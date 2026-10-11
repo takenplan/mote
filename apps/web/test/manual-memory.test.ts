@@ -7,6 +7,8 @@ import {JSDOM} from 'jsdom';
 import {Memories} from '../src/Memories.js';
 import {MemoryProgress,type MemoryJob} from '../src/MemoryProgress.js';
 import type {Api} from '../src/api.js';
+import {configureLocale,getLocale} from '@mote/shared/i18n';
+import {failureMessage} from '../src/failure-message.js';
 
 async function fixture(t:import('node:test').TestContext){
   const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();
@@ -51,4 +53,56 @@ test('waiting recipes retain result access, processing links and pause/cancel co
   await render({...blocked,status:'failed'});await click('重新检查未完成方案');assert.equal(retried,1);
   await render({...blocked,status:'paused'});assert.doesNotMatch(d.body.textContent!,/重新检查未完成方案/);await click('继续整理');assert.equal(actions.at(-1),'resume');
   await render({...job,status:'cancelled'});assert.doesNotMatch(d.body.textContent!,/重新检查未完成方案|取消未完成方案|继续整理/);await click('查看记忆');assert.equal(viewed,2);
+});
+
+test('a legacy attribution task without published Material retains reviewed results without promising automatic processing',async t=>{
+ const {root,d}=await fixture(t),actions:string[]=[];let viewed=0,retried=0;
+ const blocked:MemoryJob={...job,errorCode:'memory_owner_material_required',failedBatches:1,inputPlans:{total:0,waiting:0,blocked:0,stale:0,completed:0},recipeProgress:[],availableAt:Date.now()+60000};
+ const render=(value:MemoryJob)=>act(async()=>root.render(React.createElement(MemoryProgress,{job:value,onAction:action=>actions.push(action),onOpen:()=>{},onView:()=>viewed++,onRetry:()=>retried++})));
+ await render(blocked);
+ assert.match(d.querySelector('.workflow-line strong')!.textContent!,/需要正式资料确认归属/);
+ assert.match(d.querySelector('.notice')!.textContent!,/不能自动继续.*已审核结果保留.*取消未完成任务/);
+ assert.doesNotMatch(d.body.textContent!,/等待资料处理|就绪后会自动继续|已就绪的方案已继续处理|下次可运行时间/);
+ await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='重新检查未完成方案')!.click());assert.equal(retried,1,'explicit manual recheck remains available');
+ await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='查看记忆')!.click());
+ await act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent==='取消未完成方案')!.click());
+ assert.equal(viewed,1);assert.deepEqual(actions,['cancel']);
+ // Published Material that is still processing retains its normal wait and source link.
+ await render({...job,errorCode:'memory_input_pending'});
+ assert.match(d.querySelector('.workflow-line strong')!.textContent!,/等待资料处理/);
+ assert.match(d.body.textContent!,/就绪后会自动继续/);
+ assert.ok(Array.from(d.querySelectorAll('button')).some(button=>button.textContent==='查看来源与处理'));
+ const previousLocale=getLocale();t.after(()=>configureLocale(()=>previousLocale));configureLocale(()=>'en');
+ await render(blocked);
+ assert.match(d.querySelector('.workflow-line strong')!.textContent!,/Published material is required/);
+ assert.match(d.querySelector('.notice')!.textContent!,/cannot continue automatically.*Reviewed results are retained/);
+ assert.doesNotMatch(failureMessage({code:'memory_owner_material_required',safeMessage:'PRIVATE EXTERNAL DETAIL'}),/PRIVATE EXTERNAL DETAIL/);
+});
+
+test('Memory deletion retains accurate external clearing status after the card disappears and clears it on node change',async t=>{
+ const {root,d}=await fixture(t);
+ const memory={id:'generated-deletion',title:'Generated retained body',statement:'Generated fixture statement',uncertainty:'Fixture only',status:'published',createdAt:'2026-10-12T00:00:00Z',evidenceIds:[],evidence:[]};
+ let deleted=false,receipt={deleted:1,externalErase:'pending',physicalEraseVerified:false};
+ const api={request:async(path:string,init?:RequestInit)=>{
+  if(init?.method==='DELETE'){assert.equal(path,'/api/memories/'+memory.id);deleted=true;return receipt;}
+  if(path==='/api/model-settings')return modelView();
+  if(path==='/api/memory-recipes')return {items:[]};
+  if(path.startsWith('/api/memories?'))return {items:deleted?[]:[memory],nextCursor:null};
+  if(path.startsWith('/api/memories/'+memory.id))return memory;
+  if(path==='/api/memory-jobs')return {items:[]};
+  if(path==='/api/memory-settings')return {settings:{consolidation:{maxItems:30}},extensions:[]};
+  if(path==='/api/execution-settings')return {queues:{agents:{active:0,waiting:0,limit:1},llm:{active:0,waiting:0,limit:1}}};
+  if(path.startsWith('/api/operations/changes'))return {ids:[],cursor:0,hasMore:false,reset:false};
+  assert.fail('Unexpected request '+path);
+ },setAgentTimeout:()=>{}} as Api;
+ const render=(owner=api)=>act(async()=>root.render(React.createElement(Memories,{api:owner,range:{},onOpen:()=>{}})));
+ const click=(text:string)=>act(async()=>Array.from(d.querySelectorAll('button')).find(button=>button.textContent===text||button.querySelector('strong')?.textContent===text)!.click());
+ await render();await click(memory.title);await click('删除记忆');await click('确认删除');
+ assert.match(d.querySelector('.notice[role=status]')!.textContent!,/外部清除仍待确认/);
+ assert.equal(d.querySelectorAll('.workspace-select').length,0);
+ assert.doesNotMatch(d.querySelector('.notice[role=status]')!.textContent!,/已物理擦除/);
+ const other={...api,request:api.request.bind(api)} as Api;await render(other);
+ assert.equal(d.querySelector('.notice[role=status]'),null,'a previous node receipt does not appear under a new connection');
+ deleted=false;receipt={deleted:1,externalErase:'acknowledged',physicalEraseVerified:false};await render(api);await click(memory.title);await click('删除记忆');await click('确认删除');
+ assert.match(d.querySelector('.notice[role=status]')!.textContent!,/已确认移除当前记录，物理擦除尚未核验/);
 });

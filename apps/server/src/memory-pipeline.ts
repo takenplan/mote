@@ -23,10 +23,13 @@ import {MemoryStore,MemoryOutputValidationError,MEMORY_EXTRACTION_PROMPT,MEMORY_
 
 import type {MemoryValidationDetails} from './memory-validation.js';
 import type {ModelConfiguration} from './model-configuration.js';
-import {memoryReviewReceipt} from './memory-review.js';
+import {memoryReviewReceipt,type MemoryDraftOrigin} from './memory-review.js';
+import type {Memory} from './memory-schema.js';
 import type {MemoryReviewReceipt} from './memory-schema.js';
 import {formatMaterialRef} from './materials.js';
 import {MemoryExtractionDrafts} from './memory-extraction-drafts.js';
+import type {MemoryPublication,MemoryPublicationReceipt} from './memory-publication.js';
+import type {MemoryProviderNamespace} from './memory-provider-contract.js';
 
 export type MemoryValidationFailure={at:string;code:string;phase:'extract'|'review';attempt?:number;runId?:string;details?:MemoryValidationDetails};
 export type MemoryValidationFailureEvent=MemoryValidationFailure&{jobId:string;batchId:string;batchIndex:number};
@@ -34,19 +37,52 @@ export type MemoryValidationFailureEvent=MemoryValidationFailure&{jobId:string;b
 type Chunk=EvidenceRange&{strategy?:MemoryRecipeBinding;reviewFingerprint?:string;profile?:'personal'|'coding';profileVersion?:string;group?:string;fingerprint:string;key:string};
 export type MemoryBatch={generationContract?:string;replanRound?:number;feedbackRound?:number;feedbackWorkId?:string;workerGoal?:string;workerInstruction?:string;contextRanges?:EvidenceRange[];coverage?:MemoryWorkMember[];reviewReceipt?:MemoryReviewReceipt;supersededBy?:string[];strategy?:MemoryRecipeBinding;configuration?:ModelConfiguration;id:string;index:number;status:'pending'|'running'|'completed'|'failed'|'invalidated';evidenceRanges:EvidenceRange[];attempts:number;memoryIds:string[];availableAt?:number;errorCode?:string;validationFailures?:MemoryValidationFailure[];phase?:'extract'|'review';stage?:string;startedAt?:string;lastActivityAt?:string;execution?:ExecutionEnvelope;splitDepth?:number;splitHistory?:{at:string;errorCode:'provider_timeout'|'memory_coverage_incomplete'|'memory_capacity_saturated';attempts:number;evidenceRanges:EvidenceRange[]}[]};
 type BatchInputScope={planIds?:string[];materialInputs:MaterialInputPin[];materialRefs:Record<string,string>};
-type StoredBatch=MemoryBatch&BatchInputScope&{feedbackOnly?:boolean;contextFeedbackChildId?:string;artifactRefs?:{id:string;revision:string}[];chunks:Chunk[];contextChunks?:Chunk[];skillVersion?:string;resourceEvidenceIds?:string[]};
+type StoredBatch=MemoryBatch&BatchInputScope&{nativeDraft?:{key:string;context:MemoryEngineDraftPin};engineDrafts?:MemoryEngineDraftPin[];feedbackOnly?:boolean;contextFeedbackChildId?:string;artifactRefs?:{id:string;revision:string}[];chunks:Chunk[];contextChunks?:Chunk[];skillVersion?:string;resourceEvidenceIds?:string[]};
 export type MemoryJob={continuationOf?:string;cancellationCause?:'authority'|'owner';authorizedChunks?:Chunk[];activationRequired:boolean;inputPlanVersion:1;inputPlans:MemoryPlanSummary;recipeProgress:MemoryRecipeProgress[];materialInputs?:MaterialInputPin[];batchCharacters?:number;automaticGrant?:AutomaticMemoryGrant;automaticGrants?:AutomaticMemoryGrant[];workPackage?:MemoryWorkPackage;contextTime:string;recipes?:MemoryStrategyRef[];configuration?:ModelConfiguration;artifactRefs?:{id:string;revision:string}[];materialRefs?:Record<string,string>;language?:'zh-CN'|'en';id:string;modelProfileId?:string;modelOverride?:string;importJobId?:string;originKey?:string;timeZone?:string;status:'queued'|'running'|'completed'|'failed'|'waiting_for_model'|'waiting_for_input'|'cancelled'|'paused'|'pausing';createdAt:string;updatedAt:string;evidenceIds:string[];skillVersion:string;totalBatches:number;completedBatches:number;failedBatches:number;skippedChunks:number;memoryIds:string[];memoryCount:number;availableAt?:number;errorCode?:string;queuePosition?:number;runningBatches?:number;pendingBatches?:number;lastSavedAt?:string;execution?:ExecutionEnvelope};
 export type MemoryJobDetail=MemoryJob&{batches:MemoryBatch[]};
 export type MemoryPipelineQuery={taskContext?:QueryInput['taskContext'];processingMaterialInputs?:QueryInput['processingMaterialInputs'];contextTime?:string;signal?:AbortSignal;language?:'zh-CN'|'en';modelProfileId?:string;modelOverride?:string;question:string;skill:'memory-extraction'|'coding-memory'|'memory-strategy';responseMode:'memory-extraction';evidenceIds:string[];evidenceRanges:EvidenceRange[];timeZone?:string;validateOutput?:QueryInput['validateOutput'];onProgress?:QueryInput['onProgress'];onTrace?:QueryInput['onTrace'];traceContext?:QueryInput['traceContext']};
 export type ConversationPreparation={generationContract:string;memoryWork?:{package:{goal:string;instruction:string};members:MemoryWorkMember[];contextMembers:MemoryWorkMember[];authorizedMembers:MemoryWorkMember[];history:MemoryWorkInspection[];maxCandidates:number;instruction:string};candidatePolicy?:{prompt:string;profile:'personal'|'coding';fingerprint:string};job:MemoryJob;ranges:EvidenceRange[];materialRefs:Record<string,string>;materialInputs:MaterialInputPin[];signal:AbortSignal;parentGrant:{stepId:string;fence:string}};
-export type MemoryPipelineOptions={understand?:(input:ConversationPreparation)=>Promise<{id:string;revision:string}[]|undefined>;materialSourceCurrent?:(pin:MaterialSourcePin,materialId:string)=>boolean;materialPlanAllowed?:(materialId:string,profileId?:string)=>boolean;deletionEvidenceAllowedForMemory?:(id:string,profileId?:string)=>boolean;materialInput?:(ref:string,required:readonly string[])=> (MaterialInputPin&{ready:boolean;dependencies?:MaterialDependencyStatus[]})|undefined;materialRequirements?:(ref:string)=>string[]|undefined;automaticAllowed?:(job:MemoryJob)=>boolean;strategies?:MemoryStrategies;configuration?:(profileId?:string,modelOverride?:string)=>ModelConfiguration;executor?:ExecutionEngine;concurrency?:()=>number;onValidationFailure?:(event:MemoryValidationFailureEvent)=>void;requireAdmission?:boolean;review?:(input:MemoryPipelineQuery,result:QueryResult,strategy?:MemoryReviewStrategy)=>Promise<QueryResult>;materialAllowedForMemory?:(ref:string,profileId?:string,required?:readonly string[])=>boolean;evidenceAllowedForMemory?:(id:string,profileId?:string)=>boolean;store:Store;memories:MemoryStore;query:(input:MemoryPipelineQuery)=>Promise<QueryResult>;model:(profileId?:string)=>string;configured:(profileId?:string)=>boolean;skillVersion?:string;batchCharacters?:number|(()=>number)};
+export type MemoryEngineDraftContext={phase:'extract'|'integrate';opId:string;evidenceIds:string[];checkpointId?:string;cleanupGeneration?:string;relatedMemories?:Memory[];assertAuthority?:()=>void;provider?:{instanceId:string;configurationIdentity:string;namespace:MemoryProviderNamespace}};
+export type MemoryEngineDraftPin=Omit<MemoryEngineDraftContext,'relatedMemories'|'assertAuthority'>;
+export function memoryEngineDraftPin(context:MemoryEngineDraftContext):MemoryEngineDraftPin{const {relatedMemories:_,assertAuthority:__,...pin}=context;return structuredClone(pin);}
+export type MemoryPipelineOptions={settleEngineDraft?:(context:MemoryEngineDraftPin)=>Promise<void>;assertNewManualWork?:()=>void;engineDraft?:(input:QueryInput,context:MemoryEngineDraftContext)=>Promise<QueryResult|undefined>;publication?:MemoryPublication;understand?:(input:ConversationPreparation)=>Promise<{id:string;revision:string}[]|undefined>;materialSourceCurrent?:(pin:MaterialSourcePin,materialId:string)=>boolean;materialPlanAllowed?:(materialId:string,profileId?:string)=>boolean;deletionEvidenceAllowedForMemory?:(id:string,profileId?:string)=>boolean;materialInput?:(ref:string,required:readonly string[])=> (MaterialInputPin&{ready:boolean;dependencies?:MaterialDependencyStatus[]})|undefined;materialRequirements?:(ref:string)=>string[]|undefined;automaticAllowed?:(job:MemoryJob)=>boolean;strategies?:MemoryStrategies;configuration?:(profileId?:string,modelOverride?:string)=>ModelConfiguration;executor?:ExecutionEngine;concurrency?:()=>number;onValidationFailure?:(event:MemoryValidationFailureEvent)=>void;requireAdmission?:boolean;review?:(input:MemoryPipelineQuery,result:QueryResult,strategy?:MemoryReviewStrategy,draftOrigin?:MemoryDraftOrigin)=>Promise<QueryResult>;materialAllowedForMemory?:(ref:string,profileId?:string,required?:readonly string[])=>boolean;evidenceAllowedForMemory?:(id:string,profileId?:string)=>boolean;store:Store;memories:MemoryStore;query:(input:MemoryPipelineQuery)=>Promise<QueryResult>;model:(profileId?:string)=>string;configured:(profileId?:string)=>boolean;skillVersion?:string;batchCharacters?:number|(()=>number)};
 
 type ReadyInputScope={strategy?:MemoryRecipeBinding;ids:string[];inputs:MaterialInputPin[];refs:Record<string,string>;planIds?:string[]};
-type BatchOutput={feedbackPlan?:MemoryFeedbackPlan;coverage?:MemoryWorkCoverage;subdivide?:'memory_coverage_incomplete'|'memory_capacity_saturated';strategy?:MemoryRecipeBinding;result:QueryResult;reviewReceipt?:MemoryReviewReceipt;model:string;profile:'personal'|'coding';skillVersion:string;ranges:EvidenceRange[];chunks:Chunk[]};
+type BatchOutput={engineDrafts?:MemoryEngineDraftPin[];publication?:MemoryPublicationReceipt;feedbackPlan?:MemoryFeedbackPlan;coverage?:MemoryWorkCoverage;subdivide?:'memory_coverage_incomplete'|'memory_capacity_saturated';strategy?:MemoryRecipeBinding;result:QueryResult;reviewReceipt?:MemoryReviewReceipt;model:string;profile:'personal'|'coding';skillVersion:string;ranges:EvidenceRange[];chunks:Chunk[]};
 export type MemoryOwnerQuestionHandler={create:(input:{job:MemoryJob;batchId:string;member:MemoryWorkMember;question:MemoryOwnerQuestion})=>string;pending:(jobId:string)=>boolean};
 
 /** Jobs reference originals. Validated drafts have a separate private, dependency-bound stage store. */
 export class MemoryPipeline {
+  get publication(){return this.options.publication;}
+  assertNewManualWork(){this.options.assertNewManualWork?.();}
+  async engineDraft(input:QueryInput,context:MemoryEngineDraftContext){
+    // A retry may reuse the upstream idempotency operation after its former
+    // failed stage was cleaned. Keep distinct cleanup receipts for each new
+    // preparation invocation; a cached draft retains its original pin.
+    context.cleanupGeneration??=randomUUID();
+    const pending=this.options.engineDraft?.(input,context);
+    // The host adapter pins its configuration synchronously, before native
+    // transport/model work begins. Keep that reference even when prepare is
+    // cancelled or fails before returning a candidate.
+    const remember=()=>{if(!context.provider)return;const pin=memoryEngineDraftPin(context),id=sha256(JSON.stringify(pin)),json=JSON.stringify(pin);if(!this.store.db.prepare('SELECT 1 FROM memory_engine_stage_drafts WHERE id=?').get(id)){this.store.reserveMetadata(Buffer.byteLength(json)+256);this.store.db.prepare('INSERT INTO memory_engine_stage_drafts VALUES(?,?,?)').run(id,json,context.checkpointId??null);}};
+    remember();try{return await pending;}finally{remember();}
+  }
+  /** Call only after durable reviewed output or a final host checkpoint. Native
+   * cleanup has its own durable receipt and never reruns semantic generation. */
+  async settleEngineDraft(context:MemoryEngineDraftContext|MemoryEngineDraftPin){
+    if(!this.options.settleEngineDraft)return;
+    const {id,prior}=this.recordEngineStageCleanup(context);
+    if(prior?.state==='acknowledged')return;
+    const pin=memoryEngineDraftPin(context);
+    try{await this.options.settleEngineDraft(pin);this.store.db.prepare("UPDATE memory_engine_stage_cleanups SET state='acknowledged' WHERE id=?").run(id);}catch{this.queueEngineStageCleanup(id);}
+  }
+  /** A rejected/cancelled native stage has no remaining publication path. This
+   * durable host checkpoint queues transport cleanup without another model or
+   * review, and does not block an independently reviewed canonical result. */
+  abandonEngineDraft(context:MemoryEngineDraftContext|MemoryEngineDraftPin){if(!this.options.settleEngineDraft||!context.provider)return;const {id,prior}=this.recordEngineStageCleanup(context);if(prior?.state!=='acknowledged')this.queueEngineStageCleanup(id);}
+  private recordEngineStageCleanup(context:MemoryEngineDraftContext|MemoryEngineDraftPin){const pin=memoryEngineDraftPin(context),id=sha256(JSON.stringify(pin)),prior=this.store.db.prepare('SELECT state FROM memory_engine_stage_cleanups WHERE id=?').get(id);if(!prior){const json=JSON.stringify(pin);this.store.reserveMetadata(Buffer.byteLength(json)+256);this.store.db.prepare("INSERT INTO memory_engine_stage_cleanups VALUES(?,?,'pending')").run(id,json);}return {id,prior};}
+  private finalizeEngineStep(step:ExecutionStep){if(!['succeeded','failed','cancelled','stale'].includes(step.state))return;for(const row of this.store.db.prepare('SELECT json FROM memory_engine_stage_drafts WHERE checkpoint_id=?').all(step.id))this.abandonEngineDraft(JSON.parse(String(row.json)));}
+  private queueEngineStageCleanup(id:string){const operationId='memory-engine-stage-cleanup:'+id,prior=this.engine.get(operationId);if(!prior)this.engine.enqueue(operationId,'memory.engine-stage-cleanup',{id},{id:operationId});else if(['failed','stale','cancelled','blocked'].includes(prior.state)&&!this.engine.isActiveStep(operationId))this.engine.retry(operationId);void this.engine.tick().catch(()=>{});}
   private ownerQuestions?:MemoryOwnerQuestionHandler;
   setOwnerQuestionHandler(handler?:MemoryOwnerQuestionHandler){this.ownerQuestions=handler;}
   /** Current read/continuation authority; models never receive this control plane. */
@@ -166,6 +202,13 @@ export class MemoryPipeline {
     this.drafts=new MemoryExtractionDrafts(this.store);
     this.inputPlans=new MemoryInputPlans(this.store);
     this.engine=options.executor??new ExecutionEngine(this.store);this.owned=!options.executor;
+    this.store.db.exec('CREATE TABLE IF NOT EXISTS memory_engine_stage_cleanups(id TEXT PRIMARY KEY,json TEXT NOT NULL,state TEXT NOT NULL);');
+    this.store.db.exec('CREATE TABLE IF NOT EXISTS memory_engine_stage_drafts(id TEXT PRIMARY KEY,json TEXT NOT NULL,checkpoint_id TEXT); CREATE INDEX IF NOT EXISTS memory_engine_stage_checkpoint ON memory_engine_stage_drafts(checkpoint_id);');
+    if(options.settleEngineDraft){
+      this.unregister.push(this.engine.register({kind:'memory.engine-stage-cleanup',pool:'plugin-control',concurrency:()=>1,validate:()=>true,execute:async step=>{const row=this.store.db.prepare('SELECT json,state FROM memory_engine_stage_cleanups WHERE id=?').get(String(step.input.id));if(row?.state==='pending')try{await options.settleEngineDraft!(JSON.parse(String(row.json)));}catch{throw new ExecutionFailure('waiting','memory_engine_cleanup_pending',5000);}},commit:step=>{this.store.db.prepare("UPDATE memory_engine_stage_cleanups SET state='acknowledged' WHERE id=?").run(String(step.input.id));}}));
+      for(const row of this.store.db.prepare("SELECT id FROM memory_engine_stage_cleanups WHERE state='pending'").all())this.queueEngineStageCleanup(String(row.id));
+      for(const row of this.store.db.prepare("SELECT DISTINCT d.checkpoint_id FROM memory_engine_stage_drafts d JOIN execution_steps e ON e.id=d.checkpoint_id WHERE e.state IN ('succeeded','failed','cancelled','stale')").all()){const step=this.engine.get(String(row.checkpoint_id));if(step)this.finalizeEngineStep(step);}
+    }
     this.recover();
     this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,maxAttempts:1,timeoutMs:3600000,
       resourceKeys:step=>(step.input.evidenceIds as string[]).map(id=>'memory-evidence:'+id),
@@ -178,7 +221,17 @@ export class MemoryPipeline {
         if(!this.options.configured(job.modelProfileId))return new ExecutionFailure('blocked','model_unconfigured');
         if(this.options.configuration){const current=this.options.configuration(job.modelProfileId,job.modelOverride);if(job.configuration&&job.configuration.fingerprint!==current.fingerprint)return new ExecutionFailure('blocked','configuration_changed');if(!job.configuration){job.configuration=structuredClone(current);this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(current)));this.saveJob(job);}}
       },
-      execute:(step,signal)=>{const fence=this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(step.id)?.fence;return this.execute(String(step.input.jobId),String(step.input.batchId),signal,()=>typeof fence==='string'&&this.engine.isCurrentGrant(step.id,fence));},
+      execute:async(step,signal)=>{const fence=this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(step.id)?.fence,current=()=>typeof fence==='string'&&this.engine.isCurrentGrant(step.id,fence);
+        const publication=this.options.publication,output=publication?.retainedOutput<BatchOutput>(step.id)??await this.execute(String(step.input.jobId),String(step.input.batchId),signal,current);
+        if(!output)return output;
+        const assertAuthority=()=>{signal.throwIfAborted();if(!current()||!this.validateStep(step))throw new ExecutionFailure('stale','memory_publication_revoked');const job=this.storedJob(String(step.input.jobId)),batch=this.batch(String(step.input.batchId));this.assertAutomatic(job);this.assertConfiguration(job);this.assertStrategies(batch);this.admitBatch(job,batch);};
+        assertAuthority();publication?.retainOutput(step.id,output,{evidenceIds:[...new Set([...output.chunks,...(this.batch(String(step.input.batchId)).contextChunks??[])].map(chunk=>chunk.id))]});
+        if(publication?.retainedOutput(step.id))for(const pin of output.engineDrafts??[])await this.settleEngineDraft(pin);
+        if(output.feedbackPlan||output.subdivide)return output;
+        this.assertOwnerQuestionMaterials(this.storedJob(String(step.input.jobId)),this.batch(String(step.input.batchId)),output);
+        output.publication=await publication?.stageExtract(step.id,output.result,output.model,{maxCandidates:output.coverage?memoryWorkCandidateLimit(output.chunks.length):undefined,strategy:output.strategy,profile:output.profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.review?output.result.runId:undefined,skillVersion:output.skillVersion,evidenceRanges:output.ranges,expectedFingerprints:Object.fromEntries([...output.chunks,...(this.batch(String(step.input.batchId)).contextChunks??[])].map(chunk=>[chunk.id,chunk.fingerprint]))},assertAuthority,Boolean(this.storedJob(String(step.input.jobId)).automaticGrant||this.storedJob(String(step.input.jobId)).automaticGrants?.length));
+        return output;
+      },
       commit:(step,output)=>this.commitBatch(step,output as BatchOutput|undefined),
       project:step=>this.projectStep(step),
     }));
@@ -299,7 +352,7 @@ export class MemoryPipeline {
     const status=job.status==='completed'&&failedBatches?'failed':job.status==='queued'&&batches.some(b=>b.status==='running')?'running':job.status,attempts=batches.reduce((sum,b)=>sum+b.attempts,0);
     return {...job,...this.planView(id),status,queuePosition:this.queuePosition(id),runningBatches:batches.filter(b=>b.status==='running').length,pendingBatches:batches.filter(b=>b.status==='pending').length,lastSavedAt:(this.store.db.prepare("SELECT max(created_at) AS at FROM memories WHERE id IN (SELECT value FROM json_each(?))").get(JSON.stringify(memoryIds)) as {at?:string})?.at??undefined,totalBatches:batches.length,completedBatches:batches.filter(b=>b.status==='completed').length,failedBatches,memoryIds,memoryCount:memoryIds.length,
       execution:executionEnvelope({status:status==='paused'||status==='waiting_for_input'?'waiting':status==='pausing'?'running':status,attempts,errorCode:job.errorCode??batches.find(b=>b.errorCode)?.errorCode,availableAt:job.availableAt,updatedAt:job.updatedAt}),
-      batches:batches.map(({chunks:_chunks,contextChunks:_contexts,resourceEvidenceIds:_resources,materialInputs:_inputs,materialRefs:_refs,...batch})=>({...batch,execution:executionEnvelope({status:batch.status==='pending'?'queued':batch.status==='completed'?'succeeded':batch.status==='invalidated'?'skipped':batch.status,attempts:batch.attempts,errorCode:batch.errorCode,availableAt:batch.availableAt})}))};
+      batches:batches.map(({nativeDraft:_nativeDraft,engineDrafts:_engineDrafts,chunks:_chunks,contextChunks:_contexts,resourceEvidenceIds:_resources,materialInputs:_inputs,materialRefs:_refs,...batch})=>({...batch,execution:executionEnvelope({status:batch.status==='pending'?'queued':batch.status==='completed'?'succeeded':batch.status==='invalidated'?'skipped':batch.status,attempts:batch.attempts,errorCode:batch.errorCode,availableAt:batch.availableAt})}))};
   }
   list(limit=30):MemoryJob[]{return this.jobSummaries(this.store.db.prepare("SELECT json_remove(json,'$.evidenceIds','$.memoryIds','$.artifactRefs','$.materialInputs','$.materialRefs','$.authorizedChunks') json FROM memory_jobs ORDER BY created_at DESC,id DESC LIMIT ?").all(Math.max(1,Math.min(limit,100))));}
   /** Stable keyset pagination, including jobs outside the latest default page. */
@@ -679,19 +732,20 @@ export class MemoryPipeline {
     return batch.status!=='invalidated'&&[...batch.chunks,...(batch.contextChunks??[])].every(chunk=>this.valid(chunk))&&(batch.artifactRefs??[]).every(ref=>this.store.archive.revision(ref.id)===ref.revision);
   }
   private projectStep(step:ExecutionStep){
+    this.finalizeEngineStep(step);
     const id=String(step.input.jobId),batchId=String(step.input.batchId);
     if(!this.store.db.prepare('SELECT 1 FROM memory_batches WHERE id=?').get(batchId))return;
     const batch=this.batch(batchId),job=this.storedJob(id);
     if(batch.status==='invalidated'&&batch.coverage){batch.coverage=batch.coverage.map(member=>({...member,state:'stale',reason:batch.errorCode??'evidence_changed'}));this.saveBatch(batch);}
     if(batch.status!=='invalidated'){
-      batch.status=step.state==='blocked'&&step.error==='memory_context_required'?'failed':step.state==='succeeded'?'completed':step.state==='running'?'running':step.state==='failed'?'failed':step.state==='stale'?'invalidated':'pending';
+      batch.status=step.state==='blocked'&&['memory_context_required','memory_owner_material_required'].includes(step.error??'')?'failed':step.state==='succeeded'?'completed':step.state==='running'?'running':step.state==='failed'?'failed':step.state==='stale'?'invalidated':'pending';
       if(batch.coverage&&!batch.supersededBy&&['failed','stale','cancelled'].includes(step.state))batch.coverage=batch.coverage.map(member=>({...member,state:step.state==='stale'?'stale':step.error==='memory_coverage_incomplete'?'needs_context':'failed',reason:step.error}));
       batch.errorCode=step.error==='input_changed'?'evidence_changed':step.error;
       batch.availableAt=['rate_limited','provider_unavailable','provider_timeout','provider_network'].includes(step.error??'')?step.availableAt:undefined;
       if(step.state==='running'){batch.phase='extract';batch.stage='starting';batch.startedAt=new Date().toISOString();batch.lastActivityAt=batch.startedAt;}
       this.saveBatch(batch);
     }
-    if(step.state==='blocked'&&step.error==='memory_context_required'&&!['cancelled','paused','pausing'].includes(job.status)){job.status='waiting_for_input';job.errorCode='memory_context_required';this.saveJob(job);}
+    if(step.state==='blocked'&&['memory_context_required','memory_owner_material_required'].includes(step.error??'')&&!['cancelled','paused','pausing'].includes(job.status)){job.status='waiting_for_input';job.errorCode=step.error;this.saveJob(job);}
     if(step.state==='blocked'&&['semantic_processing_blocked','configuration_changed','model_unconfigured','provider_authentication','provider_endpoint','provider_redirect'].includes(step.error??'')&&!['cancelled','paused','pausing'].includes(job.status)){job.status='waiting_for_model';job.errorCode=step.error;this.saveJob(job);}
     else if(['waiting','running'].includes(step.state)&&job.status==='waiting_for_model'&&this.active.has(id)){job.status='queued';delete job.errorCode;this.saveJob(job);}
     this.refreshJob(id);this.wake();
@@ -701,10 +755,10 @@ export class MemoryPipeline {
     if(job.status==='pausing'&&Number(counts.running)===0)job.status='paused';
     {
       const steps=this.store.db.prepare("SELECT state,error,available_at FROM execution_steps WHERE operation_id=? AND kind='memory.input'").all('memory:'+id),inputWaiting=steps.some(step=>['waiting','running'].includes(String(step.state))),inputFailure=steps.some(step=>['blocked','failed','stale','cancelled'].includes(String(step.state)));
-      const contextWaiting=Boolean(this.store.db.prepare("SELECT 1 FROM execution_steps WHERE operation_id=? AND kind='memory.batch' AND state='blocked' AND error='memory_context_required' LIMIT 1").get('memory:'+id)),ownerWaiting=this.ownerQuestions?.pending(id)??false;
+      const contextError=this.store.db.prepare("SELECT error FROM execution_steps WHERE operation_id=? AND kind='memory.batch' AND state='blocked' AND error IN ('memory_context_required','memory_owner_material_required') ORDER BY error LIMIT 1").get('memory:'+id)?.error,contextWaiting=Boolean(contextError),ownerWaiting=this.ownerQuestions?.pending(id)??false;
       const runnable=this.store.db.prepare("SELECT 1 FROM memory_batches b LEFT JOIN execution_steps e ON e.id=b.id WHERE b.job_id=? AND json_extract(b.json,'$.status')='pending' AND (e.id IS NULL OR e.state IN ('waiting','running') OR (e.state='blocked' AND e.error='awaiting_activation')) LIMIT 1").get(id);
       if(!['cancelled','paused','pausing'].includes(job.status))job.status=Number(counts.running)>0?'running':runnable?'queued':inputWaiting||contextWaiting||ownerWaiting?'waiting_for_input':job.status==='waiting_for_model'&&Number(counts.pending)>0?'waiting_for_model':Number(counts.failed)>0||inputFailure?'failed':'completed';
-      if(job.status==='waiting_for_input'){job.errorCode=ownerWaiting?'memory_owner_input_required':contextWaiting?'memory_context_required':'memory_input_pending';job.availableAt=contextWaiting||ownerWaiting?undefined:Math.min(...steps.filter(step=>step.state==='waiting').map(step=>Number(step.available_at)||0));}
+      if(job.status==='waiting_for_input'){job.errorCode=ownerWaiting?'memory_owner_input_required':contextWaiting?String(contextError):'memory_input_pending';job.availableAt=contextWaiting||ownerWaiting?undefined:Math.min(...steps.filter(step=>step.state==='waiting').map(step=>Number(step.available_at)||0));}
       else if(job.status!=='waiting_for_model'){job.errorCode=String(steps.find(step=>['blocked','failed','stale'].includes(String(step.state)))?.error??'')||undefined;delete job.availableAt;}
     }
     if(!['waiting_for_model','waiting_for_input'].includes(job.status))job.errorCode=job.errorCode||String(this.store.db.prepare("SELECT json_extract(json,'$.errorCode') error FROM memory_batches WHERE job_id=? AND json_extract(json,'$.status') IN ('failed','invalidated') LIMIT 1").get(id)?.error??'')||undefined;
@@ -753,11 +807,14 @@ export class MemoryPipeline {
       this.subdivide(job,batch,output.subdivide);return;}
     const maxCandidates=output.coverage?memoryWorkCandidateLimit(chunks.length):undefined;
     this.assertStrategies(batch);this.admitBatch(job,batch);
-    this.options.memories.extract(result,model,{maxCandidates,strategy:output.strategy,profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.review?result.runId:undefined,skillVersion,evidenceRanges:ranges,expectedFingerprints:Object.fromEntries(processingChunks.map(c=>[c.id,c.fingerprint])),onSaved:items=>{
+    this.assertOwnerQuestionMaterials(job,batch,output);
+    this.options.publication?.assert(output.publication,result);
+    this.options.memories.extract(result,model,{prepared:output.publication?.prepared,maxCandidates,strategy:output.strategy,profile,requireAdmission:this.options.requireAdmission,reviewReceipt:output.reviewReceipt,reviewRunId:output.reviewReceipt?output.reviewReceipt.reviewRunId:this.options.review?result.runId:undefined,skillVersion,evidenceRanges:ranges,expectedFingerprints:Object.fromEntries(processingChunks.map(c=>[c.id,c.fingerprint])),onSaved:items=>{
       for(const item of items)for(const ref of batch.artifactRefs??[])this.store.db.prepare('INSERT INTO memory_artifact_dependencies VALUES(?,?)').run(item.id,ref.id);
       batch.reviewReceipt=output.reviewReceipt;batch.memoryIds=items.map(m=>m.id);
       if(output.coverage)batch.coverage=this.workMembers(job,batch,chunks).map(member=>{const row=output.coverage!.find(row=>row.key===member.key)!;return {...member,state:row.state,memoryIds:row.candidateIndexes.map(index=>items[index]?.id).filter((id):id is string=>Boolean(id)),reason:row.reason,contextRefs:row.contextRefs,...(row.question?{question:row.question}:{})};});
       this.saveBatch(batch);
+      this.options.publication?.committed(output.publication);
       for(const member of batch.coverage??[])if(member.state==='needs_owner_input'&&member.question){
         if(!this.ownerQuestions)throw new StoreError('Memory owner question provider unavailable',409);
         member.questionId=this.ownerQuestions.create({job,batchId:batch.id,member,question:member.question});
@@ -766,6 +823,14 @@ export class MemoryPipeline {
       if(this.ownerQuestions&&output.coverage)this.scheduleContextFeedback(job,batch,chunks,output.coverage);
       for(const chunk of chunks)if(!batch.coverage?.some(member=>member.id===chunk.id&&member.offset===chunk.offset&&member.length===chunk.length&&['needs_owner_input','needs_context'].includes(member.state)))this.store.db.prepare('INSERT OR IGNORE INTO memory_checkpoints(key,evidence_id,completed_at) VALUES(?,?,?)').run(chunk.key,chunk.id,new Date().toISOString());
     }});
+  }
+  /** The existing declaration continuation belongs to a published Material.
+   * Keep its reviewed question durable when a raw-original legacy job lacks
+   * that structural prerequisite; never publish or silently discard the gap. */
+  private assertOwnerQuestionMaterials(job:MemoryJob,batch:StoredBatch,output:BatchOutput){
+    if(!this.ownerQuestions||!output.coverage?.some(row=>row.state==='needs_owner_input'&&row.question))return;
+    const members=this.workMembers(job,batch,output.chunks);
+    if(output.coverage.some(row=>row.state==='needs_owner_input'&&row.question&&!members.find(member=>member.key===row.key)?.materialRef))throw new ExecutionFailure('blocked','memory_owner_material_required');
   }
   /** Reuse validated unified candidates only when every touched candidate fits this exact batch. */
   private reuseCandidates(batch:StoredBatch,ranges:EvidenceRange[],generationContract:string,members:MemoryWorkMember[]|undefined,maxCandidates:number|undefined):QueryResult|undefined {
@@ -864,21 +929,26 @@ export class MemoryPipeline {
           const draftKey=sha256(JSON.stringify(['memory-extraction-draft@2',generationContract,(batch.artifactRefs??[]).map(ref=>({...ref})).sort((a,b)=>a.id.localeCompare(b.id)),summaries.slice().sort((a,b)=>a.id.localeCompare(b.id))]));
           let cached:QueryResult|undefined;
           if(!observeCurrent(()=>{batch.phase='extract';this.saveBatch(batch);if(this.options.review&&generation===0)cached=this.drafts.get(batch.id,draftKey,Boolean(selected));} ))throw new ExecutionFailure('waiting','interrupted');
-          let result=cached??(generation===0?this.reuseCandidates(batch,ranges,generationContract,workMembers,maxCandidates):undefined)??await withExecutionCancellation(signal,()=>this.options.query(input));
+          const nativeContext:MemoryEngineDraftContext={phase:'extract',opId:batch.id+':draft:'+generation,evidenceIds:input.evidenceIds,checkpointId:batch.id,assertAuthority:validateArtifacts};
+          const cachedNative=Boolean(cached&&batch.nativeDraft?.key===draftKey&&cached.runId===batch.nativeDraft.context.opId);
+          const native=cachedNative?cached:cached?undefined:await this.engineDraft(input,nativeContext);
+          if(native&&!cachedNative){const pin=memoryEngineDraftPin(nativeContext);if(!observeCurrent(()=>{batch.nativeDraft={key:draftKey,context:pin};batch.engineDrafts=[...(batch.engineDrafts??[]).filter(item=>item.opId!==pin.opId),pin];this.saveBatch(batch);} ))throw new ExecutionFailure('waiting','interrupted');}
+          let result=native??cached??(generation===0?this.reuseCandidates(batch,ranges,generationContract,workMembers,maxCandidates):undefined)??await withExecutionCancellation(signal,()=>this.options.query(input));
+
           signal.throwIfAborted();
           try{
             validateArtifacts();
             if(this.options.review){
-              if(workMembers)readMemoryWorkCoverage(result,workMembers,maxCandidates!);
-              this.options.memories.extract(result,model,{maxCandidates,profile:profile.id,requireAdmission:true,evidenceRanges:ranges,expectedFingerprints:Object.fromEntries(processingChunks.map(c=>[c.id,c.fingerprint])),validateOnly:true});
-              if(workMembers){const accounting=readMemoryWorkCoverage(result,workMembers,maxCandidates!,id=>this.options.memories.readEvidence([id])[0]?.ocrText);if(accounting.missing.length)throw new MemoryOutputValidationError('coverage','Every supplied target requires coverage');}
-              if(!observeCurrent(()=>{validateArtifacts();this.drafts.put(batch.id,draftKey,result,Boolean(selected));} ))throw new ExecutionFailure('waiting','interrupted');
+              if(workMembers&&!native)readMemoryWorkCoverage(result,workMembers,maxCandidates!);
+              if(!native)this.options.memories.extract(result,model,{maxCandidates,profile:profile.id,requireAdmission:true,evidenceRanges:ranges,expectedFingerprints:Object.fromEntries(processingChunks.map(c=>[c.id,c.fingerprint])),validateOnly:true});
+              if(workMembers&&!native){const accounting=readMemoryWorkCoverage(result,workMembers,maxCandidates!,id=>this.options.memories.readEvidence([id])[0]?.ocrText);if(accounting.missing.length)throw new MemoryOutputValidationError('coverage','Every supplied target requires coverage');}
+              if(!observeCurrent(()=>{validateArtifacts();this.drafts.put(batch.id,draftKey,result,Boolean(selected)&&!native);} ))throw new ExecutionFailure('waiting','interrupted');
               phase='review';batch.phase='review';observe('model');
               const validDraft=result;
               for(let reviewAttempt=0;reviewAttempt<2;reviewAttempt++){
                 reviewAttemptNumber=reviewAttempt+1;
                 try{
-                  result=await withExecutionCancellation(signal,()=>this.options.review!(input,validDraft,selected?.review));
+                  result=await withExecutionCancellation(signal,()=>this.options.review!(input,validDraft,selected?.review,native?'native-engine':'mote'));
                   const failure=await validateOutput({...result,trace:[]});if(failure)throw new MemoryOutputValidationError(failure.code as import('./memory-validation.js').MemoryOutputValidationCode,'Memory review failed host validation');
                   break;
                 }catch(error){
@@ -893,7 +963,7 @@ export class MemoryPipeline {
             this.options.memories.extract(result,model,{maxCandidates,profile:profile.id,requireAdmission:this.options.requireAdmission,evidenceRanges:ranges,expectedFingerprints:Object.fromEntries(processingChunks.map(c=>[c.id,c.fingerprint])),validateOnly:true});
             const accounting=workMembers?readMemoryWorkCoverage(result,workMembers,maxCandidates!,id=>this.options.memories.readEvidence([id])[0]?.ocrText):undefined;
             if(accounting?.incomplete||accounting?.saturated)observeCurrent(()=>{batch.coverage=workMembers!.map(member=>{const row=accounting.coverage.find(row=>row.key===member.key);return {...member,state:row?.state==='needs_context'?'needs_context':'pending',reason:row?.reason,contextRefs:row?.contextRefs};});this.saveBatch(batch);});
-            if(accounting&&!accounting.saturated&&!accounting.missing.length&&(accounting.needsOwnerInput.length||this.ownerQuestions&&accounting.coverage.some(row=>row.state==='needs_context')))return {coverage:accounting.coverage,strategy:selected?.binding,result,reviewReceipt:memoryReviewReceipt(result),model,profile:profile.id,skillVersion:selected?`${selected.extract.id}@${selected.extract.version}`:profile.id==='coding'?profile.version:batch.skillVersion??job.skillVersion,ranges,chunks};
+            if(accounting&&!accounting.saturated&&!accounting.missing.length&&(accounting.needsOwnerInput.length||this.ownerQuestions&&accounting.coverage.some(row=>row.state==='needs_context')))return {engineDrafts:batch.engineDrafts,coverage:accounting.coverage,strategy:selected?.binding,result,reviewReceipt:memoryReviewReceipt(result),model,profile:profile.id,skillVersion:selected?`${selected.extract.id}@${selected.extract.version}`:profile.id==='coding'?profile.version:batch.skillVersion??job.skillVersion,ranges,chunks};
             if(accounting?.coverage.some(row=>row.state==='needs_context')){
               if(!this.feedbackPlanner||(batch.replanRound??0)>=2)throw new ExecutionFailure('blocked','memory_context_required');
               const request=this.feedbackRequest(job,batch,workMembers!,accounting.coverage);
@@ -902,14 +972,14 @@ export class MemoryPipeline {
               if(!observeCurrent(()=>{batch.feedbackWorkId=feedbackPlan.workId;this.saveBatch(batch);}))throw new ExecutionFailure('waiting','interrupted');
               if(!feedbackPlan.groups.length)throw new ExecutionFailure('blocked','memory_context_required');
               if(!validMemoryFeedbackPlan(request,feedbackPlan.groups))throw new ExecutionFailure('blocked','memory_context_required');
-              return {feedbackPlan,coverage:accounting.coverage,result,model,profile:profile.id,skillVersion:batch.skillVersion??job.skillVersion,ranges,chunks};
+              return {engineDrafts:batch.engineDrafts,feedbackPlan,coverage:accounting.coverage,result,model,profile:profile.id,skillVersion:batch.skillVersion??job.skillVersion,ranges,chunks};
             }
-            return {coverage:accounting?.coverage,subdivide:accounting?.saturated?'memory_capacity_saturated':accounting?.incomplete?'memory_coverage_incomplete':undefined,strategy:selected?.binding,result,reviewReceipt:memoryReviewReceipt(result),model,profile:profile.id,skillVersion:selected?`${selected.extract.id}@${selected.extract.version}`:profile.id==='coding'?profile.version:batch.skillVersion??job.skillVersion,ranges,chunks};
+            return {engineDrafts:batch.engineDrafts,coverage:accounting?.coverage,subdivide:accounting?.saturated?'memory_capacity_saturated':accounting?.incomplete?'memory_coverage_incomplete':undefined,strategy:selected?.binding,result,reviewReceipt:memoryReviewReceipt(result),model,profile:profile.id,skillVersion:selected?`${selected.extract.id}@${selected.extract.version}`:profile.id==='coding'?profile.version:batch.skillVersion??job.skillVersion,ranges,chunks};
           }catch(error){if(error instanceof MemoryOutputValidationError){
               if(phase==='extract')observeCurrent(()=>this.drafts.clear(batch.id));
               recordFailure(error,result,true);
             }if(phase==='extract'&&generation===0&&error instanceof MemoryOutputValidationError){feedback=error;continue;}
-            if(workMembers&&error instanceof MemoryOutputValidationError&&error.code==='coverage')return {subdivide:'memory_coverage_incomplete',result,model,profile:profile.id,skillVersion:batch.skillVersion??job.skillVersion,ranges,chunks};
+            if(workMembers&&error instanceof MemoryOutputValidationError&&error.code==='coverage')return {engineDrafts:batch.engineDrafts,subdivide:'memory_coverage_incomplete',result,model,profile:profile.id,skillVersion:batch.skillVersion??job.skillVersion,ranges,chunks};
             throw error;}
         }
     }catch(error){
