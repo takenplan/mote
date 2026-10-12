@@ -69,8 +69,9 @@ async function run(){
  assert.deepEqual(await js('window.dateFields.map(input=>input.value)'),['2011-09-01T08:30','2013-10-02T18:45']);
  await js(`document.querySelector('.lark-step button[type=submit]').click()`);
  await until(async()=>{const status=await request('/api/connectors/feishu-recordings');return status.selection.start===new Date('2011-09-01T08:30').toISOString()&&status.selection.end===new Date('2013-10-02T18:45').toISOString();},'save local dates as UTC');
- await window.reload();
+ await new Promise(resolve=>{wc.once('did-finish-load',resolve);window.reload();});
  await until(()=>js(`document.querySelector('.lark-range input')?.value==='2011-09-01T08:30'`),'persisted start after reload');
+ await until(()=>js(`!!document.querySelector('.source-context-fields textarea')&&!document.querySelector('.source-context-fields textarea').disabled`),'source context after reload');
  assert.equal(await js(`document.querySelectorAll('.lark-range input')[1].value`),'2013-10-02T18:45');
  await js(`window.dateFields=[...document.querySelectorAll('.lark-range input')];window.dateFields[1].focus()`);
  for(let i=0;i<8;i++)await key('Left');

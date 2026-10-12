@@ -1,7 +1,7 @@
 import test, {type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -46,7 +46,10 @@ export async function createMemoryProvider(configuration){
   async health(){return {providerId:'generated.fixed-release',version:configuration.label,ready:true,verified:{persistentCrud:true,scopedRetrieval:true,immutableRecords:true,idempotentReplay:true,history:true,physicalErase:false},problems:[]};},
   async put(input){
    let control;try{control=JSON.parse(await readFile(configuration.controlFile,'utf8'));}catch{control={};}
-   while(control.holdPut){control.putEntered=true;await writeFile(configuration.controlFile,JSON.stringify(control));await new Promise(resolve=>setTimeout(resolve,5));control=JSON.parse(await readFile(configuration.controlFile,'utf8'));}
+   // The host owns release control. A separate acknowledgement prevents the
+   // worker's stale hold flag from overwriting a concurrent host release.
+   if(control.holdPut)await writeFile(configuration.controlFile+'.entered','entered');
+   while(control.holdPut){await new Promise(resolve=>setTimeout(resolve,5));control=JSON.parse(await readFile(configuration.controlFile,'utf8'));}
    if(control.failPut){control.failPut--;await writeFile(configuration.controlFile,JSON.stringify(control));throw Error('Generated transport failure');}
    const fingerprint=hash(input),prior=state.receipts[input.opId];
    if(prior){if(prior.fingerprint!==fingerprint)throw Error('Generated intent conflict');return prior.value;}
@@ -99,6 +102,8 @@ async function waitFor(check: () => boolean, description: string) {
 
 function fixture(t: TestContext, release = generatedRelease(), durablePublication = false) {
   const directory = mkdtempSync(join(tmpdir(), 'mote-plugin-control-generated-'));
+  const controlFile = join(directory, 'generated-control.json');
+  const setControl = (value: object) => {writeFileSync(controlFile + '.tmp', JSON.stringify(value)); renameSync(controlFile + '.tmp', controlFile);};
   let clock = Date.now(), store: Store, executor: ExecutionEngine, plugins: PluginCenter, automation: MemoryAutomation, memories: MemoryStore, bindings: MemoryBindings, publication: MemoryPublication | undefined;
   let tail = 0;
   function open() {
@@ -124,9 +129,9 @@ function fixture(t: TestContext, release = generatedRelease(), durablePublicatio
     configuration(label = 'one') {return {recordFile: join(directory, 'generated-records.json'), controlFile: join(directory, 'generated-control.json'), label};},
     failNextWrite() {writeFileSync(join(directory, 'generated-control.json'), JSON.stringify({failPut: 1}));},
     failNextRemoval() {writeFileSync(join(directory, 'generated-control.json'), JSON.stringify({failRemove: 1}));},
-    holdWrites() {writeFileSync(join(directory, 'generated-control.json'), JSON.stringify({holdPut: true}));},
-    writeEntered() {try {return JSON.parse(readFileSync(join(directory, 'generated-control.json'), 'utf8')).putEntered === true;} catch {return false;}},
-    releaseWrites(losePutAck = false) {writeFileSync(join(directory, 'generated-control.json'), JSON.stringify({holdPut: false, losePutAck: Number(losePutAck)}));},
+    holdWrites() {rmSync(controlFile + '.entered', {force: true}); setControl({holdPut: true});},
+    writeEntered() {try {return readFileSync(controlFile + '.entered', 'utf8') === 'entered';} catch {return false;}},
+    releaseWrites(losePutAck = false) {setControl({holdPut: false, losePutAck: Number(losePutAck)});},
   };
 }
 type Fixture = ReturnType<typeof fixture>;
