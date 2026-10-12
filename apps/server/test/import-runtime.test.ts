@@ -1,8 +1,11 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,realpathSync,rmSync,statSync,writeFileSync} from 'node:fs';
+import {mkdirSync,mkdtempSync,readFileSync,realpathSync,rmSync,statSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {dirname,join} from 'node:path';
+import {createHash} from 'node:crypto';
+import {spawnSync} from 'node:child_process';
+import {validateImportManifest} from '../src/import-manifest-worker.js';
 import {pathToFileURL} from 'node:url';
 import {zipSync} from 'fflate';
 import ExcelJS from 'exceljs';
@@ -10,7 +13,7 @@ import {prepareImportInput} from '../src/import-runtime.js';
 
 async function helper(t:any,entries:Record<string,string|Buffer>){
  const workspace=realpathSync(mkdtempSync(join(tmpdir(),'mote-parser-')));t.after(()=>rmSync(workspace,{recursive:true,force:true}));
- const inputPaths=Object.entries(entries).map(([name,value])=>{const path=join(workspace,name);writeFileSync(path,value);return path;});
+ const inputPaths=Object.entries(entries).map(([name,value])=>{const path=join(workspace,name);mkdirSync(dirname(path),{recursive:true});writeFileSync(path,value);return path;});
  const prepared=prepareImportInput({workspace,inputPaths,instruction:'Synthetic fixtures only'});
  const api=await import(pathToFileURL(prepared.helperPath).href);return {workspace,inputPaths,prepared,api};
 }
@@ -44,6 +47,60 @@ test('helper extracts DOCX paragraphs and XLSX coordinates without evaluating fo
 test('helper validates complete records against shared source schema and supplied paths',async t=>{
  const {api,workspace,inputPaths}=await helper(t,{'fixture.txt':'synthetic'}),path=join(workspace,'records.jsonl');
  const record={item:{externalId:'1',revision:'v1',observedAt:'2026-09-15T12:00:00Z',title:'合成',text:'synthetic',kind:'file',layer:'original'},evidencePaths:inputPaths};
+ writeFileSync(join(workspace,'dispositions.json'),JSON.stringify({items:inputPaths.map(path=>({path,status:'parsed',reason:'Generated text'}))}));
  writeFileSync(path,JSON.stringify(record));assert.deepEqual(await api.validateRecords(path),{valid:true,count:1,errors:[]});
  writeFileSync(path,JSON.stringify({...record,evidencePaths:['/tmp/elsewhere']}));const invalid=await api.validateRecords(path);assert.equal(invalid.valid,false);assert.match(invalid.errors[0].error,/supplied/);
+});
+
+// Regression: the model helper used to accept evidence marked attachment, while
+// the host rejected it only after the writable model session had closed.
+test('helper and host agree on disposition failures and corrected previews, including CLI execution',async t=>{
+ const {api,workspace,inputPaths,prepared}=await helper(t,{'inputs/note.md':'Generated text','inputs/asset.bin':'Generated attachment'});
+ const record={item:{externalId:'generated',revision:'v1',observedAt:'2026-09-15T12:00:00Z',title:'Generated',text:'Generated text',kind:'file',layer:'original'},evidencePaths:['inputs/note.md'],attachments:['inputs/asset.bin']};
+ const inputs=inputPaths.map((path,index)=>{const bytes=readFileSync(path);return {path,file:{id:'fixture-'+index,hash:createHash('sha256').update(bytes).digest('hex'),name:index?'asset.bin':'note.md',relativePath:index?'asset.bin':'note.md',mimeType:'application/octet-stream',sizeBytes:bytes.length,createdAt:'2026-09-15T12:00:00Z'}};});
+ const task={kind:'manifest' as const,workspace,path:'records.jsonl',output:'prepared.jsonl',inputs,dispositions:true};
+ const disposition=(path:string,status:string)=>({path,status,reason:'Generated fixture'});
+ const write=(items:unknown[],value=record)=>{
+  // Physical line numbers must include empty lines and CRLF.
+  writeFileSync(join(workspace,'records.jsonl'),'\r\n'+JSON.stringify(value)+'\r\n');
+  writeFileSync(join(workspace,'dispositions.json'),JSON.stringify({items}));
+ };
+ for(const status of ['attachment','container','excluded','unsupported']){
+  write([disposition(inputPaths[0],status),disposition('inputs/asset.bin','attachment')]);
+  const checked=await api.validateRecords('records.jsonl');assert.equal(checked.valid,false);assert.equal(checked.errors[0].line,2);
+  const error=checked.errors[0].error;assert.match(error,/manifest line 2, evidencePaths/);assert.ok(error.includes('status='+status));assert.match(error,/path="inputs\/note.md"/);assert.ok(!error.includes(workspace));
+  assert.throws(()=>validateImportManifest(task),(rejected:Error)=>rejected.message===error);
+  if(status==='attachment'){
+   const cli=spawnSync(process.execPath,[prepared.helperPath,'validate','records.jsonl'],{cwd:workspace,encoding:'utf8'});
+   assert.equal(cli.status,1,cli.stderr);assert.equal(JSON.parse(cli.stdout).errors[0].error,error);
+  }
+ }
+ for(const status of ['container','excluded','unsupported']){
+  write([disposition(inputPaths[0],'parsed'),disposition(inputPaths[1],status)]);
+  const checked=await api.validateRecords('records.jsonl');assert.equal(checked.valid,false);assert.match(checked.errors[0].error,/attachments.*expected=parsed or attachment/);
+  assert.throws(()=>validateImportManifest(task),(rejected:Error)=>rejected.message===checked.errors[0].error);
+ }
+ for(const items of [
+  [disposition(inputPaths[0],'parsed')],
+  [disposition(inputPaths[0],'parsed'),disposition('inputs/./note.md','parsed'),disposition(inputPaths[1],'attachment')],
+  [disposition(inputPaths[0],'parsed'),disposition(inputPaths[1],'attachment'),disposition('inputs/not-supplied','excluded')],
+ ]){
+  write(items);const checked=await api.validateRecords('records.jsonl');assert.equal(checked.valid,false);assert.equal(checked.errors[0].line,0);
+  assert.throws(()=>validateImportManifest(task),(rejected:Error)=>rejected.message===checked.errors[0].error);
+ }
+ write([disposition(inputPaths[0],'parsed'),disposition(inputPaths[1],'attachment')]);
+ const cli=spawnSync(process.execPath,[prepared.helperPath,'validate','records.jsonl'],{cwd:workspace,encoding:'utf8'});
+ assert.equal(cli.status,0,cli.stderr);assert.deepEqual(JSON.parse(cli.stdout),{valid:true,count:1,errors:[]});
+ assert.equal(validateImportManifest(task).count,1);
+ // A combined record must mark every contributing original parsed.
+ write([disposition(inputPaths[0],'parsed'),disposition(inputPaths[1],'attachment')],{...record,evidencePaths:inputPaths,attachments:[]});
+ assert.equal((await api.validateRecords('records.jsonl')).valid,false);
+ write([disposition(inputPaths[0],'parsed'),disposition(inputPaths[1],'parsed')],{...record,evidencePaths:inputPaths,attachments:[]});
+ assert.equal((await api.validateRecords('records.jsonl')).valid,true);assert.equal(validateImportManifest(task).count,1);
+ write([disposition(inputPaths[0],'excluded'),disposition(inputPaths[1],'unsupported')]);writeFileSync(join(workspace,'records.jsonl'),'');
+ assert.deepEqual(await api.validateRecords('records.jsonl'),{valid:true,count:0,errors:[]});assert.equal(validateImportManifest(task).count,0);
+ rmSync(join(workspace,'dispositions.json'));
+ const missing=await api.validateRecords('records.jsonl');assert.equal(missing.valid,false);assert.match(missing.errors[0].error,/did not provide dispositions.json/);
+ // Existing host compatibility remains: old parsers without dispositions need review.
+ assert.ok(validateImportManifest(task).warnings.some(w=>w.includes('per-file disposition')));
 });

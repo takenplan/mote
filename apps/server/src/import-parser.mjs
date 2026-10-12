@@ -5,12 +5,13 @@ import {fileURLToPath} from 'node:url';
 import {decodeDocument} from "__DOCUMENT_DECODER__";
 import {sourceItemSchema} from "__MOTE_SHARED__";
 import {z} from "__ZOD__";
+import {createImportSchemas,dispositionRoles,validateDispositionReferences} from "__IMPORT_CONTRACT__";
 
 const MAX_BYTES=64*1024*1024,MAX_CHARS=2_000_000,MAX_ROWS=20000,MAX_COLUMNS=500;
 const workspace=dirname(fileURLToPath(import.meta.url));
 const inputPaths=new Set(__MOTE_INPUT_PATHS__.map(path=>resolve(workspace,path)));
 const within=(root,path)=>{const part=relative(root,path);return part===''||(!part.startsWith(`..${sep}`)&&part!=='..'&&!isAbsolute(part));};
-const recordSchema=z.object({item:sourceItemSchema,evidencePaths:z.array(z.string().min(1).max(4000)).min(1).max(100),attachments:z.array(z.string().min(1).max(4000)).max(100).default([])}).strict();
+const {recordSchema,dispositionsSchema:importDispositionsSchema}=createImportSchemas(z,sourceItemSchema);
 async function fileBytes(path,maximum=MAX_BYTES){
   const resolved=resolve(workspace,path),info=await lstat(resolved);
   if(!info.isFile()||info.isSymbolicLink()||await realpath(resolved)!==resolved)throw Error('Expected a regular file without symbolic links');
@@ -72,12 +73,21 @@ export async function extractFile(input){
 export async function validateRecords(input){
   const path=resolve(workspace,input);if(!within(workspace,path))throw Error('The records manifest must be inside this workspace');
   const {bytes}=await fileBytes(path,32*1024*1024),lines=bytes.toString('utf8').split(/\r?\n/),errors=[],seen=new Set();let count=0;
+  let roles;
+  try{
+    const {bytes}=await fileBytes(resolve(workspace,'dispositions.json'),8*1024*1024);
+    const dispositions=importDispositionsSchema.parse(JSON.parse(bytes.toString('utf8')));
+    roles=dispositionRoles(dispositions.items,inputPaths,workspace);
+  }catch(error){
+    errors.push({line:0,error:error.code==='ENOENT'?'The analysis did not provide dispositions.json. Write a per-file disposition list before validating.':String(error.message??error).slice(0,1000)});
+  }
   for(let index=0;index<lines.length;index++){
     if(!lines[index].trim())continue;count++;if(count>10000){errors.push({line:index+1,error:'Manifest exceeds 10,000 records'});break;}
     try{
       const value=recordSchema.parse(JSON.parse(lines[index])),identity=JSON.stringify([value.item.externalId,value.item.revision]);
       if(seen.has(identity))throw Error('Duplicate externalId/revision');seen.add(identity);
       for(const ref of [...value.evidencePaths,...value.attachments])if(!inputPaths.has(resolve(workspace,ref)))throw Error('References must point to a supplied input file');
+      if(roles)validateDispositionReferences(value,roles,workspace,index+1);
     }catch(error){errors.push({line:index+1,error:String(error.message??error).slice(0,1000)});if(errors.length>=100)break;}
   }
   return {valid:errors.length===0,count,errors};
