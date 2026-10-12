@@ -30,4 +30,11 @@ Instrumentation uses `dev.mote.collector.filefixture` on an emulator with captur
 
 ## Executed checks
 
-Results will be recorded after verification. Physical-device installation, personal-data capture and live-model checks are not part of this change.
+- `npm run check:affected` passed for the implementation and shared catalogs: `check:local` (all TypeScript consumers, translation parity and release-tool tests) plus Android JVM checks. After the instrumentation-only follow-up, `npm run check:affected -- --base HEAD` selected Android and release-tool checks and passed; the already-verified shared implementation was unchanged.
+- Android debug JVM: **309 tests, 0 failures, 0 errors, 0 skipped**. Debug lint and Development APK build passed. The FileFixture APK and its Android test APK built successfully using JDK 17.
+- API 37 arm64 emulator, isolated `dev.mote.collector.filefixture`: **2 instrumentation tests passed, 0 skipped**, final run **56.237 seconds**. Exact loopback bytes/ACK, HTTP 503 retry, automatic status transitions, viewport preservation, Activity lifecycle and the 212-file inventory assertions all ran.
+- Generated native view renders for folder management, home and an uploading detail were reviewed. `FLAG_SECURE` remains enabled; these renders are in-process drawings of generated fixture views, not personal screenshots.
+
+The initial viewport assertion raced the asynchronous saved-preview layout in one repeated run. The fixture now waits for the original preview to be laid out and verifies the initial scroll position before starting the HTTP attempt; the unchanged scroll-preservation assertion then passes across status updates.
+
+Physical-device installation/new-build validation, personal-data capture, live-model checks, production Central end-to-end ingestion and OEM WorkManager wake-up checks were not performed. The direct production scanner/transport fixture is not a system picker or background scheduling acceptance test.
