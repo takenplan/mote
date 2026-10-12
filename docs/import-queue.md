@@ -17,3 +17,33 @@ Recoveries follow browser exception names and authored server protocol codes. A 
 Generated-only queue and DOM fixtures cover bounded admission, immutable batches, independent job controls, pause/resume, discarded admissions, lost responses, original/session identity, preview slot release, page navigation, connection teardown, late responses and source-specific recovery. Server fixtures verify directory codes before admission and safe HTTP errors. `scripts/test-web-tasks-imports.cjs` runs the built Web app in Chromium against a generated-only real central node, including concurrent admission, navigation, resumption, missing-directory recovery, original retention and desktop/mobile layout. It captures only that fixture window. Physical devices and live models are outside these checks.
 
 The local test runners bound desktop workers to two and server test files to four. Desktop filesystem fixtures have a 15-second default timeout, with 90 seconds for the fixture that durably stages and drains 400 records. HTTP import fixtures poll at 250 ms while asynchronous processing settles. All assertions and production limits are retained.
+
+## Parser preflight and disposition failures
+
+The import Agent writes both `records.jsonl` and `dispositions.json` before running
+`mote-files.mjs validate`. Preflight checks every supplied input is listed exactly
+once, disposition paths are supplied inputs, evidence paths are `parsed`, and
+attachments are `parsed` or `attachment`. The helper and Central share the path
+accounting and reference/status rules. Central independently verifies original
+bytes and validates the result before publishing a preview. A contradiction
+reports the physical JSONL line (including blank lines), reference field, actual
+and expected statuses, and workspace-relative input path. It does not publish a
+partial preview or insert records.
+
+A failed preparation retains archived originals for an explicit retry. It does
+not add an automatic model retry; the Agent can repair preflight errors during
+its existing writable analysis session. Existing parsers that omit dispositions
+still follow Central's warning and manual-review behavior; the bundled Agent's
+preflight requires the disposition file. Attempt files are cleaned up as before;
+the job retains the actionable error rather than the temporary converter or
+personal text.
+
+Generated regressions in `import-runtime.test.ts` compare helper and host failures
+for evidence/status conflicts, invalid attachments, missing, duplicate and unknown
+inputs, combined evidence and blank-line numbering. They also run the helper via
+Node's CLI. `imports.test.ts` verifies a later conflicting record cannot partially
+publish, originals survive, and an explicit retry can preview and confirm the
+corrected records. Live-model retries of owner-selected files are separate checks.
+
+The [2026-10-13 validation report](validation/import-disposition-preflight-2026-10-13.md)
+records generated regressions and the separately authorized local live-model case.

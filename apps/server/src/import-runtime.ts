@@ -15,6 +15,7 @@ export function prepareImportInput(input:ImportPreparation){
     '__EXCELJS__':'exceljs','__YAML__':'yaml','__FFLATE__':'fflate',
   };
   for(const [placeholder,specifier]of Object.entries(dependencies))helper=helper.replaceAll(JSON.stringify(placeholder),JSON.stringify(import.meta.resolve(specifier)));
+  helper=helper.replaceAll('"__IMPORT_CONTRACT__"',JSON.stringify(new URL('./import-disposition-validation.mjs',import.meta.url).href));
   helper=helper.replaceAll('"__PDF_STANDARD_FONTS__"',JSON.stringify(join(dirname(fileURLToPath(import.meta.resolve('pdfjs-dist/package.json'))),'standard_fonts')+sep));
   helper=helper.replace('__MOTE_INPUT_PATHS__',JSON.stringify(input.inputPaths));
   const helperPath=join(input.workspace,'mote-files.mjs');privateFile(helperPath,true);writeFileSync(helperPath,helper,{mode:0o600});
