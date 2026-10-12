@@ -150,7 +150,7 @@ class MainActivity : MoteActivity() {
         val totals: String, val technical: String, val connectionTitle: String, val connection: String,
         val media: String, val config: CollectorConfig?)
     private val refresh = object : Runnable {
-        override fun run() { refreshStatus(); handler.postDelayed(this, 2000) }
+        override fun run() { refreshStatus(); loadHomeContent(); handler.postDelayed(this, 2000) }
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -314,7 +314,17 @@ class MainActivity : MoteActivity() {
         if (!::homeSourceList.isInitialized || homeTask.busy || currentPage != Page.OVERVIEW) return
         homeTask.start("", {}, {
             val store = applicationContext.localSources()
-            val sources = store.sources().map { source -> source to store.state(source.id) }
+            val sources = store.sources().map { source ->
+                val sourceState = store.state(source.id)
+                val state = if (source.binaryFiles()) applicationContext.fileArchives().state(source.id).put("status", sourceState.optString("status")) else sourceState
+                source to state.apply {
+                    if (source.tree && source.binaryFiles()) {
+                        put("folderProgress", LocalContentPresentation.folderStatus(applicationContext, source))
+                        val progress = applicationContext.fileArchives().progress(source)
+                        put("fileTransferring", progress.count(FileSyncPhase.PREPARING) + progress.count(FileSyncPhase.UPLOADING) > 0)
+                    }
+                }
+            }
             val captures = applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 3).getJSONArray("items")
             Triple(sources, captures, applicationContext.localFileContents(3))
         }) { result ->
@@ -322,7 +332,7 @@ class MainActivity : MoteActivity() {
                 homeSourceList.removeAllViews(); homeRecentList.removeAllViews()
                 if (sources.none { it.first.syncContinuously }) homeSourceList.addView(TextView(this).apply { text = MoteI18n.text("尚未添加文件夹。添加后可在这里查看范围和状态。"); textSize = 13f; setTextColor(MoteUi.muted) })
                 sources.filter { it.first.syncContinuously }.forEach { (source, state) ->
-                    addContentRow(homeSourceList, source.name, LocalContentPresentation.sourceStatus(source, state), "source:" + source.id) {
+                    addContentRow(homeSourceList, source.name, LocalContentPresentation.sourceStatus(source, state) + state.optString("folderProgress").takeIf { it.isNotBlank() }?.let { "\n" + it }.orEmpty(), "source:" + source.id) {
                         startActivity(Intent(this, SourcesActivity::class.java).putExtra("sourceId", source.id))
                     }
                 }
@@ -338,7 +348,7 @@ class MainActivity : MoteActivity() {
             orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 14)
             setPadding(dp(16), dp(15), dp(16), dp(15)); isFocusable = true; contentDescription = title; tag = identity
             addView(TextView(this@MainActivity).apply { text = title; textSize = 16f; setTextColor(MoteUi.ink) })
-            addView(TextView(this@MainActivity).apply { text = detail; textSize = 12f; maxLines = 3; setTextColor(MoteUi.muted); setPadding(0, dp(7), 0, 0) })
+            addView(TextView(this@MainActivity).apply { text = detail; textSize = 12f; maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; setTextColor(MoteUi.muted); setPadding(0, dp(7), 0, 0) })
             setOnClickListener { action() }
         }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
     }

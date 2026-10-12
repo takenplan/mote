@@ -68,16 +68,22 @@ class SourcesActivity : MoteActivity() {
                 val store = localSources()
                 store.sources().map { source ->
                     val state = if (source.binaryFiles()) fileArchives().state(source.id).put("status", store.state(source.id).optString("status")) else store.state(source.id); val pending = if (source.binaryFiles()) fileArchives().pendingCount(source.id) else state.optJSONArray("pending")?.length() ?: 0
-                    val status = when (state.optString("status")) {
+                    val fileProgress = if (source.binaryFiles()) fileArchives().progress(source) else null
+                    val transferring = fileProgress != null && fileProgress.count(FileSyncPhase.UPLOADING) + fileProgress.count(FileSyncPhase.PREPARING) > 0
+                    val status = if (transferring) MoteI18n.text("正在同步来源记录") else when (state.optString("status")) {
                         "permission" -> MoteI18n.text("权限丢失，请重新授权"); "paused" -> MoteI18n.text("中央已暂停；请在中央恢复后重试"); "provider" -> MoteI18n.text("提供者不可用或缓存已满；保留旧快照，稍后重试")
                         "context-conflict" -> MoteI18n.text("资料说明与中央版本冲突；请打开设置处理，文件保留待发。"); "context-http" -> MoteI18n.text("资料说明尚未获中央确认；请检查连接或升级中央，文件保留待发。");
                         "consent" -> MoteI18n.text("请编辑来源并确认完整文件上传到中央处理，处理后不保留中央原件。"); "offline" -> MoteI18n.text("等待网络/节点恢复"); "http", "ack" -> MoteI18n.text("节点未确认，原版本保留待发"); "synced" -> if (source.kind == "local-files" && source.retention != "archive") MoteI18n.text("文件已接收；中央处理与可搜索状态请在资料库查看") else MoteI18n.text("已同步"); "partial" -> MoteI18n.text("扫描不完整"); "scanned" -> MoteI18n.text("已扫描，等待发送"); else -> MoteI18n.text("等待首次扫描")
                     }
-                    val syncState = when { !source.enabled -> "paused"; !Settings(this).read().hasSyncConnection() -> "unconfigured"; state.optString("status") in setOf("permission", "consent", "context-conflict") -> "blocked"; state.optString("status") == "paused" -> "paused"; state.optString("status") in setOf("offline", "http", "ack", "provider", "context-http") -> "error"; pending > 0 || source.contextDirty -> "waiting"; else -> "idle" }
+                    val syncState = when { !source.enabled -> "paused"; !Settings(this).read().hasSyncConnection() -> "unconfigured"; state.optString("status") in setOf("permission", "consent", "context-conflict") -> "blocked"; state.optString("status") == "paused" -> "paused"; transferring -> "uploading"; state.optString("status") in setOf("offline", "http", "ack", "provider", "context-http") -> "error"; pending > 0 || source.contextDirty -> "waiting"; else -> "idle" }
                     val facts = NativeStatus.project(org.json.JSONObject().put("pending", pending).put("lastAcknowledgedAt", state.opt("lastAcknowledgedAt") ?: org.json.JSONObject.NULL).put("syncState", syncState)
                         .put("errorCode", if (state.optString("status") == "permission") "permission_required" else if (state.optString("status") == "provider") "source_unavailable" else org.json.JSONObject.NULL)
                         .put("scanComplete", state.opt("scanComplete") ?: org.json.JSONObject.NULL).put("skipped", state.opt("skipped") ?: org.json.JSONObject.NULL))
-                    source to MoteI18n.text("\n{0}\n{1} · {2} · {3}\n待发 {4} 个版本 · 最近扫描 {5}\n{6}", source.name, if (source.kind == "local-calendar") MoteI18n.text("日历") else MoteI18n.text("文件"), when (source.retention) { "reference" -> MoteI18n.text("仅文件目录"); "archive" -> MoteI18n.text("原件归档"); else -> if (source.kind == "local-files") MoteI18n.text("中央提取正文，不保留原件") else MoteI18n.text("内容快照") }, if (source.enabled) status else MoteI18n.text("本机已停用"), pending, state.optString("lastScan", MoteI18n.text("尚无")), if (state.has("scanComplete") && !state.optBoolean("scanComplete")) MoteI18n.text("本次扫描未完整：跳过 {0} 项；没有推断这些项已删除。", state.optInt("skipped")) else "") + "\n" + NativeStatus.summary(facts)
+                    if (source.tree && source.binaryFiles()) source to listOf(
+                        LocalContentPresentation.folderStatus(applicationContext, source),
+                        MoteI18n.text("文件") + " · " + when (source.retention) { "reference" -> MoteI18n.text("仅文件目录"); "archive" -> MoteI18n.text("原件归档"); else -> MoteI18n.text("中央提取正文，不保留原件") },
+                        MoteI18n.text("最近扫描：{0}", state.optString("lastScan").ifBlank { MoteI18n.text("尚无") })
+                    ).joinToString("\n") else source to MoteI18n.text("\n{0}\n{1} · {2} · {3}\n待发 {4} 个版本 · 最近扫描 {5}\n{6}", source.name, if (source.kind == "local-calendar") MoteI18n.text("日历") else MoteI18n.text("文件"), when (source.retention) { "reference" -> MoteI18n.text("仅文件目录"); "archive" -> MoteI18n.text("原件归档"); else -> if (source.kind == "local-files") MoteI18n.text("中央提取正文，不保留原件") else MoteI18n.text("内容快照") }, if (source.enabled) status else MoteI18n.text("本机已停用"), pending, state.optString("lastScan", MoteI18n.text("尚无")), if (state.has("scanComplete") && !state.optBoolean("scanComplete")) MoteI18n.text("本次扫描未完整：跳过 {0} 项；没有推断这些项已删除。", state.optInt("skipped")) else "") + "\n" + NativeStatus.summary(facts)
                 }
             }
             runOnUiThread {

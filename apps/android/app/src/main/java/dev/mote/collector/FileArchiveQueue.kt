@@ -11,7 +11,7 @@ import java.util.UUID
 
 /** Local per-file journal. A pending manifest and its bytes never change during retry. */
 class FileArchiveQueue(private val directory: File, private val cipher: ByteCipher) {
-    companion object { const val PART_BYTES = 4 * 1024 * 1024; const val MAX_BYTES = 512L * 1024 * 1024; private val lock = Any() }
+    companion object { const val PART_BYTES = 4 * 1024 * 1024; const val MAX_BYTES = 512L * 1024 * 1024; private val lock = Any(); private val progressEntries = mutableMapOf<String, MutableMap<String, FileSyncEntry>>() }
     init { directory.mkdirs() }
     private fun root(id: String): File { require(id.matches(Regex("[A-Za-z0-9_.:-]{1,128}"))); return File(directory, id).apply { mkdirs() } }
     private fun stateFile(id: String) = File(root(id), "state.enc")
@@ -26,7 +26,45 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         if (!file.exists()) return@synchronized JSONObject().put("transportQueueVersion", LocalDataFormat.VERSION)
         read(file).also { check(it.has("transportQueueVersion") && it.getInt("transportQueueVersion") == LocalDataFormat.VERSION) { MoteI18n.text(LocalDataFormat.RESET_MESSAGE) } }
     }
+    private fun progressInventory(id: String): MutableMap<String, FileSyncEntry> = progressEntries.getOrPut(root(id).absolutePath) {
+        rows(id).associate { row -> FileSyncEntry.from(row).let { it.key to it } }.toMutableMap()
+    }
+    internal fun recentRows(source: LocalSource, limit: Int): List<JSONObject> = synchronized(lock) {
+        progressInventory(source.id).values.sortedByDescending { it.observedAt }.take(limit).map { entry ->
+            presentationRow(source, read(File(root(source.id), "item-${entry.key}.enc")))
+        }
+    }
+    internal fun progress(source: LocalSource, now: Long = System.currentTimeMillis()): FileSyncProgress = synchronized(lock) {
+        val sourceKey = root(source.id).absolutePath
+        // Read the inventory once per process on a background thread; mutations update only their entry.
+        val entries = progressInventory(source.id)
+        val active = FileSyncTransfers.get(sourceKey)
+        val immediate = !source.tree && !source.syncContinuously
+        FileSyncProgress(entries.values.groupingBy { entry -> (if (immediate) entry.copy(stableAt = 0) else entry).phase(now, active) }.eachCount(), state(source.id).optBoolean("scanComplete"))
+    }
+    internal fun presentationRow(source: LocalSource, row: JSONObject): JSONObject = JSONObject(row.toString()).apply {
+        put("syncImmediately", !source.tree && !source.syncContinuously)
+        FileSyncTransfers.get(root(source.id).absolutePath)?.takeIf { it.key == SourceRules.hash(row.getJSONObject("candidate").getString("externalId")) }?.let { put("syncPhase", it.phase.name) }
+    }
+    internal fun transferKey(id: String) = root(id).absolutePath
+    internal fun recordFailure(source: LocalSource, observed: JSONObject, phase: String, httpStatus: Int? = null, blocked: Boolean = false) = synchronized(lock) {
+        val path = itemFile(source.id, observed.getJSONObject("candidate").getString("externalId"))
+        if (!path.exists()) return@synchronized
+        val row = read(path)
+        if (signature(row.getJSONObject("candidate")) != signature(observed.getJSONObject("candidate")) || !dirty(row)) return@synchronized
+        row.put("syncFailure", JSONObject().put("phase", phase).put("blocked", blocked).put("httpStatus", httpStatus ?: JSONObject.NULL))
+        saveRow(source.id, row)
+    }
+    internal fun clearFailure(id: String, observed: JSONObject) = synchronized(lock) {
+        val path = itemFile(id, observed.getJSONObject("candidate").getString("externalId"))
+        if (!path.exists()) return@synchronized
+        val row = read(path)
+        if (row.has("syncFailure") && signature(row.getJSONObject("candidate")) == signature(observed.getJSONObject("candidate"))) {
+            row.remove("syncFailure"); saveRow(id, row)
+        }
+    }
     fun saveState(id: String, state: JSONObject) = synchronized(lock) { check(!state.has("transportQueueVersion") || state.getInt("transportQueueVersion") == LocalDataFormat.VERSION); write(stateFile(id), state.put("transportQueueVersion", LocalDataFormat.VERSION)) }
+    internal fun row(id: String, external: String): JSONObject = synchronized(lock) { read(itemFile(id, external)) }
     fun candidate(id: String, external: String): JSONObject? = synchronized(lock) { read(itemFile(id, external)).optJSONObject("candidate") }
     fun rows(id: String): List<JSONObject> = synchronized(lock) { root(id).listFiles()?.filter { it.name.startsWith("item-") && it.name.endsWith(".enc") }?.map { read(it) } ?: emptyList() }
     private fun dirty(row: JSONObject) = row.has("pending") || (!row.optBoolean("baseline") && row.optString("signature") != signature(row.getJSONObject("candidate")))
@@ -41,6 +79,8 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         if (dirty(row)) mark(id, row)
         if (row.has("pending")) { state.put("activeKey", key); saveState(id, state) }
         write(itemFile(id, external), row)
+        progressEntries[root(id).absolutePath]?.put(key, FileSyncEntry.from(row))
+        LocalStateChanges.changed(records = true, storage = false)
         if (!dirty(row)) mark(id, row)
         if (!row.has("pending") && state.optString("activeKey") == key) { state.remove("activeKey"); saveState(id, state) }
     }
@@ -54,6 +94,8 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
     private fun discard(id: String, row: JSONObject) {
         val external = row.getJSONObject("candidate").getString("externalId")
         itemFile(id, external).delete()
+        progressEntries[root(id).absolutePath]?.remove(SourceRules.hash(external))
+        LocalStateChanges.changed(records = true, storage = false)
         File(root(id), "todo-" + SourceRules.hash(external)).delete()
         if (row.has("pending")) File(root(id), "spool").deleteRecursively()
     }
@@ -111,7 +153,7 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         val path = itemFile(source.id, item.getString("externalId")); val row = read(path)
         if (!path.exists()) check((root(source.id).listFiles()?.count { it.name.startsWith("item-") } ?: 0) < 50000) { MoteI18n.text("文件清单达到 50000 项上限，请缩小目录") }
         if (row.optJSONObject("candidate")?.let { signature(it) } != signature(item)) {
-            row.put("stableSince", now); row.remove("nextPrepareAt")
+            row.put("stableSince", now); row.remove("nextPrepareAt"); row.remove("syncFailure")
         }
         row.put("candidate", item).put("seen", generation)
         if (source.initialSync == "new_only" && !state(source.id).optBoolean("initialized")) row.put("baseline", true)
@@ -128,14 +170,14 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         val state = state(source.id).put("initialized", true).put("scanComplete", true).put("lastScan", Instant.now().toString()).put("generation", UUID.randomUUID().toString())
         state.remove("stack"); saveState(source.id, state)
     }
-    fun pendingPage(id: String, offset: Int, limit: Int = 30): JSONObject = synchronized(lock) {
+    fun pendingPage(id: String, offset: Int, limit: Int = 30, source: LocalSource? = null): JSONObject = synchronized(lock) {
         require(offset >= 0 && limit in 1..60); state(id)
         val all = markers(id).sortedBy { it.name }
         val items = all.drop(offset).take(limit).map { marker ->
             val row = read(File(root(id), "item-${marker.name.removePrefix("todo-")}.enc"))
             val item = row.optJSONObject("candidate") ?: JSONObject()
             JSONObject().put("name", item.optString("title", item.optString("externalId")))
-                .put("size", item.optLong("size")).put("status", if (row.has("pending")) MoteI18n.text("等待上传 / 续传") else MoteI18n.text("等待准备"))
+                .put("size", item.optLong("size")).put("status", LocalContentPresentation.fileStatus(presentationRow(source ?: LocalSource(id = id, name = "", kind = "local-files"), row)))
         }
         JSONObject().put("total", all.size).put("items", JSONArray(items))
     }
@@ -155,7 +197,7 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         if (row.has("pending")) row else { state.remove("activeKey"); saveState(id, state); null }
     }
     /** Open is called for archive or transient snapshot bytes, after stability and baseline checks. */
-    fun prepare(source: LocalSource, open: (JSONObject) -> InputStream, unchanged: (JSONObject) -> Boolean, now: Long = System.currentTimeMillis(), anchor: ((String) -> String?)? = null, captureImmediately: Boolean = false): JSONObject? {
+    fun prepare(source: LocalSource, open: (JSONObject) -> InputStream, unchanged: (JSONObject) -> Boolean, now: Long = System.currentTimeMillis(), anchor: ((String) -> String?)? = null, captureImmediately: Boolean = false, onSelected: ((JSONObject) -> Unit)? = null): JSONObject? {
         val selected = synchronized(lock) {
         configure(source)
         next(source.id)?.let { assertCurrent(source, it); return it }
@@ -170,6 +212,7 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         Triple(row.toString(), state.getString("policy"), state.getString("generation"))
         }
         val selectedRow = JSONObject(selected.first)
+        onSelected?.invoke(selectedRow)
         // This callback may query central state and read configuration. Never run
         // external code under the archive lock; Settings.save checks this queue.
         val anchoredRevision = if (!selectedRow.has("revision")) anchor?.invoke(selectedRow.getJSONObject("candidate").getString("externalId")) else null
@@ -217,11 +260,11 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
             item.put("revision", if (matchesRecovery) recovery!!.getString("revision") else SourceRules.hash(SourceRules.canonical(manifest)))
             if (matchesRecovery) item.put("observedAt", recovery!!.getString("observedAt"))
             row.put("pending", JSONObject().put("manifest", manifest).put("signature", signature(candidate)).apply { if (matchesRecovery) put("recoveryCaptureId", recovery!!.getString("captureId")) })
-            row.remove("nextPrepareAt"); row.remove("snapshotRecovery"); row.put("contentPolicy", state(source.id).getString("policy"))
+            row.remove("nextPrepareAt"); row.remove("syncFailure"); row.remove("snapshotRecovery"); row.put("contentPolicy", state(source.id).getString("policy"))
             saveRow(source.id, row)
             if (!source.syncContinuously && !source.tree) saveState(source.id, state(source.id).put("importCaptured", true))
             row
-        } catch (error: Exception) { spool.deleteRecursively(); row.put("nextPrepareAt", now + 60000); saveRow(source.id, row); throw error }
+        } catch (error: Exception) { spool.deleteRecursively(); row.put("nextPrepareAt", now + 60000).put("syncFailure", JSONObject().put("phase", "prepare").put("blocked", false)); saveRow(source.id, row); throw error }
         }
     }
     fun part(id: String, part: Int): ByteArray = synchronized(lock) { require(part >= 0); cipher.open(File(File(root(id), "spool"), part.toString()).readBytes()) }
@@ -231,7 +274,7 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         if (manifest.has("sha256")) check(ack.optString("sha256") == manifest.getString("sha256") && ack.optLong("sizeBytes", -1) == manifest.getLong("sizeBytes")) { MoteI18n.text("中央原件校验确认不匹配") }
         val current = read(itemFile(id, item.getString("externalId")))
         check(current.optJSONObject("pending")?.getJSONObject("manifest")?.getJSONObject("item")?.getString("revision") == item.getString("revision"))
-        current.put("captureId", ack.optString("captureId", ack.getString("id"))).put("acknowledgedAt", Instant.now().toString()).put("signature", pending.getString("signature")).put("revision", item.getString("revision")).remove("pending")
+        current.put("captureId", ack.optString("captureId", ack.getString("id"))).put("acknowledgedAt", Instant.now().toString()).put("signature", pending.getString("signature")).put("revision", item.getString("revision")).apply { remove("pending"); remove("syncFailure"); remove("nextPrepareAt") }
         saveRow(id, current); saveState(id, state(id).put("lastAcknowledgedAt", Instant.now().toString())); File(root(id), "spool").deleteRecursively()
     }
     /** Preview/export only the immutable saved version, never the provider's current URI. */
@@ -260,6 +303,6 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         check(hash.digest().joinToString("") { "%02x".format(it) } == manifest.getString("sha256"))
         output.flush()
     }
-    fun resetSynced() = synchronized(lock) { check(pendingSync().count == 0); directory.listFiles()?.filter { it.isDirectory }?.forEach { it.deleteRecursively() }; Unit }
-    fun remove(id: String) = synchronized(lock) { root(id).deleteRecursively() }
+    fun resetSynced() = synchronized(lock) { check(pendingSync().count == 0); directory.listFiles()?.filter { it.isDirectory }?.forEach { progressEntries.remove(it.absolutePath); it.deleteRecursively() }; Unit }
+    fun remove(id: String) = synchronized(lock) { progressEntries.remove(root(id).absolutePath); root(id).deleteRecursively(); LocalStateChanges.changed(records = true, storage = false) }
 }
