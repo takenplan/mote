@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "保存说明": "Save description",
+  "资料说明版本已变化；草稿已保留，请重新加载最新版本后再保存。": "The description version has changed. Your draft is kept; reload the latest version before saving.",
   "复制或删除模型预设": "Copy or delete model presets",
   "复用已有连接设置，或清理未使用的自定义预设。": "Reuse existing connection settings, or remove unused custom presets.",
   "无法保存本机草稿，请检查存储后重试。": "Unable to save the local draft. Check storage and try again.",
