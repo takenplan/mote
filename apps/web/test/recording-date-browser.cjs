@@ -69,8 +69,10 @@ async function run(){
  assert.deepEqual(await js('window.dateFields.map(input=>input.value)'),['2011-09-01T08:30','2013-10-02T18:45']);
  await js(`document.querySelector('.lark-step button[type=submit]').click()`);
  await until(async()=>{const status=await request('/api/connectors/feishu-recordings');return status.selection.start===new Date('2011-09-01T08:30').toISOString()&&status.selection.end===new Date('2013-10-02T18:45').toISOString();},'save local dates as UTC');
- await window.reload();
+ await until(()=>js(`!!document.querySelector('.recording-save-bar [role=status]')&&!document.querySelector('.lark-step fieldset').disabled`),'renderer acknowledgement before reload');
+ await Promise.race([new Promise(resolve=>{wc.once('did-finish-load',resolve);window.reload();}),delay(30000).then(()=>{throw Error('Timed out: browser reload');})]);
  await until(()=>js(`document.querySelector('.lark-range input')?.value==='2011-09-01T08:30'`),'persisted start after reload');
+ await until(()=>js(`!!document.querySelector('.source-context-fields textarea')&&!document.querySelector('.source-context-fields textarea').disabled`),'source context after reload');
  assert.equal(await js(`document.querySelectorAll('.lark-range input')[1].value`),'2013-10-02T18:45');
  await js(`window.dateFields=[...document.querySelectorAll('.lark-range input')];window.dateFields[1].focus()`);
  for(let i=0;i<8;i++)await key('Left');
