@@ -172,6 +172,22 @@ test('per-file dispositions expose unsupported originals and cannot contradict e
  assert.equal(preview.status,'awaiting_confirmation');assert.equal(preview.dispositions?.counts.unsupported,1);assert.equal(preview.dispositions?.counts.parsed,1);assert.ok(preview.warnings.some(w=>w.includes('unsupported')));
  invalid=true;imports.updateInstruction(job.id,'test contradictory disposition');const rejected=await imports.prepare(job.id);assert.equal(rejected.status,'failed');assert.match(rejected.error!,/marked parsed/);
 });
+test('contradictory evidence dispositions fail atomically and an explicit retry reuses archived originals',async t=>{
+ let invalid=true,calls=0;const {imports,files,store}=fixture(t,{prepare:async({workspace,inputPaths})=>{
+  calls++;
+  writeFileSync(join(workspace,'records.jsonl'),JSON.stringify({item:item('accepted-first'),evidencePaths:[inputPaths[0]]})+'\n\n'+JSON.stringify({item:item('conflicting-second'),evidencePaths:[inputPaths[1]]})+'\n');
+  writeFileSync(join(workspace,'dispositions.json'),JSON.stringify({items:inputPaths.map((path,index)=>({path,status:invalid&&index?'attachment':'parsed',reason:'Generated fixture'}))}));
+  return {summary:'Generated two-record preview'};
+ }});
+ const job=await imports.create({files:[entry('first.md','Generated first'),entry('second.md','Generated second')]});
+ const failed=await imports.prepare(job.id);assert.equal(failed.status,'failed');assert.equal(calls,1,'No automatic model retry');
+ assert.match(failed.error!,/manifest line 3, evidencePaths, status=attachment, expected=parsed, path="inputs\/second.md"/);
+ assert.equal(failed.preview,undefined);assert.equal(failed.progress.imported,0);assert.equal(store.list().items.length,0);assert.deepEqual(failed.captureIds,[]);
+ assert.equal(files.read(job.files[0].id).toString(),'Generated first');assert.equal(files.read(job.files[1].id).toString(),'Generated second');
+ invalid=false;const preview=await imports.retry(job.id);assert.equal(preview.status,'awaiting_confirmation');assert.equal(preview.preview?.count,2);assert.equal(calls,2);
+ assert.deepEqual(preview.files.map(file=>file.id),job.files.map(file=>file.id));assert.equal(preview.error,undefined);
+ const completed=await imports.confirm(job.id);assert.equal(completed.status,'completed');assert.equal(completed.progress.imported,2);assert.equal(store.list().items.length,2);
+});
 test('record, attachments and progress commit together; partial failures resume exact new IDs',async t=>{
  const batches:string[][]=[];const {imports,files,store}=fixture(t,{prepare:async({workspace,inputPaths})=>{writeFileSync(join(workspace,'records.jsonl'),['first','second'].map(id=>JSON.stringify({item:item(id),evidencePaths:inputPaths})).join('\n'));return {summary:'two fixtures'};},onImported:async ids=>{batches.push(ids);return {memoryJobId:'exact-batch'};}});
  const attach=files.attach.bind(files);let fail=true;
