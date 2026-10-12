@@ -1,7 +1,6 @@
 import {useResource} from './useResource';
 import {resources} from './resource-cache';
 import {RuntimeSettings} from './RuntimeSettings';
-import {confirmNavigation} from './unsaved';
 import {PerceptionSettings} from './PerceptionSettings';
 import { moteText } from '@mote/shared/i18n';
 import { useEffect, useState } from 'react';
@@ -12,11 +11,14 @@ import {ConfigurationBuilder, type ConfigCategory} from './ConfigurationBuilder'
 import {MemorySettings} from './MemorySettings';
 import {ModelProfiles} from './ModelProfiles';
 import {ModelAssignments} from './ModelAssignments';
+import {ModelStartGuide} from './ModelStartGuide';
+import {useHashChoice} from './useHashChoice';
+import {settingsCategoryFromHash} from './route-query';
 import {FileProcessingSettings} from './FileProcessingSettings';
-export type SettingsDestination = 'imports'|'usage'|'lark'|'vault'|'developer'|'about'|'connections';
+export type SettingsDestination = 'imports'|'usage'|'lark'|'vault'|'developer'|'about'|'connections'|'extensions';
 type SettingsCategory = ConfigCategory|'providers'|'model'|'file-processing'|'images';
 const categories: {id:SettingsCategory;title:string;description:string;icon:typeof Bot}[] = [
-  {id:'providers',title:moteText("模型 Provider"),description:moteText("连接预设、模型目录、凭据与测试"),icon:Bot},
+  {id:'providers',title:moteText('模型连接（Provider）'),description:moteText('保存模型服务的地址与凭据，选择模型并按需测试连接'),icon:Bot},
   {id:'model',title:moteText("模块与模型"),description:moteText("为各模块分配预设和模型，设置记忆与回顾"),icon:Settings2},
   {id:'images',title:moteText('图片'),description:moteText('统一文字识别、画面理解与历史补处理'),icon:FileText},
   {id:'file-processing',title:moteText("文件与语音"),description:moteText("本地语音模型、转写与文件处理策略"),icon:FileText},
@@ -30,24 +32,24 @@ function EffectiveField({field}:{field:ConfigurationField}) {
  return <div className="effective-field" data-config-key={field.key}><div><strong>{field.label}</strong><small>{field.description}</small></div><div>{field.visibility==='secret-status'?<span className={`badge ${value?'green':'muted'}`}>{value?moteText("已配置"):moteText("未配置")}</span>:<span>{value===null||value===''?moteText("未设置"):field.unit==='bytes'&&typeof value==='number'?bytes(value):Array.isArray(value)?value.join('、')||moteText("未设置"):typeof value==='boolean'?value?moteText("已开启"):moteText("已关闭"):String(value)}{typeof value==='number'&&field.unit&&field.unit!=='bytes'?` ${{days:moteText("天"),hours:moteText("小时"),seconds:moteText("秒"),ms:moteText("毫秒"),tokens:'tokens',files:moteText("个"),entries:moteText("条")}[field.unit]||field.unit}`:''}</span>}<small>{origins[field.source]}</small></div></div>;
 }
 export function ServerSettings({api,onNavigate,onModelApplied}:{api:Api;onNavigate:(page:SettingsDestination)=>void;onModelApplied:()=>void}) {
- const [category,setCategory]=useState<SettingsCategory|null>(null),[revision,setRevision]=useState(0);
+ const [category,setCategory]=useHashChoice('category',settingsCategoryFromHash),[revision,setRevision]=useState(0);
  const configuration=useResource<ServerConfiguration>(api,'/api/configuration'),sourceResource=useResource<{items:SourceConnection[]}>(api,category==='connectors'?'/api/sources':null);
  const config=configuration.data,busy=configuration.loading,error=configuration.error,sources=sourceResource.data?.items??[],sourcesError=sourceResource.error?errorMessage(sourceResource.error):'';
  const refresh=()=>{resources(api).invalidate(key=>key==='/api/configuration'||key==='/api/sources'||key==='/api/file-processing'||key==='/api/media-models'||key.startsWith('/api/model-settings'));setRevision(n=>n+1);};
  useEffect(()=>{const heading=document.querySelector<HTMLElement>('.server-settings h1');if(heading?.getClientRects().length){heading.tabIndex=-1;heading.focus({preventScroll:true});}},[category]);
  const selected=categories.find(c=>c.id===category);
  return <div className="server-settings">
-  <button className="back-link workspace-back" aria-label={moteText('返回{0}',category?moteText('模型与服务'):moteText('设置'))} onClick={()=>{if(category){if(confirmNavigation())setCategory(null);}else onNavigate('about');}}><ArrowLeft size={16}/>{moteText('返回上级')}</button>
+  <button className="back-link workspace-back" aria-label={moteText('返回{0}',category?moteText('模型与服务'):moteText('设置'))} onClick={()=>{if(category){setCategory(null);}else onNavigate('about');}}><ArrowLeft size={16}/>{moteText('返回上级')}</button>
   <div className="page-heading settings-heading"><div><div className="eyebrow">{moteText("按你的方式运行")}</div><h1>{selected?.title||moteText("模型与服务")}</h1><p>{selected?.description||moteText("连接、记录与理解，各自有清楚的位置。")}</p></div><button className="button subtle" disabled={busy} onClick={refresh}><RefreshCw size={15} className={busy?'spin':''}/>{moteText("刷新生效配置")}</button></div>
   {error!==undefined&&<p className="notice error" role="alert">{errorMessage(error)}</p>}
   {!config&&busy&&<p role="status">{moteText("正在读取节点设置…")}</p>}
   {!category&&<>
-   <div className="settings-category-label">{moteText("偏好设置")}</div><div className="preference-menu">{categories.map(item=><button key={item.id} className="preference-menu-row" onClick={()=>setCategory(item.id)}><span className="preference-menu-icon"><item.icon size={21}/></span><span><strong>{item.title}</strong><small>{item.description}</small></span><ArrowRight size={17}/></button>)}</div>
+   <ModelStartGuide/><div className="settings-category-label">{moteText("偏好设置")}</div><div className="preference-menu">{categories.map(item=><button key={item.id} className="preference-menu-row" onClick={()=>setCategory(item.id)}><span className="preference-menu-icon"><item.icon size={21}/></span><span><strong>{item.title}</strong><small>{item.description}</small></span><ArrowRight size={17}/></button>)}</div>
    <p className="settings-footnote"><ShieldCheck size={16}/>{moteText("模型、记忆、文件处理与飞书设置可直接保存并生效；其他偏好通过部署草稿修改并重启。离开有未保存修改的配置页面时会先提醒。")}</p>
   </>}
   {category==='file-processing'&&<FileProcessingSettings api={api}/>}
-  {category==='images'&&<PerceptionSettings api={api} onMemory={()=>{if(confirmNavigation())setCategory('model');}} onAdvanced={()=>{if(confirmNavigation())setCategory('file-processing');}}/>}
-  {config&&categories.filter(item=>category===item.id&&item.id!=='file-processing'&&item.id!=='images').map(item=><div key={item.id}>{item.id==='providers'&&<ModelProfiles api={api} revision={revision} onApplied={()=>{setRevision(n=>n+1);onModelApplied();}}/>}{item.id==='model'&&<><ModelAssignments api={api} revision={revision} onApplied={()=>{setRevision(n=>n+1);onModelApplied();}} onManage={()=>{if(confirmNavigation())setCategory('providers');}}/><RuntimeSettings api={api} kind="execution"/><MemorySettings api={api}/></>} {item.id!=='model'&&item.id!=='providers'&&item.id!=='file-processing'&&item.id!=='images'&&<><ConfigurationBuilder config={config} category={item.id} sources={sources} sourcesError={sourcesError}/><section className="panel effective-settings"><div className="section-heading"><div><h2>{moteText("当前生效值")}</h2><p>{moteText("来自运行中的中央节点；与上方尚未应用的草稿分开显示。")}</p></div><span className="badge muted">{moteText("只读")}</span></div>{config.groups.find(g=>g.id===item.id)?.fields.map(field=><EffectiveField key={field.key} field={field}/>)}</section></>}</div>)}
+  {category==='images'&&<PerceptionSettings api={api} onMemory={()=>{setCategory('model');}} onAdvanced={()=>{setCategory('file-processing');}}/>}
+  {config&&categories.filter(item=>category===item.id&&item.id!=='file-processing'&&item.id!=='images').map(item=><div key={item.id}>{item.id==='providers'&&<ModelProfiles api={api} revision={revision} onApplied={()=>{setRevision(n=>n+1);onModelApplied();}}/>}{item.id==='model'&&<><ModelAssignments api={api} revision={revision} onApplied={()=>{setRevision(n=>n+1);onModelApplied();}} onManage={()=>{setCategory('providers');}}/><div className="discovery-inline-guidance"><p>{moteText('先检查你要用的模块即可。下方高级设置管理任务执行名额、自动记忆配方和历史处理节奏，可按需调整。')}</p></div><details className="discovery-settings-advanced"><summary>{moteText('高级：任务执行与并发（Harness）')}</summary><p>{moteText('任务超出名额时排队；这是执行资源设置，不是启用问答的起步步骤。')}</p><RuntimeSettings api={api} kind="execution"/></details><details className="discovery-settings-advanced"><summary>{moteText('高级：记忆、洞察与自动处理节奏')}</summary><p>{moteText('这里管理已有配方和历史资料处理周期；整体自动记忆的暂停 / 恢复在「自动记忆与插件」。')}</p><MemorySettings api={api} onPlans={()=>onNavigate("extensions")}/></details></>} {item.id!=='model'&&item.id!=='providers'&&item.id!=='file-processing'&&item.id!=='images'&&<><ConfigurationBuilder config={config} category={item.id} sources={sources} sourcesError={sourcesError}/><section className="panel effective-settings"><div className="section-heading"><div><h2>{moteText("当前生效值")}</h2><p>{moteText("来自运行中的中央节点；与上方尚未应用的草稿分开显示。")}</p></div><span className="badge muted">{moteText("只读")}</span></div>{config.groups.find(g=>g.id===item.id)?.fields.map(field=><EffectiveField key={field.key} field={field}/>)}</section></>}</div>)}
  </div>;
 }
 export function AdvancedConfiguration({api}:{api:Api}) {

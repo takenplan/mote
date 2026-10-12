@@ -56,6 +56,8 @@ import './workspace.css';
 import './library.css';
 import './settings-ui.css';
 import './plugin-center.css';
+import './discovery-ui.css';
+import './feature-guide.css';
 import { confirmNavigation } from './unsaved';
 
 
@@ -103,7 +105,7 @@ function App() {
   useEffect(() => {
     const navigate = () => {
       const next = readWorkspaceRoute(location.hash,readPage,collectionIds());
-      if ((next.page !== pageRef.current || (next.page==='archive'&&next.collection!==archiveTabRef.current)) && !confirmNavigation()) {
+      if (location.hash !== currentHash.current && !confirmNavigation()) {
         history.replaceState(null, '', currentHash.current); return;
       }
       currentHash.current=location.hash;
@@ -264,6 +266,7 @@ function App() {
   }, [page, showConnect]);
   function onPage(next: Page) {
     const target=canonicalDestination(next,archiveTabRef.current,collectionIds());
+    if(!webFeatures.page(target.page)){setNotice(moteText('当前服务未提供此入口'));return;}
     if ((target.page !== page || (target.page==='archive'&&target.collection!==archiveTabRef.current)) && !confirmNavigation()) return;
     history.pushState(null, '', workspaceHash(routes[target.page],target.page==='archive'?target.collection:undefined));
     currentHash.current=location.hash;
@@ -315,7 +318,7 @@ function App() {
         </button>
         <div className="workspace-label">{moteText("个人资料库")}</div>
         <nav aria-label={moteText("主导航")}>
-          {nav.map(item => <button key={item.id} className={primaryDestination(page) === item.id ? 'active' : ''} aria-current={primaryDestination(page) === item.id ? 'page' : undefined} onClick={() => onPage(item.id)}><item.icon size={18} strokeWidth={1.7}/>{item.label}</button>)}
+          {nav.map(item => <button key={item.id} className={primaryDestination(page) === item.id ? 'active' : ''} aria-current={primaryDestination(page) === item.id ? 'page' : undefined} onClick={() => onPage(item.id)}><item.icon size={18} strokeWidth={1.7}/><span className="discovery-nav-copy"><span>{item.label}</span>{item.id==='activity'&&<small>{moteText("Mote 后台工作")}</small>}</span></button>)}
         </nav>
         <div className="sidebar-bottom"><LanguageSelector/>
           <button aria-current={primaryDestination(page)==='about'?'page':undefined} className={'settings-nav '+(primaryDestination(page)==='about'?'active':'')} onClick={()=>onPage('about')}><Settings2 size={18}/>{moteText('设置')}</button>
@@ -352,7 +355,7 @@ function App() {
               <strong>{pageLabels[page]}</strong>
             </span>
           </div>
-          <div className="topbar-actions"><button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("记录")}</button>
+          <div className="topbar-actions"><button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>
             <CentralStatusPill
               connection={connection}
               verified={verified}

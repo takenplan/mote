@@ -37,7 +37,9 @@ test('explicit library navigation leads directly into rows and source details wi
   const {root,d}=await fixture(t),reads:string[]=[],opened:string[]=[];
   const api=apiWith(path=>{reads.push(path);if(path.startsWith('/api/capture-browser?'))return {items:[row()],nextCursor:null,totalCount:1};if(path.startsWith('/api/capture-browser/'))return capture();throw Error('Unexpected generated request '+path);});
   await act(async()=>root.render(view(api,{onOpen:ref=>opened.push(ref)})));
-  assert.deepEqual(Array.from(d.querySelectorAll('.library-navigation button'),button=>button.getAttribute('data-collection-id')),webFeatures.collections().map(entry=>entry.id));
+  assert.deepEqual(Array.from(d.querySelectorAll('.library-navigation button'),button=>button.getAttribute('data-collection-id')),webFeatures.collections().filter(entry=>entry.id!=='coding-status').map(entry=>entry.id));
+  assert.equal(d.querySelector('[data-collection-id="coding-status"]'),null,'Coding receipts are contextual in Processing tasks; the legacy collection remains registered');
+  assert.ok(webFeatures.collections().some(entry=>entry.id==='coding-status'));
   assert.equal(d.querySelector('[data-collection-id="segments"]')?.textContent,'片段');assert.equal(d.querySelector('select[aria-label="资料类型"]'),null);assert.equal(d.querySelector('[aria-label="记录视图"]'),null);
   assert.equal(d.querySelector('.library-detail h3')?.textContent,'选择一条资料');
   const record=d.querySelector<HTMLButtonElement>('.library-record')!;record.focus();
@@ -146,4 +148,14 @@ test('a deployed type adds card, detail, panel and action without changing the l
   assert.match(d.querySelector('.library-master')!.textContent!,/Generated custom journal/);
   assert.match(d.querySelector('.library-detail')!.textContent!,/Generated generic body/);
   assert.equal(button(d,'Custom journal command'),undefined);
+});
+
+test('an explicit missing collection shows unavailable and never reads the first collection',async t=>{
+ const {root,d}=await fixture(t),reads:string[]=[];
+ const api=apiWith(path=>{reads.push(path);throw Error('Unexpected generated request '+path);});
+ await act(async()=>root.render(view(api,{tab:'generated-removed-collection'})));
+ assert.match(d.querySelector('.library-content')!.textContent!,/此资料库分类当前不可用/);
+ assert.equal(d.querySelector('.library-content .library-record'),null);
+ assert.deepEqual(reads,[]);
+ assert.equal(d.querySelector('.library-navigation button[aria-current=page]'),null);
 });

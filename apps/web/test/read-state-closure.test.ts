@@ -229,6 +229,6 @@ test('image progress keeps ready OCR visible after vision failure and reports a 
  const api=apiWith((path,init)=>{if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return {queued:true};}return value;});
  await act(async()=>root.render(React.createElement(ImageProgress,{api,id:'generated-image'})));
  const state=(name:string)=>[...d.querySelectorAll('dt')].find(n=>n.textContent===name)?.nextElementSibling?.textContent;
- assert.equal(state('文字识别'),'已就绪');assert.equal(state('内容理解'),'处理失败');assert.equal(state('Memory'),'已完成，未生成新记忆');assert.equal(writes.length,0);
+ assert.equal(state('文字识别'),'已就绪');assert.equal(state('内容理解'),'处理失败');assert.equal(state('记忆（Memory）'),'已完成，未生成新记忆');assert.equal(writes.length,0);
  await act(async()=>button(d,'补齐未完成步骤').click());assert.deepEqual(writes,[{mode:'complete',confirmUnknown:false}]);
 });

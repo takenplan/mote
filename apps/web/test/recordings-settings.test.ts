@@ -29,5 +29,29 @@ test('the recording page discovers third-party providers from the connector regi
  const calls:string[]=[],api={request:async(path:string)=>{calls.push(path);return path==='/api/connectors/status'?{'generated-recordings':status,unrelated:null}:structuredClone(status);}} as unknown as Api;
  const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});
  await act(async()=>{root.render(React.createElement(RecordingsSettings,{api,onSources:()=>{},onOpen:()=>{}}));await tick();});
- await act(async()=>{await tick();});assert.ok(element.textContent?.includes(status.label!));assert.ok(element.textContent?.includes(status.setup!.description!));assert.ok(calls.includes('/api/connectors/generated-recordings'));assert.ok(!calls.includes('/api/connectors/feishu-recordings'));
+ await act(async()=>{await tick();});assert.ok(element.textContent?.includes(status.label!));
+ const provider=element.querySelector<HTMLAnchorElement>('a[href="#/connections/recordings?provider=generated"]');assert.ok(provider,'the registered provider has an explicit detail entry');
+ assert.ok(!calls.includes('/api/connectors/generated-recordings'),'the provider directory does not mount connection controls');
+ await act(async()=>{dom.window.location.hash=provider.getAttribute('href')!;dom.window.dispatchEvent(new dom.window.HashChangeEvent('hashchange'));await tick();});
+ assert.ok(element.textContent?.includes(status.setup!.description!));assert.ok(calls.includes('/api/connectors/generated-recordings'));assert.ok(!calls.includes('/api/connectors/feishu-recordings'));
+ await act(async()=>{dom.window.location.hash='#/connections/recordings';dom.window.dispatchEvent(new dom.window.HashChangeEvent('hashchange'));await tick();});
+ assert.ok(element.querySelector('a[href="#/connections/recordings?provider=generated"]'),'back navigation returns to the provider directory');
+});
+
+for(const [locale,code,expected] of [
+ ['zh-CN','unsupported_format','厂商转写格式尚不支持'],
+ ['en','unsupported_format',"provider's transcript format is not supported"],
+ ['zh-CN','generated_unknown_failure','generated_unknown_failure'],
+ ['en','generated_unknown_failure','generated_unknown_failure'],
+] as const)test('recording failures keep archived audio separate from transcript failure and report the exact cause in '+locale+' / '+code,async t=>{
+ configureLocale(()=>locale);t.after(()=>configureLocale(()=> 'zh-CN'));
+ const status:RecordingStatus={provider:'generated',connected:true,selection:{enabled:true,start:'2026-09-01T00:00:00Z',autoSync:true,backupAudio:true},steps:[{id:'generated-transcript-step',phase:'transcript',state:'failed',attempts:1,error:code},{id:'generated-audio-step',phase:'media',state:'succeeded',attempts:1}],counts:{transcripts:0,audio:1,pending:0,failed:1}};
+ const writes:string[]=[],api={request:async(path:string,init?:RequestInit)=>{if(init?.method)writes.push(path);return path.endsWith('/items')?{items:[]}:structuredClone(status);}} as unknown as Api;
+ const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});
+ await act(async()=>{root.render(React.createElement(RecordingConnection,{api,provider:'generated',onOpen:()=>{}}));await tick();});
+ assert.match(element.textContent??'',new RegExp(expected));
+ assert.match(element.querySelector('p[role=status]')?.textContent??'',locale==='en'?/0 transcripts and 1 audio files/:/转写 0 条，音频 1 条/);
+ assert.match(element.textContent??'',locale==='en'?/Back up audio|Audio backup/:/备份音频/);
+ assert.equal(writes.length,0,'reading a failure never changes its source or repeats archival');
+ assert.doesNotMatch(element.textContent??'',locale==='en'?/Check the node network and provider read permissions/:/请检查节点网络与厂商读取权限/);
 });

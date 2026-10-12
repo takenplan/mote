@@ -31,7 +31,7 @@ function fixtures(){
 function button(host:Element,name:string){const found=[...host.querySelectorAll<HTMLButtonElement>('button')].find(element=>element.textContent===name||element.getAttribute('aria-label')===name);assert.ok(found,`button ${name}`);return found;}
 async function click(host:Element,name:string){await act(async()=>{button(host,name).click();await tick();});}
 async function input(host:Element,label:string,value:string){const field=[...host.querySelectorAll('label')].find(element=>element.textContent?.startsWith(label))?.querySelector('input');assert.ok(field,`field ${label}`);await act(async()=>{Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(field,value);field.dispatchEvent(new dom.window.Event('input',{bubbles:true}));});}
-async function mount(t:import('node:test').TestContext,api:Api){const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});await act(async()=>{root.render(React.createElement(PluginCenter,{api,onPage:()=>{}}));await tick();});return {element,root};}
+async function mount(t:import('node:test').TestContext,api:Api,hash='#/system/plugins'){dom.window.history.replaceState(null,'',hash);const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});await act(async()=>{root.render(React.createElement(PluginCenter,{api,onPage:()=>{}}));await tick();});return {element,root};}
 function readFixture(path:string,plugins:PluginCenterView,binding:MemoryBindingView){if(path==='/api/plugins')return structuredClone(plugins);if(path===bindingPath)return structuredClone(binding);if(path==='/api/features')return {features:[],capabilities:[]};throw new Error('Unexpected fixture read '+path);}
 
 test('installation requires an explicit pinned preview, config, verified capabilities, and separate enable; transport retry reuses its operation ID',async t=>{
@@ -152,4 +152,15 @@ test('an installed package exposes required fields before the first instance exi
  assert.equal(element.querySelector('[role=dialog]'),null);assert.equal(calls.length,1);assert.equal(calls[0].path,'/api/plugin-instances');
  assert.deepEqual(calls[0].body.configuration,{serviceReference:'generated-initial-service'});assert.equal(calls[0].body.packageId,packageFixture.id);
  assert.equal(plugins.instances[0].desired,false);assert.equal(binding.activePlan.id,builtin.id);
+});
+
+
+test('plugin deep links and same-page browser history retain the selected tab',async t=>{
+ const {plugins,binding}=fixtures(),api={request:async(path:string)=>readFixture(path,plugins,binding)} as unknown as Api;
+ const {element}=await mount(t,api,'#/system/plugins?tab=memory');
+ assert.equal(button(element,'记忆方案').getAttribute('aria-pressed'),'true');
+ await act(async()=>{dom.window.location.hash='#/system/plugins?tab=discover';dom.window.dispatchEvent(new dom.window.HashChangeEvent('hashchange'));await tick();});
+ assert.equal(button(element,'发现').getAttribute('aria-pressed'),'true');
+ await act(async()=>{dom.window.location.hash='#/system/plugins';dom.window.dispatchEvent(new dom.window.HashChangeEvent('hashchange'));await tick();});
+ assert.equal(button(element,'已安装').getAttribute('aria-pressed'),'true');
 });
