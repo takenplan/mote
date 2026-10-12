@@ -22,7 +22,11 @@ const errors: Record<string, string> = {
     unsupported_format: '厂商转写格式尚不支持。音频备份是独立步骤，请分别核对转写与音频的状态。',
 };
 const problem = (code: string,phase?:string) => errors[code]&&(code!=='unsupported_format'||phase==='transcript')?moteText(errors[code]):moteText('同步未完成（原因代码：{0}）。请查看同步步骤，核对实际原因后再重试。',code);
-const inputTime = (value?: string) => value ? new Date(Date.parse(value) - new Date(value).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+const inputTime = (value?: string) => {
+    if (!value) return '';
+    const date = new Date(value), pad = (part: number) => String(part).padStart(2, '0');
+    return `${String(date.getFullYear()).padStart(4, '0')}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 export function RecordingConnection({ api, provider, onOpen }: {
     api: Api;
     provider: string;
@@ -41,16 +45,24 @@ export function RecordingConnection({ api, provider, onOpen }: {
         }[];
     }>(api, read.data?.connected ? path + '/items' : null, 10000);
     const [selection, setSelection] = useState<RecordingSelection>(), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+    // Keep native date-field drafts intact while the user types a year. Converting
+    // each keystroke through UTC changes partial years and resets the segment editor.
+    const [range, setRange] = useState({ start: '', end: '' });
+    const acceptSelection = (next: RecordingSelection) => {
+        setSelection(next);
+        setRange({ start: inputTime(next.start), end: inputTime(next.end) });
+    };
     const dirty = useRef(false), scope = useRef(new AbortController());
     useEffect(() => { const controller = new AbortController(); scope.current = controller; return () => controller.abort(); }, [api, provider]);
     useEffect(() => { if (read.data && !dirty.current)
-        setSelection(read.data.selection); }, [read.data]);
+        acceptSelection(read.data.selection); }, [read.data]);
     const update = (patch: Partial<RecordingSelection>) => { dirty.current = true; setSelection(v => v ? { ...v, ...patch } : v); };
+    const updateRange = (field: 'start' | 'end', value: string) => { dirty.current = true; setRange(v => ({ ...v, [field]: value })); };
     const run = async (method: string, suffix = '', body?: unknown) => { const signal = scope.current.signal; setBusy(true); setError(''); try {
         const next = await api.request<RecordingStatus>(path + suffix, { method, signal, ...(body ? { body: JSON.stringify(body) } : {}) });
         if (!signal.aborted) {
             dirty.current = false;
-            setSelection(next.selection);
+            acceptSelection(next.selection);
             read.refresh();
         }
     }
@@ -68,10 +80,15 @@ export function RecordingConnection({ api, provider, onOpen }: {
  {status?.accountName && <p>{status.accountName}</p>}{!status?.connected && <div className="discovery-inline-guidance"><p>{moteText("先在中央节点授权厂商账号，确认所需读取权限，再选择历史范围并启用同步。飞书文档与日历的授权另在自己的页面管理。")}</p></div>}
  {!status?.connected && <><p>{moteText('连接中央节点已经授权的厂商账号，然后选择首次导入时间。')}</p><button className="button" disabled={busy || !status} onClick={() => void run('POST', '/connect')}>{moteText('连接已授权账号')}</button>
  {(provider === 'feishu' || provider === 'dingtalk') && <details><summary>{moteText('首次授权帮助')}</summary>{provider === 'feishu' ? <><p>{moteText('在中央节点安装并登录官方 Lark CLI。需要妙记搜索、基础信息、产物读取和媒体导出权限。')}</p><code>lark-cli auth login</code><p><a href="https://github.com/larksuite/cli" target="_blank" rel="noreferrer">Lark CLI</a></p></> : <><p>{moteText('在中央节点安装并登录官方 DWS CLI；所在组织需开启 CLI 接入。钉钉适配器尚未完成真实账号验证。')}</p><code>dws auth login</code><p><a href="https://github.com/DingTalk-Real-AI/dingtalk-workspace-cli" target="_blank" rel="noreferrer">DWS CLI</a></p></>}</details>}{status?.setup && <details><summary>{moteText('首次授权帮助')}</summary><p>{status.setup.description}</p>{status.setup.command && <code>{status.setup.command}</code>}{status.setup.documentationUrl?.startsWith('https://') && <p><a href={status.setup.documentationUrl} target="_blank" rel="noreferrer">{status.label ?? provider}</a></p>}</details>}</>}
- {status?.connected && selection && <><fieldset disabled={busy}><div className="lark-range"><label>{moteText('首次历史导入起点')}<input type="datetime-local" required value={inputTime(selection.start)} onChange={e => { if (e.target.value)
-            update({ start: new Date(e.target.value).toISOString() }); }}/></label><label>{moteText('导入终点（留空持续同步）')}<input type="datetime-local" value={inputTime(selection.end)} onChange={e => update({ end: e.target.value ? new Date(e.target.value).toISOString() : undefined })}/></label></div>
+ {status?.connected && selection && <form onSubmit={e => {
+     e.preventDefault();
+     void run('PUT', '/selection', { ...selection,
+         start: range.start === inputTime(selection.start) ? selection.start : new Date(range.start).toISOString(),
+         end: range.end === inputTime(selection.end) ? selection.end : range.end ? new Date(range.end).toISOString() : undefined,
+     });
+ }}><fieldset disabled={busy}><div className="lark-range"><label>{moteText('首次历史导入起点')}<input type="datetime-local" required value={range.start} onChange={e => updateRange('start', e.target.value)}/></label><label>{moteText('导入终点（留空持续同步）')}<input type="datetime-local" value={range.end} onChange={e => updateRange('end', e.target.value)}/></label></div>
  <label className="lark-check"><input type="checkbox" checked={selection.enabled} onChange={e => update({ enabled: e.target.checked })}/>{moteText('启用录音同步')}</label><label className="lark-check"><input type="checkbox" checked={selection.autoSync} onChange={e => update({ autoSync: e.target.checked })}/>{moteText('在后台定期同步选中内容')}</label>
- <div className="lark-buttons"><button className="button" onClick={() => void run('PUT', '/selection', selection)}>{moteText('保存并开始同步')}</button><button className="button subtle" disabled={!selection.enabled || dirty.current} onClick={() => void run('POST', '/sync')}><RefreshCw size={15}/>{moteText('立即同步')}</button><button className="button subtle" disabled={!status.counts.failed} onClick={() => void run('POST', '/retry')}>{moteText('重试失败步骤')}</button><button className="button subtle" onClick={() => void run('DELETE')}>{moteText('断开连接')}</button></div></fieldset></>}
+ <div className="lark-buttons"><button className="button" type="submit">{moteText('保存并开始同步')}</button><button className="button subtle" type="button" disabled={!selection.enabled || dirty.current} onClick={() => void run('POST', '/sync')}><RefreshCw size={15}/>{moteText('立即同步')}</button><button className="button subtle" type="button" disabled={!status.counts.failed} onClick={() => void run('POST', '/retry')}>{moteText('重试失败步骤')}</button><button className="button subtle" type="button" onClick={() => void run('DELETE')}>{moteText('断开连接')}</button></div></fieldset></form>}
  {status && <><p role="status">{moteText('已归档转写 {0} 条，音频 {1} 条；等待 {2} 步，需处理 {3} 步。', status.counts.transcripts, status.counts.audio, status.counts.pending, status.counts.failed)}</p>
  {status.counts.failed > 0 && <p className="notice error" role="alert">{status.counts.failed}{moteText("个步骤需要处理。")}{Array.from(new Set(status.steps.filter(step => step.error).map(step => problem(step.error!,step.phase)))).slice(0, 3).join(' ')}{moteText("核对原因后，可使用上方「重试失败步骤」。转写与音频状态分别核对。")}</p>}<details className="discovery-bounded-details"><summary>{moteText('同步步骤与状态')} · {status.steps.length}{moteText("项")}</summary><div className="discovery-bounded-list" role="region" aria-label={moteText("同步步骤与状态明细")} tabIndex={0}>{status.steps.map(step => <p key={step.id}>{phases[step.phase]?moteText(phases[step.phase]):step.phase} · {states[step.state]?moteText(states[step.state]):step.state} · {moteText('尝试 {0} 次', step.attempts)}{step.error && <> · {problem(step.error,step.phase)} <code className="discovery-technical-id">{step.error}</code></>}</p>)}</div></details></>}
  {Boolean(archive.data?.items.length) && <details className="discovery-bounded-details"><summary>{moteText('最近归档的录音')} · {archive.data!.items.length}{moteText("条")}</summary><div className="discovery-bounded-list" role="region" aria-label={moteText("最近归档的录音列表")} tabIndex={0}>{archive.data!.items.map(item => <div className="source-item" key={item.captureId}><button className="text-button" onClick={() => onOpen(formatEvidenceRef('capture', item.captureId))}>{item.title || moteText('原始录音')}</button>{item.audio && <ArchivedAudio api={api} id={item.audio.id} name={item.audio.name} mimeType={item.audio.mimeType}/>}</div>)}</div></details>}

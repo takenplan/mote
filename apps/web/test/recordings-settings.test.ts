@@ -5,6 +5,7 @@ import {JSDOM} from 'jsdom';
 import {configureLocale} from '@mote/shared/i18n';
 import type {RecordingStatus} from '@mote/shared';
 import type {Api} from '../src/api.js';
+import {resources} from '../src/resource-cache.js';
 configureLocale(()=> 'zh-CN');
 const dom=new JSDOM('<html><body></body></html>',{url:'http://localhost/'});
 Object.assign(globalThis,{window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true});
@@ -22,6 +23,42 @@ test('recording journey connects an existing account, explicitly enables import,
  await act(async()=>{enabled.click();await tick();});assert.equal(button('立即同步').disabled,true,'unsaved edits must not sync');
  await act(async()=>{button('保存并开始同步').click();await tick();});const body=JSON.parse(String(calls.find(c=>c.path.endsWith('/selection'))?.init?.body));assert.equal(body.enabled,true);assert.equal(body.backupAudio,true);assert.equal(body.start,'2026-09-01T00:00:00Z');assert.equal(button('立即同步').disabled,false);
  await act(async()=>{button('重试失败步骤').click();await tick();});assert.ok(calls.some(c=>c.path.endsWith('/retry')));
+});
+
+test('recording range keeps typed year drafts through refresh and saves local dates only on submit',async t=>{
+ const status:RecordingStatus={provider:'feishu',connected:true,selection:{enabled:true,start:'2026-09-01T00:00:12Z',autoSync:true,backupAudio:true},steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}};
+ const saves:Record<string,unknown>[]=[],api={request:async(path:string,init?:RequestInit)=>{
+  if(path.endsWith('/items'))return {items:[]};
+  if(init?.method==='PUT'){const body=JSON.parse(String(init.body));saves.push(body);status.selection=body;}
+  return structuredClone(status);
+ }} as unknown as Api;
+ const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});
+ await act(async()=>{root.render(React.createElement(RecordingConnection,{api,provider:'feishu',onOpen:()=>{}}));await tick();});
+ const [start,end]=[...element.querySelectorAll<HTMLInputElement>('input[type=datetime-local]')];
+ const input=async(field:HTMLInputElement,value:string)=>act(async()=>{
+  Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype,'value')!.set!.call(field,value);
+  field.dispatchEvent(new dom.window.Event('input',{bubbles:true}));await tick();
+ });
+ await act(async()=>{button('保存并开始同步').click();await tick();});
+ assert.equal(saves[0].start,'2026-09-01T00:00:12Z','untouched timestamps retain their seconds');
+ start.focus();
+ for(const year of ['0002','0020','0201','2011']){
+  const value=year+'-09-01T08:30';await input(start,value);
+  assert.equal(start.value,value,'React must not convert or rewrite each partial year');
+  assert.equal(document.activeElement,start);
+ }
+ await input(end,'2012-10-02T18:45');
+ await act(async()=>{resources(api).invalidate(path=>path==='/api/connectors/feishu-recordings');await tick();});
+ assert.equal(start.value,'2011-09-01T08:30');assert.equal(end.value,'2012-10-02T18:45');
+ assert.equal(button('立即同步').disabled,true);assert.equal(saves.length,1);
+ await act(async()=>{button('保存并开始同步').click();await tick();});
+ assert.equal(saves[1].start,new Date('2011-09-01T08:30').toISOString());
+ assert.equal(saves[1].end,new Date('2012-10-02T18:45').toISOString());
+ await input(start,'');await act(async()=>{button('保存并开始同步').click();await tick();});
+ assert.equal(start.validity.valueMissing,true);assert.equal(saves.length,2,'an empty required start cannot silently save the old range');
+ await input(start,'2011-09-01T08:30');await input(end,'');
+ await act(async()=>{button('保存并开始同步').click();await tick();});
+ assert.equal(saves[2].end,undefined,'clearing the optional end keeps continuous sync');
 });
 
 test('the recording page discovers third-party providers from the connector registry without a core provider list',async t=>{
