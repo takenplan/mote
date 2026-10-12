@@ -1,3 +1,5 @@
+import {decodeSourceText} from '@mote/shared';
+const formalValue=(record:{ocrText:string}):any=>decodeSourceText('speech-text-v2',record.ocrText)??{text:record.ocrText};
 import {fixtureCaptureRefs} from './fixtures/evidence-refs.js';
 import {fixtureMemoryResult,fixtureMemoryPipeline} from './fixtures/memory-result.js';
 import {fixtureFilePolicy} from './fixtures/file-policy.js';
@@ -201,7 +203,7 @@ for(const manual of [false,true])test(`confirmed ${manual?'manual':'model'} text
  const materials=new MaterialStore(f.store),work=new MaterialMemoryWork(f.store,materials),organizers=new MaterialOrganizerRuntime(f.store,materials,[],undefined,work);
  try{
   while(await organizers.tick(100));const material=materials.get(materialId('phone','fixture.wav'))!;
-  const raw=f.files.chunks(f.id),formal=materials.evidence(materials.evidenceIds(material.ref)).filter(r=>JSON.parse(r.ocrText).speaker);
+  const raw=f.files.chunks(f.id),formal=materials.evidence(materials.evidenceIds(material.ref)).filter(r=>formalValue(r).speaker);
   const memories=new MemoryStore(f.store,ids=>[...f.files.evidence(ids),...materials.evidence(ids)],id=>f.files.isCurrentEvidence(id)||materials.isCurrentEvidence(id));
   const save=(record:typeof raw[number]|typeof formal[number])=>memories.publish(memories.extract(fixtureMemoryResult(memories,{answer:JSON.stringify({memories:[{title:'Generated correction fixture',statement:`Generated speech [${record.id}]`,uncertainty:'Fixture',evidenceIds:[record.id],evidence:[{id:record.id,quote:record.ocrText}]}]}),citations:[{id:record.id,capturedAt:record.capturedAt,appName:record.appName,excerpt:record.ocrText}],trace:[],runId:'generated-text-correction'}),'fixture').items[0].id);
   const savedRaw=raw.map(save),savedFormal=formal.map(save),stableFingerprint=memoryEvidenceFingerprint(raw[1]);
@@ -276,18 +278,18 @@ test('formal audio material preserves anonymous and confirmed speakers and repub
  const publish=async()=>{while(await organizers.tick(100));return materials.get(id)!;};
  try{
   const anonymous=await publish(),anonymousEvidence=materials.evidence(materials.evidenceIds(anonymous.ref));
-  assert.ok(anonymousEvidence.some(record=>JSON.parse(record.ocrText).speaker==='SPEAKER_0'));
-  assert.ok(anonymousEvidence.every(record=>JSON.parse(record.ocrText).speakerAttribution===undefined));
+  assert.ok(anonymousEvidence.some(record=>formalValue(record).speaker==='SPEAKER_0'));
+  assert.ok(anonymousEvidence.every(record=>formalValue(record).speakerAttribution===undefined));
   reviews.nameSpeakers(f.id,{artifactId,names:{SPEAKER_0:'Generated Alice',SPEAKER_1:'Generated Bob'}});
   const named=await publish();assert.notEqual(named.revision,anonymous.revision);assert.equal(work.readyForMemory(named.ref),true);
-  const namedRecords=materials.evidence(materials.evidenceIds(named.ref)),dialogue=namedRecords.map(record=>JSON.parse(record.ocrText)).filter(value=>value.speaker);
+  const namedRecords=materials.evidence(materials.evidenceIds(named.ref)),dialogue=namedRecords.map(record=>formalValue(record)).filter(value=>value.speaker);
   assert.deepEqual(dialogue.map(value=>value.text),raw.map(record=>record.ocrText.replace(/^\[SPEAKER_\d+\] /,'')));
   assert.deepEqual(dialogue.map(value=>value.speakerAttribution),f.files.chunks(f.id).map(record=>record.fileEvidence!.speakerAttribution));
   const memories=new MemoryStore(f.store,ids=>materials.evidence(ids),anchor=>materials.isCurrentEvidence(anchor));
-  const record=namedRecords.find(record=>JSON.parse(record.ocrText).speaker==='SPEAKER_0')!;
+  const record=namedRecords.find(record=>formalValue(record).speaker==='SPEAKER_0')!;
   const memory=memories.extract(fixtureMemoryResult(memories,{answer:JSON.stringify({memories:[{title:'Generated owner experience',statement:`Generated speech [${record.id}]`,uncertainty:'Fixture',evidenceIds:[record.id],evidence:[{id:record.id,quote:record.ocrText}]}]}),citations:[{id:record.id,capturedAt:record.capturedAt,appName:record.appName,excerpt:record.ocrText}],trace:[],runId:'generated-material-speaker'}),'fixture').items[0];
   memories.publish(memory.id);
-  const other=namedRecords.find(record=>JSON.parse(record.ocrText).speaker==='SPEAKER_1')!;
+  const other=namedRecords.find(record=>formalValue(record).speaker==='SPEAKER_1')!;
   const otherFingerprint=memoryEvidenceFingerprint(other);
   const otherMemory=memories.extract(fixtureMemoryResult(memories,{answer:JSON.stringify({memories:[{title:'Unchanged speaker',statement:`Generated speech [${other.id}]`,uncertainty:'Fixture',evidenceIds:[other.id],evidence:[{id:other.id,quote:other.ocrText}]}]}),citations:[{id:other.id,capturedAt:other.capturedAt,appName:other.appName,excerpt:other.ocrText}],trace:[],runId:'generated-unchanged-speaker'}),'fixture').items[0];
   memories.publish(otherMemory.id);
@@ -310,13 +312,13 @@ test('formal audio material preserves anonymous and confirmed speakers and repub
   assert.equal(reader.evidence(fixtureCaptureRefs([record.id])).length,0);
   assert.ok(reader.evidence(fixtureCaptureRefs([other.id]))[0].provenance!.uri!.startsWith(corrected.ref+'#'));
   assert.ok(materials.read(named.ref).text.includes('Generated Alice'),'pinned history remains distinguishable from current state');
-  const correctedDialogue=materials.evidence(materials.evidenceIds(id)).map(record=>JSON.parse(record.ocrText)).filter(value=>value.speaker);
+  const correctedDialogue=materials.evidence(materials.evidenceIds(id)).map(record=>formalValue(record)).filter(value=>value.speaker);
   assert.equal(correctedDialogue[0].speakerAttribution.name,'Generated Carol');assert.equal(correctedDialogue[1].speakerAttribution.name,'Generated Bob');
   assert.deepEqual(correctedDialogue.map(value=>value.text),dialogue.map(value=>value.text));
   reviews.nameSpeakers(f.id,{artifactId,names:{SPEAKER_0:'Generated Carol',SPEAKER_1:'Generated Bob'}});assert.equal((await publish()).revision,corrected.revision);
   reviews.nameSpeakers(f.id,{artifactId,names:{SPEAKER_0:'Generated Carol'}});
   assert.equal(memories.get(otherMemory.id).status,'stale','withdrawing confirmation invalidates that speaker immediately');
-  await publish();assert.equal(materials.evidence(materials.evidenceIds(id)).map(r=>JSON.parse(r.ocrText)).find(r=>r.speaker==='SPEAKER_1').speakerAttribution,undefined);
+  await publish();assert.equal(materials.evidence(materials.evidenceIds(id)).map(r=>formalValue(r)).find(r=>r.speaker==='SPEAKER_1').speakerAttribution,undefined);
  }finally{await organizers.close();}
 });
 
@@ -328,7 +330,7 @@ for(const correction of ['speaker','text'] as const)test(`formal ${correction} c
  const proposal=correction==='text'?await reviews.propose(f.id,{kind:'terms'}):undefined;
  while(await organizers.tick(100));
  const material=materials.get(materialId('phone','fixture.wav'))!;
- const record=materials.evidence(materials.evidenceIds(material.ref)).find(r=>JSON.parse(r.ocrText).speaker==='SPEAKER_0')!;
+ const record=materials.evidence(materials.evidenceIds(material.ref)).find(r=>formalValue(r).speaker==='SPEAKER_0')!;
  const memories=new MemoryStore(f.store,ids=>materials.evidence(ids),id=>materials.isCurrentEvidence(id));
  let enter!:()=>void,finish!:()=>void;const entered=new Promise<void>(resolve=>enter=resolve),release=new Promise<void>(resolve=>finish=resolve);
  const pipeline=fixtureMemoryPipeline({store:f.store,memories,configured:()=>true,model:()=> 'fixture',materialAllowedForMemory:ref=>work.readyForMemory(ref),query:async()=>{enter();await release;return {answer:JSON.stringify({memories:[{title:'Old formal attribution',statement:`Old speaker [${record.id}]`,uncertainty:'Generated',evidenceIds:[record.id],evidence:[{id:record.id,quote:record.ocrText}]}]}),citations:[{id:record.id,capturedAt:record.capturedAt,appName:record.appName,excerpt:record.ocrText}],trace:[],runId:'generated-old-formal-attribution'};}});
@@ -396,8 +398,8 @@ for(const change of ['geometry','text'] as const)test(`image ${change} changes p
  const materials=new MaterialStore(f.store),work=new MaterialMemoryWork(f.store,materials),organizers=new MaterialOrganizerRuntime(f.store,materials,[],undefined,work);
  try{
   while(await organizers.tick(100));const first=materials.get(materialId('phone','generated.png'))!;
-  const anchors=materials.evidence(materials.evidenceIds(first.ref)).filter(r=>JSON.parse(r.ocrText).imageLocation);
-  assert.equal(anchors.length,2);assert.deepEqual(anchors.map(r=>JSON.parse(r.ocrText).imageLocation),transcript.segments.map(s=>s.imageLocation));
+  const anchors=materials.evidence(materials.evidenceIds(first.ref)).filter(r=>formalValue(r).imageLocation);
+  assert.equal(anchors.length,2);assert.deepEqual(anchors.map(r=>formalValue(r).imageLocation),transcript.segments.map(s=>s.imageLocation));
   assert.deepEqual(materials.block(first.ref,1)!.block.locator!.imageLocation,transcript.segments[0].imageLocation);
   const view=sourceMaterialView(materials,first.id,{revision:first.revision});
   assert.deepEqual(view.items.filter(i=>i.type==='text').map(i=>i.text),['Same words','Same words']);
@@ -411,9 +413,9 @@ for(const change of ['geometry','text'] as const)test(`image ${change} changes p
   assert.equal(memories.get(saved[0].id).status,'stale');assert.equal(memories.get(saved[1].id).status,'published');
   while(await organizers.tick(100));assert.equal(materials.isCurrentEvidence(anchors[1].id),true);
   const second=materials.get(first.id)!;assert.notEqual(second.ref,first.ref);
-  assert.equal(JSON.parse(materials.block(first.ref,1)!.block.text).text,'Same words','historical OCR stays readable');
-  assert.deepEqual(JSON.parse(materials.block(first.ref,1)!.block.text).imageLocation,before[0].fileEvidence!.imageLocation);
-  assert.deepEqual(JSON.parse(materials.block(second.ref,1)!.block.text).imageLocation,after[0].fileEvidence!.imageLocation);
+  assert.equal(decodeSourceText('speech-text-v2',materials.block(first.ref,1)!.block.text)!.text,'Same words','historical OCR stays readable');
+  assert.deepEqual(decodeSourceText('speech-text-v2',materials.block(first.ref,1)!.block.text)!.imageLocation,before[0].fileEvidence!.imageLocation);
+  assert.deepEqual(decodeSourceText('speech-text-v2',materials.block(second.ref,1)!.block.text)!.imageLocation,after[0].fileEvidence!.imageLocation);
  }finally{await organizers.close();}
 });
 

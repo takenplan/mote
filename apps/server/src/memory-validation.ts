@@ -1,9 +1,9 @@
 import {CODING_MEMORY_CONTRACT} from './memory-schema.js';
 const MEMORY_SCHEMA_FEEDBACK='Every candidate needs admission (layer observation|memory, reason, scope, attribution user|third_party|observed|inferred) and exact evidence quotes. Consolidated candidates must be layer memory and include only relatedMemoryIds actually used from supplied cards. Empty output is valid.';
 export const validationFeedback={
-  coverage:'Work-package output requires coverage for every host member key, with checked or no_candidates or needs_context, matching zero-based candidateIndexes, and capacity:{saturated:boolean}. Preserve exactly the host member identities. Do not claim completion when a range was omitted; report needs_context. The host capacity replaces the ordinary eight-candidate limit.',
+  coverage:'Work-package output requires coverage for every host member key, with checked or no_candidates or needs_context or needs_owner_input (with question), matching zero-based candidateIndexes, and capacity:{saturated:boolean}. Preserve exactly the host member identities. Do not claim completion when a range was omitted; report needs_context. The host capacity replaces the ordinary eight-candidate limit.',
   json:'The answer field must be a string containing one valid JSON object with a memories array. Do not put Markdown fences or prose around that JSON.',
-  schema:MEMORY_SCHEMA_FEEDBACK+' Use exactly a memories array with at most 8 objects (at most 3 for coding-memory extraction). Each object requires string title, string statement, string uncertainty, and a nonempty evidenceIds array of complete UUIDs. Evidence entries require id and an exact quote. Omit offset and length by default; the host resolves a unique exact match. If supplied, offset must be absolute UTF-16 and length must equal the UTF-16 quote length. '+CODING_MEMORY_CONTRACT+' Do not add other keys.',
+  schema:MEMORY_SCHEMA_FEEDBACK+' Use a memories array within the current host candidate capacity (at most 3 for ordinary coding-memory extraction). For a work package, always preserve coverage for every listed target key and capacity:{saturated:boolean}, including when memories is empty. Each object requires string title, string statement, string uncertainty, and a nonempty evidenceIds array of complete UUIDs. Evidence entries require id and an exact quote. Omit offset and length by default; the host resolves a unique exact match. If supplied, offset must be absolute UTF-16 and length must equal the UTF-16 quote length. '+CODING_MEMORY_CONTRACT+' Do not add other keys.',
   coding_contract:CODING_MEMORY_CONTRACT,
   coding_scope:'The supplied originals lack a resolved host project identity. Keep the supported coding claim, but use coding.scope=session for limited/unresolved applicability, name the evidenced project in coding.applicability prose, and do not invent scopeRefs or repository/session identities.',
   citations:'Use complete supporting evidence UUIDs in inline [UUID] citations and declare those same IDs in the inner evidenceIds and outer citationIds. Every declared ID must have been retrieved in this same supplied scope.',
@@ -20,4 +20,15 @@ export const validationFeedback={
 export type MemoryOutputValidationCode=keyof typeof validationFeedback;
 
 /** Content-free locations and measurements, safe for ordinary diagnostics. Indices are zero-based. */
-export type MemoryValidationDetails={candidateIndex?:number;spanIndex?:number;evidenceId?:string;declaredOffset?:number;declaredLength?:number;quoteLength?:number;sourceLength?:number;authorizedMatches?:number};
+export type MemoryValidationDetails={candidateIndex?:number;spanIndex?:number;evidenceId?:string;declaredOffset?:number;declaredLength?:number;quoteLength?:number;sourceLength?:number;authorizedMatches?:number;fieldPath?:string;problem?:string;maxCandidates?:number};
+
+/** Schema-owned locations only; never echo arbitrary keys, bad values or model text. */
+const fields=new Set('memories domain relations admission layer reason scope attribution relatedMemoryIds coding kind applicability validation validFrom validUntil title statement uncertainty evidenceIds evidence id offset length quote citationIds coverage key state candidateIndexes contextRefs question prompt choices label answer capacity saturated memoryId fingerprint version'.split(' '));
+export function validationLocation(path:(string|number)[]){return path.every(key=>typeof key==='number'?Number.isSafeInteger(key)&&key>=0:fields.has(key))?path.reduce<string>((value,key)=>typeof key==='number'?value+'['+key+']':value+(value?'.':'')+key,''):'unrecognized_field';}
+export function memoryValidationInstruction(code:MemoryOutputValidationCode,details:MemoryValidationDetails){
+ return validationFeedback[code]+(details.fieldPath?' Host field: '+details.fieldPath+'.':'')+(details.problem?' Host issue: '+details.problem+'.':'')+(details.candidateIndex===undefined?'':' Candidate index: '+details.candidateIndex+'.')+(details.spanIndex===undefined?'':' Evidence entry index: '+details.spanIndex+'.')+(details.maxCandidates===undefined?'':' Current candidate capacity: '+details.maxCandidates+'.')+' Return the complete corrected object; preserve all required fields and exact target keys. Do not repair an evidence ID by guessing.';
+}
+
+export function validationProblem(issue:{code:string;validation?:unknown;received?:unknown}){
+ return issue.code==='invalid_string'&&issue.validation==='uuid'?'invalid_uuid':issue.code==='invalid_string'&&issue.validation==='regex'?'invalid_pattern':issue.code==='invalid_type'&&issue.received==='undefined'?'missing_required_field':issue.code;
+}

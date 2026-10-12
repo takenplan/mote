@@ -10,7 +10,7 @@ type Display={type:'text'|'source'|'asset'|'raw';text:string;speaker?:string;con
 function display(block:MaterialStoredBlock):Display {
   if(block.kind==='asset')return {type:'asset',text:'',mimeType:block.asset?.mimeType};
   const timing=typeof block.locator?.startMs==='number'&&Number.isFinite(block.locator.startMs)&&block.locator.startMs>=0?{startMs:block.locator.startMs,...(typeof block.locator.endMs==='number'&&Number.isFinite(block.locator.endMs)?{endMs:block.locator.endMs}:{})}:{};
-  if(block.format==='json'){
+  if(block.format==='json'||block.format==='speech-text'){
     const format=sourceTextFormat(block),value=format&&decodeSourceText(format,block.text);
     if(value?.kind==='source')return {type:'source',text:value.text,capturedAt:value.capturedAt,recordedAt:value.documentTime?.recordedAt,occurredAt:value.documentTime?.occurredAt,appName:value.appName,sourceRef:'capture:'+value.captureId,sourceType:value.source};
     if(value?.kind==='speech')return {type:'text',text:value.text,speaker:value.speaker,...(value.speakerAttribution?{confirmedName:value.speakerAttribution.name}:{}),...timing};
@@ -21,7 +21,7 @@ function display(block:MaterialStoredBlock):Display {
 const query=z.object({revision:z.string().regex(/^[a-f0-9]{64}$/),block:z.coerce.number().int().nonnegative().default(0),offset:z.coerce.number().int().nonnegative().max(250000).default(0),length:z.coerce.number().int().min(2).max(8000).default(4000)}).strict();
 export function sourceMaterialView(materials:MaterialStore,id:string,input:unknown){
   const args=query.parse(input),ref=formatMaterialRef(id,args.revision),material=materials.get(ref);
-  if(!material||!sourceItemKinds.some(kind=>material.kind==='mote.'+kind)||material.schemaVersion!==1)throw new StoreError('Source material view is unavailable',404);
+  if(!material||!sourceItemKinds.some(kind=>material.kind==='mote.'+kind)||![1,2].includes(material.schemaVersion))throw new StoreError('Source material view is unavailable',404);
   let index=args.block,offset=args.offset,remaining=args.length;
   if(index>material.blockCount||index===material.blockCount&&offset)throw new StoreError('Invalid material view range');
   const items:(Omit<Display,'text'>&{attributionContext:MaterialStoredBlock['attributionContext'];blockId:string;text:string;offset:number;total:number;continued:boolean})[]=[];

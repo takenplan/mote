@@ -34,7 +34,7 @@ test('current built-in authored Material is admitted once, without a second raw 
   const f=await fixture(t),material=f.materials.list({kind:'mote.note'}).items[0]!;
   const owner=f.store.db.prepare('SELECT organizer_id,version,group_json,active FROM material_organizer_groups WHERE material_id=?').get(material.id);
   assert.deepEqual({id:owner.organizer_id,version:owner.version,active:owner.active},
-    {id:'mote.authored-record',version:'3',active:1});
+    {id:'mote.authored-record',version:'4',active:1});
   assert.equal(JSON.parse(String(owner.group_json)).captureId,f.originalId);
   assert.equal(f.store.db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(material.origin.sourceId),undefined);
   assert.equal(f.reader.materialPlanAllowed(material.id),true);
@@ -43,7 +43,7 @@ test('current built-in authored Material is admitted once, without a second raw 
   assert.equal(f.reader.materialAllowedForMemory(material.ref,undefined,['material']),false,'retired authored organizer versions cannot authorize current Memory input');
   f.store.db.prepare("UPDATE material_organizer_groups SET version='unverified' WHERE material_id=?").run(material.id);
   assert.equal(f.reader.materialAllowedForMemory(material.ref,undefined,['material']),false,'unknown organizers cannot acquire authored original authorization');
-  f.store.db.prepare("UPDATE material_organizer_groups SET version='3' WHERE material_id=?").run(material.id);
+  f.store.db.prepare("UPDATE material_organizer_groups SET version='4' WHERE material_id=?").run(material.id);
   const selected=f.reader.memoryPlanSelection({},[f.strategy]);
   assert.equal(selected.manualPlans.length,1);
   assert.deepEqual(selected.evidenceIds,[]);

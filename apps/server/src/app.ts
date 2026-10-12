@@ -476,6 +476,9 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
       taskSignal?.throwIfAborted();
       assertModelEvidence(input);
       const evidenceDependencies=resolveDependencies(store,combineDependencies([contextDependencies(input),result.evidenceDependencies]));
+      // Metadata/declaration reads also pin their original Material lineage.
+      // They need correction fences even when no original quote was expanded.
+      if(evidenceDependencies)assertModelEvidence({question:'',contextEvidenceDependencies:evidenceDependencies});
       const sourcePins=combineSourceContextDependencies([disclosedSourcePins,result.sourceContextDependencies]);
       assertSourceContextDependencies(sourceContexts,sourcePins);
       // A long-running review may overlap routine imports and derived-layer updates.

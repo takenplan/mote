@@ -5,7 +5,7 @@ import {RecipeRegistry,type InstalledRecipe,type RecipeComponentKind,type Recipe
 import {recipeFingerprint,type RecipeDefinition} from './recipe-contract.js';
 import type {RecipeExposureRoute} from './evidence-exposure.js';
 
-export const SOURCE_ITEM_RECIPE_VERSION='1';
+export const SOURCE_ITEM_RECIPE_VERSION='2';
 const components=[
   {id:'mote.record-ingest',version:'1',kind:'raw-writer'},
   {id:'mote.capture-raw-reader',version:CAPTURE_RAW_READER_VERSION,kind:'raw-reader'},

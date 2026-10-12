@@ -30,6 +30,7 @@ import {
   AgentResponseError,
   AgentTimeoutError,
   AgentProviderError,
+  AgentContextBudgetError,
   type AgentOptions,
   type AgentAnswer,
   type QueryInput,
@@ -220,6 +221,8 @@ export function createAgent(options: AgentOptions) {
     let primaryFailure = false;
     let abortListener: (() => void) | undefined;
     try {
+      const {prompt,metrics}=assembleContext(input,bridge.seedEvidence,system,taskTools(input).map(name=>contextToolDefinitions(input).find(t=>t[0]===name)),options.maxTokens??DEFAULT_MODEL_MAX_TOKENS,options.maxToolCalls??24);
+      trace({type:'context.assembled',stage:'starting',payload:{prompt,metrics,seedEvidence:bridge.seedEvidence}});
       transportObserver=await observeModelTransport(options.authorizeModelRequest);
       await mkdir(join(root, "workspace"));
       const patch = join(root, "mote.patch.json");
@@ -272,8 +275,6 @@ export function createAgent(options: AgentOptions) {
         },
       });
       active.add(harness);
-      const {prompt,metrics}=assembleContext(input,bridge.seedEvidence,system,taskTools(input).map(name=>contextToolDefinitions(input).find(t=>t[0]===name)),options.maxTokens??DEFAULT_MODEL_MAX_TOKENS,options.maxToolCalls??24);
-      trace({type:'context.assembled',stage:'starting',payload:{prompt,metrics,seedEvidence:bridge.seedEvidence}});
       const checkProviderResult = (result: Awaited<ReturnType<DeepSeekHarness['run']>>) => {
         // The SDK resolves some failed turns instead of throwing. Inspect only
         // the typed terminal event, never classify its free-form provider text.
@@ -352,11 +353,11 @@ export function createAgent(options: AgentOptions) {
     } catch (error) {
       primaryFailure = true;
       if(error instanceof AgentYieldError){trace({type:'run.yielded',status:'waiting'});throw error;}
-      trace({type:'run.failed',status:'failed',payload:{errorName:error instanceof Error?error.name:'UnknownError',reason:error instanceof AgentResponseError?error.reason:undefined}});
+      trace({type:'run.failed',status:'failed',payload:{errorName:error instanceof Error?error.name:'UnknownError',reason:error instanceof AgentResponseError?error.reason:undefined,...(error instanceof AgentContextBudgetError?{code:error.code,budget:error.budget,characters:error.characters,limit:error.limit,sections:error.sections}:{})}});
       // The SDK message may contain child stderr. Class identity establishes the
       // timeout; never inspect or forward provider/runtime message text.
       if (error instanceof RequestTimeoutError) throw new AgentTimeoutError();
-      if (error instanceof AgentTimeoutError || error instanceof AgentResponseError || error instanceof AgentClosedError || error instanceof ProviderFailure) throw error;
+      if (error instanceof AgentContextBudgetError || error instanceof AgentTimeoutError || error instanceof AgentResponseError || error instanceof AgentClosedError || error instanceof ProviderFailure) throw error;
       throw new AgentProviderError();
     } finally {
       modelAdmission.abort();

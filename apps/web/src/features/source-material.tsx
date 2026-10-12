@@ -34,4 +34,4 @@ export function SourceMaterialView({api,value,fallback,onOpen}:ViewProps){
     </>}
   </div>;
 }
-export const sourceMaterialViews:ViewEntry[]=sourceItemKinds.map(kind=>({id:'source-item.'+kind,kind:'mote.'+kind,schemaVersion:1,representation:'owner-material',render:props=><SourceMaterialView key={props.value.ref} {...props}/>}));
+export const sourceMaterialViews:ViewEntry[]=sourceItemKinds.flatMap(kind=>[1,2].map(schemaVersion=>({id:'source-item.'+kind+(schemaVersion===1?'':'.v2'),kind:'mote.'+kind,schemaVersion,representation:'owner-material' as const,render:(props:Parameters<ViewEntry['render']>[0])=><SourceMaterialView key={props.value.ref} {...props}/>})));

@@ -79,3 +79,20 @@ test('HTTP-imported maximum notes remain readable through native Ask and current
   const current=await node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Inspect the corrected diary context'}});
   assert.equal(current.statusCode,200,current.body);assert.equal(verified,3,'a new query reads the current correction and the original import note');
 });
+
+test('metadata-only disclosure cannot publish after a Material owner correction and cannot grant original citations',async t=>{
+ const dataDir=mkdtempSync(join(tmpdir(),'mote-generated-metadata-fence-')),token='generated-metadata-fence-token';let node:Awaited<ReturnType<typeof buildApp>>;
+ const config:Config={dataDir,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:10000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture-model',modelBaseUrl:'https://fixture.invalid',apiKey:'fixture-key',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''};
+ node=await buildApp(config,{backgroundWorker:false,createModelAgent:async(_settings,reader)=>({configured:true,close:async()=>{},query:async input=>{
+  const {startBridge}=await import('../../../packages/agent/dist/bridge.js');
+  const bridge=await startBridge(reader,input,24);try{
+   const call=async(tool:string,args:unknown)=>{const r=await fetch(bridge.url+'/'+tool,{method:'POST',headers:{Authorization:'Bearer '+bridge.token,'content-type':'application/json'},body:JSON.stringify(args)});assert.equal(r.status,200);return r.json() as Promise<any>;};
+   const catalog=await call('material_catalog',{limit:1}),ref=catalog.data.items[0].ref,material=node.materials.get(ref)!,span=node.materials.read(ref).spans.find(s=>s.blockId==='source-metadata')!;
+   await call('material_read',{ref,offset:span.materialRange.start,length:32});assert.equal(bridge.records.size,0,'transport metadata is context, not original citation authority');
+   node.materials.correctContext(material.id,material.revision,'third_party');
+   return {answer:'Generated stale metadata answer',citations:[],trace:bridge.trace,runId:randomUUID(),evidenceDependencies:bridge.evidenceDependencies};
+  }finally{await bridge.close();}
+ }})});t.after(async()=>{await node.app.close();rmSync(dataDir,{recursive:true,force:true});});
+ node.sources.register({id:'generated-metadata',name:'Generated',kind:'custom',deviceId:'generated',platform:'import'});await node.sources.upsert('generated-metadata',{externalId:'one',revision:'1',observedAt:'2026-10-01T00:00:00Z',kind:'message',layer:'original',text:'Generated original diary.'});await node.materialOrganizer.tick();
+ const result=await node.app.inject({method:'POST',url:'/api/query',headers:{authorization:'Bearer '+token},payload:{question:'Generated metadata inspection'}});assert.equal(result.statusCode,409,result.body);
+});

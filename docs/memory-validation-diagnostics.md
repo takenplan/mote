@@ -14,6 +14,12 @@ new optional fields do not require a database migration. The job/batch terminal
 error stays `invalid_model_output` for compatibility; inspect the failure history
 for the precise validation code.
 
+Optional `fieldPath`, `problem` and `maxCandidates` identify schema-owned locations
+and the current work capacity without logging rejected values or arbitrary keys.
+Host context budget failures use `host_context_budget`, with numeric section
+measurements in the Agent trace. They are separate from model-output repair and
+provider failure. See [context and canonical evidence ADR](adr-memory-context-and-canonical-evidence.md).
+
 ## Quote codes
 
 | Code | Meaning |

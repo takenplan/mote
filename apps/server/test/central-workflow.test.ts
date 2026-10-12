@@ -126,7 +126,7 @@ test('an import with historical revisions completes and extracts only the newly 
   const material=node.materials.get(materialId(imported.sourceId,'same-object'))!;
   assert.equal(node.materialMemoryWork.readyForMemory(material.ref),true,JSON.stringify({coverage:material.coverage,artifacts:material.artifacts,request:node.store.db.prepare('SELECT * FROM material_memory_requests WHERE material_id=?').get(material.id)}));
   assert.equal(material.memberCount,1);
-  const anchors=node.materials.evidenceIds(material.ref);assert.equal(anchors.length,1);
+  const anchors=node.materials.input(material.ref,['source-body'])!.evidenceIds;assert.equal(anchors.length,1,'only the canonical original body is an automatic Memory input');
   node.materialMemoryWork.drain(node.memoryPipeline,true);
   await until(async()=>seen.length,count=>count>0);
   assert.deepEqual(seen[0].evidenceIds,anchors);

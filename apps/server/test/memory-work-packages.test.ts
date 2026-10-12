@@ -197,3 +197,26 @@ test('compatible reviewers reuse a complete draft when transport target ordering
  const second=f.pipeline.create({...common,evidenceIds:[...f.ids].reverse(),recipes:[{id:'mote.coding-memory',version:'2'}]});assert.equal((await f.pipeline.run(second.id)).status,'completed');
  assert.equal(f.seen.length,1,'transport order does not change an otherwise exact generation contract');assert.equal(f.reviews.length,2,'each reviewer remains independent');
 });
+
+test('host packing failure subdivides exact ranges without publishing or checkpointing its parent; children still require independent review',async t=>{
+ const {AgentContextBudgetError}=await import('@mote/agent'),f=await fixture(t,4);
+ f.setGenerate(input=>{if(members(input).length>1)throw new AgentContextBudgetError('task',81000,80000,{memoryWork:81000});return output(input,'generated-small');});
+ const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'completed');assert.equal(f.reviews.length,4);
+ assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,4);
+ const parents=done.batches.filter(b=>b.supersededBy?.length);assert.equal(parents.length,3);assert.ok(parents.every(b=>!b.reviewReceipt&&b.memoryIds.length===0&&b.coverage?.every(m=>m.reason==='host_context_budget')));
+ assert.ok(done.batches.every(b=>b.attempts===1));assert.equal(f.memories.list().length,0);
+});
+
+test('unsplittable host budget failure keeps its distinct code and cannot trigger provider retries or save results',async t=>{
+ const {AgentContextBudgetError}=await import('@mote/agent'),f=await fixture(t,1);f.setGenerate(()=>{throw new AgentContextBudgetError('task',81000,80000);});
+ const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'failed');assert.equal(done.batches[0].errorCode,'host_context_budget');assert.equal(done.batches[0].attempts,1);assert.equal(f.reviews.length,0);assert.equal(f.memories.list().length,0);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
+});
+
+test('schema and coverage repair identify exact host fields and actual capacity without leaking rejected values',async t=>{
+ const f=await fixture(t,2);f.setGenerate(async input=>{
+  const valid=output(input,'generated-contract',true),draft=JSON.parse(valid.answer);draft.memories[0].evidence[0].id='generated-invalid-id-do-not-echo';
+  let issue=await input.validateOutput!({...valid,answer:JSON.stringify(draft)});assert.equal(issue?.code,'schema');assert.match(issue!.feedback,/memories\[0\]\.evidence\[0\]\.id/);assert.match(issue!.feedback,/Current candidate capacity: 16/);assert.match(issue!.feedback,/preserve coverage/i);assert.ok(!issue!.feedback.includes('generated-invalid-id-do-not-echo'));
+  draft.memories[0].evidence[0].id=members(input)[0].id;delete draft.coverage;delete draft.capacity;issue=await input.validateOutput!({...valid,answer:JSON.stringify(draft)});assert.equal(issue?.code,'coverage');assert.match(issue!.feedback,/Host field: coverage/);assert.match(issue!.feedback,/needs_owner_input/);
+  const bad=JSON.parse(valid.answer);bad.coverage[1].key+='a';issue=await input.validateOutput!({...valid,answer:JSON.stringify(bad)});assert.match(issue!.feedback,/coverage\[1\]\.key/);return valid;
+ });const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'completed');assert.equal(f.reviews.length,1);
+});

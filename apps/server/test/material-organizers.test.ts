@@ -52,7 +52,7 @@ test('formal evidence preserves declared source role and three distinct times wi
   const authored=materials.evidence(materials.evidenceIds(materialId('fixture-provenance','authored')))[0]!;
   assert.deepEqual(authored.provenance?.document,document);
   assert.equal(authored.capturedAt,at(0));
-  assert.equal(JSON.parse(authored.ocrText!).text,text,'the captured body remains literal evidence');
+  assert.equal(authored.ocrText,text,'the captured body remains literal evidence; JSON inside prose is never decoded');
   const unknown=materials.evidence(materials.evidenceIds(materialId('fixture-provenance','unknown')))[0]!;
   assert.equal(unknown.capturedAt,at(1));
   assert.deepEqual(unknown.provenance?.document,{timeBasis:'unknown',contentRole:'other'});
