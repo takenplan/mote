@@ -9,7 +9,7 @@ import {automaticMemoryGrantSchema,type AutomaticMemoryGrant} from './memory-inp
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-engine.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
 import {requestLocale} from './i18n.js';
-import {AgentResponseError,AgentTimeoutError,SYSTEM_PROMPT,skillCatalog,type QueryInput} from '@mote/agent';
+import {AgentContextBudgetError,AgentResponseError,AgentTimeoutError,SYSTEM_PROMPT,skillCatalog,type QueryInput} from '@mote/agent';
 import {memoryProfile} from './memory-profiles.js';
 import {MemoryStrategies} from './memory-strategies.js';
 import {defaultMemoryReviewStrategy} from './memory-review-policy.js';
@@ -35,7 +35,7 @@ export type MemoryValidationFailure={at:string;code:string;phase:'extract'|'revi
 export type MemoryValidationFailureEvent=MemoryValidationFailure&{jobId:string;batchId:string;batchIndex:number};
 
 type Chunk=EvidenceRange&{strategy?:MemoryRecipeBinding;reviewFingerprint?:string;profile?:'personal'|'coding';profileVersion?:string;group?:string;fingerprint:string;key:string};
-export type MemoryBatch={generationContract?:string;replanRound?:number;feedbackRound?:number;feedbackWorkId?:string;workerGoal?:string;workerInstruction?:string;contextRanges?:EvidenceRange[];coverage?:MemoryWorkMember[];reviewReceipt?:MemoryReviewReceipt;supersededBy?:string[];strategy?:MemoryRecipeBinding;configuration?:ModelConfiguration;id:string;index:number;status:'pending'|'running'|'completed'|'failed'|'invalidated';evidenceRanges:EvidenceRange[];attempts:number;memoryIds:string[];availableAt?:number;errorCode?:string;validationFailures?:MemoryValidationFailure[];phase?:'extract'|'review';stage?:string;startedAt?:string;lastActivityAt?:string;execution?:ExecutionEnvelope;splitDepth?:number;splitHistory?:{at:string;errorCode:'provider_timeout'|'memory_coverage_incomplete'|'memory_capacity_saturated';attempts:number;evidenceRanges:EvidenceRange[]}[]};
+export type MemoryBatch={generationContract?:string;replanRound?:number;feedbackRound?:number;feedbackWorkId?:string;workerGoal?:string;workerInstruction?:string;contextRanges?:EvidenceRange[];coverage?:MemoryWorkMember[];reviewReceipt?:MemoryReviewReceipt;supersededBy?:string[];strategy?:MemoryRecipeBinding;configuration?:ModelConfiguration;id:string;index:number;status:'pending'|'running'|'completed'|'failed'|'invalidated';evidenceRanges:EvidenceRange[];attempts:number;memoryIds:string[];availableAt?:number;errorCode?:string;validationFailures?:MemoryValidationFailure[];phase?:'extract'|'review';stage?:string;startedAt?:string;lastActivityAt?:string;execution?:ExecutionEnvelope;splitDepth?:number;splitHistory?:{at:string;errorCode:'provider_timeout'|'memory_coverage_incomplete'|'memory_capacity_saturated'|'host_context_budget';attempts:number;evidenceRanges:EvidenceRange[]}[]};
 type BatchInputScope={planIds?:string[];materialInputs:MaterialInputPin[];materialRefs:Record<string,string>};
 type StoredBatch=MemoryBatch&BatchInputScope&{nativeDraft?:{key:string;context:MemoryEngineDraftPin};engineDrafts?:MemoryEngineDraftPin[];feedbackOnly?:boolean;contextFeedbackChildId?:string;artifactRefs?:{id:string;revision:string}[];chunks:Chunk[];contextChunks?:Chunk[];skillVersion?:string;resourceEvidenceIds?:string[]};
 export type MemoryJob={continuationOf?:string;cancellationCause?:'authority'|'owner';authorizedChunks?:Chunk[];activationRequired:boolean;inputPlanVersion:1;inputPlans:MemoryPlanSummary;recipeProgress:MemoryRecipeProgress[];materialInputs?:MaterialInputPin[];batchCharacters?:number;automaticGrant?:AutomaticMemoryGrant;automaticGrants?:AutomaticMemoryGrant[];workPackage?:MemoryWorkPackage;contextTime:string;recipes?:MemoryStrategyRef[];configuration?:ModelConfiguration;artifactRefs?:{id:string;revision:string}[];materialRefs?:Record<string,string>;language?:'zh-CN'|'en';id:string;modelProfileId?:string;modelOverride?:string;importJobId?:string;originKey?:string;timeZone?:string;status:'queued'|'running'|'completed'|'failed'|'waiting_for_model'|'waiting_for_input'|'cancelled'|'paused'|'pausing';createdAt:string;updatedAt:string;evidenceIds:string[];skillVersion:string;totalBatches:number;completedBatches:number;failedBatches:number;skippedChunks:number;memoryIds:string[];memoryCount:number;availableAt?:number;errorCode?:string;queuePosition?:number;runningBatches?:number;pendingBatches?:number;lastSavedAt?:string;execution?:ExecutionEnvelope};
@@ -555,7 +555,7 @@ export class MemoryPipeline {
     for(const child of children)this.engine.enqueue('memory:'+job.id,'memory.batch',{jobId:job.id,batchId:child.id,evidenceIds:[...new Set([...child.chunks,...(child.contextChunks??[])].map(chunk=>chunk.id))]},{id:child.id});
     this.feedbackApplied?.(plan,job.id);
   }
-  private subdivide(job:MemoryJob,batch:StoredBatch,code:'memory_coverage_incomplete'|'memory_capacity_saturated'){
+  private subdivide(job:MemoryJob,batch:StoredBatch,code:'memory_coverage_incomplete'|'memory_capacity_saturated'|'host_context_budget'){
     if((batch.splitDepth??0)>=4)throw new ExecutionFailure('permanent',code);
     let groups:Chunk[][];
     if(batch.chunks.length>1){const middle=Math.ceil(batch.chunks.length/2);groups=[batch.chunks.slice(0,middle),batch.chunks.slice(middle)];}
@@ -983,6 +983,11 @@ export class MemoryPipeline {
             throw error;}
         }
     }catch(error){
+      if(error instanceof AgentContextBudgetError){
+        assertGrant();
+        if(!observeCurrent(()=>this.subdivide(this.storedJob(id),this.batch(batchId),'host_context_budget')))throw new ExecutionFailure('waiting','interrupted');
+        return;
+      }
       if(error instanceof AgentTimeoutError)throw new ExecutionFailure('transient','provider_timeout');
       throw error instanceof ExecutionFailure||error instanceof ProviderFailure?error:new ExecutionFailure(error instanceof StoreError&&error.statusCode===409?'stale':'permanent',signal.aborted?'cancelled':error instanceof StoreError&&error.statusCode===409?'evidence_changed':error instanceof StoreError&&error.statusCode===507?'storage_full':(error instanceof StoreError&&error.statusCode===502)||error instanceof AgentResponseError?'invalid_model_output':'model_failed');
     }

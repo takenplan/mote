@@ -21,9 +21,10 @@ test('only built-in source-item Material serialization receives citation display
   const reader=node.featureServices.evidenceReader,ids=node.materials.evidenceIds(material.ref);
   assert.equal(ids.length,1);
   const records=reader.context(reader.evidence(fixtureCaptureRefs(ids)));
-  assert.equal(records[0].evidencePresentation,'source-record-json-v1');
+  assert.equal(records[0].evidencePresentation,undefined,'canonical original text needs no JSON display decoding');
+  assert.equal(node.materials.read(material.ref).spans.find(span=>span.blockId==='source-metadata')?.evidenceId,undefined,'transport metadata is not independent original proof');
   assert.equal(records[0].ocrText,node.materials.block(material.ref,0)!.block.text);
-  assert.equal(JSON.parse(records[0].ocrText).text,text);
+  assert.equal(records[0].ocrText,text);
   assert.equal(reader.context(node.store.evidence([input.id]))[0].evidencePresentation,undefined);
   const clone={...records[0],ocrText:JSON.stringify({text:'pretend wrapper'})};
   assert.equal(reader.context([clone])[0].evidencePresentation,undefined,'Caller-supplied marker cannot survive a host recheck');

@@ -1,6 +1,6 @@
 import {ProviderFailure} from '@mote/shared';
 import {AgentYieldError} from '@mote/agent';
-import {validationFeedback} from './memory-validation.js';
+import {validationFeedback,validationLocation} from './memory-validation.js';
 import { moteText } from './i18n.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
@@ -29,9 +29,10 @@ const operations:Operation[] = ['recording_metadata','recording_discover','recor
 const events = new Set(['server.started','server.stopping','request.started','request.completed','request.failed','queue.snapshot','support.exported','agent.trace','agent.fragment_timing','agent.harness_timing','agent.tool_rejected','agent.memory_validation_failed','agent.waiting','agent.yielded','agent.heartbeat','file.blocked','file.retry','file.cached','file.cancelled','file.settings','file.step.started','file.step.completed','file.step.failed',...['ingest','index','agent','source','maintenance','file'].flatMap(s=>[`${s}.started`,`${s}.completed`,`${s}.failed`])]);
 const routes = new Set(['files','file-sync','file-processing','conversations','configuration','sources','memories','layers','connectors','health','status','captures','notes','image','devices','connections','updates','activity','query','insights','index','export','import','diagnostics','support','web','unknown']);
 const categories = new Set(['validation','unauthorized','forbidden','not_found','conflict','deleted','too_large','rate_limited','model_not_configured','agent_response','embedding_http','embedding_invalid','embedding_transport','timeout','unavailable','storage_full','internal','not_configured','archive_only','unsupported_format','summary_disabled','cancelled']);
-const numberKeys = ['durationMs','queueWaitMs','statusCode','count','bytes','pending','failed','queueDepth','activeQueries','toolCalls','citations','httpStatus','deleted','attempt','retryAfterMs','part','batchIndex','candidateIndex','spanIndex','declaredOffset','declaredLength','quoteLength','sourceLength','authorizedMatches','idleMs','elapsedMs','remainingCalls','remainingCharacters','repeatCount'] as const;
+const numberKeys = ['durationMs','queueWaitMs','statusCode','count','bytes','pending','failed','queueDepth','activeQueries','toolCalls','citations','httpStatus','deleted','attempt','retryAfterMs','part','batchIndex','candidateIndex','spanIndex','declaredOffset','declaredLength','quoteLength','sourceLength','authorizedMatches','maxCandidates','idleMs','elapsedMs','remainingCalls','remainingCharacters','repeatCount'] as const;
 const responseReasons:Record<string,string>={
   provider_quota:"模型服务额度不足，恢复账户额度后再继续。",
+  host_context_budget:"服务端上下文超过预算，请缩小处理批次。",
   provider_policy:"模型服务拒绝了本次请求，请调整内容或处理范围。",
   recovery_window_exhausted:"自动恢复时间已用完，可手动重试开启新的恢复周期。",
   configuration_changed:"相关模型配置已改变，请重试以使用新配置；已完成批次会保留。",
@@ -77,7 +78,7 @@ const validStage=(value:unknown):value is DiagnosticStage=>typeof value==='strin
 const processStartedAt=Date.now()-process.uptime()*1000;
 type Metrics = Partial<Record<typeof numberKeys[number],number>>;
 type QueuedLine = {line:string;day:string};
-export type EventFields = Metrics & { lane?:'background'|'interactive';unit?:'agent_fragment'|'harness_session';status?:'completed'|'failed'|'yielded';requestId?:string;jobId?:string;batchId?:string;runId?:string;evidenceId?:string;validationCode?:string;toolErrorCode?:string;validationPhase?:'extract'|'review';method?:'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'HEAD'|'OPTIONS';operation?:Operation;route?:string;category?:string;reason?:string };
+export type EventFields = Metrics & { lane?:'background'|'interactive';unit?:'agent_fragment'|'harness_session';status?:'completed'|'failed'|'yielded';requestId?:string;jobId?:string;batchId?:string;runId?:string;evidenceId?:string;validationCode?:string;toolErrorCode?:string;validationPhase?:'extract'|'review';fieldPath?:string;problem?:string;method?:'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'HEAD'|'OPTIONS';operation?:Operation;route?:string;category?:string;reason?:string };
 export interface DiagnosticEvent extends EventFields { seq:number;at:string;instanceId:string;event:string;level:Exclude<LogLevel,'silent'>;stage?:DiagnosticStage;truncated?:boolean;trace?:Record<string,unknown> }
 export interface ServerDiagnosticsOptions { enabled?:boolean;debug?:boolean;level?:LogLevel;directory:string;maxBytes?:number;maxFiles?:number;maxEntries?:number;now?:()=>Date;traceEnabled?:boolean }
 
@@ -107,6 +108,7 @@ function describeError(error:unknown):{status:number;category:string;message:str
   if(e.code==='context_lineage_incomplete')return {status:409,category:'context_lineage_incomplete',message:moteText("这段历史的证据范围不完整，无法安全发送给远程模型。请新建对话，或改用本地模型并重新提供证据。")};
   if(e.code==='context_evidence_restricted')return {status:409,category:'context_evidence_restricted',message:moteText("这段历史包含当前不可向所选模型披露的资料。请改用本地模型，或新建对话并重新选择可用证据。")};
   if(error instanceof ProviderFailure&&Object.hasOwn(responseReasons,error.details.code)){const reason=error.details.code;return {status:502,category:error.details.category==='blocked'?'model_not_configured':error.details.category==='permanent'?'validation':reason==='rate_limited'?'rate_limited':'unavailable',reason,message:moteText(responseReasons[reason])};}
+  if(e.name==='AgentContextBudgetError')return {status:413,category:'too_large',reason:'host_context_budget',message:moteText("服务端上下文超过预算，请缩小处理批次。")};
   if(e.name==='AgentProviderError')return {status:502,category:'agent_response',message:moteText("模型服务请求未完成，请检查地址、凭据和模型配置。")};
   if(e.name==='AgentResponseError') {const reason=typeof e.reason==='string'&&Object.hasOwn(responseReasons,e.reason)?e.reason:'invalid_response';return {status:502,category:'agent_response',reason,message:moteText(responseReasons[reason])};}
   if(e.name==='AbortError'||e.name==='TimeoutError')return {status:504,category:'timeout',message:moteText("操作已取消或超时，请稍后重试。")};
@@ -129,6 +131,8 @@ function fields(raw:unknown):EventFields {
   if(typeof value.validationCode==='string'&&Object.hasOwn(validationFeedback,value.validationCode))out.validationCode=value.validationCode;
   if(typeof value.toolErrorCode==='string'&&['evidence_changed','invalid_tool_arguments','evidence_budget_exceeded','tool_budget_exceeded','evidence_scope_denied','invalid_evidence_range','evidence_range_exceeded','invalid_changes_view','context_tool_failed','repeated_tool_failure','image_disclosure_disabled'].includes(value.toolErrorCode))out.toolErrorCode=value.toolErrorCode;
   if(value.validationPhase==='extract'||value.validationPhase==='review')out.validationPhase=value.validationPhase;
+  if(typeof value.fieldPath==='string'&&value.fieldPath.length<=200&&/^[a-zA-Z_][a-zA-Z0-9_.\[\]]*$/.test(value.fieldPath)){const path=value.fieldPath.replace(/\[(\d+)\]/g,'.$1').split('.').map(key=>/^\d+$/.test(key)?Number(key):key);if(validationLocation(path)===value.fieldPath)out.fieldPath=value.fieldPath;}
+  if(typeof value.problem==='string'&&['invalid_uuid','invalid_pattern','missing_required_field','invalid_type','invalid_string','invalid_enum_value','unrecognized_keys','too_big','too_small','custom'].includes(value.problem))out.problem=value.problem;
   if(typeof value.method==='string'&&['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'].includes(value.method))out.method=value.method as EventFields['method'];
   if(operations.includes(value.operation as Operation))out.operation=value.operation as Operation;
   if(typeof value.route==='string'&&routes.has(value.route))out.route=value.route;

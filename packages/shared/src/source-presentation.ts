@@ -3,15 +3,17 @@ import {fileSpeakerAttributionSchema,imageLocationSchema} from './files.js';
 import {documentSchema,sourceItemKinds} from './sources.js';
 
 /** These are organizer-owned serializations, not JSON guessed from captured prose. */
-export type SourceTextFormat='source-record-json-v1'|'speech-json-v1';
+export type SourceTextFormat='source-record-json-v1'|'speech-json-v1'|'speech-text-v2';
 const speech=z.object({speaker:z.string().max(100).optional(),speakerAttribution:fileSpeakerAttributionSchema.optional(),imageLocation:imageLocationSchema.optional(),text:z.string().max(250000)}).strict().refine(value=>value.speaker!==undefined||value.imageLocation!==undefined);
 const source=z.object({captureId:z.string().uuid(),capturedAt:z.string().datetime({offset:true}),source:z.enum(sourceItemKinds),appName:z.string().max(300).optional(),text:z.string().max(250000).optional(),documentTime:documentSchema.pick({recordedAt:true,occurredAt:true,timeBasis:true,contentRole:true}).strict().optional()}).passthrough();
 export function sourceTextFormat(block:{id:string;format?:string;locator?:Record<string,unknown>}):SourceTextFormat|undefined {
+  if(block.format==='speech-text'&&typeof block.locator?.chunkId==='string')return 'speech-text-v2';
   if(block.format!=='json')return;
-  if(block.id==='source-record')return 'source-record-json-v1';
+  if(block.id==='source-record'||block.id==='source-metadata')return 'source-record-json-v1';
   if(typeof block.locator?.chunkId==='string')return 'speech-json-v1';
 }
 export function decodeSourceText(format:SourceTextFormat,text:string){
+  if(format==='speech-text-v2'){const end=text.indexOf('\n');if(end<0)return;let metadata;try{metadata=JSON.parse(text.slice(0,end));}catch{return;}const value=speech.safeParse({...metadata,text:text.slice(end+1)});if(value.success)return {kind:'speech' as const,...value.data};return;}
   let json:unknown;try{json=JSON.parse(text);}catch{return;}
   if(format==='source-record-json-v1'){const value=source.safeParse(json);if(value.success)return {...value.data,kind:'source' as const,text:value.data.text??''};}
   if(format==='speech-json-v1'){const value=speech.safeParse(json);if(value.success)return {kind:'speech' as const,...value.data};}
@@ -21,6 +23,7 @@ export function decodeSourceText(format:SourceTextFormat,text:string){
  * Only coordinates survive; no unread decoded text is retained in this plan. */
 export function sourceTextBoundaries(format:SourceTextFormat,raw:string):number[]|undefined {
   const decoded=decodeSourceText(format,raw);if(!decoded)return;
+  if(format==='speech-text-v2'){const start=raw.indexOf('\n')+1,boundaries=[start];let offset=start;for(const point of decoded.text){offset+=point.length;boundaries.push(offset);}return boundaries;}
   let depth=0,tokenStart=-1,tokenEnd=-1,matches=0;
   for(let i=0;i<raw.length;i++){
     const ch=raw[i];

@@ -20,7 +20,7 @@ export const featuresReady=(async()=>{
     {surface:'panel',entry:{id:'memory.saved',kind:'mote.memory',schemaVersion:1,representation:'saved-record',render:({value})=><MemoryRecordPanel record={JSON.parse(value.text)}/>}},
     {surface:'panel',entry:{id:'operation.saved',kind:'mote.operation',schemaVersion:1,representation:'saved-record',render:({value})=><details><summary>{moteText('保存记录（只读）')}</summary><pre className="feature-json">{value.text}</pre></details>}},
   ]);
-  await webFeatures.install({id:'mote.source-material-views',version:'1',components:[]},sourceMaterialViews.map(entry=>({surface:'renderer' as const,entry})));
+  await webFeatures.install({id:'mote.source-material-views',version:'2',components:[]},sourceMaterialViews.map(entry=>({surface:'renderer' as const,entry})));
   await webFeatures.install({id:'mote.owner-questions',version:'1',components:[]},ownerQuestionPanels.map(entry=>({surface:'panel' as const,entry})));
 })();
 class ViewBoundary extends React.Component<{fallback:React.ReactNode;children:React.ReactNode},{failed:boolean}>{

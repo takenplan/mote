@@ -195,10 +195,10 @@ export class EvidenceReader {
     // prose nor a custom organizer acquires a presentation type by looking like JSON.
     let evidencePresentation:ReturnType<typeof sourceTextFormat>;
     const ref=formal&&record.provenance?.uri?.split('#')[0],material=ref?this.materials!.get(ref):undefined;
-    if(material&&material.schemaVersion===1&&sourceItemKinds.some(kind=>material.kind==='mote.'+kind)&&
+    if(material&&[1,2].includes(material.schemaVersion)&&sourceItemKinds.some(kind=>material.kind==='mote.'+kind)&&
       this.store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='material_organizer_groups'").get()){
       const owners=this.store.db.prepare('SELECT organizer_id,version FROM material_organizer_groups WHERE material_id=? AND active=1').all(material.id);
-      if(owners.length===1&&owners[0].organizer_id==='mote.source-item'&&String(owners[0].version)==='11'){
+      if(owners.length===1&&owners[0].organizer_id==='mote.source-item'&&(String(owners[0].version)==='12'||material.schemaVersion===1&&String(owners[0].version)==='11')){
         const block=this.store.db.prepare(`SELECT b.block_id,b.format,b.locator,p.text FROM material_blocks b
           JOIN material_block_payloads p ON p.hash=b.payload_hash WHERE b.material_id=? AND b.revision=? AND b.anchor_id=?`).get(material.id,material.revision,record.id);
         if(block&&block.text===record.ocrText){
@@ -553,7 +553,7 @@ export class EvidenceReader {
     if(!this.store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='material_organizer_groups'").get())return;
     const owners=this.store.db.prepare('SELECT organizer_id,version,group_json FROM material_organizer_groups WHERE material_id=? AND active=1').all(material.id) as
       {organizer_id:string;version:string;group_json:string}[];
-    if(owners.length!==1||owners[0].organizer_id!=='mote.authored-record'||owners[0].version!=='3')return;
+    if(owners.length!==1||owners[0].organizer_id!=='mote.authored-record'||!['3','4'].includes(owners[0].version))return;
     let group:{deviceId?:unknown;captureId?:unknown};
     try{group=JSON.parse(owners[0].group_json);}catch{return;}
     if(typeof group.deviceId!=='string'||typeof group.captureId!=='string')return;

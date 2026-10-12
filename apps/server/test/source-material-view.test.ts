@@ -68,7 +68,7 @@ test('imported authored messages retain distinct source times through organizati
   for(let i=0;i<10;i++)if(await node.materialOrganizer.tick(100)===0)break;
   const material=node.materials.get(materialId(sourceId,externalId))!;assert.equal(material.kind,'mote.message');
   const response=await node.app.inject({url:`/api/materials/${material.id}/source-view?revision=${material.revision}`,headers});assert.equal(response.statusCode,200);
-  const item=response.json().items[0];assert.equal(item.type,'source');assert.equal(item.text,text);assert.equal(item.sourceType,'message');assert.equal(item.sourceRef,'capture:'+captureId);
+  const item=response.json().items.find((value:{type:string})=>value.type==='source');assert.equal(item.type,'source');assert.equal(item.text,'','host metadata is separate from literal body');assert.equal(response.json().items[0].text,text);assert.equal(item.sourceType,'message');assert.equal(item.sourceRef,'capture:'+captureId);
   assert.equal(item.recordedAt,recordedAt);assert.equal(Date.parse(item.capturedAt),Date.parse(observedAt));assert.equal(item.occurredAt,undefined);assert.equal(item.confirmedName,undefined);
-  const raw=JSON.parse(node.materials.block(material.ref,0)!.block.text);assert.equal(raw.documentTime.contentRole,'authored');assert.equal(raw.text,text);
+  const raw=JSON.parse(node.materials.block(material.ref,1)!.block.text);assert.equal(raw.documentTime.contentRole,'authored');assert.equal(raw.text,undefined);assert.equal(node.materials.block(material.ref,0)!.block.text,text);
 });

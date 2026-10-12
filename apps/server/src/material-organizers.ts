@@ -245,7 +245,7 @@ class MaterialBody {
     if(this.members.length>=MAX_MEMBERS){this.limitations.add('member_limit');return false;}
     this.members.push(member(record));return true;
   }
-  text(id:string,text:string,memberId:string|string[],format:'plain'|'json'|'transcript'='plain',locator?:Record<string,unknown>,evidenceIds?:string[],context?:MaterialEvidenceContext){
+  text(id:string,text:string,memberId:string|string[],format:'plain'|'json'|'transcript'|'speech-text'='plain',locator?:Record<string,unknown>,evidenceIds?:string[],context?:MaterialEvidenceContext){
     if(!text)return;
     let position=0,part=0;
     while(position<text.length){
@@ -290,7 +290,7 @@ function imageBlocks(body:MaterialBody,record:CaptureRecord,image:ImageMaterialP
 
 /** A source item keeps its own identity; a coding session is assembled separately. */
 const sourceItem:MaterialOrganizer={
-  id:'mote.source-item',version:'11',slot:'source-item',
+  id:'mote.source-item',version:'12',slot:'source-item',
   select:r=>r.provenance&&!r.provenance.document?.coding?{sourceId:r.provenance.sourceId,externalId:r.provenance.externalId}:undefined,
   identity:g=>materialId(g.sourceId,g.externalId),
   build(reader,g){
@@ -298,14 +298,17 @@ const sourceItem:MaterialOrganizer={
     const file=reader.file(r.id);if(!file)return;
     const {attachments,chunks,job}=file;
     const body=file.providerTranscript?new MaterialBody(20000,16*1024*1024):new MaterialBody();body.addMember(r);
-    body.text('source-record',captureText(r),r.id,'json',undefined,undefined,evidenceContext(r));
+    const {text:_body,...metadata}=JSON.parse(captureText(r));
+    body.text('source-record',r.ocrText,r.id,'plain',undefined,undefined,evidenceContext(r));
+    const sourceBodyBlocks=body.blocks.map(block=>block.id);
+    body.text('source-metadata',JSON.stringify(metadata),r.ocrText?[]:r.id,'json',undefined,undefined,evidenceContext(r));
     const sourceBlocks=body.blocks.map(block=>block.id);
     for(const c of chunks){
       const structured=c.speaker!==undefined||c.imageLocation!==undefined;
-      const text=structured?JSON.stringify({...(c.speaker!==undefined?{speaker:c.speaker}:{}),...(c.speakerAttribution?{speakerAttribution:c.speakerAttribution}:{}),...(c.imageLocation?{imageLocation:c.imageLocation}:{}),text:c.text}):c.text;
+      const text=structured?JSON.stringify({...(c.speaker!==undefined?{speaker:c.speaker}:{}),...(c.speakerAttribution?{speakerAttribution:c.speakerAttribution}:{}),...(c.imageLocation?{imageLocation:c.imageLocation}:{})})+'\n'+c.text:c.text;
       // The chunk writer preserves a real media timeline across corrections.
       // A corrected-dialogue container can also contain untimed document text.
-      body.text(`chunk:${c.id}`,text,r.id,structured?'json':c.startMs===null?'plain':'transcript',
+      body.text(`chunk:${c.id}`,text,r.id,structured?'speech-text':c.startMs===null?'plain':'transcript',
         {chunkId:c.id,...(c.imageLocation?{imageLocation:c.imageLocation}:{}),...(c.startMs===null?{}:{startMs:c.startMs,endMs:c.endMs})},[c.id],
         evidenceContext(r,c.startMs===null?undefined:'transcript'));
     }
@@ -357,8 +360,8 @@ const sourceItem:MaterialOrganizer={
     // processor's state must not change the identity of the authored body.
     const limitations=['metadata_projected',...(reference?['original_body_not_collected']:[])];
     const artifacts:MaterialDraft['artifacts']=[
-      {key:'source-record',blockIds:sourceBlocks,state:'ready'},
-      {key:'source-body',blockIds:sourceBlocks,state:reference||!hasSourceBody?'unavailable':'ready',
+      {key:'source-record',blockIds:sourceBodyBlocks.length?sourceBodyBlocks:sourceBlocks,state:'ready'},
+      {key:'source-body',blockIds:sourceBodyBlocks,state:reference||!hasSourceBody?'unavailable':'ready',
         ...(reference?{reason:'original_body_not_collected'}:!hasSourceBody?{reason:'source_body_empty'}:{})},
       ...(file.objectHash?[{key:'original',blockIds:body.blocks.filter(b=>b.id==='original').map(b=>b.id),state:'ready' as const,revision:file.objectHash}]:[]),
       ...(file.processingRequired?[{key:'extracted-text',blockIds:extractedBlocks,state:artifact&&artifact.complete!==false&&artifact.coverage!=='partial'?'ready' as const:['waiting','running'].includes(job?.state??'waiting')?'pending' as const:['blocked','failed','cancelled'].includes(job?.state??'')?'failed' as const:'unavailable' as const,...(!artifact&&job?.error?{reason:job.error}:{})}]:[]),
@@ -366,7 +369,7 @@ const sourceItem:MaterialOrganizer={
       ...attachedArtifacts,
     ];
     const start=r.provenance?.calendar?.start??sourceContentTime(r),end=r.provenance?.calendar?.end??start;
-    return {id:materialId(g.sourceId,g.externalId),kind:r.source==='file'?'mote.file':`mote.${r.source}`,schemaVersion:1,
+    return {id:materialId(g.sourceId,g.externalId),kind:r.source==='file'?'mote.file':`mote.${r.source}`,schemaVersion:2,
       title:r.windowTitle||r.appName||r.source,origin:origin(g.sourceId,g.externalId,[r],{firstAt:iso(start),lastAt:iso(end)}),
       blocks:body.blocks,members:body.members,coverage:body.coverage(state,reason),artifacts,fidelity:body.fidelity('derived',limitations),
       retention:{original:!!file.objectHash||attachments.length>0||!file.processingRequired&&!reference?'retained':'unavailable',policy:'keep'}};
@@ -544,17 +547,19 @@ const stateSeries:MaterialOrganizer={
 };
 
 const authored:MaterialOrganizer={
-  id:'mote.authored-record',version:'3',slot:'authored-record',
+  id:'mote.authored-record',version:'4',slot:'authored-record',
   select:r=>r.provenance||['screen','ui_page','activity','media','device_event'].includes(r.source)?undefined:{deviceId:r.deviceId,captureId:r.id},
   identity:g=>materialId(sourceKey('authored',g.deviceId),g.captureId),
   build(reader,g){
     const r=reader.capture();if(!r)return;
     const sourceId=sourceKey('authored',r.deviceId),body=new MaterialBody();body.addMember(r);
-    body.text('record',captureText(r),r.id,'json',undefined,undefined,evidenceContext(r,r.source==='note'?'authored':undefined));
+    body.text('record',r.ocrText,r.id,'plain',undefined,undefined,evidenceContext(r,r.source==='note'?'authored':undefined));
+    const {text:_body,...metadata}=JSON.parse(captureText(r));
+    body.text('record-metadata',JSON.stringify(metadata),r.ocrText?[]:r.id,'json',undefined,undefined,evidenceContext(r,r.source==='note'?'authored':undefined));
     const file=reader.file(r.id);if(!file)return;
     for(const attachment of file.attachments)body.asset(`attachment:${attachment.id}`,attachment.hash,attachment.mimeType,r.id,{fileId:attachment.id,...(attachment.relativePath?{relativePath:attachment.relativePath}:{})});
     if(file.attachmentsTruncated)body.limitations.add('attachment_limit');
-    return {id:materialId(sourceId,r.id),kind:`mote.${r.source}`,schemaVersion:1,title:r.windowTitle||r.metadata?.notification?.title?.slice(0,500)||r.appName||r.source,
+    return {id:materialId(sourceId,r.id),kind:`mote.${r.source}`,schemaVersion:2,title:r.windowTitle||r.metadata?.notification?.title?.slice(0,500)||r.appName||r.source,
       origin:origin(sourceId,r.id,[r]),blocks:body.blocks,members:body.members,coverage:body.coverage(),artifacts:[{key:'authored-record',state:'ready'}],fidelity:body.fidelity('derived',['metadata_projected']),retention:{original:'retained',policy:'keep'}};
   },
 };

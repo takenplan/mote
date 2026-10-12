@@ -1,5 +1,6 @@
 import {z} from 'zod';
 import {MemoryOutputValidationError} from './memory.js';
+import {validationLocation,validationProblem} from './memory-validation.js';
 import type {AttributionContext,QueryResult} from '@mote/shared';
 
 export const memoryWorkPackageSchema=z.object({id:z.string().min(1).max(200),goal:z.string().min(1).max(2000),instruction:z.string().min(1).max(4000),inputs:z.array(z.object({materialId:z.string().max(128),ref:z.string().max(256),sourceId:z.string().max(256),inputKey:z.string().max(256),scope:z.string().max(128),contextTime:z.string().datetime({offset:true}),fingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict()).max(8).optional()}).strict();
@@ -22,7 +23,7 @@ Candidate capacity is ${limit}, replacing the earlier eight-candidate ceiling fo
 export function readMemoryWorkCoverage(result:QueryResult,members:MemoryWorkMember[],limit:number,readText?:(id:string)=>string|undefined){
  let value:any;try{value=JSON.parse(result.answer);}catch{throw new MemoryOutputValidationError('json','Invalid Memory work output');}
  const parsed=memoryWorkCoverageSchema.safeParse(value.coverage),capacity=memoryWorkCapacitySchema.safeParse(value.capacity);
- if(!Array.isArray(value.memories)||!parsed.success||!capacity.success)throw new MemoryOutputValidationError('coverage','Memory work requires member coverage and capacity');
+ if(!Array.isArray(value.memories)||!parsed.success||!capacity.success){const issue=!parsed.success?parsed.error.issues[0]:!capacity.success?capacity.error.issues[0]:undefined,field=!Array.isArray(value.memories)?'memories':!parsed.success?'coverage':'capacity';throw new MemoryOutputValidationError('coverage','Memory work requires member coverage and capacity',{fieldPath:validationLocation([field,...(issue?.path??[])]),problem:issue?validationProblem(issue):'invalid_type',maxCandidates:limit});}
  if(value.memories.length>limit)throw new MemoryOutputValidationError('coverage','Memory work candidate capacity exceeded');
  const seen=new Set<string>();
  for(const row of parsed.data){const member=members.find(member=>member.key===row.key);if(!member||seen.has(row.key))throw new MemoryOutputValidationError('coverage','Unknown or duplicate Memory coverage member');seen.add(row.key);

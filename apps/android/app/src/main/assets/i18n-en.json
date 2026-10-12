@@ -3074,6 +3074,7 @@
   "此操作不可用。": "This operation is unavailable.",
   "资料状态已变化或当前配置不支持此操作，请刷新后重试。": "Data changed or configuration does not support this action. Refresh and retry.",
   "该条目已删除，排队重试不能恢复它。": "This item was deleted; queued retries cannot restore it.",
+  "服务端上下文超过预算，请缩小处理批次。": "The server context exceeds its budget. Use a smaller processing batch.",
   "内容超过大小限制，请分批处理。": "Content exceeds size limit. Process in batches.",
   "请求过于频繁或已有任务运行，请稍后重试。": "Too many requests or a task is already running. Retry later.",
   "服务暂不可用，请检查节点状态与模型配置。": "Service temporarily unavailable. Check node and model settings.",

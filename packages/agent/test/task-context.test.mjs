@@ -114,3 +114,31 @@ test('host derived-context dependencies are authorization metadata and never new
  const input={question:'Compare a derived rule',evidenceIds:['candidate-only'],derivedContextEvidenceIds:['private-root-only'],taskContext:{turns:[],untrustedMemoryDraft:{statement:'The derived rule'}}};
  const envelope=buildContextEnvelope(input,[]);assert.equal(JSON.stringify(envelope).includes('private-root-only'),false);assert.deepEqual(taskTools(input),['evidence']);
 });
+
+
+test('large Memory catalogs and review drafts use lossless shared declaration references within the unchanged budget',async()=>{
+ const {assembleContext}=await import('../dist/task-context.js');
+ const context={version:1,ownerRelation:'unknown',basis:'default',sourceContextStatements:[{description:'Generated source declaration. '.repeat(80),version:1}]};
+ const members=Array.from({length:24},(_,i)=>({key:String(i).padStart(64,'a'),id:'generated-'+i,offset:i*100,length:100,fingerprint:'f'.repeat(64),contextTime:'2026-10-01T00:00:00Z',attributionContext:context,state:'pending',memoryIds:[]}));
+ const work={members,contextMembers:[],authorizedMembers:members.map(m=>({...m,scope:'generated'})),history:[],instruction:'Generated complete work contract'};
+ const input={question:'Generated review',taskContext:{turns:[],memoryWork:work,untrustedMemoryDraft:'Generated draft. '.repeat(1100)}};
+ assert.ok(JSON.stringify(input.taskContext).length>80000);
+ const {prompt,metrics}=assembleContext(input,[],'Generated system',[],4096),wire=JSON.parse(prompt).untrustedTaskContext.memoryWork;
+ assert.ok(metrics.task<80000);assert.equal(wire.members.length,24);assert.equal(wire.authorizedMembers.length,24);
+ for(const [i,m] of wire.members.entries()){assert.equal(m.key,members[i].key);assert.equal(m.offset,members[i].offset);assert.equal(m.contextTime,members[i].contextTime);assert.deepEqual(wire.attributionContexts[m.attributionContextRef],context);assert.equal(wire.authorizedMembers[i].memberRef,m.key);}
+ assert.equal(input.taskContext.memoryWork.members[0].attributionContext,context,'wire compaction cannot mutate host authority or cache inputs');
+ const changed={...members[0],attributionContext:{...context,ownerRelation:'owner'}};
+ const other=JSON.parse(assembleContext({...input,taskContext:{...input.taskContext,memoryWork:{...work,authorizedMembers:[changed]}}},[],'Generated',[],4096).prompt).untrustedTaskContext.memoryWork;
+ assert.equal(other.authorizedMembers[0].memberRef,undefined,'matching keys with different context must not be silently deduplicated');
+});
+
+test('oversized host context is a typed local failure with content-free measurements',async()=>{
+ const {assembleContext}=await import('../dist/task-context.js'),{AgentContextBudgetError}=await import('../dist/index.js');
+ assert.throws(()=>assembleContext({question:'Generated',taskContext:{turns:[],draft:'x'.repeat(81000)}},[],'system',[],4096),e=>e instanceof AgentContextBudgetError&&e.code==='host_context_budget'&&e.budget==='task'&&e.limit===80000&&e.sections.draft===81002);
+});
+
+test('Codex rejects oversized host input before starting the executable or a model turn',async()=>{
+ const {createCodexAgent}=await import('../dist/codex-agent.js'),{AgentContextBudgetError}=await import('../dist/index.js'),traces=[];
+ const agent=createCodexAgent({reader,model:'generated-only',protocol:'codex-app-server',codex:{executable:'/generated/nonexistent-codex',home:'/generated/no-auth-home'}});
+ try{await assert.rejects(agent.query({question:'Generated',taskContext:{turns:[],draft:'x'.repeat(81000)},onTrace:e=>traces.push(e)}),e=>e instanceof AgentContextBudgetError);assert.ok(!traces.some(e=>e.type==='model.started'||e.type==='codex.model.selected'));assert.equal(traces.find(e=>e.type==='run.failed').payload.code,'host_context_budget');}finally{await agent.close();}
+});

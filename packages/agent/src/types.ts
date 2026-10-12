@@ -280,6 +280,16 @@ export class AgentConfigurationError extends Error {
   }
 }
 
+/** A host packing failure, observed before a model request, not a provider failure. */
+export class AgentContextBudgetError extends Error {
+  readonly statusCode=413;
+  readonly code='host_context_budget';
+  constructor(readonly budget:'task'|'input',readonly characters:number,readonly limit:number,readonly sections:Record<string,number>={}){
+    super(`Host ${budget} context exceeds its input budget (${characters} > ${limit} characters); use a smaller task batch`);
+    this.name='AgentContextBudgetError';
+  }
+}
+
 export class AgentProviderError extends ProviderFailure {
   constructor(details:ProviderFailureDetails={category:'transient',code:'provider_failed'}) {
     super(details,'The model request failed. Check the endpoint, API credential, model and protocol settings.');
