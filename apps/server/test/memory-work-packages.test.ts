@@ -29,7 +29,7 @@ async function fixture(t:TestContext,count=4){
  return {directory:dir,store,sources,memories,pipeline,ids,seen,reviews,setUnderstand(fn:NonNullable<typeof understand>){understand=fn;},setGenerate(fn:typeof generate){generate=fn;},setReview(fn:typeof review){review=fn;},create(){return pipeline.create({evidenceIds:ids,workPackage:{id:'synthetic-package',goal:'Inspect the authorized originals',instruction:'Preserve independent provenance'}});}};
 }
 
-test('wide packages reach the real Codex adapter for extraction and independent review without dropping members',async t=>{
+test('wide packages use short exact coverage identities through Codex extraction, repair and independent review',async t=>{
  const f=await fixture(t,20),executable=join(f.directory,'generated-codex.mjs'),delivered=join(f.directory,'delivered.ndjson');
  const summary='Generated derived context. '.repeat(500).slice(0,12000),artifact=f.store.archive.save('3'.repeat(64),'generated-group','1'.repeat(64),{kind:'semantic',text:summary,metadata:{evidenceRanges:f.ids.map(id=>({id,offset:0,length:20}))}},f.ids.map(id=>({id,fingerprint:f.store.archive.fingerprint(id)!})),'generated-only','1','2'.repeat(64));
  writeFileSync(join(f.directory,'auth.json'),JSON.stringify({OPENAI_API_KEY:'synthetic-unused-key'}),{mode:0o600});
@@ -37,15 +37,17 @@ test('wide packages reach the real Codex adapter for extraction and independent 
 import readline from 'node:readline';
 import {appendFileSync} from 'node:fs';
 const send=value=>process.stdout.write(JSON.stringify(value)+'\\n');
+let context,turns=0;
 readline.createInterface({input:process.stdin}).on('line',line=>{
  const m=JSON.parse(line);
  if(m.method==='initialize')send({id:m.id,result:{}});
  else if(m.method==='account/read')send({id:m.id,result:{account:{type:'apiKey'}}});
  else if(m.method==='thread/start')send({id:m.id,result:{thread:{id:'generated-thread',model:null},model:m.params.model,serviceTier:m.params.serviceTier,approvalPolicy:'never',sandbox:{type:'readOnly'}}});
  else if(m.method==='turn/start'){
-  const context=JSON.parse(m.params.input[0].text),work=context.untrustedTaskContext.memoryWork;
-  appendFileSync(${JSON.stringify(delivered)},JSON.stringify({request:context.request,work,interpretations:context.untrustedTaskContext.untrustedInterpretations,evidenceIds:context.untrustedEvidence.map(r=>r.id),review:Boolean(context.untrustedTaskContext.untrustedMemoryDraft)})+'\\n');
+  const incoming=JSON.parse(m.params.input[0].text);if(incoming.untrustedTaskContext)context=incoming;const work=context.untrustedTaskContext.memoryWork;turns++;
+  appendFileSync(${JSON.stringify(delivered)},JSON.stringify({request:context.request,work,repair:Boolean(incoming.validationError),interpretations:context.untrustedTaskContext.untrustedInterpretations,evidenceIds:context.untrustedEvidence.map(r=>r.id),review:Boolean(context.untrustedTaskContext.untrustedMemoryDraft)})+'\\n');
   const value={memories:[],coverage:work.members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),capacity:{saturated:false}};
+  if(turns===1&&!context.untrustedTaskContext.untrustedMemoryDraft)value.coverage[18].key='member_999';
   send({id:m.id,result:{turn:{id:'generated-turn'}}});
   send({method:'item/completed',params:{threadId:'generated-thread',item:{id:'generated-answer',type:'agentMessage',text:JSON.stringify({answer:JSON.stringify(value),citationIds:[]})}}});
   send({method:'turn/completed',params:{threadId:'generated-thread',turn:{status:'completed'}}});
@@ -56,9 +58,12 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  f.setGenerate(input=>agent.query(input));f.setReview(async input=>agent.query(input));
  const job=f.pipeline.create({evidenceIds:f.ids,artifactRefs:[{id:artifact.id,revision:artifact.revision}],workPackage:{id:'synthetic-package',goal:'Inspect the authorized originals',instruction:'Preserve generated provenance and original scope. '.repeat(70)}}),done=await f.pipeline.run(job.id);
  assert.equal(done.status,'completed',`the real adapter must accept both calls (extract=${f.seen[0]?.question.length}, review=${f.reviews[0]?.question.length}, error=${done.errorCode})`);
- const calls=readFileSync(delivered,'utf8').trim().split('\n').map(line=>JSON.parse(line));assert.equal(calls.length,2);
- assert.deepEqual(calls.map(call=>call.review),[false,true]);
- for(const call of calls){assert.equal(call.work.members.length,20);assert.deepEqual(new Set(call.evidenceIds),new Set(f.ids));assert.ok(call.request.length<=20000);assert.ok(call.interpretations.includes(summary.slice(0,11000)));assert.equal(call.work.package.instruction,job.workPackage!.instruction);}
+ const calls=readFileSync(delivered,'utf8').trim().split('\n').map(line=>JSON.parse(line));assert.equal(calls.length,3);
+ assert.deepEqual(calls.map(call=>call.review),[false,false,true]);assert.deepEqual(calls.map(call=>call.repair),[false,true,false]);
+ for(const call of calls){assert.equal(call.work.members.length,20);assert.ok(call.work.members.every((m:{key:string},i:number)=>m.key==='member_'+i));assert.deepEqual(new Set(call.evidenceIds),new Set(f.ids));assert.ok(call.request.length<=20000);assert.ok(call.interpretations.includes(summary.slice(0,11000)));assert.equal(call.work.package.instruction,job.workPackage!.instruction);}
+ assert.equal(done.batches[0].validationFailures?.length,1,'a foreign alias must be rejected and repaired, never inferred');
+ assert.ok(done.batches[0].coverage!.every(m=>/^[a-f0-9]{64}$/.test(m.key)),'publication preserves canonical range identities');
+ assert.equal(done.batches[0].reviewReceipt?.decision,'independent');assert.notEqual(done.batches[0].reviewReceipt?.draftRunId,done.batches[0].reviewReceipt?.reviewRunId);
  assert.equal(calls[0].interpretations,calls[1].interpretations);
  assert.ok(calls[0].request.length+calls[0].work.instruction.length+calls[0].work.package.instruction.length+calls[0].interpretations.length>20000,'putting the complete task in question reproduces the former adapter limit');
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,20);

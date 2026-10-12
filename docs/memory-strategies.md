@@ -52,6 +52,8 @@ const stopRecipe = ctx.memoryStrategies.registerRecipe({
 
 ## 自动接收的组合选择
 
+录音连接器安装 `mote.recording-memory@1` 与 `@2`，新来源初始选择 v2。v2 的提取和审核结合所有者的来源说明与实际正文解释日记叙述者对应；未设类别默认不否定有范围依据的本人说明，多人对话、引用与背景语音仍逐片段判断。已有来源覆盖和固定 v1 任务不自动升级，历史重算需显式发起。详见[录音覆盖与本人对应 ADR](adr-recording-coverage-and-owner-context.md)。
+
 所有者在「系统管理 → 模型与服务 → 模块与模型 → 自动 Memory 组合」选择非空默认组合，或为某个来源保存非空覆盖组合，也可让来源跟随默认。来源覆盖是所有者的明确选择，不根据来源名称或正文推断语义类别。已授权来源的新资料持续处理，普通用户无需另行开启 Memory；来源暂停接收、模型及隐私授权仍是独立边界。
 
 `GET /api/memory-recipe-settings` 返回普通默认选择，加 `?scope=capture` 返回截图和 v2 页面字段的独立默认选择，加 `?sourceId=...` 返回来源的有效选择及是否继承。`scope` 与 `sourceId` 互斥。每个条目包括固定的组件版本/指纹和当前是否可用。通过 `PUT /api/memory-recipe-settings` 保存：

@@ -125,11 +125,28 @@ test('large Memory catalogs and review drafts use lossless shared declaration re
  assert.ok(JSON.stringify(input.taskContext).length>80000);
  const {prompt,metrics}=assembleContext(input,[],'Generated system',[],4096),wire=JSON.parse(prompt).untrustedTaskContext.memoryWork;
  assert.ok(metrics.task<80000);assert.equal(wire.members.length,24);assert.equal(wire.authorizedMembers.length,24);
- for(const [i,m] of wire.members.entries()){assert.equal(m.key,members[i].key);assert.equal(m.offset,members[i].offset);assert.equal(m.contextTime,members[i].contextTime);assert.deepEqual(wire.attributionContexts[m.attributionContextRef],context);assert.equal(wire.authorizedMembers[i].memberRef,m.key);}
+ for(const [i,m] of wire.members.entries()){assert.equal(m.key,'member_'+i);assert.equal(m.offset,members[i].offset);assert.equal(m.contextTime,members[i].contextTime);assert.deepEqual(wire.attributionContexts[m.attributionContextRef],context);assert.equal(wire.authorizedMembers[i].memberRef,m.key);}
  assert.equal(input.taskContext.memoryWork.members[0].attributionContext,context,'wire compaction cannot mutate host authority or cache inputs');
  const changed={...members[0],attributionContext:{...context,ownerRelation:'owner'}};
  const other=JSON.parse(assembleContext({...input,taskContext:{...input.taskContext,memoryWork:{...work,authorizedMembers:[changed]}}},[],'Generated',[],4096).prompt).untrustedTaskContext.memoryWork;
  assert.equal(other.authorizedMembers[0].memberRef,undefined,'matching keys with different context must not be silently deduplicated');
+});
+
+test('coverage aliases round-trip only exact identities from this call, including reviewer drafts and context references',async()=>{
+ const {compactMemoryTaskContext,restoreMemoryCoverageKeys}=await import('../dist/memory-context.js');
+ const keys=['a'.repeat(64),'b'.repeat(64),'c'.repeat(64)];
+ const work={members:[{key:keys[0],id:'target'}],contextMembers:[{key:keys[1],id:'context'}],authorizedMembers:[{key:keys[2],id:'unread'}],history:[{targets:[{key:keys[0],contextRefs:[keys[1]]}],contextMembers:[]}],instruction:'Generated'};
+ const draft={memories:[{statement:'member_0 remains literal prose',evidence:[{id:'target',quote:'member_0'}]}],coverage:[{key:keys[0],contextRefs:[keys[1],'material:unchanged'],state:'needs_context',candidateIndexes:[]}],capacity:{saturated:false}};
+ const task={turns:[],memoryWork:work,untrustedMemoryDraft:draft},wire=compactMemoryTaskContext(task);
+ assert.equal(wire.memoryWork.contextEncoding,'memory-context@3');assert.equal(wire.untrustedMemoryDraft.coverage[0].key,'member_0');assert.deepEqual(wire.untrustedMemoryDraft.coverage[0].contextRefs,['member_1','material:unchanged']);
+ assert.deepEqual(JSON.parse(restoreMemoryCoverageKeys(JSON.stringify(wire.untrustedMemoryDraft),task)),draft);
+ assert.deepEqual(wire.untrustedMemoryDraft.memories,draft.memories,'claims and quotes are not alias substitution targets');
+ assert.equal(wire.memoryWork.history[0].targets[0].key,'member_0');assert.equal(wire.memoryWork.history[0].targets[0].contextRefs[0],'member_1');
+ const unknown=JSON.stringify({coverage:[{key:'member_999'},{key:'member_00'},{key:keys[0].slice(0,62)}]});
+ assert.equal(restoreMemoryCoverageKeys(unknown,task),unknown,'unknown aliases and corrupted canonical keys are never guessed');
+ const contextOnly=JSON.parse(restoreMemoryCoverageKeys(JSON.stringify({coverage:[{key:'member_1'}]}),task));assert.equal(contextOnly.coverage[0].key,keys[1],'host target validation still rejects context-only coverage');
+ assert.equal(restoreMemoryCoverageKeys('not JSON',task),'not JSON');assert.deepEqual(compactMemoryTaskContext(wire),wire);
+ assert.equal(task.memoryWork.members[0].key,keys[0]);assert.deepEqual(task.untrustedMemoryDraft,draft);
 });
 
 test('oversized host context is a typed local failure with content-free measurements',async()=>{

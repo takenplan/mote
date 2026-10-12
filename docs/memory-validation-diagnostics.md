@@ -20,6 +20,14 @@ Host context budget failures use `host_context_budget`, with numeric section
 measurements in the Agent trace. They are separate from model-output repair and
 provider failure. See [context and canonical evidence ADR](adr-memory-context-and-canonical-evidence.md).
 
+Memory requests use batch-local `member_N` coverage keys on the model wire. The
+Agent decodes only exact supplied aliases before host validation; persistent
+coverage and checkpoint keys retain their canonical identities. Unknown aliases,
+corrupted canonical keys and non-target coverage still fail normally. Evidence
+IDs, quotes and offsets are never alias substitutions. Extraction, repair and
+independent review use the same mapping for their frozen task vectors; see the
+[recording coverage ADR](adr-recording-coverage-and-owner-context.md).
+
 ## Quote codes
 
 | Code | Meaning |

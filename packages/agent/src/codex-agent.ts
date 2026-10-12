@@ -3,6 +3,7 @@ import {ProviderFailure} from '@mote/shared';
 import {ContextToolError} from './tool-errors.js';
 import {AgentYieldError} from './host-controls.js';
 import {assembleContext,taskTools} from './task-context.js';
+import {restoreMemoryCoverageKeys} from './memory-context.js';
 import {randomUUID} from 'node:crypto';
 import {startBridge} from './bridge.js';
 import {contextToolDefinitions,pinContextTools} from './tool-contributions.js';
@@ -77,7 +78,7 @@ export function createCodexAgent(options:AgentOptions){
       trace({type:'validation.started',stage:'validating',phase:'started'});
       let answer:ReturnType<typeof parseAnswer>;
       for(let repair=0;;repair++){
-        try{answer=parseAnswer(text,bridge.records);await validateHostOutput(input,{...answer,trace:bridge.trace,runId});break;}
+        try{answer=parseAnswer(text,bridge.records);answer={...answer,answer:restoreMemoryCoverageKeys(answer.answer,input.taskContext)};await validateHostOutput(input,{...answer,trace:bridge.trace,runId});break;}
         catch(error){
           if(!(error instanceof AgentResponseError)||error.reason==='tool_failure'||repair>=MAX_OUTPUT_REPAIRS)throw error;
           trace({type:'validation.failed',stage:'validating',phase:'completed',status:'rejected',payload:{reason:error.reason}});
