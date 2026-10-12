@@ -3862,9 +3862,15 @@ h1 { font-family:inherit;font-weight:600;letter-spacing:-.8px; }
 .lark-step h2 { margin-top:0; font-size:18px; }
 .lark-step p { line-height:1.65; }
 .lark-buttons { display:flex; gap:10px; flex-wrap:wrap; margin:14px 0; }
+.recording-save-bar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-top:24px; padding:20px 0 6px; border-top:1px solid var(--line, #d6ded9); }
+.recording-save-bar .button.primary { min-width:180px; font-size:14px; padding:12px 20px; }
+.recording-save-bar .muted { font-size:13px; }
 .lark-step fieldset { padding:0; border:0; min-width:0; }
 .lark-step label:not(.lark-check) { display:grid; gap:8px; margin:16px 0; font-size:14px; }
 .lark-step input:not([type=checkbox]), .lark-step textarea, .lark-step select { width:100%; box-sizing:border-box; border:1px solid var(--line, #d6ded9); border-radius:8px; padding:10px 12px; background:var(--surface, #fff); color:inherit; font:inherit; }
+.source-context-fields textarea { font-weight:400; }
+.source-context-fields .field-note { display:block; font-size:13px; line-height:1.65; color:var(--muted); }
+.source-context-fields .field-note p { margin:6px 0; }
 .lark-check { display:flex; align-items:center; gap:10px; padding:9px 0; overflow-wrap:anywhere; }
 .lark-range { display:grid; grid-template-columns:1fr 1fr 2fr; gap:14px; }
 .lark-step details { margin-top:18px; }

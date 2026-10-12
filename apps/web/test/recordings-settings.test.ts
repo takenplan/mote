@@ -12,6 +12,7 @@ const {createRoot}=await import('react-dom/client');
 const {RecordingConnection,RecordingsSettings}=await import('../src/RecordingsSettings.js');
 const tick=()=>new Promise(r=>setTimeout(r,20));
 const button=(name:string)=>{const found=[...document.querySelectorAll<HTMLButtonElement>('button')].find(b=>b.textContent===name);assert.ok(found);return found;};
+async function description(value:string){await act(async()=>{const input=document.querySelector('textarea')!;assert.ok(input);Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype,'value')!.set!.call(input,value);input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));await tick();});}
 test('recording journey connects an existing account, explicitly enables import, preserves draft range and offers failure retry',async t=>{
  const calls:{path:string;init?:RequestInit}[]=[],status:RecordingStatus={provider:'feishu',connected:false,selection:{enabled:false,start:'2026-09-01T00:00:00Z',autoSync:true,backupAudio:true},steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}};
  const api={request:async(path:string,init?:RequestInit)=>{calls.push({path,init});if(path.endsWith('/items'))return {items:[]};if(path.endsWith('/connect'))status.connected=true;if(path.endsWith('/selection')){status.selection=JSON.parse(String(init?.body));status.counts.failed=1;}return structuredClone(status);}} as unknown as Api;
@@ -22,6 +23,64 @@ test('recording journey connects an existing account, explicitly enables import,
  await act(async()=>{enabled.click();await tick();});assert.equal(button('立即同步').disabled,true,'unsaved edits must not sync');
  await act(async()=>{button('保存并开始同步').click();await tick();});const body=JSON.parse(String(calls.find(c=>c.path.endsWith('/selection'))?.init?.body));assert.equal(body.enabled,true);assert.equal(body.backupAudio,true);assert.equal(body.start,'2026-09-01T00:00:00Z');assert.equal(button('立即同步').disabled,false);
  await act(async()=>{button('重试失败步骤').click();await tick();});assert.ok(calls.some(c=>c.path.endsWith('/retry')));
+});
+
+test('recording save acknowledges exact source description before enabling intake and a metadata-only edit keeps the sync lifecycle',async t=>{
+ const sourceId='generated-recordings-owner',status:RecordingStatus={provider:'generated',connected:true,sourceId,selection:{enabled:false,start:'2026-09-01T00:00:00Z',autoSync:true,backupAudio:true},steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}};
+ let snapshot={sourceId,version:0,description:''},ack!:()=>void;
+ const writes:{path:string;body:any}[]=[],api={request:async(path:string,init?:RequestInit)=>{
+  if(path.endsWith('/context')){if(init?.method==='PATCH'){const body=JSON.parse(String(init.body));writes.push({path,body});if(snapshot.version===0)await new Promise<void>(resolve=>ack=resolve);snapshot={...snapshot,version:snapshot.version+1,description:body.description};}return structuredClone(snapshot);}
+  if(path.endsWith('/items'))return {items:[]};
+  if(init?.method){const body=JSON.parse(String(init.body));writes.push({path,body});if(path.endsWith('/selection'))status.selection=body;}
+  return structuredClone(status);
+ }} as unknown as Api;
+ const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});
+ await act(async()=>{root.render(React.createElement(RecordingConnection,{api,provider:'generated',onOpen:()=>{}}));await tick();});await act(tick);
+ assert.ok(element.querySelector('.recording-save-bar .button.primary'),'save is the primary action, separated from sync controls');
+ const prose='  Generated diary owner\nOther voices belong to their speakers.  ';
+ await description(prose);await act(async()=>{document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click();});
+ await act(async()=>{button('保存并开始同步').click();await tick();});assert.equal(writes.length,1);assert.ok(writes[0].path.endsWith('/context'));assert.deepEqual(writes[0].body,{expectedVersion:0,description:prose});
+ await act(async()=>{ack();await tick();});assert.ok(writes[1].path.endsWith('/selection'));assert.equal(writes[1].body.enabled,true);
+ await description('Generated revised background');await act(async()=>{button('保存设置').click();await tick();});
+ assert.equal(writes.filter(write=>write.path.endsWith('/selection')).length,1,'pure description edits never restart synchronization');assert.deepEqual(writes[2].body,{expectedVersion:1,description:'Generated revised background'});assert.match(element.textContent!,/设置已保存/);
+});
+
+test('a source description conflict preserves both drafts and prevents enabling recording intake',async t=>{
+ const {ApiError}=await import('../src/api.js'),sourceId='generated-conflict',status:RecordingStatus={provider:'generated',connected:true,sourceId,selection:{enabled:false,start:'2026-09-01T00:00:00Z',autoSync:true,backupAudio:true},steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}},writes:string[]=[];
+ const api={request:async(path:string,init?:RequestInit)=>{if(init?.method){writes.push(path);if(path.endsWith('/context'))throw new ApiError('Generated source version conflict',409);}if(path.endsWith('/context'))return {sourceId,version:2,description:'Generated saved description'};return path.endsWith('/items')?{items:[]}:structuredClone(status);}} as unknown as Api;
+ const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});
+ await act(async()=>{root.render(React.createElement(RecordingConnection,{api,provider:'generated',onOpen:()=>{}}));await tick();});await act(tick);
+ await description('Generated unsaved declaration');await act(async()=>{document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click();});
+ await act(async()=>{button('保存并开始同步').click();await tick();});
+ assert.equal(writes.some(path=>path.endsWith('/selection')),false);assert.equal(document.querySelector('textarea')!.value,'Generated unsaved declaration');assert.equal(document.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked,true);assert.match(element.textContent!,/Generated source version conflict/);assert.equal(button('立即同步').disabled,true);
+});
+
+test('a failed range save retries only the range after the source declaration was already acknowledged',async t=>{
+ const sourceId='generated-partial-save',status:RecordingStatus={provider:'generated',connected:true,sourceId,selection:{enabled:false,start:'2026-09-01T00:00:00Z',autoSync:true,backupAudio:true},steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}};
+ let snapshot={sourceId,version:0,description:''},attempts=0;const writes:string[]=[],api={request:async(path:string,init?:RequestInit)=>{
+  if(init?.method)writes.push(path);
+  if(path.endsWith('/context')){if(init?.method)snapshot={...snapshot,version:1,description:JSON.parse(String(init.body)).description};return structuredClone(snapshot);}
+  if(path.endsWith('/selection')){if(++attempts===1)throw Error('Generated range save failed');status.selection=JSON.parse(String(init?.body));}
+  return path.endsWith('/items')?{items:[]}:structuredClone(status);
+ }} as unknown as Api;
+ const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});
+ await act(async()=>{root.render(React.createElement(RecordingConnection,{api,provider:'generated',onOpen:()=>{}}));await tick();});await act(tick);
+ await description('Generated retained description');await act(async()=>{document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click();});
+ await act(async()=>{button('保存并开始同步').click();await tick();});assert.match(element.textContent!,/Generated range save failed/);
+ await act(async()=>{button('保存并开始同步').click();await tick();});assert.equal(writes.filter(path=>path.endsWith('/context')).length,1);assert.equal(writes.filter(path=>path.endsWith('/selection')).length,2);assert.equal(document.querySelector('textarea')!.value,'Generated retained description');assert.match(element.textContent!,/设置已保存/);
+});
+
+test('switching central nodes during a description save never sends the old recording selection or publishes its late acknowledgement',async t=>{
+ const sourceId='generated-old-source',oldStatus:RecordingStatus={provider:'generated',connected:true,sourceId,selection:{enabled:false,start:'2026-09-01T00:00:00Z',autoSync:true,backupAudio:true},steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}};
+ let acknowledge!:(value:unknown)=>void,signal:AbortSignal|undefined;const writes:string[]=[];
+ const oldApi={request:async(path:string,init?:RequestInit)=>{if(init?.method){writes.push(path);signal=init.signal as AbortSignal;return new Promise(resolve=>acknowledge=resolve);}return path.endsWith('/context')?{sourceId,version:0,description:''}:path.endsWith('/items')?{items:[]}:structuredClone(oldStatus);}} as unknown as Api;
+ const newSourceId='generated-new-source',newStatus={...oldStatus,sourceId:newSourceId},newApi={request:async(path:string,init?:RequestInit)=>{assert.equal(init?.method,undefined,'node switching must not write old settings on the new node');return path.endsWith('/context')?{sourceId:newSourceId,version:4,description:'Generated new node context'}:path.endsWith('/items')?{items:[]}:structuredClone(newStatus);}} as unknown as Api;
+ const element=document.createElement('div');document.body.appendChild(element);const root=createRoot(element);t.after(async()=>{await act(async()=>root.unmount());element.remove();});
+ await act(async()=>{root.render(React.createElement(RecordingConnection,{api:oldApi,provider:'generated',onOpen:()=>{}}));await tick();});await act(tick);
+ await description('Generated old draft');await act(async()=>{document.querySelector<HTMLInputElement>('input[type=checkbox]')!.click();});await act(async()=>{button('保存并开始同步').click();await tick();});
+ await act(async()=>{root.render(React.createElement(RecordingConnection,{api:newApi,provider:'generated',onOpen:()=>{}}));await tick();});await act(tick);
+ assert.equal(signal?.aborted,true);await act(async()=>{acknowledge({sourceId,version:1,description:'Generated old draft'});await tick();});
+ assert.equal(writes.length,1);assert.ok(writes[0].endsWith('/context'));assert.equal(document.querySelector('textarea')!.value,'Generated new node context');assert.equal(document.querySelector<HTMLInputElement>('input[type=checkbox]')!.checked,false);assert.doesNotMatch(element.textContent!,/设置已保存/);
 });
 
 test('the recording page discovers third-party providers from the connector registry without a core provider list',async t=>{
