@@ -1,0 +1,32 @@
+import type {CollectionEntry,PageEntry} from './features/types';
+
+export const settingsCategories=['providers','model','file-processing','images','storage','embedding','connectors'] as const;
+export type SettingsCategory=typeof settingsCategories[number];
+export function settingsCategoryFromHash(hash:string):SettingsCategory|null {
+ const value=new URLSearchParams(hash.split('?')[1]??'').get('category');
+ return settingsCategories.includes(value as SettingsCategory)?value as SettingsCategory:null;
+}
+export function pluginTabFromHash(hash:string):'installed'|'discover'|'memory' {
+ const value=new URLSearchParams(hash.split('?')[1]??'').get('tab');
+ return value==='discover'||value==='memory'?value:'installed';
+}
+/** A return link is local navigation to an installed destination, never an arbitrary URL. */
+export function validatedReturnTarget(candidate:string|null|undefined,pages:readonly PageEntry[],collections:readonly CollectionEntry[]):string|undefined {
+ if(!candidate?.startsWith('#/')||/[\\\r\n]/.test(candidate)||candidate.includes('#',1))return;
+ const [route,queryText]=candidate.slice(2).split('?');
+ const page=pages.find(entry=>(entry.route??entry.id)===route||entry.aliases?.includes(route));
+ if(!page)return;
+ const query=new URLSearchParams(queryText);
+ const allowed=new Set(['view','evidence','source','sourceId','kind','device','after','before','search','asOf','category','setup','provider','tab','work','question']);
+ for(const [key,value] of query){
+  if(!allowed.has(key)||query.getAll(key).length!==1)return;
+  if(key==='view'&&(page.id!=='archive'||!collections.some(entry=>entry.id===value)))return;
+  if(key==='category'&&(page.id!=='settings'||!settingsCategories.includes(value as SettingsCategory)))return;
+  if(key==='tab'&&(page.id!=='extensions'||!['installed','discover','memory'].includes(value)))return;
+  if(key==='setup'&&(page.id!=='sources'||!['gmail','google','mcp','reference'].includes(value)))return;
+  if(key==='provider'&&page.id!=='recordings')return;
+  if(key==='work'&&page.id!=='activity')return;
+  if(key==='question'&&page.id!=='ask')return;
+ }
+ return candidate;
+}

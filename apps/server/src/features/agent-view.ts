@@ -6,7 +6,7 @@ import {buildContextEnvelope,taskTools,systemInstructions,contextToolDefinitions
 import {openingMemories} from '../opening-memory.js';
 import {requestLocale} from '../i18n.js';
 const scope={...navigationScopeSchema.shape,limit:z.coerce.number().int().min(1).max(20).default(12),cursor:z.string().max(4096).optional()};
-export function register(app:FastifyInstance,{archiveReader,diagnostics}:Pick<FeatureServices,'archiveReader'|'diagnostics'>){
+export function register(app:FastifyInstance,{archiveReader,diagnostics,evidenceReader}:Pick<FeatureServices,'archiveReader'|'diagnostics'|'evidenceReader'>){
   app.get('/api/agent-view/catalog',async req=>archiveReader.catalog!(z.object({...scope,path:z.string().max(100).optional()}).strict().parse(req.query)));
   app.get('/api/agent-view/materials',async req=>archiveReader.materialCatalog!(z.object({...scope,kind:z.string().max(128).optional()}).strict().parse(req.query)));
   app.get('/api/agent-view/material-read',async req=>archiveReader.materialRead!(z.object({...navigationScopeSchema.shape,ref:z.string().min(1).max(1600),offset:z.coerce.number().int().min(0).default(0),length:z.coerce.number().int().min(1).max(4000).default(4000)}).strict().parse(req.query)));
@@ -19,7 +19,18 @@ export function register(app:FastifyInstance,{archiveReader,diagnostics}:Pick<Fe
     const items=(Array.isArray(page)?page:page.items).map(record=>({id:record.id,ref:record.ref,appName:record.appName,windowTitle:record.windowTitle,capturedAt:record.capturedAt,sourceType:record.sourceType,revisionState:record.revisionState,preview:record.ocrText.slice(0,400),characters:record.ocrText.length}));
     return {items,nextCursor:Array.isArray(page)?null:page.nextCursor};
   });
-  app.get('/api/agent-view/segments',async req=>archiveReader.segments!(z.object({...scope,id:z.string().max(1600).optional()}).strict().parse(req.query)));
+  app.get('/api/agent-view/segments',async req=>{
+    const {offset,length,...range}=z.object({...scope,id:z.string().max(1600).optional(),offset:z.coerce.number().int().min(0).default(0),length:z.coerce.number().int().min(1).max(4000).default(4000)}).strict().parse(req.query);
+    // Discover through the same Agent exposure guard before expanding the exact scoped revision.
+    const page=await archiveReader.segments!(range);
+    if(!range.id)return page;
+    return {...page,items:page.items.flatMap(item=>{
+      const artifact=typeof item.ref==='string'?evidenceReader.artifact(item.ref,range):undefined;
+      if(!artifact)return [];
+      const text=artifact.text.slice(offset,offset+length);
+      return [{...item,text,textRange:{offset,total:artifact.text.length,nextOffset:offset+text.length<artifact.text.length?offset+text.length:null}}];
+    })};
+  });
   app.post('/api/agent-view/startup',{bodyLimit:16384},async req=>{
     const input=z.object({question:z.string().max(4000).default(''),after:navigationScopeSchema.shape.after,before:navigationScopeSchema.shape.before,deviceId:navigationScopeSchema.shape.deviceId,timeZone:z.string().max(100).default('UTC')}).strict().parse(req.body);
     // Preview a NEW conversation through the same reader and envelope builder.
@@ -35,8 +46,16 @@ export function register(app:FastifyInstance,{archiveReader,diagnostics}:Pick<Fe
     return {items:records.map(record=>({...record,ocrText:record.ocrText.slice(offset,offset+length),textRange:{offset,total:record.ocrText.length,nextOffset:offset+length<record.ocrText.length?offset+length:null}}))};
   });
   app.get('/api/agent-view/runs',async()=>{
-    const snapshot=diagnostics.snapshot(),events=diagnostics.events(Math.max(0,snapshot.lastSeq-500),500),runs=new Map<string,{runId:string;at:string;type:string;firstSeq:number}>();
-    for(const event of events.items){const trace=event.trace;if(event.event!=='agent.trace'||typeof trace?.runId!=='string'||typeof trace.type!=='string')continue;const previous=runs.get(trace.runId);runs.set(trace.runId,{runId:trace.runId,at:event.at,type:trace.type,firstSeq:previous?.firstSeq??event.seq});}
+    const snapshot=diagnostics.snapshot(),runs=new Map<string,{runId:string;at:string;type:string;firstSeq:number}>();
+    // Retained model runs remain discoverable after unrelated background diagnostics.
+    // Read only the bounded in-memory retention buffer, stopping at this snapshot.
+    let afterSeq=0;
+    while(afterSeq<snapshot.lastSeq){
+      const events=diagnostics.events(afterSeq,500);
+      for(const event of events.items){if(event.seq>snapshot.lastSeq)break;const trace=event.trace;if(event.event!=='agent.trace'||typeof trace?.runId!=='string'||typeof trace.type!=='string')continue;const previous=runs.get(trace.runId);runs.set(trace.runId,{runId:trace.runId,at:event.at,type:trace.type,firstSeq:previous?.firstSeq??event.seq});}
+      if(events.nextSeq<=afterSeq)break;
+      afterSeq=events.nextSeq;
+    }
     return {items:[...runs.values()].reverse().slice(0,20),recording:snapshot.agentTrace,partial:true};
   });
   app.post('/api/agent-view/read',{bodyLimit:8192},async req=>{

@@ -3,15 +3,22 @@ import test from 'node:test';
 import { canonicalDestination, readWorkspaceRoute, workspaceHash } from '../src/workspace-route';
 const collections = ['materials', 'records', 'segments', 'sources', 'files', 'activity', 'media', 'memories', 'extension'];
 const readPage = (hash:string)=>hash.replace(/^#\//,'').split('?')[0]==='library'?'archive':'overview';
-test('current collection links use explicit query state and retired route aliases are absent', () => {
+test('current collection links and documented legacy routes retain their destination', () => {
   for(const collection of ['files','segments','materials','memories']){
     assert.deepEqual(readWorkspaceRoute('#/library?view='+collection,readPage,collections),{page:'archive',collection});
-    assert.deepEqual(readWorkspaceRoute('#/library/'+collection,readPage,collections),{page:'overview',collection:'materials'});
+    assert.deepEqual(readWorkspaceRoute('#/library/'+collection,readPage,collections),{page:'archive',collection});
   }
 });
-test('registered collection types remain deep-linkable; invalid types fall back safely', () => {
+test('legacy task destinations resolve to registered Library routes without undefined hashes',()=>{
+ for(const [page,collection] of Object.entries({library:'materials',files:'files',timeline:'records',memories:'memories'})){
+  const target=canonicalDestination(page,'materials',collections);
+  assert.deepEqual(target,{page:'archive',collection});
+  assert.equal(workspaceHash('library',target.collection),'#/library?view='+collection);
+ }
+});
+test('explicit unavailable collection types stay visible instead of opening unrelated materials', () => {
   assert.deepEqual(readWorkspaceRoute('#/library?view=extension',readPage,collections),{page:'archive',collection:'extension'});
-  assert.deepEqual(readWorkspaceRoute('#/library?view=unknown',readPage,collections),{page:'archive',collection:'materials'});
+  assert.deepEqual(readWorkspaceRoute('#/library?view=unknown',readPage,collections),{page:'archive',collection:'unknown'});
   assert.deepEqual(canonicalDestination('notes','files',collections),{page:'notes',collection:'files'});
 });
 test('switching library types preserves direct evidence and other filters', () => {

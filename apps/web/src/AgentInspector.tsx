@@ -23,7 +23,8 @@ function EntryDetail({api,entry,scope,onSelect}:{api:Api;entry:Entry;scope:Scope
  const [offset,setOffset]=useState(0);
  const endpoint=entry.expand==='memories'?'memories':entry.expand==='segments'?'segments':'evidence';
  const id=endpoint==='segments'?entry.ref:entry.id;
- const page=useResource<Details>(api,`/api/agent-view/${endpoint}?`+query(scope,{id,includeEvidence:endpoint==='memories'?'true':undefined,offset:endpoint==='evidence'?offset:undefined}));
+ const page=useResource<Details>(api,`/api/agent-view/${endpoint}?`+query(scope,{id,includeEvidence:endpoint==='memories'?'true':undefined,offset:endpoint==='evidence'||endpoint==='segments'?offset:undefined}));
+ useEffect(()=>setOffset(0),[id,endpoint,scope.deviceId,scope.after,scope.before]);
  return <section className="panel panel-pad agent-detail" aria-label={moteText('条目内容')}>
   <h2>{entry.title??entry.windowTitle??entry.appName??entry.layer??entry.id}</h2><p className="badge muted">{moteText('可访问 · 本次浏览展开')}</p>
   {page.loading&&!page.data&&<p role="status">{moteText('正在读取…')}</p>}{page.error!==undefined&&<p role="alert">{errorMessage(page.error)} <button className="text-button" onClick={page.refresh}>{moteText('重试')}</button></p>}
@@ -33,7 +34,7 @@ function EntryDetail({api,entry,scope,onSelect}:{api:Api;entry:Entry;scope:Scope
    {item.uncertainty&&<p><strong>{moteText('不确定性')}</strong> · {item.uncertainty}</p>}
    {item.evidence?.map(e=><blockquote key={e.id}>{e.quote}<button className="text-button" onClick={()=>onSelect({id:e.id,expand:'evidence',title:moteText('原始证据')})}>{moteText('读取原始证据')}<ChevronRight size={14}/></button></blockquote>)}
    {item.members?.length&&<details><summary>{moteText('支持证据')} · {item.members.length}</summary>{item.members.map(id=><button className="agent-ref text-button" key={id} onClick={()=>onSelect({id,expand:'evidence',title:moteText('原始证据')})}>{id}<ChevronRight size={14}/></button>)}</details>}
-   {item.textRange&&<><p className="fine-print">{moteText('已展开 {0}–{1} / {2} 个字符',item.textRange.offset,Math.min(item.textRange.offset+4000,item.textRange.total),item.textRange.total)}</p><div className="processing-actions">{offset>0&&<button className="button" onClick={()=>setOffset(0)}>{moteText('返回第一页')}</button>}{item.textRange.nextOffset!==null&&<button className="button" onClick={()=>setOffset(item.textRange!.nextOffset!)}>{moteText('继续展开')}</button>}</div></>}
+   {item.textRange&&<><p className="fine-print">{moteText('已展开 {0}–{1} / {2} 个字符',item.textRange.offset,item.textRange.offset+(item.statement??item.ocrText??item.text??'').length,item.textRange.total)}</p><div className="processing-actions">{offset>0&&<button className="button" onClick={()=>setOffset(0)}>{moteText('返回第一页')}</button>}{typeof item.textRange.nextOffset==='number'&&item.textRange.nextOffset>item.textRange.offset&&<button className="button" onClick={()=>setOffset(item.textRange!.nextOffset!)}>{moteText('继续展开')}</button>}</div></>}
   </div>)}
   {page.data?.sourceSpans?.map(span=><div className="agent-proof" key={span.record.id}><strong>{moteText('已核验的支持原文')}</strong><div className="agent-body">{span.record.ocrText.slice(span.offset,span.offset+span.length)}</div></div>)}
   {page.data?.sourceCoverage?.partial&&<p className="fine-print">{moteText('支持原文仅部分展开，请按需继续读取。')}</p>}

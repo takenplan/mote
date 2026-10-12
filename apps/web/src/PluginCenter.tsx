@@ -10,6 +10,8 @@ import {resources} from './resource-cache';
 import {confirmNavigation,useUnsavedChanges} from './unsaved';
 import {useResource} from './useResource';
 import {capabilityLabel,configurationValid,memoryAdmissionLabel,moduleLabel,packageStateLabel,preparationLabel} from './plugin-center-presentation';
+import {useHashChoice} from './useHashChoice';
+import {pluginTabFromHash} from './route-query';
 import type {Page} from './navigation';
 
 const pluginsPath='/api/plugins',bindingPath='/api/memory-spaces/default/binding';
@@ -61,7 +63,7 @@ function Configuration({api,item,instance,busy,onSave}:{api:Api;item:PluginPacka
 export function PluginCenter({api,onPage}:{api:Api;onPage:(page:Page)=>void}){
  const pluginResource=useResource<PluginCenterView>(api,pluginsPath,3000),bindingResource=useResource<MemoryBindingView>(api,bindingPath,3000);
  const view=pluginResource.data,binding=bindingResource.data;
- const [tab,setTab]=useState<'installed'|'discover'|'memory'>('installed'),[selected,setSelected]=useState<string>(),[dialog,setDialog]=useState<Dialog>(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[retry,setRetry]=useState<Intent>();
+ const [tab,setTab]=useHashChoice('tab',pluginTabFromHash),[selected,setSelected]=useState<string>(),[dialog,setDialog]=useState<Dialog>(),[busy,setBusy]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[retry,setRetry]=useState<Intent>();
  const [repository,setRepository]=useState(''),[tag,setTag]=useState(''),[scope,setScope]=useState('default'),[fee,setFee]=useState(false),[showInventory,setShowInventory]=useState(false);
  const opener=useRef<HTMLElement|null>(null),identity=useRef(api),controller=useRef<AbortController|undefined>(undefined),busyRef=useRef(false);identity.current=api;
  useEffect(()=>{setSelected(undefined);setDialog(undefined);setBusy(false);busyRef.current=false;setError('');setNotice('');setRetry(undefined);setRepository('');setTag('');return()=>controller.current?.abort();},[api]);
@@ -94,9 +96,9 @@ export function PluginCenter({api,onPage}:{api:Api;onPage:(page:Page)=>void}){
  const admission=binding?.admission,preparation=binding?.preparation;
  const memoryActions=binding?.allowedActions??[];
  return <div className="plugin-center">
-  <div className="page-heading split-heading"><div><h1>{moteText('插件')}</h1><p>{moteText('管理安装、运行与记忆方案。资料连接仍在来源中管理。')}</p></div><button className="button subtle" disabled={busy} onClick={()=>onPage('processing')}><RefreshCw size={16}/>{moteText('查看运行记录')}</button></div>
+  <div className="page-heading split-heading"><div><h1>{moteText('自动记忆与插件')}</h1><p>{moteText('管理安装、运行与记忆方案。资料连接仍在来源中管理。')}</p></div><button className="button subtle" disabled={busy} onClick={()=>onPage('processing')}><RefreshCw size={16}/>{moteText('查看运行记录')}</button></div>
   <nav className="segmented-nav plugin-tabs" aria-label={moteText('插件页面')}>
-   {(['installed','discover','memory'] as const).map(value=><button key={value} className={tab===value?'active':''} aria-pressed={tab===value} onClick={()=>{if(confirmNavigation())setTab(value);}}>{value==='installed'?moteText('已安装'):value==='discover'?moteText('发现'):moteText('记忆方案')}</button>)}
+   {(['installed','discover','memory'] as const).map(value=><button key={value} className={tab===value?'active':''} aria-pressed={tab===value} onClick={()=>{setTab(value);}}>{value==='installed'?moteText('已安装'):value==='discover'?moteText('发现'):moteText('记忆方案')}</button>)}
   </nav>
   {error&&<div className="notice error" role="alert">{error}{retry&&<button className="text-button" disabled={busy} onClick={()=>void execute(retry)}>{moteText('重试同一请求')}</button>}</div>}
   {notice&&<p className="notice" role="status">{notice}</p>}
@@ -129,6 +131,7 @@ export function PluginCenter({api,onPage}:{api:Api;onPage:(page:Page)=>void}){
    {Boolean(view?.catalog.length)&&<div className="plugin-catalog">{view?.catalog.map(item=><article key={item.repository}><h3>{item.name}</h3><p>{item.description}</p><small>{item.repository}</small><button className="text-button" onClick={()=>{setRepository(item.repository);setTag('');}}>{moteText('选择仓库')}</button></article>)}</div>}
   </section>}
   {tab==='memory'&&<>
+   <div className="discovery-inline-guidance"><p>{moteText('这里管理自动记忆的暂停 / 恢复及当前方案。模型分配、自动配方和历史资料处理节奏，请到「模型与服务 → 模块与模型」。独立洞察按自己的设置运行。')}</p><a className="text-button" href="#/system/models?category=model">{moteText('设置模型、配方与处理节奏 →')}</a></div>
    {bindingResource.error!==undefined&&<p className="notice error" role="alert">{errorMessage(bindingResource.error)}<button className="text-button" onClick={bindingResource.refresh}>{moteText('重试')}</button></p>}
    {bindingResource.loading&&!binding&&<p role="status">{moteText('正在读取…')}</p>}
    {binding&&<><section className="panel plugin-memory-control"><div className="section-heading"><div><h2>{moteText('自动记忆')}</h2><p>{moteText('控制自动提取与整合；原件、已有记忆与只读查询保留。独立回顾按自己的设置运行。')}</p></div><button type="button" role="switch" aria-checked={admission!.desired} aria-label={moteText('自动记忆')} className={'plugin-memory-switch '+(admission!.desired?'is-on':'')} disabled={busy||!(admission!.desired?memoryActions.includes('pause'):memoryActions.includes('resume'))} onClick={()=>memoryCommand(admission!.desired?'pause':'resume')}>{admission!.desired?moteText('已选择启用'):moteText('已选择暂停')}</button></div>
