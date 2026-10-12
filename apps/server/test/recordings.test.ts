@@ -15,6 +15,7 @@ import {dingtalkTranscript,dwsArguments,createDingtalkRecordings} from '../src/c
 import {recordingFile} from '../src/connectors/recording-staging.js';
 import type {QueryInput} from '@mote/agent';
 import {planGeneratedMemory,generatedMemoryOutput} from './fixtures/memory-planning.js';
+import {recordingMemoryRecipe} from '../src/connectors/recording-memory.js';
 const raw='Generated diary export\n\nOwner 00:00:00.000\nI felt proud of finishing a generated prototype.\n\nOwner 00:00:02.500\nI prefer quiet mornings for focused work.\n';
 const selection={enabled:true,start:'2026-09-01T00:00:00Z',end:'2026-10-01T00:00:00Z',autoSync:false,backupAudio:true};
 const wav=Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(200)]);
@@ -77,6 +78,24 @@ test('recording intake produces complete material and Memory, bypasses ASR, pres
  await f.restart();await f.flush();await f.memory();assert.equal(f.models.length,modelCount);assert.equal((await f.request('GET')).counts.transcripts,1);
  const forbidden=await f.node.app.inject({method:'POST',url:'/api/connectors/feishu-recordings/sync'});assert.equal(forbidden.statusCode,401);
  await f.request('DELETE');assert.equal((await f.request('GET')).connected,false);assert.equal(f.node.sources.getSource(source.id).enabled,false);assert.equal(f.node.sources.history(source.id,'r1').length,1);
+});
+
+test('recording v2 carries scoped owner source prose with unknown default through formal intake and independent review; v1 stays available',async t=>{
+ const f=await fixture(t);await f.connect();const status=await f.request('GET'),sourceId=status.sourceId;
+ const description='Generated recordings are my spoken diary; quoted people and navigation announcements are not my own experiences.';
+ const updated=await f.node.app.inject({method:'PATCH',url:'/api/sources/'+sourceId+'/context',headers:{authorization:'Bearer '+f.config.token},payload:{expectedVersion:0,description}});assert.equal(updated.statusCode,200,updated.body);
+ assert.equal(f.node.memoryStrategies.resolve({id:'mote.recording-memory',version:'1'}).binding.extract.version,'1');assert.equal(recordingMemoryRecipe.version,'2');
+ await f.flush();await f.memory();const jobs=f.node.memoryPipeline.list().map(j=>f.node.memoryPipeline.get(j.id));
+ assert.ok(jobs.length>0);assert.ok(jobs.every(j=>j.status==='completed'&&j.recipes?.every(r=>r.id===recordingMemoryRecipe.id&&r.version==='2')));
+ assert.ok(f.models.some(input=>input.taskContext?.untrustedMemoryDraft),'independent reviewer sees the actual recording work');
+ for(const input of f.models){
+  const members=(input.taskContext?.memoryWork as {members:{attributionContext?:{ownerRelation:string;basis:string;sourceContextStatements?:{description:string}[]}}[]})?.members;assert.ok(members?.length);
+  for(const member of members){assert.equal(member.attributionContext?.ownerRelation,'unknown');assert.equal(member.attributionContext?.basis,'default');assert.equal(member.attributionContext?.sourceContextStatements?.[0].description,description);}
+  assert.match(input.question,/sourceContextStatements/);assert.match(input.question,/not a veto/);assert.match(input.question,/background\/navigation/);
+ }
+ const recipe2=f.node.memoryStrategies.resolve(recordingMemoryRecipe).binding,recipe1=f.node.memoryStrategies.resolve({id:recordingMemoryRecipe.id,version:'1'}).binding;
+ await f.restart();assert.deepEqual(f.node.memoryStrategies.resolve(recordingMemoryRecipe).binding,recipe2);assert.deepEqual(f.node.memoryStrategies.resolve({id:recordingMemoryRecipe.id,version:'1'}).binding,recipe1);
+ assert.equal((await f.request('GET')).selection.autoSync,false);
 });
 
 test('independent audio failure does not block Memory; retry attaches audio without paid replay and revisions retain prior archive',async t=>{

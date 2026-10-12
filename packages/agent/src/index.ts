@@ -6,6 +6,7 @@ export {ContextToolRegistry,contextToolDefinitions,type ContextToolContribution}
 export {buildContextEnvelope,taskTools} from './task-context.js';
 import {evidenceExcerpt,excerptSlice} from './evidence-ledger.js';
 import {assembleContext,taskTools} from './task-context.js';
+import {restoreMemoryCoverageKeys} from './memory-context.js';
 import {observeHarness} from './usage.js';
 import {DEFAULT_MODEL_MAX_TOKENS} from '@mote/shared/models';
 import {createCodexAgent} from './codex-agent.js';
@@ -287,7 +288,8 @@ export function createAgent(options: AgentOptions) {
         const lastEnd = result.events && [...result.events].reverse().find(event => event.type === 'turn/end');
         if ((lastEnd?.data as {reason?:{kind?:string}} | undefined)?.reason?.kind === 'max-tokens')
           throw new AgentResponseError('The model reached its output token limit before completing the response.', 'output_limit');
-        return parseAnswer(result.finalResponse, bridge.records);
+        const answer=parseAnswer(result.finalResponse, bridge.records);
+        return {...answer,answer:restoreMemoryCoverageKeys(answer.answer,input.taskContext)};
       };
       const onNotification = observeHarness(input, runId, connection.protocol !== 'deepseek');
       const readAnswer = async () => {
