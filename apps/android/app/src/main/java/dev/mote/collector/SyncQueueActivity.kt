@@ -58,7 +58,7 @@ class SyncQueueActivity : MoteActivity() {
         previous.isEnabled = false; next.isEnabled = false; categories.isEnabled = false
         task.start(MoteI18n.text("正在读取队列…"), { summary.text = it }, {
             val page = if (source == null) queue().pendingPage(offset, pageSize)
-            else if (source.binaryFiles()) fileArchives().pendingPage(source.id, offset, pageSize)
+            else if (source.binaryFiles()) fileArchives().pendingPage(source.id, offset, pageSize, source)
             else {
                 val pending = localSources().state(source.id).optJSONArray("pending") ?: JSONArray()
                 JSONObject().put("total", pending.length()).put("items", JSONArray((offset until minOf(offset + pageSize, pending.length())).map {
