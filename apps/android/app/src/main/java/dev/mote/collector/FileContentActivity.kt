@@ -2,6 +2,8 @@ package dev.mote.collector
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.WindowManager
 import android.widget.*
 import org.json.JSONObject
@@ -11,11 +13,29 @@ class FileContentActivity : MoteActivity() {
     private lateinit var content: LinearLayout
     private val task by lazy { UiTask(this) }
     private var viewGeneration = 0L
+    private val handler = Handler(Looper.getMainLooper())
+    private var resumed = false
+    private var loadedIdentity: String? = null
+    private var loadedAccessGeneration = -1L
+    private var centralPending = false
+    private var lastCentralCheck = 0L
+    private var loadedPresentation: String? = null
+    private var transportStatus: TextView? = null
+    private var folderProgress: TextView? = null
+    private val refresh = object : Runnable {
+        override fun run() {
+            if (!resumed) return
+            refreshLocal()
+            handler.postDelayed(this, 2500)
+        }
+    }
+    private fun identity(row: JSONObject) = SourceRules.fileSignature(row.getJSONObject("candidate")) + ":" + row.optJSONObject("pending")?.optJSONObject("manifest")?.optJSONObject("item")?.optString("revision").orEmpty() + ":" + LocalContentPresentation.currentReceipt(row).orEmpty()
+
     private var offset = 0
     private var exportVersion: Triple<String, String, String>? = null
     private data class Detail(val source: LocalSource, val row: JSONObject, val item: JSONObject, val access: CentralAccess.Selection,
         val capture: JSONObject?, val file: JSONObject?, val material: JSONObject?, val read: String?, val nextOffset: Int?,
-        val total: Int?, val localPreview: Pair<String, Boolean>?, val failed: Boolean)
+        val total: Int?, val localPreview: Pair<String, Boolean>?, val failed: Boolean, val retryRead: Boolean, val folderSummary: String)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         offset = savedInstanceState?.getInt("offset", 0) ?: 0
@@ -26,22 +46,43 @@ class FileContentActivity : MoteActivity() {
         state.putInt("offset", offset); exportVersion?.let { (source, external, revision) -> state.putString("exportSource", source); state.putString("exportExternal", external); state.putString("exportRevision", revision) }
         super.onSaveInstanceState(state)
     }
-    override fun onResume() { super.onResume(); load() }
-    override fun onPause() { viewGeneration++; content.removeAllViews(); super.onPause() }
-    private fun load() {
+    override fun onResume() { super.onResume(); resumed = true; load(); handler.removeCallbacks(refresh); handler.postDelayed(refresh, 2500) }
+    override fun onPause() { resumed = false; handler.removeCallbacks(refresh); viewGeneration++; content.removeAllViews(); super.onPause() }
+    private fun refreshLocal() {
+        if (task.busy || loadedIdentity == null) return
+        val generation = viewGeneration
+        val sourceId = intent.getStringExtra("sourceId") ?: return
+        val external = intent.getStringExtra("externalId") ?: return
+        task.start("", {}, {
+            val source = localSources().sources().first { it.id == sourceId }
+            val queue = fileArchives()
+            Triple(queue.presentationRow(source, queue.row(sourceId, external)), if (source.tree) LocalContentPresentation.folderStatus(this, source) else "", CentralAccess.resolve(this).generation)
+        }) { result ->
+            if (!resumed || generation != viewGeneration) return@start
+            result.onSuccess { (row, summary, accessGeneration) ->
+                if (accessGeneration != loadedAccessGeneration) {
+                    content.removeAllViews(); loadedPresentation = null; load(); return@onSuccess
+                }
+                transportStatus?.text = LocalContentPresentation.fileStatus(row)
+                folderProgress?.text = summary
+                if (identity(row) != loadedIdentity || (centralPending && System.currentTimeMillis() - lastCentralCheck >= 5000)) load(automatic = true)
+            }
+        }
+    }
+    private fun load(automatic: Boolean = false) {
         if (task.busy) return
         val generation = ++viewGeneration
         val sourceId = intent.getStringExtra("sourceId") ?: return
         val external = intent.getStringExtra("externalId") ?: return
         val pageOffset = offset
-        content.removeAllViews(); text(MoteI18n.text("正在读取内容…"))
+        if (!automatic) { content.removeAllViews(); text(MoteI18n.text("正在读取内容…")) }
         task.start(MoteI18n.text("正在读取内容…"), {}, {
             val source = localSources().sources().first { it.id == sourceId }
-            val row = fileArchives().rows(sourceId).first { it.getJSONObject("candidate").getString("externalId") == external }
+            val row = fileArchives().let { it.presentationRow(source, it.row(sourceId, external)) }
             val item = row.optJSONObject("pending")?.optJSONObject("manifest")?.optJSONObject("item") ?: row.getJSONObject("candidate")
             val local = if (row.has("pending")) runCatching { fileArchives().pendingPreview(sourceId, external, item.getString("revision")) }.getOrNull() else null
             val access = CentralAccess.resolve(this)
-            var capture: JSONObject? = null; var file: JSONObject? = null; var material: JSONObject? = null; var read: String? = null; var next: Int? = null; var total: Int? = null; var failed = false
+            var capture: JSONObject? = null; var file: JSONObject? = null; var material: JSONObject? = null; var read: String? = null; var next: Int? = null; var total: Int? = null; var failed = false; var retryRead = false
             // A pending newer version must not be represented by the previous version's receipt.
             val id = LocalContentPresentation.currentReceipt(row).orEmpty()
             if (id.isNotBlank() && access.client != null) {
@@ -73,14 +114,30 @@ class FileContentActivity : MoteActivity() {
                     }
                 }.onFailure { error ->
                     failed = true
+                    retryRead = error !is CentralFailure || error.status !in setOf(401, 403)
                     if (error is CentralFailure && error.status in setOf(401, 403)) { capture = null; file = null; material = null; read = null; next = null; total = null }
                 }
             }
-            Detail(source, row, item, access, capture, file, material, read, next, total, local, failed)
+            Detail(source, row, item, access, capture, file, material, read, next, total, local, failed, retryRead, if (source.tree) LocalContentPresentation.folderStatus(this, source) else "")
         }) { result ->
             if (generation != viewGeneration || (result.isSuccess && CentralSession.get(this).generation != result.getOrThrow().access.generation)) { if (!isFinishing) load(); return@start }
-            content.removeAllViews()
-            result.onSuccess(::render).onFailure { text(MoteI18n.text("内容暂不可读取，原数据保留。")); button(MoteI18n.text("重试")) { load() } }
+            result.onSuccess { detail ->
+                loadedIdentity = identity(detail.row)
+                lastCentralCheck = System.currentTimeMillis()
+                loadedAccessGeneration = detail.access.generation
+                centralPending = detail.retryRead || detail.file?.optJSONObject("job")?.optString("state") in setOf("waiting", "running") || detail.material?.optJSONObject("indexing")?.optString("state") in setOf("pending", "running")
+                val presentation = listOf(loadedIdentity, detail.capture?.toString(), detail.file?.toString(), detail.material?.toString(), detail.read, detail.nextOffset, detail.total, detail.localPreview, detail.failed, detail.access.generation, pageOffset).joinToString("|")
+                if (!automatic || presentation != loadedPresentation) {
+                    val scroll = content.parent as? ScrollView
+                    val previousScroll = if (automatic) scroll?.scrollY ?: 0 else 0
+                    content.removeAllViews(); render(detail)
+                    if (automatic) scroll?.post { scroll.scrollTo(0, previousScroll) }
+                    loadedPresentation = presentation
+                } else {
+                    transportStatus?.text = LocalContentPresentation.fileStatus(detail.row)
+                    folderProgress?.text = detail.folderSummary
+                }
+            }.onFailure { if (!automatic) { content.removeAllViews(); text(MoteI18n.text("内容暂不可读取，原数据保留。")); button(MoteI18n.text("重试")) { load() } } }
         }
     }
     private fun render(detail: Detail) {
@@ -88,7 +145,8 @@ class FileContentActivity : MoteActivity() {
         text(item.optString("title"), 27f)
         text(MoteI18n.text("来源：{0}", detail.source.name), 13f)
         text(item.optString("observedAt"), 12f)
-        text(LocalContentPresentation.fileStatus(row), 15f)
+        transportStatus = text(LocalContentPresentation.fileStatus(row), 15f)
+        folderProgress = if (detail.folderSummary.isNotBlank()) text(detail.folderSummary, 13f) else null
         if (detail.capture != null) text(LocalContentPresentation.centralStatus(detail.file, detail.material), 15f)
         if (detail.failed) text(MoteI18n.text("中央暂不可用 · 保留本机状态，恢复连接后重试"), 13f)
         if (!row.has("pending") && row.optString("captureId").isNotBlank() && detail.access.client == null) {
@@ -127,6 +185,6 @@ class FileContentActivity : MoteActivity() {
             contentResolver.openOutputStream(destination)?.use { output -> fileArchives().exportPending(selected.first, selected.second, selected.third, output) } ?: error("Destination unavailable")
         }) { result -> Toast.makeText(this, MoteI18n.text(if (result.isSuccess) "本机原件已导出" else "原件导出未完成，请重新打开内容后重试"), Toast.LENGTH_LONG).show(); load() }
     }
-    private fun text(value: String, size: Float = 14f) = content.addView(TextView(this).apply { text = value; textSize = size; setTextIsSelectable(true); setPadding(0, moteDp(8), 0, moteDp(8)) })
+    private fun text(value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setTextIsSelectable(true); setPadding(0, moteDp(8), 0, moteDp(8)) }.also(content::addView)
     private fun button(value: String, action: () -> Unit) = content.addView(MoteUi.button(Button(this).apply { text = value; setOnClickListener { action() } }))
 }
