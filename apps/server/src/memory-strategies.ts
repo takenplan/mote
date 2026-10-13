@@ -2,7 +2,7 @@ import {memoryExtractionStrategySchema,memoryReviewStrategySchema,memoryRecipeSc
 import {freezeRecipe,recipeFingerprint} from './recipe-contract.js';
 import {MEMORY_EXTRACTION_PROMPT,MEMORY_SKILL_VERSION} from './memory.js';
 import {personalMemoryReviewStrategyV2} from './personal-memory-review-policy.js';
-import {PERSONAL_MEMORY_RECIPE,boundedPersonalExtractionStrategy,boundedPersonalReviewStrategy} from './bounded-personal-memory-policy.js';
+import {PERSONAL_MEMORY_RECIPE,PERSONAL_MEMORY_RECIPE_V3,boundedPersonalExtractionStrategy,boundedPersonalReviewStrategy,contextReadingPersonalExtractionStrategy,contextReadingPersonalReviewStrategy} from './bounded-personal-memory-policy.js';
 import {codingMemoryReviewStrategyV2} from './coding-memory-review-policy.js';
 import {DAILY_EVENT_RECIPE,dailyEventExtractionStrategy,dailyEventReviewStrategy} from './daily-event-memory-policy.js';
 import {memoryIntegrationStrategySchema,memoryIntegrationRecipeSchema,type MemoryIntegrationStrategy,type MemoryIntegrationBinding} from './memory-strategy-contract.js';
@@ -29,7 +29,10 @@ export class MemoryStrategies {
     this.registerRecipe({id:'mote.personal-memory',version:'2',extract:{id:'mote.context-extraction',version:MEMORY_SKILL_VERSION.split('@')[1]},review:{id:'mote.personal-review',version:'2'}});
     this.registerExtraction(boundedPersonalExtractionStrategy);
     this.registerReview(boundedPersonalReviewStrategy);
-    this.registerRecipe({...PERSONAL_MEMORY_RECIPE,extract:{id:boundedPersonalExtractionStrategy.id,version:boundedPersonalExtractionStrategy.version},review:{id:boundedPersonalReviewStrategy.id,version:boundedPersonalReviewStrategy.version}});
+    this.registerRecipe({...PERSONAL_MEMORY_RECIPE_V3,extract:{id:boundedPersonalExtractionStrategy.id,version:boundedPersonalExtractionStrategy.version},review:{id:boundedPersonalReviewStrategy.id,version:boundedPersonalReviewStrategy.version}});
+    this.registerExtraction(contextReadingPersonalExtractionStrategy);
+    this.registerReview(contextReadingPersonalReviewStrategy);
+    this.registerRecipe({...PERSONAL_MEMORY_RECIPE,extract:{id:contextReadingPersonalExtractionStrategy.id,version:contextReadingPersonalExtractionStrategy.version},review:{id:contextReadingPersonalReviewStrategy.id,version:contextReadingPersonalReviewStrategy.version}});
     this.registerReview(codingMemoryReviewStrategyV2);
     this.registerRecipe({id:'mote.coding-memory',version:'2',extract:{id:'mote.context-extraction',version:MEMORY_SKILL_VERSION.split('@')[1]},review:{id:'mote.coding-review',version:'2'}});
     this.registerExtraction(rangeSelectionPersonalExtractionStrategy);

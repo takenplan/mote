@@ -48,15 +48,15 @@ siblings and their checkpoints remain valid.
 | One completed sibling + output-limit failure → close/reopen → one explicit retry | Completed sibling/checkpoint survives; only unfinished work resumes under the fixed contract. | `memory-range-evaluation.test.ts`, `import-memory-progress.test.ts` |
 | Oversized external-adapter answer + short unsplittable target | Existing answer-size bound rejects the complete output; no silent slice or apparent completed selection. | `memory-range-evaluation.test.ts` |
 | Permanent input-budget failure at the text recovery bound | Every terminal range remains unfinished with the measured resource code. | `memory-range-evaluation.test.ts` |
-| Public source ingress → Memory job API, explicit v4 or omitted recipes → app restart | Forty selected generated results commit with the frozen new contract through the real API path. | `memory-range-evaluation.test.ts` |
+| Public source ingress → Memory job API, explicit v5 or omitted recipes → app restart | Forty selected generated results commit with the frozen new contract through the real API path. | `memory-range-evaluation.test.ts` |
 | Existing no-field job / explicit old recipe reaches legacy capacity → restart | Legacy saturation is retained; new code does not automatically replay or rewrite the task. | `memory-range-evaluation.test.ts` |
-| Fresh defaults / exact old v2 or v3 composition / missing capture-default row | New future defaults are correct; old scopes stay available, custom/source choices stay fixed. | `bounded-personal-defaults.test.ts` |
+| Fresh defaults / exact old v2, v3 or v4 composition / missing capture-default row | New future defaults are correct; old scopes stay available, custom/source choices stay fixed. | `bounded-personal-defaults.test.ts` |
 | Default upgrade fails halfway → rollback → restart | Choices, legacy scopes and migration marker roll back together. | `bounded-personal-defaults.test.ts` |
-| Already authorized v3 receipt → upgrade → drain old → new receipt → restart | Old binding, authority and product stay v3; only genuinely new receipt uses v4, without historical backfill. | `automatic-memory-recipes.test.ts` |
+| Already authorized v3 receipt → upgrade → drain old → new receipt → restart | Old binding, authority and product stay v3; only genuinely new receipt uses v5, without historical backfill. | `automatic-memory-recipes.test.ts` |
 | Same originals + legacy/new generation products or incomplete products | Only exact matching contract, ranges, policy and completed assessment permit reuse. | `memory-work-packages.test.ts`, `conversation-understanding.test.ts` |
 | New conversation interpretation → 80 candidates + full reviewed target coverage | Producer stores its new product/contract identity and no semantic capacity envelope; legacy products remain legacy. | `conversation-understanding.test.ts` |
 | Native preparation / reviewer failure / retained publication → restart | Draft and retained output reuse keep contract, exact evidence, policy and authority; no stale verdict promotion or duplicate model stage. | `memory-owner-material-prerequisite.test.ts`, `memory-review.test.ts`, Memory publication fixtures |
-| Mixed owner question + context gap + independent completed target | The actual API keeps independent results, creates only the scoped feedback child, and preserves contract/resource counters for personal v2 and v4. | `memory-owner-questions.test.ts` |
+| Mixed owner question + context gap + independent completed target | The actual API keeps independent results, creates only the scoped feedback child, and preserves contract/resource counters for personal v2 and v5. | `memory-owner-questions.test.ts` |
 | New raw job → review timeout / shutdown → vault restart | Resume independent review of the validated private draft without re-extraction; changed model configuration or extraction policy regenerates, and late old responses cannot write. | `memory-draft-recovery.test.ts` |
 | New raw failed-review draft → source deletion / revision / owner cancellation | Purge private unshared draft text and publish no result; bounded draft accounting remains exact. | `memory-draft-recovery.test.ts` |
 | Legacy action/event consumers + new Memory products | New selection semantics do not suppress unrelated action cues or claim compatible generation without an exact contract. | `semantic-products.test.ts` |
@@ -73,6 +73,24 @@ Coverage for feedback/timeout child counter inheritance, explicit-old-binding
 planning precedence and contract-aware retained journals must be checked with the
 affected lifecycle fixtures. A file's presence or a mocked output does not prove
 the corresponding production entry point or ordering passed.
+
+## Composed-policy integration checks
+
+Personal v5 combines the separately reviewed context-reading and range-evaluation
+changes. Its fixed components are personal-extraction v3 and personal-review v5;
+personal v4/extraction v2/review v4 keep their context-reading fingerprints and
+legacy work contract. Default regression checks must cover v2→v3→v4→v5 and
+grandfathered v2/v3/v4 receipts without historical authorization.
+
+The generated integration journey in `memory-feature-composition.test.ts` uses
+public source ingress, formal Material publication and the Memory job API. It
+requires both model phases to actually read authorized original context, saves
+more than 32 selected candidates with independent review and no count-driven
+split, then changes the source through its API. The resulting current detail/list
+counts must report input invalidation separately from processing failure and
+remain stable across restart without another model call. Execution results are
+recorded separately after the composed implementation passes. The earlier PR
+checks below remain historical evidence for their original definitions.
 
 ## Commands and executed evidence
 

@@ -1,28 +1,29 @@
 import {SOURCE_TIME_INSTRUCTIONS} from '@mote/agent';
-import {BOUNDED_PERSONAL_POLICY} from './bounded-personal-memory-policy.js';
+import {CONTEXT_READING_PERSONAL_POLICY} from './bounded-personal-memory-policy.js';
 import {codingMemoryReviewStrategyV2} from './coding-memory-review-policy.js';
 import {dailyEventExtractionStrategy,dailyEventReviewStrategy} from './daily-event-memory-policy.js';
 import {MEMORY_EXTRACTION_PROMPT} from './memory.js';
 import type {MemoryExtractionStrategy,MemoryReviewStrategy} from './memory-strategy-contract.js';
 
-export const RANGE_SELECTION_PERSONAL_RECIPE={id:'mote.personal-memory',version:'4'} as const;
+export const RANGE_SELECTION_PERSONAL_RECIPE={id:'mote.personal-memory',version:'5'} as const;
 export const RANGE_SELECTION_CODING_RECIPE={id:'mote.coding-memory',version:'3'} as const;
 export const RANGE_SELECTION_DAILY_RECIPE={id:'mote.daily-event-memory',version:'2'} as const;
 
 /** These are new immutable definitions. Old policy text and fingerprints stay intact. */
 const selectionPolicy=`Assess every supplied authorized target range in full, then select useful standalone Memory or observation candidates under this policy. The complete originals remain searchable. Do not enumerate every useful fact, create a candidate per paragraph, fill a quota, or manufacture a result for coverage. Preserve meaningful positive context and consequential details in coherent supported candidates; avoid repetitive cards. Deliberate selection can omit potentially useful details after full assessment. Selection is not incomplete evaluation and candidate count is not a completeness signal. Return no_candidates only after assessing the full range and selecting no additional candidate. Independently review the full ranges even when the draft has no candidates; correct unsupported claims, material omissions within selected claims, and the semantic selection. If inspection is unfinished or evidence/output is truncated, return incomplete with a concrete reason, never checked or no_candidates. Do not report semantic capacity saturation or request recursive splitting merely to enumerate more candidates. Existing resource limits, exact proof and target/context coverage remain host guarantees.`;
 
-const personalPolicy=BOUNDED_PERSONAL_POLICY.replace(
- 'Zero products are appropriate only after reading all target ranges and finding no useful supported content.',
- 'Zero products are appropriate only after assessing all target ranges and selecting no additional useful supported product under this policy.',
+// Combine selection with the immutable v4 interpretation policy under new versions.
+const personalPolicy=CONTEXT_READING_PERSONAL_POLICY.replace(
+ 'Then use checked for supported products or no_candidates for a precise reason there is no additional supported product;',
+ 'Then use checked for selected supported products or no_candidates for a precise reason no additional supported product was selected under this policy;',
 );
 export const rangeSelectionPersonalExtractionStrategy:MemoryExtractionStrategy={
- id:'mote.personal-extraction',version:'2',input:'memory-evidence@1',output:'memory-candidates@1',permissions:['evidence.read'],
+ id:'mote.personal-extraction',version:'3',input:'memory-evidence@1',output:'memory-candidates@1',permissions:['evidence.read'],
  prompt:personalPolicy+'\n'+SOURCE_TIME_INSTRUCTIONS+'\n'+selectionPolicy,
 };
 export const rangeSelectionPersonalReviewStrategy:MemoryReviewStrategy={
- id:'mote.personal-review',version:'4',input:'memory-candidates@1',output:'memory-candidates@1',permissions:['evidence.read'],
- policy:'Independently review the complete fallible draft against every authorized original range. Correct unsupported claims, actor attribution, temporal status, semantic selection and range coverage. Preserve material supported details within selected candidates. Return the complete corrected selected-candidate JSON, not approval prose.\n'+personalPolicy+'\n'+SOURCE_TIME_INSTRUCTIONS+'\n'+selectionPolicy,
+ id:'mote.personal-review',version:'5',input:'memory-candidates@1',output:'memory-candidates@1',permissions:['evidence.read'],
+ policy:'Independently review the complete fallible draft against every target original range and the exact authorized context needed to interpret it. Re-evaluate narrator correspondence, temporal frames, continuations, modality, semantic selection and coverage from originals; the draft and the extractor\'s context choices are not approval requirements. Use context_evidence yourself for unresolved material gaps. Correct unsupported claims and preserve material supported details within selected candidates. Return the complete corrected selected-candidate JSON, not approval prose.\n'+personalPolicy+'\n'+SOURCE_TIME_INSTRUCTIONS+'\n'+selectionPolicy,
 };
 
 export const rangeSelectionContextExtractionStrategy:MemoryExtractionStrategy={

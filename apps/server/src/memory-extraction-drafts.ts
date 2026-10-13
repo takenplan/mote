@@ -1,6 +1,7 @@
 import {encodeMemoryPrivate,decodeMemoryPrivate} from './memory-private-storage.js';
 import type {QueryResult} from '@mote/shared';
 import type {Store} from './store.js';
+import {retainedMemoryReadReceipt} from './memory-read-context.js';
 
 /** Private, bounded stage output. Explicit recipes may share a validated product
  * with identical generation inputs; review/checkpoint identities stay separate.
@@ -36,7 +37,7 @@ export class MemoryExtractionDrafts {
   put(batchId:string,inputHash:string,result:QueryResult,shared=false){
     if(shared&&this.store.db.prepare('SELECT 1 FROM memory_extraction_drafts WHERE input_hash=? AND shared=1').get(inputHash))return;
     // Reusing generation does not create another call, trace or usage receipt.
-    const value={answer:result.answer,citations:result.citations,runId:result.runId,trace:[]},json=JSON.stringify(this.store.contentEncryption.enabled?{private:encodeMemoryPrivate(this.store,value)}:value),bytes=Buffer.byteLength(json);
+    const value={answer:result.answer,citations:result.citations,runId:result.runId,trace:[],...retainedMemoryReadReceipt(result)},json=JSON.stringify(this.store.contentEncryption.enabled?{private:encodeMemoryPrivate(this.store,value)}:value),bytes=Buffer.byteLength(json);
     this.clear(batchId);
     if(bytes>Math.min(this.maxBytes,512*1024))return;
     const rows=this.store.db.prepare('SELECT batch_id,length(CAST(json AS BLOB)) bytes FROM memory_extraction_drafts ORDER BY created_at,rowid').all();

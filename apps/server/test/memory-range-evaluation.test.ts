@@ -118,7 +118,7 @@ test('a pinned policy reviewer receives host repair after an inner validation fa
   assert.deepEqual(supplied,originalDraft,'repair retains the same valid draft for independent review');assert.deepEqual(input.evidenceRanges,f.extracts[0].evidenceRanges);assert.equal(work(input).workContract,contract);
   return {...draft,runId:'generated-repaired-pinned-review'};
  });
- const done=await f.pipeline.run(f.create({recipes:[{id:'mote.personal-memory',version:'4'}]}).id);
+ const done=await f.pipeline.run(f.create({recipes:[{id:'mote.personal-memory',version:'5'}]}).id);
  assert.equal(done.status,'completed');assert.equal(f.extracts.length,1);assert.equal(f.reviews.length,2);assert.equal(done.memoryIds.length,2);
  assert.equal(done.batches[0].validationFailures![0].code,'quote_not_found');assert.equal(done.batches[0].reviewReceipt!.reviewRunId,'generated-repaired-pinned-review');
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,1);
@@ -205,7 +205,7 @@ test('absent saved work contract and pinned old recipes retain legacy capacity b
  const calls=f.extracts.length+f.reviews.length,oldBinding=failed.batches[0].strategy;
  await f.restart();assert.equal(f.pipeline.get(job.id).status,'failed');assert.equal(f.extracts.length+f.reviews.length,calls);assert.deepEqual(f.pipeline.get(job.id).batches[0].strategy,oldBinding);
  assert.equal(f.memories.list().length,0);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
- assert.equal(f.pipeline.strategies.resolve({id:'mote.personal-memory',version:'4'}).binding.workContract,contract);
+ assert.equal(f.pipeline.strategies.resolve({id:'mote.personal-memory',version:'5'}).binding.workContract,contract);
 });
 
 for(const explicitRecipe of [false,true])test(`public source and Memory job API complete 40 selected results and retain the new frozen policy through app restart${explicitRecipe?' with personal-v4 selection':' with omitted recipes'}`,async t=>{
@@ -221,7 +221,7 @@ for(const explicitRecipe of [false,true])test(`public source and Memory job API 
  const inserted=await api('PUT','/api/sources/generated-selection/items',{externalId:'choices',revision:'1',observedAt:at,kind:'message',layer:'original',text:lines.join('\n'),document:{contentRole:'authored',recordedAt:at,timeBasis:'recorded'}});assert.equal(inserted.statusCode,200,inserted.body);
  await node.materialOrganizer.tick();await node.sourcePipelines.tick();
  const material=node.materials.list({sourceId:'generated-selection'}).items[0];assert.ok(material);
- const created=await api('POST','/api/memory-jobs',{evidenceIds:node.materials.evidenceIds(material.ref),...(explicitRecipe?{recipes:[{id:'mote.personal-memory',version:'4'}]}:{})});assert.equal(created.statusCode,202,created.body);
+ const created=await api('POST','/api/memory-jobs',{evidenceIds:node.materials.evidenceIds(material.ref),...(explicitRecipe?{recipes:[{id:'mote.personal-memory',version:'5'}]}:{})});assert.equal(created.statusCode,202,created.body);
  const done=await node.memoryPipeline.run(created.json().id);assert.equal(done.status,'completed');assert.equal(done.memoryIds.length,40);assert.ok(done.batches.every(batch=>batch.evaluation?.workContract===contract));if(explicitRecipe)assert.ok(done.batches.every(batch=>batch.strategy?.workContract===contract));else assert.equal(done.workContract,contract);
  const read=await api('GET','/api/memory-jobs/'+done.id);assert.equal(read.statusCode,200);assert.equal(read.json().memoryCount,40);
  const before=calls.length,memoryIds=[...done.memoryIds];await node.app.close();await open();

@@ -2,7 +2,7 @@
 
 Mote 是 AI-native 的个人上下文采集器与中央归档。当前实现采用单一 MVP 基线：Central 存储 epoch 4，Desktop / Android 本机格式 3，不安装旧库迁移器。产品版本、wire protocol 1、collector Ingress 2、便携归档 v2 各自独立，见 [MVP 基线决策](adr-mvp-baseline.md)。
 
-导入说明是确切新增原件的宿主背景，不是整份来源的身份分类。个人策略沿用 v3 的身份边界，在身份未知时保留有限观察；Ask 逐事实核对当前原件、主体和时间。原决定与补问边界见 [有限个人 Memory ADR](adr-bounded-personal-memory.md)。
+导入说明是确切新增原件的宿主背景，不是整份来源的身份分类。个人 v5 保留 v4 的声明、日记主叙述者、时间框架与续文解释，并组合范围评估与模型择要；真实身份未知时仍保留有限观察。新 Memory 任务区分产出目标与同一任务的已授权解释范围，提取和独立审核模型可按具体缺口补读原件。实际披露范围提供精确引用资格并保留阶段依赖；未读许可不成为本批上下文依赖，另一未读原件的变化不撤出独立目标。Ask 逐事实核对主体和时间。版本与旧任务边界见[上下文读取 ADR](adr-memory-context-reading.md)，v3 固定定义见[有限个人 Memory ADR](adr-bounded-personal-memory.md)。
 
 新的 `range-evaluation@1` 配方及新建的未指定配方独立审核任务保留完整原件，逐授权范围评估并独立审核，由模型选取有用 Memory；完成不承诺列出全部有用事实。未读、截断或未完成评估的范围保持未完成。显式旧配方/收据、已有无新字段任务和内部无审核路径沿用旧契约；候选数量不再触发新契约的语义递归切分，实际资源失败仍有界恢复。见[范围评估 ADR](adr-memory-range-evaluation.md)。
 

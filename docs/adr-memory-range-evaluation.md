@@ -114,12 +114,19 @@ Add new immutable built-in definitions rather than changing an installed
 
 | Recipe | Extraction | Review | Work contract |
 | --- | --- | --- | --- |
-| `mote.personal-memory@4` | `mote.personal-extraction@2` | `mote.personal-review@4` | `range-evaluation@1` |
+| `mote.personal-memory@5` | `mote.personal-extraction@3` | `mote.personal-review@5` | `range-evaluation@1` |
 | `mote.coding-memory@3` | `mote.selected-context-extraction@1` | `mote.coding-review@3` | `range-evaluation@1` |
 | `mote.daily-event-memory@2` | `mote.daily-event-extraction@2` | `mote.daily-event-review@2` | `range-evaluation@1` |
 
-The policies retain their existing personal, coding and dated-event admission responsibilities,
-while their output instructions distinguish selection from incomplete evaluation.
+Personal v5 retains the complete context-reading personal policy introduced by
+[personal v4](adr-memory-context-reading.md): narrator/declaration applicability,
+retrospective time, continuations, modality and autonomous `context_evidence`
+inspection by both extraction and independent review. It adds selected-output
+semantics through new immutable extraction v3 and review v5 definitions. The v4
+recipe, extraction v2 and review v4 remain installed with their original fingerprints
+and legacy capacity contract. Coding and dated-event policies likewise retain their
+admission responsibilities while their output instructions distinguish selection
+from incomplete evaluation.
 Personal significance, source/time boundaries and separate capture observations
 remain model decisions under the fixed policy; removing the exhaustive-candidate
 promise does not authorize false actions, invented coding lessons or merged dates.
@@ -133,8 +140,12 @@ when its job is created later. Preserve old definitions, bindings, default recei
 jobs, artifact metadata, range keys and checkpoints without migration or replay.
 
 Use the existing named default-upgrade mechanism only for exact built-in default
-compositions: future personal-v3 defaults select personal v4, and their matching
-capture composition also advances daily-event v1 to v2. Preserve already authorized
+compositions. The existing fixed upgrades remain v2 → v3 → context-reading v4;
+the new range-evaluation upgrade advances exact personal-v4 ordinary defaults to
+personal v5 and exact personal-v4 + daily-event-v1 capture defaults to personal v5
++ daily-event v2. A new vault starts with personal v5 and adds daily-event v2 only
+when establishing the separate capture default. Each migration has a durable
+one-time marker; an owner later choosing an old recipe does not trigger it again. Preserve already authorized
 old scopes while they drain under their old definitions. Custom compositions and
 source overrides remain owner choices. Installation, upgrades, duplicate receipt
 delivery, restart and projection rebuilds do not create historical authorization.
@@ -157,6 +168,18 @@ introduced.
 | REMOVE | For new work only: `capacity.saturated`, the eight/32-candidate and 64-index ceilings, candidate-count inference of incompleteness, the requirement to enumerate every eligible candidate, and semantic recursive splitting driven by selected output count. |
 | EXCEPTION | Explicit old pinned recipes and their receipts/products, existing no-field tasks, and internal paths without independent review retain their legacy contracts; genuine context/owner dependencies and measured resource failures keep guarded recovery; custom/source selections are not rewritten; historical recovery requires its own authorization. |
 | UNKNOWN | Semantic selection quality, actual model adherence, completeness of evaluation claims, production cost/latency, OCR/transcription accuracy and physical-device behavior require separate evidence. No capacity change alone proves recovery of historical failures. |
+
+The combined implementation resolves the two proposed uses of personal v4 by
+preserving the context-reading v4 identity and assigning the composed policy v5.
+The integration dispositions are:
+
+| Classification | Composition disposition |
+| --- | --- |
+| KEEP | Context-reading grants, actual disclosure receipts/dependencies, narrator/time/continuation policy, exact support and independent review from personal v4. |
+| CHANGE | New personal v5/extraction v3/review v5 compose those responsibilities with `range-evaluation@1`; exact built-in future defaults advance v2→v3→v4→v5. |
+| REMOVE | Count-driven semantic subdivision only for new range-evaluation work; conflicting reuse of immutable v4 component identities. |
+| EXCEPTION | Installed v4, old receipts/tasks and custom/source selections retain their original policies; context-read version and work contract remain separately frozen. |
+| UNKNOWN | Combined live-model semantics, physical-device behavior and real-data quality are unverified by the earlier separate PR results; new generated integration checks are recorded separately. |
 
 For new work this supersedes the candidate-capacity/semantic-subdivision parts of
 [delegation and Activity](delegation-and-activity.md),

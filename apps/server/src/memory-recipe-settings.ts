@@ -4,7 +4,7 @@ import type {MemoryStrategies} from './memory-strategies.js';
 import {memoryRecipeBindingSchema,memoryStrategyRefSchema,type MemoryRecipeBinding} from './memory-strategy-contract.js';
 import {DAILY_EVENT_RECIPE} from './daily-event-memory-policy.js';
 import {isCaptureMemorySource} from './capture-memory-source.js';
-import {PERSONAL_MEMORY_RECIPE} from './bounded-personal-memory-policy.js';
+import {PERSONAL_MEMORY_RECIPE,PERSONAL_MEMORY_RECIPE_V3} from './bounded-personal-memory-policy.js';
 import {RANGE_SELECTION_PERSONAL_RECIPE,RANGE_SELECTION_DAILY_RECIPE} from './memory-range-selection-policy.js';
 
 export const memoryRecipeScope=(binding:MemoryRecipeBinding)=>'recipe/'+sha256(JSON.stringify(binding));
@@ -40,9 +40,13 @@ export class MemoryRecipeSettings {
     }
   }
   private upgradeBuiltInDefaults(){
-    const db=this.store.db,id='bounded-personal@3';if(db.prepare('SELECT 1 FROM memory_recipe_default_upgrades WHERE id=?').get(id))return;
-    const old=this.strategies.resolve({id:'mote.personal-memory',version:'2'}).binding,
-      next=this.strategies.resolve({id:'mote.personal-memory',version:'3'}).binding,daily=this.strategies.resolve(DAILY_EVENT_RECIPE).binding;
+    this.upgradeBuiltInDefault('bounded-personal@3',{id:'mote.personal-memory',version:'2'},PERSONAL_MEMORY_RECIPE_V3);
+    this.upgradeBuiltInDefault('context-reading-personal@4',PERSONAL_MEMORY_RECIPE_V3,PERSONAL_MEMORY_RECIPE);
+  }
+  private upgradeBuiltInDefault(id:string,prior:Parameters<MemoryStrategies['resolve']>[0],current:Parameters<MemoryStrategies['resolve']>[0]){
+    const db=this.store.db;if(db.prepare('SELECT 1 FROM memory_recipe_default_upgrades WHERE id=?').get(id))return;
+    const old=this.strategies.resolve(prior).binding,
+      next=this.strategies.resolve(current).binding,daily=this.strategies.resolve(DAILY_EVENT_RECIPE).binding;
     db.exec('BEGIN IMMEDIATE');
     try{
       for(const [setting,expected] of [['default',[old]],['capture-default',[old,daily]]] as const){
@@ -50,7 +54,7 @@ export class MemoryRecipeSettings {
         if(!row||String(row.json)!==JSON.stringify(expected))continue;
         const json=JSON.stringify(expected.map(binding=>memoryRecipeScope(binding)===memoryRecipeScope(old)?next:binding));
         this.store.reserveMetadata(Buffer.byteLength(json)+256);
-        // Keep already authorized version-2 receipts runnable. This does not
+        // Keep already authorized prior-version receipts runnable. This does not
         // create receipts, reauthorize revoked work, or publish historical data.
         db.prepare('INSERT OR IGNORE INTO memory_recipe_legacy_scopes VALUES(?,?)').run(setting,memoryRecipeScope(old));
         db.prepare('UPDATE memory_recipe_settings SET json=? WHERE id=?').run(json,setting);

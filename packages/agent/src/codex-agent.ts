@@ -23,7 +23,7 @@ const answerSchema={type:'object',properties:{answer:{type:'string'},citationIds
 export function createCodexAgent(options:AgentOptions){
   let closed=false;const sessions=new Set<CodexSession>(),pending=new Set<Promise<AgentAnswer>>();
   async function execute(input:QueryInput):Promise<AgentAnswer>{
-    input=pinContextTools({...input,...(options.contextToolMode?{hostContextToolMode:options.contextToolMode}:{})},options.reader);
+    input=pinContextTools({...input,...(input.evidenceReadRanges?{evidenceReadRanges:Object.freeze(input.evidenceReadRanges.map(range=>Object.freeze({...range})))}:{}),...(options.contextToolMode?{hostContextToolMode:options.contextToolMode}:{})},options.reader);
     const runTools=toolsFor(input).filter(t=>taskTools(input).includes(t.name)||t.name==='skill');
     input.signal?.throwIfAborted();
     if(closed)throw new AgentProviderError();if(!options.model?.trim())throw new AgentNotConfiguredError();
@@ -78,7 +78,7 @@ export function createCodexAgent(options:AgentOptions){
       trace({type:'validation.started',stage:'validating',phase:'started'});
       let answer:ReturnType<typeof parseAnswer>;
       for(let repair=0;;repair++){
-        try{answer=parseAnswer(text,bridge.records);answer={...answer,answer:restoreMemoryCoverageKeys(answer.answer,input.taskContext)};await validateHostOutput(input,{...answer,trace:bridge.trace,runId});break;}
+        try{answer=parseAnswer(text,bridge.records);answer={...answer,answer:restoreMemoryCoverageKeys(answer.answer,input.taskContext)};await validateHostOutput(input,{...answer,...(input.evidenceIds!==undefined?{evidenceReadRanges:bridge.deliveredRanges}:{}),trace:bridge.trace,runId});break;}
         catch(error){
           if(!(error instanceof AgentResponseError)||error.reason==='tool_failure'||repair>=MAX_OUTPUT_REPAIRS)throw error;
           trace({type:'validation.failed',stage:'validating',phase:'completed',status:'rejected',payload:{reason:error.reason}});
@@ -91,7 +91,7 @@ export function createCodexAgent(options:AgentOptions){
       }
       trace({type:'validation.completed',stage:'validating',phase:'completed',status:'accepted',payload:{citations:answer.citations.map(citation=>citation.id)}});
       trace({type:'run.completed',stage:'validating',phase:'completed',status:'succeeded',payload:{citations:answer.citations.map(citation=>citation.id),toolCalls:bridge.trace}});
-      return {...answer,sourceContextDependencies:bridge.sourceContextDependencies,evidenceDependencies:bridge.evidenceDependencies,trace:bridge.trace,contextUsage:{...metrics,toolResults:bridge.deliveredCharacters},runId};
+      return {...answer,...(input.evidenceIds!==undefined?{evidenceReadRanges:bridge.deliveredRanges}:{}),sourceContextDependencies:bridge.sourceContextDependencies,evidenceDependencies:bridge.evidenceDependencies,trace:bridge.trace,contextUsage:{...metrics,toolResults:bridge.deliveredCharacters},runId};
     }catch(error){if(error instanceof AgentYieldError){trace({type:'run.yielded',status:'waiting'});throw error;}trace({type:'run.failed',status:'failed',payload:{errorName:error instanceof Error?error.name:'UnknownError',reason:error instanceof AgentResponseError?error.reason:undefined,...(error instanceof AgentContextBudgetError?{code:error.code,budget:error.budget,characters:error.characters,limit:error.limit,sections:error.sections}:{})}});if(error instanceof AgentContextBudgetError||error instanceof AgentNotConfiguredError||error instanceof AgentTimeoutError||error instanceof AgentResponseError||error instanceof ProviderFailure)throw error;throw new AgentProviderError();}
     finally{input.signal?.removeEventListener('abort',abort);try{await session?.close();}finally{if(session)sessions.delete(session);await bridge.close();}}
   }
