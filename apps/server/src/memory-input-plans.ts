@@ -9,7 +9,7 @@ export const manualMemoryInputPlanSchema=z.object({materialId:z.string().regex(/
 export type ManualMemoryInputPlanRequest=z.infer<typeof manualMemoryInputPlanSchema>;
 export type ManualMemoryInputPlan=ManualMemoryInputPlanRequest&{id:string;jobId:string;resolvedInput?:MaterialInputPin;batchIds?:string[];coveredByBatchId?:string};
 export type MemoryPlanSummary={total:number;waiting:number;blocked:number;stale:number;completed:number};
-export type MemoryRecipeProgress={recipe:MemoryStrategyRef;inputs:MemoryPlanSummary;completedBatches:number;failedBatches:number;reasons:{code:string;required?:string[];materialRef?:string}[]};
+export type MemoryRecipeProgress={recipe:MemoryStrategyRef;inputs:MemoryPlanSummary;completedBatches:number;failedBatches:number;invalidatedBatches?:number;reasons:{code:string;required?:string[];materialRef?:string}[]};
 export class MemoryInputPlans {
  constructor(private store:Store){store.db.exec(`CREATE TABLE IF NOT EXISTS memory_input_plans(id TEXT PRIMARY KEY,job_id TEXT NOT NULL REFERENCES memory_jobs(id) ON DELETE CASCADE,material_id TEXT NOT NULL REFERENCES material_heads(id) ON DELETE CASCADE,json TEXT NOT NULL);
   CREATE INDEX IF NOT EXISTS memory_input_plans_job ON memory_input_plans(job_id);

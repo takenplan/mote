@@ -44,3 +44,19 @@ test('application action analysis usage and semantic children resolve to the adm
  }}});t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});assert.equal(node.actions.engine,node.executor);
  node.sources.register({id:'fixture',kind:'custom',name:'Generated',deviceId:'fixture',platform:'import'});await node.sources.upsert('fixture',{externalId:'one',revision:'1',observedAt:'2026-01-01T00:00:00Z',kind:'message',layer:'original',text});node.actions.configure({enabled:true,timeZone:'UTC',reviewDeviceIds:[]});await node.actions.tick();assert.equal(node.actions.list().length,1);const step=node.store.db.prepare("SELECT operation_id FROM execution_steps WHERE kind='actions.extract'").get()!;const receipt=JSON.parse(String(node.store.db.prepare("SELECT json FROM model_usage WHERE json_extract(json,'$.attribution.moduleId')='actions'").get()!.json));assert.equal(receipt.attribution.operationId,step.operation_id);assert.ok(receipt.attribution.jobId);assert.ok(node.store.db.prepare('SELECT 1 FROM operation_parents WHERE parent_id=?').get(String(step.operation_id)));
 });
+
+
+test('deleted and superseded action inputs do not leave global failure alerts or hide another valid failure',async t=>{
+ const f=await fixture(t,async()=>{throw new Error('Generated processing failure');});
+ const first=await f.add();await f.actions.tick();assert.equal(f.actions.progress().errorCode,'action_analysis_failed');
+ f.store.delete(first.id);assert.deepEqual(f.actions.progress().jobs,[]);assert.equal(f.actions.progress().error,null);
+ assert.equal(f.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind='actions.extract' AND state='failed'").get()!.n,1,'historical execution remains');
+ const other=await f.add();await f.actions.tick();assert.equal(f.actions.progress().errorCode,'action_analysis_failed');
+ const stale=await f.sources.upsert('fixture',{externalId:'versioned',revision:'1',observedAt:'2026-01-01T00:00:00Z',kind:'message',layer:'original',text});
+ await f.actions.tick();await f.sources.upsert('fixture',{externalId:'versioned',revision:'2',observedAt:'2026-01-02T00:00:00Z',kind:'message',layer:'original',text:'Generated revised evidence'});
+ assert.equal(f.actions.progress().jobs.find(j=>j.status==='stale')?.count,1);
+ assert.equal(f.actions.progress().jobs.find(j=>j.status==='failed')?.count,1,'another independent current failure remains counted');
+ assert.equal(f.actions.progress().errorCode,'action_analysis_failed');
+ f.store.delete(other.id);assert.equal(f.actions.progress().error,null,'retained superseded evidence is information, not a current failure');
+ assert.ok(f.store.db.prepare('SELECT 1 FROM captures WHERE id=?').get(stale.id));
+});

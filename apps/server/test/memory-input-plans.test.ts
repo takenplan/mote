@@ -57,7 +57,9 @@ test('a transcript becoming unavailable cannot invalidate the body batch in the 
  const f=await fixture(t),raw=await f.add('independent'),material=f.publish('independent',raw,'ready'),body=f.materials.input(material.id,['body'])!;
  const job=f.pipeline.create({evidenceIds:[],recipes,manualPlans:[f.plan(material.id,0),f.plan(material.id,1)]});f.publish('independent',raw,'failed');
  assert.equal(f.materials.input(material.id,['body'])!.fingerprint,body.fingerprint);
- const done=await f.pipeline.run(job.id);assert.equal(done.completedBatches,1);assert.equal(done.failedBatches,1);assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0].processingMaterialInputs?.map(pin=>pin.required),[['body']]);
+ const done=await f.pipeline.run(job.id);assert.equal(done.completedBatches,1);assert.equal(done.failedBatches,0);assert.equal(done.invalidatedBatches,1);assert.equal(done.outcome,'input_invalidated');assert.equal(done.execution?.status,'skipped');assert.equal(f.calls.length,1);assert.deepEqual(f.calls[0].processingMaterialInputs?.map(pin=>pin.required),[['body']]);
+ const summary=f.pipeline.page().items.find(row=>row.id===job.id)!;assert.equal(summary.invalidatedBatches,1);assert.equal(summary.failedBatches,0);assert.equal(summary.outcome,done.outcome);
+ assert.equal(done.recipeProgress.reduce((n,recipe)=>n+(recipe.invalidatedBatches??0),0),1);assert.equal(done.recipeProgress.reduce((n,recipe)=>n+recipe.failedBatches,0),0);
 });
 
 test('a paused waiting plan resumes only its original ready input and current authorization',async t=>{

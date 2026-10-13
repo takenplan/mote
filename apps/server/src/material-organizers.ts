@@ -809,9 +809,15 @@ export class MaterialOrganizerRuntime {
   status(){
     const cursor=this.cursor();
     const pendingChanges=(this.store.db.prepare('SELECT COUNT(*) n FROM changes WHERE seq>?').get(cursor) as {n:number}).n;
-    const pendingSteps=(this.store.db.prepare("SELECT COUNT(*) n FROM execution_steps WHERE kind=? AND state IN ('waiting','running','blocked','failed')").get(ORGANIZER_STEP) as {n:number}).n;
+    const stepCounts:Record<string,number>={waiting:0,running:0,blocked:0,failed:0,succeeded:0,cancelled:0,stale:0};
+    // Membership is the shared authority for current progress. History remains
+    // readable, and a shared/parent membership must not multiply a step.
+    for(const row of this.store.db.prepare(`SELECT e.state,count(*) n FROM execution_steps e WHERE e.kind=?
+      AND EXISTS(SELECT 1 FROM execution_operation_steps o WHERE o.step_id=e.id AND o.operation_id=e.operation_id AND o.active=1)
+      GROUP BY e.state`).all(ORGANIZER_STEP))stepCounts[String(row.state)]=Number(row.n);
+    const pendingSteps=stepCounts.waiting+stepCounts.running;
     const backfills=this.store.db.prepare('SELECT organizer_id id,version,cursor_rowid cursorRowid,complete FROM material_organizer_backfills ORDER BY organizer_id').all() as {id:string;version:string;cursorRowid:number;complete:number}[];
-    return {cursor,pendingChanges,pendingSteps,organizers:this.registry.list(),backfills:backfills.map(row=>({...row,complete:Boolean(row.complete)}))};
+    return {cursor,pendingChanges,pendingSteps,blockedSteps:stepCounts.blocked,failedSteps:stepCounts.failed,stepCounts,organizers:this.registry.list(),backfills:backfills.map(row=>({...row,complete:Boolean(row.complete)}))};
   }
   private discover(limit:number){
     const db=this.store.db,batchSize=Math.max(1,Math.min(limit,500)),stepIds:string[]=[];

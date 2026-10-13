@@ -17,3 +17,12 @@ Current failures and stale steps remain visible until a replacement actually exi
 The Processing page displays operation summaries and paged step details, including prior configurations. Source pages still own their domain controls; the existing context workflow controls remain available. Import phases, query runs and insight runs now use the shared executor, with parent membership propagation and persistent result references. Domain lifecycle windows link their child work to the same Operation. Collector credentials do not gain owner-only task reads: native clients show central processing as unknown and offer the authorized central task page. See [execution and snapshot integration](operation-import-insight-closure.md) and [native status contract](client-scheduling-and-status.md).
 
 Validation: 400 dated generated operations exercise keyset paging and change cursors, transaction rollback, shared step counts, current/history migration, optional work and collector denial. Authenticated application tests cover unauthenticated/collector rejection and malformed bounds. Cache tests cover late and aborted responses, session isolation, retry and shared subscriptions. A real Electron renderer with an isolated generated server exercises 400 operation rows, automatic list/detail updates, filter reset, pagination, detail focus restoration and 200%/mobile layout (`scripts/test-web-operations.cjs`). These are fixture tests; no live model or personal data is used.
+
+Domain summaries follow the same current-progress boundary. Organizer
+`pendingSteps` counts current waiting/running steps; `blockedSteps`, `failedSteps`
+and `stepCounts` expose the remaining states independently. Memory summaries
+separate processing failures from input invalidation with `invalidatedBatches`
+and a publication `outcome`; an all-invalidated terminal task is skipped in its
+execution envelope without changing persisted scheduling state. Action analysis
+alerts require a surviving job and matching current evidence. See the
+[current-status regression](validation/current-status-counts.md).
