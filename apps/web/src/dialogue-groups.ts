@@ -10,3 +10,10 @@ export function dialogueGroups(chunks:Capture[]){
  }
  return groups;
 }
+
+/** FileStore prepends this exact metadata label. Remove one transport prefix for
+ * presentation/correction only; a literal label inside the speech is retained. */
+export function transcriptChunkText(chunk:Capture){
+ const prefix=chunk.fileEvidence?.speaker?`[${chunk.fileEvidence.speaker}] `:'';
+ return prefix&&chunk.ocrText.startsWith(prefix)?chunk.ocrText.slice(prefix.length):chunk.ocrText;
+}
