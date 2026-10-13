@@ -61,7 +61,7 @@ run(['git', 'archive', '--format=tar', '--output=' + str(output / 'android-sourc
 
 _, build_seconds = run(['./gradlew', ':app:assembleDevelopment', ':app:assembleDevelopmentAndroidTest',
                         *([':app:testDevelopmentUnitTest'] if args.verify_journeys else []),
-                        '--console=plain', '--quiet'], cwd=ANDROID, timeout=900, log=output / 'build.log')
+                        '-Pmote.testBuildType=development', '--console=plain', '--quiet'], cwd=ANDROID, timeout=900, log=output / 'build.log')
 (output / 'build-results.json').write_text(json.dumps({'passed': True, 'elapsedSeconds': build_seconds}, indent=2))
 assert source_hashes == {name: hashlib.sha256((REPO / name).read_bytes()).hexdigest() for name in source_files}, 'Source changed while building'
 

@@ -29,23 +29,35 @@ for(const round of inputs.rounds){
  }
  if(round.web){
   const data=JSON.parse(fs.readFileSync(path.resolve(repo,round.web.manifest)));assert(data.passed&&data.generatedOnly);
-  for(const c of data.captures.filter(c=>c.reviewSelection!==false&&['normal','compact'].includes(c.variant))){
+  assert.equal(data.sourceCommit,round.sourceCommit,'Web commit identity');
+  for(const c of data.coreCaptures||data.captures.filter(c=>c.reviewSelection!==false&&['normal','compact'].includes(c.variant))){
    const scene=c.scene==='providers'?'connection':c.scene;if(!scenes.some(s=>s.id===scene))continue;
    add(round,'web',scene,c.variant,c.language,path.resolve(repo,round.web.root,c.name+'.png'),c);
   }
  }
  if(round.mac){
-  const data=JSON.parse(fs.readFileSync(path.resolve(repo,round.mac.manifest)));assert(data.generatedOnly);
-  for(const c of data.scenes){const scene=Object.keys(macScenes).find(key=>macScenes[key]===c.scene);if(!scene)continue;add(round,'mac',scene,c.size,c.locale==='en'?'en':'zh',c.path,c);}
+  const data=JSON.parse(fs.readFileSync(path.resolve(repo,round.mac.manifest)));assert(data.generatedOnly&&data.passed);
+  assert.equal(data.sourceCommit,round.sourceCommit,'Mac commit identity');
+  for(const c of data.coreCaptures||data.captures){const scene=Object.keys(macScenes).find(key=>macScenes[key]===c.scene);if(!scene)continue;add(round,'mac',scene,c.variant,c.language==='en'?'en':'zh',path.resolve(repo,round.mac.root,c.file),c);}
  }
  if(round.android){
   const data=JSON.parse(fs.readFileSync(path.resolve(repo,round.android.manifest)));assert(data.generatedOnly);assert.equal(data.productApkSha256,round.android.apkSha256);
+  assert.equal(data.sourceCommit,round.sourceCommit,'Android commit identity');
+  assert.equal(data.matrix.length,4);assert(data.matrix.every(c=>c.passed===3&&c.skipped===0),'Four actual Android conditions');
   const dirs={default:['normal','zh'],english:['normal','en'],compact:['compact','zh'],'compact-english':['compact','en']};
-  for(const c of data.images){const parts=c.file.split('/'),[variant,language]=dirs[parts[0]]||[];if(!variant)continue;const scene=Object.keys(nativeScenes).find(key=>nativeScenes[key]+'.png'===parts.at(-1));if(!scene)continue;add(round,'android',scene,variant,language,path.resolve(repo,round.android.root,c.file),c);}
+  for(const c of data.images){const parts=c.path.split('/'),[variant,language]=dirs[parts[0]]||[];if(!variant)continue;const scene=Object.keys(nativeScenes).find(key=>nativeScenes[key]+'.png'===parts.at(-1));if(!scene)continue;add(round,'android',scene,variant,language,path.resolve(repo,round.android.root,c.path),c);}
  }
  for(const platform of Object.keys(manifest.platforms))for(const s of scenes)for(const variant of ['normal','compact'])for(const language of ['zh','en'])assert(manifest.assets.some(a=>a.round===round.id&&a.platform===platform&&a.scene===s.id&&a.variant===variant&&a.language===language),'Candidate missing actual core scene: '+[round.id,platform,s.id,variant,language].join('/'));
 }
 for(const f of ['index.html','review.css','review.js','README.md'])fs.copyFileSync(path.join(__dirname,f),path.join(out,f));
-for(const [file,target] of [['docs/design/ui-art-direction-five-rounds.md','design.md'],['docs/design/ui-art-direction-evaluation.md','evaluation.md']])fs.copyFileSync(path.join(repo,file),path.join(out,target));
+function portable(text){return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g,(all,label,target)=>{
+ if(/^(https?:|#)/.test(target))return all;
+ const mapped={'ui-focus-and-consistency-2026-10-13.md':'criteria.md','ui-art-direction-five-rounds.md':'design.md','ui-art-direction-evaluation.md':'evaluation.md'}[target];
+ return mapped?'['+label+']('+mapped+')':label+'（仓库参考：`'+target+'`）';
+});}
+for(const [file,target] of [['docs/design/ui-art-direction-five-rounds.md','design.md'],['docs/design/ui-art-direction-evaluation.md','evaluation.md']])fs.writeFileSync(path.join(out,target),portable(fs.readFileSync(path.join(repo,file),'utf8')));
+const original=fs.readFileSync(path.join(repo,'docs/design/ui-iteration-evaluator-2026-10-13.md'),'utf8').split('## Review method')[0];
+const additions=fs.readFileSync(path.join(repo,'docs/design/ui-focus-and-consistency-2026-10-13.md'),'utf8').split('## 用户旅程与范围')[0];
+fs.writeFileSync(path.join(out,'criteria.md'),portable('# 原七项量表（历史合同）\n\n以下保留原有量表；五轮共同风格合同见 [design.md](ui-art-direction-five-rounds.md)，新评分见 [evaluation.md](ui-art-direction-evaluation.md)。历史接受或旧目标不表示用户接受当前候选。\n\n'+original+'\n'+additions));
 fs.writeFileSync(path.join(out,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');fs.writeFileSync(path.join(out,'manifest.js'),'window.MOTE_ART_REVIEW='+JSON.stringify(manifest)+';\n');
 console.log('Generated '+manifest.assets.length+' original ready images across '+manifest.rounds.length+' rounds: '+out);

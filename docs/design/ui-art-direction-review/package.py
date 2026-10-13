@@ -6,7 +6,7 @@ repo=Path(__file__).resolve().parents[3]
 folder=repo/'.mote/ui-art-direction-review'
 m=json.loads((folder/'manifest.json').read_text())
 assert m['generatedOnly']
-files=['index.html','review.css','review.js','manifest.js','manifest.json','README.md','design.md','evaluation.md']+[a['src'] for a in m['assets']]
+files=['index.html','review.css','review.js','manifest.js','manifest.json','README.md','design.md','evaluation.md','criteria.md']+[a['src'] for a in m['assets']]
 with ZipFile(folder.with_suffix('.zip'),'w',compression=ZIP_DEFLATED) as z:
     for f in files:
         (folder/f).resolve().relative_to(folder.resolve())
