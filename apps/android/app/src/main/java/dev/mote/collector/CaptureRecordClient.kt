@@ -61,6 +61,10 @@ internal class CaptureRecordClient(private val config: CollectorConfig, private 
 }
 
 internal object CapturePreview {
+    fun showMediaContext(record: JSONObject): Boolean {
+        val media = record.optJSONObject("metadata")?.optJSONObject("media") ?: return false
+        return record.optString("source") != "note" || media.optString("status") != "disabled" || (media.optJSONArray("sessions")?.length() ?: 0) > 0
+    }
     fun hasImage(record: JSONObject): Boolean = record.optString("source", "screen") == "screen" &&
         if (record.has("hasImage")) record.optBoolean("hasImage") else
             (!record.isNull("imagePath") && record.optString("imagePath").isNotBlank() || !record.isNull("imageMime") && record.optString("imageMime").isNotBlank())

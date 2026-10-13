@@ -14,7 +14,6 @@ Monitor,
 RefreshCw,
 Settings2,
 ShieldCheck,
-Smartphone,
 Sparkles,
 X
 } from "lucide-react";
@@ -419,7 +418,7 @@ function App() {
           )}
           {!connection ? (
             <>
-              <div className="greeting welcome simple-welcome">
+              <div className="greeting welcome simple-welcome archive-welcome">
                 <div>
                   <div className="eyebrow">{moteText('个人资料库')}</div>
                   <h1>
@@ -427,6 +426,11 @@ function App() {
                   </h1>
                   <p>
                     {moteText("汇集手机、电脑与文件里的记录。按来源浏览资料，也能直接提问，回到答案的出处。")}</p>
+                  <div className="welcome-archive-flow" aria-label={moteText("采集 · 汇聚 · 理解")}>
+                    <span><FileText size={17}/>{moteText("添加资料")}</span><ArrowRight size={14} aria-hidden="true"/>
+                    <span><Database size={17}/>{moteText("资料库")}</span><ArrowRight size={14} aria-hidden="true"/>
+                    <span><MessageSquare size={17}/>{moteText("问一问")}</span>
+                  </div>
                   <button
                     className="button primary"
                     onClick={() => setShowConnect(true)}
@@ -435,22 +439,7 @@ function App() {
                     {moteText("登录 Mote")}<ArrowRight size={16} />
                   </button>
                 </div>
-                <div className="welcome-art" aria-hidden="true">
-                  <div className="orbit orbit-one" />
-                  <div className="orbit orbit-two" />
-                  <span className="art-node art-phone">
-                    <Smartphone size={27} />
-                  </span>
-                  <span className="art-node art-desktop">
-                    <Monitor size={31} />
-                  </span>
-                  <span className="art-node art-file">
-                    <FileText size={24} />
-                  </span>
-                  <span className="art-center">
-                    m<span>.</span>
-                  </span>
-                </div>
+
               </div>
               <div className="welcome-values simple-values">
                 <div>

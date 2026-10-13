@@ -245,10 +245,12 @@ export function AuthImage({
 }
 
 export function CaptureCard({
+  compact = false,
   capture,
   api,
   onOpen,
 }: {
+  compact?: boolean;
   capture: Capture | CapturePreview;
   api: Api;
   onOpen: (id: string) => void;
@@ -257,8 +259,8 @@ export function CaptureCard({
   const ocr = ocrPresentation('textPreview' in capture ? capture.ocr : captureOcrState(capture), text);
   const media = 'textPreview' in capture ? capture.media : capture.metadata?.media;
   return (
-    <button className="capture-card" onClick={() => onOpen(formatEvidenceRef('capture',capture.id))} aria-label={moteText("查看 {0} · {1} 的记录", capture.appName || moteText("未识别应用"), dateTime(capture.capturedAt))}>
-      <AuthImage api={api} capture={capture} />
+    <button className={compact ? "capture-card capture-card-compact" : "capture-card"} onClick={() => onOpen(formatEvidenceRef('capture',capture.id))} aria-label={moteText("查看 {0} · {1} 的记录", capture.appName || moteText("未识别应用"), dateTime(capture.capturedAt))}>
+      {compact ? <FileText className="capture-record-icon" size={20} aria-hidden="true"/> : <AuthImage api={api} capture={capture} />}
       <div className="capture-card-body">
         <div className="capture-caption">
           <span className="app-avatar">

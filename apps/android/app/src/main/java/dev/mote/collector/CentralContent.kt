@@ -94,24 +94,34 @@ internal class CentralContent(
         downloadPath = state?.getString("downloadPath"); downloadOrigin = state?.getString("downloadOrigin")
         downloadGeneration = state?.getLong("downloadGeneration") ?: -1L
         root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background) }
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; tag = "central-header"; setPadding(moteDp(12), 0, moteDp(12), 0) }
+        val compactHeader = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
+        val header = LinearLayout(this).apply {
+            orientation = if (compactHeader) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL; tag = "central-header"; setPadding(moteDp(12), 0, moteDp(12), 0)
+        }
+        val heading = if (compactHeader) LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL } else header
+        val actions = if (compactHeader) LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL } else header
         backButton = TextView(this).apply {
             text = "‹"; contentDescription = MoteI18n.text("返回上级"); textSize = 28f; gravity = Gravity.CENTER
             isFocusable = true; minHeight = moteDp(48); setOnClickListener { if (!back()) { if (openLocalPage != null) localPage("OVERVIEW") else activity.finish() } }
         }
-        header.addView(backButton, LinearLayout.LayoutParams(moteDp(44), -2))
-        title = TextView(this).apply { tag = "central-title"; textSize = 20f; maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; setTextColor(MoteUi.ink) }
-        header.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
+        heading.addView(backButton, LinearLayout.LayoutParams(moteDp(44), -2))
+        title = TextView(this).apply { tag = "central-title"; textSize = 20f; maxLines = if (compactHeader) 2 else 1; ellipsize = android.text.TextUtils.TruncateAt.END; setTextColor(MoteUi.ink) }
+        heading.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
         fun headerAction(label: String, description: String = label, action: () -> Unit) {
-            header.addView(TextView(this).apply {
+            actions.addView(TextView(this).apply {
                 text = MoteI18n.text(label); contentDescription = MoteI18n.text(description); textSize = 13f; gravity = Gravity.CENTER
                 isFocusable = true; minHeight = moteDp(48); background = MoteUi.clickable(this@CentralContent, MoteUi.tint, 12)
                 setOnClickListener { action() }
-            }, LinearLayout.LayoutParams(moteDp(56), -2).apply { marginStart = moteDp(4) })
+            }, (if (compactHeader) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(56), -2)).apply { marginStart = moteDp(4) })
         }
         headerAction("添加", "添加内容") { activity.showMoteAddActions() }
         headerAction("设置") { localPage("SETTINGS") }
         headerAction("更多") { more() }
+        if (compactHeader) {
+            header.addView(heading, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(6) })
+            header.addView(actions, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(6) })
+        }
         root.addView(header)
         status = TextView(this).apply {
             tag = "central-status"
@@ -151,9 +161,7 @@ internal class CentralContent(
         accessGeneration = selected.generation
         if (endpoint.isBlank()) {
             server = ""; client = null; revision++; pending.clear(); screens?.close(); screens?.clearPrivateState(); body.removeAllViews(); collectionBar.visibility = View.GONE
-            title.text = MoteI18n.text("中央节点")
-            text(MoteI18n.text("中央问答暂不可用。连接中央后，可以根据已整理的内容提问；文件和随手记仍可在本机保存。"))
-            connectionButton()
+            disconnected()
             return
         }
         val changed = server != endpoint
@@ -195,12 +203,22 @@ internal class CentralContent(
         page = next; revision++; pending.clear(); handler.removeCallbacks(refreshRun); screens?.close(); body.removeAllViews()
         navigation?.select(MoteNavigation.centralTab(next)); updateCollectionBar(); updateBackButton()
         title.text = CentralScreens.pages.firstOrNull { it.first == if (next == "extensions") "plugins" else next }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
-        if (client == null) { login(); return }
+        if (client == null) { if (server.isBlank()) disconnected() else login(); return }
         screens?.show(next)
     }
+    private fun disconnected() {
+        title.text = CentralScreens.pages.firstOrNull { it.first == page }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
+        text(MoteI18n.text(when {
+            page == "ask" -> "中央问答暂不可用。连接中央后，可以根据已整理的内容提问；文件和随手记仍可在本机保存。"
+            page in MoteNavigation.libraryPages -> "中央资料库暂不可用。连接中央后，可浏览已归档的资料；文件和随手记仍可在本机保存和查看。"
+            else -> "中央功能需要连接中央；文件和随手记仍可在本机保存和查看。"
+        }))
+        connectionButton()
+    }
+    internal fun showFeatureGuide() = more()
     private fun more() {
         val titles = MoteNavigation.groups.map { MoteI18n.text(it.titleKey) } + MoteI18n.text("退出登录")
-        MoteDialogBuilder(this).setTitle(MoteI18n.text("中央资料库")).setItems(titles.toTypedArray()) { _, index ->
+        MoteDialogBuilder(this).setTitle(MoteI18n.text("此客户端支持的中央功能")).setItems(titles.toTypedArray()) { _, index ->
             if (index == MoteNavigation.groups.size) {
                 val expected = accessGeneration
                 work(MoteI18n.text("正在退出登录…"), { session.signOut(expected); CentralAccess.resolve(this) }, allowSessionChange = true) { selected -> applyAccess(selected) }
@@ -212,11 +230,11 @@ internal class CentralContent(
                     .setItems(entries.map { MoteI18n.text(it.second) }.toTypedArray()) { _, position -> navigate(entries[position].first) }
                     .setNegativeButton(MoteI18n.text("返回")) { _, _ -> more() }.show()
             }
-        }.setNegativeButton(MoteI18n.text("关闭"), null).show()
+        }.setNegativeButton(MoteI18n.text("取消"), null).show()
     }
     private fun updateCollectionBar() {
         collectionBar.removeAllViews()
-        if (client == null || MoteNavigation.centralTab(page) != MotePrimaryTab.LIBRARY) { collectionBar.visibility = View.GONE; return }
+        if (client == null || page !in MoteNavigation.libraryBrowsePages) { collectionBar.visibility = View.GONE; return }
         collectionBar.visibility = View.VISIBLE
         val scope = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         scope.addView(TextView(this).apply {
@@ -225,7 +243,7 @@ internal class CentralContent(
         }, LinearLayout.LayoutParams(0, -2, 1f))
         scope.addView(MoteUi.button(Button(this).apply { text = MoteI18n.text("本机保留"); setOnClickListener { localPage("LIBRARY") } }))
         collectionBar.addView(scope)
-        val entries = MoteNavigation.libraryPages.mapNotNull { id -> CentralScreens.pages.find { it.first == id } }
+        val entries = MoteNavigation.libraryBrowsePages.mapNotNull { id -> CentralScreens.pages.find { it.first == id } }
         collectionBar.addView(Spinner(this).apply {
             contentDescription = MoteI18n.text("资料类型")
             adapter = ArrayAdapter(this@CentralContent, android.R.layout.simple_spinner_dropdown_item, entries.map { MoteI18n.text(it.second) })

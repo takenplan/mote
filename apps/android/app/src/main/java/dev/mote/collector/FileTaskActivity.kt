@@ -186,9 +186,13 @@ class FileTaskActivity : MoteActivity() {
         enabled = CheckBox(this).apply { text = MoteI18n.text("允许读取并按所选策略发送这个来源"); isChecked = source.enabled; if (savedSource != null) advanced.addView(this) }
         continuous = CheckBox(this).apply { text = MoteI18n.text("以后修改，也自动同步"); isChecked = source.syncContinuously; tag = "file-task:continuous"; if (savedSource != null && !source.tree) advanced.addView(this) }
         hint("更改选择、过滤或保留方式会清除这个来源的本机旧待发缓存，按新设置重新扫描；不会自动删除中央历史。停用仅暂停本机检查与同步，中央的启用状态与历史保持不变。移除只影响本机连接。", advanced)
-        val destination = Settings(this).read().server
+        val destinationConfig = Settings(this).read()
+        val destination = destinationConfig.server
         label("发送目的地")
-        hint(if (destination.isBlank()) "未连接中央：先保存本机任务，连接时确认发送范围。" else MoteI18n.text("完整文件的发送目的地：{0}", destination))
+        if (!destinationConfig.hasSyncConnection()) {
+            hint("未连接中央：先保存本机任务，连接时确认发送范围。")
+            if (destination.isNotBlank()) hint(MoteI18n.text("已填写的中央地址：{0}；连接并确认后才会发送。", destination))
+        } else hint(MoteI18n.text("完整文件的发送目的地：{0}", destination))
         hint("上传后仅清理 Mote 暂存，保留手机原文件。")
         confirm = Button(this).apply { text = MoteI18n.text(if (savedSource != null) "保存来源设置" else if (source.tree) "开始同步" else "确认导入"); tag = "file-task:confirm"; setTag(R.id.mote_primary, true); setOnClickListener { save() }; body.addView(this) }
         if (hasContextConflict) body.addView(Button(this).apply { text = MoteI18n.text("解决资料说明冲突"); tag = "file-task:context-conflict"; setOnClickListener { resolveConflict() } })

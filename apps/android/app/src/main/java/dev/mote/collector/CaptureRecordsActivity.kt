@@ -355,7 +355,7 @@ class CaptureRecordsActivity : MoteActivity() {
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(18), moteDp(10), moteDp(18), moteDp(16)) }
         val message = text(content, MoteI18n.text("正在读取详情…"), 14f)
         val loading = ProgressBar(this); content.addView(loading)
-        val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("采集记录")).setView(ScrollView(this).apply { addView(content) }).setPositiveButton(MoteI18n.text("关闭"), null).create()
+        val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("采集记录")).setView(ScrollView(this).apply { addView(content) }).setPositiveButton(MoteI18n.text("关闭详情"), null).create()
         var detailBitmap: Bitmap? = null
         dialog.setOnDismissListener { content.removeAllViews(); detailBitmap?.recycle(); detailBitmap = null }
         dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
@@ -387,7 +387,7 @@ class CaptureRecordsActivity : MoteActivity() {
                         media?.optString("observedAt")?.takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("媒体观察时间：{0}", it), 12f) }
                         return@runOnUiThread
                     }
-                    if (media != null) text(content, CapturePreview.mediaLabel(record), 13f)
+                    if (CapturePreview.showMediaContext(record)) text(content, CapturePreview.mediaLabel(record), 13f)
                     if (record.optString("source") in setOf("note", "activity", "ui_page")) {
                         record.optJSONObject("metadata")?.optJSONObject("uiPage")?.let { text(content, "${it.optString("adapterId")} @ ${it.optString("adapterVersion")} · ${it.optString("status")}", 13f) }
                         text(content, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, 14f).setTextIsSelectable(true)

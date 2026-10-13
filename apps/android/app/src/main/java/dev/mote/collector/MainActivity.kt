@@ -234,18 +234,19 @@ class MainActivity : MoteActivity() {
     private fun buildToday() {
         val local = LocalStateRepository.get(this).state.value
         firstUse = MoteNavigation.isFirstUse(loadedConfig.hasSyncConnection(), settings.enabled, settings.lastCapture(), (local.active?.records ?: 0) > 0 || (local.sourcePending ?: 0) > 0)
-        page(Page.OVERVIEW, MoteI18n.text("收进来，随时找回。"))
-        text(MoteI18n.text("文件、屏幕和想法，都可以从这里开始。"), 16, MoteUi.muted)
+        page(Page.OVERVIEW, MoteI18n.text("文件、屏幕记录和想法先保存在本机；连接中央并完成整理后，可搜索和提问。"))
         val choices = MoteAddAction.entries
+        val collection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@MainActivity, Color.WHITE, 18, true) }
+        content.addView(collection, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
         for (row in choices.chunked(2)) {
             val group = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
             row.forEachIndexed { index, action ->
                 group.addView(LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 18)
-                    setPadding(dp(16), dp(19), dp(16), dp(18)); minimumHeight = dp(146)
-                    isFocusable = true; tag = "add:${action.name}"; contentDescription = MoteI18n.text(action.titleKey)
+                    orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 8)
+                    setPadding(dp(15), dp(17), dp(15), dp(17)); minimumHeight = dp(102)
+                    isFocusable = true; tag = "add:${action.name}"; contentDescription = MoteI18n.text(action.titleKey) + "，" + MoteI18n.text(action.subtitleKey)
                     addView(TextView(this@MainActivity).apply {
-                        text = MoteI18n.text(action.titleKey); textSize = 17f; setTextColor(MoteUi.ink)
+                        text = MoteI18n.text(action.titleKey); textSize = 16f; setTextColor(MoteUi.ink)
                         setCompoundDrawablesWithIntrinsicBounds(MoteNavigationIcon(this@MainActivity, action.icon, true), null, null, null)
                         compoundDrawablePadding = dp(8)
                     })
@@ -253,12 +254,31 @@ class MainActivity : MoteActivity() {
                     setOnClickListener { openMoteAdd(action) }
                 }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (index == 0) marginEnd = dp(6) else marginStart = dp(6) })
             }
-            content.addView(group, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+            collection.addView(group, LinearLayout.LayoutParams(-1, -2))
+            if (row.last() != choices.last()) collection.addView(View(this).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(15); marginEnd = dp(15) })
         }
+        text(MoteI18n.text("保存之后，回看或提问"), 12, MoteUi.muted)
+        val retrieval = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        listOf("查看内容 →" to Page.LIBRARY, "问一问 →" to Page.ASK).forEach { (label, destination) ->
+            retrieval.addView(TextView(this).apply {
+                text = MoteI18n.text(label); textSize = 14f; setTextColor(MoteUi.accent); minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
+                isFocusable = true; contentDescription = MoteI18n.text(label); setOnClickListener { showPage(destination) }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        content.addView(retrieval, LinearLayout.LayoutParams(-1, -2))
         card(MoteUi.tint) {
-            homeSyncStatus = text(MoteI18n.text("仅保存在本机 · 连接后可发送到中央"), 14)
+            val summary = LinearLayout(this@MainActivity).apply { gravity = Gravity.CENTER_VERTICAL }
+            content.addView(summary, LinearLayout.LayoutParams(-1, -2))
+            homeSyncStatus = TextView(this@MainActivity).apply {
+                text = MoteI18n.text("仅保存在本机 · 连接后可发送到中央"); textSize = 13f; setTextColor(MoteUi.ink); setLineSpacing(dp(3).toFloat(), 1f)
+            }
+            summary.addView(homeSyncStatus, LinearLayout.LayoutParams(0, -2, 1f))
             val details = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-            button(MoteI18n.text("查看同步详情")) { details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+            summary.addView(TextView(this@MainActivity).apply {
+                text = MoteI18n.text("查看同步详情"); textSize = 12f; setTextColor(MoteUi.accent); minHeight = dp(48); gravity = Gravity.CENTER
+                setPadding(dp(12), 0, 0, 0); isFocusable = true
+                setOnClickListener { details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+            }, LinearLayout.LayoutParams(-2, -2))
             content.addView(details)
             val previous = content; content = details
             homeSyncDetailStatus = text("", 13, MoteUi.muted)
@@ -279,6 +299,10 @@ class MainActivity : MoteActivity() {
         todaySummary = text(local.imageLabel(), 12, MoteUi.muted)
         homeRecentList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(homeRecentList)
         button(MoteI18n.text("查看全部内容")) { showPage(Page.LIBRARY) }
+        section(MoteI18n.text("中央工作台"))
+        menu(MoteI18n.text("全部功能与设置"), MoteI18n.text("连接中央后，查看完整资料库、记忆、洞察与处理进度。"), "library") {
+            startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "overview").putExtra("featureGuide", true))
+        }
     }
 
     internal fun addContent(action: MoteAddAction) {
@@ -345,10 +369,17 @@ class MainActivity : MoteActivity() {
 
     private fun addContentRow(parent: LinearLayout, title: String, detail: String, identity: String, action: () -> Unit) {
         parent.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 14)
-            setPadding(dp(16), dp(15), dp(16), dp(15)); isFocusable = true; contentDescription = title; tag = identity
-            addView(TextView(this@MainActivity).apply { text = title; textSize = 16f; setTextColor(MoteUi.ink) })
-            addView(TextView(this@MainActivity).apply { text = detail; textSize = 12f; maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; setTextColor(MoteUi.muted); setPadding(0, dp(7), 0, 0) })
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 12)
+            setPadding(dp(14), dp(15), dp(14), dp(15)); isFocusable = true; contentDescription = title + "，" + detail; tag = identity
+            addView(ImageView(this@MainActivity).apply {
+                setImageDrawable(MoteNavigationIcon(this@MainActivity, "library", true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                background = MoteUi.shape(this@MainActivity, MoteUi.tint, 8); setPadding(dp(8), dp(8), dp(8), dp(8))
+            }, LinearLayout.LayoutParams(dp(39), dp(39)).apply { marginEnd = dp(12) })
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(this@MainActivity).apply { text = title; textSize = 15f; setTextColor(MoteUi.ink); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) })
+                addView(TextView(this@MainActivity).apply { text = detail; textSize = 12f; maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; setTextColor(MoteUi.muted); setPadding(0, dp(7), 0, 0) })
+            }, LinearLayout.LayoutParams(0, -2, 1f))
             setOnClickListener { action() }
         }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
     }
@@ -490,7 +521,7 @@ class MainActivity : MoteActivity() {
         menu(MoteI18n.text("采集与存储详情"), MoteI18n.text("查看累计结果、队列与使用空间"), "chart") { startActivity(Intent(this, ActivityStatsActivity::class.java)) }
         menu(MoteI18n.text("导入与导出"), MoteI18n.text("迁移配置、备份与恢复本机记录"), "folder") { startActivity(Intent(this, BackupActivity::class.java)) }
         menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "settings") { showPage(Page.DEVELOPER) }
-        menu(MoteI18n.text("资料库管理"), MoteI18n.text("模型、存储、处理任务与对外授权"), "settings") { openCentral("about") }
+        menu(MoteI18n.text("资料库管理"), MoteI18n.text("模型、存储、记忆、洞察等中央功能"), "settings") { openCentral("about") }
         content = owner
         text(MoteI18n.text("修改后请保存，再切换页面。"), 12, MoteUi.muted)
     }
@@ -662,7 +693,6 @@ class MainActivity : MoteActivity() {
 
     private fun buildNotes() {
         page(Page.NOTES, MoteI18n.text("为此刻，留下一句话"))
-        menu(MoteI18n.text("图片与语音附件"), MoteI18n.text("在中央随手记中添加附件"), "note") { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "notes")) }
         val app = applicationContext
         val io = QuickNotes.io
         val task = UiTask(this, io, ownsExecutor = false)
@@ -732,6 +762,11 @@ class MainActivity : MoteActivity() {
                         }
                     }
                 }.show()
+        }
+        text(MoteI18n.text("图片与语音附件"), 13, MoteUi.accent).apply {
+            minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
+            contentDescription = MoteI18n.text("在中央随手记中添加附件")
+            setOnClickListener { openCentral("notes") }
         }
         text(MoteI18n.text("草稿自动保存在本机，保存后按同步设置上传。正文最多 100000 字符，心情最多 80 字符。"), 13, MoteUi.muted)
     }
@@ -1387,8 +1422,8 @@ class MainActivity : MoteActivity() {
                 minHeight = dp(44); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
                 contentDescription = MoteI18n.text("返回{0}", Page.valueOf(page.parent).title); setOnClickListener { showPage(Page.valueOf(page.parent)) }
             }
-        } else text("MOTE", 11, MoteUi.accent).apply { letterSpacing = .18f }
-        text(page.title, 30).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }
+        } else if (page != Page.OVERVIEW) text("MOTE", 11, MoteUi.accent).apply { letterSpacing = .18f }
+        text(if (page == Page.OVERVIEW) MoteI18n.text("个人资料库") else page.title, 30).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }
         text(subtitle, 14, MoteUi.muted).apply { isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null }
     }
 

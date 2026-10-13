@@ -100,6 +100,7 @@ class MoteNavigationIcon(context: Context, private val kind: String, active: Boo
             "dropdown" -> path(6f, 9f, 12f, 15f, 18f, 9f)
             "overview" -> { path(3f, 11f, 12f, 3f, 21f, 11f); path(5f, 10f, 5f, 21f, 19f, 21f, 19f, 10f); path(10f, 21f, 10f, 14f, 14f, 14f, 14f, 21f) }
             "notes", "note" -> { canvas.drawRoundRect(4f, 3f, 20f, 21f, 3f, 3f, paint); line(8f, 8f, 16f, 8f); line(8f, 12f, 16f, 12f); line(8f, 16f, 13f, 16f) }
+            "import" -> { path(13f, 3f, 5f, 3f, 5f, 21f, 19f, 21f, 19f, 9f, 13f, 3f, 13f, 9f, 19f, 9f); line(8f, 14f, 16f, 14f); path(13f, 11f, 16f, 14f, 13f, 17f) }
             "library", "sources", "folder" -> { path(3f, 7f, 3f, 20f, 21f, 20f, 21f, 7f, 3f, 7f, 3f, 4f, 10f, 4f, 13f, 7f) }
             "ask" -> { canvas.drawRoundRect(3f, 3f, 21f, 18f, 4f, 4f, paint); path(7f, 18f, 7f, 22f, 12f, 18f); line(7f, 8f, 17f, 8f); line(7f, 12f, 14f, 12f) }
             "capture" -> { canvas.drawRoundRect(4f, 3f, 20f, 21f, 3f, 3f, paint); canvas.drawCircle(12f, 12f, 4f, paint); line(10f, 18f, 14f, 18f) }
@@ -215,7 +216,7 @@ class MoteDialogBuilder(context: Context) : android.app.AlertDialog.Builder(cont
 /** Every Add entry uses this same action set and real native flows. */
 enum class MoteAddAction(val titleKey: String, val subtitleKey: String, val icon: String) {
     FOLDER("同步文件夹", "持续收集文件夹里的新内容与修改", "folder"),
-    FILE("导入文件", "导入一次，不跟踪后续修改。", "note"),
+    FILE("导入文件", "导入一次，不跟踪后续修改。", "import"),
     SCREEN("记录屏幕", "先选择应用范围，再按需授权", "capture"),
     NOTE("随手记", "离线也能留下想法与片段", "notes")
 }

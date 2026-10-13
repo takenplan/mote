@@ -17,6 +17,7 @@ open class CentralActivity : MoteActivity() {
         content = CentralContent(this, state, intent.getStringExtra("page") ?: "ask")
         content.root.moteInsets()
         setContentView(content.root)
+        if (state == null && intent.getBooleanExtra("featureGuide", false)) content.showFeatureGuide()
         if (android.os.Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { navigateBack() }
     }
     override fun onResume() { super.onResume(); content.resume() }

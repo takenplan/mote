@@ -82,6 +82,25 @@ class NativeCentralInstrumentedTest {
             }
         }
     }
+    @Test fun libraryTypesExcludeLegacyCodingStatusWithoutRedirectingItsDirectRoute() {
+        open("archive").use { scenario ->
+            login(scenario); waitFor(scenario, "Archive catalog ready") { !it.isWorking && contains(it, "全部资料") }
+            scenario.onActivity { activity ->
+                val types = all(activity).filterIsInstance<android.widget.Spinner>().single { it.contentDescription == "资料类型" }
+                val labels = (0 until types.adapter.count).map { types.adapter.getItem(it).toString() }
+                assertTrue(labels.contains("中央资料库"))
+                assertFalse(labels.contains("Coding Agent 上传")); assertFalse(labels.contains("Coding 会话同步状态"))
+                activity.navigate("coding")
+            }
+            waitFor(scenario, "Legacy Coding status remains selected after loading") { !it.isWorking && contains(it, "Coding 会话同步状态") }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                assertEquals("Coding 会话同步状态", (all(activity).single { it.tag == "central-title" } as TextView).text.toString())
+                assertTrue(all(activity).filterIsInstance<android.widget.Spinner>().none { it.contentDescription == "资料类型" })
+                assertTrue(all(activity).single { it.tag == "primary:LIBRARY" }.isSelected)
+            }
+        }
+    }
     @Test fun settingsFormsSaveAgainstRealContractsAndInvitationIsDisplayed() {
         open("settings").use { scenario ->
             login(scenario); waitFor(scenario, "Settings ready") { !it.isWorking }

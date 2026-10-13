@@ -22,6 +22,19 @@ dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [sourceFile] 
 const errors = [];
 const externalUrls = [];
 shell.openExternal = async url => { externalUrls.push(url); };
+const childProcess = require('node:child_process');
+const originalExecFile = childProcess.execFile;
+childProcess.execFile = function(file, args, ...rest) {
+  if (file !== '/usr/bin/open') return originalExecFile.call(this, file, args, ...rest);
+  externalUrls.push(args.at(-1));
+  const callback = rest.at(-1);
+  if (typeof callback === 'function') queueMicrotask(() => callback(null, '', ''));
+  return { kill() {} };
+};
+childProcess.execFile[require('node:util').promisify.custom] = async (file, args, ...rest) => {
+  if (file !== '/usr/bin/open') return require('node:util').promisify(originalExecFile)(file, args, ...rest);
+  externalUrls.push(args.at(-1)); return { stdout: '', stderr: '' };
+};
 let finished = false;
 let currentPhase = 'startup';
 const timeout = setTimeout(() => { process.stderr.write('UI smoke timeout: ' + currentPhase + '\n'); app.exit(1); }, 45000);
@@ -87,6 +100,14 @@ app.on('browser-window-created', (_event, window) => {
       assert.equal(status.sync.state, 'unconfigured');
       assert.deepEqual(await js(`Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(b => b.textContent.trim())`), ['首页','内容','问一问']);
       assert.equal(await js(`document.querySelectorAll('.home-add-grid [data-add-choice]').length`), 4, 'All four local actions are equal home entries');
+      assert(await js(`(() => {
+        const luminance = color => color.match(/\\d+(?:\\.\\d+)?/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,index)=>sum+v*[.2126,.7152,.0722][index],0);
+        const background=luminance(getComputedStyle(document.documentElement).backgroundColor);
+        return Array.from(document.querySelectorAll('.home-page .text-button')).filter(button=>!button.disabled).every(button=>{
+          const foreground=luminance(getComputedStyle(button).color);
+          return (Math.max(background,foreground)+.05)/(Math.min(background,foreground)+.05)>=4.5;
+        });
+      })()`), 'Normal-size Home links meet measured 4.5:1 contrast on the actual Slate background');
       assert(await js(`document.querySelector('#start').getClientRects().length === 0`), 'Home starts with content actions');
       await js(`document.querySelector('#note-action').click()`);
       assert.equal(await js(`document.querySelectorAll('#add-dialog [data-add-choice]').length`),4,'Every Add entry offers the shared four choices');
@@ -98,6 +119,14 @@ app.on('browser-window-created', (_event, window) => {
       assert(await js(`document.documentElement.scrollWidth <= window.innerWidth`), 'Newcomer setup fits the minimum window width');
       writeFileSync(join(outputDirectory, 'first-run-compact-ui-fixture.png'), (await window.webContents.capturePage()).toPNG());
       window.setSize(1140, 840);
+      if (process.env.MOTE_UI_REVIEW === '1') {
+        // Keep only this clean generated profile open for independent live UI review.
+        // Capture and permissions are already stubbed above; no personal applications are read.
+        clearTimeout(timeout);
+        window.setTitle('Mote — Generated UI Review');
+        process.stdout.write(JSON.stringify({ reviewReady: true, generatedOnly: true, screenshotDirectory: outputDirectory }) + '\n');
+        return;
+      }
       await js(`document.querySelector('#note-action').click(); document.querySelector('#add-dialog [data-add-choice=note]').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(await js(`!document.querySelector('[data-page="notes"]').hidden`), 'A newcomer can write a note before configuring capture');
       await js(`document.querySelector('#workspace-back').click(); new Promise(resolve => setTimeout(resolve, 100))`);
@@ -129,6 +158,26 @@ app.on('browser-window-created', (_event, window) => {
       await navigate('overview');
       assert(await js(`Array.from(document.querySelectorAll('[data-page]')).filter(el => !el.hidden).every(el => el.dataset.page === 'overview')`));
       assert(await js(`document.querySelector('#server-url').getClientRects().length === 0 && document.querySelector('#diagnostics-enabled').getClientRects().length === 0`), 'Overview has no settings fields');
+      await navigate('ask');
+      assert(await js(`!document.querySelector('#ask-disconnected').hidden && document.querySelector('#ask-workspace').hidden && document.querySelector('#node-login-panel').hidden`), 'Offline Ask explains the connection requirement before requesting a central API');
+      assert.equal(await js(`document.querySelector('#ask-error').textContent`), '', 'An absent node must not become a raw IPC failure');
+      await js(`document.querySelector('#ask-question').value='generated offline question draft';`);
+      window.webContents.send('mote:status', status);
+      await js(`new Promise(resolve => requestAnimationFrame(resolve))`);
+      assert(await js(`document.querySelector('#node-login-panel').hidden && !document.querySelector('#ask-disconnected').hidden`), 'A subsequent status event preserves the disconnected Ask surface');
+      assert.equal(await js(`document.querySelector('#ask-question').value`), 'generated offline question draft', 'Status updates preserve the question draft');
+      const authenticatedStatus = { ...status, config: { ...status.config, serverUrl: 'http://127.0.0.1:47999', tokenConfigured: true } };
+      const previousAskHandler = ipcMain._invokeHandlers.get('mote:ask');
+      ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', (_event, command) => command === 'history' || command === 'runs' ? { items: [] } : undefined);
+      try {
+        window.webContents.send('mote:status', authenticatedStatus);
+        await js(`new Promise(resolve => requestAnimationFrame(resolve)); document.querySelector('#ask-refresh').click(); new Promise(resolve => setTimeout(resolve, 100))`);
+        assert(await js(`document.querySelector('#node-login-panel').hidden && document.querySelector('#ask-disconnected').hidden`), 'Refreshing an authenticated Ask does not redisplay the token form');
+      } finally { ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', previousAskHandler); window.webContents.send('mote:status', status); }
+      await js(`new Promise(resolve => requestAnimationFrame(resolve)); document.querySelector('#ask-question').value='';`);
+      await js(`document.querySelector('#ask-disconnected [data-nav="connection"]').click(); new Promise(resolve => setTimeout(resolve, 100))`);
+      assert(await js(`!document.querySelector('[data-page="connection"]').hidden`), 'Offline Ask leads to the existing connection setup');
+      await navigate('overview');
       const settingsMenu = Menu.getApplicationMenu().items[0].submenu.items.find(item => item.accelerator === 'CmdOrCtrl+,');
       assert(settingsMenu, 'Standard settings menu exists'); settingsMenu.click();
       await js(`new Promise(resolve => requestAnimationFrame(resolve))`);
@@ -461,5 +510,18 @@ app.on('browser-window-created', (_event, window) => {
     })().catch(error => { process.stderr.write(`UI smoke failed in ${currentPhase}: ${error.message}\n${errors.join('\n')}\n`); app.exit(1); });
   });
 });
-app.on('quit', () => { if (finished) void rm(profile, { recursive: true, force: true }); });
+app.on('quit', () => { if (finished || process.env.MOTE_UI_REVIEW === '1') void rm(profile, { recursive: true, force: true }); });
+// The fixture always runs in the background, including independent review. Patch only
+// the fixture's Electron dependency, so production window behavior stays unchanged.
+const Module = require('node:module');
+const originalLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  const result = originalLoad.call(this, request, parent, isMain);
+  if (request !== 'electron') return result;
+  return { ...result, BrowserWindow: class extends result.BrowserWindow {
+    constructor(options) { super({ ...options, show: false }); }
+    show() {}
+    focus() {}
+  } };
+};
 require('../dist/main');

@@ -56,7 +56,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
     button.classList.toggle('selected', active);
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
-  const heading = (target: Page) => document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
+  const heading = (target: Page) => target === 'overview' ? moteText('首页') : document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
   const title = heading(page), sectionTitle = heading(selected);
   byId('workspace-location').textContent = page === selected ? title : `${sectionTitle} / ${title}`;
   byId('workspace-back').hidden = !navigation.canGoBack;
@@ -311,8 +311,7 @@ function render(status: import('./contracts').Status): void {
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
   currentStatus = status; renderStorage();
-  byId('node-login-panel').hidden = status.config.tokenConfigured;
-  byId('ask-logout').hidden = !status.config.tokenConfigured;
+  askConnectionState();
   updateTokenField();
   const operations = status.operations ?? [];
   byId('background-progress').hidden = !operations.length;
@@ -498,7 +497,11 @@ byId('note-attachments').addEventListener('click',()=>void perform(()=>desktopAp
 byId('central').addEventListener('click', () => {
   if (!currentStatus?.config.serverUrl) { showPage('connection'); feedback(moteText("先连接你的中央节点，即可打开中央仓库。")); return; }
 
-  void perform(() => desktopApi.openCentral());
+  void perform(() => desktopApi.openCentral('overview'));
+});
+byId('home-feature-guide').addEventListener('click', () => {
+  if (!currentStatus?.config.serverUrl) { showPage('connection'); feedback(moteText("先连接你的中央节点，即可打开中央仓库。")); return; }
+  void perform(() => desktopApi.openCentral('guide'));
 });
 let draft: import('./note-draft').NoteDraft | undefined;
 let noteSaving = false;
@@ -1102,6 +1105,12 @@ async function askAction(action: () => Promise<void>): Promise<void> {
   finally { askBusy = false; askControls(); }
 }
 async function refreshAsk(): Promise<void> {
+  const connected = askConnectionState();
+  if (!connected) {
+    clearTimeout(askTimer);
+    setText('ask-login-status', ''); setText('ask-error', '');
+    return;
+  }
   await askAction(async () => {
     setText('ask-login-status', moteText('正在连接中央节点…'));
     try { await askHistory(); } catch (error) { setText('ask-login-status', moteText('请求失败，请重试')); throw error; }
@@ -1111,6 +1120,15 @@ async function refreshAsk(): Promise<void> {
     if (askRun?.conversationId) askConversation = await askCall('conversation', {id: askRun.conversationId});
     renderAsk(); if (askRun?.status === 'running') scheduleAskPoll();
   });
+}
+function askConnectionState(): boolean {
+  const connected = Boolean(currentStatus?.config.serverUrl);
+  byId('ask-disconnected').hidden = connected;
+  byId('ask-workspace').hidden = !connected;
+  byId('node-login-panel').hidden = !connected || currentStatus.config.tokenConfigured;
+  byId('ask-logout').hidden = !connected || !currentStatus.config.tokenConfigured;
+  byId('ask-new').hidden = !connected;
+  return connected;
 }
 function scheduleAskPoll(): void {
   clearTimeout(askTimer); const generation = askGeneration;

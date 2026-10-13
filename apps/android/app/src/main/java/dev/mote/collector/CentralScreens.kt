@@ -503,7 +503,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         fun next(value: JSONObject): String? = if (value.isNull("nextCursor") || !value.has("nextCursor")) null else value.opt("nextCursor").toString()
         val pages = listOf(
             "overview" to "中央工作台", "archive" to "中央资料库", "ask" to "问一问", "notes" to "随手记",
-            "materials" to "正式资料", "coding" to "Coding Agent 上传", "timeline" to "片段", "files" to "文件与录音",
+            "materials" to "正式资料", "coding" to "Coding 会话同步状态", "timeline" to "片段", "files" to "文件与录音",
             "memories" to "记忆", "insights" to "洞察", "actions" to "行动", "agentView" to "Agent 视角",
             "sources" to "来源", "devices" to "设备", "connections" to "对外授权", "lark" to "飞书",
             "statistics" to "运行状态", "processing" to "处理任务", "plugins" to "插件", "settings" to "模型与服务",

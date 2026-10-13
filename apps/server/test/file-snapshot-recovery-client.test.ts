@@ -35,6 +35,18 @@ async function firstUpload(options:SourceOptions=DEFAULT_SOURCE_OPTIONS){const v
 function expire(id:string){node.store.db.prepare('UPDATE file_snapshot_inputs SET expires=0 WHERE capture_id=?').run(id);node.files.sweepSnapshotInputs();}
 function identity(id:string,manifest:string){assert.deepEqual(node.store.db.prepare('SELECT capture_id,manifest FROM file_versions').all().map(row=>({...row})),[{capture_id:id,manifest}]);assert.equal(node.store.db.prepare('SELECT COUNT(*) n FROM captures').get()!.n,1);}
 async function recover(value:LocalSourceManager){const before=paths.length;await value.sync(true);assert.equal(paths.length,before,'manual local scan must stay offline');await value.flushPending(new AbortController().signal);assert.equal(value.pendingStats().pendingRecords,0);}
+async function finishPipeline(id:string){
+ let timeout:ReturnType<typeof setTimeout>|undefined;
+ const completing=(async()=>{
+  await node.processing.tick();
+  // A completion wake may have claimed the recovered pipeline before discovery.
+  // Drain that real operation as well, rather than assuming tick discovered it.
+  const pipelines=node.processing.engine.list({operationId:'file:'+id,kind:'files.pipeline',limit:100}).items.map(step=>step.id);
+  assert.equal(pipelines.length,1);await node.processing.engine.drain(pipelines);
+ })();
+ try{await Promise.race([completing,new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(Error('Timed out waiting for recovered pipeline completion')),20_000);})]);}
+ finally{clearTimeout(timeout);}
+}
 
 test('Desktop manual sync restores expired bytes under the same capture/revision/time and never replays completed processing',async()=>{
  const first=await firstUpload();expire(first.id);await node.processing.tick();assert.equal(node.files.detail(first.id).job!.state,'blocked');assert.equal(node.files.detail(first.id).job!.error,'snapshot_input_expired');
@@ -49,7 +61,7 @@ test('Desktop manual sync restores expired bytes under the same capture/revision
 test('Desktop lost ACK plus expired input reuses the immutable pending version without a second capture',async()=>{
  const value=await manager();await value.addFiles(selected,DEFAULT_SOURCE_OPTIONS);await value.sync(true);loseCommitAck=true;await assert.rejects(value.flushPending(new AbortController().signal),/lost ACK/);assert.equal(value.pendingStats().pendingRecords,1);
  const first=node.store.db.prepare('SELECT capture_id,manifest FROM file_versions').get()!;const id=String(first.capture_id),manifest=String(first.manifest);expire(id);await node.processing.tick();await value.close();
- const restarted=await manager();await restarted.sync(true);assert.equal(restarted.pendingStats().pendingRecords,1);await restarted.flushPending(new AbortController().signal);identity(id,manifest);assert.equal(restarted.pendingStats().pendingRecords,0);await node.processing.tick();assert.equal(node.files.detail(id).job!.state,'succeeded');
+ const restarted=await manager();await restarted.sync(true);assert.equal(restarted.pendingStats().pendingRecords,1);await restarted.flushPending(new AbortController().signal);identity(id,manifest);assert.equal(restarted.pendingStats().pendingRecords,0);await finishPipeline(id);assert.equal(node.files.detail(id).job!.state,'succeeded');
 });
 
 test('Desktop manual sync cannot restart cancellation; only explicit owner retry permits same-capture resupply',async()=>{

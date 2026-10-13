@@ -57,6 +57,11 @@ export function FeatureGuide({ api,onPage }: {
     const state=useDiscoveryState(api);
     return <DiscoveryProvider state={state}><div className="feature-guide">
     <div className="page-heading guide-heading"><div className="eyebrow">{moteText("资料、证据与记忆")}</div><h1>{moteText("全部功能")}</h1><p>{moteText("从你想做的事找到入口。接入选中的资料，保留原始证据，再按需要提问、回顾和整理。")}</p></div>
+    <nav className="guide-section-nav" aria-label={moteText("功能分类")}>{guideSections.map((section, index) => <button key={section.id} type="button" onClick={() => {
+      const target = document.getElementById('guide-heading-' + section.id);
+      target?.focus({preventScroll:true});
+      document.getElementById('guide-section-' + section.id)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+    }}><span className="guide-index-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><span><strong>{moteText(section.title)}</strong><small>{moteText(section.description)}</small></span><ArrowRight size={16} aria-hidden="true"/></button>)}</nav>
     <section className="panel guide-start" aria-label={moteText("常用入口")}><div><h2>{moteText("开始一件事")}</h2><p>{moteText("记录想法、加入已有资料，或查看正在做的工作。")}</p></div><div className="guide-quick-links">{quickLinks.map(t => <GuideLink key={moteText(t.label)} target={t} onPage={onPage} primary>{moteText(t.label)}</GuideLink>)}</div></section>
     <aside className="guide-model-start" aria-labelledby="guide-model-start-title">
       <h2 id="guide-model-start-title">{moteText("准备使用 AI 功能？先检查这两处")}</h2>
@@ -71,9 +76,8 @@ export function FeatureGuide({ api,onPage }: {
         <p><strong>{moteText("记忆配方")}</strong>{moteText("定义要整理什么输入、输出何种记忆；")}<strong>{moteText("记忆方案")}</strong>{moteText("是当前运行的整体实现，由可信组件和实例组成。并发、超时及其他执行参数在相应高级设置中按需调整。")}</p>
       </details>
     </aside>
-    <nav className="guide-section-nav" aria-label={moteText("功能分类")}>{guideSections.map(section => <button key={section.id} type="button" onClick={() => document.getElementById('guide-section-' + section.id)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth', block: 'start' })}>{moteText(section.title)}</button>)}</nav>
     {guideSections.map(section => <section className="guide-section" key={section.id} id={'guide-section-' + section.id} aria-labelledby={'guide-heading-' + section.id}>
-      <div className="guide-section-heading"><h2 id={'guide-heading-' + section.id}>{moteText(section.title)}</h2><p>{moteText(section.description)}</p></div>
+      <div className="guide-section-heading"><h2 tabIndex={-1} id={'guide-heading-' + section.id}>{moteText(section.title)}</h2><p>{moteText(section.description)}</p></div>
       <div className="guide-groups">{section.groups.map(group => <Group key={group.id} group={group} onPage={onPage}/>)}</div>
     </section>)}
     <div className="guide-footer"><p>{moteText("采集与系统权限在对应设备设置。原件归档、正文发布、索引和记忆各有状态，可在资料详情与活动中核对。")}</p><GuideLink target={{ pageId: 'activity', href: '#/activity', collectionId: null, categoryId: null, label: moteText("活动"), path: moteText("活动"), where: '' }} onPage={onPage}>{moteText("查看工作进度")}</GuideLink></div>
