@@ -23,9 +23,9 @@
 
 所有执行使用临时 Central / Electron profile 与专用无窗口 `mote_ui_focus_5330_api37` / `emulator-5582`。保留 `FLAG_SECURE`，Android 图只绘制应用自己的窗口，不含系统键盘像素；真实 IME 对应用布局的影响另有操作与几何证据。生成者交接后停止驱动。其任务结束导致 held 进程被工具清理，root 以相同产品重新启动临时 profile 并持续持有，旧 canonical 图片不覆盖。独立三端核心实操与详细补验随后完成，真实 reviewer 和未验边界见评价记录；root 已在明确 release 后清理 Web/Mac 进程及 Android 生成 profile，专用无窗口 AVD 留供下一轮。
 
-## 待完成记录
+## 完成状态
 
-候选 2～5、最终受影响检查及可移动 ZIP 验证将按实际完成后追加。未执行的内容不作为已验证结果。
+五轮均已实际构建、采图与独立评价，逐轮记录如下。最终受影响检查与离线包验证按实际结果另记。
 
 ## 未验证范围
 
@@ -57,3 +57,41 @@
 实际源码提交：`b47938b44da5ccedeac9d7376c48acbb264b96a2`。三端保留本轮实际 producer 提交；如单端修复，采用实际 Git 输入等价证明，未借用其他轮图片。本轮 producer：Web `b47938b44da5ccedeac9d7376c48acbb264b96a2`、Mac `ad503028863294217b02c799f987d1f5f60027db`、Android `5bf1fbf944abaca4a1fa671a193b99606a77db99`。Web / Mac 各 32 张核心图；Android 四条件共 86 张应用自有窗口图，核心 32 张，矩阵 12 项通过、0 跳过；连接返回回归 16 项通过。Web 47 个实际脚本旅程、Mac 15 个；独立手动操作、八项评分与限制见评价报告该轮记录。
 
 构建 / 源码 / 原始图 / 内容就绪状态 / 旅程证据保存于 `.mote/ui-art-direction/r4`；独立评估证据保存于 `.mote/ui-art-direction/evaluator/r4`。产品 APK SHA256：`c6a1305eb29b6af5da9059e23ae7e9c356d1321df19a5cce02992428f425fac0`。应用自有窗口绘制不包含系统键盘像素；真实 IME 布局在矩阵中单独执行。无实机、个人资料、真实模型或真实账号检查。
+
+
+## 候选 5：细节与节奏
+
+实际源码提交：`68fe663476f1b37fa0aceb7d051969c23659ec45`。三端保留本轮实际 producer 提交；如单端修复，采用实际 Git 输入等价证明，未借用其他轮图片。本轮 producer：Web `7afc4b97cd8bc27a410370359091975439a48b45`、Mac `7afc4b97cd8bc27a410370359091975439a48b45`、Android `68fe663476f1b37fa0aceb7d051969c23659ec45`。Web / Mac 各 32 张核心图；Android 四条件共 86 张应用自有窗口图，核心 32 张，矩阵 12 项通过、0 跳过；连接返回回归 16 项通过。Web 55 个实际脚本旅程、Mac 15 个；独立手动操作、八项评分与限制见评价报告该轮记录。
+
+构建 / 源码 / 原始图 / 内容就绪状态 / 旅程证据保存于 `.mote/ui-art-direction/r5`；独立评估证据保存于 `.mote/ui-art-direction/evaluator/r5`。产品 APK SHA256：`522cee74bc0fa23166482471bdcefea29a39cd5adc19f42171e46ef2ca94d928`。应用自有窗口绘制不包含系统键盘像素；真实 IME 布局在矩阵中单独执行。无实机、个人资料、真实模型或真实账号检查。
+
+
+## 第五轮补验与真实生命周期修复
+
+最终 Android 源码 / 聚合候选为 `68fe663476f1b37fa0aceb7d051969c23659ec45`，Web / Mac 实际构建和详细实操保留本轮 `7afc4b97` producer，复核时聚合候选为 `0110434e`；最终再次逐项核验共同与本端生产输入，Web 1282、Mac 1235 个 Git blob 完全相同。没有改写旧构建身份，也没有借用其他轮图片。
+
+Android 末轮完整验证：313 JVM、12 页面矩阵、16 原任务返回、8 新阅读窗口生命周期回归、24 弹窗动作和 180 个真实边线像素样本通过；最终补充旅程 15 通过、2 项既有可选检查跳过。紧凑中英两组明确区分 Unicode fixture `setText` 与真实 ASCII key events，在真实 IME 保持显示时滚动并触摸保存，再逐字核对原文和实际父页返回；没有系统键盘像素采集。第一次输入会话时序失败保留于 `r5/android-ime-attempt-7afc4b97`，没有降低原文或触摸门槛。
+
+独立终评在旧 `0110434e` 发现真实问题：关闭原文到列表后，系统字体 / 密度变化引起重建，原文再次自动打开。旧产物与原始 61 / 62 UI 证据保留于 `r5/android-lifecycle-attempt-0110434e` 及独立评估目录。修复仅保存实际显示中的原文 ID / 本机或中央标志；首次 Intent 与恢复状态分开，关闭后不重放 Intent，仍打开的原文可按原 ID 继续读取。正文、client 和 token 不进入 Bundle，中央原文不回退读取本机。四个条件的打开 / 关闭两状态共 8 条真实产品入口回归通过，关闭后的日期和来源保持；独立评审另以系统配置两次变化验证关闭保持列表、打开保持逐字原文 / 来源 / 时间，再 Close → Content → Home。真实账号的远程读取恢复未验证。
+
+Web 最后 55 个实际脚本旅程通过，新增附件限制直接可见、具名完整处理说明在中英四尺寸实际展开 / 折回；32 核心图来自 158 张本轮真实图。独立实操另验证真实 200% 浏览器 zoom：720×484 CSS、DPR4，实际 Tab / Enter 保存、精确原文、完整帮助、Escape 同来源焦点、设置职责及模型设置原任务返回通过，恢复 zoom1 后再次确认 1440×968 / DPR2。不是 CSS 缩放或仅窄视口模拟。
+
+Mac 32 核心图 / 15 矩阵旅程及完整 UI smoke、45 请求的同步历史 smoke 通过；本轮完整 native helper / updater / icon 与 Electron 构建完成。实际完整标签边界与菜单图标在四条件中核验。独立中英窄窗键盘保存、原文 / 帮助、同 opener 焦点、草稿重载、Keep / Discard、原任务返回、导入预览后取消、停止状态与范围入口通过。最初后台 wrapper 语法失败发生在夹具初始化前，原文件和日志保留；修复 wrapper 后执行原断言，不冒充产品故障。
+
+## 最终受影响组件检查
+
+`npm run check:affected -- --base b52d6275` 通过，包含 `check:local` 和 Android Debug JVM。完整 TypeScript 消费者检查无失败，两个既有条件跳过另列于原日志；Android Debug 66 suites / 313 tests，0 failure / error / skip。本次完整检查始于 `7afc4b97`，期间仅 Android fixture 输入会话顺序改为 `0110434e`，全部 TypeScript 生产输入不变。
+
+之后分别执行受影响增量检查：`--base 7afc4b97 --head 0110434e` 通过（Gradle up-to-date，不当作第二次实际单测）；`--base 0110434e --head 68fe6634` 通过，阅读窗口生产修复的 Debug JVM 313 实际重跑。8177 条中英文文案与 Android catalog 同步检查通过。完整命令日志及 SHA 保存于 `.mote/ui-art-direction/final-checks.json`。
+
+三端最终评审明确释放后，Root 已精确关闭本次 Web / Mac 进程、清理对应生成 profile 和 Android Dev 资料，只停止专用 `emulator-5582` / `mote_ui_focus_5330_api37`；四个 Root 持有会话均已退出。物理设备、真实个人采集、真实模型 / 外部账号、真人审美 / 首次理解与完整无障碍研究未执行。
+
+## 最终离线候选页与 ZIP
+
+完整候选页包含 573 张实际原图：93 张历史基线和五轮各 96 张。五个候选的三端 / 中英文 / 常规与窄屏共 60 个组合，各 8 个场景，哈希、内容就绪状态、实际加载与逐场景切换全部通过。历史基线缺少的三张 Web 原文图明确标注，不用其他轮或场景替代；五个新候选矩阵完整。
+
+隐藏 Chromium 实际打开原目录的 file 页面，验证两轮对照、三端并看、原始像素放大 / Escape、本地倾向的保存 / 刷新、导出格式和 390px 无横向溢出；外部请求为 0。只验证导出格式，未操作系统下载对话框。报告标题与候选说明的格式整理后，重新生成并重复这些检查。
+
+ZIP 仅含 9 个静态页面 / 报告文件和 573 张原图，共 582 个文件，CRC 及每张原图 SHA-256 通过。实际解压到一个全新移动目录，再以 `--folder` 打开移动后的 file 页面，以上 573 原图 / 60 组合及交互检查再次通过，外部请求为 0。包大小为 95,382,150 bytes，SHA-256 为 `34761efb75cd18e5ecf16311dfc276cb865de5c94090c289a5e5d311a0526fde`；原目录与解压移动页的 manifest SHA-256 均为 `3fbca2f3bb95a9425b576379a461824211bce4e279170f8395e8da985e4b7bda`。
+
+交付位于忽略目录 `.mote/ui-art-direction-review/index.html` 和 `.mote/ui-art-direction-review.zip`。最终证明为 `.mote/ui-art-direction/r5/{gallery-validation.json,portable-gallery-validation.json,package-validation.json}`，前一次格式整理前的通过结果另存，不覆盖为失败或扩大验证范围。此节是验证记录，不在 ZIP 内；记录追加后没有改变已验证的页面 / 报告 / 图片字节。

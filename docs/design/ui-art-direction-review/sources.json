@@ -237,7 +237,7 @@
         ]
       },
       "jointScore": 8,
-      "notes": "压低辅助色和重复标题，三端原文与来源/时间更靠前。,Android窄屏顶栏完整分行，同步信息按queue/policy/facts分角色。,仍有badge换行、辅助绿色和英文单数；第5轮校准细节并做末轮完整验证。",
+      "notes": "压低辅助色和重复标题，三端原文与来源/时间更靠前。Android窄屏顶栏完整分行，同步信息按queue/policy/facts分角色。仍有badge换行、辅助绿色和英文单数；第5轮校准细节并做末轮完整验证。",
       "web": {
         "root": ".mote/ui-art-direction/r4/web",
         "manifest": ".mote/ui-art-direction/r4/web/result.json",
@@ -253,6 +253,60 @@
         "manifest": ".mote/ui-art-direction/r4/android/image-manifest.json",
         "sourceCommit": "5bf1fbf944abaca4a1fa671a193b99606a77db99",
         "apkSha256": "c6a1305eb29b6af5da9059e23ae7e9c356d1321df19a5cce02992428f425fac0"
+      }
+    },
+    {
+      "id": "r5",
+      "title": "候选 5",
+      "theme": "细节与节奏",
+      "sourceCommit": "68fe663476f1b37fa0aceb7d051969c23659ec45",
+      "status": "reviewed-candidate",
+      "scores": {
+        "web": [
+          8,
+          6.5,
+          8,
+          8.5,
+          8,
+          8.5,
+          8
+        ],
+        "mac": [
+          8,
+          6.5,
+          8.5,
+          8.5,
+          8,
+          8.5,
+          8.5
+        ],
+        "android": [
+          7.5,
+          6.5,
+          7.5,
+          8.5,
+          7.5,
+          8.5,
+          8
+        ]
+      },
+      "jointScore": 8,
+      "notes": "统一菜单图标、完整状态标签和原文阅读节奏；附件既有限制直接可见，全文帮助可展开。实际键盘、200%缩放、草稿和任务返回已复核；Android原文关闭后重建误开已同轮修复。跨端共同风格8分；窄屏长说明、编辑区高度和部分动作/辅助色仍有差异，五轮均供选择。",
+      "web": {
+        "root": ".mote/ui-art-direction/r5/web",
+        "manifest": ".mote/ui-art-direction/r5/web/result.json",
+        "sourceCommit": "7afc4b97cd8bc27a410370359091975439a48b45"
+      },
+      "mac": {
+        "root": ".mote/ui-art-direction/r5/mac",
+        "manifest": ".mote/ui-art-direction/r5/mac/manifest.json",
+        "sourceCommit": "7afc4b97cd8bc27a410370359091975439a48b45"
+      },
+      "android": {
+        "root": ".mote/ui-art-direction/r5/android",
+        "manifest": ".mote/ui-art-direction/r5/android/image-manifest.json",
+        "sourceCommit": "68fe663476f1b37fa0aceb7d051969c23659ec45",
+        "apkSha256": "522cee74bc0fa23166482471bdcefea29a39cd5adc19f42171e46ef2ca94d928"
       }
     }
   ]

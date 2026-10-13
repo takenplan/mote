@@ -2,13 +2,13 @@
 
 本文件逐轮记录实际构建、操作、八项判断与取舍。五个方案均供用户选择，独立模型评价不是用户接受。
 
-# 五轮美术方向迭代：独立评估初审与固定合同
+## 初审与固定合同
 
 评估者：preview_audit。日期：2026-10-13。本文件不修改产品或预览生成器。
 
 用户已明确推翻上一轮的审美接受。F2 / D3 / R10 的历史独立操作与当时分数保留，但**8.5 不作为本轮起点或已获用户认可的证明**。此次没有正在运行的隔离 fixture，初审重新目视实际冻结 PNG。基线 Functionality 使用同一冻结版本此前独立实际操作的 trace，再结合本次动作可识别性重判，明确本次没有重跑；不会把此前通过带到任何新候选。五轮均须有真实三端候选、独立反馈和逐项分数，即使中途分数达标也不把其余轮次省略或倒填为同一批图。
 
-## 网上调研与采用边界
+### 网上调研与采用边界
 
 - Apple HIG 把重要性、对齐、分组与渐进呈现联系起来：空白、容器、分隔线都能表达关系；过多内容和选择会妨碍理解。这支持压缩重复说明、整理层级，而不是统一加卡片或隐藏功能。[Layout](https://developer.apple.com/design/human-interface-guidelines/layout?changes=lat_3__1_2)
 - Apple 字体指南强调用字号、字重和颜色表达层级，并在字体放大时维持相对关系。系统字体可不同，但内容/标题/辅助说明的角色应清楚。[Typography](https://developer.apple.com/cn/design/human-interface-guidelines/typography)
@@ -19,7 +19,7 @@
 
 这些是设计参考，不是 Mote 产品政策。不会照搬 Carbon 的单主按钮规则来删除 native 四个平等保存动作，不强制新依赖/框架、同一字体文件、相同像素布局或 Liquid Glass。三端真实功能与交互习惯可不同；同一角色的美术语言需要能解释为同一个产品。
 
-## 当前截图的具体问题
+### 当前截图的具体问题
 
 初审重新打开以下真实图，兼看上一轮三端接触图：Web F2 `populated-home/settings/providers-en-1440`，Mac D3 `en-normal-home/note-composer/reader`，Android R10 `english/home/settings` 与 `compact-english/note-return-list`。文件来自各自冻结 manifest，没有重新合成产品图或启动用户界面。
 
@@ -34,7 +34,7 @@
 
 这些判断是评估者基于图像的诊断与推断。它们不证明用户会按同样路径理解，也不以官方指南推导出用户必须喜欢哪种风格。
 
-## 初审重新评级（视觉范围）
+### 初审重新评级（视觉范围）
 
 本轮不继承历史8.5。基线 Functionality 有此前同版本保存/返回的独立实操依据，同时对当前可理解性与使用摩擦重新判断；这里没有新执行任何fixture，更不代表R1功能验收。候选每轮需fresh实操。
 
@@ -48,7 +48,7 @@
 
 新的三端共同美术风格初评 **4/10**：有共同蓝灰基础，但角色、字形/密度、形状与品牌表现分裂。该分是三端合看结果，不是三端平均分。
 
-## 第八项建议：跨端统一美术风格
+### 第八项建议：跨端统一美术风格
 
 评估同一候选轮中的 Web/Mac/Android 是否呈现同一个产品的美术语言：字体层级、色彩角色、表面与边界、形状家族、图标/品牌、留白与信息节奏，以及这些规则如何落到首页、表单、列表、原文、限制与设置。只看已有shared token不足以得分，必须看真实渲染。
 
@@ -65,7 +65,7 @@
 
 不由评估者自定用户接受分。若owner仍保留各旧目标，应逐项报告差距；哪怕8项都达到目标，结论只能是模型建议，不能写“用户已经接受”。五轮始终使用同一锚点，不在第4/5轮放宽条件或调权重。
 
-## 五轮固定审查清单
+### 五轮固定审查清单
 
 每轮都审以下同一清单，不能用不同焦点代替全套评审：
 
@@ -80,7 +80,7 @@
 9. **主要旅程保持**：保存、回原文、草稿、取消/返回、功能目录与配置任务origin可用；设置不重新混入记录仪表盘，进入页面不启动授权/采集。
 10. **证据可比**：round/build/APK/source、locale/viewport/font/DPR、page/state/marker、PNGhash、实际交互日志明确；没有借用上一轮图补当前缺项。无效/历史图有原因，first-view与滚动后图不混称同一首屏。
 
-## 每轮最低真实操作
+### 每轮最低真实操作
 
 评估者单独接手known generated后台fixture，生成者停止驱动；三端全部完成后算该轮反馈，不由截图脚本自己打分。
 
@@ -92,7 +92,7 @@
 
 五轮每次unique记录带round编号，不沿用上一轮截图。功能catalog/source/import/screen关键族可由每轮现有真实fixture自动旅程覆盖，评估者R1/R5至少实际打开目录及一个file/scope预览，R2–R4至少打开一项新增或主要修改的功能入口；区分本人实操与生成者脚本，不要求外部账号/实机/模型。新增用户发现缺陷加入持久回归。
 
-## 每轮最低截图与状态矩阵
+### 每轮最低截图与状态矩阵
 
 保持固定同类生成内容和稳定文件名。四条件为ZH/EN × normal/compact：Web1440×968/390×812，Mac实际CSS1140×808/820×588（外窗1140×840/820×620，DPR2），Android411dp@420dpi-font1/320dp@540dpi-font1.3（实际PNG1080×2400）。首屏单独记录；为检查下方内容另外保存scroll状态，不能用scroll状态伪称首屏。
 
@@ -107,24 +107,24 @@
 
 PNG可解码和hash一致不构成ready。必须目标页、loaded/empty/restriction/error consumer标记明确且排除pending/suspense，错误/loading若保留按该状态单独命名。Android用app-owned完整window和实际dialog几何/parent证据；不使用adb screencap，不移除FLAG_SECURE；IME应用布局图明确不包含系统键盘像素。base/overlay secure范围分别写，不能说所有叠层secure。
 
-## 每轮交付字段
+### 每轮交付字段
 
 候选R1…R5各有冻结manifest/源码或APKhash、候选图、生成者变更假设、独立8项评分与具体缺陷、实际操作范围/未验范围、对上轮反馈的处理与下一轮决定。记录“保留/修正/转向”及证据，不用5个版本名包装一次生成。第5轮即使未达目标也如实报告差距，并把全部5个候选保留可看；未执行实机/live-model/真人理解不会被综合分隐去。
 
-## Owner合同对齐
+### Owner合同对齐
 
 已读 docs/design/ui-art-direction-five-rounds.md。共同方向与token角色由owner确定，本初审不另设新产品导航/功能政策；第8项8.5按owner合同作为努力目标，仍不凑分。R1共同语法、R2密度、R3边界、R4重点、R5细节只作为演进主题；每轮八项均审，按实际反馈调整主题。详细生命周期首末轮执行，其他轮保留表中真实核心操作，不能只审缩略图。
 
 
 ---
 
-# R1：共同视觉语法，独立八项评审
+## 候选 1 · 共同视觉语法
 
 R1 建立了可辨认的共同基础：冷灰背景、白色带边界的内容面、深色系统无衬线标题、蓝色动作和选中态、线性图标。仍有明显的密度与角色断裂，**不能写成用户已接受**。本轮各端功能核心能够完成；Android 的真实 Ask 配置返回丢失原任务是需要明确修正的摩擦。评分从当前真实候选重新判断，没有继承之前的 8.5。
 
 聚合候选：`5d5f076e9067bacf03b2ad76212d4e832fb665ec`。实际 producer 保持 Web `2b17e6e20821a773779acceb5bd7384523546aac`、Mac `5e4c1724362d939841da9d3afb10b60eb5a8f3cf`、Android `5d5f076e9067bacf03b2ad76212d4e832fb665ec`。Web/Mac 对聚合候选的各 1450 个生产输入 Git blob 已由 `/root/preview_audit` 独立逐项验证相同，证明记录分别为 `web-equivalence-independent.json`、`mac-equivalence-independent.json`。不倒填原 producer / manifest / PNG 来源，也不借用跨轮图片。
 
-## 八项分数
+### 八项分数
 
 固定七项依次为：设计质量、原创性、工艺、功能性、第一眼清晰与完整、页面职责与聚焦、端内一致性与平台适配。第八项对同一轮三端共同角色独立给分；不是七项平均，没有总分或权重。
 
@@ -136,7 +136,7 @@ R1 建立了可辨认的共同基础：冷灰背景、白色带边界的内容�
 
 联合项 **7/10**：符合固定锚点“多数共同角色已成立，仍有明显断裂”。标题、白内容面、蓝色填充/描边按钮、蓝选中底和线性图标已使三端比旧三套风格更像同一产品；Mac 的 serif / 纸页书脊已离开核心，Android 四动作外框和组内分隔连续，未观察到所怀疑的 child 白色遮角。剩余问题是 Web 原文/Ask/composer/导入辅助区域的绿色或橄榄色，与其他端蓝灰共同角色脱节；阅读对象、正文、状态和帮助的权重不同且重复，使三端资料读取呈现不连续。Android Import 标题/普通文字偏灰且与其他核心标题层级不同；Mac 读者先遇到四阶段状态与重复题文，Web 读者再遇到绿色类型与来源，Android 原文框直接可读却父列表有厚重重复 scaffold。平台 native nav/IME/窗口尺寸的合理差异不要求像素相同，不能用它解释辅助色和同角色层级漂移。
 
-## 独立评审者与证据
+### 独立评审者与证据
 
 | 范围 | 实际评审者 | 实际方法与报告 |
 | --- | --- | --- |
@@ -147,7 +147,7 @@ R1 建立了可辨认的共同基础：冷灰背景、白色带边界的内容�
 
 每个 reviewer 是独立评审角色，Web/Android 操作不冒充 parent 本人操作；生成者没有给本轮分数。先前 held进程消失是交接生命周期问题，root复开同候选、持续持有新生成profile后才开始核心实操，原canonical图片未替换。只用生成资料、隐藏fixture，不使用用户前台或 private auth。
 
-## 实操结论与 R2 优先项
+### 实操结论与 R2 优先项
 
 1. **Android 修正真实任务返回。** 独立两次 Home→Ask→Connection settings→真实 Back to parent，结果是 Settings hub。可手动底栏Ask恢复，不阻断本地保存或原文，但打断原任务；Functionality和Page focus已扣分。Web与Mac真实来源返回均通过。R2按已有真实origin/directSettings差异修复，保留草稿离开确认，并加实际入口的持久回归。
 2. **资料更早进入视野。** Mac列表同段title与preview重复、reader又显示同段title与正文，正文前四段处理状态和单独说明占空间。Android日期页title/help/filter/date/prev-next/count/Refresh/time/type/status层叠，compact正文要再滚动；Web Library同类记录卡只有类型/来源/完成，无区别正文预览。按对象/正文/来源/时间/状态给唯一职责，减少无信息增量重复；不能把真实限制、错误、发送目标/范围、保留规则移到不可发现处。
@@ -157,7 +157,7 @@ R1 建立了可辨认的共同基础：冷灰背景、白色带边界的内容�
 
 KEEP：四种平等保存动作、Android原生导航/IME、原文/来源/时间、草稿与明确开始、真实离线/模型限制、发送/保留政策、已经修好的日期和Provider长label。没有在评审中改产品、生成器或gallery。
 
-## 验证边界与释放
+### 验证边界与释放
 
 - Web true200%仅看producer真实Home图；独立390/320操作不能冒充true-browser zoom，Provider/Settings true200%未独立实操。503/慢请求/signed-out是producer证据，不写成reviewer注入。
 - AndroidPNG来自真实应用自己的View/窗口，不包含OS键盘像素；IME状态实际输入/应用insets另验，swipe会先收键盘再露出Save，不写成键盘保持时保存。base secure与overlay实际flags分开，几何不单独证明Activity parent或安全范围。reader父关系由实际Close/树/真实Back证明。
@@ -171,13 +171,12 @@ R1记录完整，下一轮可按上述优先问题继续；用户尚未选择任
 
 ## 候选 2 · 扫读与密度
 
-# R2：扫读与密度，独立八项评审
 
 本轮减少了设置和阅读页的重复说明。Mac 与 Android 的原文更早进入视野，设置菜单开始按相关职责成组；配置的完整帮助仍可展开，重要限制和操作直接可见。真实保存、原文回读和来源返回通过，Android Ask 配置返回丢失原任务的问题已在本轮正常与窄屏实操中修正。**美术风格仍有明显断裂，用户尚未选择候选。**
 
 聚合候选 `10d28e60aaaff205d3871594d3fa5a4d07664658`。Web实际 producer为同一提交，Mac/Android实际 producer为 `6854f25904d924b406fdbf1843ae74a5ab420e15`。两提交唯一改动是隐藏 Web fixture 获得键盘焦点的测试前提；Mac1235、Android1349个声明生产输入的实际 Git blob 已由 `/root/preview_r2` 独立重核逐项相同。原 manifest、APK、PNG来源保持原 producer，没有借用前轮图片。本文只使用冻结的R2资料，未使用之后R3 workingtree。
 
-## 八项分数
+### 八项分数
 
 固定七项依次为设计质量、原创性、工艺、功能性、第一眼清晰与完整、页面职责与聚焦、端内一致性与平台适配。联合项单独直接判断，没有总分、权重或平均。
 
@@ -189,7 +188,7 @@ R1记录完整，下一轮可按上述优先问题继续；用户尚未选择任
 
 联合项 **7/10** 未随轮次自动提高。共同灰白蓝、无衬线、线性图标已成立，信息层次变得接近；Web残留淡绿/橄榄辅助面、重复reader层级，Android灰色Import标题、不同顶栏与own-window对话框U形描边，以及Mac同组菜单图标例外，仍对应固定7分锚点。`/root/preview_r2`亲自合看48张同轮英文共同角色图，未从token哈希相同或平台分数平均推出联合项；详见 `joint-independent-review.md` 与 `joint-visual/index.json`。
 
-## 实际评审与证据
+### 实际评审与证据
 
 | 范围 | 实际评审者 | 本轮实际范围 |
 | --- | --- | --- |
@@ -208,7 +207,7 @@ Mac保存后Notes出现完成提示，进入Settings时没有遗留提示；但�
 
 错误gate/locator及旧壳观察保留并排除完成证明：Web18模块旧门槛只捕获旧Provider壳，原PNG不作为完成页，21按真实模块标题/内容补证；Mac06/12/15/18错误marker均false且无完成PNG，后续根据实际观察补证；Android初始实际为English，错误ZH gate保留诊断后改用真实marker。详见各端报告。没有重写失败raw记录或用它们提高评分。
 
-## R3的具体反馈
+### R3的具体反馈
 
 1. 把外壳、操作描边、组内分隔分成稳定角色；Android own-window对话框动作上边缺失需定位绘制/裁剪原因并加入真实几何回归，不能先宣称系统渲染故障已证实。
 2. 同职责顶栏、菜单图标和返回提示连续；Android Main/子Activity层级、灰色Import标题，Mac Permissions图标例外与Ask配置breadcrumb应明确修正。
@@ -217,7 +216,7 @@ Mac保存后Notes出现完成提示，进入Settings时没有遗留提示；但�
 
 KEEP：原文/来源/时间、实际处理/发送/保留/离线限制、四个平等保存动作、草稿/返回、完整帮助与明确开始。R2–4按实际核心与受影响变化验证；未重演R1全部生命周期或宣称完整错误状态覆盖。
 
-## 验证边界与释放
+### 验证边界与释放
 
 没有实机、真实个人采集/账号/传输/模型、真人初看实验或完整无障碍认证。R2未独立重做true200%浏览器缩放、应用重启与完整语言持久性；两语言视觉矩阵来自本轮真实canonical。模拟器、生成资料和fixture不能扩大为这些验证。
 
@@ -226,13 +225,12 @@ KEEP：原文/来源/时间、实际处理/发送/保留/离线限制、四个�
 
 ## 候选 3 · 边界与分隔
 
-# R3：边界与分隔，独立八项评审
 
 本轮的操作描边、轻容器外框与浅组内分隔开始形成稳定关系。Mac 同组图标和真实原任务路径更连续；Android 原生对话框按钮被真实布局裁切的问题已在本轮修复。**三端仍有色彩、顶栏和阅读层级的断裂；用户尚未选择候选。**
 
 聚合候选 `f628484e02b5c6975a896e35de247c5162afd725`。Web/Mac实际producer为 `f63f2a23c3ee7128a22caf39c51990a1e807d585`，Android实际producer为聚合提交。两个提交的改动仅为Android NativeUi和GeneratedWindowRendering；父评审实际逐项重核Mac1235、Web1281个声明生产输入Git blob全部相同。原manifest/PNG/构建来源不改写；失败f63 Android图未用于正式候选评分，没有借用前轮图。
 
-## 八项分数
+### 八项分数
 
 固定七项依次为设计质量、原创性、工艺、功能性、第一眼清晰与完整、页面职责与聚焦、端内一致性与平台适配。联合项单独直接判断，无总分、权重或平台平均。
 
@@ -244,7 +242,7 @@ KEEP：原文/来源/时间、实际处理/发送/保留/离线限制、四个�
 
 联合项7.5来自本轮具体角色连续性的改善，不是按轮次涨分。父评审亲自合看48张同轮英文共同角色图（8场景×常规/窄屏×三端），并细看重点全图。操作/容器/分隔层级已更清楚，Android完整原生对话框顶边与Mac菜单语法解决已观察缺口；Web非状态绿色、正文前重复支架、Android嵌入Ask顶栏仍使其低于8.5努力目标。详见 `joint-independent-review.md` / `joint-visual/index.json`。
 
-## 实际验证范围
+### 实际验证范围
 
 | 平台 | 实际评审者 | 本轮范围 |
 | --- | --- | --- |
@@ -258,7 +256,7 @@ Android生产方的24完整layout/global-visible bounds及顶部RGBA样本证明
 
 无本轮所验主旅程阻断。错误评审gate/locator完整保留且不作产品失败或完成截图：Web4错误gate+1移动locator，15模块过渡旧Provider壳排除，22真实模块consumer补证；Mac6错误gate+2before-only locator，由06b/08b/09c/13b/15b实际consumer补证；Android5错误就绪假设及正确后续UI-tree/selected状态明确区分。没有把错误gate或过渡PNG包装成完成证明。
 
-## R4的具体反馈
+### R4的具体反馈
 
 1. Web Ask/Import的非状态绿色、reader遮罩和少量指示归入共同角色；Mac推荐标签也审视共同辅助角色。错误/成功等真实状态色保持语义。
 2. 原文/来源/时间优先；Web reader重复类型和前置处理/Memory动作应压缩层级，实际处理/提取边界仍清楚。Android内容/近期行重复类型可去重。
@@ -267,7 +265,7 @@ Android生产方的24完整layout/global-visible bounds及顶部RGBA样本证明
 
 KEEP：真实内容/来源/时间、功能目的地、原任务返回、保存和处理边界、完整选项与完整帮助；不引入处理/保留/发送政策。没有用不同轮的图或纯token相同推出用户接受。
 
-## 未验证和释放
+### 未验证和释放
 
 这是中间轮的核心与受影响变化复核，未独立重演R1/R2全部生命周期、语言重启、全部指南和完整错误/高级配置状态。Web/Mac独立键盘/IME、true200%缩放未重验；Android本轮独立compact IME与全部下拉展开未重验，四条件实际矩阵审图和生产方脚本验证另外声明。制作方自动旅程不能冒充独立实操。没有实机、真实个人采集/账号/传输/模型、真人审美/首次理解实验或完整无障碍认证。
 
@@ -276,13 +274,12 @@ KEEP：真实内容/来源/时间、功能目的地、原任务返回、保存�
 
 ## 候选 4 · 视觉重点
 
-# R4：视觉重点，独立八项评审
 
 第四轮的蓝色动作、冷中性色和原文优先层级更连续，Android 窄屏顶栏的标题与动作已分行完整显示。**仍有英文窄屏密度、少量辅助绿色、badge 换行与图标区分缺口；用户尚未选择候选。**
 
 聚合候选 `b47938b44da5ccedeac9d7376c48acbb264b96a2`。实际 Web producer 为聚合提交；Mac 为 `ad503028863294217b02c799f987d1f5f60027db`，Android 为 `5bf1fbf944abaca4a1fa671a193b99606a77db99`。差异只有公共 UI fixture 脚本的真实帮助、原文顺序与键盘焦点前提断言；父评审逐项重核 Mac1235、Android1349 个声明生产输入 Git blob 全部相同。没有改写原 manifest / PNG / 构建身份，没有借用前轮图片；失败 fixture 尝试不用于正式候选评分。
 
-## 八项分数
+### 八项分数
 
 固定七项依次为设计质量、原创性、工艺、功能性、第一眼清晰与完整、页面职责与聚焦、端内一致性与平台适配。联合项直接判断，没有总分、权重或平台平均。
 
@@ -294,7 +291,7 @@ KEEP：真实内容/来源/时间、功能目的地、原任务返回、保存�
 
 联合项8来自父评审亲自核验合看的48张同轮英文共同角色图：8场景 × 常规/窄屏 × 三端，并细看重点完整图。蓝动作、中性辅助角色、规则边界及原文/来源/时间的阅读关系更连续；平台导航与系统字体差异有职责依据。仍未到9分锚点：Web残余辅助绿和窄屏说明、Mac badge 换行、Android英文数词与复用菜单图标尚有缺口。详见 `joint-independent-review.md` / `joint-visual/index.json`。这不是用户接受或真人首次理解研究。
 
-## 实际验证范围
+### 实际验证范围
 
 | 平台 | 实际评审者 | 本轮范围 |
 | --- | --- | --- |
@@ -306,7 +303,7 @@ KEEP：真实内容/来源/时间、功能目的地、原任务返回、保存�
 
 错误评审gate与过渡诊断完整保留并排除completed证据：Web27后置records中21正确ready、6错误gate；Mac22中19正确ready、3错误gate；Android26中19明确ready、3错误gate、4无explicit gate诊断。失败的consumer预期分别经观察的实际消费者补证，未设gate的诊断不作为completed页面证明，失败gate没有完成页PNG，不作为产品失败或完成证明。制作方脚本旅程另行声明，不能冒充以上独立实操。
 
-## R5的具体反馈
+### R5的具体反馈
 
 1. Web实际辅助角色 `.icon-button` 颜色 `rgb(139,145,135)`、`.language-selector select` 描边 `rgb(220,227,221)`、`.node-button` 上边线 `rgb(219,227,216)`；按角色校准，不覆盖真实success/error。英文390编辑页的tool/page节距及常驻附件说明偏重，既有文件/不能现场录音/归档顺序/50MiB限制继续直接可知，完整教学具名可达。
 2. Mac窄屏Quick notes及中文类型badge、Saved locally状态badge换行拥挤；调整自然宽度与节距，保留真实内容/状态，不缩小原文字号或隐藏状态。设置菜单图标可再区分。
@@ -314,8 +311,50 @@ KEEP：真实内容/来源/时间、功能目的地、原任务返回、保存�
 
 KEEP：真实来源/时间/原文、完整政策/范围/发送后果、实际状态、具名完整帮助、草稿/原任务返回。CHANGE只包括辅助角色、自然换行、图标区分和节奏；不新增处理/保留/发送政策或产品默认。R5最后一轮重验键盘/缩放/高风险生命周期与限制。
 
-## 未验证和释放
+### 未验证和释放
 
 本轮是中间轮核心与变化复核，未独立重演全部未改生命周期、语言重启、全部指南、全部高级/慢加载/错误/运行状态。Web新真实UI note未携带非空windowTitle，非空窗口标题本轮只核源码条件行与已有canonical静态范围，不声称独立manual positive；来源/时间/索引/隐私及原文顺序实际已验。Web/Mac独立键盘/IME/true200%本轮未重验；Android系统IME像素未采，只用自己的真实窗口PNG与实际输入/UI-tree分别说明。没有实机、真实个人采集/账号/传输/模型、真人审美/首次理解实验或完整无障碍认证。
 
 **三端已显式release给Root**：Mac中文Home实际滚回顶部1140×808DPR2；Android英文Home顶端selected=true、实际density420/font1.0，sync已折回、脏配置真实Discard、note保存后空、采集未开始；Web中文Home且草稿空/配置未改，27已clear device metrics但同一步末snapshot仍390×812DPR2，异步恢复正常尺寸未fresh验证，早先normal恢复声明明确撤回。Root决定接管后精确关闭本轮Web/Mac及清除生成profile/ownDev状态，不额外补normal尺寸实操。评审未杀Root-owned fixture或AVD。
+
+
+## 候选 5 · 细节与节奏
+
+
+第五轮的菜单图标、完整状态标签、原文阅读和附件限制更清楚。三端共同视觉语法已成立，仍有窄屏长说明、编辑区高度和少量辅助色/动作强调差异。**联合项为8，未强求8.5；用户未选择候选。**
+
+最终聚合源码 `68fe663476f1b37fa0aceb7d051969c23659ec45`。Web/Mac实际producer为同轮 `7afc4b97cd8bc27a410370359091975439a48b45`，详细操作在当时聚合 `0110434eb5eee05e43040911c5f8eaa6a1978420` 下完成，原记录未改写。Android修复后实际producer为最终源码，采用全部新manifest/PNG/APK。父评审在最终handoff后亲自重核Web1282、Mac1235个声明的生产/共同输入Git blob全部相同，保留同轮已完成构建与操作；没有借用其他轮图片或冒称重新构建。
+
+### 八项分数
+
+固定七项依次为设计质量、原创性、工艺、功能性、第一眼清晰与完整、页面职责与聚焦、端内一致性与平台适配。第八共同项直接判断，无总分、权重或平台平均。
+
+| 平台 | 设计 | 原创 | 工艺 | 功能 | 第一眼 | 职责/聚焦 | 端内/平台 | 跨端统一美术风格 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Web | 8 | 6.5 | 8 | 8.5 | 8 | 8.5 | 8 | 8（联合项） |
+| Mac | 8 | 6.5 | 8.5 | 8.5 | 8 | 8.5 | 8.5 | 8（联合项） |
+| Android | 7.5 | 6.5 | 7.5 | 8.5 | 7.5 | 8.5 | 8 | 8（联合项） |
+
+父评审重新核验并合看48张最终英文共同角色图（8场景 × 两条件 × 三端），再细看关键完整图；Android全为68fe新canonical，011旧attempt不计最终共同项。冷灰/白/蓝、系统字体、边界、浅分隔、线性图标及原文/来源/时间关系连续。仍有Web模型辅助暖绿与多层compact导航、Mac固定设置页脚/长配置、Android大字体长说明；桌面填蓝/native描边Add的强调不同。详见joint-independent-review.md。分数是模型判断，不是真人首次理解或用户接受。
+
+### 实际验证
+
+三端各自独立核32core中英四条件hash/bitmap/consumer并审图。完整理由、原动作、来源身份与报告SHA见scores.json及三个独立平台报告。
+
+- Web子评审实际验证三份逐字原文、草稿导航/reload/保存清空、完整帮助及同opener焦点、纯Settings、配置Keep/Discard、Ask→Provider→实际module consumer→原任务返回、直接Settings返回，以及英文390真实Tab/Enter Save。真正浏览器200%为1440×968/DPR2→Root私有fixture zoom2→fresh720×484/DPR4→实际保存/原文/帮助/Escape/设置/Ask返回→reset1→fresh1440×968/DPR2；没有以CSS或窄屏替代。
+- 父评审Mac实际验证混合双空格/空行/emoji原文、renderer reload草稿，两语言820窄窗Tab/Enter Save及readerClose/同Home key焦点，全框加6px完整；四阶段帮助键盘展开/折回、metadata；纯Settings、脏Keep/Discard与Ask/直接Settings返回、真实语言reload、生成Import preview/Cancel、停止的Recordscreen→Privacy范围未Start。
+- Android子评审最终独立核新86PNG/32core、两APK、24严格dialog完整几何及180实际顶边像素；新note真实输入/Save清空/精确两行原文与来源时间，Closed常规→compact→常规始终list无dialog，Open同两变换恢复同原文，Close/headerBack→Content→Home。共19新observations（17gated完成、2diagnostic）与4实际config。
+
+Android先前011的draft、纯Settings、连接Keep/Discard/任务返回、两compact实际IME/Save/原文、同步事实保留真实旧source范围；独立Gitblob证明Main/Connection/NativeUi/catalog/shared未变，不冒称68fe重新操作。生产方最终12matrix/16返回/8新reader状态/24几何/313JVM及15pass2skip另列，不能冒充独立实操。
+
+### 确认失败与边界
+
+Android在011实际Close后，配置变化触发重建又误开同原文；旧source/build/APK、失效trace/原图冻结，分数暂为null等待修复。68fe仅在dialog实际显示时保存ID/remote标记；Close/Cancel后null，fresh create只消费初始intent。新增8个durable状态回归，并经上述真实闭/开双向配置补验：关闭保持列表、正在读则精确恢复。远程沿用既有授权、不存正文/client/token、不回落本机，是源码与生成回归证据，未操作真实中央账号。
+
+Web73post/63原ready/60可用完成记录/40有效PNG，6false、4null、2before-only与3过渡/过宽PNG保留排除；Mac53post/47原ready/45可用完成记录及PNG，6false、2空snapshot/保存过渡排除并fresh补证。错误gate/过渡不冒产品失败或完成图。最终Android0failedgate；旧011的69observations不计新producer完成数。
+
+没有个人屏幕/真实资料、实机、真实账号/采集/模型/发送、真人研究或完整无障碍认证。Web超限上传/长文件名/非空windowTitle未手动制造；Mac只有renderer/语言reload，无完整主进程重启，picker/权限来自生成stub；Android真实中文IME composition、remote关闭/取消/错误恢复未独立运行。FLAG_SECURE保留，只应用自身窗口绘图，未采系统IME像素；CDPfocus只exact隐藏生成target，不称物理键盘/原生OS focus。
+
+### 释放
+
+三端显式release Root：Web中文Home1440×968/DPR2/zoom1、metricsclear、草稿/配置清楚；Mac英文Home1140×808/DPR2（normal metrics恢复→clear→fresh）、focus emulation关、草稿空/配置Discard复核/importCancel；Android英文Home顶端420/font1、sync折回、note空、无reader/IME/dirty、未capture/sending。Root精确清理ownedfixture/profile/ownDev/专用AVD，评审未kill/clear。最新源码对应第五轮，五个候选均保留供用户选择，剩余gap不抬分或增加第六轮。
