@@ -61,6 +61,7 @@ internal object GeneratedWindowRendering {
                 if (view is ViewGroup) {
                     put("layoutMode", view.layoutMode).put("clipChildren", view.clipChildren).put("clipToPadding", view.clipToPadding)
                 }
+                if (view is android.widget.LinearLayout) put("baselineAligned", view.isBaselineAligned)
             }
     }
 

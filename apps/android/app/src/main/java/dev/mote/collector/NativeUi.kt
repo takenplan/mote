@@ -125,6 +125,10 @@ object MoteUi {
             is Button -> if (view !is CompoundButton) {
                 action(view, view.getTag(R.id.mote_button_role) as? ButtonRole ?: if (view.getTag(R.id.mote_primary) == true) ButtonRole.PRIMARY else ButtonRole.SECONDARY)
                 (view.layoutParams as? LinearLayout.LayoutParams)?.let { it.bottomMargin = view.context.moteDp(8) }
+                // The native dialog bar bottom-aligns actions. Baseline alignment also
+                // subtracts the custom bottom margin, moving their top into its padding.
+                if (view.id in setOf(android.R.id.button1, android.R.id.button2, android.R.id.button3))
+                    (view.parent as? LinearLayout)?.isBaselineAligned = false
             }
             is EditText -> field(view)
             is TextView -> if (view.getTag(R.id.mote_type) == null) {
