@@ -40,7 +40,7 @@ export function ServerSettings({api,onNavigate,onModelApplied}:{api:Api;onNaviga
  const selected=categories.find(c=>c.id===category);
  return <div className="server-settings" aria-busy={busy||sourceResource.loading}>
   <button className="back-link workspace-back" aria-label={moteText('返回{0}',category?moteText('模型与服务'):moteText('设置'))} onClick={()=>{if(category){setCategory(null);}else onNavigate('about');}}><ArrowLeft size={16}/>{moteText('返回上级')}</button>
-  <div className="page-heading settings-heading"><div><div className="eyebrow">{moteText("按你的方式运行")}</div><h1>{selected?.title||moteText("模型与服务")}</h1><p>{selected?.description||moteText("连接、记录与理解，各自有清楚的位置。")}</p></div><button className="button subtle" disabled={busy} onClick={refresh}><RefreshCw size={15} className={busy?'spin':''}/>{moteText("刷新生效配置")}</button></div>
+  <div className="page-heading settings-heading"><div><h1>{selected?.title||moteText("模型与服务")}</h1><p>{selected?.description||moteText("连接、记录与理解，各自有清楚的位置。")}</p></div><button className="button subtle" disabled={busy} onClick={refresh}><RefreshCw size={15} className={busy?'spin':''}/>{moteText("刷新生效配置")}</button></div>
   {error!==undefined&&<p className="notice error" role="alert">{errorMessage(error)}</p>}
   {!config&&busy&&<p role="status">{moteText("正在读取节点设置…")}</p>}
   {!category&&<>

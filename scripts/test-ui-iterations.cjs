@@ -20,6 +20,8 @@ const roundIndex = args.indexOf('--round');
 const round = roundIndex >= 0 ? args[roundIndex + 1] : 'baseline';
 assert.match(round || '', /^[a-z0-9][a-z0-9_-]{0,40}$/i, 'Use a simple round label');
 const review = args.includes('--review') || args.includes('--review-hold');
+const reviewBootstrapOnly = args.includes('--review-bootstrap-only');
+assert(!reviewBootstrapOnly || review, 'A review bootstrap must retain its isolated fixture');
 const artRoundIndex=args.indexOf('--art-round'),artRound=artRoundIndex>=0?Number(args[artRoundIndex+1]):undefined;
 if(artRound!==undefined)assert.ok(Number.isInteger(artRound)&&artRound>=1&&artRound<=5,'A sequential art round is 1 through 5');
 const repo = resolve(__dirname, '..');
@@ -53,6 +55,20 @@ async function freePort() {
   });
 }
 const js = code => window.webContents.executeJavaScript(code);
+// Private generated-fixture controls, never imported by the product application.
+if (review) {
+  const zoom = factor => {
+    if (!window || window.isDestroyed()) return;
+    window.webContents.setZoomFactor(factor);
+    console.log(JSON.stringify({fixtureZoomFactor:window.webContents.getZoomFactor(),fixturePid:process.pid}));
+  };
+  process.on('SIGUSR2', () => zoom(2));
+  process.on('SIGWINCH', () => zoom(1));
+}
+async function holdReview() {
+  console.log('REVIEW READY: ' + endpoint + ' private bootstrap ' + join(root, 'connection.json'));
+  await new Promise(resolveHold => { process.once('SIGTERM', resolveHold); process.once('SIGINT', resolveHold); });
+}
 // Observe actual renderer requests and their JSON bodies, without reading a personal profile.
 const observeFixtureRequests = `(() => {
  if(window.__moteUiFetchObserved)return true;window.__moteUiFetchObserved=true;
@@ -227,6 +243,11 @@ async function settingsJourneys() {
   assert.equal(await js(`document.querySelector('.content').dataset.page`),'about','Browser Back returns to the actual settings origin');
   await clickLabel(['模型与服务'],'system/models','pure model settings');await assertSettingsTask('models');
   assert.equal(await js(`!!document.querySelector('.discovery-model-start a[href="#/ask"]')`),false,'Direct settings do not invent an Ask task');
+  assert.equal(await js(`document.querySelector('.model-setup-help').open`),false,'Supplementary setup help starts collapsed');
+  assert.equal(await js(`Array.from(document.querySelectorAll('.discovery-model-start nav a')).every(e=>e.getClientRects().length>0)`),true,'Actual setup steps stay directly visible outside supplementary help');
+  await js(`document.querySelector('.model-setup-help summary').click();true`);
+  assert.equal(await js(`document.querySelector('.model-setup-help').open&&Array.from(document.querySelectorAll('.model-setup-help p,.model-setup-help small')).every(e=>e.getClientRects().length>0)`),true,'The full setup explanation remains available through its real summary');
+  await js(`document.querySelector('.model-setup-help summary').click();true`);
   const askOrigin='#/ask';
   await route(askOrigin.slice(2),'.conversation-layout');
   await click('.model-notice button','system/models','actual Ask restriction to model providers');
@@ -336,6 +357,26 @@ async function artReaderMatrix(){
   }
   window.setSize(1440,1000);
 }
+async function mobileNoteFocusJourney(){
+  window.setSize(1440,1000);await route('today','.home-page');
+  if(await js('document.documentElement.lang')!=='en')await chooseLanguage('en',true,'.home-page');
+  await route('library/notes','#note-text');window.setSize(390,844);
+  await until(()=>js('innerWidth===390'),'real narrow note viewport');
+  const original='Generated candidate '+artRound+' keyboard focus original.';
+  await js(`(()=>{const e=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,${JSON.stringify(original)});e.dispatchEvent(new Event('input',{bubbles:true}));e.focus();})()`);
+  const observations=[];
+  for(const [label,selector] of [['attachment','.note-composer input[type=file]'],['save','.note-composer-actions .button.primary']]){
+    await key('Tab');await until(()=>js(`document.activeElement===document.querySelector(${JSON.stringify(selector)})`),'actual Tab reaches '+label);
+    let bounds;
+    await until(async()=>{bounds=await js(`(()=>{const e=document.activeElement,r=e.getBoundingClientRect(),s=getComputedStyle(e),n=document.getElementById('primary-navigation').getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,dockTop:n.top,width:innerWidth,ring:parseFloat(s.outlineWidth)||0,offset:parseFloat(s.outlineOffset)||0,outlineStyle:s.outlineStyle};})()`);return bounds.bottom+bounds.ring+Math.max(0,bounds.offset)<bounds.dockTop;},'complete '+label+' focus ring above the dock');
+    assert(bounds.top>=0&&bounds.left>=0&&bounds.right<=bounds.width,'Entire focused control is inside the narrow viewport');assert(bounds.ring>0&&bounds.outlineStyle!=='none','Keyboard focus is actually visible');
+    observations.push({label,...bounds});
+  }
+  await capture('actual-keyboard-save-focus-r'+artRound,{scene:'focus-regression',variant:'compact',reviewSelection:false,notes:'Real Tab from note text through attachment to Save; complete focused control and ring above the actual fixed dock.'});
+  await key('Enter');await until(()=>js(`document.querySelector('#note-text').value===''&&Array.from(document.querySelectorAll('.note-card p')).some(e=>e.textContent===${JSON.stringify(original)})`),'real keyboard Enter saves the exact original');
+  journeys.push({name:'narrow keyboard note save and unobscured focus',verified:true,original,observations});
+  window.setSize(1440,1000);
+}
 async function key(keyCode) {
   window.webContents.sendInputEvent({ type: 'keyDown', keyCode });
   if (keyCode === 'Enter') window.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
@@ -399,6 +440,16 @@ async function run() {
   window.webContents.on('did-finish-load', () => { void js(confirmFixtureScript).then(()=>js(observeFixtureRequests)).catch(() => {}); });
   await window.loadURL(endpoint);
   await until(() => js('!!document.querySelector(".simple-welcome")'), 'signed-out welcome');
+  if (reviewBootstrapOnly) {
+    await authenticate(token);
+    window.setSize(1440,1000);
+    await until(() => js('innerWidth===1440'), 'review bootstrap actual viewport');
+    await route('today','.home-page');
+    await readyConsumer('review bootstrap Home');
+    writeFileSync(join(output,'result.json'),JSON.stringify({round,sourceCommit:captureScriptCommit,generatedOnly:true,phase:'review-ready',bootstrapOnly:true,boundary:'Fresh isolated authenticated Home for independent operations. No candidate matrix or score is asserted.'},null,2));
+    await holdReview();
+    return;
+  }
   await homeMatrix('signed-out');
   await chooseLanguage('en', false, '.simple-welcome');
   await chooseLanguage('en', true, '.simple-welcome');
@@ -497,6 +548,7 @@ async function run() {
   writeFileSync(join(output, 'language-confirmations.json'), JSON.stringify({ generatedOnly: true, simulatedConfirmations: true, confirmations }, null, 2), {mode: 0o600});
   await settingsJourneys();
   await consumerMatrix();
+  if(artRound>=2)await mobileNoteFocusJourney();
   if(artRound)await artReaderMatrix();
   await route('today','.home-page');
   assert.deepEqual(errors, [], 'No renderer errors');
@@ -515,8 +567,7 @@ async function run() {
     validationBoundary: 'Actual renderer and generated ingress/publication. Language selector uses simulated confirmation decisions with the real change handler and reload; native modal handling is not validated. Route entry is not complete feature use. No physical capture, external account, or live model.' }, null, 2), { mode: 0o600 });
   console.log('PASS: UI journey evidence ' + round + ' → ' + output);
   if (review) {
-    console.log('REVIEW READY: ' + endpoint + ' private bootstrap ' + join(root, 'connection.json'));
-    await new Promise(resolveHold => { process.once('SIGTERM', resolveHold); process.once('SIGINT', resolveHold); });
+    await holdReview();
   }
 }
 async function finish(code) {

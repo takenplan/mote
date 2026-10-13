@@ -67,7 +67,7 @@ class UiIterationInstrumentedTest {
                     val labels = views(root).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
                     val parentLabels = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
                     assertTrue(parentLabels.contains("Quick notes"))
-                    assertTrue(parentLabels.contains("Browse records by date; open one to read its original."))
+                    assertTrue(parentLabels.contains(MoteI18n.text("查看记录说明")))
                     assertFalse(parentLabels.contains(MoteI18n.text("截图支持按连续 Session 或 App 分组，点开查看图片。")))
                     assertFalse("A note list has no unsupported thumbnail control", parentLabels.contains("Thumbnail view"))
                     assertTrue(labels.contains("Close details")); assertFalse(labels.contains("Off"))
@@ -78,6 +78,21 @@ class UiIterationInstrumentedTest {
                     GeneratedWindowRendering.save(activity, directory, "note-detail-english", listOf(root))
                     File(directory, "note-detail-english.txt").writeText(labels.joinToString("\n"))
                     assertTrue(root.findViewById<View>(android.R.id.button1).performClick())
+                }
+                scenario.onActivity { activity ->
+                    val help = views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("查看记录说明") }
+                    help.requestRectangleOnScreen(android.graphics.Rect(0, 0, help.width, help.height), true)
+                    val bounds = android.graphics.Rect()
+                    assertTrue(help.getGlobalVisibleRect(bounds)); assertEquals(help.height, bounds.height())
+                    assertTrue("The complete source-specific record explanation remains reachable", help.performClick())
+                }
+                instrumentation.waitForIdleSync()
+                instrumentation.runOnMainSync {
+                    val help = requireNotNull(dialogRoot())
+                    val labels = views(help).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+                    assertTrue(labels.contains("Browse records by date; open one to read its original."))
+                    assertFalse(labels.contains(MoteI18n.text("截图支持按连续 Session 或 App 分组，点开查看图片。")))
+                    assertTrue(help.findViewById<View>(android.R.id.button1).performClick())
                 }
                 scenario.onActivity { assertTrue(it.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0) }
             }

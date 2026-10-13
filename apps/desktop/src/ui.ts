@@ -23,6 +23,7 @@ let captureStorageDirectory = '';
 let settingsApplying = false;
 let wasRunningBeforeSave = false;
 let pageRevision = 0;
+let pageEnteredAt = Date.now();
 const pageScroll = new Map<Page, number>();
 const settingsPages = new Set<Page>(['connection', 'sync', 'capture', 'privacy', 'developer']);
 const libraryUi=createContentLibraryUi(desktopApi);
@@ -37,6 +38,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   else pageScroll.set(currentPage, window.scrollY);
   if (page !== currentPage) {
     pageRevision++;
+    pageEnteredAt = Date.now();
     feedback('');
     if (initialized && settingsPages.has(currentPage) && !preserveSettingsDraft) fillConfig(currentStatus.config);
     if (currentPage === 'connection') {
@@ -48,6 +50,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   }
   if (currentPage === 'uploads' && page !== 'uploads') syncHistoryUi.hide();
   currentPage = page;
+  if(initialized) renderOperations(currentStatus.operations??[]);
   if (page === 'uploads') syncHistoryUi.show();
   const selected = navigation.section;
   for (const element of Array.from(document.querySelectorAll<HTMLElement>('[data-page]'))) element.hidden = element.dataset.page !== page;
@@ -308,6 +311,12 @@ byId('capture-directory-choose').addEventListener('click', () => void perform(as
 byId('capture-directory-default').addEventListener('click', () => { captureStorageDirectory = ''; markSettingsDirty(); renderStorage(); });
 byId('capture-directory-open').addEventListener('click', () => void perform(() => desktopApi.openCaptureDirectory()));
 let connectionPreview: import('./connection').ConnectionPreview | undefined;
+function renderOperations(jobs:NonNullable<import('./contracts').Status['operations']>):void {
+  // Completed work belongs to the page where it began; active work and failures remain global.
+  const operations=jobs.filter(job=>job.state!=='completed'||job.startedAt>=pageEnteredAt);
+  byId('background-progress').hidden = !operations.length;
+  byId('background-progress').textContent = operations.map(job => `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${job.state === 'running' ? moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000)) : ''}`).join('；');
+}
 function render(status: import('./contracts').Status): void {
   syncHistoryUi.update(status);libraryUi.update(status);
   if(currentStatus&&(currentStatus.authorizationGeneration!==status.authorizationGeneration||currentStatus.config.serverUrl!==status.config.serverUrl||currentStatus.config.tokenConfigured!==status.config.tokenConfigured||currentStatus.config.authSignedOut!==status.config.authSignedOut||currentStatus.config.authExpiresAt!==status.config.authExpiresAt)){
@@ -317,9 +326,7 @@ function render(status: import('./contracts').Status): void {
   currentStatus = status; renderStorage();
   askConnectionState();
   updateTokenField();
-  const operations = status.operations ?? [];
-  byId('background-progress').hidden = !operations.length;
-  byId('background-progress').textContent = operations.map(job => `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${job.state === 'running' ? moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000)) : ''}`).join('；');
+  renderOperations(status.operations??[]);
   byId('connection-device').textContent = moteText("设备：{0} · ID {1}。迁移已有设备时，请在中央邀请中选择此 ID。", status.config.deviceName, status.config.deviceId);
   byId('environment').textContent = status.environment ? moteText("环境：{0}{1} · {2}", status.environment.profile, status.environment.defaultProfile ? moteText("（原日常目录）") : moteText(" · 独立数据"), status.environment.dataDirectory) : '';
   const names = { stopped: moteText("采集已停止"), capturing: moteText("正在采集"), paused: moteText("采集已暂停"), permission_required: moteText("需要屏幕录制权限"), error: moteText("采集已停止 · 需要处理") };

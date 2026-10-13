@@ -58,6 +58,9 @@ module.exports = async function({window,js,navigate,outputDirectory,round,profil
   await until(()=>js('document.querySelector("#note-text").value===""'),'actual note save');
   await navigate('overview');await until(()=>js('Array.from(document.querySelectorAll("#home-recent .content-row")).some(e=>e.textContent.includes('+JSON.stringify(original.split('\n')[0])+'))'),'same saved note on Home');
   const key=await js('Array.from(document.querySelectorAll("#home-recent .content-row")).find(e=>e.textContent.includes('+JSON.stringify(original.split('\n')[0])+')).dataset.contentKey');
+  await until(()=>js('window.mote.status().then(s=>!(s.operations??[]).some(job=>job.state==="running"))'),'actual note operation completed');
+  await until(()=>js('document.querySelector("#background-progress").hidden'),'completed operation no longer displayed on Home');
+  assert.equal(await js('document.querySelector("#background-progress").hidden'),true,'Completed work does not persist on an unrelated Home page');
   journeys.push({name:'actual save, retained draft and Home identity',verified:true,contentKey:key});
   for(const language of ['zh-CN','en']){
     await changeLanguage(language);
@@ -65,13 +68,19 @@ module.exports = async function({window,js,navigate,outputDirectory,round,profil
       if(scene==='reader'){
         await navigate('records');await readiness('content');await js('document.querySelector('+JSON.stringify('#content-feed [data-content-key="'+key+'"]')+').click();true;');
         await readiness('reader');assert.equal(await js('document.querySelector("#content-detail-body").textContent'),original,'Exact original in real reader');
+        assert.equal(await js('document.querySelector("#content-detail-title").textContent.includes('+JSON.stringify(original.split('\n')[0])+')'),false,'Note title does not duplicate original');
+        assert.equal(await js('!document.querySelector("#content-processing").open&&document.querySelector("#content-detail-status").textContent.trim().length>0'),true,'Actual status visible, complete process help initially folded');
       }else if(scene==='import'){
         await navigate('overview');await js('document.querySelector("#note-action").click();document.querySelector("#add-dialog [data-add-choice=file]").click();true;');
       }else await navigate({home:'overview',content:'records',note:'notes',ask:'ask',settings:'settings',connection:'connection'}[scene]);
       await readiness(scene);
       for(const [variant,width,height] of [['normal',1140,840],['compact',820,620]])await capture(scene,language==='en'?'en':'zh',variant,width,height);
       if(scene==='reader'){
+        await js('document.querySelector("#content-processing summary").click();true;');
+        assert.equal(await js('document.querySelector("#content-processing").open&&document.querySelectorAll("#content-detail-stages li").length===4'),true,'Complete processing stages are actually expandable');
+        await js('document.querySelector("#content-processing summary").click();true;');
         await js('document.querySelector("#content-detail-close").click();true;');assert.equal(await js('document.activeElement.dataset.contentKey'),key,'Close restores exact source focus');
+        journeys.push({name:'actual exact source, note title, expandable processing and Close focus',language,verified:true});
       }
       if(scene==='ask'){
         await js('document.querySelector("#ask-disconnected [data-nav=connection]").click();true;');await readiness('connection');await js('document.querySelector("#workspace-back").click();true;');await readiness('ask');

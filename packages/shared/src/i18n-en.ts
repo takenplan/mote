@@ -1,5 +1,15 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "{0} 条 · 第 {1} 页": "Records: {0} · Page {1}",
+  "关闭预览": "Close preview",
+  "先存本机；连接中央整理后，可搜索和提问。": "Save locally first. Connect to central and process content to search or ask.",
+  "资料如何整理": "How content is organized",
+  "查看记录说明": "About records",
+  "连接说明": "Connection guide",
+  "点击即保存空预设。": "Creates an empty profile immediately.",
+  "模型设置说明": "Model setup guide",
+  "预设配置说明": "About profiles",
+  "接收与整理状态": "Receipt and processing",
   "按日期浏览记录，点开查看原文。": "Browse records by date; open one to read its original.",
   "当天没有随手记。选择其他日期，或添加一条随手记。": "No quick notes for this day. Choose another date or add a note.",
   "文件、屏幕记录与想法，先存本机。连接中央整理后，可搜索和提问。": "Save files, screen records and thoughts locally. Connect to central and process them to search or ask.",

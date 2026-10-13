@@ -163,13 +163,13 @@ class FileTaskActivity : MoteActivity() {
         metadataStatus = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); body.addView(this) }
         if (savedSource != null) hint("修改说明适用于已有和未来资料；不会自动重新转写或重算历史记忆。")
         initial = Spinner(this).apply {
-            adapter = ArrayAdapter(this@FileTaskActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("一起导入已有文件"), MoteI18n.text("首次清点后，只同步新文件")))
+            adapter = MoteUi.choiceAdapter(this@FileTaskActivity, listOf(MoteI18n.text("一起导入已有文件"), MoteI18n.text("首次清点后，只同步新文件")))
             setSelection(if (source.initialSync == "new_only") 1 else 0); tag = "file-task:initial"
         }
         if (source.tree) { label("已有文件"); body.addView(initial) }
         label("中央保存方式")
         retention = Spinner(this).apply {
-            adapter = ArrayAdapter(this@FileTaskActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("仅保留提取内容"), MoteI18n.text("保留原件及提取内容"), MoteI18n.text("仅记录文件信息")))
+            adapter = MoteUi.choiceAdapter(this@FileTaskActivity, listOf(MoteI18n.text("仅保留提取内容"), MoteI18n.text("保留原件及提取内容"), MoteI18n.text("仅记录文件信息")))
             tag = "file-task:retention"; setSelection(listOf("snapshot", "archive", "reference").indexOf(source.retention))
             body.addView(this)
         }

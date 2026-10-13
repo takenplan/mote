@@ -73,6 +73,20 @@ object MoteUi {
         minHeight = context.moteDp(DesignTokens.controlHeight)
     }
 
+    /** A selected scope or retention choice must remain fully readable, including at 130%. */
+    fun choiceAdapter(context: Context, labels: List<String>) = object : ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, labels) {
+        private fun present(view: View): View = view.apply {
+            (this as? TextView)?.let {
+                type(it, DesignTokens.fontBody); it.setTextColor(ink)
+                it.isSingleLine = false; it.maxLines = Int.MAX_VALUE; it.ellipsize = null
+                it.gravity = Gravity.CENTER_VERTICAL; it.minHeight = context.moteDp(DesignTokens.controlHeight)
+                it.setPadding(context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline))
+            }
+        }
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getView(position, convertView, parent))
+        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getDropDownView(position, convertView, parent))
+    }
+
     /** Set line behavior before inputType: setSingleLine replaces password transformation. */
     fun textInput(field: EditText, type: Int, multiline: Boolean = false) = field.apply {
         setSingleLine(!multiline)
@@ -203,7 +217,7 @@ private fun Activity.detailTab(): MotePrimaryTab? = when (this) {
     else -> MotePrimaryTab.TODAY
 }
 
-fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), onBack: () -> Unit = { finish() }): LinearLayout {
+fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, onBack: () -> Unit = { finish() }): LinearLayout {
     val body = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(moteDp(DesignTokens.spacePage), moteDp(DesignTokens.spaceItem), moteDp(DesignTokens.spacePage), moteDp(DesignTokens.spaceGroup))
@@ -211,10 +225,15 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), onBack: () -
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background); moteInsets() }
     val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
     header.addView(TextView(this).apply {
-        text = "‹  " + MoteI18n.text("返回上级"); MoteUi.type(this, DesignTokens.fontAction); setTextColor(MoteUi.accent)
+        text = if (title == null) "‹  " + MoteI18n.text("返回上级") else "‹"
+        MoteUi.type(this, DesignTokens.fontAction); setTextColor(MoteUi.accent)
         gravity = Gravity.CENTER_VERTICAL; minHeight = moteDp(48)
         setPadding(moteDp(16), moteDp(4), moteDp(16), moteDp(4))
         contentDescription = MoteI18n.text("返回上一页"); isFocusable = true; setOnClickListener { onBack() }
+    }, if (title == null) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(48), -2))
+    if (title != null) header.addView(TextView(this).apply {
+        text = title; tag = "detail-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); setTextColor(MoteUi.ink)
+        setPadding(0, moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spaceInline))
     }, LinearLayout.LayoutParams(0, -2, 1f))
     if (primary != null) header.addView(MoteUi.button(Button(this).apply {
         text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")

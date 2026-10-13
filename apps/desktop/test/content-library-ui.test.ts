@@ -69,3 +69,31 @@ it('clears private DOM and invalidates old requests when a credential changes wi
   (el('content-detail-refresh') as HTMLButtonElement).click();await flush();library.update({...status,authorizationGeneration:2});expectCleared();
   finish(remote);await flush();expectCleared();
 });
+
+it('shows a note excerpt once and reads its exact original before expandable processing stages',async()=>{
+  const text='Generated first line\nGenerated second line';
+  page={items:[{...item,title:'Generated first line',preview:text}],total:1};
+  vi.mocked(api.centralContentDetail).mockResolvedValue({...remote,text});
+  await library.refresh();
+  const button=document.querySelector<HTMLButtonElement>('#content-feed .content-row')!;
+  const copy=button.querySelector('.content-row-copy')!;
+  expect(copy.querySelector('strong')).toBeNull();expect(copy.querySelector('span')!.textContent).toBe(text);
+  button.click();await flush();
+  expect(el('content-detail-title').textContent).not.toContain('Generated first line');
+  expect(el('content-detail-body').textContent).toBe(text);
+  const processing=el('content-processing') as HTMLDetailsElement;
+  expect(processing.open).toBe(false);expect(processing.querySelector('summary')!.textContent!.trim()).not.toBe('');
+  expect(el('content-detail-body').compareDocumentPosition(processing)&dom.window.Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(el('content-detail-status').textContent).not.toBe('');
+  processing.open=true;expect(processing.querySelectorAll('li')).toHaveLength(4);
+  el('content-detail-close').click();expect(document.activeElement).toBe(button);
+});
+
+it('retains the authored title of a non-note source and resets process help for the next reader',async()=>{
+  page={items:[{...item,source:'file',title:'Generated authored file name'}],total:1};
+  await library.refresh();await open();
+  expect(document.querySelector('#content-feed .content-row-copy strong')!.textContent).toBe('Generated authored file name');
+  expect(el('content-detail-title').textContent).toBe('Generated authored file name');
+  (el('content-processing') as HTMLDetailsElement).open=true;el('content-detail-close').click();await open();
+  expect((el('content-processing') as HTMLDetailsElement).open).toBe(false);
+});

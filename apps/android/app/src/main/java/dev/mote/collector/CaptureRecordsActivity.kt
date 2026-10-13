@@ -22,7 +22,7 @@ class CaptureRecordsActivity : MoteActivity() {
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
     private lateinit var recordHeading: TextView
-    private lateinit var recordDescription: TextView
+    private var recordDescription = ""
     private lateinit var grouping: Spinner
     private lateinit var layout: Switch
     private lateinit var progress: ProgressBar
@@ -67,13 +67,15 @@ class CaptureRecordsActivity : MoteActivity() {
         recordSource = (savedInstanceState?.getString("recordSource") ?: intent.getStringExtra("recordSource"))?.takeIf { it in recordSources } ?: "screen"
         sessionGrouping = savedInstanceState?.getBoolean("sessionGrouping", true) ?: true
         grid = savedInstanceState?.getBoolean("grid", true) ?: true
-        body = moteDetailPage { navigateBack() }
-        recordHeading = text(body, "", DesignTokens.fontTitleMobile.toFloat())
-        recordDescription = text(body, "", DesignTokens.fontBody.toFloat())
+        body = moteDetailPage(title = MoteI18n.text("采集记录")) { navigateBack() }
+        recordHeading = window.decorView.findViewWithTag("detail-title")
+        val compactFilters = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
+        val filters = LinearLayout(this).apply { orientation = if (compactFilters) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL }
+        body.addView(filters, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) })
         val source = Spinner(this).apply {
-            adapter = ArrayAdapter(this@CaptureRecordsActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("本机记录"), MoteI18n.text("中央归档")))
+            adapter = MoteUi.choiceAdapter(this@CaptureRecordsActivity, listOf(MoteI18n.text("本机记录"), MoteI18n.text("中央归档")))
             setSelection(if (central) 1 else 0)
-        }; body.addView(source)
+        }; filters.addView(source, if (compactFilters) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
         source.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -81,9 +83,9 @@ class CaptureRecordsActivity : MoteActivity() {
             }
         }
         val kinds = Spinner(this).apply {
-            adapter = ArrayAdapter(this@CaptureRecordsActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("截图"), MoteI18n.text("媒体播放状态"), MoteI18n.text("通知事件"), MoteI18n.text("设备事件"), MoteI18n.text("随手记"), MoteI18n.text("应用活动"), MoteI18n.text("页面内容采集")))
+            adapter = MoteUi.choiceAdapter(this@CaptureRecordsActivity, listOf(MoteI18n.text("截图"), MoteI18n.text("媒体播放状态"), MoteI18n.text("通知事件"), MoteI18n.text("设备事件"), MoteI18n.text("随手记"), MoteI18n.text("应用活动"), MoteI18n.text("页面内容采集")))
             setSelection(recordSources.indexOf(recordSource))
-        }; body.addView(kinds)
+        }; filters.addView(kinds, if (compactFilters) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
         kinds.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -92,7 +94,7 @@ class CaptureRecordsActivity : MoteActivity() {
             }
         }
         grouping = Spinner(this).apply {
-            adapter = ArrayAdapter(this@CaptureRecordsActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("按 Session · 连续记录"), MoteI18n.text("按 App · 每 15 分钟")))
+            adapter = MoteUi.choiceAdapter(this@CaptureRecordsActivity, listOf(MoteI18n.text("按 Session · 连续记录"), MoteI18n.text("按 App · 每 15 分钟")))
             setSelection(if (sessionGrouping) 0 else 1)
         }; body.addView(grouping)
         grouping.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -116,13 +118,23 @@ class CaptureRecordsActivity : MoteActivity() {
             previousDay.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(DesignTokens.spaceInline) }
             body.addView(days, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceInline) })
         }
-        status = text(body, MoteI18n.text("正在读取…"), DesignTokens.fontBody.toFloat())
+        val stateAndRefresh = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        body.addView(stateAndRefresh, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceInline); bottomMargin = moteDp(DesignTokens.spaceInline) })
+        status = text(stateAndRefresh, MoteI18n.text("正在读取…"), DesignTokens.fontBody.toFloat()).apply {
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+        }
+        stateAndRefresh.addView(MoteUi.action(Button(this).apply { text = MoteI18n.text("刷新"); setOnClickListener { reload() } }, MoteUi.ButtonRole.TEXT), LinearLayout.LayoutParams(-2, -2))
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true }; body.addView(progress)
-        button(body, MoteI18n.text("刷新")) { reload() }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(list)
         val pages = row(body)
         previousPage = button(pages, MoteI18n.text("上一页")) { if (cursors.size > 1) { cursors.removeAt(cursors.lastIndex); load() } }
         nextPage = button(pages, MoteI18n.text("下一页")) { nextCursor?.let { cursors.add(it); load() } }
+        body.addView(MoteUi.action(Button(this).apply {
+            text = MoteI18n.text("查看记录说明"); setOnClickListener {
+                MoteDialogBuilder(this@CaptureRecordsActivity).setTitle(MoteI18n.text("查看记录说明")).setMessage(recordDescription)
+                    .setPositiveButton(MoteI18n.text("知道了"), null).show()
+            }
+        }, MoteUi.ButtonRole.TEXT), LinearLayout.LayoutParams(-1, -2))
         MoteUi.styleTree(body)
         updateRecordHeading()
         load()
@@ -139,7 +151,7 @@ class CaptureRecordsActivity : MoteActivity() {
             else -> "采集记录"
         }
         recordHeading.text = MoteI18n.text(title)
-        recordDescription.text = MoteI18n.text(if (recordSource == "screen") "截图支持按连续 Session 或 App 分组，点开查看图片。" else "按日期浏览记录，点开查看原文。")
+        recordDescription = MoteI18n.text(if (recordSource == "screen") "截图支持按连续 Session 或 App 分组，点开查看图片。" else "按日期浏览记录，点开查看原文。")
         grouping.visibility = if (recordSource == "screen") View.VISIBLE else View.GONE
         layout.visibility = if (recordSource == "screen") View.VISIBLE else View.GONE
     }
@@ -235,7 +247,8 @@ class CaptureRecordsActivity : MoteActivity() {
                         return@runOnUiThread
                     }
                     val thumbnailCount = records.count(CapturePreview::hasImage)
-                    val pageStatus = MoteI18n.text("{0} · {1} 条 · 第 {2} 页", selected?.optString("appName")?.ifBlank { selected.optString("appId").ifBlank { MoteI18n.text("系统画面") } } ?: if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录"), total, pageNumber)
+                    val pageStatus = if (selected == null) MoteI18n.text("{0} 条 · 第 {1} 页", total, pageNumber)
+                        else MoteI18n.text("{0} · {1} 条 · 第 {2} 页", selected.optString("appName").ifBlank { selected.optString("appId").ifBlank { MoteI18n.text("系统画面") } }, total, pageNumber)
                     status.text = pageStatus + if (thumbnailCount > 0) MoteI18n.text(" · 正在加载缩略图（0/{0}）", thumbnailCount) else ""
                     if (records.isEmpty()) text(list, when {
                         source == "note" -> MoteI18n.text("当天没有随手记。选择其他日期，或添加一条随手记。")
@@ -402,10 +415,11 @@ class CaptureRecordsActivity : MoteActivity() {
                     if (isDestroyed || stamp != generation || !dialog.isShowing) { bitmap?.recycle(); if (dialog.isShowing) dialog.dismiss(); return@runOnUiThread }
                     content.removeAllViews(); detailBitmap = bitmap
                     val isNote = record.optString("source") == "note"
-                    if (isNote) dialog.setTitle(MoteI18n.text("随手记"))
-                    text(content, "${record.getString("capturedAt").let { runCatching { DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.MEDIUM).withLocale(MoteI18n.locale()).withZone(ZoneId.systemDefault()).format(Instant.parse(it)) }.getOrDefault(it) }} · ${if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录")}", DesignTokens.fontMeta.toFloat()).setTextColor(MoteUi.muted)
+                    if (isNote) dialog.setTitle(MoteI18n.text("原文"))
+                    val capturedAt = record.getString("capturedAt").let { runCatching { DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.MEDIUM).withLocale(MoteI18n.locale()).withZone(ZoneId.systemDefault()).format(Instant.parse(it)) }.getOrDefault(it) }
                     val origin = record.optString("appName").ifBlank { record.optString("appId").ifBlank { if (isNote) MoteI18n.text("随手记") else if (record.optString("source") == "media") MoteI18n.text("媒体会话状态") else if (record.optString("source") == "device_event") MoteI18n.text("设备状态") else MoteI18n.text("桌面 / 系统画面") } }
-                    if (!isNote || origin != MoteI18n.text("随手记")) text(content, origin, DesignTokens.fontBody.toFloat())
+                    text(content, "$capturedAt · ${if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录")}" + if (isNote) " · $origin" else "", DesignTokens.fontMeta.toFloat()).setTextColor(MoteUi.muted)
+                    if (!isNote) text(content, origin, DesignTokens.fontBody.toFloat())
                     if (record.optString("source") in SystemEventRules.sources) {
                         text(content, SystemEventRules.label(record), DesignTokens.fontBody.toFloat()).setTextIsSelectable(true)
                         text(content, MoteI18n.text("原始系统事件 · 不代表已阅读通知或实际执行某项任务。熄屏不等于锁定。"), DesignTokens.fontMeta.toFloat())
@@ -425,13 +439,7 @@ class CaptureRecordsActivity : MoteActivity() {
                     if (CapturePreview.showMediaContext(record)) text(content, CapturePreview.mediaLabel(record), DesignTokens.fontSupport.toFloat())
                     if (record.optString("source") in setOf("note", "activity", "ui_page")) {
                         record.optJSONObject("metadata")?.optJSONObject("uiPage")?.let { text(content, "${it.optString("adapterId")} @ ${it.optString("adapterVersion")} · ${it.optString("status")}", DesignTokens.fontSupport.toFloat()) }
-                        val originalParent = if (isNote) LinearLayout(this).apply {
-                            orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@CaptureRecordsActivity, Color.WHITE, MoteUi.readingRadius)
-                            setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(16))
-                            content.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(12); bottomMargin = moteDp(8) })
-                            text(this, MoteI18n.text("原文"), DesignTokens.fontMeta.toFloat()).setTextColor(MoteUi.muted)
-                        } else content
-                        text(originalParent, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) DesignTokens.fontSection.toFloat() else DesignTokens.fontBody.toFloat()).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(0f, 1.4f) }
+                        text(content, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) DesignTokens.fontSection.toFloat() else DesignTokens.fontBody.toFloat()).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(0f, 1.4f) }
                         record.optString("syncError").takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("同步需要处理：{0}", it), DesignTokens.fontBody.toFloat()) }
                         return@runOnUiThread
                     }

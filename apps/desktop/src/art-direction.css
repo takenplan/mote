@@ -49,4 +49,28 @@ input:not([type=checkbox]),textarea,select { font-size:var(--mote-font-body); ba
 .source-card strong,.section-title h2,.status-heading h2 { color:var(--mote-ink); }
 .ask-empty,.collection-welcome,.model-card,.setup-prompt { background:var(--mote-surface); border-color:var(--mote-border); border-radius:var(--mote-radius-container); }
 .ask-answer,.record-ocr-text { font-size:var(--mote-font-body); line-height:1.8; }
+/* R2: one note excerpt, a visible receipt, and original text before process help. */
+.page-header,.workspace-home .page-header { margin-bottom:var(--mote-space-panel); }
+.workspace-home .home-add-grid .add-choice { padding:var(--mote-space-item); gap:var(--mote-space-inline); }
+.home-retrieval { padding-block:var(--mote-space-inline); }
+.content-note-copy>span { margin-top:0; font-size:var(--mote-font-body); color:var(--mote-ink); -webkit-line-clamp:3; }
+.content-row { padding:var(--mote-space-item) var(--mote-space-panel); }
+.content-row-copy>span { margin-top:var(--mote-space-inline); }
+.content-note-copy>span { margin-top:0; }
+.settings-group-label { margin:var(--mote-space-panel) 0 var(--mote-space-inline); font-size:var(--mote-font-meta); }
+.settings-row { padding:var(--mote-space-item) var(--mote-space-panel); }
+.settings-row-copy>span { margin-top:var(--mote-space-inline); }
+.note-composer form { display:grid; gap:var(--mote-space-item); }
+.note-composer #note-text { margin-top:0; }
+.composer-bottom { display:flex; align-items:center; flex-wrap:wrap; gap:var(--mote-space-item); }
+.dialog-heading { margin-bottom:var(--mote-space-item); gap:var(--mote-space-item); }
+.dialog-heading p { margin-top:var(--mote-space-inline); }
+.reader-state { display:flex; flex-wrap:wrap; gap:var(--mote-space-inline) var(--mote-space-panel); }
+.reader-state p { margin:0; }
+.reader-state p:empty { display:none; }
+.content-reading-body { margin:var(--mote-space-item) 0; min-height:0; }
+.content-reading-dialog>.disclosure { margin-top:var(--mote-space-inline); }
+.content-reading-dialog summary { font-size:var(--mote-font-support); min-height:var(--mote-control-height); padding-block:var(--mote-space-inline); }
+.content-stages { margin-top:var(--mote-space-inline); gap:var(--mote-space-inline); }
+button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:3px solid var(--mote-accent); outline-offset:3px; }
 @media(max-width:1000px) { main,.workspace-toolbar { padding-inline:var(--mote-space-page); } .home-add-grid .add-choice,.add-dialog-grid .add-choice { min-height:var(--mote-control-height); padding:var(--mote-space-panel); } }

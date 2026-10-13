@@ -1,4 +1,5 @@
 import { ClientLoginApproval } from './ClientLoginApproval';
+import {revealWorkspaceFocus} from './workspace-focus';
 import {consumeLoginTicket,loginRequestId,removeLoginParameter} from './login-handoff';
 import { getLocale,moteText } from '@mote/shared/i18n';
 import {
@@ -348,7 +349,7 @@ function App() {
           </div>
         </div>
       </aside>
-      <main className="main">
+      <main className="main" onFocusCapture={event=>revealWorkspaceFocus(event.target)}>
         <header className="topbar">
           <div>
             <span className="breadcrumb">

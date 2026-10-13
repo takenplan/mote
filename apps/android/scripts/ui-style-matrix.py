@@ -131,7 +131,7 @@ def instrument(class_name, extras, log, expected):
     assert f'OK ({expected} test' in result and 'FAILURES!!!' not in result and 'INSTRUMENTATION_CODE: 0' not in result, f'Instrumentation failed: {log}'
     return round(time.monotonic() - started, 3)
 
-matrix = []; images = []
+matrix = []; images = []; route_journeys = []
 for variant in VARIANTS:
     clear_generated_profile()
     compact = 'compact' in variant
@@ -164,6 +164,14 @@ for variant in VARIANTS:
         assert metadata['baseWindow']['width'] == 1080 and metadata['baseWindow']['height'] == 2400
         images.append({'path': str(png.relative_to(output)), 'sha256': hashlib.sha256(png.read_bytes()).hexdigest(),
                        'variant': variant, 'scene': png.stem, **metadata})
+    if args.round >= 2:
+        clear_generated_profile()
+        log = output / ('connection-return-' + variant + '.log')
+        route_seconds = instrument('dev.mote.collector.ConnectionTaskReturnInstrumentedTest',
+                                   {'uiIterationFixture': 'true', 'uiIterationVariant': variant}, log, 4)
+        assert 'INSTRUMENTATION_STATUS_CODE: -4' not in log.read_text(), 'Actual task returns cannot be skipped'
+        route_journeys.append({'variant': variant, 'passed': 4, 'skipped': 0, 'elapsedSeconds': route_seconds})
+        (output / 'connection-return-results.json').write_text(json.dumps(route_journeys, indent=2))
     matrix.append({'variant': variant, 'passed': 3, 'skipped': 0, 'elapsedSeconds': seconds,
                    'densityDpi': 540 if compact else 420, 'fontScale': 1.3 if compact else 1.0,
                    'actualImeExercised': compact, 'pngCount': len(list(destination.glob('*.png')))})
@@ -186,7 +194,7 @@ if args.verify_journeys:
         journeys.append({'test': name, 'passed': expected - skips, 'skipped': skips, 'elapsedSeconds': seconds})
 (output / 'journey-results.json').write_text(json.dumps(journeys, indent=2))
 assert source_hashes == {name: hashlib.sha256((REPO / name).read_bytes()).hexdigest() for name in source_files}, 'Source changed during capture'
-manifest = {**identity, 'images': images, 'matrix': matrix, 'journeys': journeys, 'jvm': jvm}
+manifest = {**identity, 'images': images, 'matrix': matrix, 'journeys': journeys, 'connectionReturns': route_journeys, 'jvm': jvm}
 (output / 'image-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 
 # Hand off a clean generated profile, without stopping the held AVD until review releases it.

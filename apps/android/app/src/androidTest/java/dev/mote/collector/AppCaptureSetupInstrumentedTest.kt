@@ -85,7 +85,7 @@ class AppCaptureSetupInstrumentedTest {
                     instrumentation.runOnMainSync { shown = dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("这里是生成的格式示例") } }
                     shown
                 }
-                instrumentation.runOnMainSync { button("关闭").performClick() }
+                instrumentation.runOnMainSync { button("关闭预览").performClick() }
                 assertFalse(settings.enabled); assertFalse(settings.capturePreviewSeen())
                 assertEquals(AppCollectionRules.DEFAULT, settings.read().appCollectionRules)
             }
@@ -111,7 +111,7 @@ class AppCaptureSetupInstrumentedTest {
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("文章格式示例") && it.text.contains("示例作者") })
-                button("关闭").performClick(); button("完成").performClick()
+                button("关闭预览").performClick(); button("完成").performClick()
             }
             assertFalse(settings.enabled)
         }
@@ -145,7 +145,7 @@ class AppCaptureSetupInstrumentedTest {
                 instrumentation.runOnMainSync { shown = dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("这里是生成的格式示例") } }
                 shown
             }
-            instrumentation.runOnMainSync { button("关闭").performClick() }
+            instrumentation.runOnMainSync { button("关闭预览").performClick() }
             @Suppress("DEPRECATION") val version = context.packageManager.getPackageInfo(context.packageName, 0).versionName!!
             assertEquals(1, AppPageSetup.adapters(settings.read().uiPageRules, context.packageName, version).size)
             assertEquals("ui_preferred", settings.read().uiPageMode)

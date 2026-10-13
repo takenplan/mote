@@ -214,7 +214,7 @@ export function ModelSettingsEditor({ api, revision, onApplied, profileId }: {
     const credentialChoice = (field: 'apiKeyAction' | 'headersAction' | 'extraBodyAction', label: string, configured: boolean) => <label className="preference-field">{label}<select aria-label={label} value={draft![field]} onChange={e => change({ [field]: e.target.value as CredentialAction, ...(field === 'apiKeyAction' ? { apiKey: '' } : field === 'headersAction' ? { headers: '' } : { extraBody: '' }) })}><option value="keep">{moteText("不改动（")}{configured ? moteText("已配置") : moteText("未配置")}）</option><option value="replace">{moteText("填写新值，替换已有配置")}</option><option value="clear">{moteText("清除已有配置")}</option></select></label>;
     return <>
     <section className="panel config-builder model-settings-editor" aria-label={moteText("模型服务设置")} aria-busy={busy}>
-      <div className="section-heading"><div><h2><SlidersHorizontal size={18}/>{moteText("模型服务")}</h2><p>{moteText("设置连接与默认模型，其他模块可复用此连接并选择不同模型。")}</p></div><span className="badge green">{moteText("保存后生效")}</span></div>
+      <div className="section-heading">{profileId===undefined&&<div><h2><SlidersHorizontal size={18}/>{moteText("模型服务")}</h2><p>{moteText("设置连接与默认模型，其他模块可复用此连接并选择不同模型。")}</p></div>}<span className="badge green">{moteText("保存后生效")}</span></div>
       {!active && loading && <p role="status">{moteText("正在读取模型设置…")}</p>}
       {error && <p className="notice error" role="alert">{error}</p>}
       {conflict && <button className="button subtle" disabled={busy} onClick={reread}><RotateCcw size={15}/>{moteText("重新读取并还原草稿")}</button>}

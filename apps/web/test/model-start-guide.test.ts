@@ -27,6 +27,9 @@ test('direct model settings keep setup steps without inventing a task return des
  assert.ok([...d.querySelectorAll('a')].every(link=>!new URLSearchParams(link.getAttribute('href')!.split('?')[1]).has('returnTo')));
  assert.match(d.body.textContent!,/已有可用默认时可直接使用/);
  assert.match(d.body.textContent!,/无需创建新预设或修改所有模块/);
+ const help=d.querySelector<HTMLDetailsElement>('details')!;
+ assert.equal(help.open,false);assert.match(help.querySelector('summary')!.textContent!,/模型设置说明/);
+ assert.equal(d.querySelectorAll('nav a').length,2,'Setup steps remain immediately reachable outside the folded help');
 });
 
 test('a valid task return target survives both model setup steps with its exact context',async t=>{

@@ -39,6 +39,59 @@
       "status": "historical",
       "jointScore": 4,
       "notes": "独立复查重判基线；本轮未重新执行旧产品旅程，功能分数参考冻结构建的既有实操及当前可理解性。旧8.5不作为美术依据。"
+    },
+    {
+      "id": "r1",
+      "title": "候选 1",
+      "theme": "共同视觉语法",
+      "sourceCommit": "5d5f076e9067bacf03b2ad76212d4e832fb665ec",
+      "status": "reviewed-candidate",
+      "scores": {
+        "web": [
+          7,
+          6.5,
+          6.5,
+          8,
+          7.5,
+          7.5,
+          7
+        ],
+        "mac": [
+          7,
+          6.5,
+          6.5,
+          8,
+          7,
+          7.5,
+          7
+        ],
+        "android": [
+          7,
+          6.5,
+          6,
+          7.5,
+          7.5,
+          7,
+          7
+        ]
+      },
+      "jointScore": 7,
+      "notes": "共同字体、颜色、表面与动作角色初步成立。独立评审仍指出重复标题、正文前文字堆叠、设置留白与 Android 提问配置后的返回摩擦，进入第二轮修整。",
+      "web": {
+        "root": ".mote/ui-art-direction/r1/web",
+        "manifest": ".mote/ui-art-direction/r1/web/result.json",
+        "sourceCommit": "2b17e6e20821a773779acceb5bd7384523546aac"
+      },
+      "mac": {
+        "root": ".mote/ui-art-direction/r1/mac",
+        "manifest": ".mote/ui-art-direction/r1/mac/manifest.json",
+        "sourceCommit": "5e4c1724362d939841da9d3afb10b60eb5a8f3cf"
+      },
+      "android": {
+        "root": ".mote/ui-art-direction/r1/android",
+        "manifest": ".mote/ui-art-direction/r1/android/image-manifest.json",
+        "apkSha256": "5e79f6d515b3e49237e51f1c5d79ca09257c77b7a798a5c300673690e433f91b"
+      }
     }
   ]
 }

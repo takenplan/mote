@@ -15,7 +15,9 @@ export function createContentLibraryUi(api:DesktopApi){
     if(!rows.length){const empty=document.createElement('div');empty.className='content-empty';const title=document.createElement('strong');title.textContent=moteText('还没有内容，从一个小动作开始');const copy=document.createElement('p');copy.textContent=moteText('同步文件夹、导入文件、记录屏幕或写一条随手记。内容会先保存在本机。');empty.append(title,copy);root.append(empty);return;}
     for(const item of rows){const button=document.createElement('button');button.type='button';button.className='content-row';button.dataset.contentKey=item.key;
       const icon=document.createElement('span');icon.className='content-type';icon.textContent=sourceName(item.source);
-      const copy=document.createElement('span');copy.className='content-row-copy';const title=document.createElement('strong');title.textContent=item.title||sourceName(item.source);const preview=document.createElement('span');preview.textContent=item.preview;const meta=document.createElement('small');meta.textContent=`${new Date(item.observedAt).toLocaleString(getLocale())} · ${item.sourceName??sourceName(item.source)}`;copy.append(title,preview,meta);
+      const copy=document.createElement('span');copy.className='content-row-copy';const title=document.createElement('strong');title.textContent=item.title||sourceName(item.source);const preview=document.createElement('span');preview.textContent=item.preview;const meta=document.createElement('small');meta.textContent=`${new Date(item.observedAt).toLocaleString(getLocale())} · ${item.sourceName??sourceName(item.source)}`;
+      // A note's title is derived from its first line. Show its excerpt once; other sources keep their authored titles.
+      if(item.source==='note'&&item.preview){copy.classList.add('content-note-copy');copy.append(preview,meta);}else copy.append(title,preview,meta);
       const state=document.createElement('span');state.className='content-state';state.textContent=item.key.startsWith('capture:')?moteText('中央已收到'):item.error?moteText('需要处理'):moteText('本机已保存');button.append(icon,copy,state);button.addEventListener('click',()=>{selectedButton=button;selected=item;detailIsCentral=item.key.startsWith('capture:');chunkOffset=0;el<HTMLDetailsElement>('content-original').open=false;void readSelected();});root.append(button);
     }
   }
@@ -51,9 +53,9 @@ export function createContentLibraryUi(api:DesktopApi){
   async function readSelected(image=false){
     if(!selected)return;const version=++detailGeneration,archiveVersion=archiveGeneration,item=selected;
     el('content-detail-status').setAttribute('aria-busy','true');
-    el('content-detail-title').textContent=item.title||sourceName(item.source);el('content-detail-source').textContent=`${sourceName(item.source)} · ${item.sourceName??''} · ${new Date(item.observedAt).toLocaleString(getLocale())}`;
+    el('content-detail-title').textContent=item.source==='note'?sourceName(item.source):item.title||sourceName(item.source);el('content-detail-source').textContent=`${item.source==='note'?'':sourceName(item.source)+' · '}${item.sourceName??''} · ${new Date(item.observedAt).toLocaleString(getLocale())}`;
     el('content-detail-range').hidden=true;el('content-detail-body').textContent='';el('content-detail-original-state').textContent='';el('content-detail-metadata').textContent='';el<HTMLImageElement>('content-detail-image').removeAttribute('src');el('content-detail-status').textContent=moteText('正在读取内容…');el('content-detail-next').hidden=true;el('content-detail-central').hidden=true;el('content-original').hidden=true;
-    if(!dialog.open){dialog.showModal();el('content-detail-title').focus();}stages(item.key.startsWith('capture:'),'unknown');
+    if(!dialog.open){el<HTMLDetailsElement>('content-processing').open=false;dialog.showModal();el('content-detail-title').focus();}stages(item.key.startsWith('capture:'),'unknown');
     try{
       const result:ContentDetail|SyncContent=item.key.startsWith('capture:')?await api.centralContentDetail(item.key.slice(8),chunkOffset,image):await api.localContentDetail(item.key,image);
       if(version!==detailGeneration||!dialog.open)return;

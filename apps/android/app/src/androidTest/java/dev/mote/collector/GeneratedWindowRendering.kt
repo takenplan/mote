@@ -43,7 +43,7 @@ internal object GeneratedWindowRendering {
             "content-populated" -> Triple("content", "content", "本机保留")
             "note", "note-keyboard" -> Triple("note", "empty", "草稿已载入")
             "home-note-original", "note-detail-english" -> Triple("reader", "content", "原文")
-            "note-return-list" -> Triple("records", "content", "按日期浏览记录，点开查看原文。")
+            "note-return-list" -> Triple("records", "content", "查看记录说明")
             "note-empty-list" -> Triple("records", "empty", "当天没有随手记。选择其他日期，或添加一条随手记。")
             "settings" -> Triple("settings", "content", "连接与同步")
             "connection" -> Triple("connection", "content", "连接与同步")
