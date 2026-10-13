@@ -8,6 +8,7 @@ import type {MemoryReviewCache} from './memory-review-cache.js';
 import {defaultMemoryReviewStrategy} from './memory-review-policy.js';
 import {memoryReviewStrategySchema,memoryStrategyPin,MEMORY_CANDIDATE_OUTPUT_CONTRACT,type MemoryReviewStrategy} from './memory-strategy-contract.js';
 import {validationFeedback,type MemoryOutputValidationCode} from './memory-validation.js';
+import {memoryReadRanges} from './memory-read-context.js';
 
 const receipts=new WeakMap<QueryResult,MemoryReviewReceipt>();
 export function memoryReviewReceipt(result:QueryResult){return receipts.get(result);}
@@ -18,6 +19,12 @@ type ReviewOptions={draftOrigin?:MemoryDraftOrigin;deletions?:MemoryDeletions;au
 /** A separate read-only model pass. The host still validates exact evidence after review. */
 export async function reviewMemory(input:QueryInput,draft:QueryResult,query:(input:QueryInput)=>Promise<QueryResult>,options?:ReviewOptions):Promise<QueryResult> {
   input.signal?.throwIfAborted();
+  // Re-disclose extraction's actual original reads to the independent reviewer;
+  // the broader grant remains available for its own autonomous inspection.
+  if(input.evidenceReadRanges){
+    const ranges=memoryReadRanges(draft,input.evidenceRanges??[],input.evidenceReadRanges);
+    input={...input,evidenceIds:[...new Set([...(input.evidenceIds??[]),...ranges.map(range=>range.id)])],evidenceRanges:ranges};
+  }
   const strategy=options?.strategy?memoryReviewStrategySchema.parse(options.strategy):undefined;
   let value: {memories:unknown[]};
   try{value=JSON.parse(draft.answer);if(!Array.isArray(value.memories))throw Error();}catch{throw new MemoryOutputValidationError('json','Invalid memory draft');}

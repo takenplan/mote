@@ -187,7 +187,7 @@ export function createAgent(options: AgentOptions) {
   const configured =
     !!options.model?.trim() && (!!options.apiKey?.trim() || localWithoutKey);
   async function execute(input: QueryInput): Promise<AgentAnswer> {
-    input=pinContextTools({...input,...(options.contextToolMode?{hostContextToolMode:options.contextToolMode}:{})},options.reader);
+    input=pinContextTools({...input,...(input.evidenceReadRanges?{evidenceReadRanges:Object.freeze(input.evidenceReadRanges.map(range=>Object.freeze({...range})))}:{}),...(options.contextToolMode?{hostContextToolMode:options.contextToolMode}:{})},options.reader);
     input.signal?.throwIfAborted();
     if (closed) throw new AgentClosedError();
     if (!configured) throw new AgentNotConfiguredError();
@@ -303,7 +303,7 @@ export function createAgent(options: AgentOptions) {
         reportProgress(input,{stage:'validating'});
         trace({type:'validation.started',stage:'validating',phase:'started'});
         for(let repair=0;;repair++){
-          try { const answer=completeAnswer(result);await validateHostOutput(input,{...answer,trace:bridge.trace,runId});trace({type:'validation.completed',stage:'validating',phase:'completed',status:'accepted',payload:{citations:answer.citations.map(citation=>citation.id)}});return answer; }
+          try { const answer=completeAnswer(result);await validateHostOutput(input,{...answer,...(input.evidenceIds!==undefined?{evidenceReadRanges:bridge.deliveredRanges}:{}),trace:bridge.trace,runId});trace({type:'validation.completed',stage:'validating',phase:'completed',status:'accepted',payload:{citations:answer.citations.map(citation=>citation.id)}});return answer; }
           catch (error) {
             if (!(error instanceof AgentResponseError)||error.reason==='tool_failure'||repair>=MAX_OUTPUT_REPAIRS) throw error;
             trace({type:'validation.failed',stage:'validating',phase:'completed',status:'rejected',payload:{reason:error.reason}});
@@ -348,6 +348,7 @@ export function createAgent(options: AgentOptions) {
       trace({type:'run.completed',stage:'validating',phase:'completed',status:'succeeded',payload:{citations:answer.citations.map(citation=>citation.id),toolCalls:bridge.trace}});
       return {
         ...answer,
+        ...(input.evidenceIds!==undefined?{evidenceReadRanges:bridge.deliveredRanges}:{}),
         sourceContextDependencies:bridge.sourceContextDependencies,evidenceDependencies:bridge.evidenceDependencies,
         trace: bridge.trace,contextUsage:{...metrics,toolResults:bridge.deliveredCharacters},
         runId,

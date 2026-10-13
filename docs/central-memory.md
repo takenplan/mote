@@ -1,6 +1,6 @@
 # 中央导入、记忆与洞察
 
-> 用户自身表达、代办任务和项目归属见[个人记忆归属](personal-memory-attribution.md)。用户的日常、重复主观表达可以成为个人记忆；第三方或身份未知的有用内容可成为来源限定观察。导入背景、个人 v3 和默认升级见[有限个人 Memory ADR](adr-bounded-personal-memory.md)。
+> 用户自身表达、代办任务和项目归属见[个人记忆归属](personal-memory-attribution.md)。用户的日常、重复主观表达可以成为个人记忆；第三方或身份未知的有用内容可成为来源限定观察。个人 v4、新任务的按需原件上下文读取和未来默认升级见[上下文读取 ADR](adr-memory-context-reading.md)，旧 v3 固定定义见[有限个人 Memory ADR](adr-bounded-personal-memory.md)。
 
 > 当前 Central epoch 4：新产物须经过 admission 分层与独立审核；已授权且就绪的新输入采用有界滚动package，保留artifact/history的固定窗口。当前规则见 [系统改造ADR](adr-system-refactor.md)、[记忆准入设计](memory-admission.md)，存储边界见 [MVP 基线 ADR](adr-mvp-baseline.md)。
 

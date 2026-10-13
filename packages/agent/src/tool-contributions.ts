@@ -34,18 +34,18 @@ export class ContextToolRegistry {
 export function pinContextTools(input:QueryInput,reader:ContextReader):QueryInput{
   const pinned=input.toolContributions?input:{...input,toolContributions:reader.contextTools?.()??[]};
   const contributions=new Map((pinned.toolContributions??[]).map(tool=>[tool.name,tool]));
-  const snapshot=[...CONTEXT_TOOLS,...(pinned.toolContributions??[]).map(tool=>[tool.name,tool.description,tool.fields] as const)].map(([name,description,fields])=>({name,version:contributions.get(name)?.version??'1',fingerprint:createHash('sha256').update(JSON.stringify([description,fields])).digest('hex')})).sort((a,b)=>a.name.localeCompare(b.name));
+  const snapshot=[...CONTEXT_TOOLS.filter(([name])=>name!=='context_evidence'||pinned.evidenceIds!==undefined&&Boolean(pinned.evidenceReadRanges?.length)),...(pinned.toolContributions??[]).map(tool=>[tool.name,tool.description,tool.fields] as const)].map(([name,description,fields])=>({name,version:contributions.get(name)?.version??'1',fingerprint:createHash('sha256').update(JSON.stringify([description,fields])).digest('hex')})).sort((a,b)=>a.name.localeCompare(b.name));
   if(input.contextCapabilitySnapshot&&JSON.stringify(input.contextCapabilitySnapshot)!==JSON.stringify(snapshot))throw new ContextToolError('context_capabilities_changed','The query capability manifest changed. This saved query cannot gain new capabilities on resume.','stop');
   input.onContextCapabilities?.(snapshot);
   return {...pinned,contextCapabilitySnapshot:snapshot};
 }
 export function registeredContextToolDefinitions(input:QueryInput){
-  return [...CONTEXT_TOOLS,...(input.toolContributions??[]).map(tool=>[tool.name,tool.description,tool.fields] as [string,string,Record<string,Record<string,unknown>>]),...hostControlDefinitions(input.hostControlChannel)];
+  return [...CONTEXT_TOOLS.filter(([name])=>name!=='context_evidence'||input.evidenceIds!==undefined&&Boolean(input.evidenceReadRanges?.length)),...(input.toolContributions??[]).map(tool=>[tool.name,tool.description,tool.fields] as [string,string,Record<string,Record<string,unknown>>]),...hostControlDefinitions(input.hostControlChannel)];
 }
 
 // Ordinary discovery/reading and image modalities need no catalog round trip.
 // Special capabilities remain registered host code, never arbitrary RPC/URLs.
-export const NATIVE_CONTEXT_TOOLS=new Set(['material_catalog','material_read','attribution_context','search_context','timeline','evidence','memories','read_image','progress_update']);
+export const NATIVE_CONTEXT_TOOLS=new Set(['material_catalog','material_read','attribution_context','search_context','timeline','evidence','context_evidence','memories','read_image','progress_update']);
 export const CAPABILITY_TOOLS:[string,string,Record<string,Record<string,unknown>>][]=[
   ['capability_discover','List registered read-only special capabilities as brief metadata. Pass an exact listed name to obtain its pinned version and argument schema before capability_execute. This host catalog cannot expand scope or authorize citations.',{name:{type:'string',description:'Exact registered capability name; omit for the brief list'}}],
   ['capability_execute','Execute one previously discovered registered read-only capability. Copy its exact name/version and encode arguments as a JSON object string following the discovered schema. The host validates schema, current authority, scope and the shared budgets. No URL, RPC, shell, code or write capability is available.',{name:{type:'string',required:true},version:{type:'string',required:true},argumentsJson:{type:'string',required:true,description:'JSON object matching the discovered argument schema'}}],
