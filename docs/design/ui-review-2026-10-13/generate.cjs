@@ -160,13 +160,14 @@ for(const revision of ['baseline','candidate']){
   if(revision==='candidate')add('android',revision,'detail',variant,language,join(directory,'home-note-original.png'),verified||selected.verifiedPlatforms?.android,'从当前可见首页的确切生成笔记进入，验证同一记录 ID 和原始正文。');
  }
 }
-const sceneMap={home:'home','home-populated':'populated',add:'add',content:'content',reader:'detail','note-composer':'note','ask-disconnected':'ask'};
+const sceneMap={home:'home','home-populated':'populated',add:'add',content:'content',reader:'detail','note-composer':'note','ask-disconnected':'ask',guide:'guide',import:'import'};
 if(refresh('mac')&&sources.candidate.macSceneManifest){
  const reviewer=JSON.parse(readFileSync(resolve(repo,sources.candidate.macSceneManifest),'utf8'));assert.equal(reviewer.generatedOnly,true);
  if(reviewer.build)manifest.candidateBuilds={...manifest.candidateBuilds,mac:reviewer.build};
  for(const record of reviewer.scenes){assert.equal(record.generatedOnly,true);if(!sceneMap[record.scene])continue;
   if(record.sha256)assert.equal(createHash('sha256').update(readFileSync(record.path)).digest('hex'),record.sha256,'Selected Mac scene hash: '+record.scene);
-  add('mac','candidate',sceneMap[record.scene],record.size,record.locale==='en'?'en':'zh',record.path,sources.candidate.verifiedPlatforms?.mac??sources.candidate.verified,'当前构建实际生成界面；采集与系统权限使用生成 fixture 桩。');
+  const boundary=record.scene==='guide'?'完整功能目录位于中央 Web；此 Mac 截图只记录入口的当前状态，不证明完整目录已打开。':'当前构建实际生成界面；采集与系统权限使用生成 fixture 桩。';
+  add('mac','candidate',sceneMap[record.scene],record.size,record.locale==='en'?'en':'zh',record.path,sources.candidate.verifiedPlatforms?.mac??sources.candidate.verified,boundary+(record.notes?' '+record.notes:''));
  }
 }
 if(refresh('mac')&&sources.candidate.macRoot)add('mac','candidate','populated-content','compact','en',join(sources.candidate.macRoot,'mixed-source-content-en-compact.png'),sources.candidate.verifiedPlatforms?.mac??sources.candidate.verified,'同一本机内容列表中的生成通知、笔记与文件；使用真实队列导入与原文阅读，系统通知观察器为 fixture。');

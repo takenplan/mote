@@ -563,3 +563,14 @@ inspected generated states, not a first-time-user experiment. Physical devices,
 real capture, live models, external accounts, native dialogs and full
 accessibility remain unverified. Component checks and branch delivery are
 reported separately.
+
+The final static-delivery audit added seven Mac screenshots from the same held
+D2 build: all four guide-entry conditions and the three missing import-confirmation
+conditions. The reviewer inspected English compact images. Guide correctly shows
+the disconnected connection-settings destination; its caption explicitly states
+that the full directory lives in central Web and has not opened here. Import
+shows the real generated-file confirmation panel, without confirming a task.
+The fixture finished with capture stopped, zero queue records and zero sources;
+its process and profile were removed. This closes static walkthrough gaps without
+changing product code or scores. Both native walkthroughs now have current images
+for all four language/size conditions; old-baseline gaps remain explicit.
