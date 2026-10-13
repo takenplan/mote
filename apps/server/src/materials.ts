@@ -589,8 +589,10 @@ export class MaterialStore {
   private sameReadinessBody(head:HeadRow,draft:MaterialDraft):boolean {
     const current=this.get(formatMaterialRef(head.id,head.revision));if(!current)return false;
     const body=(value:MaterialDraft)=>{
-      const {coverage:_,artifacts,blocks,...rest}=value;
-      return canonicalContext({...rest,artifacts:artifacts?.map(({state:__,reason:___,...artifact})=>artifact),
+      const {coverage:_,artifacts,blocks,attributionContext,...rest}=value;
+      // Reads expand private declaration prose; publication pins only its
+      // identities. Compare the same authority representation on both sides.
+      return canonicalContext({...rest,...(attributionContext?{attributionContext:contextMetadata(attributionContext)}:{}),artifacts:artifacts?.map(({state:__,reason:___,...artifact})=>artifact),
         blocks:blocks.map(block=>{if(!block.evidenceIds?.length){const {evidenceIds:__,...plain}=block;return plain;}return block;})});
     };
     return JSON.stringify(body(this.contextDraft(current)))===JSON.stringify(body(draft));
