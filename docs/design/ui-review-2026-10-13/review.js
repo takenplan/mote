@@ -3,53 +3,61 @@
  const data=window.MOTE_UI_REVIEW;
  if(!data||!data.generatedOnly)throw Error('Generated-only screenshot manifest is required');
  const state={platform:'mac',variant:'normal',language:'zh',scene:'home',compare:true};
- const noteKey='mote.offlineUiReview.2026-10-13';
- let notes={mac:{preference:'',text:''},android:{preference:'',text:''}},storageAvailable=true;
- try{const saved=JSON.parse(localStorage.getItem(noteKey)||'null');if(saved)for(const platform of ['mac','android'])if(saved[platform])notes[platform]={preference:['candidate','baseline'].includes(saved[platform].preference)?saved[platform].preference:'',text:String(saved[platform].text||'')};}catch{storageAvailable=false;}
+ const noteKey='mote.offlineUiReview.'+(data.source.evaluation?.reviewId||'2026-10-13');
+ const reviewedPlatforms=Object.keys(data.platforms);
+ let notes=Object.fromEntries(reviewedPlatforms.map(platform=>[platform,{preference:'',text:''}])),storageAvailable=true;
+ try{const saved=JSON.parse(localStorage.getItem(noteKey)||'null');if(saved)for(const platform of reviewedPlatforms)if(saved[platform])notes[platform]={preference:['candidate','baseline'].includes(saved[platform].preference)?saved[platform].preference:'',text:String(saved[platform].text||'')};}catch{storageAvailable=false;}
  const $=selector=>document.querySelector(selector);
  const sceneInfo=id=>data.scenes.find(item=>item.id===id);
  const variantLabel=()=>data.platforms[state.platform].variantLabels[state.variant]||data.variantLabels[state.variant];
- const find=(revision,scene=state.scene)=>data.assets.find(item=>item.platform===state.platform&&item.revision===revision&&item.scene===scene&&item.variant===state.variant&&item.language===state.language);
+ const excluded=new Set((data.invalidHistoricalEvidence||[]).map(item=>item.src));
+ const find=(revision,scene=state.scene)=>data.assets.find(item=>!excluded.has(item.src)&&item.platform===state.platform&&item.revision===revision&&item.scene===scene&&item.variant===state.variant&&item.language===state.language);
  const evidence=revision=>find(revision);
- const subtitles=['整体设计与身份','有意为产品做出的原创选择','字体、间距、对比度与响应','实际可用性与状态转换','追加项：用途、起点和重要入口'];
+ const subtitles=data.metricDescriptions||['整体设计与身份','有意为产品做出的原创选择','字体、间距、对比度与响应','实际可用性与状态转换','追加项：用途、起点和重要入口'];
+ const unchanged=()=>data.source.candidate.unchangedPlatforms?.includes(state.platform)??(state.platform==='web'&&!data.source.candidate.webRoot);
  $('#final-validation').hidden=!data.finalValidation;
  function sceneAvailable(id){return !!(find('baseline',id)||find('candidate',id));}
  function platformScenes(){return data.scenes.filter(item=>data.platforms[state.platform].walkthrough.includes(item.id)||data.assets.some(asset=>asset.platform===state.platform&&asset.scene===item.id));}
  function option(value,label){const e=document.createElement('option');e.value=value;e.textContent=label;return e;}
- function selectedAsset(revision){return evidence(revision)||(revision==='candidate'&&state.platform==='web'?evidence('baseline'):undefined);}
+ function selectedAsset(revision){return evidence(revision)||(revision==='candidate'&&unchanged()?evidence('baseline'):undefined);}
  function candidateLabel(){return data.source.candidate.platformLabels?.[state.platform]||data.source.candidate.label;}
  function renderPane(revision){
   const item=selectedAsset(revision),img=$('#'+revision+'-image'),button=$(`[data-enlarge="${revision}"]`),missing=$('#'+revision+'-missing');
   button.hidden=!item;missing.hidden=!!item;
-  const reused=revision==='candidate'&&state.platform==='web';
-  const label=revision==='baseline'?data.source.baseline.label:reused?'沿用第 5 轮':candidateLabel();
+  const reused=revision==='candidate'&&unchanged();
+  const before=data.source.baseline.platformLabels?.[state.platform]||data.source.baseline.label;
+  const label=revision==='baseline'?before:reused?'沿用 '+before:candidateLabel();
+  $('#baseline-pane figcaption h3').textContent=before;
   if(revision==='candidate')$('#candidate-label').textContent=label;
-  $('#'+revision+'-tag').textContent=item?(item.verified?'已验证生成截图':'实际生成截图 · 待完成验证'):'证据未提供';
+  $('#'+revision+'-tag').textContent=item?(item.captureKind==='dialog-fragment'?'旧对话框片段':item.verified?'已验证生成截图':'实际生成截图 · 待完成验证'):'证据未提供';
   if(item){
    img.src=item.src;img.alt=`${data.platforms[state.platform].title} ${label} · ${sceneInfo(state.scene).title} · ${state.language==='en'?'English':'中文'} · ${variantLabel()}，实际生成 fixture 截图`;
-   $('#'+revision+'-caption').textContent=`原始图像 ${item.width} × ${item.height} px · ${item.note||'复制原图，未绘制替代界面。'}${reused?' 本轮没有 Web 新候选。':''}`;
+   button.dataset.captureKind=item.captureKind||'app-window';
+   $('#'+revision+'-caption').textContent=`原始图像 ${item.width} × ${item.height} px · ${item.captureKind==='dialog-fragment'?'旧轮次仅保存对话框局部，不能按完整手机界面比较。 ':''}${item.note||'复制原图，未绘制替代界面。'}${reused?' 本端产品呈现未改变。':''}`;
   }else{
    img.removeAttribute('src');img.alt='';
    const isCandidate=revision==='candidate';
-   missing.textContent=isCandidate&&!data.assets.some(asset=>asset.platform===state.platform&&asset.revision==='candidate')?'当前原生候选尚未同步生成截图。':'此版本未提供当前语言 / 条件的这个场景。';
+   const invalid=data.invalidHistoricalEvidence?.find(entry=>data.assets.some(asset=>asset.src===entry.src&&asset.platform===state.platform&&asset.revision===revision&&asset.scene===state.scene&&asset.variant===state.variant&&asset.language===state.language));
+   missing.textContent=invalid?invalid.reason:isCandidate&&!data.assets.some(asset=>asset.platform===state.platform&&asset.revision==='candidate')?'当前方案尚未同步生成截图。':'此版本未提供当前语言 / 条件的这个场景。';
    $('#'+revision+'-caption').textContent='未用其他语言、尺寸或旧轮次替代缺失证据。';
   }
  }
  function renderScores(){
   const before=data.source.baseline.scores[state.platform],after=data.source.candidate.scores[state.platform];
-  $('#candidate-score-title').textContent=state.platform==='web'?'沿用第 5 轮':candidateLabel();
+  $('#candidate-score-title').textContent=unchanged()?'未改动':candidateLabel();
   const rows=$('#score-rows');rows.replaceChildren();
   data.metrics.forEach((metric,index)=>{
    const row=document.createElement('tr'),name=document.createElement('th');name.scope='row';name.textContent=metric;
    const subtitle=document.createElement('span');subtitle.className='metric-subtitle';subtitle.textContent=subtitles[index];name.append(subtitle);row.append(name);
-   const baseline=document.createElement('td');baseline.textContent=String(before[index]);row.append(baseline);
-   const candidate=document.createElement('td');candidate.textContent=state.platform==='web'?'未改动':after?String(after[index]):'待独立复评';row.append(candidate);
+   const baseline=document.createElement('td');baseline.textContent=Number.isFinite(before[index])?String(before[index]):'未评估';row.append(baseline);
+   const candidate=document.createElement('td');candidate.textContent=unchanged()?'未改动':Number.isFinite(after?.[index])?String(after[index]):'待独立复评';row.append(candidate);
    const change=document.createElement('td');
-   if(after&&state.platform!=='web'){const difference=after[index]-before[index];change.textContent=(difference>0?'+':'')+Number(difference.toFixed(2));if(difference>0)change.className='positive';}
+   if(!unchanged()&&Number.isFinite(after?.[index])&&Number.isFinite(before[index])){const difference=after[index]-before[index];change.textContent=(difference>0?'+':'')+Number(difference.toFixed(2));if(difference>0)change.className='positive';}
    else change.textContent='—';row.append(change);rows.append(row);
   });
-  $('#score-note').textContent=state.platform==='web'?'Web 原四项及追加项如左列。本次补充工作聚焦原生原创性，不为未改动的 Web 添加新评分。':after?'候选分数来自独立评审；图片浏览与静态示意本身不证明功能成功。原生原创性的新目标为严格高于 7，其他四项不低于第 5 轮。':'第 5 轮原生原创性为 6.5；新候选要求严格高于 7，其他四项不低于第 5 轮。候选尚未完成独立复评，未根据外观自动加分。';
-  $('#candidate-score-source').hidden=state.platform==='web'||!data.source.candidate.scoreSource;
+  $('#score-note').textContent='原五项保留，追加页面职责与视觉一致性；分别判断，不计算总分。反馈前列为历史发布分数，新增两项当时未评估，失效加载壳不再作为完成页面证明。当前分数需独立操作复评，图片本身不证明功能完成。';
+  $('#candidate-score-source').hidden=!data.source.candidate.scoreSource;
+  if(data.source.candidate.scoreSource)$('#candidate-score-source').href=data.source.candidate.scoreSource;
  }
  function renderJourney(){
   const ids=data.platforms[state.platform].walkthrough,journey=$('#journey');journey.replaceChildren();
@@ -77,8 +85,8 @@
   renderPane('baseline');renderPane('candidate');renderJourney();renderScores();
   $('#selection-status').textContent=`${platform.title} · ${state.language==='en'?'English':'中文'} · ${variantLabel()} · ${sceneInfo(state.scene).title}。${sceneInfo(state.scene).purpose}${sceneAvailable(state.scene)?'':' 当前条件没有此场景的截图证据。'}`;
   $('#decisions').replaceChildren(...platform.decisions.map(text=>{const li=document.createElement('li');li.textContent=text;return li;}));
-  $('.owner-notes').hidden=state.platform==='web';
-  if(state.platform!=='web'){
+  $('.owner-notes').hidden=false;
+  {
    $('#preference-platform').textContent=platform.title+' 倾向';
    document.querySelectorAll('[name=preference]').forEach(input=>{input.checked=notes[state.platform].preference===input.value;});
    $('#owner-note').value=notes[state.platform].text;
@@ -97,14 +105,15 @@
  document.querySelectorAll('[name=preference]').forEach(input=>input.addEventListener('change',()=>{notes[state.platform].preference=input.value;saveNotes();}));
  $('#owner-note').addEventListener('input',()=>{notes[state.platform].text=$('#owner-note').value;saveNotes();});
  $('#clear-preference').addEventListener('click',()=>{notes[state.platform].preference='';saveNotes();render();});
- function decisionText(){return ['Mote 三端 UI 离线评审 · 2026-10-13',`对照：第 5 轮 / ${data.source.candidate.label}`,'生成截图；本页仅静态浏览，倾向不是功能验证。','',...['mac','android'].flatMap(platform=>[data.platforms[platform].title,`倾向：${({candidate:'倾向本轮',baseline:'保留第 5 轮'})[notes[platform].preference]||'未选择'}`,`候选：${data.source.candidate.platformLabels?.[platform]||data.source.candidate.label}`,`备注：${notes[platform].text||'无'}`,''])].join('\n');}
+ function decisionText(){return ['Mote 三端 UI 离线评审 · 2026-10-13',`对照：${data.source.baseline.label} / ${data.source.candidate.label}`,'生成截图；本页仅静态浏览，倾向不是功能验证。','',...reviewedPlatforms.flatMap(platform=>[data.platforms[platform].title,`倾向：${({candidate:'倾向本轮',baseline:'保留反馈前'})[notes[platform].preference]||'未选择'}`,`候选：${data.source.candidate.platformLabels?.[platform]||data.source.candidate.label}`,`备注：${notes[platform].text||'无'}`,''])].join('\n');}
  window.moteReviewDecisionText=decisionText;
  $('#export-decisions').addEventListener('click',()=>{const url=URL.createObjectURL(new Blob([decisionText()],{type:'text/plain;charset=utf-8'})),link=document.createElement('a');link.href=url;link.download='mote-ui-review-decisions-2026-10-13.txt';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
  const dialog=$('#image-dialog');
  document.querySelectorAll('[data-enlarge]').forEach(button=>button.addEventListener('click',()=>{
   const revision=button.dataset.enlarge,item=selectedAsset(revision);if(!item)return;
   $('#dialog-image').src=item.src;$('#dialog-image').alt=$('#'+revision+'-image').alt;
-  $('#dialog-title').textContent=`${data.platforms[state.platform].title} · ${revision==='baseline'?'第 5 轮':state.platform==='web'?'沿用第 5 轮':candidateLabel()} · ${sceneInfo(state.scene).title}`;
+  const label=revision==='baseline'?(data.source.baseline.platformLabels?.[state.platform]||data.source.baseline.label):candidateLabel();
+  $('#dialog-title').textContent=`${data.platforms[state.platform].title} · ${label} · ${sceneInfo(state.scene).title}`;
   $('#dialog-caption').textContent=`实际生成 fixture 截图 · ${item.width} × ${item.height} px · SHA-256 ${item.sha256.slice(0,16)}… · 图中按钮不执行产品操作。`;
   $('#dialog-canvas').classList.remove('pixels');$('#pixel-toggle').setAttribute('aria-pressed','false');$('#pixel-toggle').textContent='原始像素';dialog.showModal();
  }));

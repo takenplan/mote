@@ -20,6 +20,16 @@ async function run(){
  const manifest=JSON.parse(readFileSync(join(folder,'manifest.json'),'utf8'));
  assert.equal(manifest.generatedOnly,true);assert.ok(manifest.assets.length>0);
  for(const asset of manifest.assets){assert.equal(asset.generatedOnly,true);const bytes=readFileSync(join(folder,asset.src));assert.equal(createHash('sha256').update(bytes).digest('hex'),asset.sha256,'Original PNG bytes are retained');}
+ const excluded=new Set((manifest.invalidHistoricalEvidence||[]).map(item=>item.src));
+ const reusable=platform=>manifest.source.candidate.unchangedPlatforms?.includes(platform)??(platform==='web'&&!manifest.source.candidate.webRoot);
+ const selectedRevision=(revision,platform)=>revision==='candidate'&&reusable(platform)?'baseline':revision;
+ const available=(platform,revision,scene,variant,language)=>manifest.assets.find(item=>!excluded.has(item.src)&&item.platform===platform&&item.revision===selectedRevision(revision,platform)&&item.scene===scene&&item.variant===variant&&item.language===language);
+ for(const invalid of manifest.invalidHistoricalEvidence||[]){const asset=manifest.assets.find(item=>item.src===invalid.src);assert.ok(asset&&asset.sha256===invalid.sha256,'Exact invalid historical evidence');}
+ if(manifest.source.candidate.requireReadyEvidence)for(const asset of manifest.assets.filter(item=>item.revision==='candidate')){
+  assert.equal(asset.readiness?.ready,true,'Current scene content readiness: '+asset.src);
+  assert.ok(asset.readiness.page&&['content','empty','restriction'].includes(asset.readiness.state),'Known finished page state: '+asset.src);
+  assert.notEqual(asset.captureKind,'dialog-fragment','Current dialog scenes retain their full application context');
+ }
  for(const file of ['index.html','review.js','review.css','manifest.js','README.md','evidence/evaluator.md','evidence/journeys.md','evidence/validation.md'])assert.ok(existsSync(join(folder,file)),file);
  let reportPreviews=0,reportLinks=0;
  const documents=new Set(['README.md',...(manifest.documents||['evidence/evaluator.md','evidence/journeys.md','evidence/validation.md']),...(manifest.finalValidation?[manifest.finalValidation]:[])]);
@@ -38,8 +48,14 @@ async function run(){
  const corrupted=join(temporary,'corrupted-frozen'),first=manifest.assets[0];mkdirSync(join(corrupted,'assets'),{recursive:true});
  writeFileSync(join(corrupted,first.src),readFileSync(join(folder,first.src)));
  writeFileSync(join(corrupted,'manifest.json'),JSON.stringify({...manifest,assets:[{...first,sha256:'0'.repeat(64)}]}));
- const rejected=spawnSync(process.execPath,[join(__dirname,'generate.cjs'),'--frozen',corrupted,'--refresh-platform','mac','--refresh-platform','android'],{encoding:'utf8',env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});
+ const rejected=spawnSync(process.execPath,[join(__dirname,'generate.cjs'),'--frozen',corrupted,'--refresh-platform','web','--refresh-platform','mac','--refresh-platform','android'],{encoding:'utf8',env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});
  assert.notEqual(rejected.status,0,'Corrupt frozen PNG cannot be regenerated');assert.match(rejected.stderr,/Frozen PNG hash/);
+ if(manifest.source.baseline.originManifestSha256){
+  const before=createHash('sha256').update(readFileSync(join(folder,'manifest.json'))).digest('hex');
+  const unsafe=spawnSync(process.execPath,[join(__dirname,'generate.cjs')],{encoding:'utf8',env:{...process.env,ELECTRON_RUN_AS_NODE:'1'}});
+  assert.notEqual(unsafe.status,0,'A promoted feedback baseline cannot be reconstructed from obsolete fixture directories');assert.match(unsafe.stderr,/Feedback baseline requires --frozen/);
+  assert.equal(createHash('sha256').update(readFileSync(join(folder,'manifest.json'))).digest('hex'),before,'Rejected reconstruction cannot rewrite existing evidence');
+ }
  if(args.includes('--static-only')){
   const documentHashes=Object.fromEntries([...documents].map(name=>[name,createHash('sha256').update(readFileSync(join(folder,name))).digest('hex')]));
   writeFileSync(join(output,'result-static.json'),JSON.stringify({passed:true,generatedOnly:true,manifestSha256:createHash('sha256').update(readFileSync(join(folder,'manifest.json'))).digest('hex'),screenshots:manifest.assets.length,reportPreviews,reportLinks,documentHashes,frozenCorruptionRejected:true,boundary:'Static PNG bytes and document references only. No new UI interaction, product, native or live-model check.'},null,2));
@@ -56,13 +72,15 @@ async function run(){
  for(const platform of ['web','mac','android']){
   await evaluate(`document.querySelector('[data-platform="${platform}"]').click();true`);
   assert.equal(await evaluate("document.querySelector('[data-platform][aria-pressed=true]').dataset.platform"),platform);
+  assert.deepEqual(await evaluate("[...document.querySelectorAll('#score-rows th')].map(item=>item.childNodes[0].textContent)"),manifest.metrics,'All seven independent criteria remain visible');
+  assert.equal(await evaluate("document.querySelector('#score-rows').textContent.includes('NaN')"),false,'Missing historical criteria cannot produce invented numeric deltas');
   for(const language of ['zh','en']){
    await evaluate(`document.querySelector('#language').value='${language}';document.querySelector('#language').dispatchEvent(new Event('change',{bubbles:true}));true`);
    for(const variant of manifest.platforms[platform].variants){
     await evaluate(`document.querySelector('#variant').value='${variant}';document.querySelector('#variant').dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('#scene').value='home';document.querySelector('#scene').dispatchEvent(new Event('change'));true`);await readyImages();
     assert.equal(await evaluate('document.documentElement.scrollWidth>innerWidth'),false,'No horizontal overflow');
     for(const revision of ['baseline','candidate']){
-     const expected=manifest.assets.some(item=>item.platform===platform&&item.revision===(revision==='candidate'&&platform==='web'?'baseline':revision)&&item.scene==='home'&&item.variant===variant&&item.language===language);
+     const expected=!!available(platform,revision,'home',variant,language);
      assert.equal(await evaluate(`document.querySelector('[data-enlarge="${revision}"]').hidden`),!expected,'Missing scene cannot display a substitute');
     }
     const scenes=await evaluate("[...document.querySelector('#scene').options].map(item=>item.value)");
@@ -82,7 +100,7 @@ async function run(){
  await evaluate("document.querySelector('[name=preference][value=candidate]').click();document.querySelector('#owner-note').value='Generated offline decision note';document.querySelector('#owner-note').dispatchEvent(new Event('input'));true");
  assert.match(await evaluate('window.moteReviewDecisionText()'),/Mac\n倾向：倾向本轮\n候选：[^\n]+\n备注：Generated offline decision note/);
  await evaluate("document.querySelector('[data-platform=android]').click();document.querySelector('[name=preference][value=baseline]').click();true");
- assert.match(await evaluate('window.moteReviewDecisionText()'),/Android\n倾向：保留第 5 轮/);
+ assert.match(await evaluate('window.moteReviewDecisionText()'),/Android\n倾向：保留反馈前/);
  await evaluate("document.querySelector('[data-platform=mac]').click();true");assert.equal(await evaluate("document.querySelector('#owner-note').value"),'Generated offline decision note');
  const noteReload=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await noteReload;await until(()=>evaluate("!!document.querySelector('#scene')?.value"),'saved local notes reload');
  assert.equal(await evaluate("document.querySelector('#owner-note').value"),'Generated offline decision note','Nonempty local notes survive reload');
@@ -105,12 +123,17 @@ async function run(){
   for(const scene of scenes){
    await evaluate(`document.querySelector('#scene').value=${JSON.stringify(scene)};document.querySelector('#scene').dispatchEvent(new Event('change'));true`);await readyImages();
    for(const revision of ['baseline','candidate']){
-    const selected=revision==='candidate'&&platform==='web'?'baseline':revision;
-    const asset=manifest.assets.find(item=>item.platform===platform&&item.revision===selected&&item.scene===scene&&item.variant===variant&&item.language===language);
+    const asset=available(platform,revision,scene,variant,language);
     assert.equal(await evaluate(`document.querySelector('[data-enlarge="${revision}"]').hidden`),!asset,'Missing selected scene cannot display a substitute');
     if(asset)assert.equal(await evaluate(`document.querySelector('#${revision}-image').getAttribute('src')`),asset.src,'Exact selected scene is displayed');
    }
   }
+ }
+ for(const invalid of manifest.invalidHistoricalEvidence||[]){
+  const asset=manifest.assets.find(item=>item.src===invalid.src);
+  await evaluate(`document.querySelector('[data-platform="${asset.platform}"]').click();document.querySelector('#language').value='${asset.language}';document.querySelector('#language').dispatchEvent(new Event('change'));document.querySelector('#variant').value='${asset.variant}';document.querySelector('#variant').dispatchEvent(new Event('change'));document.querySelector('#scene').value='${asset.scene}';document.querySelector('#scene').dispatchEvent(new Event('change'));true`);await readyImages();
+  assert.equal(await evaluate("document.querySelector('[data-enlarge=baseline]').hidden"),true,'A decodable historical loading-shell PNG cannot appear as a completed page');
+  assert.equal(await evaluate("document.querySelector('#baseline-missing').textContent"),invalid.reason,'Owner sees the exact excluded evidence reason');
  }
  await evaluate("document.querySelector('[data-platform=web]').click();document.querySelector('#language').value='zh';document.querySelector('#language').dispatchEvent(new Event('change'));true");await readyImages();
  assert.equal(await evaluate("document.querySelector('[data-platform][aria-pressed=true]').dataset.platform"),'web');

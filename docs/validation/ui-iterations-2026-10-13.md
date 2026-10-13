@@ -1,5 +1,7 @@
 # 三端 UI 五轮迭代验证（2026-10-13）
 
+后续复查确认七张第 5 轮 Web 场景 PNG 截在读取状态；文件可解码不能证明目标页已加载完成。这些图片不再用于完成页面的设计对照。本文保留当时的命令和评分历史；当前证据硬门槛与用户反馈修正见 [页面职责与一致性合同](../design/ui-focus-and-consistency-2026-10-13.md)。
+
 本次在本地分支 `codex/ui-five-rounds` 上完成 Web、Mac、Android 的五轮实现与独立评估。没有发布或部署。方法合同见 [迭代记录](../design/ui-iterations-2026-10-13.md)，完整逐轮评分和实际操作见 [独立评估](../design/ui-iteration-evaluator-2026-10-13.md)，功能清单与测试边界见 [旅程清单](../design/ui-iteration-journeys-2026-10-13.md)。
 
 ## 实现结果
