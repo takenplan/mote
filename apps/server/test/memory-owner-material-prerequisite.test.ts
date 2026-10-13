@@ -1,3 +1,4 @@
+import {fixtureMemoryCapacity} from './fixtures/memory-planning.js';
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtemp,rm} from 'node:fs/promises';
@@ -38,7 +39,7 @@ async function fixture(t:TestContext){
       review:async(input,draft,_strategy,origin)=>reviewMemory(input,draft,async reviewInput=>{
         reviewCalls++;assert.equal(reviewInput.traceContext?.phase,'review');
         const members=(input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members,record=memories.readEvidence([originalId])[0];
-        return {runId:randomUUID(),answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:'needs_owner_input',candidateIndexes:[],question:{prompt:'Are you the speaker describing the generated telescope?',choices:[],reason:'The generated original does not establish owner correspondence.',evidence:[{id:member.id,quote:record.ocrText}]}})),capacity:{saturated:false}}),citations:[{id:originalId,capturedAt:record.capturedAt,appName:record.appName,excerpt:record.ocrText}],trace:[]};
+        return {runId:randomUUID(),answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:'needs_owner_input',candidateIndexes:[],question:{prompt:'Are you the speaker describing the generated telescope?',choices:[],reason:'The generated original does not establish owner correspondence.',evidence:[{id:member.id,quote:record.ocrText}]}})),...fixtureMemoryCapacity(input)}),citations:[{id:originalId,capturedAt:record.capturedAt,appName:record.appName,excerpt:record.ocrText}],trace:[]};
       },{draftOrigin:origin}),
     });
     questions=new OwnerQuestions(store);
@@ -65,7 +66,7 @@ for(const legacyVerified of [false,true])test(`raw-original reviewed owner quest
     // Recreate the observed pre-fix durable state through the real staging API.
     // The reviewed zero-candidate envelope was valid; only its Material-bound
     // continuation was missing, so no canonical external body is written.
-    await f.publication.stageExtract(batchId,output.result,output.model,{maxCandidates:memoryWorkCandidateLimit(output.chunks.length),profile:output.profile,requireAdmission:true,reviewReceipt:output.reviewReceipt,evidenceRanges:output.ranges,expectedFingerprints:Object.fromEntries(output.chunks.map((chunk:{id:string;fingerprint:string})=>[chunk.id,chunk.fingerprint]))},()=>{});
+    await f.publication.stageExtract(batchId,output.result,output.model,{workContract:output.workContract,maxCandidates:output.workContract==='range-evaluation@1'?undefined:memoryWorkCandidateLimit(output.chunks.length),profile:output.profile,requireAdmission:true,reviewReceipt:output.reviewReceipt,evidenceRanges:output.ranges,expectedFingerprints:Object.fromEntries(output.chunks.map((chunk:{id:string;fingerprint:string})=>[chunk.id,chunk.fingerprint]))},()=>{});
     assert.equal(f.store.db.prepare('SELECT state FROM memory_publications WHERE id=?').get(batchId)!.state,'verified');
   }
   const reviewedJson=JSON.stringify(output);await f.restart();

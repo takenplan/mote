@@ -16,7 +16,7 @@ import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 function members(input:MemoryPipelineQuery){return (input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members;}
 function output(input:MemoryPipelineQuery,runId:string,withCandidate=false,coverage=members(input),saturated=false):QueryResult{
  const first=members(input)[0],memories=withCandidate?[{title:'Generated preference',statement:`The owner prefers a blue bowl [${first.id}]`,uncertainty:'One synthetic statement',admission:{layer:'memory',reason:'An explicit generated preference',scope:'Fixture only',attribution:'user'},evidenceIds:[first.id],evidence:[{id:first.id,quote:'I prefer a blue bowl.'}]}]:[];
- return {runId,trace:[],citations:withCandidate?[{id:first.id,capturedAt:'2026-09-01T00:00:00Z',appName:'Generated',excerpt:''}]:[],answer:JSON.stringify({memories,coverage:coverage.map(member=>({key:member.key,state:withCandidate&&member.key===first.key?'checked':'no_candidates',candidateIndexes:withCandidate&&member.key===first.key?[0]:[]})),capacity:{saturated}})};
+ return {runId,trace:[],citations:withCandidate?[{id:first.id,capturedAt:'2026-09-01T00:00:00Z',appName:'Generated',excerpt:''}]:[],answer:JSON.stringify({memories,coverage:coverage.map(member=>({key:member.key,state:withCandidate&&member.key===first.key?'checked':'no_candidates',candidateIndexes:withCandidate&&member.key===first.key?[0]:[]})),...((input.taskContext!.memoryWork as {workContract?:string}).workContract==='range-evaluation@1'?{}:{capacity:{saturated}})})};
 }
 async function fixture(t:TestContext,count=4){
  const dir=mkdtempSync(join(tmpdir(),'mote-memory-package-')),store=new Store(dir),sources=new SourceStore(store),memories=new MemoryStore(store);
@@ -26,7 +26,9 @@ async function fixture(t:TestContext,count=4){
  let understand:((input:ConversationPreparation)=>Promise<{id:string;revision:string}[]|undefined>)|undefined;
  const pipeline=new MemoryPipeline({store,memories,understand:input=>understand?.(input)??Promise.resolve(undefined),configured:()=>true,model:()=> 'generated-model',requireAdmission:true,query:async input=>{seen.push(input);return generate(input);},review:(input,draft)=>reviewMemory(input,draft,async reviewed=>{reviews.push(reviewed as MemoryPipelineQuery);return review(reviewed as MemoryPipelineQuery,draft);})});
  t.after(async()=>{await pipeline.close();store.close();rmSync(dir,{recursive:true,force:true});});
- return {directory:dir,store,sources,memories,pipeline,ids,seen,reviews,setUnderstand(fn:NonNullable<typeof understand>){understand=fn;},setGenerate(fn:typeof generate){generate=fn;},setReview(fn:typeof review){review=fn;},create(){return pipeline.create({evidenceIds:ids,workPackage:{id:'synthetic-package',goal:'Inspect the authorized originals',instruction:'Preserve independent provenance'}});}};
+ // These retained scenarios characterize the old contract under its immutable
+ // recipe. New range-evaluation journeys live in memory-range-evaluation.test.ts.
+ return {directory:dir,store,sources,memories,pipeline,ids,seen,reviews,setUnderstand(fn:NonNullable<typeof understand>){understand=fn;},setGenerate(fn:typeof generate){generate=fn;},setReview(fn:typeof review){review=fn;},create(){return pipeline.create({evidenceIds:ids,recipes:[{id:'mote.personal-memory',version:'2'}],workPackage:{id:'synthetic-package',goal:'Inspect the authorized originals',instruction:'Preserve independent provenance'}});}};
 }
 
 test('wide packages use short exact coverage identities through Codex extraction, repair and independent review',async t=>{
@@ -46,7 +48,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  else if(m.method==='turn/start'){
   const incoming=JSON.parse(m.params.input[0].text);if(incoming.untrustedTaskContext)context=incoming;const work=context.untrustedTaskContext.memoryWork;turns++;
   appendFileSync(${JSON.stringify(delivered)},JSON.stringify({request:context.request,work,repair:Boolean(incoming.validationError),interpretations:context.untrustedTaskContext.untrustedInterpretations,evidenceIds:context.untrustedEvidence.map(r=>r.id),review:Boolean(context.untrustedTaskContext.untrustedMemoryDraft)})+'\\n');
-  const value={memories:[],coverage:work.members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),capacity:{saturated:false}};
+  const value={memories:[],coverage:work.members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),...(work.workContract==='range-evaluation@1'?{}:{capacity:{saturated:false}})};
   if(turns===1&&!context.untrustedTaskContext.untrustedMemoryDraft)value.coverage[18].key='member_999';
   send({id:m.id,result:{turn:{id:'generated-turn'}}});
   send({method:'item/completed',params:{threadId:'generated-thread',item:{id:'generated-answer',type:'agentMessage',text:JSON.stringify({answer:JSON.stringify(value),citationIds:[]})}}});
@@ -125,7 +127,7 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
   const context=JSON.parse(m.params.input[0].text),repair=Boolean(context.validationError);original??=context;
   const work=original.untrustedTaskContext.memoryWork,member=work.members[0],review=Boolean(original.untrustedTaskContext.untrustedMemoryDraft);
   appendFileSync(${JSON.stringify(delivered)},JSON.stringify({threadId,repair,review,feedback:context.validationError})+'\\n');
-  const value={memories:[{title:'Generated preference',statement:'The owner prefers a blue bowl ['+member.id+']',uncertainty:'One synthetic statement',admission:{layer:'memory',reason:'Explicit generated preference',scope:'Fixture only',attribution:'user'},evidenceIds:[member.id],evidence:[{id:member.id,quote:review||repair?'I prefer a blue bowl.':'I prefer the blue bowl.'}]}],coverage:[{key:member.key,state:'checked',candidateIndexes:[0]}],capacity:{saturated:false}};
+  const value={memories:[{title:'Generated preference',statement:'The owner prefers a blue bowl ['+member.id+']',uncertainty:'One synthetic statement',admission:{layer:'memory',reason:'Explicit generated preference',scope:'Fixture only',attribution:'user'},evidenceIds:[member.id],evidence:[{id:member.id,quote:review||repair?'I prefer a blue bowl.':'I prefer the blue bowl.'}]}],coverage:[{key:member.key,state:'checked',candidateIndexes:[0]}],...(work.workContract==='range-evaluation@1'?{}:{capacity:{saturated:false}})};
   send({id:m.id,result:{turn:{id:'generated-turn'}}});
   send({method:'item/completed',params:{threadId,item:{id:'generated-answer',type:'agentMessage',text:JSON.stringify({answer:JSON.stringify(value),citationIds:[member.id]})}}});
   send({method:'turn/completed',params:{threadId,turn:{status:'completed'}}});
@@ -194,6 +196,17 @@ for(const variant of ['valid','legacy','missing','saturated','contract','range']
   return [{id:artifact.id,revision:artifact.revision}];
  });
  const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'completed');assert.equal(f.seen.length,variant==='valid'?0:1);assert.equal(f.reviews.length,1);assert.equal(done.batches[0].reviewReceipt?.draftRunId,variant==='valid'?'authentic-understanding-run':'extract');
+});
+
+for(const variant of ['selected','legacy-products','legacy-contract','incomplete'] as const)test(`range evaluation reuses only a product carrying its frozen assessment contract: ${variant}`,async t=>{
+ const f=await fixture(t,1);
+ f.setUnderstand(async preparation=>{
+  assert.equal(preparation.memoryWork!.workContract,'range-evaluation@1');const member=preparation.memoryWork!.members[0],coverage=[{key:member.key,state:variant==='incomplete'?'incomplete':'no_candidates',candidateIndexes:[],...(variant==='incomplete'?{reason:'Generated producer did not assess all supplied input'}:{})}];
+  const metadata={productsVersion:variant==='legacy-products'?2:3,...(variant==='legacy-contract'?{}:{workContract:'range-evaluation@1'}),generationContract:preparation.generationContract,complete:true,runId:'generated-selected-understanding',memoryCandidates:[],memoryCoverage:coverage,evidenceRanges:preparation.ranges};
+  const artifact=f.store.archive.save('3'.repeat(64),'generated-selected-'+variant,'1'.repeat(64),{kind:'semantic',text:'Generated navigation',metadata},f.ids.map(id=>({id,fingerprint:f.store.archive.fingerprint(id)!})),'generated-only','1','2'.repeat(64));return [{id:artifact.id,revision:artifact.revision}];
+ });
+ const job=f.pipeline.create({evidenceIds:f.ids,workPackage:{id:'generated-selected-reuse',goal:'Assess the generated target',instruction:'Select useful context after complete range assessment'}}),done=await f.pipeline.run(job.id);
+ assert.equal(done.status,'completed');assert.equal(f.seen.length,variant==='selected'?0:1);assert.equal(f.reviews.length,1);assert.equal(done.batches[0].reviewReceipt?.draftRunId,variant==='selected'?'generated-selected-understanding':'extract');
 });
 
 test('compatible reviewers reuse a complete draft when transport target ordering changes',async t=>{

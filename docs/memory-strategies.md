@@ -34,19 +34,29 @@ const stopRecipe = ctx.memoryStrategies.registerRecipe({
 {
   "evidenceIds": ["a-current-formal-evidence-uuid"],
   "recipes": [
-    { "id": "mote.personal-memory", "version": "4" },
-    { "id": "mote.coding-memory", "version": "2" }
+    { "id": "mote.personal-memory", "version": "5" },
+    { "id": "mote.coding-memory", "version": "3" }
   ]
 }
 ```
 
-个人 v2 和 Coding v2 共用上下文提取器；个人 v3/v4 使用各自固定的个人提取器，审核器分别判断各自产物。它们都能处理日记或 Coding 会话等来源，一方的审核拒绝不会否决另一方。只有固定提取定义和输入相同才共享提取。手工任务未传 `recipes` 时仍沿用原有默认流程；正式来源资料的自动接收队列使用下面的独立组合选择。
+个人 v2 和 Coding v2 共用旧上下文提取器；个人 v3/v4/v5 使用各自固定的个人提取器，审核器分别判断各自产物。个人 v5、Coding v3 和日常事件 v2 使用新的 `range-evaluation@1` 契约。它们都能处理其授权范围内的来源，一方的审核拒绝不会否决另一方。只有固定提取定义、工作契约和输入相同才共享提取。新建任务未传 `recipes` 且有独立审核执行器时，固定新契约；正式来源资料的自动接收队列使用下面的独立组合选择。
 
-`mote.personal-memory@4` 组合 `mote.personal-extraction@2` 与 `mote.personal-review@4`。模型结合宿主声明与连续原件判断日记主叙述者；默认 unknown 不否定有范围依据的本人对应，少量通话声明也不自动否定日记。提取和审核可按具体缺口读取同一任务的已授权原件上下文，分别核对回顾年份、录制/导入时间、角色及续文。上下文只支持本批目标，不产生独立覆盖或候选；真实含混、猜测、计划和未知后续仍保留。详见[上下文读取 ADR](adr-memory-context-reading.md)。
+新契约要求每个授权目标范围完整评估并经过独立审核，由模型按固定策略选取有用 Memory 或观察线索，不穷举每个可能有用的事实。输出为 `{memories,coverage}`，没有 `capacity` 或候选数量配额；达到旧八/32候选数量不会触发语义递归切分。`checked` 与 `no_candidates` 均声明完整评估，`incomplete` 与具体原因保留未完成范围。既有输入/输出大小、字段、provider、草稿和存储限制仍校验，真实资源失败有界恢复，不截断正文或候选后假装完成。[范围评估 ADR](adr-memory-range-evaluation.md) 说明完成语义与兼容边界。
 
-`mote.personal-memory@3` 组合 `mote.personal-extraction@1` 与 `mote.personal-review@3`，固定定义继续保留。v3 保留有依据的个人意义，并允许身份对应未知的有限、来源限定观察。缺少本人对应关系不为个人化而逐条补问；真正必要的用户事实沿用整理问题生命周期。导入说明按确切原件及文字所声明的范围解释，第三方/AI 引文不继承为本人。详见 [有限个人 Memory ADR](adr-bounded-personal-memory.md)。
+| 新配方 | 固定提取器 | 固定审核器 |
+| --- | --- | --- |
+| `mote.personal-memory@5` | `mote.personal-extraction@3` | `mote.personal-review@5` |
+| `mote.coding-memory@3` | `mote.selected-context-extraction@1` | `mote.coding-review@3` |
+| `mote.daily-event-memory@2` | `mote.daily-event-extraction@2` | `mote.daily-event-review@2` |
 
-`mote.personal-memory@2` 与其原提取、审核定义继续保留，区分普通任务线索与有依据的个人意义或后续用途：单次感受、有意义的愿望和限定用途的资源关联仍可收录；不能仅以“未来可能追踪”为由，将待办、普通开发进度和一次性安排升为选中 Memory。这是可替换的产品政策，不是公共层的关键词规则，也不限制 Coding 或其他策略。当前安装个人 v2/v3/v4、Coding v2 和日常事件 v1；安装本身不授权历史重算。
+`workContract` 随配方定义/指纹和收据固定；新的未指定配方/原始证据任务在创建时固定契约，无需附带 work package，手工任务的未绑定回退也相同。显式旧配方优先于任务级新默认；其 binding 缺失字段、既有持久任务缺失字段，以及没有独立审核器的内部路径仍走旧契约。旧定义不原地改写，旧固定任务、未领取的固定配方收据、成功检查点及派生产物不自动升级或重跑。草稿、审核、理解产物和保留的发布结果复用均须匹配该契约；新未绑定任务采用中性程序，旧来源程序不能重新引入候选数量配额。
+
+`mote.personal-memory@4` 组合 `mote.personal-extraction@2` 与 `mote.personal-review@4`，保留其固定的上下文读取策略与旧容量契约。个人 v5 在新的提取 v3/审核 v5 定义中保留这些上下文解释责任，并采用上面的范围评估契约。模型结合宿主声明与连续原件判断日记主叙述者；默认 unknown 不否定有范围依据的本人对应，少量通话声明也不自动否定日记。提取和审核可按具体缺口读取同一任务的已授权原件上下文，分别核对回顾年份、录制/导入时间、角色及续文。上下文只支持本批目标，不产生独立覆盖或候选；真实含混、猜测、计划和未知后续仍保留。详见[上下文读取 ADR](adr-memory-context-reading.md)。
+
+`mote.personal-memory@3` 组合 `mote.personal-extraction@1` 与 `mote.personal-review@3`，固定定义继续保留。v3 保留有依据的个人意义，并允许身份对应未知的有限、来源限定观察。缺少本人对应关系不为个人化而逐条补问；真正必要的用户事实沿用整理问题生命周期。导入说明按确切原件及文字所声明的范围解释，第三方/AI 引文不继承为本人。详见[有限个人 Memory ADR](adr-bounded-personal-memory.md)。
+
+`mote.personal-memory@2` 与其原提取、审核定义继续保留，区分普通任务线索与有依据的个人意义或后续用途：单次感受、有意义的愿望和限定用途的资源关联仍可收录；不能仅以“未来可能追踪”为由，将待办、普通开发进度和一次性安排升为选中 Memory。这是可替换的产品政策，不是公共层的关键词规则，也不限制 Coding 或其他策略。当前安装个人 v2/v3/v4/v5、Coding v2/v3 和日常事件 v1/v2；安装本身不授权历史重算。
 
 `mote.coding-memory@2` 只替换独立的 `mote.coding-review@2`，继续共享原提取器。审核保留有依据的工程决定、失败机制与适用经验中的具体接口、前提、实施顺序和验证边界，可从原文补回草稿遗漏的必要细节；相关进展可以作为这条经验的上下文，但不能仅凭报错、修补、PR 或成功自述构成长效经验。尚未实施的有理由设计也可收录，须区分他人建议、用户采纳、已完成与未知。具体测试及结果才支持相应范围内的 `tested`，不能把未测试部分一并升级。内置 Coding v1 与个人 v1 已移除；当前配方仍固定自身定义，不因安装自动重算历史。
 
@@ -64,13 +74,15 @@ const stopRecipe = ctx.memoryStrategies.registerRecipe({
 {
   "sourceId": "an-existing-source-id",
   "recipes": [
-    { "id": "mote.personal-memory", "version": "4" },
-    { "id": "mote.coding-memory", "version": "2" }
+    { "id": "mote.personal-memory", "version": "5" },
+    { "id": "mote.coding-memory", "version": "3" }
   ]
 }
 ```
 
-省略 `sourceId` 和 `scope` 修改普通默认；传 `scope: "capture"` 修改采集默认；最多选择 9 个组合。新的 `recipes: []` 被拒绝；指定来源并传 `recipes: null` 恢复继承。持久化空选择也被拒绝；继承由缺少来源覆盖记录表示。配置接口只接受所有者凭据，采集端不能修改。首次建立普通默认只选择 `mote.personal-memory@4`；首次建立采集默认复制当时普通组合并追加日常事件 v1，之后两个默认独立持久化。已保存来源覆盖仍优先；用户移除日常事件后，重启不会重新追加。普通来源不自动启用 Coding 或日常事件。[v3](adr-bounded-personal-memory.md#固定版本与升级)与[v4](adr-memory-context-reading.md#默认与历史边界)的具名内置默认迁移只替换精确匹配旧内置默认的未来选择，保留既有 v2/v3 授权范围的执行资格，来源覆盖与自定义组合不动；不跟随任意安装版本漂移。用户后来选回旧版，重启不重复迁移。缺失的已选组件会显示为不可用，不偷偷替换为另一策略。
+省略 `sourceId` 和 `scope` 修改普通默认；传 `scope: "capture"` 修改采集默认；最多选择 9 个组合。新的 `recipes: []` 被拒绝；指定来源并传 `recipes: null` 恢复继承。持久化空选择也被拒绝；继承由缺少来源覆盖记录表示。配置接口只接受所有者凭据，采集端不能修改。首次建立普通默认只选择 `mote.personal-memory@5`；首次建立采集默认复制当时普通组合并追加日常事件 v2，之后两个默认独立持久化。已保存来源覆盖仍优先；用户移除日常事件后，重启不会重新追加。普通来源不自动启用 Coding 或日常事件。
+
+已有配置固定确切定义，不跟随任意安装版本漂移。[v3 内置默认升级](adr-bounded-personal-memory.md#固定版本与升级) 仍显式执行旧 v2→v3 迁移；随后[上下文读取升级](adr-memory-context-reading.md#默认与历史边界)将精确个人 v3 默认改为固定 v4，范围评估升级再将精确个人 v4 普通默认改为个人 v5，将精确个人 v4＋日常事件 v1 采集默认改为个人 v5＋日常事件 v2。完整迁移顺序是 v2→v3→v4→v5；各具名迁移保留固定目标并只执行一次。既有 v2/v3/v4 和日常事件 v1 收据保留原作用域及契约；来源覆盖、自定义组合和已成功产品不动。缺失的已选组件显示为不可用，不偷偷替换为另一策略。用户后来明确选回旧版，重启不会重复迁移。后续显式所有者选择仍按既有规则结束对应旧范围的保留资格。
 
 原件接收事务为当时选中的每个配方分别保存授权或拒绝，并固定同一接收时刻作为评估语境。公共队列按资料和配方范围保存状态，首次发布只延续自己的未用授权；重复接收、后来选择、改版本、重启和确定性重建都不补发历史授权。当前 API 拒绝 extraction.enabled:false 及来源 memory 字段；未授权输入和拒绝收据不能因重启、改配方而获得授权。收费历史处理继续通过所有者显式创建的 Memory job 发起。
 
@@ -161,4 +173,4 @@ node --import tsx scripts/review-memory-recipe-live.ts
 
 ## Rolling packages and reviewer-stage recovery (2026-10-10)
 
-Ordinary automatic inputs form bounded structural packages under their exact receipt/generation contracts. Packing does not imply semantic relatedness. Member time, attribution and target ranges remain independent; zero candidates still require review. Reviewer format/coverage failure preserves a valid extraction draft and repairs review only, subject to current evidence, recipe, configuration and deletion policy. An uncommitted saturated/incomplete batch is subdivided in full; checked declarations are not committed results. Coding reuse requires exact complete unsaturated v2 products. Existing cache bounds, retention and full-evidence locks remain. See [ADR](adr-system-refactor.md).
+Ordinary automatic inputs form bounded structural packages under their exact receipt/generation contracts. Packing does not imply semantic relatedness. Member time, attribution and target ranges remain independent; zero candidates still require review. Reviewer format/coverage failure preserves a valid extraction draft and repairs review only, subject to current evidence, recipe, configuration and deletion policy. Legacy uncommitted saturated batches retain their existing subdivision behavior. New `range-evaluation@1` work preserves explicit incomplete evaluation without semantic splitting; only actual resource failures use bounded recovery. Checked declarations remain uncommitted until their normal commit succeeds. Coding reuse requires an exact complete product under the same work contract; legacy v2 products additionally require unsaturated capacity. Existing cache bounds, retention and full-evidence locks remain. See the [system ADR](adr-system-refactor.md) and [range-evaluation ADR](adr-memory-range-evaluation.md).

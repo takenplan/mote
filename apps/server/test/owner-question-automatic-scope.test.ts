@@ -1,3 +1,4 @@
+import {fixtureMemoryCapacity} from './fixtures/memory-planning.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
@@ -21,7 +22,7 @@ async function fixture(t:import('node:test').TestContext){
    if(member.attributionContext?.ownerStatements?.length){const index=memories.length;memories.push({domain:'personal',title:'Generated uncertainty',statement:`The owner felt uncertain [${member.id}]`,uncertainty:'This generated conversation only.',admission:{layer:'memory',reason:'A generated expressed personally meaningful experience',scope:'This generated conversation only',attribution:'user'},evidenceIds:[member.id],evidence:[{id:member.id,quote:'I felt uncertain.'}]});return {key:member.key,state:'checked',candidateIndexes:[index]};}
    return {key:member.key,state:'needs_owner_input',candidateIndexes:[],question:{prompt:'Which generated speaker corresponds to you?',choices:[{id:'first',label:'First speaker',answer:'The first speaker corresponds to me.'}],evidence:[{id:member.id,quote:'I felt uncertain.'}]}};
   });
-  return {runId:'generated-'+randomUUID(),citations:memories.flatMap(memory=>memory.evidenceIds.map((id:string)=>({id,capturedAt:'2026-09-01T00:00:00Z',appName:'Generated',excerpt:''}))),trace:[],answer:JSON.stringify({memories,coverage,capacity:{saturated:false}})};
+  return {runId:'generated-'+randomUUID(),citations:memories.flatMap(memory=>memory.evidenceIds.map((id:string)=>({id,capturedAt:'2026-09-01T00:00:00Z',appName:'Generated',excerpt:''}))),trace:[],answer:JSON.stringify({memories,coverage,...fixtureMemoryCapacity(input)})};
  };
  const node=await buildApp(config,{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:generate},createModelAgent:async()=>({configured:true,close:async()=>{},query:generate})});await node.app.ready();
  const settings=node.lifecycle.settings();for(const id of ['working','consolidation','insights'] as const)settings[id].enabled=false;node.lifecycle.configure(settings);

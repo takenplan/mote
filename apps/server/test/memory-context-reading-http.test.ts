@@ -213,7 +213,7 @@ test('a persisted legacy job resumes its private draft after restart without gra
  let pipeline=new MemoryPipeline(options());
  t.after(async()=>{await pipeline.close();store.close();rmSync(dataDir,{recursive:true,force:true});});
  const job=pipeline.create({evidenceIds:[source.id],workPackage:{id:'generated-existing-job',goal:'Inspect the supplied generated original',instruction:'Preserve source attribution and uncertainty'}});
- const stored=JSON.parse(String(store.db.prepare('SELECT json FROM memory_jobs WHERE id=?').get(job.id)!.json));delete stored.contextReadVersion;
+ const stored=JSON.parse(String(store.db.prepare('SELECT json FROM memory_jobs WHERE id=?').get(job.id)!.json));delete stored.contextReadVersion;delete stored.workContract;
  store.db.prepare('UPDATE memory_jobs SET json=? WHERE id=?').run(JSON.stringify(stored),job.id);
  const failed=await pipeline.run(job.id);assert.equal(failed.status,'failed');assert.equal(extracts,1);assert.equal(reviews,1);
  const before=store.db.prepare('SELECT input_hash,json FROM memory_extraction_drafts WHERE batch_id=?').get(failed.batches[0].id)!;assert.ok(before);

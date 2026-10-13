@@ -17,3 +17,10 @@ Return JSON inside answer, with every supporting UUID in outer citationIds:
 Use separate short exact evidence entries for disjoint supporting passages, including multiple entries for one ID. Do not concatenate separated passages or replace the original Unicode punctuation with other quote styles.
 For a task breadcrumb set admission.layer=observation; do not summarize the external resource as a selected memory. For domain=coding add coding:{kind:"pitfall|decision|principle|preference",scope:"session|project|shared",applicability:"evidenced project, module, stage, conditions and exceptions",validation:"observed|user_confirmed|tested|unverified"}. Select one enum value, not the pipe-separated list. Project identity session/unknown requires session scope for project-specific claims. A project name found only in quoted content is a discussed subject, not a resolved workspace identity.
 For quotes omit offset and length: the host locates a unique exact substring within the delivered range. Preserve literal backslashes and line breaks. For ambiguous quotes provide a longer unique quote or the correct absolute UTF-16 offset. Shared principles/preferences require explicit cross-project intent or evidenced generalization with stated limits. Never generalize identifiers, credentials or paths into shared instructions.`;
+
+/** Preserve source/correction procedures while removing only trusted legacy quotas. */
+export function memoryRangeSelectionProfile(record:CaptureRecord){
+ const profile=memoryProfile(record),base=profile.id==='coding'?CODING_MEMORY_PROMPT:MEMORY_EXTRACTION_PROMPT;
+ const selected=profile.id==='coding'?base.replace('Propose at most 3 items','Select useful items'):base.replace('propose at most 8 useful, distinct memories','select useful, distinct memories');
+ return {...profile,skill:'memory-strategy' as const,prompt:selected+profile.prompt.slice(base.length)};
+}

@@ -50,8 +50,9 @@ test('HTTP import of a thousand generated originals rolls through bounded backgr
    materials:node.store.db.prepare('SELECT count(*) n FROM material_heads').get(),
    requests:node.store.db.prepare('SELECT auto_authorized,error,count(*) n FROM material_memory_requests GROUP BY auto_authorized,error').all(),
    jobs:node.store.db.prepare("SELECT json_extract(json,'$.status') status,json_extract(json,'$.errorCode') error,count(*) n FROM memory_jobs GROUP BY status,error").all()}));};
-  while(Date.now()<deadline){const {imported,checkpoints}=snapshot();if(ready(imported,checkpoints))return;if(imported.status==='failed')fail();await setTimeout(250);}
-  fail();
+  // A busy event loop may resume after its timer deadline even though the
+  // final checkpoint committed first. Inspect terminal state before expiry.
+  for(;;){const {imported,checkpoints}=snapshot();if(ready(imported,checkpoints))return;if(imported.status==='failed'||Date.now()>=deadline)fail();await setTimeout(250);}
  };
  const prefixStarted=Date.now();
  await waitForPhase('prior 999 receipts committed',300000,(_imported,checkpoints)=>checkpoints===999);

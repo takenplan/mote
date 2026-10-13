@@ -1,4 +1,5 @@
 import {fixtureMemoryResult,fixtureMemoryPipeline} from './fixtures/memory-result.js';
+import {fixtureMemoryWorkResult} from './fixtures/memory-planning.js';
 import {test,type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -30,7 +31,7 @@ test('strict admission requires exact provenance; missing admission is refused a
 
 test('independent review can reject a valid draft without saving it; empty completion still checkpoints',async t=>{
  const {sources,memories,store}=fixture(t),a=await original(sources);let reviews=0;
- const pipeline=fixtureMemoryPipeline({store,memories,requireAdmission:true,configured:()=>true,model:()=> 'fixture',query:async()=>result(a.id),review:async(input,draft)=>reviewMemory(input,draft,async request=>{reviews++;assert.ok(request.taskContext?.untrustedMemoryDraft);return {answer:'{"memories":[]}',citations:[],trace:[],runId:'review-rejected'};})});t.after(()=>pipeline.close());
+ const pipeline=new MemoryPipeline({store,memories,requireAdmission:true,configured:()=>true,model:()=> 'fixture',query:async input=>fixtureMemoryWorkResult(input,result(a.id)),review:async(input,draft)=>reviewMemory(input,draft,async request=>{reviews++;assert.ok(request.taskContext?.untrustedMemoryDraft);return fixtureMemoryWorkResult(request,{answer:'{"memories":[]}',citations:[],trace:[],runId:'review-rejected'});})});t.after(()=>pipeline.close());
  const job=await pipeline.run(pipeline.create({evidenceIds:[a.id]}).id);assert.equal(job.status,'completed');assert.equal(reviews,1);assert.equal(memories.list().length,0);assert.equal(pipeline.create({evidenceIds:[a.id]}).totalBatches,0);
 });
 

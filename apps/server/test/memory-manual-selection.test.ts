@@ -11,6 +11,9 @@ import {MemoryStrategies} from '../src/memory-strategies.js';
 import {materialSourcePin,materialSourceCurrent} from '../src/material-source-pin.js';
 import {SourcePipelineRuntime} from '../src/source-pipelines.js';
 import {codingSourcePlugin} from '../src/coding-source-plugin.js';
+import {MemoryPipeline} from '../src/memory-pipeline.js';
+import {reviewMemory} from '../src/memory-review.js';
+import {fixtureMemoryWorkResult} from './fixtures/memory-planning.js';
 
 async function fixture(t:any){
   const directory=mkdtempSync(join(tmpdir(),'mote-manual-selection-')),store=new Store(directory),sources=new SourceStore(store),materials=new MaterialStore(store);
@@ -53,6 +56,25 @@ test('unknown organizer cannot infer original continuity across Material revisio
   assert.equal(pin.kind,'material-revision');assert.equal(materialSourceCurrent(f.store,f.materials,pin,material.id),true);
   f.materials.publish({...draft,title:'A new custom revision'},{expectedRevision:material.revision});
   assert.equal(materialSourceCurrent(f.store,f.materials,pin,material.id),false);
+});
+
+test('a mixed manual selection preserves legacy range offsets and checkpoint keys despite the new fallback contract',async t=>{
+ const f=await fixture(t),text='Generated old-contract prefix. '.padEnd(230,'.')+'\n'+'Generated remaining text. '.padEnd(100,'.');
+ const original=await f.sources.upsert('generated',{externalId:'note',revision:'2',observedAt:f.at,kind:'message',layer:'original',text});
+ const material=f.materials.publish({...f.draft,blocks:[{id:'body',kind:'text',format:'plain',text,memberIds:[original.id]}],members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],coverage:{state:'complete'}},{expectedRevision:f.material.revision});
+ const strategies=new MemoryStrategies(),old={id:'mote.personal-memory',version:'3'},selected={id:'mote.personal-memory',version:'5'},ids=f.materials.input(material.ref,['source-body'])!.evidenceIds;
+ const pipeline=new MemoryPipeline({store:f.store,memories:f.reader.memories,strategies,configured:()=>true,model:()=> 'generated',batchCharacters:256,query:async input=>fixtureMemoryWorkResult(input,{answer:'{"memories":[]}',citations:[],trace:[],runId:'generated-manual-extract'}),review:(input,draft,strategy)=>reviewMemory(input,draft,async()=>({...draft,runId:'generated-manual-review'}),{strategy}),materialInput:(ref,required)=>f.materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>f.reader.materialAllowedForMemory(ref,undefined,required),materialPlanAllowed:id=>f.reader.materialPlanAllowed(id),materialSourceCurrent:(pin,id)=>f.reader.materialSourceCurrent(pin,id)});
+ t.after(()=>pipeline.close());
+ const legacy=pipeline.create({evidenceIds:ids,recipes:[old],contextTime:f.at});
+ const selection=f.reader.memoryPlanSelection({},[strategies.resolve(old).binding,strategies.resolve(selected).binding],undefined,ids);
+ const manual=pipeline.create({evidenceIds:selection.evidenceIds,manualPlans:selection.manualPlans,contextTime:f.at});
+ const chunks=(jobId:string)=>f.store.db.prepare('SELECT json FROM memory_batches WHERE job_id=? ORDER BY idx').all(jobId).flatMap(row=>JSON.parse(String(row.json)).chunks);
+ const before=chunks(legacy.id),mixed=chunks(manual.id),retained=mixed.filter(chunk=>chunk.strategy.recipe.version==='3'),newRanges=mixed.filter(chunk=>chunk.strategy.recipe.version==='5');
+ assert.deepEqual(retained.map(({offset,length,key})=>({offset,length,key})),before.map(({offset,length,key})=>({offset,length,key})),'an explicit old binding wins over the containing manual job fallback');
+ assert.deepEqual(retained.map(chunk=>[chunk.offset,chunk.length]),[[0,256],[256,text.length-256]]);assert.deepEqual(newRanges.map(chunk=>[chunk.offset,chunk.length]),[[0,231],[231,text.length-231]]);
+ const done=await pipeline.run(manual.id);assert.equal(done.status,'completed');assert.equal(done.inputPlans!.completed,2);assert.equal(done.memoryIds.length,0);
+ assert.ok(done.batches.filter(batch=>batch.strategy!.recipe.version==='3').every(batch=>batch.strategy!.workContract===undefined));assert.ok(done.batches.filter(batch=>batch.strategy!.recipe.version==='5').every(batch=>batch.strategy!.workContract==='range-evaluation@1'));
+ const checkpointKeys=f.store.db.prepare('SELECT key FROM memory_checkpoints').all().map(row=>row.key);assert.ok(before.every(chunk=>checkpointKeys.includes(chunk.key)));
 });
 
 test('archive-backed selection pins original group contents before a late event is organized',async t=>{

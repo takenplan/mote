@@ -52,7 +52,7 @@ test('central UI APIs complete original import → exact Memory → cited static
     return {summary:'识别到一条合成原始日记；记录时间来自原始字段。'};
   },agent:{configured:true,close:async()=>{},query:async input=>{
     queries.push(input);
-    if(input.skill==='memory-extraction'){
+    if(input.responseMode==='memory-extraction'){
       if(failMemory){failMemory=false;throw Error('Synthetic transient failure');}
       evidenceId=input.evidenceIds![0];const materialText=node.memories.readEvidence([evidenceId])[0].ocrText,offset=materialText.indexOf(original);
       assert.ok(offset>=0);assert.deepEqual(input.evidenceRanges,[{id:evidenceId,offset:0,length:materialText.length}]);
@@ -95,7 +95,7 @@ test('central UI APIs complete original import → exact Memory → cited static
   const report=generated.json();assert.equal(report.artifact.skillId,'personal-insight');assert.equal(report.artifact.title,'观测计划回顾');assert.match(report.answer,/完成情况未知/);
   assert.doesNotMatch(report.artifact.html,/<script|<img|http-equiv="refresh"|href="https:/i);assert.match(report.artifact.html,/Content-Security-Policy/);
   assert.equal((await request('GET','/api/insights')).json().items[0].artifact.id,report.runId);
-  assert.equal(queries.filter(q=>q.skill==='memory-extraction').length,3);
+  assert.equal(queries.filter(q=>q.responseMode==='memory-extraction').length,3);
 });
 
 test('static reports retain layout and only approved evidence links',()=>{

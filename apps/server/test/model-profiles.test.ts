@@ -17,7 +17,7 @@ test('profiles route each request and feature independently; credentials, restar
   const directory=await mkdtemp(join(tmpdir(),'mote-profiles-'));
   const cfg:Config={dataDir:directory,token:'synthetic-profile-owner',tokenPath:'fixture',host:'127.0.0.1',port:47832,maxStorageBytes:10000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:settings.model,modelProvider:settings.provider,modelProtocol:settings.protocol,modelBaseUrl:settings.baseUrl,apiKey:settings.apiKey,allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''};
   const seen:ModelSettings[]=[],calls:{model:string;skill?:string}[]=[];
-  const factory=async (s:ModelSettings)=>{seen.push(s);return {configured:!!s.model,query:async(input:QueryInput)=>{calls.push({model:s.model,skill:input.skill});return {answer:input.skill==='memory-extraction'?generatedMemoryOutput(input):input.skill==='personal-insight'?JSON.stringify({title:'Generated model profile report',markdown:s.model,html:`<p>${s.model}</p>`}):s.model,citations:[],trace:[],runId:'fixture'};},close:async()=>{}};};
+  const factory=async (s:ModelSettings)=>{seen.push(s);return {configured:!!s.model,query:async(input:QueryInput)=>{calls.push({model:s.model,skill:input.skill});return {answer:input.responseMode==='memory-extraction'?generatedMemoryOutput(input):input.skill==='personal-insight'?JSON.stringify({title:'Generated model profile report',markdown:s.model,html:`<p>${s.model}</p>`}):s.model,citations:[],trace:[],runId:'fixture'};},close:async()=>{}};};
   let node=await buildApp(cfg,{createModelAgent:factory});
   t.after(async()=>{await node.app.close();await rm(directory,{recursive:true,force:true});});
   let view=(await node.app.inject({url:'/api/model-settings',headers})).json<ModelSettingsView>();
@@ -56,7 +56,7 @@ test('profiles route each request and feature independently; credentials, restar
   const created=await node.app.inject({method:'POST',url:'/api/memory-jobs',headers,payload:{evidenceIds:node.materials.evidenceIds(fixtureMaterial.ref),modelProfileId:'env:deployment'}});
   assert.equal(created.statusCode,202,created.body);assert.equal(created.json().modelProfileId,'env:deployment');
   const finished=await node.memoryPipeline.run(created.json().id);assert.equal(finished.status,'completed');
-  assert.deepEqual(calls.at(-1),{model:'first-model',skill:'memory-extraction'});
+  assert.deepEqual(calls.at(-1),{model:'first-model',skill:'memory-strategy'});
   const removed=await node.app.inject({method:'DELETE',url:'/api/model-settings/profiles/second',headers,payload:{revision:view.revision}});
   assert.equal(removed.statusCode,409);
   const oldRevision=view.revision;
@@ -127,7 +127,7 @@ test('module model overrides reach chat, insights, immediate memory and persiste
   const directory=await mkdtemp(join(tmpdir(),'mote-module-models-'));
   const cfg:Config={dataDir:directory,token:'synthetic-profile-owner',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:10000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:settings.model,modelProvider:settings.provider,modelProtocol:settings.protocol,modelBaseUrl:settings.baseUrl,apiKey:settings.apiKey,allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''};
   const called:string[]=[];
-  const node=await buildApp(cfg,{createModelAgent:async s=>({configured:true,query:async input=>{called.push(s.model);return {answer:input.skill==='memory-extraction'?generatedMemoryOutput(input):input.skill==='personal-insight'?JSON.stringify({title:'Generated module model report',markdown:s.model,html:`<p>${s.model}</p>`}):s.model,citations:[],trace:[],runId:'generated'};},close:async()=>{}})});
+  const node=await buildApp(cfg,{createModelAgent:async s=>({configured:true,query:async input=>{called.push(s.model);return {answer:input.responseMode==='memory-extraction'?generatedMemoryOutput(input):input.skill==='personal-insight'?JSON.stringify({title:'Generated module model report',markdown:s.model,html:`<p>${s.model}</p>`}):s.model,citations:[],trace:[],runId:'generated'};},close:async()=>{}})});
   t.after(async()=>{await node.app.close();await rm(directory,{recursive:true,force:true});});
   let view=node.modelSettings.view();
   view=await node.modelSettings.copyProfile('env:deployment',{revision:view.revision,id:'shared-provider',name:'Shared Provider'});
