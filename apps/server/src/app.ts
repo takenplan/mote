@@ -1,3 +1,4 @@
+import {memoryReadRanges} from './memory-read-context.js';
 import {OwnerQuestions} from './owner-questions.js';
 import {CODING_DIALOGUE_SCHEMA_VERSION,formatEvidenceRef} from '@mote/shared';
 import {imageOutput} from './evidence-image.js';
@@ -254,7 +255,7 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
   const codex={executable:config.codexBin,home:config.codexHome};
   const wrapAgent=(inner:QueryAgent,settings:import('@mote/shared/models').ModelSettings):QueryAgent=>({get configured(){return inner.configured;},close:()=>inner.close(),query:async input=>{
     assertModelEvidence(input);
-    if(input.evidenceIds&&input.executionLane!=='interactive')input={...input,processingEvidence:Object.fromEntries(memories.readEvidence(input.evidenceIds).map(record=>[record.id,memoryEvidenceFingerprint(record)]))};
+    if(input.evidenceIds&&input.executionLane!=='interactive')input={...input,processingEvidence:{...Object.fromEntries(memories.readEvidence(input.evidenceIds).map(record=>[record.id,memoryEvidenceFingerprint(record)])),...input.processingEvidence}};
     input.signal?.throwIfAborted();providerAdmission.check(settings);
     input.onProgress?.({stage:'starting',phase:'started',message:moteText('等待 Agent 执行名额')});
     const queuedAt=performance.now(),lane=input.executionLane==='interactive'?'interactive':'background';
@@ -458,7 +459,7 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
       }
       input.onTrace?.(event);
     };
-    trace({type:'query.started',stage:'starting',payload:{question:input.question,taskContext:input.taskContext??null,conversation:input.conversation??null,evidenceIds:input.evidenceIds??null,evidenceRanges:input.evidenceRanges??null,scope:{after:input.after??null,before:input.before??null,deviceId:input.deviceId??null,timeZone:input.timeZone??null},skill:input.skill??null,responseMode:input.responseMode??'answer'}});
+    trace({type:'query.started',stage:'starting',payload:{question:input.question,taskContext:input.taskContext??null,conversation:input.conversation??null,evidenceIds:input.evidenceIds??null,evidenceRanges:input.evidenceRanges??null,evidenceReadRanges:input.evidenceReadRanges??null,scope:{after:input.after??null,before:input.before??null,deviceId:input.deviceId??null,timeZone:input.timeZone??null},skill:input.skill??null,responseMode:input.responseMode??'answer'}});
     const revision=store.deletionRevision();
     const meter=usageOwner==='query'?usageLedger.start(profile.settings.provider,input.modelOverride??profile.settings.model,input.skill??operation,{agentId:'context-query',moduleId,skillId:input.skill??null,operationId:input.traceContext?.operationId,jobId:input.traceContext?.jobId,requestId:diagnostics.requestId()}):undefined;
     const deadline=agentDeadline(input.signal,profile.settings.agentTimeoutMs),taskSignal=deadline.signal;
@@ -498,7 +499,7 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
   const memoryReviews=new MemoryReviewCache();
   const reviewExtraction=(input:QueryInput,result:QueryResult,strategy?:MemoryReviewStrategy,draftOrigin?:import('./memory-review.js').MemoryDraftOrigin)=>reviewMemory(input,result,next=>queryAgent(next,'query','memories'),{
     draftOrigin,strategy,deletions:memories.deletions,authorizeDeletionEvidence:ids=>memoryPipeline.assertDeletionEvidenceAllowed(ids,input.modelProfileId),cache:memoryReviews,snapshot:()=>{
-      const ids=input.evidenceIds??[];
+      const ids=input.evidenceReadRanges?[...new Set([...(input.evidenceIds??[]),...memoryReadRanges(result,input.evidenceRanges??[],input.evidenceReadRanges).map(range=>range.id)])]:input.evidenceIds??[];
       if(ids.some(id=>!memories.isCurrentEvidence(id)))throw new StoreError('Memory evidence changed during review',409);
       // Include full original metadata (speaker, source, device, dates, version),
       // not just quote text. Credentials/config are hashed, never retained.

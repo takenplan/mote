@@ -9,8 +9,14 @@ the work; the corrected request preserves all 20 members, original IDs and deriv
 both calls, commits exact zero-candidate range checkpoints, and completes.
 
 `apps/server/test/memory-work-packages.test.ts` also exercises zero-candidate
-independent review, supported candidates, missing/saturated coverage subdivision,
-review timeout and draft recovery, unresolved context and changed-input fencing.
+independent review, supported candidates, review timeout and draft recovery,
+unresolved context and changed-input fencing. Its missing/saturated coverage
+subdivision cases preserve the historical fixed contract; they do not describe
+new `range-evaluation@1` completion. New reviewed work selects Memory after full
+range assessment, retains explicit incomplete assessment without semantic
+subdivision, and splits only for actual bounded resource recovery. See the
+[range-evaluation ADR](adr-memory-range-evaluation.md) and
+[current journey/regression matrix](memory-range-evaluation-validation.md).
 `apps/server/test/memory-review.test.ts` checks the complete review task, review
 reuse boundaries, cancellation/deletion races and checkpoint transaction recovery.
 

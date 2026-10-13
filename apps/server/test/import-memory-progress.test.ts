@@ -5,6 +5,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {QueryInput} from '@mote/agent';
+import {AgentContextBudgetError} from '@mote/agent';
 import type {Config} from '../src/config.js';
 import {buildApp} from '../src/app.js';
 import {importMemoryProgress} from '../src/import-memory-progress.js';
@@ -20,8 +21,9 @@ for(const mode of ['failed','waiting'] as const)test(`import receipt progress pr
       return {runId:'generated-stop',trace:[],citations:[],answer:'Generated context stop submitted'};
     }
     const members=(input.taskContext?.memoryWork as {members:MemoryWorkMember[]}).members;
+    if(members.length>1)throw new AgentContextBudgetError('task',81000,80000,{memoryWork:81000});
     if(members.length===1&&members[0].inputKey===badId&&mode==='failed')throw Error('Generated terminal model failure');
-    return {runId:'generated-'+(input.taskContext?.untrustedMemoryDraft?'review':'draft'),trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:members.length===1&&member.inputKey===badId&&mode==='waiting'?'needs_context':'no_candidates',candidateIndexes:[],...(members.length===1&&member.inputKey===badId&&mode==='waiting'?{reason:'Generated missing context'}:{})})),capacity:{saturated:members.length>1}})};
+    return {runId:'generated-'+(input.taskContext?.untrustedMemoryDraft?'review':'draft'),trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:members.length===1&&member.inputKey===badId&&mode==='waiting'?'needs_context':'no_candidates',candidateIndexes:[],...(members.length===1&&member.inputKey===badId&&mode==='waiting'?{reason:'Generated missing context'}:{})}))})};
   }}});
   await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
   node.sources.register({id:'generated',name:'Generated originals',kind:'custom',deviceId:'generated',platform:'import'});
@@ -51,8 +53,9 @@ test('one committed subrange never completes an original whose remaining range f
   const directory=mkdtempSync(join(tmpdir(),'mote-import-memory-ranges-'));let failSecondHalf=true;
   const node=await buildApp(config(directory),{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{
     const members=(input.taskContext?.memoryWork as {members:MemoryWorkMember[]}).members;
+    if(members[0].length>1500)throw new AgentContextBudgetError('task',81000,80000,{memoryWork:81000});
     if(members[0].offset>0&&failSecondHalf)throw Error('Generated failed second half');
-    return {runId:'generated-range',trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),capacity:{saturated:members[0].length>1500}})};
+    return {runId:'generated-range',trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]}))})};
   }}});
   await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
   node.sources.register({id:'generated',name:'Generated long original',kind:'custom',deviceId:'generated',platform:'import'});

@@ -2,6 +2,12 @@
 
 Date: 2026-10-10. Status: accepted by the owner.
 
+The 2026-10-13 [range-evaluation decision](adr-memory-range-evaluation.md) adds
+daily-event v2 with full range assessment and model-selected event clues. It
+supersedes exhaustive event enumeration for that version while preserving exact
+dated capture boundaries. Pinned v1 definitions, receipts and tasks below remain
+unchanged; the new default upgrade applies only to its exact future compositions.
+
 The owner requested automatic daily recall of what appeared, was browsed and was
 done, for both screenshot and structured capture, with original proof, distinct
 action states and correct speaker attribution. This extends the earlier

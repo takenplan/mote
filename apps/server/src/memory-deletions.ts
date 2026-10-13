@@ -192,7 +192,10 @@ export class MemoryDeletions {
       if(!rejected)kept.push(candidate);
     }
     if(this.snapshot()!==snapshot)throw new StoreError('Memory deletion policy changed during review',409);
-    return {...result,answer:JSON.stringify({...value,memories:kept})};
+    const coverage=(value as typeof value&{coverage?:{state:string;candidateIndexes:number[]}[]}).coverage;
+    const indexes=new Map(kept.map((candidate,index)=>[candidate,index]));
+    const mapped=coverage?.map(row=>{const candidateIndexes=row.candidateIndexes.flatMap(index=>{const mapped=indexes.get(value.memories[index]);return mapped===undefined?[]:[mapped];});return {...row,candidateIndexes,state:row.state==='checked'&&!candidateIndexes.length?'no_candidates':row.state};});
+    return {...result,answer:JSON.stringify({...value,memories:kept,...(mapped?{coverage:mapped}:{})})};
   }
 }
 const decisionSchema=z.object({sameConclusion:z.boolean(),newSupportEvidenceIds:z.array(z.string().uuid()).max(30)}).strict();

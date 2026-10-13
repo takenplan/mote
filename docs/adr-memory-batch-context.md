@@ -2,6 +2,11 @@
 
 Date: 2026-10-09. Status: accepted for the internal Memory request correction.
 
+The 2026-10-13 [range-evaluation ADR](adr-memory-range-evaluation.md) supersedes
+candidate-capacity completion and semantic subdivision for its new versioned
+recipes. The batch-local scope, request packing and legacy-task decisions below
+remain in force.
+
 Memory extraction carried the same package goal, instructions and complete member
 contract in both `question` and `taskContext.memoryWork`. A valid wide batch could
 therefore exceed the Agent question limit before its model session started. This

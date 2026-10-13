@@ -111,6 +111,8 @@ Central（server + web）、macOS、Android 使用各自产品版本；当前版
 | 文档 | 内容 |
 | --- | --- |
 | [系统改造 ADR](adr-system-refactor.md) | 已确认的统一查询、滚动 Memory 合批、审核恢复与前后台隔离决定 |
+| [范围评估与模型选取 Memory ADR](adr-memory-range-evaluation.md) | 完整原件、逐范围评估、独立审核、模型选取、资源恢复与旧任务契约边界 |
+| [范围评估回归矩阵](memory-range-evaluation-validation.md) | 新旧入口、选取与未完成状态、实际资源恢复、授权和重启场景；执行结果单独记录 |
 | [系统改造方案（2026-10-10，已确认）](design/system-refactor-2026-10-10.md) | 14模块变更、5组选型、旅程、supersession和发布路线；拟议收益不是实测结果 |
 | [系统改造验证方案](design/system-refactor-validation-2026-10-10.md) | 22条真实入口旅程、质量rubric、同模型性能对照与发布门槛；结果见本次验收记录 |
 | [0.0.13-validation](0.0.13-validation.md) | 0.0.13 验证记录 |

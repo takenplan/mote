@@ -1,3 +1,4 @@
+import {fixtureMemoryCapacity} from './fixtures/memory-planning.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -17,7 +18,7 @@ test('private work prose, coverage feedback and drafts obey encryption, owner re
  const dir=mkdtempSync(join(tmpdir(),'mote-memory-private-')),store=new Store(dir,{dataKey:'ab'.repeat(32),contentEncryptionEnabled:true}),sources=new SourceStore(store),memories=new MemoryStore(store);
  sources.register({id:'generated',name:'Generated fixture',kind:'custom',deviceId:'fixture',platform:'import'});
  const id=(await sources.upsert('generated',{externalId:'one',revision:'1',observedAt:'2026-09-01T00:00:00Z',text:'Synthetic evidence.',kind:'file',layer:'original'})).id;
- const pipeline=new MemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query:async input=>({runId:'fixture',trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:(input.taskContext!.memoryWork as any).members.map((member:any)=>({key:member.key,state:'needs_context',candidateIndexes:[],reason:marker,contextRefs:[marker]})),capacity:{saturated:false}})}),review:async(_input,draft)=>({...draft,runId:'fresh-review'})});
+ const pipeline=new MemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query:async input=>({runId:'fixture',trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:(input.taskContext!.memoryWork as any).members.map((member:any)=>({key:member.key,state:'needs_context',candidateIndexes:[],reason:marker,contextRefs:[marker]})),...fixtureMemoryCapacity(input)})}),review:async(_input,draft)=>({...draft,runId:'fresh-review'})});
  const files=new FileStore(store,sources),archived=new ArchivedFileStore(store),service=new ContentStorageService(store,files,archived);t.after(async()=>{await service.close();await pipeline.close();store.close();rmSync(dir,{recursive:true,force:true});});
  const job=pipeline.create({evidenceIds:[id],workPackage:{id:'private-work',goal:marker,instruction:marker+' instructions'}}),done=await pipeline.run(job.id);
  assert.equal(done.workPackage?.goal,marker);assert.deepEqual(done.batches[0].coverage?.[0].contextRefs,[marker]);

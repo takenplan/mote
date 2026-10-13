@@ -10,6 +10,21 @@ The built-in repository stores readable Memory text and version metadata in SQLi
 
 New source inputs with automatic Memory authorization use a separate ready-Material queue: ordinary background workers structurally pack at most eight compatible members within the existing character budget, then extract/reuse and independently review. They do not wait for the lifecycle count threshold or maximum wait, and import completion does not create duplicate work. Global automatic admission must be open when a new input obtains its receipt. The window admission rules below describe the retained artifact/history workflows, consolidation, insights and conversation summaries. Member attribution, time and receipt scopes remain separate within a transport package. See [system refactor ADR](adr-system-refactor.md).
 
+New versioned built-in recipes and newly created unbound jobs with independent
+review use `range-evaluation@1`: complete target-range
+assessment and independent review precede model-selected Memory. Empty selection
+is valid after full assessment and review; candidate count is not a completion or
+truncation signal. Explicit `incomplete` coverage preserves an unfinished target
+with its reason. Structural grouping is separate from measured resource recovery;
+actual context/output limits and deadlines retain finite scoped recovery. Old
+receipts and tasks retain their previous contract, including candidate capacity
+and saturation behavior. Installation or default upgrade never retries historical
+jobs. Newly created reviewed raw/API jobs use the contract even when `recipes` or
+the work package is omitted, as does a new manual job's unbound fallback. Explicit
+old recipe bindings take precedence; existing no-field jobs and internal paths
+without an independent reviewer remain legacy. See
+[range evaluation ADR](adr-memory-range-evaluation.md).
+
 Automatic insights require **the minimum interval AND the count threshold**. Their `intervalHours` is the minimum delay after successful completion (or registration); `maxWaitHours` does not bypass either requirement. The other three Memory workflows require **pending changes AND (the count threshold OR the maximum wait)**. For those three workflows, the implementation uses `maxWaitHours` when set, otherwise `min(intervalHours, 1)` hours, measured from the last successful window (or initial registration). For those three workflows, `intervalHours` is a retained configuration field, not an additional mandatory delay once the count threshold is reached. A one-minute timer only checks admission; upload and import completion do not call a model. A first deployment starts its interval clock at registration. Integration initializes its selection at the current Memory journal watermark, so pre-existing cards require an explicit historical request. Other workflow journal rules are unchanged. Manual extraction/review and explicitly requested integration can run immediately. A process restart retains clocks, windows and cursors. A configured model is required.
 
 | Workflow | Stored intervalHours | Count threshold | Maximum journal entries per window |
