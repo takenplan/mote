@@ -344,7 +344,7 @@ async function artReaderMatrix(){
     window.setSize(1440,1000);await until(()=>js('innerWidth===1440'),'language selector desktop viewport');
     await route('today','.home-page');if(await js('document.documentElement.lang')!==language)await chooseLanguage(language,true,'.home-page');
     await route('library/notes','#note-text');
-    await until(()=>js(`(()=>{const item=[...document.querySelectorAll('.note-card')].find(item=>item.querySelector('p')?.textContent===${JSON.stringify(savedArtOriginal)});if(!item)return false;item.click();return true;})()`),'same saved candidate opens original');
+    await until(()=>js(`(()=>{const item=[...document.querySelectorAll('.note-card')].find(item=>item.querySelector('p')?.textContent===${JSON.stringify(savedArtOriginal)});if(!item)return false;item.focus();if(document.activeElement!==item)return false;item.click();return true;})()`),'same saved candidate opens original');
     await readyConsumer('actual candidate reader');
     assert.equal(await js("document.querySelector('.evidence-modal .evidence-text pre').textContent"),savedArtOriginal,'Real saved original is exact');
     for(const [variant,width,height] of [['normal',1440,1000],['compact',390,844]]){
