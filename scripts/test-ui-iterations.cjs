@@ -362,6 +362,8 @@ async function mobileNoteFocusJourney(){
   if(await js('document.documentElement.lang')!=='en')await chooseLanguage('en',true,'.home-page');
   await route('library/notes','#note-text');window.setSize(390,844);
   await until(()=>js('innerWidth===390'),'real narrow note viewport');
+  window.webContents.focus();
+  await until(()=>js('document.hasFocus()'),'hidden fixture renderer receives actual keyboard focus');
   const original='Generated candidate '+artRound+' keyboard focus original.';
   await js(`(()=>{const e=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,${JSON.stringify(original)});e.dispatchEvent(new Event('input',{bubbles:true}));e.focus();})()`);
   const observations=[];
