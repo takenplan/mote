@@ -57,6 +57,7 @@ import './settings-ui.css';
 import './plugin-center.css';
 import './discovery-ui.css';
 import './feature-guide.css';
+import './art-direction.css';
 import { confirmNavigation } from './unsaved';
 
 

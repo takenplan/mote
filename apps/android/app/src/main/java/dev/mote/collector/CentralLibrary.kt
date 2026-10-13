@@ -36,7 +36,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         val path = "/api/library/catalog?limit=24" + (if (source.isNotBlank()) "&sourceId=" + enc(source) else "")
         ui.work(MoteI18n.text("正在读取…"), { api.get(path) }) { result ->
             val descriptor = CentralCatalogDescriptor.read(result)
-            ui.text(MoteI18n.text("全部资料"), 24f)
+            ui.text(MoteI18n.text("全部资料"), DesignTokens.fontTitleMobile.toFloat())
             ui.text(MoteI18n.text("包括 Coding Agent 会话；可读内容不等待记忆整理。"))
             val filters = ui.card()
             val facets = result.optJSONArray("sources") ?: JSONArray()
@@ -53,7 +53,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             val target = ui.card()
             val render: (JSONObject, LinearLayout) -> Unit = { row, card ->
                 val type = descriptor.type(row.optString("kind"), row.optInt("schemaVersion"))
-                ui.text(row.getString("title"), 19f, card)
+                ui.text(row.getString("title"), DesignTokens.fontRow.toFloat(), card)
                 ui.text(type?.let { MoteI18n.text(it.label) } ?: row.optString("kind"), parent = card)
                 ui.text(row.optJSONObject("coverage")?.optString("state").orEmpty(), parent = card)
                 ui.button(MoteI18n.text("查看原文"), parent = card) { material(row.getString("id"), row.getString("revision")) }
@@ -62,11 +62,11 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
     }
     private fun codingStatus() {
-        ui.text(MoteI18n.text("上传与处理"), 24f)
+        ui.text(MoteI18n.text("上传与处理"), DesignTokens.fontTitleMobile.toFloat())
         ui.text(MoteI18n.text("接收成功表示原件已保留；正文发布、索引和记忆整理分别显示状态。"))
         paged("/api/coding/uploads?limit=20", ui.card()) { row, card ->
             val source = row.getJSONObject("source")
-            ui.text(source.getString("name"), 19f, card)
+            ui.text(source.getString("name"), DesignTokens.fontRow.toFloat(), card)
             ui.text(MoteI18n.text("已接收事件") + ": " + row.getJSONObject("received").getInt("events"), parent = card)
             ui.text(MoteI18n.text("已发布资料") + ": " + row.getInt("materials"), parent = card)
             ui.text(MoteI18n.text("已索引资料") + ": " + row.getInt("indexedMaterials"), parent = card)
@@ -101,11 +101,11 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             // Search is delegated to the server's evidence reader, with no local intent classifier.
             val path = "/api/context/search?" + params.filterNot { it.startsWith("source=") }.joinToString("&") + "&query=" + enc(query)
             paged(path, list) { row, card ->
-                ui.text(row.optString("title"), 19f, card); ui.text(row.optString("snippet"), parent = card)
+                ui.text(row.optString("title"), DesignTokens.fontRow.toFloat(), card); ui.text(row.optString("snippet"), parent = card)
                 ui.button(MoteI18n.text("查看原文"), parent = card) { evidence(row.getString("ref")) }
             }
         } else paged("/api/capture-browser?" + params.joinToString("&"), list) { row, card ->
-            ui.text(row.optString("appName"), 19f, card); ui.text(row.optString("capturedAt"), 13f, card)
+            ui.text(row.optString("appName"), DesignTokens.fontRow.toFloat(), card); ui.text(row.optString("capturedAt"), DesignTokens.fontSupport.toFloat(), card)
             ui.text(row.optString("textPreview"), parent = card)
             ui.button(MoteI18n.text("查看原文"), parent = card) { capture(row.getString("id")) }
         }
@@ -118,8 +118,8 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/activity" + params) to api.get("/api/media-activity" + params) }) { (apps, media) ->
-            ui.text(MoteI18n.text("应用活动与媒体"), 24f); values(apps, ui.card())
-            ui.text(MoteI18n.text("媒体统计"), 20f); values(media, ui.card())
+            ui.text(MoteI18n.text("应用活动与媒体"), DesignTokens.fontTitleMobile.toFloat()); values(apps, ui.card())
+            ui.text(MoteI18n.text("媒体统计"), DesignTokens.fontSection.toFloat()); values(media, ui.card())
         }
     }
     private fun sessions() {
@@ -132,7 +132,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         val path = "/api/capture-browser/sessions?limit=20&after=" + enc(date.atStartOfDay(zone).toInstant().toString()) +
             "&before=" + enc(date.plusDays(1).atStartOfDay(zone).toInstant().toString())
         paged(path, ui.card()) { row, card ->
-            ui.text(row.optString("appName"), 20f, card)
+            ui.text(row.optString("appName"), DesignTokens.fontSection.toFloat(), card)
             ui.text(row.optString("firstAt") + " — " + row.optString("capturedAt"), parent = card)
             ui.button(MoteI18n.text("展开记录"), parent = card) {
                 body.removeAllViews(); screens.setBack { ui.navigate("timeline") }
@@ -147,7 +147,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         if (coding) {
             paged("/api/coding/uploads?limit=30", ui.card()) { row, card ->
                 val source = row.getJSONObject("source")
-                ui.text(source.getString("name"), 19f, card); values(row, card)
+                ui.text(source.getString("name"), DesignTokens.fontRow.toFloat(), card); values(row, card)
                 ui.button(MoteI18n.text("来源资料"), parent = card) {
                     body.removeAllViews(); screens.setBack { screens.refresh() }
                     paged("/api/materials?limit=20&sourceId=" + enc(source.getString("id")), ui.card()) { item, child ->
@@ -156,7 +156,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 }
             }
         } else paged("/api/materials?limit=20", ui.card()) { row, card ->
-            ui.text(row.optString("title"), 19f, card); ui.text(row.optString("kind") + " · " + row.optJSONObject("coverage")?.optString("state"), parent = card)
+            ui.text(row.optString("title"), DesignTokens.fontRow.toFloat(), card); ui.text(row.optString("kind") + " · " + row.optJSONObject("coverage")?.optString("state"), parent = card)
             ui.button(MoteI18n.text("查看原文"), parent = card) { material(row.getString("id"), row.getString("revision")) }
         }
     }
@@ -174,7 +174,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val item = result.optJSONArray("items")?.optJSONObject(0)
             if (item == null) { ui.text(MoteI18n.text("资料不存在或已删除。")); return@work }
-            ui.text(item.optString("title"), 24f); ui.text(item.optString("text"))
+            ui.text(item.optString("title"), DesignTokens.fontTitleMobile.toFloat()); ui.text(item.optString("text"))
             val range = item.optJSONObject("textRange")
             if (range != null && !range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { evidence(reference, range.getInt("nextOffset")) }
             val refs = item.optJSONArray("evidenceRefs") ?: JSONArray()
@@ -185,7 +185,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         val api = client
         ui.work(MoteI18n.text("正在读取原文…"), { api.get("/api/capture-browser/" + enc(id)) }) { row ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
-            ui.text(row.optString("appName"), 24f); ui.text(row.optString("capturedAt")); ui.text(row.optString("ocrText"))
+            ui.text(row.optString("appName"), DesignTokens.fontTitleMobile.toFloat()); ui.text(row.optString("capturedAt")); ui.text(row.optString("ocrText"))
             val metadata = row.optJSONObject("metadata")
             values(metadata ?: JSONObject(), ui.card())
             val attachments = metadata?.optJSONArray("attachments") ?: JSONArray()
@@ -222,7 +222,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             api.get("/api/materials/" + enc(id) + "/read?offset=$offset&length=4000" + (revision?.let { "&revision=" + enc(it) } ?: "")) to api.get("/api/materials/" + enc(id))
         }) { (value, current) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
-            val item = value.getJSONObject("material"); ui.text(item.getString("title"), 24f)
+            val item = value.getJSONObject("material"); ui.text(item.getString("title"), DesignTokens.fontTitleMobile.toFloat())
             ui.text(MoteI18n.text("版本 {0}", item.opt("sequence"))); ui.text(value.getString("text"))
             values(item.getJSONObject("origin"), ui.card())
             item.optJSONObject("attributionContext")?.let { context ->
@@ -256,7 +256,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         val search = ui.field(MoteI18n.text("文件名"), query)
         ui.button(MoteI18n.text("搜索")) { query = search.text.toString(); screens.refresh() }
         paged("/api/files?limit=30&query=" + enc(query), ui.card()) { row, card ->
-            ui.text(row.getJSONObject("item").optString("title"), 20f, card)
+            ui.text(row.getJSONObject("item").optString("title"), DesignTokens.fontSection.toFloat(), card)
             ui.text(row.optJSONObject("job")?.optString("state").orEmpty(), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { file(row.getString("captureId")) }
         }
@@ -267,7 +267,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         ui.work(MoteI18n.text("正在读取文件…"), { api.get("/api/files/" + enc(id)) to api.get("/api/files/" + enc(id) + "/chunks?offset=$offset") }) { (row, chunks) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val item = row.getJSONObject("item")
-            ui.text(item.optString("title"), 24f); ui.text(item.optString("mimeType")); ui.text(item.optString("text"))
+            ui.text(item.optString("title"), DesignTokens.fontTitleMobile.toFloat()); ui.text(item.optString("mimeType")); ui.text(item.optString("text"))
             values(row.optJSONObject("job") ?: JSONObject(), ui.card())
             if (row.optBoolean("hasOriginal")) {
                 if (item.optString("mimeType").startsWith("image/")) ui.button(MoteI18n.text("查看原图")) { image("/api/files/" + enc(id) + "/content", body) }
@@ -314,7 +314,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("本机来源")) { ui.startActivity(android.content.Intent(ui, SourcesActivity::class.java)) }
         ui.button(MoteI18n.text("连接更多来源")) { CentralAdmin(screens).connectors() }
         paged("/api/sources", ui.card()) { row, card ->
-            ui.text(row.optString("name"), 20f, card); ui.text(row.optString("kind") + " · " + row.optString("deviceId"), parent = card)
+            ui.text(row.optString("name"), DesignTokens.fontSection.toFloat(), card); ui.text(row.optString("kind") + " · " + row.optString("deviceId"), parent = card)
             ui.button(MoteI18n.text("编辑来源"), parent = card) {
                 val name = ui.field(MoteI18n.text("名称"), row.optString("name"), parent = card)
                 ui.text(MoteI18n.text("来源内容归属（可选）"), parent = card)
@@ -332,7 +332,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             ui.button(MoteI18n.text("来源资料"), parent = card) {
                 body.removeAllViews(); screens.setBack { screens.refresh() }
                 paged("/api/sources/" + enc(row.getString("id")) + "/items?limit=30", ui.card()) { item, child ->
-                    ui.text(item.optString("title"), 19f, child); ui.text(item.optString("text"), parent = child)
+                    ui.text(item.optString("title"), DesignTokens.fontRow.toFloat(), child); ui.text(item.optString("text"), parent = child)
                     item.optString("captureId").takeIf { it.isNotBlank() }?.let { id -> ui.button(MoteI18n.text("查看原文"), parent = child) { captureEvidence(id) } }
                     ui.button(MoteI18n.text("历史版本"), parent = child) {
                         val api = client
@@ -347,7 +347,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("提取记忆")) { CentralAdmin(screens).memoryJobs() }
         ui.button(MoteI18n.text("记忆设置")) { CentralAdmin(screens).memorySettings() }
         paged("/api/memories?limit=30", ui.card()) { row, card ->
-            ui.text(row.optString("statement"), 20f, card); ui.text(row.optString("status"), parent = card)
+            ui.text(row.optString("statement"), DesignTokens.fontSection.toFloat(), card); ui.text(row.optString("status"), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { memory(row.getString("id")) }
         }
     }

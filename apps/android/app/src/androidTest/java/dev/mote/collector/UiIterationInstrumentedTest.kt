@@ -354,6 +354,16 @@ class UiIterationInstrumentedTest {
                     assertTrue("Close dismisses the reader into the actual matching records page", closedToList)
                     instrumentation.runOnMainSync {
                         val rows = views(reader.window.decorView)
+                        val date = rows.filterIsInstance<TextView>().single { it.isShown && it.text.toString() == java.time.LocalDate.now().toString() }
+                        assertEquals("The selected ISO date stays on one line at the real font scale", 1, requireNotNull(date.layout).lineCount)
+                        for (key in listOf("前一天", "后一天")) {
+                            val action = rows.filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text(key) }
+                            val label = action.text.toString(); val layout = requireNotNull(action.layout)
+                            for (line in 1 until layout.lineCount) {
+                                val split = layout.getLineStart(line)
+                                assertFalse("Date navigation must never split a translated word: $label", split > 0 && split < label.length && label[split - 1].isLetter() && label[split].isLetter())
+                            }
+                        }
                         val kind = rows.filterIsInstance<android.widget.Spinner>().single { it.adapter.count == 7 }
                         kind.setSelection(0) // The real source selector moves to screenshots.
                     }

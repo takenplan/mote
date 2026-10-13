@@ -28,36 +28,49 @@ object MoteUi {
     val tint = DesignTokens.tint
     val border = DesignTokens.border
 
-    const val containerRadius = 12
-    const val readingRadius = 16
-    const val actionRadius = 24
+    const val containerRadius = DesignTokens.radiusContainer
+    const val readingRadius = DesignTokens.radiusReading
+    const val actionRadius = DesignTokens.radiusControl
 
-    fun shape(context: Context, fill: Int = Color.WHITE, radius: Int = containerRadius, outline: Boolean = false) = GradientDrawable().apply {
-        setColor(fill); cornerRadius = context.moteDp(radius).toFloat()
-        if (outline) setStroke(context.moteDp(1), border)
+    /** Role sizes scale with the system font; callers choose meaning, never fit-to-space. */
+    fun type(view: TextView, size: Int = DesignTokens.fontBody, medium: Boolean = false) = view.apply {
+        textSize = size.toFloat()
+        typeface = Typeface.create(if (medium) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
+        setLineSpacing(0f, 1.25f)
+        setTag(R.id.mote_type, size)
     }
 
-    fun clickable(context: Context, fill: Int = Color.WHITE, radius: Int = containerRadius) = RippleDrawable(
-        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius), shape(context, Color.WHITE, radius)
+    fun shape(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true) = GradientDrawable().apply {
+        setColor(fill); cornerRadius = context.moteDp(radius).toFloat()
+        if (outline) setStroke(context.moteDp(DesignTokens.borderWidth), border)
+    }
+
+    fun clickable(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true) = RippleDrawable(
+        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius, outline), shape(context, Color.WHITE, radius, false)
     )
 
-    fun button(button: Button, primary: Boolean = false, radius: Int = actionRadius) = button.apply {
-        isAllCaps = false; textSize = 14f; minHeight = context.moteDp(50)
+    enum class ButtonRole { PRIMARY, SECONDARY, TEXT }
+
+    fun button(button: Button, primary: Boolean = false, radius: Int = actionRadius) = action(button, if (primary) ButtonRole.PRIMARY else ButtonRole.SECONDARY, radius)
+
+    fun action(button: Button, role: ButtonRole = ButtonRole.SECONDARY, radius: Int = actionRadius) = button.apply {
+        val primary = role == ButtonRole.PRIMARY
+        isAllCaps = false; type(this, DesignTokens.fontAction, medium = true); minHeight = context.moteDp(DesignTokens.controlHeight)
         setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, if (primary) Color.WHITE else accent)))
         setTag(R.id.mote_primary, primary)
+        setTag(R.id.mote_button_role, role)
         backgroundTintList = null; background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, MoteUi.background, radius))
-            addState(intArrayOf(), clickable(context, if (primary) accent else tint, radius))
+            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, if (role == ButtonRole.TEXT) Color.TRANSPARENT else MoteUi.background, radius, role != ButtonRole.TEXT))
+            addState(intArrayOf(), clickable(context, when (role) { ButtonRole.PRIMARY -> accent; ButtonRole.SECONDARY -> DesignTokens.surface; ButtonRole.TEXT -> Color.TRANSPARENT }, radius, role == ButtonRole.SECONDARY))
         }
-        setPadding(context.moteDp(14), context.moteDp(12), context.moteDp(14), context.moteDp(12))
-        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        setPadding(context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceInline))
     }
 
     fun field(field: EditText) = field.apply {
-        setTextColor(ink); setHintTextColor(muted); textSize = 15f
-        background = shape(context, Color.WHITE, 12, true)
-        setPadding(context.moteDp(14), context.moteDp(13), context.moteDp(14), context.moteDp(13))
-        minHeight = context.moteDp(52)
+        setTextColor(ink); setHintTextColor(muted); type(this, DesignTokens.fontBody)
+        background = shape(context, DesignTokens.surface, DesignTokens.radiusControl, true)
+        setPadding(context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceItem), context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceItem))
+        minHeight = context.moteDp(DesignTokens.controlHeight)
     }
 
     /** Set line behavior before inputType: setSingleLine replaces password transformation. */
@@ -65,19 +78,25 @@ object MoteUi {
         setSingleLine(!multiline)
         if (multiline) { minLines = 2; gravity = Gravity.TOP }
         inputType = if (multiline) android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE else type
+        // Password input applies a platform monospace face; retain masking and the shared type face.
+        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
     }
 
     /** Apply the same controls to dynamic native lists and dialog forms. */
     fun styleTree(view: View) {
         when (view) {
             is Button -> if (view !is CompoundButton) {
-                button(view, view.getTag(R.id.mote_primary) == true)
+                action(view, view.getTag(R.id.mote_button_role) as? ButtonRole ?: if (view.getTag(R.id.mote_primary) == true) ButtonRole.PRIMARY else ButtonRole.SECONDARY)
                 (view.layoutParams as? LinearLayout.LayoutParams)?.let { it.bottomMargin = view.context.moteDp(8) }
             }
             is EditText -> field(view)
-            is TextView -> { view.setTextColor(ink); view.setLineSpacing(view.context.moteDp(3).toFloat(), 1f) }
+            is TextView -> if (view.getTag(R.id.mote_type) == null) {
+                val dialogTitle = view.resources.getIdentifier("alertTitle", "id", "android")
+                type(view, if (view.id == dialogTitle) DesignTokens.fontTitleMobile else DesignTokens.fontBody, view.id == dialogTitle)
+                view.setTextColor(ink)
+            }
         }
-        if (view is CompoundButton) { view.setTextColor(ink); view.textSize = 15f; view.buttonTintList = ColorStateList.valueOf(accent); view.minHeight = view.context.moteDp(48) }
+        if (view is CompoundButton) { view.setTextColor(ink); type(view, DesignTokens.fontBody); view.buttonTintList = ColorStateList.valueOf(accent); view.minHeight = view.context.moteDp(DesignTokens.controlHeight) }
         if (view is ViewGroup) for (index in 0 until view.childCount) styleTree(view.getChildAt(index))
     }
 }
@@ -130,7 +149,7 @@ class MotePrimaryNavigation(private val activity: Activity, onSelect: (MotePrima
         contentDescription = MoteI18n.text("主导航")
         MotePrimaryTab.entries.forEach { tab ->
             val item = TextView(activity).apply {
-                text = MoteI18n.text(tab.titleKey); textSize = 12f; gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
+                text = MoteI18n.text(tab.titleKey); MoteUi.type(this, DesignTokens.fontMeta); gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
                 compoundDrawablePadding = activity.moteDp(5); isFocusable = true; tag = "primary:${tab.name}"
                 contentDescription = MoteI18n.text(tab.titleKey); setOnClickListener { onSelect(tab) }
             }
@@ -142,7 +161,7 @@ class MotePrimaryNavigation(private val activity: Activity, onSelect: (MotePrima
         items.forEach { (destination, view) ->
             val active = destination == tab
             view.isSelected = active; view.setTextColor(if (active) MoteUi.accent else MoteUi.muted)
-            view.background = MoteUi.clickable(activity, Color.WHITE)
+            view.background = MoteUi.clickable(activity, DesignTokens.surface, outline = false)
             view.setCompoundDrawablesWithIntrinsicBounds(null, MoteNavigationIndicator(activity, destination.icon, active), null, null)
         }
     }
@@ -154,7 +173,7 @@ private class MoteNavigationIndicator(context: Context, kind: String, private va
     private val height = context.moteDp(32)
     private val glyphSize = context.moteDp(23)
     private val glyph = MoteNavigationIcon(context, kind, active)
-    private val indicator = MoteUi.shape(context, MoteUi.tint, 24)
+    private val indicator = MoteUi.shape(context, MoteUi.tint, DesignTokens.radiusIndicator, false)
     override fun getIntrinsicWidth() = width
     override fun getIntrinsicHeight() = height
     override fun draw(canvas: Canvas) {
@@ -187,12 +206,12 @@ private fun Activity.detailTab(): MotePrimaryTab? = when (this) {
 fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), onBack: () -> Unit = { finish() }): LinearLayout {
     val body = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(32))
+        setPadding(moteDp(DesignTokens.spacePage), moteDp(DesignTokens.spaceItem), moteDp(DesignTokens.spacePage), moteDp(DesignTokens.spaceGroup))
     }
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background); moteInsets() }
     val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
     header.addView(TextView(this).apply {
-        text = "‹  " + MoteI18n.text("返回上级"); textSize = 15f; setTextColor(MoteUi.accent)
+        text = "‹  " + MoteI18n.text("返回上级"); MoteUi.type(this, DesignTokens.fontAction); setTextColor(MoteUi.accent)
         gravity = Gravity.CENTER_VERTICAL; minHeight = moteDp(48)
         setPadding(moteDp(16), moteDp(4), moteDp(16), moteDp(4))
         contentDescription = MoteI18n.text("返回上一页"); isFocusable = true; setOnClickListener { onBack() }

@@ -30,8 +30,8 @@ class SourcesActivity : MoteActivity() {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         restoringDraft = lastNonConfigurationInstance as? Draft
         val content = moteDetailPage()
-        content.addView(TextView(this).apply { text = MoteI18n.text("来源管理"); textSize = 26f })
-        content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); textSize = 14f })
+        content.addView(TextView(this).apply { text = MoteI18n.text("来源管理"); MoteUi.type(this, DesignTokens.fontTitleMobile) })
+        content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); MoteUi.type(this, DesignTokens.fontBody) })
         fun action(label: String, callback: () -> Unit) { content.addView(Button(this).apply { text = label; setOnClickListener { callback() } }) }
         operationStatus = TextView(this); content.addView(operationStatus)
         action(MoteI18n.text("连接本机日历")) {
@@ -94,8 +94,8 @@ class SourcesActivity : MoteActivity() {
                 else {
                     if (rows.getOrThrow().isEmpty()) list.addView(TextView(this).apply { text = MoteI18n.text("尚未连接来源。权限只在点击连接时申请。") })
                     for ((source, summary) in rows.getOrThrow()) {
-                        list.addView(TextView(this).apply { text = source.name; textSize = 20f; setPadding(0, moteDp(20), 0, moteDp(4)) })
-                        list.addView(TextView(this).apply { text = summary; textSize = 13f })
+                        list.addView(TextView(this).apply { text = source.name; MoteUi.type(this, DesignTokens.fontSection); setPadding(0, moteDp(20), 0, moteDp(4)) })
+                        list.addView(TextView(this).apply { text = summary; MoteUi.type(this, DesignTokens.fontSupport) })
                         list.addView(Button(this).apply { text = MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源"); setOnClickListener {
                             work(MoteI18n.text("正在保存来源设置…")) { localSources().save(source.copy(enabled = !source.enabled)); SourceWork.schedule(applicationContext, true) }
                         } })
@@ -149,9 +149,9 @@ class SourcesActivity : MoteActivity() {
             return EditText(this).apply { setText(value); if (numeric) inputType = InputType.TYPE_CLASS_NUMBER; form.addView(this); draftControls[label] = this }
         }
         val name = field(MoteI18n.text("来源名称"), source.name)
-        form.addView(TextView(this).apply { text = MoteI18n.text("读取范围：{0}", source.uri ?: source.name); textSize = 13f })
+        form.addView(TextView(this).apply { text = MoteI18n.text("读取范围：{0}", source.uri ?: source.name); MoteUi.type(this, DesignTokens.fontSupport) })
         val destination = Settings(this).read().server
-        form.addView(TextView(this).apply { text = if (destination.isBlank()) MoteI18n.text("未连接中央：先保存本机任务，连接时确认发送范围。") else MoteI18n.text("完整文件的发送目的地：{0}", destination); textSize = 13f })
+        form.addView(TextView(this).apply { text = if (destination.isBlank()) MoteI18n.text("未连接中央：先保存本机任务，连接时确认发送范围。") else MoteI18n.text("完整文件的发送目的地：{0}", destination); MoteUi.type(this, DesignTokens.fontSupport) })
         val continuous = CheckBox(this).apply { text = MoteI18n.text("以后修改，也自动同步"); isChecked = source.syncContinuously }
         draftControls["continuous"] = continuous
         if (source.kind == "local-files" && !source.tree) form.addView(continuous)

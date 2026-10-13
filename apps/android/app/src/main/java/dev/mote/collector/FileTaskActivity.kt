@@ -126,9 +126,9 @@ class FileTaskActivity : MoteActivity() {
     private fun showForm() {
         building = true; body.removeAllViews(); presetButtons.clear()
         fun label(text: String, target: LinearLayout = body) = TextView(this).apply {
-            this.text = MoteI18n.text(text); textSize = 15f; setPadding(0, moteDp(16), 0, moteDp(6)); target.addView(this)
+            this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontBody); setPadding(0, moteDp(16), 0, moteDp(6)); target.addView(this)
         }
-        fun hint(text: String, target: LinearLayout = body) = TextView(this).apply { this.text = MoteI18n.text(text); textSize = 13f; target.addView(this) }
+        fun hint(text: String, target: LinearLayout = body) = TextView(this).apply { this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontSupport); target.addView(this) }
         fun field(value: String, tagValue: String, target: LinearLayout = body, numeric: Boolean = false, multiline: Boolean = false) = EditText(this).apply {
             tag = tagValue; MoteUi.textInput(this, if (numeric) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT, multiline); setText(value)
             isSaveEnabled = false; importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO; target.addView(this)
@@ -141,11 +141,11 @@ class FileTaskActivity : MoteActivity() {
                     }
                 } })
         }
-        body.addView(TextView(this).apply { text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件"); textSize = 26f })
+        body.addView(TextView(this).apply { text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件"); MoteUi.type(this, DesignTokens.fontTitleMobile) })
         hint(if (source.tree) "持续收集文件夹中的新增文件和修改。" else if (source.syncContinuously) "持续同步这个文件的修改。" else "导入一次，不跟踪后续修改。")
         status = TextView(this); body.addView(status)
         pickButton = Button(this).apply { tag = "file-task:pick"; setOnClickListener { pick() }; body.addView(this) }
-        selectedInfo = TextView(this).apply { textSize = 13f; setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12)); background = MoteUi.shape(this@FileTaskActivity); body.addView(this) }
+        selectedInfo = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12)); background = MoteUi.shape(this@FileTaskActivity); body.addView(this) }
         if (source.tree) {
             label("收集哪些文件")
             val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; body.addView(choices)
@@ -160,7 +160,7 @@ class FileTaskActivity : MoteActivity() {
             minLines = 3; hint = MoteI18n.text("例如：这是我的通话录音，我通常是其中一方；对方的表达属于对方。")
         }
         hint(if (source.tree) "用于理解这个来源的背景、作者和内容归属。" else "可说明格式、时间、作者，以及哪些内容属于你。")
-        metadataStatus = TextView(this).apply { textSize = 13f; body.addView(this) }
+        metadataStatus = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); body.addView(this) }
         if (savedSource != null) hint("修改说明适用于已有和未来资料；不会自动重新转写或重算历史记忆。")
         initial = Spinner(this).apply {
             adapter = ArrayAdapter(this@FileTaskActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("一起导入已有文件"), MoteI18n.text("首次清点后，只同步新文件")))
@@ -173,7 +173,7 @@ class FileTaskActivity : MoteActivity() {
             tag = "file-task:retention"; setSelection(listOf("snapshot", "archive", "reference").indexOf(source.retention))
             body.addView(this)
         }
-        retentionHelp = TextView(this).apply { textSize = 13f; body.addView(this) }
+        retentionHelp = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); body.addView(this) }
         advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         body.addView(Button(this).apply { text = MoteI18n.text("高级设置"); tag = "file-task:advanced"; setOnClickListener { advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE; persistDraft() } })
         body.addView(advanced)

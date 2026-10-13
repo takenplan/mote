@@ -7,10 +7,10 @@
  */
 require('./fixture-language.cjs');
 const { app, BrowserWindow } = require('electron');
-const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } = require('node:fs');
+const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
-const { spawn } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const net = require('node:net');
 const assert = require('node:assert/strict');
@@ -20,6 +20,8 @@ const roundIndex = args.indexOf('--round');
 const round = roundIndex >= 0 ? args[roundIndex + 1] : 'baseline';
 assert.match(round || '', /^[a-z0-9][a-z0-9_-]{0,40}$/i, 'Use a simple round label');
 const review = args.includes('--review') || args.includes('--review-hold');
+const artRoundIndex=args.indexOf('--art-round'),artRound=artRoundIndex>=0?Number(args[artRoundIndex+1]):undefined;
+if(artRound!==undefined)assert.ok(Number.isInteger(artRound)&&artRound>=1&&artRound<=5,'A sequential art round is 1 through 5');
 const repo = resolve(__dirname, '..');
 const root = mkdtempSync(join(tmpdir(), 'mote-ui-eval-'));
 const output = join(repo, '.mote', 'ui-iterations', round);
@@ -29,6 +31,7 @@ app.setPath('userData', join(root, 'browser'));
 app.on('window-all-closed', () => {});
 let server, window, endpoint, request;
 const errors = [], journeys = [], captures = [];
+let savedArtOriginal;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function until(fn, label) {
   const deadline = Date.now() + 25000;
@@ -76,6 +79,18 @@ function rendererReadiness() {
  if(!expectedPage||!visible(content)||page!==expectedPage)return {...base,reason:'requested consumer is not mounted'};
  const busy=[...document.querySelectorAll('[data-page-loading],.loading,.load-more .spin,[aria-busy="true"]')].filter(visible);
  if(busy.length||base.pendingApi||performance.now()-(window.__moteUiApiSettledAt??0)<120)return {...base,reason:'consumer or requests still loading',busy:busy.map(element=>element.getAttribute('data-page-loading')||element.className||element.tagName)};
+ const login=document.querySelector('.connect-modal');
+ if(visible(login)){
+  const input=login.querySelector('input[type=password]');
+  if(!visible(input)||input.disabled)return {...base,reason:'Actual login consumer is not ready'};
+  return {...base,ready:true,page:'connection',expectedPage:'connection',state:'restriction',marker:'.connect-modal input[type=password]',visibleMarker:{tag:input.tagName,text:login.querySelector('h2').textContent},busyExcluded:true};
+ }
+ const reader=document.querySelector('.evidence-modal');
+ if(visible(reader)){
+  const original=reader.querySelector('.evidence-text pre');
+  if(!visible(original)||!original.textContent.trim())return {...base,reason:'Actual original text is not ready'};
+  return {...base,ready:true,page:'reader',expectedPage:'reader',state:'content',marker:'.evidence-modal .evidence-text pre',visibleMarker:{tag:original.tagName,text:original.textContent.trim().slice(0,180)},busyExcluded:true};
+ }
  const query=new URLSearchParams(route.split('?')[1]||''),collection=query.get('view')||'materials';
  const markers={overview:'.home-page',about:'.settings-destinations',settings:'.server-settings',vault:'#content-storage-title',statistics:'.storage-chart',featureGuide:'.feature-guide [data-guide-group]',notes:'#note-text',imports:content.querySelector('.import-detail')?'.imports-page .import-detail':'.imports-page .import-form',ask:'.conversation-layout .ask-form',insights:'.insights-page .insight-compose',activity:'.activity-centre .activity-list',sourceCatalog:'.discovery-source-catalog',archive:content.querySelector('.library-browser.has-selection')?'.material-detail,.library-capture-detail':collection==='memories'?'.memories-page':'.archive-page .library-navigation'};
  const marker=content.dataset.session==='verification-failed'?'.notice.error':content.dataset.session==='signed-out'?(content.classList.contains('settings-surface')?'.settings-sign-in':'.simple-welcome'):markers[page];
@@ -246,6 +261,13 @@ async function settingsJourneys() {
   await route('today','.home-page');await click('.topbar .quick-note','library/notes','return to existing note draft');
   assert.equal(await js(`document.querySelector('#note-text').value`),draft,'Removing the settings shortcut preserves the existing note draft lifecycle');
   await js(`(()=>{const input=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  if(artRound){
+    savedArtOriginal='Generated art direction candidate '+artRound+' original · 生成资料 🐾\nA saved note retains its exact source and time.';
+    await js(`(()=>{const input=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,${JSON.stringify(savedArtOriginal)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+    await js("document.querySelector('.note-composer').requestSubmit();true");
+    await until(()=>js(`document.querySelector('#note-text').value===''&&[...document.querySelectorAll('.note-card p')].some(item=>item.textContent===${JSON.stringify(savedArtOriginal)})`),'actual art candidate note save');
+    journeys.push({name:'actual candidate note save',verified:true,original:savedArtOriginal});
+  }
   // A failed real consumer fetch is a known limitation, never a home/creation fallback.
   await route('today','.home-page');
   await js(`window.__moteUiFailStorage=true;const previous=window.fetch.bind(window);window.fetch=async(input,init)=>{const path=new URL(typeof input==='string'?input:input.url,location.href).pathname;if(path==='/api/content-storage'&&window.__moteUiFailStorage)return new Response(JSON.stringify({error:'generated_storage_failure'}),{status:503,headers:{'Content-Type':'application/json'}});return previous(input,init);};true`);
@@ -295,6 +317,23 @@ async function authenticate(token) {
   // The evaluator uses the real login UI in its own browser. Values never go to stdout.
   if (review) writeFileSync(join(root, 'connection.json'), JSON.stringify({ generatedOnly: true, endpoint, token, output }, null, 2), { mode: 0o600 });
 }
+async function artReaderMatrix(){
+  for(const language of ['zh-CN','en']){
+    await route('today','.home-page');if(await js('document.documentElement.lang')!==language)await chooseLanguage(language,true,'.home-page');
+    await route('library/notes','#note-text');
+    await until(()=>js(`(()=>{const item=[...document.querySelectorAll('.note-card')].find(item=>item.querySelector('p')?.textContent===${JSON.stringify(savedArtOriginal)});if(!item)return false;item.click();return true;})()`),'same saved candidate opens original');
+    await readyConsumer('actual candidate reader');
+    assert.equal(await js("document.querySelector('.evidence-modal .evidence-text pre').textContent"),savedArtOriginal,'Real saved original is exact');
+    for(const [variant,width,height] of [['normal',1440,1000],['compact',390,844]]){
+      window.setSize(width,height);await until(()=>js('innerWidth==='+width),'reader width');
+      await capture('reader-'+(language==='en'?'en':'zh')+'-'+variant,{scene:'detail',variant,reviewSelection:true});
+    }
+    await js("document.querySelector('.evidence-modal .icon-button').click();true");
+    await until(()=>js("!document.querySelector('.evidence-modal')"),'reader returns to actual note origin');
+    journeys.push({name:'actual saved note original and close',language,verified:true});
+  }
+  window.setSize(1440,1000);
+}
 async function key(keyCode) {
   window.webContents.sendInputEvent({ type: 'keyDown', keyCode });
   if (keyCode === 'Enter') window.webContents.sendInputEvent({ type: 'char', keyCode: '\r' });
@@ -324,6 +363,10 @@ async function verifyGuideKeyboard(sections) {
   }
 }
 async function run() {
+  if(artRound){
+    const dirty=spawnSync('git',['status','--porcelain','--','apps/web','scripts/test-ui-iterations.cjs','packages/shared/design-tokens.json','scripts/generate-design-tokens.mjs'],{cwd:repo,encoding:'utf8'}).stdout;
+    assert.equal(dirty,'','Capture requires the committed Web source and token build');
+  }
   await app.whenReady();
   endpoint = 'http://127.0.0.1:' + await freePort();
   const token = randomBytes(32).toString('hex');
@@ -440,7 +483,7 @@ async function run() {
   await capture('library');
   await click('.library-record', 'library', 'read generated evidence');
   await until(() => js('!!document.querySelector(".material-detail")'), 'material body');
-  await capture('material-detail',{scene:'detail',reviewSelection:true});
+  await capture('material-detail',{scene:'detail',reviewSelection:!artRound});
   await route('today', '.home-page');
   await chooseLanguage('en', true, '.home-page');
   await homeMatrix('populated-home', 'en');
@@ -452,6 +495,7 @@ async function run() {
   writeFileSync(join(output, 'language-confirmations.json'), JSON.stringify({ generatedOnly: true, simulatedConfirmations: true, confirmations }, null, 2), {mode: 0o600});
   await settingsJourneys();
   await consumerMatrix();
+  if(artRound)await artReaderMatrix();
   await route('today','.home-page');
   assert.deepEqual(errors, [], 'No renderer errors');
   const selectedCoordinates=new Set();
@@ -459,7 +503,12 @@ async function run() {
     const key=JSON.stringify([record.scene,record.variant,record.language]);
     assert.equal(selectedCoordinates.has(key),false,'Each selected comparison scene is unique: '+key);selectedCoordinates.add(key);
   }
-  writeFileSync(join(output, 'result.json'), JSON.stringify({ round, passed: true, phase: 'completed', generatedOnly: true, captures, journeys,
+  const sourceCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).stdout.trim();
+  const coreScenes=['home','content','note','detail','ask','settings','providers','import'];
+  const coreCaptures=artRound?captures.filter(item=>coreScenes.includes(item.scene)&&['normal','compact'].includes(item.variant)&&item.reviewSelection):[];
+  if(artRound){assert.equal(coreCaptures.length,32);assert.equal(new Set(coreCaptures.map(item=>[item.scene,item.language,item.variant].join(':'))).size,32);for(const item of coreCaptures){item.artDirectionCore=true;item.sceneKey=item.scene;item.sourceCommit=sourceCommit;}}
+  const buildIdentity=Object.fromEntries(readdirSync(join(repo,'apps/web/dist/assets')).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,'apps/web/dist/assets',file))).digest('hex')]));
+  writeFileSync(join(output, 'result.json'), JSON.stringify({ round, artRound, sourceCommit,buildIdentity,tokensSha256:createHash('sha256').update(readFileSync(join(repo,'packages/shared/design-tokens.json'))).digest('hex'),coreCaptures,passed: true, phase: 'completed', generatedOnly: true, captures, journeys,
     featureGroups: catalog.groups.length, featureUnits: catalog.units.length,
     validationBoundary: 'Actual renderer and generated ingress/publication. Language selector uses simulated confirmation decisions with the real change handler and reload; native modal handling is not validated. Route entry is not complete feature use. No physical capture, external account, or live model.' }, null, 2), { mode: 0o600 });
   console.log('PASS: UI journey evidence ' + round + ' → ' + output);

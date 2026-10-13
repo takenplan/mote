@@ -1,0 +1,44 @@
+{
+  "generatedOnly": true,
+  "rounds": [
+    {
+      "id": "baseline",
+      "title": "上一轮基线",
+      "theme": "用户不接受的现状",
+      "sourceCommit": "b52d6275",
+      "root": ".mote/ui-art-direction/baseline",
+      "scores": {
+        "web": [
+          6.5,
+          6.5,
+          5.5,
+          7.5,
+          6.5,
+          7,
+          6.5
+        ],
+        "mac": [
+          6.5,
+          7,
+          6,
+          7.5,
+          6.5,
+          7.5,
+          6.5
+        ],
+        "android": [
+          5.5,
+          5.5,
+          4.5,
+          7,
+          5.5,
+          7,
+          5.5
+        ]
+      },
+      "status": "historical",
+      "jointScore": 4,
+      "notes": "独立复查重判基线；本轮未重新执行旧产品旅程，功能分数参考冻结构建的既有实操及当前可理解性。旧8.5不作为美术依据。"
+    }
+  ]
+}

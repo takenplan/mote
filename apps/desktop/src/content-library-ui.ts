@@ -24,6 +24,7 @@ export function createContentLibraryUi(api:DesktopApi){
     const version=++generation;const scope=el<HTMLSelectElement>('content-scope').value;
     if(!append){localOffset=0;remoteCursor=undefined;localMore=false;remoteMore=false;items=[];}
     el('content-status').textContent=moteText('正在读取内容…');
+    el('content-status').setAttribute('aria-busy','true');
     const local=scope==='received'||append&&!localMore?undefined:api.localContent(localOffset);
     const remote=scope==='local'||!status?.config.tokenConfigured||append&&!remoteMore?undefined:api.centralContent(remoteCursor);
     const [l,r]=await Promise.allSettled([local,remote]);if(version!==generation)return;
@@ -40,6 +41,7 @@ export function createContentLibraryUi(api:DesktopApi){
     const centralIds=new Set(items.filter(item=>item.key.startsWith('capture:')).map(item=>item.key.slice(8)));items=items.filter(item=>!item.key.startsWith('queue:')||!centralIds.has(item.key.slice(6)));
     renderFeed('content-feed',items);renderFeed('home-recent',items.slice(0,5));el('content-more').hidden=!localMore&&!remoteMore;
     el('content-status').textContent=error||(!status?.config.tokenConfigured?moteText('本机内容可离线阅读；连接中央后显示已归档内容。'):moteText('接收与整理分别进行，点开内容查看实际状态。'));
+    el('content-status').setAttribute('aria-busy','false');
   }
   function stages(received:boolean,readiness:SyncContent['readiness']){
     const list=el('content-detail-stages');list.replaceChildren();
@@ -48,6 +50,7 @@ export function createContentLibraryUi(api:DesktopApi){
   }
   async function readSelected(image=false){
     if(!selected)return;const version=++detailGeneration,archiveVersion=archiveGeneration,item=selected;
+    el('content-detail-status').setAttribute('aria-busy','true');
     el('content-detail-title').textContent=item.title||sourceName(item.source);el('content-detail-source').textContent=`${sourceName(item.source)} · ${item.sourceName??''} · ${new Date(item.observedAt).toLocaleString(getLocale())}`;
     el('content-detail-range').hidden=true;el('content-detail-body').textContent='';el('content-detail-original-state').textContent='';el('content-detail-metadata').textContent='';el<HTMLImageElement>('content-detail-image').removeAttribute('src');el('content-detail-status').textContent=moteText('正在读取内容…');el('content-detail-next').hidden=true;el('content-detail-central').hidden=true;el('content-original').hidden=true;
     if(!dialog.open){dialog.showModal();el('content-detail-title').focus();}stages(item.key.startsWith('capture:'),'unknown');
@@ -67,6 +70,7 @@ export function createContentLibraryUi(api:DesktopApi){
       el('content-detail-central').hidden=!centralId;
       if('nextChunkOffset'in result&&result.nextChunkOffset!==undefined){el('content-detail-next').hidden=false;el('content-detail-next').dataset.offset=String(result.nextChunkOffset);}
     }catch(error){if(version!==detailGeneration||!dialog.open)return;el('content-detail-status').textContent=error instanceof Error?error.message:String(error);clearDetail();if(item.key.startsWith('capture:')){items=items.filter(row=>!row.key.startsWith('capture:'));renderFeed('content-feed',items);renderFeed('home-recent',items.slice(0,5));}}
+    finally{if(version===detailGeneration&&dialog.open)el('content-detail-status').setAttribute('aria-busy','false');}
   }
   function clearDetail(){el('content-detail-range').textContent='';el('content-detail-range').hidden=true;el('content-detail-original-state').textContent='';el('content-detail-body').textContent='';el('content-detail-metadata').textContent='';el('content-detail-source').textContent='';el('content-detail-title').textContent='';el<HTMLImageElement>('content-detail-image').removeAttribute('src');centralId=undefined;detailIsCentral=false;el<HTMLDetailsElement>('content-original').open=false;}
   function close(){detailGeneration++;dialog.close();clearDetail();selected=undefined;selectedButton?.focus();selectedButton=undefined;}

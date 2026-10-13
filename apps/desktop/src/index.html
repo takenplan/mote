@@ -6,6 +6,7 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
   <title data-i18n>Mote · 你的个人上下文</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="art-direction.css">
 </head>
 <body>
   <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -44,7 +45,7 @@
     <div id="background-progress" class="helper" role="status" hidden></div>
     <div id="feedback" role="alert" hidden></div>
 
-    <section data-page="overview" class="page home-page archive-folio">
+    <section data-page="overview" class="page home-page workspace-home">
       <header class="page-header"><div><div class="eyebrow" data-i18n>本地优先 · macOS</div><h1 tabindex="-1" data-page-title data-i18n>个人资料库</h1><p data-i18n>文件、屏幕记录和想法先保存在本机；连接中央并完成整理后，可搜索和提问。</p></div></header>
       <section class="home-intro"><h2 data-i18n>从你想留下的内容开始</h2><div class="home-add-grid"><button type="button" class="add-choice" data-add-choice="folder"><span class="choice-index" aria-hidden="true">01</span><span class="setting-icon"><svg class="icon" aria-hidden="true"><use href="#icon-folder"/></svg></span><strong data-i18n>同步文件夹</strong><span data-i18n>让选定文件夹的变化持续归档</span><span class="choice-arrow" aria-hidden="true">↗</span></button><button type="button" class="add-choice" data-add-choice="file"><span class="choice-index" aria-hidden="true">02</span><span class="setting-icon"><svg class="icon" aria-hidden="true"><use href="#icon-import"/></svg></span><strong data-i18n>导入文件</strong><span data-i18n>保存一份文件，也可选择以后自动同步</span><span class="choice-arrow" aria-hidden="true">↗</span></button><button type="button" class="add-choice" data-add-choice="screen"><span class="choice-index" aria-hidden="true">03</span><span class="setting-icon"><svg class="icon" aria-hidden="true"><use href="#icon-screen"/></svg></span><strong data-i18n>记录屏幕</strong><span data-i18n>选择允许记录的应用与范围</span><span class="choice-arrow" aria-hidden="true">↗</span></button><button type="button" class="add-choice" data-add-choice="note"><span class="choice-index" aria-hidden="true">04</span><span class="setting-icon"><svg class="icon" aria-hidden="true"><use href="#icon-note"/></svg></span><strong data-i18n>随手记</strong><span data-i18n>写下想法，断网也能保存</span><span class="choice-arrow" aria-hidden="true">↗</span></button></div></section>
       <div class="home-retrieval"><span data-i18n>保存之后，回看或提问</span><div class="actions"><button class="text-button" data-nav="records" type="button" data-i18n>查看内容 →</button><button class="text-button" data-nav="ask" type="button" data-i18n>问一问 →</button></div></div>
@@ -88,7 +89,7 @@
       <p id="upload-retention-note" class="page-footnote"></p><p class="page-footnote" data-i18n>历史按当前节点与设备统计；传输量包含失败尝试，不等于远端存储占用。待复核项不会被自动重试放行。</p>
     </section>
 
-    <section data-page="records" class="page archive-reading-page" hidden>
+    <section data-page="records" class="page workspace-content" hidden>
       <header class="page-header"><div><div class="eyebrow"><span data-i18n>按天回看</span></div><h1 tabindex="-1" data-page-title><span data-i18n>内容</span></h1><p><span data-i18n>文件、屏幕和想法，在同一处阅读。点开内容即可核对出处和整理状态。</span></p></div></header>
       <div class="content-library-tools"><label><span data-i18n>查看内容</span><select id="content-scope"><option value="all" data-i18n>本机与已发送</option><option value="local" data-i18n>本机保留</option><option value="received" data-i18n>中央已收到</option></select></label><button id="content-refresh" class="secondary" type="button" data-i18n>刷新</button><button class="primary" data-add type="button" data-i18n>添加</button></div><p id="content-status" class="helper" role="status"></p><div id="content-feed" class="content-feed"></div><button id="content-more" class="secondary" type="button" hidden data-i18n>加载更多</button>
       <details id="capture-library-tools" class="capture-library-tools"><summary data-i18n>按日期浏览屏幕与页面记录</summary>
@@ -100,7 +101,7 @@
       </details>
     </section>
 
-    <section data-page="notes" class="page archive-writing-page" hidden>
+    <section data-page="notes" class="page workspace-note" hidden>
       <header class="page-header"><div><div class="eyebrow"><span data-i18n>留住此刻</span></div><h1 tabindex="-1" data-page-title><span data-i18n>随手记</span></h1><p><span data-i18n>给生活留一句注脚。先保存到本机，再按你的上传策略同步。</span></p></div><span class="tag"><span data-i18n>文字记录</span></span></header>
       <section class="panel note-composer"><form id="note-form"><label for="note-text" class="composer-label"><span data-i18n>此刻想记什么？</span></label><textarea id="note-text" rows="9" maxlength="20000" required placeholder="今天的感受、突然想到的事情，或者不想忘记的一个细节…" data-i18n-placeholder=""></textarea><div class="composer-bottom"><button id="save-note" class="primary" type="submit"><span data-i18n>保存随手记</span></button></div><button id="note-attachments" type="button" class="secondary"><span data-i18n>图片与语音附件</span></button><p id="note-feedback" class="helper" role="status"></p></form></section>
       <p class="page-footnote"><span data-i18n>每一条随手记都会先安全写入本地队列。已同步的记录可在中央仓库中查看。</span></p>

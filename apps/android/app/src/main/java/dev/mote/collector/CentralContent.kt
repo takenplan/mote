@@ -107,12 +107,12 @@ internal class CentralContent(
             isFocusable = true; minHeight = moteDp(48); setOnClickListener { if (!back()) { if (openLocalPage != null) localPage("OVERVIEW") else activity.finish() } }
         }
         heading.addView(backButton, LinearLayout.LayoutParams(moteDp(44), -2))
-        title = TextView(this).apply { tag = "central-title"; textSize = 20f; maxLines = if (compactHeader) 2 else 1; ellipsize = android.text.TextUtils.TruncateAt.END; setTextColor(MoteUi.ink) }
+        title = TextView(this).apply { tag = "central-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); maxLines = if (compactHeader) 2 else 1; ellipsize = android.text.TextUtils.TruncateAt.END; setTextColor(MoteUi.ink) }
         heading.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
         fun headerAction(label: String, description: String = label, tonal: Boolean = false, action: () -> Unit): TextView {
             val item = TextView(this).apply {
-                text = MoteI18n.text(label); contentDescription = MoteI18n.text(description); textSize = 13f; gravity = Gravity.CENTER
-                isFocusable = true; minHeight = moteDp(48); background = MoteUi.clickable(this@CentralContent, if (tonal) MoteUi.tint else MoteUi.background, MoteUi.actionRadius)
+                text = MoteI18n.text(label); contentDescription = MoteI18n.text(description); MoteUi.type(this, DesignTokens.fontAction, medium = true); gravity = Gravity.CENTER
+                isFocusable = true; minHeight = moteDp(DesignTokens.controlHeight); background = MoteUi.clickable(this@CentralContent, if (tonal) DesignTokens.surface else Color.TRANSPARENT, MoteUi.actionRadius, outline = tonal)
                 setOnClickListener { action() }
             }
             actions.addView(item, (if (compactHeader) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(56), -2)).apply { marginStart = moteDp(4) })
@@ -242,7 +242,7 @@ internal class CentralContent(
         collectionBar.visibility = View.VISIBLE
         val scope = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         scope.addView(TextView(this).apply {
-            text = MoteI18n.text("中央资料库"); textSize = 12f; setTextColor(MoteUi.accent)
+            text = MoteI18n.text("中央资料库"); MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.accent)
             background = MoteUi.shape(this@CentralContent, MoteUi.tint, 8); setPadding(moteDp(12), moteDp(8), moteDp(12), moteDp(8))
         }, LinearLayout.LayoutParams(0, -2, 1f))
         scope.addView(MoteUi.button(Button(this).apply { text = MoteI18n.text("本机保留"); setOnClickListener { localPage("LIBRARY") } }))
@@ -324,14 +324,14 @@ internal class CentralContent(
         }
     }
 
-    internal fun text(value: String, size: Float = 15f, parent: LinearLayout = body): TextView = TextView(this).apply {
-        text = value; textSize = size; setTextColor(MoteUi.ink); setTextIsSelectable(true); setPadding(0, moteDp(8), 0, moteDp(8))
+    internal fun text(value: String, size: Float = DesignTokens.fontBody.toFloat(), parent: LinearLayout = body): TextView = TextView(this).apply {
+        text = value; MoteUi.type(this, size.toInt()); setTextColor(MoteUi.ink); setTextIsSelectable(true); setPadding(0, moteDp(8), 0, moteDp(8))
     }.also(parent::addView)
     internal fun button(label: String, primary: Boolean = false, parent: LinearLayout = body, action: () -> Unit): Button = MoteUi.button(Button(this).apply {
         text = label; setOnClickListener { if (!task.busy) runCatching(action).onFailure { notice(it.message ?: MoteI18n.text("操作失败")) } }
     }, primary).also { parent.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(8) }) }
     internal fun field(label: String, value: String = "", multiline: Boolean = false, password: Boolean = false, parent: LinearLayout = body): EditText {
-        text(label, 13f, parent)
+        text(label, DesignTokens.fontSupport.toFloat(), parent)
         return MoteUi.field(EditText(this).apply {
             hint = label; contentDescription = label; setText(value); isSaveEnabled = false
             MoteUi.textInput(this, InputType.TYPE_CLASS_TEXT or if (password) InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, multiline)
@@ -347,9 +347,9 @@ internal class CentralContent(
         background = MoteUi.clickable(this@CentralContent, DesignTokens.surface)
         isFocusable = true; contentDescription = title + ". " + subtitle
         val copy = LinearLayout(this@CentralContent).apply { orientation = LinearLayout.VERTICAL }
-        copy.addView(TextView(this@CentralContent).apply { text = title; textSize = 14f; setTextColor(MoteUi.ink); maxLines = 2 })
+        copy.addView(TextView(this@CentralContent).apply { text = title; MoteUi.type(this, DesignTokens.fontRow, medium = true); setTextColor(MoteUi.ink); maxLines = 2 })
         copy.addView(TextView(this@CentralContent).apply {
-            text = subtitle; textSize = 12f; setTextColor(MoteUi.muted); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
+            text = subtitle; MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(0, moteDp(4), 0, 0)
         })
         addView(copy, LinearLayout.LayoutParams(0, -2, 1f))

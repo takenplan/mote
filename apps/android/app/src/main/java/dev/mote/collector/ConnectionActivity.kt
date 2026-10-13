@@ -62,9 +62,9 @@ class ConnectionActivity : MoteActivity() {
     private fun buildUi(initial: InitialConnection) {
         val config = initial.config
         val root = moteDetailPage()
-        fun text(value: String, size: Float = 15f) = TextView(this).apply { text = value; textSize = size; setPadding(0, 16, 0, 16) }.also(root::addView)
+        fun text(value: String, size: Float = DesignTokens.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)) }.also(root::addView)
         fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { if (!working && !task.busy) runCatching(action).onFailure { showFailure(it) } } }.also(root::addView)
-        text(MoteI18n.text("连接中央节点"), 26f)
+        text(MoteI18n.text("连接中央节点"), DesignTokens.fontTitleMobile.toFloat())
         text(MoteI18n.text("先在中央网页生成一次性邀请。扫码、选择 JSON 文件或粘贴邀请后，核对节点再确认连接；不会自动开始截图。邀请有效期 10 分钟，请勿分享。"))
         currentNode = text(""); refreshCurrentNode()
         button(MoteI18n.text("复制本设备 ID")) { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("Mote device ID", deviceId)); Toast.makeText(this, MoteI18n.text("已复制设备 ID，不含凭据"), Toast.LENGTH_SHORT).show() }
