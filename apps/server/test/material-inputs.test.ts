@@ -4,11 +4,15 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import type {QueryInput} from '@mote/agent';
+import type {QueryResult} from '@mote/shared';
 import {Store} from '../src/store.js';
 import {MaterialStore,materialId,type MaterialDraft} from '../src/materials.js';
 import {MemoryStrategies} from '../src/memory-strategies.js';
 import {MemoryStore} from '../src/memory.js';
 import {MemoryPipeline} from '../src/memory-pipeline.js';
+import {reviewMemory} from '../src/memory-review.js';
+import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 
 function fixture(t:import('node:test').TestContext){
   const path=mkdtempSync(join(tmpdir(),'mote-material-input-')),store=new Store(path),materials=new MaterialStore(store);
@@ -87,5 +91,57 @@ test('a manual composition retains default dependencies without blocking an inde
     assert.equal(done.batches.find(batch=>batch.strategy?.recipe.id==='mote.personal-memory')?.status,'invalidated');
     assert.deepEqual(calls,[['body']],'only the independently ready recipe may call the model');
     assert.equal(pipeline.get(job.id).memoryIds.length,0);
+  }finally{await pipeline.close();}
+});
+
+test('body feedback retains its recipe pin when the same originals also belong to an unavailable whole-material recipe',async t=>{
+  const {store,materials,draft}=fixture(t),strategies=new MemoryStrategies(),recipe={id:'fixture.body-feedback',version:'1',extract:{id:'mote.context-extraction',version:'3.4.0'},review:{id:'mote.personal-review',version:'2'},requires:['body']};
+  strategies.registerRecipe(recipe);
+  const blocks=[{...draft.blocks[0],id:'target',text:'Generated target refers to an earlier body entry. '.padEnd(240,'x')},{...draft.blocks[0],id:'background',text:'Generated earlier body entry resolves the target reference. '.padEnd(240,'x')}];
+  const initial={...draft,blocks,coverage:{state:'complete' as const},artifacts:[{key:'body',state:'ready' as const,blockIds:blocks.map(block=>block.id)},{key:'summary',state:'ready' as const,blockIds:[]}]};
+  const first=materials.publish(initial),body=materials.input(first.ref,['body'])!,[targetId,backgroundId]=body.evidenceIds;
+  const memories=new MemoryStore(store,ids=>materials.evidence(ids),id=>materials.isCurrentEvidence(id)),calls:QueryInput[]=[];
+  let feedbackCalls=0;
+  const output=(input:QueryInput,runId:string):QueryResult=>{
+    calls.push(input);
+    assert.deepEqual(input.processingMaterialInputs?.map(pin=>pin.required),[['body']],'an unavailable whole-material requirement cannot attach to body extraction or review');
+    assert.equal(input.processingMaterialInputs?.[0].fingerprint,body.fingerprint);
+    const work=input.taskContext!.memoryWork as {members:MemoryWorkMember[];contextMembers?:MemoryWorkMember[]};
+    assert.equal(work.members.length,1);
+    const needs=work.members[0].id===targetId&&!work.contextMembers?.some(member=>member.id===backgroundId);
+    return {runId,trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:work.members.map(member=>({key:member.key,state:needs?'needs_context':'no_candidates',candidateIndexes:[],...(needs?{reason:'The generated target needs the separately selected earlier body entry.',contextRefs:[backgroundId]}:{})})),capacity:{saturated:false}})};
+  };
+  const pipeline=fixtureMemoryPipeline({store,memories,strategies,configured:()=>true,model:()=> 'fixture',batchCharacters:256,
+    materialInput:(ref,required)=>materials.input(ref,required),materialAllowedForMemory:(ref,_profile,required)=>Boolean(materials.input(ref,required??['material'])?.ready),
+    query:async input=>output(input,'generated-body-extract-'+calls.length),review:(input,result,strategy)=>reviewMemory(input,result,async next=>output(next,'generated-body-review-'+calls.length),{strategy})});
+  pipeline.setFeedbackPlanner(async request=>{
+    feedbackCalls++;
+    assert.equal(request.round,1);assert.equal(request.targets.length,1);assert.equal(request.targets[0].id,targetId);
+    assert.equal(request.authorized.length,2,'the shared original identities do not duplicate the compatible body scope');
+    assert.equal(pipeline.feedbackAllowed(request),true,'the independent body input remains authorized after summary failure');
+    const context=request.authorized.find(member=>member.id===backgroundId)!;assert.ok(context);
+    return {workId:'generated-body-feedback',groups:[{id:'generated-body-context-child',goal:'Inspect the unfinished generated target with its earlier body entry',memberKeys:request.targets.map(member=>member.key),contextKeys:[context.key],instruction:'Use only the selected body originals to resolve the generated reference.'}]};
+  });
+  try{
+    const job=pipeline.create({evidenceIds:body.evidenceIds,recipes:[{id:recipe.id,version:recipe.version},{id:'mote.personal-memory',version:'2'}],workPackage:{id:'generated-body-package',goal:'Inspect both generated body originals',instruction:'Preserve each selected recipe and the independent range coverage.'}});
+    assert.deepEqual(job.materialInputs!.map(pin=>pin.required),[['body'],['material']]);
+    const bodyBackground=job.batches.find(batch=>batch.strategy?.recipe.id===recipe.id&&batch.coverage?.[0].id===backgroundId)!;
+    const wholeBackground=job.batches.find(batch=>batch.strategy?.recipe.id==='mote.personal-memory'&&batch.coverage?.[0].id===backgroundId)!;
+    assert.equal(bodyBackground.coverage![0].key,wholeBackground.coverage![0].key,'the fixture exercises the shared coverage key that previously selected the other recipe pin');
+    const revised=materials.publish({...initial,coverage:{state:'partial'},artifacts:[initial.artifacts[0],{...initial.artifacts[1],state:'failed',reason:'Generated unavailable summary'}]},{expectedRevision:first.revision});
+    assert.equal(materials.input(revised.ref,['body'])!.fingerprint,body.fingerprint);
+    const done=await pipeline.run(job.id);
+    assert.equal(done.status,'failed','the unavailable whole-material recipe remains visible as a failed composition');
+    assert.equal(feedbackCalls,1);
+    assert.ok(done.batches.filter(batch=>batch.strategy?.recipe.id==='mote.personal-memory').every(batch=>batch.status==='invalidated'));
+    const parent=done.batches.find(batch=>batch.strategy?.recipe.id===recipe.id&&batch.supersededBy)!;assert.ok(parent);
+    const child=done.batches.find(batch=>batch.replanRound===1)!;assert.ok(child);
+    assert.deepEqual(parent.supersededBy,[child.id]);assert.equal(child.strategy?.recipe.id,recipe.id);assert.equal(child.status,'completed');
+    assert.deepEqual(child.evidenceRanges.map(range=>range.id),[targetId]);assert.deepEqual(child.contextRanges?.map(range=>range.id),[backgroundId]);
+    assert.equal(child.coverage?.[0].state,'no_candidates');assert.ok(child.reviewReceipt?.reviewRunId);
+    assert.equal(done.batches.find(batch=>batch.id===bodyBackground.id)?.attempts,1,'the already inspected body sibling is used as context without repeating its target coverage');
+    assert.equal(calls.length,6,'the two original body batches and the feedback child each receive extraction and independent review');
+    assert.equal(calls.filter(input=>input.traceContext?.batchId===child.id).length,2);
+    assert.equal(memories.list().length,0);
   }finally{await pipeline.close();}
 });

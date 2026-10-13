@@ -9,6 +9,7 @@ import {actionEvidenceText,parseEvidenceRef,parseEvidenceId,formatEvidenceRef} f
 import {ContextToolError} from './tool-errors.js';
 import {AgentResponseError,reportTrace,reportProgress} from './types.js';
 import {sourceProtocolInstructions} from './instructions.js';
+import {extractionSeedScopeFitsBudget} from './extraction-seed-budget.js';
 import { createServer, type Server } from "node:http";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import type { AddressInfo } from "node:net";
@@ -285,7 +286,7 @@ export async function startBridge(
   if(bounds.evidenceRanges&&!restricted)throw hostError('Evidence ranges require explicit evidence IDs');
   if(bounds.evidenceReadRanges&&!restricted)throw hostError('Context read ranges require a bounded extraction session');
   if(restricted){
-    if(!bounds.evidenceIds?.length||bounds.evidenceIds.length>100||ranges.length>100||ranges.some(r=>!bounds.evidenceIds!.includes(r.id)||!Number.isSafeInteger(r.offset)||r.offset<0||!Number.isSafeInteger(r.length)||r.length<1||r.length>100000)||ranges.reduce((n,r)=>n+r.length,0)>100000)throw hostError('Invalid extraction evidence scope');
+    if(!bounds.evidenceIds||!extractionSeedScopeFitsBudget(bounds.evidenceIds,ranges))throw hostError('Invalid extraction evidence scope');
     if(readRanges.length>100||readRanges.some(r=>typeof r.id!=='string'||!r.id||!Number.isSafeInteger(r.offset)||r.offset<0||!Number.isSafeInteger(r.length)||r.length<1||!Number.isSafeInteger(r.offset+r.length)))throw hostError('Invalid context evidence read scope');
     const ids=[...new Set([...bounds.evidenceIds,...readRanges.map(r=>r.id)])];if(ids.length>100)throw hostError('Context evidence read scope exceeds the original ID bound');
     for(const raw of await reader.evidence({...range({},bounds),ids}))if(ids.includes(raw.id)){const record=bounds.skill==='calendar-extraction'?{...raw,ocrText:actionEvidenceText(raw)}:raw;permitted.set(record.id,record);originalPins.set(record.id,originalPin(record));}

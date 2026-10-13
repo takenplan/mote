@@ -41,6 +41,7 @@ export * from "./types.js";
 export {AgentYieldError,hostControlDefinitions,hostControlInstructions,type HostControlChannel,type HostControlDefinition,type HostControlResult} from './host-controls.js';
 export {ContextToolError} from './tool-errors.js';
 export {originalEvidenceReceipt} from './bridge.js';
+export {extractionSeedScopeFitsBudget} from './extraction-seed-budget.js';
 export {validateInlineCitations} from "./citations.js";
 export {validateModelOptions} from './model-runtime.js';
 
