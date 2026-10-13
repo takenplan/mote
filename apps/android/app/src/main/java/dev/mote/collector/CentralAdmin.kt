@@ -10,6 +10,15 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.util.UUID
 
+/** Publication outcomes describe the current result; persisted status still owns scheduling. */
+internal object CentralMemoryJobPresentation {
+    private val controls = listOf("pause" to "暂停", "resume" to "继续", "cancel" to "取消", "retry" to "重试")
+    fun invalidated(job: JSONObject) = job.optString("outcome") == "input_invalidated"
+    fun status(job: JSONObject) = if (invalidated(job)) MoteI18n.text("资料已更新，本次结果失效") else job.optString("state", job.optString("status"))
+    fun notice(job: JSONObject): String? = if (invalidated(job)) MoteI18n.text("历史结果保留；请查看当前资料版本。失效输入不能直接重试。") else null
+    fun controls(job: JSONObject) = if (invalidated(job)) emptyList() else controls
+}
+
 /** Management uses native controls and explicit endpoint contracts, never a web fallback. */
 internal class CentralAdmin(private val screens: CentralScreens) {
     private val ui get() = screens.ui
@@ -308,16 +317,25 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         body.removeAllViews(); screens.setBack { screens.refresh() }
         ui.button(MoteI18n.text("开始提取"), true) { action("/api/memory-jobs") { run("/api/memory-jobs", it.getString("id")) } }
         library.paged("/api/memory-jobs", ui.card()) { row, card ->
-            ui.text(row.optString("state", row.optString("status")), parent = card)
+            ui.text(CentralMemoryJobPresentation.status(row), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { run("/api/memory-jobs", row.getString("id")) }
         }
     }
     fun run(path: String, id: String) {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        read(path + "/" + enc(id))
+        if (path == "/api/memory-jobs") {
+            val target = ui.card(); val api = client
+            ui.work(MoteI18n.text("正在读取…"), { api.get(path + "/" + enc(id)) }) { job ->
+                if (CentralMemoryJobPresentation.invalidated(job)) {
+                    ui.text(CentralMemoryJobPresentation.status(job), 18f, target)
+                    CentralMemoryJobPresentation.notice(job)?.let { ui.text(it, parent = target) }
+                    ui.disclosure(MoteI18n.text("查看详情"), target) { values(job, it) }
+                } else values(job, target)
+                CentralMemoryJobPresentation.controls(job).forEach { (command, label) -> ui.button(MoteI18n.text(label), parent = target) { action(path + "/" + enc(id) + "/" + command) { run(path, id) } } }
+            }
+        } else read(path + "/" + enc(id))
         ui.button(MoteI18n.text("刷新")) { run(path, id) }
-        val controls = if (path == "/api/memory-jobs") listOf("pause" to "暂停", "resume" to "继续", "cancel" to "取消", "retry" to "重试") else listOf("cancel" to "停止")
-        controls.forEach { (command, label) -> ui.button(MoteI18n.text(label)) { action(path + "/" + enc(id) + "/" + command) { run(path, id) } } }
+        if (path != "/api/memory-jobs") ui.button(MoteI18n.text("停止")) { action(path + "/" + enc(id) + "/cancel") { run(path, id) } }
     }
     private fun devices() {
         library.paged("/api/devices", ui.card()) { row, card -> values(row, card) }

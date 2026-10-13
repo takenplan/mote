@@ -161,7 +161,21 @@ export class Actions {
     }
     return {ranges,cues,refs};
   }
-  progress(){const failure=this.store.db.prepare("SELECT error,available_at FROM execution_steps WHERE kind='actions.extract' AND state IN ('failed','blocked','stale') AND error IS NOT NULL ORDER BY updated_at DESC LIMIT 1").get();return {configured:this.configured(),running:!!this.running,jobs:this.store.db.prepare('SELECT status,COUNT(*) count FROM action_jobs GROUP BY status').all(),error:failure?moteText("日程分析未完成，可能是模型不可用、证据更新或结果未通过校验。可重试失败批次。"):null,...(failure?{errorCode:String(failure.error),availableAt:Number(failure.available_at)}:{})};}
+  progress(){
+    // Deleted or superseded evidence can retain an execution receipt. It is
+    // history, not a current failure banner, and must not mask another failure.
+    const currentJobs=new Set<string>(),counts=new Map<string,number>();
+    for(const row of this.store.db.prepare('SELECT status,COUNT(*) count FROM action_jobs WHERE status IN (\'completed\',\'cancelled\',\'stale\') GROUP BY status').all())counts.set(String(row.status),Number(row.count));
+    for(const row of this.store.db.prepare("SELECT key,status FROM action_jobs WHERE status NOT IN ('completed','cancelled','stale')").all()){
+      const valid=this.validJob(String(row.key));if(valid)currentJobs.add(String(row.key));
+      const status=valid?String(row.status):'stale';counts.set(status,(counts.get(status)??0)+1);
+    }
+    const failure=this.store.db.prepare(`SELECT j.key,e.error,e.available_at FROM execution_steps e
+      JOIN action_jobs j ON j.key=json_extract(e.input,'$.jobKey')
+      WHERE e.kind='actions.extract' AND e.state IN ('failed','blocked') AND e.error IS NOT NULL
+      ORDER BY e.updated_at DESC`).all().find(row=>currentJobs.has(String(row.key)));
+    return {configured:this.configured(),running:!!this.running,jobs:[...counts].sort(([a],[b])=>a.localeCompare(b)).map(([status,count])=>({status,count})),error:failure?moteText("日程分析未完成，可能是模型不可用、证据更新或结果未通过校验。可重试失败批次。"):null,...(failure?{errorCode:String(failure.error),availableAt:Number(failure.available_at)}:{})};
+  }
   retry(){for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind='actions.extract' AND state IN ('failed','blocked','stale','cancelled')").all())this.engine.retry(String(row.id));}
   tick(){if(this.closed||this.running||!this.settings().enabled)return this.running??Promise.resolve();this.running=this.execute().finally(()=>{this.running=undefined;});return this.running;}
   private async execute(){

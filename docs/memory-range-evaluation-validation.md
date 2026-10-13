@@ -88,9 +88,19 @@ requires both model phases to actually read authorized original context, saves
 more than 32 selected candidates with independent review and no count-driven
 split, then changes the source through its API. The resulting current detail/list
 counts must report input invalidation separately from processing failure and
-remain stable across restart without another model call. Execution results are
-recorded separately after the composed implementation passes. The earlier PR
-checks below remain historical evidence for their original definitions.
+remain stable across restart without another model call.
+
+2026-10-13: `node --import tsx --test apps/server/test/memory-feature-composition.test.ts`
+passed 1 test, 0 failed and 0 skipped. The composed application saved 40 generated
+observations through independently reviewed target coverage. Both extraction and
+review actually called `context_evidence` for an exact continuation outside that
+target; the read did not add a coverage row or trigger semantic subdivision. A
+source revision through the API withdrew the dependent current products and
+reported zero processing failures plus input-invalidated batches in both detail
+and list. Closing/reopening the application preserved those states without a new
+model call. This proves the composed host journey with a scripted model, not real
+model interpretation, personal-data quality or physical-device behavior. The earlier
+PR checks below remain historical evidence for their original definitions.
 
 ## Commands and executed evidence
 

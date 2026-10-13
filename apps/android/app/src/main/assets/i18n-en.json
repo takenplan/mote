@@ -8144,5 +8144,9 @@
   "仅在已知范围时填写；与准确人数互斥": "Fill in only for a known range; cannot be combined with an exact count",
   "本地说话人分离 · WeSpeaker 中文": "Local speaker separation · WeSpeaker Chinese",
   "人数范围为用户声明；候选为声学模型估计，评分不是概率。自动单标签也可能漏分，需试听确认。": "The range is declared by the owner. Candidates are acoustic estimates; scores are not probabilities. Automatic single-label output can still miss speakers. Listen to confirm.",
-  "未得到范围内的候选；已保留自动结果及候选，不会补造或隐藏说话人。": "No candidate met the declared range. Automatic output and candidates are retained; speakers are neither invented nor hidden."
+  "未得到范围内的候选；已保留自动结果及候选，不会补造或隐藏说话人。": "No candidate met the declared range. Automatic output and candidates are retained; speakers are neither invented nor hidden.",
+  "资料已更新，本次结果失效": "The source changed; this result is no longer valid.",
+  " · {0} 批输入已失效": " · {0} batches have invalidated input",
+  " · {0} 项输入已失效": " · {0} inputs are no longer valid",
+  "历史结果保留；请查看当前资料版本。失效输入不能直接重试。": "Historical results are retained. Review the current source version; invalidated input cannot be retried directly."
 }
