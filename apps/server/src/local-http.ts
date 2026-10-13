@@ -17,7 +17,7 @@ export function requestLocalJson(endpoint:string|URL,input:{method?:'GET'|'POST'
   return new Promise((resolve,reject)=>{
     const outgoing=request(url,{method:input.method??'GET',headers,signal:input.signal,agent},async incoming=>{
       try{
-        if((incoming.statusCode??0)<200||(incoming.statusCode??0)>=300){incoming.resume();throw new ProviderFailure(providerHttpFailure(incoming.statusCode??502,String(incoming.headers['retry-after']??'')));}
+        if((incoming.statusCode??0)<200||(incoming.statusCode??0)>=300){incoming.resume();throw new ProviderFailure({...providerHttpFailure(incoming.statusCode??502,String(incoming.headers['retry-after']??'')),...(input.requireOfflineExecution&&incoming.headers['x-mote-execution']==='local'&&incoming.headers['x-mote-execution-started']==='false'?{executionStarted:false as const}:{})});}
         if(input.requireOfflineExecution&&incoming.headers['x-mote-execution']!=='local'){incoming.resume();throw new StoreError('Local worker did not confirm offline execution',502);}
         const chunks:Buffer[]=[];let length=0;
         for await(const chunk of incoming){length+=chunk.length;if(length>limit)throw new StoreError('Processing response exceeds limit',502);chunks.push(chunk);}

@@ -8,6 +8,7 @@ import {Store,sha256} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
 import {FileStore} from '../src/files.js';
 import {FileProcessing} from '../src/file-processing.js';
+import {Operations} from '../src/operations.js';
 import {FileReviews} from '../src/file-reviews.js';
 import {fileSummaryInputFingerprint} from '../src/file-summary-lineage.js';
 import {fixtureFilePolicy} from './fixtures/file-policy.js';
@@ -40,7 +41,7 @@ async function fixture(t:import('node:test').TestContext,held=false,count=1){
 for(const kind of ['manual','review','speaker'] as const){
   test(`saved summary retires immediately after ${kind} input change and reprocesses current evidence`,async t=>{
     const f=await fixture(t);await f.processing.tick();const previous=f.files.detail(f.id).artifacts.find((a:any)=>a.kind==='summary')!;assert.ok(previous);
-    await f.correct(kind);assert.equal(f.files.detail(f.id).artifacts.some((a:any)=>a.kind==='summary'),false);assert.equal(f.files.detail(f.id).job.summary_state,'waiting');
+    await f.correct(kind);assert.equal(f.files.detail(f.id).artifacts.some((a:any)=>a.kind==='summary'),false);assert.equal(f.files.detail(f.id).job.summary_state,'waiting');assert.equal(new Operations(f.store).detail('file:'+f.id).operation.state,'waiting');
     await f.processing.tick();const current=f.files.detail(f.id).artifacts.find((a:any)=>a.kind==='summary') as any;assert.ok(current);assert.notEqual(current.id,previous.id);
     assert.equal(current.inputFingerprint,fileSummaryInputFingerprint(f.files,f.id));assert.match(current.sections[0].answer,kind==='speaker'?/Generated participant/:/NOT complete/);
   });

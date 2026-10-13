@@ -29,6 +29,7 @@ import {MemoryPipeline} from '../src/memory-pipeline.js';
 import {MaterialStore,materialId} from '../src/materials.js';
 import {MaterialOrganizerRuntime} from '../src/material-organizers.js';
 import {MaterialMemoryWork} from '../src/material-memory-work.js';
+import {Operations} from '../src/operations.js';
 import {EvidenceReader} from '../src/evidence-reader.js';
 import {evidenceDependents} from '../src/evidence-dependencies.js';
 import {sourceMaterialView} from '../src/source-material-view.js';
@@ -125,7 +126,7 @@ test('retained recording publishes ASR with a 56ms sentence-boundary discrepancy
 });
 
 test('actual Cordis registration and disposal; local pipeline checkpoints resume without repeating ASR',async t=>{
- const f=await fixture(t,{failFirst:true});await f.processing.tick();assert.equal(f.files.detail(f.id).job.state,'failed');assert.equal(f.files.detail(f.id).artifacts.filter((a:any)=>a.kind==='transcript').length,1);
+ const f=await fixture(t,{failFirst:true});await f.processing.tick();assert.equal(f.files.detail(f.id).job.state,'failed');assert.equal(f.processing.cancellation(f.id).wait,'unknown');assert.equal(f.files.detail(f.id).artifacts.filter((a:any)=>a.kind==='transcript').length,1);
  // Reconstruct the engine and Cordis runtime, leaving the persisted checkpoint in place.
  await f.processing.close();const resumed=f.createProcessing();await resumed.runtime.ready;
  assert.equal(resumed.cancellation(f.id).wait,'unknown');assert.throws(()=>resumed.retry(f.id,'diarize'),{statusCode:409});resumed.retry(f.id,'diarize',false,true);
@@ -648,9 +649,35 @@ test('ordinary cooperative processor still receives cancellation and cannot publ
 
 
 test('explicit retry leaves cancelled children from an obsolete configuration untouched',async t=>{
- const f=await fixture(t,{transcribe:async()=>{throw new ProviderFailure(providerHttpFailure(429));}});await f.processing.tick();
+ const f=await fixture(t,{transcribe:async()=>{throw new ProviderFailure(providerHttpFailure(429));}});await f.processing.tick();const original=f.processing.engine.list({operationId:'file:'+f.id,kind:'files.pipeline'}).items[0].id;
  f.processing.update({revision:f.processing.view().revision,settings:{...f.processing.view().settings,localEndpoint:'http://127.0.0.1:9047/generated-new-endpoint'},policy:fixtureFilePolicy({...f.processing.view().settings,localEndpoint:'http://127.0.0.1:9047/generated-new-endpoint'},f.processing.runtime.registry)});
- assert.equal(f.processing.engine.list({operationId:'file:'+f.id,kind:'files.pipeline'}).items[0].state,'cancelled','fixture must actually revoke the old configuration');
+ assert.equal(f.processing.engine.get(original)!.state,'cancelled','fixture must actually revoke the old configuration');
  const historical=()=>f.store.db.prepare("SELECT e.* FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND e.kind LIKE 'file-step.%'").all('file:'+f.id);
  const before=JSON.stringify(historical());assert.ok(historical().length);f.processing.retry(f.id);assert.equal(JSON.stringify(historical()),before,'only current-generation child backoff may reset');
+});
+
+
+test('archive-only vendor summary is not scheduled and old membership is corrected without model replay',async t=>{
+ const f=await fixture(t);const ack=await f.files.transcriptRevision('phone',{externalId:'generated-export',kind:'file',title:'Generated vendor export',observedAt:new Date().toISOString(),deleted:false},'Generated original export',{...raw,coverage:'full'},()=>{});
+ await f.processing.tick();const operations=new Operations(f.store);let detail=operations.detail('file:'+ack.id);assert.equal(detail.operation.notScheduled,1);assert.equal(detail.operation.counts.blocked,0);assert.equal(detail.operation.state,'skipped');assert.equal(f.files.detail(ack.id).job.summary_state,'skipped');
+ const summary=detail.steps.find(s=>s.kind==='files.summary')!;assert.equal(summary.attempts,0);assert.equal(summary.reason,'archive_only');
+ f.store.db.prepare('UPDATE execution_operation_steps SET optional=0 WHERE step_id=?').run(summary.id);assert.equal(operations.detail('file:'+ack.id).operation.state,'blocked');
+ await f.processing.close();const restored=f.createProcessing();await restored.runtime.ready;await restored.tick();detail=operations.detail('file:'+ack.id);assert.equal(detail.operation.state,'skipped');assert.equal(detail.steps.find(s=>s.id===summary.id)!.attempts,0);assert.equal(f.counts().summaries,0);
+});
+test('definitive local rejection can retry while ambiguous 503 retains its issued-call guard',async t=>{
+ let fail=true;const f=await fixture(t,{transcribe:async()=>{if(fail)throw new ProviderFailure({...providerHttpFailure(503),executionStarted:false});return raw;}});
+ await f.processing.tick();assert.equal(f.processing.cancellation(f.id).wait,null);assert.equal(f.files.detail(f.id).job.execution.status,'retry_wait');
+ fail=false;f.processing.retry(f.id);await f.processing.tick();assert.equal(f.files.detail(f.id).job.state,'succeeded');
+ const g=await fixture(t,{transcribe:async()=>{throw new ProviderFailure(providerHttpFailure(503));}});await g.processing.tick();assert.equal(g.processing.cancellation(g.id).wait,'unknown');assert.throws(()=>g.processing.retry(g.id),{statusCode:409});
+});
+test('file details use the recovered child receipt even when its old program mirror remains waiting',async t=>{
+ const f=await fixture(t,{transcribe:async()=>{throw new ProviderFailure(providerHttpFailure(503));}});await f.processing.tick();await f.processing.close();
+ f.store.db.prepare("UPDATE execution_steps SET recovery_deadline=1 WHERE state='waiting' AND kind LIKE 'file-step.%'").run();
+ const restored=f.createProcessing();await restored.runtime.ready;await restored.tick();const detail=f.files.detail(f.id);
+ assert.equal(detail.steps.find(s=>s.step==='extract')!.state,'failed');assert.equal(detail.steps.find(s=>s.step==='extract')!.error,'recovery_window_exhausted');assert.equal(detail.job.state,'failed');assert.equal(new Operations(f.store).detail('file:'+f.id).operation.state,'failed');assert.equal(f.counts().asrCalls,1);assert.equal(restored.cancellation(f.id).wait,'unknown');
+});
+
+test('archive-only original pipeline is skipped without executing a content processor',async t=>{
+ const f=await fixture(t),view=f.processing.view(),policy=structuredClone(view.policy);policy.rules=[{type:'*/*',profileId:'archive'}];f.processing.update({revision:view.revision,settings:view.settings,policy});await f.processing.tick();
+ assert.equal(f.files.detail(f.id).job.state,'skipped');assert.equal(new Operations(f.store).detail('file:'+f.id).operation.state,'skipped');assert.equal(f.processing.cancellation(f.id).canCancel,false);assert.equal(f.counts().asrCalls,0);assert.equal(f.counts().summaries,0);
 });

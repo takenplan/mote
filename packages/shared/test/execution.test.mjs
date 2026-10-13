@@ -40,3 +40,10 @@ test('shutdown interruption distinguishes replayable tasks from runs requiring e
 test('unknown and missing states are rejected instead of granting recovery actions',()=>{
   for(const input of [{status:'old_pending_state'},{status:'canceled'},{}])assert.throws(()=>executionEnvelope(input),/Unsupported domain execution state/);
 });
+
+
+test('terminal provider failure does not promise auto retry and unknown calls require acknowledgement',()=>{
+ assert.equal(executionEnvelope({state:'failed',errorCode:'provider_unavailable'}).failure.recovery,'needs_action');
+ const unknown=executionEnvelope({state:'blocked',errorCode:'processor_response_unknown'});assert.equal(unknown.waiting.reason,'outcome_unknown');assert.equal(unknown.waiting.requiredAction,'acknowledge_unknown_execution');assert.equal(unknown.failure.recovery,'needs_action');
+ assert.equal(executionEnvelope({state:'blocked',errorCode:'processor_not_configured'}).waiting.reason,'configuration');
+});

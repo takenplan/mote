@@ -2,6 +2,10 @@ import { moteText } from '@mote/shared/i18n';
 /** Display follows protocol codes, never provider text or semantic matching. The
  * server's allowedActions remains the authority for recovery controls. */
 const messages: Record<string, string> = {
+    processor_response_unknown: '上次处理结果未知，需要确认后重试',
+    processor_still_running: '处理器仍在运行',
+    archive_only: '按归档策略未安排内容处理',
+    summary_disabled: '未安排摘要',
     appledouble_metadata: '这是 AppleDouble 文件系统元数据，原件已保留，已跳过内容处理。',
     processing_disabled: '处理队列已停用，请启用后继续。',
     snapshot_input_expired: '快照的临时输入已清理，请重新同步来源文件后重试。',

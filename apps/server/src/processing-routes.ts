@@ -24,7 +24,8 @@ export function registerProcessingRoutes(app:FastifyInstance,{store,workflows,pe
     const probe=async(url:string)=>{if(!token)return null;try{const response=await fetch(url,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(1200)});return response.ok?await response.json():null;}catch{return null;}};
     const ocrHealth=new URL(process.env.MOTE_MEDIA_OCR_ENDPOINT??'http://127.0.0.1:9010/ocr'),asrHealth=new URL(process.env.MOTE_MEDIA_ASR_ENDPOINT??'http://127.0.0.1:9009/transcribe');ocrHealth.pathname='/health';asrHealth.pathname='/health';
     const [ocr,dialogue]=await Promise.all([status.ocr.state==='ready'?probe(ocrHealth.toString()):null,status.dialogue.state==='ready'?probe(asrHealth.toString()):null]);
-    return {ocr:{...status.ocr,runtimeReady:Boolean((ocr as {ocr?:boolean}|null)?.ocr)},dialogue:{...status.dialogue,runtimeReady:Boolean((dialogue as {asr?:boolean;diarization?:boolean}|null)?.asr&&(dialogue as {diarization?:boolean}|null)?.diarization)}};
+    const missing=z.array(z.enum(['ffmpeg','faster_whisper','sherpa_onnx'])).safeParse((dialogue as {missingDependencies?:unknown}|null)?.missingDependencies);
+    return {ocr:{...status.ocr,runtimeReady:Boolean((ocr as {ocr?:boolean}|null)?.ocr)},dialogue:{...status.dialogue,missingDependencies:missing.success?missing.data:[],runtimeReady:Boolean((dialogue as {asr?:boolean;diarization?:boolean}|null)?.asr&&(dialogue as {diarization?:boolean}|null)?.diarization)}};
   });
   app.post('/api/media-models/:role/install',async(req,reply)=>{const {role}=z.object({role:z.enum(['ocr','dialogue'])}).parse(req.params);const {source}=z.object({source:z.enum(['auto','official','mirror']).default('auto')}).strict().parse(req.body??{});return reply.code(202).send(mediaAssets.install(role,source));});
 }

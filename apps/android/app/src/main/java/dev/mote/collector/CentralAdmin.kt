@@ -377,7 +377,11 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     private val operationStates = listOf("" to "全部", "waiting" to "等待处理", "running" to "运行中", "blocked" to "受阻", "failed" to "失败", "succeeded" to "完成", "cancelled" to "已取消", "stale" to "来源变化待重验", "skipped" to "未安排")
     private fun stateLabel(state: String) = MoteI18n.text(operationStates.firstOrNull { it.first == state }?.second ?: state)
-    private fun operationTitle(kind: String) = MoteI18n.text(mapOf("file" to "文件处理", "capture" to "截图处理", "memory" to "记忆整理", "workflow" to "上下文处理", "import" to "资料导入", "query" to "问答", "insight" to "洞察", "embedding" to "检索向量计算", "material-index" to "资料检索索引")[kind] ?: "上下文处理")
+    private fun operationState(row: JSONObject): String {
+        val label = CentralProcessingPresentation.stateKey(row.optString("state"), row.optString("waitingReason", row.optString("reason")), row.optBoolean("notScheduled"))
+        return if (label != null) MoteI18n.text(label) else stateLabel(row.optString("state"))
+    }
+    private fun operationTitle(kind: String) = MoteI18n.text(mapOf("recording-sync" to "录音同步", "material-organizer" to "资料整理", "memory-provider-reconcile" to "记忆供应商核对", "file" to "文件处理", "capture" to "截图处理", "memory" to "记忆整理", "workflow" to "上下文处理", "import" to "资料导入", "query" to "问答", "insight" to "洞察", "embedding" to "检索向量计算", "material-index" to "资料检索索引")[kind] ?: "上下文处理")
     private fun processing(cursors: List<Long?> = listOf(null), state: String = "") {
         body.removeAllViews()
         ui.button(MoteI18n.text("刷新")) { processing(cursors, state) }
@@ -400,7 +404,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             if (items.length() == 0) ui.text(MoteI18n.text("没有符合条件的任务"), parent = target)
             for (i in 0 until items.length()) {
                 val row = items.getJSONObject(i)
-                ui.selectRow(operationTitle(row.optString("kind")) + " · " + stateLabel(row.optString("state")), row.getString("id"), target) {
+                ui.selectRow(operationTitle(row.optString("kind")) + " · " + operationState(row), row.getString("id"), target) {
                     operation(row.getString("id"), returnTo = { processing(cursors, state) })
                 }.apply { tag = "operation:" + row.getString("id"); contentDescription = MoteI18n.text("查看任务 {0} 的详情", row.getString("id")) }
             }
@@ -427,12 +431,12 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         val target = ui.card(); val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/operations/" + enc(id) + "?limit=10" + (cursors.last()?.let { "&cursor=$it" } ?: "")) }) { result ->
             val operation = result.getJSONObject("operation")
-            ui.text(operationTitle(operation.optString("kind")) + " · " + stateLabel(operation.optString("state")), 18f, target)
+            ui.text(operationTitle(operation.optString("kind")) + " · " + operationState(operation), 18f, target)
             ui.text(id, 13f, target)
             val steps = result.optJSONArray("steps") ?: JSONArray()
             for (i in 0 until steps.length()) {
                 val step = steps.getJSONObject(i)
-                ui.disclosure(step.optString("kind") + " · " + stateLabel(step.optString("state")), target) { values(step, it) }
+                ui.disclosure(step.optString("kind") + " · " + operationState(step), target) { values(step, it) }
             }
             pageButtons(cursors, result, steps.length(), target) { operation(id, it, returnTo) }
         }
@@ -619,6 +623,22 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         }
     }
+    private fun recordingSteps(path: String, cursors: List<Long?> = listOf(null)) {
+        body.removeAllViews(); screens.setBack { recordings() }
+        ui.text(MoteI18n.text("同步步骤与状态"), 23f)
+        val target = ui.card(); val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get(path + "/steps?limit=20" + (cursors.last()?.let { "&cursor=$it" } ?: "")) }) { page ->
+            val items = page.optJSONArray("items") ?: JSONArray()
+            for (i in 0 until items.length()) {
+                val step = items.getJSONObject(i)
+                ui.disclosure(step.optString("title") + " · " + stateLabel(step.optString("state")), target) { child ->
+                    values(step, child)
+                    if (step.optString("state") == "failed") ui.text(MoteI18n.text("自动重试已停止，请核对原因后手动重试"), parent = child)
+                }
+            }
+            pageButtons(cursors, page, items.length(), target) { recordingSteps(path, it) }
+        }
+    }
     private fun recordings() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/status") }) { registry ->
@@ -629,6 +649,9 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 val provider = value.getString("provider"); require(Regex("^[a-z][a-z0-9-]{0,79}$").matches(provider))
                 val path = "/api/connectors/$provider-recordings"; val card = ui.card()
                 ui.text(value.optString("label", provider), 20f, card); values(value, card)
+                val empty = value.optJSONObject("counts")?.optInt("empty") ?: 0
+                if (empty > 0) ui.text(MoteI18n.text("采集完成，暂无文字：{0} 条", empty), parent = card)
+                ui.button(MoteI18n.text("同步步骤与状态"), parent = card) { recordingSteps(path) }
                 ui.button(MoteI18n.text("连接已授权账号"), parent = card) { action(path + "/connect") { recordings() } }
                 ui.button(MoteI18n.text("同步范围"), parent = card) {
                     val selection = JSONObject(value.getJSONObject("selection").toString()).put("backupAudio", true)
@@ -638,8 +661,12 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 ui.button(MoteI18n.text("重试失败步骤"), parent = card) { action(path + "/retry") { recordings() } }
                 ui.button(MoteI18n.text("断开连接"), parent = card) { ui.work(MoteI18n.text("正在处理…"), { api.delete(path) }) { recordings() } }
                 ui.button(MoteI18n.text("最近归档的录音"), parent = card) {
-                    library.paged(path + "/items", card) { item, child ->
-                        ui.button(item.optString("title"), parent = child) { library.captureEvidence(item.getString("captureId")) }
+                    library.paged(path + "/items?includeExports=true", card) { item, child ->
+                        val captureId = item.optString("captureId").takeIf { it.isNotEmpty() && it != "null" }
+                        if (captureId != null) ui.button(item.optString("title"), parent = child) { library.captureEvidence(captureId) }
+                        else ui.text(item.optString("title"), parent = child)
+                        if (item.optBoolean("empty")) ui.text(MoteI18n.text("采集完成，暂无文字"), parent = child)
+                        if (item.optBoolean("unsupported")) ui.text(MoteI18n.text("厂商转写格式尚不支持"), parent = child)
                         item.optJSONObject("audio")?.let { audio -> ui.button(MoteI18n.text("播放录音"), parent = child) {
                             screens.playAudio("/api/archived-files/" + enc(audio.getString("id")) + "/content", child)
                         } }

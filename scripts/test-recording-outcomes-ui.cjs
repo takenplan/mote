@@ -1,0 +1,24 @@
+require('./fixture-language.cjs');
+const {app,BrowserWindow}=require('electron');
+const {mkdtempSync,mkdirSync,existsSync,readFileSync,writeFileSync,rmSync}=require('node:fs');
+const {join,resolve}=require('node:path'),{tmpdir}=require('node:os'),{spawn}=require('node:child_process');
+const assert=require('node:assert/strict');
+const repo=resolve(__dirname,'..'),root=mkdtempSync(join(tmpdir(),'mote-recording-renderer-')),output=join(repo,'.mote/recording-outcomes-ui');mkdirSync(output,{recursive:true});app.setPath('userData',join(root,'browser'));app.on('window-all-closed',()=>{});
+let server,window;const delay=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(fn,label){const end=Date.now()+20000;while(Date.now()<end){if(await fn())return;await delay(50);}throw Error('Timed out: '+label);}
+async function run(){
+ await app.whenReady();const connection=join(root,'connection.json');server=spawn(process.execPath,[join(repo,'scripts/recording-outcomes-fixture-server.mjs'),connection],{cwd:repo,env:{...process.env,ELECTRON_RUN_AS_NODE:'1'},stdio:['ignore','ignore','pipe']});let stderr='';server.stderr.on('data',b=>stderr+=b);await until(()=>{if(server.exitCode!==null)throw Error(stderr);return existsSync(connection);},'generated central');
+ const {url,token}=JSON.parse(readFileSync(connection));window=new BrowserWindow({width:1360,height:1000,show:false,webPreferences:{contextIsolation:true,sandbox:true,nodeIntegration:false,backgroundThrottling:false}});const wc=window.webContents,js=code=>wc.executeJavaScript(code);
+ const text=()=>js('document.body.innerText');const open=async hash=>{await js(`location.hash=${JSON.stringify(hash)}`);await delay(100);};
+ const click=label=>until(()=>js(`(()=>{const b=[...document.querySelectorAll('button,summary')].find(b=>b.getClientRects().length&&b.textContent.trim().startsWith(${JSON.stringify(label)}));if(!b||b.disabled)return false;b.click();return true;})()`),'click '+label);
+ const select=async(label,value)=>js(`(()=>{const s=document.querySelector('select[aria-label='+${JSON.stringify(JSON.stringify(label))}+']');if(!s)throw Error('Missing select');Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype,'value').set.call(s,${JSON.stringify(value)});s.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ const shot=async name=>{await delay(100);assert(await js('document.documentElement.scrollWidth<=innerWidth'),'overflow '+name);writeFileSync(join(output,name+'.png'),(await wc.capturePage()).toPNG());};
+ await window.loadURL(url);await js(`sessionStorage.setItem('mote.connection',${JSON.stringify(JSON.stringify({token,viewScope:require('node:crypto').randomUUID()}))});location.reload()`);await until(async()=> (await text()).includes('已登录 ·'),'owner login');
+ await open('#/connections/recordings?provider=feishu');await until(async()=> (await text()).includes('采集完成，暂无文字：1 条'),'empty count');await click('最近归档的录音');await until(async()=> (await text()).includes('Generated empty')&&(await text()).includes('采集完成，暂无文字'),'original available');assert((await text()).includes('Generated unsupported'));assert((await text()).includes('自动重试已停止'));assert(!(await text()).includes('将自动重试'));
+ await click('同步步骤与状态');await until(()=>js("document.querySelector('nav[aria-label=\"步骤分页\"]')!==null"),'step pagination');await shot('recordings-desktop');window.setSize(390,844);await shot('recordings-mobile');window.setSize(1360,1000);
+ await open('#/system/models?category=file-processing');await until(async()=> (await text()).includes('模型已安装，服务缺少运行依赖：ffmpeg'),'specific runtime gap');await shot('runtime-dependency');
+ await open('#/system/processing');await until(()=>js("document.querySelector('select[aria-label=\"任务状态\"]')!==null"),'operations');await select('任务状态','skipped');await until(async()=> (await text()).includes('file:generated-archive'),'normal skip filter');assert(await js("[...document.querySelectorAll('.operation-row .badge')].every(b=>b.textContent==='已跳过')"));await click('查看详情');await until(async()=> (await text()).includes('未安排摘要'),'skip detail');await shot('archive-skipped');await click('关闭');
+ await select('任务状态','');await select('任务类型','import');await until(async()=> (await text()).includes('等待你确认'),'confirmation label');await shot('confirmation');await select('任务类型','file');await select('任务状态','blocked');await until(async()=> (await text()).includes('处理结果未知'),'unknown label');await shot('unknown-outcome');
+ assert(await js("[...document.querySelector('select[aria-label=\"任务类型\"]').options].some(o=>o.value==='recording-sync'&&o.text==='录音同步')"));console.log(JSON.stringify({passed:true,generatedOnly:true,output}));
+}
+run().then(()=>app.quit()).catch(e=>{console.error(e);process.exitCode=1;app.quit();}).finally(async()=>{window?.destroy();if(server&&server.exitCode===null){const closed=new Promise(r=>server.once('exit',r));server.kill('SIGTERM');await closed;}rmSync(root,{recursive:true,force:true});});

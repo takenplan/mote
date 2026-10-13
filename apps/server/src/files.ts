@@ -22,6 +22,9 @@ const timestamp=()=>new Date().toISOString();
 
 /** Bounded parts using the configured content write policy. No caller supplies a filesystem path. */
 export class FileStore {
+  /** Processing owns input authority and the transition after bounded resupply. */
+  processingReceiptCurrent?:(input:Record<string,unknown>,phase:'pipeline'|'summary')=>boolean;
+  snapshotInputResupplied?:(id:string)=>void;
   readonly objects:string;
   readonly uploads:string;
   private pending=new Map<string,Promise<unknown>>();
@@ -161,7 +164,8 @@ export class FileStore {
           try{
             this.store.db.prepare('INSERT INTO file_snapshot_inputs VALUES(?,?,?) ON CONFLICT(capture_id) DO UPDATE SET object_hash=excluded.object_hash,expires=excluded.expires').run(prior.capture_id,input.sha256!,Date.now()+86400000);
             // Resupply never undoes an explicit cancellation. A retry clears that state separately.
-            this.store.db.prepare("UPDATE file_jobs SET state='waiting',attempts=0,available_at=0,error=NULL WHERE capture_id=? AND error='snapshot_input_expired' AND state='blocked'").run(prior.capture_id);
+            const resumed=this.store.db.prepare("UPDATE file_jobs SET state='waiting',attempts=0,available_at=0,error=NULL WHERE capture_id=? AND error='snapshot_input_expired' AND state='blocked'").run(prior.capture_id);
+            if(resumed.changes)this.snapshotInputResupplied?.(prior.capture_id);
             const ack=onCommit(prior.capture_id);if(own)this.store.db.exec('COMMIT');return ack;
           }catch(error){if(own)this.store.db.exec('ROLLBACK');throw error;}
         }
@@ -236,10 +240,25 @@ export class FileStore {
     const artifacts=includeArtifacts?(db.prepare('SELECT id,kind,created_at,json FROM file_artifacts WHERE capture_id=? AND current=1 ORDER BY created_at').all(id) as {id:string;kind:string;created_at:string;json:string}[]).map(a=>{
       const {transcript,segments,output,...data}=JSON.parse(a.json);return {id:a.id,kind:a.kind,createdAt:a.created_at,...data,...(output?{output:{type:output.type}}:{}),...(transcript?{durationMs:transcript.durationMs,segments:transcript.segments.length,warnings:transcript.warnings}:segments?{segments:Array.isArray(segments)?segments.length:segments}:{})};
     }):[];
-    const rawJob=db.prepare('SELECT state,stage,attempts,error,summary_state,available_at AS availableAt,config_revision AS inputVersion FROM file_jobs WHERE capture_id=?').get(id) as ({state:string;stage:string;attempts:number;error:string|null;summary_state:string;availableAt:number;inputVersion:string|null}|undefined);
-    const rawSteps=includeArtifacts?db.prepare('SELECT step,processor,version,state,attempts,error,updated_at AS updatedAt FROM file_steps WHERE capture_id=? ORDER BY rowid').all(id) as {step:string;processor:string;version:string;state:string;attempts:number;error:string|null;updatedAt:string}[]:[];
-    const job=rawJob?{...rawJob,execution:executionEnvelope({state:rawJob.state,attempts:rawJob.attempts,errorCode:rawJob.error??undefined,availableAt:rawJob.availableAt,inputVersion:rawJob.inputVersion??undefined})}:null;
-    const steps=rawSteps.map(step=>({...step,execution:executionEnvelope({state:step.state,attempts:step.attempts,errorCode:step.error??undefined,definitionVersion:step.version,updatedAt:step.updatedAt})}));
+    let rawJob=db.prepare('SELECT state,stage,attempts,error,summary_state,available_at AS availableAt,config_revision AS inputVersion FROM file_jobs WHERE capture_id=?').get(id) as ({state:string;stage:string;attempts:number;error:string|null;summary_state:string;availableAt:number;inputVersion:string|null}|undefined);
+    const rawSteps=includeArtifacts?db.prepare('SELECT step,processor,version,fingerprint,state,attempts,error,updated_at AS updatedAt FROM file_steps WHERE capture_id=? ORDER BY rowid').all(id) as {step:string;processor:string;version:string;fingerprint:string;state:string;attempts:number;error:string|null;updatedAt:string}[]:[];
+    // The execution receipt is authoritative even when a program handler was
+    // not registered during restart/recovery. Read mirrors are never replayed.
+    const hasExecution=Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='execution_operation_steps'").get());
+    if(hasExecution&&rawJob){
+      const parent=db.prepare("SELECT e.state,e.attempts,e.error,e.available_at,e.input,o.optional FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND e.kind='files.pipeline' ORDER BY e.updated_at DESC LIMIT 1").get('file:'+id);
+      if(parent&&(!this.processingReceiptCurrent||this.processingReceiptCurrent(JSON.parse(String(parent.input)),'pipeline')))rawJob={...rawJob,state:parent.optional&&parent.state==='blocked'&&parent.error==='archive_only'?'skipped':String(parent.state),attempts:Number(parent.attempts),error:parent.error===null?null:String(parent.error),availableAt:Number(parent.available_at)};
+      const failed=db.prepare("SELECT e.error,json_extract(e.input,'$.name') AS stage FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND e.kind LIKE 'file-step.%' AND e.state='failed' ORDER BY e.updated_at DESC LIMIT 1").get('file:'+id);
+      if(failed&&rawJob.state==='blocked')rawJob={...rawJob,state:'failed',stage:String(failed.stage),error:String(failed.error)};
+      const summary=db.prepare("SELECT e.state,e.error,e.input,o.optional FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND e.kind='files.summary' ORDER BY e.updated_at DESC LIMIT 1").get('file:'+id);
+      if(summary&&(!this.processingReceiptCurrent||this.processingReceiptCurrent(JSON.parse(String(summary.input)),'summary')))rawJob={...rawJob,summary_state:summary.optional&&summary.state==='blocked'&&['archive_only','summary_disabled'].includes(String(summary.error))?'skipped':String(summary.state)};
+    }
+    if(hasExecution)for(const step of rawSteps){
+      const receipt=db.prepare('SELECT state,attempts,error,updated_at FROM execution_steps WHERE id=?').get(sha256(JSON.stringify(['file-step',id,step.step,step.fingerprint])));
+      if(receipt){step.state=String(receipt.state);step.attempts=Number(receipt.attempts);step.error=receipt.error===null?null:String(receipt.error);step.updatedAt=new Date(Number(receipt.updated_at)).toISOString();}
+    }
+    const job=rawJob?{...rawJob,execution:executionEnvelope({state:rawJob.state==='waiting'&&rawJob.error&&rawJob.availableAt>Date.now()?'retry_wait':rawJob.state,attempts:rawJob.attempts,errorCode:rawJob.error??undefined,availableAt:rawJob.availableAt,inputVersion:rawJob.inputVersion??undefined})}:null;
+    const steps=rawSteps.map(({fingerprint,...step})=>({...step,execution:executionEnvelope({state:step.state,attempts:step.attempts,errorCode:step.error??undefined,definitionVersion:step.version,updatedAt:step.updatedAt})}));
     const manifest=JSON.parse(v.manifest),index=this.store.evidence([id])[0]?.provenance?.document?.fileIndex;if(index&&manifest.item.layer==='snapshot')manifest.item.document={...manifest.item.document,fileIndex:index};
     return {captureId:id,...manifest,hasOriginal:!!v.object_hash,originMissing:!!head?.origin_missing,job,artifacts,steps};
   }

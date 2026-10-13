@@ -5,7 +5,7 @@ import { writeFile,readFile,stat } from 'node:fs/promises';
 import { join,resolve } from 'node:path';
 import {fileURLToPath} from 'node:url';
 import { profilePaths, initialize, loadProfile, isolatedEnvironment, withProfileLock, startNative, nativeIdentity, health, compose, execute, backupProfile, restoreProfile, atomicJson, launchdXml, effectiveConfiguration, setPublicUrl } from './profile-lib.mjs';
-import { ensureMediaRuntime } from './media-workers.mjs';
+import { ensureMediaRuntime, probeMediaCommands } from './media-workers.mjs';
 import { configureTunnel, runNativeTunnel, nativeTunnelArgs, nativeTunnelIdentity, stopNativeTunnel } from './tunnel-lib.mjs';
 import { startProfile as start, stopProfile as stop, changeProfileDeployment } from './update-deploy.mjs';
 const help = `Mote central profiles (Node 24+, default: dev; prod requires --profile prod)
@@ -91,7 +91,8 @@ async function main() {
       if((await nativeIdentity(p)).running)throw Error('Stop this profile before installing the Native media runtime');
       const python=join(p.directory,'media-venv/bin/python');
       const changed=await ensureMediaRuntime({root:resolve(p.meta.release),python,env:isolatedEnvironment(p),sourcePython:values.python||'python3',run:(command,args,env)=>execute(command,args,{env,timeoutMs:30*60*1000,capture:true})});
-      return {profile:p.profile,installed:true,changed,python};
+      await probeMediaCommands(python,isolatedEnvironment(p),(command,args,env)=>execute(command,args,{env,capture:true}));
+      return {profile:p.profile,installed:true,changed,python,runtimeReady:true};
     });print(result);return;
   }
   if (command === 'media-import') {

@@ -181,7 +181,7 @@ export class MemoryPipeline {
       }
       if(own)db.exec('COMMIT');
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
-    for(const current of stopped){for(const step of this.steps(current))this.engine.cancel(step);this.feedbackCancel?.(current);}this.wake();return this.get(id);
+    for(const current of stopped){for(const step of this.steps(current))this.engine.cancel(step,true,options?.cause==='authority'?'authority_changed':'cancelled');this.feedbackCancel?.(current);}this.wake();return this.get(id);
   }
 
   private closed=false;

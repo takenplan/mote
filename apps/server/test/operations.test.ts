@@ -53,3 +53,17 @@ test('optional failures retain actual receipts without failing required work acr
  const restored=new ExecutionEngine(store);await restored.close();assert.equal(operations.detail('query:complete').operation.state,'succeeded');assert.equal(operations.detail('query:complete').operation.optionalIssues,1);
  engine.retry(optional);await engine.drain([optional]);detail=operations.detail('query:complete');assert.equal(detail.operation.optionalIssues,0);assert.equal(detail.operation.counts.succeeded,2);assert.equal(operations.detail('embedding:standalone').operation.state,'succeeded');
 });
+
+test('optional configuration faults are not normal skips; confirmation and actual task kinds remain readable',async t=>{
+ const {engine,operations}=fixture(t);
+ engine.enqueue('file:optional-config','fixture',{},{optional:true,initial:{state:'blocked',attempts:0,availableAt:0,error:'processor_not_configured'}});
+ assert.equal(operations.detail('file:optional-config').operation.notScheduled,0);assert.equal(operations.detail('file:optional-config').operation.optionalIssues,1);assert.equal(operations.detail('file:optional-config').steps[0].notScheduled,false);
+ engine.enqueue('import:confirm','fixture',{},{initial:{state:'blocked',attempts:0,availableAt:0,error:'awaiting_confirmation'}});assert.equal(operations.detail('import:confirm').operation.waitingReason,'awaiting_confirmation');assert.equal(operations.page({kind:'import'}).items[0].waitingReason,'awaiting_confirmation');
+ const step=engine.enqueue('memory:context','fixture',{});engine.cancel(step,true,'authority_changed');assert.equal(operations.detail('memory:context').steps[0].reason,'authority_changed');
+ const app=Fastify();t.after(()=>app.close());registerOperations(app,operations,()=>false);for(const kind of ['recording-sync','material-organizer','memory-provider-reconcile'])assert.equal((await app.inject({url:'/api/operations?kind='+kind})).statusCode,200);
+});
+
+test('a pending descendant cannot hide an unknown issued-call outcome',async t=>{
+ const {engine,operations}=fixture(t);engine.enqueue('file:unknown-pending','fixture',{parent:true},{initial:{state:'blocked',attempts:1,availableAt:0,error:'processor_response_unknown'}});engine.enqueue('file:unknown-pending','fixture',{child:true},{initial:{state:'waiting',attempts:1,availableAt:Number.MAX_SAFE_INTEGER,error:'provider_unavailable'}});
+ const current=operations.detail('file:unknown-pending').operation;assert.equal(current.state,'waiting');assert.equal(current.waitingReason,'processor_response_unknown');assert.equal(operations.page({kind:'file'}).items[0].waitingReason,'processor_response_unknown');
+});

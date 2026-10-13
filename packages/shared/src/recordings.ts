@@ -8,6 +8,7 @@ export type RecordingSelection=z.infer<typeof recordingSelectionSchema>;
 export interface RecordingStatus {
  category?:'recordings';label?:string;setup?:{description?:string;command?:string;documentationUrl?:string};
  provider:string;connected:boolean;accountName?:string;sourceId?:string;selection:RecordingSelection;
- steps:{id:string;phase:string;state:string;attempts:number;error?:string}[];
- counts:{transcripts:number;audio:number;pending:number;failed:number};error?:string;
+ steps:{id:string;phase:string;state:string;attempts:number;title?:string;availableAt?:number;error?:string}[];
+ stepsTotal?:number;
+ counts:{transcripts:number;audio:number;empty?:number;pending:number;failed:number};error?:string;
 }

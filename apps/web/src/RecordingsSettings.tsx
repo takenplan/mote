@@ -1,4 +1,6 @@
 import { formatEvidenceRef } from '@mote/shared';
+import {ListPagination,useCursorPages} from './ListPagination';
+import {ArchivedFileButton} from './ArchivedFileButton';
 import { ArchivedAudio } from './ArchivedAudio';
 import React, { useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
@@ -20,10 +22,18 @@ const errors: Record<string, string> = {
     dingtalk_not_connected: '请先在中央节点完成钉钉账号授权，再连接录音。',
     recording_account_changed: '账号已变化，请重新连接并确认同步范围。',
     recording_authorization_required: '读取权限不足或授权已失效，请重新连接后重试。',
-    recording_transcript_not_ready: '厂商转写尚未就绪，将自动重试。',
+    recording_transcript_not_ready: '厂商转写尚未就绪。',
+    recording_transcript_format_unsupported: '厂商转写格式尚不支持。音频备份是独立步骤，请分别核对转写与音频的状态。',
     unsupported_format: '厂商转写格式尚不支持。音频备份是独立步骤，请分别核对转写与音频的状态。',
 };
 const problem = (code: string,phase?:string) => errors[code]&&(code!=='unsupported_format'||phase==='transcript')?moteText(errors[code]):moteText('同步未完成（原因代码：{0}）。请查看同步步骤，核对实际原因后再重试。',code);
+function RecordingSteps({api,path}:{api:Api;path:string}){
+    const paging=useCursorPages(),read=useResource<{items:RecordingStatus['steps'];nextCursor:number|null}>(api,path+'/steps?limit=20'+(paging.cursor?'&cursor='+paging.cursor:''),3000);
+    return <>{read.error&&<p role="alert">{errorMessage(read.error)}</p>}<div className="discovery-bounded-list" role="region" aria-label={moteText("同步步骤与状态明细")} tabIndex={0}>{read.data?.items.map(step=><Step key={step.id} step={step}/>)}</div><ListPagination label={moteText('步骤分页')} paging={paging} nextCursor={read.data?.nextCursor} count={read.data?.items.length??0} loading={read.loading}/></>;
+}
+function Step({step}:{step:RecordingStatus['steps'][number]}){
+    return <p>{step.title&&<strong>{step.title} · </strong>}{phases[step.phase]?moteText(phases[step.phase]):step.phase} · {states[step.state]?moteText(states[step.state]):step.state} · {moteText('尝试 {0} 次',step.attempts)}{step.error&&<> · {problem(step.error,step.phase)} <code className="discovery-technical-id">{step.error}</code></>}{step.state==='waiting'&&Boolean(step.availableAt)&&step.availableAt!>Date.now()&&<> · {moteText('下次可运行时间')} {new Date(step.availableAt!).toLocaleString()}</>}{step.state==='failed'&&<> · {moteText('自动重试已停止，请核对原因后手动重试')}</>}</p>;
+}
 const inputTime = (value?: string) => {
     if (!value) return '';
     const date = new Date(value), pad = (part: number) => String(part).padStart(2, '0');
@@ -37,7 +47,11 @@ export function RecordingConnection({ api, provider, onOpen }: {
     const path = `/api/connectors/${provider}-recordings`, read = useResource<RecordingStatus>(api, path, 3000);
     const archive = useResource<{
         items: {
-            captureId: string;
+            id: string;
+            captureId?: string;
+            empty?: boolean;
+            unsupported?: boolean;
+            export?: {id:string;name:string};
             title: string;
             audio?: {
                 id: string;
@@ -45,8 +59,8 @@ export function RecordingConnection({ api, provider, onOpen }: {
                 mimeType: string;
             };
         }[];
-    }>(api, read.data?.connected ? path + '/items' : null, 10000);
-    const [selection, setSelection] = useState<RecordingSelection>(), [error, setError] = useState(''), [busy, setBusy] = useState(false), [saved, setSaved] = useState(false);
+    }>(api, read.data?.connected ? path + '/items?includeExports=true' : null, 10000);
+    const [selection, setSelection] = useState<RecordingSelection>(), [error, setError] = useState(''), [busy, setBusy] = useState(false), [saved, setSaved] = useState(false), [stepsOpen,setStepsOpen]=useState(false);
     // Preserve native partial-year drafts until the validated form is submitted.
     const [range, setRange] = useState({ start: '', end: '' });
     const acceptSelection = (next?: RecordingSelection) => {
@@ -126,8 +140,10 @@ export function RecordingConnection({ api, provider, onOpen }: {
  <div className="recording-save-bar"><button className="button primary" type="submit" disabled={!changed || context.busy || Boolean(status.sourceId && !context.ready)}>{busy ? moteText('正在保存…') : selectionChanged && selection.enabled ? moteText('保存并开始同步') : moteText('保存设置')}</button>{changed ? <span className="muted">{moteText('有未保存的修改，仅保留在当前页面')}</span> : saved && <span role="status">{moteText('设置已保存。')}</span>}</div>
  <div className="lark-buttons"><button className="button subtle" type="button" disabled={!selection.enabled || changed} onClick={() => void run('POST', '/sync')}><RefreshCw size={15}/>{moteText('立即同步')}</button><button className="button subtle" type="button" disabled={!status.counts.failed} onClick={() => void run('POST', '/retry')}>{moteText('重试失败步骤')}</button><button className="button subtle" type="button" onClick={() => void run('DELETE')}>{moteText('断开连接')}</button></div></fieldset></form>}
  {status && <><p role="status">{moteText('已归档转写 {0} 条，音频 {1} 条；等待 {2} 步，需处理 {3} 步。', status.counts.transcripts, status.counts.audio, status.counts.pending, status.counts.failed)}</p>
- {status.counts.failed > 0 && <p className="notice error" role="alert">{status.counts.failed}{moteText("个步骤需要处理。")}{Array.from(new Set(status.steps.filter(step => step.error).map(step => problem(step.error!,step.phase)))).slice(0, 3).join(' ')}{moteText("核对原因后，可使用上方「重试失败步骤」。转写与音频状态分别核对。")}</p>}<details className="discovery-bounded-details"><summary>{moteText('同步步骤与状态')} · {status.steps.length}{moteText("项")}</summary><div className="discovery-bounded-list" role="region" aria-label={moteText("同步步骤与状态明细")} tabIndex={0}>{status.steps.map(step => <p key={step.id}>{phases[step.phase]?moteText(phases[step.phase]):step.phase} · {states[step.state]?moteText(states[step.state]):step.state} · {moteText('尝试 {0} 次', step.attempts)}{step.error && <> · {problem(step.error,step.phase)} <code className="discovery-technical-id">{step.error}</code></>}</p>)}</div></details></>}
- {Boolean(archive.data?.items.length) && <details className="discovery-bounded-details"><summary>{moteText('最近归档的录音')} · {archive.data!.items.length}{moteText("条")}</summary><div className="discovery-bounded-list" role="region" aria-label={moteText("最近归档的录音列表")} tabIndex={0}>{archive.data!.items.map(item => <div className="source-item" key={item.captureId}><button className="text-button" onClick={() => onOpen(formatEvidenceRef('capture', item.captureId))}>{item.title || moteText('原始录音')}</button>{item.audio && <ArchivedAudio api={api} id={item.audio.id} name={item.audio.name} mimeType={item.audio.mimeType}/>}</div>)}</div></details>}
+ {Boolean(status.counts.empty)&&<p role="status">{moteText('采集完成，暂无文字：{0} 条',status.counts.empty!)}</p>}
+ {status.counts.failed > 0 && <div className="notice error" role="alert"><p>{status.counts.failed}{moteText("个步骤需要处理。")}{moteText("核对原因后，可使用上方「重试失败步骤」。转写与音频状态分别核对。")}</p>{status.steps.filter(step=>['failed','blocked'].includes(step.state)).map(step=><Step key={step.id} step={step}/>)}</div>}<details className="discovery-bounded-details" onToggle={e=>setStepsOpen(e.currentTarget.open)}><summary>{moteText('同步步骤与状态')} · {status.stepsTotal??status.steps.length}{moteText("项")}</summary>{stepsOpen&&<RecordingSteps api={api} path={path}/>}</details></>}
+
+ {Boolean(archive.data?.items.length) && <details className="discovery-bounded-details"><summary>{moteText('最近归档的录音')} · {archive.data!.items.length}{moteText("条")}</summary><div className="discovery-bounded-list" role="region" aria-label={moteText("最近归档的录音列表")} tabIndex={0}>{archive.data!.items.map(item => <div className="source-item" key={item.id}>{item.captureId?<button className="text-button" onClick={() => onOpen(formatEvidenceRef('capture', item.captureId!))}>{item.title || moteText('原始录音')}</button>:<strong>{item.title || moteText('原始录音')}</strong>}{item.empty&&<p>{moteText('采集完成，暂无文字')}</p>}{item.unsupported&&<p>{moteText('厂商转写格式尚不支持')}</p>}{item.export&&<ArchivedFileButton api={api} id={item.export.id} name={item.export.name}/>}{item.audio && <ArchivedAudio api={api} id={item.audio.id} name={item.audio.name} mimeType={item.audio.mimeType}/>}</div>)}</div></details>}
  </section>;
 }
 export function RecordingsSettings({ api, onSources, onOpen, onAdd }: {
