@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 // Build the web app first; run with: node_modules/.bin/electron scripts/test-import-folder-browser.cjs
 require('./fixture-language.cjs');
 const {app,BrowserWindow}=require('electron');

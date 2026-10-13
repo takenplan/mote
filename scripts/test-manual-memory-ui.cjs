@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Real Electron renderer and HTTP API; generated Materials and stubbed model replies only. */
 const {app,BrowserWindow}=require('electron');

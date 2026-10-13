@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Actual React citation renderers with generated evidence only; no model or private vault. */
 const {app,BrowserWindow}=require('electron');

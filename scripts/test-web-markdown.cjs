@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 /** Source-only browser regression: generated Markdown, no archive or model service. */
 const {app,BrowserWindow}=require('electron');
 const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync}=require('node:fs');

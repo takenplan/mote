@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Real full application during generated ingress. Default preserves the legacy 20→631 profile. */
 const {app,BrowserWindow}=require('electron');
@@ -60,7 +61,7 @@ async function readLong(record,full=false){let offset=0,page=sliceBody(record.it
 }
 async function wheel(phase){
  await js("document.querySelector('.material-detail').scrollIntoView({block:'start',behavior:'instant'})");await frames();
- const before=await js('scrollY'),start=Date.now();window.focus();window.webContents.focus();
+ const before=await js('scrollY'),start=Date.now();if(process.env.MOTE_TEST_SHOW_UI==='1')window.focus();window.webContents.focus();
  for(let i=0;i<6;i++){window.webContents.sendInputEvent({type:'mouseWheel',x:Math.min(600,window.getBounds().width-80),y:450,deltaY:-160,deltaX:0,canScroll:true});await delay(80);}
  await until(()=>js(`scrollY>${before}+100`),'actual wheel scroll displacement');
  const after=await js('scrollY');report.wheelSamples??=[];report.wheelSamples.push({phase,start,end:Date.now(),events:6,before,after});check('real wheel moves viewport',after-before>100);
@@ -96,7 +97,7 @@ async function run(){
  }
  for(let start=0;start<fixture.initialIngress;start+=fixture.batchSize)await batch(start,Math.min(start+fixture.batchSize,fixture.initialIngress));
  let initial=await request('/api/fixture/state');assert.equal(initial.count,fixture.initial);
- window=new BrowserWindow({width:1280,height:1000,show:interactive,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});const wc=window.webContents;
+ window=new BrowserWindow({width:1280,height:1000,show:process.env.MOTE_TEST_SHOW_UI==='1',webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});const wc=window.webContents;
  wc.on('render-process-gone',(_e,data)=>report.crashes.push(data.reason));wc.on('console-message',(_e,level,message)=>{if(level>=3)report.consoleErrors.push(message);});
  const pending=new Map();wc.session.webRequest.onBeforeRequest((details,callback)=>{const u=new URL(details.url),allowed=!['http:','https:'].includes(u.protocol)||u.origin===endpoint;if(!allowed)report.blockedRequests.push({url:details.url,at:Date.now()});pending.set(details.id,{origin:'renderer',path:u.pathname+u.search,start:Date.now(),method:details.method});callback({cancel:!allowed});});
  wc.session.webRequest.onCompleted(details=>{const entry=pending.get(details.id);if(entry){pending.delete(details.id);report.requests.push({...entry,end:Date.now(),status:details.statusCode});}if(details.statusCode>=400)report.httpErrors.push({path:new URL(details.url).pathname,status:details.statusCode});});

@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Real renderer + isolated server; generated Coding events only, no personal capture. */
 const {app,BrowserWindow}=require('electron');

@@ -1,3 +1,4 @@
+require('../../../scripts/fixture-background.cjs');
 // Generated-only renderer fixture. Runs no collector, server, network or model.
 const { app, BrowserWindow, session } = require('electron');
 const { build } = require('esbuild');
