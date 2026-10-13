@@ -321,12 +321,41 @@ class UiIterationInstrumentedTest {
                             val bounds = android.graphics.Rect(); assertTrue(item.getGlobalVisibleRect(bounds))
                             assertTrue("Navigation stays above the keyboard", bounds.height() == item.height && bounds.bottom <= availableBottom + 2)
                         }
-                        // Unicode fixture content is injected explicitly; the ASCII prefix below uses actual input events.
-                        val field = views(root).filterIsInstance<android.widget.EditText>().single { it.isShown }
-                        assertTrue(field.hasFocus())
-                        field.setText("\n$fixtureText"); field.setSelection(0)
-                        assertTrue("Fixture setup must keep the actual IME open", root.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime()))
+                        // Fixture setup precedes the input session used for the real key sequence.
+                        // setText while the IME is active restarts its connection asynchronously.
+                        activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
+                        activity.currentFocus?.clearFocus()
                     }
+                    var hidden = false
+                    val sessionDeadline = SystemClock.elapsedRealtime() + 10000
+                    while (!hidden && SystemClock.elapsedRealtime() < sessionDeadline) {
+                        scenario.onActivity { hidden = !it.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime()) }
+                        if (!hidden) Thread.sleep(25)
+                    }
+                    assertTrue("The fixture closes the previous input session before replacing editor content", hidden)
+                    scenario.onActivity { activity ->
+                        val field = views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single { it.isShown }
+                        assertFalse("The Unicode fixture is prepared before restoring editor focus", field.hasFocus())
+                        field.setText("\n$fixtureText"); field.setSelection(0)
+                    }
+                    settle()
+                    scenario.onActivity { activity ->
+                        val field = views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single { it.isShown }
+                        assertTrue(field.requestFocus())
+                        activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(field, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    }
+                    var sessionReady = false
+                    while (!sessionReady && SystemClock.elapsedRealtime() < sessionDeadline) {
+                        scenario.onActivity { activity ->
+                            val field = views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single { it.isShown }
+                            sessionReady = activity.hasWindowFocus() && field.hasFocus() &&
+                                activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java).isActive(field) &&
+                                activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime())
+                        }
+                        if (!sessionReady) Thread.sleep(25)
+                    }
+                    assertTrue("Actual window focus, active editor input connection and visible IME must be ready before key events", sessionReady)
+                    settle()
                     instrumentation.sendStringSync(keyEventPrefix)
                     instrumentation.waitForIdleSync()
                     scenario.onActivity { activity ->
@@ -358,6 +387,7 @@ class UiIterationInstrumentedTest {
                         val geometry = org.json.JSONObject().put("generatedOnly", true).put("variant", variant).put("language", MoteI18n.language())
                             .put("asciiInputMode", "Instrumentation.sendStringSync key events with actual IME visible").put("asciiInput", keyEventPrefix)
                             .put("fixtureInputMode", "EditText.setText for the original Unicode fixture body, with selection at zero before ASCII events")
+                            .put("inputSessionOrdering", "Fixture text set while IME hidden and editor unfocused; new focused active input session and real IME awaited before key events")
                             .put("fixtureBody", fixtureText).put("expectedSavedOriginal", generatedText).put("clickMode", "Instrumentation.sendPointerSync ACTION_DOWN/ACTION_UP")
                             .put("systemKeyboardPixelsCaptured", false).put("imeVisibleBeforeTouch", insets.isVisible(android.view.WindowInsets.Type.ime()))
                             .put("imeBottom", imeBottom).put("imeTopScreen", imeTop).put("rootBoundsScreen", rectJson(rootBounds))
