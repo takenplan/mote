@@ -29,7 +29,7 @@ export function fileConfiguration(saved:FileConfiguration,sourceId:string,mime:s
  // Fingerprints may include credentials, but only the digest is durable/public. Global UI revision and labels are not execution inputs.
  const serviceIds=applied?[applied.profile.serviceId,applied.profile.modelServiceId].filter(Boolean):[];
  const value={enabled:base.enabled,timeoutMs:base.timeoutMs,...(mime.startsWith('audio/')?{maxAudioMinutes:base.maxAudioMinutes}:{}),processorId,version:processor?.version??'unavailable',unavailable,
-  dependencies:dependencies.map(p=>processorSettingsFingerprint(p,settings,p.stage==='diarize'?{speakerCount:settings.speakerCount}:applied?.profile.parameters??{})),summarize:settings.summarize,
+  dependencies:dependencies.map(p=>processorSettingsFingerprint(p,settings,p.stage==='diarize'?{speakerCount:settings.speakerCount,speakerMin:settings.speakerMin,speakerMax:settings.speakerMax}:applied?.profile.parameters??{})),summarize:settings.summarize,
   ...(processor?.dialogue?{diarizationProcessor:settings.diarizationProcessor,semanticTurns:settings.semanticTurns}:{}),
   ...(applied?{parameters:applied.profile.parameters,diarizationProcessor:applied.profile.diarizationProcessor,services:serviceIds.map(id=>{const s=policy.services.find(s=>s.id===id);return s?{id:s.id,kind:s.kind,execution:s.execution,endpoint:s.endpoint,model:s.model,apiKey:s.apiKey}:null;}),boundServices:applied.services.map(({name,...s})=>s)}:{}),
  };

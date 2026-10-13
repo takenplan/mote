@@ -125,7 +125,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                             setSelection(choices.indexOf(raw.toString()).coerceAtLeast(0)) }; target.addView(spinner)
                         reads[key] = { choices[spinner.selectedItemPosition] }; continue
                     }
-                    val nullableNumber = key in setOf("modelRequestTimeoutMs", "agentTimeoutMs", "speakerCount")
+                    val nullableNumber = key in setOf("modelRequestTimeoutMs", "agentTimeoutMs", "speakerCount", "speakerMin", "speakerMax")
                     val field = ui.field(caption, if (raw == JSONObject.NULL) "" else raw.toString(),
                         multiline = key in setOf("description", "instruction", "prompt"), password = key in secrets, parent = target)
                     if (raw is Number || nullableNumber) field.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED

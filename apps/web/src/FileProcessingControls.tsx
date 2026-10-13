@@ -1,3 +1,4 @@
+import type {FileDiarizationOptions} from '@mote/shared';
 import {moteText} from '@mote/shared/i18n';
 import {useEffect,useId,useLayoutEffect,useRef,useState} from 'react';
 import {ApiError,errorMessage,type Api} from './api';
@@ -7,6 +8,7 @@ import {useResource} from './useResource';
 import {useOperationUpdates} from './useOperationUpdates';
 
 type ProcessingFile={
+ artifacts?:{id:string;kind:string}[];
  cancellation?:{canCancel:boolean;wait:'running'|'unknown'|null};
  job:null|{state:string;summary_state:string};
  processingPolicy?:{capabilities?:{dialogue:boolean;summary:boolean};applied?:{profile?:{summarize?:boolean}};current?:{profile?:{summarize?:boolean}}};
@@ -28,21 +30,24 @@ function UnknownRetryConfirmation({onCancel,onConfirm}:{onCancel:()=>void;onConf
 export function FileProcessingControls({api,id,mode='detail',disabled=false,onChanged}:{api:Api;id:string;mode?:'detail'|'import';disabled?:boolean;onChanged?:()=>void}){
  const path='/api/files/'+encodeURIComponent(id),{data:file,error:readError,loading,refresh}=useResource<ProcessingFile>(api,path);
  useOperationUpdates(api);
- const request=useRef<AbortController|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[unknownStage,setUnknownStage]=useState<string|null>(null);
+ const request=useRef<AbortController|null>(null),[busy,setBusy]=useState(false),[error,setError]=useState(''),[unknownStage,setUnknownStage]=useState<{stage:string;scoped:boolean}|null>(null);
+ const [model,setModel]=useState('audio.diarize-wespeaker'),[countMode,setCountMode]=useState('unknown'),[exact,setExact]=useState(''),[minimum,setMinimum]=useState(''),[maximum,setMaximum]=useState('');
  useEffect(()=>file?.cancellation?.wait==='running'?resources(api).get<ProcessingFile>(path).poll(2000):undefined,[api,path,file?.cancellation?.wait]);
  useLayoutEffect(()=>{setBusy(false);setError('');setUnknownStage(null);return()=>{request.current?.abort();request.current=null;};},[api,id]);
  const revoked=readError instanceof ApiError&&[401,403,404,410].includes(readError.status);
  useLayoutEffect(()=>{if(revoked){request.current?.abort();request.current=null;setBusy(false);setUnknownStage(null);}},[revoked]);
  useEffect(()=>{if(file?.cancellation?.wait!=='unknown')setUnknownStage(null);},[file?.cancellation?.wait]);
- async function action(kind:'cancel'|'retry',stage='transcribe',unknownConfirmed=false){
+ async function action(kind:'cancel'|'retry',stage='transcribe',unknownConfirmed=false,scoped=false){
   if(request.current||disabled||loading||readError||!file?.job)return;
   if(kind==='cancel'&&!file.cancellation?.canCancel)return;
   if(kind==='retry'&&file.cancellation?.wait==='running')return;
   const confirmUnknown=kind==='retry'&&file.cancellation?.wait==='unknown';
-  if(confirmUnknown&&!unknownConfirmed){setUnknownStage(stage);return;}
+  if(confirmUnknown&&!unknownConfirmed){setUnknownStage({stage,scoped});return;}
+  let diarization:{artifactId:string;options:FileDiarizationOptions}|undefined;
+  if(scoped){const artifactId=file.artifacts?.find(a=>a.kind==='transcript')?.id;if(!artifactId)return;diarization={artifactId,options:{processor:model as FileDiarizationOptions['processor'],speakerCount:countMode==='exact'?Number(exact):null,range:countMode==='range'?{min:Number(minimum),max:Number(maximum)}:null}};}
   const controller=new AbortController();request.current=controller;setBusy(true);setError('');
   try{
-   await api.request(path+'/'+kind,{method:'POST',body:JSON.stringify(kind==='cancel'?{}:{stage,...(confirmUnknown?{confirmUnknown:true}:{})}),signal:controller.signal});
+   await api.request(path+'/'+kind,{method:'POST',body:JSON.stringify(kind==='cancel'?{}:{stage,...(diarization?{diarization}:{}),...(confirmUnknown?{confirmUnknown:true}:{})}),signal:controller.signal});
    if(request.current===controller&&!controller.signal.aborted){refresh();onChanged?.();}
   }catch(error){if(request.current===controller&&!controller.signal.aborted)setError(errorMessage(error));}
   finally{if(request.current===controller){request.current=null;setBusy(false);}}
@@ -53,7 +58,7 @@ export function FileProcessingControls({api,id,mode='detail',disabled=false,onCh
  const summaryDisabled=file.processingPolicy?.capabilities?.summary===false||(file.processingPolicy?.applied??file.processingPolicy?.current)?.profile?.summarize===false;
  const canRetry=mode==='detail'||['failed','blocked','cancelled'].includes(file.job?.state??'')||file.cancellation?.wait==='unknown';
  return <>
-  {unknownStage!==null&&<UnknownRetryConfirmation onCancel={()=>setUnknownStage(null)} onConfirm={()=>{const stage=unknownStage;setUnknownStage(null);void action('retry',stage,true);}}/>}
+  {unknownStage!==null&&<UnknownRetryConfirmation onCancel={()=>setUnknownStage(null)} onConfirm={()=>{const stage=unknownStage;setUnknownStage(null);void action('retry',stage.stage,true,stage.scoped);}}/>}
   {waiting&&<p role="status">{moteText('当前调用尚在等待结束；此时不能重试。')}</p>}
   {file.cancellation?.wait==='unknown'&&<p role="status">{moteText('上次处理是否结束未知，重试可能重复执行。请确认后继续。')}</p>}
   {(file.job?.state==='cancelled'||file.job?.summary_state==='cancelled')&&<p role="status">{moteText('本次处理已取消，不再保存后续结果；原件和已保存的成果保留。')}</p>}
@@ -64,6 +69,7 @@ export function FileProcessingControls({api,id,mode='detail',disabled=false,onCh
    {mode==='detail'&&file.processingPolicy?.capabilities?.dialogue&&<button className="button" disabled={locked||waiting} onClick={()=>void action('retry','diarize')}>{moteText('重新分离说话人（保留转写）')}</button>}
    <button className="button" onClick={refresh}>{moteText('刷新处理状态')}</button>
   </div>}
+  {mode==='detail'&&file.processingPolicy?.capabilities?.dialogue&&file.artifacts?.some(a=>a.kind==='transcript')&&<details className="source-item"><summary>{moteText('单文件分人设置')}</summary><p>{moteText('只更改此文件的分人与对齐，复用原始转写。其他文件和默认方案保持原配置。')}</p><form onSubmit={e=>{e.preventDefault();void action('retry','diarize',false,true);}}><fieldset disabled={locked||waiting}><label>{moteText('声纹模型')}<select value={model} onChange={e=>{setModel(e.target.value);if(e.target.value==='audio.diarize'&&countMode==='range')setCountMode('unknown');}}><option value="audio.diarize-wespeaker">WeSpeaker 中文</option><option value="audio.diarize">3D-Speaker</option></select></label><label>{moteText('人数信息')}<select value={countMode} onChange={e=>setCountMode(e.target.value)}><option value="unknown">{moteText('未知')}</option><option value="exact">{moteText('准确人数')}</option><option value="range" disabled={model!=='audio.diarize-wespeaker'}>{moteText('已知范围')}</option></select></label>{countMode==='exact'&&<label>{moteText('准确人数')}<input type="number" min="1" max="16" required value={exact} onChange={e=>setExact(e.target.value)}/></label>}{countMode==='range'&&<><label>{moteText('说话人数下限')}<input type="number" min="1" max="16" required value={minimum} onChange={e=>setMinimum(e.target.value)}/></label><label>{moteText('说话人数上限')}<input type="number" min={minimum||1} max="16" required value={maximum} onChange={e=>setMaximum(e.target.value)}/></label></>}<button className="button" type="submit">{moteText('应用并重新分人')}</button></fieldset></form></details>}
   {(error||readError)&&<p role="alert" className="error-banner">{error||errorMessage(readError)}</p>}
  </>;
 }

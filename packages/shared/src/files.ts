@@ -46,16 +46,23 @@ export const transcriptSchema=z.object({
 }});
 export type Transcript=z.infer<typeof transcriptSchema>;
 const speakerLabel=z.string().regex(/^SPEAKER_(?:[0-9]{1,5}|UNKNOWN)$/);
+export const speakerRangeSchema=z.object({min:z.number().int().min(1).max(16),max:z.number().int().min(1).max(16)}).strict().refine(v=>v.min<=v.max,'Invalid speaker range');
+export const fileDiarizationOptionsSchema=z.object({processor:z.enum(['audio.diarize','audio.diarize-wespeaker']),speakerCount:z.number().int().min(1).max(16).nullable(),range:speakerRangeSchema.nullable()}).strict().refine(v=>!(v.speakerCount&&v.range),'Choose exact count or range');
+export type FileDiarizationOptions=z.infer<typeof fileDiarizationOptionsSchema>;
+const acousticSegmentSchema=z.object({startMs:z.number().finite().nonnegative(),endMs:z.number().finite().nonnegative(),speaker:speakerLabel}).strict();
 export const diarizationSchema=z.object({
   durationMs:z.number().finite().nonnegative(),engine:z.string().min(1).max(200),
   // Model labels are unverified clusters. Their bounded count is independent of
   // the configured person-count constraint and the 16-clip preview allowance.
   expectedSpeakers:z.number().int().min(1).max(16).nullable(),observedSpeakers:z.number().int().min(0).max(100000),
+  declaredRange:speakerRangeSchema.optional(),
+  modelProvenance:z.object({embedding:z.enum(['3d-speaker','wespeaker-zh']),embeddingSha256:z.string().regex(/^[a-f0-9]{64}$/),segmentationSha256:z.string().regex(/^[a-f0-9]{64}$/),runtime:z.string().max(100),threshold:z.literal(0.5),minDurationOn:z.literal(0.1),minDurationOff:z.literal(0.3),threads:z.number().int().min(1).max(32)}).strict().optional(),
+  estimate:z.object({method:z.literal('bounded-silhouette-v1'),selectedClusters:z.number().int().min(-1).max(16),needsReview:z.literal(true),scoreGap:z.number().finite().nullable(),candidates:z.array(z.object({clusters:z.number().int().min(-1).max(16),observedSpeakers:z.number().int().min(0).max(100000),score:z.number().min(-1).max(1).nullable(),segments:z.array(acousticSegmentSchema).max(100000)}).strict()).min(1).max(17)}).strict().optional(),
   overlapDetection:z.enum(['available','unknown']),
   segments:z.array(z.object({startMs:z.number().finite().nonnegative(),endMs:z.number().finite().nonnegative(),speaker:speakerLabel}).strict()).max(100000),
   samples:z.array(z.object({speaker:speakerLabel,startMs:z.number().finite().nonnegative(),endMs:z.number().finite().nonnegative(),wavBase64:z.string().max(1024*1024)}).strict()).max(16).default([]),
   warnings:z.array(z.string().max(1000)).max(30).default([]),
-}).strict().superRefine((v,c)=>{for(const s of [...v.segments,...v.samples])if(s.endMs<=s.startMs||s.endMs>v.durationMs+1000)c.addIssue({code:'custom',message:'Invalid diarization timeline'});});
+}).strict().superRefine((v,c)=>{for(const s of [...v.segments,...v.samples,...(v.estimate?.candidates.flatMap(candidate=>candidate.segments)??[])])if(s.endMs<=s.startMs||s.endMs>v.durationMs+1000)c.addIssue({code:'custom',message:'Invalid diarization timeline'});});
 export type Diarization=z.infer<typeof diarizationSchema>;
 export const fileSpeakerAttributionSchema=z.object({name:z.string().trim().min(1).max(100),confirmedBy:z.literal('owner'),confirmationId:z.string().uuid(),confirmedAt:z.string().datetime()}).strict();
 export const fileEvidenceSchema=z.object({documentLocation:documentLocationSchema.optional(),imageLocation:imageLocationSchema.optional(),captureId:z.string().uuid(),revision:z.string().max(200),artifactId:z.string().uuid(),chunkId:z.string().uuid(),startMs:z.number().nonnegative().optional(),endMs:z.number().nonnegative().optional(),speaker:z.string().max(100).optional(),speakerAttribution:fileSpeakerAttributionSchema.optional(),uncertain:z.boolean().optional(),overlap:z.boolean().optional()}).strict();
@@ -72,12 +79,15 @@ export const fileProcessingSchema=z.object({
   localEndpoint:z.string().max(2000).default('http://127.0.0.1:9009/transcribe'),
   localWorkerApiKey:z.string().max(4096).optional(),
   speakerCount:z.number().int().min(1).max(16).nullable().default(null),
+  speakerMin:z.number().int().min(1).max(16).nullable().default(null),
+  speakerMax:z.number().int().min(1).max(16).nullable().default(null),
   semanticTurns:z.boolean().default(false),
   sourceProfiles:z.record(sourceIdSchema,z.string().regex(/^[a-z][a-z0-9.-]{0,99}$/)).default({}),
   typeProfiles:z.record(z.string().regex(/^[a-z0-9.+-]+\/(?:[a-z0-9.+-]+|\*)$/),z.string().regex(/^[a-z][a-z0-9.-]{0,99}$/)).default({}),
   maxAudioMinutes:z.number().int().min(1).max(1440).default(120),
   timeoutMs:z.number().int().min(1000).max(3600000).default(600000),
 }).strict().superRefine((v,c)=>{
+  if((v.speakerMin===null)!==(v.speakerMax===null)||v.speakerMin!==null&&(v.speakerCount!==null||v.speakerMax!<v.speakerMin))c.addIssue({code:'custom',message:'Choose unknown, exact count or a complete ordered range'});
   for(const endpoint of [v.endpoint,v.imageEndpoint].filter(Boolean))try{const u=new URL(endpoint);if(u.username||u.password||u.hash||u.search||!['http:','https:'].includes(u.protocol))throw Error();const local=['127.0.0.1','localhost','[::1]'].includes(u.hostname);if(!local&&(!v.allowRemote||u.protocol!=='https:'))throw Error();}catch{c.addIssue({code:'custom',message:'Use a local endpoint or explicitly allow an HTTPS remote endpoint'});}
   for(const endpoint of [v.localEndpoint])try{const u=new URL(endpoint);if(!['http:','https:'].includes(u.protocol)||!['127.0.0.1','localhost','[::1]'].includes(u.hostname)||u.username||u.password||u.search||u.hash)throw Error();}catch{c.addIssue({code:'custom',message:'Local processing endpoints must use loopback'});}
 });

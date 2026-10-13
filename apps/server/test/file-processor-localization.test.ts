@@ -14,7 +14,7 @@ test('builtin processor metadata follows each request locale without changing re
  })));
  const english=views[0],chinese=views[1];
  assert.deepEqual(english,views[2]);
- const expectedNames:Record<string,string>={'audio.http':'Transcription endpoint','audio.local-dialogue':'Local multi-speaker audio','text.utf8':'UTF-8 text extraction','document.generic':'Document text extraction','image.http':'Image text extraction endpoint','audio.diarize':'Local speaker separation'};
+ const expectedNames:Record<string,string>={'audio.http':'Transcription endpoint','audio.local-dialogue':'Local multi-speaker audio','text.utf8':'UTF-8 text extraction','document.generic':'Document text extraction','image.http':'Image text extraction endpoint','audio.diarize':'Local speaker separation','audio.diarize-wespeaker':'Local speaker separation · WeSpeaker Chinese'};
  for(const processor of english){
   assert.equal(processor.name,expectedNames[processor.id]);
   assert.deepEqual(processorContract(processor),processorContract(chinese.find(p=>p.id===processor.id)!));
@@ -22,7 +22,8 @@ test('builtin processor metadata follows each request locale without changing re
  const audio=english.find(p=>p.id==='audio.local-dialogue')!;
  assert.equal(audio.parameters?.[0].label,'Expected speakers');
  assert.equal(audio.parameters?.[0].description,'Leave blank for model detection');
- assert.equal(audio.parameters?.[1].label,'Use the selected language model to merge natural speaking turns');
+ assert.equal(audio.parameters?.find(p=>p.key==='semanticTurns')?.label,'Use the selected language model to merge natural speaking turns');
+ assert.equal(audio.parameters?.find(p=>p.key==='speakerMin')?.label,'Minimum speakers');
  assert.equal(chinese.find(p=>p.id===audio.id)?.name,'本地多人录音');
  assert.equal(chinese.find(p=>p.id===audio.id)?.parameters?.[0].label,'预期说话人数');
  audio.name='Changed response';audio.parameters![0].label='Changed response';

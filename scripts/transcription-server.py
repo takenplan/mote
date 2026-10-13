@@ -27,7 +27,7 @@ def recognize(path, stage, settings, budget, speakers, sender):
             if stage == 'transcribe':
                 body = transcribe(wav, settings['model'], settings['threads'])
             else:
-                body = diarize(wav, settings['segmentation_model'], settings['speaker_model'], speakers, settings['threads'])
+                body = diarize(wav, settings['segmentation_model'], settings['speaker_model'], speakers, settings['threads'], settings.get('speaker_range'), settings.get('embedding', '3d-speaker'))
             result = json.dumps({'status': 200, 'body': body}, ensure_ascii=False).encode()
             if len(result) > 32 * 1024 * 1024:
                 raise OverflowError('output limit')
@@ -45,6 +45,7 @@ def main():
     parser.add_argument('--model', required=True, help='Local faster-whisper model directory')
     parser.add_argument('--segmentation-model', default='', help='Local pyannote segmentation ONNX file')
     parser.add_argument('--speaker-model', default='', help='Local 3D-Speaker embedding ONNX file')
+    parser.add_argument('--wespeaker-model', default='', help='Optional pinned WeSpeaker Chinese embedding ONNX file')
     parser.add_argument('--port', type=int, default=9009)
     parser.add_argument('--threads', type=int, default=4)
     parser.add_argument('--timeout', type=int, default=600)
@@ -97,6 +98,7 @@ def main():
                 dependencies = self.dependencies()
                 runtime = dependencies['ffmpeg'] and dependencies['faster_whisper']
                 self.json_response({'version': 2, 'execution': 'local', 'dependencies': dependencies, 'missingDependencies': [name for name, ready in dependencies.items() if not ready], 'asr': bool(runtime and Path(args.model).is_dir() and Path(args.model, 'model.bin').is_file()),
+                                    'wespeaker': bool(runtime and dependencies['sherpa_onnx'] and Path(args.wespeaker_model).is_file() and Path(args.segmentation_model).is_file()),
                                     'diarization': bool(runtime and importlib.util.find_spec('sherpa_onnx') and args.segmentation_model and args.speaker_model and
                                                         Path(args.segmentation_model).is_file() and Path(args.speaker_model).is_file())})
             else:
@@ -112,7 +114,12 @@ def main():
             if not Path(args.model, 'model.bin').is_file() or not shutil.which('ffmpeg') or importlib.util.find_spec('faster_whisper') is None:
                 self.reject_before_execution(503, 'Local ASR model or runtime unavailable')
                 return
-            if self.path == '/diarize' and (not Path(args.segmentation_model).is_file() or not Path(args.speaker_model).is_file() or importlib.util.find_spec('sherpa_onnx') is None):
+            embedding = self.headers.get('X-Mote-Speaker-Model', '3d-speaker')
+            if embedding not in ('3d-speaker', 'wespeaker-zh'):
+                self.reject_before_execution(400, 'Unknown speaker model')
+                return
+            selected_model = args.wespeaker_model if embedding == 'wespeaker-zh' else args.speaker_model
+            if self.path == '/diarize' and (not Path(args.segmentation_model).is_file() or not Path(selected_model).is_file() or importlib.util.find_spec('sherpa_onnx') is None):
                 self.reject_before_execution(503, 'Local diarization model unavailable')
                 return
             if not busy.acquire(blocking=False):
@@ -130,6 +137,13 @@ def main():
                 length = int(self.headers.get('Content-Length', '-1'))
                 budget = min(float(self.headers.get('X-Mote-Max-Audio-Ms', '14400000')), 86400000)
                 speakers = int(self.headers.get('X-Mote-Speaker-Count', '0'))
+                lower, upper = self.headers.get('X-Mote-Speaker-Min'), self.headers.get('X-Mote-Speaker-Max')
+                speaker_range = None
+                if lower is not None or upper is not None:
+                    if lower is None or upper is None or not lower.isascii() or not upper.isascii() or not lower.isdecimal() or not upper.isdecimal() or len(lower)>2 or len(upper)>2 or not 1 <= int(lower) <= int(upper) <= 16 or speakers or embedding != 'wespeaker-zh':
+                        self.reject_before_execution(400, 'Invalid speaker range')
+                        return
+                    speaker_range = (int(lower), int(upper))
                 if not 0 < length <= 512 * 1024 * 1024 or not math.isfinite(budget) or budget <= 0 or not 0 <= speakers <= 16:
                     self.send_error(413)
                     return
@@ -144,7 +158,7 @@ def main():
                             output.write(block)
                             remaining -= len(block)
                     receiver, sender = mp.Pipe(duplex=False)
-                    worker = mp.Process(target=recognize, args=(str(audio), self.path[1:], {**settings, 'timeout': timeout}, budget, speakers, sender))
+                    worker = mp.Process(target=recognize, args=(str(audio), self.path[1:], {**settings, 'timeout': timeout, 'speaker_model': selected_model, 'embedding': embedding, 'speaker_range': speaker_range}, budget, speakers, sender))
                     worker.start()
                     sender.close()
                     try:

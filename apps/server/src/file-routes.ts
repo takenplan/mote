@@ -4,7 +4,7 @@ import type {ServerDiagnostics,Operation} from './diagnostics.js';
 import {randomBytes} from 'node:crypto';
 import type {FastifyInstance,FastifyRequest} from 'fastify';
 import {z} from 'zod';
-import {FILE_PART_BYTES,formatEvidenceRef} from '@mote/shared';
+import {FILE_PART_BYTES,formatEvidenceRef,fileDiarizationOptionsSchema} from '@mote/shared';
 import {FileStore} from './files.js';
 import {FileReviews} from './file-reviews.js';
 import {fileExportEntries,exportTar} from './file-export.js';
@@ -65,7 +65,7 @@ export function registerFileRoutes(app:FastifyInstance,files:FileStore,processin
   app.delete('/api/files/:id',async req=>files.forget(fileId(req)));
   app.post('/api/files/:id/allow-again',async req=>{const q=z.object({sourceId:z.string(),externalId:z.string()}).strict().parse(req.body);files.store.db.prepare('DELETE FROM file_forgotten WHERE source_id=? AND external_id=?').run(q.sourceId,q.externalId);return {allowed:true};});
   app.post('/api/files/:id/cancel',async req=>{if(device(req))throw new StoreError('Owner access required',403);z.object({}).strict().parse(req.body??{});file(req);return processing.cancel(fileId(req));});
-  app.post('/api/files/:id/retry',async req=>{if(device(req))throw new StoreError('Owner access required',403);const q=z.object({stage:z.enum(['transcribe','diarize','summary']).default('transcribe'),confirmUnknown:z.boolean().default(false)}).strict().parse(req.body??{});file(req);return processing.retry(fileId(req),q.stage,false,q.confirmUnknown);});
+  app.post('/api/files/:id/retry',async req=>{if(device(req))throw new StoreError('Owner access required',403);const q=z.object({stage:z.enum(['transcribe','diarize','summary']).default('transcribe'),confirmUnknown:z.boolean().default(false),diarization:z.object({artifactId:z.string().uuid(),options:fileDiarizationOptionsSchema.nullable()}).strict().optional()}).strict().parse(req.body??{});file(req);return processing.retry(fileId(req),q.stage,false,q.confirmUnknown,q.diarization);});
   app.get('/api/files/:id/export',async(req,reply)=>{file(req);return reply.header('Content-Disposition',`attachment; filename="mote-recording-${fileId(req)}.tar.gz"`).type('application/gzip').send(exportTar(fileExportEntries(files,fileId(req))));});
   app.get('/api/files/:id/assets',async(req,reply)=>{file(req);const q=z.object({artifactId:z.string().uuid(),name:z.string().max(100)}).strict().parse(req.query);const asset=files.asset(fileId(req),q.artifactId,q.name);return reply.header('Cache-Control','no-store').type(asset.mime).send(asset.bytes);});
   app.get('/api/files/:id/reviews',async req=>{file(req);return reviews.list(fileId(req));});
@@ -73,7 +73,7 @@ export function registerFileRoutes(app:FastifyInstance,files:FileStore,processin
   app.post('/api/files/:id/reviews/:reviewId',{bodyLimit:65536},async req=>{file(req);return reviews.confirm(fileId(req),(req.params as {reviewId:string}).reviewId,req.body);});
   app.post('/api/files/:id/corrections',{bodyLimit:131072},async req=>{if(device(req))throw new StoreError('Owner access required',403);file(req);return reviews.correct(fileId(req),req.body);});
   app.post('/api/files/:id/speakers',{bodyLimit:16384},async req=>{file(req);return reviews.nameSpeakers(fileId(req),req.body);});
-  app.post('/api/file-processing/test-local',async req=>{const q=z.object({serviceId:z.string().max(100).optional()}).strict().parse(req.body??{}),settings=processing.localService(q.serviceId);if(!isLoopback(settings.endpoint))throw new StoreError('Local worker must use loopback');const endpoint=new URL(settings.endpoint);endpoint.pathname='/health';return z.object({version:z.number(),execution:z.literal('local'),asr:z.boolean(),diarization:z.boolean()}).strict().parse(await requestLocalJson(endpoint,{headers:settings.apiKey?{Authorization:`Bearer ${settings.apiKey}`}:{},signal:AbortSignal.timeout(10000),limit:4096}));});
+  app.post('/api/file-processing/test-local',async req=>{const q=z.object({serviceId:z.string().max(100).optional()}).strict().parse(req.body??{}),settings=processing.localService(q.serviceId);if(!isLoopback(settings.endpoint))throw new StoreError('Local worker must use loopback');const endpoint=new URL(settings.endpoint);endpoint.pathname='/health';return z.object({version:z.number(),execution:z.literal('local'),asr:z.boolean(),diarization:z.boolean(),wespeaker:z.boolean().optional()}).parse(await requestLocalJson(endpoint,{headers:settings.apiKey?{Authorization:`Bearer ${settings.apiKey}`}:{},signal:AbortSignal.timeout(10000),limit:4096}));});
   app.get('/api/file-processing',async()=>processing.view());
   app.post('/api/file-processing/match',async req=>processing.match(req.body));
   app.post('/api/file-processing/preview',async req=>processing.preview(req.body));

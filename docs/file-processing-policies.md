@@ -74,3 +74,13 @@ MOTE_FILE_TEST_DIR=<测试目录> node --import tsx scripts/test-file-dialogue.t
 ```
 
 前者需要已生成的模拟器结果和显式真实模型配置；后者需要本地 ASR/分离模型。fixture 测试、真实模型测试、模拟器与真机验证应分别报告。
+
+## 可选声纹模型与单文件范围
+
+`audio.diarize-wespeaker@1` 使用独立安装的 WeSpeaker 中文模型。下载不更改默认分离插件。人数参数支持未知（全部留空）、准确人数（`speakerCount`），或已知范围（`speakerMin` 与 `speakerMax`）；准确人数和范围互斥，范围仅供该插件使用。候选评分不是概率，匿名标签也不是已确认的真人身份。范围估计保留候选和版本，仍需试听。
+
+文件详情的“单文件分人设置”复用原始转写，只重新分人与对齐，不改变其他文件的配置。原始与历史产物保留，旧名称确认不会自动套用到新声纹标签。快照来源仍需要有效临时输入；不会因单文件重处理变成长期归档。展示合并可展开每个原始片段，校正和引用继续指向原坐标。
+
+`POST /api/files/:id/retry` 的 `stage:"diarize"` 可携带 `diarization:{artifactId,options:{processor,speakerCount,range}}`；`artifactId` 为当前原始转写，`processor` 为 `audio.diarize` 或 `audio.diarize-wespeaker`，`range` 为 `{min,max}` 或 null。`options:null` 清除此文件覆盖。仅 Owner 可提交，活动/未知调用仍遵循现有保护。CLI `media-import --role speaker-wespeaker --from DIRECTORY` 验证固定目录中的 `speaker.onnx` 后安装，不下载 ASR 或改选默认方案。
+
+行为边界和验证见 [声纹范围 ADR](adr-speaker-range-and-display.md) 与 [验证场景](validation/speaker-quality-range.md)。

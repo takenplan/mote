@@ -4,6 +4,8 @@ Model APIs follow faster-whisper and sherpa-onnx's official Python examples.
 No model downloads, remote inference, speaker naming, or term correction occur here.
 """
 import base64
+import hashlib
+import math
 import io
 import os
 from pathlib import Path
@@ -117,28 +119,97 @@ def exclusive_sample(rows, speaker):
     return best
 
 
-def diarize(normalized, segmentation_path, embedding_path, speaker_count, threads):
+def candidate_score(rows):
+    valid = [(float(r.confidence), r.end - r.start) for r in rows
+             if math.isfinite(float(r.confidence)) and -1 <= r.confidence <= 1 and r.end > r.start]
+    return sum(score * duration for score, duration in valid) / sum(duration for _, duration in valid) if valid else None
+
+
+def choose_candidate(candidates, minimum, maximum):
+    """Acoustic ranking only; the declared range is not an identity assertion.
+
+    One cluster has no silhouette. Keep an automatic one-cluster hypothesis
+    rather than manufacturing several voices by forcing K. Never hide fallback
+    candidates or turn the ranking into a calibrated probability.
+    """
+    automatic = candidates[0]
+    if automatic['observedSpeakers'] <= 1 and minimum == 1:
+        return automatic, None
+    eligible = [c for c in candidates if c['clusters'] != -1 and minimum <= c['observedSpeakers'] <= maximum]
+    scored = sorted((c for c in eligible if c['score'] is not None), key=lambda c: c['score'], reverse=True)
+    if scored:
+        return scored[0], scored[0]['score'] - scored[1]['score'] if len(scored) > 1 else None
+    return (eligible[0] if eligible else automatic), None
+
+
+def diarize(normalized, segmentation_path, embedding_path, speaker_count, threads, speaker_range=None, embedding='3d-speaker'):
     import numpy as np
     import sherpa_onnx
     if not Path(segmentation_path).is_file() or not Path(embedding_path).is_file():
         raise ValueError('Local segmentation and speaker embedding models are required')
-    config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
-        segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
-            pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(segmentation_path)),
-            num_threads=threads, provider='cpu'),
-        embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(embedding_path), num_threads=threads, provider='cpu'),
-        clustering=sherpa_onnx.FastClusteringConfig(num_clusters=speaker_count or -1, threshold=0.5),
-        min_duration_on=0.1, min_duration_off=0.3)
-    if not config.validate():
-        raise ValueError('Invalid local diarization models')
+    if speaker_range and (speaker_count or not 1 <= speaker_range[0] <= speaker_range[1] <= 16 or embedding != 'wespeaker-zh'):
+        raise ValueError('Invalid declared speaker range')
     with wave.open(str(normalized), 'rb') as reader:
         duration_ms = reader.getnframes() / 16
         samples = np.frombuffer(reader.readframes(reader.getnframes()), dtype=np.int16).astype(np.float32) / 32768
-    model = sherpa_onnx.OfflineSpeakerDiarization(config)
-    if model.sample_rate != 16000:
-        raise ValueError('Diarization model must accept 16 kHz')
-    result = model.process(samples).sort_by_start_time()
-    return diarization_output(normalized, result, duration_ms, speaker_count)
+
+    def run(count):
+        config = sherpa_onnx.OfflineSpeakerDiarizationConfig(
+            segmentation=sherpa_onnx.OfflineSpeakerSegmentationModelConfig(
+                pyannote=sherpa_onnx.OfflineSpeakerSegmentationPyannoteModelConfig(model=str(segmentation_path)),
+                num_threads=threads, provider='cpu'),
+            embedding=sherpa_onnx.SpeakerEmbeddingExtractorConfig(model=str(embedding_path), num_threads=threads, provider='cpu'),
+            clustering=sherpa_onnx.FastClusteringConfig(num_clusters=count, threshold=0.5, compute_confidence=bool(speaker_range)),
+            min_duration_on=0.1, min_duration_off=0.3)
+        if not config.validate():
+            raise ValueError('Invalid local diarization models')
+        model = sherpa_onnx.OfflineSpeakerDiarization(config)
+        if model.sample_rate != 16000:
+            raise ValueError('Diarization model must accept 16 kHz')
+        result = model.process(samples).sort_by_start_time()
+        if len(result) > MAX_DIARIZATION_SEGMENTS:
+            raise OverflowError('Diarization output exceeds limit')
+        return result
+
+    result = run(speaker_count or -1)
+    estimation = None
+    if speaker_range:
+        minimum, maximum = speaker_range
+        runs = [(-1, result)]
+        automatic_count = len({r.speaker for r in result})
+        if not (automatic_count <= 1 and minimum == 1):
+            for count in range(max(2, minimum), maximum + 1):
+                runs.append((count, run(count)))
+            if maximum == 1:
+                runs.append((1, run(1)))
+        candidates = []
+        for count, rows in runs:
+            labels = {}
+            segments = []
+            for r in rows:
+                labels.setdefault(r.speaker, 'SPEAKER_' + str(len(labels)))
+                start, end = max(0, round(r.start * 1000)), min(round(duration_ms), round(r.end * 1000))
+                if end > start:
+                    segments.append({'startMs': start, 'endMs': end, 'speaker': labels[r.speaker]})
+            candidates.append({'clusters': count, 'observedSpeakers': len(labels),
+                               'score': candidate_score(rows), 'segments': segments})
+        chosen, gap = choose_candidate(candidates, minimum, maximum)
+        result = runs[candidates.index(chosen)][1]
+        estimation = {'method': 'bounded-silhouette-v1', 'selectedClusters': chosen['clusters'],
+                      'needsReview': True, 'scoreGap': gap, 'candidates': candidates}
+    output = diarization_output(normalized, result, duration_ms, speaker_count)
+    output['engine'] = 'sherpa-onnx/pyannote-3.0+' + ('WeSpeaker-zh-CN-Celeb' if embedding == 'wespeaker-zh' else '3D-Speaker')
+    output['modelProvenance'] = {'embedding': embedding,
+                               'embeddingSha256': hashlib.sha256(Path(embedding_path).read_bytes()).hexdigest(),
+                               'segmentationSha256': hashlib.sha256(Path(segmentation_path).read_bytes()).hexdigest(),
+                               'runtime': sherpa_onnx.__version__, 'threshold': 0.5, 'minDurationOn': 0.1, 'minDurationOff': 0.3, 'threads': threads}
+    if estimation:
+        output['declaredRange'] = {'min': speaker_range[0], 'max': speaker_range[1]}
+        output['estimate'] = estimation
+        output['warnings'].insert(0, '人数范围为用户声明；候选为声学模型估计，评分不是概率。自动单标签也可能漏分，需试听确认。')
+        if not speaker_range[0] <= output['observedSpeakers'] <= speaker_range[1]:
+            output['warnings'].insert(1, '未得到范围内的候选；已保留自动结果及候选，不会补造或隐藏说话人。')
+    return output
 
 
 def diarization_output(normalized, segments, duration_ms, speaker_count):

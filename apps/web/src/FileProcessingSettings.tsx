@@ -19,6 +19,7 @@ export function FileProcessingSettings({ api }: {
         }[];
     }>(api, '/api/sources'), sources = sourceList.data?.items ?? [];
     const media = useResource<{
+        'speaker-wespeaker'?: {state:string;runtimeReady:boolean;bytes:number;totalBytes:number;error?:string};
         dialogue: {
             state: string;
             bytes: number;
@@ -28,11 +29,12 @@ export function FileProcessingSettings({ api }: {
             runtimeReady: boolean;
             missingDependencies?: string[];
         };
-    }>(api, '/api/media-models'), dialogue = media.data?.dialogue;
+    }>(api, '/api/media-models'), dialogue = media.data?.dialogue, wespeaker=media.data?.['speaker-wespeaker'];
     useEffect(() => { if (dialogue && (['downloading', 'verifying', 'installing'].includes(dialogue.state) || dialogue.state === 'ready' && !dialogue.runtimeReady)) {
         const timer = setInterval(media.refresh, 2000);
         return () => clearInterval(timer);
     } }, [dialogue?.state, dialogue?.runtimeReady, media.refresh]);
+    useEffect(()=>{if(wespeaker&&(['downloading','verifying','installing'].includes(wespeaker.state)||wespeaker.state==='ready'&&!wespeaker.runtimeReady)){const timer=setInterval(media.refresh,2000);return()=>clearInterval(timer);}},[wespeaker?.state,wespeaker?.runtimeReady,media.refresh]);
     useUnsavedChanges(dirty);
     useEffect(() => { setSaved(null); setDirty(false); setPreview(null); setMatch(null); setMessage(''); }, [api]);
     useEffect(() => { if (resource.data && !dirty)
@@ -62,6 +64,7 @@ export function FileProcessingSettings({ api }: {
     }
     return <section className="panel file-processing-settings" aria-label={moteText("中央文件处理设置")}><p>{moteText("按文件类型选择处理方案。服务保存地址和密钥；方案保存独立参数；同一目录可对录音和图片采用不同方案。处理均由中央节点调度。")}</p>
  <div className="policy-card"><strong>{moteText("本地转写与说话人模型：")}{localModelState(dialogue?.state)}</strong>{dialogue?.state === 'ready' && <p role="status">{dialogue.runtimeReady ? moteText("转写与说话人 Worker 已就绪") : (dialogue.missingDependencies?.length ? moteText("模型已安装，服务缺少运行依赖：{0}", dialogue.missingDependencies.join(", ")) : moteText("模型已安装，等待音频 Worker 启动或安装 Native 运行时"))}</p>}{dialogue && ['downloading', 'verifying', 'installing'].includes(dialogue.state) && <p role="status">{Math.round(100 * dialogue.bytes / dialogue.totalBytes)}% · {dialogue.source}</p>}{dialogue?.error && <p role="alert">{dialogue.error}</p>}{dialogue?.state !== 'ready' && <button className="button" type="button" disabled={busy || ['downloading', 'verifying', 'installing'].includes(dialogue?.state ?? '')} onClick={() => void action(async () => { await api.request('/api/media-models/dialogue/install', { method: 'POST', body: JSON.stringify({ source: 'auto' }) }); media.refresh(); })}>{moteText("下载并安装本地音频模型")}</button>}<p>{moteText("新上传录音默认在中央转写并区分匿名说话人；模型未就绪时先归档。单文件时长可在下方设置，不设每日限额。")}</p></div>
+ <div className="policy-card"><strong>{moteText('可选 WeSpeaker 中文声纹模型')} · {localModelState(wespeaker?.state)}</strong><p>{moteText('仅选用此插件的录音使用此模型；下载不会更改默认方案。')}</p>{wespeaker?.state==='ready'?<p>{wespeaker.runtimeReady?moteText('已就绪'):moteText('等待音频 Worker')}</p>:<button className="button" disabled={busy||['downloading','verifying','installing'].includes(wespeaker?.state??'')} onClick={()=>void action(async()=>{await api.request('/api/media-models/speaker-wespeaker/install',{method:'POST',body:JSON.stringify({source:'official'})});media.refresh();})}>{moteText('安装可选声纹模型')}</button>}{wespeaker?.error&&<p role="alert">{wespeaker.error}</p>}</div>
  {resource.loading && !saved && <p role="status">{moteText("正在读取…")}</p>}{readError && <p role="alert" className="error-banner">{errorMessage(readError)}</p>}
  {saved && <><form onSubmit={e => { e.preventDefault(); void action(async () => { setSaved(await api.request('/api/file-processing', { method: 'PUT', body: JSON.stringify({ revision: saved.revision, settings, policy }) })); resources(api).invalidate(key => key === '/api/file-processing'); setDirty(false); setPreview(null); setMessage(moteText("设置已保存。新文件和未完成任务使用新配置；已完成文件保留原结果。")); }); }}>
  <fieldset disabled={busy}><legend>{moteText("处理开关与单文件限制")}</legend><label><input type="checkbox" checked={settings.enabled} onChange={e => edit(s => { s.settings.enabled = e.target.checked; })}/>{moteText("启用中央文件处理")}</label><div className="policy-grid"><label>{moteText("单个音频最长（分钟）")}<input aria-label={moteText("单个音频最长（分钟）")} type="number" min="1" max="1440" value={settings.maxAudioMinutes} onChange={e => edit(s => { s.settings.maxAudioMinutes = Number(e.target.value); })}/></label><label>{moteText("单文件超时（秒）")}<input aria-label={moteText("单文件超时（秒）")} type="number" min="1" max="3600" value={settings.timeoutMs / 1000} onChange={e => edit(s => { s.settings.timeoutMs = Number(e.target.value) * 1000; })}/></label></div></fieldset>
