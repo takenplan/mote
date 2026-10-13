@@ -24,13 +24,31 @@ class UiIterationInstrumentedTest {
         if (root is ViewGroup) for (index in 0 until root.childCount) addAll(views(root.getChildAt(index)))
     }
 
+    @Test fun generatedFixtureRejectsRetainedMoodBeforeDrawing() {
+        org.junit.Assume.assumeTrue("Explicit generated-only iteration fixture required", InstrumentationRegistry.getArguments().getString("uiIterationFixture") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
+        require(!Settings(context).enabled && Settings(context).read().token.isBlank() && context.queue().depth() == 0)
+        require(QuickNotes.draft(context).read() == NoteDraft() && context.localSources().sources().isEmpty())
+        val draft = QuickNotes.draft(context)
+        val generated = NoteDraft(mood = "Generated retained mood")
+        draft.update(generated.text, generated.mood)
+        try {
+            for (fixture in listOf(::generatedHomeContentAskJourney, ::generatedPlainNoteDetailKeepsItsOriginalAndUsesActionClose)) {
+                assertThrows(IllegalArgumentException::class.java) { fixture() }
+                assertEquals("A rejected fixture preserves the existing draft", generated, draft.read())
+                assertEquals("Rejection happens before a note is saved", 0, context.queue().depth())
+            }
+        } finally { draft.clear() } // Only the known generated draft created above is removed.
+    }
+
     @Test fun generatedPlainNoteDetailKeepsItsOriginalAndUsesActionClose() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         org.junit.Assume.assumeTrue("Explicit generated-only iteration fixture required", InstrumentationRegistry.getArguments().getString("uiIterationFixture") == "true")
         val context = instrumentation.targetContext
         require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
         require(!Settings(context).enabled && Settings(context).read().token.isBlank() && context.queue().depth() == 0)
-        require(QuickNotes.draft(context).read().text.isEmpty() && context.localSources().sources().isEmpty())
+        require(QuickNotes.draft(context).read() == NoteDraft() && context.localSources().sources().isEmpty())
         val previous = MoteI18n.preference()
         MoteI18n.select(context, "en")
         val text = "Generated note reader regression · 原文 🐾"
@@ -51,7 +69,9 @@ class UiIterationInstrumentedTest {
                     val labels = views(root).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
                     assertTrue(labels.contains("Close details")); assertFalse(labels.contains("Off"))
                     assertFalse(labels.contains("Media collection not enabled"))
-                    val directory = File(context.filesDir, "ui-iterations/round-5").apply { mkdirs() }
+                    val round = InstrumentationRegistry.getArguments().getString("uiIterationRound", "5").also { require(it.matches(Regex("baseline|[1-9][0-9]*"))) }
+                    val variant = InstrumentationRegistry.getArguments().getString("uiIterationVariant", "default").also { require(it.matches(Regex("default|compact|english|compact-english"))) }
+                    val directory = File(context.filesDir, "ui-iterations/round-$round" + if (variant == "default") "" else "/$variant").apply { mkdirs() }
                     val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
                     root.draw(Canvas(bitmap))
                     File(directory, "note-detail-english.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
@@ -73,9 +93,9 @@ class UiIterationInstrumentedTest {
         val context = instrumentation.targetContext
         require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
         require(!Settings(context).enabled && Settings(context).read().token.isBlank() && context.queue().depth() == 0)
-        require(QuickNotes.draft(context).read().text.isEmpty())
+        require(QuickNotes.draft(context).read() == NoteDraft())
         require(context.localSources().sources().isEmpty())
-        val round = args.getString("uiIterationRound", "baseline").also { require(it.matches(Regex("baseline|[1-5]"))) }
+        val round = args.getString("uiIterationRound", "baseline").also { require(it.matches(Regex("baseline|[1-9][0-9]*"))) }
         val variant = args.getString("uiIterationVariant", "default").also { require(it.matches(Regex("default|compact|english|compact-english"))) }
         val directory = File(context.filesDir, "ui-iterations/round-$round" + if (variant == "default") "" else "/$variant").apply { mkdirs() }
         val previous = MoteI18n.preference()
@@ -109,6 +129,11 @@ class UiIterationInstrumentedTest {
                 render("home")
                 scenario.onActivity { activity ->
                     assertEquals(4, views(activity.window.decorView).count { it.tag?.toString()?.startsWith("add:") == true })
+                    for (item in views(activity.window.decorView).filter { it.tag?.toString()?.startsWith("add:") == true }) {
+                        val visible = android.graphics.Rect()
+                        assertTrue("Every peer save action is available in the first Home view", item.getGlobalVisibleRect(visible))
+                        assertEquals("The four peer action labels and explanations fit the first view", item.height, visible.height())
+                    }
                     assertEquals(3, views(activity.window.decorView).count { it.tag?.toString()?.startsWith("primary:") == true })
                     assertFalse(Settings(activity).enabled)
                 }
@@ -161,7 +186,109 @@ class UiIterationInstrumentedTest {
                         root.clearFocus()
                     }
                 }
+                val generatedText = if (variant.contains("english")) "Generated context fixture\nThe review kept the original notes with the decision, so the reason can be recovered later." else "生成资料验证\n这次评审把原始记录和决定放在一起，方便以后回看当时的依据。"
+                scenario.onActivity { activity ->
+                    views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single { it.isShown }.setText(generatedText)
+                    views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("保存随手记") }.performClick()
+                }
+                val savedDeadline = SystemClock.elapsedRealtime() + 10000
+                var saved = false
+                while (!saved && SystemClock.elapsedRealtime() < savedDeadline) {
+                    scenario.onActivity { activity -> saved = views(activity.window.decorView).filterIsInstance<TextView>().any { it.text.toString() == MoteI18n.text("随手记已保存；同步按你的设置运行") } }
+                    if (!saved) Thread.sleep(25)
+                }
+                assertTrue("Save uses the real note action and clears only the committed draft", saved)
                 scenario.onActivity { activity -> views(activity.window.decorView).single { it.isShown && it.contentDescription == MoteI18n.text("返回{0}", MoteI18n.text("内容")) }.performClick() }
+                var populated = false
+                while (!populated && SystemClock.elapsedRealtime() < savedDeadline) {
+                    scenario.onActivity { activity -> populated = views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == generatedText } }
+                    if (!populated) Thread.sleep(25)
+                }
+                assertTrue("Content displays the actual generated saved original preview", populated)
+                render("content-populated")
+                val savedRecords = context.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), source = "note").getJSONArray("items")
+                assertEquals(1, savedRecords.length())
+                val savedId = savedRecords.getJSONObject(0).getString("id")
+                tab("TODAY")
+                populated = false
+                val homeDeadline = SystemClock.elapsedRealtime() + 10000
+                while (!populated && SystemClock.elapsedRealtime() < homeDeadline) {
+                    scenario.onActivity { activity ->
+                        val recent = views(activity.window.decorView).single { it.isShown && it.tag == "home-recent-content" }
+                        val record = views(recent).singleOrNull { it.isShown && it.tag == "library-record:$savedId" }
+                        populated = record != null && views(record).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == generatedText }
+                    }
+                    if (!populated) Thread.sleep(25)
+                }
+                assertTrue("The Home archive uses the same actual saved record", populated)
+                settle() // The row was just appended by the real asynchronous Home query.
+                scenario.onActivity { activity ->
+                    val recent = views(activity.window.decorView).single { it.isShown && it.tag == "home-recent-content" }
+                    val record = views(recent).single { it.isShown && it.tag == "library-record:$savedId" }
+                    var ancestor = recent.parent
+                    while (ancestor !is android.widget.ScrollView) ancestor = ancestor.parent
+                    val scroll = ancestor
+                    val bounds = android.graphics.Rect(); record.getDrawingRect(bounds)
+                    scroll.offsetDescendantRectToMyCoords(record, bounds)
+                    scroll.scrollTo(0, (bounds.top - activity.moteDp(48)).coerceAtLeast(0))
+                }
+                settle()
+                val monitor = instrumentation.addMonitor(CaptureRecordsActivity::class.java.name, null, false)
+                try {
+                    val visibleDeadline = SystemClock.elapsedRealtime() + 10000
+                    var opened = false
+                    while (!opened && SystemClock.elapsedRealtime() < visibleDeadline) {
+                        scenario.onActivity { activity ->
+                            val recent = views(activity.window.decorView).single { it.isShown && it.tag == "home-recent-content" }
+                            val record = views(recent).single { it.isShown && it.tag == "library-record:$savedId" }
+                            val visible = android.graphics.Rect()
+                            val diagnostic = mutableListOf<String>()
+                            var ancestor: View? = record
+                            while (ancestor != null) {
+                                val rect = android.graphics.Rect(); val shown = ancestor.getGlobalVisibleRect(rect)
+                                diagnostic += "${ancestor.javaClass.simpleName} ${ancestor.tag} bounds=${ancestor.left},${ancestor.top},${ancestor.width},${ancestor.height} scroll=${ancestor.scrollX},${ancestor.scrollY} visible=$shown/$rect"
+                                ancestor = ancestor.parent as? View
+                            }
+                            File(directory, "home-scroll-geometry.txt").writeText(diagnostic.joinToString("\n"))
+                            if (record.height > 0) record.requestRectangleOnScreen(android.graphics.Rect(0, 0, record.width, record.height), true)
+                            if (record.height > 0 && record.getGlobalVisibleRect(visible) && record.height == visible.height()) {
+                                assertTrue(views(record).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == generatedText })
+                                File(directory, "home-visible-record.txt").writeText("id=$savedId\nrect=$visible\nheight=${record.height}\n$generatedText")
+                                val root = activity.window.decorView
+                                assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
+                                val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+                                root.draw(Canvas(bitmap))
+                                File(directory, "home-populated.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+                                File(directory, "home-populated.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
+                                opened = record.performClick()
+                            }
+                        }
+                        if (!opened) Thread.sleep(25)
+                    }
+                    assertTrue("Only the actual fully visible Home saved note opens the reader", opened)
+                    val reader = requireNotNull(instrumentation.waitForMonitorWithTimeout(monitor, 10000))
+                    fun detailRoot() = android.view.inspector.WindowInspector.getGlobalWindowViews().lastOrNull { it.findViewById<View>(android.R.id.button1)?.isShown == true }
+                    val deadline = SystemClock.elapsedRealtime() + 10000
+                    var original = false
+                    while (!original && SystemClock.elapsedRealtime() < deadline) {
+                        instrumentation.runOnMainSync { original = detailRoot()?.let { root -> views(root).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == generatedText } } == true }
+                        if (!original) Thread.sleep(25)
+                    }
+                    assertTrue("Opening the actual Home note preserves the exact saved original", original)
+                    instrumentation.runOnMainSync {
+                        assertEquals(savedId, reader.intent.getStringExtra("recordId"))
+                        assertTrue(reader.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
+                        val root = requireNotNull(detailRoot())
+                        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
+                        root.draw(Canvas(bitmap))
+                        File(directory, "home-note-original.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+                        File(directory, "home-note-original.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
+                        assertTrue(root.findViewById<View>(android.R.id.button1).performClick())
+                        reader.finish()
+                    }
+                } finally { instrumentation.removeMonitor(monitor) }
+                context.queue().acknowledge(savedId)
+                scenario.onActivity { assertTrue(QuickNotes.draft(it).read().text.isEmpty()) }
                 tab("TODAY")
                 scenario.onActivity { activity -> activity.openGeneratedAdd(MoteAddAction.SCREEN) }
                 render("screen-scope")

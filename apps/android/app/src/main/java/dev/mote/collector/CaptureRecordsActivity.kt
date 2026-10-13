@@ -369,8 +369,11 @@ class CaptureRecordsActivity : MoteActivity() {
                 runOnUiThread {
                     if (isDestroyed || stamp != generation || !dialog.isShowing) { bitmap?.recycle(); if (dialog.isShowing) dialog.dismiss(); return@runOnUiThread }
                     content.removeAllViews(); detailBitmap = bitmap
-                    text(content, "${time(record.getString("capturedAt"))} · ${if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录")}", 15f)
-                    text(content, record.optString("appName").ifBlank { record.optString("appId").ifBlank { if (record.optString("source") == "media") MoteI18n.text("媒体会话状态") else if (record.optString("source") == "device_event") MoteI18n.text("设备状态") else MoteI18n.text("桌面 / 系统画面") } }, 15f)
+                    val isNote = record.optString("source") == "note"
+                    if (isNote) dialog.setTitle(MoteI18n.text("随手记"))
+                    text(content, "${record.getString("capturedAt").let { runCatching { DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.MEDIUM).withLocale(MoteI18n.locale()).withZone(ZoneId.systemDefault()).format(Instant.parse(it)) }.getOrDefault(it) }} · ${if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录")}", 12f).setTextColor(MoteUi.muted)
+                    val origin = record.optString("appName").ifBlank { record.optString("appId").ifBlank { if (isNote) MoteI18n.text("随手记") else if (record.optString("source") == "media") MoteI18n.text("媒体会话状态") else if (record.optString("source") == "device_event") MoteI18n.text("设备状态") else MoteI18n.text("桌面 / 系统画面") } }
+                    if (!isNote || origin != MoteI18n.text("随手记")) text(content, origin, 15f)
                     if (record.optString("source") in SystemEventRules.sources) {
                         text(content, SystemEventRules.label(record), 14f).setTextIsSelectable(true)
                         text(content, MoteI18n.text("原始系统事件 · 不代表已阅读通知或实际执行某项任务。熄屏不等于锁定。"), 12f)
@@ -390,7 +393,14 @@ class CaptureRecordsActivity : MoteActivity() {
                     if (CapturePreview.showMediaContext(record)) text(content, CapturePreview.mediaLabel(record), 13f)
                     if (record.optString("source") in setOf("note", "activity", "ui_page")) {
                         record.optJSONObject("metadata")?.optJSONObject("uiPage")?.let { text(content, "${it.optString("adapterId")} @ ${it.optString("adapterVersion")} · ${it.optString("status")}", 13f) }
-                        text(content, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, 14f).setTextIsSelectable(true)
+                        val originalParent = if (isNote) LinearLayout(this).apply {
+                            orientation = LinearLayout.VERTICAL; background = MoteUi.folio(this@CaptureRecordsActivity)
+                            setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(16))
+                            content.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(12); bottomMargin = moteDp(8) })
+                            text(this, MoteI18n.text("原文"), 11f).setTextColor(MoteUi.muted)
+                            addView(View(this@CaptureRecordsActivity).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, moteDp(1)).apply { topMargin = moteDp(6); bottomMargin = moteDp(10) })
+                        } else content
+                        text(originalParent, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) 16f else 14f).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(moteDp(7).toFloat(), 1f) }
                         record.optString("syncError").takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("同步需要处理：{0}", it), 14f) }
                         return@runOnUiThread
                     }

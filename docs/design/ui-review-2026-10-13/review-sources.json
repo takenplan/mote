@@ -1,0 +1,76 @@
+{
+  "generatedOnly": true,
+  "baseline": {
+    "label": "第 5 轮",
+    "webRoot": ".mote/ui-iterations/round-5-language-cdp",
+    "nativeRoot": "/tmp/mote-native-ui/round-5",
+    "verified": true,
+    "scores": {
+      "web": [
+        8,
+        7.5,
+        8.5,
+        8.5,
+        8.5
+      ],
+      "mac": [
+        8,
+        6.5,
+        8.5,
+        8.5,
+        8.5
+      ],
+      "android": [
+        8,
+        6.5,
+        8.5,
+        8.5,
+        8.5
+      ]
+    },
+    "scoreSource": "evidence/evaluator.md#round-5--contrast-truthful-destinations-and-final-recovery-checks"
+  },
+  "candidate": {
+    "label": "当前原生候选",
+    "platformLabels": {
+      "mac": "Mac D2 · 当前方案",
+      "android": "Android R8 · 当前方案"
+    },
+    "nativeRoot": null,
+    "macRoot": ".mote/ui-continuation/mac/smoke",
+    "macSceneManifest": ".mote/ui-continuation/mac/manifest.json",
+    "androidRoot": ".mote/ui-continuation/android",
+    "androidApkSha256": "025178385afa56cb98a63daa382319bdc87e9c6588d4ac452dde530cbe37b793",
+    "verifiedPlatforms": {
+      "mac": true,
+      "android": true
+    },
+    "verified": true,
+    "scores": {
+      "web": null,
+      "mac": [
+        8.5,
+        7.5,
+        8.5,
+        8.5,
+        8.5
+      ],
+      "android": [
+        8,
+        7.5,
+        8.5,
+        8.5,
+        8.5
+      ]
+    },
+    "scoreSource": "evidence/originality-evaluator.md",
+    "note": "当前分支重新验证并独立接受 Mac D2 与 Android R8；两端原创性均为 7.5，其他四项保持。Mac 修正切语言后的后台文案；Android 重测修正英文窄屏首屏裁切，并核验可见首页同一笔记原文。Web 保留第5轮评分与冻结画面，本次当前构建交互另行复跑。",
+    "androidVariantDirectories": {
+      "normal-zh": "default",
+      "normal-en": "english",
+      "compact-zh": "compact",
+      "compact-en": "compact-english"
+    },
+    "androidSceneManifest": ".mote/ui-continuation/android/image-manifest.json"
+  }
+}

@@ -401,6 +401,62 @@ app.on('browser-window-created', (_event, window) => {
       await js(`document.querySelector('#compression-apply').click()`);
       assert(await js(`!document.querySelector('#settings-pending').hidden`));
       await navigate('overview');
+      // Exercise a real generated queue import and the normal content reader.
+      // This is a durable regression for long English provenance-gutter labels;
+      // the notification observer remains synthetic and no system permission is used.
+      const notificationAt = new Date(Date.now() - 1000).toISOString();
+      const notificationId = randomUUID();
+      const notificationArchive = join(profile, 'generated-notification-archive.json');
+      const notificationOriginal = 'Generated notification original; never a personal notification.';
+      writeFileSync(notificationArchive, JSON.stringify({format:'mote-desktop-queue',version:3,blobs:{},records:[{
+        event:{id:notificationId,deviceId:status.config.deviceId,deviceName:'Generated_Notification_Source_'+ 'x'.repeat(96),platform:'macos',capturedAt:notificationAt,
+          durationMs:0,appId:'dev.mote.generated.notification',appName:'Generated notification',ocrText:'',source:'notification',
+          privacy:{excluded:false,redacted:false,mode:'none',collection:'content'},
+          metadata:{version:1,observedAt:notificationAt,collector:{method:'accessibility'},observation:{sessionId:notificationId,elapsedRealtimeMs:1},
+            notification:{action:'posted',notificationKey:'ab'.repeat(32),postedAt:notificationAt,ongoing:false,groupSummary:false,text:notificationOriginal}}},
+        blobBytes:0,attempts:0,nextAttemptAt:0
+      }]}), {mode:0o600});
+      const beforeMixPicker = dialog.showOpenDialog;
+      dialog.showOpenDialog = async () => ({canceled:false,filePaths:[notificationArchive]});
+      try { assert.equal((await js('window.mote.importQueue()')).imported,1); }
+      finally { dialog.showOpenDialog = beforeMixPicker; }
+      const changeFixtureLanguage = async preference => {
+        await navigate('settings');
+        await js(`window.confirm=()=>true;document.querySelector('#language').value=${JSON.stringify(preference)};document.querySelector('#language').dispatchEvent(new Event('change'));true;`);
+        for (let i=0;i<200;i++) {
+          try { if (await js(`document.documentElement.lang===${JSON.stringify(preference)} && !!document.querySelector('#content-refresh') && document.querySelector('#workspace-location').textContent.trim()`)) break; }
+          catch { /* Reload temporarily destroys the frame; wait for the new renderer. */ }
+          await new Promise(resolve=>setTimeout(resolve,25));
+        }
+        assert.equal(await js('document.documentElement.lang'),preference);
+        // Locale reload restores the existing overview entry; its content loads normally.
+        await new Promise(resolve=>setTimeout(resolve,100));
+      };
+      await changeFixtureLanguage('en');
+      await navigate('notes');
+      const switchedLanguageNote = 'Generated language-switch note; personal content is never used.';
+      await js(`document.querySelector('#note-text').value=${JSON.stringify(switchedLanguageNote)};document.querySelector('#note-text').dispatchEvent(new Event('input'));document.querySelector('#note-form').requestSubmit();true;`);
+      for(let i=0;i<200&&!await js(`document.querySelector('#note-text').value===''`);i++)await new Promise(resolve=>setTimeout(resolve,25));
+      assert.equal(await js(`document.querySelector('#note-text').value`),'','Note saves through the real UI after locale reload');
+      assert.equal((await js('window.mote.status()')).operations.find(job=>job.id==='mote:note')?.message,'Saving quick note · Operation finished','Main-process operation labels follow the changed language');
+      window.setSize(820,620); await navigate('records');
+      await js(`document.querySelector('#content-refresh').click();true;`);
+      for(let i=0;i<200&&!await js(`!!document.querySelector('#content-feed [data-content-key="queue:${notificationId}"]')`);i++)await new Promise(resolve=>setTimeout(resolve,25));
+      assert(await js(`(() => {
+        const rows=Array.from(document.querySelectorAll('#content-feed .content-row'));
+        if(!rows.some(row=>row.querySelector('.content-type').textContent==='Notifications') || !rows.some(row=>row.querySelector('.content-type').textContent==='Quick notes') || !rows.some(row=>row.querySelector('.content-type').textContent==='File')) return false;
+        return rows.every(row=>['.content-type','.content-row-copy small'].every(selector=>{const element=row.querySelector(selector),bounds=element.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(element);
+          return element.scrollWidth<=element.clientWidth && Array.from(range.getClientRects()).every(rect=>rect.left>=bounds.left-.5 && rect.right<=bounds.right+.5);
+        }));
+      })()`),'Actual mixed-source records keep English types and long unbroken source metadata inside their narrow columns');
+      assert(await js(`document.documentElement.scrollWidth<=innerWidth`),'Mixed-source content has no horizontal overflow');
+      writeFileSync(join(outputDirectory,'mixed-source-content-en-compact.png'),(await window.webContents.capturePage()).toPNG());
+      await js(`document.querySelector('#content-feed [data-content-key="queue:${notificationId}"]').click();true;`);
+      for(let i=0;i<200&&!await js(`document.querySelector('#content-detail-body').textContent===${JSON.stringify(notificationOriginal)}`);i++)await new Promise(resolve=>setTimeout(resolve,25));
+      assert.equal(await js(`document.querySelector('#content-detail-body').textContent`),notificationOriginal,'The real imported notification original remains readable');
+      assert.equal(await js(`document.querySelector('#content-detail-close').textContent`),'Close details','Reader dismissal is an action, not the Off state translation');
+      await js(`document.querySelector('#content-detail-close').click();true;`);
+      await changeFixtureLanguage('zh-CN'); window.setSize(1140,840); await navigate('overview');
       const generatedJpeg = nativeImage.createFromBitmap(Buffer.alloc(64 * 64 * 4, 160), { width: 64, height: 64 }).toJPEG(75);
       const hash = imageHash(generatedJpeg), day = new Date(), fixtureRecords = [];
       for (let index = 0; index < 31; index++) fixtureRecords.push({ event: { id: randomUUID(), deviceId: status.config.deviceId, deviceName: '合成截图设备', platform: 'macos', capturedAt: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, index).toISOString(), durationMs: 0, appId: 'dev.mote.fixture', appName: '合成截图', imageMime: 'image/jpeg', ocrText: '合成 OCR <script>不可执行的证据</script>', ocr: { status: 'completed' }, source: 'screen', privacy: { excluded: false, redacted: false, mode: 'local', reason: 'generated fixture only' } }, blobHash: hash, blobBytes: generatedJpeg.length, attempts: 0, nextAttemptAt: 0 });

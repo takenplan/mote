@@ -234,30 +234,39 @@ class MainActivity : MoteActivity() {
     private fun buildToday() {
         val local = LocalStateRepository.get(this).state.value
         firstUse = MoteNavigation.isFirstUse(loadedConfig.hasSyncConnection(), settings.enabled, settings.lastCapture(), (local.active?.records ?: 0) > 0 || (local.sourcePending ?: 0) > 0)
-        page(Page.OVERVIEW, MoteI18n.text("文件、屏幕记录和想法先保存在本机；连接中央并完成整理后，可搜索和提问。"))
+        page(Page.OVERVIEW, MoteI18n.text("文件、屏幕记录与想法，先存本机。连接中央整理后，可搜索和提问。"))
         val choices = MoteAddAction.entries
-        val collection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@MainActivity, Color.WHITE, 18, true) }
+        val collection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.folio(this@MainActivity) }
         content.addView(collection, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
-        for (row in choices.chunked(2)) {
-            val group = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row.forEachIndexed { index, action ->
-                group.addView(LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 8)
-                    setPadding(dp(15), dp(17), dp(15), dp(17)); minimumHeight = dp(102)
+        collection.addView(TextView(this).apply {
+            text = MoteI18n.text("添加内容"); textSize = 11f; setTextColor(MoteUi.muted)
+            setPadding(dp(14), dp(10), dp(14), dp(6))
+        })
+        val inputs = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.folio(this@MainActivity, 44, false) }
+        collection.addView(inputs)
+        choices.forEachIndexed { index, action ->
+                inputs.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = MoteUi.folioAction(this@MainActivity)
+                    setPadding(dp(12), dp(6), dp(12), dp(6)); minimumHeight = dp(64)
                     isFocusable = true; tag = "add:${action.name}"; contentDescription = MoteI18n.text(action.titleKey) + "，" + MoteI18n.text(action.subtitleKey)
-                    addView(TextView(this@MainActivity).apply {
-                        text = MoteI18n.text(action.titleKey); textSize = 16f; setTextColor(MoteUi.ink)
-                        setCompoundDrawablesWithIntrinsicBounds(MoteNavigationIcon(this@MainActivity, action.icon, true), null, null, null)
-                        compoundDrawablePadding = dp(8)
-                    })
-                    addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.subtitleKey); textSize = 12f; setTextColor(MoteUi.muted); setPadding(0, dp(11), 0, 0); setLineSpacing(dp(3).toFloat(), 1f) })
+                    addView(ImageView(this@MainActivity).apply {
+                        setImageDrawable(MoteNavigationIcon(this@MainActivity, action.icon, true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, LinearLayout.LayoutParams(dp(21), dp(21)).apply { marginEnd = dp(24) })
+                    addView(LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.VERTICAL; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                        addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.titleKey); textSize = 14f; setTextColor(MoteUi.ink); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) })
+                        addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.subtitleKey); textSize = 12f; setTextColor(MoteUi.muted); setPadding(0, dp(4), 0, 0); setLineSpacing(dp(2).toFloat(), 1f) })
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; setTextColor(MoteUi.accent); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(8) })
                     setOnClickListener { openMoteAdd(action) }
-                }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (index == 0) marginEnd = dp(6) else marginStart = dp(6) })
-            }
-            collection.addView(group, LinearLayout.LayoutParams(-1, -2))
-            if (row.last() != choices.last()) collection.addView(View(this).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(15); marginEnd = dp(15) })
+                }, LinearLayout.LayoutParams(-1, -2))
+            if (index != choices.lastIndex) inputs.addView(View(this).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(44); marginEnd = dp(12) })
         }
-        text(MoteI18n.text("保存之后，回看或提问"), 12, MoteUi.muted)
+        collection.addView(View(this).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, dp(1)))
+        val previousContent = content
+        val recovery = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), 0) }
+        collection.addView(recovery); content = recovery
+        text(MoteI18n.text("保存之后，回看或提问"), 11, MoteUi.muted).apply { (layoutParams as LinearLayout.LayoutParams).bottomMargin = 0 }
         val retrieval = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         listOf("查看内容 →" to Page.LIBRARY, "问一问 →" to Page.ASK).forEach { (label, destination) ->
             retrieval.addView(TextView(this).apply {
@@ -266,7 +275,11 @@ class MainActivity : MoteActivity() {
             }, LinearLayout.LayoutParams(0, -2, 1f))
         }
         content.addView(retrieval, LinearLayout.LayoutParams(-1, -2))
-        card(MoteUi.tint) {
+        val syncEdge = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(10)); setBackgroundColor(MoteUi.tint)
+        }
+        collection.addView(syncEdge); content = syncEdge
+        run {
             val summary = LinearLayout(this@MainActivity).apply { gravity = Gravity.CENTER_VERTICAL }
             content.addView(summary, LinearLayout.LayoutParams(-1, -2))
             homeSyncStatus = TextView(this@MainActivity).apply {
@@ -288,6 +301,7 @@ class MainActivity : MoteActivity() {
             menu(MoteI18n.text("发送中的内容"), MoteI18n.text("查看待发条目、阻塞原因与恢复操作"), "sync") { startActivity(Intent(this@MainActivity, SyncQueueActivity::class.java)) }
             content = previous
         }
+        content = previousContent
         section(MoteI18n.text("持续来源"))
         homeScreenAction = button(MoteI18n.text("记录屏幕")) {
             if (settings.enabled && loadedConfig.screenCollectionEnabled) changeRuntimeConfig(loadedConfig.copy(screenCollectionEnabled = false))
@@ -297,7 +311,7 @@ class MainActivity : MoteActivity() {
         menu(MoteI18n.text("来源管理"), MoteI18n.text("逐个查看范围、暂停或重新授权"), "folder") { startActivity(Intent(this, SourcesActivity::class.java)) }
         section(MoteI18n.text("最近内容"))
         todaySummary = text(local.imageLabel(), 12, MoteUi.muted)
-        homeRecentList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(homeRecentList)
+        homeRecentList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; tag = "home-recent-content" }; content.addView(homeRecentList)
         button(MoteI18n.text("查看全部内容")) { showPage(Page.LIBRARY) }
         section(MoteI18n.text("中央工作台"))
         menu(MoteI18n.text("全部功能与设置"), MoteI18n.text("连接中央后，查看完整资料库、记忆、洞察与处理进度。"), "library") {
@@ -349,7 +363,7 @@ class MainActivity : MoteActivity() {
                     }
                 }
             }
-            val captures = applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 3).getJSONArray("items")
+            val captures = applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 3, source = "").getJSONArray("items")
             Triple(sources, captures, applicationContext.localFileContents(3))
         }) { result ->
             result.onSuccess { (sources, captures, files) ->
@@ -367,45 +381,52 @@ class MainActivity : MoteActivity() {
         }
     }
 
-    private fun addContentRow(parent: LinearLayout, title: String, detail: String, identity: String, action: () -> Unit) {
+    private fun addContentRow(parent: LinearLayout, title: String, detail: String, identity: String, icon: String = "library", provenance: String = "", framed: Boolean = true, action: () -> Unit) {
         parent.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 12)
-            setPadding(dp(14), dp(15), dp(14), dp(15)); isFocusable = true; contentDescription = title + "，" + detail; tag = identity
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP
+            background = if (framed) android.graphics.drawable.LayerDrawable(arrayOf(MoteUi.folio(this@MainActivity, 44), MoteUi.folioAction(this@MainActivity))) else MoteUi.folioAction(this@MainActivity)
+            setPadding(dp(12), dp(14), dp(12), dp(14)); isFocusable = true; contentDescription = listOf(title, provenance, detail).filter { it.isNotBlank() }.joinToString("，"); tag = identity
             addView(ImageView(this@MainActivity).apply {
-                setImageDrawable(MoteNavigationIcon(this@MainActivity, "library", true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-                background = MoteUi.shape(this@MainActivity, MoteUi.tint, 8); setPadding(dp(8), dp(8), dp(8), dp(8))
-            }, LinearLayout.LayoutParams(dp(39), dp(39)).apply { marginEnd = dp(12) })
+                setImageDrawable(MoteNavigationIcon(this@MainActivity, icon, true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            }, LinearLayout.LayoutParams(dp(21), dp(21)).apply { marginEnd = dp(24); topMargin = dp(2) })
             addView(LinearLayout(this@MainActivity).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(TextView(this@MainActivity).apply { text = title; textSize = 15f; setTextColor(MoteUi.ink); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) })
-                addView(TextView(this@MainActivity).apply { text = detail; textSize = 12f; maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; setTextColor(MoteUi.muted); setPadding(0, dp(7), 0, 0) })
+                addView(TextView(this@MainActivity).apply { text = title; textSize = 14f; setTextColor(MoteUi.ink); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) })
+                if (provenance.isNotBlank()) addView(TextView(this@MainActivity).apply { text = provenance; textSize = 11f; setTextColor(MoteUi.muted); setPadding(0, dp(5), 0, 0) })
+                addView(TextView(this@MainActivity).apply { text = detail; textSize = 13f; maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; setTextColor(if (identity.startsWith("library-record:")) MoteUi.ink else MoteUi.muted); setPadding(0, dp(9), 0, 0); setLineSpacing(dp(3).toFloat(), 1f) })
             }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; setTextColor(MoteUi.accent); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(8) })
             setOnClickListener { action() }
         }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
     }
-    private fun addFileRow(parent: LinearLayout, row: org.json.JSONObject) {
-        addContentRow(parent, row.getJSONObject("candidate").optString("title"), LocalContentPresentation.fileStatus(row), "file-content:" + row.getString("sourceId")) {
+    private fun addFileRow(parent: LinearLayout, row: org.json.JSONObject, framed: Boolean = true) {
+        addContentRow(parent, row.getJSONObject("candidate").optString("title"), LocalContentPresentation.fileStatus(row), "file-content:" + row.getString("sourceId"), "import", row.optString("sourceName"), framed) {
             startActivity(Intent(this, FileContentActivity::class.java).putExtra("sourceId", row.getString("sourceId")).putExtra("externalId", row.getJSONObject("candidate").getString("externalId")))
         }
     }
-    private fun addCaptureRow(parent: LinearLayout, item: org.json.JSONObject) {
+    private fun addCaptureRow(parent: LinearLayout, item: org.json.JSONObject, framed: Boolean = true) {
         val title = item.optString("appName").ifBlank { if (item.optString("source") == "note") MoteI18n.text("随手记") else MoteI18n.text("采集记录") }
-        addContentRow(parent, title, item.optString("capturedAt") + " · " + item.optString("textPreview"), "library-record:" + item.getString("id")) {
+        val note = item.optString("source") == "note"
+        val timestamp = runCatching { java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT).withLocale(resources.configuration.locales[0]).withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.parse(item.getString("capturedAt"))) }.getOrDefault(item.optString("capturedAt"))
+        addContentRow(parent, title, item.optString("textPreview"), "library-record:" + item.getString("id"), if (note) "notes" else "capture", MoteI18n.text(if (note) "随手记" else "采集记录") + " · " + timestamp, framed) {
             startActivity(Intent(this, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")).putExtra("recordSource", item.optString("source")).putExtra("recordDate", java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()))
         }
     }
 
     private fun buildLibrary() {
         page(Page.LIBRARY, MoteI18n.text("所有资料，在一处浏览和找回"))
+        val pageContent = content
+        val index = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.folio(this@MainActivity); setPadding(dp(14), dp(14), dp(14), dp(4)) }
+        pageContent.addView(index, LinearLayout.LayoutParams(-1, -2)); content = index
         val scope = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         scope.addView(TextView(this).apply {
             text = MoteI18n.text("本机保留"); textSize = 14f; gravity = Gravity.CENTER; minHeight = dp(50)
-            isSelected = true; isFocusable = true; setTextColor(Color.WHITE); background = MoteUi.shape(this@MainActivity, MoteUi.accent, 24)
+            isSelected = true; isFocusable = true; setTextColor(MoteUi.accent); background = MoteUi.shape(this@MainActivity, MoteUi.tint, 4)
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(8) })
         scope.addView(MoteUi.button(Button(this).apply {
             text = MoteI18n.text("中央归档"); setOnClickListener { openCentral("archive") }
-        }).apply { background = MoteUi.clickable(this@MainActivity, Color.WHITE, 24) }, LinearLayout.LayoutParams(0, -2, 1f))
+        }).apply { background = MoteUi.folioAction(this@MainActivity) }, LinearLayout.LayoutParams(0, -2, 1f))
         content.addView(scope, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
         text(MoteI18n.text("本机保留的记录，离线也能查看；同步后的完整资料在中央资料库中。"), 12, MoteUi.muted)
         val types = listOf("" to "全部记录", "file" to "文件", "screen" to "截图", "ui_page" to "页面内容采集", "note" to "随手记", "notification" to "通知", "media" to "媒体播放状态", "activity" to "应用活动", "device_event" to "设备事件")
@@ -424,6 +445,7 @@ class MainActivity : MoteActivity() {
         localLibraryStatus = text(MoteI18n.text("正在读取…"), 13, MoteUi.muted)
         localLibraryList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(localLibraryList)
         button(MoteI18n.text("按日期浏览更多记录")) { startActivity(Intent(this, CaptureRecordsActivity::class.java)) }
+        content = pageContent
     }
     private fun openCentral(page: String) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", page)) }
 
@@ -438,23 +460,16 @@ class MainActivity : MoteActivity() {
             if (generation == libraryGeneration && list === localLibraryList) {
                 list.removeAllViews()
                 result.onSuccess { (page, files) ->
-                    files.forEach { addFileRow(list, it) }
+                    files.forEach { addFileRow(list, it, false) }
                     val items = page.getJSONArray("items")
                     label.text = MoteI18n.text("本机保留 · {0} 条资料", page.getInt("totalCount"))
                     if (items.length() == 0 && files.isEmpty()) list.addView(TextView(this).apply { text = MoteI18n.text("这里还没有内容。点击添加，选择文件、屏幕或随手记。"); setTextColor(MoteUi.muted); setPadding(0, dp(20), 0, dp(20)) })
                     for (i in 0 until items.length()) {
                         val item = items.getJSONObject(i)
-                        val title = item.optString("appName").ifBlank { MoteI18n.text("采集记录") }
-                        list.addView(LinearLayout(this).apply {
-                            orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 12)
-                            setPadding(dp(16), dp(16), dp(16), dp(16)); isFocusable = true
-                            contentDescription = title; tag = "library-record:" + item.getString("id")
-                            addView(TextView(this@MainActivity).apply { text = title; textSize = 16f; setTextColor(MoteUi.ink) })
-                            addView(TextView(this@MainActivity).apply { text = item.optString("capturedAt"); textSize = 12f; setTextColor(MoteUi.muted); setPadding(0, dp(7), 0, dp(7)) })
-                            item.optString("textPreview").takeIf { it.isNotBlank() }?.let { preview -> addView(TextView(this@MainActivity).apply { text = preview; textSize = 13f; maxLines = 3; setTextColor(MoteUi.muted) }) }
-                            setOnClickListener { startActivity(Intent(this@MainActivity, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")).putExtra("recordSource", item.optString("source")).putExtra("recordDate", java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString())) }
-                        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+                        addCaptureRow(list, item, false)
                     }
+                    list.background = if (files.isEmpty() && items.length() == 0) null else MoteUi.folio(this, 44, false)
+                    for (index in list.childCount - 1 downTo 1) list.addView(View(this).apply { setBackgroundColor(MoteUi.border) }, index, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(44); marginEnd = dp(12) })
                 }.onFailure { label.text = MoteI18n.text("资料暂不可读取，请稍后重试。") }
             }
             if (libraryRefreshPending) { libraryRefreshPending = false; loadLocalLibrary() }
@@ -693,11 +708,16 @@ class MainActivity : MoteActivity() {
 
     private fun buildNotes() {
         page(Page.NOTES, MoteI18n.text("为此刻，留下一句话"))
+        val pageContent = content
+        val draft = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.folio(this@MainActivity); setPadding(dp(16), dp(16), dp(16), dp(4)) }
+        pageContent.addView(draft); content = draft
         val app = applicationContext
         val io = QuickNotes.io
         val task = UiTask(this, io, ownsExecutor = false)
         val note = field(MoteI18n.text("正在想什么"), "", MoteI18n.text("记下此刻的想法…"), multiline = true)
         note.minLines = 7; note.gravity = Gravity.TOP
+        note.background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
+        note.setPadding(0, dp(8), 0, dp(12)); note.setLineSpacing(dp(6).toFloat(), 1f)
         note.filters = arrayOf(android.text.InputFilter.LengthFilter(100000))
         val progress = text(MoteI18n.text("正在读取草稿…"), 13, MoteUi.muted)
         var changingDraft = false
@@ -763,6 +783,7 @@ class MainActivity : MoteActivity() {
                     }
                 }.show()
         }
+        content = pageContent
         text(MoteI18n.text("图片与语音附件"), 13, MoteUi.accent).apply {
             minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
             contentDescription = MoteI18n.text("在中央随手记中添加附件")
@@ -1411,7 +1432,7 @@ class MainActivity : MoteActivity() {
     }
     private fun page(page: Page, subtitle: String) {
         buildingPage = page
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(28)) }
+        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(if (page == Page.OVERVIEW) 10 else 18), dp(18), dp(28)) }
         val scroll = ScrollView(this).apply {
             isFillViewport = true; clipToPadding = false; visibility = View.GONE
             addView(content); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -1422,9 +1443,9 @@ class MainActivity : MoteActivity() {
                 minHeight = dp(44); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
                 contentDescription = MoteI18n.text("返回{0}", Page.valueOf(page.parent).title); setOnClickListener { showPage(Page.valueOf(page.parent)) }
             }
-        } else if (page != Page.OVERVIEW) text("MOTE", 11, MoteUi.accent).apply { letterSpacing = .18f }
-        text(if (page == Page.OVERVIEW) MoteI18n.text("个人资料库") else page.title, 30).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }
-        text(subtitle, 14, MoteUi.muted).apply { isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null }
+        } else if (page != Page.OVERVIEW && page != Page.LIBRARY) text("MOTE", 11, MoteUi.accent).apply { letterSpacing = .18f }
+        text(if (page == Page.OVERVIEW) MoteI18n.text("个人资料库") else page.title, if (page == Page.OVERVIEW || page == Page.LIBRARY) 26 else 30).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(8) }
+        text(subtitle, if (page == Page.OVERVIEW) 13 else 14, MoteUi.muted).apply { isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null }
     }
 
     private fun ensurePage(page: Page) {
@@ -1643,6 +1664,7 @@ class MainActivity : MoteActivity() {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(15), dp(16), dp(15), dp(16)); background = MoteUi.clickable(this@MainActivity)
             tag = "menu:$label"; isFocusable = true; contentDescription = "$label，$description"; setOnClickListener { action() }
+            if (buildingPage == Page.OVERVIEW) background = android.graphics.drawable.LayerDrawable(arrayOf(MoteUi.folio(this@MainActivity, 54), MoteUi.folioAction(this@MainActivity)))
         }
         row.addView(ImageView(this).apply {
             setImageDrawable(MoteNavigationIcon(this@MainActivity, icon, true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
@@ -1915,7 +1937,7 @@ class MainActivity : MoteActivity() {
         buttonTintList = android.content.res.ColorStateList.valueOf(MoteUi.accent)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }; content.addView(this); track(this, label)
     }
-    private fun button(label: String, primary: Boolean = false, action: () -> Unit) = MoteUi.button(Button(this), primary).apply {
+    private fun button(label: String, primary: Boolean = false, action: () -> Unit) = MoteUi.button(Button(this), primary, if (buildingPage in setOf(Page.OVERVIEW, Page.LIBRARY, Page.NOTES)) 4 else 24).apply {
         text = label; setOnClickListener { action() }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }; content.addView(this)
     }

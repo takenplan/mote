@@ -37,13 +37,21 @@ object MoteUi {
         ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius), shape(context, Color.WHITE, radius)
     )
 
-    fun button(button: Button, primary: Boolean = false) = button.apply {
+    /** A shared folio: the gutter belongs to real source glyphs, never a processing stage. */
+    fun folio(context: Context, gutter: Int = 0, outline: Boolean = true): Drawable = MoteFolioDrawable(context, gutter, outline)
+
+    fun folioAction(context: Context) = RippleDrawable(
+        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))),
+        null, shape(context, Color.WHITE, 4)
+    )
+
+    fun button(button: Button, primary: Boolean = false, radius: Int = 24) = button.apply {
         isAllCaps = false; textSize = 14f; minHeight = context.moteDp(50)
         setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, if (primary) Color.WHITE else accent)))
         setTag(R.id.mote_primary, primary)
         backgroundTintList = null; background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, MoteUi.background, 24))
-            addState(intArrayOf(), clickable(context, if (primary) accent else tint, 24))
+            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, MoteUi.background, radius))
+            addState(intArrayOf(), clickable(context, if (primary) accent else tint, radius))
         }
         setPadding(context.moteDp(14), context.moteDp(12), context.moteDp(14), context.moteDp(12))
         typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -76,6 +84,25 @@ object MoteUi {
         if (view is CompoundButton) { view.setTextColor(ink); view.textSize = 15f; view.buttonTintList = ColorStateList.valueOf(accent); view.minHeight = view.context.moteDp(48) }
         if (view is ViewGroup) for (index in 0 until view.childCount) styleTree(view.getChildAt(index))
     }
+}
+
+private class MoteFolioDrawable(context: Context, gutter: Int, private val outline: Boolean) : Drawable() {
+    private val rule = context.moteDp(gutter).toFloat()
+    private val radius = context.moteDp(4).toFloat()
+    private val stroke = context.resources.displayMetrics.density
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    private var drawableAlpha = 255
+    override fun draw(canvas: Canvas) {
+        val rect = android.graphics.RectF(bounds).apply { inset(stroke / 2, stroke / 2) }
+        paint.style = Paint.Style.FILL; paint.color = Color.WHITE; paint.alpha = drawableAlpha
+        canvas.drawRoundRect(rect, radius, radius, paint)
+        paint.style = Paint.Style.STROKE; paint.strokeWidth = stroke; paint.color = MoteUi.border; paint.alpha = drawableAlpha
+        if (outline) canvas.drawRoundRect(rect, radius, radius, paint)
+        if (rule > 0) canvas.drawLine(bounds.left + rule, rect.top, bounds.left + rule, rect.bottom, paint)
+    }
+    override fun setAlpha(alpha: Int) { drawableAlpha = alpha; invalidateSelf() }
+    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
+    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
 fun Context.moteDp(value: Int) = (value * resources.displayMetrics.density).toInt()

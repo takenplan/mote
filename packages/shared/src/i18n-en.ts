@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "文件、屏幕记录与想法，先存本机。连接中央整理后，可搜索和提问。": "Save files, screen records and thoughts locally. Connect to central and process them to search or ask.",
   "已填写的中央地址：{0}；连接并确认后才会发送。": "Configured central address: {0}. Sending starts only after connecting and confirming.",
 
   "暂不可用": "Temporarily unavailable",
