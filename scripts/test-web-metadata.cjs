@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 // Real central and Chromium UI, using generated records only; no personal screen capture.
 const {app,BrowserWindow}=require('electron');

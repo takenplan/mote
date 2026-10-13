@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Real browser + isolated central node. All providers and 400 tasks are generated fixtures. */
 const {app,BrowserWindow}=require('electron');

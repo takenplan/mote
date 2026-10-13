@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 const {app,BrowserWindow}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),http=require('node:http'),os=require('node:os');
 // Explicit fixture input only. All API traffic stays on the supplied loopback fixture central.

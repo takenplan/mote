@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Isolated browser + real API with generated answers. Never opens a personal archive. */
 const {app,BrowserWindow}=require('electron');

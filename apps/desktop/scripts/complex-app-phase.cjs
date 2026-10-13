@@ -1,3 +1,4 @@
+require('../../../scripts/fixture-background.cjs');
 const { app, BrowserWindow } = require('electron');
 const { readFileSync, writeFileSync } = require('node:fs');
 const assert = require('node:assert/strict');

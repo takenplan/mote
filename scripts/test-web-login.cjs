@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Real central + browser, generated tokens and notes only; no personal capture or model calls. */
 const {app,BrowserWindow}=require('electron');

@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Generated-only real Electron + HTTP owner declaration journey. No screenshots. */
 const {app,BrowserWindow}=require('electron');

@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Opt-in real renderer/API/background import journey with generated evidence only.
  * Run after build: electron scripts/test-import-memory-ui.cjs
