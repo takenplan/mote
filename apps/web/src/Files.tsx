@@ -1,4 +1,4 @@
-import {dialogueGroups} from './dialogue-groups';
+import {dialogueGroups,transcriptChunkText} from './dialogue-groups';
 import {failureMessage} from './failure-message';
 import {ImageProgress} from './ImageProgress';
 import {formatEvidenceRef} from '@mote/shared';
@@ -32,8 +32,7 @@ export function Files({api,onOpen}:{api:Api;onOpen:(id:string)=>void}){
 function SegmentCorrection({api,id,chunk,onSaved}:{api:Api;id:string;chunk:Capture;onSaved:()=>void}){
  const [editing,setEditing]=useState(false),[text,setText]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const evidence=chunk.fileEvidence;
- const prefix=evidence?.speaker?`[${evidence.speaker}] `:'';
- const originalText=prefix&&chunk.ocrText.startsWith(prefix)?chunk.ocrText.slice(prefix.length):chunk.ocrText;
+ const originalText=transcriptChunkText(chunk);
  const alive=useRef(true);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
  if(!evidence)return null;
@@ -101,7 +100,7 @@ function FileDetailContents({api,id,startMs=0,onOpen}:{api:Api;id:string;startMs
  {file.artifacts.some(a=>['transcript','text','image-text'].includes(a.kind))&&<FileReview key={id} api={api} id={id} artifacts={file.artifacts} onChanged={async()=>{resetChunks();await load();}}/>}
  {file.artifacts.filter(a=>a.kind==='summary').map(a=><div key={a.id}><h4>{moteText("模型摘要")}</h4>{a.sections?.map((s,i)=><AnswerMarkdown key={i} onOpen={onOpen} answer={{answer:s.answer,runId:a.id,trace:[],citations:s.citationIds.map(id=>({id,capturedAt:file.item.observedAt,appName:file.item.title,excerpt:''}))}}/>)}</div>)}
  {rawTranscript&&<p>{moteText("原始转写已保留，尚未校正；说话人分离与对话整理的结果另行生成。")}</p>}
- {chunks.length>0&&<h4>{rawTranscript?moteText("原始转写 · 未校正"):moteText("转写 / 提取片段")}</h4>}{dialogueGroups(chunks).map(group=>group.length===1?renderChunk(group[0]):<div key={group[0].id} className="source-item"><p>{group[0].fileEvidence?.speakerAttribution?.name??group[0].fileEvidence?.speaker} · {moteText("{0} 秒",Math.floor(group[0].fileEvidence!.startMs!/1000))}{group.some(c=>c.fileEvidence?.uncertain)&&` · ${moteText('含不确定片段')}`}{group[0].fileEvidence?.overlap&&` · ${moteText('重叠说话')}`}</p><p className="file-text">{group.map(c=>c.ocrText).join('')}</p><details><summary>{moteText('展开 {0} 个原始片段',group.length)}</summary>{group.map(renderChunk)}</details></div>)}
+ {chunks.length>0&&<h4>{rawTranscript?moteText("原始转写 · 未校正"):moteText("转写 / 提取片段")}</h4>}{dialogueGroups(chunks).map(group=>group.length===1?renderChunk(group[0]):<div key={group[0].id} className="source-item"><p>{group[0].fileEvidence?.speakerAttribution?.name??group[0].fileEvidence?.speaker} · {moteText("{0} 秒",Math.floor(group[0].fileEvidence!.startMs!/1000))}{group.some(c=>c.fileEvidence?.uncertain)&&` · ${moteText('含不确定片段')}`}{group[0].fileEvidence?.overlap&&` · ${moteText('重叠说话')}`}</p><p className="file-text">{group.map(transcriptChunkText).join('')}</p><details><summary>{moteText('展开 {0} 个原始片段',group.length)}</summary>{group.map(renderChunk)}</details></div>)}
  {offset!==null&&textArtifact&&<button className="button" disabled={chunksLoading} onClick={()=>void loadChunks()}>{chunks.length?moteText("继续展开"):rawTranscript?moteText("展开原始转写（未校正）"):moteText("展开转写 / 原文片段")}</button>}
  {error&&<p role="alert" className="error-banner">{error}</p>}</section>;
 }
