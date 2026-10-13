@@ -23,6 +23,7 @@ const review = args.includes('--review') || args.includes('--review-hold');
 const artRoundIndex=args.indexOf('--art-round'),artRound=artRoundIndex>=0?Number(args[artRoundIndex+1]):undefined;
 if(artRound!==undefined)assert.ok(Number.isInteger(artRound)&&artRound>=1&&artRound<=5,'A sequential art round is 1 through 5');
 const repo = resolve(__dirname, '..');
+const captureScriptCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).stdout.trim();
 const root = mkdtempSync(join(tmpdir(), 'mote-ui-eval-'));
 const output = join(repo, '.mote', 'ui-iterations', round);
 mkdirSync(output, { recursive: true, mode: 0o700 });
@@ -319,6 +320,7 @@ async function authenticate(token) {
 }
 async function artReaderMatrix(){
   for(const language of ['zh-CN','en']){
+    window.setSize(1440,1000);await until(()=>js('innerWidth===1440'),'language selector desktop viewport');
     await route('today','.home-page');if(await js('document.documentElement.lang')!==language)await chooseLanguage(language,true,'.home-page');
     await route('library/notes','#note-text');
     await until(()=>js(`(()=>{const item=[...document.querySelectorAll('.note-card')].find(item=>item.querySelector('p')?.textContent===${JSON.stringify(savedArtOriginal)});if(!item)return false;item.click();return true;})()`),'same saved candidate opens original');
@@ -503,7 +505,7 @@ async function run() {
     const key=JSON.stringify([record.scene,record.variant,record.language]);
     assert.equal(selectedCoordinates.has(key),false,'Each selected comparison scene is unique: '+key);selectedCoordinates.add(key);
   }
-  const sourceCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).stdout.trim();
+  const sourceCommit=captureScriptCommit;
   const coreScenes=['home','content','note','detail','ask','settings','providers','import'];
   const coreCaptures=artRound?captures.filter(item=>coreScenes.includes(item.scene)&&['normal','compact'].includes(item.variant)&&item.reviewSelection):[];
   if(artRound){assert.equal(coreCaptures.length,32);assert.equal(new Set(coreCaptures.map(item=>[item.scene,item.language,item.variant].join(':'))).size,32);for(const item of coreCaptures){item.artDirectionCore=true;item.sceneKey=item.scene;item.sourceCommit=sourceCommit;}}

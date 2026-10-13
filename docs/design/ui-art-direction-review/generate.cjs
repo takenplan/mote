@@ -1,19 +1,30 @@
 /** Import exact ready screenshots from five actual generated product builds. */
 const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict');
+const {spawnSync}=require('node:child_process');
 const repo=path.resolve(__dirname,'../../..'),out=path.join(repo,'.mote/ui-art-direction-review');
 const inputs=JSON.parse(fs.readFileSync(path.join(__dirname,'sources.json'),'utf8'));
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 fs.mkdirSync(path.join(out,'assets'),{recursive:true});
 const metrics=['Design quality','Originality','Craft','Functionality','首次理解与重要功能完整性','页面职责与任务聚焦','视觉一致性与平台适配','跨端统一美术风格'];
 const scenes=[['home','首页'],['content','已有内容'],['note','随手记'],['detail','原文阅读'],['ask','问一问'],['settings','设置'],['connection','连接配置'],['import','导入文件']].map(([id,title])=>({id,title}));
-const manifest={generatedOnly:true,artifactType:'five-round-art-direction-review',metrics,scenes,rounds:inputs.rounds,platforms:{web:{title:'Web',sizes:{normal:'1440 px',compact:'390 px'}},mac:{title:'Mac',sizes:{normal:'1140 × 840',compact:'820 × 620'}},android:{title:'Android',sizes:{normal:'411 dp',compact:'320 dp / 130% 字体'}}},assets:[]};
+const manifest={generatedOnly:true,artifactType:'five-round-art-direction-review',metrics,scenes,rounds:inputs.rounds,platforms:{web:{title:'Web',sizes:{normal:'1440 px',compact:'390 px'}},mac:{title:'Mac',sizes:{normal:'1140 × 808',compact:'820 × 588'}},android:{title:'Android',sizes:{normal:'411 dp',compact:'320 dp / 130% 字体'}}},assets:[]};
 function add(round,platform,scene,variant,language,file,metadata){
  assert(metadata.readiness?.ready&&['content','empty','restriction'].includes(metadata.readiness.state)&&metadata.readiness.page,'Ready target content is required: '+file);
  assert.notEqual(metadata.captureKind,'dialog-fragment');
  const b=fs.readFileSync(file);assert.equal(b.subarray(1,4).toString(),'PNG');assert.equal(hash(b),metadata.sha256,'Original PNG hash');
  const name=[round.id,platform,scene,variant,language].join('-')+'.png';
  assert(!manifest.assets.some(a=>a.src==='assets/'+name),'Duplicate selected label');fs.writeFileSync(path.join(out,'assets',name),b);
- manifest.assets.push({round:round.id,platform,scene,variant,language,src:'assets/'+name,width:b.readUInt32BE(16),height:b.readUInt32BE(20),sha256:hash(b),readiness:metadata.readiness,captureKind:metadata.captureKind||'app-window',sourceCommit:round.sourceCommit,source:path.relative(repo,file),note:metadata.note||''});
+ manifest.assets.push({round:round.id,platform,scene,variant,language,src:'assets/'+name,width:b.readUInt32BE(16),height:b.readUInt32BE(20),sha256:hash(b),readiness:metadata.readiness,captureKind:metadata.captureKind||'app-window',sourceCommit:round[platform]?.sourceCommit||round.sourceCommit,candidateCommit:round.sourceCommit,source:path.relative(repo,file),note:metadata.note||''});
+}
+function verifyProducer(round,platform,data){
+ const producer=round[platform].sourceCommit||round.sourceCommit;assert.equal(data.sourceCommit,producer,platform+' actual producer identity');
+ if(producer!==round.sourceCommit){
+  const result=spawnSync('git',['diff','--name-only',producer,round.sourceCommit],{cwd:repo,encoding:'utf8'});assert.equal(result.status,0);
+  const changed=result.stdout.trim().split('\n').filter(Boolean),otherApps=['web','desktop','android'].filter(p=>p!==({mac:'desktop'}[platform]||platform));
+  const fixtureOnly=['scripts/test-ui-iterations.cjs'];
+  assert(changed.every(f=>f.startsWith('docs/')||fixtureOnly.includes(f)||otherApps.some(p=>f.startsWith('apps/'+p+'/'))),'Unchanged platform and all common build inputs are required');
+  round[platform].equivalence={verified:true,producerCommit:producer,candidateCommit:round.sourceCommit,changedPaths:changed,nonProductFixturePaths:changed.filter(f=>fixtureOnly.includes(f)),boundary:'Same-round repair only: platform source and all common production build inputs unchanged. Original producer manifest and PNG identities are retained; fixture orchestration is separately identified.'};
+ }
 }
 const nativeScenes={home:'home',content:'content-populated',note:'note',detail:'home-note-original',ask:'ask',settings:'settings',connection:'connection',import:'import-local-task'};
 const macScenes={home:'home',content:'content',note:'note-composer',detail:'reader',ask:'ask-disconnected',settings:'settings',connection:'connection',import:'import'};
@@ -29,7 +40,7 @@ for(const round of inputs.rounds){
  }
  if(round.web){
   const data=JSON.parse(fs.readFileSync(path.resolve(repo,round.web.manifest)));assert(data.passed&&data.generatedOnly);
-  assert.equal(data.sourceCommit,round.sourceCommit,'Web commit identity');
+  verifyProducer(round,'web',data);
   for(const c of data.coreCaptures||data.captures.filter(c=>c.reviewSelection!==false&&['normal','compact'].includes(c.variant))){
    const scene=c.scene==='providers'?'connection':c.scene;if(!scenes.some(s=>s.id===scene))continue;
    add(round,'web',scene,c.variant,c.language,path.resolve(repo,round.web.root,c.name+'.png'),c);
@@ -37,12 +48,12 @@ for(const round of inputs.rounds){
  }
  if(round.mac){
   const data=JSON.parse(fs.readFileSync(path.resolve(repo,round.mac.manifest)));assert(data.generatedOnly&&data.passed);
-  assert.equal(data.sourceCommit,round.sourceCommit,'Mac commit identity');
+  verifyProducer(round,'mac',data);
   for(const c of data.coreCaptures||data.captures){const scene=Object.keys(macScenes).find(key=>macScenes[key]===c.scene);if(!scene)continue;add(round,'mac',scene,c.variant,c.language==='en'?'en':'zh',path.resolve(repo,round.mac.root,c.file),c);}
  }
  if(round.android){
   const data=JSON.parse(fs.readFileSync(path.resolve(repo,round.android.manifest)));assert(data.generatedOnly);assert.equal(data.productApkSha256,round.android.apkSha256);
-  assert.equal(data.sourceCommit,round.sourceCommit,'Android commit identity');
+  verifyProducer(round,'android',data);
   assert.equal(data.matrix.length,4);assert(data.matrix.every(c=>c.passed===3&&c.skipped===0),'Four actual Android conditions');
   const dirs={default:['normal','zh'],english:['normal','en'],compact:['compact','zh'],'compact-english':['compact','en']};
   for(const c of data.images){const parts=c.path.split('/'),[variant,language]=dirs[parts[0]]||[];if(!variant)continue;const scene=Object.keys(nativeScenes).find(key=>nativeScenes[key]+'.png'===parts.at(-1));if(!scene)continue;add(round,'android',scene,variant,language,path.resolve(repo,round.android.root,c.path),c);}

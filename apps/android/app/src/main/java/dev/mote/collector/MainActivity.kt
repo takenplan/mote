@@ -180,7 +180,7 @@ class MainActivity : MoteActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background); moteInsets()
         }
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(16), dp(6), dp(16), dp(6)) }
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(DesignTokens.spacePage), 0, dp(DesignTokens.spacePage), 0) }
         header.addView(TextView(this).apply { text = "Mote"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); setTextColor(MoteUi.ink) }, LinearLayout.LayoutParams(0, -2, 1f))
         val quickNote = MoteUi.button(Button(this).apply {
             text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
@@ -242,25 +242,25 @@ class MainActivity : MoteActivity() {
         content.addView(collection, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
         collection.addView(TextView(this).apply {
             text = MoteI18n.text("添加内容"); MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.muted)
-            setPadding(dp(14), dp(10), dp(14), dp(6))
+            setPadding(dp(DesignTokens.spaceItem), dp(4), dp(DesignTokens.spaceItem), dp(4))
         })
         val inputs = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@MainActivity); clipToOutline = true; setPadding(dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth)) }
         collection.addView(inputs)
         choices.forEachIndexed { index, action ->
                 inputs.addView(LinearLayout(this).apply {
-                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = MoteUi.clickable(this@MainActivity, radius = 0, outline = false)
-                    setPadding(dp(12), dp(6), dp(12), dp(6)); minimumHeight = dp(64)
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.TRANSPARENT, radius = 0, outline = false)
+                    setPadding(dp(DesignTokens.spaceInline), dp(4), dp(DesignTokens.spaceInline), dp(4)); minimumHeight = dp(64)
                     isFocusable = true; tag = "add:${action.name}"; contentDescription = MoteI18n.text(action.titleKey) + "，" + MoteI18n.text(action.subtitleKey)
                     addView(ImageView(this@MainActivity).apply {
                         setImageDrawable(MoteNavigationIcon(this@MainActivity, action.icon, true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
                         background = MoteUi.shape(this@MainActivity, MoteUi.tint, DesignTokens.radiusIndicator, false); setPadding(dp(4), dp(4), dp(4), dp(4))
-                    }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(12) })
+                    }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(DesignTokens.spaceInline) })
                     addView(LinearLayout(this@MainActivity).apply {
                         orientation = LinearLayout.VERTICAL; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
                         addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.titleKey); MoteUi.type(this, DesignTokens.fontRow, medium = true); setTextColor(MoteUi.ink) })
                         addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.subtitleKey); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, dp(4), 0, 0) })
                     }, LinearLayout.LayoutParams(0, -2, 1f))
-                    addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; setTextColor(MoteUi.accent); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(8) })
+                    addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; setTextColor(MoteUi.accent); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(4) })
                     setOnClickListener { openMoteAdd(action) }
                 }, LinearLayout.LayoutParams(-1, -2))
             if (index != choices.lastIndex) inputs.addView(View(this).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(56); marginEnd = dp(12) })
@@ -1421,7 +1421,7 @@ class MainActivity : MoteActivity() {
     }
     private fun page(page: Page, subtitle: String) {
         buildingPage = page
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(if (page == Page.OVERVIEW) 10 else 16), dp(16), dp(28)) }
+        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(DesignTokens.spacePage), dp(if (page == Page.OVERVIEW) 4 else DesignTokens.spacePage), dp(DesignTokens.spacePage), dp(28)) }
         val scroll = ScrollView(this).apply {
             isFillViewport = true; clipToPadding = false; visibility = View.GONE
             addView(content); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -1433,8 +1433,11 @@ class MainActivity : MoteActivity() {
                 contentDescription = MoteI18n.text("返回{0}", Page.valueOf(page.parent).title); setOnClickListener { showPage(Page.valueOf(page.parent)) }
             }
         }
-        text(if (page == Page.OVERVIEW) MoteI18n.text("个人资料库") else page.title, DesignTokens.fontTitleMobile).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(8) }
-        text(subtitle, DesignTokens.fontSupport, MoteUi.muted).apply { isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null }
+        text(if (page == Page.OVERVIEW) MoteI18n.text("个人资料库") else page.title, DesignTokens.fontTitleMobile).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(if (page == Page.OVERVIEW) 4 else DesignTokens.spaceInline) }
+        text(subtitle, DesignTokens.fontSupport, MoteUi.muted).apply {
+            isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null
+            if (page == Page.OVERVIEW) (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(DesignTokens.spaceInline)
+        }
     }
 
     private fun ensurePage(page: Page) {

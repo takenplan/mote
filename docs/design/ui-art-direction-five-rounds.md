@@ -6,6 +6,8 @@
 
 [Linear 官方重设计记录](https://linear.app/now/how-we-redesigned-the-linear-ui)展示了通过共同界面框架、表面和文字层级降低噪声、提高导航密度的实践。[Fluent 排版](https://fluent2.microsoft.design/typography)与[布局](https://fluent2.microsoft.design/layout)说明跨平台可以共享角色、节距和对齐关系，同时适配平台尺度。[Android 主题](https://developer.android.com/design/ui/mobile/guides/styles/themes)、[设置模式](https://developer.android.com/design/ui/mobile/guides/patterns/settings)强调颜色、字体、形状、图标的共同体系及简短设置说明。参考这些原则形成 Mote 的共同体系，不复制其他产品的页面或品牌。
 
+同时检查了较新的官方实践：[2025-05 Androidify 的 Material 3 Expressive](https://android-developers.googleblog.com/2025/05/androidify-building-delightful-ui-with-compose.html) 与 [2025-12 Android AI 示例目录](https://android-developers.googleblog.com/2025/12/explore-ai-on-android-with-our-sample.html)将品牌表达落实到组件、形状与动效体系。依据 Mote 的资料扫描 / 原文阅读任务，本轮采用清晰角色、稳定边界和适度强调，风格判断仍以三端实际呈现及用户反馈为准。这是本项目的设计取舍，不是对风格流行度的测量。
+
 共同方向为清晰、安静、带可辨边界的资料工作台：冷中性色底、白内容面、单一蓝色强调、同一线性图标语法、系统无衬线字体、4 单位节距、规则化表面和按钮。阅读区保留正文 / 来源 / 时间的关系。Web 与 Mac 使用适合桌面的信息密度；Android 保留原生底栏、系统字体缩放、触控和键盘行为。
 
 共享 `packages/shared/design-tokens.json` 从颜色扩展为排版、间距、表面 / 控件 / 阅读圆角和触控角色，由同一生成器输出 CSS 与 Kotlin。标题为桌面 24、手机 22，分组 16，行标题 / 正文 / 动作 14，辅助 13、元信息 12；数字是默认角色尺度，原文阅读和系统字体缩放保留适当适配。
@@ -43,6 +45,8 @@ UNKNOWN：实机、真实采集 / 模型 / 账号、真人理解和完整无障�
 ## 记录与验证
 
 基线固定为 `b52d6275` 与已冻结的反馈后实际截图。五轮分别保存源码提交、token、构建身份、实际 APK / 测试 APK、原始 PNG、内容就绪 JSON、实际旅程、独立八项评价与下一轮取舍。不能将失败的截图包装成完成页。
+
+同一轮只有一个平台需要修复时，其他端可保留该轮已完成的真实构建，明确记录原 producer SHA 与新聚合候选 SHA。必须由实际 `git diff` 证明本端源码及全部共同构建输入逐字未改，并保留原 manifest / PNG 来源；不能将旧 producer SHA 改写为新构建，不能以此借用其他轮的图片。任一本端或共同输入变化均需重建该端。
 
 共同核心矩阵覆盖首页、内容、随手记、原文、问一问、设置、连接和导入，中英文 × 常规 / 窄屏；Android 窄屏含 130% 字体。每轮实际保存并核对原文、设置职责与原任务返回；重点变化补测相应状态。首末轮详细验证草稿 / 生命周期 / 键盘及限制，其他轮不能仅审缩略图。
 
