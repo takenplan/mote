@@ -60,7 +60,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
   const heading = (target: Page) => target === 'overview' ? moteText('首页') : document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
-  const title = heading(page), sectionTitle = heading(selected);
+  const title = heading(page), sectionTitle = heading(page==='connection'&&navigation.backTarget==='ask'?'ask':selected);
   byId('workspace-location').textContent = page === selected ? title : `${sectionTitle} / ${title}`;
   byId('workspace-back').hidden = !navigation.canGoBack;
   updateNoteAction();

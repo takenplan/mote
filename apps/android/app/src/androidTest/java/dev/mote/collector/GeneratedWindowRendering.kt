@@ -4,11 +4,13 @@ import android.app.Activity
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Rect
 import android.os.Build
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.TextView
+import android.widget.CompoundButton
 import androidx.test.platform.app.InstrumentationRegistry
 import java.io.File
 import org.json.JSONArray
@@ -26,6 +28,126 @@ internal object GeneratedWindowRendering {
             "正在读取详情…", "记录已读取，正在加载图片…", "正在读取 App 与时间…", "加载预览…").map { MoteI18n.text(it) }.toSet() +
             listOf("本机记录", "中央归档").map { MoteI18n.text("正在读取{0}…", MoteI18n.text(it)) }
         return views(root).filterIsInstance<TextView>().none { it.isShown && it.text.toString() in pending }
+    }
+
+    private fun rectangle(rect: Rect) = JSONObject().put("left", rect.left).put("top", rect.top)
+        .put("right", rect.right).put("bottom", rect.bottom).put("width", rect.width()).put("height", rect.height())
+
+    private fun fullBounds(view: View): Rect {
+        val position = IntArray(2); view.getLocationOnScreen(position)
+        return Rect(position[0], position[1], position[0] + view.width, position[1] + view.height)
+    }
+
+    private fun viewGeometry(view: View): JSONObject {
+        val visible = Rect()
+        val hasVisibleRect = view.getGlobalVisibleRect(visible)
+        val params = view.layoutParams
+        return JSONObject().put("class", view.javaClass.name).put("id", view.id)
+            .put("resourceId", if (view.id == View.NO_ID) JSONObject.NULL else runCatching { view.resources.getResourceName(view.id) }.getOrNull() ?: JSONObject.NULL)
+            .put("fullBoundsScreen", rectangle(fullBounds(view))).put("globalVisibleRect", rectangle(visible))
+            .put("hasGlobalVisibleRect", hasVisibleRect).put("isShown", view.isShown).put("isLaidOut", view.isLaidOut)
+            .put("isLayoutRequested", view.isLayoutRequested)
+            .put("layoutBounds", rectangle(Rect(view.left, view.top, view.right, view.bottom)))
+            .put("scrollX", view.scrollX).put("scrollY", view.scrollY)
+            .put("translationX", view.translationX).put("translationY", view.translationY)
+            .put("padding", JSONObject().put("left", view.paddingLeft).put("top", view.paddingTop)
+                .put("right", view.paddingRight).put("bottom", view.paddingBottom))
+            .put("layoutParams", if (params == null) JSONObject.NULL else JSONObject().put("class", params.javaClass.name)
+                .put("width", params.width).put("height", params.height).apply {
+                    if (params is ViewGroup.MarginLayoutParams) put("margins", JSONObject().put("left", params.leftMargin)
+                        .put("top", params.topMargin).put("right", params.rightMargin).put("bottom", params.bottomMargin))
+                })
+            .apply {
+                if (view is ViewGroup) {
+                    put("layoutMode", view.layoutMode).put("clipChildren", view.clipChildren).put("clipToPadding", view.clipToPadding)
+                }
+            }
+    }
+
+    private fun rgba(pixel: Int) = JSONObject().put("argbHex", String.format("#%08x", pixel))
+        .put("red", Color.red(pixel)).put("green", Color.green(pixel)).put("blue", Color.blue(pixel)).put("alpha", Color.alpha(pixel))
+
+    private fun colorDistance(first: Int, second: Int) = maxOf(kotlin.math.abs(Color.red(first) - Color.red(second)),
+        kotlin.math.abs(Color.green(first) - Color.green(second)), kotlin.math.abs(Color.blue(first) - Color.blue(second)))
+
+    /** Compare actual child pixels with the same overlay draw; property-only checks miss parent clipping. */
+    private fun dialogButtons(overlay: View, appBitmap: Bitmap, origin: IntArray, failures: MutableList<String>): JSONArray {
+        val evidence = JSONArray()
+        val actionIds = setOf(android.R.id.button1, android.R.id.button2, android.R.id.button3)
+        for (button in views(overlay).filter { it.isShown && it.id in actionIds && it !is CompoundButton }) {
+            val full = fullBounds(button)
+            val visible = Rect()
+            val hasVisibleRect = button.getGlobalVisibleRect(visible)
+            val errors = mutableListOf<String>()
+            val geometry = viewGeometry(button)
+            val ancestors = JSONArray()
+            var ancestor = button.parent
+            while (ancestor is View) {
+                ancestors.put(viewGeometry(ancestor))
+                ancestor = ancestor.parent
+            }
+            val background = button.background
+            geometry.put("label", (button as? TextView)?.text?.toString() ?: "")
+                .put("ancestors", ancestors)
+                .put("background", if (background == null) JSONObject.NULL else JSONObject()
+                    .put("class", background.javaClass.name).put("bounds", rectangle(background.bounds))
+                    .put("currentClass", background.current.javaClass.name).put("currentBounds", rectangle(background.current.bounds))
+                    .put("opticalInsets", JSONObject().put("left", background.opticalInsets.left).put("top", background.opticalInsets.top)
+                        .put("right", background.opticalInsets.right).put("bottom", background.opticalInsets.bottom)))
+            if (!hasVisibleRect || visible.width() != button.width || visible.height() != button.height) {
+                errors += "Button is clipped: actual=${button.width}x${button.height}, globalVisible=$visible, fullScreen=$full"
+            }
+            if (!button.isLaidOut || button.width <= 0 || button.height <= 0) {
+                errors += "Button has not completed real layout: laidOut=${button.isLaidOut}, requested=${button.isLayoutRequested}, size=${button.width}x${button.height}"
+            } else {
+                val isolated = Bitmap.createBitmap(button.width, button.height, Bitmap.Config.ARGB_8888)
+                try {
+                    button.draw(Canvas(isolated))
+                    val expectedBorder = MoteUi.controlBorder
+                    val tolerance = 32 // Allows edge anti-aliasing while separating #8090a5 from the white surface.
+                    val rows = minOf(button.height, maxOf(4, button.context.moteDp(2) + 1))
+                    val center = button.width / 2
+                    val offset = maxOf(1, button.context.moteDp(2))
+                    val columns = listOf((center - offset).coerceAtLeast(0), center, (center + offset).coerceAtMost(button.width - 1)).distinct()
+                    val samples = JSONArray()
+                    var expectedSamples = 0
+                    var matchedSamples = 0
+                    for (x in columns) {
+                        var columnBorderSamples = 0
+                        for (y in 0 until rows) {
+                            val childPixel = isolated.getPixel(x, y)
+                            val appX = full.left - origin[0] + x
+                            val appY = full.top - origin[1] + y
+                            val inBitmap = appX in 0 until appBitmap.width && appY in 0 until appBitmap.height
+                            val appPixel = if (inBitmap) appBitmap.getPixel(appX, appY) else null
+                            val childIsBorder = Color.alpha(childPixel) >= 192 && colorDistance(childPixel, expectedBorder) <= tolerance
+                            val appIsBorder = appPixel != null && Color.alpha(appPixel) >= 192 && colorDistance(appPixel, expectedBorder) <= tolerance
+                            val difference = appPixel?.let { colorDistance(childPixel, it) }
+                            val preserved = childIsBorder && appIsBorder && difference != null && difference <= tolerance
+                            samples.put(JSONObject().put("buttonX", x).put("buttonY", y).put("appBitmapX", appX).put("appBitmapY", appY)
+                                .put("overlayX", full.left - fullBounds(overlay).left + x).put("overlayY", full.top - fullBounds(overlay).top + y)
+                                .put("isolatedButtonDraw", rgba(childPixel)).put("actualOverlayDraw", appPixel?.let(::rgba) ?: JSONObject.NULL)
+                                .put("isolatedIsControlBorder", childIsBorder).put("overlayIsControlBorder", appIsBorder)
+                                .put("maxRgbDifference", difference ?: JSONObject.NULL).put("preserved", preserved))
+                            if (childIsBorder) {
+                                columnBorderSamples++; expectedSamples++
+                                if (preserved) matchedSamples++
+                                else errors += "Top border lost at button($x,$y)/app($appX,$appY): child=${rgba(childPixel)}, overlay=${appPixel?.let(::rgba)}, maxRgbDifference=$difference"
+                            }
+                        }
+                        if (columnBorderSamples == 0) errors += "Isolated button.draw has no control border in top $rows rows at x=$x"
+                    }
+                    geometry.put("topEdgePixels", JSONObject().put("comparison", "button.draw versus actual overlay.draw in the application window bitmap")
+                        .put("expectedControlBorder", rgba(expectedBorder)).put("rgbTolerance", tolerance).put("minimumAlpha", 192)
+                        .put("topRows", rows).put("columns", JSONArray(columns)).put("expectedBorderSamples", expectedSamples)
+                        .put("preservedBorderSamples", matchedSamples).put("samples", samples))
+                } finally { isolated.recycle() }
+            }
+            geometry.put("passed", errors.isEmpty()).put("errors", JSONArray(errors))
+            evidence.put(geometry)
+            failures.addAll(errors.map { "${button.javaClass.simpleName}#${button.id} ${(button as? TextView)?.text}: $it" })
+        }
+        return evidence
     }
     fun save(activity: Activity, directory: File, name: String, overlays: List<View> = emptyList()) {
         require(activity.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
@@ -70,6 +192,7 @@ internal object GeneratedWindowRendering {
             val canvas = Canvas(bitmap)
             base.draw(canvas)
             val windows = JSONArray()
+            val geometryFailures = mutableListOf<String>()
             for (overlay in overlays) {
                 require(overlay !== base && overlay.isShown && overlay.width > 0 && overlay.height > 0)
                 val attributes = requireNotNull(overlay.layoutParams as? WindowManager.LayoutParams)
@@ -80,18 +203,21 @@ internal object GeneratedWindowRendering {
                 canvas.translate((rectangle.getInt("left") - origin[0]).toFloat(), (rectangle.getInt("top") - origin[1]).toFloat())
                 overlay.draw(canvas)
                 canvas.restore()
-                windows.put(rectangle.put("dimAmount", dim).put("flags", attributes.flags))
+                windows.put(rectangle.put("dimAmount", dim).put("flags", attributes.flags)
+                    .put("dialogButtons", dialogButtons(overlay, bitmap, origin, geometryFailures)))
             }
             File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             val configuration = activity.resources.configuration
             val metadata = JSONObject().put("captureKind", "application-windows-own-view")
                 .put("generatedOnly", true).put("secureWindow", true)
-                .put("readiness", JSONObject().put("ready", true).put("page", page).put("state", state).put("marker", actualMarker))
+                .put("readiness", JSONObject().put("ready", geometryFailures.isEmpty()).put("page", page).put("state", state).put("marker", actualMarker))
                 .put("baseWindow", bounds(base)).put("overlayWindows", windows)
+                .put("dialogButtonGeometry", JSONObject().put("passed", geometryFailures.isEmpty()).put("errors", JSONArray(geometryFailures)))
                 .put("language", MoteI18n.language()).put("screenWidthDp", configuration.screenWidthDp)
                 .put("densityDpi", configuration.densityDpi).put("fontScale", configuration.fontScale)
                 .put("actualIme", base.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
             File(directory, "$name.json").writeText(metadata.toString(2))
+            check(geometryFailures.isEmpty()) { "Real dialog button geometry failed for $name; evidence saved in ${File(directory, "$name.json")}: ${geometryFailures.joinToString("; ")}" }
         } finally { bitmap.recycle() }
     }
 }

@@ -11,6 +11,8 @@ object DesignTokens {
     val accentHover = android.graphics.Color.parseColor("#254ba7")
     val tint = android.graphics.Color.parseColor("#eaf0fc")
     val border = android.graphics.Color.parseColor("#cad3df")
+    val controlBorder = android.graphics.Color.parseColor("#8090a5")
+    val divider = android.graphics.Color.parseColor("#e0e6ef")
     val success = android.graphics.Color.parseColor("#28734d")
     val warning = android.graphics.Color.parseColor("#966017")
     val danger = android.graphics.Color.parseColor("#b83c45")

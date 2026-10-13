@@ -32,7 +32,6 @@ class MainActivity : MoteActivity() {
     private var permissionReturnPage = Page.SETTINGS
     private enum class ConnectionOrigin { LOCAL_ASK, CENTRAL_CALLER }
     private var connectionOrigin: ConnectionOrigin? = null
-    private val pageBackLinks = mutableMapOf<Page, TextView>()
     private var applyingConnectionFields = false
     private lateinit var status: TextView
     private lateinit var captureTitle: TextView
@@ -54,6 +53,8 @@ class MainActivity : MoteActivity() {
     private lateinit var homeHeader: LinearLayout
     private lateinit var headerAddAction: Button
     private lateinit var headerSettingsAction: TextView
+    private lateinit var headerBackAction: TextView
+    private lateinit var headerTitle: TextView
     private var activeMenuGroup: LinearLayout? = null
     private var centralContent: CentralContent? = null
     private var centralState: Bundle? = null
@@ -188,7 +189,14 @@ class MainActivity : MoteActivity() {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background); moteInsets()
         }
         val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(DesignTokens.spacePage), 0, dp(DesignTokens.spacePage), 0) }
-        header.addView(TextView(this).apply { text = "Mote"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); setTextColor(MoteUi.ink) }, LinearLayout.LayoutParams(0, -2, 1f))
+        headerBackAction = TextView(this).apply {
+            text = "‹"; MoteUi.type(this, DesignTokens.fontAction); setTextColor(MoteUi.accent)
+            gravity = Gravity.CENTER; minHeight = dp(DesignTokens.controlHeight); isFocusable = true
+            setOnClickListener { navigatePageBack(currentPage) }
+        }
+        header.addView(headerBackAction, LinearLayout.LayoutParams(dp(DesignTokens.controlHeight), -2))
+        headerTitle = TextView(this).apply { text = "Mote"; tag = "local-page-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); setTextColor(MoteUi.ink) }
+        header.addView(headerTitle, LinearLayout.LayoutParams(0, -2, 1f))
         val quickNote = MoteUi.button(Button(this).apply {
             text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
             setOnClickListener { showMoteAddActions() }
@@ -271,7 +279,7 @@ class MainActivity : MoteActivity() {
                     addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; setTextColor(MoteUi.accent); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(4) })
                     setOnClickListener { openMoteAdd(action) }
                 }, LinearLayout.LayoutParams(-1, -2))
-            if (index != choices.lastIndex) inputs.addView(View(this).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(56); marginEnd = dp(12) })
+            if (index != choices.lastIndex) inputs.addView(View(this).apply { setBackgroundColor(MoteUi.divider) }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(56); marginEnd = dp(12) })
         }
         val previousContent = content
         val recovery = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), 0) }
@@ -1440,14 +1448,7 @@ class MainActivity : MoteActivity() {
             addView(content); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         }
         pages[page] = scroll; pagesHost.addView(scroll, FrameLayout.LayoutParams(-1, -1))
-        if (page.parent != null) {
-            pageBackLinks[page] = text("‹  " + MoteI18n.text("返回上级"), DesignTokens.fontAction, MoteUi.accent).apply {
-                minHeight = dp(DesignTokens.controlHeight); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
-                tag = "local-back:${page.name}"
-                contentDescription = MoteI18n.text("返回{0}", Page.valueOf(page.parent).title); setOnClickListener { navigatePageBack(page) }
-            }
-        }
-        text(if (page == Page.OVERVIEW) MoteI18n.text("个人资料库") else page.title, DesignTokens.fontTitleMobile).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(if (page == Page.OVERVIEW) 4 else DesignTokens.spaceInline) }
+        if (page == Page.OVERVIEW) text(MoteI18n.text("个人资料库"), DesignTokens.fontTitleMobile).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(4) }
         subtitle?.let { text(it, DesignTokens.fontSupport, MoteUi.muted).apply {
             isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null
             if (page == Page.OVERVIEW) (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(DesignTokens.spaceInline)
@@ -1480,6 +1481,7 @@ class MainActivity : MoteActivity() {
                 Page.ABOUT -> buildAbout()
                 else -> buildSettingsPage(page, loadedConfig)
             }
+            pages[page]?.let(MoteUi::styleSelects)
             baseline = baseline + controlValues(controls.filter { controlPages[it] == page })
         } finally { initializing = wasInitializing }
     }
@@ -1507,7 +1509,12 @@ class MainActivity : MoteActivity() {
         }
         val enteringAsk = page == Page.ASK && currentPage != page
         currentPage = page
-        pageBackLinks[page]?.contentDescription = if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.CENTRAL_CALLER)
+        headerTitle.text = if (page == Page.OVERVIEW) "Mote" else page.title
+        headerTitle.setPadding(0, dp(DesignTokens.spaceInline), dp(DesignTokens.spaceInline), dp(DesignTokens.spaceInline))
+        homeHeader.setPadding(dp(if (page == Page.OVERVIEW) DesignTokens.spacePage else 0), 0, dp(DesignTokens.spacePage), 0)
+        headerBackAction.tag = "local-back:${page.name}"
+        headerBackAction.visibility = if (page.parent != null) View.VISIBLE else View.GONE
+        headerBackAction.contentDescription = if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.CENTRAL_CALLER)
             MoteI18n.text("返回上一页") else pageBackTarget(page)?.let { MoteI18n.text("返回{0}", it.title) }
         homeHeader.visibility = if (page == Page.ASK) View.GONE else View.VISIBLE
         headerAddAction.visibility = if (page.belongsToSettings()) View.GONE else View.VISIBLE
@@ -1723,7 +1730,7 @@ class MainActivity : MoteActivity() {
         row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(TextView(this).apply { text = "›"; textSize = 25f; setTextColor(MoteUi.muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(18), -2))
         val group = activeMenuGroup
-        if (group != null && group.childCount > 0) group.addView(View(this).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, dp(DesignTokens.borderWidth)).apply { marginStart = dp(48); marginEnd = dp(DesignTokens.spacePanel) })
+        if (group != null && group.childCount > 0) group.addView(View(this).apply { setBackgroundColor(MoteUi.divider) }, LinearLayout.LayoutParams(-1, dp(DesignTokens.borderWidth)).apply { marginStart = dp(48); marginEnd = dp(DesignTokens.spacePanel) })
         (group ?: content).addView(row, LinearLayout.LayoutParams(-1, -2).apply { if (group == null) bottomMargin = dp(DesignTokens.spaceItem) })
     }
     private fun renderAppRules() {

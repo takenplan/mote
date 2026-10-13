@@ -167,3 +167,58 @@ KEEP：四种平等保存动作、Android原生导航/IME、原文/来源/时间
 **三端已明确 release 给 root**：Web EN Today1440×968DPR2且空草稿；Mac EN Home820×588DPR2，note Save后为空、device/mask已Revert、Import已Cancel、采集停止；Android English420dpi/font1/Home selected、空草稿、preview关闭、未开始采集。只留独立生成记录/一个未配置preset给owner清理。reviewer没有停止或清理root-owned进程；release状态是允许owner收回，不冒充清理已完成。
 
 R1记录完整，下一轮可按上述优先问题继续；用户尚未选择任何候选。
+
+
+## 候选 2 · 扫读与密度
+
+# R2：扫读与密度，独立八项评审
+
+本轮减少了设置和阅读页的重复说明。Mac 与 Android 的原文更早进入视野，设置菜单开始按相关职责成组；配置的完整帮助仍可展开，重要限制和操作直接可见。真实保存、原文回读和来源返回通过，Android Ask 配置返回丢失原任务的问题已在本轮正常与窄屏实操中修正。**美术风格仍有明显断裂，用户尚未选择候选。**
+
+聚合候选 `10d28e60aaaff205d3871594d3fa5a4d07664658`。Web实际 producer为同一提交，Mac/Android实际 producer为 `6854f25904d924b406fdbf1843ae74a5ab420e15`。两提交唯一改动是隐藏 Web fixture 获得键盘焦点的测试前提；Mac1235、Android1349个声明生产输入的实际 Git blob 已由 `/root/preview_r2` 独立重核逐项相同。原 manifest、APK、PNG来源保持原 producer，没有借用前轮图片。本文只使用冻结的R2资料，未使用之后R3 workingtree。
+
+## 八项分数
+
+固定七项依次为设计质量、原创性、工艺、功能性、第一眼清晰与完整、页面职责与聚焦、端内一致性与平台适配。联合项单独直接判断，没有总分、权重或平均。
+
+| 平台 | 设计 | 原创 | 工艺 | 功能 | 第一眼 | 职责/聚焦 | 端内/平台 | 跨端统一美术风格 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Web | 7.5 | 6.5 | 7 | 8 | 7.5 | 8 | 7.5 | 7（联合项） |
+| Mac | 7.5 | 6.5 | 7.5 | 8 | 7.5 | 8 | 7.5 | 7（联合项） |
+| Android | 7.5 | 6.5 | 7 | 8.5 | 7.5 | 8 | 7.5 | 7（联合项） |
+
+联合项 **7/10** 未随轮次自动提高。共同灰白蓝、无衬线、线性图标已成立，信息层次变得接近；Web残留淡绿/橄榄辅助面、重复reader层级，Android灰色Import标题、不同顶栏与own-window对话框U形描边，以及Mac同组菜单图标例外，仍对应固定7分锚点。`/root/preview_r2`亲自合看48张同轮英文共同角色图，未从token哈希相同或平台分数平均推出联合项；详见 `joint-independent-review.md` 与 `joint-visual/index.json`。
+
+## 实际评审与证据
+
+| 范围 | 实际评审者 | 本轮实际范围 |
+| --- | --- | --- |
+| Web | `/root/preview_r2/web_evaluator` | 32核心图独立核hash/尺寸/ready并审四条件；两条独立生成note实际Save、逐字reader与Close，纯Settings/真实Ask origin、命名完整帮助与Provider即时空preset后果，390真实Tab与CR Enter保存。见 `web-independent-review.md` / scores。 |
+| Mac | `/root/preview_r2` | 32核心核验/四条件审图，真实独立两行note、Home/Content两入口逐字原文、展开四阶段、Close同key焦点、Settings职责、Ask配置真实返回、生成文件preview/Cancel。见 `mac-independent-review.md` / scores。 |
+| Android | `/root/preview_r2/android_evaluator` | 86同APK own-window图独立核验/审图；正常与320dp130%实际IME输入保存/逐字原文/Close/真实headerBack、Ask origin与Keep/Discard、直接Settings、完整帮助/同步动作与Close preview。见 `android-independent-review.md` / scores。 |
+| 共同项 | `/root/preview_r2` | 8共同角色×常规/窄屏×3端共48英文图亲自对照；个别端四条件完整审图由各实际评审者完成，不冒充父代理亲自操作子评审运行时。 |
+
+Root handoff预置的 `reviewerTask=/root/preview_r2` 被通用runner原样写入raw trace。Web/Android实际操作者是上表子评审，汇总分别记录 `actualReviewerTask` 和 `rawDeclaredReviewerTask`；原trace不改写。制作代理没有给本轮分数。
+
+Web焦点全边界独立实证：390宽，Save底部709.54CSSpx，outline3+offset3后的边界715.54，小于底栏顶部742；规范CR Enter实际保存且原文相等。隐藏fixture焦点前提及CDP focus emulation按报告明确记录，不能当作前台浏览器/真实系统焦点研究。制作方首次focus失败是隐藏renderer没有获得焦点，保留该测试缺陷记录，不当作产品故障。
+
+Android真实Ask→Connection→headerBack回Ask；Keep editing不丢草稿/origin，Discard后同样回Ask；直接Settings访问回Settings，未虚构Ask来源。正常IME下Save完整可见；compact首次输入后需真实gesture露出Save，应用仍保持IME缩短的视口，完整Save实际成功。PNG只绘制应用自己的窗口，没有系统键盘像素，不用几何单独证明返回父Activity。
+
+Mac保存后Notes出现完成提示，进入Settings时没有遗留提示；但点击Settings前提示已先自然消失，**本轮未独立证明即时跨页抑制时序**，也未注入running/error。该边界已纠正，不能把源码规则写成额外通过。
+
+错误gate/locator及旧壳观察保留并排除完成证明：Web18模块旧门槛只捕获旧Provider壳，原PNG不作为完成页，21按真实模块标题/内容补证；Mac06/12/15/18错误marker均false且无完成PNG，后续根据实际观察补证；Android初始实际为English，错误ZH gate保留诊断后改用真实marker。详见各端报告。没有重写失败raw记录或用它们提高评分。
+
+## R3的具体反馈
+
+1. 把外壳、操作描边、组内分隔分成稳定角色；Android own-window对话框动作上边缺失需定位绘制/裁剪原因并加入真实几何回归，不能先宣称系统渲染故障已证实。
+2. 同职责顶栏、菜单图标和返回提示连续；Android Main/子Activity层级、灰色Import标题，Mac Permissions图标例外与Ask配置breadcrumb应明确修正。
+3. Web残留绿色非状态辅助面应归入共同角色；普通蓝色Delete与正常动作区分。reader重复类型/前置处理说明仍影响正文优先。
+4. Android展开同步的大块同色长文、重复记录类型/近期统计继续压缩层级。Web Library同类项难区分是已记录扫描限制；不能凭空捏造API尚未提供的正文或时间字段。
+
+KEEP：原文/来源/时间、实际处理/发送/保留/离线限制、四个平等保存动作、草稿/返回、完整帮助与明确开始。R2–4按实际核心与受影响变化验证；未重演R1全部生命周期或宣称完整错误状态覆盖。
+
+## 验证边界与释放
+
+没有实机、真实个人采集/账号/传输/模型、真人初看实验或完整无障碍认证。R2未独立重做true200%浏览器缩放、应用重启与完整语言持久性；两语言视觉矩阵来自本轮真实canonical。模拟器、生成资料和fixture不能扩大为这些验证。
+
+**三端均已显式release给Root**：Web中文Today1440×968DPR2、空note/config草稿且focus emulation reset；Mac中文Home1140×808DPR2、note已Save后为空、配置未改、导入Cancel、采集停止；Android英文Home420dpi无override/font1、空草稿/无未保存配置、Collection paused/not started。reviewer没有结束Root-owned进程；Root随后已精确清理Web/Mac与专用AVD开发生成profile，保留AVD继续下一轮。用户尚未选择候选。

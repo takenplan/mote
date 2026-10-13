@@ -92,6 +92,60 @@
         "manifest": ".mote/ui-art-direction/r1/android/image-manifest.json",
         "apkSha256": "5e79f6d515b3e49237e51f1c5d79ca09257c77b7a798a5c300673690e433f91b"
       }
+    },
+    {
+      "id": "r2",
+      "title": "候选 2",
+      "theme": "扫读与密度",
+      "sourceCommit": "10d28e60aaaff205d3871594d3fa5a4d07664658",
+      "status": "reviewed-candidate",
+      "scores": {
+        "web": [
+          7.5,
+          6.5,
+          7,
+          8,
+          7.5,
+          8,
+          7.5
+        ],
+        "mac": [
+          7.5,
+          6.5,
+          7.5,
+          8,
+          7.5,
+          8,
+          7.5
+        ],
+        "android": [
+          7.5,
+          6.5,
+          7,
+          8.5,
+          7.5,
+          8,
+          7.5
+        ]
+      },
+      "jointScore": 7,
+      "notes": "本轮减少设置和阅读页的重复说明，完整帮助仍可展开，重要限制直接可见。Android配置返回保留原任务，窄屏焦点与长标签已实操。仍需统一按钮轮廓、组内分隔和顶栏角色，清理Web残留绿色辅助面与重复阅读层级。",
+      "web": {
+        "root": ".mote/ui-art-direction/r2/web",
+        "manifest": ".mote/ui-art-direction/r2/web/result.json",
+        "sourceCommit": "10d28e60aaaff205d3871594d3fa5a4d07664658"
+      },
+      "mac": {
+        "root": ".mote/ui-art-direction/r2/mac",
+        "manifest": ".mote/ui-art-direction/r2/mac/manifest.json",
+        "sourceCommit": "6854f25904d924b406fdbf1843ae74a5ab420e15"
+      },
+      "android": {
+        "root": ".mote/ui-art-direction/r2/android",
+        "manifest": ".mote/ui-art-direction/r2/android/image-manifest.json",
+        "sourceCommit": "6854f25904d924b406fdbf1843ae74a5ab420e15",
+        "apkSha256": "a93ba288337467b23739890b9886d91656b13e52a236e6ef2e7025f595470062"
+      }
     }
   ]
 }

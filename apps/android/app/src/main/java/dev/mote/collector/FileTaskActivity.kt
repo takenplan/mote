@@ -61,7 +61,7 @@ class FileTaskActivity : MoteActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val state = savedInstanceState
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        body = moteDetailPage(); status = TextView(this)
+        body = moteDetailPage(title = MoteI18n.text("导入文件")); status = TextView(this)
         val id = intent.getStringExtra("sourceId")
         draftKey = id ?: intent.getStringExtra("addAction").orEmpty().ifBlank { "FILE" }
         if (state?.containsKey("source") == true) {
@@ -141,7 +141,7 @@ class FileTaskActivity : MoteActivity() {
                     }
                 } })
         }
-        body.addView(TextView(this).apply { text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件"); MoteUi.type(this, DesignTokens.fontTitleMobile) })
+        window.decorView.findViewWithTag<TextView>("detail-title").text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件")
         hint(if (source.tree) "持续收集文件夹中的新增文件和修改。" else if (source.syncContinuously) "持续同步这个文件的修改。" else "导入一次，不跟踪后续修改。")
         status = TextView(this); body.addView(status)
         pickButton = Button(this).apply { tag = "file-task:pick"; setOnClickListener { pick() }; body.addView(this) }

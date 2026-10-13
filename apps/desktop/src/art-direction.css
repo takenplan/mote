@@ -13,11 +13,11 @@ main { padding:var(--mote-space-group); padding-bottom:calc(var(--mote-space-gro
 .nav-item { font-size:var(--mote-font-action); min-height:var(--mote-control-height); border-radius:var(--mote-radius-control); color:var(--mote-muted); }
 .nav-item:hover,.nav-item.selected,.nav-item[aria-current=page] { background:var(--mote-tint); color:var(--mote-accent); }
 .workspace-toolbar { padding:var(--mote-space-item) var(--mote-space-group); background:var(--mote-surface); border-color:var(--mote-border); }
-button { font-size:var(--mote-font-action); min-height:var(--mote-control-height); padding:var(--mote-space-inline) var(--mote-space-panel); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-control); background:var(--mote-surface); color:var(--mote-accent); box-shadow:none; }
+button { font-size:var(--mote-font-action); min-height:var(--mote-control-height); padding:var(--mote-space-inline) var(--mote-space-panel); border:var(--mote-border-width) solid var(--mote-control-border); border-radius:var(--mote-radius-control); background:var(--mote-surface); color:var(--mote-accent); box-shadow:none; }
 .primary { color:var(--mote-surface); background:var(--mote-accent); border-color:var(--mote-accent); box-shadow:none; }
 .primary:hover:not(:disabled) { background:var(--mote-accent-hover); border-color:var(--mote-accent-hover); }
-.secondary { color:var(--mote-accent); background:var(--mote-surface); border-color:var(--mote-border); }
-button:hover:not(:disabled),.secondary:hover:not(:disabled) { background:var(--mote-tint); border-color:var(--mote-border); color:var(--mote-accent-hover); }
+.secondary { color:var(--mote-accent); background:var(--mote-surface); border-color:var(--mote-control-border); }
+button:hover:not(:disabled),.secondary:hover:not(:disabled) { background:var(--mote-tint); border-color:var(--mote-accent); color:var(--mote-accent-hover); }
 .primary:hover:not(:disabled) { color:var(--mote-surface); }
 .text-button { background:transparent; border-color:transparent; color:var(--mote-accent); padding:var(--mote-space-inline); }
 .danger { color:var(--mote-danger); border-color:var(--mote-danger); background:var(--mote-surface); }
@@ -25,20 +25,20 @@ button:hover:not(:disabled),.secondary:hover:not(:disabled) { background:var(--m
 .panel,.status-card,.central-status,.source-card,.source-confirmation,.workspace-home,dialog { padding:var(--mote-space-panel); }
 .workspace-home .page-header { margin-bottom:var(--mote-space-group); }
 .home-add-grid,.add-dialog-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:var(--mote-space-item); background:transparent; }
-.home-add-grid .add-choice,.add-dialog-grid .add-choice { min-height:var(--mote-control-height); margin:0; padding:var(--mote-space-panel); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-control); background:var(--mote-surface); box-shadow:none; }
+.home-add-grid .add-choice,.add-dialog-grid .add-choice { min-height:var(--mote-control-height); margin:0; padding:var(--mote-space-panel); border:var(--mote-border-width) solid var(--mote-control-border); border-radius:var(--mote-radius-control); background:var(--mote-surface); box-shadow:none; }
 .add-choice strong,.settings-row-copy strong,.content-row-copy strong,.home-source strong { font-size:var(--mote-font-row); color:var(--mote-ink); }
 .add-choice>span:not(.setting-icon):not(.choice-arrow):not(.choice-index) { font-size:var(--mote-font-support); line-height:1.6; color:var(--mote-muted); }
 .add-choice .setting-icon,.setting-icon,.central-status-icon,.shortcut-icon { color:var(--mote-accent); background:var(--mote-tint); border-radius:var(--mote-radius-control); }
 .choice-index { display:none; }
 .content-row { padding:var(--mote-space-panel); gap:var(--mote-space-item); align-items:flex-start; }
-.content-row+.content-row { border-top:var(--mote-border-width) solid var(--mote-border); }
+.content-row+.content-row { border-top:var(--mote-border-width) solid var(--mote-divider); }
 .content-type,.content-state { border-radius:var(--mote-radius-indicator); background:var(--mote-tint); color:var(--mote-accent); border:0; white-space:normal; overflow-wrap:anywhere; }
 .content-row-copy { min-width:0; }
 .content-row-copy small { overflow-wrap:anywhere; }
 .content-empty { padding:var(--mote-space-panel); font-size:var(--mote-font-support); }
 .note-composer { border-radius:var(--mote-radius-container); border:var(--mote-border-width) solid var(--mote-border); padding:var(--mote-space-panel); }
 .composer-label,label,.field-heading { font-size:var(--mote-font-row); color:var(--mote-ink); }
-input:not([type=checkbox]),textarea,select { font-size:var(--mote-font-body); background:var(--mote-surface); border-color:var(--mote-border); border-radius:var(--mote-radius-control); }
+input:not([type=checkbox]),textarea,select { font-size:var(--mote-font-body); background:var(--mote-surface); border-color:var(--mote-control-border); border-radius:var(--mote-radius-control); }
 .note-composer #note-text { font-size:var(--mote-font-body); line-height:1.8; }
 .settings-row { min-height:var(--mote-control-height); padding:var(--mote-space-panel); gap:var(--mote-space-item); }
 .settings-row:hover { background:var(--mote-tint); }
@@ -73,4 +73,12 @@ input:not([type=checkbox]),textarea,select { font-size:var(--mote-font-body); ba
 .content-reading-dialog summary { font-size:var(--mote-font-support); min-height:var(--mote-control-height); padding-block:var(--mote-space-inline); }
 .content-stages { margin-top:var(--mote-space-inline); gap:var(--mote-space-inline); }
 button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible { outline:3px solid var(--mote-accent); outline-offset:3px; }
+/* R3: four clear action edges without two enclosing Home frames. */
+.workspace-home { border:0; border-radius:0; background:transparent; padding:0; }
+.home-add-grid { border:0; border-radius:0; overflow:visible; }
+.settings-row+.settings-row,.content-reading-dialog>.disclosure,.home-retrieval { border-color:var(--mote-divider); }
+.settings-row:focus-visible { outline-offset:-3px; }
+.chevron,.choice-arrow { color:var(--mote-muted); }
+.note-composer #note-text { border:var(--mote-border-width) solid var(--mote-control-border); border-radius:var(--mote-radius-control); padding:var(--mote-space-item); }
+input:not([type=checkbox]):focus-visible,textarea:focus-visible,select:focus-visible { border-color:var(--mote-accent); }
 @media(max-width:1000px) { main,.workspace-toolbar { padding-inline:var(--mote-space-page); } .home-add-grid .add-choice,.add-dialog-grid .add-choice { min-height:var(--mote-control-height); padding:var(--mote-space-panel); } }

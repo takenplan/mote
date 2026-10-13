@@ -138,6 +138,14 @@ class UiIterationInstrumentedTest {
                     scenario.onActivity { activity ->
                         assertTrue("Secure window remains enabled", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                         val root = activity.window.decorView
+                        if (name in setOf("settings", "connection", "note", "content", "content-populated")) {
+                            val title = views(root).filterIsInstance<TextView>().single { it.isShown && it.tag == "local-page-title" }
+                            val bounds = android.graphics.Rect()
+                            assertTrue("The actual page title is fully visible in its app bar", title.getGlobalVisibleRect(bounds))
+                            assertEquals(title.width, bounds.width()); assertEquals(title.height, bounds.height())
+                            assertFalse("A local page no longer repeats the brand and return label above its title",
+                                views(root).filterIsInstance<TextView>().any { it.isShown && it.text.toString() in setOf("Mote", "‹  " + MoteI18n.text("返回上级")) })
+                        }
                         GeneratedWindowRendering.save(activity, directory, name)
                         File(directory, "$name.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
                     }
@@ -504,6 +512,10 @@ class UiIterationInstrumentedTest {
                     if (Settings(activity).read().server.isNotBlank()) assertTrue(labels.contains(MoteI18n.text("已填写的中央地址：{0}；连接并确认后才会发送。", Settings(activity).read().server)))
                     assertTrue(labels.none { it.startsWith(MoteI18n.text("完整文件的发送目的地：{0}", Settings(activity).read().server)) })
                     val root = activity.window.decorView
+                    val title = views(root).filterIsInstance<TextView>().single { it.isShown && it.tag == "detail-title" }
+                    assertEquals(MoteI18n.text("导入文件"), title.text.toString())
+                    assertEquals("Import has a single page identity in the shared app bar", 1, labels.count { it == MoteI18n.text("导入文件") })
+                    assertEquals(MoteUi.ink, title.currentTextColor)
                     GeneratedWindowRendering.save(activity, directory, "import-local-task")
                     File(directory, "import-local-task.txt").writeText(labels.joinToString("\n"))
                 }

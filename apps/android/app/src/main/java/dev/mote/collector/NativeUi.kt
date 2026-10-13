@@ -27,6 +27,8 @@ object MoteUi {
     val accent = DesignTokens.accent
     val tint = DesignTokens.tint
     val border = DesignTokens.border
+    val controlBorder = DesignTokens.controlBorder
+    val divider = DesignTokens.divider
 
     const val containerRadius = DesignTokens.radiusContainer
     const val readingRadius = DesignTokens.radiusReading
@@ -40,13 +42,13 @@ object MoteUi {
         setTag(R.id.mote_type, size)
     }
 
-    fun shape(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true) = GradientDrawable().apply {
+    fun shape(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true, strokeColor: Int = border) = GradientDrawable().apply {
         setColor(fill); cornerRadius = context.moteDp(radius).toFloat()
-        if (outline) setStroke(context.moteDp(DesignTokens.borderWidth), border)
+        if (outline) setStroke(context.moteDp(DesignTokens.borderWidth), strokeColor)
     }
 
-    fun clickable(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true) = RippleDrawable(
-        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius, outline), shape(context, Color.WHITE, radius, false)
+    fun clickable(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true, strokeColor: Int = border) = RippleDrawable(
+        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius, outline, strokeColor), shape(context, Color.WHITE, radius, false)
     )
 
     enum class ButtonRole { PRIMARY, SECONDARY, TEXT }
@@ -60,17 +62,37 @@ object MoteUi {
         setTag(R.id.mote_primary, primary)
         setTag(R.id.mote_button_role, role)
         backgroundTintList = null; background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, if (role == ButtonRole.TEXT) Color.TRANSPARENT else MoteUi.background, radius, role != ButtonRole.TEXT))
-            addState(intArrayOf(), clickable(context, when (role) { ButtonRole.PRIMARY -> accent; ButtonRole.SECONDARY -> DesignTokens.surface; ButtonRole.TEXT -> Color.TRANSPARENT }, radius, role == ButtonRole.SECONDARY))
+            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, if (role == ButtonRole.TEXT) Color.TRANSPARENT else MoteUi.background, radius, role != ButtonRole.TEXT, controlBorder))
+            addState(intArrayOf(), clickable(context, when (role) { ButtonRole.PRIMARY -> accent; ButtonRole.SECONDARY -> DesignTokens.surface; ButtonRole.TEXT -> Color.TRANSPARENT }, radius, role == ButtonRole.SECONDARY, controlBorder))
         }
         setPadding(context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceInline))
     }
 
     fun field(field: EditText) = field.apply {
         setTextColor(ink); setHintTextColor(muted); type(this, DesignTokens.fontBody)
-        background = shape(context, DesignTokens.surface, DesignTokens.radiusControl, true)
+        backgroundTintList = null
+        background = shape(context, DesignTokens.surface, DesignTokens.radiusControl, true, controlBorder)
         setPadding(context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceItem), context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceItem))
         minHeight = context.moteDp(DesignTokens.controlHeight)
+    }
+
+    fun select(spinner: Spinner) = spinner.apply {
+        backgroundTintList = null
+        background = android.graphics.drawable.LayerDrawable(arrayOf(
+            shape(context, DesignTokens.surface, actionRadius, true, controlBorder),
+            MoteNavigationIcon(context, "dropdown", false)
+        )).apply {
+            setLayerSize(1, context.moteDp(20), context.moteDp(20))
+            setLayerGravity(1, Gravity.END or Gravity.CENTER_VERTICAL)
+            setLayerInset(1, 0, 0, context.moteDp(DesignTokens.spaceInline), 0)
+        }
+        setPadding(context.moteDp(DesignTokens.spaceInline), 0, context.moteDp(36), 0)
+        minimumHeight = context.moteDp(DesignTokens.controlHeight)
+    }
+
+    fun styleSelects(view: View) {
+        if (view is Spinner) select(view)
+        else if (view is ViewGroup) for (index in 0 until view.childCount) styleSelects(view.getChildAt(index))
     }
 
     /** A selected scope or retention choice must remain fully readable, including at 130%. */
@@ -99,6 +121,7 @@ object MoteUi {
     /** Apply the same controls to dynamic native lists and dialog forms. */
     fun styleTree(view: View) {
         when (view) {
+            is Spinner -> select(view)
             is Button -> if (view !is CompoundButton) {
                 action(view, view.getTag(R.id.mote_button_role) as? ButtonRole ?: if (view.getTag(R.id.mote_primary) == true) ButtonRole.PRIMARY else ButtonRole.SECONDARY)
                 (view.layoutParams as? LinearLayout.LayoutParams)?.let { it.bottomMargin = view.context.moteDp(8) }

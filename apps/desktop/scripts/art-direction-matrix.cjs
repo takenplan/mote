@@ -83,7 +83,9 @@ module.exports = async function({window,js,navigate,outputDirectory,round,profil
         journeys.push({name:'actual exact source, note title, expandable processing and Close focus',language,verified:true});
       }
       if(scene==='ask'){
-        await js('document.querySelector("#ask-disconnected [data-nav=connection]").click();true;');await readiness('connection');await js('document.querySelector("#workspace-back").click();true;');await readiness('ask');
+        await js('document.querySelector("#ask-disconnected [data-nav=connection]").click();true;');await readiness('connection');
+        assert.equal(await js('document.querySelector("#workspace-location").textContent.startsWith(document.querySelector("[data-page=ask] [data-page-title]").textContent.trim()+" / ")'),true,'Visible connection breadcrumb names the actual Ask origin');
+        await js('document.querySelector("#workspace-back").click();true;');await readiness('ask');
         journeys.push({name:'actual offline Ask connection and origin return',language,verified:true});
       }
       if(scene==='import')await js('document.querySelector("#source-selection-cancel").click();true;');
