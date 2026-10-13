@@ -49,7 +49,7 @@ export interface FileProcessor {
   /** Compose the selected diarizer, exact alignment and optional semantic grouping. */
   dialogue?:boolean;
   /** Opt into the host-managed dialogue worker's model availability/version. */
-  managedModel?:'dialogue';
+  managedModel?:'dialogue'|'speaker-wespeaker';
   /** Omitted dependencies conservatively include all settings and parameters. */
   dependencies?:{settings:(keyof FileProcessingSettings)[];parameters?:string[]};
   /** Output depends only on original bytes, MIME and the pinned processor inputs,
@@ -70,7 +70,7 @@ export class ProcessorRegistry {
     if(!/^[a-z][a-z0-9.-]{0,99}$/.test(processor.id)||!processor.version||this.entries.has(processor.id))throw new Error('Invalid or duplicate file processor');
     if(processor.awaitResponseOnCancel!==undefined&&typeof processor.awaitResponseOnCancel!=='boolean')throw new Error('Invalid processor cancellation capability');
     if(processor.dialogue&&(processor.stage!=='extract'||!processor.mediaTypes.length||!processor.mediaTypes.every(type=>type.startsWith('audio/'))))throw new Error('Dialogue composition requires an audio extraction processor');
-    if(processor.managedModel!==undefined&&processor.managedModel!=='dialogue')throw new Error('Unknown managed processing model');
+    if(processor.managedModel!==undefined&&!['dialogue','speaker-wespeaker'].includes(processor.managedModel))throw new Error('Unknown managed processing model');
     if(processor.reuseByContent!==undefined&&(typeof processor.reuseByContent!=='boolean'||processor.stage!=='extract'))throw new Error('Invalid content reuse capability');
     if(processor.dialogue!==undefined&&typeof processor.dialogue!=='boolean'||processor.localOnly!==undefined&&typeof processor.localOnly!=='boolean'||processor.allowSummary!==undefined&&typeof processor.allowSummary!=='boolean')throw new Error('Invalid processing capability');
     if(processor.dependencies){
@@ -111,7 +111,7 @@ export class FileProcessorRuntime {
     if(contextProcessors&&!root)this.pluginScope.provide('moteContextProcessors',contextProcessors);
     const audio=(id:string,localOnly=false)=>builtin({id,version:localOnly?'4':'3',name:localOnly?"本地多人录音":"转写接口",stage:'extract',mediaTypes:['audio/'],localOnly,serviceKind:'asr',awaitResponseOnCancel:true,
       ...(localOnly?{dialogue:true,managedModel:'dialogue' as const}:{}),dependencies:{settings:['endpoint','apiKey','allowRemote'],parameters:[]},
-      parameters:localOnly?[{key:'speakerCount',label:"预期说话人数",type:'number',nullable:true,default:null,min:1,max:16,integer:true,description:"留空由模型自动识别"},{key:'semanticTurns',label:"使用所选语言模型合并自然发言轮次",type:'boolean',default:false}]:[],
+      parameters:localOnly?[{key:'speakerCount',label:"预期说话人数",type:'number',nullable:true,default:null,min:1,max:16,integer:true,description:"留空由模型自动识别"},{key:'speakerMin',label:'说话人数下限',type:'number',nullable:true,default:null,min:1,max:16,integer:true,description:'仅在已知范围时填写；与准确人数互斥'},{key:'speakerMax',label:'说话人数上限',type:'number',nullable:true,default:null,min:1,max:16,integer:true},{key:'semanticTurns',label:"使用所选语言模型合并自然发言轮次",type:'boolean',default:false}]:[],
       process:input=>provider.transcribe({body:input.readOriginal(),sizeBytes:input.file.sizeBytes,mimeType:input.file.mimeType,settings:input.settings,localOnly,maxAudioMs:input.maxAudioMs,signal:input.signal})});
     const pluginScope=this.pluginScope;
     this.ready=(async()=>{
@@ -127,11 +127,12 @@ export class FileProcessorRuntime {
           const value=isLoopback(input.settings.imageEndpoint)?await postLocalProcessor(input.settings.imageEndpoint,headers,input.readOriginal(),input.signal,false):await readProcessorJson(await fetch(input.settings.imageEndpoint,{method:'POST',headers,body:input.readOriginal() as unknown as BodyInit,duplex:'half',signal:input.signal,redirect:'error'} as RequestInit));
           const transcript=transcriptSchema.parse(value);if(transcript.durationMs!==0)throw new StoreError('Image text cannot have audio duration',502);return transcript;
         }}));
-        await pluginScope.install(builtin({id:'audio.diarize',version:'3',name:"本地说话人分离",stage:'diarize',mediaTypes:['audio/'],localOnly:true,managedModel:'dialogue',awaitResponseOnCancel:true,dependencies:{settings:['endpoint','apiKey','speakerCount'],parameters:['speakerCount']},async process(input){
+        for(const alternative of [false,true])await pluginScope.install(builtin({id:alternative?'audio.diarize-wespeaker':'audio.diarize',version:alternative?'1':'3',name:alternative?'本地说话人分离 · WeSpeaker 中文':'本地说话人分离',stage:'diarize',mediaTypes:['audio/'],localOnly:true,managedModel:alternative?'speaker-wespeaker':'dialogue',awaitResponseOnCancel:true,dependencies:alternative?{settings:['endpoint','apiKey','speakerCount','speakerMin','speakerMax'],parameters:['speakerCount','speakerMin','speakerMax']}:{settings:['endpoint','apiKey','speakerCount'],parameters:['speakerCount']},async process(input){
           if(!isLoopback(input.settings.endpoint))throw new StoreError('Diarization requires a loopback worker',409);
           const endpoint=new URL(input.settings.endpoint);endpoint.pathname=endpoint.pathname.replace(/\/transcribe\/?$/,'/diarize');
           if(!endpoint.pathname.endsWith('/diarize'))throw new StoreError('Local worker URL must end with /transcribe',409);
-          const headers={'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Offline':'1','X-Mote-Max-Audio-Ms':String(input.maxAudioMs),'X-Mote-Processing-Timeout-Ms':String(input.settings.timeoutMs),'X-Mote-Speaker-Count':String(input.settings.speakerCount??0),...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})};
+          if(!alternative&&input.settings.speakerMin!==null)throw new StoreError('Speaker range requires the WeSpeaker plugin',409);
+          const headers={...(alternative?{'X-Mote-Speaker-Model':'wespeaker-zh',...(input.settings.speakerMin!==null?{'X-Mote-Speaker-Min':String(input.settings.speakerMin),'X-Mote-Speaker-Max':String(input.settings.speakerMax)}:{})}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Offline':'1','X-Mote-Max-Audio-Ms':String(input.maxAudioMs),'X-Mote-Processing-Timeout-Ms':String(input.settings.timeoutMs),'X-Mote-Speaker-Count':String(input.settings.speakerCount??0),...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})};
           return diarizationSchema.parse(await postLocalProcessor(endpoint.toString(),headers,input.readOriginal(),input.signal));
         }}));
         for(const plugin of plugins)await pluginScope.install(plugin);

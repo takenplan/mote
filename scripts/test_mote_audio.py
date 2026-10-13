@@ -11,9 +11,27 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 import wave
-from mote_audio import diarization_output, exclusive_sample, normalize, sample_bytes, transcribe
+from mote_audio import candidate_score, choose_candidate, diarization_output, exclusive_sample, normalize, sample_bytes, transcribe
 
 class AudioPrimitives(unittest.TestCase):
+    def test_single_cluster_is_not_forced_and_missing_silhouette_is_not_a_probability(self):
+        one = {'clusters': -1, 'observedSpeakers': 1, 'score': None}
+        forced = {'clusters': 3, 'observedSpeakers': 3, 'score': .9}
+        self.assertEqual(choose_candidate([one, forced], 1, 3), (one, None))
+        self.assertIsNone(candidate_score([SimpleNamespace(confidence=-2, start=0, end=5)]))
+        self.assertAlmostEqual(candidate_score([SimpleNamespace(confidence=.2, start=0, end=1), SimpleNamespace(confidence=.8, start=1, end=4)]), .65)
+
+    def test_range_retains_internal_cluster_count_separately_from_observed_labels(self):
+        automatic = {'clusters': -1, 'observedSpeakers': 20, 'score': .99}
+        two = {'clusters': 2, 'observedSpeakers': 2, 'score': .5}
+        three = {'clusters': 3, 'observedSpeakers': 2, 'score': .6}
+        chosen, gap = choose_candidate([automatic, two, three], 1, 3)
+        self.assertIs(chosen, three)
+        self.assertEqual(chosen['observedSpeakers'], 2)
+        self.assertAlmostEqual(gap, .1)
+        # If the acoustic model fails to meet a constraint, retain evidence.
+        self.assertEqual(choose_candidate([automatic], 2, 3), (automatic, None))
+
     def asr_modules(self, speech, samples=64000):
         calls = []
         def model(*args, **kwargs):

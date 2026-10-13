@@ -4,13 +4,14 @@ import {createReadStream,copyFileSync,existsSync,lstatSync,mkdirSync,readFileSyn
 import {dirname,join} from 'node:path';
 import {StoreError} from './store.js';
 
-type Role='ocr'|'dialogue';
+type Role='ocr'|'dialogue'|'speaker-wespeaker';
 type Item={name:string;size:number;sha256:string;official:string;mirror?:string;extract?:{entry:string;destination:string;kind:'tar'|'bz2'}};
 const hf='536b0662742c02347bc0e980a01041f333bce120';
 const hfFile=(name:string,mirror=false)=>`https://${mirror?'hf-mirror.com':'huggingface.co'}/Systran/faster-whisper-small/resolve/${hf}/${name}`;
 const paddle='https://paddle-model-ecology.bj.bcebos.com/paddlex/official_inference_model/paddle3.0.0';
 const sherpa='https://github.com/k2-fsa/sherpa-onnx/releases/download';
 export const MEDIA_CATALOG:Record<Role,{version:string;files:Item[]}>= {
+  'speaker-wespeaker':{version:'wespeaker-zh-cnceleb-resnet34-f86cd6c5',files:[{name:'speaker.onnx',size:26534363,sha256:'f86cd6c509f331f0e20b07bd48d1b2eb7de54202643401c4e84695ac861a0e5a',official:`${sherpa}/speaker-recongition-models/wespeaker_zh_cnceleb_resnet34.onnx`}]},
   ocr:{version:'pp-ocrv5-mobile-onnx-1',files:[
     {name:'det.tar',size:4843520,sha256:'781056046c9ed77a15c94681605db6a0f62317c2e9cce6931c71da2478d4bc30',official:`${paddle}/PP-OCRv5_mobile_det_onnx_infer.tar`,extract:{kind:'tar',entry:'PP-OCRv5_mobile_det_onnx_infer/inference.onnx',destination:'det/inference.onnx'}},
     {name:'rec.tar',size:16701440,sha256:'f7e792bc836f36e7ef895ad47c426d75b0b75b1650caa6d63fe9418441ffba8c',official:`${paddle}/PP-OCRv5_mobile_rec_onnx_infer.tar`,extract:{kind:'tar',entry:'PP-OCRv5_mobile_rec_onnx_infer/inference.onnx',destination:'rec/inference.onnx'}},
@@ -24,6 +25,9 @@ export const MEDIA_CATALOG:Record<Role,{version:string;files:Item[]}>= {
     {name:'speaker.onnx',size:39593761,sha256:'1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b',official:`${sherpa}/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx`},
   ]},
 };
+// Preserve the installed ASR cache identity while versioning acoustic components independently.
+export const ASR_MODEL_VERSION='faster-whisper-small-sherpa-1';
+export const SEGMENTATION_MODEL_SHA256='24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488'; // pinned archive
 const safeUrl=(url:string)=>{const u=new URL(url);if(u.protocol!=='https:'||u.username||u.password||u.hash||u.hostname==='localhost'||u.hostname.startsWith('127.')||u.hostname.endsWith('.local'))throw new Error('Invalid model source');return u.toString();};
 const sha256File=async(path:string)=>{const hash=createHash('sha256');for await(const block of createReadStream(path))hash.update(block);return hash.digest('hex');};
 type Progress={role:Role;state:'downloading'|'verifying'|'installing'|'ready'|'failed';bytes:number;totalBytes:number;source:string;error?:string};
@@ -33,10 +37,10 @@ export class MediaAssets {
   path(role:Role){return join(this.root,role);}
   ready(role:Role){const m=MEDIA_CATALOG[role],root=this.path(role),path=join(root,'complete.json');try{
     if(JSON.parse(readFileSync(path,'utf8')).version!==m.version)return false;
-    return role==='ocr'?['det/inference.onnx','det/inference.yml','rec/inference.onnx','rec/inference.yml'].every(name=>existsSync(join(root,name))):['model.bin','config.json','tokenizer.json','vocabulary.txt','segmentation.onnx','speaker.onnx'].every(name=>existsSync(join(root,name)));
+    return role==='speaker-wespeaker'?existsSync(join(root,'speaker.onnx')):role==='ocr'?['det/inference.onnx','det/inference.yml','rec/inference.onnx','rec/inference.yml'].every(name=>existsSync(join(root,name))):['model.bin','config.json','tokenizer.json','vocabulary.txt','segmentation.onnx','speaker.onnx'].every(name=>existsSync(join(root,name)));
   }catch{return false;}}
   status(role:Role){const m=MEDIA_CATALOG[role],active=this.active.get(role),totalBytes=m.files.reduce((sum,file)=>sum+file.size,0);return active?{...active,version:m.version}:{role,state:this.ready(role)?'ready':'not_installed',bytes:this.ready(role)?totalBytes:0,totalBytes,source:'',version:m.version};}
-  statuses(){return {ocr:this.status('ocr'),dialogue:this.status('dialogue')};}
+  statuses(){return {ocr:this.status('ocr'),dialogue:this.status('dialogue'),'speaker-wespeaker':this.status('speaker-wespeaker')};}
   install(role:Role,source:'auto'|'official'|'mirror'='auto'){
     if(this.active.get(role)?.state==='downloading'||this.active.get(role)?.state==='installing')throw new StoreError('Model installation is already running',409);
     if(this.ready(role))return this.status(role);

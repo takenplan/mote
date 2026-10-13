@@ -39,6 +39,7 @@ export function parseFilePolicy(raw:unknown,previous:FilePolicy,registry:Process
     for(const d of definitions){const v=profile.parameters[d.key];if(v===undefined){if(d.default!==undefined)profile.parameters[d.key]=d.default;continue;}if(v===null&&d.nullable)continue;
       if(typeof v!==d.type||typeof v==='number'&&(d.integer&&!Number.isInteger(v)||d.min!==undefined&&v<d.min||d.max!==undefined&&v>d.max)||typeof v==='string'&&d.options&&!d.options.includes(v))throw new StoreError(moteText("参数 {0} 的值不合法", d.label),400);
     }
+    if(plugin.dialogue){const speakers=fileProcessingSchema.parse({speakerCount:profile.parameters.speakerCount??null,speakerMin:profile.parameters.speakerMin??null,speakerMax:profile.parameters.speakerMax??null});if(speakers.speakerMin!==null&&profile.diarizationProcessor!=='audio.diarize-wespeaker')throw new StoreError('Speaker range requires WeSpeaker',400);}
   }
   for(const rule of policy.rules){const profile=policy.profiles.find(p=>p.id===rule.profileId)!;if(profile.processorId==='archive')continue;
     const plugin=registry.list().find(p=>p.id===profile.processorId);if(!plugin)continue;
@@ -62,7 +63,7 @@ export function effectiveFileSettings(applied:AppliedFilePolicy,policy:FilePolic
   if(endpoint&&endpoint.kind!==plugin.serviceKind)throw new StoreError(moteText("服务类型与处理插件不匹配"),409);
   if(plugin.localOnly&&endpoint?.execution==='remote')throw new StoreError('Local processing requires local services',409);
   const settings:FileProcessingSettings={...base,apiKey:undefined,localWorkerApiKey:undefined,imageEndpoint:'',audioProcessor:profile.processorId,
-    diarizationProcessor:profile.diarizationProcessor,speakerCount:typeof profile.parameters.speakerCount==='number'?profile.parameters.speakerCount:null,semanticTurns:profile.parameters.semanticTurns===true,summarize:profile.summarize,
+    diarizationProcessor:profile.diarizationProcessor,speakerCount:typeof profile.parameters.speakerCount==='number'?profile.parameters.speakerCount:null,speakerMin:typeof profile.parameters.speakerMin==='number'?profile.parameters.speakerMin:null,speakerMax:typeof profile.parameters.speakerMax==='number'?profile.parameters.speakerMax:null,semanticTurns:profile.parameters.semanticTurns===true,summarize:profile.summarize,
     ...(endpoint?{endpoint:endpoint.endpoint,apiKey:endpoint.apiKey,allowRemote:endpoint.execution==='remote',...(endpoint.kind==='image'?{imageEndpoint:endpoint.endpoint}:{}),...(endpoint.execution==='local'?{localEndpoint:endpoint.endpoint,localWorkerApiKey:endpoint.apiKey}:{})}:{}),
   };
   return {...fileProcessingSchema.parse(settings),analysisModel:model};

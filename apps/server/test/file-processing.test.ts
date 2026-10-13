@@ -681,3 +681,23 @@ test('archive-only original pipeline is skipped without executing a content proc
  const f=await fixture(t),view=f.processing.view(),policy=structuredClone(view.policy);policy.rules=[{type:'*/*',profileId:'archive'}];f.processing.update({revision:view.revision,settings:view.settings,policy});await f.processing.tick();
  assert.equal(f.files.detail(f.id).job.state,'skipped');assert.equal(new Operations(f.store).detail('file:'+f.id).operation.state,'skipped');assert.equal(f.processing.cancellation(f.id).canCancel,false);assert.equal(f.counts().asrCalls,0);assert.equal(f.counts().summaries,0);
 });
+
+
+test('scoped speaker parameters survive restart, reuse ASR, preserve old results and never update the default policy',async t=>{
+ const {createServer}=await import('node:http');const {once}=await import('node:events');
+ const worker=createServer((req,res)=>{req.resume();res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');assert.equal(req.headers['x-mote-speaker-model'],'wespeaker-zh');assert.equal(req.headers['x-mote-speaker-count'],'0');assert.equal(req.headers['x-mote-speaker-min'],'1');assert.equal(req.headers['x-mote-speaker-max'],'3');res.end(JSON.stringify({...diary,expectedSpeakers:null,declaredRange:{min:1,max:3},estimate:{method:'bounded-silhouette-v1',selectedClusters:3,needsReview:true,scoreGap:.1,candidates:[{clusters:3,observedSpeakers:2,score:.6,segments:diary.segments}]}}));});worker.listen(0,'127.0.0.1');await once(worker,'listening');t.after(()=>new Promise<void>(resolve=>worker.close(()=>resolve())));
+ const port=(worker.address() as {port:number}).port;
+ const f=await fixture(t,{settings:{localEndpoint:`http://127.0.0.1:${port}/transcribe`}});await f.processing.tick();const before=f.files.detail(f.id),transcript=before.artifacts.find((a:any)=>a.kind==='transcript')!,old=before.artifacts.find((a:any)=>a.kind==='diarization')!;
+ const global=structuredClone(f.processing.view()),invalid={artifactId:transcript.id,options:{processor:'audio.diarize-wespeaker' as const,speakerCount:2,range:{min:1,max:3}}};
+ assert.throws(()=>f.processing.retry(f.id,'diarize',false,false,invalid));
+ assert.equal(f.store.db.prepare('SELECT count(*) AS n FROM file_diarization_overrides').get()!.n,0);
+ assert.throws(()=>f.processing.retry(f.id,'diarize',false,false,{artifactId:old.id,options:{processor:'audio.diarize',speakerCount:2,range:null}}),{statusCode:409});
+ f.processing.retry(f.id,'diarize',false,false,{artifactId:transcript.id,options:{processor:'audio.diarize-wespeaker',speakerCount:null,range:{min:1,max:3}}});
+ await f.processing.close();const resumed=f.createProcessing();await resumed.runtime.ready;await resumed.tick();
+ assert.equal(f.files.detail(f.id).job.state,'succeeded',JSON.stringify(f.files.detail(f.id).job));assert.equal(f.counts().asrCalls,1,'no second ASR for acoustic-only change');
+ assert.equal(f.files.detail(f.id).artifacts.find((a:any)=>a.kind==='transcript')!.id,transcript.id);
+ assert.equal(f.store.db.prepare('SELECT count(*) AS n FROM file_artifacts WHERE id=?').get(old.id)!.n,1);
+ assert.equal(resumed.explain(f.id).current.profile.diarizationProcessor,'audio.diarize-wespeaker');
+ const estimate=f.files.detail(f.id).artifacts.find((a:any)=>a.kind==='diarization')!;assert.equal(estimate.expectedSpeakers,null);assert.equal(estimate.observedSpeakers,2);assert.equal(estimate.estimate.selectedClusters,3);
+ assert.deepEqual(resumed.view().policy,global.policy);
+});

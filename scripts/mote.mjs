@@ -18,7 +18,7 @@ const help = `Mote central profiles (Node 24+, default: dev; prod requires --pro
   restore --from BACKUP [--profile NAME] [--home PATH]
   launchd [--profile NAME] [--home PATH] [--node ABSOLUTE_NODE]
   media-runtime [--profile NAME] [--home PATH] [--python PYTHON_BINARY] (Native profile, stopped)
-  media-import --role ocr|dialogue --from DIRECTORY [--profile NAME] [--home PATH] (verified offline model bundle)
+  media-import --role ocr|dialogue|speaker-wespeaker --from DIRECTORY [--profile NAME] [--home PATH] (verified offline model bundle)
   tunnel --enable --token-file PRIVATE_FILE [--public-url HTTPS_ORIGIN] [--protocol auto|http2|quic] [--binary ABSOLUTE_CLOUDFLARED]
   tunnel --disable [--profile NAME] [--home PATH]
   tunnel-run|tunnel-launchd [--profile NAME] [--home PATH] [--node ABSOLUTE_NODE]
@@ -96,7 +96,7 @@ async function main() {
     });print(result);return;
   }
   if (command === 'media-import') {
-    if(!['ocr','dialogue'].includes(values.role)||!values.from)throw Error('media-import requires --role ocr|dialogue and --from DIRECTORY');
+    if(!['ocr','dialogue','speaker-wespeaker'].includes(values.role)||!values.from)throw Error('media-import requires --role ocr|dialogue|speaker-wespeaker and --from DIRECTORY');
     const source=resolve(values.from),info=await stat(source);if(!info.isDirectory())throw Error('Model source must be a directory');
     await withProfileLock(p,async()=>{
       if(p.meta.runtime==='native'){
