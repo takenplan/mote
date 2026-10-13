@@ -126,7 +126,7 @@ test('retained recording publishes ASR with a 56ms sentence-boundary discrepancy
 });
 
 test('actual Cordis registration and disposal; local pipeline checkpoints resume without repeating ASR',async t=>{
- const f=await fixture(t,{failFirst:true});await f.processing.tick();assert.equal(f.files.detail(f.id).job.state,'waiting');assert.equal(f.files.detail(f.id).job.execution.status,'retry_wait');assert.equal(f.files.detail(f.id).artifacts.filter((a:any)=>a.kind==='transcript').length,1);
+ const f=await fixture(t,{failFirst:true});await f.processing.tick();assert.equal(f.files.detail(f.id).job.state,'failed');assert.equal(f.processing.cancellation(f.id).wait,'unknown');assert.equal(f.files.detail(f.id).artifacts.filter((a:any)=>a.kind==='transcript').length,1);
  // Reconstruct the engine and Cordis runtime, leaving the persisted checkpoint in place.
  await f.processing.close();const resumed=f.createProcessing();await resumed.runtime.ready;
  assert.equal(resumed.cancellation(f.id).wait,'unknown');assert.throws(()=>resumed.retry(f.id,'diarize'),{statusCode:409});resumed.retry(f.id,'diarize',false,true);

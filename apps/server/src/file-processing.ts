@@ -527,7 +527,7 @@ export class FileProcessing {
         this.files.releaseSnapshotInput(id);
       }
       this.log('file.completed',id,{operation:'file_process',durationMs:performance.now()-started,attempt:job.attempts+1});
-    }catch(error){const failure=safeError(error),cancelled=!this.exists(id,revision);this.log(cancelled?'file.cancelled':'file.failed',id,{operation:'file_process',durationMs:performance.now()-started,attempt:job.attempts+1,category:cancelled?'cancelled':failure.category,...(!cancelled&&failure.status!==409&&job.attempts<3?{retryAfterMs:30000*Math.pow(2,job.attempts)}:{})},cancelled?'info':failure.status>=500?'error':'warn');throw error;}
+    }catch(error){const failure=safeError(error),cancelled=!this.exists(id,revision);this.log(cancelled?'file.cancelled':'file.failed',id,{operation:'file_process',durationMs:performance.now()-started,attempt:job.attempts+1,category:cancelled?'cancelled':failure.category,...(!cancelled&&failure.status!==409&&job.attempts<3?{retryAfterMs:30000*Math.pow(2,job.attempts)}:{})},cancelled?'info':failure.status>=500?'error':'warn');if(this.cancellation(id).wait==='unknown'&&!cancelled)throw new ExecutionFailure('blocked','processor_response_unknown');throw error;}
   }
   private async runSummary(step:ExecutionStep,signal:AbortSignal){
     const id=String(step.input.captureId),{revision,settings,effective,processorId}=this.executionSettings(id,'summary');

@@ -9,6 +9,7 @@ class CentralProcessingPresentationTest {
         assertEquals("未安排", CentralProcessingPresentation.stateKey("blocked", "archive_only", true))
         assertEquals("等待你确认", CentralProcessingPresentation.stateKey("blocked", "awaiting_confirmation"))
         assertEquals("处理结果未知", CentralProcessingPresentation.stateKey("blocked", "processor_response_unknown"))
+        assertEquals("处理结果未知", CentralProcessingPresentation.stateKey("waiting", "processor_response_unknown"))
         assertNull(CentralProcessingPresentation.stateKey("blocked", "processor_not_configured"))
         assertNull(CentralProcessingPresentation.stateKey("failed", "provider_unavailable"))
         assertNull(CentralProcessingPresentation.stateKey("cancelled", "authority_changed"))

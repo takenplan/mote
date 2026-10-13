@@ -62,3 +62,8 @@ test('optional configuration faults are not normal skips; confirmation and actua
  const step=engine.enqueue('memory:context','fixture',{});engine.cancel(step,true,'authority_changed');assert.equal(operations.detail('memory:context').steps[0].reason,'authority_changed');
  const app=Fastify();t.after(()=>app.close());registerOperations(app,operations,()=>false);for(const kind of ['recording-sync','material-organizer','memory-provider-reconcile'])assert.equal((await app.inject({url:'/api/operations?kind='+kind})).statusCode,200);
 });
+
+test('a pending descendant cannot hide an unknown issued-call outcome',async t=>{
+ const {engine,operations}=fixture(t);engine.enqueue('file:unknown-pending','fixture',{parent:true},{initial:{state:'blocked',attempts:1,availableAt:0,error:'processor_response_unknown'}});engine.enqueue('file:unknown-pending','fixture',{child:true},{initial:{state:'waiting',attempts:1,availableAt:Number.MAX_SAFE_INTEGER,error:'provider_unavailable'}});
+ const current=operations.detail('file:unknown-pending').operation;assert.equal(current.state,'waiting');assert.equal(current.waitingReason,'processor_response_unknown');assert.equal(operations.page({kind:'file'}).items[0].waitingReason,'processor_response_unknown');
+});
