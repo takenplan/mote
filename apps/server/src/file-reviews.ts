@@ -131,6 +131,7 @@ export class FileReviews {
       }
       db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'supersede',?)").run(id,new Date().toISOString());db.exec('COMMIT');
     }catch(error){db.exec('ROLLBACK');throw error;}
+    if(transcript)this.processing.refreshSummaryReceipt(id);
     return {status:'accepted',artifactId};
   }
   nameSpeakers(id:string,raw:unknown){
@@ -150,6 +151,7 @@ export class FileReviews {
       for(const chunk of affected){const chunkId=String(chunk.id);this.files.store.invalidateMemoryEvidence(chunkId);db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'supersede',?)").run(chunkId,confirmedAt);}
       db.exec('COMMIT');
     }catch(error){db.exec('ROLLBACK');throw error;}
+    this.processing.refreshSummaryReceipt(id);
     return {saved:true};
   }
 }

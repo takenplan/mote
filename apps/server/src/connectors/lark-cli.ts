@@ -75,7 +75,7 @@ export function createLarkRunner(directory:string,optionsConfig:{localProfile?:b
         if(code===0)return finish();
         // Error text may contain credentials or personal content. Return fixed codes only.
         let problem:{type?:string;subtype?:string;code?:number}={};for(const text of [stderr,stdout])try{problem=JSON.parse(text).error??{};break;}catch{}
-        const error=problem.type==='authorization'?'lark_permission_required':problem.type==='authentication'?'lark_not_connected':problem.subtype==='not_configured'?'lark_not_configured':problem.code===193104?'lark_event_limit':'lark_command_failed';
+        const error=command.kind==='minutes-transcript'&&problem.code===2091003?'recording_transcript_not_ready':problem.type==='authorization'?'lark_permission_required':problem.type==='authentication'?'lark_not_connected':problem.subtype==='not_configured'?'lark_not_configured':problem.code===193104?'lark_event_limit':'lark_command_failed';
         finish(new ConnectorError(error,502));
       });
       child.stdin.on('error',()=>{});child.stdin.end(command.kind==='configure'?command.secret:undefined);

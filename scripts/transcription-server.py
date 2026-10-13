@@ -73,12 +73,30 @@ def main():
             self.end_headers()
             self.wfile.write(data)
 
+        def dependencies(self):
+            return {'ffmpeg': bool(shutil.which('ffmpeg')),
+                    'faster_whisper': importlib.util.find_spec('faster_whisper') is not None,
+                    'sherpa_onnx': importlib.util.find_spec('sherpa_onnx') is not None}
+
+        def reject_before_execution(self, status, message):
+            # A transport fact for the host's issued-call ledger, never a guess
+            # from an HTTP status or provider's free-form error text.
+            data = json.dumps({'error': message, 'executionStarted': False}).encode()
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('X-Mote-Execution', 'local')
+            self.send_header('X-Mote-Execution-Started', 'false')
+            self.send_header('Content-Length', str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
         def do_GET(self):
             if not self.authorized():
                 self.send_error(401)
             elif self.path == '/health':
-                runtime = bool(shutil.which('ffmpeg') and importlib.util.find_spec('faster_whisper'))
-                self.json_response({'version': 2, 'execution': 'local', 'asr': bool(runtime and Path(args.model).is_dir() and Path(args.model, 'model.bin').is_file()),
+                dependencies = self.dependencies()
+                runtime = dependencies['ffmpeg'] and dependencies['faster_whisper']
+                self.json_response({'version': 2, 'execution': 'local', 'dependencies': dependencies, 'missingDependencies': [name for name, ready in dependencies.items() if not ready], 'asr': bool(runtime and Path(args.model).is_dir() and Path(args.model, 'model.bin').is_file()),
                                     'diarization': bool(runtime and importlib.util.find_spec('sherpa_onnx') and args.segmentation_model and args.speaker_model and
                                                         Path(args.segmentation_model).is_file() and Path(args.speaker_model).is_file())})
             else:
@@ -92,13 +110,13 @@ def main():
                 self.send_error(401)
                 return
             if not Path(args.model, 'model.bin').is_file() or not shutil.which('ffmpeg') or importlib.util.find_spec('faster_whisper') is None:
-                self.send_error(503, 'Local ASR model or runtime unavailable')
+                self.reject_before_execution(503, 'Local ASR model or runtime unavailable')
                 return
             if self.path == '/diarize' and (not Path(args.segmentation_model).is_file() or not Path(args.speaker_model).is_file() or importlib.util.find_spec('sherpa_onnx') is None):
-                self.send_error(503, 'Local diarization model unavailable')
+                self.reject_before_execution(503, 'Local diarization model unavailable')
                 return
             if not busy.acquire(blocking=False):
-                self.send_error(429, 'Local worker busy')
+                self.reject_before_execution(429, 'Local worker busy')
                 return
             worker = None
             released = False

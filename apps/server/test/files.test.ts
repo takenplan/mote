@@ -147,7 +147,7 @@ test('changing a processing provider during a job requeues it and rejects the ol
  const processing=new FileProcessing(files,{transcribe:async()=>{if(first){first=false;started();return new Promise(r=>{release=r;});}return {durationMs:1000,segments:[]};}});t.after(()=>processing.close());await processing.runtime.ready;
  const update=(endpoint=processing.view().settings.endpoint)=>processing.update({revision:processing.view().revision,settings:{...processing.view().settings,enabled:true,audioProcessor:'audio.http',endpoint},policy:fixtureFilePolicy({...processing.view().settings,enabled:true,audioProcessor:'audio.http',endpoint},processing.runtime.registry)});update();
  const running=processing.tick();await begun;update('http://127.0.0.1:9010/transcribe');release({durationMs:1000,segments:[{startMs:0,endMs:1000,text:'superseded output'}]});await running;
- assert.equal(files.detail(ack.id).job.state,'waiting');assert.equal(files.chunks(ack.id).length,0);for(const until=Date.now()+5000;Date.now()<until&&files.detail(ack.id).job.state!=='succeeded';){await processing.tick();if(files.detail(ack.id).job.state!=='succeeded')await new Promise(r=>setTimeout(r,25));}
+ assert.ok(['waiting','running','succeeded'].includes(files.detail(ack.id).job.state),'the new definition is queued or has already advanced through the shared engine');assert.equal(files.chunks(ack.id).length,0);for(const until=Date.now()+5000;Date.now()<until&&files.detail(ack.id).job.state!=='succeeded';){await processing.tick();if(files.detail(ack.id).job.state!=='succeeded')await new Promise(r=>setTimeout(r,25));}
  assert.equal(files.detail(ack.id).job.state,'succeeded');assert.equal(files.chunks(ack.id).length,0);
 });
 

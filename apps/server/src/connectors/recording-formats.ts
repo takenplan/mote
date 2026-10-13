@@ -2,7 +2,7 @@ import {transcriptSchema,type Transcript} from '@mote/shared';
 import {ExecutionFailure} from '../execution-engine.js';
 
 /** Transport-format parsing only. Labels are vendor claims, never identities. */
-export function feishuTranscript(rawText:string,durationMs:number):Transcript {
+export function feishuTranscript(rawText:string,durationMs:number):Transcript | null {
  const entries:{startMs:number;speaker?:string;text:string}[]=[];
  let current:typeof entries[number]|undefined;
  for(const line of rawText.replace(/\r\n/g,'\n').split('\n')){
@@ -13,9 +13,20 @@ export function feishuTranscript(rawText:string,durationMs:number):Transcript {
    current={startMs,...(match[1]!.trim()?{speaker:match[1]!.trim()}:{}),text:''};entries.push(current);
   }else if(current)current.text+=(current.text?'\n':'')+line;
  }
- if(!entries.length||entries.some(e=>!e.text.trim()))throw new ExecutionFailure('transient','recording_transcript_not_ready');
+ // A successful TXT export can contain only its documented preamble. Do not
+ // infer provider readiness or speech from the absence of parsed segments.
+ if(!entries.length){
+  const lines=rawText.trim().split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+  if(!lines.length||lines.every(line=>/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} [A-Z+0-9:-]+\|\d+(?:[hms]|\s)*$/.test(line)||line==='Keywords:'))return null;
+  throw new ExecutionFailure('permanent','recording_transcript_format_unsupported');
+ }
+ if(entries.some((entry,index)=>entry.startMs>durationMs||index>0&&entry.startMs<entries[index-1]!.startMs))throw new ExecutionFailure('permanent','recording_timeline_invalid');
+ const populated=entries.filter(entry=>entry.text.trim());
+ if(!populated.length)return null;
+ // Empty timestamp intervals supply boundaries, never fabricated words.
+
  const segments=entries.flatMap((entry,index)=>splitTranscriptText(entry.text.trim()).map(text=>({...entry,text,endMs:entries[index+1]?.startMs??durationMs,uncertain:true})));
- return transcriptSchema.parse({durationMs,segments,coverage:'full',engine:'feishu-export@1',uncorrected:true,warnings:['Vendor TXT export supplies start times. End times use the next start or media duration. Speaker labels are unverified. Export preamble is retained in the original asset.']});
+ try{return transcriptSchema.parse({durationMs,segments,coverage:'full',engine:'feishu-export@1',uncorrected:true,warnings:['Vendor TXT export supplies start times. End times use the next start or media duration. Speaker labels are unverified. Export preamble is retained in the original asset.']});}catch{throw new ExecutionFailure('permanent','recording_timeline_invalid');}
 }
 export function splitTranscriptText(text:string):string[]{
  const parts:string[]=[];let from=0;

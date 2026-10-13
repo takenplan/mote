@@ -28,11 +28,16 @@ export function createFeishuRecordings(directory:string,provided?:LarkRunner):Re
    return {id:minute.token,title:minute.title,createdAt:new Date(Number(minute.create_time)).toISOString(),durationMs:Number(minute.duration),...(minute.url?{uri:minute.url}:{})};
   },
   async transcript(_account,metadata,signal){return recordingStage(root,async(directory,relativeDirectory)=>{
-   const value=larkJson(await runner({kind:'minutes-transcript',id:metadata.id,outputDir:relativeDirectory},{signal}));
+   const response=await runner({kind:'minutes-transcript',id:metadata.id,outputDir:relativeDirectory},{signal});
+   let envelope:unknown;try{envelope=JSON.parse(response);}catch{throw new ExecutionFailure('permanent','recording_contract_invalid');}
+   const failed=z.object({code:z.literal(2091003)}).passthrough().safeParse(envelope);
+   const failedError=z.object({error:z.object({code:z.literal(2091003)}).passthrough()}).passthrough().safeParse(envelope);
+   if(failed.success||failedError.success)throw new ExecutionFailure('transient','recording_transcript_not_ready');
+   const value=larkJson(response);
    const minutes=z.array(z.object({minute_token:token,artifacts:z.object({transcript_file:z.string()})})).parse(value.data?.minutes);
-   const result=minutes.find(m=>m.minute_token===metadata.id);if(!result)throw new ExecutionFailure('transient','recording_transcript_not_ready');
+   const result=minutes.find(m=>m.minute_token===metadata.id);if(!result)throw new ExecutionFailure('permanent','recording_contract_invalid');
    const exported=resolve(root,result.artifacts.transcript_file),rawText=(await recordingFile(directory,exported,16*1024*1024)).toString('utf8');
-   return {rawText,transcript:feishuTranscript(rawText,metadata.durationMs)};
+   try{return {rawText,transcript:feishuTranscript(rawText,metadata.durationMs)};}catch(error){if(error instanceof ExecutionFailure&&(error.code==='recording_transcript_format_unsupported'||error.code==='recording_timeline_invalid'))return {rawText,transcript:null,formatError:error.code};throw error;}
   });},
   async media(_account,metadata,signal){return recordingStage(root,async(directory,relativeDirectory)=>{
    const output=relativeDirectory+'/recording.bin';larkJson(await runner({kind:'minutes-media',id:metadata.id,output},{signal}));

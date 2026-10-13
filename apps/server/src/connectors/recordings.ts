@@ -17,7 +17,7 @@ export interface RecordingProvider {
  account(signal?:AbortSignal):Promise<RecordingAccount>;
  discover(account:RecordingAccount,range:{start:string;end:string;cursor?:string},signal:AbortSignal):Promise<{ids:string[];next?:string}>;
  metadata(account:RecordingAccount,id:string,signal:AbortSignal):Promise<RecordingMetadata>;
- transcript(account:RecordingAccount,metadata:RecordingMetadata,signal:AbortSignal):Promise<{rawText:string;transcript:Transcript}>;
+ transcript(account:RecordingAccount,metadata:RecordingMetadata,signal:AbortSignal):Promise<{rawText:string;transcript:Transcript|null;formatError?:'recording_transcript_format_unsupported'|'recording_timeline_invalid'}>;
  media(account:RecordingAccount,metadata:RecordingMetadata,signal:AbortSignal):Promise<{mimeType:string;bytes:Buffer}>;
  close?():Promise<void>;
 }
@@ -40,7 +40,7 @@ export class RecordingConnector {
  private error?:string;
  constructor(private ctx:ConnectorContext,readonly provider:RecordingProvider){
   new ArchivedFileStore(ctx.store);
-  ctx.store.db.exec(`CREATE TABLE IF NOT EXISTS recording_media(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,PRIMARY KEY(source_id,external_id)); CREATE TABLE IF NOT EXISTS recording_cursors(source_id TEXT PRIMARY KEY,epoch TEXT NOT NULL,scanned_until TEXT NOT NULL,full_at INTEGER NOT NULL);`);
+  ctx.store.db.exec(`CREATE TABLE IF NOT EXISTS recording_media(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,PRIMARY KEY(source_id,external_id)); CREATE TABLE IF NOT EXISTS recording_exports(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,metadata TEXT NOT NULL,observed_at TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('empty','unsupported')),PRIMARY KEY(source_id,external_id)); CREATE TABLE IF NOT EXISTS recording_cursors(source_id TEXT PRIMARY KEY,epoch TEXT NOT NULL,scanned_until TEXT NOT NULL,full_at INTEGER NOT NULL);`);
   this.file=new PrivateFile(ctx.config.connectors!.directory,`${provider.id}-recordings.json`);
   this.engine=ctx.sourcePipelines?.engine??new ExecutionEngine(ctx.store);this.owned=!ctx.sourcePipelines;
  }
@@ -61,7 +61,7 @@ export class RecordingConnector {
      const result=await this.execute(phase,step,signal,grant);this.observe(phase,'completed',step,{durationMs:Date.now()-started});return result;
     }catch(e){this.observe(phase,'failed',step,{durationMs:Date.now()-started});throw e;}
    },commit:(step,result)=>this.commit(phase,step,result),
-   classify:error=>error instanceof ExecutionFailure?error:error instanceof z.ZodError?new ExecutionFailure('permanent','recording_contract_invalid'):error instanceof StoreError&&[400,409,410,413].includes(error.statusCode)?new ExecutionFailure('blocked','recording_archive_rejected'):error instanceof ConnectorError&&['lark_permission_required','lark_not_connected','lark_not_configured','lark_cli_missing','dingtalk_cli_missing','dingtalk_not_connected','dingtalk_permission_required'].includes(error.code)?new ExecutionFailure('blocked','recording_authorization_required'):
+   classify:error=>error instanceof ExecutionFailure?error:error instanceof z.ZodError?new ExecutionFailure('permanent','recording_contract_invalid'):error instanceof StoreError&&[400,409,410,413].includes(error.statusCode)?new ExecutionFailure('blocked','recording_archive_rejected'):error instanceof ConnectorError&&error.code==='recording_transcript_not_ready'?new ExecutionFailure('transient','recording_transcript_not_ready'):error instanceof ConnectorError&&['lark_permission_required','lark_not_connected','lark_not_configured','lark_cli_missing','dingtalk_cli_missing','dingtalk_not_connected','dingtalk_permission_required'].includes(error.code)?new ExecutionFailure('blocked','recording_authorization_required'):
     new ExecutionFailure('transient','recording_provider_failed'),
   }));
   this.timer=setInterval(()=>{void this.tick().catch(()=>{this.error='recording_sync_failed';});},Math.max(1000,Math.min(this.ctx.config.connectors?.syncIntervalMs??300000,300000)));this.timer.unref();
@@ -115,7 +115,15 @@ export class RecordingConnector {
   if(phase==='metadata'){const metadata=await this.provider.metadata(account,id,signal);if(metadata.id!==id||!Number.isFinite(metadata.durationMs)||metadata.durationMs<0)throw new ExecutionFailure('permanent','recording_identity_invalid');return metadata;}
   const metadata=input.metadata as unknown as RecordingMetadata;
   if(phase==='transcript'){
-   const result=await this.provider.transcript(account,metadata,signal);if((await this.provider.account(signal)).id!==account.id)throw new ExecutionFailure('blocked','recording_account_changed');authorize();this.observe('decode','completed',step,{count:result.transcript.segments.length});
+   const result=await this.provider.transcript(account,metadata,signal);if((await this.provider.account(signal)).id!==account.id)throw new ExecutionFailure('blocked','recording_account_changed');authorize();this.observe('decode','completed',step,{count:result.transcript?.segments.length??0});
+   if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(sourceId,id))throw new ExecutionFailure('stale','recording_evidence_changed');
+   if(!result.transcript||result.formatError){
+    const requireAllowed=()=>{authorize();if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(sourceId,id))throw new ExecutionFailure('stale','recording_evidence_changed');};
+    // Preserve the export without creating full-text evidence or a Memory input.
+    const bytes=Buffer.from(result.rawText),file=new ArchivedFileStore(this.ctx.store).putParts({name:`recording-export-${hash([sourceId,id])}.txt`,mimeType:'text/plain'},[bytes],bytes.length,requireAllowed);
+    if(result.formatError){grant.commit(()=>this.ctx.store.db.prepare("INSERT INTO recording_exports VALUES(?,?,?,?,?,'unsupported') ON CONFLICT(source_id,external_id) DO UPDATE SET file_id=excluded.file_id,metadata=excluded.metadata,observed_at=excluded.observed_at,state=excluded.state").run(sourceId,id,file.id,JSON.stringify(metadata),new Date().toISOString()));throw new ExecutionFailure('permanent',result.formatError);}
+    return {id,empty:true,fileId:file.id,metadata,observedAt:new Date().toISOString()};
+   }
    if(!this.ctx.files)throw new ExecutionFailure('blocked','recording_storage_unavailable');
    const ack=await this.ctx.files.transcriptRevision(sourceId,{externalId:id,kind:'file',title:metadata.title,observedAt:new Date().toISOString(),deleted:false,
     ...(metadata.uri?{uri:metadata.uri}:{}),document:{contentRole:'transcript',...(metadata.recordedAt?{recordedAt:metadata.recordedAt,timeBasis:'recorded'}:{timeBasis:'unknown'})}},result.rawText,result.transcript,authorize);
@@ -134,7 +142,11 @@ export class RecordingConnector {
   this.observe(phase,'completed',step,{bytes:media.bytes.length});return {fileId:file.id,id};
  }
  private commit(phase:Phase,step:ExecutionStep,result:unknown){const value=result as any;
-  if(phase==='discover'){
+  if(phase==='transcript'){
+   if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(this.sourceId()!,value.id))throw new ExecutionFailure('stale','recording_evidence_changed');
+   if(value.empty)this.ctx.store.db.prepare("INSERT INTO recording_exports VALUES(?,?,?,?,?,'empty') ON CONFLICT(source_id,external_id) DO UPDATE SET file_id=excluded.file_id,metadata=excluded.metadata,observed_at=excluded.observed_at,state=excluded.state").run(this.sourceId()!,value.id,value.fileId,JSON.stringify(value.metadata),value.observedAt);
+   else this.ctx.store.db.prepare('DELETE FROM recording_exports WHERE source_id=? AND external_id=?').run(this.sourceId()!,value.id);
+  }else if(phase==='discover'){
    for(const id of new Set<string>(value.ids))this.enqueue('metadata',step.operationId,{id,discovery:step.id});
    if(value.next)this.enqueue('discover',step.operationId,{start:step.input.start,end:step.input.end,cursor:value.next,page:Number(step.input.page)+1,runEnd:step.input.runEnd,runFull:step.input.runFull});
    else {const others=this.ctx.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE operation_id=? AND kind=? AND id!=? AND state!='succeeded'").get(step.operationId,this.kind('discover'),step.id);if(Number(others!.n)===0)this.ctx.store.db.prepare('INSERT INTO recording_cursors VALUES(?,?,?,?) ON CONFLICT(source_id) DO UPDATE SET epoch=excluded.epoch,scanned_until=excluded.scanned_until,full_at=CASE WHEN excluded.full_at>0 THEN excluded.full_at ELSE recording_cursors.full_at END').run(this.sourceId()!,this.saved.epoch,String(step.input.runEnd),step.input.runFull?Date.now():0);}
@@ -153,14 +165,28 @@ export class RecordingConnector {
   }
  }
  status():RecordingStatus {
-  const sourceId=this.sourceId(),all=phases.flatMap(phase=>this.engine.list({kind:this.kind(phase),limit:25}).items).filter(s=>s.input.epoch===this.saved.epoch);
+  const sourceId=this.sourceId(),all=this.steps({limit:100,problemsFirst:true}).items;
   const transcripts=sourceId?Number(this.ctx.store.db.prepare('SELECT count(*) n FROM file_heads WHERE source_id=?').get(sourceId)!.n):0;
   const audio=sourceId?Number(this.ctx.store.db.prepare('SELECT count(*) n FROM recording_media WHERE source_id=?').get(sourceId)!.n):0;
   return {provider:this.provider.id,connected:Boolean(this.saved.account),accountName:this.saved.account?.name,sourceId,selection:this.saved.selection,
-   steps:all.map(s=>({id:s.id,phase:s.kind.split('.').at(-1)!,state:s.state,attempts:s.attempts,...(s.error?{error:s.error}:{})})),
-   counts:{transcripts,audio,pending:this.count(['running','waiting']),failed:this.count(['failed','blocked'])},...(this.error?{error:this.error}:{})};
+   steps:all,stepsTotal:this.count(['waiting','running','succeeded','failed','blocked','cancelled','stale']),
+   counts:{transcripts,audio,empty:sourceId?Number(this.ctx.store.db.prepare("SELECT count(*) n FROM recording_exports WHERE source_id=? AND state='empty'").get(sourceId)!.n):0,pending:this.count(['running','waiting']),failed:this.count(['failed','blocked'])},...(this.error?{error:this.error}:{})};
  }
- items(){const sourceId=this.sourceId();if(!sourceId)return {items:[]};const rows=this.ctx.store.db.prepare('SELECT h.external_id,h.capture_id,m.file_id FROM file_heads h LEFT JOIN recording_media m ON m.source_id=h.source_id AND m.external_id=h.external_id JOIN captures c ON c.id=h.capture_id WHERE h.source_id=? ORDER BY c.received_at DESC LIMIT 30').all(sourceId) as {external_id:string;capture_id:string;file_id:string|null}[];return {items:rows.map(row=>{const item=this.ctx.sources.getItem(sourceId,row.external_id)!,audio=row.file_id?new ArchivedFileStore(this.ctx.store).get(row.file_id):undefined;return {captureId:row.capture_id,title:item.title,observedAt:item.observedAt,recordedAt:item.document?.recordedAt,...(audio?{audio:{id:audio.id,name:audio.name,mimeType:audio.mimeType}}:{})};})};}
+ steps(args:{cursor?:number;limit?:number;problemsFirst?:boolean}={}){
+  const limit=Math.max(1,Math.min(args.limit??50,100)),clauses=["kind IN (SELECT value FROM json_each(?))","json_extract(input,'$.epoch')=?"],values:(string|number)[]=[JSON.stringify(phases.map(p=>this.kind(p))),this.saved.epoch];
+  if(args.cursor!==undefined){clauses.push('rowid<?');values.push(args.cursor);}
+  const rows=this.ctx.store.db.prepare(`SELECT rowid,id FROM execution_steps WHERE ${clauses.join(' AND ')} ORDER BY ${args.problemsFirst?"state IN ('failed','blocked') DESC,":''}rowid DESC LIMIT ?`).all(...values,limit+1);
+  return {items:rows.slice(0,limit).map(row=>{const s=this.engine.get(String(row.id))!;return {id:s.id,phase:s.kind.split('.').at(-1)!,state:s.state,attempts:s.attempts,availableAt:s.availableAt,...(s.input.metadata?{title:(s.input.metadata as unknown as RecordingMetadata).title}:{}),...(s.error?{error:s.error}:{})};}),nextCursor:rows.length>limit?Number(rows[limit-1]!.rowid):null};
+ }
+ items(includeExports=false){
+  const sourceId=this.sourceId();if(!sourceId)return {items:[]};
+  const archived=new ArchivedFileStore(this.ctx.store);
+  const rows=this.ctx.store.db.prepare('SELECT h.external_id,h.capture_id,m.file_id FROM file_heads h LEFT JOIN recording_media m ON m.source_id=h.source_id AND m.external_id=h.external_id JOIN captures c ON c.id=h.capture_id WHERE h.source_id=? ORDER BY c.received_at DESC LIMIT 30').all(sourceId) as {external_id:string;capture_id:string;file_id:string|null}[];
+  const full=rows.map(row=>{const item=this.ctx.sources.getItem(sourceId,row.external_id)!;return {id:row.external_id,captureId:row.capture_id,title:item.title,observedAt:item.observedAt,recordedAt:item.document?.recordedAt,...(row.file_id?{audio:archived.get(row.file_id)}:{})};});
+  if(!includeExports)return {items:full};
+  const empty=this.ctx.store.db.prepare('SELECT e.*,m.file_id AS audio_id FROM recording_exports e LEFT JOIN recording_media m ON m.source_id=e.source_id AND m.external_id=e.external_id WHERE e.source_id=? ORDER BY e.observed_at DESC LIMIT 30').all(sourceId).map(row=>{const metadata=JSON.parse(String(row.metadata)) as RecordingMetadata;return {id:String(row.external_id),title:metadata.title,observedAt:String(row.observed_at),recordedAt:metadata.recordedAt,empty:row.state==='empty',unsupported:row.state==='unsupported',export:archived.get(String(row.file_id)),...(row.audio_id?{audio:archived.get(String(row.audio_id))}:{})};});
+  return {items:[...empty,...full.filter(item=>!empty.some(receipt=>receipt.id===item.id))].sort((a,b)=>b.observedAt.localeCompare(a.observedAt)).slice(0,30)};
+ }
  private count(states:string[]){return Number(this.ctx.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN (SELECT value FROM json_each(?)) AND json_extract(input,'$.epoch')=?").get(JSON.stringify(phases.map(p=>this.kind(p))),JSON.stringify(states),this.saved.epoch)!.n);}
  retry(){const rows=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN ('failed','blocked') AND json_extract(input,'$.epoch')=?").all(JSON.stringify(phases.map(p=>this.kind(p))),this.saved.epoch) as {id:string}[];for(const row of rows)if(this.valid(this.engine.get(row.id)!))this.engine.retry(row.id);void this.engine.tick();return this.status();}
  async close(){this.closed=true;clearInterval(this.timer);for(const dispose of this.disposers)await dispose();if(this.owned)await this.engine.close();await this.provider.close?.();await this.file.flush();}
@@ -174,7 +200,8 @@ export function recordingManifest(id:string,create:(ctx:ConnectorContext)=>Recor
   const provider=create(ctx);if(provider.id!==id)throw Error('Recording manifest and provider identity differ');const connector=new RecordingConnector(ctx,provider),status=()=>({...connector.status(),category:'recordings' as const,...options});return {status,init:()=>connector.init(),close:()=>connector.close(),configure:host=>{
    const path=`/api/connectors/${id}-recordings` as const;
    host.ownerRoute({method:'GET',path,handler:status});
-   host.ownerRoute({method:'GET',path:`${path}/items`,handler:()=>connector.items()});
+   host.ownerRoute({method:'GET',path:`${path}/items`,handler:req=>connector.items(z.object({includeExports:z.enum(['true','false']).optional()}).strict().parse(req.query).includeExports==='true')});
+   host.ownerRoute({method:'GET',path:`${path}/steps`,handler:req=>connector.steps(z.object({cursor:z.coerce.number().int().positive().optional(),limit:z.coerce.number().int().min(1).max(100).optional()}).strict().parse(req.query))});
    host.ownerRoute({method:'POST',path:`${path}/connect`,handler:()=>connector.connect()});
    host.ownerRoute({method:'PUT',path:`${path}/selection`,handler:req=>connector.select(req.body)});
    host.ownerRoute({method:'POST',path:`${path}/sync`,handler:()=>connector.sync()});

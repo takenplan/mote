@@ -6,7 +6,11 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join, isAbsolute } from 'node:path';
 
 export function mediaEnvironment(env) {
-  return Object.fromEntries(['PATH', 'HOME', 'LANG', 'TMPDIR', 'TMP', 'TEMP'].filter(key => env[key] !== undefined).map(key => [key, env[key]]));
+  const clean=Object.fromEntries(['PATH', 'HOME', 'LANG', 'TMPDIR', 'TMP', 'TEMP'].filter(key => env[key] !== undefined).map(key => [key, env[key]]));
+  // GUI/launchd processes need the standard Native package-manager locations.
+  // Preserve configured search order and never forward credentials.
+  if(env.MOTE_RUNTIME==='native'&&process.platform==='darwin')clean.PATH=[...new Set([...(clean.PATH??'/usr/bin:/bin:/usr/sbin:/sbin').split(':'),'/opt/homebrew/bin','/usr/local/bin'])].join(':');
+  return clean;
 }
 
 export async function ensureMediaRuntime({ root, python, env, run, sourcePython = 'python3' }) {
@@ -26,6 +30,11 @@ export async function ensureMediaRuntime({ root, python, env, run, sourcePython 
   await probe();
   await writeFile(marker, version, { mode: 0o600 });
   return true;
+}
+
+export async function probeMediaCommands(python, env, run) {
+  try { await run(python, ['-c', 'import shutil; assert shutil.which("ffmpeg"), "ffmpeg missing"'], mediaEnvironment(env)); }
+  catch { throw Error('media.runtime.ffmpeg_missing'); }
 }
 
 export function startMediaWorkers({ root = process.cwd(), env = process.env, signal, report = event => console.info(JSON.stringify({ event })) } = {}) {
@@ -65,7 +74,10 @@ export function startMediaWorkers({ root = process.cwd(), env = process.env, sig
         try {
           report('media.runtime.preparing');
           await ensureMediaRuntime({ root, python, env, run });
-          report('media.runtime.ready'); break;
+          try { await probeMediaCommands(python, env, run); report('media.runtime.ready'); }
+          catch { report('media.runtime.ffmpeg_missing'); }
+          // Keep control endpoints and OCR available while a system command is missing.
+          break;
         } catch (error) {
           if (controller.signal.aborted) throw error;
           report('media.runtime.install_failed');

@@ -41,8 +41,10 @@ function data(value:any){if(value?.ok===false||value?.success===false||value?.er
 /** Preserve complete vendor paragraph JSON. Until a timestamp contract is
  * verified against a real account, expose text as untimed evidence. */
 export function dingtalkTranscript(raw:unknown){
- const value=z.object({taskUuid:idSchema,complete:z.literal(true),paragraphList:z.array(z.record(z.unknown())).min(1).max(50000)}).parse(raw);
- const rawText=JSON.stringify(value),segments=value.paragraphList.flatMap(p=>splitTranscriptText(JSON.stringify(p)).map(text=>({startMs:0,endMs:0,text,untimed:true as const,...(typeof p.speakerNick==='string'&&p.speakerNick.length<=100?{speaker:p.speakerNick}:{}),uncertain:true})));
+ const value=z.object({taskUuid:idSchema,complete:z.boolean(),paragraphList:z.array(z.record(z.unknown())).max(50000)}).parse(raw);
+ if(!value.complete)throw new ExecutionFailure('transient','recording_transcript_not_ready');
+ const rawText=JSON.stringify(value);if(!value.paragraphList.length)return {rawText,transcript:null};
+ const segments=value.paragraphList.flatMap(p=>splitTranscriptText(JSON.stringify(p)).map(text=>({startMs:0,endMs:0,text,untimed:true as const,...(typeof p.speakerNick==='string'&&p.speakerNick.length<=100?{speaker:p.speakerNick}:{}),uncertain:true})));
  return {rawText,transcript:transcriptSchema.parse({durationMs:0,segments,coverage:'full',engine:'dingtalk-paragraph-json@1',uncorrected:true,warnings:['Complete vendor paragraphs retained as structured text. Timing and speaker identity are unverified.']})};
 }
 export function createDingtalkRecordings(directory:string,provided?:DwsRunner):RecordingProvider {

@@ -36,7 +36,7 @@ export interface ExecutionHandler {
  maxAttempts?:number;
  maxRecoveryWindowMs?:number;
 }
-type ProgramStep<T>=OperationMembership&{id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;initialAttempts?:number;timeoutMs?:number};
+type ProgramStep<T>=OperationMembership&{id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;initialAttempts?:number;timeoutMs?:number;classify?:(error:unknown)=>ExecutionFailure};
 type Row={id:string;operation_id:string;kind:string;pool:string;input:string;state:ExecutionState;attempts:number;available_at:number;error:string|null;fence:string|null;lease_until:number;recovery_deadline?:number};
 const view=(row:Row):ExecutionStep=>({id:row.id,operationId:row.operation_id,kind:row.kind,pool:row.pool,input:JSON.parse(row.input),state:row.state,attempts:row.attempts,availableAt:row.available_at,...(row.error?{error:row.error}:{})});
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,v])=>[key,canonical(v)])):value;
@@ -114,10 +114,11 @@ export class ExecutionEngine {
  }
  project(id:string){const step=this.get(id);if(step)this.handlers.get(step.kind)?.project?.(step);}
  /** Transactional callers may defer local abort; lease renewal observes committed revocation. */
- cancel(id:string,abortLocal=true){
+ cancel(id:string,abortLocal=true,reason='cancelled'){
+  if(!/^[a-z][a-z0-9_]{0,80}$/.test(reason))throw new StoreError('Invalid cancellation reason',400);
   const alias=this.store.db.prepare('SELECT step_id FROM execution_cancellation_aliases WHERE alias_id=?').get(id);
   if(alias){this.store.db.prepare('UPDATE execution_cancellation_aliases SET cancelled=1 WHERE alias_id=?').run(id);id=String(alias.step_id);}
-  const db=this.store.db;db.prepare("UPDATE execution_steps SET state='cancelled',fence=NULL,error='cancelled',updated_at=? WHERE id=? AND state!='succeeded'").run(this.now(),id);if(abortLocal)this.active.get(id)?.controller.abort();this.project(id);
+  const db=this.store.db;db.prepare("UPDATE execution_steps SET state='cancelled',fence=NULL,error=?,updated_at=? WHERE id=? AND state!='succeeded'").run(reason,this.now(),id);if(abortLocal)this.active.get(id)?.controller.abort();this.project(id);
  }
  /** Stable operation identities can revoke the currently active resumable
   * fragment from another host without depending on its revision number. */
@@ -277,7 +278,7 @@ export class ExecutionEngine {
    execute:async(_step,signal)=>{try{return await options.execute(AbortSignal.any([signal,options.signal]));}catch(error){failure=error;throw error;}},
    commit:(_step,result)=>{try{options.commit(result);}catch(error){failure=error;throw error;}},project:options.project,
    // The program retries the failed step on replay; only it consumes a retry slot.
-   classify:()=>new ExecutionFailure('permanent','step_failed'),
+   classify:options.classify??(()=>new ExecutionFailure('permanent','step_failed')),
   });
   const abort=()=>{if(this.stopping||options.signal.reason===interrupted)this.active.get(options.id)?.controller.abort(interrupted);else this.cancel(options.id);};options.signal.addEventListener('abort',abort,{once:true});
   try{

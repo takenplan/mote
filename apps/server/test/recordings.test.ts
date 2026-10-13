@@ -121,7 +121,7 @@ test('switching vendor account during a transcript read blocks publication; paus
 });
 
 test('export parsers preserve speaker/timeline, long speech, structured DingTalk paragraphs and reject incomplete data and unsafe paths',async t=>{
- const text='甲 00:00:00.040\n'+('x'.repeat(7999)+'😀').repeat(2)+'\n\n乙 00:00:02.000\nEnd\n';const parsed=feishuTranscript(text,4000);assert.ok(parsed.segments.length>2);assert.equal(parsed.segments[0].startMs,40);assert.equal(parsed.segments.at(-1)?.speaker,'乙');assert.ok(parsed.segments.every(s=>s.text.length<=8000));
+ const text='甲 00:00:00.040\n'+('x'.repeat(7999)+'😀').repeat(2)+'\n\n乙 00:00:02.000\nEnd\n';const parsed=feishuTranscript(text,4000)!;assert.ok(parsed.segments.length>2);assert.equal(parsed.segments[0].startMs,40);assert.equal(parsed.segments.at(-1)?.speaker,'乙');assert.ok(parsed.segments.every(s=>s.text.length<=8000));
  assert.throws(()=>feishuTranscript('not a transcript',100));assert.throws(()=>feishuTranscript('A 00:00:02.000\nText\nB 00:00:01.000\nText',4000));
  const dws=dingtalkTranscript({taskUuid:'generated',complete:true,paragraphList:[{speakerNick:'Unknown',words:[{text:'Generated words'}]}]});assert.ok(dws.rawText.includes('Generated words'));assert.equal(dws.transcript.segments[0].untimed,true);assert.throws(()=>dingtalkTranscript({taskUuid:'generated',complete:false,paragraphList:[]}));
  const args=dwsArguments({kind:'search',start:selection.start,end:selection.end},'corp:user');assert.ok(args.includes('corp:user'));assert.ok(!args.includes('--query'));
@@ -131,9 +131,9 @@ test('export parsers preserve speaker/timeline, long speech, structured DingTalk
 test('Feishu CLI adapter validates actual envelopes and reads only controlled exports; creation time is not a recording date',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'mote-feishu-format-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  const provider=createFeishuRecordings(directory,async command=>{switch(command.kind){case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'generated'}}});case 'minutes-search':return JSON.stringify({ok:true,data:{items:[{token:'r1'}],has_more:false}});case 'minutes-metadata':return JSON.stringify({data:{minute:{token:'r1',title:'Generated',create_time:String(Date.parse('2026-09-20T00:00:00Z')),duration:'5000'}}});case 'minutes-transcript':{const path=resolve(directory,'lark-runtime',command.outputDir,'transcript.txt');await writeFile(path,raw);return JSON.stringify({data:{minutes:[{minute_token:'r1',artifacts:{transcript_file:path}}]}});}case 'minutes-media':await writeFile(resolve(directory,'lark-runtime',command.output),wav);return '{}';default:return '{}';}});
- const account=await provider.account(),signal=new AbortController().signal;assert.equal((await provider.discover(account,selection,signal)).ids[0],'r1');const metadata=await provider.metadata(account,'r1',signal);assert.equal(metadata.recordedAt,undefined);assert.ok(metadata.createdAt);assert.equal((await provider.transcript(account,metadata,signal)).transcript.segments.length,2);assert.equal((await provider.media(account,metadata,signal)).mimeType,'audio/wav');
+ const account=await provider.account(),signal=new AbortController().signal;assert.equal((await provider.discover(account,selection,signal)).ids[0],'r1');const metadata=await provider.metadata(account,'r1',signal);assert.equal(metadata.recordedAt,undefined);assert.ok(metadata.createdAt);assert.equal((await provider.transcript(account,metadata,signal)).transcript!.segments.length,2);assert.equal((await provider.media(account,metadata,signal)).mimeType,'audio/wav');
  const dws=createDingtalkRecordings(directory,async command=>command.kind==='status'?{authenticated:true,corp_id:'corp',user_id:'user'}:command.kind==='metadata'?{data:{taskUuid:'d1',basic:{result:{uuid:'d1',title:'Generated'}}}}:command.kind==='search'?{data:{minutes:[{taskUuid:'d1'}],complete:true},meta:{pagination:{endpoint_exhausted:true}}}:{data:{taskUuid:'d1',complete:true,paragraphList:[{text:'Generated'}]}});
- const da=await dws.account();assert.equal((await dws.metadata(da,'d1',signal)).title,'Generated');assert.equal((await dws.discover(da,selection,signal)).ids[0],'d1');assert.ok((await dws.transcript(da,{id:'d1',title:'Generated',durationMs:0},signal)).transcript.segments.length);
+ const da=await dws.account();assert.equal((await dws.metadata(da,'d1',signal)).title,'Generated');assert.equal((await dws.discover(da,selection,signal)).ids[0],'d1');assert.ok((await dws.transcript(da,{id:'d1',title:'Generated',durationMs:0},signal)).transcript!.segments.length);
 });
 
 test('a long provider transcript keeps every fine-grained segment in the material and Memory input beyond the ordinary 2000-block limit',async t=>{
@@ -145,4 +145,42 @@ test('a long provider transcript keeps every fine-grained segment in the materia
  assert.ok(material,JSON.stringify(f.node.executor.list({limit:5})));assert.equal(material.coverage.state,'complete');assert.equal(material.blockCount,2502);const pin=f.node.materials.input(material.ref,['extracted-text'])!;assert.equal(pin.ready,true);assert.equal(pin.evidenceIds.length,2500);
  const chunk=f.node.store.db.prepare('SELECT count(*) n FROM file_chunks WHERE capture_id=?').get(result.id)!;assert.equal(chunk.n,2500);
  const reader=await f.request('GET','/items');assert.ok(reader.items.some((i:any)=>i.captureId===result.id));
+});
+
+
+test('empty exports remain available without full-text or Memory, survive restart, and later publish text without downloading audio again',async t=>{
+ const f=await fixture(t);f.state.text='2026-09-20 08:00:00 CST|5s\n\nKeywords:\n';await f.connect();await f.flush();await f.memory();
+ let status=await f.request('GET');assert.equal(status.counts.empty,1);assert.equal(status.counts.transcripts,0);assert.equal(status.counts.audio,1);assert.equal(status.counts.failed,0);assert.equal(f.models.length,0);
+ assert.equal((await f.request('GET','/items')).items.length,0,'legacy clients receive only capture-backed records');
+ const item=(await f.request('GET','/items?includeExports=true')).items[0];assert.equal(item.empty,true);assert.equal(item.captureId,undefined);assert.equal(new ArchivedFileStore(f.node.store).read(item.export.id).toString(),f.state.text);
+ await f.restart();await f.request('POST','/sync');await f.flush();assert.equal((await f.request('GET')).counts.empty,1);assert.equal(f.calls.filter(c=>c.phase==='media').length,1);
+ f.state.text=raw;await f.request('POST','/sync');await f.flush();await f.memory();status=await f.request('GET');assert.equal(status.counts.empty,0);assert.equal(status.counts.transcripts,1);assert.ok(f.models.length>0);assert.equal(f.calls.filter(c=>c.phase==='media').length,1);
+ assert.equal(new ArchivedFileStore(f.node.store).read(item.export.id).toString(),'2026-09-20 08:00:00 CST|5s\n\nKeywords:\n');
+});
+test('format structure distinguishes empty intervals, unsupported text and incomplete vendor exports',()=>{
+ assert.equal(feishuTranscript('',5000),null);assert.equal(feishuTranscript('A 00:00:00.000\n\n',5000),null);
+ const partial=feishuTranscript('A 00:00:00.000\nWords\nB 00:00:02.000\n\nC 00:00:03.000\nMore',5000)!;
+ assert.equal(partial.segments.length,2);assert.equal(partial.segments[0].endMs,2000);
+ assert.throws(()=>feishuTranscript('Unknown nonempty export format',5000),(error:any)=>error.code==='recording_transcript_format_unsupported');
+ assert.throws(()=>dingtalkTranscript({taskUuid:'generated',complete:false,paragraphList:[]}),(error:any)=>error.code==='recording_transcript_not_ready');
+ assert.equal(dingtalkTranscript({taskUuid:'generated',complete:true,paragraphList:[]}).transcript,null);
+});
+test('old failures stay visible while all current recording steps paginate through the owner API',async t=>{
+ const f=await fixture(t);f.state.transcriptFails=true;await f.connect();await f.flush();
+ const old=(await f.request('GET')).steps.find((s:any)=>s.phase==='transcript');f.state.transcriptFails=false;f.state.ids=Array.from({length:35},(_,i)=>'generated-'+i);
+ await f.request('POST','/sync');await f.flush();const status=await f.request('GET');assert.ok(status.steps.some((s:any)=>s.id===old.id&&s.state==='blocked'&&s.title==='Generated diary'));
+ let cursor:number|null=null,all:any[]=[];do{const page=await f.request('GET','/steps?limit=7'+(cursor?'&cursor='+cursor:''));all.push(...page.items);cursor=page.nextCursor;}while(cursor);
+ assert.equal(all.length,status.stepsTotal);assert.equal(new Set(all.map(s=>s.id)).size,all.length);assert.ok(all.some(s=>s.id===old.id));
+ assert.equal((await f.node.app.inject({url:'/api/connectors/feishu-recordings/steps'})).statusCode,401);
+});
+
+test('Feishu adapter retains unsupported exports and only explicit upstream not-ready is transient',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-feishu-empty-'));t.after(()=>rm(directory,{recursive:true,force:true}));
+ let response:unknown,content='Unknown generated export';
+ const provider=createFeishuRecordings(directory,async command=>{if(command.kind!=='minutes-transcript')return '{}';if(response)return JSON.stringify(response);const path=resolve(directory,'lark-runtime',command.outputDir,'transcript.txt');await writeFile(path,content);return JSON.stringify({data:{minutes:[{minute_token:'r1',artifacts:{transcript_file:path}}]}});});
+ const account={id:'generated'},metadata={id:'r1',title:'Generated',durationMs:5000},signal=new AbortController().signal;
+ const unsupported=await provider.transcript(account,metadata,signal);assert.equal(unsupported.rawText,content);assert.equal(unsupported.formatError,'recording_transcript_format_unsupported');
+ content='2026-09-20 08:00:00 CST|5s\n\nKeywords:\n';assert.equal((await provider.transcript(account,metadata,signal)).transcript,null);
+ for(const body of [{code:2091003},{error:{code:2091003}}]){response=body;await assert.rejects(provider.transcript(account,metadata,signal),(error:any)=>error.code==='recording_transcript_not_ready'&&error.category==='transient');}
+ response={data:{minutes:[]}};await assert.rejects(provider.transcript(account,metadata,signal),(error:any)=>error.code==='recording_contract_invalid'&&error.category==='permanent');
 });
