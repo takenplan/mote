@@ -40,7 +40,11 @@ module.exports = async function({window,js,navigate,outputDirectory,round,profil
     writeFileSync(join(outputDirectory,item.file),png);writeFileSync(join(outputDirectory,name+'.json'),JSON.stringify(item,null,2));captures.push(item);
   }
   async function changeLanguage(language){
-    await navigate('settings');await js('window.confirm=()=>true;document.querySelector("#language").value='+JSON.stringify(language)+';document.querySelector("#language").dispatchEvent(new Event("change"));true;');
+    if(await js('document.documentElement.lang')===language)return;
+    await navigate('settings');
+    const reloaded=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));
+    await js('window.confirm=()=>true;document.querySelector("#language").value='+JSON.stringify(language)+';document.querySelector("#language").dispatchEvent(new Event("change"));true;');
+    await Promise.race([reloaded,delay(15000).then(()=>{throw Error('Actual locale reload did not finish');})]);
     await until(()=>js('document.documentElement.lang==='+JSON.stringify(language)+'&&!!document.querySelector("#content-refresh")&&!!document.querySelector("#workspace-location").textContent.trim()'),'language reload');
     await js('window.confirm=()=>true;true;');
   }
@@ -75,6 +79,17 @@ module.exports = async function({window,js,navigate,outputDirectory,round,profil
       }
       if(scene==='import')await js('document.querySelector("#source-selection-cancel").click();true;');
     }
+    window.setSize(820,620);
+    await navigate('overview');await js('document.querySelector("#note-action").click();true;');
+    assert.equal(await js('document.querySelector("#add-dialog").open&&document.querySelectorAll("#add-dialog [data-add-choice]").length===4'),true,'Actual Add retains its four actions');
+    await js('document.querySelector("#add-close").click();true;');
+    for(const page of ['screen','privacy','sources','sync']){
+      await navigate(page);await until(()=>js('!document.querySelector("#settings-fields").disabled'),'supplemental settings idle');
+      journeys.push({name:'actual supplemental '+page,language,variant:'compact',verified:true,marker:await js('document.querySelector("[data-page='+page+'] [data-page-title]").textContent.trim()')});
+    }
+    await navigate('overview');await js('document.querySelector("#home-feature-guide").click();true;');
+    await readiness('connection');
+    journeys.push({name:'actual complete guide offline limitation',language,variant:'compact',verified:true,boundary:'The full guide belongs to Central Web; this unconnected Mac correctly enters connection settings.'});
   }
   assert.equal(captures.length,32);assert.equal(new Set(captures.map(item=>[item.scene,item.language,item.variant].join(':'))).size,32);
   const status=await js('window.mote.status()');assert.equal(status.running,false);assert.equal((await js('window.mote.sources()')).length,0,'Import confirmation never creates a source');

@@ -1,5 +1,7 @@
 # 2026-10-13 用户反馈后的独立 UI 复评
 
+本文保留当时的模型复评与实际操作记录。用户随后再次否定 Android 审美及三端共同风格，以下“接受”已被新的 [五轮候选合同](ui-art-direction-five-rounds.md) 与 [独立重评](ui-art-direction-evaluation.md) 取代，不表示用户接受，也不作为新轮次评分起点。
+
 最终接受 Web F2、Mac D3 与 Android R10 的生成界面方案。Web 和 Android 各完成两轮，第一轮拒绝原因保留在下文；Mac 设置修正通过一轮复评。原五项和新增两项遵循[固定合同](ui-focus-and-consistency-2026-10-13.md)，没有总分。
 
 | 评价项 | Web F2 | Mac D3 | Android R10 |

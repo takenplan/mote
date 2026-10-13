@@ -32,7 +32,9 @@ button:hover:not(:disabled),.secondary:hover:not(:disabled) { background:var(--m
 .choice-index { display:none; }
 .content-row { padding:var(--mote-space-panel); gap:var(--mote-space-item); align-items:flex-start; }
 .content-row+.content-row { border-top:var(--mote-border-width) solid var(--mote-border); }
-.content-type,.content-state { border-radius:var(--mote-radius-indicator); background:var(--mote-tint); color:var(--mote-accent); border:0; }
+.content-type,.content-state { border-radius:var(--mote-radius-indicator); background:var(--mote-tint); color:var(--mote-accent); border:0; white-space:normal; overflow-wrap:anywhere; }
+.content-row-copy { min-width:0; }
+.content-row-copy small { overflow-wrap:anywhere; }
 .content-empty { padding:var(--mote-space-panel); font-size:var(--mote-font-support); }
 .note-composer { border-radius:var(--mote-radius-container); border:var(--mote-border-width) solid var(--mote-border); padding:var(--mote-space-panel); }
 .composer-label,label,.field-heading { font-size:var(--mote-font-row); color:var(--mote-ink); }

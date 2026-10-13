@@ -50,6 +50,10 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
 .notice.model-notice { background:var(--mote-surface); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); }
 .ask-form { border-radius:var(--mote-radius-control); border-color:var(--mote-border); background:var(--mote-surface); }
 .ask-form textarea,.note-composer textarea { font-size:var(--mote-font-body); line-height:1.7; }
+@media(min-width:761px) and (max-width:1100px) {
+ .topbar { height:auto; min-height:var(--mote-control-height); flex-wrap:wrap; gap:var(--mote-space-inline); padding-block:var(--mote-space-item); }
+ .topbar-actions { flex-wrap:wrap; min-width:0; max-width:100%; }
+}
 @media(max-width:760px) {
  .content { padding:var(--mote-space-page); }
  .page-heading h1,.greeting h1,.library-home .greeting h1,.home-archive-intro .greeting h1,.simple-welcome h1 { font-size:var(--mote-font-title-mobile); }

@@ -6,7 +6,7 @@ const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
 fs.mkdirSync(path.join(out,'assets'),{recursive:true});
 const metrics=['Design quality','Originality','Craft','Functionality','首次理解与重要功能完整性','页面职责与任务聚焦','视觉一致性与平台适配','跨端统一美术风格'];
 const scenes=[['home','首页'],['content','已有内容'],['note','随手记'],['detail','原文阅读'],['ask','问一问'],['settings','设置'],['connection','连接配置'],['import','导入文件']].map(([id,title])=>({id,title}));
-const manifest={generatedOnly:true,artifactType:'five-round-art-direction-review',metrics,scenes,rounds:inputs.rounds,platforms:{web:{title:'Web',sizes:{normal:'1440 px',compact:'390 px'}},mac:{title:'Mac',sizes:{normal:'1140 × 808',compact:'820 × 620'}},android:{title:'Android',sizes:{normal:'411 dp',compact:'320 dp / 130% 字体'}}},assets:[]};
+const manifest={generatedOnly:true,artifactType:'five-round-art-direction-review',metrics,scenes,rounds:inputs.rounds,platforms:{web:{title:'Web',sizes:{normal:'1440 px',compact:'390 px'}},mac:{title:'Mac',sizes:{normal:'1140 × 840',compact:'820 × 620'}},android:{title:'Android',sizes:{normal:'411 dp',compact:'320 dp / 130% 字体'}}},assets:[]};
 function add(round,platform,scene,variant,language,file,metadata){
  assert(metadata.readiness?.ready&&['content','empty','restriction'].includes(metadata.readiness.state)&&metadata.readiness.page,'Ready target content is required: '+file);
  assert.notEqual(metadata.captureKind,'dialog-fragment');

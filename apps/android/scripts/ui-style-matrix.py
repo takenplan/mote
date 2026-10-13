@@ -14,6 +14,7 @@ import shutil
 import subprocess
 import tarfile
 import time
+import xml.etree.ElementTree as ET
 
 REPO = Path(__file__).resolve().parents[3]
 ANDROID = REPO / 'apps/android'
@@ -63,6 +64,17 @@ _, build_seconds = run(['./gradlew', ':app:assembleDevelopment', ':app:assembleD
                         *([':app:testDevelopmentUnitTest'] if args.verify_journeys else []),
                         '-Pmote.testBuildType=development', '--console=plain', '--quiet'], cwd=ANDROID, timeout=900, log=output / 'build.log')
 (output / 'build-results.json').write_text(json.dumps({'passed': True, 'elapsedSeconds': build_seconds}, indent=2))
+jvm = None
+if args.verify_journeys:
+    report_dir = ANDROID / 'app/build/test-results/testDevelopmentUnitTest'
+    reports = sorted(report_dir.glob('TEST-*.xml'))
+    assert reports, 'The requested JVM verification must provide its actual XML reports'
+    shutil.copytree(report_dir, output / 'jvm-xml')
+    suites = [ET.parse(report).getroot() for report in reports]
+    jvm = {'classes': len(suites), **{key: sum(int(suite.get(key, '0')) for suite in suites)
+                                     for key in ['tests', 'failures', 'errors', 'skipped']}}
+    assert jvm['tests'] > 0 and jvm['failures'] == 0 and jvm['errors'] == 0 and jvm['skipped'] == 0
+    (output / 'jvm-results.json').write_text(json.dumps(jvm, indent=2))
 assert source_hashes == {name: hashlib.sha256((REPO / name).read_bytes()).hexdigest() for name in source_files}, 'Source changed while building'
 
 def adb(*command, timeout=240):
@@ -174,7 +186,7 @@ if args.verify_journeys:
         journeys.append({'test': name, 'passed': expected - skips, 'skipped': skips, 'elapsedSeconds': seconds})
 (output / 'journey-results.json').write_text(json.dumps(journeys, indent=2))
 assert source_hashes == {name: hashlib.sha256((REPO / name).read_bytes()).hexdigest() for name in source_files}, 'Source changed during capture'
-manifest = {**identity, 'images': images, 'matrix': matrix, 'journeys': journeys}
+manifest = {**identity, 'images': images, 'matrix': matrix, 'journeys': journeys, 'jvm': jvm}
 (output / 'image-manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2))
 
 # Hand off a clean generated profile, without stopping the held AVD until review releases it.

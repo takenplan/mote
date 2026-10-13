@@ -94,7 +94,7 @@
 
 ## 每轮最低截图与状态矩阵
 
-保持固定同类生成内容和稳定文件名。四条件为ZH/EN × normal/compact：Web1440×968/390×812，Mac1140×808/820×620，Android411dp@420dpi-font1/320dp@540dpi-font1.3（实际PNG1080×2400）。首屏单独记录；为检查下方内容另外保存scroll状态，不能用scroll状态伪称首屏。
+保持固定同类生成内容和稳定文件名。四条件为ZH/EN × normal/compact：Web1440×968/390×812，Mac1140×840/820×620，Android411dp@420dpi-font1/320dp@540dpi-font1.3（实际PNG1080×2400）。首屏单独记录；为检查下方内容另外保存scroll状态，不能用scroll状态伪称首屏。
 
 | 范围 | 四条件必有的实际ready图 |
 | --- | --- |

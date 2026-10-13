@@ -1,6 +1,6 @@
 # Slate UI 与开发版发布
 
-Slate 提供现有视觉 token、原生组件和中央工作台的设计基线。2026-10-11 的 [行动优先 ADR](adr-client-action-first.md) 取代原生客户端的旧入口组织，保留 Slate 的配色、组件、权限与中央处理边界。讨论原型中的演示数字、进度与权限回调不作为产品运行数据。
+Slate 提供视觉 token、原生组件和中央工作台的历史设计基线。2026-10-11 的 [行动优先 ADR](adr-client-action-first.md) 取代原生客户端的旧入口组织，保留权限与中央处理边界；2026-10-13 用户再次反馈后的 [五轮共同美术风格候选](design/ui-art-direction-five-rounds.md) 取代旧配色、纸页及大圆角混搭的当前视觉依据。讨论原型中的演示数字、进度与权限回调不作为产品运行数据。
 
 中央一级入口为今天、资料库、问一问、活动、采集与设备。活动承接处理进度；系统管理集中运行统计、上下文任务、处理器、模型、费用、存储和诊断，用户设置保留会话与语言。所有旧 hash 入口由 `apps/web/src/navigation.ts` 映射至同一业务页。资料筛选在证据打开期间保留；浏览器返回/前进恢复证据，关闭后恢复焦点。原图需要主动展开。
 
@@ -12,7 +12,7 @@ Android 使用 Kotlin 原生 Activity 和 Android Views。中央工作台、资�
 
 2026-10-13 的 [用户反馈续迭代](design/ui-focus-and-consistency-2026-10-13.md) 保留 Slate 配色与原生导航，Android 采用一致的表面、动作、表单和阅读角色：同类间距、圆角、图标与字体跨页面复用，不再混用桌面纸页和原生大圆角面板。设置围绕配置与维护，采集和同步操作在首页现有区域承接；Web 与 Mac 设置也隐藏通用新记录动作。原五项评估继续保留，另检查页面职责及视觉一致性，当前截图必须证明目标内容完成加载。
 
-共享配色源在 `packages/shared/design-tokens.json`。运行 `node scripts/generate-design-tokens.mjs` 生成 Web/Electron CSS 与 Kotlin token。平台导航、系统权限与文件选择器仍用原生实现。
+共享角色源在 `packages/shared/design-tokens.json`，包括颜色、字体层级、间距、控件尺寸和表面 / 控件 / 阅读圆角。运行 `node scripts/generate-design-tokens.mjs` 生成 Web/Electron CSS 与 Kotlin token。当前共同方向为冷中性色、白内容面、蓝色强调、系统无衬线和规则边界；平台导航、系统权限与文件选择器仍用原生实现。五轮候选逐轮记录独立八项评价，用户尚未选择最终方案。
 
 处理任务页使用 owner-only `/api/operations` 分页读取 Operation 及步骤状态；原 `/api/processing` 上下文任务入口仍保留。截图感知、文件、Memory、导入、问答、洞察、生命周期、日程分析和 embedding 已接入共享执行器，各领域保留自己的配置与进度入口。支持的操作由服务端状态确定，不返回私人步骤输入，见 [Operations](operations.md)。结果不明的日程仍走原有核实流程。
 
