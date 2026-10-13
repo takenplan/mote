@@ -81,4 +81,23 @@ button:focus-visible,summary:focus-visible,input:focus-visible,select:focus-visi
 .chevron,.choice-arrow { color:var(--mote-muted); }
 .note-composer #note-text { border:var(--mote-border-width) solid var(--mote-control-border); border-radius:var(--mote-radius-control); padding:var(--mote-space-item); }
 input:not([type=checkbox]):focus-visible,textarea:focus-visible,select:focus-visible { border-color:var(--mote-accent); }
+/* R4: primary actions carry the accent; menus and source metadata stay quiet. */
+button.secondary:not(.danger) { color:var(--mote-ink); }
+.setting-icon,.add-choice .setting-icon,.setup-prompt .setting-icon,.central-status-icon,.central-status.unconfigured .central-status-icon,.shortcut-icon,.shortcut-card:nth-child(2) .shortcut-icon,.shortcut-card:nth-child(3) .shortcut-icon,.setting-icon.neutral { background:var(--mote-background); color:var(--mote-muted); }
+.settings-row .setting-icon { background:transparent; }
+.add-choice:hover,.content-row:hover,.shortcut-card:hover { background:var(--mote-tint); box-shadow:none; }
+.home-source,.home-state-details { background:var(--mote-surface); border-color:var(--mote-border); }
+.home-feature-guide,.home-retrieval,.home-status { border-color:var(--mote-divider); }
+.home-feature-guide>.icon,.quiet-note>.icon,.shortcut-arrow { color:var(--mote-muted); }
+.home-feature-guide strong,.setup-prompt strong { color:var(--mote-ink); }
+.recommended { font-size:var(--mote-font-meta); background:var(--mote-background); color:var(--mote-muted); border-radius:var(--mote-radius-indicator); }
+.content-type { background:transparent; color:var(--mote-muted); }
+.content-state { background:var(--mote-background); color:var(--mote-muted); }
+.content-state.needs-attention { background:color-mix(in srgb,var(--mote-warning) 10%,var(--mote-surface)); color:var(--mote-warning); }
+.content-row-copy small { display:flex; flex-wrap:wrap; gap:var(--mote-space-inline); color:var(--mote-muted); }
+.content-row-copy small time { font-variant-numeric:tabular-nums; }
+.content-row-copy .content-source-name { color:var(--mote-muted); }
+.content-reading-dialog .dialog-heading p { font-size:var(--mote-font-meta); color:var(--mote-muted); }
+.reader-state,.content-stages,.content-reading-metadata { color:var(--mote-muted); }
+.content-reading-body { color:var(--mote-ink); }
 @media(max-width:1000px) { main,.workspace-toolbar { padding-inline:var(--mote-space-page); } .home-add-grid .add-choice,.add-dialog-grid .add-choice { min-height:var(--mote-control-height); padding:var(--mote-space-panel); } }

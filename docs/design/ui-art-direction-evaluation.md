@@ -222,3 +222,53 @@ KEEP：原文/来源/时间、实际处理/发送/保留/离线限制、四个�
 没有实机、真实个人采集/账号/传输/模型、真人初看实验或完整无障碍认证。R2未独立重做true200%浏览器缩放、应用重启与完整语言持久性；两语言视觉矩阵来自本轮真实canonical。模拟器、生成资料和fixture不能扩大为这些验证。
 
 **三端均已显式release给Root**：Web中文Today1440×968DPR2、空note/config草稿且focus emulation reset；Mac中文Home1140×808DPR2、note已Save后为空、配置未改、导入Cancel、采集停止；Android英文Home420dpi无override/font1、空草稿/无未保存配置、Collection paused/not started。reviewer没有结束Root-owned进程；Root随后已精确清理Web/Mac与专用AVD开发生成profile，保留AVD继续下一轮。用户尚未选择候选。
+
+
+## 候选 3 · 边界与分隔
+
+# R3：边界与分隔，独立八项评审
+
+本轮的操作描边、轻容器外框与浅组内分隔开始形成稳定关系。Mac 同组图标和真实原任务路径更连续；Android 原生对话框按钮被真实布局裁切的问题已在本轮修复。**三端仍有色彩、顶栏和阅读层级的断裂；用户尚未选择候选。**
+
+聚合候选 `f628484e02b5c6975a896e35de247c5162afd725`。Web/Mac实际producer为 `f63f2a23c3ee7128a22caf39c51990a1e807d585`，Android实际producer为聚合提交。两个提交的改动仅为Android NativeUi和GeneratedWindowRendering；父评审实际逐项重核Mac1235、Web1281个声明生产输入Git blob全部相同。原manifest/PNG/构建来源不改写；失败f63 Android图未用于正式候选评分，没有借用前轮图。
+
+## 八项分数
+
+固定七项依次为设计质量、原创性、工艺、功能性、第一眼清晰与完整、页面职责与聚焦、端内一致性与平台适配。联合项单独直接判断，无总分、权重或平台平均。
+
+| 平台 | 设计 | 原创 | 工艺 | 功能 | 第一眼 | 职责/聚焦 | 端内/平台 | 跨端统一美术风格 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Web | 7.5 | 6.5 | 7 | 8 | 7.5 | 7.5 | 7.5 | 7.5（联合项） |
+| Mac | 7.5 | 6.5 | 8 | 8 | 7.5 | 8 | 8 | 7.5（联合项） |
+| Android | 7.5 | 6.5 | 7 | 8.5 | 8 | 8 | 7.5 | 7.5（联合项） |
+
+联合项7.5来自本轮具体角色连续性的改善，不是按轮次涨分。父评审亲自合看48张同轮英文共同角色图（8场景×常规/窄屏×三端），并细看重点全图。操作/容器/分隔层级已更清楚，Android完整原生对话框顶边与Mac菜单语法解决已观察缺口；Web非状态绿色、正文前重复支架、Android嵌入Ask顶栏仍使其低于8.5努力目标。详见 `joint-independent-review.md` / `joint-visual/index.json`。
+
+## 实际验证范围
+
+| 平台 | 实际评审者 | 本轮范围 |
+| --- | --- | --- |
+| Web | `/root/preview_r3/web_evaluator` | 四条件32core核hash/尺寸/ready并审图；唯一生成note实际保存/精确三行原文/Close同card焦点；纯Settings；Ask→Provider→真正模块消费者→③返回Ask，中央badge实际Settings/BrowserBack；中文390设置。 |
+| Mac | `/root/preview_r3` | 四条件32core核验审图；唯一两行note实际Save/同记录精确原文/Close同opener焦点；纯Settings；Ask→Connection→真实breadcrumb/BackAsk；directSettings→Connection→BackSettings。 |
+| Android | `/root/preview_r3/android_evaluator` | 四条件32core审图、86PNG核验；独立重算24同APK原生按钮完整几何及180有效顶边像素；正常IME实际保存/Content和Home精确原文/Close→对应列表→真实headerBack；纯Settings；Ask配置脏草稿Keep保留/Discard回Ask。 |
+
+每个平台的原始记录使用真实owner副本handoff；父评审没有冒充Web/Android的实际操作者。完整平台理由、错误诊断、报告SHA和操作记录见 `scores.json` 及各平台 independent report。
+
+Android生产方的24完整layout/global-visible bounds及顶部RGBA样本证明四条件本轮裁切修复；子评审独立解码canonical PNG并核像素，与实时XML reader/dirty对话框按钮142px高度分别记录。实时XML只证明可见范围，不能代替当时完整View或像素；没有采集系统IME像素、没有adb screencap。几何hardgate/像素算法未因修复而改变。
+
+无本轮所验主旅程阻断。错误评审gate/locator完整保留且不作产品失败或完成截图：Web4错误gate+1移动locator，15模块过渡旧Provider壳排除，22真实模块consumer补证；Mac6错误gate+2before-only locator，由06b/08b/09c/13b/15b实际consumer补证；Android5错误就绪假设及正确后续UI-tree/selected状态明确区分。没有把错误gate或过渡PNG包装成完成证明。
+
+## R4的具体反馈
+
+1. Web Ask/Import的非状态绿色、reader遮罩和少量指示归入共同角色；Mac推荐标签也审视共同辅助角色。错误/成功等真实状态色保持语义。
+2. 原文/来源/时间优先；Web reader重复类型和前置处理/Memory动作应压缩层级，实际处理/提取边界仍清楚。Android内容/近期行重复类型可去重。
+3. Android原生与嵌入Ask的同职责顶栏动作颜色和边界统一；compact English的Add/Settings挤压Quick notes、屏幕范围标题，Ask顶栏下有大空带。
+4. 三端窄屏说明与配置页头仍偏重；重要范围、发送目的地、离线/隐私/保留后果直接可见。完整帮助持续具名可达。R5再校准Mac类型badge换行、Android英文单数和菜单图标区分。
+
+KEEP：真实内容/来源/时间、功能目的地、原任务返回、保存和处理边界、完整选项与完整帮助；不引入处理/保留/发送政策。没有用不同轮的图或纯token相同推出用户接受。
+
+## 未验证和释放
+
+这是中间轮的核心与受影响变化复核，未独立重演R1/R2全部生命周期、语言重启、全部指南和完整错误/高级配置状态。Web/Mac独立键盘/IME、true200%缩放未重验；Android本轮独立compact IME与全部下拉展开未重验，四条件实际矩阵审图和生产方脚本验证另外声明。制作方自动旅程不能冒充独立实操。没有实机、真实个人采集/账号/传输/模型、真人审美/首次理解实验或完整无障碍认证。
+
+**三端已显式release给Root**：Web中文Home1440×968DPR2并clear metrics，Mac中文Home1140×808DPR2，Android英文Home420dpi/font1；空note草稿、配置未改或真实Discard、采集停止/未开始。评审没有杀Root-owned进程或清空profile，Root负责随后精确清理。用户尚未选择候选。

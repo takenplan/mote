@@ -138,11 +138,13 @@ class UiIterationInstrumentedTest {
                     scenario.onActivity { activity ->
                         assertTrue("Secure window remains enabled", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                         val root = activity.window.decorView
-                        if (name in setOf("settings", "connection", "note", "content", "content-populated")) {
+                        if (name in setOf("settings", "connection", "note", "content", "content-populated", "screen-scope")) {
                             val title = views(root).filterIsInstance<TextView>().single { it.isShown && it.tag == "local-page-title" }
                             val bounds = android.graphics.Rect()
                             assertTrue("The actual page title is fully visible in its app bar", title.getGlobalVisibleRect(bounds))
                             assertEquals(title.width, bounds.width()); assertEquals(title.height, bounds.height())
+                            if ((activity.resources.configuration.screenWidthDp < 360 || activity.resources.configuration.fontScale > 1.2f) && name in setOf("connection", "note", "screen-scope"))
+                                assertEquals("Compact titles use their complete heading row, without Add/Settings squeezing their words", 1, title.lineCount)
                             assertFalse("A local page no longer repeats the brand and return label above its title",
                                 views(root).filterIsInstance<TextView>().any { it.isShown && it.text.toString() in setOf("Mote", "‹  " + MoteI18n.text("返回上级")) })
                         }
@@ -195,6 +197,11 @@ class UiIterationInstrumentedTest {
                 scrollTo("立即同步")
                 render("home-sync-details")
                 scenario.onActivity { activity ->
+                    val labels = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+                    assertTrue("Receipt and processing has its own explicit role", labels.contains(MoteI18n.text("接收与整理状态")))
+                    assertTrue("The exact receipt versus processing distinction remains visible", labels.contains(MoteI18n.text("本机保存、中央接收与整理完成分别显示；接收确认不代表已经可以搜索。")))
+                    assertTrue("Processing remains explicitly unknown in this generated offline fixture", labels.any { it.contains(MoteI18n.text("中央处理状态待查询，请在中央任务中心查看")) })
+                    assertTrue("Upload speed metadata is still available", labels.any { it.startsWith(MoteI18n.text("上传速率") + " · ") })
                     views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("查看同步详情") }.performClick()
                     activity.showMoteAddActions()
                 }
@@ -234,6 +241,14 @@ class UiIterationInstrumentedTest {
                     val header = views(activity.window.decorView).single { it.isShown && it.tag == "central-header" }
                     val settings = views(header).filterIsInstance<TextView>().single { it.text.toString() == MoteI18n.text("设置") }
                     assertEquals("The header action stays readable at narrow widths and large fonts", 1, settings.lineCount)
+                    assertEquals("Settings keeps the quiet action role", MoteUi.muted, settings.currentTextColor)
+                    val add = views(header).filterIsInstance<TextView>().single { it.contentDescription == MoteI18n.text("添加内容") }
+                    assertEquals("Add uses the secondary action text color", MoteUi.accent, add.currentTextColor)
+                    val status = views(activity.window.decorView).single { it.tag == "central-status" } as TextView
+                    assertTrue("The actual disconnected Ask has finished its status work", status.text.isBlank())
+                    assertEquals("An empty live status container does not reserve a blank strip", View.GONE, status.visibility)
+                    val scope = views(activity.window.decorView).single { it.tag == "central-collection-scope" }
+                    assertEquals("No empty scope container reserves space in actual Ask", View.GONE, scope.visibility)
                 }
                 tab("TODAY")
                 scenario.onActivity { activity -> activity.openGeneratedAdd(MoteAddAction.NOTE) }

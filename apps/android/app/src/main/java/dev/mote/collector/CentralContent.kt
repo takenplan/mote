@@ -108,12 +108,13 @@ internal class CentralContent(
             isFocusable = true; minHeight = moteDp(48); setOnClickListener { if (!back()) { if (openLocalPage != null) localPage("OVERVIEW") else activity.finish() } }
         }
         heading.addView(backButton, LinearLayout.LayoutParams(moteDp(44), -2))
-        title = TextView(this).apply { tag = "central-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); maxLines = if (compactHeader) 2 else 1; ellipsize = android.text.TextUtils.TruncateAt.END; setTextColor(MoteUi.ink) }
+        title = TextView(this).apply { tag = "central-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); maxLines = Int.MAX_VALUE; ellipsize = null; setTextColor(MoteUi.ink) }
         heading.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
         fun headerAction(label: String, description: String = label, tonal: Boolean = false, action: () -> Unit): TextView {
             val item = TextView(this).apply {
                 text = MoteI18n.text(label); contentDescription = MoteI18n.text(description); MoteUi.type(this, DesignTokens.fontAction, medium = true); gravity = Gravity.CENTER
-                isFocusable = true; minHeight = moteDp(DesignTokens.controlHeight); background = MoteUi.clickable(this@CentralContent, if (tonal) DesignTokens.surface else Color.TRANSPARENT, MoteUi.actionRadius, outline = tonal)
+                setTextColor(if (tonal) MoteUi.accent else MoteUi.muted)
+                isFocusable = true; minHeight = moteDp(DesignTokens.controlHeight); background = MoteUi.clickable(this@CentralContent, if (tonal) DesignTokens.surface else Color.TRANSPARENT, MoteUi.actionRadius, outline = tonal, strokeColor = MoteUi.controlBorder)
                 setOnClickListener { action() }
             }
             actions.addView(item, (if (compactHeader) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(56), -2)).apply { marginStart = moteDp(4) })
@@ -129,10 +130,11 @@ internal class CentralContent(
         root.addView(header)
         status = TextView(this).apply {
             tag = "central-status"
+            visibility = View.GONE
             setTextColor(MoteUi.muted); setPadding(moteDp(16), moteDp(8), moteDp(16), moteDp(8))
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }; root.addView(status)
-        collectionBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(16), 0, moteDp(16), moteDp(8)) }
+        collectionBar = LinearLayout(this).apply { tag = "central-collection-scope"; orientation = LinearLayout.VERTICAL; visibility = View.GONE; setPadding(moteDp(16), 0, moteDp(16), moteDp(8)) }
         root.addView(collectionBar)
         val scroll = ScrollView(this).apply { isFillViewport = true }
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(24)) }
@@ -367,10 +369,13 @@ internal class CentralContent(
         }.apply { contentDescription = label; accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE }
         section.addView(content)
     }
-    internal fun notice(message: String) { status.text = message }
+    internal fun notice(message: String) {
+        status.text = message
+        status.visibility = if (message.isBlank()) View.GONE else View.VISIBLE
+    }
     internal fun enterDetail() { backButton.visibility = View.VISIBLE; revision++; pending.clear(); handler.removeCallbacks(refreshRun) }
     internal fun requestFailure(error: Throwable, generation: Long = accessGeneration) {
-        status.text = error.message ?: MoteI18n.text("操作失败")
+        notice(error.message ?: MoteI18n.text("操作失败"))
         if (client == null && body.childCount == 0) {
             button(MoteI18n.text("重试")) { recreate() }; connectionButton()
         }
@@ -396,7 +401,7 @@ internal class CentralContent(
             if (view is EditText || view is Spinner || view is CompoundButton) { if (view.isEnabled) { inputs.add(view); view.isEnabled = false } }
             if (view is android.view.ViewGroup) for (i in 0 until view.childCount) lock(view.getChildAt(i))
         }; lock(body)
-        task.start(label, { if (foreground == foregroundRevision && resumed) status.text = it }, { progress ->
+        task.start(label, { if (foreground == foregroundRevision && resumed) notice(it) }, { progress ->
             val before = CentralAccess.resolve(this)
             check(allowSessionChange || generation < 0 || before.generation == generation) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
             check(allowSessionChange || !authenticated || before.client != null && before.server == origin) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
@@ -411,7 +416,7 @@ internal class CentralContent(
             if (version == revision && foreground == foregroundRevision && resumed && !isDestroyed && !isFinishing) {
                 result.onSuccess { completed ->
                     if (completed.generation >= accessGeneration) {
-                        status.text = ""; runCatching { done(completed.value) }.onFailure { error -> status.text = error.message ?: MoteI18n.text("操作失败") }
+                        notice(""); runCatching { done(completed.value) }.onFailure { error -> notice(error.message ?: MoteI18n.text("操作失败")) }
                     }
                 }
                     .onFailure { error ->

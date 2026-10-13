@@ -26,7 +26,7 @@ useRef,
 useState
 } from "react";
 import { AnswerMarkdown } from "./AnswerMarkdown";
-import { EvidenceState } from './EvidenceState';
+import { EvidenceState,EvidenceProcessingHelp } from './EvidenceState';
 import { ReferenceDetail } from './ReferenceDetail';
 import { TurnUsage } from './Usage';
 import {
@@ -425,6 +425,8 @@ export function EvidenceDialog({
   const sourceBody=capture?.evidencePresentation==='source-record-json-v1'?decodeSourceText(capture.evidencePresentation,capture.ocrText):undefined;
   const readableText=sourceBody?.kind==='source'?sourceBody.text:capture?.ocrText;
   const ocr = capture ? ocrPresentation(captureOcrState(capture), capture.ocrText, capture.metadata?.capture?.deduplication?.duplicate, capture.perceptionJobs) : null;
+  const sourceLabel=capture?(sourceLabels[capture.source]||capture.source):'';
+  const readerTitle=capture?(capture.source==='note'?sourceLabel:capture.windowTitle||capture.appName||sourceLabel):moteText('上下文证据');
   const materialRef=capture?.revisionState==='current'&&capture.memoryMaterialRef;
   const currentMaterialRef=materialRef&&/^material:mat_[a-f0-9]{64}@[a-f0-9]{64}$/.test(materialRef)?materialRef:undefined;
   return (
@@ -440,11 +442,12 @@ export function EvidenceDialog({
       >
         <div className="evidence-heading">
           <div>
-            <span className="eyebrow">CONTEXT / EVIDENCE</span>
-            <h2>{capture?.appName || moteText("上下文证据")}</h2>
+            <h2>{readerTitle}</h2>
             {capture && (
-              <p>
-                {dateTime(capture.capturedAt)} · {capture.deviceName}
+              <p className="evidence-caption">
+                {readerTitle!==sourceLabel&&<span>{sourceLabel} · </span>}
+                {capture.appName&&capture.appName!==readerTitle&&capture.appName!==sourceLabel&&<span>{capture.appName} · </span>}
+                <time dateTime={capture.capturedAt}>{dateTime(capture.capturedAt)}</time> · {capture.deviceName}
               </p>
             )}
           </div>
@@ -470,17 +473,16 @@ export function EvidenceDialog({
           <>
             <div className={`evidence-grid ${!capture.blobHash ? 'note-evidence' : ''}`}>
               {capture.blobHash && <OriginalImage key={capture.id} api={api} capture={capture}/>}
-              <div className="evidence-text"><EvidenceState/>
-                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
-                  capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
-                  capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div>
-                <span className="eyebrow">{presentation?.textLabel}</span>
-                <h3>{capture.windowTitle || sourceLabels[capture.source] || moteText("原始上下文")}</h3>
+              <div className="evidence-text"><EvidenceState compact/>
                 {capture.source === 'screen' && ocr && <div className="evidence-ocr-status" role="status"><span className={`badge ${ocr.tone}`}>{ocr.label}</span><p>{ocr.description}</p></div>}
-                <h4 className="evidence-body-heading">{capture.source === 'screen' ? moteText("OCR 全文") : moteText("记录全文")}</h4>
+                <h3 className="evidence-body-heading">{presentation?.textLabel}</h3>
                 <pre>
                   {capture.source==='media'?mediaExplanation:capture.source === 'activity' ? activityExplanation : systemEventText(capture.metadata) || readableText || (capture.provenance?.deleted ? moteText("来源已报告删除；本次只保留来源元数据。") : capture.provenance?.layer === 'reference' ? moteText("此来源仅保留引用与元数据，未导入正文。") : presentation?.nativeFile&&capture.provenance?.layer==='original'?moteText("原件单独保存；转写与摘要见上方。"):capture.blobHash ? moteText("暂无文字。") : moteText("此记录没有正文。"))}
                 </pre>
+                <EvidenceProcessingHelp/>
+                <div className="evidence-source-actions">{currentMaterialRef?<button className="button" onClick={()=>onOpen(currentMaterialRef)}>{moteText('查看正式资料并提取记忆')}</button>:
+                  capture.requiresMaterialForMemory?<p className="muted">{moteText('此来源的原始记录需通过正式资料提取记忆。')} <a href="#/library?view=materials">{moteText('查看正式资料')}</a></p>:
+                  capture.revisionState!=='historical'&&<a className="button" href={memorySourceRoute(formatEvidenceRef('capture',capture.id))}>{moteText("仅从这条资料提取记忆")}</a>}</div>
                 {(capture.source==='media'||capture.metadata?.media)&&<MediaSnapshot media={capture.metadata?.media} observedAt={capture.metadata?.observedAt??capture.capturedAt} screenLocked={capture.metadata?.state?.screenLocked} collection={capture.privacy.collection}/>}
                 <dl>
                   <div>
@@ -489,6 +491,7 @@ export function EvidenceDialog({
                       {sourceLabels[capture.source] || capture.source}
                     </dd>
                   </div>
+                  {capture.source==='note'&&capture.windowTitle&&<div><dt>{moteText("窗口标题")}</dt><dd>{capture.windowTitle}</dd></div>}
                   {capture.appId && <div><dt>{moteText("应用标识")}</dt><dd>{capture.appId}</dd></div>}
                   {(capture.source === 'screen' || capture.source === 'activity') && <div><dt>{moteText("前台应用采样时长")}</dt><dd>{duration(capture.durationMs)}</dd></div>}
                   {capture.source==='media'&&<div><dt>{moteText("媒体播放采样时长")}</dt><dd>{capture.durationMs>0?duration(capture.durationMs):moteText("状态观察，不累计时长")}</dd></div>}

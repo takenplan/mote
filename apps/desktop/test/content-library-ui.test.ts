@@ -97,3 +97,12 @@ it('retains the authored title of a non-note source and resets process help for 
   (el('content-processing') as HTMLDetailsElement).open=true;el('content-detail-close').click();await open();
   expect((el('content-processing') as HTMLDetailsElement).open).toBe(false);
 });
+
+it('keeps source time separate from the original and omits absent source separators',async()=>{
+  page={items:[item],total:1};await library.refresh();await open();
+  const time=document.querySelector<HTMLTimeElement>('#content-feed .content-row-copy time')!;
+  expect(time.dateTime).toBe(item.observedAt);expect(time.textContent).not.toBe('');
+  expect(document.querySelector('#content-feed .content-source-name')!.textContent).not.toBe('');
+  expect(el('content-detail-source').textContent).not.toMatch(/^\s*·/);
+  expect(el('content-detail-body').textContent).toBe(remote.text);
+});

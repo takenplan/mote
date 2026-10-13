@@ -146,6 +146,60 @@
         "sourceCommit": "6854f25904d924b406fdbf1843ae74a5ab420e15",
         "apkSha256": "a93ba288337467b23739890b9886d91656b13e52a236e6ef2e7025f595470062"
       }
+    },
+    {
+      "id": "r3",
+      "title": "候选 3",
+      "theme": "边界与分隔",
+      "sourceCommit": "f628484e02b5c6975a896e35de247c5162afd725",
+      "status": "reviewed-candidate",
+      "scores": {
+        "web": [
+          7.5,
+          6.5,
+          7,
+          8,
+          7.5,
+          7.5,
+          7.5
+        ],
+        "mac": [
+          7.5,
+          6.5,
+          8,
+          8,
+          7.5,
+          8,
+          8
+        ],
+        "android": [
+          7.5,
+          6.5,
+          7,
+          8.5,
+          8,
+          8,
+          7.5
+        ]
+      },
+      "jointScore": 7.5,
+      "notes": "本轮统一操作描边、轻外框和浅组内分隔，修复Android弹窗顶边裁切，Mac菜单与原任务提示更连续。保存、原文回读和来源返回已实操；下一轮仍需清理非状态绿色、压缩阅读页重复层级并统一安卓顶栏。",
+      "web": {
+        "root": ".mote/ui-art-direction/r3/web",
+        "manifest": ".mote/ui-art-direction/r3/web/result.json",
+        "sourceCommit": "f63f2a23c3ee7128a22caf39c51990a1e807d585"
+      },
+      "mac": {
+        "root": ".mote/ui-art-direction/r3/mac",
+        "manifest": ".mote/ui-art-direction/r3/mac/manifest.json",
+        "sourceCommit": "f63f2a23c3ee7128a22caf39c51990a1e807d585"
+      },
+      "android": {
+        "root": ".mote/ui-art-direction/r3/android",
+        "manifest": ".mote/ui-art-direction/r3/android/image-manifest.json",
+        "sourceCommit": "f628484e02b5c6975a896e35de247c5162afd725",
+        "apkSha256": "b81a06075263f4dabfa0bee83506c6163490b06e7d076b99cf0fd0c9c20c5197"
+      }
     }
   ]
 }

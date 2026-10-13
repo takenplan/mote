@@ -336,7 +336,7 @@ test('full record uses a visible heading and unnamed text content without losing
  await act(async()=>root.render(React.createElement(EvidenceDialog,{id:'capture:'+ids[0],api,onClose:()=>{},onDeleted:()=>{},onOpen:()=>{}})));
  const body=d.querySelector('.evidence-text pre')!;
  assert.match(d.querySelector<HTMLAnchorElement>('.evidence-text a')!.href,/library\?view=memories&memorySource=capture%3Aaaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/);
- assert.equal(body.previousElementSibling?.tagName,'H4');assert.equal(body.previousElementSibling?.textContent,'记录全文');
+ assert.equal(body.previousElementSibling?.tagName,'H3');assert.equal(body.previousElementSibling?.textContent,'用户原文');
  assert.equal(body.textContent,text);assert.equal(body.getAttribute('aria-label'),null);assert.equal(body.getAttribute('aria-labelledby'),null);
  assert.equal(body.querySelector('b, img, script'),null);assert.equal(body.closest('[aria-hidden=true], [inert]'),null);
  assert.equal((d.defaultView as unknown as {__evidenceExecuted?:boolean}).__evidenceExecuted,undefined);
@@ -614,7 +614,7 @@ test('source drawer decodes only declared organizer text once and separates acti
  await act(async()=>root.render(React.createElement(EvidenceDialog,{id:'capture:'+ids[0],api,onClose:()=>{},onDeleted:()=>{},onOpen:()=>{}})));
  const body=()=>d.querySelector('.evidence-text>pre')!;
  assert.equal(body().textContent,text);assert.equal(body().querySelector('script'),null);
- const action=d.querySelector('.evidence-source-actions')!;assert.ok(action.querySelector('button'));assert.equal(action.nextElementSibling?.className,'eyebrow');assert.equal(body().previousElementSibling?.tagName,'H4');
+ const action=d.querySelector('.evidence-source-actions')!;assert.ok(action.querySelector('button'));assert.ok(body().compareDocumentPosition(action)&d.defaultView!.Node.DOCUMENT_POSITION_FOLLOWING);assert.equal(body().previousElementSibling?.tagName,'H3');assert.equal(body().previousElementSibling?.textContent,'原始文本');
  declaration=undefined;await act(async()=>resources(api).invalidate(key=>key.startsWith('/api/capture-browser/')));assert.equal(body().textContent,envelope,'ordinary JSON prose is never unwrapped heuristically');
  declaration='source-record-json-v1';raw='{"text":"not a valid organizer envelope"}';await act(async()=>resources(api).invalidate(key=>key.startsWith('/api/capture-browser/')));assert.equal(body().textContent,raw,'invalid declarations retain the supplied evidence');
 });
