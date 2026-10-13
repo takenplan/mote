@@ -77,6 +77,22 @@ async function withProvider(protocol, run, options = {}, actions, final = answer
 }
 
 for (const protocol of ['deepseek','openai-completions','openai-responses','anthropic-messages','google-generative-ai']) {
+  test(`real Harness ${protocol} reads granted original context and delivers host receipts before validation`,{timeout:60000},async()=>{
+    const continuationId='44444444-4444-4444-8444-444444444444',original='Generated diary context: I am reviewing 2024. Generated target: I repaired a bicycle.',offset=original.indexOf('Generated target');
+    const target={id:record.id,offset,length:original.length-offset},prefix={id:record.id,offset:0,length:20};
+    const extra={...record,id:continuationId,ocrText:'Generated continuation with a different quoted speaker.'},first={...record,ocrText:original},grants=[{id:record.id,offset:0,length:original.length},{id:continuationId,offset:0,length:extra.ocrText.length}];
+    const actions=[{name:'context_evidence',args:{id:record.id,offset:0,length:20}},{name:'context_evidence',args:{id:continuationId,offset:0,length:12000}}];
+    let validated;
+    await withProvider(protocol,async(agent,requests)=>{
+      const result=await agent.query({question:'Inspect the generated target with needed context.',skill:'memory-extraction',evidenceIds:[record.id],evidenceRanges:[target],evidenceReadRanges:grants,validateOutput:value=>{validated=value.evidenceReadRanges;assert.deepEqual(value.evidenceReadRanges,[prefix,target,{id:continuationId,offset:0,length:extra.ocrText.length}]);}});
+      assert.equal(requests.length,3);assert.deepEqual(result.evidenceReadRanges,validated);assert.equal(result.citations[0].id,continuationId);
+      assert.ok(!JSON.stringify(requests[0].body).includes(extra.ocrText),'unread continuation body stays out of the initial model prompt');
+      assert.ok(JSON.stringify(requests[2].body).includes(extra.ocrText),'a successful context tool read supplies its original text');
+      const body=requests[0].body,tools=protocol==='google-generative-ai'?body.tools.flatMap(t=>t.functionDeclarations):body.tools.map(t=>t.function??t);
+      assert.deepEqual(tools.map(tool=>tool.name).sort(),['context_evidence','evidence','skill']);
+      assert.deepEqual(result.trace.map(item=>item.tool),['context_evidence','context_evidence']);
+    },{reader:{...reader,evidence:async({ids})=>[first,extra].filter(record=>ids.includes(record.id))}},actions,JSON.stringify({answer:`Generated continuation [${continuationId}]`,citationIds:[continuationId],evidenceReadRanges:[{id:'model-forged',offset:0,length:999999}]}));
+  });
   test(`real Harness ${protocol} transports native attribution pages without original citation authority`,{timeout:60000},async()=>{
     const fixture=generatedMaterialPages(),ctx={version:1,ownerRelation:'unknown',basis:'default',importDeclarations:[{id:record.id,version:1,fingerprint:'a'.repeat(64),captureIds:[fixture.originals[0].id]}],importStatements:[{id:record.id,version:1,captureIds:[fixture.originals[0].id],instruction:'Generated narrator-only scope. '.repeat(500).slice(0,12000)}]};
     fixture.material.attributionContext=ctx;

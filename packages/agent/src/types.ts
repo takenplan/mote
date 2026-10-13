@@ -153,7 +153,7 @@ export interface QueryInput {
   responseMode?: 'answer'|'personal-insight'|'memory-extraction'|'calendar-extraction';
   /** Host-selected procedure, never selected from captured text. */
   skill?: Exclude<MoteSkillId,'document-import'>;
-  /** A bounded extraction session may read only these original evidence ranges. */
+  /** Initially supplied original IDs for a bounded extraction session. */
   evidenceIds?: string[];
   /** Host-only immutable evidence fingerprints for a bounded background read. */
   processingEvidence?: Record<string,string>;
@@ -166,6 +166,9 @@ export interface QueryInput {
   /** Small host-selected derived leads, never citation evidence or an owner-identity grant. */
   openingMemories?:{id:string;title:string;statement:string;uncertainty:string;status:'published'|'proposed';tier:'episode'|'consolidated';createdAt:string;admission?:{scope:string;attribution:'user'|'third_party'|'observed'|'inferred'};validFrom?:string;validUntil?:string}[];
   evidenceRanges?: {id:string;offset:number;length:number}[];
+  /** Host-only additional original read grant. These exact ranges are a catalog,
+   * not delivered evidence or extraction targets. No archive discovery is added. */
+  evidenceReadRanges?: readonly {id:string;offset:number;length:number}[];
   after?: string;
   before?: string;
   deviceId?: string;
@@ -243,6 +246,9 @@ export interface ToolTrace {
   count: number;
 }
 export interface AgentAnswer {
+  /** Host-generated receipt of original ranges actually delivered in this run.
+   * Populated before host validation, never parsed from model output. */
+  evidenceReadRanges?: {id:string;offset:number;length:number}[];
   /** Fixed owner metadata versions disclosed by this run; never original citation grants. */
   sourceContextDependencies?:{sourceId:string;version:number;fingerprint:string}[];
   evidenceDependencies?:import('@mote/shared').EvidenceDependencies;

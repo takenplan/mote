@@ -86,6 +86,24 @@ test('built-in default upgrade finishes a preexisting v2 receipt and uses v3 onl
   assert.deepEqual(f.jobs().map(j=>j.id),ids);assert.equal(f.calls.length,4,'restart does not replay either version');
 });
 
+test('v4 built-in default upgrade preserves a queued v3 receipt and selects v4 only for future intake',async t=>{
+  const f=await fixture(t),v3={id:personal.id,version:'3'};
+  await f.configure([v3]);f.source('diary');
+  await f.add('diary','old-v3-receipt');await f.publish();await f.queue();
+  const before=f.jobs();assert.equal(before.length,1);assert.equal(before[0].recipes![0].version,'3');
+  // Keep the accepted v3 intake and queued work while reproducing startup before
+  // the separate named v4 migration. No synthetic receipt or backfill is used.
+  f.node.store.db.prepare("DELETE FROM memory_recipe_default_upgrades WHERE id='context-reading-personal@4'").run();
+  await f.restart();assert.equal(f.node.memoryRecipeSettings.selection()[0].recipe.version,'4');
+  await f.run();assert.equal(f.node.memoryPipeline.get(before[0].id).status,'completed');
+  assert.equal(f.count('extract'),1);assert.equal(f.count('review'),1);
+  await f.add('diary','fresh-v4-receipt');await f.publish();await f.run();
+  assert.deepEqual(f.jobs().map(j=>j.recipes![0].version).sort(),['3','4']);
+  assert.equal(f.count('extract'),2);assert.equal(f.count('review'),2,'v4 uses its own immutable extractor and reviewer');
+  const ids=f.jobs().map(j=>j.id);await f.restart();await f.publish();await f.run();
+  assert.deepEqual(f.jobs().map(j=>j.id),ids);assert.equal(f.calls.length,4,'restart does not replay either version');
+});
+
 test('explicit source inheritance after default upgrade revokes its old receipt without cancelling other sources',async t=>{
   const f=await fixture(t);await f.configure([personal]);f.source('ordinary');f.source('override');await f.configure([personal],'override');
   let entered!:()=>void,release!:()=>void;const reached=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
@@ -247,7 +265,7 @@ test('enablement and revocation commit atomically and query agent credentials ca
 
 test('current defaults and source inheritance preserve denied receipts across restart; empty persisted selections are rejected',async t=>{
   const f=await fixture(t);f.source('diary');f.source('inherited');
-  const pinned=f.node.memoryRecipeSettings.selection()[0];assert.equal(pinned.recipe.version,'3');
+  const pinned=f.node.memoryRecipeSettings.selection()[0];assert.equal(pinned.recipe.version,'4');
   await f.add('diary','denied');f.node.store.db.prepare("UPDATE memory_input_authorizations SET authorized=0 WHERE source_id='diary'").run();
   f.node.store.db.prepare("UPDATE memory_recipe_settings SET json='[]' WHERE id='default'").run();
   f.node.store.db.prepare("INSERT INTO memory_recipe_settings VALUES('source:inherited','inherited','[]')").run();

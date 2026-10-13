@@ -9,6 +9,7 @@ import {actionEvidenceText,parseEvidenceRef,parseEvidenceId,formatEvidenceRef} f
 import {ContextToolError} from './tool-errors.js';
 import {AgentResponseError,reportTrace,reportProgress} from './types.js';
 import {sourceProtocolInstructions} from './instructions.js';
+import {extractionSeedScopeFitsBudget} from './extraction-seed-budget.js';
 import { createServer, type Server } from "node:http";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import type { AddressInfo } from "node:net";
@@ -233,7 +234,7 @@ export async function startBridge(
   bounds: QueryInput,
   maxToolCalls: number,
 ) {
-  bounds=pinContextTools(bounds,reader);
+  bounds=pinContextTools({...bounds,...(bounds.evidenceIds?{evidenceIds:[...bounds.evidenceIds]}:{}),...(bounds.evidenceRanges?{evidenceRanges:bounds.evidenceRanges.map(range=>({...range}))}:{}),...(bounds.evidenceReadRanges?{evidenceReadRanges:Object.freeze(bounds.evidenceReadRanges.map(range=>Object.freeze({...range})))}:{})},reader);
   const contributions=new Map((bounds.toolContributions??[]).map(tool=>[tool.name,tool]));
   const specialCapabilities=new Map(registeredContextToolDefinitions(bounds).filter(([name])=>dispatchTools(bounds).includes(name)&&!NATIVE_CONTEXT_TOOLS.has(name)&&!name.startsWith('delegation_')).map(([name,description,fields])=>[name,{name,version:contributions.get(name)?.version??'1',description,fields}]));
   const discoveredCapabilities=new Set<string>();
@@ -278,23 +279,30 @@ export async function startBridge(
   const limits=retrievalLimits(bounds);
   const permitted = new Map<string,ContextRecord>();
   const ranges = bounds.evidenceRanges ?? bounds.evidenceIds?.map(id=>({id,offset:0,length:12000})) ?? [];
+  const readRanges=bounds.evidenceReadRanges??[];
+  const originalPins=new Map<string,string>();
+  const originalPin=(record:ContextRecord)=>JSON.stringify([record.id,record.ocrText,record.capturedAt,record.deviceId,record.provenance,record.attributionContext,record.fileEvidence,record.metadata]);
   const splitsPair=(text:string,at:number)=>at>0&&at<text.length&&/[\uD800-\uDBFF]/.test(text[at-1])&&/[\uDC00-\uDFFF]/.test(text[at]);
   if(bounds.evidenceRanges&&!restricted)throw hostError('Evidence ranges require explicit evidence IDs');
+  if(bounds.evidenceReadRanges&&!restricted)throw hostError('Context read ranges require a bounded extraction session');
   if(restricted){
-    if(!bounds.evidenceIds?.length||bounds.evidenceIds.length>100||ranges.length>100||ranges.some(r=>!bounds.evidenceIds!.includes(r.id)||!Number.isSafeInteger(r.offset)||r.offset<0||!Number.isSafeInteger(r.length)||r.length<1||r.length>100000)||ranges.reduce((n,r)=>n+r.length,0)>100000)throw hostError('Invalid extraction evidence scope');
-    for(const record of await reader.evidence({ids:bounds.evidenceIds}))if(bounds.evidenceIds.includes(record.id))permitted.set(record.id,bounds.skill==='calendar-extraction'?{...record,ocrText:actionEvidenceText(record)}:record);
+    if(!bounds.evidenceIds||!extractionSeedScopeFitsBudget(bounds.evidenceIds,ranges))throw hostError('Invalid extraction evidence scope');
+    if(readRanges.length>100||readRanges.some(r=>typeof r.id!=='string'||!r.id||!Number.isSafeInteger(r.offset)||r.offset<0||!Number.isSafeInteger(r.length)||r.length<1||!Number.isSafeInteger(r.offset+r.length)))throw hostError('Invalid context evidence read scope');
+    const ids=[...new Set([...bounds.evidenceIds,...readRanges.map(r=>r.id)])];if(ids.length>100)throw hostError('Context evidence read scope exceeds the original ID bound');
+    for(const raw of await reader.evidence({...range({},bounds),ids}))if(ids.includes(raw.id)){const record=bounds.skill==='calendar-extraction'?{...raw,ocrText:actionEvidenceText(raw)}:raw;permitted.set(record.id,record);originalPins.set(record.id,originalPin(record));}
     const scope=range({},bounds);
-    for(const id of bounds.evidenceIds){
+    for(const id of ids){
       const record=permitted.get(id);
-      if(!record)throw hostError('Extraction evidence is missing');
+      if(!record){if(bounds.evidenceIds.includes(id))throw hostError('Extraction evidence is missing');continue;}
       const document=documentSchema.safeParse((record.provenance as Record<string,unknown>|undefined)?.document);
       const at=sourceContentTime({capturedAt:record.capturedAt,...(document.success?{provenance:{document:document.data}}:{})});
       if((scope.deviceId&&record.deviceId!==scope.deviceId)||(scope.after&&Date.parse(at)<Date.parse(scope.after))||(scope.before&&Date.parse(at)>=Date.parse(scope.before)))throw hostError('Extraction evidence is outside the selected scope');
-      if(!ranges.some(r=>r.id===id))throw hostError('Every extraction evidence ID requires a delivered range');
+      if(bounds.evidenceIds.includes(id)&&!ranges.some(r=>r.id===id))throw hostError('Every extraction evidence ID requires a delivered range');
     }
     for(const r of ranges){const text=permitted.get(r.id)!.ocrText;
       if(bounds.evidenceRanges&&(r.offset+r.length>text.length||splitsPair(text,r.offset)||splitsPair(text,r.offset+r.length)))throw hostError('Extraction range must stay inside original text and UTF-16 boundaries');
     }
+    for(const r of readRanges){const text=permitted.get(r.id)?.ocrText;if(text!==undefined&&(r.offset+r.length>text.length||splitsPair(text,r.offset)||splitsPair(text,r.offset+r.length)))throw hostError('Context read range must stay inside original text and UTF-16 boundaries');}
   }
   const seedEvidence=ranges.flatMap(r=>{const record=permitted.get(r.id);return record?[project(record,r.offset,r.length,bounds.timeZone)]:[];});
   if(Buffer.byteLength(JSON.stringify(seedEvidence))>1_500_000)throw hostError('Extraction evidence exceeds the byte budget');
@@ -314,6 +322,7 @@ export async function startBridge(
   const discovered=new Set(records.keys());
   const pinnedMaterials=new Set<string>();
   let deliveredCharacters=JSON.stringify(seedEvidence).length;
+  const deliveredRanges=seedEvidence.flatMap(record=>{const span=record.textRange as {start:number;end:number};return span.end>span.start?[{id:record.id,offset:span.start,length:span.end-span.start}]:[];});
   const expanded=new Set<string>();
   for(const image of directImages)expanded.add(image.id);
   // Query-local byte identities only: never skip the reader's fresh authorization
@@ -471,7 +480,7 @@ export async function startBridge(
         return id;
       };
       if(tool==='evidence'&&Array.isArray(args.ids))args={...args,ids:args.ids.map(captureId)};
-      if(['read_image','read_file_evidence','file_chunks','source_history'].includes(tool)||tool==='attribution_context'&&args.id!==undefined)args={...args,id:captureId(args.id)};
+      if(['read_image','read_file_evidence','file_chunks','source_history','context_evidence'].includes(tool)||tool==='attribution_context'&&args.id!==undefined)args={...args,id:captureId(args.id)};
       if (!dispatchedViaCatalog&&++calls > maxToolCalls)
         throw new ContextToolError('tool_budget_exceeded','Tool call budget reached. Finish using already retrieved evidence; do not call retrieval tools again.','use_existing_evidence',{remainingCalls:0});
       if(deliveredCharacters>=limits.totalToolCharacters-1000)throw budgetError();
@@ -635,10 +644,37 @@ export async function startBridge(
         reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:1});res.end(serialized);return;
       }
       if(restricted){
+        if(tool==='context_evidence'){
+          if(Object.keys(args).some(key=>!['id','offset','length'].includes(key))||typeof args.id!=='string'||!Number.isSafeInteger(args.offset)||Number(args.offset)<0||!Number.isSafeInteger(args.length??4000)||Number(args.length??4000)<1||Number(args.length??4000)>12000)throw new ContextToolError('invalid_evidence_range','Use an original id from authorizedContextRanges, an absolute UTF-16 offset and length from 1–12000.','correct_arguments');
+          const id=args.id,start=Number(args.offset),requestedLength=Number(args.length??4000);
+          const grant=readRanges.filter(r=>r.id===id&&start>=r.offset&&start<r.offset+r.length).sort((a,b)=>b.offset+b.length-a.offset-a.length)[0];
+          if(!grant)throw new ContextToolError('evidence_range_exceeded','Requested context is outside the host original read grant.','correct_arguments',{evidenceId:id,requestedOffset:start,allowedRanges:readRanges.filter(r=>r.id===id).map(({offset,length})=>({offset,length}))});
+          const raw=(await reader.evidence({...range({},bounds),ids:[id]})).find(record=>record.id===id),fresh=raw&&(bounds.skill==='calendar-extraction'?{...raw,ocrText:actionEvidenceText(raw)}:raw);
+          if(!fresh||originalPin(fresh)!==originalPins.get(id))throw new ContextToolError('evidence_changed','Source evidence, authorization or its host attribution changed. Stop this run; its original read grant cannot be repaired by changing arguments.','stop');
+          const text=fresh.ocrText,grantEnd=grant.offset+grant.length;
+          if(splitsPair(text,start))throw new ContextToolError('invalid_evidence_range','Context offset splits a UTF-16 pair. Use the returned continuation offset.','correct_arguments');
+          let end=Math.min(grantEnd,start+requestedLength);if(splitsPair(text,end))end--;
+          const serialize=(stop:number)=>{const record=project(fresh,start,stop-start,bounds.timeZone);record.textRange={...(record.textRange as object),nextOffset:stop<grantEnd?stop:null};return {record,text:JSON.stringify({source:'untrusted_personal_context',data:[record],readRange:{offset:grant.offset,length:grant.length},hostBudget:hostBudget()})};};
+          const available=Math.min(limits.toolResultCharacters,limits.totalToolCharacters-deliveredCharacters);
+          if(end<=start)throw new ContextToolError('invalid_evidence_range','This page cannot deliver a complete Unicode character; request at least two UTF-16 units.','correct_arguments');
+          let page=serialize(end);
+          if(page.text.length>available){
+            let low=start+1,high=end,best:ReturnType<typeof serialize>|undefined,bestEnd=start;
+            while(low<=high){const probe=Math.floor((low+high)/2),stop=splitsPair(text,probe)?probe-1:probe;
+              if(stop<=start){low=probe+1;continue;}
+              const candidate=serialize(stop);if(candidate.text.length<=available){best=candidate;bestEnd=stop;low=probe+1;}else high=probe-1;
+            }
+            if(!best)throw budgetError();page=best;end=bestEnd;
+          }
+          remember(page.record);discovered.add(id);disclosedIds.add(id);expanded.add(id);rememberSourceContexts(page.record);
+          deliveredRanges.push({id,offset:start,length:end-start});deliveredCharacters+=page.text.length;
+          trace.push({tool,arguments:{id,offset:start,length:requestedLength,returnedLength:end-start},count:1});
+          reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:1});res.end(page.text);return;
+        }
         if(tool!=='evidence')throw hostError('This extraction session uses only the supplied evidence ranges');
-        if(!Array.isArray(args.ids)||!args.ids.length||args.ids.some(id=>typeof id!=='string'||!permitted.has(id)))throw new ContextToolError('evidence_scope_denied','Use only record.id values supplied by the host for this batch, never fingerprints or content hashes. Copy IDs from allowedRanges; omit offset and length to read the supplied segments.','correct_arguments',{allowedRanges:ranges.map(({id,offset,length})=>({id,offset,length}))});
-        const current=await reader.evidence({ids:args.ids as string[]});
-        if((args.ids as string[]).some(id=>{const before=permitted.get(id)!,after=current.find(r=>r.id===id);return !after||(bounds.skill==='calendar-extraction'?actionEvidenceText(after):after.ocrText)!==before.ocrText||JSON.stringify(after.provenance)!==JSON.stringify(before.provenance);}))throw new ContextToolError('evidence_changed','Source evidence was deleted or revised. Stop this run; its original grant cannot be repaired by changing arguments.','stop');
+        if(!Array.isArray(args.ids)||!args.ids.length||args.ids.some(id=>typeof id!=='string'||!bounds.evidenceIds!.includes(id)))throw new ContextToolError('evidence_scope_denied','Use only record.id values supplied by the host for this batch, never fingerprints or content hashes. Copy IDs from allowedRanges; omit offset and length to read the supplied segments.','correct_arguments',{allowedRanges:ranges.map(({id,offset,length})=>({id,offset,length}))});
+        const current=await reader.evidence({...range({},bounds),ids:args.ids as string[]});
+        if((args.ids as string[]).some(id=>{const raw=current.find(r=>r.id===id),after=raw&&(bounds.skill==='calendar-extraction'?{...raw,ocrText:actionEvidenceText(raw)}:raw);return !after||originalPin(after)!==originalPins.get(id);}))throw new ContextToolError('evidence_changed','Source evidence, authorization or its host attribution changed. Stop this run; its original grant cannot be repaired by changing arguments.','stop');
         let data=seedEvidence.filter(record=>(args.ids as string[]).includes(record.id));
         if(args.offset!==undefined||args.length!==undefined){
           const offset=args.offset??0,length=args.length??2000;
@@ -975,6 +1011,15 @@ export async function startBridge(
     trace,
     records,
     seedEvidence,
+    /** A catalog range is never included here until its text was delivered. */
+    get deliveredRanges(){
+      const merged:{id:string;offset:number;length:number}[]=[];
+      for(const range of [...deliveredRanges].sort((a,b)=>a.id.localeCompare(b.id)||a.offset-b.offset||a.length-b.length)){
+        const prior=merged.at(-1);if(prior&&prior.id===range.id&&range.offset<=prior.offset+prior.length)prior.length=Math.max(prior.offset+prior.length,range.offset+range.length)-prior.offset;
+        else merged.push({...range});
+      }
+      return merged;
+    },
     get sourceContextDependencies(){return [...sourceContextDependencies.values()];},
     get evidenceDependencies(){return {version:1 as const,complete:completeLineage&&[...metadataImageIds].every(id=>disclosedIds.has(id)),ids:[...disclosedIds]};},
     get deliveredCharacters(){return deliveredCharacters;},
