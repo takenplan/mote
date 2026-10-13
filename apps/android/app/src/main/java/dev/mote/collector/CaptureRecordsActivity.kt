@@ -55,6 +55,10 @@ class CaptureRecordsActivity : MoteActivity() {
     private val recordSources = listOf("screen", "media", "notification", "device_event", "note", "activity", "ui_page")
     private var recordSource = "screen"
     private var sessionGrouping = true
+    private data class ReaderRequest(val id: String, val remote: Boolean)
+    private var openReader: ReaderRequest? = null
+    private var readerDialog: AlertDialog? = null
+    private var readerTeardown = false
     @Volatile private var generation = 0
     @Volatile private var loadGeneration = 0
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -144,7 +148,9 @@ class CaptureRecordsActivity : MoteActivity() {
         MoteUi.styleTree(body)
         updateRecordHeading()
         load()
-        intent.getStringExtra("recordId")?.let { detail(it, false, null, generation) }
+        val reader = if (savedInstanceState == null) intent.getStringExtra("recordId")?.let { ReaderRequest(it, false) }
+            else savedInstanceState.getString("readerId")?.let { ReaderRequest(it, savedInstanceState.getBoolean("readerRemote")) }
+        reader?.let { detail(it.id, it.remote, null, generation) }
     }
     private fun updateRecordHeading() {
         val title = when (recordSource) {
@@ -403,19 +409,33 @@ class CaptureRecordsActivity : MoteActivity() {
         return image
     }
     private fun detail(id: String, remote: Boolean, client: CaptureRecordClient?, stamp: Int) {
+        readerDialog?.dismiss()
+        openReader = ReaderRequest(id, remote)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(18), moteDp(10), moteDp(18), moteDp(16)) }
         val message = text(content, MoteI18n.text("正在读取详情…"), DesignTokens.fontBody.toFloat())
         val loading = ProgressBar(this); content.addView(loading)
         val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("采集记录")).setView(ScrollView(this).apply { addView(content) }).setPositiveButton(MoteI18n.text("关闭详情"), null).create()
         var detailBitmap: Bitmap? = null
-        dialog.setOnDismissListener { content.removeAllViews(); detailBitmap?.recycle(); detailBitmap = null }
+        readerDialog = dialog
+        dialog.setOnDismissListener {
+            content.removeAllViews(); detailBitmap?.recycle(); detailBitmap = null
+            if (readerDialog === dialog) {
+                readerDialog = null
+                if (!readerTeardown) openReader = null
+            }
+        }
         dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         detailExecutor.execute {
             try {
-                val record = client?.detail(id) ?: queue().capture(id) ?: error(MoteI18n.text("本机记录已同步并清理，请切换到中央归档查看"))
+                val readerClient = if (remote && client == null) {
+                    val settings = Settings(this)
+                    CaptureRecordClient(settings.read(), settings.deviceId, CentralAccess.resolve(this).client)
+                } else client
+                val record = if (remote) requireNotNull(readerClient).detail(id)
+                    else queue().capture(id) ?: error(MoteI18n.text("本机记录已同步并清理，请切换到中央归档查看"))
                 runOnUiThread { if (dialog.isShowing && CapturePreview.hasImage(record)) message.text = MoteI18n.text("记录已读取，正在加载图片…") }
                 require(record.getString("id") == id); Instant.parse(record.getString("capturedAt"))
-                val bytes = if (CapturePreview.hasImage(record)) client?.image(id, false) ?: queue().image(id) else null
+                val bytes = if (CapturePreview.hasImage(record)) if (remote) requireNotNull(readerClient).image(id, false) else queue().image(id) else null
                 val bitmap = bytes?.let { CapturePreview.decode(it, 1600) }
                 runOnUiThread {
                     if (isDestroyed || stamp != generation || !dialog.isShowing) { bitmap?.recycle(); if (dialog.isShowing) dialog.dismiss(); return@runOnUiThread }
@@ -465,6 +485,14 @@ class CaptureRecordsActivity : MoteActivity() {
     private fun text(parent: LinearLayout, value: String, size: Float) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setTextColor(MoteUi.ink); setPadding(0, moteDp(5), 0, moteDp(5)) }.also(parent::addView)
     private fun button(parent: LinearLayout, label: String, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { action() } }).also { parent.addView(it, if (parent.orientation == LinearLayout.HORIZONTAL) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2)) }
     private fun clearList() { list.removeAllViews() }
-    override fun onSaveInstanceState(outState: Bundle) { outState.putBoolean("grid", grid); outState.putBoolean("sessionGrouping", sessionGrouping); outState.putString("date", date.toString()); outState.putString("album", album?.toString()); outState.putBoolean("central", central); outState.putString("recordSource", recordSource); super.onSaveInstanceState(outState) }
-    override fun onDestroy() { generation++; loadGeneration++; executor.shutdownNow(); imageExecutor.shutdownNow(); thumbnailWriter.shutdown(); detailExecutor.shutdownNow(); clearList(); thumbnails.evictAll(); super.onDestroy() }
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putBoolean("grid", grid); outState.putBoolean("sessionGrouping", sessionGrouping); outState.putString("date", date.toString()); outState.putString("album", album?.toString()); outState.putBoolean("central", central); outState.putString("recordSource", recordSource)
+        val reader = openReader.takeIf { readerDialog?.isShowing == true }
+        outState.putString("readerId", reader?.id); outState.putBoolean("readerRemote", reader?.remote ?: false)
+        super.onSaveInstanceState(outState)
+    }
+    override fun onDestroy() {
+        readerTeardown = true; readerDialog?.dismiss()
+        generation++; loadGeneration++; executor.shutdownNow(); imageExecutor.shutdownNow(); thumbnailWriter.shutdown(); detailExecutor.shutdownNow(); clearList(); thumbnails.evictAll(); super.onDestroy()
+    }
 }
