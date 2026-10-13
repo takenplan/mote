@@ -436,19 +436,18 @@ class UiIterationInstrumentedTest {
                         assertTrue(back.getGlobalVisibleRect(android.graphics.Rect()))
                         assertTrue("Use the product's real header Back action", back.performClick())
                     }
-                    scenario.onActivity { activity ->
-                        assertTrue("Header Back returns to the actual originating Home", views(activity.window.decorView).single { it.isShown && it.tag == "primary:TODAY" }.isSelected)
-                    }
                     val returnDeadline = SystemClock.elapsedRealtime() + 10000
                     var homeRecord = false
                     while (!homeRecord && SystemClock.elapsedRealtime() < returnDeadline) {
                         scenario.onActivity { activity ->
-                            val recent = views(activity.window.decorView).single { it.isShown && it.tag == "home-recent-content" }
-                            homeRecord = views(recent).any { it.isShown && it.tag == "library-record:$savedId" }
+                            val shown = views(activity.window.decorView).filter { it.isShown }
+                            val recent = shown.singleOrNull { it.tag == "home-recent-content" }
+                            homeRecord = shown.singleOrNull { it.tag == "primary:TODAY" }?.isSelected == true &&
+                                recent?.let { views(it).any { row -> row.isShown && row.tag == "library-record:$savedId" } } == true
                         }
                         if (!homeRecord) Thread.sleep(25)
                     }
-                    assertTrue("The real resumed Home query recovers the same generated note", homeRecord)
+                    assertTrue("Header Back resumes the originating Home with its selected navigation and the exact same generated note", homeRecord)
                 } finally { instrumentation.removeMonitor(monitor) }
                 context.queue().acknowledge(savedId)
                 scenario.onActivity { assertTrue(QuickNotes.draft(it).read().text.isEmpty()) }
