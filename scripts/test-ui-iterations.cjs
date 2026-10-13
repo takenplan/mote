@@ -351,9 +351,19 @@ async function artReaderMatrix(){
       window.setSize(width,height);await until(()=>js('innerWidth==='+width),'reader width');
       await capture('reader-'+(language==='en'?'en':'zh')+'-'+variant,{scene:'detail',variant,reviewSelection:true});
     }
+    if(artRound>=4){
+      assert.equal(await js("!!(document.querySelector('.evidence-text pre').compareDocumentPosition(document.querySelector('.evidence-source-actions')) & Node.DOCUMENT_POSITION_FOLLOWING)"),true,'Actual original precedes its extraction actions');
+      assert.equal(await js("document.querySelector('.evidence-processing-help').open"),false,'Full processing explanation starts collapsed');
+      const helpKey='OCR、索引和记忆分别处理；处理进度请在任务中心查看。';
+      const fullHelp=language==='en'?JSON.parse(readFileSync(join(repo,'apps/android/app/src/main/assets/i18n-en.json'),'utf8'))[helpKey]:helpKey;
+      await js("document.querySelector('.evidence-processing-help summary').scrollIntoView({block:'center'});document.querySelector('.evidence-processing-help summary').click();true");
+      await until(()=>js(`(()=>{const d=document.querySelector('.evidence-processing-help'),p=d.querySelector('p');return d.open&&p.getClientRects().length>0&&p.textContent===${JSON.stringify(fullHelp)};})()`),'actual complete named processing explanation');
+      await js("document.querySelector('.evidence-processing-help summary').click();true");
+    }
     await js("document.querySelector('.evidence-modal .icon-button').click();true");
     await until(()=>js("!document.querySelector('.evidence-modal')"),'reader returns to actual note origin');
-    journeys.push({name:'actual saved note original and close',language,verified:true});
+    await until(()=>js(`document.activeElement.closest('.note-card')?.querySelector('p')?.textContent===${JSON.stringify(savedArtOriginal)}`),'Close restores the exact original source focus');
+    journeys.push({name:'actual saved note original, complete processing help and close focus',language,verified:true,processingHelpVerified:artRound>=4});
   }
   window.setSize(1440,1000);
 }
