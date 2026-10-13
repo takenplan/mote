@@ -6,7 +6,7 @@ import type {MemoryReviewReceipt} from './memory-schema.js';
 import type {MemoryDeletions} from './memory-deletions.js';
 import type {MemoryReviewCache} from './memory-review-cache.js';
 import {defaultMemoryReviewStrategy} from './memory-review-policy.js';
-import {memoryReviewStrategySchema,memoryStrategyPin,MEMORY_CANDIDATE_OUTPUT_CONTRACT,type MemoryReviewStrategy} from './memory-strategy-contract.js';
+import {memoryReviewStrategySchema,memoryStrategyPin,memoryCandidateOutputContract,type MemoryWorkContract,type MemoryReviewStrategy} from './memory-strategy-contract.js';
 import {validationFeedback,type MemoryOutputValidationCode} from './memory-validation.js';
 
 const receipts=new WeakMap<QueryResult,MemoryReviewReceipt>();
@@ -16,7 +16,7 @@ export type MemoryDraftOrigin='mote'|'native-engine';
 type ReviewOptions={draftOrigin?:MemoryDraftOrigin;deletions?:MemoryDeletions;authorizeDeletionEvidence?:(ids:string[])=>void;cache?:MemoryReviewCache;snapshot?:()=>string;strategy?:MemoryReviewStrategy;taskInstructions?:string};
 
 /** A separate read-only model pass. The host still validates exact evidence after review. */
-export async function reviewMemory(input:QueryInput,draft:QueryResult,query:(input:QueryInput)=>Promise<QueryResult>,options?:ReviewOptions):Promise<QueryResult> {
+export async function reviewMemory(input:QueryInput&{memoryReviewQuestion?:string;memoryReviewRepair?:string},draft:QueryResult,query:(input:QueryInput)=>Promise<QueryResult>,options?:ReviewOptions):Promise<QueryResult> {
   input.signal?.throwIfAborted();
   const strategy=options?.strategy?memoryReviewStrategySchema.parse(options.strategy):undefined;
   let value: {memories:unknown[]};
@@ -26,7 +26,7 @@ export async function reviewMemory(input:QueryInput,draft:QueryResult,query:(inp
   const receipt=(result:QueryResult,decision:MemoryReviewReceipt['decision'],inputHash?:string,model=result.usage?.model)=>{
     receipts.set(result,{deletionSnapshot,resultHash:sha256(result.answer),strategy:memoryStrategyPin(strategy??defaultMemoryReviewStrategy),policy:'bounded-exact-review@1',decision,draftRunId:draft.runId,reviewRunId:decision==='empty'?undefined:result.runId,checkedAt:new Date().toISOString(),contextTime:input.contextTime,inputHash,model});return result;
   };
-  const workPackage=Boolean(input.taskContext?.memoryWork);
+  const workPackage=Boolean(input.taskContext?.memoryWork),contract=(input.taskContext?.memoryWork as {workContract?:MemoryWorkContract}|undefined)?.workContract;
   const native=options?.draftOrigin==='native-engine';
   if(!value.memories.length&&!workPackage&&!native)return receipt(await finish({...draft}),'empty');
   // Only fixed, bounded extraction tools may reuse a verdict. Consolidation and
@@ -39,7 +39,7 @@ export async function reviewMemory(input:QueryInput,draft:QueryResult,query:(inp
     signal?.throwIfAborted();
     if(snapshot!==undefined&&options!.snapshot!()!==snapshot)throw new StoreError('Memory review inputs changed',409);
     const failure=await validateOutput?.({...result,trace:[]});
-    if(failure)throw new MemoryOutputValidationError(Object.hasOwn(validationFeedback,failure.code)?failure.code as MemoryOutputValidationCode:'schema','Memory review failed host validation');
+    if(failure)throw new MemoryOutputValidationError(Object.hasOwn(validationFeedback,failure.code)?failure.code as MemoryOutputValidationCode:'schema','Memory review failed host validation',{workContract:contract});
     signal?.throwIfAborted();
     if(snapshot!==undefined&&options!.snapshot!()!==snapshot)throw new StoreError('Memory review inputs changed',409);
   };
@@ -52,9 +52,10 @@ export async function reviewMemory(input:QueryInput,draft:QueryResult,query:(inp
     if(cached){await validate(cached.result);return receipt(await finish(cached.result),'reused',key,cached.model);}
   }
   // Keep one authoritative policy and the complete task; do not exceed the Agent input limit by duplicating it.
-  const taskQuestion=input.question.startsWith(MEMORY_ADMISSION_PROMPT)?input.question.slice(MEMORY_ADMISSION_PROMPT.length):input.question;
-  const question=(strategy?strategy.policy+'\n'+MEMORY_CANDIDATE_OUTPUT_CONTRACT+(options?.taskInstructions?'\n'+options.taskInstructions:''):
-    MEMORY_ADMISSION_PROMPT+'\n'+taskQuestion+'\n'+defaultMemoryReviewStrategy.policy.slice(MEMORY_ADMISSION_PROMPT.length+1))+(workPackage?'\nIndependently inspect every listed target range in full and verify each member coverage decision, including all no_candidates entries and omitted or saturated candidates. Apply the batch-local coverage contract in taskContext.memoryWork. The overall package goal does not authorize other ranges or require this call to complete the whole original. Verify owner questions and their exact source quotes as well as independently supported candidates in the same range. A named participant or conversational role does not establish owner identity, and diarization labels may mix speakers. Use needs_context only for specific useful additional authorized evidence; use needs_owner_input with a concrete minimal question when a meaningful result requires an owner fact unavailable from the evidence. Preserve completed uncertainty or useful observed context when no question is needed. Consult supplied prior inspection outcomes and never recommend unchanged reading to infer a missing owner association. An empty candidate array still requires this independent review.':'');
+  const task=input.memoryReviewQuestion??input.question,taskQuestion=task.startsWith(MEMORY_ADMISSION_PROMPT)?task.slice(MEMORY_ADMISSION_PROMPT.length):task;
+  const repair=input.memoryReviewRepair;
+  const question=(strategy?strategy.policy+'\n'+memoryCandidateOutputContract(contract)+(options?.taskInstructions?'\n'+options.taskInstructions:''):
+    MEMORY_ADMISSION_PROMPT+'\n'+taskQuestion+'\n'+defaultMemoryReviewStrategy.policy.slice(MEMORY_ADMISSION_PROMPT.length+1))+(workPackage?'\nIndependently inspect every listed target range in full and verify each member coverage decision, including all no_candidates entries.'+(contract?' Verify the quality and usefulness of the selected set; deliberate selection is permitted and is not incomplete evaluation. Do not infer completeness from candidate count. Explicit unread/truncated or unassessed target ranges require incomplete with a concrete reason.':' Verify omitted or saturated candidates under the fixed legacy contract.')+' Apply the batch-local coverage contract in taskContext.memoryWork. The overall package goal does not authorize other ranges or require this call to complete the whole original. Verify owner questions and their exact source quotes as well as independently supported candidates in the same range. A named participant or conversational role does not establish owner identity, and diarization labels may mix speakers. Use needs_context only for specific useful additional authorized evidence; use needs_owner_input with a concrete minimal question when a meaningful result requires an owner fact unavailable from the evidence. Preserve completed uncertainty or useful observed context when no question is needed. Consult supplied prior inspection outcomes and never recommend unchanged reading to infer a missing owner association. An empty candidate array still requires this independent review.':'')+(repair?'\nHost review repair: '+repair:'');
   const reviewed=await query({...input,traceContext:{...traceContext,phase:'review'},taskContext:{turns:[],...input.taskContext,untrustedMemoryDraft:value},question});
   await validate(reviewed);
   if(key)options!.cache!.put(key,reviewed);

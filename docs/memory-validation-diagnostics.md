@@ -15,7 +15,11 @@ error stays `invalid_model_output` for compatibility; inspect the failure histor
 for the precise validation code.
 
 Optional `fieldPath`, `problem` and `maxCandidates` identify schema-owned locations
-and the current work capacity without logging rejected values or arbitrary keys.
+and, for legacy work only, its candidate capacity without logging rejected values
+or arbitrary keys. New `range-evaluation@1` work has no candidate-count quota.
+Explicit incomplete assessment retains its range/reason with
+`memory_evaluation_incomplete`; it is not inferred from array length or repaired
+by count-driven splitting. See the [range-evaluation ADR](adr-memory-range-evaluation.md).
 Host context budget failures use `host_context_budget`, with numeric section
 measurements in the Agent trace. They are separate from model-output repair and
 provider failure. See [context and canonical evidence ADR](adr-memory-context-and-canonical-evidence.md).

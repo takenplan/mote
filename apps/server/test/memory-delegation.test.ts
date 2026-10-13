@@ -1,3 +1,4 @@
+import {fixtureMemoryCapacity} from './fixtures/memory-planning.js';
 import {test,type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -28,7 +29,7 @@ async function fixture(t:TestContext,count=4){
   store.db.exec('BEGIN IMMEDIATE');work.inputs.receive({sourceId,inputKey:'raw-'+index});store.db.exec('COMMIT');work.observe(material.id,['material'],{inputKey:'raw-'+index,change:'source'});
  }
  let planning=0,extraction=0,reviews=0;const seen:QueryInput[]=[];
- const zero=(input:QueryInput,runId:string):QueryResult=>({runId,trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:(input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),capacity:{saturated:false}})});
+ const zero=(input:QueryInput,runId:string):QueryResult=>({runId,trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:(input.taskContext!.memoryWork as {members:MemoryWorkMember[]}).members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),...fixtureMemoryCapacity(input)})});
  const pipeline=new MemoryPipeline({store,memories,executor:engine,configured:()=>true,model:()=> 'synthetic',concurrency:()=>2,requireAdmission:true,automaticAllowed:job=>work.authorized(job),materialInput:(ref,required)=>materials.input(ref,required),materialRequirements:()=>['material'],materialAllowedForMemory:()=>true,query:async input=>{seen.push(input);extraction++;return zero(input,'generated-extraction');},review:(input,draft)=>reviewMemory(input,draft,async next=>{reviews++;return zero(next,'generated-review');})});
  let planningHook:((input:QueryInput,catalog:MemoryWorkCandidate[])=>Promise<void>)|undefined;
  let allow:((candidate:MemoryWorkCandidate)=>boolean)=()=>true;

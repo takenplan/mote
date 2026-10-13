@@ -1,4 +1,5 @@
 import {fixtureMemoryResult,fixtureMemoryPipeline} from './fixtures/memory-result.js';
+import {fixtureMemoryWorkResult} from './fixtures/memory-planning.js';
 import {test,type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -289,8 +290,8 @@ test('cancelling extraction or review fences late models and saves no memory or 
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item('cancel-'+phase));
   let enter!:()=>void,release!:(value:ReturnType<typeof result>)=>void,signal:AbortSignal|undefined;
   const entered=new Promise<void>(r=>{enter=r;}),held=new Promise<ReturnType<typeof result>>(r=>{release=r;});
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,
-   query:async input=>{signal=input.signal;if(phase==='extract'){enter();return held;}const draft=result(a.id,{offset:0,quote:item().text}),value=JSON.parse(draft.answer);value.memories[0].admission={layer:'memory',reason:'Explicit fixture instruction',scope:'Fixture only',attribution:'user'};return {...draft,answer:JSON.stringify(value)};},
+  const pipeline=new MemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,
+   query:async input=>{signal=input.signal;if(phase==='extract'){enter();return held;}const draft=result(a.id,{offset:0,quote:item().text}),value=JSON.parse(draft.answer);value.memories[0].admission={layer:'memory',reason:'Explicit fixture instruction',scope:'Fixture only',attribution:'user'};return fixtureMemoryWorkResult(input,{...draft,answer:JSON.stringify(value)});},
    ...(phase==='review'?{review:async()=>{enter();return held;}}:{})});
   const job=pipeline.create({evidenceIds:[a.id]}),running=pipeline.run(job.id);await entered;
   pipeline.cancel(job.id);release(result(a.id));const done=await running;

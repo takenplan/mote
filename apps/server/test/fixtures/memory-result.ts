@@ -13,5 +13,10 @@ export function fixtureMemoryResult(memories:MemoryStore,result:QueryResult,rang
  return changed?{...result,answer:JSON.stringify(output)}:result;
 }
 export function fixtureMemoryPipeline(options:MemoryPipelineOptions){
- return new MemoryPipeline({...options,query:async input=>fixtureMemoryResult(options.memories,await options.query(input),input.evidenceRanges),...(options.review?{review:async(input:any,draft:QueryResult,strategy:any,origin)=>fixtureMemoryResult(options.memories,await options.review!(input,draft,strategy,origin),input.evidenceRanges)}:{})});
+ const pipeline=new MemoryPipeline({...options,query:async input=>fixtureMemoryResult(options.memories,await options.query(input),input.evidenceRanges),...(options.review?{review:async(input:any,draft:QueryResult,strategy:any,origin)=>fixtureMemoryResult(options.memories,await options.review!(input,draft,strategy,origin),input.evidenceRanges)}:{})});
+ // Existing low-level reviewed fixtures retain their immutable legacy policy.
+ // Never manufacture missing coverage for a negative model response. New range
+ // evaluation exercises the real constructor/API in its dedicated journeys.
+ if(options.review){const create=pipeline.create.bind(pipeline);pipeline.create=input=>create(input.recipes||input.manualPlans||input.automaticGrant||input.automaticGrants?input:{...input,recipes:[{id:'mote.personal-memory',version:'2'}]});}
+ return pipeline;
 }

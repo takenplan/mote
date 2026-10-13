@@ -1,3 +1,4 @@
+import {fixtureMemoryCapacity} from './fixtures/memory-planning.js';
 import {test,type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -36,7 +37,7 @@ async function fixture(t:TestContext,mode:FixtureMode='resolved',targets=1){
   const current=modelWork(input),hasContext=Boolean(current.contextMembers?.length),needs=current.members.some(member=>member.id!==backgroundId)&&(mode==='unresolved'||mode==='outside'||!hasContext);
   const coverage=current.members.map(member=>({key:member.key,state:needs?'needs_context':'no_candidates',candidateIndexes:[],...(needs?{reason:'Generated target requires the separately authorized background.',contextRefs:[mode==='outside'?'capture:'+outsideId:backgroundId]}:{})}));
   const memories=mode==='context-candidate'&&hasContext?[{title:'Generated background preference',statement:`The owner prefers a blue bowl [${backgroundId}]`,uncertainty:'Synthetic fixture only',admission:{layer:'memory',reason:'Explicit generated preference',scope:'Fixture only',attribution:'user'},evidenceIds:[backgroundId],evidence:[{id:backgroundId,quote:'I prefer a blue bowl.'}]}]:[];
-  return {runId,trace:[],citations:memories.length?[{id:backgroundId,capturedAt:observedAt,appName:'Generated',excerpt:'I prefer a blue bowl.'}]:[],answer:JSON.stringify({memories,coverage,capacity:{saturated:false}})};
+  return {runId,trace:[],citations:memories.length?[{id:backgroundId,capturedAt:observedAt,appName:'Generated',excerpt:'I prefer a blue bowl.'}]:[],answer:JSON.stringify({memories,coverage,...fixtureMemoryCapacity(input)})};
  };
  const attach=async()=>{
   store=new Store(directory);sources=new SourceStore(store);materials=new MaterialStore(store);
@@ -136,6 +137,9 @@ test('a restart reuses the durable feedback proposal after an atomic product han
  const f=await fixture(t);f.interruptNextApply();const interrupted=await f.start();
  assert.equal(interrupted.status,'failed');assert.equal(f.feedback.length,1);assert.equal(f.checkpoints().length,1);assert.equal(interrupted.batches.filter(batch=>batch.replanRound).length,0,'partial child inserts must roll back');
  assert.deepEqual(f.counts(),{planning:0,feedback:1,extraction:2,reviews:2,maxActiveModels:1});
+ // An uncommitted review cannot become this batch's own prior inspection and
+ // change its generation fingerprint before the saved feedback handoff resumes.
+ const failedParent=interrupted.batches.find(batch=>batch.status==='failed')!;assert.equal(failedParent.reviewReceipt,undefined);assert.equal(failedParent.evaluation?.workContract,'range-evaluation@1');
  const owner=f.runtime.list().find(owner=>owner.profileId==='memory.feedback');assert.ok(owner?.planningComplete);const unitId=owner.units[0].id;
  const checkpoints=f.checkpoints();await f.restart();const done=await f.pipeline.retry(interrupted.id);await f.settle();
  assert.equal(done.status,'completed');assert.equal(f.feedback.length,1,'the saved feedback plan is reused without another planning model');assert.equal(f.counts().planning,0);

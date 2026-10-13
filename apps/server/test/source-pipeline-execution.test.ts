@@ -1,3 +1,4 @@
+import {fixtureMemoryCapacity} from './fixtures/memory-planning.js';
 import {fixtureMemoryPipeline} from './fixtures/memory-result.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -188,7 +189,7 @@ test('Coding recipe upgrade reuses the common queue without paying for historica
   let calls=0;
   const pipeline=()=>{const reader=new EvidenceReader(store,sources,undefined,undefined,undefined,materials,runtime);
     return fixtureMemoryPipeline({store,memories:reader.memories,automaticAllowed:job=>runtime.memoryWork.authorized(job),review:(input,draft)=>reviewMemory(input,draft,async()=>({...draft,runId:'fixture-independent-review'})),materialAllowedForMemory:ref=>reader.materialAllowedForMemory(ref),configured:()=>true,model:()=> 'fixture',query:async input=>{
-      calls++;return {answer:JSON.stringify({memories:[],...(input.taskContext?.memoryWork?{coverage:(input.taskContext.memoryWork as {members:{key:string}[]}).members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),capacity:{saturated:false}}:{})}),citations:[],trace:[],runId:'fixture'};
+      calls++;return {answer:JSON.stringify({memories:[],...(input.taskContext?.memoryWork?{coverage:(input.taskContext.memoryWork as {members:{key:string}[]}).members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),...fixtureMemoryCapacity(input)}:{})}),citations:[],trace:[],runId:'fixture'};
     }});};
   let memory=pipeline();
   t.after(async()=>{await memory.close();await runtime.close();store.close();rmSync(directory,{recursive:true,force:true});});

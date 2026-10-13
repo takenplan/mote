@@ -9,9 +9,10 @@ import {materialRequirementsSchema} from './material-readiness.js';
 import type {ModelConfiguration} from './model-configuration.js';
 import type {UsageLedger} from './usage.js';
 import {StoreError} from './store.js';
-import {memoryWorkCoverageSchema,memoryWorkCapacitySchema,memoryWorkInstruction,readMemoryWorkCoverage,type MemoryWorkMember} from './memory-work-contract.js';
-import {MemoryOutputValidationError,type MemoryStore,type EvidenceRange} from './memory.js';
+import {memoryWorkCoverageFor,memoryWorkCapacitySchema,memoryWorkInstruction,readMemoryWorkCoverage,type MemoryWorkMember} from './memory-work-contract.js';
+import {claimSchema,MemoryOutputValidationError,type MemoryStore,type EvidenceRange} from './memory.js';
 import {memoryProfile} from './memory-profiles.js';
+import type {MemoryWorkContract} from './memory-strategy-contract.js';
 import {conversationClaimContext,parseSemanticProducts,semanticProductsSchema} from './semantic-extraction.js';
 
 export type ConversationEvidenceScope={records:CaptureRecord[];ranges:EvidenceRange[]};
@@ -72,10 +73,10 @@ function originalScope(pages:MaterialReadPage[],resolve:ConversationUnderstandin
  return {records:[...records.values()],ranges:union,characters};
 }
 
-function parseConversationProducts(answer:string,scope:ConversationEvidenceScope,citationIds:string[],candidateLimit=8){
+function parseConversationProducts(answer:string,scope:ConversationEvidenceScope,citationIds:string[],candidateLimit=8,workContract?:MemoryWorkContract){
  if(Buffer.byteLength(answer)>64000)throw new StoreError('Semantic output exceeds the 64 KB response budget',502);
- conversationProductsSchema.extend({memoryCandidates:conversationProductsSchema.shape.memoryCandidates.max(candidateLimit)}).parse(JSON.parse(answer));
- const output=parseSemanticProducts(answer,scope.records,citationIds,scope.ranges,candidateLimit);
+ conversationProductsSchema.extend({memoryCandidates:workContract==='range-evaluation@1'?z.array(claimSchema):conversationProductsSchema.shape.memoryCandidates.max(candidateLimit)}).parse(JSON.parse(answer));
+ const output=parseSemanticProducts(answer,scope.records,citationIds,scope.ranges,candidateLimit,workContract);
  const claims=[...output.events,...output.workRecords!.flatMap(record=>[...record.requirements,...record.constraints,...record.decisions,...record.results,...record.validation,...record.openItems,...record.artifactRefs])];
  for(const claim of claims){
   if(claim.sourceTime&&!claim.evidence.some(evidence=>evidence.quote.includes(claim.sourceTime!)||scope.records.find(record=>record.id===evidence.id)?.provenance?.document?.recordedAt===claim.sourceTime))throw new StoreError('A source time must appear in its exact original support or source metadata',502);
@@ -115,14 +116,15 @@ export function conversationUnderstandingProcessor(options:ConversationUnderstan
   const preparation=input.config.memoryPreparation===true?options.resolveMemoryPreparation?.(generationContract??''):undefined;
   if(input.config.memoryPreparation===true&&!preparation)throw new StoreError('Conversation preparation provider unavailable',409);
   const candidatePolicy=candidatePolicySchema.optional().parse(preparation?.candidatePolicy??input.config.candidatePolicy),candidateProfile=candidatePolicy?.profile??profile.id;
-  const work=(preparation?.memoryWork??input.config.memoryWork) as {members:MemoryWorkMember[];maxCandidates:number;instruction:string}|undefined;
+  const work=(preparation?.memoryWork??input.config.memoryWork) as {members:MemoryWorkMember[];workContract?:MemoryWorkContract;maxCandidates?:number;instruction:string}|undefined;
   if(work&&!generationContract)throw new StoreError('Conversation candidate reuse requires the complete generation contract',409);
   const parse=(result:QueryResult)=>{
    const value=JSON.parse(result.answer),{coverage,capacity,...products}=value;
-   const output=parseConversationProducts(JSON.stringify(products),scope,result.citations.map(citation=>citation.id),work?.maxCandidates??8);
-   if(work){const accounting=readMemoryWorkCoverage({...result,answer:JSON.stringify({memories:output.memoryCandidates,coverage,capacity})},work.members,work.maxCandidates,id=>scope.records.find(record=>record.id===id)?.ocrText);if(accounting.missing.length)throw new MemoryOutputValidationError('coverage','Every supplied conversation target requires coverage');}
+   if(work?.workContract&&capacity!==undefined)throw new MemoryOutputValidationError('schema','Range evaluation does not accept legacy capacity',{workContract:work.workContract});
+   const output=parseConversationProducts(JSON.stringify(products),scope,result.citations.map(citation=>citation.id),work?.maxCandidates??8,work?.workContract);
+   if(work){const accounting=readMemoryWorkCoverage({...result,answer:JSON.stringify({memories:output.memoryCandidates,coverage,...(!work?.workContract?{capacity}:{})})},work.members,work.maxCandidates,id=>scope.records.find(record=>record.id===id)?.ocrText,work.workContract);if(accounting.missing.length||accounting.notAssessed.length)throw new MemoryOutputValidationError('coverage','Every supplied conversation target requires completed evaluation',{workContract:work.workContract});}
    else if(coverage!==undefined||capacity!==undefined)throw new StoreError('Legacy conversation products must not invent a coverage contract',502);
-   options.memories.extract({...result,answer:JSON.stringify({memories:output.memoryCandidates,...(work?{coverage,capacity}:{})})},selected.model,{maxCandidates:work?.maxCandidates,profile:candidateProfile,requireAdmission:true,evidenceRanges:scope.ranges,validateOnly:true});
+   options.memories.extract({...result,answer:JSON.stringify({memories:output.memoryCandidates,...(work?{coverage,...(!work.workContract?{capacity}:{})}:{})})},selected.model,{workContract:work?.workContract,maxCandidates:work?.maxCandidates,profile:candidateProfile,requireAdmission:true,evidenceRanges:scope.ranges,validateOnly:true});
    return output;
   };
   const host={operationId:input.execution?.operationId??'conversation:'+material.id,jobId:input.execution?.jobId,requestId:randomUUID()};
@@ -134,14 +136,14 @@ export function conversationUnderstandingProcessor(options:ConversationUnderstan
     language:input.config.language==='en'?'en':input.config.language==='zh-CN'?'zh-CN':undefined,
     taskContext:work?{turns:[],memoryWork:work}:undefined,
     evidenceIds:scope.records.map(record=>record.id),evidenceRanges:scope.ranges,
-    question:'The following guidance applies only to memoryCandidates. Its sample memories envelope is subordinate to the final unified contract.\n'+(candidatePolicy?.prompt??profile.prompt)+'\nFINAL UNIFIED RESPONSE CONTRACT:\n'+CONVERSATION_UNDERSTANDING_PROMPT+(work?'\nThe host memoryWork contract supersedes the legacy eight-candidate ceiling. Additionally return coverage and capacity for all supplied members. memoryCandidates is the memories array for this coverage contract. '+memoryWorkInstruction(work.members,work.maxCandidates):''),
+    question:'The following guidance applies only to memoryCandidates. Its sample memories envelope is subordinate to the final unified contract.\n'+(candidatePolicy?.prompt??profile.prompt)+'\nFINAL UNIFIED RESPONSE CONTRACT:\n'+(work?.workContract?CONVERSATION_UNDERSTANDING_PROMPT.replace('memoryCandidates (0–8 matching the supplied memory admission contract)','memoryCandidates (a variable selected set matching the memory contract below)'):CONVERSATION_UNDERSTANDING_PROMPT)+(work?'\nThe host memoryWork contract supersedes the legacy eight-candidate ceiling. Additionally return coverage'+(work.workContract?'':' and capacity')+' for all supplied members. memoryCandidates is the memories array for this coverage contract. '+memoryWorkInstruction(work.members,work.maxCandidates,work.workContract):''),
     validateOutput:result=>{try{parse(result);}catch(error){const detail=error instanceof MemoryOutputValidationError?error.repairInstruction:error instanceof z.ZodError?error.issues.slice(0,3).map(issue=>issue.path.join('.')+': '+issue.message).join('; '):error instanceof StoreError?error.message:'Invalid JSON object';return {code:'conversation_products',feedback:detail+' Return summary, evidence, workRecords, events, memoryCandidates and actionCues. Absent products use empty arrays; actionCues must be empty. Every claim must preserve attribution, status, basis, sourceTime and uncertainty, with exact cited original quotes inside the supplied ranges.'};}},
     signal:input.signal,onUsage:meter.update});
    input.signal.throwIfAborted();const output=parse(result);
    if(options.selection(input.config).fingerprint!==selected.fingerprint)throw new StoreError('Model settings changed during conversation understanding',409);
    const usage=meter.finish('completed');
    const text=conversationProductText(output);
-   return [{kind:'semantic',text,metadata:{productsVersion:work?2:1,...(work?{generationContract,memoryCoverage:memoryWorkCoverageSchema.parse(JSON.parse(result.answer).coverage),memoryCapacity:memoryWorkCapacitySchema.parse(JSON.parse(result.answer).capacity)}:{}),configuration:selected,materialRef:material.ref,summary:output.summary,
+   return [{kind:'semantic',text,metadata:{productsVersion:work?.workContract?3:work?2:1,...(work?{generationContract,workContract:work.workContract,memoryCoverage:memoryWorkCoverageFor(work.workContract).parse(JSON.parse(result.answer).coverage),...(!work.workContract?{memoryCapacity:memoryWorkCapacitySchema.parse(JSON.parse(result.answer).capacity)}:{})}:{}),configuration:selected,materialRef:material.ref,summary:output.summary,
     ...(candidatePolicy?{candidatePolicyFingerprint:candidatePolicy.fingerprint}:{}),
     workRecords:output.workRecords,events:output.events,memoryCandidates:output.memoryCandidates,actionCues:[],
     evidenceRanges:scope.ranges,supportRanges:output.evidenceRanges,citations:[...new Set(output.evidenceRanges.map(range=>range.id))],

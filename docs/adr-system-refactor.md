@@ -2,6 +2,11 @@
 
 Date: 2026-10-10. Status: accepted by the owner; implementation validation is recorded separately.
 
+For new versioned recipes, the candidate-enumeration/saturation and semantic
+subdivision responsibilities below are superseded by the 2026-10-13
+[range-evaluation decision](adr-memory-range-evaluation.md). Legacy pinned work
+retains this contract; the other decisions remain in force.
+
 The normal query path directly retrieves and verifies evidence. The same durable
 query coordinator may delegate independent research when the model chooses it.
 There is one user entry point and no semantic keyword router or fast/deep mode.
