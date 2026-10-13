@@ -527,11 +527,11 @@ class MainActivity : MoteActivity() {
         section(MoteI18n.text("记录与保护"))
         menuGroup {
             menu(MoteI18n.text("连接与同步"), MoteI18n.text("中央节点、设备名称与上传网络"), "sync") { showPage(Page.CONNECTION) }
-            menu(MoteI18n.text("权限与后台运行"), MoteI18n.text("系统授权、电池优化与自启动"), "settings") { showPage(Page.PERMISSIONS) }
+            menu(MoteI18n.text("权限与后台运行"), MoteI18n.text("系统授权、电池优化与自启动"), "shield") { showPage(Page.PERMISSIONS) }
         }
         section(MoteI18n.text("应用"))
         menuGroup {
-            menu(if (MoteI18n.language() == "en") "Language" else "界面语言", "中文 / English", "settings") {
+            menu(if (MoteI18n.language() == "en") "Language" else "界面语言", "中文 / English", "language") {
                 val choices = arrayOf(if (MoteI18n.language() == "en") "System default" else "跟随系统", "中文", "English")
                 val values = listOf("system", "zh-CN", "en")
                 MoteDialogBuilder(this).setTitle(if (MoteI18n.language() == "en") "Language" else "界面语言")
@@ -539,7 +539,7 @@ class MainActivity : MoteActivity() {
                         MoteI18n.select(this, values[index]); dialog.dismiss(); recreate()
                     }.setNegativeButton(android.R.string.cancel, null).show()
             }
-            menu(MoteI18n.text("插件"), MoteI18n.text("安装、运行与记忆方案"), "settings") { openCentral("plugins") }
+            menu(MoteI18n.text("插件"), MoteI18n.text("安装、运行与记忆方案"), "plugin") { openCentral("plugins") }
             menu(MoteI18n.text("关于与更新"), MoteI18n.text("版本信息、应用更新与开发者选项"), "info") { showPage(Page.ABOUT) }
             menu(MoteI18n.text("反馈"), MoteI18n.text("前往 GitHub，可附图片或诊断包"), "note") { openFeedback() }
         }
@@ -555,7 +555,7 @@ class MainActivity : MoteActivity() {
             menu(MoteI18n.text("统计中心"), MoteI18n.text("按日期和文件类型查看空间占用"), "chart") { startActivity(Intent(this, StorageStatisticsActivity::class.java)) }
             menu(MoteI18n.text("采集与存储详情"), MoteI18n.text("查看累计结果、队列与使用空间"), "chart") { startActivity(Intent(this, ActivityStatsActivity::class.java)) }
             menu(MoteI18n.text("导入与导出"), MoteI18n.text("迁移配置、备份与恢复本机记录"), "folder") { startActivity(Intent(this, BackupActivity::class.java)) }
-            menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "settings") { showPage(Page.DEVELOPER) }
+            menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "code") { showPage(Page.DEVELOPER) }
             menu(MoteI18n.text("资料库管理"), MoteI18n.text("模型、存储、记忆、洞察等中央功能"), "settings") { openCentral("about") }
         }
         content = owner

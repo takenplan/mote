@@ -223,6 +223,41 @@ class UiIterationInstrumentedTest {
                     assertFalse("Operational sync belongs to Home", labels.contains(MoteI18n.text("立即同步")))
                     assertFalse("Record statistics belong to Home", labels.contains(MoteI18n.text("此刻的 Mote")))
                 }
+                val settingsIconEvidence = org.json.JSONArray()
+                val settingsIconHashes = mutableListOf<String>()
+                for (label in listOf(if (MoteI18n.language() == "en") "Language" else "界面语言", MoteI18n.text("插件"), MoteI18n.text("权限与后台运行"))) {
+                    scenario.onActivity { activity ->
+                        val row = views(activity.window.decorView).single { it.isShown && it.tag == "menu:$label" }
+                        row.requestRectangleOnScreen(android.graphics.Rect(0, 0, row.width, row.height), true)
+                    }
+                    settle()
+                    scenario.onActivity { activity ->
+                        val row = views(activity.window.decorView).single { it.isShown && it.tag == "menu:$label" }
+                        val icon = views(row).filterIsInstance<android.widget.ImageView>().single { it.isShown }
+                        val visible = android.graphics.Rect()
+                        assertTrue("The actual settings icon must be fully visible: $label", icon.getGlobalVisibleRect(visible))
+                        assertEquals(icon.width, visible.width()); assertEquals(icon.height, visible.height())
+                        val bitmap = android.graphics.Bitmap.createBitmap(icon.width, icon.height, android.graphics.Bitmap.Config.ARGB_8888)
+                        try {
+                            icon.draw(android.graphics.Canvas(bitmap))
+                            val pixels = IntArray(icon.width * icon.height)
+                            bitmap.getPixels(pixels, 0, icon.width, 0, 0, icon.width, icon.height)
+                            assertTrue("The actual icon draw contains visible ink: $label", pixels.any { android.graphics.Color.alpha(it) > 0 })
+                            val rgba = ByteArray(pixels.size * 4)
+                            pixels.forEachIndexed { index, pixel ->
+                                rgba[index * 4] = android.graphics.Color.red(pixel).toByte(); rgba[index * 4 + 1] = android.graphics.Color.green(pixel).toByte()
+                                rgba[index * 4 + 2] = android.graphics.Color.blue(pixel).toByte(); rgba[index * 4 + 3] = android.graphics.Color.alpha(pixel).toByte()
+                            }
+                            val hash = java.security.MessageDigest.getInstance("SHA-256").digest(rgba).joinToString("") { "%02x".format(it.toInt() and 255) }
+                            settingsIconHashes += hash
+                            settingsIconEvidence.put(org.json.JSONObject().put("menuTag", row.tag).put("label", label).put("rgbaSha256", hash)
+                                .put("width", icon.width).put("height", icon.height).put("visibleRect", visible.toShortString()).put("drawSource", "actual ImageView.draw raw RGBA"))
+                        } finally { bitmap.recycle() }
+                    }
+                }
+                File(directory, "settings-icon-geometry.json").writeText(org.json.JSONObject().put("language", MoteI18n.language())
+                    .put("icons", settingsIconEvidence).put("distinctDrawings", settingsIconHashes.distinct().size).toString(2))
+                assertEquals("Language, plugins and permissions must have distinct actual rendered icons", 3, settingsIconHashes.distinct().size)
                 scenario.onActivity { activity -> views(activity.window.decorView).single { it.isShown && it.tag == "menu:${MoteI18n.text("连接与同步")}" }.performClick() }
                 render("connection")
                 scenario.onActivity { activity -> assertFalse("Connection settings keeps record addition out of its task", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") }) }
@@ -254,7 +289,12 @@ class UiIterationInstrumentedTest {
                 scenario.onActivity { activity -> activity.openGeneratedAdd(MoteAddAction.NOTE) }
                 awaitVisible("草稿已载入")
                 render("note")
-                if (args.getString("uiIterationKeyboard") == "true") {
+                val keyboardJourney = args.getString("uiIterationKeyboard") == "true"
+                if (variant in setOf("compact", "compact-english")) assertTrue("Both compact conditions must exercise the real keyboard save journey", keyboardJourney)
+                val fixtureText = if (variant.contains("english")) "Generated context fixture\nThe review kept the original notes with the decision, so the reason can be recovered later." else "生成资料验证\n这次评审把原始记录和决定放在一起，方便以后回看当时的依据。"
+                val keyEventPrefix = "GeneratedIME_R5_${variant.replace('-', '_')}_"
+                val generatedText = if (keyboardJourney) "$keyEventPrefix\n$fixtureText" else fixtureText
+                if (keyboardJourney) {
                     val deadline = SystemClock.elapsedRealtime() + 10000
                     var ready = false
                     while (!ready && SystemClock.elapsedRealtime() < deadline) {
@@ -281,14 +321,73 @@ class UiIterationInstrumentedTest {
                             val bounds = android.graphics.Rect(); assertTrue(item.getGlobalVisibleRect(bounds))
                             assertTrue("Navigation stays above the keyboard", bounds.height() == item.height && bounds.bottom <= availableBottom + 2)
                         }
-                        activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
-                        root.clearFocus()
+                        // Unicode fixture content is injected explicitly; the ASCII prefix below uses actual input events.
+                        val field = views(root).filterIsInstance<android.widget.EditText>().single { it.isShown }
+                        assertTrue(field.hasFocus())
+                        field.setText("\n$fixtureText"); field.setSelection(0)
+                        assertTrue("Fixture setup must keep the actual IME open", root.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime()))
                     }
-                }
-                val generatedText = if (variant.contains("english")) "Generated context fixture\nThe review kept the original notes with the decision, so the reason can be recovered later." else "生成资料验证\n这次评审把原始记录和决定放在一起，方便以后回看当时的依据。"
-                scenario.onActivity { activity ->
-                    views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single { it.isShown }.setText(generatedText)
-                    views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("保存随手记") }.performClick()
+                    instrumentation.sendStringSync(keyEventPrefix)
+                    instrumentation.waitForIdleSync()
+                    scenario.onActivity { activity ->
+                        val field = views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single { it.isShown }
+                        assertEquals("Real generated key events must reach the focused note editor without replacing its Unicode fixture", generatedText, field.text.toString())
+                        assertTrue("The editor remains focused while the actual IME is shown", field.hasFocus())
+                        assertTrue(activity.window.decorView.rootWindowInsets.isVisible(android.view.WindowInsets.Type.ime()))
+                    }
+                    scrollTo("保存随手记")
+                    var touchX = 0f; var touchY = 0f
+                    scenario.onActivity { activity ->
+                        fun screenRect(view: View): android.graphics.Rect {
+                            val position = IntArray(2); view.getLocationOnScreen(position)
+                            return android.graphics.Rect(position[0], position[1], position[0] + view.width, position[1] + view.height)
+                        }
+                        fun rectJson(rect: android.graphics.Rect) = org.json.JSONObject().put("left", rect.left).put("top", rect.top)
+                            .put("right", rect.right).put("bottom", rect.bottom).put("width", rect.width()).put("height", rect.height())
+                        val root = activity.window.decorView
+                        val insets = requireNotNull(root.rootWindowInsets)
+                        val rootBounds = screenRect(root)
+                        val imeBottom = insets.getInsets(android.view.WindowInsets.Type.ime()).bottom
+                        val imeTop = rootBounds.bottom - imeBottom
+                        val save = views(root).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("保存随手记") }
+                        val saveVisible = android.graphics.Rect(); val saveHasRect = save.getGlobalVisibleRect(saveVisible)
+                        val saveBounds = screenRect(save)
+                        val navigation = views(root).filterIsInstance<MotePrimaryNavigation>().single { it.isShown }
+                        val navVisible = android.graphics.Rect(); val navHasRect = navigation.getGlobalVisibleRect(navVisible)
+                        val navBounds = screenRect(navigation)
+                        val geometry = org.json.JSONObject().put("generatedOnly", true).put("variant", variant).put("language", MoteI18n.language())
+                            .put("asciiInputMode", "Instrumentation.sendStringSync key events with actual IME visible").put("asciiInput", keyEventPrefix)
+                            .put("fixtureInputMode", "EditText.setText for the original Unicode fixture body, with selection at zero before ASCII events")
+                            .put("fixtureBody", fixtureText).put("expectedSavedOriginal", generatedText).put("clickMode", "Instrumentation.sendPointerSync ACTION_DOWN/ACTION_UP")
+                            .put("systemKeyboardPixelsCaptured", false).put("imeVisibleBeforeTouch", insets.isVisible(android.view.WindowInsets.Type.ime()))
+                            .put("imeBottom", imeBottom).put("imeTopScreen", imeTop).put("rootBoundsScreen", rectJson(rootBounds))
+                            .put("saveBoundsScreen", rectJson(saveBounds)).put("saveGlobalVisibleRect", rectJson(saveVisible)).put("saveHasVisibleRect", saveHasRect)
+                            .put("navigationBoundsScreen", rectJson(navBounds)).put("navigationGlobalVisibleRect", rectJson(navVisible)).put("navigationHasVisibleRect", navHasRect)
+                        File(directory, "note-ime-save-geometry.json").writeText(geometry.toString(2))
+                        assertTrue("The actual IME stays visible until the real Save touch", insets.isVisible(android.view.WindowInsets.Type.ime()))
+                        assertTrue("Save must be fully visible before its actual touch", saveHasRect)
+                        assertEquals(save.width, saveVisible.width()); assertEquals(save.height, saveVisible.height())
+                        assertTrue("Navigation must also remain fully visible", navHasRect)
+                        assertEquals(navigation.width, navVisible.width()); assertEquals(navigation.height, navVisible.height())
+                        assertTrue("Navigation remains above the actual IME", navBounds.bottom <= imeTop + 2)
+                        assertTrue("Save remains above the actual IME", saveBounds.bottom <= imeTop + 2)
+                        assertTrue("Save remains above the primary navigation", saveBounds.bottom <= navBounds.top + 2)
+                        assertTrue(save.isEnabled && save.isClickable)
+                        touchX = saveBounds.exactCenterX(); touchY = saveBounds.exactCenterY()
+                    }
+                    val down = SystemClock.uptimeMillis()
+                    android.view.MotionEvent.obtain(down, down, android.view.MotionEvent.ACTION_DOWN, touchX, touchY, 0).let {
+                        try { instrumentation.sendPointerSync(it) } finally { it.recycle() }
+                    }
+                    android.view.MotionEvent.obtain(down, down + 30, android.view.MotionEvent.ACTION_UP, touchX, touchY, 0).let {
+                        try { instrumentation.sendPointerSync(it) } finally { it.recycle() }
+                    }
+                    instrumentation.waitForIdleSync()
+                } else {
+                    scenario.onActivity { activity ->
+                        views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single { it.isShown }.setText(generatedText)
+                        views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("保存随手记") }.performClick()
+                    }
                 }
                 val savedDeadline = SystemClock.elapsedRealtime() + 10000
                 var saved = false
@@ -297,6 +396,18 @@ class UiIterationInstrumentedTest {
                     if (!saved) Thread.sleep(25)
                 }
                 assertTrue("Save uses the real note action and clears only the committed draft", saved)
+                if (keyboardJourney) {
+                    scenario.onActivity { activity ->
+                        val root = activity.window.decorView
+                        val geometryFile = File(directory, "note-ime-save-geometry.json")
+                        val geometry = org.json.JSONObject(geometryFile.readText()).put("savedThroughActualTouch", true)
+                            .put("imeVisibleAfterSuccessfulSave", root.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
+                        geometryFile.writeText(geometry.toString(2))
+                        activity.getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(root.windowToken, 0)
+                        activity.currentFocus?.clearFocus()
+                    }
+                    settle()
+                }
                 scenario.onActivity { activity -> views(activity.window.decorView).single { it.isShown && it.contentDescription == MoteI18n.text("返回{0}", MoteI18n.text("内容")) }.performClick() }
                 var populated = false
                 while (!populated && SystemClock.elapsedRealtime() < savedDeadline) {

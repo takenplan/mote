@@ -50,3 +50,10 @@
 
 
 候选 3 的真实弹窗边线回归：首次 `f63f2a23` 构建中，142px 动作按钮仅121px可见，按钮 `top=-10px`，6 个完整顶边采样在自身绘制中存在、在同次整窗绘制中全丢。失败源码 / APK / 原图 / ready=false 几何 JSON 保留于 `r3/android-dialog-clipped-f63f2a23`，未导入候选。`f628484e` 只关闭原生动作栏的 baseline alignment；同一硬门槛、采样容差与绘制算法复验，四条件24按钮全部完整可见，全部顶边采样保留。该回归继续在后两轮执行。
+
+
+## 候选 4：视觉重点
+
+实际源码提交：`b47938b44da5ccedeac9d7376c48acbb264b96a2`。三端保留本轮实际 producer 提交；如单端修复，采用实际 Git 输入等价证明，未借用其他轮图片。本轮 producer：Web `b47938b44da5ccedeac9d7376c48acbb264b96a2`、Mac `ad503028863294217b02c799f987d1f5f60027db`、Android `5bf1fbf944abaca4a1fa671a193b99606a77db99`。Web / Mac 各 32 张核心图；Android 四条件共 86 张应用自有窗口图，核心 32 张，矩阵 12 项通过、0 跳过；连接返回回归 16 项通过。Web 47 个实际脚本旅程、Mac 15 个；独立手动操作、八项评分与限制见评价报告该轮记录。
+
+构建 / 源码 / 原始图 / 内容就绪状态 / 旅程证据保存于 `.mote/ui-art-direction/r4`；独立评估证据保存于 `.mote/ui-art-direction/evaluator/r4`。产品 APK SHA256：`c6a1305eb29b6af5da9059e23ae7e9c356d1321df19a5cce02992428f425fac0`。应用自有窗口绘制不包含系统键盘像素；真实 IME 布局在矩阵中单独执行。无实机、个人资料、真实模型或真实账号检查。

@@ -75,7 +75,9 @@ class CaptureRecordsActivity : MoteActivity() {
         val source = Spinner(this).apply {
             adapter = MoteUi.choiceAdapter(this@CaptureRecordsActivity, listOf(MoteI18n.text("本机记录"), MoteI18n.text("中央归档")))
             setSelection(if (central) 1 else 0)
-        }; filters.addView(source, if (compactFilters) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
+        }; filters.addView(source, (if (compactFilters) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f)).apply {
+            if (compactFilters) bottomMargin = moteDp(DesignTokens.spaceInline) else marginEnd = moteDp(DesignTokens.spaceInline)
+        })
         source.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
@@ -114,6 +116,10 @@ class CaptureRecordsActivity : MoteActivity() {
                 .apply { datePicker.maxDate = System.currentTimeMillis() }.show()
         }.apply { setSingleLine() }
         nextDay = button(days, MoteI18n.text("后一天")) { date = date.plusDays(1); reload() }
+        if (!compactDates) {
+            (previousDay.layoutParams as LinearLayout.LayoutParams).marginEnd = moteDp(DesignTokens.spaceInline)
+            (dateButton.layoutParams as LinearLayout.LayoutParams).marginEnd = moteDp(DesignTokens.spaceInline)
+        }
         if (compactDates) {
             previousDay.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(DesignTokens.spaceInline) }
             body.addView(days, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceInline) })

@@ -315,6 +315,18 @@ async function consumerMatrix() {
       if(['settings','models','providers','modules','privacy','storage'].includes(scene))await assertSettingsTask(scene);
       for(const [width,height,variant] of [[1440,1000,'normal'],[820,900,'tablet'],[390,844,'compact'],[320,740,'minimum']]){
         window.setSize(width,height);await until(()=>js(`innerWidth===${width}`),'consumer viewport '+width);
+        if(artRound>=5&&scene==='note'){
+          const catalog=JSON.parse(readFileSync(join(repo,'apps/android/app/src/main/assets/i18n-en.json'),'utf8'));
+          const boundaryKey='已有文件 · 不现场录音 · 附件先归档 · 每个附件最多 50 MiB。';
+          const helpKey='文字识别与音频转写按中央处理设置进行；可在资料库核对各阶段状态。';
+          const boundary=language==='en'?catalog[boundaryKey]:boundaryKey,help=language==='en'?catalog[helpKey]:helpKey;
+          assert.equal(await js("document.querySelector('.note-attachment-boundary').textContent"),boundary,'Attachment consequences remain directly visible');
+          assert.equal(await js("document.querySelector('.note-attachment-help').open"),false,'Processing teaching starts in a named disclosure');
+          await js("document.querySelector('.note-attachment-help summary').click();true");
+          await until(()=>js(`(()=>{const d=document.querySelector('.note-attachment-help');return d.open&&d.querySelector('p').getClientRects().length>0&&d.querySelector('p').textContent===${JSON.stringify(help)}})()`),'complete attachment processing teaching');
+          await js("document.querySelector('.note-attachment-help summary').click();true");
+          journeys.push({name:'attachment consequences and complete named processing help',language,width,verified:true});
+        }
         await capture(scene+'-'+(language==='en'?'en':'zh')+'-'+width,{scene,variant,reviewSelection:true,notes:scene==='privacy'?'Existing Sources and external apps settings, including write scopes; this is not a newly invented standalone privacy page.':''});
       }
       window.setSize(1440,1000);

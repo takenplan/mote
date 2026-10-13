@@ -470,8 +470,8 @@ app.on('browser-window-created', (_event, window) => {
       assert(await js(`(() => {
         const rows=Array.from(document.querySelectorAll('#content-feed .content-row'));
         if(!rows.some(row=>row.querySelector('.content-type').textContent==='Notifications') || !rows.some(row=>row.querySelector('.content-type').textContent==='Quick notes') || !rows.some(row=>row.querySelector('.content-type').textContent==='File')) return false;
-        return rows.every(row=>['.content-type','.content-row-copy small'].every(selector=>{const element=row.querySelector(selector),bounds=element.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(element);
-          return element.scrollWidth<=element.clientWidth && Array.from(range.getClientRects()).every(rect=>rect.left>=bounds.left-.5 && rect.right<=bounds.right+.5);
+        return rows.every(row=>['.content-type','.content-state','.content-row-copy small'].every(selector=>{const element=row.querySelector(selector),bounds=element.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(element);const rects=Array.from(range.getClientRects());
+          return element.scrollWidth<=element.clientWidth && rects.every(rect=>rect.left>=bounds.left-.5 && rect.right<=bounds.right+.5) && (selector==='.content-row-copy small'||rects.length>0&&Math.max(...rects.map(rect=>rect.top))-Math.min(...rects.map(rect=>rect.top))<1);
         }));
       })()`),'Actual mixed-source records keep English types and long unbroken source metadata inside their narrow columns');
       assert(await js(`document.documentElement.scrollWidth<=innerWidth`),'Mixed-source content has no horizontal overflow');

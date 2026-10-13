@@ -100,4 +100,17 @@ button.secondary:not(.danger) { color:var(--mote-ink); }
 .content-reading-dialog .dialog-heading p { font-size:var(--mote-font-meta); color:var(--mote-muted); }
 .reader-state,.content-stages,.content-reading-metadata { color:var(--mote-muted); }
 .content-reading-body { color:var(--mote-ink); }
+/* R5: complete labels use their natural width alongside the readable original. */
+.content-row { display:grid; grid-template-columns:max-content minmax(0,1fr); align-items:first baseline; }
+.content-row-labels { display:grid; gap:var(--mote-space-inline); justify-items:start; align-content:start; }
+.content-row .content-type,.content-row .content-state { width:max-content; max-width:none; min-height:0; white-space:nowrap; overflow-wrap:normal; font-size:var(--mote-font-meta); line-height:1.6; }
+.content-row .content-type { padding:0; }
+.content-row .content-state { padding:var(--mote-space-inline); }
+.content-row-copy small { display:block; }
+.content-row-copy small time { white-space:nowrap; }
+.content-source-name { overflow-wrap:anywhere; }
+.settings-row { align-items:flex-start; }
+.settings-row .setting-icon { width:24px; height:24px; }
+.settings-row .setting-icon .icon { width:20px; height:20px; }
+.settings-row .chevron { align-self:center; line-height:1; padding-inline-start:var(--mote-space-inline); }
 @media(max-width:1000px) { main,.workspace-toolbar { padding-inline:var(--mote-space-page); } .home-add-grid .add-choice,.add-dialog-grid .add-choice { min-height:var(--mote-control-height); padding:var(--mote-space-panel); } }

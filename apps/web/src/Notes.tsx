@@ -173,7 +173,7 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
         }
     }
     return <>
-    <div className="page-heading"><div className="eyebrow">A LITTLE ROOM FOR YOUR THOUGHTS</div><h1>{moteText("想到什么，就记下来。")}</h1><p>{moteText("心情、杂事、一个还没成形的想法，都可以成为上下文。")}</p></div>
+    <div className="page-heading note-heading"><h1>{moteText("想到什么，就记下来。")}</h1><p>{moteText("心情、杂事、一个还没成形的想法，都可以成为上下文。")}</p></div>
     <form className="panel note-composer" onSubmit={save}>
       <label htmlFor="note-text">{moteText("此刻想留下什么？")}</label>
       <textarea disabled={uploading} id="note-text" value={draft.text} onChange={e => edit({ ...draft, text: e.target.value })} maxLength={100000} rows={6} placeholder={moteText("记下此刻的想法…")} onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && draft.text.trim())
@@ -206,8 +206,9 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
                 setUploading(false); if (attachmentRequest.current === controller)
                 attachmentRequest.current = null; });
         }}/></label><p role="status">{uploading ? moteText("正在上传附件…") : moteText("已添加 {0} 个附件", draft.attachments?.length ?? 0)}</p>
-      <p className="fine-print">{moteText("此入口上传已有文件，网页不现场录音。附件先归档，文字识别与音频转写按中央处理设置进行；可在资料库核对各阶段状态。每个附件最多 50 MiB。")}</p>
+      <p className="fine-print note-attachment-boundary">{moteText("已有文件 · 不现场录音 · 附件先归档 · 每个附件最多 50 MiB。")}</p>
       <div className="note-composer-actions"><span>{draftSaved && <><Check size={14}/> {' '}{moteText("草稿已保存在本机 ·")}{' '}</>} {draft.text.length.toLocaleString(getLocale())}{' '}{moteText("字")}</span><button className="button primary" disabled={uploading || (!draft.text.trim() && !draft.attachments?.length)}><CloudUpload size={16}/>{moteText("保存并同步")}</button></div>
+      <details className="note-attachment-help"><summary>{moteText("附件与处理说明")}</summary><p>{moteText("文字识别与音频转写按中央处理设置进行；可在资料库核对各阶段状态。")}</p></details>
       <p className="note-storage-hint">{moteText("草稿和待同步内容保存在此应用的本机存储中，清除应用数据会移除它们。打开随手记时自动续传；按中央节点地址分别保存。")}</p>
     </form>
     {error && <div className="notice error" role="alert">{error}</div>}

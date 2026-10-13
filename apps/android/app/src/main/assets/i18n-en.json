@@ -6194,7 +6194,7 @@
   "所有资料，在一处浏览和找回": "Browse and find all your records in one place",
   "本机保留的记录，离线也能查看；同步后的完整资料在中央资料库中。": "Browse records kept on this device while offline. Your full synchronized collection is in the central library.",
   "按日期浏览更多记录": "Browse more records by date",
-  "本机保留 · {0} 条资料": "On this device · {0} records",
+  "本机保留 · {0} 条资料": "On this device · Records: {0}",
   "这里还没有资料。写一条记录，或在本机页面设置采集范围。": "No records yet. Write a note or choose what to collect under Device.",
   "资料暂不可读取，请稍后重试。": "Records are unavailable for now. Try again shortly.",
   "记录与保护": "Collection & protection",
@@ -8172,5 +8172,8 @@
   "未得到范围内的候选；已保留自动结果及候选，不会补造或隐藏说话人。": "No candidate met the declared range. Automatic output and candidates are retained; speakers are neither invented nor hidden.",
   "归档不代表整理完成。": "Archiving does not mean processing is complete.",
   "归档与处理说明": "Archival and processing",
-  "窗口标题": "Window title"
+  "窗口标题": "Window title",
+  "已有文件 · 不现场录音 · 附件先归档 · 每个附件最多 50 MiB。": "Existing files · No live recording · Attachments archive first · Up to 50 MiB per attachment.",
+  "附件与处理说明": "Attachments and processing",
+  "文字识别与音频转写按中央处理设置进行；可在资料库核对各阶段状态。": "OCR and audio transcription follow Central processing settings. Inspect each stage in the Library."
 }

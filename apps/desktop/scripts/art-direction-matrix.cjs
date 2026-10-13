@@ -29,14 +29,35 @@ module.exports = async function({window,js,navigate,outputDirectory,round,profil
     return {...base,ready:true,state:['ask','connection','import'].includes(scene)?'restriction':'content',marker,visibleMarker:{tag:element.tagName,text:element.textContent.trim().slice(0,180)},busyExcluded:true};
   }
   async function readiness(scene){let state;await until(async()=>{state=await js('('+ready.toString()+')('+JSON.stringify(scene)+')');return state.ready;},scene);return state;}
+  function completeLabels(){
+    return Array.from(document.querySelectorAll('[data-page]:not([hidden]) .content-row')).map(row=>{
+      const bounds=row.getBoundingClientRect();
+      return Array.from(row.querySelectorAll('.content-type,.content-state')).map(element=>{
+        const r=element.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(element);
+        const rects=Array.from(range.getClientRects()),textBounds=range.getBoundingClientRect();
+        return {text:element.textContent,className:element.className,singleLine:rects.length>0&&Math.max(...rects.map(x=>x.top))-Math.min(...rects.map(x=>x.top))<1,fullyInside:element.scrollWidth<=element.clientWidth+1&&textBounds.left>=r.left-.5&&textBounds.right<=r.right+.5&&r.left>=bounds.left-.5&&r.right<=bounds.right+.5,left:r.left,right:r.right,top:r.top,bottom:r.bottom,textWidth:textBounds.width};
+      });
+    }).flat();
+  }
+  function settingsGlyphs(){
+    const expected={permissions:'access',connection:'link',sync:'sync',capture:'screen',privacy:'shield',about:'info',activity:'activity',statistics:'storage',developer:'code'};
+    return Object.entries(expected).map(([page,glyph])=>{
+      const row=document.querySelector('[data-page=settings] .settings-row[data-nav="'+page+'"]'),use=row?.querySelector('.setting-icon use'),href=use?.getAttribute('href');
+      return {page,href,valid:href==='#icon-'+glyph&&!!document.querySelector(href)};
+    });
+  }
   async function capture(scene,language,variant,width,height){
     window.setSize(width,height);await until(()=>js('innerWidth==='+width),'actual viewport');await readiness(scene);
     await js('window.scrollTo(0,0);new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     const state=await readiness(scene);assert.equal(await js('document.documentElement.scrollWidth<=innerWidth'),true,'No overflow: '+scene);
+    const labelGeometry=['home','content'].includes(scene)?await js('('+completeLabels.toString()+')()'):undefined;
+    if(labelGeometry)assert(labelGeometry.length>0&&labelGeometry.every(item=>item.singleLine&&item.fullyInside),'Complete source and state labels fit: '+scene+' '+language+' '+variant);
+    const menuGlyphs=scene==='settings'?await js('('+settingsGlyphs.toString()+')()'):undefined;
+    if(menuGlyphs)assert(menuGlyphs.every(item=>item.valid),'Explicit settings page glyphs are present');
     const png=(await window.webContents.capturePage()).toPNG(),name=[scene,language,variant].join('-');
     const viewport=await js('({width:innerWidth,height:innerHeight,devicePixelRatio})');
     const sceneKey=({note:'note-composer',ask:'ask-disconnected'})[scene]??scene;
-    const item={name,file:name+'.png',scene:sceneKey,sceneKey,coreScene:scene,language,locale:await js('document.documentElement.lang'),variant,generatedOnly:true,reviewSelection:true,artDirectionCore:true,sourceCommit,viewport,bitmap:{width:png.readUInt32BE(16),height:png.readUInt32BE(20)},readiness:state,sha256:createHash('sha256').update(png).digest('hex')};
+    const item={name,file:name+'.png',scene:sceneKey,sceneKey,coreScene:scene,language,locale:await js('document.documentElement.lang'),variant,generatedOnly:true,reviewSelection:true,artDirectionCore:true,sourceCommit,viewport,bitmap:{width:png.readUInt32BE(16),height:png.readUInt32BE(20)},readiness:state,labelGeometry,menuGlyphs,sha256:createHash('sha256').update(png).digest('hex')};
     writeFileSync(join(outputDirectory,item.file),png);writeFileSync(join(outputDirectory,name+'.json'),JSON.stringify(item,null,2));captures.push(item);
   }
   async function changeLanguage(language){
