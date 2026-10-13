@@ -80,7 +80,11 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-na
   if (pageNames.includes(page)) showPage(page);
 });
 byId('workspace-back').addEventListener('click', () => showPage(navigation.backTarget));
-function updateNoteAction(): void { byId('note-action').classList.add('primary'); }
+function updateNoteAction(): void {
+  const action = byId('note-action');
+  action.classList.add('primary');
+  action.hidden = currentPage !== 'notes' && (navigation.section === 'settings' || settingsPages.has(currentPage));
+}
 const addDialog=byId<HTMLDialogElement>('add-dialog');
 let addOrigin:HTMLElement|undefined;
 for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-add]'))) button.addEventListener('click',()=>{addOrigin=button;addDialog.showModal();});

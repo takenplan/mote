@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PrimaryNavigationTest {
+    @Test fun recordAdditionStaysInContentJourneysInsteadOfMaintenance() {
+        for (page in listOf("overview", "actions", "archive", "files", "notes", "ask")) {
+            assertTrue("Record action remains available on $page", MoteNavigation.centralAllowsAdd(page))
+        }
+        for (page in listOf("settings", "connections", "devices", "plugins", "vault", "processing", "developer", "about")) {
+            assertFalse("Maintenance stays focused on $page", MoteNavigation.centralAllowsAdd(page))
+        }
+    }
+
     @Test fun localAndCentralObjectsStayInTheSamePrimaryDestination() {
         assertEquals(MoteNavigation.localTab("LIBRARY"), MoteNavigation.centralTab("archive"))
         assertEquals(MoteNavigation.localTab("NOTES"), MoteNavigation.centralTab("notes"))

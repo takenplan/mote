@@ -19,6 +19,7 @@ object MoteNavigation {
         MoteNavigationGroup("连接与授权", listOf("devices", "connections", "lark")),
         MoteNavigationGroup("管理与维护", listOf("statistics", "processing", "plugins", "settings", "usage", "vault", "developer", "about", "help"))
     )
+    fun centralAllowsAdd(page: String): Boolean = page == "ask" || page in libraryPages || page in groups[1].pages
     fun centralTab(page: String): MotePrimaryTab = when (page) {
         "ask" -> MotePrimaryTab.ASK
         "overview", "actions" -> MotePrimaryTab.TODAY

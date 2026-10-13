@@ -45,7 +45,7 @@ import { changeEvidenceRoute,readEvidenceRoute } from './evidence-route';
 import { FeaturePage,featuresReady,webFeatures } from './features/runtime';
 import { pageLabels,readPage,routes,type Page } from './navigation';
 import { canonicalDestination,readWorkspaceRoute,workspaceHash } from './workspace-route';
-import { primaryDestination,WorkspaceNavigation } from './WorkspaceNavigation';
+import { isSettingsContext,primaryDestination,WorkspaceNavigation } from './WorkspaceNavigation';
 import { readResource,resources } from './resource-cache';
 import { importQueue } from './import-queue';
 import { clearSession,persistSession,readPeriod,savePeriod,type Period,readSessionLifetime,readStoredSession,saveSessionLifetime,type SessionLifetime } from "./session";
@@ -97,6 +97,7 @@ function App() {
   const collectionIds = () => webFeatures.collections().map(entry=>entry.id);
   const initialRoute = useRef(readWorkspaceRoute(location.hash,readPage,collectionIds()));
   const [page, setPage] = useState<Page>(initialRoute.current.page);
+  const settingsContext = isSettingsContext(page);
   const [archiveTab, updateArchiveTab] = useState<ArchiveTab>(initialRoute.current.collection);
   const archiveTabRef=useRef(archiveTab); archiveTabRef.current=archiveTab;
   const currentHash=useRef(location.hash);
@@ -354,7 +355,7 @@ function App() {
               <strong>{pageLabels[page]}</strong>
             </span>
           </div>
-          <div className="topbar-actions"><button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>
+          <div className="topbar-actions">{!settingsContext&&page!=='featureGuide'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
             <CentralStatusPill
               connection={connection}
               verified={verified}
@@ -368,7 +369,7 @@ function App() {
                 <button className="icon-button mobile-settings" aria-label={moteText('设置')} onClick={()=>onPage('about')}><Settings2 size={18}/></button>
                 <button
                   className="icon-button"
-                  aria-label={moteText("刷新资料")}
+                  aria-label={settingsContext?moteText("刷新生效配置"):moteText("刷新资料")}
                   onClick={refresh}
                   disabled={loading}
                 >
@@ -384,7 +385,7 @@ function App() {
               {moteText("我")}</button>
           </div>
         </header>
-        <React.Suspense key={page} fallback={<p role="status">{moteText("正在读取…")}</p>}><div className={`content ${primaryDestination(page)==='about'||['lark','recordings'].includes(page)?'settings-surface':''}`}>
+        <React.Suspense key={page} fallback={<p role="status" data-page-loading={page}>{moteText("正在读取…")}</p>}><div data-page={page} data-session={!connection?'signed-out':verified?'ready':error?'verification-failed':'verifying'} aria-busy={Boolean(connection&&loading)} className={`content ${settingsContext?'settings-surface':''}`}>
           {connection&&verified&&<WorkspaceNavigation page={page} onPage={onPage}/> }
           <div className="workspace-range">
             {connection&&verified&&(page === "insights" || (page === "archive" && webFeatures.collections().find(entry=>entry.id===archiveTab)?.usesTimeRange !== false)) && (
@@ -416,7 +417,7 @@ function App() {
               </button>
             </div>
           )}
-          {!connection ? (
+          {!connection && settingsContext ? <section className="panel settings-sign-in"><div className="page-heading"><h1>{moteText("登录后查看{0}", pageLabels[page])}</h1><p>{moteText("调整服务与资料管理方式，或管理当前登录。")}</p></div><button className="button primary" onClick={()=>setShowConnect(true)}><Link2 size={16}/>{moteText("登录 Mote")}<ArrowRight size={16}/></button></section> : !connection ? (
             <>
               <div className="greeting welcome simple-welcome archive-welcome">
                 <div>

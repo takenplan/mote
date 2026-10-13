@@ -208,7 +208,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     } catch (e) {if (!controller.signal.aborted) setError(errorMessage(e));}
     finally {if (!controller.signal.aborted) {setBusy(false); operation.current = null;}}
   }
-  return <div className="conversation-layout">
+  return <div className="conversation-layout" aria-busy={loading||opening||recentRuns.loading}>
     <aside className="conversation-history panel" aria-label={moteText("对话历史")}>
       <div className="conversation-history-heading"><div className="chat-section-title"><div className="chat-section-icon"><MessageSquare size={15}/></div><div><span className="eyebrow">MOTE CHAT</span><h2>{moteText("对话历史")}</h2></div></div><button className="icon-button" aria-label={moteText("刷新对话历史")} disabled={loading} onClick={() => void loadHistory()}><RefreshCw size={16} className={loading ? 'spin' : ''}/></button></div>
       <button className="button subtle full new-conversation-button" disabled={busy} onClick={startNew}><Plus size={16}/>{moteText("新对话")}</button>

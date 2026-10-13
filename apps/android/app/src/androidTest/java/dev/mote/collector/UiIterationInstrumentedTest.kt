@@ -1,7 +1,5 @@
 package dev.mote.collector
 
-import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.os.Build
 import android.os.SystemClock
 import android.view.View
@@ -60,21 +58,24 @@ class UiIterationInstrumentedTest {
                 var ready = false
                 fun dialogRoot() = android.view.inspector.WindowInspector.getGlobalWindowViews().lastOrNull { it.findViewById<View>(android.R.id.button1)?.isShown == true }
                 while (!ready && SystemClock.elapsedRealtime() < deadline) {
-                    instrumentation.runOnMainSync { ready = dialogRoot()?.let { root -> views(root).filterIsInstance<TextView>().any { it.text.toString() == text } } == true }
+                    scenario.onActivity { activity -> ready = GeneratedWindowRendering.hasNoPendingLabels(activity.window.decorView) && dialogRoot()?.let { root -> views(root).filterIsInstance<TextView>().any { it.text.toString() == text } } == true }
                     if (!ready) Thread.sleep(25)
                 }
                 assertTrue("The native reader loads the original saved note", ready)
-                instrumentation.runOnMainSync {
+                scenario.onActivity { activity ->
                     val root = requireNotNull(dialogRoot())
                     val labels = views(root).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+                    val parentLabels = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+                    assertTrue(parentLabels.contains("Quick notes"))
+                    assertTrue(parentLabels.contains("Browse records by date; open one to read its original."))
+                    assertFalse(parentLabels.contains(MoteI18n.text("截图支持按连续 Session 或 App 分组，点开查看图片。")))
+                    assertFalse("A note list has no unsupported thumbnail control", parentLabels.contains("Thumbnail view"))
                     assertTrue(labels.contains("Close details")); assertFalse(labels.contains("Off"))
                     assertFalse(labels.contains("Media collection not enabled"))
                     val round = InstrumentationRegistry.getArguments().getString("uiIterationRound", "5").also { require(it.matches(Regex("baseline|[1-9][0-9]*"))) }
                     val variant = InstrumentationRegistry.getArguments().getString("uiIterationVariant", "default").also { require(it.matches(Regex("default|compact|english|compact-english"))) }
                     val directory = File(context.filesDir, "ui-iterations/round-$round" + if (variant == "default") "" else "/$variant").apply { mkdirs() }
-                    val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                    root.draw(Canvas(bitmap))
-                    File(directory, "note-detail-english.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+                    GeneratedWindowRendering.save(activity, directory, "note-detail-english", listOf(root))
                     File(directory, "note-detail-english.txt").writeText(labels.joinToString("\n"))
                     assertTrue(root.findViewById<View>(android.R.id.button1).performClick())
                 }
@@ -112,20 +113,40 @@ class UiIterationInstrumentedTest {
                 }
                 fun render(name: String) {
                     settle()
+                    val deadline = SystemClock.elapsedRealtime() + 10000
+                    var ready = false
+                    while (!ready && SystemClock.elapsedRealtime() < deadline) {
+                        scenario.onActivity { ready = GeneratedWindowRendering.hasNoPendingLabels(it.window.decorView) }
+                        if (!ready) Thread.sleep(25)
+                    }
+                    assertTrue("The full active page must finish its reads before capture: $name", ready)
                     scenario.onActivity { activity ->
                         assertTrue("Secure window remains enabled", activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                         val root = activity.window.decorView
-                        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                        // Draw only this fresh fixture app's views, never capture the device display.
-                        root.draw(Canvas(bitmap))
-                        File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-                        bitmap.recycle()
+                        GeneratedWindowRendering.save(activity, directory, name)
                         File(directory, "$name.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
                     }
                 }
                 fun tab(identity: String) {
                     scenario.onActivity { activity -> views(activity.window.decorView).single { it.isShown && it.tag == "primary:$identity" }.performClick() }
                 }
+                fun scrollTo(label: String) {
+                    scenario.onActivity { activity ->
+                        val target = views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text(label) }
+                        target.requestRectangleOnScreen(android.graphics.Rect(0, 0, target.width, target.height), true)
+                    }
+                    settle()
+                }
+                fun awaitVisible(label: String) {
+                    val deadline = SystemClock.elapsedRealtime() + 10000
+                    var ready = false
+                    while (!ready && SystemClock.elapsedRealtime() < deadline) {
+                        scenario.onActivity { activity -> ready = views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == MoteI18n.text(label) } }
+                        if (!ready) Thread.sleep(25)
+                    }
+                    assertTrue("A scene is captured only after its actual content has loaded: $label", ready)
+                }
+                awaitVisible("还没有内容。选一个动作，留下第一份资料。")
                 render("home")
                 scenario.onActivity { activity ->
                     assertEquals(4, views(activity.window.decorView).count { it.tag?.toString()?.startsWith("add:") == true })
@@ -137,12 +158,51 @@ class UiIterationInstrumentedTest {
                     assertEquals(3, views(activity.window.decorView).count { it.tag?.toString()?.startsWith("primary:") == true })
                     assertFalse(Settings(activity).enabled)
                 }
-                tab("LIBRARY"); render("content")
+                scrollTo("开始采集")
+                render("home-collection")
+                scenario.onActivity { activity ->
+                    val control = views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("开始采集") }
+                    val visible = android.graphics.Rect()
+                    assertTrue(control.getGlobalVisibleRect(visible)); assertEquals(control.height, visible.height())
+                    assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == MoteI18n.text("屏幕与应用活动") })
+                }
+                scenario.onActivity { activity ->
+                    views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("查看同步详情") }.performClick()
+                }
+                scrollTo("立即同步")
+                render("home-sync-details")
+                scenario.onActivity { activity ->
+                    views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("查看同步详情") }.performClick()
+                    activity.showMoteAddActions()
+                }
+                settle()
+                scenario.onActivity { activity ->
+                    val dialog = android.view.inspector.WindowInspector.getGlobalWindowViews().single { it.findViewById<View>(android.R.id.button2)?.isShown == true }
+                    val labels = views(dialog).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+                    for (action in MoteAddAction.entries) assertTrue(labels.contains(MoteI18n.text(action.titleKey)))
+                    GeneratedWindowRendering.save(activity, directory, "add", listOf(dialog))
+                    File(directory, "add.txt").writeText(labels.joinToString("\n"))
+                    assertTrue(dialog.findViewById<View>(android.R.id.button2).performClick())
+                    views(activity.window.decorView).single { it.isShown && it.isClickable && it.contentDescription == MoteI18n.text("设置") }.performClick()
+                }
+                render("settings")
+                scenario.onActivity { activity ->
+                    assertFalse("Settings keeps record addition out of its task", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") })
+                    val labels = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+                    assertFalse("Operational capture belongs to Home", labels.contains(MoteI18n.text("开始采集")))
+                    assertFalse("Operational sync belongs to Home", labels.contains(MoteI18n.text("立即同步")))
+                    assertFalse("Record statistics belong to Home", labels.contains(MoteI18n.text("此刻的 Mote")))
+                }
+                scenario.onActivity { activity -> views(activity.window.decorView).single { it.isShown && it.tag == "menu:${MoteI18n.text("连接与同步")}" }.performClick() }
+                render("connection")
+                scenario.onActivity { activity -> assertFalse("Connection settings keeps record addition out of its task", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") }) }
+                tab("LIBRARY"); awaitVisible("这里还没有内容。点击添加，选择文件、屏幕或随手记。"); render("content")
+                scenario.onActivity { activity -> assertTrue("Content still offers the shared record action", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") }) }
                 tab("ASK")
                 val deadline = SystemClock.elapsedRealtime() + 10000
                 var loaded = false
                 while (!loaded && SystemClock.elapsedRealtime() < deadline) {
-                    scenario.onActivity { activity -> loaded = views(activity.window.decorView).any { it.tag == "central-title" && (it as TextView).text.isNotBlank() } }
+                    scenario.onActivity { activity -> loaded = views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == MoteI18n.text("中央问答暂不可用。连接中央后，可以根据已整理的内容提问；文件和随手记仍可在本机保存。") } }
                     if (!loaded) Thread.sleep(25)
                 }
                 assertTrue("Ask uses the real embedded native central page", loaded)
@@ -154,6 +214,7 @@ class UiIterationInstrumentedTest {
                 }
                 tab("TODAY")
                 scenario.onActivity { activity -> activity.openGeneratedAdd(MoteAddAction.NOTE) }
+                awaitVisible("草稿已载入")
                 render("note")
                 if (args.getString("uiIterationKeyboard") == "true") {
                     val deadline = SystemClock.elapsedRealtime() + 10000
@@ -256,9 +317,7 @@ class UiIterationInstrumentedTest {
                                 File(directory, "home-visible-record.txt").writeText("id=$savedId\nrect=$visible\nheight=${record.height}\n$generatedText")
                                 val root = activity.window.decorView
                                 assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
-                                val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                                root.draw(Canvas(bitmap))
-                                File(directory, "home-populated.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+                                GeneratedWindowRendering.save(activity, directory, "home-populated")
                                 File(directory, "home-populated.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
                                 opened = record.performClick()
                             }
@@ -271,7 +330,7 @@ class UiIterationInstrumentedTest {
                     val deadline = SystemClock.elapsedRealtime() + 10000
                     var original = false
                     while (!original && SystemClock.elapsedRealtime() < deadline) {
-                        instrumentation.runOnMainSync { original = detailRoot()?.let { root -> views(root).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == generatedText } } == true }
+                        instrumentation.runOnMainSync { original = GeneratedWindowRendering.hasNoPendingLabels(reader.window.decorView) && detailRoot()?.let { root -> views(root).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == generatedText } } == true }
                         if (!original) Thread.sleep(25)
                     }
                     assertTrue("Opening the actual Home note preserves the exact saved original", original)
@@ -279,13 +338,107 @@ class UiIterationInstrumentedTest {
                         assertEquals(savedId, reader.intent.getStringExtra("recordId"))
                         assertTrue(reader.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                         val root = requireNotNull(detailRoot())
-                        val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                        root.draw(Canvas(bitmap))
-                        File(directory, "home-note-original.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+                        GeneratedWindowRendering.save(reader, directory, "home-note-original", listOf(root))
                         File(directory, "home-note-original.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
                         assertTrue(root.findViewById<View>(android.R.id.button1).performClick())
-                        reader.finish()
                     }
+                    val closedDeadline = SystemClock.elapsedRealtime() + 10000
+                    var closedToList = false
+                    while (!closedToList && SystemClock.elapsedRealtime() < closedDeadline) {
+                        instrumentation.runOnMainSync {
+                            closedToList = detailRoot() == null && GeneratedWindowRendering.hasNoPendingLabels(reader.window.decorView) &&
+                                views(reader.window.decorView).any { it.isShown && it.tag == "capture:$savedId" }
+                        }
+                        if (!closedToList) Thread.sleep(25)
+                    }
+                    assertTrue("Close dismisses the reader into the actual matching records page", closedToList)
+                    instrumentation.runOnMainSync {
+                        val rows = views(reader.window.decorView)
+                        val kind = rows.filterIsInstance<android.widget.Spinner>().single { it.adapter.count == 7 }
+                        kind.setSelection(0) // The real source selector moves to screenshots.
+                    }
+                    instrumentation.waitForIdleSync()
+                    instrumentation.runOnMainSync {
+                        val rows = views(reader.window.decorView)
+                        val grouping = rows.filterIsInstance<android.widget.Spinner>().single { it.adapter.count == 2 && it.getItemAtPosition(0).toString() == MoteI18n.text("按 Session · 连续记录") }
+                        val thumbnails = rows.filterIsInstance<android.widget.Switch>().single { it.text.toString() == MoteI18n.text("缩略图视图") }
+                        assertTrue(grouping.isShown); assertTrue(thumbnails.isShown)
+                        grouping.setSelection(1); thumbnails.isChecked = false
+                        rows.filterIsInstance<android.widget.Spinner>().single { it.adapter.count == 7 }.setSelection(4)
+                    }
+                    instrumentation.waitForIdleSync()
+                    instrumentation.runOnMainSync {
+                        val rows = views(reader.window.decorView)
+                        assertFalse(rows.filterIsInstance<android.widget.Switch>().single { it.text.toString() == MoteI18n.text("缩略图视图") }.isShown)
+                        val grouping = rows.filterIsInstance<android.widget.Spinner>().single { it.adapter.count == 2 && it.getItemAtPosition(0).toString() == MoteI18n.text("按 Session · 连续记录") }
+                        assertFalse(grouping.isShown); assertEquals(1, grouping.selectedItemPosition)
+                        rows.filterIsInstance<android.widget.Spinner>().single { it.adapter.count == 7 }.setSelection(0)
+                    }
+                    instrumentation.waitForIdleSync()
+                    instrumentation.runOnMainSync {
+                        val rows = views(reader.window.decorView)
+                        val grouping = rows.filterIsInstance<android.widget.Spinner>().single { it.adapter.count == 2 && it.getItemAtPosition(0).toString() == MoteI18n.text("按 Session · 连续记录") }
+                        assertTrue(grouping.isShown); assertEquals(1, grouping.selectedItemPosition)
+                        val thumbnails = rows.filterIsInstance<android.widget.Switch>().single { it.text.toString() == MoteI18n.text("缩略图视图") }
+                        assertTrue(thumbnails.isShown); assertFalse(thumbnails.isChecked)
+                        rows.filterIsInstance<android.widget.Spinner>().single { it.adapter.count == 7 }.setSelection(4)
+                    }
+                    instrumentation.waitForIdleSync()
+                    val restoredDeadline = SystemClock.elapsedRealtime() + 10000
+                    var restoredNote = false
+                    while (!restoredNote && SystemClock.elapsedRealtime() < restoredDeadline) {
+                        instrumentation.runOnMainSync { restoredNote = GeneratedWindowRendering.hasNoPendingLabels(reader.window.decorView) && views(reader.window.decorView).any { it.isShown && it.tag == "capture:$savedId" } }
+                        if (!restoredNote) Thread.sleep(25)
+                    }
+                    assertTrue("The actual source switches preserve the saved note and its original", restoredNote)
+                    instrumentation.runOnMainSync {
+                        views(reader.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("前一天") }.performClick()
+                    }
+                    val emptyDeadline = SystemClock.elapsedRealtime() + 10000
+                    var emptyNoteDay = false
+                    while (!emptyNoteDay && SystemClock.elapsedRealtime() < emptyDeadline) {
+                        instrumentation.runOnMainSync {
+                            emptyNoteDay = views(reader.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == MoteI18n.text("当天没有随手记。选择其他日期，或添加一条随手记。") }
+                        }
+                        if (!emptyNoteDay) Thread.sleep(25)
+                    }
+                    assertTrue("The actual previous date has a permission-free note empty state", emptyNoteDay)
+                    instrumentation.runOnMainSync {
+                        val rows = views(reader.window.decorView)
+                        assertFalse(rows.any { it.isShown && it.tag == "capture:$savedId" })
+                        assertFalse(rows.filterIsInstance<TextView>().any { it.isShown && it.text.toString() == MoteI18n.text("当天没有此类记录。请开启相应采集来源并授权，记录按同步策略上传。") })
+                        GeneratedWindowRendering.save(reader, directory, "note-empty-list")
+                        File(directory, "note-empty-list.txt").writeText(rows.filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
+                        val next = rows.filterIsInstance<TextView>().single { it.isShown && it.text.toString() == MoteI18n.text("后一天") }
+                        assertTrue(next.isEnabled); assertTrue(next.performClick())
+                    }
+                    val todayDeadline = SystemClock.elapsedRealtime() + 10000
+                    var backToToday = false
+                    while (!backToToday && SystemClock.elapsedRealtime() < todayDeadline) {
+                        instrumentation.runOnMainSync { backToToday = GeneratedWindowRendering.hasNoPendingLabels(reader.window.decorView) && views(reader.window.decorView).any { it.isShown && it.tag == "capture:$savedId" } }
+                        if (!backToToday) Thread.sleep(25)
+                    }
+                    assertTrue("Returning to the actual saved date recovers the same note ID", backToToday)
+                    instrumentation.runOnMainSync {
+                        GeneratedWindowRendering.save(reader, directory, "note-return-list")
+                        File(directory, "note-return-list.txt").writeText(views(reader.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
+                        val back = views(reader.window.decorView).single { it.isShown && it.contentDescription == MoteI18n.text("返回上一页") }
+                        assertTrue(back.getGlobalVisibleRect(android.graphics.Rect()))
+                        assertTrue("Use the product's real header Back action", back.performClick())
+                    }
+                    scenario.onActivity { activity ->
+                        assertTrue("Header Back returns to the actual originating Home", views(activity.window.decorView).single { it.isShown && it.tag == "primary:TODAY" }.isSelected)
+                    }
+                    val returnDeadline = SystemClock.elapsedRealtime() + 10000
+                    var homeRecord = false
+                    while (!homeRecord && SystemClock.elapsedRealtime() < returnDeadline) {
+                        scenario.onActivity { activity ->
+                            val recent = views(activity.window.decorView).single { it.isShown && it.tag == "home-recent-content" }
+                            homeRecord = views(recent).any { it.isShown && it.tag == "library-record:$savedId" }
+                        }
+                        if (!homeRecord) Thread.sleep(25)
+                    }
+                    assertTrue("The real resumed Home query recovers the same generated note", homeRecord)
                 } finally { instrumentation.removeMonitor(monitor) }
                 context.queue().acknowledge(savedId)
                 scenario.onActivity { assertTrue(QuickNotes.draft(it).read().text.isEmpty()) }
@@ -293,6 +446,13 @@ class UiIterationInstrumentedTest {
                 scenario.onActivity { activity -> activity.openGeneratedAdd(MoteAddAction.SCREEN) }
                 render("screen-scope")
                 assertFalse(Settings(context).enabled)
+            }
+            ActivityScenario.launch(SourcesActivity::class.java).awaitUiText(MoteI18n.text("尚未连接来源。权限只在点击连接时申请。")).use { scenario ->
+                scenario.onActivity { activity ->
+                    GeneratedWindowRendering.save(activity, directory, "sources")
+                    File(directory, "sources.txt").writeText(views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
+                    assertFalse(Settings(activity).enabled)
+                }
             }
             ActivityScenario.launch<CentralActivity>(android.content.Intent(context, CentralActivity::class.java).putExtra("page", "archive")).use { scenario ->
                 val deadline = SystemClock.elapsedRealtime() + 10000
@@ -320,9 +480,7 @@ class UiIterationInstrumentedTest {
                     if (Settings(activity).read().server.isNotBlank()) assertTrue(labels.contains(MoteI18n.text("已填写的中央地址：{0}；连接并确认后才会发送。", Settings(activity).read().server)))
                     assertTrue(labels.none { it.startsWith(MoteI18n.text("完整文件的发送目的地：{0}", Settings(activity).read().server)) })
                     val root = activity.window.decorView
-                    val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                    root.draw(Canvas(bitmap))
-                    File(directory, "import-local-task.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+                    GeneratedWindowRendering.save(activity, directory, "import-local-task")
                     File(directory, "import-local-task.txt").writeText(labels.joinToString("\n"))
                 }
             }
@@ -345,19 +503,19 @@ class UiIterationInstrumentedTest {
                 }
                 instrumentation.waitForIdleSync()
             }
+            lateinit var guideActivity: CentralActivity
             fun drawDialog(name: String) {
                 instrumentation.waitForIdleSync()
                 instrumentation.runOnMainSync {
                     File(directory, "$name-roots.txt").writeText(android.view.inspector.WindowInspector.getGlobalWindowViews().joinToString("\n\n") { root -> views(root).filterIsInstance<TextView>().joinToString("\n") { "${it.id} shown=${it.isShown} text=${it.text}" } })
                     val root = requireNotNull(dialogRoot())
-                    val bitmap = Bitmap.createBitmap(root.width, root.height, Bitmap.Config.ARGB_8888)
-                    root.draw(Canvas(bitmap))
-                    File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }; bitmap.recycle()
+                    GeneratedWindowRendering.save(guideActivity, directory, name, listOf(root))
                     File(directory, "$name.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
                 }
             }
             val guide = android.content.Intent(context, CentralActivity::class.java).putExtra("page", "overview").putExtra("featureGuide", true)
             ActivityScenario.launch<CentralActivity>(guide).use { scenario ->
+                scenario.onActivity { guideActivity = it }
                 drawDialog("feature-guide")
                 tapDialog("内容"); drawDialog("feature-guide-content")
                 instrumentation.runOnMainSync {
@@ -373,10 +531,15 @@ class UiIterationInstrumentedTest {
                     assertTrue(dialogViews().filterIsInstance<TextView>().none { it.text.toString() == MoteI18n.text("此客户端支持的中央功能") })
                     activity.navigate("coding")
                     assertEquals(MoteI18n.text("Coding 会话同步状态"), (views(activity.window.decorView).single { it.tag == "central-title" } as TextView).text.toString())
+                    activity.navigate("settings")
+                    assertFalse("Central maintenance also keeps only related actions", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") })
+                    activity.navigate("ask")
+                    assertTrue("Ask retains its unobtrusive global context action", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") })
                 }
             }
             MoteI18n.select(context, "en")
-            ActivityScenario.launch<CentralActivity>(guide).use {
+            ActivityScenario.launch<CentralActivity>(guide).use { scenario ->
+                scenario.onActivity { guideActivity = it }
                 drawDialog("feature-guide-english")
                 instrumentation.runOnMainSync {
                     assertTrue("Dialog close uses an action translation", dialogViews().filterIsInstance<TextView>().any { it.text.toString() == "Cancel" })

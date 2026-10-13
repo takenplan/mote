@@ -1,4 +1,5 @@
 import { moteText } from '@mote/shared/i18n';
+import { modelSetupHref } from '../ModelStartGuide';
 
 import { Ask } from '../Ask';
 import type { PageEntry,PageProps } from './types';
@@ -11,7 +12,7 @@ export const pages:PageEntry[]=[
                           status={status}
                           onOpen={setEvidenceId}
                           onInsights={()=>onPage("insights")}
-                          onSettings={()=>onPage("settings")}
+                          onSettings={()=>{window.location.hash=modelSetupHref('providers',window.location.hash);}}
                         />
                       ):null},
 ];

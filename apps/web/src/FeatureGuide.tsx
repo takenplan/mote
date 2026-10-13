@@ -3,7 +3,7 @@ import { ArrowRight, ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type {Api} from './api';
 import {DiscoveryLink,DiscoveryProvider,useDiscoveryState} from './DiscoveryLink';
-import { guideSections, quickLinks, type GuideTarget, type GuideUnit, type GuideGroup } from './feature-guide-catalog';
+import { guideSections, type GuideTarget, type GuideUnit, type GuideGroup } from './feature-guide-catalog';
 type GuideLinkProps = {
     target: GuideTarget;
     onPage: (page: string) => void;
@@ -62,7 +62,6 @@ export function FeatureGuide({ api,onPage }: {
       target?.focus({preventScroll:true});
       document.getElementById('guide-section-' + section.id)?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion:reduce)').matches ? 'auto' : 'smooth', block: 'start' });
     }}><span className="guide-index-number" aria-hidden="true">{String(index + 1).padStart(2, '0')}</span><span><strong>{moteText(section.title)}</strong><small>{moteText(section.description)}</small></span><ArrowRight size={16} aria-hidden="true"/></button>)}</nav>
-    <section className="panel guide-start" aria-label={moteText("常用入口")}><div><h2>{moteText("开始一件事")}</h2><p>{moteText("记录想法、加入已有资料，或查看正在做的工作。")}</p></div><div className="guide-quick-links">{quickLinks.map(t => <GuideLink key={moteText(t.label)} target={t} onPage={onPage} primary>{moteText(t.label)}</GuideLink>)}</div></section>
     <aside className="guide-model-start" aria-labelledby="guide-model-start-title">
       <h2 id="guide-model-start-title">{moteText("准备使用 AI 功能？先检查这两处")}</h2>
       <p>{moteText("提问、理解资料或整理记忆前，可按这条路径检查。已有可用的默认连接与分配，可以直接回到原任务。")}</p>

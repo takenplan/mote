@@ -11,7 +11,7 @@ const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } = require(
 const { tmpdir } = require('node:os');
 const { join, resolve } = require('node:path');
 const { spawn } = require('node:child_process');
-const { randomBytes, randomUUID } = require('node:crypto');
+const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const net = require('node:net');
 const assert = require('node:assert/strict');
 
@@ -49,6 +49,47 @@ async function freePort() {
   });
 }
 const js = code => window.webContents.executeJavaScript(code);
+// Observe actual renderer requests and their JSON bodies, without reading a personal profile.
+const observeFixtureRequests = `(() => {
+ if(window.__moteUiFetchObserved)return true;window.__moteUiFetchObserved=true;
+ window.__moteUiPendingApi=0;window.__moteUiApiSettledAt=performance.now();
+ const original=window.fetch.bind(window);
+ window.fetch=async(input,init)=>{
+  const path=new URL(typeof input==='string'?input:input.url,location.href).pathname;
+  if(!path.startsWith('/api/'))return original(input,init);
+  window.__moteUiPendingApi++;
+  try {
+   const slow=window.__moteUiSlow;
+   if(slow&&slow.path===path){slow.hits++;await new Promise(resolve=>setTimeout(resolve,slow.delayMs));}
+   const response=await original(input,init);
+   if(response.headers.get('content-type')?.includes('application/json'))await response.clone().arrayBuffer();
+   return response;
+  } finally {window.__moteUiPendingApi--;window.__moteUiApiSettledAt=performance.now();}
+ };return true;
+})()`;
+function rendererReadiness() {
+ const visible=element=>!!element&&element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden';
+ const route=location.hash||'#/today',path=route.replace(/^#\/?/,'').split('?')[0];
+ const expectedPage=({'today':'overview','preferences':'about','system/models':'settings','system/storage':'vault','system':'statistics','guide':'featureGuide','ask':'ask','library':'archive','library/notes':'notes','library/import':'imports','library/insights':'insights','activity':'activity','connections/add':'sourceCatalog'})[path];
+ const content=document.querySelector('.content[data-page]'),page=content?.dataset.page;
+ const base={ready:false,route,page,expectedPage,pendingApi:window.__moteUiPendingApi??0};
+ if(!expectedPage||!visible(content)||page!==expectedPage)return {...base,reason:'requested consumer is not mounted'};
+ const busy=[...document.querySelectorAll('[data-page-loading],.loading,.load-more .spin,[aria-busy="true"]')].filter(visible);
+ if(busy.length||base.pendingApi||performance.now()-(window.__moteUiApiSettledAt??0)<120)return {...base,reason:'consumer or requests still loading',busy:busy.map(element=>element.getAttribute('data-page-loading')||element.className||element.tagName)};
+ const query=new URLSearchParams(route.split('?')[1]||''),collection=query.get('view')||'materials';
+ const markers={overview:'.home-page',about:'.settings-destinations',settings:'.server-settings',vault:'#content-storage-title',statistics:'.storage-chart',featureGuide:'.feature-guide [data-guide-group]',notes:'#note-text',imports:content.querySelector('.import-detail')?'.imports-page .import-detail':'.imports-page .import-form',ask:'.conversation-layout .ask-form',insights:'.insights-page .insight-compose',activity:'.activity-centre .activity-list',sourceCatalog:'.discovery-source-catalog',archive:content.querySelector('.library-browser.has-selection')?'.material-detail,.library-capture-detail':collection==='memories'?'.memories-page':'.archive-page .library-navigation'};
+ const marker=content.dataset.session==='verification-failed'?'.notice.error':content.dataset.session==='signed-out'?(content.classList.contains('settings-surface')?'.settings-sign-in':'.simple-welcome'):markers[page];
+ const element=content.querySelector(marker);
+ if(!visible(element))return {...base,reason:'expected loaded, empty or restricted consumer marker is missing',marker};
+ const error=[...content.querySelectorAll('[role="alert"]')].some(visible),restriction=content.dataset.session==='signed-out'||error||[...content.querySelectorAll('.model-notice,.review-notes')].some(visible);
+ const empty=[...content.querySelectorAll('.empty,.home-empty,.workspace-empty')].some(visible);
+ return {...base,ready:true,state:restriction?'restriction':empty?'empty':'content',marker,visibleMarker:{tag:element.tagName,text:element.textContent.trim().slice(0,180)},busyExcluded:true};
+}
+async function readyConsumer(label) {
+ let readiness;
+ await until(async()=>{readiness=await js('('+rendererReadiness.toString()+')()');return readiness.ready;},'actual consumer '+label);
+ return readiness;
+}
 const confirmFixtureScript = `(() => {
   let history=[];try {history=JSON.parse(sessionStorage.getItem('mote.fixtureConfirmHistory')||'[]');}catch{}
   window.__moteUiConfirmHistory=history;window.__moteUiConfirmDecision=false;
@@ -85,8 +126,8 @@ async function chooseLanguage(next, accept, selector) {
 }
 async function route(path, selector = '.content h1, .content h2') {
   await js(`location.hash=${JSON.stringify('#/' + path)};window.scrollTo(0,0);true`);
-  await until(() => js(`!!document.querySelector(${JSON.stringify(selector)})`), 'route ' + path);
-  await delay(180);
+  await until(() => js(`location.hash===${JSON.stringify('#/'+path)} && !!document.querySelector(${JSON.stringify(selector)})`), 'route ' + path);
+  await readyConsumer(path);
 }
 async function click(selector, expectedRoute, name) {
   await until(() => js(`(() => {
@@ -95,7 +136,7 @@ async function click(selector, expectedRoute, name) {
     item.scrollIntoView({block:'center'}); item.click(); return true;
   })()`), 'click ' + name);
   await until(() => js(`location.hash.startsWith(${JSON.stringify('#/' + expectedRoute)})`), 'destination ' + name);
-  await delay(180);
+  await readyConsumer(name);
   journeys.push({ name, action: 'clicked actual product control', route: await js('location.hash'), status: 'route-reached' });
 }
 async function clickLabel(labels, expectedRoute, name) {
@@ -106,10 +147,11 @@ async function clickLabel(labels, expectedRoute, name) {
     item.scrollIntoView({block:'center'}); item.click(); return true;
   })()`), 'control ' + name);
   await until(() => js(`location.hash.startsWith(${JSON.stringify('#/' + expectedRoute)})`), 'destination ' + name);
-  await delay(180);
+  await readyConsumer(name);
   journeys.push({ name, action: 'clicked actual product control', route: await js('location.hash'), status: 'route-reached' });
 }
-async function capture(name) {
+async function capture(name, context = {}) {
+  const readiness = await readyConsumer(name);
   await js('window.scrollTo(0,0); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   const state = await js(`(() => {
     const visible=e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';
@@ -130,9 +172,13 @@ async function capture(name) {
       controls:controls.map(e=>{const box=e.getBoundingClientRect();return {tag:e.tagName,text:(e.getAttribute('aria-label')||e.textContent||e.getAttribute('placeholder')||'').trim().slice(0,180),href:e.getAttribute('href'),disabled:e.disabled||e.getAttribute('aria-disabled')==='true',aboveFold:box.top>=0&&box.bottom<=innerHeight,box:{x:box.x,y:box.y,width:box.width,height:box.height}};})};
   })()`);
   state.viewport.browserZoom = window.webContents.getZoomFactor();
-  writeFileSync(join(output, name + '.png'), (await window.webContents.capturePage()).toPNG());
+  const finalReadiness=await js('('+rendererReadiness.toString()+')()');assert.equal(finalReadiness.ready,true,'Capture remains ready: '+name);
+  const png=(await window.webContents.capturePage()).toPNG();writeFileSync(join(output, name + '.png'),png);
+  state.readiness=finalReadiness;
   writeFileSync(join(output, name + '.json'), JSON.stringify(state, null, 2), { mode: 0o600 });
-  captures.push({ name, hash: state.hash, locale: state.locale, viewport: state.viewport, overflow: state.overflow });
+  const pageScenes={overview:'home',about:'settings',settings:'models',vault:'storage',statistics:'storage',featureGuide:'guide',notes:'note',imports:'import',ask:'ask',insights:'insights',activity:'activity',sourceCatalog:'sources',archive:new URLSearchParams(state.hash.split('?')[1]||'').get('view')==='memories'?'memory':'content'};
+  const variant=context.variant??({1440:'normal',820:'tablet',390:'compact',320:'minimum'})[state.viewport.width]??'normal';
+  captures.push({ name, hash: state.hash, locale: state.locale, language:state.locale==='en'?'en':'zh', scene:context.scene??pageScenes[readiness.page],variant,viewport: state.viewport,bitmap:{width:png.readUInt32BE(16),height:png.readUInt32BE(20),unit:'pixels'},overflow: state.overflow, readiness:finalReadiness,sha256:createHash('sha256').update(png).digest('hex'),notes:context.notes??'',reviewSelection:context.reviewSelection===true });
   assert.equal(state.overflow, false, 'No horizontal page overflow: ' + name);
 }
 async function homeMatrix(state, language = 'zh') {
@@ -147,16 +193,95 @@ async function homeMatrix(state, language = 'zh') {
       })()`);
       assert.deepEqual(visibleRecent, { total: 4, visible: 4 }, 'All four recent records remain visible at ' + width);
     }
-    await capture(state + '-' + language + '-' + width);
+    await capture(state + '-' + language + '-' + width,{scene:state==='signed-out'?'signedout':state==='empty-home'?'empty':'home',reviewSelection:true});
   }
   window.setSize(1440, 1000);
   await until(() => js('innerWidth === 1440'), 'desktop viewport');
+}
+async function assertSettingsTask(label) {
+  assert.equal(await js(`!!document.querySelector('.topbar .quick-note,.content .library-home,.content .discovery-intake-card,.content .guide-start,.content .welcome-archive-flow')`),false,'Settings excludes creation/home content: '+label);
+  assert.equal(await js(`!!document.querySelector('.content.settings-surface')`),true,'Settings retains its own navigation context: '+label);
+}
+async function settingsJourneys() {
+  await route('preferences','.settings-destinations');await assertSettingsTask('settings hub');
+  await clickLabel(['全部功能'],'guide','settings to complete directory');
+  assert.equal(await js(`!!document.querySelector('.guide-start,.topbar .quick-note')`),false,'The directory lists capabilities without a new-record start panel');
+  assert.equal(await js(`document.querySelector('.sidebar nav button:first-child').getAttribute('aria-current')`),'page','Directory belongs to Home');
+  await js('history.back();true');await readyConsumer('real browser back to settings');
+  assert.equal(await js(`document.querySelector('.content').dataset.page`),'about','Browser Back returns to the actual settings origin');
+  await clickLabel(['模型与服务'],'system/models','pure model settings');await assertSettingsTask('models');
+  assert.equal(await js(`!!document.querySelector('.discovery-model-start a[href="#/ask"]')`),false,'Direct settings do not invent an Ask task');
+  const askOrigin='#/ask';
+  await route(askOrigin.slice(2),'.conversation-layout');
+  await click('.model-notice button','system/models','actual Ask restriction to model providers');
+  assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('category')`),'providers','The actual Ask control starts at the connection step');
+  assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('returnTo')`),askOrigin,'The actual Ask control preserves its exact origin');
+  await assertSettingsTask('Ask model providers');
+  await capture('actual-ask-model-setup-origin',{scene:'providers',notes:'Actual Ask missing-model CTA, preserving its real origin. Journey evidence only; the final matrix remains the selected visual comparison.'});
+  await click('.discovery-model-start a:nth-of-type(2)','system/models','actual Ask setup to module assignment');
+  assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('category')`),'model','The second setup step is the module assignment');
+  assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('returnTo')`),askOrigin,'The module step retains the exact Ask origin');
+  await click('.discovery-model-start a:nth-of-type(3)','ask','return to actual Ask task');
+  assert.equal(await js('location.hash'),askOrigin,'The actual task return preserves the Ask origin');
+  await route('library/insights','.insight-compose');
+  await click('.review-notes button','system/models','actual Insights restriction to model providers');
+  assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('returnTo')`),'#/library/insights','Insights preserves its real origin');
+  await click('.discovery-model-start a:nth-of-type(3)','library/insights','return to actual Insights task');
+  // Generated file passes the real browser upload and import queue lifecycle, then waits for model configuration.
+  await route('library/import','.import-form');
+  const importName='generated-model-setup-origin.txt',instruction='Generated ownership context; use the existing model setup task return.';
+  await js(`(()=>{const files=new DataTransfer();files.items.add(new File(['Generated scoped archive fixture'],${JSON.stringify(importName)},{type:'text/plain'}));const input=document.querySelector('.import-form input[type=file]');input.files=files.files;input.dispatchEvent(new Event('change',{bubbles:true}));const note=document.querySelector('.import-form textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(note,${JSON.stringify(instruction)});note.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await until(()=>js(`(()=>{const item=[...document.querySelectorAll('.import-form button')].find(item=>item.textContent.trim()==='加入导入队列');if(!item||item.disabled)return false;item.click();return true;})()`),'actual import admission');
+  let importJob;
+  await until(async()=>{importJob=(await request('/api/imports')).items.find(item=>item.instruction===instruction);return importJob?.status==='needs_configuration';},'actual import waits for model configuration');
+  assert.equal(importJob.progress.imported,0,'No model output or imported semantic records are fabricated');
+  await clickLabel([importName],'library/import','actual import queue detail');
+  await clickLabel(['打开模型设置'],'system/models','actual Import restriction to model providers');
+  assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('returnTo')`),'#/library/import','Import preserves its real route origin');
+  await click('.discovery-model-start a:nth-of-type(3)','library/import','return to actual Import task');
+  await route('today','.home-page');await click('.topbar .quick-note','library/notes','ordinary page retains notes');
+  const draft='Generated settings-focus draft; must remain through settings and return.';
+  await js(`(()=>{const input=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,${JSON.stringify(draft)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  await click('.settings-nav,.mobile-settings','preferences','note draft to settings');await assertSettingsTask('saved note draft in settings');
+  await route('today','.home-page');await click('.topbar .quick-note','library/notes','return to existing note draft');
+  assert.equal(await js(`document.querySelector('#note-text').value`),draft,'Removing the settings shortcut preserves the existing note draft lifecycle');
+  await js(`(()=>{const input=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+  // A failed real consumer fetch is a known limitation, never a home/creation fallback.
+  await route('today','.home-page');
+  await js(`window.__moteUiFailStorage=true;const previous=window.fetch.bind(window);window.fetch=async(input,init)=>{const path=new URL(typeof input==='string'?input:input.url,location.href).pathname;if(path==='/api/content-storage'&&window.__moteUiFailStorage)return new Response(JSON.stringify({error:'generated_storage_failure'}),{status:503,headers:{'Content-Type':'application/json'}});return previous(input,init);};true`);
+  await route('system/storage','#content-storage-title');await assertSettingsTask('storage failure');
+  await until(()=>js(`!!document.querySelector('.content [role="alert"]')`),'explicit storage request failure');
+  await capture('storage-known-failure',{scene:'storage-failure',reviewSelection:true,notes:'Controlled generated 503 from the storage consumer; its alert is an actual known failure, with no home/creation fallback.'});
+  await js('window.__moteUiFailStorage=false;true');await route('today','.home-page');
+  journeys.push({name:'settings responsibility, task return and draft lifecycle',status:'verified',checks:['no record shortcut/home block in settings','full directory is Home with browser origin preserved','no invented default Ask return','actual Ask restriction to providers/module preserves exact origin','actual Insights and Import setup controls preserve their real route origins','note draft survives settings and return','storage failure remains explicit']});
+}
+async function consumerMatrix() {
+  for(const language of ['zh-CN','en']){
+    window.setSize(1440,1000);await route('today','.home-page');await chooseLanguage(language,true,'.home-page');
+    for(const [path,scene,selector] of [
+      ['preferences','settings','.settings-destinations'],['system/models','models','.server-settings .preference-menu'],
+      ['system/models?category=providers','providers','.provider-workspace'],['system/models?category=model','modules','.module-assignments'],
+      ['system/models?category=connectors','privacy','.server-settings .config-draft-footer'],
+      ['system/storage','storage','#content-storage-title'],['guide','guide','.feature-guide'],
+      ['library/notes','note','#note-text'],['library/import','import','.import-form'],['ask','ask','.ask-form'],
+      ['library?view=memories','memory','.memories-page'],['library/insights','insights','.insights-page'],['activity','activity','.activity-centre'],
+      ['library','content','.archive-page .library-navigation']
+    ]){
+      await route(path,selector);
+      if(['settings','models','providers','modules','privacy','storage'].includes(scene))await assertSettingsTask(scene);
+      for(const [width,height,variant] of [[1440,1000,'normal'],[820,900,'tablet'],[390,844,'compact'],[320,740,'minimum']]){
+        window.setSize(width,height);await until(()=>js(`innerWidth===${width}`),'consumer viewport '+width);
+        await capture(scene+'-'+(language==='en'?'en':'zh')+'-'+width,{scene,variant,reviewSelection:true,notes:scene==='privacy'?'Existing Sources and external apps settings, including write scopes; this is not a newly invented standalone privacy page.':''});
+      }
+      window.setSize(1440,1000);
+    }
+  }
 }
 async function authenticate(token) {
   await js("document.querySelector('.simple-welcome button').click();true");
   await until(() => js('!!document.querySelector(".connect-modal input[type=password]")'), 'real login dialog');
   assert.equal(await js("document.querySelector('.connect-modal input').type"), 'password', 'Credential field is masked');
-  await capture('generated-login-dialog');
+  await capture('generated-login-dialog',{scene:'login',reviewSelection:true});
   await js(`(() => {
     const input=document.querySelector('.connect-modal input[type=password]');
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(token)});
@@ -226,7 +351,7 @@ async function run() {
   } });
   window.webContents.on('console-message', (_event, level, message) => { if (level >= 3) errors.push(message); });
   // Simulated confirmation avoids native system dialogs in this background-only fixture.
-  window.webContents.on('did-finish-load', () => { void js(confirmFixtureScript).catch(() => {}); });
+  window.webContents.on('did-finish-load', () => { void js(confirmFixtureScript).then(()=>js(observeFixtureRequests)).catch(() => {}); });
   await window.loadURL(endpoint);
   await until(() => js('!!document.querySelector(".simple-welcome")'), 'signed-out welcome');
   await homeMatrix('signed-out');
@@ -234,6 +359,9 @@ async function run() {
   await chooseLanguage('en', true, '.simple-welcome');
   await homeMatrix('signed-out', 'en');
   await chooseLanguage('zh-CN', true, '.simple-welcome');
+  await route('preferences','.settings-sign-in');await assertSettingsTask('signed-out settings');
+  await capture('settings-signedout-zh',{scene:'settings-signedout',reviewSelection:true,notes:'No session: actual settings login restriction, without the Home archive onboarding flow.'});
+  await route('today','.simple-welcome');
   await authenticate(token);
   await homeMatrix('empty-home');
   await chooseLanguage('en', true, '.home-page');
@@ -245,11 +373,19 @@ async function run() {
     [['新增数据源'], 'connections/add', 'add source'],
     [['导入资料', '导入文件'], 'library/import', 'import existing files'],
     [['写随手记', '随手记'], 'library/notes', 'quick note'],
-    [['全部功能与设置'], 'guide', 'all features and settings'],
+    [['全部功能'], 'guide', 'all features and settings'],
   ]) {
     await route('today', '.home-page');
+    const started=Date.now();
+    if(name==='quick note')await js("window.__moteUiSlow={path:'/api/notes',delayMs:900,hits:0};true");
     await clickLabel(labels, path, name);
-    await capture(name.replaceAll(' ', '-'));
+    await capture(name.replaceAll(' ', '-'),{reviewSelection:name==='add source'});
+    if(name==='quick note'){
+      assert.ok((await js('window.__moteUiSlow.hits'))>0,'Slow-loading scenario delays the actual notes request');
+      assert.ok(Date.now()-started>=900,'Readiness excludes the loading shell until the actual delayed response arrives');
+      journeys.push({name:'controlled slow notes response',route:await js('location.hash'),status:'loaded-consumer-only',elapsedMs:Date.now()-started,delayMs:900});
+      await js('window.__moteUiSlow=null;true');
+    }
   }
   await until(() => js('document.querySelectorAll("[data-guide-group]").length>0'), 'function catalog');
   const catalog = await js(`({groups:[...document.querySelectorAll('[data-guide-group]')].map(e=>e.dataset.guideGroup),units:[...document.querySelectorAll('[data-capability-id]')].map(e=>e.dataset.capabilityId),links:[...document.querySelectorAll('.feature-guide a[href]')].map(e=>({text:e.textContent.trim(),href:e.getAttribute('href')})),unavailable:[...document.querySelectorAll('.feature-guide [aria-disabled="true"]')].map(e=>e.textContent.trim())})`);
@@ -304,17 +440,25 @@ async function run() {
   await capture('library');
   await click('.library-record', 'library', 'read generated evidence');
   await until(() => js('!!document.querySelector(".material-detail")'), 'material body');
-  await capture('material-detail');
+  await capture('material-detail',{scene:'detail',reviewSelection:true});
   await route('today', '.home-page');
   await chooseLanguage('en', true, '.home-page');
   await homeMatrix('populated-home', 'en');
-  window.webContents.setZoomFactor(2); await delay(150); await capture('populated-home-en-200-percent');
+  window.webContents.setZoomFactor(2); await delay(150); await capture('populated-home-en-200-percent',{scene:'home',variant:'zoom200',reviewSelection:true,notes:'Actual 200% browser zoom; viewport dimensions are CSS pixels, bitmap dimensions are captured image pixels.'});
   window.webContents.setZoomFactor(1);
   await chooseLanguage('zh-CN', true, '.home-page');
   await js(confirmFixtureScript);
   const confirmations = await js("JSON.parse(sessionStorage.getItem('mote.fixtureConfirmHistory')||'[]')");
   writeFileSync(join(output, 'language-confirmations.json'), JSON.stringify({ generatedOnly: true, simulatedConfirmations: true, confirmations }, null, 2), {mode: 0o600});
+  await settingsJourneys();
+  await consumerMatrix();
+  await route('today','.home-page');
   assert.deepEqual(errors, [], 'No renderer errors');
+  const selectedCoordinates=new Set();
+  for(const record of captures.filter(item=>item.reviewSelection)){
+    const key=JSON.stringify([record.scene,record.variant,record.language]);
+    assert.equal(selectedCoordinates.has(key),false,'Each selected comparison scene is unique: '+key);selectedCoordinates.add(key);
+  }
   writeFileSync(join(output, 'result.json'), JSON.stringify({ round, passed: true, phase: 'completed', generatedOnly: true, captures, journeys,
     featureGroups: catalog.groups.length, featureUnits: catalog.units.length,
     validationBoundary: 'Actual renderer and generated ingress/publication. Language selector uses simulated confirmation decisions with the real change handler and reload; native modal handling is not validated. Route entry is not complete feature use. No physical capture, external account, or live model.' }, null, 2), { mode: 0o600 });

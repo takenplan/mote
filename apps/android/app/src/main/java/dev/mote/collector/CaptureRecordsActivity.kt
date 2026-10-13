@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.app.DatePickerDialog
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -20,6 +21,10 @@ class CaptureRecordsActivity : MoteActivity() {
     private lateinit var body: LinearLayout
     private lateinit var list: LinearLayout
     private lateinit var status: TextView
+    private lateinit var recordHeading: TextView
+    private lateinit var recordDescription: TextView
+    private lateinit var grouping: Spinner
+    private lateinit var layout: Switch
     private lateinit var progress: ProgressBar
     private val detailExecutor = Executors.newSingleThreadExecutor()
     private lateinit var dateButton: Button
@@ -63,8 +68,8 @@ class CaptureRecordsActivity : MoteActivity() {
         sessionGrouping = savedInstanceState?.getBoolean("sessionGrouping", true) ?: true
         grid = savedInstanceState?.getBoolean("grid", true) ?: true
         body = moteDetailPage { navigateBack() }
-        text(body, MoteI18n.text("采集记录"), 27f)
-        text(body, MoteI18n.text("截图支持按连续 Session 或 App 分组，点开查看图片。"), 14f)
+        recordHeading = text(body, "", 26f)
+        recordDescription = text(body, "", 14f)
         val source = Spinner(this).apply {
             adapter = ArrayAdapter(this@CaptureRecordsActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("本机记录"), MoteI18n.text("中央归档")))
             setSelection(if (central) 1 else 0)
@@ -83,10 +88,10 @@ class CaptureRecordsActivity : MoteActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 val chosen = recordSources[position]
-                if (recordSource != chosen) { recordSource = chosen; reload() }
+                if (recordSource != chosen) { recordSource = chosen; updateRecordHeading(); reload() }
             }
         }
-        val grouping = Spinner(this).apply {
+        grouping = Spinner(this).apply {
             adapter = ArrayAdapter(this@CaptureRecordsActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("按 Session · 连续记录"), MoteI18n.text("按 App · 每 15 分钟")))
             setSelection(if (sessionGrouping) 0 else 1)
         }; body.addView(grouping)
@@ -96,7 +101,7 @@ class CaptureRecordsActivity : MoteActivity() {
                 if (sessionGrouping != (position == 0)) { sessionGrouping = position == 0; reload() }
             }
         }
-        val layout = Switch(this).apply { text = MoteI18n.text("缩略图视图"); isChecked = grid; setOnCheckedChangeListener { _, checked -> grid = checked; load() } }; body.addView(layout)
+        layout = Switch(this).apply { text = MoteI18n.text("缩略图视图"); isChecked = grid; setOnCheckedChangeListener { _, checked -> grid = checked; load() } }; body.addView(layout)
         backToAlbums = button(body, MoteI18n.text("‹ 返回分组")) { closeAlbum() }.apply { visibility = View.GONE }
         val days = row(body)
         button(days, MoteI18n.text("前一天")) { date = date.minusDays(1); reload() }
@@ -113,8 +118,24 @@ class CaptureRecordsActivity : MoteActivity() {
         previousPage = button(pages, MoteI18n.text("上一页")) { if (cursors.size > 1) { cursors.removeAt(cursors.lastIndex); load() } }
         nextPage = button(pages, MoteI18n.text("下一页")) { nextCursor?.let { cursors.add(it); load() } }
         MoteUi.styleTree(body)
+        updateRecordHeading()
         load()
         intent.getStringExtra("recordId")?.let { detail(it, false, null, generation) }
+    }
+    private fun updateRecordHeading() {
+        val title = when (recordSource) {
+            "note" -> "随手记"
+            "media" -> "媒体播放状态"
+            "notification" -> "通知事件"
+            "device_event" -> "设备事件"
+            "activity" -> "应用活动"
+            "ui_page" -> "页面内容采集"
+            else -> "采集记录"
+        }
+        recordHeading.text = MoteI18n.text(title)
+        recordDescription.text = MoteI18n.text(if (recordSource == "screen") "截图支持按连续 Session 或 App 分组，点开查看图片。" else "按日期浏览记录，点开查看原文。")
+        grouping.visibility = if (recordSource == "screen") View.VISIBLE else View.GONE
+        layout.visibility = if (recordSource == "screen") View.VISIBLE else View.GONE
     }
     override fun onResume() {
         super.onResume()
@@ -210,7 +231,12 @@ class CaptureRecordsActivity : MoteActivity() {
                     val thumbnailCount = records.count(CapturePreview::hasImage)
                     val pageStatus = MoteI18n.text("{0} · {1} 条 · 第 {2} 页", selected?.optString("appName")?.ifBlank { selected.optString("appId").ifBlank { MoteI18n.text("系统画面") } } ?: if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录"), total, pageNumber)
                     status.text = pageStatus + if (thumbnailCount > 0) MoteI18n.text(" · 正在加载缩略图（0/{0}）", thumbnailCount) else ""
-                    if (records.isEmpty()) text(list, if (source != "screen") MoteI18n.text("当天没有此类记录。请开启相应采集来源并授权，记录按同步策略上传。") else if (remote) MoteI18n.text("当天没有此设备的中央截图记录。") else MoteI18n.text("当天没有本机截图。已同步且完成 OCR 的图片可在中央归档查看。"), 14f)
+                    if (records.isEmpty()) text(list, when {
+                        source == "note" -> MoteI18n.text("当天没有随手记。选择其他日期，或添加一条随手记。")
+                        source != "screen" -> MoteI18n.text("当天没有此类记录。请开启相应采集来源并授权，记录按同步策略上传。")
+                        remote -> MoteI18n.text("当天没有此设备的中央截图记录。")
+                        else -> MoteI18n.text("当天没有本机截图。已同步且完成 OCR 的图片可在中央归档查看。")
+                    }, 14f)
                     progress.isIndeterminate = false; progress.max = maxOf(1, thumbnailCount); progress.progress = 0
                     if (thumbnailCount == 0) progress.visibility = View.GONE
                     var gridRow: LinearLayout? = null
@@ -394,11 +420,10 @@ class CaptureRecordsActivity : MoteActivity() {
                     if (record.optString("source") in setOf("note", "activity", "ui_page")) {
                         record.optJSONObject("metadata")?.optJSONObject("uiPage")?.let { text(content, "${it.optString("adapterId")} @ ${it.optString("adapterVersion")} · ${it.optString("status")}", 13f) }
                         val originalParent = if (isNote) LinearLayout(this).apply {
-                            orientation = LinearLayout.VERTICAL; background = MoteUi.folio(this@CaptureRecordsActivity)
+                            orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@CaptureRecordsActivity, Color.WHITE, MoteUi.readingRadius)
                             setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(16))
                             content.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(12); bottomMargin = moteDp(8) })
                             text(this, MoteI18n.text("原文"), 11f).setTextColor(MoteUi.muted)
-                            addView(View(this@CaptureRecordsActivity).apply { setBackgroundColor(MoteUi.border) }, LinearLayout.LayoutParams(-1, moteDp(1)).apply { topMargin = moteDp(6); bottomMargin = moteDp(10) })
                         } else content
                         text(originalParent, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) 16f else 14f).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(moteDp(7).toFloat(), 1f) }
                         record.optString("syncError").takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("同步需要处理：{0}", it), 14f) }

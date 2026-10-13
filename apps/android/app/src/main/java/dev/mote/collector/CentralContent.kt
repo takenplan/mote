@@ -30,6 +30,7 @@ internal class CentralContent(
     private val handler = Handler(Looper.getMainLooper())
     private val session by lazy { CentralSession.get(this) }
     private lateinit var body: LinearLayout
+    private lateinit var addAction: TextView
     private lateinit var status: TextView
     private lateinit var title: TextView
     private var navigation: MotePrimaryNavigation? = null
@@ -108,14 +109,16 @@ internal class CentralContent(
         heading.addView(backButton, LinearLayout.LayoutParams(moteDp(44), -2))
         title = TextView(this).apply { tag = "central-title"; textSize = 20f; maxLines = if (compactHeader) 2 else 1; ellipsize = android.text.TextUtils.TruncateAt.END; setTextColor(MoteUi.ink) }
         heading.addView(title, LinearLayout.LayoutParams(0, -2, 1f))
-        fun headerAction(label: String, description: String = label, action: () -> Unit) {
-            actions.addView(TextView(this).apply {
+        fun headerAction(label: String, description: String = label, tonal: Boolean = false, action: () -> Unit): TextView {
+            val item = TextView(this).apply {
                 text = MoteI18n.text(label); contentDescription = MoteI18n.text(description); textSize = 13f; gravity = Gravity.CENTER
-                isFocusable = true; minHeight = moteDp(48); background = MoteUi.clickable(this@CentralContent, MoteUi.tint, 12)
+                isFocusable = true; minHeight = moteDp(48); background = MoteUi.clickable(this@CentralContent, if (tonal) MoteUi.tint else MoteUi.background, MoteUi.actionRadius)
                 setOnClickListener { action() }
-            }, (if (compactHeader) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(56), -2)).apply { marginStart = moteDp(4) })
+            }
+            actions.addView(item, (if (compactHeader) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(56), -2)).apply { marginStart = moteDp(4) })
+            return item
         }
-        headerAction("添加", "添加内容") { activity.showMoteAddActions() }
+        addAction = headerAction("添加", "添加内容", tonal = true) { activity.showMoteAddActions() }
         headerAction("设置") { localPage("SETTINGS") }
         headerAction("更多") { more() }
         if (compactHeader) {
@@ -125,13 +128,13 @@ internal class CentralContent(
         root.addView(header)
         status = TextView(this).apply {
             tag = "central-status"
-            setTextColor(MoteUi.muted); setPadding(moteDp(20), moteDp(8), moteDp(20), moteDp(8))
+            setTextColor(MoteUi.muted); setPadding(moteDp(16), moteDp(8), moteDp(16), moteDp(8))
             accessibilityLiveRegion = View.ACCESSIBILITY_LIVE_REGION_POLITE
         }; root.addView(status)
-        collectionBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(20), 0, moteDp(20), moteDp(8)) }
+        collectionBar = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(16), 0, moteDp(16), moteDp(8)) }
         root.addView(collectionBar)
         val scroll = ScrollView(this).apply { isFillViewport = true }
-        body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(20), moteDp(12), moteDp(20), moteDp(24)) }
+        body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(24)) }
         scroll.addView(body); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
         if (openLocalPage == null) navigation = MotePrimaryNavigation(activity) { destination ->
             when (destination) {
@@ -196,6 +199,7 @@ internal class CentralContent(
     }
     private fun updateBackButton() {
         backButton.visibility = if (openLocalPage != null && page == "ask" && pageHistory.isEmpty()) View.GONE else View.VISIBLE
+        addAction.visibility = if (MoteNavigation.centralAllowsAdd(page)) View.VISIBLE else View.GONE
     }
 
     internal fun navigate(next: String, remember: Boolean = true) {
@@ -334,13 +338,13 @@ internal class CentralContent(
         }).also(parent::addView)
     }
     internal fun card(parent: LinearLayout = body): LinearLayout = LinearLayout(this).apply {
-        orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@CentralContent, DesignTokens.surface, 10, true)
+        orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@CentralContent, DesignTokens.surface)
         setPadding(moteDp(14), moteDp(10), moteDp(14), moteDp(10))
     }.also { parent.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(12) }) }
     internal fun selectRow(title: String, subtitle: String, parent: LinearLayout, action: () -> Unit): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = moteDp(64)
         setPadding(moteDp(14), moteDp(10), moteDp(14), moteDp(10))
-        background = MoteUi.clickable(this@CentralContent, DesignTokens.surface, 10)
+        background = MoteUi.clickable(this@CentralContent, DesignTokens.surface)
         isFocusable = true; contentDescription = title + ". " + subtitle
         val copy = LinearLayout(this@CentralContent).apply { orientation = LinearLayout.VERTICAL }
         copy.addView(TextView(this@CentralContent).apply { text = title; textSize = 14f; setTextColor(MoteUi.ink); maxLines = 2 })

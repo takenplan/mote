@@ -28,24 +28,20 @@ object MoteUi {
     val tint = DesignTokens.tint
     val border = DesignTokens.border
 
-    fun shape(context: Context, fill: Int = Color.WHITE, radius: Int = 18, outline: Boolean = false) = GradientDrawable().apply {
+    const val containerRadius = 12
+    const val readingRadius = 16
+    const val actionRadius = 24
+
+    fun shape(context: Context, fill: Int = Color.WHITE, radius: Int = containerRadius, outline: Boolean = false) = GradientDrawable().apply {
         setColor(fill); cornerRadius = context.moteDp(radius).toFloat()
         if (outline) setStroke(context.moteDp(1), border)
     }
 
-    fun clickable(context: Context, fill: Int = Color.WHITE, radius: Int = 18) = RippleDrawable(
+    fun clickable(context: Context, fill: Int = Color.WHITE, radius: Int = containerRadius) = RippleDrawable(
         ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius), shape(context, Color.WHITE, radius)
     )
 
-    /** A shared folio: the gutter belongs to real source glyphs, never a processing stage. */
-    fun folio(context: Context, gutter: Int = 0, outline: Boolean = true): Drawable = MoteFolioDrawable(context, gutter, outline)
-
-    fun folioAction(context: Context) = RippleDrawable(
-        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))),
-        null, shape(context, Color.WHITE, 4)
-    )
-
-    fun button(button: Button, primary: Boolean = false, radius: Int = 24) = button.apply {
+    fun button(button: Button, primary: Boolean = false, radius: Int = actionRadius) = button.apply {
         isAllCaps = false; textSize = 14f; minHeight = context.moteDp(50)
         setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, if (primary) Color.WHITE else accent)))
         setTag(R.id.mote_primary, primary)
@@ -84,25 +80,6 @@ object MoteUi {
         if (view is CompoundButton) { view.setTextColor(ink); view.textSize = 15f; view.buttonTintList = ColorStateList.valueOf(accent); view.minHeight = view.context.moteDp(48) }
         if (view is ViewGroup) for (index in 0 until view.childCount) styleTree(view.getChildAt(index))
     }
-}
-
-private class MoteFolioDrawable(context: Context, gutter: Int, private val outline: Boolean) : Drawable() {
-    private val rule = context.moteDp(gutter).toFloat()
-    private val radius = context.moteDp(4).toFloat()
-    private val stroke = context.resources.displayMetrics.density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var drawableAlpha = 255
-    override fun draw(canvas: Canvas) {
-        val rect = android.graphics.RectF(bounds).apply { inset(stroke / 2, stroke / 2) }
-        paint.style = Paint.Style.FILL; paint.color = Color.WHITE; paint.alpha = drawableAlpha
-        canvas.drawRoundRect(rect, radius, radius, paint)
-        paint.style = Paint.Style.STROKE; paint.strokeWidth = stroke; paint.color = MoteUi.border; paint.alpha = drawableAlpha
-        if (outline) canvas.drawRoundRect(rect, radius, radius, paint)
-        if (rule > 0) canvas.drawLine(bounds.left + rule, rect.top, bounds.left + rule, rect.bottom, paint)
-    }
-    override fun setAlpha(alpha: Int) { drawableAlpha = alpha; invalidateSelf() }
-    override fun setColorFilter(colorFilter: ColorFilter?) { paint.colorFilter = colorFilter }
-    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
 fun Context.moteDp(value: Int) = (value * resources.displayMetrics.density).toInt()
@@ -149,7 +126,7 @@ class MotePrimaryNavigation(private val activity: Activity, onSelect: (MotePrima
     private val items = linkedMapOf<MotePrimaryTab, TextView>()
     init {
         orientation = HORIZONTAL; setPadding(activity.moteDp(10), activity.moteDp(7), activity.moteDp(10), activity.moteDp(9))
-        setBackgroundColor(Color.WHITE); elevation = activity.moteDp(2).toFloat()
+        setBackgroundColor(Color.WHITE)
         contentDescription = MoteI18n.text("主导航")
         MotePrimaryTab.entries.forEach { tab ->
             val item = TextView(activity).apply {
@@ -165,10 +142,30 @@ class MotePrimaryNavigation(private val activity: Activity, onSelect: (MotePrima
         items.forEach { (destination, view) ->
             val active = destination == tab
             view.isSelected = active; view.setTextColor(if (active) MoteUi.accent else MoteUi.muted)
-            view.background = MoteUi.clickable(activity, if (active) MoteUi.tint else Color.WHITE, 12)
-            view.setCompoundDrawablesWithIntrinsicBounds(null, MoteNavigationIcon(activity, destination.icon, active), null, null)
+            view.background = MoteUi.clickable(activity, Color.WHITE)
+            view.setCompoundDrawablesWithIntrinsicBounds(null, MoteNavigationIndicator(activity, destination.icon, active), null, null)
         }
     }
+}
+
+/** The selected destination is indicated at its icon; the entire item remains one touch target. */
+private class MoteNavigationIndicator(context: Context, kind: String, private val active: Boolean) : Drawable() {
+    private val width = context.moteDp(64)
+    private val height = context.moteDp(32)
+    private val glyphSize = context.moteDp(23)
+    private val glyph = MoteNavigationIcon(context, kind, active)
+    private val indicator = MoteUi.shape(context, MoteUi.tint, 24)
+    override fun getIntrinsicWidth() = width
+    override fun getIntrinsicHeight() = height
+    override fun draw(canvas: Canvas) {
+        if (active) { indicator.bounds = bounds; indicator.draw(canvas) }
+        val left = bounds.centerX() - glyphSize / 2
+        val top = bounds.centerY() - glyphSize / 2
+        glyph.setBounds(left, top, left + glyphSize, top + glyphSize); glyph.draw(canvas)
+    }
+    override fun setAlpha(alpha: Int) { indicator.alpha = alpha; glyph.alpha = alpha }
+    override fun setColorFilter(colorFilter: ColorFilter?) { glyph.colorFilter = colorFilter }
+    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
 fun Activity.openMoteLocalPage(page: String) {
@@ -190,14 +187,14 @@ private fun Activity.detailTab(): MotePrimaryTab? = when (this) {
 fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), onBack: () -> Unit = { finish() }): LinearLayout {
     val body = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(moteDp(22), moteDp(12), moteDp(22), moteDp(32))
+        setPadding(moteDp(16), moteDp(12), moteDp(16), moteDp(32))
     }
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background); moteInsets() }
     val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
     header.addView(TextView(this).apply {
         text = "‹  " + MoteI18n.text("返回上级"); textSize = 15f; setTextColor(MoteUi.accent)
         gravity = Gravity.CENTER_VERTICAL; minHeight = moteDp(48)
-        setPadding(moteDp(22), moteDp(4), moteDp(22), moteDp(4))
+        setPadding(moteDp(16), moteDp(4), moteDp(16), moteDp(4))
         contentDescription = MoteI18n.text("返回上一页"); isFocusable = true; setOnClickListener { onBack() }
     }, LinearLayout.LayoutParams(0, -2, 1f))
     if (primary != null) header.addView(MoteUi.button(Button(this).apply {
@@ -218,6 +215,7 @@ class MoteDialogBuilder(context: Context) : android.app.AlertDialog.Builder(cont
         window.decorView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
         override fun onViewDetachedFromWindow(view: View) = Unit
         override fun onViewAttachedToWindow(view: View) {
+        window.setBackgroundDrawable(MoteUi.shape(context, Color.WHITE, MoteUi.readingRadius))
         MoteUi.styleTree(window.decorView)
         val original = window.callback
         window.callback = object : android.view.Window.Callback by original {

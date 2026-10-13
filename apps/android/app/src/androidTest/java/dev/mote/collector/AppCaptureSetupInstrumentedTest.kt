@@ -51,7 +51,7 @@ class AppCaptureSetupInstrumentedTest {
     }
     @Test fun firstStartShowsGeneratedScopePreviewAndCancelPreservesPausedState() = fixture { settings ->
         ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
-            scenario.onActivity { activity -> button("设置").performClick(); button("开始采集").performClick() }
+            scenario.onActivity { button("开始采集").performClick() }
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {
                 assertTrue(dialogViews().filterIsInstance<TextView>().any { it.isShown && it.text.contains("这里是生成的格式示例") })

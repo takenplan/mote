@@ -3,9 +3,26 @@ import assert from 'node:assert/strict';
 import React,{act} from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {JSDOM} from 'jsdom';
-import {primaryDestination,parentDestination,WorkspaceNavigation,SettingsLanding} from '../src/WorkspaceNavigation.js';
+import {isSettingsContext,primaryDestination,parentDestination,WorkspaceNavigation,SettingsLanding} from '../src/WorkspaceNavigation.js';
 import {webFeatures} from '../src/features/registry.js';
 import {configureLocale} from '@mote/shared/i18n';
+
+test('the complete directory belongs to Home while installed settings keep their own task context',async t=>{
+ configureLocale(()=> 'zh-CN');
+ const featureId='generated.settings-context';
+ const registration=await webFeatures.install({id:featureId,version:'1',components:[]},[
+  ...[{id:'overview',route:'today',label:'今天'},{id:'featureGuide',route:'guide',label:'全部功能'},
+    {id:'about',route:'preferences',label:'设置'},{id:'settings',route:'system/models',label:'模型与服务',section:'system'},
+    {id:'vault',route:'system/storage',label:'存储',section:'system'},{id:'generated-setting',route:'system/generated',label:'Generated settings',section:'system'}]
+    .map(entry=>({surface:'page' as const,entry:{...entry,featureId,render:()=>null}})),
+ ]);
+ t.after(()=>registration.dispose());
+ for(const page of ['about','settings','vault','generated-setting'])assert.equal(isSettingsContext(page),true,page);
+ assert.equal(isSettingsContext('featureGuide'),false);assert.equal(isSettingsContext('archive'),false);
+ assert.equal(primaryDestination('featureGuide'),'overview');assert.equal(parentDestination('featureGuide'),'overview');
+ const document=new JSDOM(renderToStaticMarkup(React.createElement(WorkspaceNavigation,{page:'featureGuide',onPage:()=>{}}))).window.document;
+ assert.equal(document.querySelector('button[aria-label="返回今天"]')?.textContent,'返回今天');
+});
 
 test('the legacy Coding page stays under Library and has a Library parent without a Settings card',async t=>{
  configureLocale(()=> 'zh-CN');

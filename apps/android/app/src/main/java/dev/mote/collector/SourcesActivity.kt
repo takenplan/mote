@@ -30,7 +30,7 @@ class SourcesActivity : MoteActivity() {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         restoringDraft = lastNonConfigurationInstance as? Draft
         val content = moteDetailPage()
-        content.addView(TextView(this).apply { text = MoteI18n.text("来源管理"); textSize = 28f })
+        content.addView(TextView(this).apply { text = MoteI18n.text("来源管理"); textSize = 26f })
         content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); textSize = 14f })
         fun action(label: String, callback: () -> Unit) { content.addView(Button(this).apply { text = label; setOnClickListener { callback() } }) }
         operationStatus = TextView(this); content.addView(operationStatus)

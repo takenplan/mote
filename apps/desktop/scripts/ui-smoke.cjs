@@ -71,6 +71,10 @@ app.on('browser-window-created', (_event, window) => {
           const visible = () => Array.from(document.querySelectorAll('[data-nav="${page}"]')).find(button => button.getClientRects().length);
           if (!visible()) {
             if ('${page}' === 'notes' || '${page}' === 'screen') {
+              if (document.querySelector('#note-action').hidden) {
+                document.querySelector('aside [data-nav="overview"]').click();
+                await new Promise(resolve => requestAnimationFrame(resolve));
+              }
               document.querySelector('#note-action').click();
               document.querySelector('#add-dialog [data-add-choice="' + ('${page}' === 'notes' ? 'note' : 'screen') + '"]').click();
               await new Promise(resolve => setTimeout(resolve, 180)); return;
@@ -168,12 +172,23 @@ app.on('browser-window-created', (_event, window) => {
       assert.equal(await js(`document.querySelector('#ask-question').value`), 'generated offline question draft', 'Status updates preserve the question draft');
       const authenticatedStatus = { ...status, config: { ...status.config, serverUrl: 'http://127.0.0.1:47999', tokenConfigured: true } };
       const previousAskHandler = ipcMain._invokeHandlers.get('mote:ask');
+      const previousStatusHandler = ipcMain._invokeHandlers.get('mote:get-status');
+      const originalStatusSend = window.webContents.send;
       ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', (_event, command) => command === 'history' || command === 'runs' ? { items: [] } : undefined);
+      // Keep both IPC reads and status events in the same synthetic auth state.
+      // A late real offline status must not race this isolated authenticated UI scenario.
+      ipcMain.removeHandler('mote:get-status'); ipcMain.handle('mote:get-status', () => authenticatedStatus);
+      window.webContents.send = function(channel, ...args) { return originalStatusSend.call(this, channel, ...(channel === 'mote:status' ? [authenticatedStatus] : args)); };
       try {
+        await js(`window.mote.status().then(()=>new Promise(resolve=>requestAnimationFrame(resolve)))`);
         window.webContents.send('mote:status', authenticatedStatus);
         await js(`new Promise(resolve => requestAnimationFrame(resolve)); document.querySelector('#ask-refresh').click(); new Promise(resolve => setTimeout(resolve, 100))`);
         assert(await js(`document.querySelector('#node-login-panel').hidden && document.querySelector('#ask-disconnected').hidden`), 'Refreshing an authenticated Ask does not redisplay the token form');
-      } finally { ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', previousAskHandler); window.webContents.send('mote:status', status); }
+      } finally {
+        window.webContents.send = originalStatusSend;
+        ipcMain.removeHandler('mote:get-status'); ipcMain.handle('mote:get-status', previousStatusHandler);
+        ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', previousAskHandler); window.webContents.send('mote:status', status);
+      }
       await js(`new Promise(resolve => requestAnimationFrame(resolve)); document.querySelector('#ask-question').value='';`);
       await js(`document.querySelector('#ask-disconnected [data-nav="connection"]').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(await js(`!document.querySelector('[data-page="connection"]').hidden`), 'Offline Ask leads to the existing connection setup');
@@ -222,6 +237,7 @@ app.on('browser-window-created', (_event, window) => {
       await js(`document.querySelector('#workspace-back').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(await js(`!document.querySelector('[data-page="records"]').hidden`), 'Note back returns to the originating library');
       await navigate('settings'); await navigate('developer');
+      assert(await js(`document.querySelector('#note-action').hidden`), 'Settings maintenance pages do not offer unrelated recording actions');
       const rawFixture = '  {"level":"info","code":"OK"}\nmalformed <script>fixture</script> 中文\n';
       ipcMain.removeHandler('mote:events-raw');
       ipcMain.handle('mote:events-raw', () => rawFixture);
@@ -246,10 +262,11 @@ app.on('browser-window-created', (_event, window) => {
       assert.equal(await js(`document.querySelector('#jpeg-quality').value`), String(status.config.jpegQuality));
       assert(await js(`document.querySelector('#settings-pending').hidden`));
       await navigate('connection');
+      assert(await js(`document.querySelector('#note-action').hidden`), 'Connection settings remain focused on configuration');
       await js(`document.querySelector('#device-name').value = '未保存的设备名称'; document.querySelector('#device-name').dispatchEvent(new Event('input', {bubbles: true}));`);
       assert(await js(`!document.querySelector('#settings-pending').hidden`));
-      await js(`window.confirm = () => false; document.querySelector('#note-action').click(); document.querySelector('#add-dialog [data-add-choice=note]').click();`);
-      assert(await js(`!document.querySelector('[data-page="connection"]').hidden && !document.querySelector('#settings-pending').hidden && document.querySelector('#device-name').value === '未保存的设备名称'`), 'Cancelling toolbar navigation preserves the settings draft and current route');
+      await js(`window.confirm = () => false; document.querySelector('aside [data-nav="ask"]').click();`);
+      assert(await js(`!document.querySelector('[data-page="connection"]').hidden && !document.querySelector('#settings-pending').hidden && document.querySelector('#device-name').value === '未保存的设备名称'`), 'Cancelling navigation preserves the settings draft and current route');
       await js(`window.confirm = () => true; document.querySelector('#workspace-back').click()`);
       assert(await js(`!document.querySelector('[data-page="settings"]').hidden`));
       assert(await js(`document.querySelector('#settings-save-bar').hidden && document.querySelector('#settings-pending').hidden`), 'Settings menu has no abandoned draft or save bar');
@@ -561,7 +578,7 @@ app.on('browser-window-created', (_event, window) => {
           await navigate('screen'); assert(await js(`!document.querySelector('#storage-restart').hidden`));
         } finally { ConfigStore.prototype.save = originalSave; }
       } finally { QueueStorage.prototype.migrate = originalMigration; await rm(external, { recursive: true, force: true }); }
-      process.stdout.write(JSON.stringify({ slowMigrationWaitsForSettingsCompletion: true, failedSettingsRolledBack: true, ambiguousCommitPreservesBothAndBlocksWrites: true, captureStorageNativePickerAndMigration: true, arbitraryStoragePathRejected: true, captureBrowserPagingAndOcrDetails: true, chargingOcrSettingSaved: true, feedbackLink: true, localOnlyStartIpcStub: true, uploadModeControls: true, installedAppPickerFixture: true, maskPresetsAndSlider: true, friendlyPresetsSaved: true, localBacklogConsent: true, navigationAndKeyboardFocus: true, actionFirstNavigation: true, sharedAddChooser: true, oneTimeFileConfirmation: true, screenScopeConfirmation: true, contextualReturnPaths: true, unifiedNoteContext: true, settingsDraftProtectedOnToolbarCancel: true, nativeSettingsMenu: true, settingsEditableWhileCapturing: true, noteDraftRetainedAcrossPages: true, settingsDiscardedOnBackSidebarAndEscape: true, settingsMenuHasNoSaveBar: true, invalidSettingsRevealed: true, discardSettings: true, sourceEditorRevealed: true, minimumWindowLayout: true, gradedCollectionUiAndIpc: true, metadataDisabled: true, updatesUiAndChannelIpc: true, noUpdateNetworkRequest: true, ok: true, fixtureOnly: true, rendererLoaded: true, preloadIpc: true, savedSettings: true, offlineNotePersisted: true, captureStayedStopped: true, nativeFilePickerAndOfflineSource: true, calendarPermissionNotRequested: true, screenshot: output }) + '\n');
+      process.stdout.write(JSON.stringify({ slowMigrationWaitsForSettingsCompletion: true, failedSettingsRolledBack: true, ambiguousCommitPreservesBothAndBlocksWrites: true, captureStorageNativePickerAndMigration: true, arbitraryStoragePathRejected: true, captureBrowserPagingAndOcrDetails: true, chargingOcrSettingSaved: true, feedbackLink: true, localOnlyStartIpcStub: true, uploadModeControls: true, installedAppPickerFixture: true, maskPresetsAndSlider: true, friendlyPresetsSaved: true, localBacklogConsent: true, navigationAndKeyboardFocus: true, actionFirstNavigation: true, sharedAddChooser: true, oneTimeFileConfirmation: true, screenScopeConfirmation: true, contextualReturnPaths: true, unifiedNoteContext: true, settingsDraftProtectedOnNavigationCancel: true, nativeSettingsMenu: true, settingsEditableWhileCapturing: true, noteDraftRetainedAcrossPages: true, settingsDiscardedOnBackSidebarAndEscape: true, settingsMenuHasNoSaveBar: true, invalidSettingsRevealed: true, discardSettings: true, sourceEditorRevealed: true, minimumWindowLayout: true, gradedCollectionUiAndIpc: true, metadataDisabled: true, updatesUiAndChannelIpc: true, noUpdateNetworkRequest: true, ok: true, fixtureOnly: true, rendererLoaded: true, preloadIpc: true, savedSettings: true, offlineNotePersisted: true, captureStayedStopped: true, nativeFilePickerAndOfflineSource: true, calendarPermissionNotRequested: true, screenshot: output }) + '\n');
       finished = true; clearTimeout(timeout); app.quit();
     })().catch(error => { process.stderr.write(`UI smoke failed in ${currentPhase}: ${error.message}\n${errors.join('\n')}\n`); app.exit(1); });
   });

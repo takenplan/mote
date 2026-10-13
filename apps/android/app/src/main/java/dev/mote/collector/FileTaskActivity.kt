@@ -141,7 +141,7 @@ class FileTaskActivity : MoteActivity() {
                     }
                 } })
         }
-        body.addView(TextView(this).apply { text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件"); textSize = 28f })
+        body.addView(TextView(this).apply { text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件"); textSize = 26f })
         hint(if (source.tree) "持续收集文件夹中的新增文件和修改。" else if (source.syncContinuously) "持续同步这个文件的修改。" else "导入一次，不跟踪后续修改。")
         status = TextView(this); body.addView(status)
         pickButton = Button(this).apply { tag = "file-task:pick"; setOnClickListener { pick() }; body.addView(this) }
