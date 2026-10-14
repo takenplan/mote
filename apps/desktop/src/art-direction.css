@@ -196,6 +196,7 @@ summary { min-height:var(--mote-control-height); padding-block:var(--mote-space-
 .upload-segment button[aria-pressed=true],.upload-bar-value { color:var(--mote-ink); }
 .content-reading-dialog,.upload-dialog { scroll-padding:var(--mote-space-panel); }
 .note-composer #note-text { min-height:180px; }
+.note-composer #note-text:focus-visible { border-color:var(--mote-accent); outline:3px solid var(--mote-accent); outline-offset:3px; }
 #content-detail-title,#record-detail-title { outline-color:var(--mote-accent); }
 #content-detail-title:focus,#record-detail-title:focus { outline:3px solid var(--mote-accent); outline-offset:3px; border-radius:var(--mote-radius-control); }
 /* Quantities and informational states share the blue data role; success keeps
