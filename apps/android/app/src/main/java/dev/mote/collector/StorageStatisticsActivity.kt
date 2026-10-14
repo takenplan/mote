@@ -29,7 +29,7 @@ class StorageStatisticsActivity : MoteActivity() {
                         } catch (_: Exception) { skipped++ }
                     }
                     listOf(File(applicationInfo.dataDir).canonicalFile, File(QueueStorage(this).current().path).canonicalFile).forEach(::visit)
-                    Triple("${"%.2f".format(total / 1048576.0)} MiB · $count ${MoteI18n.text("文件")}" + if (skipped > 0) "\n" + MoteI18n.text("部分文件无法读取，统计可能不完整。") else "", types, days)
+                    Triple(MoteI18n.text("{0} MiB · 文件：{1}", "%.2f".format(total / 1048576.0), count) + if (skipped > 0) "\n" + MoteI18n.text("部分文件无法读取，统计可能不完整。") else "", types, days)
                 }
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread

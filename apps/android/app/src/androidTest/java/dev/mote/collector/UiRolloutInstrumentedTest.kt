@@ -38,6 +38,8 @@ class UiRolloutInstrumentedTest {
         require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
         val variant = args.getString("uiIterationVariant", "default")!!
         MoteI18n.select(context, if (variant.contains("english")) "en" else "zh-CN")
+        val statisticsSummary = if (variant.contains("english")) Regex("""^\d+[.,]\d{2} MiB · Files: \d+$""")
+            else Regex("""^\d+[.,]\d{2} MiB · 文件：\d+$""")
         val settings = Settings(context)
         settings.enabled = false
         settings.save(settings.read().copy(server = "", token = "", debugHttp = false, syncMode = "manual"), confirmCentralEndpoint = true)
@@ -114,7 +116,8 @@ class UiRolloutInstrumentedTest {
             render("rollout-$scene", title, Intent(context, activity)) { a ->
                 when (scene) {
                     "queue" -> labels(a).contains(MoteI18n.text("暂无待上传记录"))
-                    "statistics" -> labels(a).contains(MoteI18n.text("按文件类型"))
+                    "statistics" -> labels(a).contains(MoteI18n.text("按文件类型")) &&
+                        labels(a).any { statisticsSummary.matches(it.lineSequence().first()) }
                     "compression" -> views(a.window.decorView).filterIsInstance<Button>().any { it.text.toString() == MoteI18n.text("将参数带回采集设置") && it.isEnabled }
                     else -> true
                 }

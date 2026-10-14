@@ -6241,6 +6241,7 @@
   "修改目录": "Edit directory",
   "移出队列": "Remove from queue",
   "{0} 个文件": "{0} files",
+  "{0} MiB · 文件：{1}": "{0} MiB · Files: {1}",
   "每份资料独立处理，可以继续添加其他资料。": "Each batch is processed independently. You can keep adding materials.",
   "上传已暂停，文件和已上传的分片仍保留，点击继续上传即可恢复。": "Upload paused. Files and uploaded parts are retained. Resume the upload to continue.",
   "正在归档并提交任务，请等待服务器返回。": "Archiving originals and submitting the task. Waiting for the server response.",
