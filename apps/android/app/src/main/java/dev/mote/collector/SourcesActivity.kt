@@ -29,16 +29,15 @@ class SourcesActivity : MoteActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         restoringDraft = lastNonConfigurationInstance as? Draft
-        val content = moteDetailPage()
-        content.addView(TextView(this).apply { text = MoteI18n.text("来源管理"); textSize = 28f })
-        content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); textSize = 14f })
-        fun action(label: String, callback: () -> Unit) { content.addView(Button(this).apply { text = label; setOnClickListener { callback() } }) }
+        val content = moteDetailPage(title = MoteI18n.text("来源管理"))
+        content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted) })
+        fun action(label: String, primary: Boolean = false, callback: () -> Unit) { content.addView(MoteUi.button(Button(this).apply { text = label; setOnClickListener { callback() } }, primary)) }
         operationStatus = TextView(this); content.addView(operationStatus)
         action(MoteI18n.text("连接本机日历")) {
             if (checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) chooseCalendars()
             else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR), 301)
         }
-        action(MoteI18n.text("立即扫描并同步")) { work(MoteI18n.text("正在调度扫描与同步…")) { SourceWork.schedule(applicationContext, true, syncExplicit = true) } }
+        action(MoteI18n.text("立即扫描并同步"), primary = true) { work(MoteI18n.text("正在调度扫描与同步…")) { SourceWork.schedule(applicationContext, true, syncExplicit = true) } }
         action(MoteI18n.text("来源限制与同步说明")) { MoteDialogBuilder(this).setTitle(MoteI18n.text("来源说明")).setMessage(MoteI18n.text("文件快照和原件归档都会上传完整文件，由中央解析或转写。快照处理后删除中央临时原件，保留提取正文；原件归档长期保留文件。每文件最多 512 MiB，支持断网续传。仅文件目录不读取正文。超限或扫描不完整不会推断文件已删除。\n系统后台任务约每 15 分钟检查一次。")).setPositiveButton(MoteI18n.text("知道了"), null).show() }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(list)
         MoteUi.styleTree(content)
@@ -94,13 +93,15 @@ class SourcesActivity : MoteActivity() {
                 else {
                     if (rows.getOrThrow().isEmpty()) list.addView(TextView(this).apply { text = MoteI18n.text("尚未连接来源。权限只在点击连接时申请。") })
                     for ((source, summary) in rows.getOrThrow()) {
-                        list.addView(TextView(this).apply { text = source.name; textSize = 20f; setPadding(0, moteDp(20), 0, moteDp(4)) })
-                        list.addView(TextView(this).apply { text = summary; textSize = 13f })
-                        list.addView(Button(this).apply { text = MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源"); setOnClickListener {
+                        val group = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@SourcesActivity); setPadding(moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline)) }
+                        list.addView(group, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceItem) })
+                        group.addView(TextView(this).apply { text = source.name; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)) })
+                        group.addView(TextView(this).apply { text = summary.removePrefix("\n${source.name}\n"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, 0, 0, moteDp(DesignTokens.spaceInline)) })
+                        group.addView(MoteUi.button(Button(this).apply { text = MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源"); setOnClickListener {
                             work(MoteI18n.text("正在保存来源设置…")) { localSources().save(source.copy(enabled = !source.enabled)); SourceWork.schedule(applicationContext, true) }
-                        } })
-                        if (source.kind == "local-files") list.addView(Button(this).apply { text = MoteI18n.text("重新授权或选择范围"); setOnClickListener { edit(source) } })
-                        list.addView(Button(this).apply { text = MoteI18n.text("设置 · {0}", source.name); setOnClickListener { edit(source) } })
+                        } }, primary = !source.enabled))
+                        if (source.kind == "local-files") group.addView(Button(this).apply { text = MoteI18n.text("重新授权或选择范围"); setOnClickListener { edit(source) } })
+                        group.addView(Button(this).apply { text = MoteI18n.text("设置 · {0}", source.name); setOnClickListener { edit(source) } })
                     }
                 }
                 MoteUi.styleTree(list)
@@ -149,9 +150,9 @@ class SourcesActivity : MoteActivity() {
             return EditText(this).apply { setText(value); if (numeric) inputType = InputType.TYPE_CLASS_NUMBER; form.addView(this); draftControls[label] = this }
         }
         val name = field(MoteI18n.text("来源名称"), source.name)
-        form.addView(TextView(this).apply { text = MoteI18n.text("读取范围：{0}", source.uri ?: source.name); textSize = 13f })
+        form.addView(TextView(this).apply { text = MoteI18n.text("读取范围：{0}", source.uri ?: source.name); MoteUi.type(this, DesignTokens.fontSupport) })
         val destination = Settings(this).read().server
-        form.addView(TextView(this).apply { text = if (destination.isBlank()) MoteI18n.text("未连接中央：先保存本机任务，连接时确认发送范围。") else MoteI18n.text("完整文件的发送目的地：{0}", destination); textSize = 13f })
+        form.addView(TextView(this).apply { text = if (destination.isBlank()) MoteI18n.text("未连接中央：先保存本机任务，连接时确认发送范围。") else MoteI18n.text("完整文件的发送目的地：{0}", destination); MoteUi.type(this, DesignTokens.fontSupport) })
         val continuous = CheckBox(this).apply { text = MoteI18n.text("以后修改，也自动同步"); isChecked = source.syncContinuously }
         draftControls["continuous"] = continuous
         if (source.kind == "local-files" && !source.tree) form.addView(continuous)

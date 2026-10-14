@@ -7,6 +7,7 @@ import {InsightReport,reportDocument} from '../src/InsightReport.js';
 import {MemoryProgress,type MemoryJob} from '../src/MemoryProgress.js';
 import {SourceDocumentDetails} from '../src/SourceDocumentDetails.js';
 import {createApi,type Answer} from '../src/api.js';
+import designTokens from '../../../packages/shared/design-tokens.json';
 
 const evidenceId='11111111-1111-4111-8111-111111111111';
 test('snapshot metadata describes central text retention and partial coverage without offering a legacy lightweight mode',()=>{
@@ -34,6 +35,36 @@ test('report document places the restrictive resource policy before any generate
   for(const directive of ["default-src 'none'","script-src 'none'","connect-src 'none'","frame-src 'none'","object-src 'none'","base-uri 'none'","form-action 'none'"])assert.ok(html.includes(directive));
   assert.ok(html.includes("img-src data:"));
   assert.ok(!html.includes('allow-scripts'));
+});
+
+test('unstyled report links use the shared accent while authored link presentation wins',()=>{
+  const stored='<style>.authored{color:rgb(98, 37, 131)}</style><a href="#source">Generated source</a><a class="authored" href="#source">Authored source</a>';
+  const rendered=new JSDOM(reportDocument(stored));
+  const [plain,authored]=rendered.window.document.querySelectorAll('a');
+  const expected=designTokens.accent.slice(1).match(/.{2}/g)!.map(part=>parseInt(part,16));
+  assert.equal(rendered.window.getComputedStyle(plain).color,`rgb(${expected.join(', ')})`);
+  assert.equal(rendered.window.getComputedStyle(authored).color,'rgb(98, 37, 131)');
+  assert.equal(rendered.window.getComputedStyle(plain).pointerEvents,'none');
+  assert.ok(reportDocument(stored).includes(stored),'authored markup and styles stay intact');
+  rendered.window.close();
+});
+
+test('full-document reports without citations keep one effective host policy and retain authored presentation',()=>{
+  const dom=new JSDOM('<!doctype html><body></body>');
+  const previous=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{configurable:true,value:dom.window.document});
+  try{
+    const stored='<html><head><meta http-equiv="Content-Security-Policy" content="default-src \'none\'"><style>p{color:green}</style></head><body><h1>Generated report</h1><p>Uncited facts still need review.</p></body></html>';
+    const result=reportDocument(stored,[]),rendered=new JSDOM(result);
+    const policies=rendered.window.document.querySelectorAll('meta[http-equiv="content-security-policy" i]');
+    assert.equal(policies.length,1);
+    assert.equal(policies[0].parentElement?.tagName,'HEAD');
+    assert.match(policies[0].getAttribute('content')??'',/script-src 'none';.*connect-src 'none'/);
+    assert.match(result,/<style>p\{color:green\}<\/style>/);
+    assert.match(result,/<h1>Generated report<\/h1><p>Uncited facts still need review\.<\/p>/);
+    assert.ok(stored.includes('Content-Security-Policy'),'the stored artifact remains unchanged');
+    rendered.window.close();
+  }finally{if(previous)Object.defineProperty(globalThis,'document',previous);else Reflect.deleteProperty(globalThis,'document');dom.window.close();}
 });
 
 test('report display shortens only verified visible citation text in an inert copy',()=>{

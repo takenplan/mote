@@ -50,7 +50,7 @@ class ConnectionActivity : MoteActivity() {
     private data class InitialConnection(val config: CollectorConfig, val deviceId: String, val status: String, val statusAt: Long)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        val loading = moteDetailPage(); val label = TextView(this); loading.addView(label)
+        val loading = moteDetailPage(title = MoteI18n.text("连接中央节点")); val label = TextView(this); loading.addView(label)
         task.start(MoteI18n.text("正在读取已保存连接…"), { label.text = it }, {
             val settings = Settings(applicationContext); val client = ConnectionClient(applicationContext)
             InitialConnection(settings.read(), settings.deviceId, client.status(), client.statusAt())
@@ -61,16 +61,16 @@ class ConnectionActivity : MoteActivity() {
     }
     private fun buildUi(initial: InitialConnection) {
         val config = initial.config
-        val root = moteDetailPage()
-        fun text(value: String, size: Float = 15f) = TextView(this).apply { text = value; textSize = size; setPadding(0, 16, 0, 16) }.also(root::addView)
-        fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { if (!working && !task.busy) runCatching(action).onFailure { showFailure(it) } } }.also(root::addView)
-        text(MoteI18n.text("连接中央节点"), 26f)
+        val root = moteDetailPage(title = MoteI18n.text("连接中央节点"))
+        fun text(value: String, size: Float = DesignTokens.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)) }.also(root::addView)
+        fun button(label: String, primary: Boolean = false, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { if (!working && !task.busy) runCatching(action).onFailure { showFailure(it) } } }, primary).also(root::addView)
         text(MoteI18n.text("先在中央网页生成一次性邀请。扫码、选择 JSON 文件或粘贴邀请后，核对节点再确认连接；不会自动开始截图。邀请有效期 10 分钟，请勿分享。"))
         currentNode = text(""); refreshCurrentNode()
         button(MoteI18n.text("复制本设备 ID")) { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("Mote device ID", deviceId)); Toast.makeText(this, MoteI18n.text("已复制设备 ID，不含凭据"), Toast.LENGTH_SHORT).show() }
         text(MoteI18n.text("设备名称"))
-        name = EditText(this).apply { hint = MoteI18n.text("设备名称"); setSingleLine(); setText(config.deviceName); filters = arrayOf(android.text.InputFilter.LengthFilter(128)) }; root.addView(name)
-        button(MoteI18n.text("保存设备名称")) {
+        name = EditText(this).apply { hint = MoteI18n.text("设备名称"); setSingleLine(); setText(config.deviceName); filters = arrayOf(android.text.InputFilter.LengthFilter(128)) }
+        root.addView(name, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) })
+        button(MoteI18n.text("保存设备名称"), primary = true) {
             val chosen = name.text.toString().trim()
             require(chosen.isNotBlank() && chosen.length <= 128)
             val expected = currentConfig

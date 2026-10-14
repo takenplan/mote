@@ -1,0 +1,62 @@
+.memory-correction {
+ display:grid;
+ gap:var(--mote-space-item);
+}
+.memory-correction>label {
+ display:grid;
+ gap:var(--mote-space-inline);
+ min-width:0;
+ font-size:var(--mote-font-support);
+}
+.memory-correction>label>input,.memory-correction>label>textarea {
+ width:100%;
+ min-width:0;
+ max-width:100%;
+}
+.memory-correction>h3,.memory-correction>p { margin:0; }
+
+.memories-page { container-type:inline-size; }
+/* The same compact Memory pattern applies when the embedding lane is narrow. */
+@container(max-width:640px) {
+ .memories-page .memory-filters { flex-wrap:wrap; }
+ .memories-page .memory-filters button { flex:1 1 140px; overflow-wrap:normal; word-break:normal; }
+ .memories-page .workspace-layout { grid-template-columns:minmax(0,1fr); gap:var(--mote-space-item); }
+ .memories-page .workspace-list {
+  position:static;
+  display:flex;
+  flex-wrap:wrap;
+  gap:var(--mote-space-inline);
+  max-height:235px;
+  overflow:auto;
+  padding:0;
+ }
+ .memories-page .workspace-list-heading { width:100%; }
+ .memories-page .workspace-select {
+  width:calc(50% - var(--mote-space-inline) / 2);
+  min-width:0;
+  margin:0;
+  padding:var(--mote-space-item);
+ }
+}
+
+/* A source opened beside Memory must not squeeze a second nested detail column. */
+.library-browser.has-selection>.library-master .memories-page .workspace-layout {
+ grid-template-columns:minmax(0,1fr);
+ gap:var(--mote-space-item);
+}
+.library-browser.has-selection>.library-master .memories-page .workspace-list {
+ position:static;
+ display:flex;
+ flex-wrap:wrap;
+ gap:var(--mote-space-inline);
+ max-height:235px;
+ overflow:auto;
+ padding:0;
+}
+.library-browser.has-selection>.library-master .memories-page .workspace-list-heading { width:100%; }
+.library-browser.has-selection>.library-master .memories-page .workspace-select {
+ width:calc(50% - var(--mote-space-inline) / 2);
+ min-width:0;
+ margin:0;
+ padding:var(--mote-space-item);
+}

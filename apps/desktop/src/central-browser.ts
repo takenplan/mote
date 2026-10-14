@@ -5,7 +5,7 @@ import { formatEvidenceRef, parseEvidenceRef } from '@mote/shared';
 export async function openCentralBrowser(serverUrl: string, page: string | undefined, platform: string,
   launchChrome: (url: string) => Promise<unknown>, openDefault: (url: string) => Promise<unknown>, evidenceId?: string, loginTicket?: string, loginRequestId?:string): Promise<void> {
   const origin = validateServerUrl(serverUrl);
-  let hash = ['ask', 'notes', 'vault'].includes(page ?? '') ? '#' + page : '';
+  let hash = ['ask', 'notes', 'vault'].includes(page ?? '') ? '#' + page : ['overview', 'about', 'guide'].includes(page ?? '') ? '#/' + page : '';
   if (evidenceId !== undefined) {
     if (typeof evidenceId !== 'string' || !evidenceId.trim() || evidenceId.length > 4096 || /[\u0000-\u001f\u007f]/.test(evidenceId)) throw new Error('Invalid evidence reference');
     const bare=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(evidenceId);

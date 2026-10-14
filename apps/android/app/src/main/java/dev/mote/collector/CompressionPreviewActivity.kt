@@ -29,7 +29,7 @@ class CompressionPreviewActivity : MoteActivity() {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         quality = state?.getInt("quality") ?: quality; maxSide = state?.getInt("maxSide") ?: maxSide
         hasParameters = state?.containsKey("quality") == true && state.containsKey("maxSide")
-        val body = moteDetailPage()
+        val body = moteDetailPage(title = MoteI18n.text("图片压缩预览"))
         val label = TextView(this).apply { text = MoteI18n.text("正在读取本机设置…") }; body.addView(label); body.addView(ProgressBar(this))
         task.start(MoteI18n.text("正在读取本机设置…"), { label.text = it }, {
             Settings(applicationContext).read()
@@ -42,9 +42,8 @@ class CompressionPreviewActivity : MoteActivity() {
     private fun buildUi(config: CollectorConfig, state: Bundle?) {
         quality = state?.getInt("quality") ?: config.jpegQuality; maxSide = state?.getInt("maxSide") ?: config.captureMaxSide
         hasParameters = true
-        val body = moteDetailPage()
+        val body = moteDetailPage(title = MoteI18n.text("图片压缩预览"))
         fun text(value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(8), 0, moteDp(8)); body.addView(this) }
-        text(MoteI18n.text("图片压缩预览"), 27f)
         text(MoteI18n.text("用生成的图文样张比较小字、渐变和细线。只在内存处理，不读取或上传屏幕。"))
         val label = text(MoteI18n.text("JPEG 质量 {0} · 不是文件压缩百分比", quality))
         body.addView(SeekBar(this).apply {

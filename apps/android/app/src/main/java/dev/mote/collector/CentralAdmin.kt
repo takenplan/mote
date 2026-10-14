@@ -72,7 +72,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 val next = value.opt(key)
                 if (next == null || next == JSONObject.NULL) return@forEach
                 if (next is JSONObject || next is JSONArray) {
-                    val group = ui.card(target); ui.text(label(key), 17f, group); values(next, group, depth + 1)
+                    val group = ui.card(target); ui.text(label(key), DesignTokens.fontSection.toFloat(), group); values(next, group, depth + 1)
                 } else ui.text(label(key) + " · " + next.toString(), parent = target)
             }
             is JSONArray -> for (i in 0 until minOf(value.length(), 100)) values(value.opt(i), target, depth + 1)
@@ -84,7 +84,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         if (items.length() == 0) ui.text(MoteI18n.text("暂无记录"), parent = target)
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i); val card = ui.card(target)
-            ui.text(item.optString("title", item.optString("kind", item.optString("id"))), 18f, card)
+            ui.text(item.optString("title", item.optString("kind", item.optString("id"))), DesignTokens.fontSection.toFloat(), card)
             ui.text(item.optString("state", item.optString("status")), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { select(item) }
         }
@@ -119,7 +119,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                         val field = ui.field(caption + " · " + MoteI18n.text("高级 JSON"), raw.toString(2), multiline = true, parent = target)
                         reads[key] = { JSONObject(field.text.toString()) }
                     } else {
-                        ui.text(caption, 18f, target); val nested = form(raw, ui.card(target), if (key == "extraction") setOf("enabled") else emptySet()); reads[key] = nested
+                        ui.text(caption, DesignTokens.fontSection.toFloat(), target); val nested = form(raw, ui.card(target), if (key == "extraction") setOf("enabled") else emptySet()); reads[key] = nested
                     }
                 }
                 is JSONArray -> {
@@ -129,7 +129,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 else -> {
                     val choices = enums[key]
                     if (choices != null) {
-                        ui.text(caption, 13f, target)
+                        ui.text(caption, DesignTokens.fontSupport.toFloat(), target)
                         val spinner = Spinner(ui).apply { adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, if (key == "serviceTier") choices.map { if (it == "fast") "Fast" else "Standard" } else choices)
                             setSelection(choices.indexOf(raw.toString()).coerceAtLeast(0)) }; target.addView(spinner)
                         reads[key] = { choices[spinner.selectedItemPosition] }; continue
@@ -154,7 +154,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }; if (has("protocol") && optString("protocol") != "codex-app-server") remove("serviceTier") } }
     }
     private fun edit(title: String, path: String, value: JSONObject, method: String = "PUT", back: () -> Unit = { screens.refresh() }, completed: (JSONObject) -> Unit = { screens.refresh() }) {
-        body.removeAllViews(); screens.setBack(back); ui.text(title, 23f)
+        body.removeAllViews(); screens.setBack(back); ui.text(title, DesignTokens.fontTitleMobile.toFloat())
         val collect = form(value, ui.card())
         ui.button(MoteI18n.text("保存设置"), true) {
             val payload = collect(); val api = client
@@ -184,7 +184,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                     for (j in 0 until fields.length()) {
                         val field = fields.getJSONObject(j)
                         ui.text(field.optString("label") + " · " + field.opt("value"), parent = card)
-                        ui.text(field.optString("description"), 13f, card)
+                        ui.text(field.optString("description"), DesignTokens.fontSupport.toFloat(), card)
                     }
                 }
             }
@@ -194,7 +194,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/model-settings") }) { value ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
-            ui.text(MoteI18n.text("模型配置"), 24f)
+            ui.text(MoteI18n.text("模型配置"), DesignTokens.fontTitleMobile.toFloat())
             ui.button(MoteI18n.text("功能默认模型")) { modelDefaults(value) }
             val profiles = value.getJSONArray("profiles")
             val choice = Spinner(ui).apply {
@@ -209,7 +209,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 selected.removeAllViews()
 
                 val profile = profiles.getJSONObject(i); val id = profile.getString("id"); val card = ui.card(selected)
-                ui.text(profile.optString("name") + " · " + profile.getJSONObject("settings").optString("model"), 19f, card)
+                ui.text(profile.optString("name") + " · " + profile.getJSONObject("settings").optString("model"), DesignTokens.fontRow.toFloat(), card)
                 if (!profile.optBoolean("readOnly")) {
                     ui.button(MoteI18n.text("编辑"), parent = card) {
                         val settings = cleanSettings(profile.getJSONObject("settings")).put("apiKey", "").put("headers", JSONObject.NULL).put("extraBody", JSONObject.NULL)
@@ -246,7 +246,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         val defaults = value.getJSONObject("defaults"); val models = value.getJSONObject("defaultModels")
         val fields = linkedMapOf<String, Pair<Spinner, EditText>>()
         for (feature in defaults.keys()) {
-            ui.text(label(feature), 19f)
+            ui.text(label(feature), DesignTokens.fontRow.toFloat())
             val choice = Spinner(ui).apply {
                 adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, names)
                 setSelection(ids.indexOf(defaults.getString(feature)).coerceAtLeast(0))
@@ -347,7 +347,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     private fun credentialResult(value: JSONObject) {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        ui.text(MoteI18n.text("授权已创建"), 24f); values(value, ui.card())
+        ui.text(MoteI18n.text("授权已创建"), DesignTokens.fontTitleMobile.toFloat()); values(value, ui.card())
         val uri = value.optString("uri")
         if (uri.isNotBlank()) {
             val matrix = com.google.zxing.MultiFormatWriter().encode(uri, com.google.zxing.BarcodeFormat.QR_CODE, 512, 512)
@@ -380,12 +380,12 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             configuration(MoteI18n.text("行动设置"), "/api/actions", "/api/actions/settings") { it.getJSONObject("settings") }
         }
         val todo = ui.field(MoteI18n.text("待办标题"))
-        ui.button(MoteI18n.text("添加待办")) {
+        ui.button(MoteI18n.text("添加待办"), true) {
             action("/api/todos", JSONObject().put("id", UUID.randomUUID().toString()).put("title", todo.text.toString()).put("description", "").put("dueAt", JSONObject.NULL).put("evidenceIds", JSONArray()))
         }
         library.paged("/api/todos?limit=30", ui.card()) { row, card ->
-            ui.text(row.getString("title"), 20f, card); ui.text(row.optString("description"), parent = card); ui.text(row.optString("status"), parent = card)
-            if (row.optString("status") == "open") ui.button(MoteI18n.text("标记完成"), parent = card) {
+            ui.text(row.getString("title"), DesignTokens.fontSection.toFloat(), card); ui.text(row.optString("description"), parent = card); ui.text(row.optString("status"), parent = card)
+            if (row.optString("status") == "open") ui.button(MoteI18n.text("标记完成"), true, parent = card) {
                 val api = client
                 ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/todos/" + enc(row.getString("id")), JSONObject().put("version", row.getInt("version")).put("status", "completed")) }) { screens.refresh() }
             }
@@ -431,7 +431,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("处理设置")) { processingSettings() }
     }
     private fun pageButtons(cursors: List<Long?>, result: JSONObject, count: Int, target: LinearLayout, load: (List<Long?>) -> Unit) {
-        ui.text(MoteI18n.text("第 {0} 页 · {1} 条", cursors.size, count), 13f, target)
+        ui.text(MoteI18n.text("第 {0} 页 · {1} 条", cursors.size, count), DesignTokens.fontSupport.toFloat(), target)
         val paging = LinearLayout(ui).apply { orientation = LinearLayout.HORIZONTAL }
         target.addView(paging)
         ui.button(MoteI18n.text("上一页"), parent = paging) { load(cursors.dropLast(1)) }.apply {
@@ -444,13 +444,13 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     fun operation(id: String, cursors: List<Long?> = listOf(null), returnTo: () -> Unit = { screens.refresh() }) {
         body.removeAllViews(); screens.setBack(returnTo)
-        ui.text(MoteI18n.text("任务详情"), 23f)
+        ui.text(MoteI18n.text("任务详情"), DesignTokens.fontTitleMobile.toFloat())
         ui.button(MoteI18n.text("刷新")) { operation(id, cursors, returnTo) }
         val target = ui.card(); val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/operations/" + enc(id) + "?limit=10" + (cursors.last()?.let { "&cursor=$it" } ?: "")) }) { result ->
             val operation = result.getJSONObject("operation")
-            ui.text(operationTitle(operation.optString("kind")) + " · " + operationState(operation), 18f, target)
-            ui.text(id, 13f, target)
+            ui.text(operationTitle(operation.optString("kind")) + " · " + operationState(operation), DesignTokens.fontSection.toFloat(), target)
+            ui.text(id, DesignTokens.fontSupport.toFloat(), target)
             val steps = result.optJSONArray("steps") ?: JSONArray()
             for (i in 0 until steps.length()) {
                 val step = steps.getJSONObject(i)
@@ -482,7 +482,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     private fun vault() {
         read("/api/status")
-        ui.button(MoteI18n.text("重新建立索引")) { action("/api/index/retry") }
+        ui.button(MoteI18n.text("重新建立索引"), true) { action("/api/index/retry") }
         ui.button(MoteI18n.text("中央元数据导出")) { ui.saveCentral("/api/export-bundle?mode=metadata", "mote-central-metadata.tar.gz", "application/gzip") }
         ui.button(MoteI18n.text("中央资料与附件导出")) { ui.saveCentral("/api/export-bundle?mode=data", "mote-central-data.tar.gz", "application/gzip") }
         ui.button(MoteI18n.text("导入")) { ui.navigate("imports") }
@@ -504,7 +504,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             ui.button(folder) { agent(folder) }
         }
         library.paged("/api/agent-view/catalog?path=" + enc(path) + "&limit=12", ui.card()) { row, card ->
-            ui.text(row.optString("title", row.optString("path", row.optString("id"))), 19f, card); ui.text(row.optString("preview"), parent = card)
+            ui.text(row.optString("title", row.optString("path", row.optString("id"))), DesignTokens.fontRow.toFloat(), card); ui.text(row.optString("preview"), parent = card)
             ui.button(MoteI18n.text("展开"), parent = card) {
                 if (row.has("path")) agent(row.getString("path"))
                 else if (row.optString("expand") == "source_items") {
@@ -516,7 +516,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("实际读取记录")) { read("/api/agent-view/events?afterSeq=0") }
         val question = ui.field(MoteI18n.text("你的问题"), multiline = true)
-        ui.button(MoteI18n.text("首次上下文")) { action("/api/agent-view/startup", JSONObject().put("question", question.text.toString()).put("timeZone", ZoneId.systemDefault().id)) { values(it, ui.card()) } }
+        ui.button(MoteI18n.text("首次上下文"), true) { action("/api/agent-view/startup", JSONObject().put("question", question.text.toString()).put("timeZone", ZoneId.systemDefault().id)) { values(it, ui.card()) } }
     }
     private fun agentDetail(row: JSONObject, path: String, offset: Int = 0) {
         val kind = row.optString("expand")
@@ -542,13 +542,13 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     fun connectors() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
         listOf("google" to "Google 日历", "gmail" to "Gmail").forEach { (provider, title) ->
-            ui.text(MoteI18n.text(title), 20f)
+            ui.text(MoteI18n.text(title), DesignTokens.fontSection.toFloat())
             ui.button(MoteI18n.text("连接")) { action("/api/connectors/$provider/start") { value ->
                 val url = Uri.parse(value.getString("authorizationUrl"))
                 require(url.scheme == "https" && url.host == "accounts.google.com")
                 ui.startActivity(Intent(Intent.ACTION_VIEW, url))
             } }
-            ui.button(MoteI18n.text("立即同步")) { action("/api/connectors/$provider/sync") }
+            ui.button(MoteI18n.text("立即同步"), true) { action("/api/connectors/$provider/sync") }
             ui.button(MoteI18n.text("断开连接")) { val api = client; ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/$provider") }) { screens.refresh() } }
         }
         ui.button(MoteI18n.text("选择 Google 日历")) { calendarSelection(false) }
@@ -566,17 +566,17 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                     val resource = resources.getJSONObject(i); val choice = CheckBox(ui).apply { text = resource.optString("name"); setOnCheckedChangeListener { _, checked -> if (checked) selected.add(resource.getString("uri")) else selected.remove(resource.getString("uri")) } }; body.addView(choice)
                 }
                 val name = ui.field(MoteI18n.text("来源名称"), "MCP")
-                ui.button(MoteI18n.text("导入所选资源")) {
+                ui.button(MoteI18n.text("导入所选资源"), true) {
                     require(selected.isNotEmpty()) { MoteI18n.text("请选择资源") }
                     importMcp(payload, name.text.toString(), JSONObject().put("resourceUris", JSONArray(selected)))
                 }
                 val tools = value.optJSONArray("tools") ?: JSONArray()
                 for (i in 0 until tools.length()) {
                     val tool = tools.getJSONObject(i); val card = ui.card()
-                    ui.text(tool.getString("name"), 19f, card); ui.text(tool.optString("description"), parent = card)
+                    ui.text(tool.getString("name"), DesignTokens.fontRow.toFloat(), card); ui.text(tool.optString("description"), parent = card)
                     val args = ui.field(MoteI18n.text("工具参数 JSON"), "{}", multiline = true, parent = card)
                     val approved = CheckBox(ui).apply { text = MoteI18n.text("我确认此工具只读") }; card.addView(approved)
-                    ui.button(MoteI18n.text("导入工具结果"), parent = card) {
+                    ui.button(MoteI18n.text("导入工具结果"), true, parent = card) {
                         require(approved.isChecked) { MoteI18n.text("请确认工具只读后再执行") }
                         importMcp(payload, name.text.toString(), JSONObject().put("tool", JSONObject().put("name", tool.getString("name"))
                             .put("arguments", JSONObject(args.text.toString())).put("confirmedReadOnly", true)))
@@ -588,7 +588,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun lark() {
         val target = ui.card(); read("/api/connectors/lark", target)
         listOf("check" to "检查状态", "install" to "安装 CLI", "setup" to "开始配置", "login" to "登录", "sync" to "立即同步", "cancel" to "取消").forEach { (command, label) ->
-            ui.button(MoteI18n.text(label)) { action("/api/connectors/lark/$command") { target.removeAllViews(); values(it, target) } }
+            ui.button(MoteI18n.text(label), command in setOf("install", "setup", "sync")) { action("/api/connectors/lark/$command") { target.removeAllViews(); values(it, target) } }
         }
         ui.button(MoteI18n.text("选择日历")) {
             calendarSelection(true)
@@ -635,7 +635,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 fields.add(check to id); body.addView(check)
             }
             val collect = if (lark) form(pick(current, "documents", "pastDays", "futureDays", "timeZone", "autoSync"), ui.card()) else ({ JSONObject() })
-            ui.button(MoteI18n.text("保存设置")) {
+            ui.button(MoteI18n.text("保存设置"), true) {
                 val payload = collect().put("calendarIds", JSONArray(fields.filter { it.first.isChecked }.map { it.second }))
                 ui.work(MoteI18n.text("正在保存…"), { api.put(path + if (lark) "/selection" else "/calendars", payload) }) { screens.refresh() }
             }
@@ -643,7 +643,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     private fun recordingSteps(path: String, cursors: List<Long?> = listOf(null)) {
         body.removeAllViews(); screens.setBack { recordings() }
-        ui.text(MoteI18n.text("同步步骤与状态"), 23f)
+        ui.text(MoteI18n.text("同步步骤与状态"), DesignTokens.fontTitleMobile.toFloat())
         val target = ui.card(); val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get(path + "/steps?limit=20" + (cursors.last()?.let { "&cursor=$it" } ?: "")) }) { page ->
             val items = page.optJSONArray("items") ?: JSONArray()
@@ -666,16 +666,16 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 if (value.optString("category") != "recordings") continue
                 val provider = value.getString("provider"); require(Regex("^[a-z][a-z0-9-]{0,79}$").matches(provider))
                 val path = "/api/connectors/$provider-recordings"; val card = ui.card()
-                ui.text(value.optString("label", provider), 20f, card); values(value, card)
+                ui.text(value.optString("label", provider), DesignTokens.fontSection.toFloat(), card); values(value, card)
                 val empty = value.optJSONObject("counts")?.optInt("empty") ?: 0
                 if (empty > 0) ui.text(MoteI18n.text("采集完成，暂无文字：{0} 条", empty), parent = card)
                 ui.button(MoteI18n.text("同步步骤与状态"), parent = card) { recordingSteps(path) }
-                ui.button(MoteI18n.text("连接已授权账号"), parent = card) { action(path + "/connect") { recordings() } }
+                ui.button(MoteI18n.text("连接已授权账号"), true, parent = card) { action(path + "/connect") { recordings() } }
                 ui.button(MoteI18n.text("同步范围"), parent = card) {
                     val selection = JSONObject(value.getJSONObject("selection").toString()).put("backupAudio", true)
                     edit(MoteI18n.text("同步范围"), path + "/selection", selection)
                 }
-                ui.button(MoteI18n.text("立即同步"), parent = card) { action(path + "/sync") { recordings() } }
+                ui.button(MoteI18n.text("立即同步"), true, parent = card) { action(path + "/sync") { recordings() } }
                 ui.button(MoteI18n.text("重试失败步骤"), parent = card) { action(path + "/retry") { recordings() } }
                 ui.button(MoteI18n.text("断开连接"), parent = card) { ui.work(MoteI18n.text("正在处理…"), { api.delete(path) }) { recordings() } }
                 ui.button(MoteI18n.text("最近归档的录音"), parent = card) {
@@ -698,7 +698,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("选择文件导入")) { screens.importInstruction = instruction.text.toString(); ui.pickImport() }
         screens.importPending(ui.card())
         library.paged("/api/imports", ui.card()) { row, card ->
-            ui.text(row.optString("name") + " · " + row.optString("status"), 19f, card)
+            ui.text(row.optString("name") + " · " + row.optString("status"), DesignTokens.fontRow.toFloat(), card)
             ui.button(MoteI18n.text("查看预览"), parent = card) { importDetail(row.getString("id")) }
         }
         read("/api/import-capabilities")
@@ -710,7 +710,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             values(row, ui.card())
             row.optJSONObject("memoryProgress")?.let { progress ->
                 val card = ui.card()
-                ui.text(MoteI18n.text("自动记忆进度"), 19f, card)
+                ui.text(MoteI18n.text("自动记忆进度"), DesignTokens.fontRow.toFloat(), card)
                 ui.text(MoteI18n.text("按本次新记录接收时选中的配方处理；进度按记录汇总。"), parent = card)
                 ui.text(MoteI18n.text("完成 {0} / {1} · 处理中 {2} · 等待内容或名额 {3}", progress.optInt("completed"), progress.optInt("total"), progress.optInt("running"), progress.optInt("pending")), parent = card)
                 ui.text(MoteI18n.text("失败 {0} · 等待模型 {1} · 暂停 {2} · 已取消 {3} · 未启用 {4} · 输入已变更或不可用 {5}", progress.optInt("failed"), progress.optInt("waitingForModel"), progress.optInt("paused"), progress.optInt("cancelled"), progress.optInt("disabled"), progress.optInt("unavailable")), parent = card)

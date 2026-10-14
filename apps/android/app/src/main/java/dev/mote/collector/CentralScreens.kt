@@ -107,18 +107,18 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             listOf(api.get("/api/status"), api.get("/api/devices"), api.get("/api/operations?limit=5"))
         }) { data ->
             val status = data[0]
-            ui.text(MoteI18n.text("中央工作台"), 24f, target)
+            ui.text(MoteI18n.text("中央工作台"), DesignTokens.fontTitleMobile.toFloat(), target)
             val agent = status.getJSONObject("agent")
             ui.text(if (agent.optBoolean("configured")) MoteI18n.text("模型已配置") else MoteI18n.text("请先配置模型服务"), parent = target)
             ui.text(agent.optString("model"), parent = target)
             admin.values(status.optJSONObject("storage") ?: JSONObject(), target)
-            ui.text(MoteI18n.text("设备"), 20f, target)
+            ui.text(MoteI18n.text("设备"), DesignTokens.fontSection.toFloat(), target)
             val devices = data[1].optJSONArray("items") ?: JSONArray()
             for (i in 0 until devices.length()) {
                 val device = devices.getJSONObject(i)
                 ui.text(device.optString("deviceName") + " · " + device.optString("lastSeenAt"), parent = target)
             }
-            ui.text(MoteI18n.text("处理任务"), 20f, target)
+            ui.text(MoteI18n.text("处理任务"), DesignTokens.fontSection.toFloat(), target)
             admin.items(data[2], target) { row -> admin.operation(row.optString("id")) }
         }
         ui.button(MoteI18n.text("中央资料库")) { ui.navigate("archive") }
@@ -162,7 +162,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val profiles = modelSettings.getJSONArray("profiles")
         val ids = listOf("") + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("id") }
         val names = listOf(MoteI18n.text("跟随功能默认")) + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("name") }
-        ui.text(MoteI18n.text("模型预设"), 13f)
+        ui.text(MoteI18n.text("模型预设"), DesignTokens.fontSupport.toFloat())
         preset = Spinner(ui).apply {
             adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, names)
             setSelection(ids.indexOf(askState.optString("modelProfileId")).coerceAtLeast(0))
@@ -194,7 +194,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             ui.work(MoteI18n.text("正在停止回答…"), { api.post("/api/query-runs/" + encode(id) + "/cancel") }) { run -> receiveRun(run) }
         }
         controlsAsk()
-        ui.text(MoteI18n.text("对话历史"), 21f)
+        ui.text(MoteI18n.text("对话历史"), DesignTokens.fontSection.toFloat())
         val items = history.optJSONArray("items") ?: JSONArray()
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
@@ -281,7 +281,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val turns = conversation.getJSONArray("turns")
             for (i in 0 until turns.length()) {
                 val turn = turns.getJSONObject(i)
-                ui.text(turn.getString("question"), 18f, target)
+                ui.text(turn.getString("question"), DesignTokens.fontSection.toFloat(), target)
                 turn.optJSONObject("result")?.let { answer ->
                     ui.text(answer.optString("answer"), parent = target)
                     val citations = answer.optJSONArray("citations") ?: JSONArray()
@@ -338,18 +338,18 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         ui.text(MoteI18n.text("图片和录音会先归档。是否提取文字或转写录音取决于中央处理设置；请在资料库查看状态。每个附件最多 50 MiB。"))
         val pending = state.getJSONArray("pending")
         if (pending.length() > 0) {
-            ui.text(MoteI18n.text("待同步 {0} 条", pending.length()), 20f)
+            ui.text(MoteI18n.text("待同步 {0} 条", pending.length()), DesignTokens.fontSection.toFloat())
             ui.button(MoteI18n.text("重试同步")) {
                 syncNotes(enqueue = false)
             }
             for (i in 0 until pending.length()) ui.text(pending.getJSONObject(i).getString("text"))
         }
-        ui.text(MoteI18n.text("已经留下的心绪与杂事"), 21f)
+        ui.text(MoteI18n.text("已经留下的心绪与杂事"), DesignTokens.fontSection.toFloat())
         ui.button(MoteI18n.text("刷新")) { refresh() }
         val items = history.optJSONArray("items") ?: JSONArray()
         for (i in 0 until items.length()) {
             val note = items.getJSONObject(i); val card = ui.card()
-            ui.text(note.optString("capturedAt"), 13f, card); ui.text(note.optString("ocrText"), parent = card)
+            ui.text(note.optString("capturedAt"), DesignTokens.fontSupport.toFloat(), card); ui.text(note.optString("ocrText"), parent = card)
             ui.button(MoteI18n.text("查看原文"), parent = card) { library.captureEvidence(note.getString("id")) }
         }
         next(history)?.let { cursor -> ui.button(MoteI18n.text("加载更早的随手记")) {
@@ -503,7 +503,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         fun next(value: JSONObject): String? = if (value.isNull("nextCursor") || !value.has("nextCursor")) null else value.opt("nextCursor").toString()
         val pages = listOf(
             "overview" to "中央工作台", "archive" to "中央资料库", "ask" to "问一问", "notes" to "随手记",
-            "materials" to "正式资料", "coding" to "Coding Agent 上传", "timeline" to "片段", "files" to "文件与录音",
+            "materials" to "正式资料", "coding" to "Coding 会话同步状态", "timeline" to "片段", "files" to "文件与录音",
             "memories" to "记忆", "insights" to "洞察", "actions" to "行动", "agentView" to "Agent 视角",
             "sources" to "来源", "devices" to "设备", "connections" to "对外授权", "lark" to "飞书",
             "statistics" to "运行状态", "processing" to "处理任务", "plugins" to "插件", "settings" to "模型与服务",

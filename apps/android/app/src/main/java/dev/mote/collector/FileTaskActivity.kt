@@ -61,7 +61,7 @@ class FileTaskActivity : MoteActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         val state = savedInstanceState
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        body = moteDetailPage(); status = TextView(this)
+        body = moteDetailPage(title = MoteI18n.text("导入文件")); status = TextView(this)
         val id = intent.getStringExtra("sourceId")
         draftKey = id ?: intent.getStringExtra("addAction").orEmpty().ifBlank { "FILE" }
         if (state?.containsKey("source") == true) {
@@ -126,9 +126,9 @@ class FileTaskActivity : MoteActivity() {
     private fun showForm() {
         building = true; body.removeAllViews(); presetButtons.clear()
         fun label(text: String, target: LinearLayout = body) = TextView(this).apply {
-            this.text = MoteI18n.text(text); textSize = 15f; setPadding(0, moteDp(16), 0, moteDp(6)); target.addView(this)
+            this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontBody); setTextColor(MoteUi.ink); setPadding(0, moteDp(16), 0, moteDp(6)); target.addView(this)
         }
-        fun hint(text: String, target: LinearLayout = body) = TextView(this).apply { this.text = MoteI18n.text(text); textSize = 13f; target.addView(this) }
+        fun hint(text: String, target: LinearLayout = body) = TextView(this).apply { this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); target.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceInline); bottomMargin = moteDp(DesignTokens.spaceInline) }) }
         fun field(value: String, tagValue: String, target: LinearLayout = body, numeric: Boolean = false, multiline: Boolean = false) = EditText(this).apply {
             tag = tagValue; MoteUi.textInput(this, if (numeric) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT, multiline); setText(value)
             isSaveEnabled = false; importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO; target.addView(this)
@@ -141,11 +141,12 @@ class FileTaskActivity : MoteActivity() {
                     }
                 } })
         }
-        body.addView(TextView(this).apply { text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件"); textSize = 28f })
+        window.decorView.findViewWithTag<TextView>("detail-title").text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件")
+        window.decorView.findViewWithTag<android.view.View>("detail-add-action")?.visibility = if (savedSource == null) View.VISIBLE else View.GONE
         hint(if (source.tree) "持续收集文件夹中的新增文件和修改。" else if (source.syncContinuously) "持续同步这个文件的修改。" else "导入一次，不跟踪后续修改。")
         status = TextView(this); body.addView(status)
         pickButton = Button(this).apply { tag = "file-task:pick"; setOnClickListener { pick() }; body.addView(this) }
-        selectedInfo = TextView(this).apply { textSize = 13f; setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12)); background = MoteUi.shape(this@FileTaskActivity); body.addView(this) }
+        selectedInfo = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12)); background = MoteUi.shape(this@FileTaskActivity); body.addView(this) }
         if (source.tree) {
             label("收集哪些文件")
             val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; body.addView(choices)
@@ -160,20 +161,20 @@ class FileTaskActivity : MoteActivity() {
             minLines = 3; hint = MoteI18n.text("例如：这是我的通话录音，我通常是其中一方；对方的表达属于对方。")
         }
         hint(if (source.tree) "用于理解这个来源的背景、作者和内容归属。" else "可说明格式、时间、作者，以及哪些内容属于你。")
-        metadataStatus = TextView(this).apply { textSize = 13f; body.addView(this) }
+        metadataStatus = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); body.addView(this) }
         if (savedSource != null) hint("修改说明适用于已有和未来资料；不会自动重新转写或重算历史记忆。")
         initial = Spinner(this).apply {
-            adapter = ArrayAdapter(this@FileTaskActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("一起导入已有文件"), MoteI18n.text("首次清点后，只同步新文件")))
+            adapter = MoteUi.choiceAdapter(this@FileTaskActivity, listOf(MoteI18n.text("一起导入已有文件"), MoteI18n.text("首次清点后，只同步新文件")))
             setSelection(if (source.initialSync == "new_only") 1 else 0); tag = "file-task:initial"
         }
         if (source.tree) { label("已有文件"); body.addView(initial) }
         label("中央保存方式")
         retention = Spinner(this).apply {
-            adapter = ArrayAdapter(this@FileTaskActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("仅保留提取内容"), MoteI18n.text("保留原件及提取内容"), MoteI18n.text("仅记录文件信息")))
+            adapter = MoteUi.choiceAdapter(this@FileTaskActivity, listOf(MoteI18n.text("仅保留提取内容"), MoteI18n.text("保留原件及提取内容"), MoteI18n.text("仅记录文件信息")))
             tag = "file-task:retention"; setSelection(listOf("snapshot", "archive", "reference").indexOf(source.retention))
             body.addView(this)
         }
-        retentionHelp = TextView(this).apply { textSize = 13f; body.addView(this) }
+        retentionHelp = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); body.addView(this) }
         advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         body.addView(Button(this).apply { text = MoteI18n.text("高级设置"); tag = "file-task:advanced"; setOnClickListener { advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE; persistDraft() } })
         body.addView(advanced)
@@ -186,9 +187,13 @@ class FileTaskActivity : MoteActivity() {
         enabled = CheckBox(this).apply { text = MoteI18n.text("允许读取并按所选策略发送这个来源"); isChecked = source.enabled; if (savedSource != null) advanced.addView(this) }
         continuous = CheckBox(this).apply { text = MoteI18n.text("以后修改，也自动同步"); isChecked = source.syncContinuously; tag = "file-task:continuous"; if (savedSource != null && !source.tree) advanced.addView(this) }
         hint("更改选择、过滤或保留方式会清除这个来源的本机旧待发缓存，按新设置重新扫描；不会自动删除中央历史。停用仅暂停本机检查与同步，中央的启用状态与历史保持不变。移除只影响本机连接。", advanced)
-        val destination = Settings(this).read().server
+        val destinationConfig = Settings(this).read()
+        val destination = destinationConfig.server
         label("发送目的地")
-        hint(if (destination.isBlank()) "未连接中央：先保存本机任务，连接时确认发送范围。" else MoteI18n.text("完整文件的发送目的地：{0}", destination))
+        if (!destinationConfig.hasSyncConnection()) {
+            hint("未连接中央：先保存本机任务，连接时确认发送范围。")
+            if (destination.isNotBlank()) hint(MoteI18n.text("已填写的中央地址：{0}；连接并确认后才会发送。", destination))
+        } else hint(MoteI18n.text("完整文件的发送目的地：{0}", destination))
         hint("上传后仅清理 Mote 暂存，保留手机原文件。")
         confirm = Button(this).apply { text = MoteI18n.text(if (savedSource != null) "保存来源设置" else if (source.tree) "开始同步" else "确认导入"); tag = "file-task:confirm"; setTag(R.id.mote_primary, true); setOnClickListener { save() }; body.addView(this) }
         if (hasContextConflict) body.addView(Button(this).apply { text = MoteI18n.text("解决资料说明冲突"); tag = "file-task:context-conflict"; setOnClickListener { resolveConflict() } })
@@ -225,7 +230,7 @@ class FileTaskActivity : MoteActivity() {
         updatePreset(); updateRetention(); persistDraft()
     }
     private fun updatePreset() {
-        presetButtons.forEach { (key, button) -> button.isSelected = key == preset; button.background = MoteUi.clickable(this, if (key == preset) MoteUi.tint else android.graphics.Color.WHITE, 24) }
+        presetButtons.forEach { (key, button) -> button.isSelected = key == preset; button.background = MoteUi.clickable(this, if (key == preset) MoteUi.tint else DesignTokens.surface, MoteUi.actionRadius, strokeColor = if (key == preset) MoteUi.accent else MoteUi.controlBorder) }
         presetHelp.text = MoteI18n.text(when (preset) { "audio" -> "音频预设默认保留中央原件，保存方式可修改。"; "custom" -> "只收集你指定扩展名的文件；请在高级设置中填写。"; else -> "文本、音频、图片和文档。" })
         if (preset == "custom") advanced.visibility = View.VISIBLE
     }

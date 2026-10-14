@@ -18,7 +18,7 @@ app.whenReady().then(async () => {
   const root = resolve(__dirname, '..');
   const entry = `import { renderAskAnswer, renderAskCitation } from ${JSON.stringify(join(root, 'src/ask-presentation.ts'))};\nwindow.fixtureRender = () => {const box=document.querySelector('#ask-messages');box.replaceChildren(); const article=document.createElement('article');const c=${JSON.stringify({id,appName:'生成随手记',capturedAt:'2026-09-27',excerpt})};const open=id=>window.fixtureOpened=id;article.append(renderAskAnswer(document,${JSON.stringify(answer)},[c],open),renderAskCitation(document,c,open));box.append(article);};`;
   await build({ stdin: { contents: entry, resolveDir: root, loader: 'ts' }, bundle: true, platform: 'browser', outfile: join(output, 'renderer.js') });
-  const css = (await readFile(join(root,'src/design-tokens.css'),'utf8')) + '\n' + (await readFile(join(root,'src/styles.css'),'utf8'));
+  const css = (await readFile(join(root,'src/design-tokens.css'),'utf8')) + '\n' + (await readFile(join(root,'src/styles.css'),'utf8')) + '\n' + (await readFile(join(root,'src/art-direction.css'),'utf8'));
   await writeFile(join(output,'fixture.html'), `<!doctype html><meta charset="UTF-8"><style>${css}</style><main style="margin:0;padding:24px;width:100%"><h1>生成 Ask 布局回归</h1><div class="ask-layout"><aside class="panel">生成对话历史</aside><section class="panel"><div id="ask-messages"></div><p>回答已完成</p><textarea aria-label="你的问题"></textarea></section></div></main><script src="renderer.js"></script>`, {mode:0o600});
   session.defaultSession.webRequest.onBeforeRequest((details, done) => done({cancel:!details.url.startsWith('file:')}));
   window = new BrowserWindow({width:1140,height:833,show:false,webPreferences:{nodeIntegration:false,contextIsolation:true,backgroundThrottling:false}});
@@ -33,10 +33,13 @@ app.whenReady().then(async () => {
     window.setSize(width,833);
     const visible = await js(`new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>{const details=document.querySelector('.ask-evidence details');details.open=true;const quote=document.querySelector('.ask-excerpt');const range=document.createRange();range.selectNodeContents(quote);range.collapse(false);quote.scrollIntoView({block:'end'});const box=document.querySelector('#ask-messages'),rect=quote.getBoundingClientRect();resolve({text:quote.textContent,overflow:getComputedStyle(box).overflowY,clientHeight:box.clientHeight,scrollHeight:box.scrollHeight,bottom:rect.bottom,viewport:innerHeight,buttons:document.querySelectorAll('.ask-inline-citation').length,strong:document.querySelectorAll('.ask-answer strong').length,lists:document.querySelectorAll('.ask-answer li').length});})))`);
     assert.equal(visible.text, excerpt); assert.equal(visible.overflow,'visible'); assert(visible.bottom <= visible.viewport+1 && visible.bottom > 0); assert.equal(visible.buttons,4); assert.equal(visible.lists,3);
+    const referenceGeometry=await js(`Array.from(document.querySelectorAll('.ask-inline-citation')).map(e=>{const r=e.getBoundingClientRect();return {height:r.height,width:r.width,complete:e.scrollWidth<=e.clientWidth+1};})`);
+    assert(referenceGeometry.every(e=>e.height>=24&&e.height<=32&&e.complete),'Inline references fit the reading line with complete labels');
+    assert.equal(await js(`getComputedStyle(document.querySelector('.ask-evidence button')).minHeight`),'48px','Full evidence action retains the shared control height');
     await js(`document.querySelector('.ask-inline-citation').click()`); assert.equal(await js('window.fixtureOpened'),id);
     await js(`window.fixtureOpened='';document.querySelector('.ask-evidence button').click()`); assert.equal(await js('window.fixtureOpened'),id);
     await writeFile(join(output,`current-${width}.png`), (await window.webContents.capturePage()).toPNG());
-    results.push({width,...visible,text:undefined});
+    results.push({width,...visible,text:undefined,referenceGeometry});
   }
   await writeFile(join(output,'report.json'),JSON.stringify({generated:true,modelCalls:0,collectorStarted:false,legacy,results},null,2),{mode:0o600});
   clearTimeout(deadline); window.destroy(); app.exit(0);

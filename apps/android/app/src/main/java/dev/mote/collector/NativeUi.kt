@@ -27,33 +27,86 @@ object MoteUi {
     val accent = DesignTokens.accent
     val tint = DesignTokens.tint
     val border = DesignTokens.border
+    val controlBorder = DesignTokens.controlBorder
+    val divider = DesignTokens.divider
 
-    fun shape(context: Context, fill: Int = Color.WHITE, radius: Int = 18, outline: Boolean = false) = GradientDrawable().apply {
-        setColor(fill); cornerRadius = context.moteDp(radius).toFloat()
-        if (outline) setStroke(context.moteDp(1), border)
+    const val containerRadius = DesignTokens.radiusContainer
+    const val readingRadius = DesignTokens.radiusReading
+    const val actionRadius = DesignTokens.radiusControl
+
+    /** Role sizes scale with the system font; callers choose meaning, never fit-to-space. */
+    fun type(view: TextView, size: Int = DesignTokens.fontBody, medium: Boolean = false) = view.apply {
+        textSize = size.toFloat()
+        typeface = Typeface.create(if (medium) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
+        setLineSpacing(0f, 1.25f)
+        setTag(R.id.mote_type, size)
     }
 
-    fun clickable(context: Context, fill: Int = Color.WHITE, radius: Int = 18) = RippleDrawable(
-        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius), shape(context, Color.WHITE, radius)
+    fun shape(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true, strokeColor: Int = border) = GradientDrawable().apply {
+        setColor(fill); cornerRadius = context.moteDp(radius).toFloat()
+        if (outline) setStroke(context.moteDp(DesignTokens.borderWidth), strokeColor)
+    }
+
+    fun clickable(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true, strokeColor: Int = border) = RippleDrawable(
+        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius, outline, strokeColor), shape(context, Color.WHITE, radius, false)
     )
 
-    fun button(button: Button, primary: Boolean = false) = button.apply {
-        isAllCaps = false; textSize = 14f; minHeight = context.moteDp(50)
+    enum class ButtonRole { PRIMARY, SECONDARY, TEXT }
+
+    fun button(button: Button, primary: Boolean = false, radius: Int = actionRadius) = action(button, if (primary) ButtonRole.PRIMARY else ButtonRole.SECONDARY, radius)
+
+    fun action(button: Button, role: ButtonRole = ButtonRole.SECONDARY, radius: Int = actionRadius) = button.apply {
+        val primary = role == ButtonRole.PRIMARY
+        isAllCaps = false; type(this, DesignTokens.fontAction, medium = true); minHeight = context.moteDp(DesignTokens.controlHeight)
         setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, if (primary) Color.WHITE else accent)))
         setTag(R.id.mote_primary, primary)
+        setTag(R.id.mote_button_role, role)
         backgroundTintList = null; background = android.graphics.drawable.StateListDrawable().apply {
-            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, MoteUi.background, 24))
-            addState(intArrayOf(), clickable(context, if (primary) accent else tint, 24))
+            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, if (role == ButtonRole.TEXT) Color.TRANSPARENT else MoteUi.background, radius, role != ButtonRole.TEXT, controlBorder))
+            addState(intArrayOf(), clickable(context, when (role) { ButtonRole.PRIMARY -> accent; ButtonRole.SECONDARY -> DesignTokens.surface; ButtonRole.TEXT -> Color.TRANSPARENT }, radius, role == ButtonRole.SECONDARY, controlBorder))
         }
-        setPadding(context.moteDp(14), context.moteDp(12), context.moteDp(14), context.moteDp(12))
-        typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        setPadding(context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceInline))
     }
 
     fun field(field: EditText) = field.apply {
-        setTextColor(ink); setHintTextColor(muted); textSize = 15f
-        background = shape(context, Color.WHITE, 12, true)
-        setPadding(context.moteDp(14), context.moteDp(13), context.moteDp(14), context.moteDp(13))
-        minHeight = context.moteDp(52)
+        setTextColor(ink); setHintTextColor(muted); type(this, DesignTokens.fontBody)
+        backgroundTintList = null
+        background = shape(context, DesignTokens.surface, DesignTokens.radiusControl, true, controlBorder)
+        setPadding(context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceItem), context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceItem))
+        minHeight = context.moteDp(DesignTokens.controlHeight)
+    }
+
+    fun select(spinner: Spinner) = spinner.apply {
+        backgroundTintList = null
+        background = android.graphics.drawable.LayerDrawable(arrayOf(
+            shape(context, DesignTokens.surface, actionRadius, true, controlBorder),
+            MoteNavigationIcon(context, "dropdown", false)
+        )).apply {
+            setLayerSize(1, context.moteDp(20), context.moteDp(20))
+            setLayerGravity(1, Gravity.END or Gravity.CENTER_VERTICAL)
+            setLayerInset(1, 0, 0, context.moteDp(DesignTokens.spaceInline), 0)
+        }
+        setPadding(context.moteDp(DesignTokens.spaceInline), 0, context.moteDp(36), 0)
+        minimumHeight = context.moteDp(DesignTokens.controlHeight)
+    }
+
+    fun styleSelects(view: View) {
+        if (view is Spinner) select(view)
+        else if (view is ViewGroup) for (index in 0 until view.childCount) styleSelects(view.getChildAt(index))
+    }
+
+    /** A selected scope or retention choice must remain fully readable, including at 130%. */
+    fun choiceAdapter(context: Context, labels: List<String>) = object : ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, labels) {
+        private fun present(view: View): View = view.apply {
+            (this as? TextView)?.let {
+                type(it, DesignTokens.fontBody); it.setTextColor(ink)
+                it.isSingleLine = false; it.maxLines = Int.MAX_VALUE; it.ellipsize = null
+                it.gravity = Gravity.CENTER_VERTICAL; it.minHeight = context.moteDp(DesignTokens.controlHeight)
+                it.setPadding(context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline))
+            }
+        }
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getView(position, convertView, parent))
+        override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getDropDownView(position, convertView, parent))
     }
 
     /** Set line behavior before inputType: setSingleLine replaces password transformation. */
@@ -61,19 +114,30 @@ object MoteUi {
         setSingleLine(!multiline)
         if (multiline) { minLines = 2; gravity = Gravity.TOP }
         inputType = if (multiline) android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE else type
+        // Password input applies a platform monospace face; retain masking and the shared type face.
+        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
     }
 
     /** Apply the same controls to dynamic native lists and dialog forms. */
     fun styleTree(view: View) {
         when (view) {
+            is Spinner -> select(view)
             is Button -> if (view !is CompoundButton) {
-                button(view, view.getTag(R.id.mote_primary) == true)
+                action(view, view.getTag(R.id.mote_button_role) as? ButtonRole ?: if (view.getTag(R.id.mote_primary) == true) ButtonRole.PRIMARY else ButtonRole.SECONDARY)
                 (view.layoutParams as? LinearLayout.LayoutParams)?.let { it.bottomMargin = view.context.moteDp(8) }
+                // The native dialog bar bottom-aligns actions. Baseline alignment also
+                // subtracts the custom bottom margin, moving their top into its padding.
+                if (view.id in setOf(android.R.id.button1, android.R.id.button2, android.R.id.button3))
+                    (view.parent as? LinearLayout)?.isBaselineAligned = false
             }
             is EditText -> field(view)
-            is TextView -> { view.setTextColor(ink); view.setLineSpacing(view.context.moteDp(3).toFloat(), 1f) }
+            is TextView -> if (view.getTag(R.id.mote_type) == null) {
+                val dialogTitle = view.resources.getIdentifier("alertTitle", "id", "android")
+                type(view, if (view.id == dialogTitle) DesignTokens.fontTitleMobile else DesignTokens.fontBody, view.id == dialogTitle)
+                view.setTextColor(ink)
+            }
         }
-        if (view is CompoundButton) { view.setTextColor(ink); view.textSize = 15f; view.buttonTintList = ColorStateList.valueOf(accent); view.minHeight = view.context.moteDp(48) }
+        if (view is CompoundButton) { view.setTextColor(ink); type(view, DesignTokens.fontBody); view.buttonTintList = ColorStateList.valueOf(accent); view.minHeight = view.context.moteDp(DesignTokens.controlHeight) }
         if (view is ViewGroup) for (index in 0 until view.childCount) styleTree(view.getChildAt(index))
     }
 }
@@ -100,11 +164,25 @@ class MoteNavigationIcon(context: Context, private val kind: String, active: Boo
             "dropdown" -> path(6f, 9f, 12f, 15f, 18f, 9f)
             "overview" -> { path(3f, 11f, 12f, 3f, 21f, 11f); path(5f, 10f, 5f, 21f, 19f, 21f, 19f, 10f); path(10f, 21f, 10f, 14f, 14f, 14f, 14f, 21f) }
             "notes", "note" -> { canvas.drawRoundRect(4f, 3f, 20f, 21f, 3f, 3f, paint); line(8f, 8f, 16f, 8f); line(8f, 12f, 16f, 12f); line(8f, 16f, 13f, 16f) }
+            "import" -> { path(13f, 3f, 5f, 3f, 5f, 21f, 19f, 21f, 19f, 9f, 13f, 3f, 13f, 9f, 19f, 9f); line(8f, 14f, 16f, 14f); path(13f, 11f, 16f, 14f, 13f, 17f) }
             "library", "sources", "folder" -> { path(3f, 7f, 3f, 20f, 21f, 20f, 21f, 7f, 3f, 7f, 3f, 4f, 10f, 4f, 13f, 7f) }
             "ask" -> { canvas.drawRoundRect(3f, 3f, 21f, 18f, 4f, 4f, paint); path(7f, 18f, 7f, 22f, 12f, 18f); line(7f, 8f, 17f, 8f); line(7f, 12f, 14f, 12f) }
             "capture" -> { canvas.drawRoundRect(4f, 3f, 20f, 21f, 3f, 3f, paint); canvas.drawCircle(12f, 12f, 4f, paint); line(10f, 18f, 14f, 18f) }
             "chart" -> { path(4f, 4f, 4f, 20f, 21f, 20f); path(8f, 15f, 12f, 10f, 16f, 13f, 21f, 5f) }
             "shield" -> { path(12f, 2f, 21f, 6f, 20f, 15f, 17f, 19f, 12f, 22f, 7f, 19f, 4f, 15f, 3f, 6f, 12f, 2f); path(8f, 12f, 11f, 15f, 16f, 9f) }
+            "language" -> {
+                canvas.drawCircle(12f, 12f, 9f, paint); canvas.drawOval(8f, 3f, 16f, 21f, paint)
+                line(4f, 9f, 20f, 9f); line(4f, 15f, 20f, 15f)
+            }
+            "plugin" -> {
+                val p = Path().apply {
+                    moveTo(4f, 4f); lineTo(10f, 4f); cubicTo(10f, 1f, 15f, 1f, 15f, 4f)
+                    lineTo(20f, 4f); lineTo(20f, 10f); cubicTo(23f, 10f, 23f, 15f, 20f, 15f)
+                    lineTo(20f, 20f); lineTo(14f, 20f); cubicTo(14f, 17f, 9f, 17f, 9f, 20f)
+                    lineTo(4f, 20f); lineTo(4f, 14f); cubicTo(7f, 14f, 7f, 9f, 4f, 9f); close()
+                }; canvas.drawPath(p, paint)
+            }
+            "code" -> { path(7f, 6f, 2f, 12f, 7f, 18f); path(17f, 6f, 22f, 12f, 17f, 18f); line(14f, 4f, 10f, 20f) }
             "sync" -> { canvas.drawArc(4f, 4f, 20f, 20f, 210f, 145f, false, paint); path(16f, 4f, 20f, 8f, 21f, 3f); canvas.drawArc(4f, 4f, 20f, 20f, 30f, 145f, false, paint); path(3f, 21f, 4f, 16f, 8f, 20f) }
             "info" -> { canvas.drawCircle(12f, 12f, 9f, paint); line(12f, 11f, 12f, 17f); canvas.drawPoint(12f, 7f, paint) }
             else -> { line(4f, 6f, 20f, 6f); line(4f, 12f, 20f, 12f); line(4f, 18f, 20f, 18f); line(9f, 3f, 9f, 9f); line(16f, 9f, 16f, 15f); line(10f, 15f, 10f, 21f) }
@@ -121,11 +199,11 @@ class MotePrimaryNavigation(private val activity: Activity, onSelect: (MotePrima
     private val items = linkedMapOf<MotePrimaryTab, TextView>()
     init {
         orientation = HORIZONTAL; setPadding(activity.moteDp(10), activity.moteDp(7), activity.moteDp(10), activity.moteDp(9))
-        setBackgroundColor(Color.WHITE); elevation = activity.moteDp(2).toFloat()
+        setBackgroundColor(Color.WHITE)
         contentDescription = MoteI18n.text("主导航")
         MotePrimaryTab.entries.forEach { tab ->
             val item = TextView(activity).apply {
-                text = MoteI18n.text(tab.titleKey); textSize = 12f; gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
+                text = MoteI18n.text(tab.titleKey); MoteUi.type(this, DesignTokens.fontMeta); gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
                 compoundDrawablePadding = activity.moteDp(5); isFocusable = true; tag = "primary:${tab.name}"
                 contentDescription = MoteI18n.text(tab.titleKey); setOnClickListener { onSelect(tab) }
             }
@@ -137,10 +215,30 @@ class MotePrimaryNavigation(private val activity: Activity, onSelect: (MotePrima
         items.forEach { (destination, view) ->
             val active = destination == tab
             view.isSelected = active; view.setTextColor(if (active) MoteUi.accent else MoteUi.muted)
-            view.background = MoteUi.clickable(activity, if (active) MoteUi.tint else Color.WHITE, 12)
-            view.setCompoundDrawablesWithIntrinsicBounds(null, MoteNavigationIcon(activity, destination.icon, active), null, null)
+            view.background = MoteUi.clickable(activity, DesignTokens.surface, outline = false)
+            view.setCompoundDrawablesWithIntrinsicBounds(null, MoteNavigationIndicator(activity, destination.icon, active), null, null)
         }
     }
+}
+
+/** The selected destination is indicated at its icon; the entire item remains one touch target. */
+private class MoteNavigationIndicator(context: Context, kind: String, private val active: Boolean) : Drawable() {
+    private val width = context.moteDp(64)
+    private val height = context.moteDp(32)
+    private val glyphSize = context.moteDp(23)
+    private val glyph = MoteNavigationIcon(context, kind, active)
+    private val indicator = MoteUi.shape(context, MoteUi.tint, DesignTokens.radiusIndicator, false)
+    override fun getIntrinsicWidth() = width
+    override fun getIntrinsicHeight() = height
+    override fun draw(canvas: Canvas) {
+        if (active) { indicator.bounds = bounds; indicator.draw(canvas) }
+        val left = bounds.centerX() - glyphSize / 2
+        val top = bounds.centerY() - glyphSize / 2
+        glyph.setBounds(left, top, left + glyphSize, top + glyphSize); glyph.draw(canvas)
+    }
+    override fun setAlpha(alpha: Int) { indicator.alpha = alpha; glyph.alpha = alpha }
+    override fun setColorFilter(colorFilter: ColorFilter?) { glyph.colorFilter = colorFilter }
+    @Deprecated("Drawable opacity") override fun getOpacity() = PixelFormat.TRANSLUCENT
 }
 
 fun Activity.openMoteLocalPage(page: String) {
@@ -159,20 +257,28 @@ private fun Activity.detailTab(): MotePrimaryTab? = when (this) {
     else -> MotePrimaryTab.TODAY
 }
 
-fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), onBack: () -> Unit = { finish() }): LinearLayout {
+fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, onBack: () -> Unit = { finish() }): LinearLayout {
     val body = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(moteDp(22), moteDp(12), moteDp(22), moteDp(32))
+        setPadding(moteDp(DesignTokens.spacePage), moteDp(DesignTokens.spaceItem), moteDp(DesignTokens.spacePage), moteDp(DesignTokens.spaceGroup))
     }
     val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background); moteInsets() }
     val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
     header.addView(TextView(this).apply {
-        text = "‹  " + MoteI18n.text("返回上级"); textSize = 15f; setTextColor(MoteUi.accent)
+        text = if (title == null) "‹  " + MoteI18n.text("返回上级") else "‹"
+        MoteUi.type(this, DesignTokens.fontAction); setTextColor(MoteUi.accent)
         gravity = Gravity.CENTER_VERTICAL; minHeight = moteDp(48)
-        setPadding(moteDp(22), moteDp(4), moteDp(22), moteDp(4))
+        setPadding(moteDp(16), moteDp(4), moteDp(16), moteDp(4))
         contentDescription = MoteI18n.text("返回上一页"); isFocusable = true; setOnClickListener { onBack() }
+    }, if (title == null) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(48), -2))
+    if (title != null) header.addView(TextView(this).apply {
+        text = title; tag = "detail-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); setTextColor(MoteUi.ink)
+        setPadding(0, moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spaceInline))
     }, LinearLayout.LayoutParams(0, -2, 1f))
-    if (primary != null) header.addView(MoteUi.button(Button(this).apply {
+    // Content and source tasks share Add; maintenance pages keep their configuration duty.
+    val allowsAdd = this is CaptureRecordsActivity || this is FileContentActivity || this is FileTaskActivity || this is SourcesActivity
+    if (primary != null && allowsAdd) header.addView(MoteUi.button(Button(this).apply {
+        tag = "detail-add-action"
         text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
         setOnClickListener { showMoteAddActions() }
     }), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(14) })
@@ -190,7 +296,26 @@ class MoteDialogBuilder(context: Context) : android.app.AlertDialog.Builder(cont
         window.decorView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
         override fun onViewDetachedFromWindow(view: View) = Unit
         override fun onViewAttachedToWindow(view: View) {
+        window.setBackgroundDrawable(MoteUi.shape(context, Color.WHITE, MoteUi.readingRadius))
         MoteUi.styleTree(window.decorView)
+        // Some platform dialogs wrap stacked actions in a ScrollView whose
+        // minimum height reserves only one action. Keep every styled action
+        // visible and let the existing message area take the remaining height.
+        val actions = listOf(android.content.DialogInterface.BUTTON_POSITIVE, android.content.DialogInterface.BUTTON_NEGATIVE,
+            android.content.DialogInterface.BUTTON_NEUTRAL).mapNotNull(dialog::getButton).firstOrNull()?.parent as? View
+        val panel = actions?.parent as? ScrollView
+        fun reserveActions() {
+            if (panel == null || actions == null) return
+            val required = actions.measuredHeight + panel.paddingTop + panel.paddingBottom
+            if (required > 0 && panel.minimumHeight != required) {
+                panel.minimumHeight = required
+                // A request raised from the child's layout can be suppressed
+                // during the dialog's second layout pass. Queue the real pass.
+                panel.post { panel.requestLayout() }
+            }
+        }
+        actions?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> reserveActions() }
+        reserveActions()
         val original = window.callback
         window.callback = object : android.view.Window.Callback by original {
             override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
@@ -215,7 +340,7 @@ class MoteDialogBuilder(context: Context) : android.app.AlertDialog.Builder(cont
 /** Every Add entry uses this same action set and real native flows. */
 enum class MoteAddAction(val titleKey: String, val subtitleKey: String, val icon: String) {
     FOLDER("同步文件夹", "持续收集文件夹里的新内容与修改", "folder"),
-    FILE("导入文件", "导入一次，不跟踪后续修改。", "note"),
+    FILE("导入文件", "导入一次，不跟踪后续修改。", "import"),
     SCREEN("记录屏幕", "先选择应用范围，再按需授权", "capture"),
     NOTE("随手记", "离线也能留下想法与片段", "notes")
 }

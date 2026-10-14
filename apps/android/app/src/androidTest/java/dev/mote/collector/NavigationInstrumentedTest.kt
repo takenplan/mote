@@ -169,6 +169,20 @@ class NavigationInstrumentedTest {
 
     private fun navigate(scenario: ActivityScenario<MainActivity>, label: String) {
         val instrumentation=InstrumentationRegistry.getInstrumentation()
+        if (label in listOf("随手记", "记录", "记录屏幕")) {
+            // Add belongs to Home/Content. Finish the real Home transition and its draft decision first.
+            scenario.onActivity { activity ->
+                if (views(activity.window.decorView).none { it.isShown && it.contentDescription == MoteI18n.text("添加内容") }) {
+                    views(activity.window.decorView).single { it.isShown && it.tag == "primary:TODAY" }.performClick()
+                }
+            }
+            instrumentation.waitForIdleSync()
+            instrumentation.runOnMainSync {
+                android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { views(it) }
+                    .filterIsInstance<TextView>().firstOrNull { it.isShown && it.text.toString() == MoteI18n.text("丢弃修改") }?.performClick()
+            }
+            instrumentation.waitForIdleSync()
+        }
         scenario.onActivity { tab(it,label) };instrumentation.waitForIdleSync()
         instrumentation.runOnMainSync {
             android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap { views(it) }

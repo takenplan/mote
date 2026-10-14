@@ -39,9 +39,23 @@ function manifest(bytes:Buffer,key='generated-file',revision=sha256(bytes),previ
 
 function requestIdentity(captureId:string,input:FileRevision){return {captureId,externalId:input.item.externalId,revision:input.item.revision,sha256:input.sha256,sizeBytes:input.sizeBytes,observedAt:input.item.observedAt};}
 
+async function bounded<T>(pending:Promise<T>,stage:string){
+ let timeout:ReturnType<typeof setTimeout>|undefined;
+ try{return await Promise.race([pending,new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(Error(`Timed out waiting for ${stage}`)),20_000);})]);}
+ finally{clearTimeout(timeout);}
+}
+
 test('HTTP recovery resupplies an expired snapshot under its immutable version and lost ACK remains idempotent',async t=>{
+ let release!:()=>void,started!:()=>void;
+ const held=new Promise<void>(resolve=>release=resolve),entered=new Promise<void>(resolve=>started=resolve);
+ // Release before the fixture's close hook, including when an assertion fails.
+ t.after(()=>release());
  const f=await fixture(t),bytes=Buffer.from('Generated immutable recovery text'),input=manifest(bytes),initial=await f.upload(input,bytes);
  f.expire(initial.ack.id);await f.node.processing.tick();assert.equal(f.node.files.detail(initial.ack.id).job?.error,'snapshot_input_expired');
+ // A completion wake can admit the recovered job even without the discovery
+ // worker. Hold the real processor to inspect the received-but-unfinished stage.
+ const processor=f.node.processing.runtime.registry.get('text.utf8'),execute=processor.process;
+ processor.process=async args=>{started();await held;return execute(args);};
  assert.deepEqual((await f.recovery()).json(),{items:[requestIdentity(initial.ack.id,input)]});
  const metadata=await f.request('PUT','/api/file-sync/v1/revisions',input);assert.equal(metadata.statusCode,200,metadata.body);assert.equal(metadata.json().duplicate,true);assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM file_snapshot_inputs').get()!.n,0,'metadata ACK alone cannot restore missing bytes');
  const response=await f.begin(input);assert.equal(response.statusCode,200,response.body);const session=response.json();assert.equal(session.ack,null);assert.deepEqual(session.parts,[]);assert.equal(session.uploadId,initial.session.uploadId,'an acknowledged session is reset for bounded resupply');
@@ -49,8 +63,11 @@ test('HTTP recovery resupplies an expired snapshot under its immutable version a
  const committed=await f.commit(session.uploadId);assert.equal(committed.statusCode,200,committed.body);const ack=committed.json();assert.equal(ack.id,initial.ack.id);assert.equal(ack.receipt.version,2);assert.equal(ack.receipt.state,'received');
  assert.deepEqual((await f.commit(session.uploadId)).json(),ack,'a lost commit ACK does not publish a second revision');
  assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM file_versions').get()!.n,1);assert.equal(f.node.sources.history(input.sourceId,input.item.externalId).length,1);
- assert.deepEqual(Buffer.concat([...f.node.files.processingBytes(ack.id)]),bytes);assert.equal(f.node.files.detail(ack.id).job?.state,'waiting');assert.deepEqual((await f.recovery()).json(),{items:[]});
- await f.node.processing.tick();assert.equal(f.node.files.detail(ack.id).job?.state,'succeeded');assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM file_snapshot_inputs').get()!.n,0);assert.throws(()=>[...f.node.files.bytes(ack.id)],{statusCode:404});
+ const completing=f.node.processing.tick();void completing.catch(()=>{});
+ await bounded(entered,'restored processor entry');
+ assert.deepEqual(Buffer.concat([...f.node.files.processingBytes(ack.id)]),bytes);assert.equal(f.node.files.detail(ack.id).job?.state,'running');assert.deepEqual((await f.recovery()).json(),{items:[]});
+ const pipelines=f.node.processing.engine.list({operationId:'file:'+ack.id,kind:'files.pipeline',limit:100}).items.map(step=>step.id);assert.equal(pipelines.length,1);
+ release();await bounded(Promise.all([completing,f.node.processing.engine.drain(pipelines)]),'restored processing completion');assert.equal(f.node.files.detail(ack.id).job?.state,'succeeded');assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM file_snapshot_inputs').get()!.n,0);assert.throws(()=>[...f.node.files.bytes(ack.id)],{statusCode:404});
 });
 
 test('completed snapshots return duplicate ACK and cannot restart their successful extraction',async t=>{

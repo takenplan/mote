@@ -20,11 +20,16 @@ async function fixture(t:any){
  return {window:dom.window,render:()=>new JSDOM(renderToStaticMarkup(React.createElement(ModelStartGuide))).window.document};
 }
 
-test('optional model start keeps an absent return target on the installed Ask entry without requiring new defaults',async t=>{
+test('direct model settings keep setup steps without inventing a task return destination',async t=>{
  const {render}=await fixture(t),d=render();
- assert.ok(d.querySelector('a[href="#/ask"]'));
+ assert.equal(d.querySelector('a[href="#/ask"]'),null);
+ assert.equal(d.querySelectorAll('a').length,2);
+ assert.ok([...d.querySelectorAll('a')].every(link=>!new URLSearchParams(link.getAttribute('href')!.split('?')[1]).has('returnTo')));
  assert.match(d.body.textContent!,/已有可用默认时可直接使用/);
  assert.match(d.body.textContent!,/无需创建新预设或修改所有模块/);
+ const help=d.querySelector<HTMLDetailsElement>('details')!;
+ assert.equal(help.open,false);assert.match(help.querySelector('summary')!.textContent!,/模型设置说明/);
+ assert.equal(d.querySelectorAll('nav a').length,2,'Setup steps remain immediately reachable outside the folded help');
 });
 
 test('a valid task return target survives both model setup steps with its exact context',async t=>{

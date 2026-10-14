@@ -1,4 +1,4 @@
-import { moteText } from '@mote/shared/i18n';
+import { moteText, statusMessage } from '@mote/shared/i18n';
 import type { WorkProgress } from './background';
 
 export interface BackgroundJob extends WorkProgress { id: string; startedAt: number; state: 'running' | 'completed' | 'failed' }
@@ -8,7 +8,11 @@ export class BackgroundJobs {
   private running = new Map<string, Promise<unknown>>();
   snapshot(): BackgroundJob[] {
     const now = Date.now();
-    return [...this.rows.values()].filter(row => row.state === 'running' || now - (this.finishedAt.get(row.id) ?? now) < 10_000).map(row => ({ ...row }));
+    return [...this.rows.values()].filter(row => row.state === 'running' || now - (this.finishedAt.get(row.id) ?? now) < 10_000).map(row => ({
+      ...row,
+      // These are app-authored progress labels, rendered in the current language.
+      message: statusMessage(row.message) + (row.state === 'completed' ? moteText(" · 操作已结束") : row.state === 'failed' ? moteText(" · 未完成，请重试") : ''),
+    }));
   }
   private finishedAt = new Map<string, number>();
   progress(id: string, value: WorkProgress): void {
@@ -25,6 +29,6 @@ export class BackgroundJobs {
   private finish(id: string, state: BackgroundJob['state']): void {
     this.running.delete(id); this.finishedAt.set(id, Date.now());
     const row = this.rows.get(id)!;
-    this.rows.set(id, { ...row, state, message: state === 'completed' ? row.message + moteText(" · 操作已结束") : row.message + moteText(" · 未完成，请重试") });
+    this.rows.set(id, { ...row, state });
   }
 }

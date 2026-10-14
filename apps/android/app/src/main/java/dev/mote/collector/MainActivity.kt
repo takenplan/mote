@@ -30,6 +30,8 @@ class MainActivity : MoteActivity() {
     private var projectionRequestStamp: String? = null
     private var pageRuleImportTarget: Pair<String, String>? = null
     private var permissionReturnPage = Page.SETTINGS
+    private enum class ConnectionOrigin { LOCAL_ASK, CENTRAL_CALLER }
+    private var connectionOrigin: ConnectionOrigin? = null
     private var applyingConnectionFields = false
     private lateinit var status: TextView
     private lateinit var captureTitle: TextView
@@ -49,6 +51,13 @@ class MainActivity : MoteActivity() {
     private lateinit var pagesHost: FrameLayout
     private val pages = linkedMapOf<Page, View>()
     private lateinit var homeHeader: LinearLayout
+    private lateinit var headerAddAction: Button
+    private lateinit var headerSettingsAction: TextView
+    private lateinit var headerBackAction: TextView
+    private lateinit var headerTitle: TextView
+    private lateinit var headerHeading: LinearLayout
+    private lateinit var headerActions: LinearLayout
+    private var activeMenuGroup: LinearLayout? = null
     private var centralContent: CentralContent? = null
     private var centralState: Bundle? = null
     private var pendingCentralResult: Triple<Int, Int, Intent?>? = null
@@ -58,6 +67,7 @@ class MainActivity : MoteActivity() {
     private lateinit var todaySummary: TextView
     private lateinit var homeSyncStatus: TextView
     private lateinit var homeSyncDetailStatus: TextView
+    private lateinit var homeSyncRate: TextView
     private lateinit var homeSendAction: Button
     private lateinit var homeScreenAction: Button
     private lateinit var homeSourceList: LinearLayout
@@ -88,6 +98,7 @@ class MainActivity : MoteActivity() {
         DIAGNOSTICS("诊断与支持", "DEVELOPER")
     ;
         val title get() = MoteI18n.text(titleKey)
+        fun belongsToSettings(): Boolean = this == SETTINGS || parent?.let { valueOf(it).belongsToSettings() } == true
     }
     private var logExportHours = 24
     private data class RetainedDraft(val fields: Map<String, String>, val config: CollectorConfig)
@@ -148,7 +159,7 @@ class MainActivity : MoteActivity() {
     private var localStateJob: kotlinx.coroutines.Job? = null
     private data class StatusSnapshot(val title: String, val action: String, val status: String, val sync: String,
         val totals: String, val technical: String, val connectionTitle: String, val connection: String,
-        val media: String, val config: CollectorConfig?)
+        val media: String, val config: CollectorConfig?, val syncQueue: String, val syncPolicy: String, val syncFacts: String)
     private val refresh = object : Runnable {
         override fun run() { refreshStatus(); loadHomeContent(); handler.postDelayed(this, 2000) }
     }
@@ -158,6 +169,8 @@ class MainActivity : MoteActivity() {
         if (Build.VERSION.SDK_INT >= 33) onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { navigateBack() }
         centralState = savedInstanceState?.getBundle("centralContent")
         permissionReturnPage = savedInstanceState?.getString("permissionReturnPage")?.let { value -> Page.entries.find { it.name == value } } ?: Page.SETTINGS
+        connectionOrigin = savedInstanceState?.getString("connectionOrigin")?.let { value -> ConnectionOrigin.entries.find { it.name == value } }
+            ?: if (savedInstanceState == null && intent.getStringExtra("page") == "CONNECTION" && intent.getBooleanExtra("returnToCentral", false)) ConnectionOrigin.CENTRAL_CALLER else null
         savedInstanceState?.getString("pageRuleImportApp")?.let { id -> pageRuleImportTarget = id to savedInstanceState.getString("pageRuleImportVersion", "") }
         val retained = lastNonConfigurationInstance as? RetainedDraft
         val loading = moteDetailPage()
@@ -178,18 +191,31 @@ class MainActivity : MoteActivity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background); moteInsets()
         }
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(22), dp(6), dp(16), dp(6)) }
-        header.addView(TextView(this).apply { text = "Mote"; textSize = 21f; setTextColor(MoteUi.ink) }, LinearLayout.LayoutParams(0, -2, 1f))
+        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(dp(DesignTokens.spacePage), 0, dp(DesignTokens.spacePage), 0) }
+        headerHeading = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        headerActions = LinearLayout(this).apply { gravity = Gravity.END or Gravity.CENTER_VERTICAL }
+        headerBackAction = TextView(this).apply {
+            text = "‹"; MoteUi.type(this, DesignTokens.fontAction); setTextColor(MoteUi.accent)
+            gravity = Gravity.CENTER; minHeight = dp(DesignTokens.controlHeight); isFocusable = true
+            setOnClickListener { navigatePageBack(currentPage) }
+        }
+        headerHeading.addView(headerBackAction, LinearLayout.LayoutParams(dp(DesignTokens.controlHeight), -2))
+        headerTitle = TextView(this).apply { text = "Mote"; tag = "local-page-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); setTextColor(MoteUi.ink) }
+        headerHeading.addView(headerTitle, LinearLayout.LayoutParams(0, -2, 1f))
         val quickNote = MoteUi.button(Button(this).apply {
             text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
             setOnClickListener { showMoteAddActions() }
         })
-        header.addView(quickNote, LinearLayout.LayoutParams(-2, dp(48)))
-        header.addView(TextView(this).apply {
-            text = MoteI18n.text("设置"); contentDescription = MoteI18n.text("设置"); textSize = 14f
+        headerAddAction = quickNote
+        headerActions.addView(quickNote, LinearLayout.LayoutParams(-2, dp(48)))
+        headerSettingsAction = TextView(this).apply {
+            text = MoteI18n.text("设置"); contentDescription = MoteI18n.text("设置"); MoteUi.type(this, DesignTokens.fontAction)
             setTextColor(MoteUi.muted); gravity = Gravity.CENTER; minHeight = dp(48); isFocusable = true
             setPadding(dp(16), 0, 0, 0); setOnClickListener { showPage(Page.SETTINGS) }
-        })
+        }
+        headerActions.addView(headerSettingsAction)
+        header.addView(headerHeading, LinearLayout.LayoutParams(0, -2, 1f))
+        header.addView(headerActions, LinearLayout.LayoutParams(-2, -2))
         homeHeader = header
         root.addView(header)
         pagesHost = FrameLayout(this)
@@ -198,7 +224,7 @@ class MainActivity : MoteActivity() {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(22), dp(10), dp(22), dp(10)); setBackgroundColor(Color.WHITE)
         }
-        saveHint = TextView(this).apply { textSize = 12f; setTextColor(MoteUi.muted) }
+        saveHint = TextView(this).apply { MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.muted) }
         saveBar.addView(saveHint, LinearLayout.LayoutParams(0, -2, 1f))
         saveBar.addView(MoteUi.button(Button(this).apply {
             text = MoteI18n.text("保存设置"); setOnClickListener { saveConfig() }
@@ -209,7 +235,6 @@ class MainActivity : MoteActivity() {
         setContentView(root)
         // CollectorConfig is the complete draft baseline. Unvisited pages never supply defaults.
         buildToday()
-        buildOverview()
         buildSettings()
         val restoredPage = savedInstanceState?.getString("page")?.let { value -> Page.entries.find { it.name == value } } ?: intent.getStringExtra("page")?.let { value -> Page.entries.find { it.name == value } } ?: Page.OVERVIEW
         val initialPage = restoredPage
@@ -220,7 +245,7 @@ class MainActivity : MoteActivity() {
         }
         initializing = false
         val restoredPermissionReturn = permissionReturnPage
-        showPage(initialPage)
+        showPage(initialPage, connectionEntryOrigin = connectionOrigin)
         if (initialPage == Page.PERMISSIONS) permissionReturnPage = restoredPermissionReturn
         pendingCentralResult?.let { (request, result, data) ->
             pendingCentralResult = null
@@ -234,41 +259,93 @@ class MainActivity : MoteActivity() {
     private fun buildToday() {
         val local = LocalStateRepository.get(this).state.value
         firstUse = MoteNavigation.isFirstUse(loadedConfig.hasSyncConnection(), settings.enabled, settings.lastCapture(), (local.active?.records ?: 0) > 0 || (local.sourcePending ?: 0) > 0)
-        page(Page.OVERVIEW, MoteI18n.text("收进来，随时找回。"))
-        text(MoteI18n.text("文件、屏幕和想法，都可以从这里开始。"), 16, MoteUi.muted)
+        page(Page.OVERVIEW, MoteI18n.text("先存本机；连接中央整理后，可搜索和提问。"))
         val choices = MoteAddAction.entries
-        for (row in choices.chunked(2)) {
-            val group = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            row.forEachIndexed { index, action ->
-                group.addView(LinearLayout(this).apply {
-                    orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 18)
-                    setPadding(dp(16), dp(19), dp(16), dp(18)); minimumHeight = dp(146)
-                    isFocusable = true; tag = "add:${action.name}"; contentDescription = MoteI18n.text(action.titleKey)
-                    addView(TextView(this@MainActivity).apply {
-                        text = MoteI18n.text(action.titleKey); textSize = 17f; setTextColor(MoteUi.ink)
-                        setCompoundDrawablesWithIntrinsicBounds(MoteNavigationIcon(this@MainActivity, action.icon, true), null, null, null)
-                        compoundDrawablePadding = dp(8)
-                    })
-                    addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.subtitleKey); textSize = 12f; setTextColor(MoteUi.muted); setPadding(0, dp(11), 0, 0); setLineSpacing(dp(3).toFloat(), 1f) })
+        val collection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        content.addView(collection, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
+        collection.addView(TextView(this).apply {
+            text = MoteI18n.text("添加内容"); MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.muted)
+            setPadding(dp(DesignTokens.spaceItem), dp(4), dp(DesignTokens.spaceItem), dp(4))
+        })
+        val inputs = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@MainActivity); clipToOutline = true; setPadding(dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth)) }
+        collection.addView(inputs)
+        choices.forEachIndexed { index, action ->
+                inputs.addView(LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.TRANSPARENT, radius = 0, outline = false)
+                    setPadding(dp(DesignTokens.spaceInline), dp(4), dp(DesignTokens.spaceInline), dp(4)); minimumHeight = dp(64)
+                    isFocusable = true; tag = "add:${action.name}"; contentDescription = MoteI18n.text(action.titleKey) + "，" + MoteI18n.text(action.subtitleKey)
+                    addView(ImageView(this@MainActivity).apply {
+                        setImageDrawable(MoteNavigationIcon(this@MainActivity, action.icon, true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                        background = MoteUi.shape(this@MainActivity, MoteUi.tint, DesignTokens.radiusIndicator, false); setPadding(dp(4), dp(4), dp(4), dp(4))
+                    }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(DesignTokens.spaceInline) })
+                    addView(LinearLayout(this@MainActivity).apply {
+                        orientation = LinearLayout.VERTICAL; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
+                        addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.titleKey); MoteUi.type(this, DesignTokens.fontRow, medium = true); setTextColor(MoteUi.ink) })
+                        addView(TextView(this@MainActivity).apply { text = MoteI18n.text(action.subtitleKey); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, dp(4), 0, 0) })
+                    }, LinearLayout.LayoutParams(0, -2, 1f))
+                    addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; setTextColor(MoteUi.accent); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(4) })
                     setOnClickListener { openMoteAdd(action) }
-                }, LinearLayout.LayoutParams(0, -2, 1f).apply { if (index == 0) marginEnd = dp(6) else marginStart = dp(6) })
-            }
-            content.addView(group, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+                }, LinearLayout.LayoutParams(-1, -2))
+            if (index != choices.lastIndex) inputs.addView(View(this).apply { setBackgroundColor(MoteUi.divider) }, LinearLayout.LayoutParams(-1, dp(1)).apply { marginStart = dp(56); marginEnd = dp(12) })
         }
-        card(MoteUi.tint) {
-            homeSyncStatus = text(MoteI18n.text("仅保存在本机 · 连接后可发送到中央"), 14)
+        val previousContent = content
+        val recovery = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(10), dp(14), 0) }
+        collection.addView(recovery); content = recovery
+        text(MoteI18n.text("保存之后，回看或提问"), DesignTokens.fontMeta, MoteUi.muted).apply { (layoutParams as LinearLayout.LayoutParams).bottomMargin = 0 }
+        val retrieval = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
+        listOf("查看内容 →" to Page.LIBRARY, "问一问 →" to Page.ASK).forEach { (label, destination) ->
+            retrieval.addView(TextView(this).apply {
+                text = MoteI18n.text(label); MoteUi.type(this, DesignTokens.fontBody); setTextColor(MoteUi.accent); minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL
+                isFocusable = true; contentDescription = MoteI18n.text(label); setOnClickListener { showPage(destination) }
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+        }
+        content.addView(retrieval, LinearLayout.LayoutParams(-1, -2))
+        val syncEdge = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(6), dp(14), dp(10)); background = MoteUi.shape(this@MainActivity)
+        }
+        collection.addView(syncEdge); content = syncEdge
+        run {
+            val summary = LinearLayout(this@MainActivity).apply { gravity = Gravity.CENTER_VERTICAL }
+            content.addView(summary, LinearLayout.LayoutParams(-1, -2))
+            homeSyncStatus = TextView(this@MainActivity).apply {
+                text = MoteI18n.text("仅保存在本机 · 连接后可发送到中央"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.ink); setLineSpacing(0f, 1.25f)
+            }
+            summary.addView(homeSyncStatus, LinearLayout.LayoutParams(0, -2, 1f))
             val details = LinearLayout(this@MainActivity).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-            button(MoteI18n.text("查看同步详情")) { details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+            summary.addView(TextView(this@MainActivity).apply {
+                text = MoteI18n.text("查看同步详情"); MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.accent); minHeight = dp(48); gravity = Gravity.CENTER
+                setPadding(dp(12), 0, 0, 0); isFocusable = true
+                setOnClickListener { details.visibility = if (details.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
+            }, LinearLayout.LayoutParams(-2, -2))
             content.addView(details)
             val previous = content; content = details
-            homeSyncDetailStatus = text("", 13, MoteUi.muted)
-            text(MoteI18n.text("本机保存、中央接收与整理完成分别显示；接收确认不代表已经可以搜索。"), 12, MoteUi.muted)
-            rowButtons(MoteI18n.text("立即同步"), { retrySync() }, MoteI18n.text("连接设置"), { showPage(Page.CONNECTION) })
+            content.addView(View(this@MainActivity).apply { setBackgroundColor(MoteUi.divider) }, LinearLayout.LayoutParams(-1, dp(DesignTokens.borderWidth)).apply { bottomMargin = dp(DesignTokens.spaceInline) })
+            text(MoteI18n.text("接收与整理状态"), DesignTokens.fontRow).apply { MoteUi.type(this, DesignTokens.fontRow, medium = true) }
+            homeSyncDetailStatus = text("", DesignTokens.fontSupport, MoteUi.muted)
+            syncStatus = homeSyncDetailStatus
+            homeSyncRate = text("", DesignTokens.fontMeta, MoteUi.muted)
+            content.addView(View(this@MainActivity).apply { setBackgroundColor(MoteUi.divider) }, LinearLayout.LayoutParams(-1, dp(DesignTokens.borderWidth)).apply { topMargin = dp(DesignTokens.spaceInline); bottomMargin = dp(DesignTokens.spaceInline) })
+            centralConnectionTitle = text(MoteI18n.text("正在检查…"), DesignTokens.fontRow).apply { MoteUi.type(this, DesignTokens.fontRow, medium = true) }
+            centralConnectionStatus = text(MoteI18n.text("正在读取保存的连接与同步状态…"), DesignTokens.fontSupport, MoteUi.muted)
+            text(MoteI18n.text("本机保存、中央接收与整理完成分别显示；接收确认不代表已经可以搜索。"), DesignTokens.fontMeta, MoteUi.muted)
+            rowButtons(MoteI18n.text("立即同步"), { retrySync() }, MoteI18n.text("连接设置"), { showPage(Page.CONNECTION) }, leftPrimary = true)
             homeSendAction = button(MoteI18n.text("暂停全部发送")) { changeSendPause() }
             menu(MoteI18n.text("发送中的内容"), MoteI18n.text("查看待发条目、阻塞原因与恢复操作"), "sync") { startActivity(Intent(this@MainActivity, SyncQueueActivity::class.java)) }
             content = previous
         }
+        content = previousContent
+        help(MoteI18n.text("资料如何整理"), MoteI18n.text("文件、屏幕记录与想法，先存本机。连接中央整理后，可搜索和提问。"))
         section(MoteI18n.text("持续来源"))
+        card {
+            text(MoteI18n.text("采集状态"), DesignTokens.fontMeta, MoteUi.accent)
+            captureTitle = text(MoteI18n.text("采集已暂停"), DesignTokens.fontSection)
+            status = text(settings.message(), DesignTokens.fontSupport, MoteUi.muted)
+            captureProgress = ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true; visibility = View.GONE }
+            content.addView(captureProgress)
+            captureAction = button(MoteI18n.text("开始采集"), primary = !settings.enabled) { if (settings.enabled) stopCapture() else startCapture() }
+            text(MoteI18n.text("未连接节点也能采集；随时可以暂停。"), DesignTokens.fontMeta, MoteUi.muted)
+        }
+        text(MoteI18n.text("屏幕与应用活动"), DesignTokens.fontSupport, MoteUi.muted)
         homeScreenAction = button(MoteI18n.text("记录屏幕")) {
             if (settings.enabled && loadedConfig.screenCollectionEnabled) changeRuntimeConfig(loadedConfig.copy(screenCollectionEnabled = false))
             else showPage(Page.PRIVACY)
@@ -276,9 +353,14 @@ class MainActivity : MoteActivity() {
         homeSourceList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(homeSourceList)
         menu(MoteI18n.text("来源管理"), MoteI18n.text("逐个查看范围、暂停或重新授权"), "folder") { startActivity(Intent(this, SourcesActivity::class.java)) }
         section(MoteI18n.text("最近内容"))
-        todaySummary = text(local.imageLabel(), 12, MoteUi.muted)
-        homeRecentList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(homeRecentList)
+        todaySummary = text(local.imageLabel(), DesignTokens.fontMeta, MoteUi.muted)
+        totalsStatus = text(MoteI18n.text("正在读取统计…"), DesignTokens.fontMeta, MoteUi.muted)
+        homeRecentList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; tag = "home-recent-content" }; content.addView(homeRecentList)
         button(MoteI18n.text("查看全部内容")) { showPage(Page.LIBRARY) }
+        section(MoteI18n.text("中央工作台"))
+        menu(MoteI18n.text("全部功能与设置"), MoteI18n.text("连接中央后，查看完整资料库、记忆、洞察与处理进度。"), "library") {
+            startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "overview").putExtra("featureGuide", true))
+        }
     }
 
     internal fun addContent(action: MoteAddAction) {
@@ -325,12 +407,12 @@ class MainActivity : MoteActivity() {
                     }
                 }
             }
-            val captures = applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 3).getJSONArray("items")
+            val captures = applicationContext.queue().capturePage("1970-01-01T00:00:00Z", java.time.Instant.now().plusSeconds(1).toString(), limit = 3, source = "").getJSONArray("items")
             Triple(sources, captures, applicationContext.localFileContents(3))
         }) { result ->
             result.onSuccess { (sources, captures, files) ->
                 homeSourceList.removeAllViews(); homeRecentList.removeAllViews()
-                if (sources.none { it.first.syncContinuously }) homeSourceList.addView(TextView(this).apply { text = MoteI18n.text("尚未添加文件夹。添加后可在这里查看范围和状态。"); textSize = 13f; setTextColor(MoteUi.muted) })
+                if (sources.none { it.first.syncContinuously }) homeSourceList.addView(TextView(this).apply { text = MoteI18n.text("尚未添加文件夹。添加后可在这里查看范围和状态。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted) })
                 sources.filter { it.first.syncContinuously }.forEach { (source, state) ->
                     addContentRow(homeSourceList, source.name, LocalContentPresentation.sourceStatus(source, state) + state.optString("folderProgress").takeIf { it.isNotBlank() }?.let { "\n" + it }.orEmpty(), "source:" + source.id) {
                         startActivity(Intent(this, SourcesActivity::class.java).putExtra("sourceId", source.id))
@@ -338,45 +420,62 @@ class MainActivity : MoteActivity() {
                 }
                 files.forEach { row -> addFileRow(homeRecentList, row) }
                 for (index in 0 until captures.length()) addCaptureRow(homeRecentList, captures.getJSONObject(index))
-                if (files.isEmpty() && captures.length() == 0) homeRecentList.addView(TextView(this).apply { text = MoteI18n.text("还没有内容。选一个动作，留下第一份资料。"); textSize = 13f; setTextColor(MoteUi.muted) })
+                if (files.isEmpty() && captures.length() == 0) homeRecentList.addView(TextView(this).apply { text = MoteI18n.text("还没有内容。选一个动作，留下第一份资料。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted) })
             }.onFailure { todaySummary.text = MoteI18n.text("资料暂不可读取，请稍后重试。") }
         }
     }
 
-    private fun addContentRow(parent: LinearLayout, title: String, detail: String, identity: String, action: () -> Unit) {
+    private fun addContentRow(parent: LinearLayout, title: String, detail: String, identity: String, icon: String = "library", provenance: String = "", action: () -> Unit) {
         parent.addView(LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 14)
-            setPadding(dp(16), dp(15), dp(16), dp(15)); isFocusable = true; contentDescription = title; tag = identity
-            addView(TextView(this@MainActivity).apply { text = title; textSize = 16f; setTextColor(MoteUi.ink) })
-            addView(TextView(this@MainActivity).apply { text = detail; textSize = 12f; maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; setTextColor(MoteUi.muted); setPadding(0, dp(7), 0, 0) })
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.TOP
+            background = MoteUi.clickable(this@MainActivity)
+            setPadding(dp(12), dp(14), dp(12), dp(14)); isFocusable = true; contentDescription = listOf(title, provenance, detail).filter { it.isNotBlank() }.joinToString("，"); tag = identity
+            addView(ImageView(this@MainActivity).apply {
+                setImageDrawable(MoteNavigationIcon(this@MainActivity, icon, true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+                background = MoteUi.shape(this@MainActivity, MoteUi.tint, DesignTokens.radiusIndicator, false); setPadding(dp(4), dp(4), dp(4), dp(4))
+            }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(12); topMargin = dp(2) })
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(TextView(this@MainActivity).apply { text = title; MoteUi.type(this, DesignTokens.fontRow); setTextColor(MoteUi.ink); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) })
+                if (provenance.isNotBlank()) addView(TextView(this@MainActivity).apply { text = provenance; MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.muted); setPadding(0, dp(5), 0, 0) })
+                addView(TextView(this@MainActivity).apply { text = detail; MoteUi.type(this, DesignTokens.fontSupport); maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; setTextColor(if (identity.startsWith("library-record:")) MoteUi.ink else MoteUi.muted); setPadding(0, dp(9), 0, 0); setLineSpacing(0f, 1.25f) })
+            }, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; setTextColor(MoteUi.accent); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(8) })
             setOnClickListener { action() }
         }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
     }
     private fun addFileRow(parent: LinearLayout, row: org.json.JSONObject) {
-        addContentRow(parent, row.getJSONObject("candidate").optString("title"), LocalContentPresentation.fileStatus(row), "file-content:" + row.getString("sourceId")) {
+        addContentRow(parent, row.getJSONObject("candidate").optString("title"), LocalContentPresentation.fileStatus(row), "file-content:" + row.getString("sourceId"), "import", row.optString("sourceName")) {
             startActivity(Intent(this, FileContentActivity::class.java).putExtra("sourceId", row.getString("sourceId")).putExtra("externalId", row.getJSONObject("candidate").getString("externalId")))
         }
     }
     private fun addCaptureRow(parent: LinearLayout, item: org.json.JSONObject) {
         val title = item.optString("appName").ifBlank { if (item.optString("source") == "note") MoteI18n.text("随手记") else MoteI18n.text("采集记录") }
-        addContentRow(parent, title, item.optString("capturedAt") + " · " + item.optString("textPreview"), "library-record:" + item.getString("id")) {
+        val note = item.optString("source") == "note"
+        val timestamp = runCatching { java.time.format.DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.SHORT).withLocale(resources.configuration.locales[0]).withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.parse(item.getString("capturedAt"))) }.getOrDefault(item.optString("capturedAt"))
+        val kind = MoteI18n.text(if (note) "随手记" else "采集记录")
+        val provenance = if (title == kind) timestamp else "$kind · $timestamp"
+        addContentRow(parent, title, item.optString("textPreview"), "library-record:" + item.getString("id"), if (note) "notes" else "capture", provenance) {
             startActivity(Intent(this, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")).putExtra("recordSource", item.optString("source")).putExtra("recordDate", java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString()))
         }
     }
 
     private fun buildLibrary() {
-        page(Page.LIBRARY, MoteI18n.text("所有资料，在一处浏览和找回"))
+        page(Page.LIBRARY, null)
+        val pageContent = content
+        val index = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        pageContent.addView(index, LinearLayout.LayoutParams(-1, -2)); content = index
         val scope = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         scope.addView(TextView(this).apply {
-            text = MoteI18n.text("本机保留"); textSize = 14f; gravity = Gravity.CENTER; minHeight = dp(50)
-            isSelected = true; isFocusable = true; setTextColor(Color.WHITE); background = MoteUi.shape(this@MainActivity, MoteUi.accent, 24)
+            text = MoteI18n.text("本机保留"); MoteUi.type(this, DesignTokens.fontAction, medium = true); gravity = Gravity.CENTER; minHeight = dp(DesignTokens.controlHeight)
+            isSelected = true; isFocusable = true; setTextColor(MoteUi.accent); background = MoteUi.shape(this@MainActivity, MoteUi.tint, MoteUi.actionRadius)
             setPadding(dp(12), dp(12), dp(12), dp(12))
         }, LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = dp(8) })
         scope.addView(MoteUi.button(Button(this).apply {
             text = MoteI18n.text("中央归档"); setOnClickListener { openCentral("archive") }
-        }).apply { background = MoteUi.clickable(this@MainActivity, Color.WHITE, 24) }, LinearLayout.LayoutParams(0, -2, 1f))
+        }).apply { background = MoteUi.clickable(this@MainActivity, Color.WHITE, MoteUi.actionRadius) }, LinearLayout.LayoutParams(0, -2, 1f))
         content.addView(scope, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
-        text(MoteI18n.text("本机保留的记录，离线也能查看；同步后的完整资料在中央资料库中。"), 12, MoteUi.muted)
+        text(MoteI18n.text("本机保留的记录，离线也能查看；同步后的完整资料在中央资料库中。"), DesignTokens.fontMeta, MoteUi.muted)
         val types = listOf("" to "全部记录", "file" to "文件", "screen" to "截图", "ui_page" to "页面内容采集", "note" to "随手记", "notification" to "通知", "media" to "媒体播放状态", "activity" to "应用活动", "device_event" to "设备事件")
         val selector = Spinner(this).apply {
             contentDescription = MoteI18n.text("资料类型")
@@ -390,9 +489,11 @@ class MainActivity : MoteActivity() {
                 if (source != librarySource) { librarySource = source; loadLocalLibrary() }
             }
         }
-        localLibraryStatus = text(MoteI18n.text("正在读取…"), 13, MoteUi.muted)
+        localLibraryStatus = text(MoteI18n.text("正在读取…"), DesignTokens.fontSupport, MoteUi.muted)
         localLibraryList = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(localLibraryList)
         button(MoteI18n.text("按日期浏览更多记录")) { startActivity(Intent(this, CaptureRecordsActivity::class.java)) }
+        help(MoteI18n.text("查看记录说明"), MoteI18n.text("所有资料，在一处浏览和找回") + "\n\n" + MoteI18n.text("本机保留的记录，离线也能查看；同步后的完整资料在中央资料库中。"))
+        content = pageContent
     }
     private fun openCentral(page: String) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", page)) }
 
@@ -413,16 +514,7 @@ class MainActivity : MoteActivity() {
                     if (items.length() == 0 && files.isEmpty()) list.addView(TextView(this).apply { text = MoteI18n.text("这里还没有内容。点击添加，选择文件、屏幕或随手记。"); setTextColor(MoteUi.muted); setPadding(0, dp(20), 0, dp(20)) })
                     for (i in 0 until items.length()) {
                         val item = items.getJSONObject(i)
-                        val title = item.optString("appName").ifBlank { MoteI18n.text("采集记录") }
-                        list.addView(LinearLayout(this).apply {
-                            orientation = LinearLayout.VERTICAL; background = MoteUi.clickable(this@MainActivity, Color.WHITE, 12)
-                            setPadding(dp(16), dp(16), dp(16), dp(16)); isFocusable = true
-                            contentDescription = title; tag = "library-record:" + item.getString("id")
-                            addView(TextView(this@MainActivity).apply { text = title; textSize = 16f; setTextColor(MoteUi.ink) })
-                            addView(TextView(this@MainActivity).apply { text = item.optString("capturedAt"); textSize = 12f; setTextColor(MoteUi.muted); setPadding(0, dp(7), 0, dp(7)) })
-                            item.optString("textPreview").takeIf { it.isNotBlank() }?.let { preview -> addView(TextView(this@MainActivity).apply { text = preview; textSize = 13f; maxLines = 3; setTextColor(MoteUi.muted) }) }
-                            setOnClickListener { startActivity(Intent(this@MainActivity, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")).putExtra("recordSource", item.optString("source")).putExtra("recordDate", java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).toLocalDate().toString())) }
-                        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+                        addCaptureRow(list, item)
                     }
                 }.onFailure { label.text = MoteI18n.text("资料暂不可读取，请稍后重试。") }
             }
@@ -430,69 +522,44 @@ class MainActivity : MoteActivity() {
         }
     }
 
-    private fun buildOverview() {
-        page(Page.SETTINGS, MoteI18n.text("本机采集、隐私与同步，各自可控"))
-        card(MoteUi.tint) {
-            text(MoteI18n.text("此刻的 Mote"), 12, MoteUi.accent)
-            captureTitle = text(MoteI18n.text("采集已暂停"), 26)
-            status = text(settings.message(), 14, MoteUi.muted)
-            captureProgress = ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true; visibility = View.GONE }
-            content.addView(captureProgress)
-            captureAction = button(MoteI18n.text("开始采集"), true) { if (settings.enabled) stopCapture() else startCapture() }
-            text(MoteI18n.text("未连接节点也能采集；随时可以暂停。"), 12, MoteUi.muted)
-        }
-        section(MoteI18n.text("中央节点"))
-        card {
-            text(MoteI18n.text("中央节点连接"), 12, MoteUi.accent)
-            centralConnectionTitle = text(MoteI18n.text("正在检查…"), 19)
-            centralConnectionStatus = text(MoteI18n.text("正在读取保存的连接与同步状态…"), 13, MoteUi.muted)
-            button(MoteI18n.text("连接设置")) { showPage(Page.CONNECTION) }
-        }
-        section(MoteI18n.text("同步状态"))
-        card {
-            syncStatus = text(MoteI18n.text("正在读取同步状态…"), 14)
-            rowButtons(MoteI18n.text("立即同步"), { retrySync() }, MoteI18n.text("待上传队列"), { startActivity(Intent(this, SyncQueueActivity::class.java)) })
-        }
-        section(MoteI18n.text("本机记录"))
-        totalsStatus = text(MoteI18n.text("正在读取统计…"), 15)
-    }
-
     private fun buildSettings() {
-        menu(if (MoteI18n.language() == "en") "Language" else "界面语言", "中文 / English", "settings") {
-            val choices = arrayOf(if (MoteI18n.language() == "en") "System default" else "跟随系统", "中文", "English")
-            val values = listOf("system", "zh-CN", "en")
-            MoteDialogBuilder(this).setTitle(if (MoteI18n.language() == "en") "Language" else "界面语言")
-                .setSingleChoiceItems(choices, values.indexOf(MoteI18n.preference())) { dialog, index ->
-                    MoteI18n.select(this, values[index]); dialog.dismiss(); recreate()
-                }.setNegativeButton(android.R.string.cancel, null).show()
-        }
-
+        page(Page.SETTINGS, MoteI18n.text("本机采集、隐私与同步，各自可控"))
         section(MoteI18n.text("记录与保护"))
-
-
-        menu(MoteI18n.text("连接与同步"), MoteI18n.text("中央节点、设备名称与上传网络"), "sync") { showPage(Page.CONNECTION) }
-
-
+        menuGroup {
+            menu(MoteI18n.text("连接与同步"), MoteI18n.text("中央节点、设备名称与上传网络"), "sync") { showPage(Page.CONNECTION) }
+            menu(MoteI18n.text("权限与后台运行"), MoteI18n.text("系统授权、电池优化与自启动"), "shield") { showPage(Page.PERMISSIONS) }
+        }
         section(MoteI18n.text("应用"))
-        menu(MoteI18n.text("插件"), MoteI18n.text("安装、运行与记忆方案"), "settings") { openCentral("plugins") }
-        menu(MoteI18n.text("权限与后台运行"), MoteI18n.text("系统授权、电池优化与自启动"), "settings") { showPage(Page.PERMISSIONS) }
-        menu(MoteI18n.text("关于与更新"), MoteI18n.text("版本信息、应用更新与开发者选项"), "info") { showPage(Page.ABOUT) }
-        menu(MoteI18n.text("反馈"), MoteI18n.text("前往 GitHub，可附图片或诊断包"), "note") { openFeedback() }
+        menuGroup {
+            menu(if (MoteI18n.language() == "en") "Language" else "界面语言", "中文 / English", "language") {
+                val choices = arrayOf(if (MoteI18n.language() == "en") "System default" else "跟随系统", "中文", "English")
+                val values = listOf("system", "zh-CN", "en")
+                MoteDialogBuilder(this).setTitle(if (MoteI18n.language() == "en") "Language" else "界面语言")
+                    .setSingleChoiceItems(choices, values.indexOf(MoteI18n.preference())) { dialog, index ->
+                        MoteI18n.select(this, values[index]); dialog.dismiss(); recreate()
+                    }.setNegativeButton(android.R.string.cancel, null).show()
+            }
+            menu(MoteI18n.text("插件"), MoteI18n.text("安装、运行与记忆方案"), "plugin") { openCentral("plugins") }
+            menu(MoteI18n.text("关于与更新"), MoteI18n.text("版本信息、应用更新与开发者选项"), "info") { showPage(Page.ABOUT) }
+            menu(MoteI18n.text("反馈"), MoteI18n.text("前往 GitHub，可附图片或诊断包"), "note") { openFeedback() }
+        }
         val advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         val advancedToggle = button(MoteI18n.text("高级与维护")) {
             advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE
         }; advancedToggle.contentDescription = MoteI18n.text("展开或收起高级与维护")
         content.addView(advanced)
         val owner = content; content = advanced
-        menu(MoteI18n.text("采集与存储"), MoteI18n.text("采样频率、图像质量与电量策略"), "capture") { showPage(Page.CAPTURE) }
-        menu(MoteI18n.text("本机存储"), MoteI18n.text("保留时间、空间上限与保存位置"), "folder") { showPage(Page.STORAGE) }
-        menu(MoteI18n.text("统计中心"), MoteI18n.text("按日期和文件类型查看空间占用"), "chart") { startActivity(Intent(this, StorageStatisticsActivity::class.java)) }
-        menu(MoteI18n.text("采集与存储详情"), MoteI18n.text("查看累计结果、队列与使用空间"), "chart") { startActivity(Intent(this, ActivityStatsActivity::class.java)) }
-        menu(MoteI18n.text("导入与导出"), MoteI18n.text("迁移配置、备份与恢复本机记录"), "folder") { startActivity(Intent(this, BackupActivity::class.java)) }
-        menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "settings") { showPage(Page.DEVELOPER) }
-        menu(MoteI18n.text("资料库管理"), MoteI18n.text("模型、存储、处理任务与对外授权"), "settings") { openCentral("about") }
+        menuGroup {
+            menu(MoteI18n.text("采集与存储"), MoteI18n.text("采样频率、图像质量与电量策略"), "capture") { showPage(Page.CAPTURE) }
+            menu(MoteI18n.text("本机存储"), MoteI18n.text("保留时间、空间上限与保存位置"), "folder") { showPage(Page.STORAGE) }
+            menu(MoteI18n.text("统计中心"), MoteI18n.text("按日期和文件类型查看空间占用"), "chart") { startActivity(Intent(this, StorageStatisticsActivity::class.java)) }
+            menu(MoteI18n.text("采集与存储详情"), MoteI18n.text("查看累计结果、队列与使用空间"), "chart") { startActivity(Intent(this, ActivityStatsActivity::class.java)) }
+            menu(MoteI18n.text("导入与导出"), MoteI18n.text("迁移配置、备份与恢复本机记录"), "folder") { startActivity(Intent(this, BackupActivity::class.java)) }
+            menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "code") { showPage(Page.DEVELOPER) }
+            menu(MoteI18n.text("资料库管理"), MoteI18n.text("模型、存储、记忆、洞察等中央功能"), "settings") { openCentral("about") }
+        }
         content = owner
-        text(MoteI18n.text("修改后请保存，再切换页面。"), 12, MoteUi.muted)
+        text(MoteI18n.text("修改后请保存，再切换页面。"), DesignTokens.fontMeta, MoteUi.muted)
     }
 
     private fun openFeedback() {
@@ -513,8 +580,8 @@ class MainActivity : MoteActivity() {
         menu(MoteI18n.text("按应用配置"), MoteI18n.text("应用范围、版本字段与截图回退"), "shield") { showPage(Page.PRIVACY) }
         menu(MoteI18n.text("日历与文件"), MoteI18n.text("连接日历、选择文件或授权目录"), "folder") { startActivity(Intent(this, SourcesActivity::class.java)) }
         card(MoteUi.tint) {
-            text(MoteI18n.text("只连接你选择的内容"), 17)
-            text(MoteI18n.text("日历和文件只在主动授权后读取；你可以为每个来源调整同步范围和保留方式。"), 14, MoteUi.muted)
+            text(MoteI18n.text("只连接你选择的内容"), DesignTokens.fontSection)
+            text(MoteI18n.text("日历和文件只在主动授权后读取；你可以为每个来源调整同步范围和保留方式。"), DesignTokens.fontBody, MoteUi.muted)
         }
     }
 
@@ -523,7 +590,7 @@ class MainActivity : MoteActivity() {
         section(MoteI18n.text("中央节点"))
         menu(MoteI18n.text("扫码或导入邀请"), MoteI18n.text("推荐使用中央节点生成的一次性邀请"), "sync") { discardPageDraft(); startActivity(Intent(this, ConnectionActivity::class.java)) }
         section(MoteI18n.text("节点与设备"))
-        connectionSummary = text("", 13, MoteUi.muted)
+        connectionSummary = text("", DesignTokens.fontSupport, MoteUi.muted)
         server = field(MoteI18n.text("节点 URL（可留空，仅在本机记录）"), config.server, "https://mote.example.com", InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI)
         token = field(MoteI18n.text("访问令牌（未连接时可留空）"), "", MoteI18n.text("建议通过邀请获取本设备凭据"), InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD)
         fun showTokenField() {
@@ -544,9 +611,9 @@ class MainActivity : MoteActivity() {
             }
         })
         name = field(MoteI18n.text("设备名称"), config.deviceName, MoteI18n.text("我的 K90 Pro Max"))
-        text(MoteI18n.text("中央节点可在电脑、NAS 或服务器部署。手机的 localhost 指手机本身；跨设备请填写局域网 IP 或 HTTPS 域名。"), 13, MoteUi.muted)
-        text(MoteI18n.text("登录一次即可使用问答、资料库和同步等所有中央功能。"), 13, MoteUi.muted)
-        val verification = text("", 13, MoteUi.muted)
+        text(MoteI18n.text("中央节点可在电脑、NAS 或服务器部署。手机的 localhost 指手机本身；跨设备请填写局域网 IP 或 HTTPS 域名。"), DesignTokens.fontSupport, MoteUi.muted)
+        help(MoteI18n.text("连接说明"), MoteI18n.text("登录一次即可使用问答、资料库和同步等所有中央功能。"))
+        val verification = text("", DesignTokens.fontSupport, MoteUi.muted)
         button(MoteI18n.text("验证已保存的采集连接")) {
             if (applyingSettings || uiTask.busy) return@button
             uiTask.start(MoteI18n.text("正在测试节点和设备凭据…"), { verification.text = it }, {
@@ -564,14 +631,14 @@ class MainActivity : MoteActivity() {
                 else startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "overview"))
             }
         }
-        button(MoteI18n.text("立即重试同步")) { retrySync() }
+        button(MoteI18n.text("立即重试同步"), true) { retrySync() }
         menu(MoteI18n.text("待上传队列"), MoteI18n.text("查看采集、随手记和来源待发条目"), "sync") { startActivity(Intent(this, SyncQueueActivity::class.java)) }
         menu(MoteI18n.text("同步与恢复"), MoteI18n.text("两端检查、补传与冲突处理"), "sync") { startActivity(Intent(this, SyncRecoveryActivity::class.java)) }
         val advancedSync = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         button(MoteI18n.text("高级同步设置")) { advancedSync.visibility = if (advancedSync.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         content.addView(advancedSync); val connectionContent = content; content = advancedSync
         section(MoteI18n.text("统一同步方式"))
-        text(MoteI18n.text("所有采集记录和来源文件共用以下同步设置。"), 13, MoteUi.muted)
+        text(MoteI18n.text("所有采集记录和来源文件共用以下同步设置。"), DesignTokens.fontSupport, MoteUi.muted)
         syncMode = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("实时同步"), MoteI18n.text("定时同步"), MoteI18n.text("批量同步"), MoteI18n.text("仅手动同步")))
             setSelection(syncModes.indexOf(config.syncMode).coerceAtLeast(0))
@@ -586,7 +653,7 @@ class MainActivity : MoteActivity() {
         wifi = check(MoteI18n.text("仅非计费 Wi-Fi 同步"), config.wifiOnly)
         syncChargingOnly = check(MoteI18n.text("仅充电时同步"), config.syncChargingOnly)
         syncBatteryNotLow = check(MoteI18n.text("低电量时暂停同步"), config.syncBatteryNotLow)
-        text(MoteI18n.text("适用于记录、来源文件和 OCR 结果。立即同步与全量补传也遵守这些条件；低电量由系统判定。"), 13, MoteUi.muted)
+        text(MoteI18n.text("适用于记录、来源文件和 OCR 结果。立即同步与全量补传也遵守这些条件；低电量由系统判定。"), DesignTokens.fontSupport, MoteUi.muted)
         content = connectionContent
     }
 
@@ -599,7 +666,7 @@ class MainActivity : MoteActivity() {
         help(MoteI18n.text("通知与设备事件说明"), MoteI18n.text("通知与设备事件可独立开启，通过系统通知服务观察，按同步策略上传。通知遵循应用规则：仅活动不读取正文，不记录会完全跳过。系统可能隐藏敏感内容；熄屏不等同于锁定。"))
         mediaCollectionEnabled = check(MoteI18n.text("采集媒体播放状态（需通知使用权）"), config.mediaCollectionEnabled)
         help(MoteI18n.text("媒体采集说明"), MoteI18n.text("媒体采集可单独开启，在前台、后台和锁屏时观察播放器公开的状态、应用及曲目/章节信息；不录音、不控制播放。普通通知由单独的通知采集开关控制。使用本机页的开始/暂停控制采集。媒体沿用应用隐私规则、电量限制和同步策略；关闭元数据会同时暂停媒体。"))
-        mediaStatus = text(MoteI18n.text("媒体状态正在读取…"), 13, MoteUi.muted)
+        mediaStatus = text(MoteI18n.text("媒体状态正在读取…"), DesignTokens.fontSupport, MoteUi.muted)
         button(MoteI18n.text("授权通知、媒体与设备事件")) { mediaPermission() }
         button(MoteI18n.text("重新授权投屏（已开启的媒体可继续）")) {
             val c = loadedConfig
@@ -625,7 +692,7 @@ class MainActivity : MoteActivity() {
         menu(MoteI18n.text("图片保存位置"), MoteI18n.text("选择应用存储空间并迁移已有记录"), "folder") { startActivity(Intent(this, StorageActivity::class.java)) }
         uploadedRetention = presetNumber(MoteI18n.text("上传后本机保留 / 天（0 为立即清理）"), config.uploadedRetentionDays, "7", 0..365, listOf(0, 1, 7, 14, 30, 90, 365))
         maxQueue = presetNumber(MoteI18n.text("本机存储上限 / MiB"), config.maxQueueMiB, "256", 8..4096, listOf(64, 128, 256, 512, 1024, 2048, 4096))
-        text(MoteI18n.text("中央确认上传后开始计时，到期自动清理本机副本；中央归档继续保留。未上传和冲突记录不会自动删除。"), 13, MoteUi.muted)
+        text(MoteI18n.text("中央确认上传后开始计时，到期自动清理本机副本；中央归档继续保留。未上传和冲突记录不会自动删除。"), DesignTokens.fontSupport, MoteUi.muted)
         menu(MoteI18n.text("导入与导出"), MoteI18n.text("备份配置与本机记录"), "folder") { startActivity(Intent(this, BackupActivity::class.java)) }
     }
     private fun buildProcessing(config: CollectorConfig) {
@@ -633,7 +700,7 @@ class MainActivity : MoteActivity() {
         section(MoteI18n.text("图像质量"))
         jpegQuality = presetNumber(MoteI18n.text("图像质量 · 数值越高清晰度越高"), config.jpegQuality, "75", 40..95, listOf(50, 65, 75, 85, 95))
         captureMaxSide = presetNumber(MoteI18n.text("图片最长边 / px"), config.captureMaxSide, "1280", 640..2560, listOf(640, 960, 1280, 1920, 2560))
-        text(MoteI18n.text("图片去重"), 15)
+        text(MoteI18n.text("图片去重"), DesignTokens.fontBody)
         imageDedupeMode = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("关闭"), MoteI18n.text("精确"), MoteI18n.text("保守"), MoteI18n.text("均衡"), MoteI18n.text("激进")))
             setSelection(imageDedupeModes.indexOf(config.imageDedupeMode).coerceAtLeast(0))
@@ -645,7 +712,7 @@ class MainActivity : MoteActivity() {
 
     private fun buildDiagnostics(config: CollectorConfig) {
         page(Page.DIAGNOSTICS, MoteI18n.text("按需开启诊断，帮助定位采集和同步问题"))
-        technicalStatus = text(MoteI18n.text("正在读取运行状态…"), 13)
+        technicalStatus = text(MoteI18n.text("正在读取运行状态…"), DesignTokens.fontSupport)
         diagnosticEnabled = check(MoteI18n.text("记录数值与事件诊断"), config.diagnosticsEnabled)
         diagnosticInterval = field(MoteI18n.text("诊断采样间隔 / 秒（15–3600）"), config.diagnosticsIntervalSeconds.toString(), "60", InputType.TYPE_CLASS_NUMBER)
         help(MoteI18n.text("数值诊断说明"), MoteI18n.text("仅在应用/采集运行时采样，最多 1440 条。记录整机电量、本机空间、入队/拦截/失败计数、截图隐私审查耗时和上传字节，不包含截图、文字、笔记、令牌或审查理由。电量变化是整机变化，不能归因于 Mote。"))
@@ -661,15 +728,21 @@ class MainActivity : MoteActivity() {
     }
 
     private fun buildNotes() {
-        page(Page.NOTES, MoteI18n.text("为此刻，留下一句话"))
-        menu(MoteI18n.text("图片与语音附件"), MoteI18n.text("在中央随手记中添加附件"), "note") { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "notes")) }
+        page(Page.NOTES, null)
+        val pageContent = content
+        val draft = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@MainActivity, Color.WHITE, MoteUi.readingRadius); setPadding(dp(16), dp(16), dp(16), dp(4)) }
+        pageContent.addView(draft); content = draft
         val app = applicationContext
         val io = QuickNotes.io
         val task = UiTask(this, io, ownsExecutor = false)
         val note = field(MoteI18n.text("正在想什么"), "", MoteI18n.text("记下此刻的想法…"), multiline = true)
-        note.minLines = 7; note.gravity = Gravity.TOP
+        fieldLabels[note]?.visibility = View.GONE
+        note.contentDescription = MoteI18n.text("正在想什么")
+        note.minLines = 4; note.gravity = Gravity.TOP
+        note.background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
+        note.setPadding(0, dp(8), 0, dp(12)); note.setLineSpacing(0f, 1.25f)
         note.filters = arrayOf(android.text.InputFilter.LengthFilter(100000))
-        val progress = text(MoteI18n.text("正在读取草稿…"), 13, MoteUi.muted)
+        val progress = text(MoteI18n.text("正在读取草稿…"), DesignTokens.fontSupport, MoteUi.muted)
         var changingDraft = false
         var readable = false
         var editRevision = 0
@@ -733,12 +806,18 @@ class MainActivity : MoteActivity() {
                     }
                 }.show()
         }
-        text(MoteI18n.text("草稿自动保存在本机，保存后按同步设置上传。正文最多 100000 字符，心情最多 80 字符。"), 13, MoteUi.muted)
+        content = pageContent
+        text(MoteI18n.text("图片与语音附件"), DesignTokens.fontSupport, MoteUi.accent).apply {
+            minHeight = dp(48); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
+            contentDescription = MoteI18n.text("在中央随手记中添加附件")
+            setOnClickListener { openCentral("notes") }
+        }
+        text(MoteI18n.text("草稿自动保存在本机，保存后按同步设置上传。正文最多 100000 字符，心情最多 80 字符。"), DesignTokens.fontSupport, MoteUi.muted)
     }
 
     private fun buildPrivacy(config: CollectorConfig) {
         page(Page.PRIVACY, MoteI18n.text("由你决定，哪些内容可以留下"))
-        text(MoteI18n.text("保存范围后开始，系统权限按需申请。拒绝授权不影响文件和随手记。"), 13, MoteUi.muted)
+        text(MoteI18n.text("保存范围后开始，系统权限按需申请。拒绝授权不影响文件和随手记。"), DesignTokens.fontSupport, MoteUi.muted)
         button(MoteI18n.text("保存范围并开始记录"), true) {
             saveConfig {
                 if (!loadedConfig.screenCollectionEnabled) changeRuntimeConfig(loadedConfig.copy(screenCollectionEnabled = true)) { startCapture() }
@@ -746,14 +825,18 @@ class MainActivity : MoteActivity() {
             }
         }
         section(MoteI18n.text("选择要记录的应用"))
-        text(MoteI18n.text("内容记录：优先提取文章或商品字段，未取得结构化内容时截图。仅应用活动：记录应用与时长。不记录：跳过该应用。隐私过滤不通过时不会回退截图。"), 13, MoteUi.muted)
+        listOf(
+            "内容记录：优先提取文章或商品字段，未取得结构化内容时截图。",
+            "仅应用活动：记录应用与时长。不记录：跳过该应用。",
+            "隐私过滤不通过时不会回退截图。"
+        ).forEach { text(MoteI18n.text(it), DesignTokens.fontSupport, MoteUi.muted) }
         val appRules = AppCollectionRules.parse(config.appCollectionRules)
         appDefault = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("默认：记录截图与内容"), MoteI18n.text("默认：只记应用和时长"), MoteI18n.text("默认：不记录（仅记录单独开启的应用）")))
             setSelection(AppCollectionMode.entries.indexOf(appRules.defaultMode))
         }; content.addView(appDefault, LinearLayout.LayoutParams(-1, dp(56))); track(appDefault, "appDefault")
         appRuleRows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(appRuleRows)
-        text(MoteI18n.text("默认方式适用于没有单独设置的应用，也适用于以后安装的应用。下方显示单独设置；修改后点击保存生效。"), 13, MoteUi.muted)
+        text(MoteI18n.text("默认方式适用于没有单独设置的应用，也适用于以后安装的应用。下方显示单独设置；修改后点击保存生效。"), DesignTokens.fontSupport, MoteUi.muted)
         button(MoteI18n.text("管理应用 · 查看每个应用的记录方式")) { chooseInstalledApp() }
         val regular = content
         val rawRules = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
@@ -777,25 +860,25 @@ class MainActivity : MoteActivity() {
         button(MoteI18n.text("保存并预览"), true) { saveConfig(after = { showCapturePreview(loadedConfig) }) }
         menu(MoteI18n.text("权限与后台运行"), MoteI18n.text("保存后授权，再回本机开始采集"), "settings") { showPage(Page.PERMISSIONS) }
         metadataEnabled = check(MoteI18n.text("上传设备与采集状态元数据"), config.metadataEnabled)
-        text(MoteI18n.text("开启后附带实际系统/机型、采集器版本、语言/时区、电量/充电、网络类型、锁屏与可用空间；不取设备序列号、IMEI、MAC、SSID或定位。关闭只影响新记录和心跳，已入队内容不追溯修改。授权文件来源自身的大小/修改时间不受此开关影响。"), 13)
-        text(MoteI18n.text("没有内置应用黑名单。配置排除后，无法识别应用、多个应用窗口或系统遮挡时暂停。投屏模式需要同时启用无障碍服务才能可靠执行排除；仅使用情况权限不足以保证所有可见窗口。"), 13)
+        text(MoteI18n.text("开启后附带实际系统/机型、采集器版本、语言/时区、电量/充电、网络类型、锁屏与可用空间；不取设备序列号、IMEI、MAC、SSID或定位。关闭只影响新记录和心跳，已入队内容不追溯修改。授权文件来源自身的大小/修改时间不受此开关影响。"), DesignTokens.fontSupport)
+        text(MoteI18n.text("没有内置应用黑名单。配置排除后，无法识别应用、多个应用窗口或系统遮挡时暂停。投屏模式需要同时启用无障碍服务才能可靠执行排除；仅使用情况权限不足以保证所有可见窗口。"), DesignTokens.fontSupport)
         section(MoteI18n.text("页面采集方式"))
-        text(MoteI18n.text("端侧只提取可见字段并轻量合并；中央端负责组织、索引与进一步处理。解析未取得内容时，按已授权范围采集过滤后的截图。"), 13, MoteUi.muted)
-        text(MoteI18n.text("页面模式对所有允许记录内容的应用生效；规则仍按应用和版本匹配。"), 13, MoteUi.muted)
+        text(MoteI18n.text("端侧只提取可见字段并轻量合并；中央端负责组织、索引与进一步处理。解析未取得内容时，按已授权范围采集过滤后的截图。"), DesignTokens.fontSupport, MoteUi.muted)
+        text(MoteI18n.text("页面模式对所有允许记录内容的应用生效；规则仍按应用和版本匹配。"), DesignTokens.fontSupport, MoteUi.muted)
         uiPageMode=Spinner(this).apply {
             adapter=ArrayAdapter(this@MainActivity,android.R.layout.simple_spinner_dropdown_item,listOf(MoteI18n.text("只截图"),MoteI18n.text("页面优先，未取得内容时截图")))
             setSelection(if (config.uiPageMode == "screen_only") 0 else 1)
         }; content.addView(uiPageMode); track(uiPageMode, "uiPageMode")
-        text(MoteI18n.text("按应用版本隔离字段规则。未配置当前版本时回退截图；选择只截图则不会解析页面。投屏模式只支持只截图。"), 13, MoteUi.muted)
+        text(MoteI18n.text("按应用版本隔离字段规则。未配置当前版本时回退截图；选择只截图则不会解析页面。投屏模式只支持只截图。"), DesignTokens.fontSupport, MoteUi.muted)
         val ruleEditor = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         button(MoteI18n.text("高级：查看或编辑全部页面规则")) { ruleEditor.visibility = if (ruleEditor.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         content.addView(ruleEditor)
         val pageOwner = content; content = ruleEditor
         uiPageRules=field(MoteI18n.text("页面规则 JSON"),config.uiPageRules,"[]",multiline=true)
-        text(MoteI18n.text("字段规则需要匹配实际应用版本与控件 ID；配置匹配不代表已经通过真机验证。旧文字规则保留用于查看，不能替代文章或商品字段适配。"), 13, MoteUi.muted)
+        text(MoteI18n.text("字段规则需要匹配实际应用版本与控件 ID；配置匹配不代表已经通过真机验证。旧文字规则保留用于查看，不能替代文章或商品字段适配。"), DesignTokens.fontSupport, MoteUi.muted)
         content = pageOwner
         section(MoteI18n.text("固定遮罩"))
-        text(MoteI18n.text("拖动示意图添加矩形；绿色区域会在 OCR 和保存前被遮住。这里不会读取你的屏幕。"), 13, MoteUi.muted)
+        text(MoteI18n.text("拖动示意图添加矩形；绿色区域会在 OCR 和保存前被遮住。这里不会读取你的屏幕。"), DesignTokens.fontSupport, MoteUi.muted)
         val maskFields = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         val mainContent = content; content.addView(maskFields); content = maskFields
         masks = field(MoteI18n.text("固定遮罩（每行 left,top,right,bottom）"), config.masks, "0,0,1,0.08", multiline = true)
@@ -818,20 +901,20 @@ class MainActivity : MoteActivity() {
             setSelection(listOf("hold", "drop", "allow").indexOf(config.uploadGate.failureAction).coerceAtLeast(0))
         }
         content.addView(gateFailure); track(gateFailure, "gateFailure")
-        text(MoteI18n.text("文字规则适用于截图、页面和通知；截图文字仅在本机用于审查，完整内容识别由中央执行。待复核记录请在同步恢复中逐条处理；更改规则不会自动释放旧记录。"), 13)
+        text(MoteI18n.text("文字规则适用于截图、页面和通知；截图文字仅在本机用于审查，完整内容识别由中央执行。待复核记录请在同步恢复中逐条处理；更改规则不会自动释放旧记录。"), DesignTokens.fontSupport)
         val reviewSettings = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         val privacyContent = content
         button(MoteI18n.text("高级：截图文字隐私审查")) { reviewSettings.visibility = if (reviewSettings.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
         privacyContent.addView(reviewSettings); content = reviewSettings
-        text(MoteI18n.text("截图文字隐私审查引擎"), 15)
+        text(MoteI18n.text("截图文字隐私审查引擎"), DesignTokens.fontBody)
         ocrMode = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("中文与拉丁文（单引擎）"), MoteI18n.text("仅拉丁文"), MoteI18n.text("双引擎（高质量）")))
             setSelection(OcrPolicy.modes.indexOf(config.ocrMode).coerceAtLeast(0))
         }
         content.addView(ocrMode); track(ocrMode, "ocrMode")
         ocrAppModes = field(MoteI18n.text("按应用指定隐私审查引擎（JSON）"), config.ocrAppModes, "{}")
-        text(MoteI18n.text("可填写包名到 chinese、latin 或 dual 的映射；未指定的应用使用上方模式。"), 13, MoteUi.muted)
-        text(MoteI18n.text("仅在截图文字规则需要时运行本机识别。识别结果仅用于隐私审查，不保存、不上传；完整内容识别由中央执行。"), 13, MoteUi.muted)
+        text(MoteI18n.text("可填写包名到 chinese、latin 或 dual 的映射；未指定的应用使用上方模式。"), DesignTokens.fontSupport, MoteUi.muted)
+        text(MoteI18n.text("仅在截图文字规则需要时运行本机识别。识别结果仅用于隐私审查，不保存、不上传；完整内容识别由中央执行。"), DesignTokens.fontSupport, MoteUi.muted)
         content = privacyContent
     }
 
@@ -849,20 +932,20 @@ class MainActivity : MoteActivity() {
         section(MoteI18n.text("调试连接"))
         http = check(MoteI18n.text("允许调试局域网 HTTP（明文，仅私有 IP）"), config.debugHttp).apply { isEnabled = BuildConfig.DEBUG }
         section(MoteI18n.text("构建与运行环境"))
-        text(MoteI18n.text("环境：{0} · {1}\n私有数据目录：{2}", BuildConfig.MOTE_PROFILE, packageName, noBackupFilesDir.absolutePath), 12, MoteUi.muted)
-        if (BuildConfig.MOTE_PROFILE == "dev") text(MoteI18n.text("开发版与日常 Mote 独立安装，权限、设备 ID、令牌、草稿、队列和模型互不共享。默认测试端口 47842；模拟器使用 adb reverse tcp:47842 tcp:47842。"), 13, MoteUi.muted)
+        text(MoteI18n.text("环境：{0} · {1}\n私有数据目录：{2}", BuildConfig.MOTE_PROFILE, packageName, noBackupFilesDir.absolutePath), DesignTokens.fontMeta, MoteUi.muted)
+        if (BuildConfig.MOTE_PROFILE == "dev") text(MoteI18n.text("开发版与日常 Mote 独立安装，权限、设备 ID、令牌、草稿、队列和模型互不共享。默认测试端口 47842；模拟器使用 adb reverse tcp:47842 tcp:47842。"), DesignTokens.fontSupport, MoteUi.muted)
     }
 
     private fun buildAbout() {
         page(Page.ABOUT, MoteI18n.text("Mote · 让经历留有线索"))
         card(MoteUi.tint) {
             text("Mote", 30)
-            text(MoteI18n.text("你的个人上下文档案"), 15)
-            text(MoteI18n.text("版本 {0}", BuildConfig.VERSION_NAME), 13, MoteUi.muted)
+            text(MoteI18n.text("你的个人上下文档案"), DesignTokens.fontBody)
+            text(MoteI18n.text("版本 {0}", BuildConfig.VERSION_NAME), DesignTokens.fontSupport, MoteUi.muted)
         }
         menu(MoteI18n.text("应用更新"), MoteI18n.text("检查新版本与安装更新"), "sync") { startActivity(Intent(this, AppUpdatesActivity::class.java)) }
         menu(MoteI18n.text("开发者选项"), MoteI18n.text("诊断、采集排查与构建信息"), "settings") { showPage(Page.DEVELOPER) }
-        text("Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT} · ${Build.MANUFACTURER} ${Build.MODEL}", 12, MoteUi.muted)
+        text("Android ${Build.VERSION.RELEASE} / API ${Build.VERSION.SDK_INT} · ${Build.MANUFACTURER} ${Build.MODEL}", DesignTokens.fontMeta, MoteUi.muted)
     }
 
     private fun buildPermissions() {
@@ -894,7 +977,7 @@ class MainActivity : MoteActivity() {
     }
 
     private fun permissionStatus(name: String) {
-        permissionBadges[name] = text(MoteI18n.text(name) + " · " + MoteI18n.text("正在检查系统权限…"), 14).apply {
+        permissionBadges[name] = text(MoteI18n.text(name) + " · " + MoteI18n.text("正在检查系统权限…"), DesignTokens.fontBody).apply {
             setPadding(dp(12), dp(9), dp(12), dp(9))
             layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { bottomMargin = dp(5) }
         }
@@ -1200,6 +1283,7 @@ class MainActivity : MoteActivity() {
         val action = if (settings.enabled) MoteI18n.text("暂停采集") else MoteI18n.text("开始采集")
         if (captureAction.text != action) {
             captureAction.text = action
+            MoteUi.button(captureAction, primary = !settings.enabled)
             captureTitle.text = if (settings.enabled) MoteI18n.text("正在本机采集") else MoteI18n.text("采集已暂停")
             captureProgress.visibility = if (settings.enabled) View.VISIBLE else View.GONE
             status.text = settings.message()
@@ -1220,15 +1304,19 @@ class MainActivity : MoteActivity() {
                 result.onSuccess { snapshot ->
                     snapshot.config?.let { if (!applyingSettings && it != loadedConfig) reloadSettings(it) }
                     if (::homeSyncStatus.isInitialized) {
-                        val summary = snapshot.sync.lineSequence().take(2).toList()
-                        homeSyncStatus.text = if (loadedConfig.syncPaused) listOf(summary.firstOrNull().orEmpty(), MoteI18n.text("已暂停全部发送 · 本机继续保存")).joinToString("\n") else summary.joinToString("\n")
-                        homeSyncDetailStatus.text = snapshot.sync
+                        homeSyncStatus.text = snapshot.syncQueue + "\n" + if (loadedConfig.syncPaused) MoteI18n.text("已暂停全部发送 · 本机继续保存") else snapshot.syncPolicy
+                        homeSyncDetailStatus.text = snapshot.syncFacts
+                        homeSyncRate.text = MoteI18n.text("上传速率") + " · " + UploadMeter.label()
                         homeSendAction.text = MoteI18n.text(if (loadedConfig.syncPaused) "恢复全部发送" else "暂停全部发送")
                         homeScreenAction.text = MoteI18n.text(if (settings.enabled && loadedConfig.screenCollectionEnabled) "暂停屏幕记录" else "记录屏幕")
                     }
-                    captureTitle.text = snapshot.title; captureAction.text = snapshot.action
+                    captureTitle.text = snapshot.title
+                    if (captureAction.text != snapshot.action) {
+                        captureAction.text = snapshot.action
+                        MoteUi.button(captureAction, primary = !settings.enabled)
+                    }
                     captureProgress.visibility = if (settings.enabled) View.VISIBLE else View.GONE
-                    status.text = snapshot.status; syncStatus.text = snapshot.sync + "\n" + MoteI18n.text("上传速率") + " · " + UploadMeter.label()
+                    status.text = snapshot.status
                     totalsStatus.text = snapshot.totals; if (::technicalStatus.isInitialized) technicalStatus.text = snapshot.technical
                     centralConnectionTitle.text = snapshot.connectionTitle; centralConnectionStatus.text = snapshot.connection
                     if (::connectionSummary.isInitialized) connectionSummary.text = snapshot.connection
@@ -1277,8 +1365,11 @@ class MainActivity : MoteActivity() {
             .put("lastAcknowledgedAt", settings.lastAcknowledgedAt() ?: org.json.JSONObject.NULL)
             .put("syncState", when { c == null || !c.hasSyncConnection() -> "unconfigured"; local.error != null || queueStats == null || queueStats.blocked > 0 -> "blocked"; else -> settings.syncState().takeIf { it in setOf("idle", "waiting", "uploading", "error", "paused") } ?: "waiting" })
             .put("errorCode", when { local.error != null || queueStats == null -> "local_state_unavailable"; queueStats.blocked > 0 -> "retained_conflict"; else -> org.json.JSONObject.NULL }))
-        val syncText = "${pending?.let { MoteI18n.text("待同步 {0} 条", it) } ?: MoteI18n.text("队列暂不可读取")}${bytes?.let { " · ${"%.1f".format(it)} MiB" } ?: ""}\n${syncMessage}\n${NativeStatus.summary(nativeFacts)}"
-        val totalsText = local.imageLabel() + (if (QueueStorage.maintaining) MoteI18n.text(" · 后台整理中，可正常采集") else "") + "\n" + if (stats == null) MoteI18n.text("累计统计暂不可读取") else MoteI18n.text("本周期累计页面 {0}    截图 {1}    活动 {2}    媒体 {3}    随手记 {4}\n本周期已同步 {5} 条", stats.optLong("PAGE_QUEUED"), stats.optLong("SCREEN_QUEUED"), stats.optLong("ACTIVITY_QUEUED"), stats.optLong("MEDIA_QUEUED"), stats.optLong("NOTE_QUEUED"), stats.optLong("PAGE_ACK") + stats.optLong("SCREEN_ACK") + stats.optLong("NOTE_ACK") + stats.optLong("ACTIVITY_ACK") + stats.optLong("MEDIA_ACK") + stats.optLong("SYSTEM_EVENT_ACK"))
+        val syncQueue = "${pending?.let { MoteI18n.text("待同步 {0} 条", it) } ?: MoteI18n.text("队列暂不可读取")}${bytes?.let { " · ${"%.1f".format(it)} MiB" } ?: ""}"
+        val syncFacts = NativeStatus.summary(nativeFacts)
+        val syncText = "$syncQueue\n$syncMessage\n$syncFacts"
+        val periodTotals = if (stats == null) MoteI18n.text("累计统计暂不可读取") else MoteI18n.text("本周期累计页面 {0}    截图 {1}    活动 {2}    媒体 {3}    随手记 {4}\n本周期已同步 {5} 条", stats.optLong("PAGE_QUEUED"), stats.optLong("SCREEN_QUEUED"), stats.optLong("ACTIVITY_QUEUED"), stats.optLong("MEDIA_QUEUED"), stats.optLong("NOTE_QUEUED"), stats.optLong("PAGE_ACK") + stats.optLong("SCREEN_ACK") + stats.optLong("NOTE_ACK") + stats.optLong("ACTIVITY_ACK") + stats.optLong("MEDIA_ACK") + stats.optLong("SYSTEM_EVENT_ACK"))
+        val totalsText = periodTotals + if (QueueStorage.maintaining) MoteI18n.text(" · 后台整理中，可正常采集") else ""
         val technicalText = MoteI18n.text("{0}\n{1}\n{2}\n{3}\n无障碍 {4} · 使用情况 {5}\n最近采集 {6}", state, totals, syncText, settings.uploadStatus(), if (CaptureAccessibilityService.connected) MoteI18n.text("已连接") else MoteI18n.text("未连接"), if (ForegroundApps.usageAllowed(this)) MoteI18n.text("已授权") else MoteI18n.text("未授权"), settings.lastCapture() ?: MoteI18n.text("无")) + "\n" + MoteI18n.text("屏幕采集：{0}", settings.screenStatus())
         val connectionState = c?.takeIf { it.hasSyncConnection() }?.let { ConnectionClient(this).status() } ?: "unchecked"
         val connectionTitle = when {
@@ -1296,7 +1387,7 @@ class MainActivity : MoteActivity() {
             else -> MoteI18n.text("节点：{0} · 最近一次验证成功", c.server)
         }
         val captureState = state + if (c?.screenCollectionEnabled == true && settings.enabled) "\n" + MoteI18n.text("屏幕采集：{0}", settings.screenStatus()) else ""
-        return StatusSnapshot(title, action, captureState, syncText, totalsText, technicalText, connectionTitle, connectionText, MediaCollection.statusLabel(this), c)
+        return StatusSnapshot(title, action, captureState, syncText, totalsText, technicalText, connectionTitle, connectionText, MediaCollection.statusLabel(this), c, syncQueue, syncMessage, syncFacts)
     }
     private fun mediaPermission() {
         MoteDialogBuilder(this).setTitle(MoteI18n.text("媒体播放状态授权"))
@@ -1369,27 +1460,24 @@ class MainActivity : MoteActivity() {
     private fun dp(value: Int) = moteDp(value)
 
     private fun help(title: String, message: String) {
-        text(title + "  ›", 13, MoteUi.accent).apply {
-            minHeight = dp(44); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
+        text(title + "  ›", DesignTokens.fontAction, MoteUi.accent).apply {
+            minHeight = dp(DesignTokens.controlHeight); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
             setOnClickListener { MoteDialogBuilder(this@MainActivity).setTitle(title).setMessage(message).setPositiveButton(MoteI18n.text("知道了"), null).show() }
         }
     }
-    private fun page(page: Page, subtitle: String) {
+    private fun page(page: Page, subtitle: String?) {
         buildingPage = page
-        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(28)) }
+        content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(DesignTokens.spacePage), dp(if (page == Page.OVERVIEW) 4 else DesignTokens.spacePage), dp(DesignTokens.spacePage), dp(28)) }
         val scroll = ScrollView(this).apply {
             isFillViewport = true; clipToPadding = false; visibility = View.GONE
             addView(content); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         }
         pages[page] = scroll; pagesHost.addView(scroll, FrameLayout.LayoutParams(-1, -1))
-        if (page.parent != null) {
-            text("‹  " + MoteI18n.text("返回上级"), 14, MoteUi.accent).apply {
-                minHeight = dp(44); gravity = Gravity.CENTER_VERTICAL; isFocusable = true
-                contentDescription = MoteI18n.text("返回{0}", Page.valueOf(page.parent).title); setOnClickListener { showPage(Page.valueOf(page.parent)) }
-            }
-        } else text("MOTE", 11, MoteUi.accent).apply { letterSpacing = .18f }
-        text(page.title, 30).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) }
-        text(subtitle, 14, MoteUi.muted).apply { isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null }
+        if (page == Page.OVERVIEW) text(MoteI18n.text("个人资料库"), DesignTokens.fontTitleMobile).apply { typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL); (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(4) }
+        subtitle?.let { text(it, DesignTokens.fontSupport, MoteUi.muted).apply {
+            isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null
+            if (page == Page.OVERVIEW) (layoutParams as LinearLayout.LayoutParams).bottomMargin = dp(DesignTokens.spaceInline)
+        } }
     }
 
     private fun ensurePage(page: Page) {
@@ -1401,7 +1489,10 @@ class MainActivity : MoteActivity() {
                 Page.OVERVIEW -> buildToday()
                 Page.LIBRARY -> buildLibrary()
                 Page.ASK -> {
-                    val central = CentralContent(this, centralState, openLocalPage = { showPage(Page.valueOf(it)) })
+                    val central = CentralContent(this, centralState, openLocalPage = {
+                        val next = Page.valueOf(it)
+                        showPage(next, connectionEntryOrigin = if (next == Page.CONNECTION) ConnectionOrigin.LOCAL_ASK else null)
+                    })
                     centralContent = central
                     central.root.visibility = View.GONE
                     central.root.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -1410,21 +1501,22 @@ class MainActivity : MoteActivity() {
                 }
                 Page.NOTES -> buildNotes()
                 Page.SOURCES -> buildSources()
-                Page.SETTINGS -> { buildOverview(); buildSettings() }
+                Page.SETTINGS -> buildSettings()
                 Page.PERMISSIONS -> buildPermissions()
                 Page.ABOUT -> buildAbout()
                 else -> buildSettingsPage(page, loadedConfig)
             }
+            pages[page]?.let(MoteUi::styleSelects)
             baseline = baseline + controlValues(controls.filter { controlPages[it] == page })
         } finally { initializing = wasInitializing }
     }
 
-    private fun showPage(page: Page, discardConfirmed: Boolean = false) {
+    private fun showPage(page: Page, discardConfirmed: Boolean = false, connectionEntryOrigin: ConnectionOrigin? = null) {
         if (!initializing && page != currentPage && !discardConfirmed && pageControlValues().any { (key, value) -> baseline[key] != value && (!applyingSettings || pendingSubmission?.get(key) != value) }) {
             MoteDialogBuilder(this).setTitle(MoteI18n.text("有未保存的更改"))
                 .setMessage(MoteI18n.text("离开并丢弃修改？"))
                 .setNegativeButton(MoteI18n.text("继续编辑"), null)
-                .setPositiveButton(MoteI18n.text("丢弃修改")) { _, _ -> showPage(page, true) }.show()
+                .setPositiveButton(MoteI18n.text("丢弃修改")) { _, _ -> showPage(page, true, connectionEntryOrigin) }.show()
             return
         }
         ensurePage(page)
@@ -1435,13 +1527,28 @@ class MainActivity : MoteActivity() {
         if (currentPage != page) {
             if (pageControlValues().isNotEmpty()) discardPageDraft()
             else pages[currentPage]?.let { scrollPositions[currentPage] = it.scrollY }
+            connectionOrigin = if (page == Page.CONNECTION) connectionEntryOrigin else null
             if (currentPage == Page.ASK) centralContent?.pause()
             currentFocus?.clearFocus()
             getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(pagesHost.windowToken, 0)
         }
         val enteringAsk = page == Page.ASK && currentPage != page
         currentPage = page
+        headerTitle.text = if (page == Page.OVERVIEW) "Mote" else page.title
+        headerTitle.setPadding(0, dp(DesignTokens.spaceInline), dp(DesignTokens.spaceInline), dp(DesignTokens.spaceInline))
+        homeHeader.setPadding(dp(if (page == Page.OVERVIEW) DesignTokens.spacePage else 0), 0, dp(DesignTokens.spacePage), 0)
+        headerBackAction.tag = "local-back:${page.name}"
+        headerBackAction.visibility = if (page.parent != null) View.VISIBLE else View.GONE
+        headerBackAction.contentDescription = if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.CENTRAL_CALLER)
+            MoteI18n.text("返回上一页") else pageBackTarget(page)?.let { MoteI18n.text("返回{0}", it.title) }
         homeHeader.visibility = if (page == Page.ASK) View.GONE else View.VISIBLE
+        headerAddAction.visibility = if (page.belongsToSettings()) View.GONE else View.VISIBLE
+        headerSettingsAction.visibility = if (page == Page.SETTINGS) View.GONE else View.VISIBLE
+        val compactHeader = page != Page.OVERVIEW && (resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f)
+        homeHeader.orientation = if (compactHeader) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL
+        headerHeading.layoutParams = if (compactHeader) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f)
+        headerActions.layoutParams = LinearLayout.LayoutParams(if (compactHeader) -1 else -2, -2)
+        headerActions.visibility = if (headerAddAction.visibility == View.GONE && headerSettingsAction.visibility == View.GONE) View.GONE else View.VISIBLE
         pages.forEach { (key, view) ->
             view.visibility = if (key == page) View.VISIBLE else View.GONE
             view.importantForAccessibility = if (key == page) View.IMPORTANT_FOR_ACCESSIBILITY_AUTO else View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
@@ -1456,7 +1563,9 @@ class MainActivity : MoteActivity() {
 
     override fun onNewIntent(next: Intent) {
         super.onNewIntent(next); intent = next
-        if (::pagesHost.isInitialized) next.getStringExtra("page")?.let { value -> Page.entries.find { it.name == value } }?.let { showPage(it) }
+        if (::pagesHost.isInitialized) next.getStringExtra("page")?.let { value -> Page.entries.find { it.name == value } }?.let {
+            showPage(it, connectionEntryOrigin = if (it == Page.CONNECTION && next.getBooleanExtra("returnToCentral", false)) ConnectionOrigin.CENTRAL_CALLER else null)
+        }
     }
 
     // API 33+ uses the native OnBackInvokedDispatcher registered in onCreate; this is the API 29–32 fallback.
@@ -1468,15 +1577,38 @@ class MainActivity : MoteActivity() {
         if (initializing) { finish(); return }
         when {
             currentPage == Page.ASK && centralContent?.back() == true -> Unit
-            currentPage.parent != null -> showPage(Page.valueOf(currentPage.parent!!))
+            currentPage.parent != null -> navigatePageBack(currentPage)
             currentPage != Page.OVERVIEW -> showPage(Page.OVERVIEW)
             else -> finish()
         }
     }
 
+    private fun pageBackTarget(page: Page): Page? = if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.LOCAL_ASK) Page.ASK
+        else page.parent?.let(Page::valueOf)
+
+    private fun navigatePageBack(page: Page) {
+        if (page == Page.CONNECTION && connectionOrigin == ConnectionOrigin.CENTRAL_CALLER) returnConnectionToCaller()
+        else pageBackTarget(page)?.let { showPage(it) }
+    }
+
+    /** A real caller return uses the same unsaved-settings confirmation as page navigation. */
+    private fun returnConnectionToCaller(discardConfirmed: Boolean = false) {
+        if (!discardConfirmed && pageControlValues().any { (key, value) -> baseline[key] != value && (!applyingSettings || pendingSubmission?.get(key) != value) }) {
+            MoteDialogBuilder(this).setTitle(MoteI18n.text("有未保存的更改"))
+                .setMessage(MoteI18n.text("离开并丢弃修改？"))
+                .setNegativeButton(MoteI18n.text("继续编辑"), null)
+                .setPositiveButton(MoteI18n.text("丢弃修改")) { _, _ -> returnConnectionToCaller(true) }.show()
+            return
+        }
+        if (pageControlValues().isNotEmpty()) discardPageDraft()
+        connectionOrigin = null
+        finish()
+    }
+
     override fun onSaveInstanceState(outState: Bundle) {
         outState.putString("page", currentPage.name)
         outState.putString("permissionReturnPage", permissionReturnPage.name)
+        if (currentPage == Page.CONNECTION) connectionOrigin?.let { outState.putString("connectionOrigin", it.name) }
         pageRuleImportTarget?.let { (id, version) -> outState.putString("pageRuleImportApp", id); outState.putString("pageRuleImportVersion", version) }
         outState.putBundle("centralContent", Bundle().also { state ->
             centralContent?.saveState(state) ?: centralState?.let(state::putAll)
@@ -1584,20 +1716,29 @@ class MainActivity : MoteActivity() {
     }
 
     private fun text(value: String, size: Int, color: Int = MoteUi.ink): TextView = TextView(this).apply {
-        text = value; textSize = size.toFloat(); setTextColor(color); setLineSpacing(dp(4).toFloat(), 1f)
+        text = value; MoteUi.type(this, size); setTextColor(color)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }
         content.addView(this)
     }
     private fun section(value: String) {
-        text(value, 16).apply {
+        text(value, DesignTokens.fontSection).apply {
             typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-            setPadding(0, dp(16), 0, dp(2))
+            (layoutParams as LinearLayout.LayoutParams).apply { topMargin = dp(DesignTokens.spaceItem); bottomMargin = dp(4) }
         }
     }
-    private fun card(color: Int = Color.WHITE, body: () -> Unit) {
+    private fun menuGroup(body: () -> Unit) {
+        val group = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@MainActivity)
+            setPadding(dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth), dp(DesignTokens.borderWidth))
+        }
+        content.addView(group, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(DesignTokens.spaceItem) })
+        val previous = activeMenuGroup; activeMenuGroup = group
+        try { body() } finally { activeMenuGroup = previous }
+    }
+    private fun card(color: Int = DesignTokens.surface, body: () -> Unit) {
         val parent = content
         val card = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(18), dp(18), dp(18), dp(8)); background = MoteUi.shape(this@MainActivity, color, 22)
+            orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(16), dp(16), dp(8)); background = MoteUi.shape(this@MainActivity, color)
         }
         parent.addView(card, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8); bottomMargin = dp(14) })
         content = card
@@ -1605,19 +1746,22 @@ class MainActivity : MoteActivity() {
     }
     private fun menu(label: String, description: String, icon: String, action: () -> Unit) {
         val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(15), dp(16), dp(15), dp(16)); background = MoteUi.clickable(this@MainActivity)
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; minimumHeight = dp(DesignTokens.controlHeight)
+            setPadding(dp(DesignTokens.spacePanel), dp(DesignTokens.spaceInline), dp(DesignTokens.spacePanel), dp(DesignTokens.spaceInline))
+            background = if (activeMenuGroup == null) MoteUi.clickable(this@MainActivity) else MoteUi.clickable(this@MainActivity, Color.TRANSPARENT, 0, false)
             tag = "menu:$label"; isFocusable = true; contentDescription = "$label，$description"; setOnClickListener { action() }
         }
         row.addView(ImageView(this).apply {
-            setImageDrawable(MoteNavigationIcon(this@MainActivity, icon, true)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
-        }, LinearLayout.LayoutParams(dp(25), dp(25)).apply { marginEnd = dp(14) })
+            setImageDrawable(MoteNavigationIcon(this@MainActivity, icon, false)); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        }, LinearLayout.LayoutParams(dp(24), dp(24)).apply { marginEnd = dp(DesignTokens.spaceInline) })
         val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS }
-        labels.addView(TextView(this).apply { text = label; textSize = 15f; setTextColor(MoteUi.ink); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) })
-        labels.addView(TextView(this).apply { text = description; textSize = 12f; setTextColor(MoteUi.muted); setPadding(0, dp(5), 0, 0); setLineSpacing(dp(3).toFloat(), 1f) })
+        labels.addView(TextView(this).apply { text = label; MoteUi.type(this, DesignTokens.fontRow, medium = true); setTextColor(MoteUi.ink) })
+        labels.addView(TextView(this).apply { text = description; MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, dp(4), 0, 0) })
         row.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
         row.addView(TextView(this).apply { text = "›"; textSize = 25f; setTextColor(MoteUi.muted); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(18), -2))
-        content.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) })
+        val group = activeMenuGroup
+        if (group != null && group.childCount > 0) group.addView(View(this).apply { setBackgroundColor(MoteUi.divider) }, LinearLayout.LayoutParams(-1, dp(DesignTokens.borderWidth)).apply { marginStart = dp(48); marginEnd = dp(DesignTokens.spacePanel) })
+        (group ?: content).addView(row, LinearLayout.LayoutParams(-1, -2).apply { if (group == null) bottomMargin = dp(DesignTokens.spaceItem) })
     }
     private fun renderAppRules() {
         if (!::appPolicies.isInitialized || !::excludes.isInitialized) return
@@ -1626,7 +1770,7 @@ class MainActivity : MoteActivity() {
         if (rules == null) { appRuleRows.addView(TextView(this).apply { text = MoteI18n.text("手工规则格式有误，请展开高级规则修正。") }); return }
         val excluded = PrivacyRules.exclusions(excludes.text.toString())
         val ids = (rules.apps.keys + excluded).sorted()
-        if (ids.isEmpty()) appRuleRows.addView(TextView(this).apply { text = MoteI18n.text("尚无单独规则，所有应用沿用上方设置。"); textSize = 13f; setTextColor(MoteUi.muted); setPadding(0, dp(10), 0, dp(14)) })
+        if (ids.isEmpty()) appRuleRows.addView(TextView(this).apply { text = MoteI18n.text("尚无单独规则，所有应用沿用上方设置。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, dp(10), 0, dp(14)) })
         ids.forEach { id ->
             val label = runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(id, 0)).toString() }.getOrDefault(id)
             val mode = if (id in excluded) AppCollectionMode.OFF else rules.apps.getValue(id)
@@ -1656,9 +1800,9 @@ class MainActivity : MoteActivity() {
     private fun showAppConfiguration(id: String, label: String, onChanged: () -> Unit = {}) {
         val version = appVersion(id)
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(12)) }
-        fun detail(value: String) { body.addView(TextView(this).apply { text = value; textSize = 13f; setTextColor(MoteUi.muted); setPadding(0, 0, 0, dp(12)) }) }
+        fun detail(value: String) { body.addView(TextView(this).apply { text = value; MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, 0, 0, dp(12)) }) }
         detail(MoteI18n.text("{0}\n安装版本：{1}", id, version.ifBlank { MoteI18n.text("不可读取") }))
-        val summary = TextView(this).apply { textSize = 14f; setTextColor(MoteUi.ink); setPadding(0, 0, 0, dp(12)) }; body.addView(summary)
+        val summary = TextView(this).apply { MoteUi.type(this, DesignTokens.fontBody); setTextColor(MoteUi.ink); setPadding(0, 0, 0, dp(12)) }; body.addView(summary)
         detail(MoteI18n.text("页面模式对所有允许记录内容的应用生效；规则仍按应用和版本匹配。"))
         fun refresh() {
             val candidate = runCatching { draft() }.getOrNull() ?: return
@@ -1696,10 +1840,10 @@ class MainActivity : MoteActivity() {
     private fun editAppPageRule(id: String, version: String, onChanged: () -> Unit) {
         if (version.isBlank()) { toast(MoteI18n.text("无法读取应用版本，请重新选择已安装应用")); return }
         val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(12)) }
-        form.addView(TextView(this).apply { text = MoteI18n.text("为 {0} · {1} 映射实际控件 ID。只提取可见文字，不点击、不滚动、不猜测链接。", appLabel(id), version); textSize = 13f; setTextColor(MoteUi.muted) })
+        form.addView(TextView(this).apply { text = MoteI18n.text("为 {0} · {1} 映射实际控件 ID。只提取可见文字，不点击、不滚动、不猜测链接。", appLabel(id), version); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted) })
         val kind = Spinner(this).apply { adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("文章"), MoteI18n.text("商品"))) }; form.addView(kind)
         fun input(label: String, hint: String): EditText {
-            form.addView(TextView(this).apply { text = label; textSize = 13f; setPadding(0, dp(10), 0, 0) })
+            form.addView(TextView(this).apply { text = label; MoteUi.type(this, DesignTokens.fontSupport); setPadding(0, dp(10), 0, 0) })
             return MoteUi.field(EditText(this)).apply { this.hint = hint; setSingleLine(); inputType = InputType.TYPE_CLASS_TEXT; form.addView(this) }
         }
         val title = input(MoteI18n.text("标题控件 ID（必填）"), "$id:id/title")
@@ -1710,7 +1854,7 @@ class MainActivity : MoteActivity() {
         val activity = input(MoteI18n.text("页面 Activity（可选）"), "$id.DetailActivity")
         val region = input(MoteI18n.text("内容区块控件 ID（可选）"), "$id:id/content")
         val repeat = input(MoteI18n.text("重复商品卡片控件 ID（可选）"), "$id:id/card")
-        val error = TextView(this).apply { setTextColor(DesignTokens.warning); textSize = 13f }; form.addView(error)
+        val error = TextView(this).apply { setTextColor(DesignTokens.warning); MoteUi.type(this, DesignTokens.fontSupport) }; form.addView(error)
         val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("配置此版本字段"))
             .setView(ScrollView(this).apply { addView(form) }).setNegativeButton(MoteI18n.text("取消"), null)
             .setPositiveButton(MoteI18n.text("加入配置草稿"), null).create()
@@ -1728,7 +1872,7 @@ class MainActivity : MoteActivity() {
     }
     private fun showCapturePreview(config: CollectorConfig, firstStart: Boolean = false, appId: String? = null) {
         val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(8), dp(20), dp(12)) }
-        fun detail(value: String) { body.addView(TextView(this).apply { text = value; textSize = 14f; setTextColor(MoteUi.ink); setPadding(0, 0, 0, dp(14)) }) }
+        fun detail(value: String) { body.addView(TextView(this).apply { text = value; MoteUi.type(this, DesignTokens.fontBody); setTextColor(MoteUi.ink); setPadding(0, 0, 0, dp(14)) }) }
         detail(MoteI18n.text("这里是生成的格式示例，不读取你的屏幕。实际记录由已授权应用、版本规则和可见内容决定。"))
         val ids = appId?.let(::setOf) ?: (config.collectionRules.apps.keys + PrivacyRules.exclusions(config.excludedPackages)).sorted().toSet()
         if (appId == null) detail(MoteI18n.text("未单独设置的应用：{0}\n屏幕与应用活动：{1}", appModeLabel(config.collectionRules.defaultMode), if (config.screenCollectionEnabled) MoteI18n.text("已选择") else MoteI18n.text("未选择")))
@@ -1748,7 +1892,7 @@ class MainActivity : MoteActivity() {
         detail(if (config.hasSyncConnection()) MoteI18n.text("记录按已保存的同步策略发送到：{0}", config.server) else MoteI18n.text("尚未连接中央节点，记录只保存在本机"))
         val builder = MoteDialogBuilder(this).setTitle(MoteI18n.text("开启前预览"))
             .setView(ScrollView(this).apply { addView(body) })
-            .setNegativeButton(if (firstStart) MoteI18n.text("暂不开始") else MoteI18n.text("关闭"), null)
+            .setNegativeButton(if (firstStart) MoteI18n.text("暂不开始") else MoteI18n.text("关闭预览"), null)
         if (firstStart) builder.setPositiveButton(MoteI18n.text("按此范围开始")) { _, _ ->
             if (config != loadedConfig) { toast(MoteI18n.text("配置已变化，请重新预览后开始")); return@setPositiveButton }
             runCatching { settings.capturePreviewAccepted() }.onSuccess { startConfiguredCapture() }.onFailure { toast(it.message ?: MoteI18n.text("无法持久保存设置，请检查存储空间")) }
@@ -1865,7 +2009,7 @@ class MainActivity : MoteActivity() {
     }
 
     private fun field(label: String, value: String, placeholder: String, type: Int = InputType.TYPE_CLASS_TEXT, multiline: Boolean = false): EditText {
-        val labelView = text(label, 13, MoteUi.muted)
+        val labelView = text(label, DesignTokens.fontSupport, MoteUi.muted)
         return MoteUi.field(EditText(this)).apply {
             fieldLabels[this] = labelView
             MoteUi.textInput(this, type, multiline)
@@ -1876,7 +2020,7 @@ class MainActivity : MoteActivity() {
         }
     }
     private fun check(label: String, selected: Boolean) = CheckBox(this).apply {
-        text = label; isChecked = selected; textSize = 14f; minHeight = dp(52); setTextColor(MoteUi.ink)
+        text = label; isChecked = selected; MoteUi.type(this, DesignTokens.fontBody); minHeight = dp(52); setTextColor(MoteUi.ink)
         buttonTintList = android.content.res.ColorStateList.valueOf(MoteUi.accent)
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }; content.addView(this); track(this, label)
     }
@@ -1884,11 +2028,12 @@ class MainActivity : MoteActivity() {
         text = label; setOnClickListener { action() }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }; content.addView(this)
     }
-    private fun rowButtons(left: String, leftAction: () -> Unit, right: String, rightAction: () -> Unit) {
-        val row = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
+    private fun rowButtons(left: String, leftAction: () -> Unit, right: String, rightAction: () -> Unit, leftPrimary: Boolean = false) {
+        val compact = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
+        val row = LinearLayout(this).apply { orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         listOf(left to leftAction, right to rightAction).forEachIndexed { index, (label, action) ->
-            row.addView(MoteUi.button(Button(this)).apply { text = label; setOnClickListener { action() } },
-                LinearLayout.LayoutParams(0, -2, 1f).apply { if (index == 0) marginEnd = dp(8) })
+            row.addView(MoteUi.button(Button(this), primary = index == 0 && leftPrimary).apply { text = label; setOnClickListener { action() } },
+                (if (compact) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f)).apply { if (index == 0) { if (compact) bottomMargin = dp(DesignTokens.spaceInline) else marginEnd = dp(DesignTokens.spaceInline) } })
         }
         content.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })
     }

@@ -22,8 +22,7 @@ class LogViewerActivity : MoteActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        val body = moteDetailPage()
-        text(body, MoteI18n.text("日志中心"), 27f)
+        val body = moteDetailPage(title = MoteI18n.text("日志中心"))
         text(body, MoteI18n.text("mote.log · 时间 / 级别 / 线程 / 模块 / 事件"), 14f)
         status = text(body, MoteI18n.text("正在读取日志…"), 13f)
         refresh = Button(this).apply { text = MoteI18n.text("刷新日志"); setOnClickListener { load() } }; body.addView(refresh)

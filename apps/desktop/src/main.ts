@@ -231,15 +231,16 @@ else {
       setTimeout(() => window?.webContents.reload(), 20);
       return languageState();
     });
+    // Retain authored keys: a renderer locale change does not restart the main process.
     const operationLabels: Record<string, string> = {
-      'mote:configure': moteText("正在应用设置或迁移存储"), 'mote:import-queue': moteText("正在导入队列"), 'mote:export-queue': moteText("正在导出队列"),
-      'mote:source-sync': moteText("正在扫描并同步来源"),
-      'mote:retry': moteText("正在同步待发记录"), 'mote:source-files': moteText("正在连接文件来源"), 'mote:source-update': moteText("正在保存来源设置"),
-      'mote:source-calendar': moteText("正在连接日历"), 'mote:calendar-authorize': moteText("正在读取日历授权"), 'mote:installed-applications': moteText("正在读取应用列表"),
-      'mote:support-export': moteText("正在导出支持包"), 'mote:diagnostics-export': moteText("正在导出诊断"), 'mote:diagnostics-sample': moteText("正在读取诊断"),
-      'mote:connection-confirm': moteText("正在连接中央节点"), 'mote:connection-test': moteText("正在测试连接"),
-      'mote:update-download': moteText("正在下载更新"), 'mote:update-install': moteText("正在准备安装更新"), 'mote:update-check': moteText("正在检查更新"),
-      'mote:start': moteText("正在准备采集"), 'mote:stop': moteText("正在结束当前采集"), 'mote:note': moteText("正在保存随手记"),
+      'mote:configure': "正在应用设置或迁移存储", 'mote:import-queue': "正在导入队列", 'mote:export-queue': "正在导出队列",
+      'mote:source-sync': "正在扫描并同步来源",
+      'mote:retry': "正在同步待发记录", 'mote:source-files': "正在连接文件来源", 'mote:source-update': "正在保存来源设置",
+      'mote:source-calendar': "正在连接日历", 'mote:calendar-authorize': "正在读取日历授权", 'mote:installed-applications': "正在读取应用列表",
+      'mote:support-export': "正在导出支持包", 'mote:diagnostics-export': "正在导出诊断", 'mote:diagnostics-sample': "正在读取诊断",
+      'mote:connection-confirm': "正在连接中央节点", 'mote:connection-test': "正在测试连接",
+      'mote:update-download': "正在下载更新", 'mote:update-install': "正在准备安装更新", 'mote:update-check': "正在检查更新",
+      'mote:start': "正在准备采集", 'mote:stop': "正在结束当前采集", 'mote:note': "正在保存随手记",
     };
     const handle = (channel: string, operation: (...args: unknown[]) => unknown) => {
       const stage: EventStage | undefined = ({ 'mote:source-sync': 'SOURCE', 'mote:source-files': 'SOURCE', 'mote:source-calendar': 'SOURCE', 'mote:source-update': 'SOURCE', 'mote:connection-confirm': 'CONNECTION', 'mote:connection-test': 'CONNECTION', 'mote:update-check': 'UPDATE', 'mote:update-download': 'UPDATE', 'mote:update-install': 'UPDATE', 'mote:retry': 'UPLOAD', 'mote:configure': 'CONFIG', 'mote:start': 'CAPTURE', 'mote:stop': 'CAPTURE', 'mote:note': 'NOTE', 'mote:note-draft-update': 'NOTE', 'mote:support-export': 'SUPPORT', 'mote:import-queue': 'QUEUE', 'mote:export-queue': 'QUEUE' } as Record<string, EventStage>)[channel];

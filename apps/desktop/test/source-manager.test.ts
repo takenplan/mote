@@ -208,6 +208,8 @@ it('recovers one-time completion atomically from the outbox when source configur
  await rm(file);await value.sync(true);expect(value.pendingContent()[0].item).toEqual(staged.item);await value.flushPending(new AbortController().signal);expect(server.items).toHaveLength(1);expect(server.items[0].revision).toBe(staged.item.revision);
 });
 
+// 41 durable filesystem imports, loopback ACKs and restart/no-replay checks can
+// exceed the generic fixture deadline; this bound is not a product latency SLA.
 it('more than forty completed one-time imports can be added and restored without replaying their bodies',async()=>{
  const server=await endpoint();let app=await manager(server.url);
  for(let index=0;index<41;index++){
@@ -219,7 +221,7 @@ it('more than forty completed one-time imports can be added and restored without
  app=await manager(server.url);await app.sync(true);
  expect(app.status()).toHaveLength(41);expect(server.items).toHaveLength(received);
  expect(app.status().every(row=>row.pending===0&&Boolean(row.source.importCompletedAt))).toBe(true);
-});
+},45_000);
 
 for(const mode of ['full','lightweight'])it(`rejects retired ${mode} index configuration before opening its pending queue and preserves originals`,async()=>{
  const state=join(directory,'strict-state'),file=join(directory,'generated-private.txt'),config={serverUrl:'http://127.0.0.1:1',token:'generated-token',deviceId:'generated-device'};

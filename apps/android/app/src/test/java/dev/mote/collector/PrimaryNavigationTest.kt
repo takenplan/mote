@@ -4,6 +4,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PrimaryNavigationTest {
+    @Test fun recordAdditionStaysInContentJourneysInsteadOfMaintenance() {
+        for (page in listOf("overview", "actions", "archive", "files", "notes", "ask")) {
+            assertTrue("Record action remains available on $page", MoteNavigation.centralAllowsAdd(page))
+        }
+        for (page in listOf("settings", "connections", "devices", "plugins", "vault", "processing", "developer", "about")) {
+            assertFalse("Maintenance stays focused on $page", MoteNavigation.centralAllowsAdd(page))
+        }
+    }
+
     @Test fun localAndCentralObjectsStayInTheSamePrimaryDestination() {
         assertEquals(MoteNavigation.localTab("LIBRARY"), MoteNavigation.centralTab("archive"))
         assertEquals(MoteNavigation.localTab("NOTES"), MoteNavigation.centralTab("notes"))
@@ -17,8 +26,11 @@ class PrimaryNavigationTest {
             "actions", "agentView", "sources", "devices", "connections", "lark", "statistics", "processing", "plugins", "settings",
             "usage", "vault", "developer", "about", "imports", "help")
         val grouped = MoteNavigation.groups.flatMap { it.pages }
-        assertEquals("Only the conversation has its own primary destination", registered - "ask", grouped.toSet())
+        assertEquals("Ask has its own destination; legacy Coding status is reached contextually", registered - setOf("ask", "coding"), grouped.toSet())
         assertEquals("A capability has one canonical utility menu location", grouped.size, grouped.toSet().size)
+        assertFalse(MoteNavigation.libraryBrowsePages.contains("coding"))
+        assertEquals(MotePrimaryTab.LIBRARY, MoteNavigation.centralTab("coding"))
+        assertEquals("archive", MoteNavigation.centralParent("coding"))
         assertEquals(listOf("首页", "内容", "问一问"), MotePrimaryTab.entries.map { it.titleKey })
     }
 

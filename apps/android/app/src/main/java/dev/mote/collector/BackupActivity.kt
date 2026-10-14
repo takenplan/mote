@@ -24,10 +24,9 @@ class BackupActivity : MoteActivity() {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         includeToken = state?.getBoolean("includeToken") ?: false
         exportOrigin = state?.getString("exportOrigin"); exportGeneration = state?.getLong("exportGeneration") ?: -1L
-        val body = moteDetailPage()
+        val body = moteDetailPage(title = MoteI18n.text("导入与导出"))
         fun text(value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(10), 0, moteDp(10)) }.also(body::addView)
         fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { if (!task.busy) action() } }.also(body::addView)
-        text(MoteI18n.text("导入与导出"), 28f)
         text(MoteI18n.text("客户端配置"), 20f)
         text(MoteI18n.text("迁移采集、应用规则、同步和诊断设置。系统权限和来源文件授权需在新设备重新授予。"))
         secrets = CheckBox(this).apply { text = MoteI18n.text("导出时包含节点令牌（文件为明文，请妥善保管）"); isChecked = includeToken }.also(body::addView)

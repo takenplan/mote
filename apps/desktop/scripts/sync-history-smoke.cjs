@@ -30,7 +30,7 @@ const server = createServer((req, res) => {
   if (path.startsWith('/api/capture-browser/') && record) {if(blockDetail){blockedDetails.push(()=>res.end(JSON.stringify(record)));return;}res.end(JSON.stringify(record)); return; }
   res.statusCode = 410; res.end('{}');
 });
-const timeout = setTimeout(() => { process.stderr.write('Sync history smoke timed out\n'); app.exit(1); }, 60000);
+const timeout = setTimeout(() => { process.stderr.write('Sync history smoke timed out\n'); app.exit(1); }, process.env.MOTE_UI_ROLLOUT_DIALOGS ? 180000 : 60000);
 let finished = false;
 app.on('browser-window-created', (_event, window) => {
   window.webContents.setBackgroundThrottling(false);
@@ -54,7 +54,19 @@ app.on('browser-window-created', (_event, window) => {
       if (source === 'coding' || source === 'file') { const definition = { id: 'generated-source', deviceId: config.deviceId, name: 'Generated source', kind: source === 'coding' ? 'coding-agent' : 'local-files', platform: 'macos', retention: 'snapshot', enabled: true }; const version = { externalId: String(i), revision: 'generated', observedAt: e.capturedAt, title: e.appName, text: e.ocrText, kind: source === 'coding' ? 'message' : 'file', layer: 'snapshot' }; item = sourceHistoryItem(definition, version); e.provenance = { sourceId: definition.id }; }
       history.attempt(run, [item]); history.settle(run, item.key, true, id, 201); archive.set(id, e); items.push(item);
     }
-    history.addBytes(run, 20480); history.finish(run); history.close();
+    history.addBytes(run, 20480); history.finish(run);
+    if(process.env.MOTE_UI_ROLLOUT_DIALOGS==='uploads'){
+      const visualRun=history.begin(config,'manual'),visualItems=[];
+      for(const [i,source] of ['file','coding','screen'].entries()){
+        const e=fixtureEvent(randomUUID(),source,'Generated '+source+' dialog evidence '+i),item=captureHistoryItem(e);history.attempt(visualRun,[item]);history.settle(visualRun,item.key,true,e.id,201);archive.set(e.id,e);visualItems.push(item);
+      }
+      history.addBytes(visualRun,1536);history.finish(visualRun);
+      const retryRun=history.begin(config,'manual'),retryItem=captureHistoryItem(fixtureEvent(randomUUID(),'file','Generated unconfirmed upload'));history.attempt(retryRun,[retryItem]);history.settle(retryRun,retryItem.key,false,undefined,503);history.finish(retryRun);history.close();
+      const outputDirectory=resolve(process.env.MOTE_SYNC_SCREENSHOTS);mkdirSync(outputDirectory,{recursive:true});
+      const manifest=await require('./ui-dialog-rollout.cjs')({window,js,outputDirectory,kind:'uploads',run:visualRun,items:visualItems,archive,retryRun,ipcMain});
+      process.stdout.write(JSON.stringify({dialogReady:true,captures:manifest.captures.length,manifest:join(outputDirectory,'dialog-manifest.json')})+'\n');finished=true;clearTimeout(timeout);await new Promise(r=>server.close(r));app.quit();return;
+    }
+    history.close();
     const out = resolve(process.env.MOTE_SYNC_SCREENSHOTS || join(__dirname, '../release/sync-fixtures')); mkdirSync(out, { recursive: true });
     archive.get(items[22].captureId).memoryMaterialRef='material:generated@r1';
     await js('document.querySelector(".main-nav [data-nav=records]").click()');
@@ -136,6 +148,7 @@ app.on('browser-window-created', (_event, window) => {
     await js('document.querySelector("#upload-preview-refresh").click()');
     await wait('Boolean(document.querySelector("#upload-content-preview [role=alert]"))', 'Expired archive preview');
     assert((await js('document.querySelector("#upload-content-preview").textContent')).includes('清理'));
+    assert(!(await js('document.querySelector("#upload-content-preview [role=alert]").textContent')).includes('Error invoking remote method'), 'Archive error displays the user-facing fact without the IPC transport wrapper');
     assert.equal((await js(`window.mote.syncHistoryContents({runId:${JSON.stringify(run)}})`)).run.received, 23);
     await js('document.querySelector("#upload-content-back").click()');
     await wait('Boolean(document.querySelector("#upload-view-all")) && document.querySelector("#upload-receipt-dialog").open', 'Return to receipt after native close event');
