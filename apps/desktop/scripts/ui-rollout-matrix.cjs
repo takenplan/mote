@@ -167,11 +167,15 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
         await js('document.querySelector("#source-agent-discover").closest("details").open=true;document.querySelector("#source-agent-discover").click();true;');
         await until(()=>js('!document.querySelector("#source-agent-choice").hidden&&!document.querySelector("#source-agent-add").disabled'),'generated agent choices');
         assert.equal(await js('document.querySelector("#source-agent-add").classList.contains("primary")'),true,'Actual selected agent collection is primary');
-        await js('document.querySelector("#source-agent-add").closest(".actions").scrollIntoView({block:"end",behavior:"instant"});true;');await capture('source-agent-role-'+condition,'sources');
+        await js('document.querySelector("#source-agent-add").closest(".actions").scrollIntoView({block:"end",behavior:"instant"});true;');
+        const agentRole=await capture('source-agent-role-'+condition,'sources');
+        if(process.env.MOTE_UI_ROLLOUT_ROLE_COVERAGE==='1')await fillCoverage('source-agent-role-'+condition,'sources',[agentRole]);
         await js('document.querySelector("#source-calendar-connect").click();true;');
         await until(()=>js('!document.querySelector("#source-calendars").hidden&&!document.querySelector("#source-calendar-add").disabled'),'generated calendar choices');
         assert.equal(await js('document.querySelector("#source-calendar-add").classList.contains("primary")'),true,'Actual selected calendar sync is primary');
-        await js('document.querySelector("#source-calendar-add").scrollIntoView({block:"end",behavior:"instant"});true;');await capture('source-picker-role-'+condition,'sources');
+        await js('document.querySelector("#source-calendar-add").scrollIntoView({block:"end",behavior:"instant"});true;');
+        const pickerRole=await capture('source-picker-role-'+condition,'sources');
+        if(process.env.MOTE_UI_ROLLOUT_ROLE_COVERAGE==='1')await fillCoverage('source-picker-role-'+condition,'sources',[pickerRole]);
         await js('document.querySelector("#source-agent-add").click();true;');await until(()=>Promise.resolve(calls.some(c=>c.channel==='mote:source-coding'&&c.args[0]==='codex')),'actual coding IPC');
         await until(()=>js('!document.querySelector("#source-calendar-add").disabled'),'agent action done');
         await js('document.querySelector("#source-calendar-add").click();true;');await until(()=>Promise.resolve(calls.some(c=>c.channel==='mote:source-calendar'&&c.args[0]==='generated-calendar')),'actual calendar IPC');
