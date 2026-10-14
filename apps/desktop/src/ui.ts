@@ -85,7 +85,7 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-na
 byId('workspace-back').addEventListener('click', () => showPage(navigation.backTarget));
 function updateNoteAction(): void {
   const action = byId('note-action');
-  action.classList.add('primary');
+  action.classList.add('secondary');
   action.hidden = currentPage !== 'notes' && (navigation.section === 'settings' || settingsPages.has(currentPage));
 }
 const addDialog=byId<HTMLDialogElement>('add-dialog');
@@ -111,7 +111,15 @@ function updateSettingsHint(): void {
   byId('settings-pending').hidden = !settingsDirty;
   byId('save-hint').textContent = settingsDirty ? moteText("有未保存的修改，离开前会提醒。保存后立即生效。") : currentStatus?.running ? moteText("保存后立即应用；必要时会短暂暂停并自动恢复采集。") : moteText("设置保存后立即生效；采集保持当前开停状态。");
   byId<HTMLButtonElement>('settings-reset').disabled = !settingsDirty || busy;
+  reserveSettingsFooter();
 }
+// Long translated hints and zoom can add a row. Reserve the actual footer rather
+// than a fixed estimate so the final configuration controls remain scrollable.
+const settingsSaveBar = byId('settings-save-bar');
+function reserveSettingsFooter(): void {
+  document.documentElement.style.setProperty('--settings-save-height', `${settingsSaveBar.hidden ? 0 : settingsSaveBar.getBoundingClientRect().height}px`);
+}
+new ResizeObserver(reserveSettingsFooter).observe(settingsSaveBar);
 function markSettingsDirty(): void { settingsDirty = true; updateSettingsHint(); }
 settingsForm.addEventListener('input', markSettingsDirty);
 settingsForm.addEventListener('change', markSettingsDirty);

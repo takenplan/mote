@@ -72,7 +72,7 @@ class UiIterationInstrumentedTest {
                     assertFalse("A note list has no unsupported thumbnail control", parentLabels.contains("Thumbnail view"))
                     assertTrue(labels.contains("Close details")); assertFalse(labels.contains("Off"))
                     assertFalse(labels.contains("Media collection not enabled"))
-                    val round = InstrumentationRegistry.getArguments().getString("uiIterationRound", "5").also { require(it.matches(Regex("baseline|[1-9][0-9]*"))) }
+                    val round = InstrumentationRegistry.getArguments().getString("uiIterationRound", "5").also { require(it.matches(Regex("baseline|rollout|[1-9][0-9]*"))) }
                     val variant = InstrumentationRegistry.getArguments().getString("uiIterationVariant", "default").also { require(it.matches(Regex("default|compact|english|compact-english"))) }
                     val directory = File(context.filesDir, "ui-iterations/round-$round" + if (variant == "default") "" else "/$variant").apply { mkdirs() }
                     GeneratedWindowRendering.save(activity, directory, "note-detail-english", listOf(root))
@@ -111,7 +111,7 @@ class UiIterationInstrumentedTest {
         require(!Settings(context).enabled && Settings(context).read().token.isBlank() && context.queue().depth() == 0)
         require(QuickNotes.draft(context).read() == NoteDraft())
         require(context.localSources().sources().isEmpty())
-        val round = args.getString("uiIterationRound", "baseline").also { require(it.matches(Regex("baseline|[1-9][0-9]*"))) }
+        val round = args.getString("uiIterationRound", "baseline").also { require(it.matches(Regex("baseline|rollout|[1-9][0-9]*"))) }
         val variant = args.getString("uiIterationVariant", "default").also { require(it.matches(Regex("default|compact|english|compact-english"))) }
         val directory = File(context.filesDir, "ui-iterations/round-$round" + if (variant == "default") "" else "/$variant").apply { mkdirs() }
         val previous = MoteI18n.preference()
@@ -292,7 +292,7 @@ class UiIterationInstrumentedTest {
                 val keyboardJourney = args.getString("uiIterationKeyboard") == "true"
                 if (variant in setOf("compact", "compact-english")) assertTrue("Both compact conditions must exercise the real keyboard save journey", keyboardJourney)
                 val fixtureText = if (variant.contains("english")) "Generated context fixture\nThe review kept the original notes with the decision, so the reason can be recovered later." else "生成资料验证\n这次评审把原始记录和决定放在一起，方便以后回看当时的依据。"
-                val keyEventPrefix = "GeneratedIME_R5_${variant.replace('-', '_')}_"
+                val keyEventPrefix = "GeneratedIME_${if (round == "rollout") "Rollout" else "R5"}_${variant.replace('-', '_')}_"
                 val generatedText = if (keyboardJourney) "$keyEventPrefix\n$fixtureText" else fixtureText
                 if (keyboardJourney) {
                     val deadline = SystemClock.elapsedRealtime() + 10000

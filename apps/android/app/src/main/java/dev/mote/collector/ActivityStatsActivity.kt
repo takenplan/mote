@@ -32,8 +32,7 @@ class ActivityStatsActivity : MoteActivity() {
     private lateinit var progress: ProgressBar
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        body = moteDetailPage()
-        text(MoteI18n.text("采集与存储详情"), 27f)
+        body = moteDetailPage(title = MoteI18n.text("采集与存储详情"))
         text(MoteI18n.text("这些统计始终在本机保存，与开发者诊断开关独立。记录固定结果与数字，不记录画面、文字、应用名、邀请或令牌。"))
         inventory = TextView(this).apply { textSize = 15f }; body.addView(inventory)
         summary = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(summary)

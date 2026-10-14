@@ -738,7 +738,7 @@ class MainActivity : MoteActivity() {
         val note = field(MoteI18n.text("正在想什么"), "", MoteI18n.text("记下此刻的想法…"), multiline = true)
         fieldLabels[note]?.visibility = View.GONE
         note.contentDescription = MoteI18n.text("正在想什么")
-        note.minLines = 7; note.gravity = Gravity.TOP
+        note.minLines = 4; note.gravity = Gravity.TOP
         note.background = android.graphics.drawable.ColorDrawable(Color.TRANSPARENT)
         note.setPadding(0, dp(8), 0, dp(12)); note.setLineSpacing(0f, 1.25f)
         note.filters = arrayOf(android.text.InputFilter.LengthFilter(100000))
@@ -825,7 +825,11 @@ class MainActivity : MoteActivity() {
             }
         }
         section(MoteI18n.text("选择要记录的应用"))
-        text(MoteI18n.text("内容记录：优先提取文章或商品字段，未取得结构化内容时截图。仅应用活动：记录应用与时长。不记录：跳过该应用。隐私过滤不通过时不会回退截图。"), DesignTokens.fontSupport, MoteUi.muted)
+        listOf(
+            "内容记录：优先提取文章或商品字段，未取得结构化内容时截图。",
+            "仅应用活动：记录应用与时长。不记录：跳过该应用。",
+            "隐私过滤不通过时不会回退截图。"
+        ).forEach { text(MoteI18n.text(it), DesignTokens.fontSupport, MoteUi.muted) }
         val appRules = AppCollectionRules.parse(config.appCollectionRules)
         appDefault = Spinner(this).apply {
             adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("默认：记录截图与内容"), MoteI18n.text("默认：只记应用和时长"), MoteI18n.text("默认：不记录（仅记录单独开启的应用）")))

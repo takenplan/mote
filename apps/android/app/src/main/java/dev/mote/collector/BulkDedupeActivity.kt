@@ -48,8 +48,7 @@ class BulkDedupeActivity : MoteActivity() {
         pending = savedInstanceState?.getBoolean("pending") ?: false
         selected.addAll(savedInstanceState?.getStringArrayList("selected").orEmpty())
         page = savedInstanceState?.getInt("page") ?: 0
-        body = moteDetailPage()
-        label(body, MoteI18n.text("本机图片批量去重"), 25f)
+        body = moteDetailPage(title = MoteI18n.text("本机图片批量去重"))
         label(body, MoteI18n.text("扫描开始时本机保存的全部采集图片，按时间从早到晚扫描，与上一张保留图比较；相似则标记为重复，否则更新保留图。应用或尺寸变化时重新开始比较，不限制时间间隔。只处理本机副本；已上传中央的记录仍然保留。待决定区独立保存在本机，不参与同步和自动清理，仍占用磁盘空间。"))
         label(body, MoteI18n.text("扫描和处理均在后台执行，可以离开本页。取消后已完成的处理保留，剩余记录留在原处。"))
         modes = Spinner(this).apply {

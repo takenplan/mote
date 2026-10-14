@@ -26,7 +26,9 @@ SCENES = ['home', 'content-populated', 'note', 'home-note-original', 'ask',
 VARIANTS = ['default', 'english', 'compact', 'compact-english']
 
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument('--round', type=int, choices=range(1, 6), required=True)
+candidate = parser.add_mutually_exclusive_group(required=True)
+candidate.add_argument('--round', type=int, choices=range(1, 6))
+candidate.add_argument('--label', choices=['rollout'], help='A new rollout, separate from the historical five candidates')
 parser.add_argument('--output', type=Path, required=True)
 parser.add_argument('--source-commit', required=True)
 parser.add_argument('--serial', choices=['emulator-5582'], default='emulator-5582')
@@ -94,13 +96,17 @@ while time.monotonic() < deadline:
 else:
     raise RuntimeError('Owned headless emulator did not finish booting')
 
-identity = {'sourceCommit': commit, 'round': args.round, 'serial': args.serial,
+identity = {'sourceCommit': commit, 'round': args.round, 'label': args.label or ('R' + str(args.round)), 'serial': args.serial,
             'avd': shell('getprop', 'ro.boot.qemu.avd_name'),
             'fingerprint': shell('getprop', 'ro.build.fingerprint'),
             'generatedOnly': True, 'captureKind': 'application-windows-own-view',
             'systemImePixelsCaptured': False,
             'tokenSha256': source_hashes['packages/shared/design-tokens.json']}
 assert identity['avd'] == AVD and '/emu64a:' in identity['fingerprint'], 'Refusing any other AVD or physical device'
+if args.label == 'rollout':
+    avd_config = (Path.home() / '.android/avd' / (AVD + '.avd/config.ini')).read_text()
+    assert 'hw.camera.back=emulated' in avd_config and 'hw.camera.front=none' in avd_config and 'webcam' not in avd_config
+    identity['cameraBackend'] = {'back': 'emulated', 'front': 'none', 'configSha256': hashlib.sha256(avd_config.encode()).hexdigest()}
 assert shell('getprop', 'ro.build.version.sdk') == '37', 'Expected the known API37 generated-only fixture'
 apks = output / 'apks'; apks.mkdir()
 for key, source, target in [
@@ -138,12 +144,16 @@ for variant in VARIANTS:
     shell('wm', 'size', '1080x2400')
     shell('wm', 'density', '540' if compact else '420')
     shell('settings', 'put', 'system', 'font_scale', '1.3' if compact else '1.0')
-    extras = {'uiIterationFixture': 'true', 'uiIterationRound': args.round, 'uiIterationVariant': variant}
+    extras = {'uiIterationFixture': 'true', 'uiIterationRound': args.label or args.round, 'uiIterationVariant': variant}
     if compact:
         extras['uiIterationKeyboard'] = 'true'
     seconds = instrument('dev.mote.collector.UiIterationInstrumentedTest', extras, output / (variant + '.log'), 3)
     assert 'INSTRUMENTATION_STATUS_CODE: -4' not in (output / (variant + '.log')).read_text(), 'Matrix must not skip generated scenes'
-    archive_path = f'files/ui-iterations/round-{args.round}'
+    archive_path = f'files/ui-iterations/round-{args.label or args.round}'
+    if args.label == 'rollout':
+        instrument('dev.mote.collector.UiRolloutInstrumentedTest',
+                   {'uiIterationFixture': 'true', 'uiIterationRound': args.label, 'uiIterationVariant': variant, 'uiRolloutCameraBackend': 'emulated'},
+                   output / ('rollout-surfaces-' + variant + '.log'), 1)
     archive = adb('exec-out', 'run-as', PACKAGE, 'tar', '-cf', '-', archive_path)
     destination = output / variant; destination.mkdir()
     with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
@@ -164,7 +174,7 @@ for variant in VARIANTS:
         assert metadata['baseWindow']['width'] == 1080 and metadata['baseWindow']['height'] == 2400
         images.append({'path': str(png.relative_to(output)), 'sha256': hashlib.sha256(png.read_bytes()).hexdigest(),
                        'variant': variant, 'scene': png.stem, **metadata})
-    if args.round >= 2:
+    if args.label == 'rollout' or args.round >= 2:
         clear_generated_profile()
         log = output / ('connection-return-' + variant + '.log')
         route_seconds = instrument('dev.mote.collector.ConnectionTaskReturnInstrumentedTest',
@@ -172,7 +182,7 @@ for variant in VARIANTS:
         assert 'INSTRUMENTATION_STATUS_CODE: -4' not in log.read_text(), 'Actual task returns cannot be skipped'
         route_journeys.append({'variant': variant, 'passed': 4, 'skipped': 0, 'elapsedSeconds': route_seconds})
         (output / 'connection-return-results.json').write_text(json.dumps(route_journeys, indent=2))
-    if args.round == 5:
+    if args.label == 'rollout' or args.round == 5:
         clear_generated_profile()
         log = output / ('reader-lifecycle-' + variant + '.log')
         lifecycle_seconds = instrument('dev.mote.collector.CaptureReaderLifecycleInstrumentedTest',

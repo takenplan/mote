@@ -5,6 +5,7 @@
  * Add --review to retain the synthetic node for an independent browser evaluator.
  * This records UI journey evidence. It does not assign model/human quality scores.
  */
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 const { app, BrowserWindow } = require('electron');
 const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } = require('node:fs');
@@ -23,11 +24,15 @@ const review = args.includes('--review') || args.includes('--review-hold');
 const reviewBootstrapOnly = args.includes('--review-bootstrap-only');
 assert(!reviewBootstrapOnly || review, 'A review bootstrap must retain its isolated fixture');
 const artRoundIndex=args.indexOf('--art-round'),artRound=artRoundIndex>=0?Number(args[artRoundIndex+1]):undefined;
+const rollout=args.includes('--rollout');
+assert(!(rollout&&artRound),'Selected R5 rollout evidence is separate from historical art candidates');
 if(artRound!==undefined)assert.ok(Number.isInteger(artRound)&&artRound>=1&&artRound<=5,'A sequential art round is 1 through 5');
 const repo = resolve(__dirname, '..');
 const captureScriptCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).stdout.trim();
 const root = mkdtempSync(join(tmpdir(), 'mote-ui-eval-'));
-const output = join(repo, '.mote', 'ui-iterations', round);
+const outputIndex = args.indexOf('--output');
+const output = outputIndex >= 0 ? resolve(repo, args[outputIndex + 1]) : join(repo, '.mote', 'ui-iterations', round);
+assert(output.startsWith(join(repo, '.mote') + require('node:path').sep), 'Keep generated UI evidence under the ignored .mote directory');
 mkdirSync(output, { recursive: true, mode: 0o700 });
 writeFileSync(join(output, 'result.json'), JSON.stringify({ round, passed: null, phase: 'running', generatedOnly: true }, null, 2), { mode: 0o600 });
 app.setPath('userData', join(root, 'browser'));
@@ -90,7 +95,7 @@ const observeFixtureRequests = `(() => {
 function rendererReadiness() {
  const visible=element=>!!element&&element.getClientRects().length>0&&getComputedStyle(element).visibility!=='hidden';
  const route=location.hash||'#/today',path=route.replace(/^#\/?/,'').split('?')[0];
- const expectedPage=({'today':'overview','preferences':'about','system/models':'settings','system/storage':'vault','system':'statistics','guide':'featureGuide','ask':'ask','library':'archive','library/notes':'notes','library/import':'imports','library/insights':'insights','activity':'activity','connections/add':'sourceCatalog'})[path];
+ const expectedPage=({'today':'overview','preferences':'about','system/models':'settings','system/storage':'vault','system':'statistics','guide':'featureGuide','ask':'ask','library':'archive','library/notes':'notes','library/import':'imports','library/insights':'insights','activity':'activity','connections/add':'sourceCatalog','connections/devices':'devices','connections':'sources','connections/access':'connections','connections/lark':'lark','connections/recordings':'recordings','system/plugins':'extensions','system/processing':'processing','agent':'agentView','system/diagnostics':'developer','system/usage':'usage','help':'help','actions':'actions'})[path];
  const content=document.querySelector('.content[data-page]'),page=content?.dataset.page;
  const base={ready:false,route,page,expectedPage,pendingApi:window.__moteUiPendingApi??0};
  if(!expectedPage||!visible(content)||page!==expectedPage)return {...base,reason:'requested consumer is not mounted'};
@@ -109,7 +114,7 @@ function rendererReadiness() {
   return {...base,ready:true,page:'reader',expectedPage:'reader',state:'content',marker:'.evidence-modal .evidence-text pre',visibleMarker:{tag:original.tagName,text:original.textContent.trim().slice(0,180)},busyExcluded:true};
  }
  const query=new URLSearchParams(route.split('?')[1]||''),collection=query.get('view')||'materials';
- const markers={overview:'.home-page',about:'.settings-destinations',settings:'.server-settings',vault:'#content-storage-title',statistics:'.storage-chart',featureGuide:'.feature-guide [data-guide-group]',notes:'#note-text',imports:content.querySelector('.import-detail')?'.imports-page .import-detail':'.imports-page .import-form',ask:'.conversation-layout .ask-form',insights:'.insights-page .insight-compose',activity:'.activity-centre .activity-list',sourceCatalog:'.discovery-source-catalog',archive:content.querySelector('.library-browser.has-selection')?'.material-detail,.library-capture-detail':collection==='memories'?'.memories-page':'.archive-page .library-navigation'};
+ const markers={overview:'.home-page',about:'.settings-destinations',settings:'.server-settings',vault:'#content-storage-title',statistics:'.storage-chart',featureGuide:'.feature-guide [data-guide-group]',notes:'#note-text',imports:content.querySelector('.import-detail')?'.imports-page .import-detail':'.imports-page .import-form',ask:'.conversation-layout .ask-form',insights:'.insights-page .insight-compose',activity:'.activity-centre .activity-list',sourceCatalog:'.discovery-source-catalog',devices:'.device-overview',sources:'.sources-page',connections:'.connections',lark:'.lark-settings',recordings:'.lark-settings',extensions:'.plugin-center',processing:'.processing-centre .operation-list',agentView:'.agent-inspector',developer:'.diagnostics-panel',usage:'.usage-metrics',help:'.feedback-panel',actions:'.action-grid',archive:content.querySelector('.library-browser.has-selection')?'.material-detail,.library-capture-detail':collection==='memories'?'.memories-page':'.archive-page .library-workspace'};
  const marker=content.dataset.session==='verification-failed'?'.notice.error':content.dataset.session==='signed-out'?(content.classList.contains('settings-surface')?'.settings-sign-in':'.simple-welcome'):markers[page];
  const element=content.querySelector(marker);
  if(!visible(element))return {...base,reason:'expected loaded, empty or restricted consumer marker is missing',marker};
@@ -283,8 +288,8 @@ async function settingsJourneys() {
   await route('today','.home-page');await click('.topbar .quick-note','library/notes','return to existing note draft');
   assert.equal(await js(`document.querySelector('#note-text').value`),draft,'Removing the settings shortcut preserves the existing note draft lifecycle');
   await js(`(()=>{const input=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,'');input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
-  if(artRound){
-    savedArtOriginal='Generated art direction candidate '+artRound+' original · 生成资料 🐾\nA saved note retains its exact source and time.';
+  if(artRound||rollout){
+    savedArtOriginal='Generated '+(rollout?'selected R5 rollout':('art direction candidate '+artRound))+' original · 生成资料 🐾\nA saved note retains its exact source and time.';
     await js(`(()=>{const input=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,${JSON.stringify(savedArtOriginal)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
     await js("document.querySelector('.note-composer').requestSubmit();true");
     await until(()=>js(`document.querySelector('#note-text').value===''&&[...document.querySelectorAll('.note-card p')].some(item=>item.textContent===${JSON.stringify(savedArtOriginal)})`),'actual art candidate note save');
@@ -309,13 +314,24 @@ async function consumerMatrix() {
       ['system/storage','storage','#content-storage-title'],['guide','guide','.feature-guide'],
       ['library/notes','note','#note-text'],['library/import','import','.import-form'],['ask','ask','.ask-form'],
       ['library?view=memories','memory','.memories-page'],['library/insights','insights','.insights-page'],['activity','activity','.activity-centre'],
-      ['library','content','.archive-page .library-navigation']
+      ['library','content','.archive-page .library-workspace'],
+      ...(rollout?[
+        ['system/models?category=images','image-settings','.perception-settings'],['system/models?category=file-processing','file-settings','.file-processing-settings'],
+        ['system/models?category=storage','retention-settings','.config-draft-footer'],['system/models?category=embedding','index-settings','.config-draft-footer'],
+        ['connections/devices','devices','.device-overview'],['connections/add','source-catalog','.discovery-source-catalog'],
+        ['connections','source-management','.sources-page'],['connections/access','authorization','.connections'],
+        ['connections/lark','lark','.lark-settings'],['connections/recordings','recorders','.lark-settings'],
+        ['system/plugins','plugins','.plugin-center'],['system/processing','operations','.operation-list'],
+        ['system','statistics','.storage-chart'],['system/diagnostics','diagnostics','.diagnostics-panel'],['system/usage','usage','.usage-metrics'],
+        ['agent','agent-view','.agent-inspector'],
+        ...['records','segments','sources','files','activity','media','work-activity'].map(view=>['library?view='+view,'collection-'+view,'.library-workspace'])
+      ]:[])
     ]){
       await route(path,selector);
       if(['settings','models','providers','modules','privacy','storage'].includes(scene))await assertSettingsTask(scene);
       for(const [width,height,variant] of [[1440,1000,'normal'],[820,900,'tablet'],[390,844,'compact'],[320,740,'minimum']]){
         window.setSize(width,height);await until(()=>js(`innerWidth===${width}`),'consumer viewport '+width);
-        if(artRound>=5&&scene==='note'){
+        if((artRound>=5||rollout)&&scene==='note'){
           const catalog=JSON.parse(readFileSync(join(repo,'apps/android/app/src/main/assets/i18n-en.json'),'utf8'));
           const boundaryKey='已有文件 · 不现场录音 · 附件先归档 · 每个附件最多 50 MiB。';
           const helpKey='文字识别与音频转写按中央处理设置进行；可在资料库核对各阶段状态。';
@@ -326,6 +342,11 @@ async function consumerMatrix() {
           await until(()=>js(`(()=>{const d=document.querySelector('.note-attachment-help');return d.open&&d.querySelector('p').getClientRects().length>0&&d.querySelector('p').textContent===${JSON.stringify(help)}})()`),'complete attachment processing teaching');
           await js("document.querySelector('.note-attachment-help summary').click();true");
           journeys.push({name:'attachment consequences and complete named processing help',language,width,verified:true});
+        }
+        if(rollout&&path==='library'&&width<=800){
+          assert.equal(await js("document.querySelector('.library-navigation').getClientRects().length"),0,'Compact library has one category control');
+          assert.equal(await js("document.querySelectorAll('.library-compact-categories select').length"),1);
+          assert.equal(await js("document.querySelector('.library-compact-categories select').value"),'materials');
         }
         await capture(scene+'-'+(language==='en'?'en':'zh')+'-'+width,{scene,variant,reviewSelection:true,notes:scene==='privacy'?'Existing Sources and external apps settings, including write scopes; this is not a newly invented standalone privacy page.':''});
       }
@@ -363,7 +384,7 @@ async function artReaderMatrix(){
       window.setSize(width,height);await until(()=>js('innerWidth==='+width),'reader width');
       await capture('reader-'+(language==='en'?'en':'zh')+'-'+variant,{scene:'detail',variant,reviewSelection:true});
     }
-    if(artRound>=4){
+    if(artRound>=4||rollout){
       assert.equal(await js("!!(document.querySelector('.evidence-text pre').compareDocumentPosition(document.querySelector('.evidence-source-actions')) & Node.DOCUMENT_POSITION_FOLLOWING)"),true,'Actual original precedes its extraction actions');
       assert.equal(await js("document.querySelector('.evidence-processing-help').open"),false,'Full processing explanation starts collapsed');
       const helpKey='OCR、索引和记忆分别处理；处理进度请在任务中心查看。';
@@ -375,7 +396,7 @@ async function artReaderMatrix(){
     await js("document.querySelector('.evidence-modal .icon-button').click();true");
     await until(()=>js("!document.querySelector('.evidence-modal')"),'reader returns to actual note origin');
     await until(()=>js(`document.activeElement.closest('.note-card')?.querySelector('p')?.textContent===${JSON.stringify(savedArtOriginal)}`),'Close restores the exact original source focus');
-    journeys.push({name:'actual saved note original, complete processing help and close focus',language,verified:true,processingHelpVerified:artRound>=4});
+    journeys.push({name:'actual saved note original, complete processing help and close focus',language,verified:true,processingHelpVerified:artRound>=4||rollout});
   }
   window.setSize(1440,1000);
 }
@@ -386,7 +407,7 @@ async function mobileNoteFocusJourney(){
   await until(()=>js('innerWidth===390'),'real narrow note viewport');
   window.webContents.focus();
   await until(()=>js('document.hasFocus()'),'hidden fixture renderer receives actual keyboard focus');
-  const original='Generated candidate '+artRound+' keyboard focus original.';
+  const original='Generated '+(rollout?'selected R5 rollout':('candidate '+artRound))+' keyboard focus original.';
   await js(`(()=>{const e=document.querySelector('#note-text');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,${JSON.stringify(original)});e.dispatchEvent(new Event('input',{bubbles:true}));e.focus();})()`);
   const observations=[];
   for(const [label,selector] of [['attachment','.note-composer input[type=file]'],['save','.note-composer-actions .button.primary']]){
@@ -396,7 +417,7 @@ async function mobileNoteFocusJourney(){
     assert(bounds.top>=0&&bounds.left>=0&&bounds.right<=bounds.width,'Entire focused control is inside the narrow viewport');assert(bounds.ring>0&&bounds.outlineStyle!=='none','Keyboard focus is actually visible');
     observations.push({label,...bounds});
   }
-  await capture('actual-keyboard-save-focus-r'+artRound,{scene:'focus-regression',variant:'compact',reviewSelection:false,notes:'Real Tab from note text through attachment to Save; complete focused control and ring above the actual fixed dock.'});
+  await capture('actual-keyboard-save-focus-'+(rollout?'rollout':'r'+artRound),{scene:'focus-regression',variant:'compact',reviewSelection:false,notes:'Real Tab from note text through attachment to Save; complete focused control and ring above the actual fixed dock.'});
   await key('Enter');await until(()=>js(`document.querySelector('#note-text').value===''&&Array.from(document.querySelectorAll('.note-card p')).some(e=>e.textContent===${JSON.stringify(original)})`),'real keyboard Enter saves the exact original');
   journeys.push({name:'narrow keyboard note save and unobscured focus',verified:true,original,observations});
   window.setSize(1440,1000);
@@ -463,6 +484,11 @@ async function run() {
   // Simulated confirmation avoids native system dialogs in this background-only fixture.
   window.webContents.on('did-finish-load', () => { void js(confirmFixtureScript).then(()=>js(observeFixtureRequests)).catch(() => {}); });
   await window.loadURL(endpoint);
+  if(process.env.MOTE_TEST_SHOW_UI!=='1'){
+    window.webContents.debugger.attach('1.3');
+    await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});
+  }
+
   await until(() => js('!!document.querySelector(".simple-welcome")'), 'signed-out welcome');
   if (reviewBootstrapOnly) {
     await authenticate(token);
@@ -560,7 +586,7 @@ async function run() {
   await capture('library');
   await click('.library-record', 'library', 'read generated evidence');
   await until(() => js('!!document.querySelector(".material-detail")'), 'material body');
-  await capture('material-detail',{scene:'detail',reviewSelection:!artRound});
+  await capture('material-detail',{scene:'detail',reviewSelection:!artRound&&!rollout});
   await route('today', '.home-page');
   await chooseLanguage('en', true, '.home-page');
   await homeMatrix('populated-home', 'en');
@@ -572,8 +598,8 @@ async function run() {
   writeFileSync(join(output, 'language-confirmations.json'), JSON.stringify({ generatedOnly: true, simulatedConfirmations: true, confirmations }, null, 2), {mode: 0o600});
   await settingsJourneys();
   await consumerMatrix();
-  if(artRound>=2)await mobileNoteFocusJourney();
-  if(artRound)await artReaderMatrix();
+  if(artRound>=2||rollout)await mobileNoteFocusJourney();
+  if(artRound||rollout)await artReaderMatrix();
   await route('today','.home-page');
   assert.deepEqual(errors, [], 'No renderer errors');
   const selectedCoordinates=new Set();
@@ -583,10 +609,11 @@ async function run() {
   }
   const sourceCommit=captureScriptCommit;
   const coreScenes=['home','content','note','detail','ask','settings','providers','import'];
-  const coreCaptures=artRound?captures.filter(item=>coreScenes.includes(item.scene)&&['normal','compact'].includes(item.variant)&&item.reviewSelection):[];
-  if(artRound){assert.equal(coreCaptures.length,32);assert.equal(new Set(coreCaptures.map(item=>[item.scene,item.language,item.variant].join(':'))).size,32);for(const item of coreCaptures){item.artDirectionCore=true;item.sceneKey=item.scene;item.sourceCommit=sourceCommit;}}
+  const coreCaptures=artRound||rollout?captures.filter(item=>coreScenes.includes(item.scene)&&['normal','compact'].includes(item.variant)&&item.reviewSelection):[];
+  if(artRound||rollout){assert.equal(coreCaptures.length,32);assert.equal(new Set(coreCaptures.map(item=>[item.scene,item.language,item.variant].join(':'))).size,32);for(const item of coreCaptures){if(artRound)item.artDirectionCore=true;else item.rolloutCore=true;item.sceneKey=item.scene;item.sourceCommit=sourceCommit;}}
+  const sourceIdentity=Object.fromEntries(spawnSync('git',['ls-files','apps/web','scripts/test-ui-iterations.cjs','packages/shared/design-tokens.json','packages/shared/src/i18n-en.ts'],{cwd:repo,encoding:'utf8'}).stdout.trim().split('\n').filter(Boolean).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,file))).digest('hex')]));
   const buildIdentity=Object.fromEntries(readdirSync(join(repo,'apps/web/dist/assets')).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,'apps/web/dist/assets',file))).digest('hex')]));
-  writeFileSync(join(output, 'result.json'), JSON.stringify({ round, artRound, sourceCommit,buildIdentity,tokensSha256:createHash('sha256').update(readFileSync(join(repo,'packages/shared/design-tokens.json'))).digest('hex'),coreCaptures,passed: true, phase: 'completed', generatedOnly: true, captures, journeys,
+  writeFileSync(join(output, 'result.json'), JSON.stringify({ round, artRound, rollout, sourceCommit,sourceIdentity,buildIdentity,tokensSha256:createHash('sha256').update(readFileSync(join(repo,'packages/shared/design-tokens.json'))).digest('hex'),coreCaptures,passed: true, phase: 'completed', generatedOnly: true, captures, journeys,
     featureGroups: catalog.groups.length, featureUnits: catalog.units.length,
     validationBoundary: 'Actual renderer and generated ingress/publication. Language selector uses simulated confirmation decisions with the real change handler and reload; native modal handling is not validated. Route entry is not complete feature use. No physical capture, external account, or live model.' }, null, 2), { mode: 0o600 });
   console.log('PASS: UI journey evidence ' + round + ' → ' + output);

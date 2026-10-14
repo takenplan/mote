@@ -275,7 +275,9 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
         text = title; tag = "detail-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); setTextColor(MoteUi.ink)
         setPadding(0, moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spaceInline))
     }, LinearLayout.LayoutParams(0, -2, 1f))
-    if (primary != null) header.addView(MoteUi.button(Button(this).apply {
+    // Content and source tasks share Add; maintenance pages keep their configuration duty.
+    val allowsAdd = this is CaptureRecordsActivity || this is FileContentActivity || this is FileTaskActivity || this is SourcesActivity
+    if (primary != null && allowsAdd) header.addView(MoteUi.button(Button(this).apply {
         text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
         setOnClickListener { showMoteAddActions() }
     }), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(14) })

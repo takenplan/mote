@@ -38,7 +38,7 @@ childProcess.execFile[require('node:util').promisify.custom] = async (file, args
 };
 let finished = false;
 let currentPhase = 'startup';
-const timeout = setTimeout(() => { process.stderr.write('UI smoke timeout: ' + currentPhase + '\n'); app.exit(1); }, process.env.MOTE_UI_ART_ROUND ? 180000 : 45000);
+const timeout = setTimeout(() => { process.stderr.write('UI smoke timeout: ' + currentPhase + '\n'); app.exit(1); }, process.env.MOTE_UI_ART_ROUND || process.env.MOTE_UI_ROLLOUT ? 240000 : 45000);
 app.on('browser-window-created', (_event, window) => {
   // Fixture screenshots and animation-frame checks must run even if another app is foreground.
   window.webContents.setBackgroundThrottling(false);
@@ -124,6 +124,12 @@ app.on('browser-window-created', (_event, window) => {
       assert(await js(`document.documentElement.scrollWidth <= window.innerWidth`), 'Newcomer setup fits the minimum window width');
       writeFileSync(join(outputDirectory, 'first-run-compact-ui-fixture.png'), (await window.webContents.capturePage()).toPNG());
       window.setSize(1140, 840);
+      if (process.env.MOTE_UI_ROLLOUT) {
+        currentPhase='UI rollout matrix';
+        const manifest=await require('./ui-rollout-matrix.cjs')({window,js,navigate,outputDirectory,profile,ipcMain});
+        process.stdout.write(JSON.stringify({rolloutReady:true,captures:manifest.captures.length,manifest:join(outputDirectory,'rollout-manifest.json'),generatedOnly:true})+'\n');
+        finished=true;clearTimeout(timeout);app.quit();return;
+      }
       if (process.env.MOTE_UI_ART_ROUND) {
         currentPhase='art direction matrix';
         const manifest=await require('./art-direction-matrix.cjs')({window,js,navigate,outputDirectory,round:process.env.MOTE_UI_ART_ROUND,profile});

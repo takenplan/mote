@@ -23,10 +23,8 @@ class CalendarActionsActivity : MoteActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val poll = object : Runnable { override fun run() { if (!task.busy) refresh(); handler.postDelayed(this, 20000) } }
     override fun onCreate(state: Bundle?) {
-        super.onCreate(state); task = UiTask(this)
-        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(28, 24, 28, 32) }
-        setContentView(ScrollView(this).apply { addView(body) })
-        text(body, MoteI18n.text("日程建议"), 26f)
+        super.onCreate(state); window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE); task = UiTask(this)
+        val body = moteDetailPage(primary = null, title = MoteI18n.text("日程建议"))
         text(body, MoteI18n.text("从上传资料和持续采集中发现安排，逐条核对后添加到你选择的已有日历。备注附加 #Mote 来源标记。"))
         text(body, MoteI18n.text("首次使用：在中央网页「行动」开启发现，并授权此设备查看跨来源的建议及原文片段。"))
         button(body, MoteI18n.text("连接本机日历")) { if (calendarPermissions()) connect() else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR), 401) }
@@ -35,12 +33,13 @@ class CalendarActionsActivity : MoteActivity() {
         button(body, MoteI18n.text("刷新并同步已确认日程")) { sync() }
         status = TextView(this); body.addView(status)
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(list)
+        MoteUi.styleTree(body)
         refresh()
     }
     override fun onResume() { super.onResume(); handler.postDelayed(poll, 20000) }
     override fun onPause() { handler.removeCallbacks(poll); super.onPause() }
-    private fun text(parent: LinearLayout, value: String, size: Float = 15f) { parent.addView(TextView(this).apply { text = value; textSize = size; setPadding(0, 12, 0, 12) }) }
-    private fun button(parent: LinearLayout, title: String, fn: () -> Unit) { parent.addView(Button(this).apply { text = title; isAllCaps = false; setOnClickListener { if (!task.busy) fn() } }) }
+    private fun text(parent: LinearLayout, value: String, size: Float = DesignTokens.fontBody.toFloat()) { parent.addView(TextView(this).apply { text = value; MoteUi.type(this, if (size >= 20f) DesignTokens.fontSection else size.toInt(), medium = size >= 20f); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)); setTextIsSelectable(true) }) }
+    private fun button(parent: LinearLayout, title: String, fn: () -> Unit) { parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener { if (!task.busy) fn() } }), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }) }
     private fun calendarPermissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     private fun work(label: String, fn: () -> JSONObject) { task.start(label, { status.text = it }, {
         if (!::client.isInitialized) client = CalendarActions(applicationContext, foreground = true)
@@ -64,7 +63,7 @@ class CalendarActionsActivity : MoteActivity() {
         if (items.length() == 0) text(list, MoteI18n.text("尚未发现日程。上传资料或继续采集后会自动分析。"))
         for (i in 0 until items.length()) {
             val a = items.getJSONObject(i); val e = a.getJSONObject("event"); val state = a.getString("status")
-            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(16, 22, 16, 22) }; list.addView(card)
+            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline)); background = MoteUi.shape(this@CalendarActionsActivity) }; list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceItem) })
             text(card, e.getString("title"), 21f)
             val kind = a.getString("kind")
             text(card, when (kind) { "calendar.update" -> MoteI18n.text("更新日程"); "calendar.cancel" -> MoteI18n.text("取消日程"); "calendar.complete" -> MoteI18n.text("标记安排完成"); else -> MoteI18n.text("添加日程") })
@@ -98,7 +97,7 @@ class CalendarActionsActivity : MoteActivity() {
         for (i in 0 until targets.length()) if (targets.getJSONObject(i).getString("deviceId") == deviceId) choices = targets.getJSONObject(i).getJSONArray("calendars")
         if (!requiresCalendar) choices = org.json.JSONArray().put(JSONObject().put("id", "").put("title", MoteI18n.text("仅更新原建议")))
         if (choices.length() == 0) { status.text = MoteI18n.text("请先连接本机日历，并在系统日历中添加可写账户"); return }
-        val event = action.getJSONObject("event"); val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(28, 16, 28, 16) }
+        val event = action.getJSONObject("event"); val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline)) }
         val allDay = CheckBox(this).apply { text = MoteI18n.text("全天"); isChecked = event.getBoolean("allDay") }; form.addView(allDay)
         text(form, MoteI18n.text("点击日期字段选择时间。全天日程的结束日期不包含当天。时区可修改。"))
         val fields = linkedMapOf<String, EditText>()
@@ -120,7 +119,7 @@ class CalendarActionsActivity : MoteActivity() {
         }
         text(form, MoteI18n.text("添加到已有日历"))
         val calendars = choices
-        val picker = Spinner(this).apply { adapter = ArrayAdapter(this@CalendarActionsActivity, android.R.layout.simple_spinner_dropdown_item, (0 until calendars.length()).map { calendars.getJSONObject(it).getString("title") }) }; form.addView(picker)
+        val picker = Spinner(this).apply { adapter = MoteUi.choiceAdapter(this@CalendarActionsActivity, (0 until calendars.length()).map { calendars.getJSONObject(it).getString("title") }) }; form.addView(picker)
         if (related != null) { val originalCalendar = related.optJSONObject("target")?.optString("calendarId"); val index = (0 until calendars.length()).indexOfFirst { calendars.getJSONObject(it).getString("id") == originalCalendar }; if (index >= 0) picker.setSelection(index); picker.isEnabled = false; text(form, if (related.has("externalId")) MoteI18n.text("确认后更新原日程，不新建另一条。") else MoteI18n.text("确认后仅更新原建议，仍需确认添加到日历。")) }
         val validation = TextView(this); form.addView(validation)
         val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("确认日程")).setView(ScrollView(this).apply { addView(form) }).setNegativeButton(MoteI18n.text("返回"), null).setPositiveButton(if (related == null) MoteI18n.text("确认添加") else MoteI18n.text("确认变更"), null).create()

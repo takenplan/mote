@@ -1,4 +1,10 @@
 {
+  "屏幕录制": "Screen Recording",
+  "辅助功能": "Accessibility",
+  "内容记录：优先提取文章或商品字段，未取得结构化内容时截图。": "Content: extract article or product fields first, falling back to screenshots when structured content is unavailable.",
+  "仅应用活动：记录应用与时长。不记录：跳过该应用。": "Activity only: record app and duration. Do not record: skip the app.",
+  "隐私过滤不通过时不会回退截图。": "Privacy rejection never falls back to screenshots.",
+  "记录和索引为 JSON，图片保留原始格式。这些是本应用专用目录，不是共享相册；卸载应用会删除本机文件。移除存储卡后会停止使用该位置并提示，不会切到空目录；重新连接后可恢复。": "Records and indexes use JSON; images keep their original format. These are private app directories, not a shared album; uninstalling deletes local files. Removing a card stops access with a notice, without switching to an empty directory. Reconnect to recover.",
   "{0} 条 · 第 {1} 页": "Records: {0} · Page {1}",
   "关闭预览": "Close preview",
   "先存本机；连接中央整理后，可搜索和提问。": "Save locally first. Connect to central and process content to search or ask.",

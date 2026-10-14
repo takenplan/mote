@@ -128,7 +128,7 @@ class FileTaskActivity : MoteActivity() {
         fun label(text: String, target: LinearLayout = body) = TextView(this).apply {
             this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontBody); setPadding(0, moteDp(16), 0, moteDp(6)); target.addView(this)
         }
-        fun hint(text: String, target: LinearLayout = body) = TextView(this).apply { this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontSupport); target.addView(this) }
+        fun hint(text: String, target: LinearLayout = body) = TextView(this).apply { this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); target.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceInline); bottomMargin = moteDp(DesignTokens.spaceInline) }) }
         fun field(value: String, tagValue: String, target: LinearLayout = body, numeric: Boolean = false, multiline: Boolean = false) = EditText(this).apply {
             tag = tagValue; MoteUi.textInput(this, if (numeric) InputType.TYPE_CLASS_NUMBER else InputType.TYPE_CLASS_TEXT, multiline); setText(value)
             isSaveEnabled = false; importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO; target.addView(this)
@@ -229,7 +229,7 @@ class FileTaskActivity : MoteActivity() {
         updatePreset(); updateRetention(); persistDraft()
     }
     private fun updatePreset() {
-        presetButtons.forEach { (key, button) -> button.isSelected = key == preset; button.background = MoteUi.clickable(this, if (key == preset) MoteUi.tint else android.graphics.Color.WHITE, 24) }
+        presetButtons.forEach { (key, button) -> button.isSelected = key == preset; button.background = MoteUi.clickable(this, if (key == preset) MoteUi.tint else DesignTokens.surface, MoteUi.actionRadius, strokeColor = if (key == preset) MoteUi.accent else MoteUi.controlBorder) }
         presetHelp.text = MoteI18n.text(when (preset) { "audio" -> "音频预设默认保留中央原件，保存方式可修改。"; "custom" -> "只收集你指定扩展名的文件；请在高级设置中填写。"; else -> "文本、音频、图片和文档。" })
         if (preset == "custom") advanced.visibility = View.VISIBLE
     }

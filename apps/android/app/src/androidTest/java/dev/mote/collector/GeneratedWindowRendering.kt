@@ -25,7 +25,9 @@ internal object GeneratedWindowRendering {
     fun hasNoPendingLabels(root: View): Boolean {
         val pending = listOf("正在读取…", "正在检查…", "正在读取统计…", "正在读取同步状态…", "正在读取保存的连接与同步状态…",
             "正在读取草稿…", "正在连接本机存储，文件整理将在后台继续…", "正在读取来源…", "正在读取内容…",
-            "正在读取详情…", "记录已读取，正在加载图片…", "正在读取 App 与时间…", "加载预览…").map { MoteI18n.text(it) }.toSet() +
+            "正在读取详情…", "记录已读取，正在加载图片…", "正在读取 App 与时间…", "加载预览…",
+            "正在读取运行状态…", "正在读取已保存连接…", "正在读取存储位置…", "正在读取日志…",
+            "正在读取本机同步状态…", "正在读取本机统计…", "正在生成压缩预览…", "正在读取日程建议…").map { MoteI18n.text(it) }.toSet() +
             listOf("本机记录", "中央归档").map { MoteI18n.text("正在读取{0}…", MoteI18n.text(it)) }
         return views(root).filterIsInstance<TextView>().none { it.isShown && it.text.toString() in pending }
     }
@@ -177,6 +179,27 @@ internal object GeneratedWindowRendering {
             "screen-scope" -> Triple("screen-scope", "content", "保存范围并开始记录")
             "feature-guide", "feature-guide-english" -> Triple("guide", "restriction", "此客户端支持的中央功能")
             "feature-guide-content" -> Triple("guide", "restriction", "记忆")
+            "rollout-permissions" -> Triple("rollout-permissions", "content", "权限与后台运行")
+            "rollout-about" -> Triple("rollout-about", "content", "关于与更新")
+            "rollout-developer" -> Triple("rollout-developer", "content", "开发者选项")
+            "rollout-diagnostics" -> Triple("rollout-diagnostics", "content", "诊断与支持")
+            "rollout-capture" -> Triple("rollout-capture", "content", "屏幕与应用活动")
+            "rollout-processing" -> Triple("rollout-processing", "content", "图像质量与去重")
+            "rollout-storage-settings" -> Triple("rollout-storage-settings", "content", "本机存储")
+            "rollout-updates" -> Triple("rollout-updates", "content", "应用更新")
+            "rollout-backup" -> Triple("rollout-backup", "content", "导入与导出")
+            "rollout-queue" -> Triple("rollout-queue", "content", "待上传队列")
+            "rollout-recovery" -> Triple("rollout-recovery", "content", "同步与恢复")
+            "rollout-storage-location" -> Triple("rollout-storage-location", "content", "图片保存位置")
+            "rollout-statistics" -> Triple("rollout-statistics", "content", "统计中心")
+            "rollout-activity-statistics" -> Triple("rollout-activity-statistics", "content", "采集与存储详情")
+            "rollout-logs" -> Triple("rollout-logs", "content", "日志中心")
+            "rollout-dedupe" -> Triple("rollout-dedupe", "content", "图片去重诊断")
+            "rollout-compression" -> Triple("rollout-compression", "content", "图片压缩预览")
+            "rollout-bulk-dedupe" -> Triple("rollout-bulk-dedupe", "content", "本机图片批量去重")
+            "rollout-scanner" -> Triple("scanner", "content", "扫描连接二维码")
+            "rollout-calendar" -> Triple("calendar", "restriction", "日程建议")
+            "rollout-pairing" -> Triple("rollout-pairing", "content", "连接中央节点")
             else -> error("A new generated scene needs an explicit readiness contract: $name")
         }
         val shownText = (listOf(base) + overlays).flatMap(::views).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }

@@ -25,10 +25,9 @@ class SyncRecoveryActivity : MoteActivity() {
     private val refresh = object : Runnable { override fun run() { refreshStatus(); handler.postDelayed(this, 3000) } }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        val body = moteDetailPage()
+        val body = moteDetailPage(title = MoteI18n.text("同步与恢复"))
         fun text(value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0,moteDp(8),0,moteDp(8)) }.also(body::addView)
         fun button(label: String, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { action() } }).also { body.addView(it, LinearLayout.LayoutParams(-1,-2)) }
-        text(MoteI18n.text("同步与恢复"), 27f)
         text(MoteI18n.text("手机负责采集，中央端负责归档。已上传的本机副本按保留时间清理。"))
         summary = text(MoteI18n.text("正在读取本机同步状态…"))
         button(MoteI18n.text("查看待上传队列")) { startActivity(Intent(this, SyncQueueActivity::class.java)) }

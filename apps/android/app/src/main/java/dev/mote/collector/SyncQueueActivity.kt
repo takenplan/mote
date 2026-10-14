@@ -26,10 +26,9 @@ class SyncQueueActivity : MoteActivity() {
     override fun onPause() { speedHandler.removeCallbacks(speedTick); super.onPause() }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        val body = moteDetailPage()
-        body.addView(TextView(this).apply { text = MoteI18n.text("待上传队列"); textSize = 28f })
+        val body = moteDetailPage(title = MoteI18n.text("待上传队列"))
         summary = TextView(this).also(body::addView)
-        speed = TextView(this).apply { textSize = 20f; setTypeface(null, android.graphics.Typeface.BOLD) }.also(body::addView)
+        speed = TextView(this).apply { MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.muted); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceItem)) }.also(body::addView)
         categories = Spinner(this).also(body::addView)
         body.addView(Button(this).apply { text = MoteI18n.text("刷新"); setOnClickListener { load() } })
         rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also(body::addView)
@@ -41,7 +40,7 @@ class SyncQueueActivity : MoteActivity() {
         task.start(MoteI18n.text("正在读取来源…"), { summary.text = it }, { localSources().sources() }) { result ->
             result.onSuccess {
                 sources = it
-                categories.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("采集与随手记")) + it.map { source -> source.name + if (source.enabled) "" else MoteI18n.text("（已暂停）") })
+                categories.adapter = MoteUi.choiceAdapter(this, listOf(MoteI18n.text("采集与随手记")) + it.map { source -> source.name + if (source.enabled) "" else MoteI18n.text("（已暂停）") })
                 categories.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                     override fun onNothingSelected(parent: AdapterView<*>?) = Unit
                     override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) { offset = 0; load() }
@@ -80,7 +79,7 @@ class SyncQueueActivity : MoteActivity() {
                 for (i in 0 until items.length()) {
                     val item = items.getJSONObject(i)
                     rows.addView(TextView(this).apply {
-                        textSize = 15f; setTextColor(MoteUi.ink); gravity = android.view.Gravity.START
+                        MoteUi.type(this, DesignTokens.fontBody); setTextColor(MoteUi.ink); gravity = android.view.Gravity.START
                         setPadding(moteDp(16), moteDp(16), moteDp(16), moteDp(16)); background = MoteUi.clickable(this@SyncQueueActivity); isFocusable = true
                         text = if (source == null) "${item.optString("appName").ifBlank { sourceLabel(item.optString("source")) }} · ${item.getString("status")}\n${java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss"))}" else "${item.optString("name")}\n${item.getString("status")}"
                         setOnClickListener { startActivity(if (source == null) Intent(this@SyncQueueActivity, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")) else Intent(this@SyncQueueActivity, SourcesActivity::class.java)) }

@@ -12,7 +12,7 @@ Android 使用 Kotlin 原生 Activity 和 Android Views。中央工作台、资�
 
 2026-10-13 的 [用户反馈续迭代](design/ui-focus-and-consistency-2026-10-13.md) 保留 Slate 配色与原生导航，Android 采用一致的表面、动作、表单和阅读角色：同类间距、圆角、图标与字体跨页面复用，不再混用桌面纸页和原生大圆角面板。设置围绕配置与维护，采集和同步操作在首页现有区域承接；Web 与 Mac 设置也隐藏通用新记录动作。原五项评估继续保留，另检查页面职责及视觉一致性，当前截图必须证明目标内容完成加载。
 
-共享角色源在 `packages/shared/design-tokens.json`，包括颜色、字体层级、间距、控件尺寸和表面 / 控件 / 阅读圆角。运行 `node scripts/generate-design-tokens.mjs` 生成 Web/Electron CSS 与 Kotlin token。当前共同方向为冷中性色、白内容面、蓝色强调、系统无衬线和规则边界；平台导航、系统权限与文件选择器仍用原生实现。五轮候选逐轮记录独立八项评价，用户尚未选择最终方案。
+共享角色源在 `packages/shared/design-tokens.json`，包括颜色、字体层级、间距、控件尺寸和表面 / 控件 / 阅读圆角。运行 `node scripts/generate-design-tokens.mjs` 生成 Web/Electron CSS 与 Kotlin token。当前共同方向为冷中性色、白内容面、蓝色强调、系统无衬线和规则边界；平台导航、系统权限与文件选择器仍用原生实现。2026-10-14 用户选择第五轮作为三端全面落地基础，见 [落地范围与取舍](design/ui-rollout-2026-10-14.md)。五轮历史评价和原图保留原始记录。
 
 处理任务页使用 owner-only `/api/operations` 分页读取 Operation 及步骤状态；原 `/api/processing` 上下文任务入口仍保留。截图感知、文件、Memory、导入、问答、洞察、生命周期、日程分析和 embedding 已接入共享执行器，各领域保留自己的配置与进度入口。支持的操作由服务端状态确定，不返回私人步骤输入，见 [Operations](operations.md)。结果不明的日程仍走原有核实流程。
 

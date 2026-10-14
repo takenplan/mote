@@ -57,6 +57,22 @@ test('explicit library navigation leads directly into rows and source details wi
   assert.equal(d.activeElement,record,'return preserves the original list and keyboard opener');
 });
 
+test('compact library categories preserve the full registered choices, selected type and explicit unavailable type',async t=>{
+ const {root,d,w}=await fixture(t),selected:string[]=[];
+ const api=apiWith(path=>path.startsWith('/api/library/catalog?')?{items:[],nextCursor:null}:{items:[row()],nextCursor:null,totalCount:1});
+ await act(async()=>root.render(view(api,{setTab:tab=>selected.push(tab)})));
+ const picker=d.querySelector<HTMLSelectElement>('.library-compact-categories select')!;
+ assert.equal(picker.value,'records');
+ assert.deepEqual(Array.from(picker.options,option=>option.value),Array.from(d.querySelectorAll('.library-navigation button'),button=>button.getAttribute('data-collection-id')));
+ assert.equal(picker.querySelector('option[value="coding-status"]'),null,'transfer receipts stay in their existing Processing context');
+ await act(async()=>{picker.value='memories';picker.dispatchEvent(new w.Event('change',{bubbles:true}));});
+ assert.deepEqual(selected,['memories'],'the compact control selects the same registered collection directly');
+ await act(async()=>root.render(view(api,{tab:'generated-removed-collection'})));
+ assert.equal(picker.value,'generated-removed-collection','an explicit unavailable type never falls back to another visible type');
+ assert.equal(picker.selectedOptions[0].disabled,true);
+ assert.match(picker.selectedOptions[0].textContent??'',/当前不可用/);
+});
+
 test('record pagination and explicit device filters keep their request scope while returning from detail',async t=>{
   const {root,d,w}=await fixture(t),paths:string[]=[];
   const api=apiWith(path=>{paths.push(path);if(path.startsWith('/api/capture-browser?')){const params=new URL('http://localhost'+path).searchParams;return {items:[row(params.get('cursor')?'b'.repeat(8)+'-bbbb-4bbb-8bbb-'+ 'b'.repeat(12):id)],nextCursor:params.has('cursor')?null:'generated-next',totalCount:2};}if(path.startsWith('/api/capture-browser/'))return capture(other);throw Error(path);});
