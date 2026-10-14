@@ -355,12 +355,16 @@ test('Codex cumulative usage replaces duplicate samples and covers repair turns 
 test('Codex interrupted turns preserve observed counts but mark cumulative usage incomplete',{timeout:15000},async t=>{
  for(const kind of ['deadline','host-deadline','cancel','close','child-exit','late-usage']){
   await fake(t,kind==='child-exit'?'usage-exit':kind==='late-usage'?'usage-late-exit':'usage-timeout');
+  // Advance the deadline only after the observed-usage state is established;
+  // generated child startup must not race the behavior this case verifies.
+  const deadlineClock=kind==='deadline'?t.mock.timers:undefined;deadlineClock?.enable({apis:['setTimeout']});
   const samples=[];let sampleArrived;const firstSample=new Promise(resolve=>{sampleArrived=resolve;});
   const session=new CodexSession({model:'fixture',agentTimeoutMs:kind==='deadline'?1000:5000},async()=>({}),undefined,value=>{samples.push(value);sampleArrived();});
   try{
    await session.start('Generated interrupted usage',codexContextTools);const pending=session.run('Generated pending turn');void pending.catch(()=>{});
    await Promise.race([firstSample,pending.then(()=>{throw Error('Fixture unexpectedly completed');})]);
    assert.equal(samples[0].totalTokens,150);assert.equal(samples[0].complete,true);
+   if(deadlineClock){deadlineClock.tick(1000);deadlineClock.reset();}
    if(kind==='host-deadline')session.cancel(new DOMException('Generated host deadline','TimeoutError'));
    if(kind==='cancel'||kind==='late-usage')session.cancel(new DOMException('Generated owner cancellation','AbortError'));
    if(kind==='close')await session.close();
@@ -370,7 +374,7 @@ test('Codex interrupted turns preserve observed counts but mark cumulative usage
    assert.equal(last.inputTokens,kind==='late-usage'?200:100);assert.equal(last.outputTokens,kind==='late-usage'?100:50);
    assert.equal(last.measurement,'thread_cumulative');assert.equal(last.requests,0);
    const interrupted=samples.findIndex(sample=>sample.complete===false);assert.ok(interrupted>=0);assert.ok(samples.slice(interrupted).every(sample=>sample.complete===false),'late samples must not restore completeness after interruption');
-  }finally{await session.close();}
+  }finally{deadlineClock?.reset();await session.close();}
  }
 });
 test('Codex successful turn usage remains complete after normal session cleanup',async t=>{
