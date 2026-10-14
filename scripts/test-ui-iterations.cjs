@@ -391,12 +391,12 @@ async function rolloutAskFitJourney(){
       const caption=await js(`(()=>{const select=document.querySelector('.model-selector select'),summary=document.querySelector('.model-selector-selection');return {native:select.selectedOptions[0].textContent,visible:summary.textContent,shown:!!summary.getClientRects().length,fit:summary.scrollWidth<=summary.clientWidth}})()`);
       assert.equal(caption.visible,caption.native,'Compact caption retains the complete actual model option');assert.ok(caption.shown&&caption.fit,'Complete selected model caption wraps in compact layout');
       const observations=[];
-      for(const [state,offset]of [['top',0],['middle',406],['end',100000]]){
-        await js('window.scrollTo(0,'+offset+');true');await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-        const bounds=await js(`(()=>{const send=document.querySelector('.send-button'),r=send.getBoundingClientRect(),n=document.getElementById('primary-navigation').getBoundingClientRect();return {top:r.top,bottom:r.bottom,dockTop:n.top,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===send}})()`);
-        assert.ok(bounds.top>=0&&bounds.bottom<bounds.dockTop&&bounds.hit,'Complete Ask send target remains above the dock: '+language+' '+width+' '+state);observations.push({state,...bounds});
+      for(const[control,selector]of[['model caption','.model-selector-selection'],['attachment','.chat-image-button'],['send','.send-button']]){
+        await js('document.querySelector('+JSON.stringify(selector)+').scrollIntoView({block:"center"});true');await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const bounds=await js(`(()=>{const e=document.querySelector(${JSON.stringify(selector)}),r=e.getBoundingClientRect(),n=document.getElementById('primary-navigation').getBoundingClientRect(),form=document.querySelector('.ask-form').getBoundingClientRect(),summary=document.querySelector('.model-selector-selection').getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,dockTop:n.top,width:innerWidth,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest(${JSON.stringify(selector)})===e,captionOverlap:form.top<summary.bottom&&form.bottom>summary.top}})()`);
+        assert.ok(bounds.top>=0&&bounds.bottom<bounds.dockTop&&bounds.left>=0&&bounds.right<=bounds.width&&bounds.hit&&!bounds.captionOverlap,'Complete Ask control and model caption remain reachable without dock/composer overlap: '+language+' '+width+' '+control);observations.push({control,...bounds});
+        await capture('ask-'+control.replace(' ','-')+'-fit-'+language+'-'+width,{scene:'ask-reachable-control',variant:'minimum',preserveScroll:true,reviewSelection:true});
       }
-      await js("document.querySelector('.model-selector select').scrollIntoView({block:'center'});true");await capture('ask-selected-model-fit-'+language+'-'+width,{scene:'ask-selected-model-fit',variant:'minimum',preserveScroll:true,reviewSelection:true});
       journeys.push({name:'compact Ask complete model and dock-safe Send',language,width,caption,observations,status:'verified'});
     }
   }
@@ -660,6 +660,8 @@ async function run() {
   const coreScenes=['home','content','note','detail','ask','settings','providers','import'];
   const coreCaptures=artRound||rollout?captures.filter(item=>coreScenes.includes(item.scene)&&['normal','compact'].includes(item.variant)&&item.reviewSelection):[];
   if(artRound||rollout){assert.equal(coreCaptures.length,32);assert.equal(new Set(coreCaptures.map(item=>[item.scene,item.language,item.variant].join(':'))).size,32);for(const item of coreCaptures){if(artRound)item.artDirectionCore=true;else item.rolloutCore=true;item.sceneKey=item.scene;item.sourceCommit=sourceCommit;}}
+  assert.deepEqual(Object.fromEntries(Object.keys(captureSourceIdentity).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,file))).digest('hex')])),captureSourceIdentity,'Capture source unchanged through all journeys');
+  assert.deepEqual(Object.fromEntries(readdirSync(join(repo,'apps/web/dist/assets')).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,'apps/web/dist/assets',file))).digest('hex')])),captureBuildIdentity,'Capture build unchanged through all journeys');
   const sourceIdentity=captureSourceIdentity,buildIdentity=captureBuildIdentity;
   writeFileSync(join(output, 'result.json'), JSON.stringify({ round, artRound, rollout, sourceCommit,sourceIdentity,buildIdentity,tokensSha256:createHash('sha256').update(readFileSync(join(repo,'packages/shared/design-tokens.json'))).digest('hex'),coreCaptures,passed: true, phase: 'completed', generatedOnly: true, captures, journeys,
     featureGroups: catalog.groups.length, featureUnits: catalog.units.length,

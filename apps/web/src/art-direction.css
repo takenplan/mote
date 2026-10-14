@@ -213,7 +213,7 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
  .home-retrieval { padding-left:0; padding-top:var(--mote-space-item); }
  .sidebar nav button { font-size:var(--mote-font-meta); border-radius:var(--mote-radius-control); }
  .topbar .quick-note { min-height:var(--mote-control-height); }
- .conversation-content .ask-form { bottom:calc(70px + var(--mote-space-page)); }
+ .conversation-content .ask-form { position:static; }
  .model-selector select { width:100%; max-width:100%; min-width:0; }
  .model-selector-selection { display:block; flex-basis:100%; min-width:0; width:100%; white-space:normal; overflow-wrap:anywhere; font-size:var(--mote-font-support); }
  .settings-link-grid button { min-height:var(--mote-control-height); }
