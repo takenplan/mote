@@ -89,7 +89,7 @@ class UiRolloutInstrumentedTest {
                         }
                         "rollout-activity-statistics" -> {
                             val disclosures = views(root).filterIsInstance<Button>().filter { it.text.toString().endsWith(MoteI18n.text(" · 展开 / 收起")) }
-                            assertEquals("All three actual statistic detail controls are present", 3, disclosures.size)
+                            assertEquals("All four actual statistic detail controls are present", 4, disclosures.size)
                             disclosures.zipWithNext().forEach { (before, after) -> assertControlGap(before, after) }
                         }
                     }
