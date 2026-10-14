@@ -40,7 +40,7 @@
 .plugin-advanced {margin:24px 0;border-top:1px solid var(--line);padding-top:18px;}
 .plugin-advanced summary {cursor:pointer;font-size:13px;color:var(--muted);padding:8px 0;}
 .plugin-inventory .feature-inventory {margin-top:20px;}
-.plugin-modal {width:min(720px,100%);}
+.plugin-modal {width:min(720px,100%);padding:24px;}
 .plugin-modal .section-heading h2 {font-size:22px;}
 .plugin-modal .plugin-footer {justify-content:flex-end;}
 .plugin-confirm {display:flex;align-items:flex-start;gap:12px;margin:20px 0;font-size:13px;line-height:1.7;}
