@@ -15,8 +15,10 @@ test('memory details authorize only delivered in-scope original evidence and nev
  const b=await startBridge(reader({memories:async()=>({items:[{id:'memory-card',title:'derived'}],evidence:[record,{...record,id:'570e68d6-d7fe-5ab4-855b-1ef6adf1ce75',deviceId:'other'}]})}),{question:'memory',deviceId:'allowed'},12);t.after(()=>b.close());
  const r=await request(b,'memories',{id:'memory-card'});assert.equal(r.status,200);assert.equal(r.body.data.evidence.length,1);assert.equal((await request(b,'evidence',{ids:[record.id]})).status,200);assert.equal((await request(b,'evidence',{ids:['memory-card']})).status,400);assert.equal((await request(b,'evidence',{ids:['570e68d6-d7fe-5ab4-855b-1ef6adf1ce75']})).status,400);
 });
-test('rejected oversized memory result cannot authorize evidence',async t=>{
- const b=await startBridge(reader({memories:async()=>({items:[{text:'x'.repeat(1_600_000)}],evidence:[record]})}),{question:'memory'},12);t.after(()=>b.close());assert.equal((await request(b,'memories')).status,400);assert.equal((await request(b,'evidence',{ids:[record.id]})).status,400);
+test('large Memory navigation stays complete and does not cite unread originals',async t=>{
+ const b=await startBridge(reader({memories:async()=>({items:[{text:'x'.repeat(1_600_000)}],evidence:[record]})}),{question:'memory'},12);t.after(()=>b.close());
+ const value=await request(b,'memories');assert.equal(value.status,200);assert.equal(value.body.data.items[0].text.length,1_600_000);assert.equal(b.records.size,0);
+ assert.throws(()=>parseAnswer(JSON.stringify({answer:'Unread',citationIds:[record.id]}),b.records));assert.equal((await request(b,'evidence',{ids:[record.id]})).status,200);
 });
 test('file chunks require prior discovery, preserve immutable timed citations and cannot broaden device scope',async t=>{
  const parent={...record,id:'22222222-2222-4222-8222-222222222222',sourceType:'file',ocrText:'',provenance:{sourceId:'phone',revision:'v1',layer:'original'}};

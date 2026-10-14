@@ -14,7 +14,8 @@ test('root catalog avoids corpus scans; source and layer cursors allow complete 
  const store={archive:{stats(){throw Error('First screen must not count the corpus');}}} as unknown as Store;
  let sourceListings=0,contextReads=0;
  const sources={listSources:()=>{sourceListings++;return Array.from({length:29},(_,i)=>({id:String(i).padStart(2,'0'),name:'Generated '+i,kind:'file',deviceId:i===28?'other':'fixture'}));},
-  contexts:{current:(sourceId:string)=>{contextReads++;return {sourceId,version:0,description:''};},identity:()=>undefined}} as unknown as SourceStore;
+  contexts:{current:(sourceId:string)=>{contextReads++;return {sourceId,version:0,description:''};},identity:()=>undefined,
+   metadataIdentity:(sourceId:string)=>({sourceId,version:1,fingerprint:'a'.repeat(64),kind:'metadata'})}} as unknown as SourceStore;
  const memory={page:()=>({items:[],nextCursor:'next-memory'})};
  const root=contextIndex(store,memory,sources);assert.equal(root.entries.length,3);assert.equal(root.nextCursor,null);assert.equal(sourceListings,0);assert.equal(contextReads,0);
  const ids:string[]=[];let cursor:string|undefined;

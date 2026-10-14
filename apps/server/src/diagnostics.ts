@@ -28,11 +28,10 @@ const levels = ['debug','info','warn','error','silent'] as const;
 const operations:Operation[] = ['recording_metadata','recording_discover','recording_transcript','recording_media','recording_decode','recording_publish','capture','note','import','embedding','search','timeline','evidence','activity','devices','query','insight','retention','extract','diarize','align','turns','summary','file_upload','file_part','file_commit','file_revision','file_process','file_settings','file_retry'];
 const events = new Set(['server.started','server.stopping','request.started','request.completed','request.failed','queue.snapshot','support.exported','agent.trace','agent.fragment_timing','agent.harness_timing','agent.tool_rejected','agent.memory_validation_failed','agent.waiting','agent.yielded','agent.heartbeat','file.blocked','file.retry','file.cached','file.cancelled','file.settings','file.step.started','file.step.completed','file.step.failed',...['ingest','index','agent','source','maintenance','file'].flatMap(s=>[`${s}.started`,`${s}.completed`,`${s}.failed`])]);
 const routes = new Set(['files','file-sync','file-processing','conversations','configuration','sources','memories','layers','connectors','health','status','captures','notes','image','devices','connections','updates','activity','query','insights','index','export','import','diagnostics','support','web','unknown']);
-const categories = new Set(['validation','unauthorized','forbidden','not_found','conflict','deleted','too_large','rate_limited','model_not_configured','agent_response','embedding_http','embedding_invalid','embedding_transport','timeout','unavailable','storage_full','internal','not_configured','archive_only','unsupported_format','summary_disabled','cancelled']);
+const categories = new Set(['validation','unauthorized','forbidden','not_found','conflict','source_context_changed','deleted','too_large','rate_limited','model_not_configured','agent_response','embedding_http','embedding_invalid','embedding_transport','timeout','unavailable','storage_full','internal','not_configured','archive_only','unsupported_format','summary_disabled','cancelled']);
 const numberKeys = ['durationMs','queueWaitMs','statusCode','count','bytes','pending','failed','queueDepth','activeQueries','toolCalls','citations','httpStatus','deleted','attempt','retryAfterMs','part','batchIndex','candidateIndex','spanIndex','declaredOffset','declaredLength','quoteLength','sourceLength','authorizedMatches','maxCandidates','idleMs','elapsedMs','remainingCalls','remainingCharacters','repeatCount'] as const;
 const responseReasons:Record<string,string>={
   provider_quota:"模型服务额度不足，恢复账户额度后再继续。",
-  host_context_budget:"服务端上下文超过预算，请缩小处理批次。",
   provider_policy:"模型服务拒绝了本次请求，请调整内容或处理范围。",
   recovery_window_exhausted:"自动恢复时间已用完，可手动重试开启新的恢复周期。",
   configuration_changed:"相关模型配置已改变，请重试以使用新配置；已完成批次会保留。",
@@ -106,9 +105,9 @@ function describeError(error:unknown):{status:number;category:string;message:str
   if(e.name==='AgentNotConfiguredError')return {status:503,category:'model_not_configured',message:moteText("Agent 未配置，请在中央节点配置模型后重试。")};
   if(e.name==='AgentTimeoutError')return {status:504,category:'timeout',message:moteText("Agent 请求已超时，请稍后重试或缩小查询范围。")};
   if(e.code==='context_lineage_incomplete')return {status:409,category:'context_lineage_incomplete',message:moteText("这段历史的证据范围不完整，无法安全发送给远程模型。请新建对话，或改用本地模型并重新提供证据。")};
+  if(e.code==='source_context_changed')return {status:409,category:'source_context_changed',message:moteText("资料状态已变化或当前配置不支持此操作，请刷新后重试。")};
   if(e.code==='context_evidence_restricted')return {status:409,category:'context_evidence_restricted',message:moteText("这段历史包含当前不可向所选模型披露的资料。请改用本地模型，或新建对话并重新选择可用证据。")};
   if(error instanceof ProviderFailure&&Object.hasOwn(responseReasons,error.details.code)){const reason=error.details.code;return {status:502,category:error.details.category==='blocked'?'model_not_configured':error.details.category==='permanent'?'validation':reason==='rate_limited'?'rate_limited':'unavailable',reason,message:moteText(responseReasons[reason])};}
-  if(e.name==='AgentContextBudgetError')return {status:413,category:'too_large',reason:'host_context_budget',message:moteText("服务端上下文超过预算，请缩小处理批次。")};
   if(e.name==='AgentProviderError')return {status:502,category:'agent_response',message:moteText("模型服务请求未完成，请检查地址、凭据和模型配置。")};
   if(e.name==='AgentResponseError') {const reason=typeof e.reason==='string'&&Object.hasOwn(responseReasons,e.reason)?e.reason:'invalid_response';return {status:502,category:'agent_response',reason,message:moteText(responseReasons[reason])};}
   if(e.name==='AbortError'||e.name==='TimeoutError')return {status:504,category:'timeout',message:moteText("操作已取消或超时，请稍后重试。")};

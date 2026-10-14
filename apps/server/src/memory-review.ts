@@ -1,4 +1,4 @@
-import {extractionSeedScopeFitsBudget,type QueryInput} from '@mote/agent';
+import {extractionSeedScopeValid,type QueryInput} from '@mote/agent';
 import type {QueryResult} from '@mote/shared';
 import {MemoryOutputValidationError,MEMORY_ADMISSION_PROMPT} from './memory.js';
 import {StoreError,sha256} from './store.js';
@@ -25,7 +25,7 @@ export async function reviewMemory(input:QueryInput&{memoryReviewQuestion?:strin
   if(input.evidenceReadRanges){
     const ranges=memoryReadRanges(draft,input.evidenceRanges??[],input.evidenceReadRanges);
     const ids=[...new Set([...(input.evidenceIds??[]),...ranges.map(range=>range.id)])];
-    if(extractionSeedScopeFitsBudget(ids,ranges))input={...input,evidenceIds:ids,evidenceRanges:ranges};
+    if(extractionSeedScopeValid(ids,ranges))input={...input,evidenceIds:ids,evidenceRanges:ranges};
     else contextPagesRequired=true;
   }
   const strategy=options?.strategy?memoryReviewStrategySchema.parse(options.strategy):undefined;
@@ -66,7 +66,7 @@ export async function reviewMemory(input:QueryInput&{memoryReviewQuestion?:strin
   const repair=input.memoryReviewRepair;
   const question=(strategy?strategy.policy+'\n'+memoryCandidateOutputContract(contract)+(options?.taskInstructions?'\n'+options.taskInstructions:''):
     MEMORY_ADMISSION_PROMPT+'\n'+taskQuestion+'\n'+defaultMemoryReviewStrategy.policy.slice(MEMORY_ADMISSION_PROMPT.length+1))+(workPackage?'\nIndependently inspect every listed target range in full and verify each member coverage decision, including all no_candidates entries.'+(contract?' Verify the quality and usefulness of the selected set; deliberate selection is permitted and is not incomplete evaluation. Do not infer completeness from candidate count. Explicit unread/truncated or unassessed target ranges require incomplete with a concrete reason.':' Verify omitted or saturated candidates under the fixed legacy contract.')+' Apply the batch-local coverage contract in taskContext.memoryWork. The overall package goal does not authorize other ranges or require this call to complete the whole original. Verify owner questions and their exact source quotes as well as independently supported candidates in the same range. A named participant or conversational role does not establish owner identity, and diarization labels may mix speakers. Use needs_context only for specific useful additional authorized evidence; use needs_owner_input with a concrete minimal question when a meaningful result requires an owner fact unavailable from the evidence. Preserve completed uncertainty or useful observed context when no question is needed. Consult supplied prior inspection outcomes and never recommend unchanged reading to infer a missing owner association. An empty candidate array still requires this independent review.':'')+(repair?'\nHost review repair: '+repair:'');
-  const contextReading=contextPagesRequired?'\nThe extractor read additional authorized original pages that exceed this review\'s initial evidence budget. This review starts with the original target seeds and retains the same context read grant. Use context_evidence to read the necessary original pages before retaining claims that rely on them. Quoted text in the untrusted draft and the extractor\'s reading do not establish that this reviewer read those originals. Only originals actually delivered in this review support its citations; additional context does not add targets or complete other coverage. If necessary context cannot be inspected within the existing budgets, preserve the specific uncertainty or omit unsupported claims without inventing absence.':'';
+  const contextReading=contextPagesRequired?'\nThe extractor\'s additional original page ranges do not form a valid initial evidence scope for this review. This review starts with the original target seeds and retains the same context read grant. Use context_evidence to read the necessary original pages before retaining claims that rely on them. Quoted text in the untrusted draft and the extractor\'s reading do not establish that this reviewer read those originals. Only originals actually delivered in this review support its citations; additional context does not add targets or complete other coverage. If necessary context cannot be inspected, preserve the specific uncertainty or omit unsupported claims without inventing absence.':'';
   const reviewed=await query({...input,traceContext:{...traceContext,phase:'review'},taskContext:{turns:[],...input.taskContext,untrustedMemoryDraft:value},question:question+contextReading});
   await validate(reviewed);
   if(key)options!.cache!.put(key,reviewed);

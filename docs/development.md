@@ -160,6 +160,8 @@ npm run test:profiles
 
 `test:profiles` 使用系统临时目录、随机 loopback 端口和生成的 2×2 PNG，实际创建两套 dev/test 中央 Node 子进程。验证跨令牌拒绝、数据库分离、文件导入各自确认、备份 SHA、加密图片恢复、升级回退、原生日志隐私及轮转、监督进程异常结束后的接管；只清理本次创建的进程与目录。不会使用正式 47832，也不调用外部模型。
 
+问答依赖或 Memory 启动/恢复变化需覆盖正式 HTTP 与应用重启顺序：宽依赖续问跨过执行租约、核对中删除、外联中删除、未激活任务重启休眠、显式启动后的恢复，以及取消/撤权拒绝。使用生成原件与 loopback 模型 fixture；测试次数、真实模型计量和部署版本分别记录。当前回归入口与执行证据见[租约与启动授权验证](validation/query-lease-and-memory-activation-2026-10-14.md)。
+
 ```sh
 # 需要 Docker Engine 与 Compose 2.30+
 npm run test:container

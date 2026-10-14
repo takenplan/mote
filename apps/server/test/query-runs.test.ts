@@ -91,6 +91,25 @@ test('execution entrypoints attribute insight, memory and isolated file analysis
   ]);
 });
 
+test('direct Memory extraction preserves a generated range beyond the retired count and character gates',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'mote-extract-without-read-budget-')),seen:Array<{ids:string[];ranges:unknown[]}>=[];
+  const {app,store,memories}=await buildApp(config(dir),{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async input=>{
+    if(input.skill==='memory-extraction')seen.push({ids:input.evidenceIds??[],ranges:input.evidenceRanges??[]});
+    return {answer:JSON.stringify({memories:[]}),citations:[],trace:[],runId:randomUUID()};
+  }}});
+  t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+  const texts:string[]=[];
+  for(let index=0;index<101;index++){
+    const id=randomUUID(),text=`Generated record ${index}. `+'Generated direct extraction evidence. '.repeat(30);texts.push(text);
+    await store.ingest({id,deviceId:'generated-budget-regression',deviceName:'Generated',platform:'import',source:'note',capturedAt:'2026-10-01T00:00:00.000Z',durationMs:0,ocrText:text});
+  }
+  const response=await app.inject({method:'POST',url:'/api/memories/extract',headers,payload:{}});
+  assert.equal(response.statusCode,200,response.body);assert.equal(seen.length,1);
+  assert.equal(seen[0]!.ids.length,101);assert.equal(seen[0]!.ranges.length,101);
+  assert.deepEqual(memories.readEvidence(seen[0]!.ids).map(record=>record.ocrText).sort(),texts.sort());
+  assert.ok((seen[0]!.ranges as Array<{length:number}>).reduce((sum,range)=>sum+range.length,0)>100000);
+});
+
 test('explicit cancellation reaches the executing agent and cannot archive a late answer',async t=>{
   const dir=mkdtempSync(join(tmpdir(),'mote-query-cancel-'));let observed:AbortSignal|undefined,release!:()=>void;
   const agent:QueryAgent={configured:true,close:async()=>{},query:async input=>{

@@ -46,34 +46,22 @@ test('model deadlines remain typed and retryable without committing a checkpoint
  await assert.rejects(pipeline.retry(job.id));await new Promise(resolve=>setTimeout(resolve,Math.max(0,failed.availableAt!-Date.now())+10));
  assert.equal((await pipeline.retry(job.id)).status,'completed');assert.equal(calls,2);
 });
-test('deadline retry halves batches twice, survives restart, and concurrent retry creates no duplicate siblings',async t=>{
+test('manual timeout retry keeps exact ranges across restart and concurrent retries share one job',async t=>{
  const {store,sources,memories}=fixture(t),ids:string[]=[],seen:string[]=[];
  for(let i=0;i<20;i++)ids.push((await sources.upsert('generated',item(String(i),'前缀🌱合成原文内容'))).id);
- const ranges=ids.map(id=>({id,offset:2,length:6}));
- const query=async(input:MemoryPipelineQuery)=>{if(input.evidenceRanges.length>5)throw new ProviderFailure({category:'transient',code:'provider_timeout',retryAfterMs:0});for(const range of input.evidenceRanges){assert.equal(range.offset,2);assert.equal(range.length,6);seen.push(range.id);}return empty();};
+ const ranges=ids.map(id=>({id,offset:2,length:6}));let fail=true;
+ const query=async(input:MemoryPipelineQuery)=>{assert.deepEqual(input.evidenceRanges,ranges);if(fail)throw new ProviderFailure({category:'permanent',code:'provider_timeout',retryAfterMs:0});seen.push(...input.evidenceIds);return empty();};
  let pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query});
- try{
-  const job=pipeline.create({evidenceIds:ids,evidenceRanges:ranges});assert.equal((await pipeline.run(job.id)).failedBatches,1);
-  const [first,duplicate]=await Promise.all([pipeline.retry(job.id),pipeline.retry(job.id)]);assert.equal(first.totalBatches,2);assert.equal(duplicate.totalBatches,2);assert.equal(first.failedBatches,2);
-  const originalKeys=store.db.prepare('SELECT json FROM memory_batches WHERE job_id=?').all(job.id).flatMap(row=>JSON.parse(String(row.json)).chunks.map((chunk:{key:string})=>chunk.key));
-  await pipeline.close();pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query});
-  const completed=await pipeline.retry(job.id);assert.equal(completed.status,'completed');assert.equal(completed.totalBatches,4);assert.deepEqual(new Set(seen),new Set(ids));assert.equal(seen.length,20);
-  assert.ok(completed.batches.every(batch=>batch.splitDepth===2&&batch.splitHistory!.length===2));
-  assert.deepEqual(new Set(store.db.prepare('SELECT key FROM memory_checkpoints').all().map(row=>String(row.key))),new Set(originalKeys));
-  assert.equal((await pipeline.retry(job.id)).totalBatches,4);assert.equal(seen.length,20);assert.equal(pipeline.create({evidenceIds:ids,evidenceRanges:ranges}).totalBatches,0);
+ try{const job=pipeline.create({evidenceIds:ids,evidenceRanges:ranges});assert.equal((await pipeline.run(job.id)).failedBatches,1);await pipeline.close();pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query});fail=false;
+ const [done,duplicate]=await Promise.all([pipeline.retry(job.id),pipeline.retry(job.id)]);assert.equal(done.status,'completed');assert.equal(done.totalBatches,1);assert.equal(duplicate.totalBatches,1);assert.deepEqual(new Set(seen),new Set(ids));assert.equal(seen.length,20);
+ assert.equal((await pipeline.retry(job.id)).totalBatches,1);assert.equal(seen.length,20);
  }finally{await pipeline.close();}
 });
-test('timeout splitting stops after two levels and never subdivides a lone original range',async t=>{
- const {store,sources,memories}=fixture(t),ids:string[]=[];for(let i=0;i<8;i++)ids.push((await sources.upsert('generated',item(String(i)))).id);
- let calls=0;const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{calls++;throw new ProviderFailure({category:'transient',code:'provider_timeout',retryAfterMs:0});}});
- try{const job=pipeline.create({evidenceIds:ids});await pipeline.run(job.id);await pipeline.retry(job.id);await pipeline.retry(job.id);const terminal=await pipeline.retry(job.id);assert.equal(terminal.status,'failed');assert.equal(terminal.totalBatches,4);assert.equal(calls,11);assert.ok(terminal.batches.every(batch=>batch.splitDepth===2));
- const single=pipeline.create({evidenceIds:[ids[0]]});await pipeline.run(single.id);assert.equal((await pipeline.retry(single.id)).totalBatches,1);
- }finally{await pipeline.close();}
-});
-test('late progress and validation from a timed-out attempt cannot overwrite its reclaimed split batch',async t=>{
+
+test('late progress and validation from a failed attempt cannot overwrite its reclaimed exact batch',async t=>{
  const {store,sources,memories}=fixture(t),ids:string[]=[];for(let i=0;i<4;i++)ids.push((await sources.upsert('generated',item(String(i)))).id);
  let oldInput!:MemoryPipelineQuery,calls=0,release!:()=>void,entered!:()=>void;const started=new Promise<void>(resolve=>entered=resolve);
- const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async input=>{if(++calls===1){oldInput=input;throw new ProviderFailure({category:'transient',code:'provider_timeout',retryAfterMs:0});}if(calls===2){entered();await new Promise<void>(resolve=>release=resolve);}return empty();}});
+ const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async input=>{if(++calls===1){oldInput=input;throw new ProviderFailure({category:'permanent',code:'provider_timeout',retryAfterMs:0});}if(calls===2){entered();await new Promise<void>(resolve=>release=resolve);}return empty();}});
  try{const job=pipeline.create({evidenceIds:ids});await pipeline.run(job.id);const retry=pipeline.retry(job.id);await started;
  const before=store.db.prepare('SELECT json FROM memory_batches WHERE id=?').get(job.batches[0].id)!.json;
  oldInput.onProgress?.({stage:'model',message:'Generated late callback'});oldInput.onTrace?.({type:'generated.late'});
@@ -351,9 +339,12 @@ test('shared engine cannot bypass explicit lifecycle activation after recovery',
  const initial=fixtureMemoryPipeline(options),job=initial.create({evidenceIds:[ack.id]});await initial.close();
  const engine=new ExecutionEngine(store),pipeline=fixtureMemoryPipeline({...options,executor:engine});
  const batchId=job.batches[0].id;
+ assert.equal(pipeline.get(job.id).activationRequired,true);
  engine.enqueue('memory:'+job.id,'memory.batch',{jobId:job.id,batchId,evidenceIds:[ack.id]},{id:batchId});
  await engine.tick();assert.equal(engine.get(batchId)!.error,'awaiting_activation');assert.equal(engine.get(batchId)!.attempts,0);assert.equal(pipeline.get(job.id).completedBatches,0);
- assert.equal((await pipeline.run(job.id)).status,'completed');await engine.close();await pipeline.close();
+ const execution=pipeline.run(job.id);
+ assert.equal(JSON.parse(String(store.db.prepare('SELECT json FROM memory_jobs WHERE id=?').get(job.id)!.json)).activationRequired,false);
+ assert.equal((await execution).status,'completed');await engine.close();await pipeline.close();
 });
 
 test('typed provider authentication failures remain actionable without hanging or saving checkpoints',async t=>{
@@ -366,7 +357,7 @@ test('typed provider authentication failures remain actionable without hanging o
 
 test('memory keeps provider retry deadlines and refuses premature manual retry',async t=>{
  const {ProviderFailure}=await import('@mote/shared');const {store,sources,memories}=fixture(t),capture=await sources.upsert('generated',item());let calls=0;
- const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query:async()=>{calls++;throw new ProviderFailure({category:'transient',code:'rate_limited',retryAfterMs:12000});}});
+ const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query:async()=>{calls++;throw new ProviderFailure({category:'permanent',code:'rate_limited',retryAfterMs:12000});}});
  try{const job=pipeline.create({evidenceIds:[capture.id]}),failed=await pipeline.run(job.id);assert.equal(failed.status,'failed');assert.equal(failed.errorCode,'rate_limited');assert.ok(failed.availableAt!>Date.now());assert.ok(failed.execution!.failure!.retryAfterMs!>0);await assert.rejects(pipeline.retry(job.id),error=>error instanceof ProviderFailure&&error.details.code==='rate_limited');assert.equal(calls,1);assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);}finally{await pipeline.close();}
 });
 

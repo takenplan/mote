@@ -15,6 +15,6 @@ test('calendar history grants a bounded read-only tool without broadening origin
 test('ordinary queries and extraction without an explicit host action grant cannot call the catalog',async t=>{
  for(const input of [{question:'ordinary',actionCatalog:async()=>({items:[],nextCursor:null})},{question:'extraction',evidenceIds:[id],skill:'calendar-extraction'}]){assert.equal(taskTools(input).includes('action_catalog'),false);const {call}=await fixture(t,input);assert.equal((await call('action_catalog')).status,400);}
 });
-test('oversized action comparison output fails under the ordinary result budget',async t=>{
- const {call}=await fixture(t,{question:'Generated extraction',skill:'calendar-extraction',evidenceIds:[id],actionCatalog:async()=>({items:[{id:actionId,text:'x'.repeat(150000)}],nextCursor:null})});const value=await call('action_catalog');assert.equal(value.status,400);assert.equal(value.body.toolError.code,'evidence_budget_exceeded');
+test('action comparison output uses normal pagination without an unrelated response byte quota',async t=>{
+ const {call}=await fixture(t,{question:'Generated extraction',skill:'calendar-extraction',evidenceIds:[id],actionCatalog:async()=>({items:[{id:actionId,text:'x'.repeat(150000)}],nextCursor:null})});const value=await call('action_catalog');assert.equal(value.status,200);assert.equal(value.body.data.items[0].text.length,150000);
 });

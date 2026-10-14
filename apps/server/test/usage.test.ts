@@ -7,6 +7,14 @@ import {Store} from '../src/store.js';
 import {UsageLedger,estimateCost,usageTotals} from '../src/usage.js';
 const price={provider:'fixture',model:'fixture-model',currency:'USD' as const,input:2,output:8,cacheRead:0.5,cacheWrite:3};
 const tokens={requests:2,reportedRequests:2,inputTokens:1000000,outputTokens:100000,cacheReadTokens:500000,cacheWriteTokens:100000,totalTokens:1100000,reasoningTokens:50000};
+test('operation totals include all research/writer/reviewer fragments and keep elapsed and cumulative model time distinct',t=>{
+ const dir=mkdtempSync(join(tmpdir(),'mote-operation-usage-')),store=new Store(dir),ledger=new UsageLedger(store);t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+ for(const [index,moduleId] of ['query.research','query.writer','query.review'].entries()){
+  const meter=ledger.start('fixture','fixture-model','query',{operationId:'query:generated',moduleId});meter.update(tokens);const receipt=meter.finish('completed');receipt.createdAt=new Date(Date.parse('2026-10-14T00:00:00Z')+index*500).toISOString();receipt.durationMs=1000;store.db.prepare('UPDATE model_usage SET created_at=?,json=? WHERE id=?').run(receipt.createdAt,JSON.stringify(receipt),receipt.id);
+ }
+ ledger.start('fixture','fixture-model','query',{operationId:'query:unrelated'}).finish('completed');
+ const result=ledger.operation('query:generated','2026-10-14T00:00:00Z','2026-10-14T00:00:02Z');assert.equal(result.items.length,3);assert.equal(result.total.totalTokens,3*tokens.totalTokens);assert.equal(result.wallDurationMs,2000);assert.equal(result.modelDurationMs,3000);
+});
 test('cumulative Codex tokens are priced independently of the unknown underlying request count',()=>{
   const cumulative={...tokens,requests:0,reportedRequests:0,measurement:'thread_cumulative' as const,complete:true};
   assert.equal(estimateCost(cumulative,price),2.15);

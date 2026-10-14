@@ -4,79 +4,55 @@ import assert from 'node:assert/strict';
 import { startBridge } from '../dist/bridge.js';
 import { parseAnswer } from '../dist/index.js';
 
-const small = { id:fixtureCaptureId('synthetic-budget-0'), capturedAt:'2026-01-01T00:00:00.000Z', appName:'Synthetic fixture', ocrText:'Previously delivered original evidence.' };
-const oversized = Array.from({ length:100 }, (_, index) => ({
-  ...small, id:fixtureCaptureId('synthetic-budget-'+index), ocrText:'字'.repeat(2000), summary:'字'.repeat(4000),
-}));
-const answerFor = id => JSON.stringify({ answer:'Synthetic answer.', citationIds:[id] });
-function request(bridge, tool, args) {
-  return fetch(`${bridge.url}/${tool}`, {
-    method:'POST', headers:{ Authorization:`Bearer ${bridge.token}`, 'Content-Type':'application/json' }, body:JSON.stringify(args),
-  }).then(async response => ({ status:response.status, body:await response.json() }));
-}
+const small={id:fixtureCaptureId('generated-capacity-original'),capturedAt:'2026-01-01T00:00:00.000Z',appName:'Generated fixture',ocrText:'Previously delivered original evidence.'};
+const originals=Array.from({length:6},(_,i)=>({...small,id:fixtureCaptureId('generated-page-'+i),ocrText:'字'.repeat(12000)}));
+const base={search:async()=>[small],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[small],activity:async()=>({}),devices:async()=>[]};
+const answerFor=id=>JSON.stringify({answer:'Generated answer.',citationIds:[id]});
+async function request(bridge,tool,args={}){const r=await fetch(bridge.url+'/'+tool,{method:'POST',headers:{Authorization:'Bearer '+bridge.token,'Content-Type':'application/json'},body:JSON.stringify(args)});return {status:r.status,body:await r.json()};}
 
-test('a rejected oversized result cannot authorize either citations or evidence expansion', async () => {
-  let evidenceCalls = 0;
-  const bridge = await startBridge({
-    search:async args => args.query === 'small' ? [small] : oversized,
-    timeline:async()=>({items:([]),nextCursor:null}),
-    evidence:async()=>{ evidenceCalls++; return [small]; },
-    activity:async()=>({}), devices:async()=>[],
-  }, { question:'Synthetic budget boundary' }, 8);
-  try {
-    const rejected = await request(bridge, 'search_context', { limit:100 });
-    assert.equal(rejected.status, 400); assert.match(rejected.body.error, /evidence budget/);
-    assert.equal(bridge.records.size, 0); assert.equal(bridge.trace.length, 0);
-    assert.throws(() => parseAnswer(answerFor(small.id), bridge.records), /not retrieved/);
-    const expansion = await request(bridge, 'evidence', { ids:[small.id] });
-    assert.equal(expansion.status, 400); assert.match(expansion.body.error, /Discover records/);
-    assert.equal(evidenceCalls, 0, 'rejected results never become a discovery permission');
-    assert.equal((await request(bridge, 'search_context', { query:'small' })).status, 200);
-    assert.equal(parseAnswer(answerFor(small.id), bridge.records).citations[0].id, small.id);
-    assert.equal((await request(bridge, 'evidence', { ids:[small.id] })).status, 200);
-    assert.equal(evidenceCalls, 1, 'a later valid result can authorize normal expansion');
-  } finally { await bridge.close(); }
+test('ordinary evidence pages exceed retired per-result and cumulative character quotas without shrinking',async t=>{
+ const bridge=await startBridge({...base,search:async()=>originals,evidence:async({ids})=>originals.filter(r=>ids.includes(r.id))},{question:'Generated broad state review'});t.after(()=>bridge.close());
+ assert.equal((await request(bridge,'search_context',{limit:6})).status,200);
+ const full=await request(bridge,'evidence',{ids:originals.map(r=>r.id)});
+ assert.equal(full.status,200);assert.ok(JSON.stringify(full.body).length>48000);
+ assert.equal(full.body.data.length,6);for(const r of full.body.data){assert.equal(r.ocrText.length,12000);assert.equal(r.textRange.nextOffset,null);}
+ assert.ok(bridge.deliveredCharacters>48000);assert.equal('remainingCharactersBeforeResult' in full.body.toolUsage,false);assert.equal('remainingCalls' in full.body.toolUsage,false);
+ assert.equal(parseAnswer(answerFor(originals[4].id),bridge.records).citations[0].id,originals[4].id);
+ for(let i=0;i<30;i++)assert.equal((await request(bridge,'search_context',{limit:1})).status,200);
+ assert.ok(bridge.trace.length>24,'default tool execution is governed by deadline and real failures, not a call quota');
 });
 
-test('a rejected later page cannot overwrite earlier delivered citation evidence or add new IDs', async () => {
-  const bridge = await startBridge({
-    search:async()=>[small], timeline:async()=>({ items:oversized, nextCursor:null }),
-    evidence:async()=>[small], activity:async()=>({}), devices:async()=>[],
-  }, { question:'Synthetic prior evidence preservation' }, 5);
-  try {
-    assert.equal((await request(bridge, 'search_context', {})).status, 200);
-    const previouslyDelivered = structuredClone(bridge.records.get(small.id));
-    const rejected = await request(bridge, 'timeline', { limit:100 });
-    assert.equal(rejected.status, 400); assert.match(rejected.body.error, /evidence budget/);
-    assert.equal(bridge.records.size, 1); assert.equal(bridge.trace.length, 1);
-    assert.deepEqual(bridge.records.get(small.id), previouslyDelivered);
-    assert.equal(parseAnswer(answerFor(small.id), bridge.records).citations[0].excerpt, small.ocrText);
-    assert.throws(() => parseAnswer(answerFor(fixtureCaptureId('synthetic-budget-99')), bridge.records), /not retrieved/);
-    assert.equal((await request(bridge, 'evidence', { ids:[fixtureCaptureId('synthetic-budget-99')] })).status, 400);
-  } finally { await bridge.close(); }
+test('large ordinary metadata is delivered intact without a replacement bridge byte quota',async t=>{
+ const large={...small,provenance:{sourceId:'generated-source',externalId:'x'.repeat(1500000)}};
+ const bridge=await startBridge({...base,search:async()=>[large]},{question:'Generated transport boundary'});t.after(()=>bridge.close());
+ const delivered=await request(bridge,'search_context');assert.equal(delivered.status,200);
+ assert.equal(delivered.body.data[0].provenance.externalId,large.provenance.externalId);
+ assert.equal(bridge.records.size,1);assert.equal(bridge.trace.length,1);assert.ok(bridge.deliveredCharacters>1500000);
+ assert.equal(parseAnswer(answerFor(small.id),bridge.records).citations[0].id,small.id);
 });
 
-test('successful and rejected tools expose the same host budget without granting rejected evidence', async t => {
-  let searches=0;
-  const bridge=await startBridge({search:async args=>{searches++;return args.query==='large'?oversized:[small];},timeline:async()=>({items:([]),nextCursor:null}),evidence:async()=>[small],activity:async()=>({}),devices:async()=>[]},{question:'Generated bounded retrieval'},4);
-  t.after(()=>bridge.close());
-  const initial=bridge.deliveredCharacters;
-  const rejected=await request(bridge,'search_context',{query:'large',limit:100});
-  assert.equal(rejected.status,400);
-  assert.deepEqual(rejected.body.hostBudget,{remainingCalls:3,remainingCharactersBeforeResult:48000-initial,unit:'utf16_characters'});
-  assert.equal(bridge.deliveredCharacters,initial);assert.equal(bridge.records.size,0);
-  const found=await request(bridge,'search_context',{query:'small'});
-  assert.equal(found.status,200);assert.equal(found.body.hostBudget.remainingCalls,2);
-  assert.equal(found.body.hostBudget.remainingCharactersBeforeResult,48000-initial);
-  assert.equal(bridge.deliveredCharacters,initial+JSON.stringify(found.body).length,'Budget metadata is counted in delivered text');
-  const before=bridge.deliveredCharacters;
-  const expanded=await request(bridge,'evidence',{ids:[small.id]});
-  assert.equal(expanded.status,200);assert.equal(expanded.body.hostBudget.remainingCalls,1);
-  assert.equal(expanded.body.hostBudget.remainingCharactersBeforeResult,48000-before);
-  const last=await request(bridge,'search_context',{query:'small'});assert.equal(last.body.hostBudget.remainingCalls,0);
-  const delivered=bridge.deliveredCharacters,count=searches;
-  const denied=await request(bridge,'search_context',{query:'small'});
-  assert.equal(denied.status,400);assert.equal(denied.body.toolError.code,'tool_budget_exceeded');assert.equal(denied.body.hostBudget.remainingCalls,0);
-  assert.equal(searches,count);assert.equal(bridge.deliveredCharacters,delivered);
-  assert.equal(parseAnswer(answerFor(small.id),bridge.records).citations[0].id,small.id,'Exhaustion does not remove already admitted evidence');
+test('large later results preserve previously delivered evidence and retain the full next result',async t=>{
+ const large={...small,id:fixtureCaptureId('generated-transport-tail'),provenance:{externalId:'x'.repeat(1500000)}};
+ const bridge=await startBridge({...base,timeline:async()=>({items:[large],nextCursor:null})},{question:'Generated prior evidence preservation'});t.after(()=>bridge.close());
+ assert.equal((await request(bridge,'search_context')).status,200);const earlier=structuredClone(bridge.records.get(small.id)),before=bridge.deliveredCharacters;
+ const delivered=await request(bridge,'timeline');assert.equal(delivered.status,200);
+ assert.deepEqual(bridge.records.get(small.id),earlier);assert.equal(bridge.records.has(large.id),true);assert.ok(bridge.deliveredCharacters>before+1500000);assert.equal(bridge.trace.length,2);
+});
+
+test('only an explicitly configured caller tool limit is enforced and cannot remove existing evidence',async t=>{
+ let searches=0;const bridge=await startBridge({...base,search:async()=>{searches++;return [small];}},{question:'Generated explicit caller contract'},2);t.after(()=>bridge.close());
+ const found=await request(bridge,'search_context');assert.equal(found.status,200);assert.equal(found.body.toolUsage.remainingCalls,1);
+ const expanded=await request(bridge,'evidence',{ids:[small.id]});assert.equal(expanded.status,200);assert.equal(expanded.body.toolUsage.remainingCalls,0);
+ const before=bridge.deliveredCharacters,denied=await request(bridge,'search_context');assert.equal(denied.status,400);assert.equal(denied.body.toolError.code,'tool_budget_exceeded');assert.equal(searches,1);assert.equal(bridge.deliveredCharacters,before);
+ assert.equal(parseAnswer(answerFor(small.id),bridge.records).citations[0].id,small.id);
+});
+
+
+test('initial extraction accepts exact authorized ranges beyond retired character estimates',async t=>{
+ const source={...small,ocrText:'字'.repeat(180001)},range={id:source.id,offset:0,length:source.ocrText.length};
+ const bridge=await startBridge({...base,evidence:async()=>[source]},{question:'Generated authorized target',evidenceIds:[source.id],evidenceRanges:[range]});t.after(()=>bridge.close());
+ assert.equal(bridge.seedEvidence[0].ocrText,source.ocrText);assert.deepEqual(bridge.deliveredRanges,[range]);
+ const seen=[],large={...source,ocrText:'字'.repeat(600000)},largeRange={...range,length:large.ocrText.length};
+ const full=await startBridge({...base,evidence:async()=>[large]},{question:'Generated large authorized target',evidenceIds:[source.id],evidenceRanges:[largeRange],onEvidence:records=>seen.push(...records)});t.after(()=>full.close());
+ assert.equal(full.seedEvidence[0].ocrText,large.ocrText);assert.deepEqual(full.deliveredRanges,[largeRange]);assert.equal(seen[0].ocrText,large.ocrText);
 });

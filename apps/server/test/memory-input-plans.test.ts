@@ -98,7 +98,7 @@ test('a repaired failed input retries immediately while a different original sti
 
 test('a manual input recheck still honors a failed model batch cooldown',async t=>{
  const f=await fixture(t),raw=await f.add('retry-provider'),material=f.publish('retry-provider',raw,'pending');
- f.control.failure=new ProviderFailure({category:'transient',code:'provider_unavailable',retryAfterMs:60000});
+ f.control.failure=new ProviderFailure({category:'permanent',code:'provider_unavailable',retryAfterMs:60000});
  const job=f.pipeline.create({evidenceIds:[],recipes,manualPlans:[f.plan(material.id,0),f.plan(material.id,1)]}),waiting=await f.pipeline.run(job.id);
  assert.equal(waiting.status,'waiting_for_input');assert.equal(waiting.failedBatches,1);assert.equal(f.calls.length,1);
  await assert.rejects(f.pipeline.retry(job.id),error=>error instanceof ProviderFailure&&error.details.code==='provider_unavailable'&&(error.details.retryAfterMs??0)>50000);

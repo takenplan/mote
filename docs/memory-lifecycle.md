@@ -1,5 +1,7 @@
 # Memory lifecycle
 
+> 2026-10-14 更新：按所有者的MVP简化决定，取消宿主字符/token近似配额、结果缩页和Memory自动二分恢复；真正资源失败留下明确未完成范围，明确临时故障复用共享引擎有界重试。下面较早策略描述中的资源分拆由[当前决定](adr-ask-evidence-quality-and-simple-context.md)取代。
+
 > 2026-09-27 更新：整合采用独立注册的整合/审核配方，固定输入与模型配置，自动选择只处理后续增量；历史工作需显式触发。详见 [策略组合](memory-strategies.md)。新产物的 admission 与审核边界见 [记忆准入设计](memory-admission.md)。
 
 > 2026-10-12 更新：所有者可以在「设置 → 插件 → 记忆方案」暂停全部自动 Memory，排空已登记任务，或另行立即停止。安装、配置、启用与绑定分开；正文和检索可以由已核验的供应方接管。操作与当前支持范围见 [插件中心](plugin-center.md)。
@@ -8,17 +10,26 @@ The built-in repository stores readable Memory text and version metadata in SQLi
 
 ## Admission and defaults
 
-New source inputs with automatic Memory authorization use a separate ready-Material queue: ordinary background workers structurally pack at most eight compatible members within the existing character budget, then extract/reuse and independently review. They do not wait for the lifecycle count threshold or maximum wait, and import completion does not create duplicate work. Global automatic admission must be open when a new input obtains its receipt. The window admission rules below describe the retained artifact/history workflows, consolidation, insights and conversation summaries. Member attribution, time and receipt scopes remain separate within a transport package. See [system refactor ADR](adr-system-refactor.md).
+New source inputs with automatic Memory authorization use a separate ready-Material queue: ordinary background workers structurally pack at most eight compatible members using the configured initial batch size, then extract/reuse and independently review. Initial segmentation is separate from retrieval allowance; reading no longer consumes a host character quota, and a failure does not halve an existing package. They do not wait for the lifecycle count threshold or maximum wait, and import completion does not create duplicate work. Global automatic admission must be open when a new input obtains its receipt. The window admission rules below describe the retained artifact/history workflows, consolidation, insights and conversation summaries. Member attribution, time and receipt scopes remain separate within a transport package. See [system refactor ADR](adr-system-refactor.md) and the [simplification decision](adr-ask-evidence-quality-and-simple-context.md).
+
+Creation alone does not activate a manual Memory job. Explicit `run()` persists
+`activationRequired=false` before scheduling; startup recovery selects only
+activated detached jobs and still rejects pause, cancellation, revoked originals
+or changed versions. An unstarted `activationRequired=true` job stays dormant.
+MVP historical jobs can be explicitly rerun; recovery does not infer owner
+authorization from past attempts. See the [activation regression](validation/query-lease-and-memory-activation-2026-10-14.md).
 
 New versioned built-in recipes and newly created unbound jobs with independent
 review use `range-evaluation@1`: complete target-range
 assessment and independent review precede model-selected Memory. Empty selection
 is valid after full assessment and review; candidate count is not a completion or
 truncation signal. Explicit `incomplete` coverage preserves an unfinished target
-with its reason. Structural grouping is separate from measured resource recovery;
-actual context/output limits and deadlines retain finite scoped recovery. Old
-receipts and tasks retain their previous contract, including candidate capacity
-and saturation behavior. Installation or default upgrade never retries historical
+with its reason. Structural grouping is separate from recovery. Actual
+context/output capacity failures preserve the original unfinished range; explicitly
+typed transient transport failures retry the same valid input through the shared
+executor. Automatic subdivision is removed for old and new jobs. Old
+receipts and tasks retain their pinned candidate contract; saturation now leaves
+an explicit failure. Installation or default upgrade never retries historical
 jobs. Newly created reviewed raw/API jobs use the contract even when `recipes` or
 the work package is omitted, as does a new manual job's unbound fallback. Explicit
 old recipe bindings take precedence; existing no-field jobs and internal paths

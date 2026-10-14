@@ -2,6 +2,10 @@
 
 Date: 2026-10-13. Status: accepted by the owner; implementation and validation are recorded separately. Deployment requires the owner's final confirmation.
 
+Updated 2026-10-14: the [simplification decision](adr-ask-evidence-quality-and-simple-context.md)
+supersedes automatic resource subdivision and host character/tool quotas. The
+range-evaluation, exact evidence and independent-review responsibilities remain.
+
 ## Decision and user journey
 
 Keep the complete authorized originals in the archive. Independently assess every
@@ -76,21 +80,21 @@ Shared semantic/conversation products retain their separate existing 64,000-byte
 response budget. Removing a Memory count quota does not enlarge that transport
 budget or the independent event/action-cue limits.
 
-Actual input/context or output limits and measured provider deadlines remain
-resource failures. Recover through the existing finite, scoped mechanisms. Input
-planning and transport grouping do not consume the text-subdivision budget. Keep
-the existing four-level resource recovery bound and existing timeout-recovery
-policy; distinguish their accounting from structural grouping. No new numeric
-budget, timeout, daily limit, retry count or automatic historical recovery is
-introduced by this decision.
+Actual provider context/output capacity failures remain explicit failures of the
+complete frozen target. Memory does not halve, recursively subdivide or silently
+trim that target after a capacity failure or timeout. New range-evaluation initial
+packing uses the existing configured segmentation size without an additional
+20-member cap; saved batches retain their original ranges. Coverage, initial seed
+IDs and private dependencies preserve every authorized target rather than clipping
+them to the previous 100/200-member limits.
 
-When a measured resource failure requires subdivision, preserve exact disjoint
-target ranges, fingerprints, chronology, attribution and current grants. The child
-ranges must cover the unfinished parent range without gaps or duplication. Each
-child is independently assessed and reviewed before its completion is recorded.
-Preserve successful siblings, and leave unrecoverable ranges explicitly unfinished.
-Supplied context and interpretations remain untrusted navigation; resource
-recovery must not silently discard authorized target evidence or expand the scope.
+Only explicitly classified transient provider failures use the shared execution
+engine's bounded recovery, normally four attempts within six hours. Valid
+extraction drafts and successful siblings/checkpoints survive recovery. Generic
+provider failures, actual capacity failures, host deadlines and invalid output do
+not authorize unlimited paid replay; an unknown external write outcome must be
+reconciled before replay. Supplied context and interpretations remain untrusted
+navigation, and every retry rechecks current evidence, model, policy and authority.
 
 ## Versioned policies, defaults and saved work
 
@@ -164,9 +168,9 @@ introduced.
 | Classification | Disposition |
 | --- | --- |
 | KEEP | Complete originals, archive retrieval, model semantic selection, exact quotations, source/time/attribution scope, all-target range accounting, independent review including empty output, atomic batch commit, successful checkpoints, read-only tools, authority/version/deletion fences, existing resource limits and finite recovery. |
-| CHANGE | New versioned recipes and newly created unbound reviewed jobs evaluate complete ranges and produce model-selected Memory; explicit incomplete assessment remains unfinished; transport grouping and resource subdivision have distinct accounting; future exact built-in defaults select the new definitions. |
+| CHANGE | New versioned recipes and newly created unbound reviewed jobs evaluate complete ranges and produce model-selected Memory; explicit incomplete assessment remains unfinished; configured initial packing is separate from actual provider capacity; future exact built-in defaults select the new definitions. |
 | REMOVE | For new work only: `capacity.saturated`, the eight/32-candidate and 64-index ceilings, candidate-count inference of incompleteness, the requirement to enumerate every eligible candidate, and semantic recursive splitting driven by selected output count. |
-| EXCEPTION | Explicit old pinned recipes and their receipts/products, existing no-field tasks, and internal paths without independent review retain their legacy contracts; genuine context/owner dependencies and measured resource failures keep guarded recovery; custom/source selections are not rewritten; historical recovery requires its own authorization. |
+| EXCEPTION | Explicit old pinned recipes and their receipts/products retain their fixed semantic contracts; genuine context/owner dependencies keep scoped recovery; actual resource failures preserve unfinished ranges; custom/source selections are not rewritten. MVP historical tasks can be explicitly rerun without inferring activation from past attempts. |
 | UNKNOWN | Semantic selection quality, actual model adherence, completeness of evaluation claims, production cost/latency, OCR/transcription accuracy and physical-device behavior require separate evidence. No capacity change alone proves recovery of historical failures. |
 
 The combined implementation resolves the two proposed uses of personal v4 by
@@ -203,9 +207,10 @@ reports remain historical evidence, not assertions of the new behavior.
 ## Validation and deployment boundary
 
 Generated fixtures must exercise the real entry points and lifecycle: whole-range
-selection at former count ceilings and above them, empty output and independent
-review, explicit incomplete assessment, missing/invalid coverage, measured resource
-failure and disjoint recovery, successful siblings, cancellation/deletion races,
+selection at former count ceilings and above them, wide short-paragraph batches,
+empty output and independent review, explicit incomplete assessment,
+missing/invalid coverage, actual resource failure without subdivision,
+successful siblings, cancellation/deletion races,
 immutable old receipts, close/reopen and explicit retry, and contract-bound draft,
 product and retained-output reuse. No personal content or credentials enter Git.
 The [journey and regression matrix](memory-range-evaluation-validation.md) keeps

@@ -72,6 +72,19 @@ export class MemoryStore {
   }
   isCurrentEvidence(id:string):boolean {
     const record=this.readEvidence([id])[0];
+    return Boolean(record&&this.recordIsCurrent(record));
+  }
+  /** Read canonical originals once for this synchronous guard. Callers provide
+   * only IDs; they cannot substitute their own records for current authority. */
+  readCurrentEvidence(ids:readonly string[]):MemoryRecord[] {
+    const seen=new Set<string>();
+    return this.readEvidence([...new Set(ids)]).filter(record=>{
+      if(seen.has(record.id))return false;seen.add(record.id);
+      return this.recordIsCurrent(record);
+    });
+  }
+  private recordIsCurrent(record:MemoryRecord):boolean {
+    const id=record.id;
     if(!record||!this.currentEvidence(id))return false;
     // Formal Material anchors keep their immutable origin revision even when
     // Coding append reuses an unchanged prefix. The injected currentEvidence
@@ -152,7 +165,8 @@ export class MemoryStore {
     let input:unknown;try{input=JSON.parse(result.answer);}catch{throw new MemoryOutputValidationError('json','Model returned an invalid memory format; no memories were saved');}
     const selected=options.workContract==='range-evaluation@1',maxCandidates=selected?undefined:Math.min(32,Math.max(1,options.maxCandidates??8));
     const claims=z.array(claimSchema);
-    const parsed=z.object({memories:maxCandidates===undefined?claims:claims.max(maxCandidates),citationIds:z.array(z.string().uuid()).max(960).optional(),...(selected?{coverage:memoryWorkCoverageFor(options.workContract)}:options.maxCandidates?{coverage:memoryWorkCoverageSchema,capacity:memoryWorkCapacitySchema}:{})}).strict().safeParse(input);
+    const citationIds=z.array(z.string().uuid());
+    const parsed=z.object({memories:maxCandidates===undefined?claims:claims.max(maxCandidates),citationIds:(selected?citationIds:citationIds.max(960)).optional(),...(selected?{coverage:memoryWorkCoverageFor(options.workContract)}:options.maxCandidates?{coverage:memoryWorkCoverageSchema,capacity:memoryWorkCapacitySchema}:{})}).strict().safeParse(input);
     if(parsed.success&&!selected&&!options.maxCandidates&&options.profile==='coding'&&parsed.data.memories.length>3)throw new MemoryOutputValidationError('schema','Coding extraction allows at most three durable memories');
     if(!parsed.success){
       const codingIssue=parsed.error.issues.find(issue=>issue.path[2]==='coding'||issue.code==='unrecognized_keys'&&issue.keys.includes('applicability'));

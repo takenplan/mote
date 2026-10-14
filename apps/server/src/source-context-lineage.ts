@@ -7,7 +7,7 @@ export function combineSourceContextDependencies(values:readonly (readonly Sourc
   const result=new Map<string,SourceContextDeclaration>();
   for(const pins of values)for(const value of pins??[]){
     const pin=sourceContextDeclarationSchema.parse(value);
-    result.set(JSON.stringify([pin.sourceId,pin.version,pin.fingerprint]),pin);
+    result.set(JSON.stringify([pin.kind??'description',pin.sourceId,pin.version,pin.fingerprint]),pin);
   }
   return [...result.values()];
 }
@@ -16,7 +16,8 @@ export function sourceContextDependenciesCurrent(contexts:SourceContextStore,pin
 }
 export function assertSourceContextDependencies(contexts:SourceContextStore,pins:readonly SourceContextDeclaration[]|undefined){
   for(const value of pins??[]){
-    const pin=sourceContextDeclarationSchema.parse(value),current=contexts.identity(pin.sourceId);
+    const pin=sourceContextDeclarationSchema.parse(value);let current:SourceContextDeclaration|undefined;
+    try{current=pin.kind==='metadata'?contexts.metadataIdentity(pin.sourceId):contexts.identity(pin.sourceId);}catch{throw Object.assign(new StoreError('Source context changed; retry with current context',409),{code:'source_context_changed'});}
     if(!current||current.version!==pin.version||current.fingerprint!==pin.fingerprint)throw Object.assign(new StoreError('Source context changed; retry with current context',409),{code:'source_context_changed'});
   }
 }

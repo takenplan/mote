@@ -15,16 +15,16 @@ import {MaterialStore,materialId,type MaterialDraft} from '../src/materials.js';
 import {EvidenceReader} from '../src/evidence-reader.js';
 import {ServerDiagnostics} from '../src/diagnostics.js';
 
-test('real server candidate grants cannot bypass bridge disclosure after a material page shrinks',async t=>{
+test('a complete requested Material page preserves bridge disclosure and unread-original guards',async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-material-budget-disclosure-'));
   const store=new Store(directory),sources=new SourceStore(store),materials=new MaterialStore(store);
   const diagnostics=new ServerDiagnostics({directory:join(directory,'logs'),enabled:false});await diagnostics.init();
   t.after(async()=>{await diagnostics.close();store.close();rmSync(directory,{recursive:true,force:true});});
   const image=await sharp({create:{width:2,height:2,channels:3,background:'#ddeeff'}}).png().toBuffer();
-  const ids=[randomUUID(),randomUUID(),randomUUID()],at='2026-09-24T00:00:00.000Z';
-  for(const [index,id] of ids.entries())await store.ingest({id,deviceId:'generated-device',deviceName:'Generated device',platform:index<2?'macos':'import',source:index<2?'screen':'note',capturedAt:at,durationMs:0,ocrText:`Generated original ${index}`,...(index<2?{imageMime:'image/png',imageBase64:image.toString('base64')}:{})});
+  const ids=[randomUUID(),randomUUID(),randomUUID(),randomUUID()],at='2026-09-24T00:00:00.000Z';
+  for(const [index,id] of ids.entries())await store.ingest({id,deviceId:'generated-device',deviceName:'Generated device',platform:'macos',source:'screen',capturedAt:at,durationMs:0,ocrText:`Generated original ${index}`,imageMime:'image/png',imageBase64:image.toString('base64')});
   const draft:MaterialDraft={id:materialId('screen:generated','budget-page'),kind:'mote.screen-segment',schemaVersion:1,title:'Generated page with original members',origin:{sourceId:'screen:generated',externalId:'budget-page',deviceId:'generated-device',firstAt:at,lastAt:at},
-    blocks:[5999,1999,1999].map((length,index)=>({id:`generated-block-${index}`,kind:'text' as const,format:'plain',text:'"'.repeat(length),memberIds:[`member-${index}`]})),
+    blocks:[5999,1999,1999,1999].map((length,index)=>({id:`generated-block-${index}`,kind:'text' as const,format:'plain',text:'"'.repeat(length),memberIds:[`member-${index}`]})),
     members:ids.map((id,index)=>({id:`member-${index}`,kind:'capture' as const,ref:`capture:${id}`})),coverage:{state:'complete'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}};
   const material=materials.publish(draft),archiveReader=new EvidenceReader(store,sources,undefined,undefined,undefined,materials);
   const queryContext=new AsyncLocalStorage<object>(),reader=archiveReader.agent({diagnostics,allowQueryImages:()=>true,currentGrantContext:()=>queryContext.getStore()});
@@ -35,12 +35,12 @@ test('real server candidate grants cannot bypass bridge disclosure after a mater
       const call=async(tool:string,args:unknown)=>{const response=await fetch(bridge.url+'/'+tool,{method:'POST',headers:{authorization:'Bearer '+bridge.token},body:JSON.stringify(args)});return {status:response.status,body:await response.json()};};
       const catalog=await call('material_catalog',{});assert.equal(catalog.status,200);assert.equal(catalog.body.data.items[0].ref,material.ref);
       const before=bridge.deliveredCharacters,page=await call('material_read',{ref:material.ref,length:10000});
-      assert.equal(page.status,200);assert.equal(page.body.data.text.length,5000);assert.equal(page.body.data.textRange.nextOffset,5000);
-      assert.deepEqual(page.body.data.originalRefs,[formatEvidenceRef('capture',ids[0])]);assert.equal(bridge.trace.at(-1)!.materialPage!.readAttempts,2);
+      assert.equal(page.status,200);assert.equal(page.body.data.text.length,10000);assert.equal(page.body.data.textRange.nextOffset,10000);
+      assert.deepEqual(page.body.data.originalRefs,ids.slice(0,3).map(id=>formatEvidenceRef('capture',id)));
       assert.equal(bridge.deliveredCharacters,before+JSON.stringify(page.body).length);
-      assert.deepEqual((await reader.evidence({ids:[ids[1]]})).map(record=>record.id),[ids[1]],'the rejected larger candidate really established the server screen grant');
-      assert.equal((await reader.readImage!({id:ids[1]})).mimeType,'image/png','the internal reader grant is sufficient for its own image method, but not the bridge');
-      for(const id of ids.slice(1)){
+      assert.deepEqual((await reader.evidence({ids:[ids[1]]})).map(record=>record.id),[ids[1]],'the full requested page establishes the authorized screen grant');
+      assert.equal((await reader.readImage!({id:ids[1]})).mimeType,'image/png','the internal reader grant remains separate from bridge image expansion');
+      for(const id of ids.slice(3)){
         for(const reference of [id,`capture:${id}`]){
           assert.equal((await call('evidence',{ids:[reference],length:30})).status,400);
           assert.equal((await call('read_image',{id:reference})).status,400);
@@ -58,7 +58,7 @@ test('real server candidate grants cannot bypass bridge disclosure after a mater
       const acceptedImage=await call('read_image',{id:ids[0]});assert.equal(acceptedImage.status,200);assert.ok(acceptedImage.body.image);
       bridge.imageDelivery(acceptedImage.body.imageDelivery,true);
       assert.equal(parseAnswer(JSON.stringify({answer:'Generated accepted citation',citationIds:[ids[0]]}),bridge.records).citations[0].id,ids[0]);
-      t.diagnostic(JSON.stringify({localPageReads:2,successfulMaterialResults:1,omittedScreenGrantObserved:true,omittedCaptureCount:2,realProviderCalls:0}));
+      t.diagnostic(JSON.stringify({localPageReads:1,successfulMaterialResults:1,omittedCaptureCount:1,realProviderCalls:0}));
     }finally{await bridge.close();}
   });
   await queryContext.run({},async()=>{

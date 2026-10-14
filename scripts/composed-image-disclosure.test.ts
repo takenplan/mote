@@ -13,7 +13,7 @@ async function fixture(format:'png'|'jpeg'|'webp'='png'){
   const view:Json={original,coordinateSpace:'encoded-raster-pixels-v1',region,transform,viewId:hash(JSON.stringify([original.sha256,'encoded-raster-pixels-v1',region,transform])),id:args.id,...(args.attachmentId?{attachmentId:args.attachmentId}:{}),delivery:kind==='metadata'?'metadata':kind==='repeat'?'already_disclosed':'pending'};
   const payload=region?await sharp(bytes).extract({left:region.x,top:region.y,width:region.width,height:region.height}).toColourspace('srgb').png().toBuffer():bytes;
   if(kind!=='metadata')view.output={sha256:hash(payload),width:region?.width??12,height:region?.height??12,mimeType:region?'image/png':mimeType,sizeBytes:payload.length};
-  const result:Json={source:'untrusted_personal_context',...args,imageView:view,imageBudget:{remainingPayloads:remaining,maxRegionSide:2048,maxOutputBytes:8*1024*1024},hostBudget:{remainingCalls:20,remainingCharactersBeforeResult:20000,unit:'utf16_characters'}};
+  const result:Json={source:'untrusted_personal_context',...args,imageView:view,imageBudget:{remainingPayloads:remaining,maxRegionSide:2048,maxOutputBytes:8*1024*1024},toolUsage:{calls:20,deliveredCharactersBeforeResult:20000,unit:'utf16_characters'}};
   if(kind==='payload'){result.image={mimeType:region?'image/png':mimeType,data:payload.toString('base64')};result.imageDelivery='a'.repeat(48);}
   if(kind==='repeat'){assert.ok(first);result.imageDisclosure={status:'already_disclosed',sha256:hash(payload),mimeType:region?'image/png':mimeType,firstSelection:first.args,firstImageView:{...first.result.imageView,delivery:'prepared'}};}
   return {args,result};
@@ -39,7 +39,7 @@ test('bounded views count metadata, raw/formal attachment aliases and child orig
 
 test('default one-original accepts legacy delivery/repeat without imageView and rejects metadata or region',async()=>{
  const f=await fixture(),audit=new ComposedImageDisclosure('one-original',f.bytes,12,12),first=await f.wire({id:'child'},'payload',3),repeat=await f.wire({id:'raw',attachmentId:'attachment'},'repeat',3,first);
- for(const row of [first,repeat]){delete row.result.imageView;delete row.result.imageBudget;delete row.result.hostBudget;await audit.observeSuccessfulRead(row.args,row.result);}
+ for(const row of [first,repeat]){delete row.result.imageView;delete row.result.imageBudget;delete row.result.toolUsage;await audit.observeSuccessfulRead(row.args,row.result);}
  const final=adapter([first,repeat]);assert.equal(audit.verifyModelDelivery(final.trace,final.events).imagePayloads,1);
  for(const args of [{id:'raw',view:'metadata'},{id:'raw',expectedImageSha256:f.hash,region:{x:0,y:0,width:1,height:1}}]){const row=await f.wire(args,args.view?'metadata':'payload',args.view?4:3);await assert.rejects(new ComposedImageDisclosure('one-original',f.bytes,12,12).observeSuccessfulRead(args,row.result),/Legacy mode/);}
 });
@@ -78,15 +78,16 @@ test('repeat needs an observed first payload and retains its first source and cu
  for(const mutate of [(r:Json)=>r.imageDisclosure.firstSelection.id='other',(r:Json)=>r.imageDisclosure.firstImageView.id='other']){const audit=f.audit();await audit.observeSuccessfulRead(first.args,first.result);const result=structuredClone(repeat.result);mutate(result);await assert.rejects(audit.observeSuccessfulRead(repeat.args,result));}
 });
 
-test('metadata pixels, absent budgets and incorrect remaining quota are rejected',async()=>{
+test('metadata pixels, absent usage observations and incorrect remaining image quota are rejected',async()=>{
  const f=await fixture(),metadata=await f.wire({id:'child',view:'metadata'},'metadata',4);metadata.result.image={mimeType:'image/png',data:f.bytes.toString('base64')};await assert.rejects(f.audit().observeSuccessfulRead(metadata.args,metadata.result));
- const first=await f.wire({id:'child'},'payload',3);for(const mutate of [(r:Json)=>delete r.hostBudget,(r:Json)=>r.imageBudget.remainingPayloads=4]){const result=structuredClone(first.result);mutate(result);await assert.rejects(f.audit().observeSuccessfulRead(first.args,result));}
+ const first=await f.wire({id:'child'},'payload',3);for(const mutate of [(r:Json)=>delete r.toolUsage,(r:Json)=>r.imageBudget.remainingPayloads=4]){const result=structuredClone(first.result);mutate(result);await assert.rejects(f.audit().observeSuccessfulRead(first.args,result));}
+ const observed=structuredClone(first);observed.result.toolUsage={calls:1000,deliveredCharactersBeforeResult:3_000_000,unit:'utf16_characters'};const audit=f.audit();await audit.observeSuccessfulRead(observed.args,observed.result);const final=adapter([observed]);assert.deepEqual(audit.verifyModelDelivery(final.trace,final.events).reads[0].toolUsage,observed.result.toolUsage,'usage counts are observations and require no remaining allowance');
 });
 
-test('adapter must retain both quotas and the first-view lineage of a successful repeat',async()=>{
+test('adapter retains image boundaries, usage observations and the first-view lineage of a successful repeat',async()=>{
  const f=await fixture(),audit=f.audit(),first=await f.wire({id:'child'},'payload',3),repeat=await f.wire({id:'formal',attachmentId:'attachment'},'repeat',3,first);
  for(const row of [first,repeat])await audit.observeSuccessfulRead(row.args,row.result);
- for(const mutate of [(events:Json[])=>delete events[0].payload.result.imageBudget,(events:Json[])=>delete events[0].payload.result.hostBudget,(events:Json[])=>delete events[1].payload.result.imageDisclosure.firstImageView,(events:Json[])=>events[1].payload.result.imageDisclosure.firstSelection.id='unrelated']){
+ for(const mutate of [(events:Json[])=>delete events[0].payload.result.imageBudget,(events:Json[])=>delete events[0].payload.result.toolUsage,(events:Json[])=>delete events[1].payload.result.imageDisclosure.firstImageView,(events:Json[])=>events[1].payload.result.imageDisclosure.firstSelection.id='unrelated']){
   const final=adapter([first,repeat]);mutate(final.events);assert.throws(()=>audit.verifyModelDelivery(final.trace,final.events));
  }
 });

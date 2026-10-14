@@ -78,6 +78,13 @@ export type MaterialMemberPage={items:MaterialMember[];nextOffset:number|null;to
 
 type HeadRow={id:string;source_id:string;external_id:string;kind:string;revision:string;sequence:number;retired:number;min_visible_sequence:number;created_at:string;updated_at:string};
 type RevisionRow={manifest:string;revision:string;sequence:number;version_created_at:string;text_length:number;block_count:number;member_count:number;asset_count:number;draft_hash:string|null};
+type CurrentEvidenceRow={id:string;source_id:string;sequence:number;min_visible_sequence:number;retired:number;revision:string;evidence_revision:string;coding_active:number;snapshot_active:number;invalidated:number};
+const currentEvidenceSelection=`SELECT e.id,h.source_id,h.sequence,h.min_visible_sequence,h.retired,h.revision,e.revision evidence_revision,e.invalidated,
+    EXISTS(SELECT 1 FROM material_blocks b WHERE b.material_id=h.id AND b.revision=h.revision AND b.anchor_id=e.id) snapshot_active,
+    EXISTS(SELECT 1 FROM material_block_versions b WHERE b.anchor_id=e.id AND b.material_id=h.id AND b.from_sequence<=h.sequence
+      AND (b.until_sequence IS NULL OR b.until_sequence>h.sequence)) coding_active
+    FROM material_evidence e JOIN material_heads h ON h.id=e.material_id`;
+const currentEvidenceAllowed=(row:CurrentEvidenceRow|undefined)=>Boolean(row&&!row.retired&&!row.invalidated&&row.sequence>=row.min_visible_sequence&&(row.snapshot_active||row.coding_active));
 type BlockRow={block_id:string;anchor_id?:string|null;kind:'text'|'asset';format:string|null;payload:string;asset_hash:string|null;mime_type:string|null;member_ids:string;locator:string|null;start_offset:number;end_offset:number};
 const canonicalContext=(value:unknown):unknown=>Array.isArray(value)?value.map(canonicalContext):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonicalContext(item)])):value;
 /** Catalogs and range descriptors carry authority identities, never declaration prose. */
@@ -254,9 +261,20 @@ export class MaterialStore {
   }
   /** Host-owned projection for originals as well as formal evidence. */
   contextForEvidence(record:CaptureRecord):AttributionContext {
+    return this.contextForEvidenceWithin(record);
+  }
+  /** Reuse current Material attribution only within one synchronous batch.
+   * Each original keeps its own import lineage; the next read starts fresh. */
+  contextsForEvidence(records:readonly CaptureRecord[]):AttributionContext[] {
+    const contexts=new Map<string,AttributionContext|undefined>();
+    return records.map(record=>this.contextForEvidenceWithin(record,contexts));
+  }
+  private contextForEvidenceWithin(record:CaptureRecord,contexts?:Map<string,AttributionContext|undefined>):AttributionContext {
     const anchor=this.store.db.prepare('SELECT material_id FROM material_evidence WHERE id=?').get(record.id);
     if(anchor){
-      const context=this.get(String(anchor.material_id))?.attributionContext??unknownAttributionContext();
+      const id=String(anchor.material_id);
+      if(contexts&&!contexts.has(id))contexts.set(id,this.get(id)?.attributionContext);
+      const context=(contexts?contexts.get(id):this.get(id)?.attributionContext)??unknownAttributionContext();
       const inputs=this.store.db.prepare('SELECT evidence_id FROM material_evidence_dependencies WHERE anchor_id=?').all(record.id).map(row=>String(row.evidence_id));
       return this.withImportContext(context,inputs,true);
     }
@@ -496,17 +514,27 @@ export class MaterialStore {
     const status=materialDependencyStatus(material,required),artifacts=required.map(key=>material.artifacts?.find(a=>a.key===key));
     const mapped=required.every((key,i)=>key!=='material'&&artifacts[i]?.blockIds!==undefined);
     const evidenceIds=this.evidenceIds(ref,mapped?[...new Set(artifacts.flatMap(a=>a!.blockIds!))]:undefined);
-    return {...status,ready:status.ready&&evidenceIds.length>0&&evidenceIds.every(id=>this.isCurrentEvidence(id)),materialId:material.id,required,evidenceIds,
+    const current=this.currentEvidenceIds(evidenceIds);
+    return {...status,ready:status.ready&&evidenceIds.length>0&&evidenceIds.every(id=>current.has(id)),materialId:material.id,required,evidenceIds,
       fingerprint:hash(JSON.stringify([material.id,material.attributionContext,required,mapped?artifacts.map(a=>[a!.key,a!.revision??null,a!.blockIds]):material.ref,evidenceIds]))};
   }
   /** includeRetired is only for host archive proof validation; product readers
    * always use the default visibility and retirement fences. */
-  evidence(ids:string[],includeRetired=false):CaptureRecord[]{return ids.flatMap(id=>{
-    const anchor=this.store.db.prepare('SELECT * FROM material_evidence WHERE id=?').get(id);if(!anchor)return [];
-    let material=this.get(formatMaterialRef(String(anchor.material_id),String(anchor.revision)));
-    if(!material&&includeRetired){const head=this.head(String(anchor.material_id)),version=this.version(String(anchor.material_id),String(anchor.revision));if(head&&version)material=this.record(head,version);}
+  evidence(ids:string[],includeRetired=false):CaptureRecord[]{
+    const materials=new Map<string,MaterialRecord|undefined>(),layouts=new Map<string,boolean>();
+    const anchors=this.store.db.prepare('SELECT * FROM material_evidence WHERE id=?');
+    return ids.flatMap(id=>{
+    const anchor=anchors.get(id);if(!anchor)return [];
+    const ref=formatMaterialRef(String(anchor.material_id),String(anchor.revision));
+    if(!materials.has(ref)){
+      let material=this.get(ref);
+      if(!material&&includeRetired){const head=this.head(String(anchor.material_id)),version=this.version(String(anchor.material_id),String(anchor.revision));if(head&&version)material=this.record(head,version);}
+      materials.set(ref,material);
+    }
+    const material=materials.get(ref);
     if(!material)return [];
-    const block=this.codingLayout(material.id,material.revision)?this.store.db.prepare(`SELECT p.text,b.start_offset FROM material_block_versions b
+    if(!layouts.has(ref))layouts.set(ref,this.codingLayout(material.id,material.revision));
+    const block=layouts.get(ref)?this.store.db.prepare(`SELECT p.text,b.start_offset FROM material_block_versions b
       JOIN material_block_payloads p ON p.hash=b.payload_hash WHERE b.material_id=? AND b.from_revision=? AND b.block_id=? AND b.anchor_id=?`)
       .get(material.id,material.revision,anchor.block_id,id):this.store.db.prepare(`SELECT p.text,b.start_offset FROM material_blocks b JOIN material_block_payloads p ON p.hash=b.payload_hash
       WHERE b.material_id=? AND b.revision=? AND b.block_id=?`).get(material.id,material.revision,anchor.block_id);if(!block)return [];
@@ -519,14 +547,15 @@ export class MaterialStore {
     const document=context?.document??{timeBasis:'unknown',contentRole:'other'};
     return [{id,attributionContext:material.attributionContext??unknownAttributionContext(),deviceId:material.origin.deviceId??material.origin.sourceId,deviceName:'Material',platform:'import',capturedAt:at,receivedAt:material.createdAt,durationMs:0,source:'message',appId:'mote.material',appName:material.title,windowTitle:material.title,ocrText:String(block.text),indexingStatus:'indexed',privacy:{excluded:false,redacted:false,mode:'none'},provenance:{sourceId:material.origin.sourceId,externalId:material.id,revision:material.revision,layer:'snapshot',deleted:false,uri:material.ref+'#'+anchor.block_id,document:{...document,...(coding?{coding:{version:1,provider:material.origin.provider,projectKey:material.origin.projectKey,projectName:material.origin.projectName,projectIdentity:material.origin.projectIdentity,cwd:material.origin.cwd,repositoryKey:material.origin.repositoryKey,branch:material.origin.branch,sessionId:material.origin.sessionId,eventId:String(anchor.block_id),role:'transcript',part:0,parts:1}}:{})}}} as CaptureRecord];
   });}
-  isCurrentEvidence(id:string){const row=this.store.db.prepare(`SELECT h.source_id,h.sequence,h.min_visible_sequence,h.retired,h.revision,e.revision evidence_revision,e.invalidated,
-    EXISTS(SELECT 1 FROM material_blocks b WHERE b.material_id=h.id AND b.revision=h.revision AND b.anchor_id=e.id) snapshot_active,
-    EXISTS(SELECT 1 FROM material_block_versions b WHERE b.anchor_id=e.id AND b.material_id=h.id AND b.from_sequence<=h.sequence
-      AND (b.until_sequence IS NULL OR b.until_sequence>h.sequence)) coding_active
-    FROM material_evidence e JOIN material_heads h ON h.id=e.material_id WHERE e.id=?`).get(id) as
-    {source_id:string;sequence:number;min_visible_sequence:number;retired:number;revision:string;evidence_revision:string;coding_active:number;snapshot_active:number;invalidated:number}|undefined;
-    return Boolean(row&&!row.retired&&!row.invalidated&&row.sequence>=row.min_visible_sequence&&
-      (row.snapshot_active||row.coding_active));}
+  isCurrentEvidence(id:string){return currentEvidenceAllowed(this.store.db.prepare(currentEvidenceSelection+' WHERE e.id=?').get(id) as CurrentEvidenceRow|undefined);}
+  /** The same exact current-anchor predicate as the single-ID resolver. Each
+   * synchronous Formal input check reads its full selection once, including
+   * retained Coding prefixes; no result survives the next check. */
+  private currentEvidenceIds(ids:readonly string[]):Set<string> {
+    if(!ids.length)return new Set();
+    const rows=this.store.db.prepare(currentEvidenceSelection+' WHERE e.id IN (SELECT value FROM json_each(?))').all(JSON.stringify(ids)) as CurrentEvidenceRow[];
+    return new Set(rows.filter(currentEvidenceAllowed).map(row=>row.id));
+  }
   private needsRebuild(id:string,revision:string,sequence:number):boolean {
     return Boolean(this.store.db.prepare(`SELECT 1 FROM material_evidence e WHERE e.invalidated=1 AND e.material_id=? AND (
       EXISTS(SELECT 1 FROM material_blocks b WHERE b.material_id=e.material_id AND b.revision=? AND b.anchor_id=e.id)
@@ -548,10 +577,26 @@ export class MaterialStore {
       createdAt:head.created_at,updatedAt:row.version_created_at,blockCount:row.block_count,memberCount:row.member_count,
       textLength:row.text_length,assetCount:row.asset_count,indexing:this.indexStatus(head.id)};
   }
+  private readMetadata?:Map<string,MaterialRecord|undefined>;
+  /** A synchronous host read shares formal metadata, never a later request or
+   * publication fence. finally also clears it before any returned promise runs. */
+  withReadMetadata<T>(read:()=>T):T {
+    const prior=this.readMetadata;this.readMetadata??=new Map();
+    try{return read();}finally{this.readMetadata=prior;}
+  }
   get(ref:string):MaterialRecord|undefined {
+    if(this.readMetadata?.has(ref))return this.readMetadata.get(ref);
+    const {id,revision}=parseMaterialRef(ref),head=this.head(id);
+    const row=head&&!head.retired?this.version(id,revision??head.revision):undefined;
+    const result=head&&row&&row.sequence>=head.min_visible_sequence?this.record(head,row):undefined;
+    this.readMetadata?.set(ref,result);return result;
+  }
+  /** Private permission checks need current representation metadata, not owner
+   * declarations or import statements decrypted for model context. */
+  authorizationMetadata(ref:string):MaterialRecord|undefined {
     const {id,revision}=parseMaterialRef(ref),head=this.head(id);
     if(!head||head.retired)return undefined;
-    const row=this.version(id,revision??head.revision);return row&&row.sequence>=head.min_visible_sequence?this.record(head,row):undefined;
+    const row=this.version(id,revision??head.revision);return row&&row.sequence>=head.min_visible_sequence?this.record(head,row,false):undefined;
   }
   /** A source tombstone makes the old head and all of its derived evidence
    * unavailable in the same receive transaction, before reconstruction starts. */

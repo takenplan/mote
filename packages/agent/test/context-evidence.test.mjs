@@ -3,10 +3,12 @@ import assert from 'node:assert/strict';
 import {mkdtemp,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {randomUUID,createHash} from 'node:crypto';
 import {createAgent,parseAnswer} from '../dist/index.js';
 import {startBridge} from '../dist/bridge.js';
 import {buildContextEnvelope,taskTools} from '../dist/task-context.js';
 import {contextToolDefinitions} from '../dist/tool-contributions.js';
+import {restoreMemoryCoverageKeys} from '../dist/memory-context.js';
 
 const id='11111111-1111-4111-8111-111111111111',continuationId='22222222-2222-4222-8222-222222222222',declarationId='33333333-3333-4333-8333-333333333333';
 const text='Generated diary. I am reviewing 2024 photographs. My friend said: “I will buy a bicycle.” I later repaired my own bicycle. 🌱 End.';
@@ -30,14 +32,11 @@ test('legacy bounded sessions retain initial evidence tools and cannot inspect a
  assert.deepEqual(bridge.deliveredRanges,[target]);
 });
 
-test('persisted pre-feature capability manifests resume unchanged without a new context read grant',async t=>{
+test('a persisted capability manifest cannot resume across an actual contract change',async()=>{
  const saved=JSON.parse(await readFile(new URL('./fixtures/context-capabilities-before-context-reading.json',import.meta.url),'utf8'));
  assert.equal(saved.some(capability=>capability.name==='context_evidence'),false);
- for(const input of [{question:'Resume the persisted archive query'},bounds()]){
-  let current;const bridge=await startBridge(reader(),{...input,contextCapabilitySnapshot:saved,onContextCapabilities:snapshot=>{current=snapshot;}},8);t.after(()=>bridge.close());
-  assert.deepEqual(current,saved);assert.equal((await send(bridge,'context_evidence',{id,offset:0,length:10})).status,400);
- }
- await assert.rejects(startBridge(reader(),{...bounds({evidenceReadRanges:grants}),contextCapabilitySnapshot:saved},8),error=>error.code==='context_capabilities_changed','a saved session cannot silently acquire the new read capability');
+ for(const input of [{question:'Resume a persisted archive query'},bounds(),bounds({evidenceReadRanges:grants})])
+  await assert.rejects(startBridge(reader(),{...input,contextCapabilitySnapshot:saved},8),error=>error.code==='context_capabilities_changed');
 });
 
 test('a broader exact grant exposes only a catalog until successful model-selected original reads',async t=>{
@@ -45,8 +44,9 @@ test('a broader exact grant exposes only a catalog until successful model-select
  const envelope=buildContextEnvelope(input,bridge.seedEvidence);
  assert.deepEqual(taskTools(input),['evidence','context_evidence']);assert.deepEqual(envelope.authorizedContextRanges.ranges,grants);
  assert.equal(envelope.untrustedEvidence.length,1);assert.equal(envelope.untrustedEvidence[0].ocrText,text.slice(target.offset,target.offset+target.length));
- assert.equal(envelope.untrustedEvidence[0].attributionContext.importStatements[0].instruction,instruction);
- assert.equal(envelope.untrustedEvidence[0].contentAt,record.provenance.document.recordedAt);
+ const source=envelope.evidenceContexts[envelope.untrustedEvidence[0].commonContextRef];
+ assert.equal(source.attributionContext.importStatements[0].instruction,instruction);
+ assert.equal(source.contentAt,record.provenance.document.recordedAt);
  assert.equal(bridge.records.has(continuationId),false);assert.deepEqual(bridge.deliveredRanges,[target]);
  assert.throws(()=>parseAnswer(JSON.stringify({answer:`Unread [${continuationId}]`,citationIds:[continuationId]}),bridge.records),/not retrieved/);
  assert.equal((await send(bridge,'evidence',{ids:[continuationId]})).body.toolError.code,'evidence_scope_denied');
@@ -56,6 +56,20 @@ test('a broader exact grant exposes only a catalog until successful model-select
  assert.equal(parseAnswer(JSON.stringify({answer:`Read [${continuationId}]`,citationIds:[continuationId]}),bridge.records).citations.length,1);
  assert.ok(bridge.deliveredRanges.some(range=>range.id===continuationId&&range.length===continuation.ocrText.length));
  assert.equal((await send(bridge,'material_catalog')).status,400);assert.equal((await send(bridge,'search_context')).status,400);
+});
+test('large exact target and context vectors remain whole without artificial original-count limits',async t=>{
+ const generated=(kind,count)=>Array.from({length:count},(_,index)=>{const body=`Generated ${kind} ${index} 🌱`,record={id:randomUUID(),deviceId:'generated',capturedAt:'2026-10-01T00:00:00Z',appName:'Generated short transcript',ocrText:'prefix '+body+' suffix'};return {record,range:{id:record.id,offset:7,length:body.length},member:{key:createHash('sha256').update(kind+index).digest('hex'),id:record.id,offset:7,length:body.length}};});
+ const targets=generated('target',200),contexts=generated('context',140),input=bounds({evidenceIds:targets.map(row=>row.record.id),evidenceRanges:targets.map(row=>row.range),evidenceReadRanges:contexts.map(row=>row.range),taskContext:{turns:[],memoryWork:{workContract:'range-evaluation@1',members:targets.map(row=>row.member),contextMembers:contexts.map(row=>row.member),authorizedMembers:[...targets,...contexts].map(row=>row.member)}}});
+ const bridge=await startBridge(reader([...targets,...contexts].map(row=>row.record)),input);t.after(()=>bridge.close());
+ assert.equal(bridge.seedEvidence.length,200);assert.deepEqual(bridge.deliveredRanges,targets.map(row=>row.range).sort((a,b)=>a.id.localeCompare(b.id)));assert.equal(bridge.records.size,200);
+ for(const row of targets)assert.equal(bridge.records.get(row.record.id).ocrText,row.record.ocrText.slice(row.range.offset,row.range.offset+row.range.length));
+ const envelope=buildContextEnvelope(input,bridge.seedEvidence),work=envelope.untrustedTaskContext.memoryWork;
+ assert.equal(work.members.length,200);assert.equal(work.contextMembers.length,140);assert.equal(work.authorizedMembers.length,340);assert.equal(envelope.authorizedContextRanges.ranges.length,140);
+ const coverage=work.members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]})),restored=JSON.parse(restoreMemoryCoverageKeys(JSON.stringify({memories:[],coverage}),input.taskContext));
+ assert.deepEqual(restored.coverage.map(row=>row.key),targets.map(row=>row.member.key));
+ const last=contexts.at(-1);assert.equal(bridge.records.has(last.record.id),false);assert.equal((await send(bridge,'evidence',{ids:[last.record.id]})).body.toolError.code,'evidence_scope_denied');
+ const page=await send(bridge,'context_evidence',{id:last.record.id,offset:last.range.offset,length:12000});assert.equal(page.status,200);assert.equal(page.body.data[0].ocrText,last.record.ocrText.slice(last.range.offset,last.range.offset+last.range.length));
+ assert.equal((await send(bridge,'context_evidence',{id:last.record.id,offset:last.range.offset+last.range.length,length:1})).body.toolError.code,'evidence_range_exceeded');assert.equal(bridge.seedEvidence.length,200,'context reads never add extraction targets');
 });
 
 test('context pagination stops at its grant and respects exact UTF-16 boundaries',async t=>{
@@ -97,15 +111,13 @@ for(const change of ['body','attribution','source','authorization'])test(`fresh 
  assert.deepEqual(bridge.deliveredRanges,[target]);
 });
 
-test('shared result budgets shorten context pages without granting unread characters',async t=>{
+test('context pages retain the full requested authorized range beyond retired character quotas',async t=>{
  const long={...record,ocrText:'Generated '.repeat(3000)},initial={id,offset:15000,length:10000},grant={id,offset:0,length:12000};
- const input=bounds({evidenceRanges:[initial],evidenceReadRanges:[grant]}),bridge=await startBridge(reader([long]),input,24);t.after(()=>bridge.close());
- while(160000-bridge.deliveredCharacters>12000)assert.equal((await send(bridge,'evidence',{ids:[id]})).status,200);
- const before=bridge.deliveredCharacters,result=await send(bridge,'context_evidence',{id,offset:0,length:12000});assert.equal(result.status,200);
- const span=result.body.data[0].textRange;assert.ok(span.end>0&&span.end<12000);assert.equal(span.nextOffset,span.end);
- assert.ok(bridge.deliveredCharacters<=160000);assert.ok(bridge.deliveredCharacters>before);
- assert.deepEqual(bridge.deliveredRanges,[{id,offset:0,length:span.end},initial]);
- const delivered=bridge.deliveredRanges;const denied=await send(bridge,'context_evidence',{id,offset:span.end,length:12000});assert.equal(denied.status,400);assert.equal(denied.body.toolError.code,'evidence_budget_exceeded');assert.deepEqual(bridge.deliveredRanges,delivered);
+ const bridge=await startBridge(reader([long]),bounds({evidenceRanges:[initial],evidenceReadRanges:[grant]}));t.after(()=>bridge.close());
+ for(let i=0;i<20;i++)assert.equal((await send(bridge,'evidence',{ids:[id]})).status,200);
+ const result=await send(bridge,'context_evidence',{id,offset:0,length:12000});assert.equal(result.status,200);assert.equal(result.body.data[0].ocrText.length,12000);assert.equal(result.body.data[0].textRange.nextOffset,null);
+ assert.ok(bridge.deliveredCharacters>160000);assert.deepEqual(bridge.deliveredRanges,[grant,initial]);
+ const outside=await send(bridge,'context_evidence',{id,offset:12000,length:1});assert.equal(outside.status,400);assert.equal(outside.body.toolError.code,'evidence_range_exceeded');
 });
 
 test('the Codex adapter supplies the host delivery receipt before validation and ignores forged model receipts',async t=>{

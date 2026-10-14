@@ -6,6 +6,7 @@ import {queryWorkspace,type QueryWorkspace} from './delegation-protocol.js';
 import {StoreError,type Store} from './store.js';
 import {sourceContextDeclarationSchema,type SourceContextDeclaration} from '@mote/shared';
 import {combineSourceContextDependencies} from './source-context-lineage.js';
+import {retireBrokenActivityContinuationTrigger} from './activity-memory-index.js';
 export {originalEvidenceReceipt} from '@mote/agent';
 
 export type DelegationScope=Pick<QueryInput,'after'|'before'|'deviceId'|'timeZone'|'contextTime'|'evidenceIds'|'evidenceRanges'|'processingEvidence'>;
@@ -61,11 +62,19 @@ export class DelegationRuntime {
  private timer?:ReturnType<typeof setInterval>;
  private closed=false;
  constructor(readonly store:Store,readonly engine:ExecutionEngine,private options:{concurrency?:()=>number;interactiveConcurrency?:()=>number;revalidateEvidence?:(records:readonly ContextRecord[],scope:DelegationScope)=>Promise<readonly ContextRecord[]>;validateDependencies?:(ids:readonly string[])=>void;validateSourceContextDependencies?:(pins:readonly SourceContextDeclaration[])=>void;autoPump?:boolean}={}){
+  retireBrokenActivityContinuationTrigger(store);
   this.journal=new DelegationStore(store);
-  store.db.exec(`CREATE TABLE IF NOT EXISTS delegation_source_context_dependencies(
+  const sourceDependencyTable=`CREATE TABLE IF NOT EXISTS delegation_source_context_dependencies(
     work_id TEXT NOT NULL REFERENCES delegation_works(id) ON DELETE CASCADE,unit_id TEXT NOT NULL,
-    source_id TEXT NOT NULL,version INTEGER NOT NULL,fingerprint TEXT NOT NULL,
-    PRIMARY KEY(work_id,unit_id,source_id,version,fingerprint));`);
+    source_id TEXT NOT NULL,version INTEGER NOT NULL,fingerprint TEXT NOT NULL,kind TEXT NOT NULL DEFAULT 'description',
+    PRIMARY KEY(work_id,unit_id,kind,source_id,version,fingerprint));`;
+  store.db.exec(sourceDependencyTable);
+  if(!store.db.prepare('PRAGMA table_info(delegation_source_context_dependencies)').all().some(row=>row.name==='kind')){
+   const own=!store.db.isTransaction;if(own)store.db.exec('BEGIN IMMEDIATE');
+   try{store.db.exec('ALTER TABLE delegation_source_context_dependencies RENAME TO delegation_source_context_dependencies_previous');store.db.exec(sourceDependencyTable);
+    store.db.exec("INSERT INTO delegation_source_context_dependencies(work_id,unit_id,source_id,version,fingerprint,kind) SELECT work_id,unit_id,source_id,version,fingerprint,'description' FROM delegation_source_context_dependencies_previous; DROP TABLE delegation_source_context_dependencies_previous");if(own)store.db.exec('COMMIT');
+   }catch(error){if(own&&store.db.isTransaction)store.db.exec('ROLLBACK');throw error;}
+  }
   engine.configurePool('delegated-agents',{concurrency:{background:options.concurrency??(()=>4),interactive:options.interactiveConcurrency??options.concurrency??(()=>2)},lane:step=>{
    // Existing work/profile identity is sufficient for restart. The model's
    // payload, capability arguments and captured content cannot elevate a lane.
@@ -264,12 +273,12 @@ export class DelegationRuntime {
  recordExternalArtifact(workId:string,unitId:string,product:DelegationProduct){if(!this.store.db.isTransaction)throw new StoreError('External artifact needs its product execution commit fence',409);const unit=this.unit(unitId.startsWith(`${workId}:unit:`)?unitId:`${workId}:unit:${unitId}`);if(unit.workId!==workId||!unit.external||!this.currentWork(workId,this.coordinators.get(this.raw(workId).profileId)))throw new StoreError('Invalid external artifact owner',403);this.commitUnit({...this.engine.get(unit.stepId)!,input:{unitId:unit.id}},product);}
  private activeExecutionIds(operationId:string){return this.store.db.prepare("SELECT e.id FROM execution_steps e WHERE e.operation_id=? AND e.state IN ('waiting','running','blocked')").all(operationId).map(row=>String(row.id));}
  dependencyIds(workId:string){return this.store.db.prepare('SELECT evidence_id FROM delegation_dependencies WHERE work_id=?').all(workId).map(row=>String(row.evidence_id));}
- sourceContextDependencies(workId:string,unitId=''):SourceContextDeclaration[]{return this.store.db.prepare('SELECT source_id sourceId,version,fingerprint FROM delegation_source_context_dependencies WHERE work_id=? AND unit_id=? ORDER BY source_id,version,fingerprint').all(workId,unitId).map(row=>sourceContextDeclarationSchema.parse(row));}
+ sourceContextDependencies(workId:string,unitId=''):SourceContextDeclaration[]{return this.store.db.prepare('SELECT source_id sourceId,version,fingerprint,kind FROM delegation_source_context_dependencies WHERE work_id=? AND unit_id=? ORDER BY source_id,kind,version,fingerprint').all(workId,unitId).map(({kind,...row})=>sourceContextDeclarationSchema.parse({...row,...(kind==='metadata'?{kind}: {})}));}
  validateSourceContextDependencies(pins:readonly SourceContextDeclaration[]){this.options.validateSourceContextDependencies?.(pins);}
  recordSourceContextDependencies(workId:string,pins:readonly SourceContextDeclaration[],unitId=''){
   const values=combineSourceContextDependencies([pins]);this.validateSourceContextDependencies(values);
-  for(const pin of values){if(this.store.db.prepare('SELECT 1 FROM delegation_source_context_dependencies WHERE work_id=? AND unit_id=? AND source_id=? AND version=? AND fingerprint=?').get(workId,unitId,pin.sourceId,pin.version,pin.fingerprint))continue;
-   this.store.reserveMetadata(Buffer.byteLength(workId)+Buffer.byteLength(unitId)+Buffer.byteLength(pin.sourceId)+256);this.store.db.prepare('INSERT INTO delegation_source_context_dependencies VALUES(?,?,?,?,?)').run(workId,unitId,pin.sourceId,pin.version,pin.fingerprint);}
+  for(const pin of values){if(this.store.db.prepare('SELECT 1 FROM delegation_source_context_dependencies WHERE work_id=? AND unit_id=? AND kind=? AND source_id=? AND version=? AND fingerprint=?').get(workId,unitId,pin.kind??'description',pin.sourceId,pin.version,pin.fingerprint))continue;
+   this.store.reserveMetadata(Buffer.byteLength(workId)+Buffer.byteLength(unitId)+Buffer.byteLength(pin.sourceId)+256);this.store.db.prepare('INSERT INTO delegation_source_context_dependencies(work_id,unit_id,source_id,version,fingerprint,kind) VALUES(?,?,?,?,?,?)').run(workId,unitId,pin.sourceId,pin.version,pin.fingerprint,pin.kind??'description');}
  }
  recordEvidence(workId:string,ids:readonly string[]){for(const id of new Set(ids)){if(this.store.db.prepare('SELECT 1 FROM delegation_dependencies WHERE work_id=? AND evidence_id=?').get(workId,id))continue;this.store.reserveMetadata(Buffer.byteLength(workId)+Buffer.byteLength(id)+128);this.store.db.prepare('INSERT INTO delegation_dependencies VALUES(?,?)').run(workId,id);}}
  async tick(){if(this.closed)return;for(const id of this.activeIds()){const work=this.get(id);if(this.engine.cancellationAliasRevoked(work.id)&&activeWork(this.raw(work.id).status))this.cancel(work.id);if(work.status==='stale'||work.status==='cancelled'){this.engine.cancel(work.id);for(const stepId of this.activeExecutionIds(work.operationId))this.engine.cancel(stepId);for(const unit of work.units)if(this.engine.get(unit.stepId)&&activeWork(this.engine.get(unit.stepId)!.state)){this.capabilities.get(unit.capabilityId)?.cancel?.(unit,work);this.engine.cancel(unit.stepId);}continue;}if(work.status==='failed'||work.status==='blocked')this.failUnfinishedChildren(work);for(const unit of work.units)if(unit.external){const step=this.engine.get(unit.stepId);if(step&&unit.status!==step.state)this.projectUnit({...step,input:{...step.input,unitId:unit.id}});}const current=this.raw(work.id);if(current.status==='waiting'&&current.planningComplete&&!current.wait){const state=this.externalCompletionState(current);if(state!=='waiting'){current.status=state;if(state==='failed')current.error='delegated_product_failed';this.save(current);this.event(current.id,current.status==='succeeded'?'completed':'work.failed');}}else {this.wake(work.id);}}await this.engine.tick();}

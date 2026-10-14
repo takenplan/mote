@@ -3,12 +3,13 @@ import {sourceTextBoundaries} from '@mote/shared';
 export type DeliveredRange={start:number;end:number;text:string};
 // Display-only coordinates, never model input or citation authority. They hold
 // no decoded original text: excerpts are made from delivered raw spans only.
-const presentations=new WeakMap<ContextRecord,number[]>();
+type Presentation={boundaries:number[];encoding:'json'|'text'};
+const presentations=new WeakMap<ContextRecord,Presentation>();
 export function projectEvidencePresentation(source:ContextRecord,projected:ContextRecord){
   if(source.contentLayer==='L2_model_interpretation')return projected;
   const format=source.evidencePresentation;
-  if(format==='source-record-json-v1'||format==='speech-json-v1'){
-    const boundaries=sourceTextBoundaries(format,source.ocrText);if(boundaries)presentations.set(projected,boundaries);
+  if(format==='source-record-json-v1'||format==='speech-json-v1'||format==='speech-text-v2'){
+    const boundaries=sourceTextBoundaries(format,source.ocrText);if(boundaries)presentations.set(projected,{boundaries,encoding:format==='speech-text-v2'?'text':'json'});
   }
   return projected;
 }
@@ -58,19 +59,21 @@ export function evidenceExcerpt(record:ContextRecord){
   const spans=record.deliveredRanges as DeliveredRange[]|undefined;
   if(!spans?.length)return excerptSlice(record.ocrText,600);
   const plan=presentations.get(record);
+  const boundaries=plan?.boundaries;
   const readable=mergedSpans(spans).flatMap(span=>{
-    if(!plan)return [span];
-    const start=plan[lowerBound(plan,span.start)],endIndex=lowerBound(plan,span.end),end=plan[endIndex]===span.end?span.end:plan[endIndex-1];
+    if(!plan||!boundaries)return [span];
+    const start=boundaries[lowerBound(boundaries,span.start)],endIndex=lowerBound(boundaries,span.end),end=boundaries[endIndex]===span.end?span.end:boundaries[endIndex-1];
     if(start===undefined||end===undefined||start>=end)return [];
-    // Complete JSON escape/code-point boundaries, wholly inside this delivered
-    // range. Never decode a full body and fill the unread tail from it.
-    try{return [{start,end,text:JSON.parse('"'+span.text.slice(start-span.start,end-span.start)+'"') as string}];}catch{return []}
+    // Complete escape/code-point boundaries, wholly inside this delivered range.
+    // Never decode a full body and fill the unread tail from it.
+    const text=span.text.slice(start-span.start,end-span.start);
+    try{return [{start,end,text:plan.encoding==='text'?text:JSON.parse('"'+text+'"') as string}];}catch{return []}
   });
   if(!readable.length)return plan?'…':'';
   const length=Math.max(40,Math.floor(560/Math.min(readable.length,6)));
   const selected=readable.slice(0,6),pieces=selected.map(r=>excerptSlice(r.text,length));
-  const prefix=plan&&selected[0].start>plan[0]?'… ':'';
+  const prefix=boundaries&&selected[0].start>boundaries[0]?'… ':'';
   const tail=selected.at(-1)!,last=pieces.at(-1)!;
-  const suffix=tail.text.length>last.length||readable.length>selected.length||plan&&tail.end<plan.at(-1)!?' …':'';
+  const suffix=tail.text.length>last.length||readable.length>selected.length||boundaries&&tail.end<boundaries.at(-1)!?' …':'';
   return prefix+pieces.join(' … ')+suffix;
 }

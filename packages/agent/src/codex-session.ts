@@ -15,6 +15,19 @@ type Pending={resolve:(value:any)=>void;reject:(error:Error)=>void};
 // bounded image (12 MiB encoded at the bridge) plus its RPC envelope, while
 // retaining a separate total stream budget for the whole session.
 const MAX_RPC_FRAME_BYTES=13*1024*1024,MAX_RPC_STREAM_BYTES=32*1024*1024;
+// App Server's structured rejection, not a Mote input quota. See Codex
+// rust-v0.162.1/codex-rs/app-server/src/error_code.rs and turn_processor.rs.
+const INPUT_TOO_LARGE_ERROR_CODE='input_too_large';
+function inputLimitMetadata(error:unknown):{input_error_code:string;max_chars?:number;actual_chars?:number}|undefined {
+  if(!error||typeof error!=='object')return;
+  const rpc=error as {code?:unknown;data?:unknown};
+  if(rpc.code!==-32602||!rpc.data||typeof rpc.data!=='object')return;
+  const data=rpc.data as Record<string,unknown>;
+  if(data.input_error_code!==INPUT_TOO_LARGE_ERROR_CODE)return;
+  const metadata:{input_error_code:string;max_chars?:number;actual_chars?:number}={input_error_code:INPUT_TOO_LARGE_ERROR_CODE};
+  for(const key of ['max_chars','actual_chars'] as const){const value=data[key];if(typeof value==='number'&&Number.isSafeInteger(value)&&value>=0)metadata[key]=value;}
+  return metadata;
+}
 
 /** Official newline-delimited App Server protocol. Only the host supplies executable paths.
  * A private home links ONLY file-backed login credentials; user plugins, MCP servers,
@@ -161,13 +174,21 @@ export class CodexSession {
       if(this.usage)this.publishUsage({...this.usage,complete:false});
     }
     if(message.method==='configWarning'){this.fail(new AgentProviderError());return;}
-    if(message.id!==undefined&&!message.method){const pending=this.requests.get(Number(message.id));if(!pending)return;this.requests.delete(Number(message.id));if(message.error){this.emit({type:'codex.rpc.failed',stage:'model',payload:{requestId:message.id,code:(message.error as {code?:number}).code}});pending.reject(new AgentProviderError(codexFailure((message.error as {data?:{codexErrorInfo?:unknown}}).data?.codexErrorInfo)));}else pending.resolve(message.result);return;}
+    if(message.id!==undefined&&!message.method){
+      const pending=this.requests.get(Number(message.id));if(!pending)return;this.requests.delete(Number(message.id));
+      if(message.error){
+        const inputLimit=inputLimitMetadata(message.error);
+        this.emit({type:'codex.rpc.failed',stage:'model',payload:{requestId:message.id,code:(message.error as {code?:number}).code,...inputLimit}});
+        pending.reject(new AgentProviderError(inputLimit?{category:'permanent',code:'processing_limit'}:codexFailure((message.error as {data?:{codexErrorInfo?:unknown}}).data?.codexErrorInfo)));
+      }else pending.resolve(message.result);
+      return;
+    }
     if(message.id!==undefined&&message.method){
       if(message.method!=='item/tool/call'){this.send({id:message.id,error:{code:-32601,message:'Mote does not allow this operation'}});this.fail(new AgentProviderError());return;}
       const args=message.params;
       if(args?.threadId!==this.threadId||args.namespace){this.fail(new AgentProviderError());return;}
       this.toolQueue=this.toolQueue.then(async()=>{
-        try{const result=await this.toolCall(args.tool,args.arguments);this.send({id:message.id,result:{contentItems:args.tool==='read_image'&&result&&typeof result==='object'&&'image' in result?[{type:'inputText',text:JSON.stringify({id:(result as any).id,attachmentId:(result as any).attachmentId,...((result as any).imageView?{imageView:(result as any).imageView}:{}),...((result as any).imageBudget?{imageBudget:(result as any).imageBudget}:{}),...((result as any).hostBudget?{hostBudget:(result as any).hostBudget}:{}),source:'untrusted_personal_context'})},{type:'inputImage',imageUrl:`data:${(result as any).image.mimeType};base64,${(result as any).image.data}`}]:[{type:'inputText',text:JSON.stringify(result)}],success:true}});}
+        try{const result=await this.toolCall(args.tool,args.arguments);this.send({id:message.id,result:{contentItems:args.tool==='read_image'&&result&&typeof result==='object'&&'image' in result?[{type:'inputText',text:JSON.stringify({id:(result as any).id,attachmentId:(result as any).attachmentId,...((result as any).imageView?{imageView:(result as any).imageView}:{}),...((result as any).imageBudget?{imageBudget:(result as any).imageBudget}:{}),...((result as any).toolUsage?{toolUsage:(result as any).toolUsage}:{}),source:'untrusted_personal_context'})},{type:'inputImage',imageUrl:`data:${(result as any).image.mimeType};base64,${(result as any).image.data}`}]:[{type:'inputText',text:JSON.stringify(result)}],success:true}});}
         catch(error){if(!this.failure&&!this.ending)this.send({id:message.id,result:{contentItems:[{type:'inputText',text:error instanceof ContextToolError?JSON.stringify({toolError:error.toJSON()}):'Tool unavailable or arguments outside the permitted scope.'}],success:false}});}
       }).catch(()=>this.fail(new AgentProviderError()));return;
     }
