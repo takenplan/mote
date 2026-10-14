@@ -6,12 +6,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
-import { repository, profilePaths, loadProfile, deploymentEnvironment, nativeIdentity, stopNative, atomicJson } from './profile-lib.mjs';
+import { repository, profilePaths, loadProfile, deploymentEnvironment, nativeIdentity, stopNative, atomicJson, updateProfileConfiguration, setPublicUrl } from './profile-lib.mjs';
 import { command, cli, updateEnvironment, initializeFixture, request, note, capture, image } from './profile-fixtures.mjs';
 
 const directory = await mkdtemp(join(tmpdir(), 'mote-profiles-fixture-'));
 const home = join(directory, 'profiles'), restoreHome = join(directory, 'restored');
 const profiles = [];
+// Observe the actual file watcher through its authenticated view before checking
+// idempotence. An immediate file read missed the normalization rewrite regression.
+async function settledConfiguration(p) {
+  const deadline = Date.now() + 10000; let previous, stable = 0;
+  while (Date.now() < deadline) {
+    const view = await request(p, '/api/configuration'), raw = await readFile(p.configFile, 'utf8');
+    const signature = JSON.stringify({ revision: view.revision, raw });
+    stable = signature === previous ? stable + 1 : 0; previous = signature;
+    if (stable >= 8) return { view, raw, profile: await loadProfile(profilePaths(p.profile, p.home)) };
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw Error('Generated profile configuration watcher did not settle');
+}
 try {
   let dev = await initializeFixture(home, 'dev'), test = await initializeFixture(home, 'test'); profiles.push(dev, test);
   assert.notEqual(dev.env.MOTE_TOKEN, test.env.MOTE_TOKEN); assert.notEqual(dev.dataDir, test.dataDir); assert.notEqual(dev.project, test.project);
@@ -22,17 +35,17 @@ try {
   assert.equal(devMedia.MOTE_MEDIA_OCR_ENDPOINT, `http://127.0.0.1:${devMedia.MOTE_MEDIA_OCR_PORT}/ocr`);
   assert.equal((await stat(dev.envFile)).mode & 0o777, 0o600);
   assert.equal(dev.env.MOTE_LOG_DIR, './logs'); assert.equal(dev.env.MOTE_LOG_MAX_ENTRIES, '2000'); assert.equal(dev.env.MOTE_AGENT_TRACE_ENABLED, '1'); assert.equal(test.env.MOTE_AGENT_TRACE_ENABLED, '0');
-  assert.equal(dev.env.MOTE_LOG_MAX_MB, 'auto'); assert.equal(test.env.MOTE_LOG_MAX_MB, '2');
+  assert.equal(dev.env.MOTE_LOG_MAX_MB, '100'); assert.equal(Object.hasOwn(dev.savedDocument.diagnostics, 'maxBytes'), false); assert.equal(test.env.MOTE_LOG_MAX_MB, '2');
   assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiB, 100);
   assert.equal(JSON.parse((await cli(home, 'test', 'config')).stdout).diagnostics.logMaxMiB, 2);
   const hostile = { MOTE_PROFILE: 'prod', MOTE_ENV_FILE: '/missing/formal.env', MOTE_DATA_DIR: '/missing/formal-data', MOTE_TOKEN: 'synthetic-hostile-ambient-token', MOTE_MODEL: 'ambient-model-must-not-load', MOTE_MODEL_API_KEY: 'synthetic-ambient-key', MOTE_DEBUG: '1' };
-  const isolated = await cli(home, undefined, 'exec', ['--', process.execPath, '-e', "console.log(JSON.stringify({profile:process.env.MOTE_PROFILE,file:process.env.MOTE_ENV_FILE,model:process.env.MOTE_MODEL,key:process.env.MOTE_MODEL_API_KEY,debug:process.env.MOTE_DEBUG,url:process.env.MOTE_URL}))"], { env: hostile });
-  assert.deepEqual(JSON.parse(isolated.stdout), { profile: 'dev', file: dev.envFile, model: '', key: '', debug: '0', url: dev.url });
+  const isolated = await cli(home, undefined, 'exec', ['--', process.execPath, '-e', "console.log(JSON.stringify({profile:process.env.MOTE_PROFILE,file:process.env.MOTE_CONFIG_FILE,model:process.env.MOTE_MODEL,key:process.env.MOTE_MODEL_API_KEY,debug:process.env.MOTE_DEBUG,url:process.env.MOTE_URL}))"], { env: hostile });
+  assert.deepEqual(JSON.parse(isolated.stdout), { profile: 'dev', file: dev.configFile, url: dev.url });
   await cli(home, 'dev', 'init', [], { fail: true });
   await cli(join(directory, 'reserved'), 'dev', 'init', ['--port', '47832'], { fail: true });
   const originalEnv = await readFile(dev.envFile, 'utf8');
-  assert.match(originalEnv, /^MOTE_DATA_DIR=/m);
-  await writeFile(dev.envFile, originalEnv.replace(/^MOTE_DATA_DIR=.*$/m, 'MOTE_DATA_DIR=../test/data'));
+  assert.match(originalEnv, /dataDir: \.\/data/);
+  await updateProfileConfiguration(dev, document => { document.storage.dataDir = '../test/data'; });
   await cli(home, 'dev', 'status', [], { fail: true }); await writeFile(dev.envFile, originalEnv);
   const launch = JSON.parse((await cli(home, 'dev', 'launchd')).stdout), xml = await readFile(launch.generated, 'utf8');
   assert.equal(launch.installed, false); assert.ok(xml.includes('/dev/null')); assert.ok(!xml.includes(dev.env.MOTE_TOKEN));
@@ -54,10 +67,40 @@ try {
   const adoption = JSON.parse((await cli(home, 'dev', 'log-retention', ['--defaults'])).stdout);
   assert.deepEqual(adoption, { profile: 'dev', changed: true, before: { maxFileMiB: 2, maxFiles: 3 }, after: { maxFileMiB: 100, maxFiles: 3 }, restartRequired: true });
   assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 2 * 1024 * 1024);
+  const adopted = await settledConfiguration(dev);
+  assert.equal(Object.hasOwn(adopted.profile.savedDocument.diagnostics, 'maxBytes'), false, 'The running watcher must preserve the profile-default omission');
+  assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiBSource, 'profile-default');
+  const repeatedAdoption = JSON.parse((await cli(home, 'dev', 'log-retention', ['--defaults'])).stdout);
+  assert.deepEqual(repeatedAdoption, { profile: 'dev', changed: false, before: { maxFileMiB: 100, maxFiles: 3 }, after: { maxFileMiB: 100, maxFiles: 3 }, restartRequired: true });
+  const repeated = await settledConfiguration(dev);
+  assert.equal(repeated.raw, adopted.raw, 'Repeated adoption after watcher acceptance must not rewrite YAML');
+  assert.equal(repeated.view.revision, adopted.view.revision, 'Repeated adoption must not change the revision');
+  const execution = repeated.view.domains.find(domain => domain.id === 'execution');
+  await request(dev, '/api/configuration/execution', { method: 'PUT', body: { revision: repeated.view.revision, value: { ...execution.saved, agentConcurrency: execution.saved.agentConcurrency + 1 } } });
+  const unrelatedSave = await settledConfiguration(dev);
+  assert.equal(unrelatedSave.view.revision, repeated.view.revision + 1);
+  assert.equal(Object.hasOwn(unrelatedSave.profile.savedDocument.diagnostics, 'maxBytes'), false, 'An unrelated online save must preserve profile-default provenance');
+  assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiBSource, 'profile-default');
+  assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 2 * 1024 * 1024, 'Adoption and unrelated hot edits must leave capacity restart-required');
   await cli(home, 'dev', 'stop'); await cli(home, 'dev', 'start');
   dev = await loadProfile(profilePaths('dev', home));
   assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 100 * 1024 * 1024);
-  console.info('[profiles] DEV 100 MiB/test 2 MiB defaults, legacy numeric preservation and explicit adoption across real restart passed');
+  // A number equal to the default is still a deliberate explicit override.
+  await updateProfileConfiguration(dev, document => { document.diagnostics.maxBytes = 100 * 1024 * 1024; });
+  const explicitDefault = await settledConfiguration(dev), explicitExecution = explicitDefault.view.domains.find(domain => domain.id === 'execution');
+  await request(dev, '/api/configuration/execution', { method: 'PUT', body: { revision: explicitDefault.view.revision, value: { ...explicitExecution.saved, agentConcurrency: explicitExecution.saved.agentConcurrency + 1 } } });
+  const explicitSaved = await settledConfiguration(dev);
+  assert.equal(explicitSaved.profile.savedDocument.diagnostics.maxBytes, 100 * 1024 * 1024);
+  assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiBSource, 'explicit');
+  dev = explicitSaved.profile;
+  console.info('[profiles] DEV defaults, explicit limits, settled watcher adoption/idempotence, unrelated online save and real restart passed');
+  const beforeConfiguration = await request(dev, '/api/configuration');
+  await setPublicUrl(dev, 'https://generated-profile.invalid');
+  const configurationDeadline = Date.now() + 10000; let changedConfiguration;
+  do { changedConfiguration = await request(dev, '/api/configuration'); if (changedConfiguration.revision > beforeConfiguration.revision) break; await new Promise(resolve => setTimeout(resolve, 50)); } while (Date.now() < configurationDeadline);
+  assert.equal(changedConfiguration.revision, beforeConfiguration.revision + 1, 'CLI atomic YAML revision must be accepted by the running watcher');
+  const changedServer = changedConfiguration.domains.find(domain => domain.id === 'server');
+  assert.equal(changedServer.saved.publicUrl, 'https://generated-profile.invalid'); assert.equal(changedServer.effective.publicUrl, ''); assert.equal(changedServer.status, 'restart-required');
   await request(dev, '/api/status', { status: 401, token: test.env.MOTE_TOKEN });
   const saved = note(), screen = capture();
   await request(dev, '/api/notes', { method: 'POST', body: saved, status: 201 });
@@ -77,10 +120,10 @@ try {
     assert.equal((await stat(join(syncDirectory,stateFiles[0]+'.atime.json'))).mode&0o777,0o600);
   }
   for (const p of [dev, test]) assert.equal((await request(p, '/api/captures?source=file')).items.length, 1);
-  await writeFile(join(source, 'explicit-env.md'), 'Synthetic explicit MOTE_ENV_FILE, without process MOTE_URL.');
+  await writeFile(join(source, 'explicit-env.md'), 'Synthetic explicit MOTE_CONFIG_FILE, without process MOTE_URL.');
   for (const p of [dev, test]) {
     const clean = Object.fromEntries(Object.keys(process.env).filter(key => key.startsWith('MOTE_')).map(key => [key, undefined]));
-    const imported = await command(process.execPath, ['--import', 'tsx', join(repository, 'scripts/import-files.ts'), '--root', source, '--allow-transient-upload'], { env: { ...clean, MOTE_ENV_FILE: p.envFile } });
+    const imported = await command(process.execPath, ['--import', 'tsx', join(repository, 'scripts/import-files.ts'), '--root', source, '--allow-transient-upload'], { env: { ...clean, MOTE_CONFIG_FILE: p.configFile } });
     assert.equal(imported.code, 0, imported.stderr); assert.match(imported.stdout, /Received 1 changed/);
     assert.equal((await request(p, '/api/captures?source=file')).items.length, 2);
   }
@@ -113,7 +156,7 @@ try {
   const release = join(directory, 'release-next'); await mkdir(join(release, 'apps/server/dist'), { recursive: true });
   await writeFile(join(release, 'package.json'), '{"type":"module"}');
   await writeFile(join(release, 'apps/server/dist/index.js'), `import ${JSON.stringify(new URL('apps/server/dist/index.js', 'file://' + repository + '/').href)};\n`);
-  await cp(join(repository, 'apps/server/dist/log-retention-config.mjs'), join(release, 'apps/server/dist/log-retention-config.mjs'));
+  for (const marker of ['log-retention-config.mjs', 'config-service.js']) await cp(join(repository, 'apps/server/dist', marker), join(release, 'apps/server/dist', marker));
   await cli(home, 'dev', 'start'); await cli(home, 'dev', 'upgrade', ['--release', release]);
   assert.equal((await request(dev, `/api/notes/${saved.id}`)).ocrText, saved.text);
   const afterUpgrade = note(); await request(dev, '/api/notes', { method: 'POST', body: afterUpgrade, status: 201 });
@@ -124,7 +167,10 @@ try {
   assert.ok((await readdir(dev.directory)).some(name => name.startsWith('data.before-rollback-')));
   dev = await loadProfile(profilePaths('dev', home));
   assert.equal(dev.meta.release, repository); assert.ok(dev.meta.previous.backup.includes('pre-rollback-'));
-  const supervisor = await nativeIdentity(dev); process.kill(supervisor.record.pid, 'SIGKILL');
+  const supervisor = await nativeIdentity(dev);
+  const activeDataDir = dev.dataDir; await updateProfileConfiguration(dev, document => { document.storage.dataDir = './pending-data'; document.storage.source = join(dev.directory, 'pending-data'); });
+  dev = await loadProfile(profilePaths('dev', home)); assert.notEqual(dev.dataDir, activeDataDir); assert.equal(supervisor.record.dataDir, activeDataDir);
+  process.kill(supervisor.record.pid, 'SIGKILL');
   const orphanDeadline = Date.now() + 5000;
   while (!(await nativeIdentity(dev)).recoveredChild) { if (Date.now() > orphanDeadline) throw Error('Killed supervisor child was not recovered'); await new Promise(resolve => setTimeout(resolve, 50)); }
   assert.equal(JSON.parse((await cli(home, 'dev', 'status')).stdout).recoveredChild, true);
@@ -143,7 +189,8 @@ try {
   // The bounded supervisor must cap large chunks and repeated restarts independently of server logging.
   const noisy = join(directory, 'noisy.mjs'), log = join(directory, 'bounded.log');
   await writeFile(noisy, "process.stdout.write('synthetic-private-body\\n'.repeat(60000)); process.stderr.write('synthetic-private-token'.repeat(100000));");
-  for (let i = 0; i < 2; i++) assert.equal((await command(process.execPath, [join(repository, 'scripts/central-runner.mjs'), noisy, log, `--mote-instance=${randomUUID()}`], { env: { MOTE_LOG_MAX_MB: '0.1', MOTE_LOG_MAX_FILES: '3' } })).code, 0);
+  await updateProfileConfiguration(dev, document => { document.diagnostics.maxBytes = Math.floor(0.1 * 1024 * 1024); document.diagnostics.maxFiles = 3; });
+  for (let i = 0; i < 2; i++) assert.equal((await command(process.execPath, [join(repository, 'scripts/central-runner.mjs'), noisy, log, `--mote-instance=${randomUUID()}`], { env: { MOTE_CONFIG_FILE: dev.configFile } })).code, 0);
   for (const name of (await readdir(directory)).filter(name => name.startsWith('bounded.log'))) { assert.ok((await stat(join(directory, name))).size <= Math.floor(0.1 * 1024 * 1024)); assert.ok(!(await readFile(join(directory, name), 'utf8')).includes('synthetic-private')); }
   assert.equal((await readdir(directory)).filter(name => name.startsWith('bounded.log')).length, 3);
   console.info('[profiles] Bounded native stdout/stderr rotation passed; no formal node or live model was used');

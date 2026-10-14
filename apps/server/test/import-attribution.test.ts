@@ -27,7 +27,7 @@ function fixture(t:TestContext,encrypted=false){
   t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
   const sourceId='generated-import',sources=new SourceStore(store),materials=new MaterialStore(store),attribution=new ImportAttributionStore(store);
   sources.register({id:sourceId,name:'Generated import',kind:'custom',deviceId:'fixture',platform:'import'});
-  return {directory,store,sources,materials,attribution,sourceId,reopen(){store.close();store=new Store(directory,{dataKey:'ab'.repeat(32)});return store;}};
+  return {directory,store,sources,materials,attribution,sourceId,reopen(contentEncryptionEnabled=false){store.close();store=new Store(directory,{dataKey:'ab'.repeat(32),contentEncryptionEnabled});return store;}};
 }
 function draft(sourceId:string,captureId:string,externalId='entry'):MaterialDraft {
   return {id:materialId(sourceId,externalId),origin:{sourceId,externalId},title:'Generated mixed-actor text',kind:'mote.message',schemaVersion:1,
@@ -126,7 +126,7 @@ test('encrypted note conversion and restart follow managed private storage polic
   const f=fixture(t),id=randomUUID(),pin=f.attribution.freeze({id,version:1,sourceId:f.sourceId,instruction:note})!;
   const ack=await f.sources.upsert(f.sourceId,original,undefined,result=>f.attribution.bind(result.id,pin));
   assert.match(String(f.store.db.prepare('SELECT json FROM import_owner_declarations').get()!.json),/^json:/);
-  f.store.contentEncryption.setEnabled(true);let store=f.reopen(),materials=new MaterialStore(store);
+  f.store.contentEncryption.setEnabled(true);let store=f.reopen(true),materials=new MaterialStore(store);
   assert.match(String(store.db.prepare('SELECT json FROM import_owner_declarations').get()!.json),/^aes:/);
   assert.equal(materials.contextForEvidence(store.evidence([ack.id])[0]).importStatements?.[0].instruction,note);
   store.contentEncryption.setEnabled(false);

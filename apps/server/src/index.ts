@@ -1,9 +1,18 @@
-import { configFromEnv,ConfigError } from './config.js';
+import { configFromFile,configFromDocument,registerBuiltinDomains,ConfigError } from './config.js';
 import { buildApp } from './app.js';
 import { readFileSync,writeFileSync,unlinkSync,existsSync } from 'node:fs';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { writeRuntimeListener, cleanupRuntimeListener } from './runtime-listener.js';
+import { ConfigService } from './config-service.js';
 async function main() {
-const config=configFromEnv();
+const selected=configFromFile(undefined,{initializeCredentials:false});
+const configService=new ConfigService({path:selected.configuration.configFile!});
+registerBuiltinDomains(configService);
+try{await configService.initialize();}catch(error){await configService.close();throw error;}
+const config=configFromDocument(configService.document(),configService.path);
+const configFile=config.configuration.configFile!,instanceId=randomUUID();
+process.on('exit',()=>cleanupRuntimeListener(configFile,process.pid,instanceId));
 const pidPath=join(config.dataDir,'server.pid');
 if(existsSync(pidPath)) {
   const pid=Number(readFileSync(pidPath,'utf8').trim());
@@ -17,9 +26,15 @@ if(existsSync(pidPath)) {
 }
 writeFileSync(pidPath,String(process.pid),{mode:0o600,flag:'wx'});
 process.on('exit',()=>{try{if(existsSync(pidPath)&&readFileSync(pidPath,'utf8').trim()===String(process.pid))unlinkSync(pidPath);}catch{/* Never print a filesystem exception containing private paths. */}});
-const {app}=await buildApp(config,{backgroundWorker:true});
-try{await app.listen({host:config.host,port:config.port});}catch(error){await app.close();throw error;}
-console.info(JSON.stringify({event:'server.listening',port:config.port,tokenConfigured:true}));
+const {app}=await buildApp(config,{backgroundWorker:true,configService});
+app.addHook('onSend',async(req,reply,payload)=>{if(req.routeOptions.url==='/api/health')reply.header('X-Mote-Runtime-Instance',instanceId);return payload;});
+try{
+  await app.listen({host:config.host,port:config.port});
+  const address=app.server.address();
+  if(!address||typeof address==='string')throw Error('Invalid server listener');
+  await writeRuntimeListener(configFile,{version:1,pid:process.pid,port:address.port,address:address.address,instanceId});
+  console.info(JSON.stringify({event:'server.listening',port:address.port,tokenConfigured:true}));
+}catch(error){await app.close();throw error;}
 let closing=false;
 for(const signal of ['SIGTERM','SIGINT'] as const)process.on(signal,async()=>{if(closing)return;closing=true;try{await app.close();console.info(JSON.stringify({event:'server.stopped'}));process.exit(0);}catch{console.error(JSON.stringify({event:'server.stop_failed',category:'shutdown'}));process.exit(1);}});
 }

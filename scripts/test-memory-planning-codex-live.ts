@@ -40,7 +40,7 @@ const config:Config={dataKey:undefined,dataDir:join(directory,'http'),token,toke
 let url='';
 async function openHttp(){
  node=await buildApp(config,{backgroundWorker:false});
- const settings=node.lifecycle.settings();settings.extraction.enabled=true;for(const id of ['consolidation','insights','working'] as const)settings[id].enabled=false;node.lifecycle.configure(settings);
+ const settings=node.lifecycle.settings();settings.extraction.enabled=true;for(const id of ['consolidation','insights','working'] as const)settings[id].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
  const query=node.agent.query.bind(node.agent);node.agent.query=async input=>{
   assert.ok(report.calls.length<30&&Date.now()-started<20*60000,'Bounded live acceptance');
   const call={phase:input.traceContext?.phase??'query',startedAt:new Date().toISOString(),status:'running',durationMs:0};report.calls.push(call);progress('model-start',{call:report.calls.length,phase:call.phase});

@@ -21,7 +21,7 @@ test('local file outputs are available to remote and local models across every e
  const node=await buildApp(config,{createModelAgent:async(settings,reader)=>({configured:true,close:async()=>{},query:async()=>{
   const views=await inspect(reader);calls.push({model:settings.model,views});return {answer:'{"memories":[]}',citations:[],trace:[],runId:randomUUID()};
  }})});
- const settings=node.lifecycle.settings();for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;node.lifecycle.configure(settings);
+ const settings=node.lifecycle.settings();for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
  node.sources.register({id:'generated-files',name:'Generated files',kind:'local-files',deviceId:'fixture-device',platform:'import',retention:'archive'});
  const bytes=Buffer.from('Generated original recording');
@@ -88,7 +88,7 @@ test('native local dialogue routes grouping and summaries through the configured
  node.processing.runtime.registry.register({id:'fixture.central-diarize',version:'1',name:'Generated speakers',stage:'diarize',localOnly:true,mediaTypes:['audio/'],process:async()=>({durationMs:2000,engine:'fixture',expectedSpeakers:2,observedSpeakers:2,overlapDetection:'unknown',segments:[{startMs:0,endMs:1000,speaker:'SPEAKER_0'},{startMs:1000,endMs:2000,speaker:'SPEAKER_1'}],samples:[]})});
  const view=node.processing.view(),policy=view.policy,profile=policy.profiles.find(p=>p.processorId==='audio.local-dialogue')!;
  profile.parameters={speakerCount:2,semanticTurns:true};profile.diarizationProcessor='fixture.central-diarize';profile.summarize=true;policy.services.find(s=>s.id==='asr-local')!.endpoint='http://127.0.0.1:19009/transcribe';
- node.processing.update({revision:view.revision,settings:view.settings,policy});
+ await node.processing.save({revision:view.revision,settings:view.settings,policy});
  node.sources.register({id:'generated-native',name:'Generated audio',kind:'local-files',deviceId:'generated',platform:'import',retention:'archive'});
  const bytes=Buffer.from('Generated audio fixture'),upload=node.files.begin({sourceId:'generated-native',item:{externalId:'audio',revision:'1',observedAt:'2026-10-06T00:00:00Z',kind:'file',layer:'original',text:'',mimeType:'audio/wav'},sizeBytes:bytes.length,sha256:sha256(bytes)},()=>{});
  node.files.part(upload.uploadId,0,bytes,()=>{});const original=await node.files.commit(upload.uploadId,()=>{});

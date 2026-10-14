@@ -29,31 +29,31 @@ try {
   const config = JSON.parse((await run(dev, 'compose', ['--', 'config', '--format', 'json'])).stdout);
   // compose config escapes dollar signs for reusable configuration output.
   // Verify credential bytes at the actual container boundary after startup instead.
-  assert.equal(config.services.mote.environment.MOTE_LOG_DIR, '/data/logs');
-  assert.equal(config.services.mote.environment.MOTE_ENV_FILE, '/app/deploy/empty.env');
+  assert.equal(config.services.mote.environment.MOTE_LOG_DIR, undefined);
+  assert.equal(config.services.mote.volumes.find(volume => volume.target === '/config').source, dev.directory);
+  assert.equal(config.services.mote.environment.MOTE_CONFIG_FILE, '/config/mote.yaml');
   assert.equal(config.services.mote.ports[0].host_ip, '127.0.0.1');
   assert.notEqual(dev.project, test.project); assert.notEqual(dev.meta.volume, test.meta.volume);
   await run(dev, 'start'); await run(test, 'start');
   const literalContainer = (await run(dev,'compose',['--','ps','--quiet','mote'])).stdout.trim();
   const actualEnvironment = JSON.parse(await docker(['inspect','--format','{{json .Config.Env}}',literalContainer]));
-  assert.equal(actualEnvironment.find(value=>value.startsWith('MOTE_TOKEN=')),`MOTE_TOKEN=${dev.env.MOTE_TOKEN}`);
+  assert.equal(actualEnvironment.find(value=>value.startsWith('MOTE_TOKEN=')),undefined);
+  await docker(['exec',literalContainer,'node','--input-type=module','-e',`import assert from 'node:assert/strict';import {readConfigDocument} from '@mote/shared/config-file';assert.equal(readConfigDocument(process.env.MOTE_CONFIG_FILE).document.server.token,${JSON.stringify(dev.env.MOTE_TOKEN)});`]);
   for (const p of [dev, test]) {
     await request(p, '/api/configuration', { token: p === dev ? test.env.MOTE_TOKEN : dev.env.MOTE_TOKEN, status: 401 });
     const configuration = await request(p, '/api/configuration');
     const fields = new Map(configuration.groups.flatMap(group => group.fields).map(field => [field.key, field]));
     assert.equal(configuration.version, 1); assert.equal(configuration.profile, p.profile); assert.equal(configuration.runtime, 'docker');
-    assert.equal(configuration.readOnly, true); assert.equal(configuration.restartRequired, true);
-    assert.equal(configuration.envFile, p.envFile, 'The owner edit path must identify the host profile file');
-    assert.equal(configuration.baseDir, '/app/deploy');
-    assert.equal(fields.get('configurationFile').value, p.envFile);
-    assert.equal(fields.get('effectiveEnvFile').value, '/app/deploy/empty.env');
-    assert.equal(fields.get('effectiveEnvFile').source, 'environment');
+    assert.equal(configuration.readOnly, false);
+    assert.equal(configuration.envFile, '/config/mote.yaml', 'The owner sees the actual mounted main configuration');
+    assert.equal(configuration.baseDir, '/config');
+    assert.equal(configuration.configFile, '/config/mote.yaml');
     assert.equal(configuration.storage.kind, 'docker-volume'); assert.equal(configuration.storage.source, p.meta.volume);
     assert.equal(configuration.storage.mountPath, '/data'); assert.equal(configuration.storage.dataDir, '/data');
     assert.equal(configuration.storage.sqlitePath, '/data/mote.sqlite'); assert.equal(configuration.storage.assetDir, '/data/files/objects');
     assert.equal(configuration.storage.logDir, '/data/logs'); assert.equal(fields.get('logDirectory').value, '/data/logs');
     assert.equal(fields.get('maxStorageBytes').value, Number(p.env.MOTE_MAX_STORAGE_MB) * 1024 * 1024);
-    assert.equal(fields.get('maxStorageBytes').source, 'environment');
+    assert.equal(fields.get('maxStorageBytes').source, 'config-file');
     assert.equal(fields.get('dataKeyConfigured').value, true); assert.equal(fields.get('accessTokenConfigured').value, true);
     assert.equal(fields.get('modelApiKeyConfigured').value, Boolean(p.env.MOTE_MODEL_API_KEY));
     assert.equal(fields.get('embeddingApiKeyConfigured').value, Boolean(p.env.MOTE_EMBEDDING_API_KEY));
@@ -61,7 +61,7 @@ try {
     const serialized = JSON.stringify(configuration);
     for (const secret of secrets) assert.ok(!serialized.includes(JSON.stringify(secret).slice(1, -1)), 'Configuration must not contain credential values, including JSON-escaped tokens');
     const support = JSON.stringify(await request(p, '/api/support-bundle'));
-    for (const privateValue of [...secrets, p.envFile, p.directory, p.meta.volume, '/app/deploy', '/data']) {
+    for (const privateValue of [...secrets, p.envFile, p.directory, p.meta.volume, '/config', '/data']) {
       assert.ok(!support.includes(JSON.stringify(privateValue).slice(1, -1)), 'Reading owner configuration must not place secrets or paths in support bundles');
     }
   }
@@ -74,6 +74,18 @@ try {
   assert.deepEqual(await request(dev, `/api/captures/${screen.id}/image`, { binary: true }), image);
   await run(dev, 'backup', ['--out', join(directory, 'running')], { fail: true });
   console.info('[compose-profiles] Real Compose profiles, literal credentials, loopback ports, isolated data and encrypted image checks passed');
+
+  // Exercise the old image's private UID 1000 storage before this host user's explicit migration.
+  await run(dev, 'stop');
+  const legacyUid = process.getuid?.() === 1000 ? 1001 : 1000, legacyUser = `${legacyUid}:${legacyUid}`;
+  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', 'mote', 'chown', '-R', legacyUser, '/data', dev.modelDirectory]);
+  await run(dev, 'start', [], { fail: true });
+  await run(dev, 'compose', ['--', 'run', '--rm', '--no-deps', '--user', '0:0', 'mote', 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.equal(fs.statSync('/data/mote.sqlite').uid,${legacyUid});`]);
+  await run(dev, 'migrate-storage-owner');
+  await run(dev, 'start');
+  assert.equal((await request(dev, `/api/notes/${saved.id}`)).ocrText, saved.text);
+  assert.deepEqual(await request(dev, `/api/captures/${screen.id}/image`, { binary: true }), image);
+  console.info('[compose-profiles] Legacy private storage UID refusal and explicit stopped ownership migration preserve generated evidence');
 
   await run(dev, 'compose', ['--', 'down']); await run(dev, 'start');
   assert.equal((await request(dev, `/api/notes/${saved.id}`)).ocrText, saved.text);
@@ -125,7 +137,8 @@ try {
   await request(dev, `/api/notes/${newer.id}`, { status: 404 });
   assert.deepEqual(await request(dev, `/api/captures/${screen.id}/image`, { binary: true }), image);
   assert.ok((await request(dev, '/api/sources')).items.some(item => item.id === source.id), 'Current connector source selection survives the older archive');
-  assert.deepEqual(await readFile(dev.envFile), envBeforeRollback);
+  const beforeYaml=(await import('../packages/shared/src/config-file.ts')).parseConfigDocument(envBeforeRollback.toString()).savedDocument, afterYaml=current.savedDocument;
+  delete beforeYaml.revision;delete afterYaml.revision;beforeYaml.storage.source=current.meta.volume;assert.deepEqual(afterYaml,beforeYaml);
   // Assert inside the container; never print credential bodies, even synthetic ones.
   const restoredCredentials = { ...credentials, checkpoints: {} };
   await docker(['exec', restoredContainer, 'node', '-e', `const fs=require('node:fs'),assert=require('node:assert/strict');assert.deepEqual(JSON.parse(fs.readFileSync('/data/connectors/google-calendar.json','utf8')),${JSON.stringify(restoredCredentials)});assert.equal(fs.statSync('/data/connectors/google-calendar.json').mode&0o777,0o600);assert.equal(fs.statSync('/data/connectors/google-calendar.json').uid,process.getuid());assert.equal(fs.statSync('/data/connectors').mode&0o777,0o700);assert.equal(JSON.parse(fs.readFileSync('/data/connectors/opaque.json','utf8')).credential,'synthetic-opaque-credential');assert.equal(fs.existsSync('/data/connectors/.mote-rollback-connections.json'),false);`]);
@@ -143,7 +156,7 @@ try {
   await run(test, 'tls', ['--enable']);
   const tls = JSON.parse((await run(test, 'compose', ['--', 'config', '--format', 'json'])).stdout);
   assert.equal(tls.services.caddy.image, 'caddy:2.11.4-alpine');
-  await docker(['run', '--rm', '--env', 'MOTE_TLS_DOMAIN=synthetic-mote.invalid', '--mount', `type=bind,source=${join(repository, 'deploy/Caddyfile')},target=/etc/caddy/Caddyfile,readonly`, 'caddy:2.11.4-alpine', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile']);
+  await docker(['run', '--rm', '--env', 'MOTE_TLS_DOMAIN=synthetic-mote.invalid', '--env', 'MOTE_PORT='+test.port, '--mount', `type=bind,source=${join(repository, 'deploy/Caddyfile')},target=/etc/caddy/Caddyfile,readonly`, 'caddy:2.11.4-alpine', 'caddy', 'validate', '--config', '/etc/caddy/Caddyfile']);
   console.info('[compose-profiles] Caddy configuration validation passed; public DNS/TLS deployment was not attempted');
 } finally {
   if (available) {

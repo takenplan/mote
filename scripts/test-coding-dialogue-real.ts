@@ -44,7 +44,7 @@ try{
  for(const path of kimiFiles){if((await stat(path)).size<100)continue;const body=await readFile(path,'utf8');if(body.split('\n').some(line=>{try{return JSON.parse(line).message?.type==='TurnBegin';}catch{return false;}})){samples.push({provider:'kimi',files:[path]});break;}}
  assert.ok(samples.some(sample=>sample.provider==='codex')&&samples.some(sample=>sample.provider==='kimi'),'real native Codex and Kimi samples are required');
  node=await buildApp(config,{backgroundWorker:false});await node.app.ready();
- const settings=node.lifecycle.settings();for(const id of ['consolidation','insights','working'] as const)settings[id].enabled=false;node.lifecycle.configure(settings);
+ const settings=node.lifecycle.settings();for(const id of ['consolidation','insights','working'] as const)settings[id].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
  const counters:unknown[]=[];
  for(const sample of samples){
   const root=join(directory,'input',sample.provider);await mkdir(root,{recursive:true,mode:0o700});
@@ -74,7 +74,7 @@ try{
   return originalSend.call(this,message);
  };
  if(live){
-  const policy=node.workflows.settings();node.workflows.configure({...policy,semantic:{...policy.semantic,concurrency:3}});
+  const policy=node.workflows.settings();await node.workflows.save({revision:node.configService.revision,settings:{...policy,semantic:{...policy.semantic,concurrency:3}}});
   let calls=0;const query=node.agent.query.bind(node.agent);
   node.agent.query=async input=>{assert.ok(++calls<=24,'live call budget exceeded');assert.ok(!input.question.startsWith('Build a running overview'));
    const ranges=input.evidenceRanges??[];assert.ok(ranges.reduce((n,r)=>n+r.length,0)<=12000);

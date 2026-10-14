@@ -1,3 +1,5 @@
+import {ConfigService} from '../src/config-service.js';
+import {defaultModelDomain,modelDomainSchema} from '../src/model-settings.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {EventEmitter} from 'node:events';
@@ -37,7 +39,9 @@ test('catalog failure does not echo remote errors or credentials',async()=>{
   await assert.rejects(providerModels(settings,(async()=>new Response('generated-secret',{status:401})) as typeof fetch),e=>!String(e).includes('generated-secret'));
   await assert.rejects(providerModels(settings,(async()=>Response.json({bad:'generated-secret'})) as typeof fetch));
 });
-test('Codex discovery only initializes and pages model/list, then closes the child',async()=>{
+test('Codex discovery only initializes and pages model/list, then closes the child',async t=>{
+  const previous=process.env.MOTE_CODEX_BIN;process.env.MOTE_CODEX_BIN='/ambient/must-not-run';
+  t.after(()=>{if(previous===undefined)delete process.env.MOTE_CODEX_BIN;else process.env.MOTE_CODEX_BIN=previous;});
   const methods:string[]=[];let killed=false;
   const launch=((command:string,args:string[])=>{
     assert.equal(command,'codex');assert.deepEqual(args,['app-server']);
@@ -61,7 +65,8 @@ test('draft catalogs use the selected preset credentials, not the legacy default
   await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));
   const directory=await mkdtemp(join(tmpdir(),'mote-catalog-credentials-'));
   const baseUrl=`http://127.0.0.1:${(server.address() as {port:number}).port}/v1`;
-  const store=new ModelSettingsStore({directory,environment:{...settings,baseUrl,headers:{}},prepare:async()=>({activate(){},async dispose(){}}),probe:async()=>({ok:true,code:'ok',message:'',durationMs:0})});
+  const configService=new ConfigService({path:join(directory,'mote.yaml'),initialDocument:{version:1,revision:0,models:{...defaultModelDomain(),deployment:{...settings,baseUrl,headers:{}}}},watch:false});configService.register({id:'models',schema:modelDomainSchema,defaultValue:defaultModelDomain()});
+  const store=new ModelSettingsStore({configService,prepare:async()=>({activate(){},async dispose(){}}),probe:async()=>({ok:true,code:'ok',message:'',durationMs:0})});
   t.after(async()=>{await store.close();await new Promise<void>(resolve=>server.close(()=>resolve()));await rm(directory,{recursive:true,force:true});});
   await store.initialize();
   const view=await store.updateProfile('second',{revision:0,name:'Second account',settings:{...settings,baseUrl,apiKey:'second-generated-key',headers:{}}});

@@ -351,7 +351,7 @@ export function LoginDialog({ destination, onConnected, onClose }: {
         {error && <ErrorNotice text={error}/>}
         <button className="button primary full" disabled={busy}>{busy ? <Spinner label={moteText("正在验证令牌…")}/> : <>{moteText("登录并继续")}<ArrowRight size={16}/></>}</button>
       </form>
-      <details className="connection-help"><summary>{moteText("在哪里获取管理令牌？")}</summary><p>{moteText("在部署机器上运行")}{' '}<code>node scripts/mote.mjs token --profile dev</code>{' '}{moteText("（日常环境使用对应名称），或读取部署配置中的")}{' '}<code>MOTE_TOKEN</code>{moteText("。设备扫码使用单独的一次性邀请。")}</p></details>
+      <details className="connection-help"><summary>{moteText("在哪里获取管理令牌？")}</summary><p>{moteText("在部署机器上运行")}{' '}<code>node scripts/mote.mjs token --profile dev</code>{' '}{moteText("（日常环境使用对应名称），或读取部署配置中的")}{' '}<code>mote.yaml → server.token</code>{moteText("。设备扫码使用单独的一次性邀请。")}</p></details>
     </section>
   </div>;
 }

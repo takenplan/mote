@@ -10,17 +10,17 @@
 
 | 环境 | 默认 API 端口 | 默认配置 | 数据与日志 |
 |---|---:|---|---|
-| dev | 47842 | `.mote/profiles/dev/mote.env` | 同目录 `data/`、`logs/` |
-| test | 47852 | `.mote/profiles/test/mote.env` | 同目录 `data/`、`logs/` |
-| prod | 47832 | `.mote/profiles/prod/mote.env` | 同目录 `data/`、`logs/` |
+| dev | 47842 | `.mote/profiles/dev/mote.yaml` | 同目录 `data/`、`logs/` |
+| test | 47852 | `.mote/profiles/test/mote.yaml` | 同目录 `data/`、`logs/` |
+| prod | 47832 | `.mote/profiles/prod/mote.yaml` | 同目录 `data/`、`logs/` |
 
-`--home /absolute/profiles` 将整个环境目录放到仓库外。例如 `--home /srv/mote/profiles --profile prod` 使用 `/srv/mote/profiles/prod/`。后续命令必须使用同一个 `--home`。目录包含 `mote.env`、`profile.json`、`data/`、`logs/`、`backups/` 和 `generated/`。环境名和目录共同生成 Docker project/volume 名称，两个不同的 `--home` 也不会共享默认卷。
+`--home /absolute/profiles` 将整个环境目录放到仓库外。例如 `--home /srv/mote/profiles --profile prod` 使用 `/srv/mote/profiles/prod/`。后续命令必须使用同一个 `--home`。目录包含 `mote.yaml`、`profile.json`、`data/`、`logs/`、`backups/` 和 `generated/`。环境名和目录共同生成 Docker project/volume 名称，两个不同的 `--home` 也不会共享默认卷。
 
 初始化为每个环境生成独立的 256 bit 随机令牌，私有目录权限 0700、配置权限 0600；已存在的环境会拒绝覆盖。只有 `token` 命令主动显示令牌。`profile.json` 记录运行方式、代码版本路径或镜像、卷名与升级快照，不含令牌。
 
-CLI 清除继承的 `MOTE_*`、`COMPOSE_*` 后注入所选环境。`MOTE_ENV_FILE` 显式指定配置文件时，中央与导入脚本只读该文件；路径不存在会报错。相对 `MOTE_DATA_DIR`、`MOTE_LOG_DIR` 基于该配置文件所在目录。dev/test 拒绝 47832，并要求数据和日志路径留在各自目录内。直接运行 `npm start` 不再自动加载根 `.env`，必须显式设置 `MOTE_ENV_FILE` 或 `MOTE_DATA_DIR` 之一；默认 `MOTE_PROFILE=default`。只有显式选择的配置文件会被读取，数据路径也可以相对该文件或启动基准目录解析。CLI 不会自动接管或停止手动启动的进程。
+CLI 清除继承的普通 `MOTE_*`、`COMPOSE_*` 参数，只用 `MOTE_CONFIG_FILE` 选择服务端文件；设备与工具的连接信息从该 YAML 派生。普通进程环境不会覆盖 YAML，声明的密钥字段可使用 `${SECRET_NAME}`。相对路径以 YAML 所在目录解析。dev/test 拒绝 47832，并要求原生数据和日志路径留在各自目录内。直接 `npm start` 读取工作目录的 `mote.yaml`，也可显式设置 `MOTE_CONFIG_FILE`；`MOTE_ENV_FILE` 和根 `.env` 不再使用。CLI 不会自动接管或停止手动启动的进程。
 
-`node scripts/mote.mjs config --profile prod --home /srv/mote/profiles` 可在启动前查看配置。运行后，中央「服务端配置」页面显示进程实际使用的值。原生新环境可用 `init --profile prod --data-dir /absolute/local-disk/mote` 选择资料目录；Docker 新环境用 `init --profile prod --runtime docker --volume mote-personal-data` 选择卷名，不能靠 `MOTE_DATA_DIR` 改变 Docker 挂载。
+`node scripts/mote.mjs config --profile prod --home /srv/mote/profiles` 可在启动前查看配置。运行后，中央「服务端配置」页面显示进程实际使用的值。原生新环境可用 `init --profile prod --data-dir /absolute/local-disk/mote` 选择资料目录；Docker 新环境用 `init --profile prod --runtime docker --volume mote-personal-data` 选择卷名，容器 YAML 使用 `storage.dataDir: /data`；命名卷选择需与 profile 的部署身份一致，在线改路径不会迁移资料。
 
 ## Mac mini / 原生 Node.js
 
@@ -31,7 +31,7 @@ npm run build -w @mote/server -w @mote/web
 node scripts/mote.mjs init --profile prod --home "$HOME/Library/Application Support/MoteCentral/profiles"
 ```
 
-编辑该环境的 `mote.env` 设置部署参数，然后启动。模型服务也可以启动后在 Web“系统管理 → 模型”中保存并立即应用，见[模型服务配置](model-providers.md)：
+编辑该环境的 `mote.yaml` 设置部署参数，然后启动。模型服务也可以启动后在 Web“系统管理 → 模型”中保存并立即应用，见[模型服务配置](model-providers.md)：
 
 ```sh
 node scripts/mote.mjs start --profile prod --home "$HOME/Library/Application Support/MoteCentral/profiles"
@@ -42,29 +42,27 @@ node scripts/mote.mjs stop --profile prod --home "$HOME/Library/Application Supp
 
 `start` 启动独立后台进程，并等待经过认证的健康检查；`run` 在前台等待，适合进程管理器。`stop` 只向带有本次唯一进程标记的托管进程发送 SIGTERM，拒绝误杀复用 PID 的其它进程。端口占用会报错，不会停止占用者。普通 `start` 不提供系统级崩溃重启；长期部署使用下面的 launchd 或 Docker。
 
-原生启动脚本（包括 `scripts/dev-server.mjs`）为子进程设置 `NODE_USE_ENV_PROXY=1`，Node 下载请求会使用启动环境里的 `HTTP_PROXY` / `HTTPS_PROXY`（或小写同名变量）与 `NO_PROXY`。无需在每个 `mote.env` 中单独开启；代理地址仍由启动环境配置。
+原生启动脚本（包括 `scripts/dev-server.mjs`）为子进程设置 `NODE_USE_ENV_PROXY=1`，Node 下载请求会使用启动环境里的 `HTTP_PROXY` / `HTTPS_PROXY`（或小写同名变量）与 `NO_PROXY`。无需在每个 `mote.yaml` 中单独开启；代理地址仍由启动环境配置。
 
 启动环境保留原有绕过规则并补齐 IPv4/IPv6 loopback，统一大小写代理变量。本机语音、图像处理和 worker 健康探测另使用强制直连传输，即使直接启动中央并遗漏 `NO_PROXY`，也不会通过环境代理发送本机处理原件或授权头。
 
-原生 stdout/stderr 先经监督进程白名单化：保留固定启动/停止事件，未知 SDK 输出只记流类型与字节数，再写入有上限的 `logs/central.log`；包括单次大输出与反复重启。DEV 默认每份 100 MiB、总共 3 份，其它 profile 每份 2 MiB、3 份。中央结构化诊断独立写入 `MOTE_LOG_DIR`，使用同样的容量配置，内存仍默认限制 2000 条记录。DEV 两组日志各最多 300 MiB，合计最多 600 MiB；Docker stdout 不受这个配置控制。`MOTE_DEBUG=0` 默认关闭调试级别。修改参数后重启该环境。
+原生 stdout/stderr 先经监督进程白名单化：保留固定启动/停止事件，未知 SDK 输出只记流类型与字节数，再写入有上限的 `central.log`。DEV 默认每份 100 MiB、总共 3 份，其它 profile 默认每份 2 MiB、3 份；包括单次大输出与反复重启。中央结构化诊断独立写入 `diagnostics.directory`，使用同样的容量配置，并默认限制 2000 条记录。两组日志各自轮转，所以 DEV 默认合计最多 600 MiB；容量不保证固定保留时长。`diagnostics.debug: false` 默认关闭调试级别；开关、级别与 trace 经校验热应用，目录与日志容量修改需重启。
 
 <a id="dev-log-retention"></a>
 
-### 已有 DEV 的日志容量升级
+### DEV 日志默认容量
 
-旧 profile 没有记录模板默认值的来源，无法区分 `2` 是模板值还是主动定制。升级代码不会重写任何显式数值；新建 DEV 使用 `MOTE_LOG_MAX_MB=auto`，未设置时也采用 100 MiB 默认值。使用更新后的 CLI 主动将已有 DEV 切到默认容量：
+YAML 省略 `diagnostics.maxBytes` 时按 `server.profile` 选择默认值：DEV 为 104857600 字节（100 MiB），其它环境为 2097152 字节（2 MiB）。DEV 允许显式 0.1–100 MiB，其它允许 0.1–8 MiB。所有显式数字保持用户选择，包括转换旧 env 后写入的 2097152；配置读取不会静默迁移。
+
+已有 YAML DEV 可主动采用默认值：
 
 ```sh
-node scripts/mote.mjs config --profile dev
 node scripts/mote.mjs log-retention --defaults --profile dev
-node scripts/mote.mjs config --profile dev
 ```
 
-自定义 `--home` 时三个命令都需传入同一个目录。迁移命令只将所选 DEV 的 `MOTE_LOG_MAX_MB` 设置为 `auto`，保留文件数、内存条数、凭据及其它配置，输出迁移前后容量、是否改动和需要重启的标记；不启动、停止或重启服务，不修改已有日志。重复执行不再写文件。test、prod 和其它 profile 不支持此迁移命令。
+命令只删除主 YAML 中的 `diagnostics.maxBytes`，通过同一原子配置写入递增 revision，保留文件数、内存事件数、其它字段、密钥引用及资料。它返回变更前后容量；重复执行不改写文件。运行中的中央会显示该容量需要重启，由所有者在下一次正常重启后生效。旧 `mote.env` profile 按统一配置规则先离线准备 YAML，不由此命令自动转换。
 
-`config` 中的 `diagnostics` 展示所选文件解析后的容量及来源，运行进程的实际容量看中央 `GET /api/diagnostics`。下次正常重启该 DEV 时生效；若希望保留定制值（包括 2 MiB），不要执行迁移，继续使用显式数值即可。需要固定 100 MiB 而不跟随后续默认值时，可主动填写 `MOTE_LOG_MAX_MB=100`。无效容量配置会报错，不会退回较小值。
-
-`auto` 和大于 8 MiB 的容量要求目标中央版本支持本次日志配置。启动、迁移及升级/回退会预检目标构建；不支持时明确报错，升级/回退不会先停服务或恢复资料。先升级至支持的 release/image，再采用 DEV 默认值。需要回退到旧版本时，先主动将该字段改为旧版本支持的显式数值（0.1–8 MiB）；不会自动降低容量。较小容量的旧写入器可能截断超限历史日志，需要保留排错资料时先自行保存日志副本。原生预检检查目标构建中的日志配置模块；Docker 预检在无网络、无资料卷的临时容器中检查相同模块。
+启动、采用默认值、升级和回退都先核对目标 build/image 的 YAML 支持；超过 8 MiB 还需扩容能力。只认识 env 的旧发行版会在启动、停服务或恢复资料前拒绝。支持 YAML 但没有扩容能力的版本需要主动设置 `diagnostics.maxBytes` 为 8 MiB 或更小；不会自动降容。较小写入器可能截断超限历史日志，需要保留排错资料时先保存副本。原生预检检查目标构建模块；Docker 预检在无网络、无资料卷的临时容器中检查相同模块。
 
 ### 生成与安装 launchd 配置
 
@@ -90,11 +88,12 @@ launchctl bootout "gui/$(id -u)/$LABEL"
 
 ## Linux / NAS Docker
 
-需要 Docker Engine、**Docker Compose 2.30.0 或更新版本**与 Node 24（运行部署 CLI 和离线备份）。Compose 使用 `env_file.format: raw`，避免密钥中的 `$` 或引号被再次解释；此格式的版本要求见 [Docker 官方文档](https://docs.docker.com/reference/compose-file/services/#env_file)。镜像构建会自行安装 npm 依赖。
+需要 Docker Engine、**Docker Compose 2.30.0 或更新版本**与 Node 24（运行部署 CLI 和离线备份）。Compose 使用 `env_file.format: raw`，避免密钥中的 `$` 或引号被再次解释；此格式的版本要求见 [Docker 官方文档](https://docs.docker.com/reference/compose-file/services/#env_file)。从源码运行宿主 CLI 前，先执行 `npm ci --ignore-scripts` 安装锁定的 YAML 解析依赖；普通 Docker profile 命令无需构建共享库或服务器，也无需在宿主运行服务器的原生依赖安装脚本。镜像构建会自行安装容器内的 npm 依赖。
 
 ```sh
+npm ci --ignore-scripts
 node scripts/mote.mjs init --profile prod --home /srv/mote/profiles --runtime docker
-# 编辑 /srv/mote/profiles/prod/mote.env
+# 编辑 /srv/mote/profiles/prod/mote.yaml
 node scripts/mote.mjs compose --profile prod --home /srv/mote/profiles -- build
 node scripts/mote.mjs start --profile prod --home /srv/mote/profiles
 node scripts/mote.mjs status --profile prod --home /srv/mote/profiles
@@ -102,15 +101,24 @@ node scripts/mote.mjs token --profile prod --home /srv/mote/profiles
 node scripts/mote.mjs stop --profile prod --home /srv/mote/profiles
 ```
 
-如果系统用户不能写 `/srv/mote`，先由管理员创建并交给部署用户，不要用宽泛的全盘权限修改。容器内服务以 `node` 非 root 用户运行，数据与结构化日志分别在 `/data`、`/data/logs`，来自该环境独立命名卷。服务端口只发布到宿主机 loopback。`start` 使用现成镜像；升级前必须显式构建或拉取指定镜像。
+如果系统用户不能写 `/srv/mote`，先由管理员创建并交给部署用户，不要用宽泛的全盘权限修改。中央与媒体容器使用配置文件所属用户的 UID/GID 运行，保留 YAML 的 0600 权限；一个无网络的初始化服务只初始化空卷根目录的所有权。已有非空卷的 UID/GID 不匹配时明确拒绝，不自动递归修改旧资料。支持本地 Unix Docker Engine；远程 Engine 与 userns-remap 会明确拒绝，rootless Engine 使用映射后的 0:0。数据与结构化日志分别在 `/data`、`/data/logs`，来自该环境独立命名卷。服务端口只发布到宿主机 loopback。`start` 使用现成镜像；升级前必须显式构建或拉取指定镜像。
 
-CLI 每次生成私有 `generated/docker.env`，仅将所选环境传给容器；根目录 `.env` 不参与 Compose 插值。不要把 `compose config`、`docker inspect` 的完整输出作为公开诊断，它们可以显示容器环境中的凭据。Docker stdout 日志另设每份 10 MiB、最多 3 份。
+CLI 将 profile 的父目录挂到中央容器 `/config`，主文件是 `/config/mote.yaml`。目录挂载使设置页的原子保存和外部替换持续可见；不会生成另一份运行配置。媒体 sidecar 只读同一个目录。YAML 的 `server.port` 同时决定容器监听与 loopback 发布端口；数据与日志路径是 `/data`、`/data/logs`；模型卷的挂载目标由 YAML 的 `media.modelDirectory` 决定，初始化默认 `/models`，CLI 导入与媒体 worker 使用同一路径。该绝对容器路径不能遮蔽根目录、`/config`、`/data` 或 `/app`；更改模型路径需重启。健康检查读取同目录的私有运行 locator（只记录当前 PID、监听地址、端口和实例身份），因此保存待重启的 `server.port` 不会误判当前容器为不健康；进程退出仅清理自己的 locator。该文件是瞬时进程状态，不是第二份配置来源。每次生成的私有 `generated/secrets.env` 仅传递 YAML 中声明的环境密钥引用，普通参数不通过环境注入。根 `.env` 不参与 Compose 插值。不要公开 `compose config`、`docker inspect` 的完整输出，其中可含声明的环境密钥。Docker stdout 日志另设每份 10 MiB、最多 3 份。
+
+复用旧 Docker 卷时，先在旧版本停止写入并完成离线备份、保留内容密钥与私有配置。旧镜像的 UID 1000 可能与新 profile 用户不一致。确认本 profile 数据/模型卷的所有使用者均已停止后，显式执行：
+
+```sh
+node scripts/mote.mjs migrate-storage-owner --profile prod --home /srv/mote/profiles
+node scripts/mote.mjs start --profile prod --home /srv/mote/profiles
+```
+
+该命令仅递归调整 metadata 声明的数据卷与模型卷所有权，不启动中央、媒体或隧道，不修改 YAML 或资料内容；发现任何使用这些卷的运行容器会拒绝。请先备份，因为这是停机后的明确所有权迁移；普通 `start` 不替用户执行它。不支持远程 Docker / userns-remap 的边界仍适用。
 
 SQLite 和 blob 应使用 NAS/服务器的本地块存储或本地 Docker 卷，避免多实例共享网络文件系统上的 WAL 数据库。当前是单实例、单 owner 节点。容器中的 loopback 指容器本身；外部模型服务应使用容器可达的 HTTPS 地址。
 
 ### 可选 Caddy HTTPS
 
-在该环境 `mote.env` 设置 `MOTE_TLS_DOMAIN=mote.example.com`，换成自己的域名。DNS 指向服务器，服务器允许公网 80/443 到达，之后执行：
+在该环境 `mote.yaml` 设置 `server.tls.domain: mote.example.com`，换成自己的域名。DNS 指向服务器，服务器允许公网 80/443 到达，之后执行：
 
 ```sh
 node scripts/mote.mjs tls --enable --profile prod --home /srv/mote/profiles
@@ -119,13 +127,17 @@ node scripts/mote.mjs start --profile prod --home /srv/mote/profiles
 
 TLS overlay 使用固定 Caddy 2.11.4 Alpine 镜像；与中央在独立 Compose 网络中通信，证书保存在该 project 的 Caddy 卷中。Caddy 根据域名配置自动 HTTPS，见 [官方文档](https://caddyserver.com/docs/automatic-https)。该节点地址填为 `https://mote.example.com`，令牌单独填写。
 
-已有反向代理可以保持 TLS overlay 关闭，将请求代理到 `127.0.0.1:47832`。`tls --disable` 只调整配置；已有 Caddy 容器需用该 profile 的 `compose -- down --remove-orphans` 后再 `start`，保留卷即可。自定义宿主端口可设置 `MOTE_TLS_HTTP_PORT`、`MOTE_TLS_HTTPS_PORT`，但公共 ACME 验证仍需正确转发到标准 80/443。项目不会修改 DNS、防火墙或购买域名。
+已有反向代理可以保持 TLS overlay 关闭，将请求代理到 `127.0.0.1:47832`。`tls --disable` 只调整配置；已有 Caddy 容器需用该 profile 的 `compose -- down --remove-orphans` 后再 `start`，保留卷即可。自定义宿主端口可设置 `server.tls.httpPort`、`server.tls.httpsPort`，但公共 ACME 验证仍需正确转发到标准 80/443。项目不会修改 DNS、防火墙或购买域名。
+
+旧 profile 不会被自动转换。配置改造本身不删除资料或改变存储 epoch；如需保留当前 epoch 4 资料，先在旧版本停止写入并备份，离线将所需配置填入新 YAML，保留原数据目录、访问令牌和内容密钥，再由所有者明确启动。不要把旧 JSON/SQLite 设置作为新版本的覆盖来源。手改文件与设置页共用主 YAML；端口、目录、插件模块、媒体 worker 资源、TLS/Tunnel 启停仍需重启或对应明确 CLI 操作。
 
 ## 升级与回退
 
-本轮是 **MVP 破坏升级**：中央 `backend_epoch=4`，Desktop/Android 本机格式 3，模型 registry version 2，HTTP 便携归档 version 2。旧 schema、客户端队列/配置、旧模型及文件处理配置、旧内容包装和旧便携包不会自动转换。请先在旧版本完成必要导出、停止全部写入并保留完整旧目录、凭据及密钥，随后使用新空目录；明确放弃旧资料时才按 [MVP 基线操作](audits/mvp-baseline-cleanup-2026-10-09.md) 执行 reset。当前程序不能替旧程序读取和备份旧格式。
+本次是配置格式的破坏变更：主配置改为 YAML version 1，旧 `mote.env`、`model-settings.json`、`file-processing.json` 与 SQLite 当前运行设置不再作为配置来源，也不会自动转换。中央仍使用既有 `backend_epoch=4`，Desktop/Android 本机格式仍为 3，HTTP 便携归档仍为 version 2。已有 epoch 4 资料库无需新空目录或 reset；备份并离线准备新 YAML，保留原资料目录、访问令牌与内容密钥，再由所有者明确启动新版本。
 
-新空环境可使用 `node scripts/mote.mjs init --profile prod --home /srv/mote-epoch4/profiles`，再重新配置当前模型、文件 policy、来源和客户端连接。若在已备份且停止的原目录明确放弃旧资料，可执行 `npm run reset:mvp-vault -- --data-dir /absolute/old-vault --confirm-clear`；该命令会清空资料及旧模型/文件处理配置。它保留令牌、content-key 和 connectors，不能把旧 collector 凭据改成 owner；旧 collector 文件需另行备份并移走后重新配对，见上述实施记录。
+历史 MVP 基线曾切换上述存储与客户端格式，这与本次配置改造是两件事。来自更早 epoch、客户端格式、内容包装或便携包的资料仍不自动转换。跨越该历史基线时，请先用相应旧版本完成必要导出、停止全部写入并保留完整旧目录、凭据及密钥，再选择新空目录；只有明确放弃旧资料时才按 [MVP 基线操作](audits/mvp-baseline-cleanup-2026-10-09.md) 执行 reset。当前程序不能替旧程序读取和备份旧格式。
+
+上述历史跨代的新空环境可使用 `node scripts/mote.mjs init --profile prod --home /srv/mote-epoch4/profiles`，再重新配置当前模型、文件 policy、来源和客户端连接。若在已备份且停止的原目录明确放弃旧资料，可执行 `npm run reset:mvp-vault -- --data-dir /absolute/old-vault --confirm-clear`；该命令会清空资料及旧模型/文件处理配置。它保留令牌、content-key 和 connectors，不能把旧 collector 凭据改成 owner；旧 collector 文件需另行备份并移走后重新配对，见上述实施记录。仅转换配置格式时不要执行该命令。
 
 以下 `upgrade` / `rollback` 事务用于同一存储代际内的部署切换，不能把它当作跨代迁移。升级和回退会短暂停机，本代采集端保留未确认的本地队列。先确认新的 release 已构建或镜像已拉取，使用版本目录/不可变镜像，不要在旧 release 中直接覆盖代码。
 
@@ -135,7 +147,7 @@ TLS overlay 使用固定 Caddy 2.11.4 Alpine 镜像；与中央在独立 Compose
 
 已初始化的独立 profile 可以检查并安装符合当前契约的可信签名 Release。中央「服务端配置」页面也可检查最新版本并给出当前环境的操作命令；HTTP 接口不会启动 shell、选择本机路径或直接安装。检查是手动触发，同一分钟内共享同一次结果，不在中央启动时自动联网。非 CLI 托管进程需先由管理员建立明确的独立部署；检查接口不会自动认领根目录安装。
 
-从 Git 源码运行签名更新 CLI 前，宿主机需要 Node 24，并在可信检出目录执行 `npm ci --ignore-scripts`、`npm run build:libs` 以准备验证器及其锁定依赖。Docker 的普通 `init/start/stop/compose/backup/upgrade/rollback` 命令不依赖宿主 `node_modules`；`check-update/update` 才加载签名验证器。
+从 Git 源码运行签名更新 CLI 前，宿主机需要 Node 24，并在可信检出目录执行 `npm ci --ignore-scripts`、`npm run build:libs` 以准备验证器及其锁定依赖。所有 profile 命令都需要宿主已安装的锁定 YAML 解析依赖；`init` 无需预先构建共享库，`check-update/update` 还需构建签名验证器。
 
 ```sh
 node scripts/mote.mjs check-update --profile prod --home /srv/mote/profiles
@@ -145,7 +157,7 @@ node scripts/mote.mjs update --profile prod --home /srv/mote/profiles --version 
 
 版本号只是示例；目标必须高于当前安装的版本，已是该版本时不会重装或降级。尚无签名发行版、GitHub 限流、签名失效或包校验失败都会明确报错，不退回下载任意代码。当前原生进程的版本优先通过已认证的本机节点确认；Docker 使用该 profile 容器实际镜像的版本，不能把执行 CLI 的代码目录版本当成容器版本。
 
-发行来源默认是 `utopiafar/mote`、`stable`，可以在所选私有 `mote.env` 调整 `MOTE_UPDATE_REPOSITORY` 与 `MOTE_UPDATE_CHANNEL=stable|preview` 后重启中央界面服务。CLI 每次读取该文件。`preview` 接收预发行版本；更换仓库不会更换内置的发行签名公钥。
+发行来源默认是 `utopiafar/mote`、`stable`，可以在所选私有 `mote.yaml` 调整 `updates.repository` 与 `updates.channel: stable|preview` 后重启中央界面服务。CLI 每次读取该文件。`preview` 接收预发行版本；更换仓库不会更换内置的发行签名公钥。
 
 `mote-release.json` 包含 RSA-3072 / SHA-256 签名的原始 JSON payload。客户端只接受已安装程序内置的公钥与 keyId；manifest 不能自带替代公钥。验证仓库、版本、渠道、固定 GitHub asset URL、大小和 SHA-256 后才准备代码。原生源包限制压缩 128 MiB、展开 256 MiB、单文件 32 MiB，并拒绝路径穿越、符号链接、硬链接与私有配置条目。
 
@@ -153,11 +165,11 @@ node scripts/mote.mjs update --profile prod --home /srv/mote/profiles --version 
 
 Docker 更新只拉取已签名 manifest 中的 `ghcr.io/仓库@sha256:...`，验证本地 RepoDigest 后切换。不会使用漂移的 `latest` tag，也不把宿主 profile 凭据交给镜像拉取进程。公开发行依赖的 registry 可用性需要部署机器具备网络访问。
 
-同代更新保留现有 `mote.env`、访问令牌、数据目录/卷、连接器凭据与 Tunnel 配置；本次跨代不能直接沿用旧资料库或旧配置文件。回退时归档回到升级前快照，当前连接器凭据、日历选择和来源连接配置另作私有移交；Google 增量游标会清空，下一轮重新构建有界窗口，避免跳过已回退的数据。这份临时私有移交不进入可携带的备份文件，完成后删除。服务没有自动重启安装、自动降级或自动回退策略。
+同代更新保留现有 `mote.yaml`、访问令牌、数据目录/卷、连接器凭据与 Tunnel 配置；Docker 快照回退会生成新的数据卷，并原子更新 YAML 的 `storage.source` 与 revision，模型卷保持原部署身份。仅配置文件改造无需改变已符合 epoch 4 的资料库，旧配置必须手工转换。回退时归档回到升级前快照，当前连接器凭据、日历选择和来源连接配置另作私有移交；Google 增量游标会清空，下一轮重新构建有界窗口，避免跳过已回退的数据。这份临时私有移交不进入可携带的备份文件，完成后删除。服务没有自动重启安装、自动降级或自动回退策略。
 
 ### 手动准备的版本
 
-中央发布标签为 `central-vX.Y.Z`，server 与 web 同版本部署；下载该标签的 `mote-server-X.Y.Z.tar.gz` 或检出源码后独立构建。同代中央版本更新无需同步升级 Mac 或 Android；本次跨代各端都须使用当前格式实现。其他端的标签和版本不用于选择中央部署。
+中央发布标签为 `central-vX.Y.Z`，server 与 web 同版本部署；下载该标签的 `mote-server-X.Y.Z.tar.gz` 或检出源码后独立构建。同代中央版本更新无需同步升级 Mac 或 Android；只有跨越历史 MVP 存储基线时，各端才都须使用当前格式实现。其他端的标签和版本不用于选择中央部署。
 
 原生示例：
 
@@ -203,14 +215,14 @@ CLI 复用 `scripts/backup.ts`：SQLite backup API 生成一致数据库，只�
 
 ```sh
 node scripts/mote.mjs init --profile prod --home /srv/mote-new/profiles --runtime docker
-# 如备份含密文，在新环境设置原 MOTE_DATA_KEY，或单独恢复原 content-key
+# 如备份含密文，在新YAML设置原 storage.dataKey，或单独恢复原 content-key
 node scripts/mote.mjs restore --profile prod --home /srv/mote-new/profiles --from /srv/mote-backups/mote-2026-09-13
 node scripts/mote.mjs start --profile prod --home /srv/mote-new/profiles
 ```
 
 恢复会验证当前备份 manifest、文件类型、所有 SHA-256，并二次校验复制结果。启动仍要求数据库 epoch 4，不能通过恢复旧快照绕过格式边界。活动服务、非空数据目录/卷都会拒绝。Docker 恢复需已准备好 profile 选择的本地镜像。恢复不复制 `server.pid`、令牌、模型 API key 或数据加密 key；新节点使用自己的访问令牌。验证记录数量、原文、图片和时间线，再修改客户端 URL/令牌。保留旧节点备份直到迁移验收完成。
 
-内容加密默认关闭，`MOTE_DATA_KEY` 本身不再开启加密；可以在开发者页面或首次启动时用 `MOTE_CONTENT_ENCRYPTION=1` 主动开启，界面保存的选择优先。`MOTE_DATA_KEY` 是可选的 64 位十六进制 AES-256-GCM 图片及文件原件密钥；显式开启且未配置时会生成资料库私有的 `content-key` 文件。存在密文时必须单独备份原环境密钥或该文件，离线内容备份不携带密钥。解析文本、元数据与导入工作产物保持明文。尚有密文时不要更换原密钥；丢失密钥不能通过重新下载模型或更换访问令牌恢复内容。已有内容可在开发者页面一次性批量解密，详见[内容存储设置](content-storage.md)。
+内容加密默认关闭，`storage.dataKey` 本身不启用加密；主 YAML 的 `storage.contentEncryptionEnabled` 与开发者页面共用同一设置，校验提交成功后立即影响后续写入，无需重启，也不重写已有对象。`storage.dataKey` 是可选的 64 位十六进制 AES-256-GCM 图片及文件原件密钥；显式开启且未配置时会生成资料库私有的 `content-key` 文件。存在密文时必须单独备份原环境密钥或该文件，离线内容备份不携带密钥。解析文本、元数据与导入工作产物保持明文。尚有密文时不要更换原密钥；丢失密钥不能通过重新下载模型或更换访问令牌恢复内容。已有内容可在开发者页面一次性批量解密，详见[内容存储设置](content-storage.md)。
 
 ## 验证范围
 

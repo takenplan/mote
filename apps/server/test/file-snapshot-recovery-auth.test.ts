@@ -181,7 +181,7 @@ test('revoking an owner during recovery assembly prevents commit and releases it
 test('reference retention revokes an in-flight snapshot and cannot publish or retain temporary content',async t=>{
  const f=await fixture(t),bytes=Buffer.from('Generated reference-revoked audio'),input=manifest(bytes);input.item.mimeType='audio/wav';input.item.document!.fileIndex!.allowRead=true;
  const {ack}=await f.upload(input,bytes);await f.node.processing.runtime.ready;
- const settings={...f.node.processing.view().settings,audioProcessor:'audio.http'};f.node.processing.update({revision:f.node.processing.view().revision,settings,policy:fixtureFilePolicy(settings,f.node.processing.runtime.registry)});
+ const settings={...f.node.processing.view().settings,audioProcessor:'audio.http'};await f.node.processing.save({revision:f.node.processing.view().revision,settings,policy:fixtureFilePolicy(settings,f.node.processing.runtime.registry)});
  let started!:()=>void,release!:(value:any)=>void;const begun=new Promise<void>(resolve=>started=resolve);
  f.node.processing.runtime.registry.get('audio.http').process=async()=>{started();return new Promise(resolve=>release=resolve);};
  const pending=f.node.processing.tick();await begun;f.node.sources.update(input.sourceId,{retention:'reference'});f.node.files.sweep();

@@ -4,28 +4,20 @@ import {ProviderFailure} from '@mote/shared';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {Store,StoreError} from './store.js';
+import type {ConfigService} from './config-service.js';
+import {lifecycleSettingsSchema,defaultLifecycleSettings,type LifecycleSettings} from './memory-configuration.js';
+export {lifecycleSettingsSchema,defaultLifecycleSettings,type LifecycleSettings} from './memory-configuration.js';
 
-const policy=z.object({maxWaitHours:z.number().min(1/60).max(8760).optional(),enabled:z.boolean(),intervalHours:z.number().min(1/60).max(8760),minChanges:z.number().int().min(1).max(100000),maxItems:z.number().int().min(1).max(2000)}).strict();
-export const lifecycleSettingsSchema=z.object({
-  extraction:policy.extend({enabled:z.literal(true)}),consolidation:policy.extend({maxItems:z.number().int().min(1).max(50)}),insights:policy,working:policy,
-  drainWindows:z.number().int().min(1).max(1000).default(100),
-  batchCharacters:z.number().int().min(256).max(12000),recentTurns:z.number().int().min(2).max(20),
-  contextCharacters:z.number().int().min(4000).max(60000),summaryCharacters:z.number().int().min(1000).max(12000),
-}).strict().refine(v=>v.summaryCharacters<v.contextCharacters,{message:'Working summary must be smaller than the context budget',path:['summaryCharacters']});
-export type LifecycleSettings=z.infer<typeof lifecycleSettingsSchema>;
-export const defaultLifecycleSettings:LifecycleSettings={
-  extraction:{enabled:true,intervalHours:6,minChanges:25,maxItems:100},
-  consolidation:{enabled:true,intervalHours:24,minChanges:20,maxItems:30},
-  insights:{enabled:true,intervalHours:24,minChanges:100,maxItems:1000},
-  working:{enabled:true,intervalHours:1,minChanges:8,maxItems:20},
-  drainWindows:100,batchCharacters:12000,recentTurns:8,contextCharacters:24000,summaryCharacters:6000,
-};
-/** Connector initialization can receive originals before the lifecycle runtime
- * exists. Consult persisted policy (or its declared initial default), not a
- * closure over a later-created service. */
+/** Derived runtime projection for code that receives originals before the lifecycle runtime exists.
+ * The YAML service owns settings; this table is never a saved configuration source. */
+export function projectMemoryLifecycleSettings(store:Store,settings:LifecycleSettings):void {
+  const value=lifecycleSettingsSchema.parse(settings);
+  store.db.exec('CREATE TABLE IF NOT EXISTS memory_lifecycle_effective(id INTEGER PRIMARY KEY CHECK(id=1),json TEXT NOT NULL)');
+  store.db.prepare('INSERT INTO memory_lifecycle_effective VALUES(1,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json').run(JSON.stringify(value));
+}
 export function storedMemoryLifecycleSettings(store:Store):LifecycleSettings {
-  if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_lifecycle_settings'").get())return structuredClone(defaultLifecycleSettings);
-  const row=store.db.prepare('SELECT json FROM memory_lifecycle_settings WHERE id=1').get() as {json:string}|undefined;
+  if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='memory_lifecycle_effective'").get())return structuredClone(defaultLifecycleSettings);
+  const row=store.db.prepare('SELECT json FROM memory_lifecycle_effective WHERE id=1').get() as {json:string}|undefined;
   return row?lifecycleSettingsSchema.parse(JSON.parse(row.json)):structuredClone(defaultLifecycleSettings);
 }
 /** Host-only semantic time. Execution, authorization and retention keep their real clocks. */
@@ -47,9 +39,10 @@ export class MemoryLifecycle {
   private extensions=new Map<string,LifecycleExtension>();
   private running=new Map<string,Promise<void>>();
   private closed=false;private abort=new AbortController();
-  constructor(private store:Store,private configured:()=>boolean,private now:()=>number=Date.now,private executor?:ExecutionEngine,private semanticContextTime?:()=>string){
+  private policy:LifecycleSettings;
+  constructor(private store:Store,private configured:()=>boolean,private now:()=>number=Date.now,private executor?:ExecutionEngine,private semanticContextTime?:()=>string,private configService?:ConfigService){
+    this.policy=lifecycleSettingsSchema.parse(configService?.current('memory')??defaultLifecycleSettings);
     store.db.exec(`
-      CREATE TABLE IF NOT EXISTS memory_lifecycle_settings(id INTEGER PRIMARY KEY CHECK(id=1),json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS memory_lifecycle_state(id TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS memory_events(seq INTEGER PRIMARY KEY AUTOINCREMENT,stream TEXT NOT NULL,entity TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS memory_events_stream ON memory_events(stream,seq);
@@ -58,22 +51,18 @@ export class MemoryLifecycle {
       CREATE TRIGGER IF NOT EXISTS conversation_event_insert AFTER INSERT ON conversations BEGIN INSERT INTO memory_events(stream,entity) VALUES('conversation',new.id); END;
       CREATE TRIGGER IF NOT EXISTS conversation_event_update AFTER UPDATE ON conversations WHEN new.json!=old.json BEGIN INSERT INTO memory_events(stream,entity) VALUES('conversation',new.id); END;
     `);
-    if(!store.db.prepare('SELECT 1 FROM memory_lifecycle_settings').get()){
-      const settings=structuredClone(defaultLifecycleSettings);
-      store.db.exec('BEGIN IMMEDIATE');
-      try{
-        const inserted=store.db.prepare('INSERT OR IGNORE INTO memory_lifecycle_settings VALUES(1,?)').run(JSON.stringify(settings));
-
-        store.db.exec('COMMIT');
-      }catch(error){store.db.exec('ROLLBACK');throw error;}
-    }
+    projectMemoryLifecycleSettings(store,this.policy);
+    configService?.setHandler<LifecycleSettings>('memory',next=>{
+      const previous=this.settings(),candidate=lifecycleSettingsSchema.parse(next);
+      return {apply:()=>{},publish:()=>this.applySettings(candidate),rollback:()=>this.applySettings(previous)};
+    });
   }
   register(extension:LifecycleExtension){
     if(this.extensions.has(extension.id))throw new Error('Duplicate lifecycle extension: '+extension.id);
     const exists=this.store.db.prepare('SELECT id FROM memory_lifecycle_state WHERE id=?').get(extension.id);
     if(exists&&this.state(extension.id).stream!==extension.stream)throw new StoreError('Unsupported lifecycle stream structure',409);
     this.extensions.set(extension.id,extension);
-    if(!exists)this.save(extension.id,{stream:extension.stream,cursor:0,lastSuccess:this.now(),failures:0});
+    if(!exists)this.saveState(extension.id,{stream:extension.stream,cursor:0,lastSuccess:this.now(),failures:0});
     const state=this.state(extension.id);
     // Cancellation can outlive its running listener. Replay the exact durable
     // checkpoint; automatic authority withdrawal preserves independent replies.
@@ -84,7 +73,7 @@ export class MemoryLifecycle {
     if(this.running.has(extension.id)||this.state(extension.id).active)throw new StoreError('Finish the active window before replacing an extension',409);
     this.extensions.set(extension.id,extension);
   }
-  settings():LifecycleSettings{return lifecycleSettingsSchema.parse(JSON.parse(String(this.store.db.prepare('SELECT json FROM memory_lifecycle_settings WHERE id=1').get()!.json)));}
+  settings():LifecycleSettings{return structuredClone(this.policy);}
   request(id:LifecycleExtension['id'],ids:string[],checkpoint:string){
     const extension=this.extensions.get(id);if(!extension)throw new StoreError('Lifecycle extension is unavailable',409);
     const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
@@ -93,12 +82,12 @@ export class MemoryLifecycle {
     if(this.running.has(id)||state.active&&!state.cancelled&&this.executor?.get('lifecycle:'+state.active.id)?.state!=='cancelled')throw new StoreError('Finish or cancel the active lifecycle task first',409);
     if(!ids.length||ids.length>settings[id].maxItems||new Set(ids).size!==ids.length||checkpoint.length>32000)throw new StoreError('Choose a smaller unique set of inputs',413);
     state.active={manual:true,id:randomUUID(),version:extension.version,from:state.cursor,through:state.cursor,ids,startedAt:this.now(),contextTime:freezeSemanticContextTime(this.semanticContextTime),settings,checkpoint};
-    delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;state.failures=0;this.save(id,state);if(own)db.exec('COMMIT');return state.active.id;
+    delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;state.failures=0;this.saveState(id,state);if(own)db.exec('COMMIT');return state.active.id;
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
   cancel(id:LifecycleExtension['id'],windowId:string,options?:{cause:'authority'}){
     const state=this.state(id);if(state.active?.id!==windowId)throw new StoreError('Active lifecycle task not found',404);
-    const cause=options?.cause??'owner';state.cancelled=true;state.cancellationCause=cause;delete state.retryAt;this.save(id,state);
+    const cause=options?.cause??'owner';state.cancelled=true;state.cancellationCause=cause;delete state.retryAt;this.saveState(id,state);
     this.extensions.get(id)?.cancel?.(structuredClone(state.active),cause);
     this.executor?.cancel('lifecycle:'+windowId);return this.view();
   }
@@ -109,7 +98,7 @@ export class MemoryLifecycle {
       if(this.running.has(id)||this.executor?.get('lifecycle:'+windowId)?.state==='running')throw new StoreError('Wait for the current task to stop before retrying',409);
       prepare?.(structuredClone(state.active));
       if(this.executor?.get('lifecycle:'+windowId))this.executor.retry('lifecycle:'+windowId);
-      delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;state.failures=0;this.save(id,state);
+      delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;state.failures=0;this.saveState(id,state);
       if(own)db.exec('COMMIT');return this.view();
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
@@ -119,9 +108,16 @@ export class MemoryLifecycle {
     const state=this.state(id);if(state.cursor>=through||state.active&&state.active.through>through)return;
     if(state.active?.manual)return;
     if(state.active)this.executor?.cancel('lifecycle:'+state.active.id);
-    state.cursor=through;delete state.active;delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;delete state.drainThrough;state.failures=0;this.save(id,state);
+    state.cursor=through;delete state.active;delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.retryAt;delete state.error;delete state.drainThrough;state.failures=0;this.saveState(id,state);
   }
-  configure(input:unknown){const parsed=lifecycleSettingsSchema.parse(input);this.store.db.prepare('UPDATE memory_lifecycle_settings SET json=? WHERE id=1').run(JSON.stringify(parsed));return this.view();}
+  private applySettings(settings:LifecycleSettings){this.policy=lifecycleSettingsSchema.parse(settings);projectMemoryLifecycleSettings(this.store,this.policy);}
+  /** Standalone tests can configure their in-memory runtime; the app always uses a revisioned transaction. */
+  configure(input:unknown){if(this.configService)throw new StoreError('Use the configuration transaction to save memory settings',409);this.applySettings(lifecycleSettingsSchema.parse(input));return this.view();}
+  async save(input:unknown){
+    const parsed=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),settings:lifecycleSettingsSchema}).strict().parse(input);
+    if(!this.configService)return this.configure(parsed.settings);
+    await this.configService.update('memory',parsed.settings,parsed.revision);return this.view();
+  }
   /** Resume does not authorize the paused gap. Preserve an already admitted
    * window, while retiring unregistered automatic rounds at today's watermark. */
   skipAutomaticBacklog(){
@@ -129,11 +125,11 @@ export class MemoryLifecycle {
       const row=extension.stream==='artifact'?this.store.db.prepare('SELECT max(seq) n FROM artifact_events').get():extension.stream==='evidence'?this.store.db.prepare('SELECT max(seq) n FROM changes').get():this.store.db.prepare('SELECT max(seq) n FROM memory_events WHERE stream=?').get(extension.stream);
       state.cursor=Math.max(state.cursor,Number(row?.n??0));delete state.drainThrough;
       if(state.cancelled&&!state.active?.manual){delete state.active;delete state.cancelled;delete state.cancellationCause;delete state.manualRetryRequired;delete state.error;delete state.retryAt;state.failures=0;}
-      this.save(id,state);
+      this.saveState(id,state);
     }
   }
   private state(id:string):State{const state=JSON.parse(String(this.store.db.prepare('SELECT json FROM memory_lifecycle_state WHERE id=?').get(id)!.json)) as State;if(state.active&&(!Array.isArray(state.active.ids)||typeof state.active.contextTime!=='string'||!Number.isFinite(Date.parse(state.active.contextTime))))throw new StoreError('Unsupported lifecycle window structure',409);return state;}
-  private save(id:string,state:State){this.store.db.prepare('INSERT INTO memory_lifecycle_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json').run(id,JSON.stringify(state));}
+  private saveState(id:string,state:State){this.store.db.prepare('INSERT INTO memory_lifecycle_state VALUES(?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json').run(id,JSON.stringify(state));}
   private events(extension:LifecycleExtension,cursor:number,limit:number){
     return (extension.stream==='artifact'?this.store.db.prepare('SELECT seq,entity FROM artifact_events WHERE seq>? ORDER BY seq LIMIT ?').all(cursor,limit):extension.stream==='evidence'?this.store.db.prepare('SELECT seq,id AS entity FROM changes WHERE seq>? ORDER BY seq LIMIT ?').all(cursor,limit):this.store.db.prepare('SELECT seq,entity FROM memory_events WHERE stream=? AND seq>? ORDER BY seq LIMIT ?').all(extension.stream,cursor,limit)) as {seq:number;entity:string}[];
   }
@@ -143,7 +139,7 @@ export class MemoryLifecycle {
   }
   private dueAt(id:LifecycleExtension['id'],p:LifecycleSettings['insights'],state:State){return state.lastSuccess+(id==='insights'?p.intervalHours:(p.maxWaitHours??Math.min(p.intervalHours,1)))*3600000;}
   private ready(id:LifecycleExtension['id'],p:LifecycleSettings['insights'],state:State,pending:number,now:number){return pending>0&&(id==='insights'?pending>=p.minChanges&&now>=this.dueAt(id,p,state):pending>=p.minChanges||now>=this.dueAt(id,p,state));}
-  view(){const settings=this.settings();return {settings,trigger:'insights: interval AND increment threshold; memory: increment threshold OR maximum wait',storage:'text',extensions:[...this.extensions.values()].map(e=>{
+  view(){const settings=this.settings();return {...(this.configService?{revision:this.configService.revision}:{}),settings,trigger:'insights: interval AND increment threshold; memory: increment threshold OR maximum wait',storage:'text',extensions:[...this.extensions.values()].map(e=>{
     const state=this.state(e.id),p=settings[e.id],pendingChanges=this.count(e,state.cursor),dueAt=state.drainThrough?this.now():this.dueAt(e.id,p,state);
     return {id:e.id,version:e.version,stream:e.stream,pendingChanges,dueAt,retryAt:state.retryAt,cursor:state.cursor,failures:state.failures,maxAttempts:e.maxAttempts,error:state.error,manualRetryRequired:state.manualRetryRequired??false,
       trigger:e.id==='insights'?'interval AND increment threshold':'increment threshold OR maximum wait',
@@ -174,11 +170,11 @@ export class MemoryLifecycle {
           if(extension.id==='extraction')state.drainThrough=Number(this.store.db.prepare(`SELECT max(seq) AS seq FROM (SELECT seq FROM ${extension.stream==='artifact'?'artifact_events':'changes'} WHERE seq>? ORDER BY seq LIMIT ?)`).get(state.cursor,p.maxItems*settings.drainWindows)?.seq)||undefined;
         }
         const events=this.events(extension,state.cursor,p.maxItems).filter(e=>!state.drainThrough||e.seq<=state.drainThrough);if(!events.length)return;
-        state.active={id:randomUUID(),version:extension.version,from:state.cursor,through:events.at(-1)!.seq,ids:[...new Set(events.map(e=>e.entity))],startedAt:now,contextTime:freezeSemanticContextTime(this.semanticContextTime),settings};this.save(extension.id,state);
+        state.active={id:randomUUID(),version:extension.version,from:state.cursor,through:events.at(-1)!.seq,ids:[...new Set(events.map(e=>e.entity))],startedAt:now,contextTime:freezeSemanticContextTime(this.semanticContextTime),settings};this.saveState(extension.id,state);
       }
       try{
         if(state.active.version!==extension.version)throw new StoreError('Active window requires its original extension version',409);
-        const window=structuredClone(state.active),checkpoint=(id:string)=>{state.active!.checkpoint=id;this.save(extension.id,state);};
+        const window=structuredClone(state.active),checkpoint=(id:string)=>{state.active!.checkpoint=id;this.saveState(extension.id,state);};
         if(this.executor){
           const executor=this.executor,id='lifecycle:'+window.id,operationId='workflow:lifecycle:'+window.id;
           await executor.runStep({id,operationId,kind:'lifecycle-window',pool:'lifecycle.'+extension.id,input:{windowId:window.id,extensionId:extension.id,version:window.version},signal:this.abort.signal,timeoutMs:2147483647,
@@ -210,7 +206,7 @@ export class MemoryLifecycle {
           state.retryAt=this.now()+Math.max(requestedDelay??0,waiting?60000:Math.min(6*3600000,60000*2**Math.min(state.failures,8)));
         }else delete state.retryAt;
       }
-      this.save(extension.id,state);
+      this.saveState(extension.id,state);
   }
   async close(){
     this.closed=true;

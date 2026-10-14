@@ -108,7 +108,7 @@ async function fixture(t:TestContext,scenario:Scenario){
    return {...result,trace:bridge.trace,runId:randomUUID(),evidenceReadRanges:bridge.deliveredRanges,evidenceDependencies:bridge.evidenceDependencies,sourceContextDependencies:bridge.sourceContextDependencies};
   }catch(error){spyFailures.push(error instanceof Error?error.message:String(error));throw error;}finally{await bridge.close();}
  }})});
- node.lifecycle.configure({...node.lifecycle.settings(),batchCharacters:256});
+ await node.lifecycle.save({revision:node.configService.revision,settings:{...node.lifecycle.settings(),batchCharacters:256}});
  await node.app.ready();t.after(async()=>{await node.app.close();rmSync(dataDir,{recursive:true,force:true});});
  const headers={authorization:'Bearer '+token,'x-mote-ingress-version':'2'},api=(method:'GET'|'POST'|'PUT'|'DELETE',url:string,payload?:unknown)=>node.app.inject({method,url,headers,payload});
  const created=await api('POST','/api/imports',{instruction,files:[{name:'generated.md',dataBase64:Buffer.from(diary).toString('base64')}]});assert.equal(created.statusCode,202,created.body);

@@ -4,20 +4,21 @@
 
 ## 可扩展连接器
 
-中央内置 Google 日历、Gmail、飞书和 MCP 使用版本化 connector manifest。可信部署模块可通过 `MOTE_CONNECTOR_PLUGINS` 的 JSON 模块列表装入，例如 `MOTE_CONNECTOR_PLUGINS='["file:///srv/mote/plugins/acme-notes.mjs"]'`。模块声明来源种类与能力，启动时注册 owner 路由、OAuth 回调及状态，关闭时释放后台任务；新增有界点分命名空间种类必须提供能力声明。未安装适配器的已有来源可读，但不可继续同步。manifest 示例、资料身份、处理与安全边界见[接入与正式资料架构](material-architecture.md)。
+中央内置 Google 日历、Gmail、飞书和 MCP 使用版本化 connector manifest。可信部署模块通过主 YAML 的 `connectors.modules` 列表装入，例如 `modules: [file:///srv/mote/plugins/acme-notes.mjs]`；修改模块列表需重启。模块声明来源种类与能力，启动时注册 owner 路由、OAuth 回调及状态，关闭时释放后台任务；新增有界点分命名空间种类必须提供能力声明。未安装适配器的已有来源可读，但不可继续同步。manifest 示例、资料身份、处理与安全边界见[接入与正式资料架构](material-architecture.md)。
 
 ## Google 日历
 
-在 Google Cloud 项目启用 Calendar API，创建 **Web application** OAuth 客户端，并将回调地址精确加入允许列表。在所选 profile 的私有 `mote.env` 设置：
+在 Google Cloud 项目启用 Calendar API，创建 **Web application** OAuth 客户端，并将回调地址精确加入允许列表。在所选 profile 的私有 `mote.yaml` 设置以下片段（主文件还需 `version: 1` 和 `revision`）：
 
-```dotenv
-MOTE_GOOGLE_CLIENT_ID=你的客户端ID
-MOTE_GOOGLE_CLIENT_SECRET=你的客户端密钥
-MOTE_GOOGLE_REDIRECT_URI=https://你的中央域名/oauth/google/callback
-MOTE_CONNECTOR_SYNC_INTERVAL_SECONDS=900
+```yaml
+connectors:
+  googleClientId: ${GOOGLE_CLIENT_ID}
+  googleClientSecret: ${GOOGLE_CLIENT_SECRET}
+  googleRedirectUri: https://你的中央域名/oauth/google/callback
+  syncIntervalMs: 900000
 ```
 
-回调与运行中的中央节点必须一致。本机开发可以使用 `http://127.0.0.1:端口/oauth/google/callback`；远端要求 HTTPS。重启该 profile，在「来源」中连接 Google，完成授权后返回 Mote，明确选择需要同步的日历。程序仅请求 `calendar.calendarlist.readonly` 与 `calendar.events.readonly`，没有修改日程、邀请、提醒或联系人权限。授权采用一次性 state、PKCE 和 offline access；详见 [Google 服务端 OAuth](https://developers.google.com/identity/protocols/oauth2/web-server) 与 [日历权限范围](https://developers.google.com/workspace/calendar/api/auth)。
+回调与运行中的中央节点必须一致。本机开发可以使用 `http://127.0.0.1:端口/oauth/google/callback`；远端要求 HTTPS。上述显式密钥引用从启动环境读取，普通环境变量不覆盖 YAML。OAuth 配置改变后重启该 profile，在「来源」中连接 Google，完成授权后返回 Mote，明确选择需要同步的日历；仅同步间隔改变可热应用。程序仅请求 `calendar.calendarlist.readonly` 与 `calendar.events.readonly`，没有修改日程、邀请、提醒或联系人权限。授权采用一次性 state、PKCE 和 offline access；详见 [Google 服务端 OAuth](https://developers.google.com/identity/protocols/oauth2/web-server) 与 [日历权限范围](https://developers.google.com/workspace/calendar/api/auth)。
 
 首次同步覆盖过去 90 天至未来 365 天。日内使用 `syncToken` 增量同步；每天重建这个有界窗口，使新进入范围的重复日程也可见。完整分页成功并保存条目之后才提交新游标。增量请求不会混入 `timeMin`、`timeMax` 或 `orderBy`；失效游标的 HTTP 410 会触发完整重建。失败时保留旧游标和已归档证据，下一次可幂等重试。完整结果中消失的原有窗口条目记录为取消/移除，旧版本及计划时间保留；它不证明用户实际参加过日程。参考 [同步指南](https://developers.google.com/workspace/calendar/api/guides/sync) 和 [events.list 参数约束](https://developers.google.com/workspace/calendar/api/v3/reference/events/list)。
 
@@ -41,19 +42,20 @@ MOTE_CONNECTOR_SYNC_INTERVAL_SECONDS=900
 
 ## 把 Mote 提供给其他 Agent
 
-0.6.0 起可在中央「设备 → 添加设备与 Chatbot」直接生成专用 MCP JSON，并按连接撤销。支持 HTTP Bearer 的客户端可导入此 JSON，仓库的 stdio 桥接也可直接读取；操作步骤与权限范围见 [设备配对与独立连接](connections.md)。下面的静态令牌配置继续兼容已有部署。
+0.6.0 起可在中央「设备 → 添加设备与 Chatbot」直接生成专用 MCP JSON，并按连接撤销。支持 HTTP Bearer 的客户端可导入此 JSON，仓库的 stdio 桥接也可直接读取；操作步骤与权限范围见 [设备配对与独立连接](connections.md)。静态令牌的服务能力继续保留，旧 env 配置需显式改写为下面的 YAML；这些启动设置修改需重启。
 
 Mote 使用固定 `@modelcontextprotocol/sdk` **1.30.0** 的标准 Streamable HTTP，对外路径为 `/mcp`，采用无持久会话的 JSON 响应。依赖采用 MIT 许可证。不要混用 SDK v2 的拆分包 import；当前实现依据 [官方 v1 服务端文档](https://ts.sdk.modelcontextprotocol.io/server)。
 
-```dotenv
-MOTE_MCP_ENABLED=1
-MOTE_MCP_READ_TOKEN=单独生成的长随机只读凭据
-MOTE_MCP_WRITE_ENABLED=0
-MOTE_MCP_WRITE_TOKEN=
-MOTE_MCP_WRITE_SOURCE_IDS=
+```yaml
+connectors:
+  mcpEnabled: true
+  mcpReadToken: ${MCP_READ_TOKEN}
+  mcpWriteEnabled: false
+  mcpWriteToken: ""
+  mcpWriteSourceIds: []
 ```
 
-MCP 凭据必须与中央 owner 令牌分开。把 `/mcp` 的 HTTPS URL 与只读凭据配置给支持自定义 Authorization Bearer 的 MCP 客户端。只读凭据使用与中央查询 Agent 相同的资料可见性策略：高频截图和 Coding 原始事件不出现在目录、搜索或按 UUID 展开中，整理后的正式资料可按页读取。完整原件仍由中央 owner API 按权限管理。只把 MCP 凭据交给你信任的客户端；MCP 不向它们开放 Google refresh token、中央管理接口或 shell。
+MCP 凭据至少 32 字符，必须与中央 owner 令牌分开，写凭据还须与读凭据不同。把 `/mcp` 的 HTTPS URL 与只读凭据配置给支持自定义 Authorization Bearer 的 MCP 客户端。只读凭据使用与中央查询 Agent 相同的资料可见性策略：高频截图和 Coding 原始事件不出现在目录、搜索或按 UUID 展开中，整理后的正式资料可按页读取。完整原件仍由中央 owner API 按权限管理。只把 MCP 凭据交给你信任的客户端；MCP 不向它们开放 Google refresh token、中央管理接口或 shell。
 
 | 只读工具 | 用途 |
 |---|---|
@@ -77,10 +79,13 @@ MCP 凭据必须与中央 owner 令牌分开。把 `/mcp` 的 HTTPS URL 与只�
 
 若确实需要其他 Agent 写入工作成果，先在 Mote 创建用于接收的信源，再单独开启：
 
-```dotenv
-MOTE_MCP_WRITE_ENABLED=1
-MOTE_MCP_WRITE_TOKEN=另一份独立长随机凭据
-MOTE_MCP_WRITE_SOURCE_IDS=agent-results,agent-notes
+```yaml
+connectors:
+  mcpEnabled: true
+  mcpReadToken: ${MCP_READ_TOKEN}
+  mcpWriteEnabled: true
+  mcpWriteToken: ${MCP_WRITE_TOKEN}
+  mcpWriteSourceIds: [agent-results, agent-notes]
 ```
 
 写凭据仅暴露 `mote_put_item`，只能写入列出的既有 sourceId，没有只读工具，也不能创建信源或删除物理资料库。必须由调用方提供稳定 externalId、revision 与 observedAt，使用统一信源协议。内部查询 Harness 从不获得这些写工具。读凭据不接受写方法，owner 主令牌也不是 MCP 凭据。
@@ -99,7 +104,7 @@ MOTE_MCP_WRITE_SOURCE_IDS=agent-results,agent-notes
 | `POST /api/connectors/mcp/import` | `{sourceId,url,token?,resourceUris:[...]}` → `{imported,duplicates}` |
 | 同上：显式工具读取 | 使用 `tool:{name,arguments,confirmedReadOnly:true}` 替代 resourceUris |
 
-默认只允许公共 HTTPS 地址。URL 不接受用户名、密码、query 或 fragment；连接时解析并固定已验证的 IP，拒绝私网、环回、链路本地、IPv4 嵌入/过渡地址等目标，不跟随重定向，也不会执行远端要求的本地文件读写、sampling 或 stdio 命令。仅当明确设置 `MOTE_MCP_ALLOW_LOCAL=1` 时允许本机 loopback HTTP(S)，用于本机服务和测试；它不开放任意局域网目标。
+默认只允许公共 HTTPS 地址。URL 不接受用户名、密码、query 或 fragment；连接时解析并固定已验证的 IP，拒绝私网、环回、链路本地、IPv4 嵌入/过渡地址等目标，不跟随重定向，也不会执行远端要求的本地文件读写、sampling 或 stdio 命令。仅当明确设置主 YAML 的 `connectors.allowLocalMcp: true` 并重启时允许本机 loopback HTTP(S)，用于本机服务和测试；它不开放任意局域网目标。
 
 snapshot/archive 模式只导入用户选中的文本资源。单次最多选择 30 个 URI、100 个文本内容块，单块最多 100,000 字符，HTTP 响应最多 2 MiB；错误、超时或不支持的二进制内容会明确失败。恢复到旧内容也产生新 revision，不能误把旧版本重试变成当前版本。
 

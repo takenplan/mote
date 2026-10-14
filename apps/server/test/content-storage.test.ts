@@ -31,12 +31,39 @@ test('content encryption is off even with an environment key, and opt-in persist
   store.contentEncryption.setEnabled(true);
   const secret=originals.put({name:'encrypted.bin',bytes:Buffer.from('generated opt-in content')});
   assert.notEqual(readFileSync(join(store.assets.directory,secret.hash,'0.aes'),'utf8'),'generated opt-in content');
-  store.close();store=new Store(dir,{dataKey:'ab'.repeat(32)});
+  store.close();store=new Store(dir,{dataKey:'ab'.repeat(32),contentEncryptionEnabled:true});
   assert.equal(store.contentEncryption.enabled,true);assert.deepEqual(store.image(plain.id).bytes,image);
   assert.equal(new ArchivedFileStore(store).read(secret.id).toString(),'generated opt-in content');
   store.contentEncryption.setEnabled(false);
   assert.ok(existsSync(join(store.assets.directory,secret.hash,'0.aes')),'Disabling future writes must not silently convert old files');
   assert.throws(()=>new Store(dir,{dataKey:'cd'.repeat(32)}),/key mismatch/);
+});
+
+test('YAML owns the write-encryption toggle across restart and legacy SQLite flags never override it',async t=>{
+  const dir=mkdtempSync(join(tmpdir(),'mote-content-yaml-'));
+  const config:Config={dataDir:dir,token:'generated-content-owner-token-12345',tokenPath:'fixture',host:'127.0.0.1',port:47832,maxStorageBytes:10_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',dataKey:undefined,logLevel:'silent'};
+  const agent={configured:false,query:async()=>{throw Error('unused');},close:async()=>{}};
+  let node=await buildApp(config,{agent});t.after(async()=>{await node.app.close();rmSync(dir,{recursive:true,force:true});});
+  node.store.db.prepare("INSERT OR REPLACE INTO settings VALUES('content-encryption-enabled','0')").run();
+  const headers={authorization:`Bearer ${config.token}`},before=node.configService.revision;
+  const saved=await node.app.inject({method:'PUT',url:'/api/content-storage',headers,payload:{enabled:true,revision:before}});
+  assert.equal(saved.statusCode,200,saved.body);assert.equal(saved.json().enabled,true);
+  assert.equal(node.configService.view().domains.find(domain=>domain.id==='storage')!.status,'applied');
+  assert.equal(node.store.db.prepare("SELECT value FROM settings WHERE key='content-encryption-enabled'").get()!.value,'0');
+  await node.app.close();node=await buildApp(config,{agent});
+  assert.equal(node.store.contentEncryption.enabled,true);
+  const revision=node.configService.revision;
+  assert.equal((await node.app.inject({method:'PUT',url:'/api/content-storage',headers,payload:{enabled:false,revision:before}})).statusCode,409);
+  assert.equal(node.configService.revision,revision);assert.equal(node.store.contentEncryption.enabled,true);
+});
+
+test('an already-running maintenance store reuses the key prepared for new encrypted writes',t=>{
+  const dir=mkdtempSync(join(tmpdir(),'mote-content-worker-key-')),owner=new Store(dir),worker=new Store(dir);
+  t.after(()=>{worker.close();owner.close();rmSync(dir,{recursive:true,force:true});});
+  owner.contentEncryption.prepareEnabled(true);owner.contentEncryption.setEnabled(true);worker.contentEncryption.setEnabled(true);
+  assert.deepEqual(worker.key,owner.key);
+  const bytes=Buffer.from('generated maintenance fixture'),cipher=owner.contentEncryption.seal(bytes);
+  assert.deepEqual(worker.contentEncryption.open(cipher),bytes);
 });
 
 test('bulk decrypt handles current image chunks, originals, committed parts and pending uploads; cancellation is resumable',async t=>{
@@ -160,9 +187,10 @@ test('developer content controls require owner auth and return background progre
   assert.equal((await app.inject({method:'PUT',url:'/api/content-storage',headers:collectorHeaders,payload:{enabled:true}})).statusCode,403);
   for(const url of ['/api/content-storage/decrypt','/api/content-storage/decrypt/cancel'])assert.equal((await app.inject({method:'POST',url,headers:collectorHeaders,payload:{}})).statusCode,403);
   assert.equal((await app.inject({url:'/api/content-storage',headers})).json().enabled,false);
-  assert.equal((await app.inject({method:'PUT',url:'/api/content-storage',headers,payload:{enabled:true}})).json().enabled,true);
+  let revision=(await app.inject({url:'/api/content-storage',headers})).json().revision;
+  const enabled=await app.inject({method:'PUT',url:'/api/content-storage',headers,payload:{enabled:true,revision}});assert.equal(enabled.statusCode,200,enabled.body);assert.equal(enabled.json().enabled,true);revision=enabled.json().revision;
   assert.equal((await app.inject({method:'POST',url:'/api/content-storage/decrypt',headers,payload:{}})).statusCode,409);
-  assert.equal((await app.inject({method:'PUT',url:'/api/content-storage',headers,payload:{enabled:false}})).json().enabled,false);
+  assert.equal((await app.inject({method:'PUT',url:'/api/content-storage',headers,payload:{enabled:false,revision}})).json().enabled,false);
   const response=await app.inject({method:'POST',url:'/api/content-storage/decrypt',headers,payload:{}});assert.equal(response.statusCode,202);
   assert.equal(response.json().job.state,'running');assert.ok(!response.body.includes(store.key!.toString('hex')));
   assert.equal((await app.inject({method:'PUT',url:'/api/content-storage',headers,payload:{enabled:'false'}})).statusCode,400);

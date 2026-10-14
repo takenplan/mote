@@ -238,7 +238,7 @@ for(const mutation of ['delete','prune','revise'] as const)test(`a cancelled aut
 
 test('automatic source jobs use the owner batch limit and keep existing ranges through setting changes and restart',async t=>{
   const f=await fixture(t);f.control.emptyResults=true;f.source('diary');f.source('coding-source',true);
-  const setBudget=async(batchCharacters:number)=>{const r=await f.node.app.inject({method:'PUT',url:'/api/memory-settings',headers:{authorization:'Bearer '+f.config.token},payload:{...f.node.lifecycle.settings(),batchCharacters}});assert.equal(r.statusCode,200,r.body);};
+  const setBudget=async(batchCharacters:number)=>{const r=await f.node.app.inject({method:'PUT',url:'/api/memory-settings',headers:{authorization:'Bearer '+f.config.token},payload:{revision:f.node.configService.revision,settings:{...f.node.lifecycle.settings(),batchCharacters}}});assert.equal(r.statusCode,200,r.body);};
   await setBudget(257);const text='🍃'.repeat(700)+body;
   await f.add('diary','first',false,'1',text);await f.add('coding-source','first',true,'1',text);await f.publish();await f.queue();
   const jobs=f.jobs();assert.equal(jobs.length,1);assert.equal(jobs[0].automaticGrants?.length,2);

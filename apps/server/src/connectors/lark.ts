@@ -43,13 +43,21 @@ export class LarkConnector{
   private active?:Promise<void>;
   private controller?:AbortController;
   private timer?:ReturnType<typeof setInterval>;
+  private initialized=false;private syncIntervalMs?:number;
   private checking?:Promise<LarkStatus>;
   private closed=false;
   private disconnecting=false;
   private reading?:Promise<{calendars:LarkCalendar[]}>;
   private readController?:AbortController;
   constructor(private ctx:ConnectorContext,runner?:LarkRunner){const dir=ctx.config.connectors?.directory??`${ctx.config.dataDir}/connectors`;this.file=new PrivateFile(dir,'lark.json');this.runner=runner??createLarkRunner(dir);}
-  async init(){const saved=await this.file.read();if(saved)this.saved=savedSchema.parse(saved);this.timer=setInterval(()=>{if(this.saved.enabled&&this.saved.selection.autoSync&&!this.active&&!this.closed)try{this.startSync();}catch{}},Math.max(60000,this.ctx.config.connectors?.syncIntervalMs??900000));this.timer.unref();}
+  async init(){const saved=await this.file.read();if(saved)this.saved=savedSchema.parse(saved);this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??900000);}
+  configureSyncInterval(intervalMs:number){
+    const interval=Math.max(60000,intervalMs);
+    if(this.timer&&this.syncIntervalMs===interval)return;
+    if(this.timer)clearInterval(this.timer);this.timer=undefined;this.syncIntervalMs=interval;
+    if(!this.initialized||this.closed)return;
+    this.timer=setInterval(()=>{if(this.saved.enabled&&this.saved.selection.autoSync&&!this.active&&!this.closed)try{this.startSync();}catch{}},interval);this.timer.unref();
+  }
   status():LarkStatus{return {...this.snapshot,connected:this.snapshot.connected&&this.saved.enabled,selection:structuredClone(this.saved.selection),...(this.job?{job:{...this.job}}:{}),...(this.saved.lastSyncAt?{lastSyncAt:this.saved.lastSyncAt}:{})};}
   async refresh(){
     if(this.closed)throw new ConnectorError('connector_closed',503);
@@ -158,5 +166,5 @@ export class LarkConnector{
     if(this.saved.selection.documents.length)this.ctx.sources.reportStatus(docSource,{state:'idle',lastSyncAt:now()});
     const next={...this.saved,lastSyncAt:now()};await this.file.write(next);this.saved=next;job.result=result;
   });}
-  async close(){this.closed=true;clearInterval(this.timer);this.controller?.abort();this.readController?.abort();await this.reading?.catch(()=>{});await this.active;await this.checking;await this.file.flush();}
+  async close(){this.closed=true;clearInterval(this.timer);this.timer=undefined;this.controller?.abort();this.readController?.abort();await this.reading?.catch(()=>{});await this.active;await this.checking;await this.file.flush();}
 }

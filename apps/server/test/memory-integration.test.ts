@@ -40,7 +40,7 @@ async function fixture(t:any){
  }}};
  const nodeDependencies={...dependencies,createModelAgent:async()=>dependencies.agent};
  let node=await buildApp(config,nodeDependencies);await node.app.ready();
- const disable=()=>{const s=node.lifecycle.settings();node.lifecycle.configure({...s,consolidation:{...s.consolidation,enabled:false,minChanges:1},insights:{...s.insights,enabled:false},working:{...s.working,enabled:false}});};disable();
+ const disable=async()=>{const s=node.lifecycle.settings();await node.lifecycle.save({revision:node.configService.revision,settings:{...s,consolidation:{...s.consolidation,enabled:false,minChanges:1},insights:{...s.insights,enabled:false},working:{...s.working,enabled:false}}});};await disable();
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
  const api=(method:'GET'|'PUT'|'POST',url:string,payload?:any,token=config.token)=>node.app.inject({method,url,payload,headers:{authorization:'Bearer '+token}});
  const add=async(name:string,both=false)=>{
@@ -55,7 +55,7 @@ async function fixture(t:any){
  };
  const pins=(ids:string[])=>ids.map(id=>{const m=node.memories.get(id);return {id,version:m.version!,fingerprint:m.fingerprint};});
  const queue=(ids:string[],recipe='base')=>requestMemoryIntegration({recipe:ref(recipe),inputs:pins(ids)},{lifecycle:node.lifecycle,memories:node.memories,pipeline:node.memoryPipeline});
- return {get node(){return node;},control,calls,add,api,queue,pins,async restart(changed=false){await node.app.close();let next=config;if(changed){const changedPath=join(directory,'changed-integrator.mjs');writeFileSync(changedPath,readFileSync(modulePath,'utf8').replace('GENERATED_INTEGRATOR_1','Changed without a version'));next={...config,connectors:{...config.connectors!,modules:[changedPath]}};}node=await buildApp(next,nodeDependencies);await node.app.ready();},products:()=>node.memories.list().map(m=>node.memories.get(m.id)).filter(m=>m.tier==='consolidated'),view:()=>node.lifecycle.view().extensions.find(e=>e.id==='consolidation')!};
+ return {get node(){return node;},control,calls,add,api,queue,pins,async restart(changed=false){let selectedModule=modulePath;if(changed){selectedModule=join(directory,'changed-integrator.mjs');writeFileSync(selectedModule,readFileSync(modulePath,'utf8').replace('GENERATED_INTEGRATOR_1','Changed without a version'));}await node.configService.update('connectors',{modules:[selectedModule]},node.configService.revision);await node.app.close();node=await buildApp(config,nodeDependencies);await node.app.ready();},products:()=>node.memories.list().map(m=>node.memories.get(m.id)).filter(m=>m.tier==='consolidated'),view:()=>node.lifecycle.view().extensions.find(e=>e.id==='consolidation')!};
 }
 
 test('installed integration recipes independently replace generation and review through the owner API',async t=>{
@@ -100,7 +100,7 @@ test('selection changes process only subsequent events; disable preserves produc
  assert.equal(f.node.memoryIntegrationSettings.current({...selection,activation:randomUUID()}),false);
  assert.equal(f.node.memoryIntegrationSettings.current({...selection,afterSequence:selection.afterSequence+1}),false);
  assert.equal(f.node.memoryIntegrationSettings.current({...selection,binding:null}),false);
- const s=f.node.lifecycle.settings();f.node.lifecycle.configure({...s,consolidation:{...s.consolidation,enabled:true}});await f.node.lifecycle.tick();assert.equal(f.calls.length,0);
+ const s=f.node.lifecycle.settings();await f.node.lifecycle.save({revision:f.node.configService.revision,settings:{...s,consolidation:{...s.consolidation,enabled:true}}});await f.node.lifecycle.tick();assert.equal(f.calls.length,0);
  const next=await f.add('next');await f.node.lifecycle.tick();assert.equal(f.calls.length,2);assert.deepEqual(f.products()[0].relatedMemoryIds,next.products.map(m=>m.id));
  await f.api('PUT','/api/memory-integration-settings',{recipe:null});await f.add('disabled');await f.node.lifecycle.tick();assert.equal(f.calls.length,2);assert.equal(f.products().length,1);
  f.queue(old.products.map(m=>m.id));await f.node.lifecycle.tick();assert.equal(f.calls.length,4);assert.equal(f.products().length,2,'explicit history is a separate authorization');
@@ -125,7 +125,7 @@ for(const mutation of ['cancel','delete','parent-version','selection'] as const)
  let queued:{id:string};
  if(mutation==='selection'){
   await f.api('PUT','/api/memory-integration-settings',{recipe:ref('base')});
-  const s=f.node.lifecycle.settings();f.node.lifecycle.configure({...s,consolidation:{...s.consolidation,enabled:true}});f.node.memories.publish(products[0].id);
+  const s=f.node.lifecycle.settings();await f.node.lifecycle.save({revision:f.node.configService.revision,settings:{...s,consolidation:{...s.consolidation,enabled:true}}});f.node.memories.publish(products[0].id);
  }else queued=f.queue(products.map(m=>m.id));
  f.control.duringQuery=input=>{if(input.traceContext?.phase!=='review')return;f.control.duringQuery=undefined;
   if(mutation==='cancel')f.node.lifecycle.cancel('consolidation',queued!.id);
@@ -180,6 +180,6 @@ test('maximum declared strategy and card inputs fit the Agent question contract 
  f.node.memoryStrategies.registerIntegration({...integrate,...ref('long-integrator'),prompt:'G'.repeat(16000)});
  f.node.memoryStrategies.registerReview({...review,...ref('long-review'),policy:'R'.repeat(16000)});
  f.node.memoryStrategies.registerIntegrationRecipe({...ref('long'),integrate:ref('long-integrator'),review:ref('long-review')});
- const s=f.node.lifecycle.settings();f.node.lifecycle.configure({...s,consolidation:{...s.consolidation,maxItems:50}});f.queue(ids,'long');await f.node.lifecycle.tick();
+ const s=f.node.lifecycle.settings();await f.node.lifecycle.save({revision:f.node.configService.revision,settings:{...s,consolidation:{...s.consolidation,maxItems:50}}});f.queue(ids,'long');await f.node.lifecycle.tick();
  assert.equal(f.calls.length,2);assert.equal(f.view().error,undefined);assert.ok(f.calls.every(c=>c.question.length<=20000),f.calls.map(c=>c.question.length).join(','));
 });

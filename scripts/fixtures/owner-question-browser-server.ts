@@ -18,7 +18,7 @@ const generate=async(input:QueryInput):Promise<QueryResult>=>{
 };
 const dependencies={backgroundWorker:false,agent:{configured:true,close:async()=>{},query:generate},createModelAgent:async()=>({configured:true,close:async()=>{},query:generate})};
 const node=await buildApp(config,dependencies);await node.app.ready();
-const settings=node.lifecycle.settings();for(const id of ['working','consolidation','insights'] as const)settings[id].enabled=false;node.lifecycle.configure(settings);
+const settings=node.lifecycle.settings();for(const id of ['working','consolidation','insights'] as const)settings[id].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
 const api=(method:'GET'|'POST'|'PUT',url:string,payload?:Record<string,unknown>)=>node.app.inject({method,url,payload,headers:{authorization:'Bearer '+config.token,'x-mote-ingress-version':'2'}});
 assert.equal((await api('POST','/api/sources',{id:'generated-dialogues',name:'Generated browser conversations',kind:'custom',deviceId:'generated',platform:'import',retention:'archive'})).statusCode,200);
 const questions:any[]=[];

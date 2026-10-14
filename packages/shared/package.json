@@ -100,6 +100,10 @@
       "import": "./dist/collector-receipt.js",
       "require": "./dist/collector-receipt.js",
       "default": "./dist/collector-receipt.js"
+    },
+    "./config-file": {
+      "types": "./dist/config-file.d.ts",
+      "import": "./dist/config-file.js"
     }
   },
   "typesVersions": {
@@ -148,6 +152,9 @@
       ],
       "collector-receipt": [
         "dist/collector-receipt.d.ts"
+      ],
+      "config-file": [
+        "dist/config-file.d.ts"
       ]
     }
   },
@@ -158,6 +165,7 @@
     "test": "node --test test/*.test.mjs"
   },
   "dependencies": {
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "yaml": "^2.8.1"
   }
 }

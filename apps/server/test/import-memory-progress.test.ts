@@ -24,7 +24,7 @@ for(const mode of ['failed','waiting'] as const)test(`import receipt progress pr
     return {runId:'generated-'+(input.taskContext?.untrustedMemoryDraft?'review':'draft'),trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:members.length===1&&member.inputKey===badId&&mode==='waiting'?'needs_context':'no_candidates',candidateIndexes:[],...(members.length===1&&member.inputKey===badId&&mode==='waiting'?{reason:'Generated missing context'}:{})}))})};
   }}});
   await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
-  node.lifecycle.configure({...node.lifecycle.settings(),batchCharacters:256});
+  await node.lifecycle.save({revision:node.configService.revision,settings:{...node.lifecycle.settings(),batchCharacters:256}});
   node.sources.register({id:'generated',name:'Generated originals',kind:'custom',deviceId:'generated',platform:'import'});
   const ids:string[]=[];
   for(let index=0;index<2;index++)ids.push((await node.sources.upsert('generated',{externalId:String(index),revision:'1',text:('Generated original '+index).padEnd(200,'.'),observedAt:'2026-09-01T00:00:00Z',kind:'file',layer:'original'})).id);
@@ -56,7 +56,7 @@ test('one committed subrange never completes an original whose remaining range f
     return {runId:'generated-range',trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]}))})};
   }}});
   await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
-  node.lifecycle.configure({...node.lifecycle.settings(),batchCharacters:1024});
+  await node.lifecycle.save({revision:node.configService.revision,settings:{...node.lifecycle.settings(),batchCharacters:1024}});
   node.sources.register({id:'generated',name:'Generated long original',kind:'custom',deviceId:'generated',platform:'import'});
   const {id}=await node.sources.upsert('generated',{externalId:'long',revision:'1',text:'Generated bounded source. '.repeat(80),observedAt:'2026-09-01T00:00:00Z',kind:'file',layer:'original'});
   await node.materialOrganizer.tick();await node.sourcePipelines.tick();assert.equal(await node.sourcePipelines.drainMemory(node.memoryPipeline,true,10),1);

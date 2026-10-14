@@ -12,9 +12,9 @@ node scripts/mote.mjs init --profile dev
 node scripts/mote.mjs init --profile test
 ```
 
-每个环境都有自己的 `.mote/profiles/<name>/mote.env`、`data/`、`logs/`、`backups/` 和 `file-sync/`。`file-sync/` 在第一次明确文件导入时创建。初始化不读取根 `.env`，不继承模型 key，不复制正式资料。模型字段初始为空，可以先验证存储、UI 与同步，再在对应私有文件中配置测试模型。
+每个环境都有自己的 `.mote/profiles/<name>/mote.yaml`、`data/`、`logs/`、`backups/` 和 `file-sync/`。`file-sync/` 在第一次明确文件导入时创建。初始化不读取根 `.env`，不继承模型 key，不复制正式资料。默认模型预设使用 Codex；仅验证存储、UI 与同步时，可在该私有 YAML 将 `models.deployment.model` 留空。
 
-CLI 不自动初始化，已有 profile 不会被覆盖；重复 init 报错后直接使用已有配置即可。`--home /absolute/test-profiles` 可创建另一整套环境，Docker project 与 volume 也随路径隔离。不要把私有环境文件加入 Git。
+CLI 不自动初始化，已有 profile 不会被覆盖；重复 init 报错后直接使用已有配置即可。`--home /absolute/test-profiles` 可创建另一整套环境，Docker project 与 volume 也随路径隔离。不要把私有 YAML 加入 Git。旧 `mote.env` profile 会被拒绝；先停止旧版本、保留原目录，再离线手工填写新 YAML，CLI 不自动迁移。
 
 ## 日常开发
 
@@ -48,7 +48,7 @@ Mac 的命名 profile 使用独立的用户数据目录、队列、草稿和连�
 node scripts/mote.mjs exec --profile test -- npm run dev:workspace
 ```
 
-test Web 默认 5174。Vite 的代理读取显式 dev/test 环境的中央端口；没有所选环境或端口为 47832 时会拒绝启动。浏览器 bundle 不包含 `MOTE_*` 配置或令牌。`dev:workspace` 是内部命令，应由 `mote exec` 提供环境。
+test Web 默认 5174。Vite 的代理读取 `MOTE_CONFIG_FILE` 选择的 dev/test YAML 中 `server.port`；没有所选环境或端口为 47832 时会拒绝启动。浏览器 bundle 不包含 `MOTE_*` 配置或令牌。`dev:workspace` 是内部命令，应由 `mote exec` 提供环境。
 
 ## CLI 工具使用同一连接
 
@@ -63,7 +63,7 @@ node scripts/mote.mjs exec --profile test -- npm run import:files -- --root /abs
 
 导入脚本只读取用户明确选择的 UTF-8 文件夹，默认 `.md,.txt`，单文件不超过 100 KB，不递归隐藏目录或符号链接。加 `--extensions .md,.txt,.csv` 明确类型；`--watch` 每 30 秒检查更改。文件状态基于实际所选节点 URL，落在该 profile 的 `file-sync/`，所以同一个源目录可以分别导入 dev 与 test；成功 ACK 后同环境再次运行会跳过不变文件。原文删除不删除中央历史。
 
-`exec` 清除继承的 `MOTE_*` 与 `COMPOSE_*`，再加载唯一 profile；显式 `MOTE_ENV_FILE` 存在时只读所选文件。直接运行 `npm start` / `npm run import:files` 只使用进程环境，读取文件必须显式设置 `MOTE_ENV_FILE`；根 `.env` 不再自动加载。API/model 密钥不要写进命令参数、示例文件或公开诊断。
+`exec` 清除继承的普通 `MOTE_*` 与 `COMPOSE_*` 参数，设置所选 `MOTE_CONFIG_FILE`，并从同一 YAML 派生设备/工具连接 URL 与令牌。普通进程环境不能覆盖服务端 YAML；只有声明的敏感字段支持 `${SECRET_NAME}` 引用。直接运行 `npm start` 默认读取工作目录的 `mote.yaml`，或显式设置 `MOTE_CONFIG_FILE=/absolute/mote.yaml`；导入工具同样支持该文件选择。`MOTE_ENV_FILE` 已拒绝，根 `.env` 不参与加载。API/model 密钥不要写进命令参数、示例文件或公开诊断。
 
 ## Android 开发连接
 
@@ -174,9 +174,9 @@ npm run test:profiles:container
 
 ## 调试与分享诊断
 
-每个中央环境默认开启有上限的结构化诊断，`MOTE_DEBUG=0`。需要调试时只修改正在测试的 `mote.env`，然后重启对应环境。中央界面的运行诊断、Mac 和 Android 的支持包用于查看版本、连接类别、队列状态、数值指标与固定事件。分享前仍应查看导出内容；不要改为转发原始截图、OCR、随手记、模型 prompt 或 token。
+每个中央环境默认开启有上限的结构化诊断，`diagnostics.debug: false`。需要调试时只修改正在测试的 `mote.yaml`；enabled/debug/traceEnabled/level 经校验热应用，日志目录与容量参数需要重启。中央界面的运行诊断、Mac 和 Android 的支持包用于查看版本、连接类别、队列状态、数值指标与固定事件。分享前仍应查看导出内容；不要改为转发原始截图、OCR、随手记、模型 prompt 或 token。
 
-原生 `logs/central.log` 默认只保存固定监督事件；未知 SDK/runtime 输出只保存类型与字节数。新 DEV 使用 `MOTE_LOG_MAX_MB=auto`，每份最多 100 MiB、3 份；结构化 `central.N.ndjson` 与监督日志分别轮转，各最多 300 MiB。其它 profile 保留每份 2 MiB、3 份。已有 DEV 的显式数值保持不变，主动迁移见 [部署说明](deployment.md#dev-log-retention)。支持包、内存事件数和单条日志仍各有自身边界。
+原生 `logs/central.log` 默认只保存固定监督事件；未知 SDK/runtime 输出只保存类型与字节数。新 DEV 的 YAML 省略 `diagnostics.maxBytes`，每份最多 100 MiB、3 份；结构化 `central.N.ndjson` 与监督日志分别轮转，各最多 300 MiB。其它 profile 保留每份 2 MiB、3 份。已有 DEV 的显式数值保持不变，主动采用默认值见 [部署说明](deployment.md#dev-log-retention)。支持包、内存事件数和单条日志仍各有自身边界。
 
 ## 独立版本与发布
 

@@ -16,7 +16,7 @@ test('owner stop remains stopping and retains the cutover tail until the cancell
   let running:Promise<void>|undefined;
   t.after(async()=>{release();await running?.catch(()=>{});await node.app.close();await rm(directory,{recursive:true,force:true});});
   const headers={authorization:'Bearer '+owner},settings=node.lifecycle.settings();
-  node.lifecycle.configure({...settings,extraction:{...settings.extraction,minChanges:1}});
+  await node.lifecycle.save({revision:node.configService.revision,settings:{...settings,extraction:{...settings.extraction,minChanges:1}}});
   const received=await node.app.inject({method:'POST',url:'/api/notes',headers,payload:{id:randomUUID(),deviceId:'generated-device',deviceName:'Generated',platform:'import',capturedAt:new Date().toISOString(),text:'Generated observatory transport lifecycle.'}});
   assert.equal(received.statusCode,201,received.body);
   running=node.lifecycle.tick();await ready;

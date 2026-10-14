@@ -146,7 +146,7 @@ test('manual Memory jobs honor the saved character budget without rewriting exis
  const node=await buildApp(config,{createModelAgent:async()=>({configured:false,close:async()=>{},query:async()=>{throw Error('This structural test must not call a model');}})});
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
  const headers={authorization:'Bearer '+config.token,'x-mote-ingress-version':'2'};
- async function budget(value:number){const settings=node.lifecycle.settings();settings.batchCharacters=value;const response=await node.app.inject({method:'PUT',url:'/api/memory-settings',headers,payload:settings});assert.equal(response.statusCode,200,response.body);}
+ async function budget(value:number){const settings=node.lifecycle.settings();settings.batchCharacters=value;const response=await node.app.inject({method:'PUT',url:'/api/memory-settings',headers,payload:{revision:node.configService.revision,settings}});assert.equal(response.statusCode,200,response.body);}
  async function create(){
   const id=randomUUID(),text='合成的完整笔记。'.repeat(75);
   const note=await node.app.inject({method:'POST',url:'/api/notes',headers,payload:{id,deviceId:'generated-budget-device',deviceName:'Generated',platform:'import',capturedAt:'2026-05-01T00:00:00Z',text}});assert.equal(note.statusCode,201,note.body);

@@ -51,7 +51,7 @@ async function start(){
   };
   const settings=node.lifecycle.settings();settings.batchCharacters=report.batchCharacters;settings.extraction.enabled=true;
   for(const id of ['consolidation','insights','working'] as const)settings[id].enabled=false;
-  node.lifecycle.configure(settings);await node.app.ready();
+  await node.lifecycle.save({revision:node.configService.revision,settings});await node.app.ready();
 }
 async function close(){if(node){await save();await node.app.close();node=undefined;}}
 const payload=(r:typeof manifest.records[number])=>({externalId:sha256(r.key),revision:sha256(JSON.stringify([r.textSha256,r.origin.documentTime])),observedAt:report.startedAt,kind:'message',layer:'original',text:r.text,document:r.origin.documentTime});

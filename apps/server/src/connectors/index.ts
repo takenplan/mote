@@ -38,7 +38,7 @@ function builtins(testing?:ConnectorTestDependencies):ConnectorManifest[]{return
   {apiVersion:1,id:'google-calendar',sourceKinds:['google-calendar'],statusKey:'google',create:ctx=>{
     const google=new GoogleCalendarConnector(ctx,testing?.google);
     return {
-      init:()=>google.init(),status:()=>google.status(),
+      init:()=>google.init(),status:()=>google.status(),configureSyncInterval:interval=>google.configureSyncInterval(interval),
       configure:host=>{
         host.ownerRoute({method:'POST',path:'/api/connectors/google/start',handler:()=>google.start()});
         host.ownerRoute({method:'GET',path:'/api/connectors/google/calendars',handler:()=>google.calendars()});
@@ -53,7 +53,7 @@ function builtins(testing?:ConnectorTestDependencies):ConnectorManifest[]{return
   {apiVersion:1,id:'gmail',sourceKinds:['gmail'],statusKey:'gmail',create:ctx=>{
     const gmail=new GmailConnector(ctx,testing?.gmail);
     return {
-      init:()=>gmail.init(),status:()=>gmail.status(),
+      init:()=>gmail.init(),status:()=>gmail.status(),configureSyncInterval:interval=>gmail.configureSyncInterval(interval),
       configure:host=>{
         host.ownerRoute({method:'POST',path:'/api/connectors/gmail/start',bodyLimit:16384,handler:()=>gmail.start()});
         host.ownerRoute({method:'POST',path:'/api/connectors/gmail/sync',bodyLimit:16384,handler:()=>gmail.sync()});
@@ -66,7 +66,7 @@ function builtins(testing?:ConnectorTestDependencies):ConnectorManifest[]{return
   {apiVersion:1,id:'lark',sourceKinds:['lark-docs','lark-calendar'],create:ctx=>{
     const lark=new LarkConnector(ctx,testing?.lark);
     return {
-      init:()=>lark.init(),
+      init:()=>lark.init(),configureSyncInterval:interval=>lark.configureSyncInterval(interval),
       configure:host=>{
         const route=(method:'GET'|'POST'|'PUT'|'DELETE',path:`/api/connectors/${string}`,handler:OwnerRoute['handler'])=>host.ownerRoute({method,path,bodyLimit:16384,handler});
         route('GET','/api/connectors/lark',()=>lark.status());

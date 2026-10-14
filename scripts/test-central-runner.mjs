@@ -7,10 +7,13 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { command } from './profile-fixtures.mjs';
 import { repository } from './profile-lib.mjs';
+import { serializeConfigDocument } from '../packages/shared/src/config-file.ts';
 
 const directory = await mkdtemp(join(tmpdir(), 'mote-central-runner-fixture-'));
 const runner = join(repository, 'scripts/central-runner.mjs');
-const settings = { MOTE_LOG_MAX_MB: '0.1', MOTE_LOG_MAX_FILES: '3' };
+const configFile = join(directory, 'mote.yaml');
+await writeFile(configFile, serializeConfigDocument({ version: 1, revision: 0, diagnostics: { maxBytes: Math.floor(0.1 * 1024 * 1024), maxFiles: 3 } }), { mode: 0o600 });
+const settings = { MOTE_CONFIG_FILE: configFile, MOTE_LOG_MAX_MB: '8', MOTE_LOG_MAX_FILES: '10' };
 const launch = (entry, log) => [runner, entry, log, `--mote-instance=${randomUUID()}`];
 try {
   const noisy = join(directory, 'noisy.mjs'), log = join(directory, 'bounded.log');
@@ -31,7 +34,9 @@ try {
   const expandedLog=join(directory,'expanded.log'),MiB=1024*1024;
   const prefill=async(path,bytes)=>{const file=await open(path,'w',0o600);try{await file.truncate(bytes);}finally{await file.close();}};
   await prefill(expandedLog,9*MiB);
-  const expandedSettings={MOTE_PROFILE:'dev',MOTE_LOG_MAX_MB:'auto',MOTE_LOG_MAX_FILES:'3'};
+  const expandedFile=join(directory,'expanded.yaml');
+  await writeFile(expandedFile,serializeConfigDocument({version:1,revision:0,server:{profile:'dev'},diagnostics:{maxFiles:3}}),{mode:0o600});
+  const expandedSettings={MOTE_CONFIG_FILE:expandedFile,MOTE_PROFILE:'test',MOTE_LOG_MAX_MB:'2'};
   assert.equal((await command(process.execPath,launch(once,expandedLog),{env:expandedSettings})).code,0);
   assert.ok((await stat(expandedLog)).size>9*MiB);
   assert.equal((await readdir(directory)).includes('expanded.log.1'),false);
@@ -45,10 +50,12 @@ try {
   assert.equal((await readFile(expandedLog,'utf8')).trim(),'{"event":"server.listening","port":12345}');
   // Explicit 2 MiB remains an override even on DEV; other profiles keep the 8 MiB ceiling.
   const customLog=join(directory,'custom.log');await prefill(customLog,3*MiB);
-  assert.equal((await command(process.execPath,launch(once,customLog),{env:{...expandedSettings,MOTE_LOG_MAX_MB:'2'}})).code,0);
+  const customFile=join(directory,'custom.yaml');await writeFile(customFile,serializeConfigDocument({version:1,revision:0,server:{profile:'dev'},diagnostics:{maxBytes:2*MiB}}),{mode:0o600});
+  assert.equal((await command(process.execPath,launch(once,customLog),{env:{...expandedSettings,MOTE_CONFIG_FILE:customFile}})).code,0);
   assert.equal((await stat(customLog+'.1')).size,3*MiB);
-  const invalid=await command(process.execPath,launch(once,join(directory,'invalid.log')),{env:{MOTE_PROFILE:'test',MOTE_LOG_MAX_MB:'100'}});
-  assert.notEqual(invalid.code,0);assert.match(invalid.stderr,/MOTE_LOG_MAX_MB/);
+  const invalidFile=join(directory,'invalid.yaml');await writeFile(invalidFile,serializeConfigDocument({version:1,revision:0,server:{profile:'test'},diagnostics:{maxBytes:100*MiB}}),{mode:0o600});
+  const invalid=await command(process.execPath,launch(once,join(directory,'invalid.log')),{env:{MOTE_CONFIG_FILE:invalidFile}});
+  assert.notEqual(invalid.code,0);assert.match(invalid.stderr,/diagnostics.maxBytes/);
 
   const tail = join(directory, 'tail.mjs'), tailLog = join(directory, 'tail.log');
   await writeFile(tail, `process.stdout.write('synthetic-private-body\\n'); process.stdout.write('{"event":"server.'); setTimeout(() => { process.stdout.write('listening","port":12345,"tokenConfigured":true,"secret":"synthetic-private-token"}'); process.exitCode=7; },10);`);

@@ -29,7 +29,7 @@ async function appFixture(t:TestContext,query:(input:QueryInput,reader:ContextRe
  const directory=mkdtempSync(join(tmpdir(),'mote-coding-understanding-e2e-'));
  const node=await buildApp(config(directory),{backgroundWorker:false,createModelAgent:async(_settings,reader)=>({configured:true,close:async()=>{},query:async input=>fixtureMemoryWorkResult(input,await query(input,reader))})});
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
- const settings=node.lifecycle.settings();node.lifecycle.configure({...settings,consolidation:{...settings.consolidation,enabled:false},insights:{...settings.insights,enabled:false},working:{...settings.working,enabled:false}});
+ const settings=node.lifecycle.settings();await node.lifecycle.save({revision:node.configService.revision,settings:{...settings,consolidation:{...settings.consolidation,enabled:false},insights:{...settings.insights,enabled:false},working:{...settings.working,enabled:false}}});
  node.sources.register({id:'coding',kind:'coding-agent',name:'Generated coding',deviceId:'fixture',platform:'macos'});
  node.sourcePipelines.configure('coding',{settleSeconds:0});await node.app.ready();
  return node;

@@ -1,8 +1,8 @@
 import { createAgent, AgentNotConfiguredError, AgentTimeoutError, AgentResponseError, type ContextReader, type AgentOptions } from '@mote/agent';
-import { DEFAULT_AGENT_TIMEOUT_MS, DEFAULT_MODEL_MAX_TOKENS, DEFAULT_MODEL_REQUEST_TIMEOUT_MS, modelProvider, DEPLOYMENT_MODEL_PROFILE_ID, type ModelSettings, type ModelTestResult, type ModelProfile } from '@mote/shared/models';
+import { modelProvider, DEPLOYMENT_MODEL_PROFILE_ID, type ModelSettings, type ModelTestResult, type ModelProfile } from '@mote/shared/models';
 import type { Config } from './config.js';
 import type { QueryAgent } from './app.js';
-import type { PreparedModelSettings } from './model-settings.js';
+import {deploymentModelSettingsSchema,type PreparedModelSettings} from './model-settings.js';
 
 /** Trusted adapters must retain the host's admission and fresh transport fence. */
 export type ModelAgentHostHooks=Readonly<Pick<AgentOptions,'runModel'|'authorizeModelRequest'>>;
@@ -34,18 +34,14 @@ export async function createModelRegistry(profiles:ModelProfile[], reader:Contex
 }
 
 export function modelSettingsFromConfig(config: Config): ModelSettings {
-  const provider = config.modelProvider ?? 'deepseek', preset = modelProvider(provider);
-  const protocol = config.modelProtocol ?? preset?.protocol ?? 'deepseek';
-  return {
-    provider, protocol, baseUrl: config.modelBaseUrl || preset?.baseUrl || '', model: config.model,
-    apiKey: config.apiKey, headers: structuredClone(config.modelHeaders ?? {}), extraBody: structuredClone(config.modelExtraBody ?? {}),
-    reasoningEffort: config.modelReasoningEffort ?? (protocol === 'deepseek' ? 'high' : 'auto'),
-    maxTokens: config.modelMaxTokens ?? DEFAULT_MODEL_MAX_TOKENS,
-    modelRequestTimeoutMs: config.modelRequestTimeoutMs ?? (protocol === 'codex-app-server' ? null : DEFAULT_MODEL_REQUEST_TIMEOUT_MS),
-    agentTimeoutMs: config.agentTimeoutMs ?? (protocol === 'codex-app-server' ? null : DEFAULT_AGENT_TIMEOUT_MS),
-    serviceTier:protocol==='codex-app-server'?'default':undefined,
-    allowUnauthenticatedLocal: config.allowUnauthenticatedLocal,
+  const protocol=config.modelProtocol??modelProvider(config.modelProvider??'deepseek')?.protocol;
+  const value={
+    provider:config.modelProvider,protocol,baseUrl:config.modelBaseUrl||modelProvider(config.modelProvider??'deepseek')?.baseUrl||'',model:config.model,
+    apiKey:config.apiKey,headers:config.modelHeaders,extraBody:config.modelExtraBody,reasoningEffort:config.modelReasoningEffort,
+    maxTokens:config.modelMaxTokens,modelRequestTimeoutMs:config.modelRequestTimeoutMs,agentTimeoutMs:config.agentTimeoutMs,
+    serviceTier:protocol==='codex-app-server'?'default':undefined,allowUnauthenticatedLocal:config.allowUnauthenticatedLocal,
   };
+  return deploymentModelSettingsSchema.parse(Object.fromEntries(Object.entries(value).filter(([,field])=>field!==undefined)));
 }
 
 export function applyModelSettings(config: Config, settings: ModelSettings): void {
@@ -68,17 +64,27 @@ export class ReloadableAgent implements QueryAgent {
   get configured(): boolean { return !this.closed && Boolean(this.current?.agent.configured); }
   configuredFor(id:string):boolean { return !this.closed && Boolean(this.current?.agent.configuredFor?.(id)??this.current?.agent.configured); }
 
-  async prepare(agent: QueryAgent, activateConfig: () => void): Promise<PreparedModelSettings> {
+  async prepare(agent: QueryAgent, activateConfig: () => void, rollbackConfig: () => void = () => {}): Promise<PreparedModelSettings> {
     if (this.closed) { await agent.close(); throw new Error('Agent is closed'); }
     const generation: Generation = { agent, active: 0, retired: false };
-    let activated = false;
+    let activated = false,completed=false,rolledBack=false;
+    let previous:Generation|undefined;
     return {
       activate: () => {
         if (activated) return;
         activated = true;
-        const previous = this.current;
+        previous = this.current;
         this.generations.add(generation); this.current = generation; activateConfig();
-        if (previous) { previous.retired = true; if (!previous.active) void this.retire(previous); }
+      },
+      rollback:()=>{
+        if(!activated||completed||rolledBack)return;
+        rolledBack=true;this.current=previous;rollbackConfig();generation.retired=true;
+        if(!generation.active)void this.retire(generation);
+      },
+      complete:()=>{
+        if(!activated||completed||rolledBack)return;
+        completed=true;
+        if(previous){previous.retired=true;if(!previous.active)void this.retire(previous);}
       },
       dispose: async () => { if (!activated) await agent.close(); },
     };

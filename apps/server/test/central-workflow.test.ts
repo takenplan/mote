@@ -27,14 +27,14 @@ test('legacy denied source history stays searchable and supports an explicit HTT
     calls++;return fixtureMemoryWorkResult(input,{answer:'{"memories":[]}',citations:[],trace:[],runId:randomUUID()});
   }}});
   t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
-  const settings=node.lifecycle.settings();node.lifecycle.configure({...settings});
+  const settings=node.lifecycle.settings();await node.lifecycle.save({revision:node.configService.revision,settings:{...settings}});
   node.sources.register({id:'fixture-disabled-memory',name:'Generated',kind:'custom',deviceId:'fixture',platform:'import',retention:'archive'});
   await node.sources.upsert('fixture-disabled-memory',{externalId:'original',revision:'1',observedAt:'2026-09-20T00:00:00Z',text:'Generated independently readable original',kind:'message',layer:'original'});
   node.store.db.prepare("UPDATE memory_input_authorizations SET authorized=0 WHERE source_id='fixture-disabled-memory'").run();
   await node.materialOrganizer.tick();
   const material=node.materials.get(materialId('fixture-disabled-memory','original'))!;
   assert.equal(node.materialMemoryWork.readyForMemory(material.ref),true);
-  node.lifecycle.configure(settings);
+  await node.lifecycle.save({revision:node.configService.revision,settings});
   assert.equal(await node.sourcePipelines.drainMemory(node.memoryPipeline,true),0);assert.equal(calls,0);
   assert.equal(node.materials.list({query:'independently readable'}).items[0]?.id,material.id);
   const response=await node.app.inject({method:'POST',url:'/api/memory-jobs',headers:{authorization:'Bearer '+cfg.token},payload:{evidenceIds:node.materials.evidenceIds(material.ref)}});
@@ -117,7 +117,7 @@ test('an import with historical revisions completes and extracts only the newly 
   const imported=await until(async()=>node.imports.get(id),job=>job.status==='completed');
   assert.equal(imported.captureIds.length,2);assert.equal(node.sources.history(imported.sourceId,'same-object').length,2);
   assert.equal(imported.memoryJobId,undefined);assert.equal(seen.length,0);
-  const policy=node.lifecycle.settings();policy.extraction.minChanges=1;node.lifecycle.configure(policy);
+  const policy=node.lifecycle.settings();policy.extraction.minChanges=1;await node.lifecycle.save({revision:node.configService.revision,settings:policy});
   node.store.db.prepare("UPDATE memory_lifecycle_state SET json=json_set(json,'$.lastSuccess',0) WHERE id='extraction'").run();
   node.store.archive.aggregate(100);
   await node.lifecycle.tick();

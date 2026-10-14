@@ -16,4 +16,5 @@ function close(){closing=true;if(timer)clearTimeout(timer);store?.close();proces
 process.once('message',(options:{directory:string;options:ConstructorParameters<typeof Store>[1]})=>{
   try{store=new Store(options.directory,options.options);process.send?.({type:'ready'});tick();}catch{process.send?.({type:'error'});process.exit(1);}
 });
+process.on('message',(event:{type?:string;enabled?:boolean})=>{if(event.type==='content-encryption'&&typeof event.enabled==='boolean'&&store&&!closing){try{store.contentEncryption.setEnabled(event.enabled);}catch{process.send?.({type:'error'});}}});
 process.on('disconnect',close);process.on('SIGTERM',close);process.on('SIGINT',close);

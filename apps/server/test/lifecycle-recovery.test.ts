@@ -18,7 +18,7 @@ async function fixture(t:TestContext){
   // No provider is constructed or contacted; all source text is generated.
   const node=await buildApp(config,{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async()=>{calls++;throw new ProviderFailure({category:'permanent',code:'generated_semantic_failure'});}}});
   t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
-  const settings=node.lifecycle.settings();for(const id of ['consolidation','insights','working'] as const)settings[id].enabled=false;settings.extraction.minChanges=1;node.lifecycle.configure(settings);
+  const settings=node.lifecycle.settings();for(const id of ['consolidation','insights','working'] as const)settings[id].enabled=false;settings.extraction.minChanges=1;await node.lifecycle.save({revision:node.configService.revision,settings});
   const recordId=randomUUID();await node.store.ingest({id:recordId,deviceId:'fixture',deviceName:'Generated',platform:'import',capturedAt:'2026-09-27T00:00:00Z',source:'note',ocrText:text,durationMs:0});
   const save=(kind:'segment'|'semantic')=>{const id=kind==='segment'?'a'.repeat(64):'b'.repeat(64);node.store.archive.save(id,id,id,{kind,text,metadata:{complete:true,...(kind==='semantic'?{evidenceRanges:[{id:recordId,offset:0,length:text.length}]}:{})}},[{id:recordId,fingerprint:node.store.archive.fingerprint(recordId)!}],'fixture','1','fixture');return id;};
   const extraction=()=>node.lifecycle.view().extensions.find(extension=>extension.id==='extraction')!;
