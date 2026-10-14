@@ -97,9 +97,9 @@ class SourcesActivity : MoteActivity() {
                         list.addView(group, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceItem) })
                         group.addView(TextView(this).apply { text = source.name; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)) })
                         group.addView(TextView(this).apply { text = summary.removePrefix("\n${source.name}\n"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, 0, 0, moteDp(DesignTokens.spaceInline)) })
-                        group.addView(Button(this).apply { text = MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源"); setOnClickListener {
+                        group.addView(MoteUi.button(Button(this).apply { text = MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源"); setOnClickListener {
                             work(MoteI18n.text("正在保存来源设置…")) { localSources().save(source.copy(enabled = !source.enabled)); SourceWork.schedule(applicationContext, true) }
-                        } })
+                        } }, primary = !source.enabled))
                         if (source.kind == "local-files") group.addView(Button(this).apply { text = MoteI18n.text("重新授权或选择范围"); setOnClickListener { edit(source) } })
                         group.addView(Button(this).apply { text = MoteI18n.text("设置 · {0}", source.name); setOnClickListener { edit(source) } })
                     }

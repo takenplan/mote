@@ -207,7 +207,7 @@ internal object GeneratedWindowRendering {
             "rollout-folder-task" -> Triple("rollout-folder-task", "restriction", "收集哪些文件")
             "rollout-file-task-settings" -> Triple("rollout-file-task-settings", "content", "文件来源设置")
             "rollout-folder-task-settings" -> Triple("rollout-folder-task-settings", "content", "文件来源设置")
-            "rollout-populated-sources" -> Triple("rollout-populated-sources", "content", "Generated file source")
+            "rollout-populated-sources", "rollout-populated-sources-active" -> Triple(name, "content", "Generated file source")
             "rollout-file-original" -> Triple("rollout-file-original", "content", "原文与出处")
             "rollout-file-unavailable" -> Triple("rollout-file-unavailable", "error", "内容暂不可读取，原数据保留。")
             "rollout-app-rule-detail" -> Triple("rollout-app-rule-detail", "restriction", "规则配置与应用内容授权分开。修改只形成草稿，返回后保存生效；保存不会开始采集。")
