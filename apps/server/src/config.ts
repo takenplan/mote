@@ -159,8 +159,8 @@ export function configDocumentDomains(config?: Config): ConfigDomainRegistration
     }
     metadata(defaultValue, '');
     return { id, schema, defaultValue, restartRequired, fields,
-      resolve: value => resolveDomainSecrets(id, id === 'processing' ? processingWithDefaults(value, config?.media)
-        : id === 'diagnostics' && config && value && typeof value === 'object' ? { traceEnabled: config.agentTraceEnabled ?? config.profile === 'dev', ...value } : value),
+      resolve: (value, document) => resolveDomainSecrets(id, id === 'processing' ? processingWithDefaults(value, config?.media)
+        : id === 'diagnostics' && value && typeof value === 'object' ? { traceEnabled: config?.agentTraceEnabled ?? config?.profile === 'dev', maxBytes: defaultLogMaxBytes((document?.server as { profile?: string } | undefined)?.profile ?? config?.profile), ...value } : value),
     };
   };
   return [
@@ -231,6 +231,8 @@ function normalizedDocument(saved: Record<string, unknown>, resolved: Record<str
     }
   }
   restore(saved, result);
+  // Omission is the owner's profile-default selection, not an explicit numeric override.
+  if (!Object.hasOwn((saved.diagnostics ?? {}) as object, 'maxBytes')) delete (result.diagnostics as Record<string, unknown>).maxBytes;
   return result;
 }
 export function parseConfigDocument(raw: string, env: NodeJS.ProcessEnv = process.env): ConfigDocument {
@@ -260,7 +262,8 @@ export function configFromDocument(document: ConfigDocument, file: string, priva
   const configFile = resolve(file), baseDir = dirname(configFile);
   // Service.current() already contains effective credentials. Environment values remain literal after one expansion.
   const effective = options.resolvedDocument ? normalizedDocument(structuredClone(document), structuredClone(document)) : resolveConfigDocument(document);
-  const server = serverConfigSchema.parse(effective.server), storage = storageConfigSchema.parse(effective.storage), execution = executionConfigSchema.parse(effective.execution), diagnostics = diagnosticsConfigSchema.parse(effective.diagnostics);
+  const server = serverConfigSchema.parse(effective.server), storage = storageConfigSchema.parse(effective.storage), execution = executionConfigSchema.parse(effective.execution);
+  const diagnostics = diagnosticsConfigSchema.parse({ ...(effective.diagnostics as object), maxBytes: logRetentionFromDocument(effective).maxBytes });
   const models = modelDomainSchema.parse(effective.models), plugins = pluginsConfigSchema.parse(effective.plugins), updates = updatesConfigSchema.parse(effective.updates);
   const connectors = connectorsConfigSchema.parse(effective.connectors), media = mediaConfigSchema.parse(effective.media), model = models.deployment;
   const initializeCredentials = options.initializeCredentials !== false;

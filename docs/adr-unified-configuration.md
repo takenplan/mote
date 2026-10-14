@@ -112,6 +112,12 @@ The deliberate CLI default-adoption command now edits YAML with revision/CAS
 and still requires a normal restart. The legacy env-based adoption path is
 superseded by the single-file authority above. Server startup, CLI preflight and
 the native supervisor share the same profile-aware capacity resolver.
+The saved document preserves omission through watcher reloads and unrelated
+settings saves; the diagnostics domain resolves its effective capacity against
+the same document's profile. Incremental saves merge into raw domain values so
+derived defaults and credential references do not become explicit settings.
+Explicit values equal to the default remain explicit. Whole-domain replacement
+continues to honor every value supplied by the editor.
 
 The [Ask evidence decision](adr-ask-evidence-quality-and-simple-context.md)
 continues to remove estimated evidence-reading quotas and automatic capacity

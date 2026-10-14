@@ -12,6 +12,19 @@ import { command, cli, updateEnvironment, initializeFixture, request, note, capt
 const directory = await mkdtemp(join(tmpdir(), 'mote-profiles-fixture-'));
 const home = join(directory, 'profiles'), restoreHome = join(directory, 'restored');
 const profiles = [];
+// Observe the actual file watcher through its authenticated view before checking
+// idempotence. An immediate file read missed the normalization rewrite regression.
+async function settledConfiguration(p) {
+  const deadline = Date.now() + 10000; let previous, stable = 0;
+  while (Date.now() < deadline) {
+    const view = await request(p, '/api/configuration'), raw = await readFile(p.configFile, 'utf8');
+    const signature = JSON.stringify({ revision: view.revision, raw });
+    stable = signature === previous ? stable + 1 : 0; previous = signature;
+    if (stable >= 8) return { view, raw, profile: await loadProfile(profilePaths(p.profile, p.home)) };
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  throw Error('Generated profile configuration watcher did not settle');
+}
 try {
   let dev = await initializeFixture(home, 'dev'), test = await initializeFixture(home, 'test'); profiles.push(dev, test);
   assert.notEqual(dev.env.MOTE_TOKEN, test.env.MOTE_TOKEN); assert.notEqual(dev.dataDir, test.dataDir); assert.notEqual(dev.project, test.project);
@@ -54,10 +67,33 @@ try {
   const adoption = JSON.parse((await cli(home, 'dev', 'log-retention', ['--defaults'])).stdout);
   assert.deepEqual(adoption, { profile: 'dev', changed: true, before: { maxFileMiB: 2, maxFiles: 3 }, after: { maxFileMiB: 100, maxFiles: 3 }, restartRequired: true });
   assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 2 * 1024 * 1024);
+  const adopted = await settledConfiguration(dev);
+  assert.equal(Object.hasOwn(adopted.profile.savedDocument.diagnostics, 'maxBytes'), false, 'The running watcher must preserve the profile-default omission');
+  assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiBSource, 'profile-default');
+  const repeatedAdoption = JSON.parse((await cli(home, 'dev', 'log-retention', ['--defaults'])).stdout);
+  assert.deepEqual(repeatedAdoption, { profile: 'dev', changed: false, before: { maxFileMiB: 100, maxFiles: 3 }, after: { maxFileMiB: 100, maxFiles: 3 }, restartRequired: true });
+  const repeated = await settledConfiguration(dev);
+  assert.equal(repeated.raw, adopted.raw, 'Repeated adoption after watcher acceptance must not rewrite YAML');
+  assert.equal(repeated.view.revision, adopted.view.revision, 'Repeated adoption must not change the revision');
+  const execution = repeated.view.domains.find(domain => domain.id === 'execution');
+  await request(dev, '/api/configuration/execution', { method: 'PUT', body: { revision: repeated.view.revision, value: { ...execution.saved, agentConcurrency: execution.saved.agentConcurrency + 1 } } });
+  const unrelatedSave = await settledConfiguration(dev);
+  assert.equal(unrelatedSave.view.revision, repeated.view.revision + 1);
+  assert.equal(Object.hasOwn(unrelatedSave.profile.savedDocument.diagnostics, 'maxBytes'), false, 'An unrelated online save must preserve profile-default provenance');
+  assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiBSource, 'profile-default');
+  assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 2 * 1024 * 1024, 'Adoption and unrelated hot edits must leave capacity restart-required');
   await cli(home, 'dev', 'stop'); await cli(home, 'dev', 'start');
   dev = await loadProfile(profilePaths('dev', home));
   assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 100 * 1024 * 1024);
-  console.info('[profiles] DEV 100 MiB/test 2 MiB defaults, legacy numeric preservation and explicit adoption across real restart passed');
+  // A number equal to the default is still a deliberate explicit override.
+  await updateProfileConfiguration(dev, document => { document.diagnostics.maxBytes = 100 * 1024 * 1024; });
+  const explicitDefault = await settledConfiguration(dev), explicitExecution = explicitDefault.view.domains.find(domain => domain.id === 'execution');
+  await request(dev, '/api/configuration/execution', { method: 'PUT', body: { revision: explicitDefault.view.revision, value: { ...explicitExecution.saved, agentConcurrency: explicitExecution.saved.agentConcurrency + 1 } } });
+  const explicitSaved = await settledConfiguration(dev);
+  assert.equal(explicitSaved.profile.savedDocument.diagnostics.maxBytes, 100 * 1024 * 1024);
+  assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiBSource, 'explicit');
+  dev = explicitSaved.profile;
+  console.info('[profiles] DEV defaults, explicit limits, settled watcher adoption/idempotence, unrelated online save and real restart passed');
   const beforeConfiguration = await request(dev, '/api/configuration');
   await setPublicUrl(dev, 'https://generated-profile.invalid');
   const configurationDeadline = Date.now() + 10000; let changedConfiguration;

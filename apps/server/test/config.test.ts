@@ -76,6 +76,42 @@ test('retention saves validate profile capacity together and expose restart meta
   assert.equal(configDocumentDomains().find(domain => domain.id === 'diagnostics')?.fields?.find(field => field.path === 'maxBytes')?.effect, 'restart');
 });
 
+for (const setting of [undefined, 2 * 1024 * 1024, 100 * 1024 * 1024]) {
+  test(`configuration saves preserve ${setting === undefined ? 'profile-default' : 'explicit ' + setting} log capacity provenance`, async t => {
+    const { file, write } = fixture(t, 'log-provenance');
+    write({ server: { profile: 'dev' }, diagnostics: setting === undefined ? {} : { maxBytes: setting } });
+    const config = configFromFile(file, { initializeCredentials: false });
+    const service = new ConfigService({ path: file, watch: false, initialDocument: config.configuration.document });
+    registerBuiltinDomains(service, config); t.after(() => service.close()); await service.initialize();
+    const capacity = setting ?? 100 * 1024 * 1024;
+    const assertProvenance = () => {
+      for (const document of [service.document(), readConfigDocument(file)]) {
+        assert.equal(Object.hasOwn(document.diagnostics as object, 'maxBytes'), setting !== undefined);
+        if (setting !== undefined) assert.equal((document.diagnostics as { maxBytes: number }).maxBytes, setting);
+      }
+      assert.equal(service.saved<{ maxBytes: number }>('diagnostics').maxBytes, capacity);
+      assert.equal(service.current<{ maxBytes: number }>('diagnostics').maxBytes, capacity);
+    };
+    await service.update('execution', { agentConcurrency: 9 }, service.revision); assertProvenance();
+    await service.update('diagnostics', { debug: true }, service.revision); assertProvenance();
+    const before = readFileSync(file, 'utf8'), revision = service.revision;
+    await service.update('diagnostics', { debug: true }, revision);
+    assert.equal(service.revision, revision); assert.equal(readFileSync(file, 'utf8'), before);
+    if (setting === undefined) {
+      await service.update('server', { profile: 'test' }, service.revision);
+      assert.equal(service.saved<{ maxBytes: number }>('diagnostics').maxBytes, 2 * 1024 * 1024);
+      assert.equal(service.current<{ maxBytes: number }>('diagnostics').maxBytes, capacity, 'profile and capacity changes remain pending restart');
+      assert.equal(configFromFile(file, { initializeCredentials: false }).logMaxBytes, 2 * 1024 * 1024);
+      assert.equal(Object.hasOwn(service.document().diagnostics as object, 'maxBytes'), false);
+    } else if (setting === 100 * 1024 * 1024) {
+      const revision = service.revision;
+      await assert.rejects(service.update('server', { profile: 'test' }, revision));
+      assert.equal(service.revision, revision); assertProvenance();
+      assert.equal(service.saved<{ profile: string }>('server').profile, 'dev');
+    }
+  });
+}
+
 test('selected YAML ignores ordinary ambient environment variables and old environment files', t => {
   const { file, write, root } = fixture(t);
   write({ server: { port: 48123 }, execution: { agentConcurrency: 6 }, models: { deployment: { model: 'file-model' } } });

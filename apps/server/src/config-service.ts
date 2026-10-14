@@ -28,8 +28,8 @@ export interface ConfigDomainRegistration<T = unknown> {
   defaultValue: unknown;
   fields?: ConfigFieldMetadata[];
   restartRequired?: boolean;
-  /** Resolve only credentials declared by the domain; the raw file retains references. */
-  resolve?(raw: unknown): unknown;
+  /** Resolve declared credentials and contextual defaults without materializing them in the raw file. */
+  resolve?(raw: unknown, document?: Readonly<ConfigDocument>): unknown;
   prepare?(next: T, previous: T): Promise<PreparedConfigChange> | PreparedConfigChange;
 }
 type FileSystem = Pick<typeof fs, 'open' | 'mkdir' | 'rename' | 'unlink'>;
@@ -149,7 +149,7 @@ export class ConfigService {
       if (this.domains.has(id)) throw new ConfigServiceError('config_conflict');
       const entry: RegisteredDomain = { ...domain, id, documentPath: ['plugins', 'configuration', domain.id] };
       const raw = this.state(), input = this.domainRaw(raw, entry) ?? entry.defaultValue;
-      const value = this.parseDomain(entry, input);
+      const value = this.parseDomain(entry, input, raw);
       let candidate: PreparedConfigChange | undefined, applied = false;
       try {
         candidate = await entry.prepare?.(clone(value), clone(value));
@@ -207,17 +207,17 @@ export class ConfigService {
   }
   saved<T = unknown>(id: string): T {
     const raw = this.state(), domain = this.domains.get(id); if (!domain) throw new ConfigServiceError('config_invalid');
-    const value = this.parseDomain(domain, this.domainRaw(raw, domain));
-    return (id === 'plugins' ? this.pluginValues(value, child => this.parseDomain(child, this.domainRaw(raw, child))) : value) as T;
+    const value = this.parseDomain(domain, this.domainRaw(raw, domain), raw);
+    return (id === 'plugins' ? this.pluginValues(value, child => this.parseDomain(child, this.domainRaw(raw, child), raw)) : value) as T;
   }
   private serialize<T>(work: () => Promise<T>): Promise<T> {
     if (this.closing || this.unavailable) return Promise.reject(new ConfigServiceError('config_unavailable'));
     const result = this.tail.then(work); this.tail = result.then(() => {}, () => {}); return result;
   }
-  private parseDomain(domain: ConfigDomainRegistration, raw: unknown): unknown {
+  private parseDomain(domain: ConfigDomainRegistration, raw: unknown, document?: ConfigDocument): unknown {
     try {
       let value = clone(raw);
-      if (domain.resolve) value = domain.resolve(value);
+      if (domain.resolve) value = domain.resolve(value, document ? clone(document) : undefined);
       else for (const field of domain.fields ?? []) if (field.sensitive) value = editPath(value, field.path.split('.'), resolveSensitive);
       return domain.schema.parse(value);
     }
@@ -230,7 +230,7 @@ export class ConfigService {
     for (const domain of this.domains.values()) {
       const value = clone(this.domainRaw(next, domain) ?? domain.defaultValue);
       this.assignRaw(next, domain, value);
-      values.set(domain.id, this.parseDomain(domain, value));
+      values.set(domain.id, this.parseDomain(domain, value, next));
     }
     if (values.has('plugins')) values.set('plugins', this.pluginValues(values.get('plugins'), domain => clone(values.get(domain.id))));
     if (this.validateDocument) {
@@ -405,7 +405,7 @@ export class ConfigService {
         const state = this.state(); if (expectedRevision !== state.revision) throw new ConfigServiceError('config_conflict');
         const next = clone(state);
         for (const [id, patch] of Object.entries(patches)) {
-          const domain = this.domains.get(id)!, saved = this.saved(id), value = replace ? clone(patch) : merge(saved, patch);
+          const domain = this.domains.get(id)!, saved = this.saved(id), value = replace ? clone(patch) : merge(this.domainRaw(state, domain) ?? domain.defaultValue, patch);
           if (id === 'plugins' && object(patch) && Object.hasOwn(patch, 'configuration')) throw new ConfigServiceError('config_invalid');
           this.assignRaw(next, domain, preserveReferences(this.domainRaw(state, domain), saved, value));
         }
