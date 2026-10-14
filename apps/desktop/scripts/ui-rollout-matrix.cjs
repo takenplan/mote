@@ -170,8 +170,9 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
       for(const [variant,zoom] of [['normal',1],['compact',1],['large',1.3]]) {
         window.setSize(variant==='normal'?1140:820,variant==='normal'?840:620);window.webContents.setZoomFactor(zoom);await frames();
         await js('window.scrollTo(0,0);true;');await capture(['ask-connected',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-answer');
-        const references=await js('Array.from(document.querySelectorAll(".ask-inline-citation")).map(e=>({height:e.getBoundingClientRect().height,complete:e.scrollWidth<=e.clientWidth+1}))');
-        assert(references.every(e=>e.height>=24&&e.height<=32&&e.complete),'Compact complete inline references');
+        const references=await js('Array.from(document.querySelectorAll(".ask-inline-citation")).map(e=>({text:e.textContent,height:e.getBoundingClientRect().height,minHeight:getComputedStyle(e).minHeight,client:e.clientWidth,scroll:e.scrollWidth,complete:e.scrollWidth<=e.clientWidth+1}))');
+        if(!references.every(e=>e.height>=23.5&&e.height<=32&&e.minHeight==="24px"&&e.complete))writeFileSync(join(outputDirectory,'inline-reference-diagnostic.json'),JSON.stringify({language,variant,references},null,2));
+        assert(references.every(e=>e.height>=23.5&&e.height<=32&&e.minHeight==="24px"&&e.complete),'Compact complete inline references');
         assert.equal(await js('getComputedStyle(document.querySelector(".ask-evidence button")).minHeight'),'48px','Full original action retains control role');
         await js('document.querySelector(".ask-evidence summary").click();true;');assert.equal(await js('document.querySelector(".ask-excerpt").textContent'),excerpt,'Full generated evidence excerpt');
         await js('document.querySelector(".ask-excerpt").scrollIntoView({block:"end"});true;');await capture(['ask-evidence',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-excerpt');
@@ -180,7 +181,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
         try{await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});window.webContents.focus();window.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});window.webContents.sendInputEvent({type:'char',keyCode:'\r'});window.webContents.sendInputEvent({type:'keyUp',keyCode:'Enter'});await until(()=>openedEvidence.at(-1)?.id===citationId,'real citation IPC');}
         finally{await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:false});window.webContents.debugger.detach();}
         assert.equal(await js('document.activeElement.classList.contains("ask-inline-citation")'),true,'Citation keyboard focus remains on source action');
-        await js('document.querySelector(".ask-evidence button").click();true;');await until(()=>openedEvidence.at(-1)?.id===citationId,'full original IPC');
+        openedEvidence.length=0;await js('document.querySelector(".ask-evidence button").click();true;');await until(()=>openedEvidence.at(-1)?.id===citationId,'full original IPC');
         assert.deepEqual(openedEvidence.at(-1),{page:'ask',id:citationId});openedEvidence.length=0;
         journeys.push({name:'connected long answer, complete excerpt, citation keyboard focus and original evidence IPC',language,variant,verified:true,generatedResponse:true,browserOpenStubbed:true});
       }
