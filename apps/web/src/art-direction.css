@@ -349,3 +349,15 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
 .file-diarization-fields label { display:grid; gap:var(--mote-space-inline); min-width:0; }
 .file-diarization-fields input,.file-diarization-fields select { width:100%; min-width:0; }
 .file-diarization-fields button { justify-self:start; }
+
+.lark-disconnect-confirmation { display:block; }
+.lark-disconnect-confirmation>.lark-buttons { margin-bottom:0; }
+.lark-disconnect-confirmation>.lark-buttons>.button { flex:0 0 auto; }
+
+.calendar-review-fields { min-width:0; margin:0; padding:var(--mote-space-item); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); }
+.recording-scope-form .lark-range label { min-width:0; }
+.recording-scope-form .lark-range input { width:100%; min-width:0; }
+@media(max-width:760px) {
+ .recording-scope-form .lark-range { grid-template-columns:minmax(0,1fr); }
+ .recording-scope-form .lark-range label:last-child { grid-column:auto; }
+}
