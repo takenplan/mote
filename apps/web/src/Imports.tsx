@@ -110,7 +110,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
     void mutate(id,async signal=>{await api.raw('/api/imports/'+encodeURIComponent(id),{method:'DELETE',signal});},undefined,()=>{setItems(current=>current.filter(item=>item.id!==id));if(selectedRef.current===id){setSelected('');setCreating(true);}setDeleteConfirm(current=>current===id?'':current);setRevision(value=>value+1);});
   }
   return <section className="imports-page" aria-busy={loading}>
-    <div className="page-heading split-heading"><div><div className="eyebrow">{moteText("让已有资料成为可用的上下文")}</div><h1>{moteText("导入")}</h1><p>{moteText("上传后保留原件。解析结果明确可靠且无歧义时自动保存，否则先预览并确认。")}</p></div><button className="button primary" onClick={()=>{setCreating(true);setSelected('');setError('');}}><Plus size={16}/>{moteText("新建导入")}</button></div>
+    <div className="page-heading split-heading"><div><div className="eyebrow">{moteText("让已有资料成为可用的上下文")}</div><h1>{moteText("导入")}</h1><p>{moteText("上传后保留原件。解析结果明确可靠且无歧义时自动保存，否则先预览并确认。")}</p></div><button className="button" onClick={()=>{setCreating(true);setSelected('');setError('');}}><Plus size={16}/>{moteText("新建导入")}</button></div>
     {loadError&&<div className="error-banner" role="alert">{loadError}<button className="text-button" onClick={()=>setRevision(v=>v+1)}>{moteText("刷新状态")}</button></div>}
     <div className="workspace-layout">
       <aside className="workspace-list import-queue-list" aria-label={moteText("导入队列")}>

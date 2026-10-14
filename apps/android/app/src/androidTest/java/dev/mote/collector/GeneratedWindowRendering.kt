@@ -158,7 +158,7 @@ internal object GeneratedWindowRendering {
         }
         return evidence
     }
-    fun save(activity: Activity, directory: File, name: String, overlays: List<View> = emptyList(), includeScrollEvidence: Boolean = true, ownedGuideBuffer: File? = null) {
+    fun save(activity: Activity, directory: File, name: String, overlays: List<View> = emptyList(), includeScrollEvidence: Boolean = true, ownedGuideBuffer: File? = null, includeHorizontalEvidence: Boolean = true) {
         require(activity.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
         require(InstrumentationRegistry.getArguments().getString("uiIterationFixture") == "true")
         require(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
@@ -296,6 +296,62 @@ internal object GeneratedWindowRendering {
         } finally { bitmap.recycle() }
         if (includeScrollEvidence && InstrumentationRegistry.getArguments().getString("uiScrollEvidence") == "true")
             saveScrollEvidence(activity, directory, name, overlays)
+        if (includeHorizontalEvidence && InstrumentationRegistry.getArguments().getString("uiHorizontalEvidence") == "true")
+            saveHorizontalEvidence(activity, directory, name, overlays)
+    }
+
+    /** Actual single-line generated values at native horizontal offsets, with no text/focus mutation. */
+    private fun saveHorizontalEvidence(activity: Activity, canonicalDirectory: File, name: String, overlays: List<View>) {
+        require(activity.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
+        require(InstrumentationRegistry.getArguments().getString("uiIterationFixture") == "true")
+        require(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
+        val variant = InstrumentationRegistry.getArguments().getString("uiIterationVariant", "default")!!
+        val targetWindows = if (overlays.isEmpty()) listOf(activity.window.decorView) else overlays.takeLast(1)
+        val directory = File(activity.filesDir, "ui-horizontal-evidence/$variant/$name/${canonicalDirectory.parentFile?.name}-${canonicalDirectory.name}").apply { mkdirs() }
+        val evidence = JSONArray()
+        for ((index, field) in targetWindows.flatMap(::views).filterIsInstance<android.widget.EditText>().filter { it.isShown }.withIndex()) {
+            val value = field.text.toString()
+            val layout = field.layout ?: continue
+            if (value.isBlank() || value.contains('\n') || field.maxLines != 1 || layout.lineCount != 1 ||
+                field.transformationMethod is android.text.method.PasswordTransformationMethod) continue
+            val visible = Rect()
+            if (!field.getGlobalVisibleRect(visible) || visible.width() != field.width || visible.height() != field.height) continue
+            val viewport = field.width - field.compoundPaddingLeft - field.compoundPaddingRight
+            if (viewport <= 0) continue
+            val end = (kotlin.math.ceil(layout.getLineWidth(0).toDouble()).toInt() - viewport).coerceAtLeast(0)
+            if (end == 0) continue
+            val originalX = field.scrollX; val originalY = field.scrollY
+            val selectionStart = field.selectionStart; val selectionEnd = field.selectionEnd
+            val focused = activity.currentFocus
+            val offsets = mutableListOf(0)
+            val step = (viewport - activity.moteDp(32)).coerceAtLeast(1)
+            var next = step
+            while (next < end) { offsets += next; next += step }
+            offsets += end
+            val frames = JSONArray()
+            try {
+                for (offset in offsets.distinct()) {
+                    field.scrollTo(offset, originalY)
+                    check(field.scrollX == offset && field.text.toString() == value) { "Native value/offset changed unexpectedly for $name" }
+                    val frameDirectory = File(directory, "field-$index-x-$offset").apply { mkdirs() }
+                    save(activity, frameDirectory, name, overlays, includeScrollEvidence = false, includeHorizontalEvidence = false)
+                    val metadataFile = File(frameDirectory, "$name.json")
+                    metadataFile.writeText(JSONObject(metadataFile.readText()).put("horizontalEvidence", JSONObject()
+                        .put("canonicalScene", name).put("canonicalDirectory", canonicalDirectory.path).put("fieldIndex", index)
+                        .put("originalValue", value).put("hint", field.hint?.toString()).put("scrollX", offset)
+                        .put("viewportWidth", viewport).put("lineWidth", layout.getLineWidth(0)).put("maximumScrollX", end)
+                        .put("textReplaced", false).put("selectionChanged", false).put("focusChanged", false)).toString(2))
+                    frames.put(JSONObject().put("directory", frameDirectory.name).put("scrollX", offset))
+                }
+            } finally { field.scrollTo(originalX, originalY) }
+            check(field.text.toString() == value && field.selectionStart == selectionStart && field.selectionEnd == selectionEnd &&
+                activity.currentFocus === focused && field.scrollX == originalX && field.scrollY == originalY) { "Horizontal evidence must preserve the exact native editor state" }
+            evidence.put(JSONObject().put("fieldIndex", index).put("originalValue", value).put("originalScrollX", originalX)
+                .put("selectionStart", selectionStart).put("selectionEnd", selectionEnd).put("focusPreserved", true)
+                .put("viewportWidth", viewport).put("maximumScrollX", end).put("frames", frames))
+        }
+        File(directory, "coverage.json").writeText(JSONObject().put("canonicalScene", name).put("fields", evidence)
+            .put("automaticVisualAcceptance", false).toString(2))
     }
 
     /** Real scroll positions in unchanged app windows; separate from the canonical first frames. */

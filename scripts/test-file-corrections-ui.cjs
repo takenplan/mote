@@ -57,9 +57,14 @@ async function run(){
    if(presentationOnly&&width===1440&&mode!=='unknown'){
     await file.js("(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.scrollIntoView({block:'center',behavior:'instant'});select.focus();return true})()");
     check('native count mode owns focus before '+locale+'/'+mode,await file.js("(()=>{const s=document.querySelectorAll('.file-diarization-fields select')[1],r=s.getBoundingClientRect();return document.activeElement===s&&r.width>0&&r.height>0})()"));
-    file.wc.sendInputEvent({type:'keyDown',keyCode:'Down'});file.wc.sendInputEvent({type:'keyUp',keyCode:'Down'});
+    // A closed macOS menu-list supports native typeahead without opening an OS popup.
+    // Separate choices need the normal typeahead reset interval; this is input timing, not a layout fallback.
+    await file.js("(()=>{window.__fileNativeCountEvents=[];const s=document.querySelectorAll('.file-diarization-fields select')[1];s.addEventListener('change',event=>window.__fileNativeCountEvents.push({trusted:event.isTrusted,value:event.target.value}),{once:true});return true})()");
+    if(mode==='range')await delay(1200);
+    const prefix=await file.js(`([...document.querySelectorAll('.file-diarization-fields select')[1].options].find(option=>option.value===${JSON.stringify(mode)}).textContent.trim()[0])`);
+    await file.wc.debugger.sendCommand('Input.dispatchKeyEvent',{type:'char',text:prefix});
     await until(()=>file.js(`document.querySelectorAll('.file-diarization-fields select')[1].value===${JSON.stringify(mode)}`),'native keyboard count mode '+locale+'/'+mode);
-    check('native keyboard selects count mode '+locale+'/'+mode,true);
+    const nativeEvents=await file.js('window.__fileNativeCountEvents');check('native keyboard selects count mode '+locale+'/'+mode,nativeEvents.some(event=>event.trusted&&event.value===mode));report.nativeCountGestures??=[];report.nativeCountGestures.push({locale,mode,prefix,method:'Chromium trusted native typeahead',resetMs:mode==='range'?1200:0,nativeEvents});
    }else await file.js(`(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.value=${JSON.stringify(mode)};select.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
    await until(()=>file.js(`document.querySelectorAll('.file-diarization-fields input[type=number]').length===${mode==='unknown'?0:mode==='exact'?1:2}`),'original count fields');
    const appearance=await file.js('('+diarizationPresentation.toString()+')()');

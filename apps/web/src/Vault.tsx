@@ -108,7 +108,7 @@ export function Vault({ api, status, refresh, disconnect, embedded = false, }: {
           <div className="storage-note">
             <Layers3 size={16}/>
             <p>
-              {moteText("相同影像共享一份存储，每次采样仍保留独立观察记录。")}{storage.imageCaptures !== undefined &&
+              {moteText("相同影像共享一份存储，每次采样仍保留独立观察记录。")}{' '}{storage.imageCaptures !== undefined &&
             moteText("已复用 {0} 次影像。", Math.max(0, storage.imageCaptures - storage.blobs))}
             </p>
           </div>

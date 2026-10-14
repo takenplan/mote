@@ -380,3 +380,63 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
  .file-diarization-selection { display:block; }
  .file-diarization-fields>.button { max-width:100%; overflow-wrap:normal; word-break:normal; }
 }
+
+/* Keep established captions and field lanes readable in constrained task surfaces. */
+.activity-centre>.page-heading>div { min-width:0; }
+.activity-centre>.page-heading>.button { flex-shrink:0; overflow-wrap:normal; word-break:normal; }
+@media(min-width:761px) {
+ .content[data-page="devices"] .workspace-tool-select select { max-width:260px; }
+}
+@media(max-width:760px) {
+ .capture-session-filters { display:grid; grid-template-columns:minmax(0,1fr); }
+ .capture-session-filters.filter-bar label { display:grid; width:100%; min-width:0; gap:var(--mote-space-inline); }
+ .capture-session-filters.filter-bar input,.capture-session-filters.filter-bar select { width:100%; min-width:0; }
+ .capture-session-filters>.button { justify-self:start; }
+ .activity-centre>.section-tabs { flex-wrap:wrap; }
+ .activity-centre>.section-tabs button { flex:1 1 120px; overflow-wrap:normal; word-break:normal; }
+ .coding-receipt-summary,.coding-uploads>.panel { padding:var(--mote-space-item); }
+ .coding-uploads dl { grid-template-columns:minmax(0,1fr); gap:var(--mote-space-inline); }
+ .coding-uploads dd { text-align:start; margin-block-end:var(--mote-space-item); }
+ .coding-uploads>.panel>.button { max-width:100%; white-space:normal; overflow-wrap:normal; word-break:normal; }
+}
+
+/* Reuse the established action rows, navigation selection, and labelled form rhythm. */
+.todos-panel>h2 { margin-block:0 var(--mote-space-inline); }
+.todo-form label { display:grid; min-width:0; gap:var(--mote-space-inline); }
+.todo-form input { width:100%; min-width:0; }
+.todo-form>.button { align-self:end; }
+.conversation-delete-confirm>p { margin:0; }
+.conversation-delete-confirm>.source-toolbar { margin-block:var(--mote-space-item) 0; }
+.transfer-action .button { font-size:var(--mote-font-action); }
+@media(max-width:760px) {
+ .todo-form { display:grid; grid-template-columns:minmax(0,1fr); }
+ .todo-form>.button { justify-self:start; }
+ .todos-panel>.section-tabs { flex-wrap:wrap; }
+ .todos-panel>.section-tabs button { flex:1 1 120px; overflow-wrap:normal; word-break:normal; }
+ .action-filters button { flex:1 1 120px; overflow-wrap:normal; word-break:normal; }
+ .usage-tabs button { flex:1 1 120px; overflow-wrap:normal; word-break:normal; }
+}
+
+/* Captions follow constrained consumer lanes as well as compact windows. */
+.model-selector { container-type:inline-size; container-name:model-selector; flex:1 1 460px; min-width:0; }
+@container model-selector (max-width:520px) {
+ .model-selector-selection { display:block; flex-basis:100%; min-width:0; width:100%; white-space:normal; overflow-wrap:anywhere; font-size:var(--mote-font-support); }
+}
+.memory-integration { container-type:inline-size; container-name:memory-integration; }
+.memory-integration-selection { display:none; }
+@container memory-integration (max-width:320px) {
+ .memory-integration-selection { display:block; white-space:normal; overflow-wrap:anywhere; font-size:var(--mote-font-support); color:var(--mote-muted); }
+}
+.memory-detail { container-type:inline-size; container-name:memory-detail; }
+@container memory-detail (max-width:320px) {
+ .section-heading { align-items:flex-start; flex-direction:column; }
+ .section-heading>.button { max-width:100%; overflow-wrap:normal; word-break:normal; }
+ .status-label { overflow-wrap:normal; word-break:normal; }
+}
+
+/* Keep the reader Close focus ring clear of the full source caption. */
+.evidence-heading { gap:var(--mote-space-inline); }
+
+/* Use the shared panel rhythm instead of the legacy large empty-state inset. */
+.todos-panel,.actions-page .actions-empty { padding:var(--mote-space-panel); }
+.failed-answer .button { margin-block-start:var(--mote-space-item); }
