@@ -123,6 +123,79 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     writeFileSync(join(outputDirectory,'mask-probe.json'),JSON.stringify(probe,null,2));await capture('privacy-mask-probe','privacy');
     assert.equal(probe.groupNamespace,'http://www.w3.org/2000/svg','Mask group stays in SVG namespace');assert.equal(probe.rectOwnerSvg,'mask-preview','Configured mask paints inside actual SVG');assert(probe.rectBounds.width>1&&probe.rectBounds.height>1,'Configured mask has actual visible bounds');return finish();
   }
+  if(process.env.MOTE_UI_ROLLOUT_ROLES==='1') {
+    // Explicit handler roles, not semantic label inference. These generated
+    // platform adapters prevent enumerating or reading real agents/calendars.
+    const calls=[];
+    for(const [channel,response] of [
+      ['mote:coding-agents',[{provider:'codex',name:'Generated Codex',path:'/generated/codex',available:true}]],
+      ['mote:calendar-authorize',[{id:'generated-calendar',title:'Generated calendar'}]],
+      ['mote:source-coding',undefined],['mote:source-calendar',undefined]
+    ]) { ipcMain.removeHandler(channel);ipcMain.handle(channel,(_event,...args)=>{calls.push({channel,args});return response;}); }
+    const reference=JSON.parse(readFileSync(join(repo,'.mote/ui-rollout/mac/canonical-final/rollout-manifest.json'),'utf8'));
+    const files=spawnSync('git',['ls-files','apps/desktop/src','apps/desktop/native','packages/shared/src','packages/shared/design-tokens.json'],{cwd:repo,encoding:'utf8'}).stdout.trim().split('\n');
+    const current=Object.fromEntries(files.map(f=>[f,digest(join(repo,f))]));
+    const referenceSources=Object.fromEntries(files.map(f=>{const blob=spawnSync('git',['show',reference.parentCommit+':'+f],{cwd:repo});assert.equal(blob.status,0);return[f,createHash('sha256').update(blob.stdout).digest('hex')];}));
+    const changedSources=files.filter(f=>current[f]!==referenceSources[f]);
+    const changedBuild=Object.keys(buildIdentity).filter(f=>buildIdentity[f]!==reference.buildIdentity[f]);
+    assert.deepEqual(changedSources,['apps/desktop/src/index.html','apps/desktop/src/sync-history-ui.ts','apps/desktop/src/ui.ts'],'Reviewed markup/receipt role, mask caption and formatter deltas only');
+    assert.deepEqual(changedBuild,['ui-bundle.js','index.html'],'Reviewed renderer deltas only');
+    assert.deepEqual(nativeIdentity,reference.nativeIdentity,'Native inputs unchanged');
+    fixtureMetadata.roleOnly=true;
+    fixtureMetadata.unchangedReferenceProducer=reference.parentCommit;
+    fixtureMetadata.sourceEquivalence={current,reference:referenceSources,changedSources,changedBuild,referenceBuild:reference.buildIdentity};
+    for(const language of ['zh-CN','en']) {
+      window.webContents.setZoomFactor(1);await changeLanguage(language);
+      for(const [variant,width,height,zoom] of [['normal',1140,840,1],['compact',820,620,1],['large',820,620,1.3]]) {
+        window.setSize(width,height);window.webContents.setZoomFactor(zoom);
+        const condition=(language==='en'?'en':'zh')+'-'+variant;
+        await js('localStorage.removeItem("mote-desktop-collection-reviewed");true;');
+        const reload=new Promise(r=>window.webContents.once('did-finish-load',r));window.webContents.reload();await reload;await navigate('screen');await ready('screen');
+        assert.equal(await js('!document.querySelector("#setup-prompt").hidden&&document.querySelector("#setup-primary").classList.contains("secondary")'),true,'First-use scope chooser uses secondary role');
+        await js('window.scrollTo(0,0);true;');await capture('setup-role-'+condition+'-top','screen');
+        await js('window.scrollTo(0,document.documentElement.scrollHeight);true;');await capture('setup-role-'+condition+'-end','screen');
+        await js('document.querySelector("#setup-primary").click();true;');await ready('privacy');
+        await js('document.querySelector("#workspace-back").click();true;');await ready('screen');
+        assert.equal(await js('!document.querySelector("#collection-workbench").hidden'),true,'Chooser returns to original screen task');
+        await navigate('ask');await ready('ask');
+        assert.equal(await js('document.querySelector("#ask-disconnected [data-nav=connection]").classList.contains("secondary")'),true,'Offline Ask settings navigation is secondary');
+        await js('window.scrollTo(0,0);true;');await capture('ask-role-'+condition+'-top','ask');
+        await js('window.scrollTo(0,document.documentElement.scrollHeight);true;');await capture('ask-role-'+condition+'-end','ask');
+        await js('document.querySelector("#ask-disconnected [data-nav=connection]").click();true;');await ready('connection');
+        await js('document.querySelector("#workspace-back").click();true;');await ready('ask');
+        await navigate('sources');await ready('sources');
+        await js('document.querySelector("#source-agent-discover").closest("details").open=true;document.querySelector("#source-agent-discover").click();true;');
+        await until(()=>js('!document.querySelector("#source-agent-choice").hidden&&!document.querySelector("#source-agent-add").disabled'),'generated agent choices');
+        assert.equal(await js('document.querySelector("#source-agent-add").classList.contains("primary")'),true,'Actual selected agent collection is primary');
+        await js('document.querySelector("#source-agent-add").closest(".actions").scrollIntoView({block:"end",behavior:"instant"});true;');await capture('source-agent-role-'+condition,'sources');
+        await js('document.querySelector("#source-calendar-connect").click();true;');
+        await until(()=>js('!document.querySelector("#source-calendars").hidden&&!document.querySelector("#source-calendar-add").disabled'),'generated calendar choices');
+        assert.equal(await js('document.querySelector("#source-calendar-add").classList.contains("primary")'),true,'Actual selected calendar sync is primary');
+        await js('document.querySelector("#source-calendar-add").scrollIntoView({block:"end",behavior:"instant"});true;');await capture('source-picker-role-'+condition,'sources');
+        await js('document.querySelector("#source-agent-add").click();true;');await until(()=>Promise.resolve(calls.some(c=>c.channel==='mote:source-coding'&&c.args[0]==='codex')),'actual coding IPC');
+        await until(()=>js('!document.querySelector("#source-calendar-add").disabled'),'agent action done');
+        await js('document.querySelector("#source-calendar-add").click();true;');await until(()=>Promise.resolve(calls.some(c=>c.channel==='mote:source-calendar'&&c.args[0]==='generated-calendar')),'actual calendar IPC');
+        await until(()=>js('!document.querySelector("#source-calendar-add").disabled'),'calendar action done');
+        await navigate('privacy');await ready('privacy');
+        await js('document.querySelector("[data-mask=notification]").click();document.querySelector("#mask-preview").scrollIntoView({block:"center",behavior:"instant"});true;');
+        assert.equal(await js('(()=>{const r=document.querySelector("#mask-preview-regions rect"),b=r?.getBoundingClientRect();return r?.ownerSVGElement?.id==="mask-preview"&&b.width>1&&b.height>1;})()'),true,'Configured privacy mask actually paints');
+        await capture('privacy-mask-role-'+condition,'privacy');
+        await js('document.querySelector("#mask-editor").scrollIntoView({block:"center",behavior:"instant"});true;');
+        const expectedRemove=language==='en'?'Remove mask 1':'移除遮挡区域 1';
+        assert.equal(await js('document.querySelector("#mask-editor button").textContent'),expectedRemove,'Visible mask caption names the enabled Remove action');
+        assert.equal(await js('document.querySelector("#mask-editor button").getAttribute("aria-label")'),expectedRemove,'Visible and accessible action agree');
+        const maskControls=await capture('privacy-mask-controls-role-'+condition,'privacy');
+        await fillCoverage('privacy-mask-controls-role-'+condition,'privacy',[maskControls],'#mask-editor');
+        await js('document.querySelector("#mask-editor button").click();true;');
+        assert.equal(await js('document.querySelectorAll("#mask-preview-regions rect").length'),0,'Actual Remove removes only draft mask');
+        await js('document.querySelector("#settings-reset").click();true;');
+        journeys.push({name:'explicit navigation/chooser secondary and collection primary roles through real handlers',language,variant,verified:true,platformSelectionAndCommitAdapters:true,personalContentRead:false});
+      }
+    }
+    assert.equal(calls.filter(c=>c.channel==='mote:source-coding'&&c.args[0]==='codex').length,6,'Each selected Agent action uses its real IPC');
+    assert.equal(calls.filter(c=>c.channel==='mote:source-calendar'&&c.args[0]==='generated-calendar').length,6,'Each selected calendar action uses its real IPC');
+    assert.equal((await js('window.mote.status()')).running,false,'No collection');return finish();
+  }
   const original='Generated rollout original  双空格 🐾\n\nA note keeps its exact original, source and time.';
   await navigate('notes');await until(()=>js('!document.querySelector("#note-text").disabled'),'draft');
   await js('document.querySelector("#note-text").value='+JSON.stringify(original)+';document.querySelector("#note-text").dispatchEvent(new Event("input"));document.querySelector("#note-form").requestSubmit();true;');

@@ -973,7 +973,7 @@ function renderMaskEditor(): void {
     const card = document.createElement('div'); card.className = 'mask-control';
     const heading = document.createElement('div'); heading.className = 'section-heading';
     const title = document.createElement('strong'); title.textContent = moteText("区域 {0}", index + 1);
-    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'text-button'; remove.textContent = moteText("移除"); remove.setAttribute('aria-label', moteText("移除遮挡区域 {0}", index + 1));
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'text-button'; remove.textContent = moteText("移除遮挡区域 {0}", index + 1); remove.setAttribute('aria-label', moteText("移除遮挡区域 {0}", index + 1));
     remove.addEventListener('click', () => { masks.splice(index, 1); writeMasks(masks); renderMaskEditor(); }); heading.append(title, remove); card.append(heading);
     const grid = document.createElement('div'); grid.className = 'form-grid';
     const controls = new Map<keyof Mask, { input: HTMLInputElement; output: HTMLOutputElement }>();

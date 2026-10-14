@@ -60,9 +60,10 @@ app.on('browser-window-created', (_event, window) => {
       for(const [i,source] of ['file','coding','screen'].entries()){
         const e=fixtureEvent(randomUUID(),source,'Generated '+source+' dialog evidence '+i),item=captureHistoryItem(e);history.attempt(visualRun,[item]);history.settle(visualRun,item.key,true,e.id,201);archive.set(e.id,e);visualItems.push(item);
       }
-      history.addBytes(visualRun,1536);history.finish(visualRun);history.close();
+      history.addBytes(visualRun,1536);history.finish(visualRun);
+      const retryRun=history.begin(config,'manual'),retryItem=captureHistoryItem(fixtureEvent(randomUUID(),'file','Generated unconfirmed upload'));history.attempt(retryRun,[retryItem]);history.settle(retryRun,retryItem.key,false,undefined,503);history.finish(retryRun);history.close();
       const outputDirectory=resolve(process.env.MOTE_SYNC_SCREENSHOTS);mkdirSync(outputDirectory,{recursive:true});
-      const manifest=await require('./ui-dialog-rollout.cjs')({window,js,outputDirectory,kind:'uploads',run:visualRun,items:visualItems,archive});
+      const manifest=await require('./ui-dialog-rollout.cjs')({window,js,outputDirectory,kind:'uploads',run:visualRun,items:visualItems,archive,retryRun,ipcMain});
       process.stdout.write(JSON.stringify({dialogReady:true,captures:manifest.captures.length,manifest:join(outputDirectory,'dialog-manifest.json')})+'\n');finished=true;clearTimeout(timeout);await new Promise(r=>server.close(r));app.quit();return;
     }
     history.close();

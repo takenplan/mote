@@ -5,24 +5,26 @@ const {createHash}=require('node:crypto');
 const {spawnSync}=require('node:child_process');
 const assert=require('node:assert/strict');
 
-module.exports=async function({window,js,outputDirectory,kind,navigate,run,items,archive}) {
+module.exports=async function({window,js,outputDirectory,kind,navigate,run,items,archive,retryRun,ipcMain}) {
   const repo=resolve(__dirname,'../../..'),sha=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
   const reference=JSON.parse(readFileSync(join(repo,'.mote/ui-rollout/mac/canonical-final/rollout-manifest.json'),'utf8'));
   const productSourceFiles=spawnSync('git',['ls-files','apps/desktop/src','apps/desktop/native','packages/shared/src','packages/shared/design-tokens.json'],{cwd:repo,encoding:'utf8'}).stdout.trim().split('\n');
   const sourceIdentity=Object.fromEntries(productSourceFiles.map(f=>[f,sha(join(repo,f))]));
-  const formatterSource='apps/desktop/src/sync-history-ui.ts';
+  const reviewedSources=['apps/desktop/src/index.html','apps/desktop/src/sync-history-ui.ts','apps/desktop/src/ui.ts'];
   const referenceSourceIdentity=Object.fromEntries(productSourceFiles.map(f=>{const blob=spawnSync('git',['show',reference.parentCommit+':'+f],{cwd:repo});assert.equal(blob.status,0,'Reference product source exists: '+f);return[f,createHash('sha256').update(blob.stdout).digest('hex')];}));
   const buildIdentity=Object.fromEntries(Object.keys(reference.buildIdentity).map(f=>[f,sha(join(__dirname,'../dist',f))]));
   const nativeIdentity=Object.fromEntries(Object.keys(reference.nativeIdentity).map(f=>[f,sha(join(__dirname,'../native/bin',f))]));
   const changedSourceInputs=Object.keys(sourceIdentity).filter(f=>sourceIdentity[f]!==referenceSourceIdentity[f]);
   const changedBuildInputs=Object.keys(buildIdentity).filter(f=>buildIdentity[f]!==reference.buildIdentity[f]);
-  assert.deepEqual(changedSourceInputs,[formatterSource],'Only the reviewed upload error formatter source changes');
-  assert.deepEqual(changedBuildInputs,['ui-bundle.js'],'Only the renderer bundle containing the formatter changes');
+  assert.deepEqual(changedSourceInputs,reviewedSources,'Only reviewed action-role markup and upload formatter/receipt roles change');
+  assert.deepEqual(changedBuildInputs,['ui-bundle.js','index.html'],'Only reviewed renderer markup and bundle change');
   assert.deepEqual(nativeIdentity,reference.nativeIdentity,'Supplement keeps final native build');
   const fixtureIdentity=Object.fromEntries(['ui-dialog-rollout.cjs','ui-smoke.cjs','sync-history-smoke.cjs'].map(f=>[f,sha(join(__dirname,f))]));
   const parentCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).stdout.trim();
   const workingTreeChanges=spawnSync('git',['status','--porcelain','--','apps/desktop'],{cwd:repo,encoding:'utf8'}).stdout;
   const captures=[],journeys=[];
+  let retryRequests=0;
+  if(retryRun){const originalRetry=ipcMain._invokeHandlers.get('mote:retry');assert.equal(typeof originalRetry,'function');ipcMain.removeHandler('mote:retry');ipcMain.handle('mote:retry',(...args)=>{retryRequests++;return originalRetry(...args);});}
   async function until(code,label){for(let i=0;i<400;i++){if(await js(code))return;await new Promise(r=>setTimeout(r,25));}throw Error('Dialog readiness: '+label);}
   const frames=()=>js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   async function locale(language){if(await js('document.documentElement.lang')===language)return;
@@ -52,6 +54,8 @@ module.exports=async function({window,js,outputDirectory,kind,navigate,run,items
         await js('document.querySelector("aside [data-nav=overview]").click();document.querySelector("#home-sync-details").open=true;document.querySelector("#home-sync-details [data-nav=uploads]").click();true;');
         await until('!!document.querySelector('+JSON.stringify('[data-upload-run="'+run+'"]')+')','real generated run');
         await js('document.querySelector('+JSON.stringify('[data-upload-run="'+run+'"]')+').click();true;');await until('!!document.querySelector("#upload-view-all")','receipt');
+        assert.equal(await js('document.querySelector("#upload-view-all").classList.contains("secondary")'),true,'Reading another dialog is secondary');
+        assert.equal(await js('!document.querySelector("#upload-receipt-retry")||document.querySelector("#upload-receipt-retry").classList.contains("primary")'),true,'Actual retry upload is primary');
         await whole('upload-receipt-'+condition,'upload-receipt-dialog');await js('document.querySelector("#upload-view-all").click();true;');
         await until('!!document.querySelector(".upload-content-image")','generated screenshot');await whole('upload-content-image-'+condition,'upload-content-dialog');
         await js('document.querySelector('+JSON.stringify('[data-upload-key="'+items[1].key+'"]')+').click();true;');await until('!!document.querySelector(".upload-content-text")&&!document.querySelector(".upload-content-image")','escaped text');
@@ -62,11 +66,18 @@ module.exports=async function({window,js,outputDirectory,kind,navigate,run,items
         assert.equal(displayedError,language==='en'?'Archived content is missing or has expired; the sync receipt remains available.':'归档内容不存在或已按保留策略清理；同步凭据仍可查看。','Complete translated retention/receipt fact without internal IPC wrapper');
         await whole('upload-content-expired-'+condition,'upload-content-dialog');archive.set(captureId,saved);
         await js('document.querySelector("#upload-content-dialog [data-upload-close]").click();true;');
+        if(retryRun){
+          await js('document.querySelector('+JSON.stringify('[data-upload-run="'+retryRun+'"]')+').click();true;');await until('!!document.querySelector("#upload-receipt-retry")','unconfirmed receipt');
+          assert.equal(await js('document.querySelector("#upload-receipt-retry").classList.contains("primary")&&document.querySelector("#upload-view-all").classList.contains("secondary")'),true,'Retry performs upload; View all opens another task');
+          await whole('upload-receipt-unconfirmed-'+condition,'upload-receipt-dialog');
+          await js('document.querySelector("#upload-receipt-retry").click();true;');await until('!document.querySelector("#upload-receipt-dialog").open&&!document.querySelector("#upload-now").disabled','actual retry and receipt close');
+        }
       }
       journeys.push({name:kind==='capture'?'actual scope confirmation and Cancel':'actual receipt, generated screenshot, escaped text and expired material dialogs',language,variant,verified:true});
     }
   }
+  if(retryRun)assert.equal(retryRequests,6,'Each receipt Retry invokes the real product upload handler on the isolated empty profile');
   assert.equal((await js('window.mote.status()')).running,false,'No collection');
-  const manifest={platform:'mac',parentCommit,workingTreeChanges,sourceIdentity,buildIdentity,nativeIdentity,fixtureIdentity,captures,journeys,passed:true,generatedOnly:true,unchangedReferenceProducer:reference.parentCommit,unchangedReferenceManifest:'.mote/ui-rollout/mac/canonical-final/rollout-manifest.json',referenceSourceIdentity,referenceBuildIdentity:reference.buildIdentity,changedSourceInputs,changedBuildInputs,boundary:'Hidden real Electron main/preload/renderer. Fresh upload dialogs for the reviewed error formatter; every tracked baseline source and built input is identical to final31339 except sync-history-ui.ts and its ui-bundle.js, with native binaries unchanged. Three generated upload records via real SyncHistory and loopback archive. No personal screen/account/calendar/live model/OS permission activation. Full dialog scroll intervals captured with24CSSpx overlap; native picker/permission fixture adapters remain explicit.'};
+  const manifest={platform:'mac',parentCommit,workingTreeChanges,sourceIdentity,buildIdentity,nativeIdentity,fixtureIdentity,captures,journeys,passed:true,generatedOnly:true,unchangedReferenceProducer:reference.parentCommit,unchangedReferenceManifest:'.mote/ui-rollout/mac/canonical-final/rollout-manifest.json',referenceSourceIdentity,referenceBuildIdentity:reference.buildIdentity,changedSourceInputs,changedBuildInputs,boundary:'Hidden real Electron main/preload/renderer. Fresh upload dialogs for the reviewed formatter and action roles; every tracked baseline source and built input is identical to final31339 except index.html, sync-history-ui.ts, ui.ts and their built index.html/ui-bundle.js, with native binaries unchanged. Three received and one unconfirmed generated upload records via real SyncHistory and loopback archive; actual receipt Retry uses the original product main handler with no queued or configured personal source. No personal screen/account/calendar/live model/OS permission activation. Full dialog scroll intervals captured with24CSSpx overlap; native picker/permission fixture adapters remain explicit.'};
   writeFileSync(join(outputDirectory,'dialog-manifest.json'),JSON.stringify(manifest,null,2));return manifest;
 };
