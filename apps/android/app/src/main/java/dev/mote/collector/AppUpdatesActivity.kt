@@ -29,16 +29,17 @@ class AppUpdatesActivity : MoteActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (BuildConfig.APPLICATION_ID.endsWith(".dev")) {
-            val body = moteDetailPage()
-            body.addView(TextView(this).apply { text = "Mote DEV · ${BuildConfig.VERSION_NAME}"; textSize = 24f })
-            body.addView(TextView(this).apply { text = MoteI18n.text("开发阶段仅提供 DEV 安装包，请到 GitHub 下载并手动安装。"); textSize = 16f })
+            val body = moteDetailPage(title = MoteI18n.text("应用更新"))
+            body.addView(TextView(this).apply { text = "Mote DEV · ${BuildConfig.VERSION_NAME}"; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceItem), 0, moteDp(DesignTokens.spaceInline)) })
+            body.addView(TextView(this).apply { text = MoteI18n.text("开发阶段仅提供 DEV 安装包，请到 GitHub 下载并手动安装。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, 0, 0, moteDp(DesignTokens.spaceItem)) })
             body.addView(MoteUi.button(Button(this).apply {
                 text = MoteI18n.text("下载 DEV 安装包")
                 setOnClickListener { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/utopiafar/mote/releases"))) }.onFailure { Toast.makeText(this@AppUpdatesActivity, MoteI18n.text("无法打开 GitHub，请安装或启用浏览器后重试"), Toast.LENGTH_LONG).show() } }
             }, true))
+            MoteUi.styleTree(body)
             return
         }
-        val loading = moteDetailPage(); val label = TextView(this); loading.addView(label)
+        val loading = moteDetailPage(title = MoteI18n.text("应用更新")); val label = TextView(this); loading.addView(label)
         task.start(MoteI18n.text("正在读取更新设置…"), { label.text = it }, {
             val value = AppUpdateStore(applicationContext); value to value.config()
         }) { result ->
@@ -47,10 +48,9 @@ class AppUpdatesActivity : MoteActivity() {
         }
     }
     private fun buildUi(initialConfig: UpdateConfig) {
-        val body = moteDetailPage()
+        val body = moteDetailPage(title = MoteI18n.text("应用更新"))
         fun text(value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(10), 0, moteDp(10)) }.also(body::addView)
         fun button(label: String, action: () -> Unit) = Button(this).apply { text = label; setOnClickListener { runCatching(action).onFailure { Toast.makeText(this@AppUpdatesActivity, message((it as? UpdateFailure)?.code ?: "failed"), Toast.LENGTH_LONG).show() } } }.also(body::addView)
-        text(MoteI18n.text("应用更新"), 28f)
         text(MoteI18n.text("当前版本 {0}", BuildConfig.VERSION_NAME))
         status = text(MoteI18n.text("等待检查"), 16f)
         progress = ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100 }; body.addView(progress)

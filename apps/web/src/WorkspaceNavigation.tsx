@@ -1,10 +1,12 @@
 import { moteText } from '@mote/shared/i18n';
 import {useSyncExternalStore} from 'react';
-import { ArrowLeft, ArrowRight, Settings2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Settings2, SlidersHorizontal, Puzzle, Archive, BarChart3, HardDrive, Wrench, Bot, CircleHelp } from 'lucide-react';
+const settingsIcons:Record<string,typeof Settings2>={settings:SlidersHorizontal,extensions:Puzzle,vault:Archive,usage:BarChart3,statistics:HardDrive,developer:Wrench,agentView:Bot,help:CircleHelp};
 import { webFeatures } from './features/registry';
 import { LanguageSelector } from './LanguageSelector';
 import { pageLabels, sectionFor, sections, type Page } from './navigation';
 export function primaryDestination(page: Page) {
+    if(page==='featureGuide')return 'overview';
     if(page==='coding')return 'archive';
     const section = sectionFor(page);
     if (section === 'library')
@@ -17,12 +19,17 @@ export function primaryDestination(page: Page) {
         return 'overview';
     return ['overview', 'archive', 'ask', 'activity', 'devices'].includes(page) ? page : 'about';
 }
+/** Settings keep their task controls; the complete feature directory remains a discovery surface. */
+export function isSettingsContext(page: Page) {
+    return page !== 'featureGuide' && (primaryDestination(page) === 'about' || ['lark', 'recordings'].includes(page));
+}
 export function parentDestination(page:Page):Page|undefined {
+    if(page==='featureGuide')return 'overview';
     if(page==='coding')return 'archive';
     const section=sectionFor(page);
     if(section==='library'&&page!=='archive')return 'archive';
     if(section==='connections'&&page!=='devices')return 'devices';
-    if(page==='settings'||page==='featureGuide')return;
+    if(page==='settings')return;
     if(page==='processing')return 'activity';
     if(page==='actions')return 'overview';
     if(primaryDestination(page)==='about'&&page!=='about')return 'about';
@@ -49,8 +56,10 @@ export function WorkspaceNavigation({ page, onPage }: {
     </div>;
     }
     // The models page owns its nested categories and their single parent control.
-    if (page === 'settings' || page === 'featureGuide')
+    if (page === 'settings')
         return null;
+    if (page === 'featureGuide')
+        return <button className="back-link workspace-back" aria-label={moteText('返回{0}',pageLabels.overview)} onClick={()=>onPage('overview')}><ArrowLeft size={16}/>{moteText('返回{0}',pageLabels.overview)}</button>;
     const parent=parentDestination(page);
     return parent?<button className="back-link workspace-back" aria-label={moteText('返回{0}',pageLabels[parent])} onClick={()=>onPage(parent)}><ArrowLeft size={16}/>{moteText('返回上级')}</button>:null;
 }
@@ -70,5 +79,5 @@ export function SettingsLanding({ onPage }: {
     ];
     const known = new Set(cards.map(card => card.id));
     const extra = webFeatures.pages().filter(entry => (entry.section === 'system' || !entry.section) && !known.has(entry.id) && !new Set(['overview', 'ask', 'actions', 'activity', 'processing', 'about', 'featureGuide','coding']).has(entry.id));
-    return <section className="settings-destinations"><LanguageSelector /><div className="discovery-intake-heading"><div><h2>{moteText("按你想完成的事设置")}</h2><p>{moteText("采集范围在设备本机；中央节点负责归档、理解、检索和资料管理。")}</p></div><button className="text-button" onClick={() => onPage('featureGuide')}>{moteText("全部功能与设置")}<ArrowRight size={15}/></button></div><div className="settings-link-grid discovery-settings-grid">{cards.map(card => <button key={card.id} disabled={!webFeatures.page(card.id)} onClick={() => onPage(card.id)}><Settings2 size={18}/><span><strong>{card.title}</strong><small>{card.description}</small>{!webFeatures.page(card.id)&&<small>{moteText("当前服务未提供此入口")}</small>}</span><ArrowRight size={16}/></button>)}{extra.map(entry => <button key={entry.id} onClick={() => onPage(entry.id)}><Settings2 size={18}/><span><strong>{entry.label}</strong><small>{moteText("打开此功能查看状态与操作。")}</small></span><ArrowRight size={16}/></button>)}</div><div className="panel discovery-settings-boundary"><h3>{moteText("记忆设置分两处，各管什么？")}</h3><p><strong>{moteText("模型与服务 → 模块与模型")}</strong>{moteText("：选择模型、自动配方和历史资料的处理节奏。")}</p><p><strong>{moteText("自动记忆与插件 → 记忆方案")}</strong>{moteText("：暂停 / 恢复自动记忆，查看或准备更换当前方案。更换方案需先准备，再确认生效。")}</p></div></section>;
+    return <section className="settings-destinations"><div className="settings-toolbar"><LanguageSelector /><button className="text-button" onClick={() => onPage('featureGuide')}>{moteText("全部功能")}<ArrowRight size={15}/></button></div><p className="settings-scope">{moteText("采集范围在设备本机；中央节点负责归档、理解、检索和资料管理。")}</p><div className="settings-link-grid discovery-settings-grid">{cards.map(card => { const Icon=settingsIcons[card.id]??Settings2; return <button key={card.id} disabled={!webFeatures.page(card.id)} onClick={() => onPage(card.id)}><Icon size={18}/><span><strong>{card.title}</strong><small>{card.description}</small>{!webFeatures.page(card.id)&&<small>{moteText("当前服务未提供此入口")}</small>}</span><ArrowRight size={16}/></button>;})}{extra.map(entry => <button key={entry.id} onClick={() => onPage(entry.id)}><Settings2 size={18}/><span><strong>{entry.label}</strong><small>{moteText("打开此功能查看状态与操作。")}</small></span><ArrowRight size={16}/></button>)}</div><details className="panel discovery-settings-boundary"><summary>{moteText("记忆设置分两处，各管什么？")}</summary><p><strong>{moteText("模型与服务 → 模块与模型")}</strong>{moteText("：选择模型、自动配方和历史资料的处理节奏。")}</p><p><strong>{moteText("自动记忆与插件 → 记忆方案")}</strong>{moteText("：暂停 / 恢复自动记忆，查看或准备更换当前方案。更换方案需先准备，再确认生效。")}</p></details></section>;
 }

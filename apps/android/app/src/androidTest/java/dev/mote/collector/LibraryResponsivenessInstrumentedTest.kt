@@ -40,8 +40,11 @@ class LibraryResponsivenessInstrumentedTest {
         while (!condition()) { check(SystemClock.elapsedRealtime() < deadline) { "Timed out: $label" }; Thread.sleep(40) }
     }
     private fun fixture(block: (Settings, MutableList<String>) -> Unit) {
-        require(context.packageName == "dev.mote.collector.dev" && Build.VERSION.SDK_INT == 35 && Build.FINGERPRINT.startsWith("google/sdk_gphone64_arm64/emu64a:"))
-        require(shell("getprop ro.boot.qemu.avd_name").trim() == "mote_fixture_api35")
+        val avd = shell("getprop ro.boot.qemu.avd_name").trim()
+        val originalFixture = Build.VERSION.SDK_INT == 35 && avd == "mote_fixture_api35"
+        val currentFixture = Build.VERSION.SDK_INT == 37 && avd == "mote_ui_focus_5330_api37" &&
+            InstrumentationRegistry.getArguments().getString("uiIterationFixture") == "true"
+        require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.startsWith("google/sdk_gphone64_arm64/emu64a:") && (originalFixture || currentFixture))
         require(!Settings(context).enabled && !CaptureAccessibilityService.connected && CaptureAccessibilityService.instance == null && !ProjectionService.running)
         waitFor("startup") { !QueueStorage.recovering && !QueueStorage.maintaining }
         WorkManager.getInstance(context).cancelAllWork().result.get(20, TimeUnit.SECONDS)
@@ -80,7 +83,6 @@ class LibraryResponsivenessInstrumentedTest {
             val started = SystemClock.elapsedRealtime()
             ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
                 scenario.onActivity { activity ->
-                    views(activity.window.decorView).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString() == "设置" }.performClick()
                     val button = views(activity.window.decorView).filterIsInstance<Button>().single { it.isShown && it.text == "开始采集" }
                     assertTrue(button.isEnabled); assertTrue(button.performClick())
                 }

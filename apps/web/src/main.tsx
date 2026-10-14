@@ -1,4 +1,5 @@
 import { ClientLoginApproval } from './ClientLoginApproval';
+import {revealWorkspaceFocus} from './workspace-focus';
 import {consumeLoginTicket,loginRequestId,removeLoginParameter} from './login-handoff';
 import { getLocale,moteText } from '@mote/shared/i18n';
 import {
@@ -14,7 +15,6 @@ Monitor,
 RefreshCw,
 Settings2,
 ShieldCheck,
-Smartphone,
 Sparkles,
 X
 } from "lucide-react";
@@ -46,7 +46,7 @@ import { changeEvidenceRoute,readEvidenceRoute } from './evidence-route';
 import { FeaturePage,featuresReady,webFeatures } from './features/runtime';
 import { pageLabels,readPage,routes,type Page } from './navigation';
 import { canonicalDestination,readWorkspaceRoute,workspaceHash } from './workspace-route';
-import { primaryDestination,WorkspaceNavigation } from './WorkspaceNavigation';
+import { isSettingsContext,primaryDestination,WorkspaceNavigation } from './WorkspaceNavigation';
 import { readResource,resources } from './resource-cache';
 import { importQueue } from './import-queue';
 import { clearSession,persistSession,readPeriod,savePeriod,type Period,readSessionLifetime,readStoredSession,saveSessionLifetime,type SessionLifetime } from "./session";
@@ -58,6 +58,8 @@ import './settings-ui.css';
 import './plugin-center.css';
 import './discovery-ui.css';
 import './feature-guide.css';
+import './art-direction.css';
+import './memory-presentation.css';
 import { confirmNavigation } from './unsaved';
 
 
@@ -98,6 +100,7 @@ function App() {
   const collectionIds = () => webFeatures.collections().map(entry=>entry.id);
   const initialRoute = useRef(readWorkspaceRoute(location.hash,readPage,collectionIds()));
   const [page, setPage] = useState<Page>(initialRoute.current.page);
+  const settingsContext = isSettingsContext(page);
   const [archiveTab, updateArchiveTab] = useState<ArchiveTab>(initialRoute.current.collection);
   const archiveTabRef=useRef(archiveTab); archiveTabRef.current=archiveTab;
   const currentHash=useRef(location.hash);
@@ -347,7 +350,7 @@ function App() {
           </div>
         </div>
       </aside>
-      <main className="main">
+      <main className="main" onFocusCapture={event=>revealWorkspaceFocus(event.target)}>
         <header className="topbar">
           <div>
             <span className="breadcrumb">
@@ -355,7 +358,7 @@ function App() {
               <strong>{pageLabels[page]}</strong>
             </span>
           </div>
-          <div className="topbar-actions"><button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>
+          <div className="topbar-actions">{!settingsContext&&page!=='featureGuide'&&page!=='notes'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
             <CentralStatusPill
               connection={connection}
               verified={verified}
@@ -369,7 +372,7 @@ function App() {
                 <button className="icon-button mobile-settings" aria-label={moteText('设置')} onClick={()=>onPage('about')}><Settings2 size={18}/></button>
                 <button
                   className="icon-button"
-                  aria-label={moteText("刷新资料")}
+                  aria-label={settingsContext?moteText("刷新生效配置"):moteText("刷新资料")}
                   onClick={refresh}
                   disabled={loading}
                 >
@@ -385,7 +388,8 @@ function App() {
               {moteText("我")}</button>
           </div>
         </header>
-        <React.Suspense key={page} fallback={<p role="status">{moteText("正在读取…")}</p>}><div className={`content ${primaryDestination(page)==='about'||['lark','recordings'].includes(page)?'settings-surface':''}`}>
+        <React.Suspense key={page} fallback={<p role="status" data-page-loading={page}>{moteText("正在读取…")}</p>}><div data-page={page} data-session={!connection?'signed-out':verified?'ready':error?'verification-failed':'verifying'} aria-busy={Boolean(connection&&loading)} className={`content ${settingsContext?'settings-surface':''}`}>
+          <div className="workspace-tools">
           {connection&&verified&&<WorkspaceNavigation page={page} onPage={onPage}/> }
           <div className="workspace-range">
             {connection&&verified&&(page === "insights" || (page === "archive" && webFeatures.collections().find(entry=>entry.id===archiveTab)?.usesTimeRange !== false)) && (
@@ -403,6 +407,7 @@ function App() {
                   </select>
             )}
           </div>
+          </div>
       {clientLogin&&api&&verified&&<ClientLoginApproval id={clientLogin} api={api} done={()=>{removeLoginParameter('loginRequest');setClientLogin(undefined);setNotice(moteText('客户端已登录，可返回客户端继续。'));}}/>}
           {notice && (
             <div className="notice" role="status">
@@ -417,9 +422,9 @@ function App() {
               </button>
             </div>
           )}
-          {!connection ? (
+          {!connection && settingsContext ? <section className="panel settings-sign-in"><div className="page-heading"><h1>{moteText("登录后查看{0}", pageLabels[page])}</h1><p>{moteText("调整服务与资料管理方式，或管理当前登录。")}</p></div><button className="button" onClick={()=>setShowConnect(true)}><Link2 size={16}/>{moteText("登录 Mote")}<ArrowRight size={16}/></button></section> : !connection ? (
             <>
-              <div className="greeting welcome simple-welcome">
+              <div className="greeting welcome simple-welcome archive-welcome">
                 <div>
                   <div className="eyebrow">{moteText('个人资料库')}</div>
                   <h1>
@@ -427,30 +432,20 @@ function App() {
                   </h1>
                   <p>
                     {moteText("汇集手机、电脑与文件里的记录。按来源浏览资料，也能直接提问，回到答案的出处。")}</p>
+                  <div className="welcome-archive-flow" aria-label={moteText("采集 · 汇聚 · 理解")}>
+                    <span><FileText size={17}/>{moteText("添加资料")}</span><ArrowRight size={14} aria-hidden="true"/>
+                    <span><Database size={17}/>{moteText("资料库")}</span><ArrowRight size={14} aria-hidden="true"/>
+                    <span><MessageSquare size={17}/>{moteText("问一问")}</span>
+                  </div>
                   <button
-                    className="button primary"
+                    className="button"
                     onClick={() => setShowConnect(true)}
                   >
                     <Link2 size={16} />
                     {moteText("登录 Mote")}<ArrowRight size={16} />
                   </button>
                 </div>
-                <div className="welcome-art" aria-hidden="true">
-                  <div className="orbit orbit-one" />
-                  <div className="orbit orbit-two" />
-                  <span className="art-node art-phone">
-                    <Smartphone size={27} />
-                  </span>
-                  <span className="art-node art-desktop">
-                    <Monitor size={31} />
-                  </span>
-                  <span className="art-node art-file">
-                    <FileText size={24} />
-                  </span>
-                  <span className="art-center">
-                    m<span>.</span>
-                  </span>
-                </div>
+
               </div>
               <div className="welcome-values simple-values">
                 <div>

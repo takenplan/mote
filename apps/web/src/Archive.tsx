@@ -28,6 +28,7 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
 }) {
     useSyncExternalStore(webFeatures.registry.subscribe, webFeatures.registry.getRevision, webFeatures.registry.getRevision);
     const entries = webFeatures.collections(), entry = entries.find(item => item.id === tab);
+    const collectionGroups = (['browse', 'records', 'views', 'processing'] as const).map(group => ({group, label:({browse:moteText('资料'), records:moteText('原始记录'), views:moteText('专用视图'), processing:moteText('上传与处理')})[group], items:entries.filter(item => (item.group ?? 'views') === group && item.id !== 'coding-status')})).filter(group => group.items.length);
     const [selection, setSelection] = useState<{
         owner: Api;
         view: string;
@@ -43,9 +44,10 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
     const props = { api, devices, range, rangeSelectionKey, activity, revision, onOpen: entry?.layout === 'standalone' ? onOpen : select, onChanged, selectedReference: selected, onBrowseChanged: clearSelection };
     const content = <LibraryCollectionBoundary key={entry?.id}>{entry ? <CollectionContent entry={entry} props={props}/> : <p role="status">{moteText('此资料库分类当前不可用。请从资料库分类中选择可用入口。')}</p>}</LibraryCollectionBoundary>;
     return <div className={'archive-page library-archive' + (selected ? ' has-selection' : '')}>
-   <div className="page-heading library-heading"><div><div className="eyebrow">{moteText('有来处，也有脉络')}</div><h1>{moteText('资料库')}</h1><p>{moteText('按来源浏览已发布资料，上传与处理状态单独查看。')}</p></div><a className="button primary" href="#/library/import"><Upload size={16}/>{moteText('导入资料')}</a></div>
+   <div className="page-heading library-heading"><div><div className="eyebrow">{moteText('有来处，也有脉络')}</div><h1>{moteText('资料库')}</h1><p>{moteText('按来源浏览已发布资料，上传与处理状态单独查看。')}</p></div><a className="button" href="#/library/import"><Upload size={16}/>{moteText('导入资料')}</a></div>
+   <label className="library-compact-categories"><span>{moteText('资料库分类')}</span><select aria-label={moteText('资料库分类')} value={tab} onChange={event=>{clearSelection();setTab(event.target.value);}}>{(!entry||entry.id==='coding-status')&&<option value={tab} disabled>{entry?.label??moteText('此资料库分类当前不可用。请从资料库分类中选择可用入口。')}</option>}{collectionGroups.map(group=><optgroup key={group.group} label={group.label}>{group.items.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}</select></label>
    <div className="library-workspace"><nav className="library-navigation" aria-label={moteText('资料库分类')}>
-     {(['browse', 'records', 'views', 'processing'] as const).map(group => { const items = entries.filter(item => (item.group ?? 'views') === group && item.id !== 'coding-status'); return items.length ? <section key={group}><h2>{({ browse: moteText('资料'), records: moteText('原始记录'), views: moteText('专用视图'), processing: moteText('上传与处理') })[group]}</h2>{items.map(item => <button key={item.id} data-collection-id={item.id} aria-current={item.id === entry?.id ? 'page' : undefined} onClick={() => { clearSelection(); setTab(item.id); }}>{item.label}</button>)}</section> : null; })}
+     {collectionGroups.map(group => <section key={group.group}><h2>{group.label}</h2>{group.items.map(item => <button key={item.id} data-collection-id={item.id} aria-current={item.id === entry?.id ? 'page' : undefined} onClick={() => { clearSelection(); setTab(item.id); }}>{item.label}</button>)}</section>)}
    </nav><div className="library-content">{entry?.layout === 'standalone' ? content : <LibraryBrowseLayout reference={selected} api={api} onClose={clearSelection} onOpen={onOpen} supporting={entry?.layout !== 'browser'}>{content}</LibraryBrowseLayout>}</div></div>
  </div>;
 }

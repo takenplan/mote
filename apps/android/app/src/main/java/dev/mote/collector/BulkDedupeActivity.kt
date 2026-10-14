@@ -48,15 +48,14 @@ class BulkDedupeActivity : MoteActivity() {
         pending = savedInstanceState?.getBoolean("pending") ?: false
         selected.addAll(savedInstanceState?.getStringArrayList("selected").orEmpty())
         page = savedInstanceState?.getInt("page") ?: 0
-        body = moteDetailPage()
-        label(body, MoteI18n.text("本机图片批量去重"), 25f)
+        body = moteDetailPage(title = MoteI18n.text("本机图片批量去重"))
         label(body, MoteI18n.text("扫描开始时本机保存的全部采集图片，按时间从早到晚扫描，与上一张保留图比较；相似则标记为重复，否则更新保留图。应用或尺寸变化时重新开始比较，不限制时间间隔。只处理本机副本；已上传中央的记录仍然保留。待决定区独立保存在本机，不参与同步和自动清理，仍占用磁盘空间。"))
         label(body, MoteI18n.text("扫描和处理均在后台执行，可以离开本页。取消后已完成的处理保留，剩余记录留在原处。"))
         modes = Spinner(this).apply {
             adapter = ArrayAdapter(this@BulkDedupeActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("精确"), MoteI18n.text("保守"), MoteI18n.text("均衡"), MoteI18n.text("激进")))
             isEnabled = false
-        }; body.addView(modes); controls += modes
-        action(body, MoteI18n.text("开始全量扫描")) {
+        }; body.addView(modes, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }); controls += modes
+        action(body, MoteI18n.text("开始全量扫描"), primary = true) {
             val mode = modeValues[modes.selectedItemPosition]
             submit(workDataOf("action" to "scan", "mode" to mode))
         }
@@ -258,9 +257,9 @@ class BulkDedupeActivity : MoteActivity() {
         }
     }
     private fun label(parent: LinearLayout, value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(6), 0, moteDp(6)) }.also(parent::addView)
-    private fun action(parent: LinearLayout, value: String, requiresIdle: Boolean = true, callback: () -> Unit) = Button(this).apply {
+    private fun action(parent: LinearLayout, value: String, requiresIdle: Boolean = true, primary: Boolean = false, callback: () -> Unit) = Button(this).apply {
         text = value; setOnClickListener { if (!requiresIdle || !busy) callback() }
-    }.also { parent.addView(it); if (requiresIdle) controls += it }
+    }.also { MoteUi.button(it, primary); parent.addView(it); if (requiresIdle) controls += it }
     override fun onSaveInstanceState(outState: Bundle) { outState.putStringArrayList("selected", ArrayList(selected)); outState.putInt("page", page); outState.putBoolean("pending", pending); super.onSaveInstanceState(outState) }
     override fun onDestroy() { imageGeneration++; dialogs.forEach { it.dismiss() }; list.removeAllViews(); pageBitmaps.forEach { it.recycle() }; pageBitmaps.clear(); executor.shutdownNow(); images.shutdownNow(); super.onDestroy() }
 }

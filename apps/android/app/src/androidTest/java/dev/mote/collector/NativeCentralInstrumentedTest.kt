@@ -82,6 +82,25 @@ class NativeCentralInstrumentedTest {
             }
         }
     }
+    @Test fun libraryTypesExcludeLegacyCodingStatusWithoutRedirectingItsDirectRoute() {
+        open("archive").use { scenario ->
+            login(scenario); waitFor(scenario, "Archive catalog ready") { !it.isWorking && contains(it, "全部资料") }
+            scenario.onActivity { activity ->
+                val types = all(activity).filterIsInstance<android.widget.Spinner>().single { it.contentDescription == "资料类型" }
+                val labels = (0 until types.adapter.count).map { types.adapter.getItem(it).toString() }
+                assertTrue(labels.contains("中央资料库"))
+                assertFalse(labels.contains("Coding Agent 上传")); assertFalse(labels.contains("Coding 会话同步状态"))
+                activity.navigate("coding")
+            }
+            waitFor(scenario, "Legacy Coding status remains selected after loading") { !it.isWorking && contains(it, "Coding 会话同步状态") }
+            instrumentation.waitForIdleSync()
+            scenario.onActivity { activity ->
+                assertEquals("Coding 会话同步状态", (all(activity).single { it.tag == "central-title" } as TextView).text.toString())
+                assertTrue(all(activity).filterIsInstance<android.widget.Spinner>().none { it.contentDescription == "资料类型" })
+                assertTrue(all(activity).single { it.tag == "primary:LIBRARY" }.isSelected)
+            }
+        }
+    }
     @Test fun settingsFormsSaveAgainstRealContractsAndInvitationIsDisplayed() {
         open("settings").use { scenario ->
             login(scenario); waitFor(scenario, "Settings ready") { !it.isWorking }
@@ -99,12 +118,21 @@ class NativeCentralInstrumentedTest {
         }
     }
     @Test fun generatedEvidenceAndActivityAreReadableWithoutExecutingMarkup() {
+        val literal = "Generated native note ${java.util.UUID.randomUUID()} <script>untrusted evidence</script>"
+        val device = "generated-literal-${java.util.UUID.randomUUID()}"
         CentralClient(origin, owner).post("/api/notes", JSONObject().put("id", java.util.UUID.randomUUID().toString())
-            .put("deviceId", "generated-fixture-phone").put("deviceName", "Generated phone").put("platform", "android")
-            .put("capturedAt", java.time.Instant.now().toString()).put("text", "Generated native note <script>untrusted evidence</script>"))
-        open("archive").use { scenario ->
-            login(scenario); waitFor(scenario, "Archive ready") { !it.isWorking && contains(it, "查看原文") }
-            click(scenario, "查看原文")
+            .put("deviceId", device).put("deviceName", device).put("platform", "android")
+            .put("capturedAt", java.time.Instant.now().toString()).put("text", literal))
+        // The archive catalog groups notes under a generic title. The actual Notes entry point
+        // exposes each literal note, so select this generated card rather than the first archive item.
+        open("notes").use { scenario ->
+            login(scenario); waitFor(scenario, "Exact generated note card") { !it.isWorking && contains(it, literal) }
+            scenario.onActivity { activity ->
+                val target = all(activity).filterIsInstance<Button>().single { button ->
+                    button.text.toString() == "查看原文" && views(button.parent as View).filterIsInstance<TextView>().any { it.text.toString() == literal }
+                }
+                assertTrue(target.performClick())
+            }
             waitFor(scenario, "Literal generated evidence") { !it.isWorking && contains(it, "<script>untrusted evidence</script>") }
             scenario.onActivity { it.navigate("archive") }; waitFor(scenario, "Archive ready") { !it.isWorking }
             click(scenario, "原始采集记录"); waitFor(scenario, "Raw records ready") { !it.isWorking && contains(it, "搜索原文") }

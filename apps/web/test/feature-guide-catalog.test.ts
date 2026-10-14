@@ -1,5 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import React from 'react';
+import {renderToStaticMarkup} from 'react-dom/server';
+import {JSDOM} from 'jsdom';
+import {configureLocale} from '@mote/shared/i18n';
+import {FeatureGuide} from '../src/FeatureGuide.js';
 import {english} from '../../../packages/shared/src/i18n-en.js';
 import {guideSections,quickLinks,type GuideTarget} from '../src/feature-guide-catalog.js';
 import {settingsCategoryFromHash} from '../src/route-query.js';
@@ -83,4 +88,16 @@ test('note attachments describe existing files and Coding progress keeps its spe
   assert.equal(new URLSearchParams(coding.target.href.split('?')[1]).get('view'),'work-activity');
   assert.deepEqual(coding.target.requires,['http:GET:/api/coding/uploads']);
   assert.ok(coding.otherTargets.some(target=>target.collectionId==='materials'),'published conversation content has an explicit destination');
+});
+
+
+test('English Guide terminology labels stay separate from the complete explanations',t=>{
+  configureLocale(()=> 'en');t.after(()=>configureLocale(()=> 'zh-CN'));
+  const dom=new JSDOM(renderToStaticMarkup(React.createElement(FeatureGuide,{api:{} as any,onPage:()=>{}})));
+  const terms=dom.window.document.querySelector('.guide-model-terms')!;
+  assert.equal(terms.querySelectorAll('strong').length,4);
+  for(const label of terms.querySelectorAll('strong'))assert.match(label.nextSibling?.textContent??'',/^\s+\S/,'Complete term label has a word boundary before its explanation');
+  assert.ok(terms.textContent?.includes(english['保存服务地址、凭据与可用模型；']));
+  assert.ok(terms.textContent?.includes(english['是当前运行的整体实现，由可信组件和实例组成。并发、超时及其他执行参数在相应高级设置中按需调整。']));
+  dom.window.close();
 });

@@ -24,7 +24,7 @@ function Detail({api,id,onClose,onNavigate,opener}:{api:Api;id:string;onClose:()
  const retryIndex=async()=>{setRetryBusy(true);setRetryError('');try{await api.request('/api/materials/'+encodeURIComponent(id.slice('material-index:'.length))+'/index/retry',{method:'POST'});refresh();}catch(error){setRetryError(errorMessage(error));}finally{setRetryBusy(false);}};
  return <div className="modal-backdrop" onMouseDown={e=>e.target===e.currentTarget&&onClose()} onKeyDown={e=>{if(e.key==='Escape'){e.stopPropagation();onClose();}}}>
   <section ref={panel} className="modal processing-detail" role="dialog" aria-modal="true" aria-label={moteText('任务详情')}>
-   <div className="section-heading"><h2 ref={heading} tabIndex={-1}>{moteText('任务详情')}</h2><button className="button" onClick={onClose}>{moteText('关闭')}</button></div>
+   <div className="section-heading"><h2 ref={heading} tabIndex={-1}>{moteText('任务详情')}</h2><button className="button" onClick={onClose}>{moteText('关闭详情')}</button></div>
    {error!==undefined&&<p className="notice error" role="alert">{errorMessage(error)} <button className="button" onClick={refresh}>{moteText('重试')}</button></p>}{loading&&!data&&<p role="status">{moteText('正在读取…')}</p>}
    {retryError&&<p role="alert">{retryError}</p>}{data&&<>
     <p className="operation-id"><code>{id}</code></p><Badge state={data.operation.state} reason={data.operation.waitingReason}/><Progress operation={data.operation}/>

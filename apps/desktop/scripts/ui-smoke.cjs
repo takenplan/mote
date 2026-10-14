@@ -10,6 +10,9 @@ const { tmpdir } = require('node:os');
 const assert = require('node:assert/strict');
 const { defaultConfig, ConfigStore } = require('../dist/config');
 const { QueueStorage } = require('../dist/queue-storage');
+// Unpackaged Electron otherwise reports its runtime version. Rollout evidence
+// names the tested product version; DEV metadata exercises the real main branch.
+if (process.env.MOTE_UI_ROLLOUT) app.getVersion = () => require('../package.json').version;
 
 // A clean generated profile prevents reading existing settings or personal screenshots.
 const profile = mkdtempSync(join(tmpdir(), 'mote-ui-fixture-'));
@@ -23,9 +26,22 @@ dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [sourceFile] 
 const errors = [];
 const externalUrls = [];
 shell.openExternal = async url => { externalUrls.push(url); };
+const childProcess = require('node:child_process');
+const originalExecFile = childProcess.execFile;
+childProcess.execFile = function(file, args, ...rest) {
+  if (file !== '/usr/bin/open') return originalExecFile.call(this, file, args, ...rest);
+  externalUrls.push(args.at(-1));
+  const callback = rest.at(-1);
+  if (typeof callback === 'function') queueMicrotask(() => callback(null, '', ''));
+  return { kill() {} };
+};
+childProcess.execFile[require('node:util').promisify.custom] = async (file, args, ...rest) => {
+  if (file !== '/usr/bin/open') return require('node:util').promisify(originalExecFile)(file, args, ...rest);
+  externalUrls.push(args.at(-1)); return { stdout: '', stderr: '' };
+};
 let finished = false;
 let currentPhase = 'startup';
-const timeout = setTimeout(() => { process.stderr.write('UI smoke timeout: ' + currentPhase + '\n'); app.exit(1); }, 45000);
+const timeout = setTimeout(() => { process.stderr.write('UI smoke timeout: ' + currentPhase + '\n'); app.exit(1); }, process.env.MOTE_UI_ART_ROUND || process.env.MOTE_UI_ROLLOUT ? 240000 : 45000);
 app.on('browser-window-created', (_event, window) => {
   // Fixture screenshots and animation-frame checks must run even if another app is foreground.
   window.webContents.setBackgroundThrottling(false);
@@ -59,6 +75,10 @@ app.on('browser-window-created', (_event, window) => {
           const visible = () => Array.from(document.querySelectorAll('[data-nav="${page}"]')).find(button => button.getClientRects().length);
           if (!visible()) {
             if ('${page}' === 'notes' || '${page}' === 'screen') {
+              if (document.querySelector('#note-action').hidden) {
+                document.querySelector('aside [data-nav="overview"]').click();
+                await new Promise(resolve => requestAnimationFrame(resolve));
+              }
               document.querySelector('#note-action').click();
               document.querySelector('#add-dialog [data-add-choice="' + ('${page}' === 'notes' ? 'note' : 'screen') + '"]').click();
               await new Promise(resolve => setTimeout(resolve, 180)); return;
@@ -88,6 +108,14 @@ app.on('browser-window-created', (_event, window) => {
       assert.equal(status.sync.state, 'unconfigured');
       assert.deepEqual(await js(`Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(b => b.textContent.trim())`), ['首页','内容','问一问']);
       assert.equal(await js(`document.querySelectorAll('.home-add-grid [data-add-choice]').length`), 4, 'All four local actions are equal home entries');
+      assert(await js(`(() => {
+        const luminance = color => color.match(/\\d+(?:\\.\\d+)?/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,index)=>sum+v*[.2126,.7152,.0722][index],0);
+        const background=luminance(getComputedStyle(document.documentElement).backgroundColor);
+        return Array.from(document.querySelectorAll('.home-page .text-button')).filter(button=>!button.disabled).every(button=>{
+          const foreground=luminance(getComputedStyle(button).color);
+          return (Math.max(background,foreground)+.05)/(Math.min(background,foreground)+.05)>=4.5;
+        });
+      })()`), 'Normal-size Home links meet measured 4.5:1 contrast on the actual Slate background');
       assert(await js(`document.querySelector('#start').getClientRects().length === 0`), 'Home starts with content actions');
       await js(`document.querySelector('#note-action').click()`);
       assert.equal(await js(`document.querySelectorAll('#add-dialog [data-add-choice]').length`),4,'Every Add entry offers the shared four choices');
@@ -99,6 +127,32 @@ app.on('browser-window-created', (_event, window) => {
       assert(await js(`document.documentElement.scrollWidth <= window.innerWidth`), 'Newcomer setup fits the minimum window width');
       writeFileSync(join(outputDirectory, 'first-run-compact-ui-fixture.png'), (await window.webContents.capturePage()).toPNG());
       window.setSize(1140, 840);
+      if (process.env.MOTE_UI_ROLLOUT_DIALOGS === 'capture') {
+        const manifest=await require('./ui-dialog-rollout.cjs')({window,js,navigate,outputDirectory,kind:'capture'});
+        process.stdout.write(JSON.stringify({dialogReady:true,captures:manifest.captures.length,manifest:join(outputDirectory,'dialog-manifest.json')})+'\n');finished=true;clearTimeout(timeout);app.quit();return;
+      }
+      if (process.env.MOTE_UI_ROLLOUT) {
+        currentPhase='UI rollout matrix';
+        const manifest=await require('./ui-rollout-matrix.cjs')({window,js,navigate,outputDirectory,profile,ipcMain});
+        process.stdout.write(JSON.stringify({rolloutReady:true,captures:manifest.captures.length,manifest:join(outputDirectory,'rollout-manifest.json'),generatedOnly:true})+'\n');
+        finished=true;clearTimeout(timeout);app.quit();return;
+      }
+      if (process.env.MOTE_UI_ART_ROUND) {
+        currentPhase='art direction matrix';
+        const manifest=await require('./art-direction-matrix.cjs')({window,js,navigate,outputDirectory,round:process.env.MOTE_UI_ART_ROUND,profile});
+        clearTimeout(timeout);
+        process.stdout.write(JSON.stringify({artDirectionReady:true,sourceCommit:manifest.sourceCommit,captures:manifest.captures.length,manifest:join(outputDirectory,'manifest.json'),generatedOnly:true})+'\n');
+        if(process.env.MOTE_UI_REVIEW==='1')return;
+        finished=true;app.exit(0);return;
+      }
+      if (process.env.MOTE_UI_REVIEW === '1') {
+        // Keep only this clean generated profile open for independent live UI review.
+        // Capture and permissions are already stubbed above; no personal applications are read.
+        clearTimeout(timeout);
+        window.setTitle('Mote — Generated UI Review');
+        process.stdout.write(JSON.stringify({ reviewReady: true, generatedOnly: true, screenshotDirectory: outputDirectory }) + '\n');
+        return;
+      }
       await js(`document.querySelector('#note-action').click(); document.querySelector('#add-dialog [data-add-choice=note]').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(await js(`!document.querySelector('[data-page="notes"]').hidden`), 'A newcomer can write a note before configuring capture');
       await js(`document.querySelector('#workspace-back').click(); new Promise(resolve => setTimeout(resolve, 100))`);
@@ -130,6 +184,37 @@ app.on('browser-window-created', (_event, window) => {
       await navigate('overview');
       assert(await js(`Array.from(document.querySelectorAll('[data-page]')).filter(el => !el.hidden).every(el => el.dataset.page === 'overview')`));
       assert(await js(`document.querySelector('#server-url').getClientRects().length === 0 && document.querySelector('#diagnostics-enabled').getClientRects().length === 0`), 'Overview has no settings fields');
+      await navigate('ask');
+      assert(await js(`!document.querySelector('#ask-disconnected').hidden && document.querySelector('#ask-workspace').hidden && document.querySelector('#node-login-panel').hidden`), 'Offline Ask explains the connection requirement before requesting a central API');
+      assert.equal(await js(`document.querySelector('#ask-error').textContent`), '', 'An absent node must not become a raw IPC failure');
+      await js(`document.querySelector('#ask-question').value='generated offline question draft';`);
+      window.webContents.send('mote:status', status);
+      await js(`new Promise(resolve => requestAnimationFrame(resolve))`);
+      assert(await js(`document.querySelector('#node-login-panel').hidden && !document.querySelector('#ask-disconnected').hidden`), 'A subsequent status event preserves the disconnected Ask surface');
+      assert.equal(await js(`document.querySelector('#ask-question').value`), 'generated offline question draft', 'Status updates preserve the question draft');
+      const authenticatedStatus = { ...status, config: { ...status.config, serverUrl: 'http://127.0.0.1:47999', tokenConfigured: true } };
+      const previousAskHandler = ipcMain._invokeHandlers.get('mote:ask');
+      const previousStatusHandler = ipcMain._invokeHandlers.get('mote:get-status');
+      const originalStatusSend = window.webContents.send;
+      ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', (_event, command) => command === 'history' || command === 'runs' ? { items: [] } : undefined);
+      // Keep both IPC reads and status events in the same synthetic auth state.
+      // A late real offline status must not race this isolated authenticated UI scenario.
+      ipcMain.removeHandler('mote:get-status'); ipcMain.handle('mote:get-status', () => authenticatedStatus);
+      window.webContents.send = function(channel, ...args) { return originalStatusSend.call(this, channel, ...(channel === 'mote:status' ? [authenticatedStatus] : args)); };
+      try {
+        await js(`window.mote.status().then(()=>new Promise(resolve=>requestAnimationFrame(resolve)))`);
+        window.webContents.send('mote:status', authenticatedStatus);
+        await js(`new Promise(resolve => requestAnimationFrame(resolve)); document.querySelector('#ask-refresh').click(); new Promise(resolve => setTimeout(resolve, 100))`);
+        assert(await js(`document.querySelector('#node-login-panel').hidden && document.querySelector('#ask-disconnected').hidden`), 'Refreshing an authenticated Ask does not redisplay the token form');
+      } finally {
+        window.webContents.send = originalStatusSend;
+        ipcMain.removeHandler('mote:get-status'); ipcMain.handle('mote:get-status', previousStatusHandler);
+        ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', previousAskHandler); window.webContents.send('mote:status', status);
+      }
+      await js(`new Promise(resolve => requestAnimationFrame(resolve)); document.querySelector('#ask-question').value='';`);
+      await js(`document.querySelector('#ask-disconnected [data-nav="connection"]').click(); new Promise(resolve => setTimeout(resolve, 100))`);
+      assert(await js(`!document.querySelector('[data-page="connection"]').hidden`), 'Offline Ask leads to the existing connection setup');
+      await navigate('overview');
       const settingsMenu = Menu.getApplicationMenu().items[0].submenu.items.find(item => item.accelerator === 'CmdOrCtrl+,');
       assert(settingsMenu, 'Standard settings menu exists'); settingsMenu.click();
       await js(`new Promise(resolve => requestAnimationFrame(resolve))`);
@@ -174,6 +259,7 @@ app.on('browser-window-created', (_event, window) => {
       await js(`document.querySelector('#workspace-back').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(await js(`!document.querySelector('[data-page="records"]').hidden`), 'Note back returns to the originating library');
       await navigate('settings'); await navigate('developer');
+      assert(await js(`document.querySelector('#note-action').hidden`), 'Settings maintenance pages do not offer unrelated recording actions');
       const rawFixture = '  {"level":"info","code":"OK"}\nmalformed <script>fixture</script> 中文\n';
       ipcMain.removeHandler('mote:events-raw');
       ipcMain.handle('mote:events-raw', () => rawFixture);
@@ -198,10 +284,11 @@ app.on('browser-window-created', (_event, window) => {
       assert.equal(await js(`document.querySelector('#jpeg-quality').value`), String(status.config.jpegQuality));
       assert(await js(`document.querySelector('#settings-pending').hidden`));
       await navigate('connection');
+      assert(await js(`document.querySelector('#note-action').hidden`), 'Connection settings remain focused on configuration');
       await js(`document.querySelector('#device-name').value = '未保存的设备名称'; document.querySelector('#device-name').dispatchEvent(new Event('input', {bubbles: true}));`);
       assert(await js(`!document.querySelector('#settings-pending').hidden`));
-      await js(`window.confirm = () => false; document.querySelector('#note-action').click(); document.querySelector('#add-dialog [data-add-choice=note]').click();`);
-      assert(await js(`!document.querySelector('[data-page="connection"]').hidden && !document.querySelector('#settings-pending').hidden && document.querySelector('#device-name').value === '未保存的设备名称'`), 'Cancelling toolbar navigation preserves the settings draft and current route');
+      await js(`window.confirm = () => false; document.querySelector('aside [data-nav="ask"]').click();`);
+      assert(await js(`!document.querySelector('[data-page="connection"]').hidden && !document.querySelector('#settings-pending').hidden && document.querySelector('#device-name').value === '未保存的设备名称'`), 'Cancelling navigation preserves the settings draft and current route');
       await js(`window.confirm = () => true; document.querySelector('#workspace-back').click()`);
       assert(await js(`!document.querySelector('[data-page="settings"]').hidden`));
       assert(await js(`document.querySelector('#settings-save-bar').hidden && document.querySelector('#settings-pending').hidden`), 'Settings menu has no abandoned draft or save bar');
@@ -353,6 +440,62 @@ app.on('browser-window-created', (_event, window) => {
       await js(`document.querySelector('#compression-apply').click()`);
       assert(await js(`!document.querySelector('#settings-pending').hidden`));
       await navigate('overview');
+      // Exercise a real generated queue import and the normal content reader.
+      // This is a durable regression for long English provenance-gutter labels;
+      // the notification observer remains synthetic and no system permission is used.
+      const notificationAt = new Date(Date.now() - 1000).toISOString();
+      const notificationId = randomUUID();
+      const notificationArchive = join(profile, 'generated-notification-archive.json');
+      const notificationOriginal = 'Generated notification original; never a personal notification.';
+      writeFileSync(notificationArchive, JSON.stringify({format:'mote-desktop-queue',version:3,blobs:{},records:[{
+        event:{id:notificationId,deviceId:status.config.deviceId,deviceName:'Generated_Notification_Source_'+ 'x'.repeat(96),platform:'macos',capturedAt:notificationAt,
+          durationMs:0,appId:'dev.mote.generated.notification',appName:'Generated notification',ocrText:'',source:'notification',
+          privacy:{excluded:false,redacted:false,mode:'none',collection:'content'},
+          metadata:{version:1,observedAt:notificationAt,collector:{method:'accessibility'},observation:{sessionId:notificationId,elapsedRealtimeMs:1},
+            notification:{action:'posted',notificationKey:'ab'.repeat(32),postedAt:notificationAt,ongoing:false,groupSummary:false,text:notificationOriginal}}},
+        blobBytes:0,attempts:0,nextAttemptAt:0
+      }]}), {mode:0o600});
+      const beforeMixPicker = dialog.showOpenDialog;
+      dialog.showOpenDialog = async () => ({canceled:false,filePaths:[notificationArchive]});
+      try { assert.equal((await js('window.mote.importQueue()')).imported,1); }
+      finally { dialog.showOpenDialog = beforeMixPicker; }
+      const changeFixtureLanguage = async preference => {
+        await navigate('settings');
+        await js(`window.confirm=()=>true;document.querySelector('#language').value=${JSON.stringify(preference)};document.querySelector('#language').dispatchEvent(new Event('change'));true;`);
+        for (let i=0;i<200;i++) {
+          try { if (await js(`document.documentElement.lang===${JSON.stringify(preference)} && !!document.querySelector('#content-refresh') && document.querySelector('#workspace-location').textContent.trim()`)) break; }
+          catch { /* Reload temporarily destroys the frame; wait for the new renderer. */ }
+          await new Promise(resolve=>setTimeout(resolve,25));
+        }
+        assert.equal(await js('document.documentElement.lang'),preference);
+        // Locale reload restores the existing overview entry; its content loads normally.
+        await new Promise(resolve=>setTimeout(resolve,100));
+      };
+      await changeFixtureLanguage('en');
+      await navigate('notes');
+      const switchedLanguageNote = 'Generated language-switch note; personal content is never used.';
+      await js(`document.querySelector('#note-text').value=${JSON.stringify(switchedLanguageNote)};document.querySelector('#note-text').dispatchEvent(new Event('input'));document.querySelector('#note-form').requestSubmit();true;`);
+      for(let i=0;i<200&&!await js(`document.querySelector('#note-text').value===''`);i++)await new Promise(resolve=>setTimeout(resolve,25));
+      assert.equal(await js(`document.querySelector('#note-text').value`),'','Note saves through the real UI after locale reload');
+      assert.equal((await js('window.mote.status()')).operations.find(job=>job.id==='mote:note')?.message,'Saving quick note · Operation finished','Main-process operation labels follow the changed language');
+      window.setSize(820,620); await navigate('records');
+      await js(`document.querySelector('#content-refresh').click();true;`);
+      for(let i=0;i<200&&!await js(`!!document.querySelector('#content-feed [data-content-key="queue:${notificationId}"]')`);i++)await new Promise(resolve=>setTimeout(resolve,25));
+      assert(await js(`(() => {
+        const rows=Array.from(document.querySelectorAll('#content-feed .content-row'));
+        if(!rows.some(row=>row.querySelector('.content-type').textContent==='Notifications') || !rows.some(row=>row.querySelector('.content-type').textContent==='Quick notes') || !rows.some(row=>row.querySelector('.content-type').textContent==='File')) return false;
+        return rows.every(row=>['.content-type','.content-state','.content-row-copy small'].every(selector=>{const element=row.querySelector(selector),bounds=element.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(element);const rects=Array.from(range.getClientRects());
+          return element.scrollWidth<=element.clientWidth && rects.every(rect=>rect.left>=bounds.left-.5 && rect.right<=bounds.right+.5) && (selector==='.content-row-copy small'||rects.length>0&&Math.max(...rects.map(rect=>rect.top))-Math.min(...rects.map(rect=>rect.top))<1);
+        }));
+      })()`),'Actual mixed-source records keep English types and long unbroken source metadata inside their narrow columns');
+      assert(await js(`document.documentElement.scrollWidth<=innerWidth`),'Mixed-source content has no horizontal overflow');
+      writeFileSync(join(outputDirectory,'mixed-source-content-en-compact.png'),(await window.webContents.capturePage()).toPNG());
+      await js(`document.querySelector('#content-feed [data-content-key="queue:${notificationId}"]').click();true;`);
+      for(let i=0;i<200&&!await js(`document.querySelector('#content-detail-body').textContent===${JSON.stringify(notificationOriginal)}`);i++)await new Promise(resolve=>setTimeout(resolve,25));
+      assert.equal(await js(`document.querySelector('#content-detail-body').textContent`),notificationOriginal,'The real imported notification original remains readable');
+      assert.equal(await js(`document.querySelector('#content-detail-close').textContent`),'Close details','Reader dismissal is an action, not the Off state translation');
+      await js(`document.querySelector('#content-detail-close').click();true;`);
+      await changeFixtureLanguage('zh-CN'); window.setSize(1140,840); await navigate('overview');
       const generatedJpeg = nativeImage.createFromBitmap(Buffer.alloc(64 * 64 * 4, 160), { width: 64, height: 64 }).toJPEG(75);
       const hash = imageHash(generatedJpeg), day = new Date(), fixtureRecords = [];
       for (let index = 0; index < 31; index++) fixtureRecords.push({ event: { id: randomUUID(), deviceId: status.config.deviceId, deviceName: '合成截图设备', platform: 'macos', capturedAt: new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12, 0, index).toISOString(), durationMs: 0, appId: 'dev.mote.fixture', appName: '合成截图', imageMime: 'image/jpeg', ocrText: '合成 OCR <script>不可执行的证据</script>', ocr: { status: 'completed' }, source: 'screen', privacy: { excluded: false, redacted: false, mode: 'local', reason: 'generated fixture only' } }, blobHash: hash, blobBytes: generatedJpeg.length, attempts: 0, nextAttemptAt: 0 });
@@ -457,10 +600,24 @@ app.on('browser-window-created', (_event, window) => {
           await navigate('screen'); assert(await js(`!document.querySelector('#storage-restart').hidden`));
         } finally { ConfigStore.prototype.save = originalSave; }
       } finally { QueueStorage.prototype.migrate = originalMigration; await rm(external, { recursive: true, force: true }); }
-      process.stdout.write(JSON.stringify({ slowMigrationWaitsForSettingsCompletion: true, failedSettingsRolledBack: true, ambiguousCommitPreservesBothAndBlocksWrites: true, captureStorageNativePickerAndMigration: true, arbitraryStoragePathRejected: true, captureBrowserPagingAndOcrDetails: true, chargingOcrSettingSaved: true, feedbackLink: true, localOnlyStartIpcStub: true, uploadModeControls: true, installedAppPickerFixture: true, maskPresetsAndSlider: true, friendlyPresetsSaved: true, localBacklogConsent: true, navigationAndKeyboardFocus: true, actionFirstNavigation: true, sharedAddChooser: true, oneTimeFileConfirmation: true, screenScopeConfirmation: true, contextualReturnPaths: true, unifiedNoteContext: true, settingsDraftProtectedOnToolbarCancel: true, nativeSettingsMenu: true, settingsEditableWhileCapturing: true, noteDraftRetainedAcrossPages: true, settingsDiscardedOnBackSidebarAndEscape: true, settingsMenuHasNoSaveBar: true, invalidSettingsRevealed: true, discardSettings: true, sourceEditorRevealed: true, minimumWindowLayout: true, gradedCollectionUiAndIpc: true, metadataDisabled: true, updatesUiAndChannelIpc: true, noUpdateNetworkRequest: true, ok: true, fixtureOnly: true, rendererLoaded: true, preloadIpc: true, savedSettings: true, offlineNotePersisted: true, captureStayedStopped: true, nativeFilePickerAndOfflineSource: true, calendarPermissionNotRequested: true, screenshot: output }) + '\n');
+      process.stdout.write(JSON.stringify({ slowMigrationWaitsForSettingsCompletion: true, failedSettingsRolledBack: true, ambiguousCommitPreservesBothAndBlocksWrites: true, captureStorageNativePickerAndMigration: true, arbitraryStoragePathRejected: true, captureBrowserPagingAndOcrDetails: true, chargingOcrSettingSaved: true, feedbackLink: true, localOnlyStartIpcStub: true, uploadModeControls: true, installedAppPickerFixture: true, maskPresetsAndSlider: true, friendlyPresetsSaved: true, localBacklogConsent: true, navigationAndKeyboardFocus: true, actionFirstNavigation: true, sharedAddChooser: true, oneTimeFileConfirmation: true, screenScopeConfirmation: true, contextualReturnPaths: true, unifiedNoteContext: true, settingsDraftProtectedOnNavigationCancel: true, nativeSettingsMenu: true, settingsEditableWhileCapturing: true, noteDraftRetainedAcrossPages: true, settingsDiscardedOnBackSidebarAndEscape: true, settingsMenuHasNoSaveBar: true, invalidSettingsRevealed: true, discardSettings: true, sourceEditorRevealed: true, minimumWindowLayout: true, gradedCollectionUiAndIpc: true, metadataDisabled: true, updatesUiAndChannelIpc: true, noUpdateNetworkRequest: true, ok: true, fixtureOnly: true, rendererLoaded: true, preloadIpc: true, savedSettings: true, offlineNotePersisted: true, captureStayedStopped: true, nativeFilePickerAndOfflineSource: true, calendarPermissionNotRequested: true, screenshot: output }) + '\n');
       finished = true; clearTimeout(timeout); app.quit();
     })().catch(error => { process.stderr.write(`UI smoke failed in ${currentPhase}: ${error.message}\n${errors.join('\n')}\n`); app.exit(1); });
   });
 });
-app.on('quit', () => { if (finished) void rm(profile, { recursive: true, force: true }); });
+app.on('quit', () => { if (finished || process.env.MOTE_UI_REVIEW === '1') void rm(profile, { recursive: true, force: true }); });
+// The fixture always runs in the background, including independent review. Patch only
+// the fixture's Electron dependency, so production window behavior stays unchanged.
+const Module = require('node:module');
+const originalLoad = Module._load;
+Module._load = function(request, parent, isMain) {
+  const result = originalLoad.call(this, request, parent, isMain);
+  if (process.env.MOTE_UI_ROLLOUT_DEV_ABOUT === '1' && request === '../package.json' && parent?.filename === join(__dirname, '../dist/main.js')) return { ...result, moteDevelopment: true };
+  if (request !== 'electron') return result;
+  return { ...result, BrowserWindow: class extends result.BrowserWindow {
+    constructor(options) { super({ ...options, show: false }); }
+    show() {}
+    focus() {}
+  } };
+};
 require('../dist/main');

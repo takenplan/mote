@@ -1,1 +1,5 @@
-<resources><item type="id" name="mote_primary" /></resources>
+<resources>
+    <item type="id" name="mote_primary" />
+    <item type="id" name="mote_type" />
+    <item type="id" name="mote_button_role" />
+</resources>

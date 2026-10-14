@@ -2,6 +2,7 @@ require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Real browser + isolated central node. All providers and 400 tasks are generated fixtures. */
 const {app,BrowserWindow}=require('electron');
+const {dialogPresentation}=require('./dialog-presentation-probe.cjs');
 const {mkdtempSync,mkdirSync,readFileSync,writeFileSync,existsSync,rmSync}=require('node:fs');
 const {tmpdir}=require('node:os'),{resolve,join}=require('node:path'),{spawn}=require('node:child_process');
 const assert=require('node:assert/strict');
@@ -50,7 +51,14 @@ async function run(){
  await click('下一页');await until(()=>js(`document.querySelector('[aria-label="任务分页"]').textContent.includes('第 3 页')&&document.querySelectorAll('.operation-row').length===10`),'third page');await click('上一页');await until(async()=>JSON.stringify(await ids())===JSON.stringify(second),'previous returns to page two');
  await select('任务状态','blocked');await until(()=>js(`document.querySelectorAll('.operation-row').length===1&&document.querySelector('[aria-label="任务分页"]').textContent.includes('第 1 页')`),'filter resets cursor');
  await js(`document.querySelector('.operation-row button').focus();document.querySelector('.operation-row button').click()`);await until(()=>js(`!!document.querySelector('[role="dialog"] .processing-row')`),'on-demand detail');
- assert(await js(`document.querySelector('[role="dialog"]').contains(document.activeElement)`),'detail owns focus');await screenshot('processing-detail-desktop');window.setSize(390,844);await screenshot('processing-detail-mobile');window.setSize(1360,1000);
+ assert(await js(`document.querySelector('[role="dialog"]').contains(document.activeElement)`),'detail owns focus');
+ for(const width of [1360,390]){
+  window.setSize(width,width===390?844:1000);await until(()=>js('innerWidth==='+width),'dialog inset viewport');
+  const presentation=await js('('+dialogPresentation.toString()+')(".processing-detail")');
+  assert(presentation.scrollRestored&&presentation.title.inset&&presentation.focus.owned&&presentation.focus.unclipped&&presentation.controls.every(control=>control.inset&&control.hit),'Actual dialog title/focus/fields/actions stay inside the border');
+  await screenshot(width===390?'processing-detail-mobile':'processing-detail-desktop');
+ }
+ window.setSize(1360,1000);
  await js(`document.querySelector('[role="dialog"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))`);await until(()=>js(`!document.querySelector('[role="dialog"]')`),'escape dismisses detail');assert(await js(`document.activeElement.matches('.operation-row button')`),'close restores row focus');
  await select('任务状态','');await select('每页条数','20');await until(()=>js(`document.querySelectorAll('.operation-row').length===20&&document.querySelector('[aria-label="任务分页"]').textContent.includes('第 1 页')`),'page size resets cursor');
  await select('任务类型','capture');await until(()=>js(`document.querySelector('.empty h2')?.textContent==='没有符合条件的任务'`),'empty filtered view');window.setSize(390,844);await screenshot('processing-empty-mobile');window.setSize(1360,1000);await select('任务类型','');await select('每页条数','10');await until(()=>js(`document.querySelectorAll('.operation-row').length===10`),'restore list');

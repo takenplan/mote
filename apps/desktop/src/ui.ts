@@ -23,6 +23,7 @@ let captureStorageDirectory = '';
 let settingsApplying = false;
 let wasRunningBeforeSave = false;
 let pageRevision = 0;
+let pageEnteredAt = Date.now();
 const pageScroll = new Map<Page, number>();
 const settingsPages = new Set<Page>(['connection', 'sync', 'capture', 'privacy', 'developer']);
 const libraryUi=createContentLibraryUi(desktopApi);
@@ -37,6 +38,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   else pageScroll.set(currentPage, window.scrollY);
   if (page !== currentPage) {
     pageRevision++;
+    pageEnteredAt = Date.now();
     feedback('');
     if (initialized && settingsPages.has(currentPage) && !preserveSettingsDraft) fillConfig(currentStatus.config);
     if (currentPage === 'connection') {
@@ -48,6 +50,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   }
   if (currentPage === 'uploads' && page !== 'uploads') syncHistoryUi.hide();
   currentPage = page;
+  if(initialized) renderOperations(currentStatus.operations??[]);
   if (page === 'uploads') syncHistoryUi.show();
   const selected = navigation.section;
   for (const element of Array.from(document.querySelectorAll<HTMLElement>('[data-page]'))) element.hidden = element.dataset.page !== page;
@@ -56,8 +59,8 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
     button.classList.toggle('selected', active);
     if (active) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current');
   }
-  const heading = (target: Page) => document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
-  const title = heading(page), sectionTitle = heading(selected);
+  const heading = (target: Page) => target === 'overview' ? moteText('首页') : document.querySelector<HTMLElement>(`[data-page="${target}"] [data-page-title]`)?.textContent?.trim() ?? '';
+  const title = heading(page), sectionTitle = heading(page==='connection'&&navigation.backTarget==='ask'?'ask':selected);
   byId('workspace-location').textContent = page === selected ? title : `${sectionTitle} / ${title}`;
   byId('workspace-back').hidden = !navigation.canGoBack;
   updateNoteAction();
@@ -80,7 +83,11 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-na
   if (pageNames.includes(page)) showPage(page);
 });
 byId('workspace-back').addEventListener('click', () => showPage(navigation.backTarget));
-function updateNoteAction(): void { byId('note-action').classList.add('primary'); }
+function updateNoteAction(): void {
+  const action = byId('note-action');
+  action.classList.add('secondary');
+  action.hidden = currentPage !== 'notes' && (navigation.section === 'settings' || settingsPages.has(currentPage));
+}
 const addDialog=byId<HTMLDialogElement>('add-dialog');
 let addOrigin:HTMLElement|undefined;
 for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-add]'))) button.addEventListener('click',()=>{addOrigin=button;addDialog.showModal();});
@@ -104,7 +111,17 @@ function updateSettingsHint(): void {
   byId('settings-pending').hidden = !settingsDirty;
   byId('save-hint').textContent = settingsDirty ? moteText("有未保存的修改，离开前会提醒。保存后立即生效。") : currentStatus?.running ? moteText("保存后立即应用；必要时会短暂暂停并自动恢复采集。") : moteText("设置保存后立即生效；采集保持当前开停状态。");
   byId<HTMLButtonElement>('settings-reset').disabled = !settingsDirty || busy;
+  reserveSettingsFooter();
 }
+// Long translated hints and zoom can add a row. Reserve the actual footer rather
+// than a fixed estimate so the final configuration controls remain scrollable.
+const settingsSaveBar = byId('settings-save-bar');
+function reserveSettingsFooter(): void {
+  const fixed = !settingsSaveBar.hidden && getComputedStyle(settingsSaveBar).position === 'fixed';
+  document.documentElement.style.setProperty('--settings-save-height', `${fixed ? settingsSaveBar.getBoundingClientRect().height : 0}px`);
+}
+new ResizeObserver(reserveSettingsFooter).observe(settingsSaveBar);
+window.addEventListener('resize', reserveSettingsFooter);
 function markSettingsDirty(): void { settingsDirty = true; updateSettingsHint(); }
 settingsForm.addEventListener('input', markSettingsDirty);
 settingsForm.addEventListener('change', markSettingsDirty);
@@ -304,6 +321,12 @@ byId('capture-directory-choose').addEventListener('click', () => void perform(as
 byId('capture-directory-default').addEventListener('click', () => { captureStorageDirectory = ''; markSettingsDirty(); renderStorage(); });
 byId('capture-directory-open').addEventListener('click', () => void perform(() => desktopApi.openCaptureDirectory()));
 let connectionPreview: import('./connection').ConnectionPreview | undefined;
+function renderOperations(jobs:NonNullable<import('./contracts').Status['operations']>):void {
+  // Completed work belongs to the page where it began; active work and failures remain global.
+  const operations=jobs.filter(job=>job.state!=='completed'||job.startedAt>=pageEnteredAt);
+  byId('background-progress').hidden = !operations.length;
+  byId('background-progress').textContent = operations.map(job => `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${job.state === 'running' ? moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000)) : ''}`).join('；');
+}
 function render(status: import('./contracts').Status): void {
   syncHistoryUi.update(status);libraryUi.update(status);
   if(currentStatus&&(currentStatus.authorizationGeneration!==status.authorizationGeneration||currentStatus.config.serverUrl!==status.config.serverUrl||currentStatus.config.tokenConfigured!==status.config.tokenConfigured||currentStatus.config.authSignedOut!==status.config.authSignedOut||currentStatus.config.authExpiresAt!==status.config.authExpiresAt)){
@@ -311,12 +334,9 @@ function render(status: import('./contracts').Status): void {
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
   currentStatus = status; renderStorage();
-  byId('node-login-panel').hidden = status.config.tokenConfigured;
-  byId('ask-logout').hidden = !status.config.tokenConfigured;
+  askConnectionState();
   updateTokenField();
-  const operations = status.operations ?? [];
-  byId('background-progress').hidden = !operations.length;
-  byId('background-progress').textContent = operations.map(job => `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${job.state === 'running' ? moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000)) : ''}`).join('；');
+  renderOperations(status.operations??[]);
   byId('connection-device').textContent = moteText("设备：{0} · ID {1}。迁移已有设备时，请在中央邀请中选择此 ID。", status.config.deviceName, status.config.deviceId);
   byId('environment').textContent = status.environment ? moteText("环境：{0}{1} · {2}", status.environment.profile, status.environment.defaultProfile ? moteText("（原日常目录）") : moteText(" · 独立数据"), status.environment.dataDirectory) : '';
   const names = { stopped: moteText("采集已停止"), capturing: moteText("正在采集"), paused: moteText("采集已暂停"), permission_required: moteText("需要屏幕录制权限"), error: moteText("采集已停止 · 需要处理") };
@@ -498,7 +518,11 @@ byId('note-attachments').addEventListener('click',()=>void perform(()=>desktopAp
 byId('central').addEventListener('click', () => {
   if (!currentStatus?.config.serverUrl) { showPage('connection'); feedback(moteText("先连接你的中央节点，即可打开中央仓库。")); return; }
 
-  void perform(() => desktopApi.openCentral());
+  void perform(() => desktopApi.openCentral('overview'));
+});
+byId('home-feature-guide').addEventListener('click', () => {
+  if (!currentStatus?.config.serverUrl) { showPage('connection'); feedback(moteText("先连接你的中央节点，即可打开中央仓库。")); return; }
+  void perform(() => desktopApi.openCentral('guide'));
 });
 let draft: import('./note-draft').NoteDraft | undefined;
 let noteSaving = false;
@@ -590,8 +614,13 @@ let sourceBusy = false;
 let sourceSelection:{id:string;mode:'files'|'directory';names:string[]}|undefined;
 const sourceRules=byId<HTMLDetailsElement>('source-rules');
 const sourceRulesHome=sourceRules.parentElement!;
-function restoreSourceRules():void {sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;}
-function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceSelection?.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);if(once)field.value='all';}
+function refreshSourcePolicySummaries():void {
+  for(const [fieldId,summaryId] of [['source-initial-sync','source-history-value'],['source-retention','source-retention-value']]) byId(summaryId).textContent=byId<HTMLSelectElement>(fieldId).selectedOptions[0]?.textContent??'';
+}
+function restoreSourceRules():void {sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;refreshSourcePolicySummaries();}
+function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceSelection?.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);if(once)field.value='all';refreshSourcePolicySummaries();}
+byId('source-initial-sync').addEventListener('change',refreshSourcePolicySummaries);
+refreshSourcePolicySummaries();
 byId('source-continuous').addEventListener('change',updateSourceHistoryChoice);
 async function beginSourceSelection(mode:'files'|'directory'):Promise<void>{
   if(sourceBusy||!showPage('sources'))return;
@@ -636,6 +665,7 @@ function editSource(id?: string): void {
   refreshSourceTextOptions();
 }
 function refreshSourceTextOptions(): void {
+  refreshSourcePolicySummaries();
   const source=localSourceRows.find(row=>row.source.id===sourceEditingId)?.source;
   const visible=(!source||source.kind==='local-files')&&readInput('source-retention')==='snapshot';
   byId('source-file-text-options').hidden=!visible;
@@ -711,6 +741,8 @@ let updateState: import('./updater').UpdateStatus | undefined;
 function renderUpdate(value: import('./updater').UpdateStatus): void {
   updateState = value;
   for (const id of ['update-channel','update-check','update-download','update-cancel','update-install','update-reveal','update-progress']) byId(id).hidden=!!value.manualDownload;
+  byId('update-channel').closest('label')!.hidden=!!value.manualDownload;
+  byId('app-updates').querySelector('details')!.hidden=!!value.manualDownload;
   byId('update-notes').textContent=value.manualDownload?moteText('下载 DEV 安装包'):moteText('查看版本说明与安装包');
   byId('update-version').textContent = moteText("当前 {0}{1}", value.currentVersion, value.availableVersion ? moteText(" · 发布 ") + value.availableVersion : '');
   byId<HTMLSelectElement>('update-channel').value = value.channel;
@@ -941,7 +973,7 @@ function renderMaskEditor(): void {
     const card = document.createElement('div'); card.className = 'mask-control';
     const heading = document.createElement('div'); heading.className = 'section-heading';
     const title = document.createElement('strong'); title.textContent = moteText("区域 {0}", index + 1);
-    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'text-button'; remove.textContent = moteText("移除"); remove.setAttribute('aria-label', moteText("移除遮挡区域 {0}", index + 1));
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'text-button'; remove.textContent = moteText("移除遮挡区域 {0}", index + 1); remove.setAttribute('aria-label', moteText("移除遮挡区域 {0}", index + 1));
     remove.addEventListener('click', () => { masks.splice(index, 1); writeMasks(masks); renderMaskEditor(); }); heading.append(title, remove); card.append(heading);
     const grid = document.createElement('div'); grid.className = 'form-grid';
     const controls = new Map<keyof Mask, { input: HTMLInputElement; output: HTMLOutputElement }>();
@@ -1102,6 +1134,12 @@ async function askAction(action: () => Promise<void>): Promise<void> {
   finally { askBusy = false; askControls(); }
 }
 async function refreshAsk(): Promise<void> {
+  const connected = askConnectionState();
+  if (!connected) {
+    clearTimeout(askTimer);
+    setText('ask-login-status', ''); setText('ask-error', '');
+    return;
+  }
   await askAction(async () => {
     setText('ask-login-status', moteText('正在连接中央节点…'));
     try { await askHistory(); } catch (error) { setText('ask-login-status', moteText('请求失败，请重试')); throw error; }
@@ -1111,6 +1149,15 @@ async function refreshAsk(): Promise<void> {
     if (askRun?.conversationId) askConversation = await askCall('conversation', {id: askRun.conversationId});
     renderAsk(); if (askRun?.status === 'running') scheduleAskPoll();
   });
+}
+function askConnectionState(): boolean {
+  const connected = Boolean(currentStatus?.config.serverUrl);
+  byId('ask-disconnected').hidden = connected;
+  byId('ask-workspace').hidden = !connected;
+  byId('node-login-panel').hidden = !connected || currentStatus.config.tokenConfigured;
+  byId('ask-logout').hidden = !connected || !currentStatus.config.tokenConfigured;
+  byId('ask-new').hidden = !connected;
+  return connected;
 }
 function scheduleAskPoll(): void {
   clearTimeout(askTimer); const generation = askGeneration;

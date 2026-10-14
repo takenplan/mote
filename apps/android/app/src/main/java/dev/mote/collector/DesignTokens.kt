@@ -2,16 +2,39 @@
 package dev.mote.collector
 
 object DesignTokens {
-    val background = android.graphics.Color.parseColor("#f5f6f8")
+    val background = android.graphics.Color.parseColor("#f5f7fa")
     val surface = android.graphics.Color.parseColor("#ffffff")
-    val sidebar = android.graphics.Color.parseColor("#f0f2f5")
-    val ink = android.graphics.Color.parseColor("#202936")
-    val muted = android.graphics.Color.parseColor("#5e6b7d")
-    val accent = android.graphics.Color.parseColor("#315ed0")
-    val accentHover = android.graphics.Color.parseColor("#2449aa")
-    val tint = android.graphics.Color.parseColor("#e8eefc")
-    val border = android.graphics.Color.parseColor("#dce1e8")
+    val sidebar = android.graphics.Color.parseColor("#eef2f7")
+    val ink = android.graphics.Color.parseColor("#1e293b")
+    val muted = android.graphics.Color.parseColor("#586579")
+    val accent = android.graphics.Color.parseColor("#345fc5")
+    val accentHover = android.graphics.Color.parseColor("#254ba7")
+    val tint = android.graphics.Color.parseColor("#eaf0fc")
+    val border = android.graphics.Color.parseColor("#cad3df")
+    val controlBorder = android.graphics.Color.parseColor("#8090a5")
+    val divider = android.graphics.Color.parseColor("#e0e6ef")
     val success = android.graphics.Color.parseColor("#28734d")
     val warning = android.graphics.Color.parseColor("#966017")
     val danger = android.graphics.Color.parseColor("#b83c45")
+    const val radius = 12
+    const val radiusContainer = 12
+    const val radiusControl = 8
+    const val radiusReading = 12
+    const val radiusIndicator = 8
+    const val fontTitle = 24
+    const val fontTitleMobile = 22
+    const val fontAppbar = 16
+    const val fontSection = 16
+    const val fontRow = 14
+    const val fontBody = 14
+    const val fontSupport = 13
+    const val fontMeta = 12
+    const val fontAction = 14
+    const val spacePage = 16
+    const val spacePanel = 16
+    const val spaceGroup = 24
+    const val spaceItem = 12
+    const val spaceInline = 8
+    const val controlHeight = 48
+    const val borderWidth = 1
 }

@@ -26,8 +26,7 @@ class ImageDedupeDiagnosticsActivity : MoteActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        body = moteDetailPage()
-        text(body, MoteI18n.text("图片去重诊断"), 27f)
+        body = moteDetailPage(title = MoteI18n.text("图片去重诊断"))
         text(body, MoteI18n.text("仅保留开启诊断后命中的图片对。图片已完成隐私检查和遮罩，仅在本机保存，不会同步。"), 14f)
         text(body, MoteI18n.text("最多 20 组、32 MiB，保存期限 24 小时。读取时清理过期记录；系统休眠可能延后后台清理。关闭诊断后清空。"), 12f)
         status = text(body, MoteI18n.text("正在读取…"), 14f)

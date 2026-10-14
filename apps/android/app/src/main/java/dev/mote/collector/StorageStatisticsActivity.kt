@@ -13,7 +13,7 @@ class StorageStatisticsActivity : MoteActivity() {
     private lateinit var body: LinearLayout
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        body = moteDetailPage(); body.addView(TextView(this).apply { text = MoteI18n.text("统计中心"); textSize = 27f })
+        body = moteDetailPage(title = MoteI18n.text("统计中心"))
         body.addView(TextView(this).apply { text = MoteI18n.text("当前磁盘占用，按文件类型和最后修改日期（UTC）汇总。共享文件只计一次；日期分布不是每日新增量。") })
         val result = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(result)
         val refresh = Button(this).apply { text = MoteI18n.text("刷新") }; body.addView(refresh)
@@ -29,15 +29,15 @@ class StorageStatisticsActivity : MoteActivity() {
                         } catch (_: Exception) { skipped++ }
                     }
                     listOf(File(applicationInfo.dataDir).canonicalFile, File(QueueStorage(this).current().path).canonicalFile).forEach(::visit)
-                    Triple("${"%.2f".format(total / 1048576.0)} MiB · $count ${MoteI18n.text("文件")}" + if (skipped > 0) "\n" + MoteI18n.text("部分文件无法读取，统计可能不完整。") else "", types, days)
+                    Triple(MoteI18n.text("{0} MiB · 文件：{1}", "%.2f".format(total / 1048576.0), count) + if (skipped > 0) "\n" + MoteI18n.text("部分文件无法读取，统计可能不完整。") else "", types, days)
                 }
                 runOnUiThread {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     refresh.isEnabled = true; result.removeAllViews()
                     report.onSuccess { (summary, types, days) ->
-                        result.addView(TextView(this).apply { text = summary; textSize = 20f })
+                        result.addView(TextView(this).apply { text = summary; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink) })
                         for ((title, rows) in listOf(MoteI18n.text("按文件类型") to types, MoteI18n.text("按日期") to days)) {
-                            result.addView(TextView(this).apply { text = title; textSize = 20f }); val maximum = rows.values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
+                            result.addView(TextView(this).apply { text = title; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceItem), 0, moteDp(DesignTokens.spaceInline)) }); val maximum = rows.values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
                             for ((label, bytes) in rows) { result.addView(TextView(this).apply { text = "$label · ${"%.2f".format(bytes / 1048576.0)} MiB" }); result.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 1000; progress = (bytes.toDouble() / maximum * 1000).toInt() }) }
                         }
                     }.onFailure { result.addView(TextView(this).apply { text = MoteI18n.text("统计读取失败，请重试。") }) }

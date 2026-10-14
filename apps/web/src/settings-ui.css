@@ -49,7 +49,7 @@
 .list-pagination>span { margin-right:auto; }
 .list-pagination>label,.list-pagination>div { display:flex; align-items:center; gap:8px; }
 .list-pagination select { min-width:70px; }
-.processing-detail { width:min(780px,100%); overflow:auto; }
+.processing-detail { width:min(780px,100%); padding:24px; overflow:auto; }
 .processing-detail .operation-id { margin:16px 0; overflow-wrap:anywhere; }
 .processing-detail>progress { margin-block:10px 20px; }
 .processing-detail>p { line-height:1.7; color:var(--muted); }

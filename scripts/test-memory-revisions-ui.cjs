@@ -5,6 +5,8 @@ const {app,BrowserWindow}=require('electron');
 const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync}=require('node:fs');
 const {tmpdir}=require('node:os'),{join,resolve}=require('node:path'),{pathToFileURL}=require('node:url');
 const {spawn}=require('node:child_process'),{randomBytes}=require('node:crypto'),assert=require('node:assert/strict');
+const {memoryCorrectionPresentation}=require('./memory-presentation-probe.cjs');
+const {controlCaptionPresentation}=require('./control-caption-probe.cjs');
 const repo=resolve(__dirname,'..'),root=mkdtempSync(join(tmpdir(),'mote-memory-ui-'));
 const outputRoot=process.env.MOTE_MEMORY_UI_OUTPUT||join(repo,'.mote/memory-revisions-ui');mkdirSync(outputRoot,{recursive:true});
 const out=mkdtempSync(join(outputRoot,'run-'));
@@ -39,19 +41,34 @@ await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(
  window=new BrowserWindow({width:1280,height:1000,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
  const wc=window.webContents,js=s=>wc.executeJavaScript(s);
  const click=text=>until(()=>js(`(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(text)});if(!b||b.disabled)return false;b.click();return true;})()`),'button '+text);
+ const chooseMemories=()=>until(()=>js(`(()=>{const picker=document.querySelector('.library-compact-categories select');if(picker?.getClientRects().length){picker.value='memories';picker.dispatchEvent(new Event('change',{bubbles:true}));return true;}const button=document.querySelector('[data-collection-id="memories"]');if(!button?.getClientRects().length)return false;button.click();return true;})()`),'actual visible Memory collection control');
  const select=async title=>{await js(`(()=>{const e=[...document.querySelectorAll('.workspace-select')].find(e=>e.textContent.includes(${JSON.stringify(title)}));if(!e)throw Error('Missing memory');e.click();})()`);await until(()=>js(`document.querySelector('.memory-detail h2')?.textContent===${JSON.stringify(title)}`),'detail '+title);};
  const screenshot=async name=>{await js(`document.querySelector('.memory-detail').scrollIntoView({block:'start',behavior:'instant'})`);await delay(120);check('no horizontal overflow: '+name,await js('document.documentElement.scrollWidth<=innerWidth'));writeFileSync(join(out,name+'.png'),(await wc.capturePage()).toPNG());};
- await window.loadURL(url);await js(`sessionStorage.setItem('mote.connection',${JSON.stringify(JSON.stringify({token}))});location.reload()`);await click('资料库');await click('记忆');
+ await window.loadURL(url);await click('登录 Mote');
+ await until(()=>js(`!!document.querySelector('.connect-modal input[type=password]')`),'actual generated login');
+ await js(`(()=>{const input=document.querySelector('.connect-modal input[type=password]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(token)});input.dispatchEvent(new Event('input',{bubbles:true}));})()`);
+ await until(()=>js(`(()=>{const button=document.querySelector('.connect-modal form .button.primary');if(!button||button.disabled)return false;button.click();return true;})()`),'actual generated login submit');
+ await until(()=>js(`document.querySelector('.content')?.dataset.session==='ready'&&!document.querySelector('.connect-modal')`),'authenticated Memory fixture');
+ await click('资料库');await chooseMemories();
  await until(()=>js(`document.querySelectorAll('.workspace-select').length===2`),'current and legacy memory list');
  check('no confirmation queue in the default navigation',await js(`!document.querySelector('.memory-filters').textContent.includes('待确认')&&!document.querySelector('.memory-filters').textContent.includes('已确认')`));
  await select('旧版待重新处理记录');
- check('legacy records explain reprocessing without asking for confirmation',await js(`document.querySelector('.memory-detail [role="status"]')?.textContent.includes('无需逐条确认')&&document.querySelector('.memory-detail .status-label')?.textContent==='待重新处理'`));
+ check('legacy records remain explicitly labeled for reprocessing',await js(`document.querySelector('.memory-detail .status-label')?.textContent==='待重新处理'`));
  check('legacy records have no publish button',await js(`![...document.querySelectorAll('.memory-detail button')].some(b=>b.textContent==='确认这条记忆')`));
  await select('新版合成规则');
  check('active memory is labeled active in the renderer',await js(`document.querySelector('.memory-detail .status-label')?.textContent==='已生效'`));
  check('automatic relation has no confirmation gate',await js(`document.querySelector('.memory-detail').textContent.includes('替代的旧记忆')&&!document.querySelector('.memory-detail').textContent.includes('确认后才')`));
  await screenshot('automatic-memory-desktop');
  await click('纠正记忆');await until(()=>js(`!!document.querySelector('form.review-notes textarea')`),'correction form');
+ for(const width of [1280,820,390,320]){
+  window.setSize(width,1000);await until(()=>js('innerWidth==='+width),'actual correction width');
+  const presentation=await js('('+memoryCorrectionPresentation.toString()+')()');
+  check('owner correction stacked fields/whole Save/Cancel and original limits at '+width,presentation.fit&&presentation.fields.every(field=>field.labelBeforeField&&field.fullWidth&&field.reachable)&&[160,6000,2000].every(limit=>presentation.fields.some(field=>field.maxLength===limit))&&presentation.fields.filter(field=>field.type==='datetime-local').length===2&&presentation.buttons.every(button=>button.complete&&button.hit&&button.words.every(word=>word.lines===1))&&presentation.buttons.some(button=>button.primary&&button.type==='submit'));
+  report.presentation??=[];report.presentation.push({width,presentation});
+  writeFileSync(join(out,'owner-correction-fit-'+width+'.png'),(await wc.capturePage()).toPNG());
+ }
+ window.setSize(1280,1000);
+
  await js(`(()=>{const e=document.querySelector('form.review-notes textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'用户补充：Aurora 规则只适用于批量操作。');e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
  await request('/api/fixture/fail',{action:'correct'});await click('保存纠正并替代旧版本');
  await until(()=>js(`document.querySelector('[role="alert"]')?.textContent.includes('Generated transient save failure')`),'correction failure shown');
@@ -75,9 +92,15 @@ await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(
  await click('确认删除');await until(()=>js(`!document.querySelector('.memory-detail')&&document.querySelectorAll('.workspace-select').length===3`),'delete retry succeeds');
  check('deleted memory disappears from owner API',!(await request('/api/memories?includeHistory=true')).items.some(m=>m.id===state.legacyId));
  check('deleting a memory retains its original source',(await request('/api/fixture/state')).originalAvailable);
- await js(`localStorage.setItem('mote.language','en');location.reload()`);await click('Library');await click('Memories');await until(()=>js(`document.querySelectorAll('.workspace-select').length===1`),'English current list');await select(corrected.title);
+ await js(`localStorage.setItem('mote.language','en');location.reload()`);await click('Library');await chooseMemories();await until(()=>js(`document.querySelectorAll('.workspace-select').length===1`),'English current list');await select(corrected.title);
  check('English view translates activation and correction while retaining source text',await js(`document.querySelector('.memory-detail .status-label')?.textContent==='Active'&&[...document.querySelectorAll('.memory-detail button')].some(b=>b.textContent==='Correct memory')&&document.querySelector('.memory-detail').textContent.includes('批量操作')`));
  window.setSize(1280,1000);await screenshot('automatic-memory-english');
+ for(const width of [390,320]){
+  window.setSize(width,1000);await until(()=>js('innerWidth==='+width),'English status control viewport');
+  const presentation=await js('('+controlCaptionPresentation.toString()+')(".memory-filters")');
+  check('English Memory status captions retain whole words and original three controls at '+width,presentation.scrollRestored&&presentation.controls.length===3&&presentation.controls.every(control=>control.complete&&control.hit&&control.words.every(word=>word.lines===1))&&JSON.stringify(presentation.before)===JSON.stringify(presentation.after));
+  report.statusPresentation??=[];report.statusPresentation.push({width,presentation});
+ }
  report.passed=true;writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
 }
 run().catch(async error=>{report.error=String(error);console.error(error);if(window){writeFileSync(join(out,'failure.png'),(await window.webContents.capturePage()).toPNG());console.error((await window.webContents.executeJavaScript('document.body.innerText')).slice(-5000));}writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n');process.exitCode=1;}).finally(async()=>{
