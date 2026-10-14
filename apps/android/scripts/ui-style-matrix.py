@@ -159,6 +159,10 @@ for variant in VARIANTS:
         finally:
             # Revoking this UID's runtime permission ends it; never do it inside instrumentation.
             shell('pm', 'revoke', PACKAGE, 'android.permission.CAMERA')
+    if args.label == 'rollout':
+        instrument('dev.mote.collector.UiInventoryRolloutInstrumentedTest',
+                   {'uiIterationFixture': 'true', 'uiIterationVariant': variant},
+                   output / ('rollout-inventory-' + variant + '.log'), 1)
     archive = adb('exec-out', 'run-as', PACKAGE, 'tar', '-cf', '-', archive_path)
     destination = output / variant; destination.mkdir()
     with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:
