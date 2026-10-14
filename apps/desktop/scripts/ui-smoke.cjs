@@ -10,6 +10,9 @@ const { tmpdir } = require('node:os');
 const assert = require('node:assert/strict');
 const { defaultConfig, ConfigStore } = require('../dist/config');
 const { QueueStorage } = require('../dist/queue-storage');
+// Unpackaged Electron otherwise reports its runtime version. Rollout evidence
+// names the tested product version; DEV metadata exercises the real main branch.
+if (process.env.MOTE_UI_ROLLOUT) app.getVersion = () => require('../package.json').version;
 
 // A clean generated profile prevents reading existing settings or personal screenshots.
 const profile = mkdtempSync(join(tmpdir(), 'mote-ui-fixture-'));
@@ -605,6 +608,7 @@ const Module = require('node:module');
 const originalLoad = Module._load;
 Module._load = function(request, parent, isMain) {
   const result = originalLoad.call(this, request, parent, isMain);
+  if (process.env.MOTE_UI_ROLLOUT_DEV_ABOUT === '1' && request === '../package.json' && parent?.filename === join(__dirname, '../dist/main.js')) return { ...result, moteDevelopment: true };
   if (request !== 'electron') return result;
   return { ...result, BrowserWindow: class extends result.BrowserWindow {
     constructor(options) { super({ ...options, show: false }); }

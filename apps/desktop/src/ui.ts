@@ -614,8 +614,13 @@ let sourceBusy = false;
 let sourceSelection:{id:string;mode:'files'|'directory';names:string[]}|undefined;
 const sourceRules=byId<HTMLDetailsElement>('source-rules');
 const sourceRulesHome=sourceRules.parentElement!;
-function restoreSourceRules():void {sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;}
-function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceSelection?.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);if(once)field.value='all';}
+function refreshSourcePolicySummaries():void {
+  for(const [fieldId,summaryId] of [['source-initial-sync','source-history-value'],['source-retention','source-retention-value']]) byId(summaryId).textContent=byId<HTMLSelectElement>(fieldId).selectedOptions[0]?.textContent??'';
+}
+function restoreSourceRules():void {sourceRulesHome.append(sourceRules);sourceRules.open=false;byId<HTMLSelectElement>('source-initial-sync').disabled=false;refreshSourcePolicySummaries();}
+function updateSourceHistoryChoice():void {const field=byId<HTMLSelectElement>('source-initial-sync'),once=sourceSelection?.mode==='files'&&!byId<HTMLInputElement>('source-continuous').checked;field.disabled=Boolean(once);if(once)field.value='all';refreshSourcePolicySummaries();}
+byId('source-initial-sync').addEventListener('change',refreshSourcePolicySummaries);
+refreshSourcePolicySummaries();
 byId('source-continuous').addEventListener('change',updateSourceHistoryChoice);
 async function beginSourceSelection(mode:'files'|'directory'):Promise<void>{
   if(sourceBusy||!showPage('sources'))return;
@@ -660,6 +665,7 @@ function editSource(id?: string): void {
   refreshSourceTextOptions();
 }
 function refreshSourceTextOptions(): void {
+  refreshSourcePolicySummaries();
   const source=localSourceRows.find(row=>row.source.id===sourceEditingId)?.source;
   const visible=(!source||source.kind==='local-files')&&readInput('source-retention')==='snapshot';
   byId('source-file-text-options').hidden=!visible;
@@ -735,6 +741,8 @@ let updateState: import('./updater').UpdateStatus | undefined;
 function renderUpdate(value: import('./updater').UpdateStatus): void {
   updateState = value;
   for (const id of ['update-channel','update-check','update-download','update-cancel','update-install','update-reveal','update-progress']) byId(id).hidden=!!value.manualDownload;
+  byId('update-channel').closest('label')!.hidden=!!value.manualDownload;
+  byId('app-updates').querySelector('details')!.hidden=!!value.manualDownload;
   byId('update-notes').textContent=value.manualDownload?moteText('下载 DEV 安装包'):moteText('查看版本说明与安装包');
   byId('update-version').textContent = moteText("当前 {0}{1}", value.currentVersion, value.availableVersion ? moteText(" · 发布 ") + value.availableVersion : '');
   byId<HTMLSelectElement>('update-channel').value = value.channel;

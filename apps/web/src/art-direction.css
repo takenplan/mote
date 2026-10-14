@@ -307,3 +307,11 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
 }
 
 .source-heading-actions { flex-wrap:wrap; max-width:100%; }
+.session-lifetime-control select { flex-shrink:0; min-inline-size:220px; }
+.discovery-inline-guidance .text-button { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+.file-processing-settings fieldset { grid-template-columns:minmax(0,1fr); }
+.file-processing-settings details { min-width:0; }
+.file-processing-settings .text-button { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
+@media(max-width:760px) {
+ .session-lifetime-control select { min-inline-size:0; }
+}

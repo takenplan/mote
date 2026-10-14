@@ -198,6 +198,24 @@ summary { min-height:var(--mote-control-height); padding-block:var(--mote-space-
 .note-composer #note-text { min-height:180px; }
 #content-detail-title,#record-detail-title { outline-color:var(--mote-accent); }
 #content-detail-title:focus,#record-detail-title:focus { outline:3px solid var(--mote-accent); outline-offset:3px; border-radius:var(--mote-radius-control); }
+/* Quantities and informational states share the blue data role; success keeps
+   its semantic green only where an actual completed/granted state is shown. */
+#update-version { color:var(--mote-muted); font-size:var(--mote-font-meta); }
+.form-grid:has(#update-channel[hidden]) { grid-template-columns:1fr; }
+progress { accent-color:var(--mote-accent); background:var(--mote-divider); }
+progress::-webkit-progress-bar { background:var(--mote-divider); }
+progress::-webkit-progress-value { background:var(--mote-accent); }
+progress::-moz-progress-bar { background:var(--mote-accent); }
+.storage-bar meter { appearance:none; height:12px; background:var(--mote-divider); border-radius:var(--mote-radius-control); }
+.storage-bar meter::-webkit-meter-bar { background:var(--mote-divider); border:1px solid var(--mote-border); border-radius:var(--mote-radius-control); }
+.storage-bar meter::-webkit-meter-optimum-value,.storage-bar meter::-webkit-meter-suboptimum-value,.storage-bar meter::-webkit-meter-even-less-good-value { background:var(--mote-accent); }
+.storage-bar meter::-moz-meter-bar { background:var(--mote-accent); }
+.metrics>div+div,.quiet-note,.status-actions { border-color:var(--mote-divider); }
+#source-list>.helper { color:var(--mote-muted); background:var(--mote-background); border-color:var(--mote-border); }
+.source-connect-panel>.actions+.actions { margin-top:var(--mote-space-inline); }
+#local-sources>[data-add] { margin-top:var(--mote-space-item); }
+.app-rule button { background:var(--mote-surface); border-color:var(--mote-control-border); }
+.source-policy-value { display:none; }
 /* At high zoom or short windows, the same document scroll exposes the field,
    hint and Save together without two fixed surfaces consuming the reading lane. */
 @media(max-height:480px) {
@@ -206,6 +224,8 @@ summary { min-height:var(--mote-control-height); padding-block:var(--mote-space-
   main { padding-bottom:var(--mote-space-group); }
 }
 @media(max-width:1000px) {
+  .form-grid:has(#source-retention) { grid-template-columns:1fr; }
+  .source-policy-value { display:block; overflow-wrap:anywhere; }
   .save-row { padding-inline:var(--mote-space-page); }
   .save-row { grid-template-columns:1fr; gap:var(--mote-space-inline); }
   .save-row .actions { justify-content:flex-end; }

@@ -57,6 +57,25 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     await reload;await until(()=>js('document.documentElement.lang==='+JSON.stringify(language)+'&&!!document.querySelector("#workspace-location").textContent.trim()'),'locale reload');
     await js('window.confirm=()=>true;true;');
   }
+  const fixtureMetadata={productVersion:require('../package.json').version,appVersionAdapter:true,developmentMetadataAdapter:process.env.MOTE_UI_ROLLOUT_DEV_ABOUT==='1'};
+  function finish() {
+    const manifest={platform:'mac',generatedOnly:true,passed:true,parentCommit,workingTreeChanges,sourceIdentity,buildIdentity,nativeIdentity,fixtureMetadata,captures,journeys,boundary:'Hidden real Electron product / temporary generated profile. Native picker and permission responses are generated. Product appVersion adapter; DEV-only branch uses package metadata adapter. Real Electron zoom and key events with explicit hidden renderer focus emulation; no foreground OS focus, personal capture, account, live model or physical device.',profile};
+    writeFileSync(join(outputDirectory,'rollout-manifest.json'),JSON.stringify(manifest,null,2));return manifest;
+  }
+  if(fixtureMetadata.developmentMetadataAdapter) {
+    for(const language of ['zh-CN','en']) {
+      window.webContents.setZoomFactor(1);await changeLanguage(language);
+      for(const [variant,width,height,zoom] of [['normal',1140,840,1],['compact',820,620,1],['large',820,620,1.3]]) {
+        window.setSize(width,height);window.webContents.setZoomFactor(zoom);await navigate('about');await ready('about');
+        await until(()=>js('window.mote.updateStatus().then(s=>s.manualDownload===true&&s.currentVersion==='+JSON.stringify(fixtureMetadata.productVersion)+')'),'real DEV update branch');
+        assert.equal(await js('document.querySelector("#update-check").hidden&&document.querySelector("#update-progress").hidden&&document.querySelector("#update-notes").textContent.includes("DEV")'),true,'DEV manual download controls');
+        await js('Array.from(document.querySelectorAll("[data-page=about] details")).forEach(e=>e.open=true);window.scrollTo(0,0);true;');await capture(['about-dev',language==='en'?'en':'zh',variant,'top'].join('-'),'about');
+        await js('window.scrollTo(0,document.documentElement.scrollHeight);true;');await capture(['about-dev',language==='en'?'en':'zh',variant,'end'].join('-'),'about');
+        journeys.push({name:'real main DEV metadata manual-download About branch',language,variant,verified:true,packageMetadataAdapter:true,liveUpdateNetwork:false});
+      }
+    }
+    assert.equal((await js('window.mote.status()')).running,false,'No real collection');return finish();
+  }
   const original='Generated rollout original  双空格 🐾\n\nA note keeps its exact original, source and time.';
   await navigate('notes');await until(()=>js('!document.querySelector("#note-text").disabled'),'draft');
   await js('document.querySelector("#note-text").value='+JSON.stringify(original)+';document.querySelector("#note-text").dispatchEvent(new Event("input"));document.querySelector("#note-form").requestSubmit();true;');
@@ -65,6 +84,14 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
   const key=await js('Array.from(document.querySelectorAll("#home-recent .content-row")).find(e=>e.textContent.includes("Generated rollout original")).dataset.contentKey');
   await until(()=>js('window.mote.status().then(s=>!(s.operations??[]).some(j=>j.state==="running"))'),'note finished');
   const pages=['overview','records','notes','ask','settings','connection','sync','capture','privacy','permissions','activity','statistics','developer','about','sources','uploads','screen','compression'];
+  // Explicit generated platform selections; these actions must never enumerate
+  // personal app/session/calendar data while auditing controls.
+  const sourcePickerHandlers=new Map(['mote:coding-agents','mote:calendar-authorize'].map(channel=>[channel,ipcMain._invokeHandlers.get(channel)]));
+  ipcMain.removeHandler('mote:coding-agents');ipcMain.handle('mote:coding-agents',()=>[{provider:'codex',name:'Generated Codex',path:'/generated/codex',available:true}]);
+  ipcMain.removeHandler('mote:calendar-authorize');ipcMain.handle('mote:calendar-authorize',()=>[{id:'generated-calendar',title:'Generated calendar'}]);
+  async function reloadCleanUi(page) {
+    const reload=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await reload;await js('window.confirm=()=>true;true;');await navigate(page);await ready(page);
+  }
   for(const language of ['zh-CN','en']) {
     window.webContents.setZoomFactor(1);await changeLanguage(language);
     for(const [variant,width,height,zoom] of [['normal',1140,840,1],['compact',820,620,1],['large',820,620,1.3]]) {
@@ -83,44 +110,73 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
         }
         await capture([page,language==='en'?'en':'zh',variant,'top'].join('-'),page);
         await js('window.scrollTo(0,document.documentElement.scrollHeight);true;');await frames();
-        const last=await js('(()=>{const els=Array.from(document.querySelectorAll("[data-page]:not([hidden]) button,[data-page]:not([hidden]) input,[data-page]:not([hidden]) select,[data-page]:not([hidden]) textarea")).filter(e=>e.getClientRects().length&&!e.closest("[hidden]")&&!e.closest("details:not([open])"));const e=els.at(-1);if(!e)return null;const b=e.getBoundingClientRect(),f=document.querySelector("#settings-save-bar");return {id:e.id,bottom:b.bottom,footerTop:f.hidden?innerHeight:f.getBoundingClientRect().top};})()');
+        const last=await js('(()=>{const els=Array.from(document.querySelectorAll("[data-page]:not([hidden]) button,[data-page]:not([hidden]) input,[data-page]:not([hidden]) select,[data-page]:not([hidden]) textarea")).filter(e=>e.getClientRects().length&&!e.closest("[hidden]")&&!e.closest("details:not([open])"));const e=els.at(-1);if(!e)return null;const b=e.getBoundingClientRect(),f=document.querySelector("#settings-save-bar");return {id:e.id,bottom:b.bottom,footerTop:f.hidden||getComputedStyle(f).position!=="fixed"?innerHeight:f.getBoundingClientRect().top};})()');
         if(last)assert(last.bottom<=last.footerTop+1,'Final configuration control is scrollable above footer '+page+' '+variant);
-        if(['connection','sync','capture','privacy','permissions','developer','about','sources','uploads','screen','compression'].includes(page))await capture([page,language==='en'?'en':'zh',variant,'end'].join('-'),page);
+        await capture([page,language==='en'?'en':'zh',variant,'end'].join('-'),page);
+        if(page==='sources') {
+          await js('document.querySelector("#source-calendar-permissions").closest("details").open=true;document.querySelector("#source-calendar-permissions").closest("details").scrollIntoView({block:"start",behavior:"instant"});true;');
+          await capture(['source-scope',language==='en'?'en':'zh',variant].join('-'),page);
+          await js('document.querySelector("#source-retention").closest(".form-grid").scrollIntoView({block:"start",behavior:"instant"});true;');await capture(['source-policy',language==='en'?'en':'zh',variant].join('-'),page);
+          await js('document.querySelector("#source-agent-discover").closest("details").open=true;document.querySelector("#source-agent-discover").click();true;');await until(()=>js('!document.querySelector("#source-agent-choice").hidden&&!document.querySelector("#source-agent-add").disabled'),'generated agent picker');
+          await js('document.querySelector("#source-agent-add").closest(".actions").scrollIntoView({block:"end",behavior:"instant"});true;');await capture(['source-agent-picker',language==='en'?'en':'zh',variant].join('-'),page);
+          await js('document.querySelector("#source-calendar-connect").click();true;');await until(()=>js('!document.querySelector("#source-calendars").hidden&&!document.querySelector("#source-calendar-add").disabled'),'generated calendar picker');
+          await js('document.querySelector("#source-calendar-add").scrollIntoView({block:"end",behavior:"instant"});true;');await capture(['source-picker',language==='en'?'en':'zh',variant].join('-'),page);
+          journeys.push({name:'actual generated Coding Agent and calendar selection controls',language,variant,verified:true,platformSelectionAdapters:true,sourceCommitted:false});await reloadCleanUi(page);
+        }
+        if(page==='privacy') {
+          await js('document.querySelector("#add-app-rule").click();true;');await until(()=>js('document.querySelector("#installed-app-choice").options.length===1&&!document.querySelector("#use-installed-app").disabled'),'generated installed app picker');
+          await js('document.querySelector("#app-picker").scrollIntoView({block:"center",behavior:"instant"});true;');await capture(['privacy-app-picker',language==='en'?'en':'zh',variant].join('-'),page);
+          await js('document.querySelector("#exclude-installed-app").click();document.querySelector("#app-collection-rules").scrollIntoView({block:"center",behavior:"instant"});true;');assert.equal(await js('document.querySelector("#app-collection-rules select").value'),'off','Exact app exclusion scope');await capture(['privacy-app-rule',language==='en'?'en':'zh',variant].join('-'),page);
+          await js('document.querySelector("#settings-reset").click();document.querySelector("[data-mask=notification]").click();document.querySelector("#mask-preview").scrollIntoView({block:"start",behavior:"instant"});true;');await capture(['privacy-mask',language==='en'?'en':'zh',variant].join('-'),page);
+          assert.equal(await js('document.querySelectorAll("#mask-editor input[type=range]").length'),4,'Full generated mask controls');await js('document.querySelector("#mask-editor").scrollIntoView({block:"end",behavior:"instant"});true;');await capture(['privacy-mask-controls',language==='en'?'en':'zh',variant].join('-'),page);
+          await js('document.querySelector("#settings-reset").click();true;');journeys.push({name:'generated installed-app picker, exact exclusion rule, mask diagram/sliders and Reset',language,variant,verified:true,settingsCommitted:false,personalScreenRead:false});await reloadCleanUi(page);
+        }
       }
       await navigate('overview');await js('document.querySelector("#note-action").click();true;');
       assert.equal(await js('document.querySelector("#add-dialog").open&&document.querySelectorAll("#add-dialog [data-add-choice]").length===4'),true,'Shared four-action chooser');
       await capture(['add-chooser',language==='en'?'en':'zh',variant].join('-'),'overview');
+      await js('document.querySelector("#add-dialog").scrollTop=document.querySelector("#add-dialog").scrollHeight;true;');await capture(['add-chooser-end',language==='en'?'en':'zh',variant].join('-'),'overview');
       await js('document.querySelector("#add-dialog [data-add-choice=file]").click();true;');await ready('sources');
       await until(()=>js('!document.querySelector("#source-confirmation").hidden&&document.querySelector("#source-selected-names").textContent.includes("synthetic-source.md")'),'generated import selected range');
       await capture(['import',language==='en'?'en':'zh',variant].join('-'),'sources');
+      await js('document.querySelector("#source-selection-cancel").scrollIntoView({block:"end",behavior:"instant"});true;');await capture(['import-end',language==='en'?'en':'zh',variant].join('-'),'sources');
       assert.equal(await js('document.querySelector("#source-continuous").checked'),false,'Single file preserves one-time default');
       await js('document.querySelector("#source-selection-cancel").click();true;');assert.equal((await js('window.mote.sources()')).length,0,'Cancel does not create a source');
       journeys.push({name:'shared Add, generated import range and Cancel',language,variant,verified:true});
       await navigate('records');await ready('records');
       await js('document.querySelector('+JSON.stringify('#content-feed [data-content-key="'+key+'"]')+').click();true;');
       await until(()=>js('document.querySelector("#content-detail-dialog").open&&document.querySelector("#content-detail-status").getAttribute("aria-busy")==="false"'),'exact reader');
+      window.webContents.debugger.attach('1.3');await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});window.webContents.focus();
       assert.equal(await js('getComputedStyle(document.querySelector("#content-detail-title")).outlineColor'),await js('getComputedStyle(document.querySelector(".nav-item.selected")).color'),'Reader heading uses shared blue focus role');
       assert.equal(await js('document.querySelector("#content-detail-body").textContent'),original,'Exact note original');
       await capture(['reader',language==='en'?'en':'zh',variant].join('-'),'records');
       await js('document.querySelector("#content-processing summary").click();true;');assert.equal(await js('document.querySelectorAll("#content-detail-stages li").length'),4,'Full processing help');
+      await js('document.querySelector("#content-detail-metadata").closest("details").open=true;document.querySelector("#content-detail-dialog").scrollTop=document.querySelector("#content-detail-dialog").scrollHeight;true;');await capture(['reader-status',language==='en'?'en':'zh',variant].join('-'),'records');
       await js('document.querySelector("#content-detail-close").click();true;');assert.equal(await js('document.activeElement.dataset.contentKey'),key,'Same opener focus');
+      await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:false});window.webContents.debugger.detach();
       journeys.push({name:'exact original, full processing help and Close focus',language,variant,verified:true});
       await navigate('connection');await js('document.querySelector("#device-name").value="Generated unsaved device";document.querySelector("#device-name").dispatchEvent(new Event("input"));true;');await frames();
       await capture(['dirty-footer',language==='en'?'en':'zh',variant].join('-'),'connection');
+      await js('window.scrollTo(0,document.documentElement.scrollHeight);true;');await capture(['dirty-footer-end',language==='en'?'en':'zh',variant].join('-'),'connection');
       await js('window.confirm=()=>false;document.querySelector("#workspace-back").click();true;');assert.equal(await js('document.querySelector("#device-name").value'),'Generated unsaved device','Keep settings draft');
       await js('window.confirm=()=>true;document.querySelector("#workspace-back").click();true;');await navigate('connection');assert.equal(await js('document.querySelector("#device-name").value'),'Synthetic Mac','Discard restores saved config');
       journeys.push({name:'dirty footer, Keep and Discard',language,variant,verified:true});
     }
     window.webContents.setZoomFactor(2);window.setSize(820,620);await frames();
+    window.webContents.debugger.attach('1.3');await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});window.webContents.focus();
+    try {
     for(const page of ['overview','notes','connection','privacy','developer']) {
       await navigate(page);await ready(page);await js('Array.from(document.querySelectorAll("[data-page]:not([hidden]) details")).forEach(e=>e.open=true);true;');
-      const target={overview:'.home-add-grid [data-add-choice=folder]',notes:'#note-text',connection:'#device-name',privacy:'#default-collection',developer:'#diagnostic-interval'}[page];
+      const target={overview:'.home-add-grid [data-add-choice=folder]',notes:'#note-text',connection:'#device-name',privacy:'#default-collection',developer:'#diagnostic-interval-preset'}[page];
       await js('document.querySelector('+JSON.stringify(target)+').scrollIntoView({block:"center"});document.querySelector('+JSON.stringify(target)+').focus();true;');await frames();
-      const lane=await js('(()=>{const e=document.querySelector('+JSON.stringify(target)+'),r=e.getBoundingClientRect(),t=document.querySelector(".workspace-toolbar"),f=document.querySelector("#settings-save-bar");const top=getComputedStyle(t).position==="sticky"?t.getBoundingClientRect().bottom:0,bottom=!f.hidden&&getComputedStyle(f).position==="fixed"?f.getBoundingClientRect().top:innerHeight;return {target:'+JSON.stringify(target)+',top,bottom,fieldTop:r.top,fieldBottom:r.bottom,fieldHeight:r.height,focused:document.activeElement===e};})()');
+      const lane=await js('(()=>{const e=document.querySelector('+JSON.stringify(target)+'),r=e.getBoundingClientRect(),t=document.querySelector(".workspace-toolbar"),f=document.querySelector("#settings-save-bar");const top=getComputedStyle(t).position==="sticky"?t.getBoundingClientRect().bottom:0,bottom=!f.hidden&&getComputedStyle(f).position==="fixed"?f.getBoundingClientRect().top:innerHeight;return {target:'+JSON.stringify(target)+',top,bottom,fieldTop:r.top,fieldBottom:r.bottom,fieldHeight:r.height,focused:document.activeElement===e&&e.matches(":focus"),outlineColor:getComputedStyle(e).outlineColor,borderColor:getComputedStyle(e).borderColor,hiddenRendererFocusEmulated:true};})()');
+      const focusRole=await js('(()=>{const e=document.querySelector('+JSON.stringify(target)+'),s=getComputedStyle(e),blue=getComputedStyle(document.querySelector(".nav-item.selected")).color;return s.borderColor===blue||(s.outlineStyle!=="none"&&s.outlineColor===blue);})()');assert(focusRole,'Actual focused field paints sharedblue role '+page);
+      if(!(lane.focused&&lane.fieldTop>=lane.top+6&&lane.fieldBottom<=lane.bottom-6))writeFileSync(join(outputDirectory,'failed-reading-lane.json'),JSON.stringify({page,language,lane},null,2));
       assert(lane.focused&&lane.fieldTop>=lane.top+6&&lane.fieldBottom<=lane.bottom-6,'Full focused field and outline visible in reading lane '+page+' '+language);
       const captured=await capture([page,language==='en'?'en':'zh','zoom200'].join('-'),page);captured.readingLane=lane;
       journeys.push({name:'true200% full focused input and readable document lane',page,language,verified:true,lane});
     }
+    } finally {await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:false});window.webContents.debugger.detach();}
     await navigate('notes');await ready('notes');
     const keyboardText='Generated real keyboard save '+language;
     await js('document.querySelector("#note-text").value="";document.querySelector("#note-text").dispatchEvent(new Event("input"));document.querySelector("#note-text").scrollIntoView({block:"center"});document.querySelector("#note-text").focus();true;');
@@ -136,6 +192,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
       await until(()=>js('document.activeElement.id==="save-note"'),'Actual Tab reaches Save');
       await js('document.querySelector("#save-note").scrollIntoView({block:"center"});true;');await frames();
       assert.equal(await js('(()=>{const r=document.querySelector("#save-note").getBoundingClientRect();return r.top>=6&&r.bottom<=innerHeight-6;})()'),true,'Keyboard Save and outline fully visible');
+      await capture(['keyboard-save',language==='en'?'en':'zh','zoom200'].join('-'),'notes');
       window.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});
       window.webContents.sendInputEvent({type:'char',keyCode:'\r'});
       window.webContents.sendInputEvent({type:'keyUp',keyCode:'Enter'});
@@ -143,6 +200,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     } finally { await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:false});window.webContents.debugger.detach(); }
     journeys.push({name:'true Electron 200% zoom keyboard Save',language,verified:true,zoom:2,hiddenRendererFocusEmulated:true});
   }
+  for(const [channel,handler] of sourcePickerHandlers){ipcMain.removeHandler(channel);ipcMain.handle(channel,handler);}
   window.webContents.setZoomFactor(1);window.setSize(820,620);await changeLanguage('zh-CN');
   await navigate('notes');await ready('notes');
   const draft='Generated reload draft · 生成草稿';await js('document.querySelector("#note-text").value='+JSON.stringify(draft)+';document.querySelector("#note-text").dispatchEvent(new Event("input"));true;');await delay(400);
@@ -187,15 +245,18 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
       for(const [variant,zoom] of [['normal',1],['compact',1],['large',1.3]]) {
         window.setSize(variant==='normal'?1140:820,variant==='normal'?840:620);window.webContents.setZoomFactor(zoom);await frames();
         await js('window.scrollTo(0,0);true;');await capture(['ask-connected',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-answer');
+        await js('document.querySelector(".ask-answer").scrollIntoView({block:"start",behavior:"instant"});true;');await capture(['ask-answer',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-answer');
+        await js('document.querySelector(".ask-evidence").scrollIntoView({block:"end",behavior:"instant"});true;');await capture(['ask-answer-end',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-answer');
         const references=await js('Array.from(document.querySelectorAll(".ask-inline-citation")).map(e=>({text:e.textContent,height:e.getBoundingClientRect().height,minHeight:getComputedStyle(e).minHeight,client:e.clientWidth,scroll:e.scrollWidth,complete:e.scrollWidth<=e.clientWidth+1}))');
         if(!references.every(e=>e.height>=23.5&&e.height<=32&&e.minHeight==="24px"&&e.complete))writeFileSync(join(outputDirectory,'inline-reference-diagnostic.json'),JSON.stringify({language,variant,references},null,2));
         assert(references.every(e=>e.height>=23.5&&e.height<=32&&e.minHeight==="24px"&&e.complete),'Compact complete inline references');
         assert.equal(await js('getComputedStyle(document.querySelector(".ask-evidence button")).minHeight'),'48px','Full original action retains control role');
         await js('document.querySelector(".ask-evidence summary").click();true;');assert.equal(await js('document.querySelector(".ask-excerpt").textContent'),excerpt,'Full generated evidence excerpt');
+        await js('document.querySelector(".ask-excerpt").scrollIntoView({block:"start",behavior:"instant"});true;');await capture(['ask-evidence-start',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-excerpt');
         await js('document.querySelector(".ask-excerpt").scrollIntoView({block:"end"});true;');await capture(['ask-evidence',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-excerpt');
         await js('document.querySelector(".ask-evidence summary").click();document.querySelector(".ask-inline-citation").scrollIntoView({block:"center"});document.querySelector(".ask-inline-citation").focus();true;');
         window.webContents.debugger.attach('1.3');
-        try{await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});window.webContents.focus();window.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});window.webContents.sendInputEvent({type:'char',keyCode:'\r'});window.webContents.sendInputEvent({type:'keyUp',keyCode:'Enter'});await until(()=>openedEvidence.at(-1)?.id===citationId,'real citation IPC');}
+        try{await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});window.webContents.focus();window.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});window.webContents.sendInputEvent({type:'char',keyCode:'\r'});window.webContents.sendInputEvent({type:'keyUp',keyCode:'Enter'});await until(()=>openedEvidence.at(-1)?.id===citationId,'real citation IPC');await capture(['ask-reference-focus',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-inline-citation');}
         finally{await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:false});window.webContents.debugger.detach();}
         assert.equal(await js('document.activeElement.classList.contains("ask-inline-citation")'),true,'Citation keyboard focus remains on source action');
         openedEvidence.length=0;await js('document.querySelector(".ask-evidence button").click();true;');await until(()=>openedEvidence.at(-1)?.id===citationId,'full original IPC');
@@ -212,6 +273,5 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
   assert.equal((await js('window.mote.status()')).running,false,'No real collection');
   assert.equal((await js('window.mote.sources()')).length,0,'No source import committed');
   await navigate('overview');window.setSize(1140,840);await frames();
-  const manifest={platform:'mac',generatedOnly:true,passed:true,parentCommit,workingTreeChanges,sourceIdentity,buildIdentity,nativeIdentity,captures,journeys,boundary:'Hidden real Electron product / temporary generated profile. Native picker and permission responses are generated. Real Electron zoom and key events; no foreground OS focus, personal capture, account, live model or physical device.',profile};
-  writeFileSync(join(outputDirectory,'rollout-manifest.json'),JSON.stringify(manifest,null,2));return manifest;
+  return finish();
 };
