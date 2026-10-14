@@ -363,6 +363,12 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
 }
 
 .file-diarization-selection { display:none; }
+/* The established selected-detail lane also needs room between the mobile and wide layouts. */
+@media(min-width:801px) and (max-width:1100px) {
+ .library-browser.has-selection { display:block; }
+ .library-browser.has-selection>.library-master { display:none; }
+ .library-browser.has-selection>.library-detail { display:block; border-inline-start:0; }
+}
 @media(max-width:760px) {
  .file-diarization-settings { padding:var(--mote-space-item); }
  .file-diarization-fields { padding:var(--mote-space-inline); }

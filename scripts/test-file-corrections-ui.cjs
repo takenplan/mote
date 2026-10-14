@@ -23,18 +23,20 @@ async function run(){
  await until(()=>{if(server.exitCode!==null)throw Error(stderr);return existsSync(ready);},'fixture server');
  const info=JSON.parse(readFileSync(ready,'utf8')),endpoint='http://127.0.0.1:'+info.port;
  const request=async(path,body)=>{const r=await fetch(endpoint+path,{method:body?'POST':'GET',headers:{authorization:'Bearer '+token,'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});assert.ok(r.ok,`${path}: ${r.status} ${await(r.ok?Promise.resolve(''):r.text())}`);return r.json();};
- async function open(){const win=new BrowserWindow({width:1180,height:950,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});windows.push(win);const ui=controls(win);ui.wc.on('render-process-gone',(_e,data)=>report.crashes.push(data.reason));await win.loadURL(endpoint);await ui.js(`sessionStorage.setItem('mote.connection',${JSON.stringify(JSON.stringify({token}))});location.reload()`);await ui.click('资料库');return {win,...ui};}
- const material=await open();material.wc.session.webRequest.onCompleted(data=>{if(data.statusCode>=400)report.httpErrors.push({path:new URL(data.url).pathname,status:data.statusCode});});
+ async function open(){const win=new BrowserWindow({width:1180,height:950,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});windows.push(win);const ui=controls(win);ui.wc.on('render-process-gone',(_e,data)=>report.crashes.push(data.reason));await win.loadURL(endpoint);await until(()=>ui.js("!!document.querySelector('.simple-welcome button')"),'generated signed-out entry');await ui.js("document.querySelector('.simple-welcome button').click();true");await until(()=>ui.js("!!document.querySelector('.connect-modal input[type=password]')"),'actual masked login');await ui.js(`(()=>{const input=document.querySelector('.connect-modal input[type=password]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,${JSON.stringify(token)});input.dispatchEvent(new Event('input',{bubbles:true}));return true})()`);await until(()=>ui.js("!!document.querySelector('.connect-modal .button.primary:not(:disabled)')"),'actual login enabled');await ui.js("document.querySelector('.connect-modal .button.primary').click();true");await until(()=>ui.js("!!document.querySelector('.home-page')"),'authenticated generated Home');await ui.click('资料库');return {win,...ui};}
+ const material=presentationOnly?null:await open();if(!presentationOnly){material.wc.session.webRequest.onCompleted(data=>{if(data.statusCode>=400)report.httpErrors.push({path:new URL(data.url).pathname,status:data.statusCode});});
  await material.click('正式资料');await until(()=>material.js(`!!document.querySelector('.materials-browser .source-item')`),'material row');await material.js(`([...document.querySelectorAll('.materials-browser .source-item')].find(e=>e.textContent.includes(${JSON.stringify(info.name)}))).click()`);await until(()=>material.js(`document.querySelector('.material-detail')?.textContent.includes('周三')`),'initial material');
  check('formal file view shows confirmed names and readable speech',await material.js(`document.querySelector('.source-material-view')?.textContent.includes('已确认说话人：林工（生成）')&&document.querySelector('.source-material-view .file-text')?.textContent.includes('我修好了旧相框')`));
  check('formal reading view hides storage fields',await material.js(`!document.querySelector('.source-material-view')?.textContent.includes('confirmationId')`));
  await material.click('查看原始结构');check('raw material structure remains available',await material.js(`document.querySelector('.material-detail')?.textContent.includes('confirmationId')`));await material.click('返回阅读视图');await until(()=>material.js(`document.querySelector('.source-material-view')?.textContent.includes('周三')`),'readable material returns');
  material.win.show();material.win.focus();for(const width of [1180,430]){material.win.setSize(width,950);await material.js(`document.querySelector('.source-material-view').scrollIntoView({block:'start',behavior:'instant'})`);await delay(200);check('readable material has no horizontal overflow at '+width,await material.js(`document.documentElement.scrollWidth<=innerWidth&&document.querySelector('.source-material-view').scrollWidth<=document.querySelector('.source-material-view').clientWidth`));writeFileSync(join(out,'source-material-'+width+'.png'),(await material.wc.capturePage()).toPNG());}material.win.setSize(1180,950);
  writeFileSync(join(out,'before-material.png'),(await material.wc.capturePage()).toPNG());
- const file=await open();await file.click('文件与录音');await until(()=>file.js(`!!document.querySelector('.file-card')`),'file row');await file.js(`document.querySelector('.file-card').click()`);await file.click('展开转写 / 原文片段');await until(()=>file.js(`document.querySelectorAll('.file-text').length===2`),'file transcript');
+ }
+ const file=await open();if(presentationOnly)await file.js("document.querySelector('.library-navigation button[data-collection-id=files]').click();true");else await file.click('文件与录音');await until(()=>file.js(`!!document.querySelector('.file-card')`),'file row');await file.js(`document.querySelector('.file-card').click()`);await file.click('展开转写 / 原文片段');await until(()=>file.js(`document.querySelectorAll('.file-text').length===2`),'file transcript');
  check('confirmed names visible beside transcript',await file.js(`[...document.querySelectorAll('.file-text')].some(e=>e.parentElement.textContent.includes('林工（生成）'))`));
  // The actual language control reloads the same file, then native controls drive all count modes.
  async function reopenFile(locale){
+  file.win.setSize(1440,950);await until(()=>file.js('innerWidth===1440'),'visible language control viewport');
   if(await file.js('document.documentElement.lang')!==locale){
    await file.js(`(()=>{window.confirm=()=>true;const s=[...document.querySelectorAll('.language-selector select')].find(e=>e.getClientRects().length);s.value=${JSON.stringify(locale)};s.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
    await until(()=>file.js(`document.documentElement.lang===${JSON.stringify(locale)}&&!!document.querySelector('.file-card')`),'actual file language reload');
@@ -45,15 +47,21 @@ async function run(){
  for(const locale of ['zh-CN','en']){
   await reopenFile(locale);
   await file.js("document.querySelectorAll('.file-detail details:not([open])').forEach(e=>e.querySelector('summary').click());true");
-  for(const width of [1440,820,390,320])for(const mode of ['unknown','exact','range']){
+  for(const width of [1440,1101,1100,820,801,800,390,320])for(const mode of ([800,801,1100,1101].includes(width)?['unknown']:['unknown','exact','range'])){
    file.win.setSize(width,950);await until(()=>file.js(`innerWidth===${width}`),'diarization viewport');
    await file.js(`(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.value=${JSON.stringify(mode)};select.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
    await until(()=>file.js(`document.querySelectorAll('.file-diarization-fields input[type=number]').length===${mode==='unknown'?0:mode==='exact'?1:2}`),'original count fields');
    const appearance=await file.js('('+diarizationPresentation.toString()+')()');
-   check(`per-file selected values and whole primary action remain readable ${locale}/${width}/${mode}`,appearance.border==='solid'&&appearance.radius>0&&appearance.primary&&appearance.buttonComplete&&appearance.hit&&appearance.limit&&appearance.fit&&appearance.selections.every(s=>s.complete)&&appearance.words.every(w=>w.lines===1));
+   check(`per-file selected values and whole primary action remain readable ${locale}/${width}/${mode}`,appearance.border==='solid'&&appearance.radius>0&&appearance.primary&&appearance.buttonComplete&&appearance.hit&&appearance.limit&&appearance.fit&&appearance.selections.every(s=>s.complete)&&appearance.words.every(w=>w.lines===1)&&appearance.mediumLayout.masterHidden===(width<=1100));
    report.presentation??=[];report.presentation.push({locale,width,mode,appearance});
    writeFileSync(join(out,`file-diarization-${locale}-${width}-${mode}.png`),(await file.wc.capturePage()).toPNG());
   }
+  file.win.setSize(820,950);await until(()=>file.js('innerWidth===820'),'medium Back viewport');
+  await file.js("document.querySelector('.library-back').scrollIntoView({block:'center',behavior:'instant'});document.querySelector('.library-back').click();true");
+  await until(()=>file.js("!document.querySelector('.file-detail')&&!!document.querySelector('.file-card')"),'original Back returns current file list');
+  check('medium selected detail preserves real Back to list '+locale,true);
+  await file.js("document.querySelector('.file-card').click();true");await until(()=>file.js("!!document.querySelector('.file-detail')"),'original file can reopen after Back');
+  await file.js("document.querySelectorAll('.file-detail details:not([open])').forEach(e=>e.querySelector('summary').click());true");
   if(locale==='en'){
    const boundaries=await file.js('('+englishFileBoundaries.toString()+')()');
    check('English file status and policy labels retain word boundaries',Object.values(boundaries).every(Boolean));report.englishBoundaries=boundaries;

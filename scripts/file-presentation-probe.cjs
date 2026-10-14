@@ -10,7 +10,7 @@ function diarizationPresentation() {
   const displayed=companion?caption:select;displayed.scrollIntoView({block:'center',behavior:'instant'});
   const canvas=document.createElement('canvas'),context=canvas.getContext('2d'),style=getComputedStyle(select);context.font=style.font;
   const nativeTextFits=context.measureText(selected).width+parseFloat(style.paddingLeft)+parseFloat(style.paddingRight)+24<=select.clientWidth;
-  return {selected,caption:caption?.textContent.trim(),companion:Boolean(companion),complete:fits(displayed)&&(companion?caption.textContent.trim()===selected:nativeTextFits)};
+  return {selected,caption:caption?.textContent.trim(),companion:Boolean(companion),nativeTextFits,width:select.clientWidth,rect:displayed.getBoundingClientRect().toJSON(),complete:fits(displayed)&&(companion?caption.textContent.trim()===selected:nativeTextFits)};
  });
  const button=form.querySelector('button[type=submit]');button.scrollIntoView({block:'center',behavior:'instant'});
  const r=button.getBoundingClientRect(),words=[];const walker=document.createTreeWalker(button,NodeFilter.SHOW_TEXT);
@@ -19,7 +19,8 @@ function diarizationPresentation() {
   words.push({text:match[0],lines:range.getClientRects().length});
  }
  const style=getComputedStyle(form);
- return {selections,buttonText:button.textContent.trim(),words,border:style.borderTopStyle,radius:parseFloat(style.borderTopLeftRadius),primary:button.classList.contains('primary'),buttonComplete:fits(button),hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===button,limit:[...form.querySelectorAll('input')].every(input=>input.max==='16'),fit:form.scrollWidth<=form.clientWidth+1};
+ const browser=form.closest('.library-browser'),master=browser.querySelector(':scope>.library-master'),detail=browser.querySelector(':scope>.library-detail');
+ return {mediumLayout:{width:innerWidth,masterHidden:getComputedStyle(master).display==='none',detailWidth:detail.getBoundingClientRect().width,browserWidth:browser.getBoundingClientRect().width},selections,buttonText:button.textContent.trim(),words,border:style.borderTopStyle,radius:parseFloat(style.borderTopLeftRadius),primary:button.classList.contains('primary'),buttonComplete:fits(button),hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===button,limit:[...form.querySelectorAll('input')].every(input=>input.max==='16'),fit:form.scrollWidth<=form.clientWidth+1};
 }
 function englishFileBoundaries() {
  const detail=document.querySelector('.file-detail'),text=detail?.textContent??'';
