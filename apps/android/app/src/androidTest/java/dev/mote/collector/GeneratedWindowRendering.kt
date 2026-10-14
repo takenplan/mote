@@ -158,7 +158,7 @@ internal object GeneratedWindowRendering {
         }
         return evidence
     }
-    fun save(activity: Activity, directory: File, name: String, overlays: List<View> = emptyList(), includeScrollEvidence: Boolean = true) {
+    fun save(activity: Activity, directory: File, name: String, overlays: List<View> = emptyList(), includeScrollEvidence: Boolean = true, ownedGuideBuffer: File? = null) {
         require(activity.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
         require(InstrumentationRegistry.getArguments().getString("uiIterationFixture") == "true")
         require(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
@@ -240,10 +240,23 @@ internal object GeneratedWindowRendering {
             return JSONObject().put("left", location[0]).put("top", location[1])
                 .put("width", view.width).put("height", view.height)
         }
-        val bitmap = Bitmap.createBitmap(base.width, base.height, Bitmap.Config.ARGB_8888)
+        if (ownedGuideBuffer != null) {
+            require(name in setOf("feature-guide", "feature-guide-content", "feature-guide-english") && overlays.isNotEmpty())
+            require(ownedGuideBuffer.canonicalPath.startsWith(File(activity.filesDir, "ui-guide-window-evidence").canonicalPath + File.separator))
+            val proof = JSONObject(ownedGuideBuffer.resolveSibling(ownedGuideBuffer.nameWithoutExtension + ".json").readText())
+            require(proof.getBoolean("generatedOnly") && proof.getBoolean("secureWindow") && proof.getBoolean("nativeFrameCommitObserved"))
+            require(proof.getInt("pixelCopyStatus") == android.view.PixelCopy.SUCCESS && proof.getBoolean("footerPixelReady"))
+        }
+        val bitmap = if (ownedGuideBuffer == null) Bitmap.createBitmap(base.width, base.height, Bitmap.Config.ARGB_8888)
+        else requireNotNull(android.graphics.BitmapFactory.decodeFile(ownedGuideBuffer.path)).let { pixels ->
+            try {
+                require(pixels.width == base.width && pixels.height == base.height)
+                requireNotNull(pixels.copy(Bitmap.Config.ARGB_8888, true))
+            } finally { pixels.recycle() }
+        }
         try {
             val canvas = Canvas(bitmap)
-            base.draw(canvas)
+            if (ownedGuideBuffer == null) base.draw(canvas)
             val windows = JSONArray()
             val geometryFailures = mutableListOf<String>()
             for (overlay in overlays) {
@@ -261,7 +274,7 @@ internal object GeneratedWindowRendering {
             }
             File(directory, "$name.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
             val configuration = activity.resources.configuration
-            val metadata = JSONObject().put("captureKind", "application-windows-own-view")
+            val metadata = JSONObject().put("captureKind", if (ownedGuideBuffer == null) "application-windows-own-view" else "owned-activity-surface-with-native-overlay-view")
                 .put("generatedOnly", true).put("secureWindow", true)
                 .put("readiness", JSONObject().put("ready", geometryFailures.isEmpty()).put("page", page).put("state", state).put("marker", actualMarker))
                 .put("baseWindow", bounds(base)).put("overlayWindows", windows)
@@ -269,6 +282,10 @@ internal object GeneratedWindowRendering {
                 .put("language", MoteI18n.language()).put("screenWidthDp", configuration.screenWidthDp)
                 .put("densityDpi", configuration.densityDpi).put("fontScale", configuration.fontScale)
                 .put("actualIme", base.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
+            if (ownedGuideBuffer != null) metadata.put("baseWindowCapture", JSONObject()
+                .put("kind", "owned-activity-window-surface-pixelcopy").put("nativeFrameCommitObserved", true)
+                .put("bufferSha256", java.security.MessageDigest.getInstance("SHA-256").digest(ownedGuideBuffer.readBytes()).joinToString("") { "%02x".format(it) })
+                .put("systemCompositorPixelsCaptured", false).put("overlayKind", "actual-native-dialog-view-draw-with-real-window-dim"))
             if (name == "rollout-scanner") {
                 val preview = views(base).filterIsInstance<com.journeyapps.barcodescanner.DecoratedBarcodeView>().single()
                 metadata.put("scannerPreview", viewGeometry(preview).put("cameraBackend", "host-verified-emulated")

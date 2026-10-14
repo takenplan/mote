@@ -712,10 +712,12 @@ class UiIterationInstrumentedTest {
                 }
                 assertTrue("The actual underlying application window must draw before guide evidence: $name", drawn.await(5, java.util.concurrent.TimeUnit.SECONDS))
                 instrumentation.waitForIdleSync()
+                saveGeneratedOwnedWindowBuffer(guideActivity, File(context.filesDir, "ui-guide-window-evidence/$variant"), name)
                 instrumentation.runOnMainSync {
                     File(directory, "$name-roots.txt").writeText(android.view.inspector.WindowInspector.getGlobalWindowViews().joinToString("\n\n") { root -> views(root).filterIsInstance<TextView>().joinToString("\n") { "${it.id} shown=${it.isShown} text=${it.text}" } })
                     val root = requireNotNull(dialogRoot())
-                    GeneratedWindowRendering.save(guideActivity, directory, name, listOf(root))
+                    GeneratedWindowRendering.save(guideActivity, directory, name, listOf(root),
+                        ownedGuideBuffer = File(context.filesDir, "ui-guide-window-evidence/$variant/$name.png"))
                     File(directory, "$name.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
                 }
             }
