@@ -347,7 +347,20 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("提取记忆")) { CentralAdmin(screens).memoryJobs() }
         ui.button(MoteI18n.text("记忆设置")) { CentralAdmin(screens).memorySettings() }
         paged("/api/memories?limit=30", ui.card()) { row, card ->
-            ui.text(row.optString("statement"), DesignTokens.fontSection.toFloat(), card); ui.text(row.optString("status"), parent = card)
+            ui.text(row.getString("title"), DesignTokens.fontSection.toFloat(), card)
+            val status = when (row.optString("status")) {
+                "proposed" -> MoteI18n.text("待重新处理")
+                "published" -> when {
+                    !row.isNull("supersededBy") && row.optString("supersededBy").isNotBlank() &&
+                        (row.isNull("supersededAt") || java.time.Instant.parse(row.getString("supersededAt")).toEpochMilli() <= System.currentTimeMillis()) -> MoteI18n.text("已由新版本替代")
+                    !row.isNull("validUntil") && java.time.Instant.parse(row.getString("validUntil")).toEpochMilli() <= System.currentTimeMillis() -> MoteI18n.text("已过期")
+                    !row.isNull("validFrom") && java.time.Instant.parse(row.getString("validFrom")).toEpochMilli() > System.currentTimeMillis() -> MoteI18n.text("尚未生效")
+                    else -> MoteI18n.text("已生效")
+                }
+                "stale" -> MoteI18n.text("需要重验")
+                else -> row.optString("status")
+            }
+            ui.text(status + " · " + row.getInt("evidenceCount") + " " + MoteI18n.text("条证据"), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { memory(row.getString("id")) }
         }
     }
