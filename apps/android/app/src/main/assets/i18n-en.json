@@ -6169,7 +6169,7 @@
   "这里还没有近期屏幕记录。文件、随手记和其他资料可在资料库里查看。": "No recent screen records here yet. Browse files, notes, and other records in the library.",
   "从资料里找答案": "Find answers in your records",
   "用自己的问题开始，回答会附上可回看的资料来源。": "Start with your own question. Answers include sources you can revisit.",
-  "{0} 台已知设备": "{0} known devices",
+  "{0} 台已知设备": "Known devices: {0}",
   "查看上次上报的采集与同步状态": "View the last reported collection and sync status",
   "查看行动建议": "View suggested actions",
   "配置问答模型": "Set up the answer model",

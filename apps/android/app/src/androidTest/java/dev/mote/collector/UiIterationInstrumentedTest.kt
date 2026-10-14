@@ -471,7 +471,7 @@ class UiIterationInstrumentedTest {
                         assertTrue("Save remains above the primary navigation", saveBounds.bottom <= navBounds.top + 2)
                         assertTrue(save.isEnabled && save.isClickable)
                         if (args.getString("uiScrollEvidence") == "true") {
-                            GeneratedWindowRendering.save(activity, directory, "note-keyboard-save-visible")
+                            GeneratedWindowRendering.save(activity, directory, "note-keyboard-save-visible", includeScrollEvidence = false)
                             File(directory, "note-keyboard-save-visible.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
                             assertEquals("Pre-touch evidence preserves the exact original typed note", generatedText,
                                 views(root).filterIsInstance<android.widget.EditText>().single { it.isShown }.text.toString())
