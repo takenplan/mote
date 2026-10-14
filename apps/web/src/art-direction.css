@@ -344,3 +344,8 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
  .transfer-export p { max-width:none; }
  .transfer-export>.transfer-export-actions { grid-column:1/-1; }
 }
+
+.file-diarization-fields { min-width:0; display:grid; gap:var(--mote-space-item); margin-block:var(--mote-space-item); padding:var(--mote-space-item); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); }
+.file-diarization-fields label { display:grid; gap:var(--mote-space-inline); min-width:0; }
+.file-diarization-fields input,.file-diarization-fields select { width:100%; min-width:0; }
+.file-diarization-fields button { justify-self:start; }

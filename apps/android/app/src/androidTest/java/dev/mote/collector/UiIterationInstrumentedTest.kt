@@ -698,6 +698,20 @@ class UiIterationInstrumentedTest {
             lateinit var guideActivity: CentralActivity
             fun drawDialog(name: String) {
                 instrumentation.waitForIdleSync()
+                val drawn = java.util.concurrent.CountDownLatch(1)
+                instrumentation.runOnMainSync {
+                    val base = guideActivity.window.decorView
+                    val listener = object : android.view.ViewTreeObserver.OnDrawListener {
+                        override fun onDraw() {
+                            drawn.countDown()
+                            base.post { if (base.viewTreeObserver.isAlive) base.viewTreeObserver.removeOnDrawListener(this) }
+                        }
+                    }
+                    base.viewTreeObserver.addOnDrawListener(listener)
+                    base.invalidate()
+                }
+                assertTrue("The actual underlying application window must draw before guide evidence: $name", drawn.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                instrumentation.waitForIdleSync()
                 instrumentation.runOnMainSync {
                     File(directory, "$name-roots.txt").writeText(android.view.inspector.WindowInspector.getGlobalWindowViews().joinToString("\n\n") { root -> views(root).filterIsInstance<TextView>().joinToString("\n") { "${it.id} shown=${it.isShown} text=${it.text}" } })
                     val root = requireNotNull(dialogRoot())

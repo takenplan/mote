@@ -71,8 +71,8 @@ export function FeatureGuide({ api,onPage }: {
         <li><strong>{moteText("回到原任务继续")}</strong><span>{moteText("无需逐项修改所有模块")}</span></li>
       </ol>
       <details className="guide-model-terms"><summary>{moteText("模型连接、配方和方案各管什么？")}<ChevronDown size={14} aria-hidden="true"/></summary>
-        <p><strong>{moteText("模型连接（Provider）")}</strong>{moteText("保存服务地址、凭据与可用模型；")}<strong>{moteText("模块与模型")}</strong>{moteText("决定对应功能使用哪个连接和模型。单次请求仍可按提供的入口选择模型。")}</p>
-        <p><strong>{moteText("记忆配方")}</strong>{moteText("定义要整理什么输入、输出何种记忆；")}<strong>{moteText("记忆方案")}</strong>{moteText("是当前运行的整体实现，由可信组件和实例组成。并发、超时及其他执行参数在相应高级设置中按需调整。")}</p>
+        <p><strong>{moteText("模型连接（Provider）")}</strong>{' '}{moteText("保存服务地址、凭据与可用模型；")}{' '}<strong>{moteText("模块与模型")}</strong>{' '}{moteText("决定对应功能使用哪个连接和模型。单次请求仍可按提供的入口选择模型。")}</p>
+        <p><strong>{moteText("记忆配方")}</strong>{' '}{moteText("定义要整理什么输入、输出何种记忆；")}{' '}<strong>{moteText("记忆方案")}</strong>{' '}{moteText("是当前运行的整体实现，由可信组件和实例组成。并发、超时及其他执行参数在相应高级设置中按需调整。")}</p>
       </details>
     </aside>
     {guideSections.map(section => <section className="guide-section" key={section.id} id={'guide-section-' + section.id} aria-labelledby={'guide-heading-' + section.id}>

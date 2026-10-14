@@ -8185,5 +8185,6 @@
   "资料已更新，本次结果失效": "The source changed; this result is no longer valid.",
   " · {0} 批输入已失效": " · {0} batches have invalidated input",
   " · {0} 项输入已失效": " · {0} inputs are no longer valid",
-  "历史结果保留；请查看当前资料版本。失效输入不能直接重试。": "Historical results are retained. Review the current source version; invalidated input cannot be retried directly."
+  "历史结果保留；请查看当前资料版本。失效输入不能直接重试。": "Historical results are retained. Review the current source version; invalidated input cannot be retried directly.",
+  "WeSpeaker 中文": "WeSpeaker Chinese"
 }

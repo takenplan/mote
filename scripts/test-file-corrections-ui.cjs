@@ -31,6 +31,17 @@ async function run(){
  writeFileSync(join(out,'before-material.png'),(await material.wc.capturePage()).toPNG());
  const file=await open();await file.click('文件与录音');await until(()=>file.js(`!!document.querySelector('.file-card')`),'file row');await file.js(`document.querySelector('.file-card').click()`);await file.click('展开转写 / 原文片段');await until(()=>file.js(`document.querySelectorAll('.file-text').length===2`),'file transcript');
  check('confirmed names visible beside transcript',await file.js(`[...document.querySelectorAll('.file-text')].some(e=>e.parentElement.textContent.includes('林工（生成）'))`));
+ // A real loaded per-file form retains scopes/limits and the same R5 execution role.
+ await file.click('单文件分人设置');
+ for(const width of [1180,820,390,320]){
+  file.win.setSize(width,950);await until(()=>file.js(`innerWidth===${width}`),'diarization viewport');
+  await file.js(`(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.value='range';select.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
+  await until(()=>file.js(`document.querySelectorAll('.file-diarization-fields input[type=number]').length===2`),'original range fields');
+  const appearance=await file.js(`(()=>{const f=document.querySelector('.file-diarization-fields'),s=getComputedStyle(f),e=f.querySelector('button[type=submit]');e.scrollIntoView({block:'center',behavior:'instant'});const r=e.getBoundingClientRect(),dock=document.getElementById('primary-navigation').getBoundingClientRect();return {border:s.borderTopStyle,radius:parseFloat(s.borderTopLeftRadius),primary:e.classList.contains('primary'),bounds:r.top>=0&&r.bottom<(innerWidth<=760?dock.top:innerHeight)&&r.left>=0&&r.right<=innerWidth,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===e,limit:[...f.querySelectorAll('input')].every(i=>i.max==='16'),fit:f.scrollWidth<=f.clientWidth}})()`);
+  check('per-file diarization cold rounded group, primary submit and original16-person bounds at '+width,appearance.border==='solid'&&appearance.radius>0&&appearance.primary&&appearance.bounds&&appearance.hit&&appearance.limit&&appearance.fit);
+  writeFileSync(join(out,'file-diarization-'+width+'.png'),(await file.wc.capturePage()).toPNG());
+ }
+ await file.js(`(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.value='unknown';select.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);await file.click('单文件分人设置');file.win.setSize(1180,950);
  await file.click('场次关联与术语复核');await file.click('检查可能的识别错误');await until(()=>file.js(`!!document.querySelector('.file-detail input[type="checkbox"]:not(:disabled)')`),'proposal');
  await file.js(`document.querySelector('.file-detail input[type="checkbox"]:not(:disabled)').click()`);await file.click('确认所选校正');await until(async()=>{const s=await request('/api/fixture/state');return s.chunks.some(c=>c.ocrText.includes('周六'));},'confirmed source change');
  await file.click('展开转写 / 原文片段');await until(()=>file.js(`document.querySelector('.file-detail')?.textContent.includes('下一次讨论安排在周六')`),'updated transcript');

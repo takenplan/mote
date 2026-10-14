@@ -389,7 +389,7 @@ async function rolloutExpandedFitJourney() {
         const fit=await js(`(()=>{const e=document.querySelectorAll('.transfer-export button')[${index}];e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect(),n=document.getElementById('primary-navigation').getBoundingClientRect();return r.top>=0&&r.bottom<n.top&&r.left>=0&&r.right<=innerWidth&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===e})()`);
         assert.ok(fit,'Each unchanged export range is reachable above compact dock');
       }
-      await capture('storage-export-fit-'+language+'-'+width,{scene:'storage-export-fit',variant:'minimum',preserveScroll:true,reviewSelection:true});
+      await capture('storage-export-fit-'+language+'-'+width,{scene:'storage-export-fit',variant:'minimum',preserveScroll:true,reviewSelection:false});
       journeys.push({name:'readable compact export exclusions and all range actions',language,width,description,status:'verified'});
     }
     journeys.push({name:'expanded settings and complete session caption',language,status:'verified',checks:['selected lifetime caption at820','expanded module guidance at320','expanded file plan actions and fields at320']});
@@ -408,7 +408,7 @@ async function rolloutAskFitJourney(){
         await js('document.querySelector('+JSON.stringify(selector)+').scrollIntoView({block:"center"});true');await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
         const bounds=await js(`(()=>{const e=document.querySelector(${JSON.stringify(selector)}),r=e.getBoundingClientRect(),n=document.getElementById('primary-navigation').getBoundingClientRect(),form=document.querySelector('.ask-form').getBoundingClientRect(),summary=document.querySelector('.model-selector-selection').getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left,right:r.right,dockTop:n.top,width:innerWidth,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest(${JSON.stringify(selector)})===e,captionOverlap:form.top<summary.bottom&&form.bottom>summary.top}})()`);
         assert.ok(bounds.top>=0&&bounds.bottom<bounds.dockTop&&bounds.left>=0&&bounds.right<=bounds.width&&bounds.hit&&!bounds.captionOverlap,'Complete Ask control and model caption remain reachable without dock/composer overlap: '+language+' '+width+' '+control);observations.push({control,...bounds});
-        await capture('ask-'+control.replace(' ','-')+'-fit-'+language+'-'+width,{scene:'ask-reachable-control',variant:'minimum',preserveScroll:true,reviewSelection:true});
+        await capture('ask-'+control.replace(' ','-')+'-fit-'+language+'-'+width,{scene:'ask-reachable-control',variant:'minimum',preserveScroll:true,reviewSelection:false});
       }
       journeys.push({name:'compact Ask complete model and dock-safe Send',language,width,caption,observations,status:'verified'});
     }
