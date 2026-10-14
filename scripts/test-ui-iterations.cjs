@@ -29,6 +29,8 @@ assert(!(rollout&&artRound),'Selected R5 rollout evidence is separate from histo
 if(artRound!==undefined)assert.ok(Number.isInteger(artRound)&&artRound>=1&&artRound<=5,'A sequential art round is 1 through 5');
 const repo = resolve(__dirname, '..');
 const captureScriptCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).stdout.trim();
+const captureSourceIdentity=Object.fromEntries(spawnSync('git',['ls-files','apps/web','scripts/test-ui-iterations.cjs','packages/shared/design-tokens.json','packages/shared/src/i18n-en.ts'],{cwd:repo,encoding:'utf8'}).stdout.trim().split('\n').filter(Boolean).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,file))).digest('hex')]));
+const captureBuildIdentity=Object.fromEntries(readdirSync(join(repo,'apps/web/dist/assets')).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,'apps/web/dist/assets',file))).digest('hex')]));
 const root = mkdtempSync(join(tmpdir(), 'mote-ui-eval-'));
 const outputIndex = args.indexOf('--output');
 const output = outputIndex >= 0 ? resolve(repo, args[outputIndex + 1]) : join(repo, '.mote', 'ui-iterations', round);
@@ -381,6 +383,25 @@ async function rolloutExpandedFitJourney() {
   }
   window.setSize(1440,1000);await route('today','.home-page');
 }
+async function rolloutAskFitJourney(){
+  for(const language of ['zh-CN','en']){
+    window.setSize(1440,1000);await route('today','.home-page');if(await js('document.documentElement.lang')!==language)await chooseLanguage(language,true,'.home-page');await route('ask','.ask-form');
+    for(const width of [390,320]){
+      window.setSize(width,844);await until(()=>js('innerWidth==='+width),'compact Ask fit');
+      const caption=await js(`(()=>{const select=document.querySelector('.model-selector select'),summary=document.querySelector('.model-selector-selection');return {native:select.selectedOptions[0].textContent,visible:summary.textContent,shown:!!summary.getClientRects().length,fit:summary.scrollWidth<=summary.clientWidth}})()`);
+      assert.equal(caption.visible,caption.native,'Compact caption retains the complete actual model option');assert.ok(caption.shown&&caption.fit,'Complete selected model caption wraps in compact layout');
+      const observations=[];
+      for(const [state,offset]of [['top',0],['middle',406],['end',100000]]){
+        await js('window.scrollTo(0,'+offset+');true');await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const bounds=await js(`(()=>{const send=document.querySelector('.send-button'),r=send.getBoundingClientRect(),n=document.getElementById('primary-navigation').getBoundingClientRect();return {top:r.top,bottom:r.bottom,dockTop:n.top,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===send}})()`);
+        assert.ok(bounds.top>=0&&bounds.bottom<bounds.dockTop&&bounds.hit,'Complete Ask send target remains above the dock: '+language+' '+width+' '+state);observations.push({state,...bounds});
+      }
+      await js("document.querySelector('.model-selector select').scrollIntoView({block:'center'});true");await capture('ask-selected-model-fit-'+language+'-'+width,{scene:'ask-selected-model-fit',variant:'minimum',preserveScroll:true,reviewSelection:true});
+      journeys.push({name:'compact Ask complete model and dock-safe Send',language,width,caption,observations,status:'verified'});
+    }
+  }
+  window.setSize(1440,1000);await route('today','.home-page');
+}
 async function authenticate(token) {
   await js("document.querySelector('.simple-welcome button').click();true");
   await until(() => js('!!document.querySelector(".connect-modal input[type=password]")'), 'real login dialog');
@@ -625,7 +646,7 @@ async function run() {
   writeFileSync(join(output, 'language-confirmations.json'), JSON.stringify({ generatedOnly: true, simulatedConfirmations: true, confirmations }, null, 2), {mode: 0o600});
   await settingsJourneys();
   await consumerMatrix();
-  if(rollout)await rolloutExpandedFitJourney();
+  if(rollout){await rolloutExpandedFitJourney();await rolloutAskFitJourney();}
   if(artRound>=2||rollout)await mobileNoteFocusJourney();
   if(artRound||rollout)await artReaderMatrix();
   await route('today','.home-page');
@@ -639,8 +660,7 @@ async function run() {
   const coreScenes=['home','content','note','detail','ask','settings','providers','import'];
   const coreCaptures=artRound||rollout?captures.filter(item=>coreScenes.includes(item.scene)&&['normal','compact'].includes(item.variant)&&item.reviewSelection):[];
   if(artRound||rollout){assert.equal(coreCaptures.length,32);assert.equal(new Set(coreCaptures.map(item=>[item.scene,item.language,item.variant].join(':'))).size,32);for(const item of coreCaptures){if(artRound)item.artDirectionCore=true;else item.rolloutCore=true;item.sceneKey=item.scene;item.sourceCommit=sourceCommit;}}
-  const sourceIdentity=Object.fromEntries(spawnSync('git',['ls-files','apps/web','scripts/test-ui-iterations.cjs','packages/shared/design-tokens.json','packages/shared/src/i18n-en.ts'],{cwd:repo,encoding:'utf8'}).stdout.trim().split('\n').filter(Boolean).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,file))).digest('hex')]));
-  const buildIdentity=Object.fromEntries(readdirSync(join(repo,'apps/web/dist/assets')).map(file=>[file,createHash('sha256').update(readFileSync(join(repo,'apps/web/dist/assets',file))).digest('hex')]));
+  const sourceIdentity=captureSourceIdentity,buildIdentity=captureBuildIdentity;
   writeFileSync(join(output, 'result.json'), JSON.stringify({ round, artRound, rollout, sourceCommit,sourceIdentity,buildIdentity,tokensSha256:createHash('sha256').update(readFileSync(join(repo,'packages/shared/design-tokens.json'))).digest('hex'),coreCaptures,passed: true, phase: 'completed', generatedOnly: true, captures, journeys,
     featureGroups: catalog.groups.length, featureUnits: catalog.units.length,
     validationBoundary: 'Actual renderer and generated ingress/publication. Language selector uses simulated confirmation decisions with the real change handler and reload; native modal handling is not validated. Route entry is not complete feature use. No physical capture, external account, or live model.' }, null, 2), { mode: 0o600 });

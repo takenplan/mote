@@ -50,6 +50,7 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
 .notice.model-notice { background:var(--mote-surface); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); }
 .ask-form { border-radius:var(--mote-radius-control); border-color:var(--mote-border); background:var(--mote-surface); }
 .ask-form textarea,.note-composer textarea { font-size:var(--mote-font-body); line-height:1.7; }
+.model-selector-selection { display:none; }
 /* R2: objects and fields lead; complete setup help remains one disclosure away. */
 .page-heading,.settings-surface .page-heading,.library-heading { margin-bottom:var(--mote-space-panel); }
 .workspace-back { margin-bottom:var(--mote-space-item); }
@@ -212,6 +213,9 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
  .home-retrieval { padding-left:0; padding-top:var(--mote-space-item); }
  .sidebar nav button { font-size:var(--mote-font-meta); border-radius:var(--mote-radius-control); }
  .topbar .quick-note { min-height:var(--mote-control-height); }
+ .conversation-content .ask-form { bottom:calc(70px + var(--mote-space-page)); }
+ .model-selector select { width:100%; max-width:100%; min-width:0; }
+ .model-selector-selection { display:block; flex-basis:100%; min-width:0; width:100%; white-space:normal; overflow-wrap:anywhere; font-size:var(--mote-font-support); }
  .settings-link-grid button { min-height:var(--mote-control-height); }
  .evidence-text dl>div { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); }
  .evidence-text dd { text-align:right; }
