@@ -421,7 +421,7 @@ function App() {
               </button>
             </div>
           )}
-          {!connection && settingsContext ? <section className="panel settings-sign-in"><div className="page-heading"><h1>{moteText("登录后查看{0}", pageLabels[page])}</h1><p>{moteText("调整服务与资料管理方式，或管理当前登录。")}</p></div><button className="button primary" onClick={()=>setShowConnect(true)}><Link2 size={16}/>{moteText("登录 Mote")}<ArrowRight size={16}/></button></section> : !connection ? (
+          {!connection && settingsContext ? <section className="panel settings-sign-in"><div className="page-heading"><h1>{moteText("登录后查看{0}", pageLabels[page])}</h1><p>{moteText("调整服务与资料管理方式，或管理当前登录。")}</p></div><button className="button" onClick={()=>setShowConnect(true)}><Link2 size={16}/>{moteText("登录 Mote")}<ArrowRight size={16}/></button></section> : !connection ? (
             <>
               <div className="greeting welcome simple-welcome archive-welcome">
                 <div>
@@ -437,7 +437,7 @@ function App() {
                     <span><MessageSquare size={17}/>{moteText("问一问")}</span>
                   </div>
                   <button
-                    className="button primary"
+                    className="button"
                     onClick={() => setShowConnect(true)}
                   >
                     <Link2 size={16} />
