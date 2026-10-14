@@ -127,6 +127,10 @@ app.on('browser-window-created', (_event, window) => {
       assert(await js(`document.documentElement.scrollWidth <= window.innerWidth`), 'Newcomer setup fits the minimum window width');
       writeFileSync(join(outputDirectory, 'first-run-compact-ui-fixture.png'), (await window.webContents.capturePage()).toPNG());
       window.setSize(1140, 840);
+      if (process.env.MOTE_UI_ROLLOUT_DIALOGS === 'capture') {
+        const manifest=await require('./ui-dialog-rollout.cjs')({window,js,navigate,outputDirectory,kind:'capture'});
+        process.stdout.write(JSON.stringify({dialogReady:true,captures:manifest.captures.length,manifest:join(outputDirectory,'dialog-manifest.json')})+'\n');finished=true;clearTimeout(timeout);app.quit();return;
+      }
       if (process.env.MOTE_UI_ROLLOUT) {
         currentPhase='UI rollout matrix';
         const manifest=await require('./ui-rollout-matrix.cjs')({window,js,navigate,outputDirectory,profile,ipcMain});
