@@ -5,6 +5,7 @@ const {app,BrowserWindow}=require('electron');
 const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync}=require('node:fs');
 const {tmpdir}=require('node:os'),{join,resolve}=require('node:path'),{pathToFileURL}=require('node:url');
 const {spawn}=require('node:child_process'),{randomBytes}=require('node:crypto'),assert=require('node:assert/strict');
+const {memoryCorrectionPresentation}=require('./memory-presentation-probe.cjs');
 const repo=resolve(__dirname,'..'),root=mkdtempSync(join(tmpdir(),'mote-memory-ui-'));
 const outputRoot=process.env.MOTE_MEMORY_UI_OUTPUT||join(repo,'.mote/memory-revisions-ui');mkdirSync(outputRoot,{recursive:true});
 const out=mkdtempSync(join(outputRoot,'run-'));
@@ -58,6 +59,15 @@ await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(
  check('automatic relation has no confirmation gate',await js(`document.querySelector('.memory-detail').textContent.includes('替代的旧记忆')&&!document.querySelector('.memory-detail').textContent.includes('确认后才')`));
  await screenshot('automatic-memory-desktop');
  await click('纠正记忆');await until(()=>js(`!!document.querySelector('form.review-notes textarea')`),'correction form');
+ for(const width of [1280,820,390,320]){
+  window.setSize(width,1000);await until(()=>js('innerWidth==='+width),'actual correction width');
+  const presentation=await js('('+memoryCorrectionPresentation.toString()+')()');
+  check('owner correction stacked fields/whole Save/Cancel and original limits at '+width,presentation.fit&&presentation.fields.every(field=>field.labelBeforeField&&field.fullWidth&&field.reachable)&&[160,6000,2000].every(limit=>presentation.fields.some(field=>field.maxLength===limit))&&presentation.fields.filter(field=>field.type==='datetime-local').length===2&&presentation.buttons.every(button=>button.complete&&button.hit&&button.words.every(word=>word.lines===1))&&presentation.buttons.some(button=>button.primary&&button.type==='submit'));
+  report.presentation??=[];report.presentation.push({width,presentation});
+  writeFileSync(join(out,'owner-correction-fit-'+width+'.png'),(await wc.capturePage()).toPNG());
+ }
+ window.setSize(1280,1000);
+
  await js(`(()=>{const e=document.querySelector('form.review-notes textarea');Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(e,'用户补充：Aurora 规则只适用于批量操作。');e.dispatchEvent(new Event('input',{bubbles:true}));})()`);
  await request('/api/fixture/fail',{action:'correct'});await click('保存纠正并替代旧版本');
  await until(()=>js(`document.querySelector('[role="alert"]')?.textContent.includes('Generated transient save failure')`),'correction failure shown');
