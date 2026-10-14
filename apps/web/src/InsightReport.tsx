@@ -4,6 +4,7 @@ import {useState} from 'react';
 import {FileText,LayoutDashboard} from 'lucide-react';
 import {AnswerMarkdown} from './AnswerMarkdown';
 import {type Answer,dateTime} from './api';
+import designTokens from '../../../packages/shared/design-tokens.json';
 
 // This document contains only the report. The authenticated application's state and
 // controls stay outside the opaque-origin iframe.
@@ -32,7 +33,7 @@ function displayReportHtml(html:string,citations:Answer['citations']):string {
 
 export function reportDocument(html:string,citations:Answer['citations']=[]):string {
   const policy="default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'";
-  return '<!doctype html><html lang="zh-CN"><head><meta http-equiv="Content-Security-Policy" content="'+policy+'"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html{color-scheme:light}body{margin:0;padding:28px;font-family:system-ui,-apple-system,sans-serif;color:#253a2d;line-height:1.75;overflow-wrap:anywhere}img,svg{max-width:100%;height:auto}*{box-sizing:border-box}table{max-width:100%}a{pointer-events:none}</style></head><body>'+displayReportHtml(html,citations)+'</body></html>';
+  return '<!doctype html><html lang="zh-CN"><head><meta http-equiv="Content-Security-Policy" content="'+policy+'"><meta name="referrer" content="no-referrer"><meta name="viewport" content="width=device-width, initial-scale=1"><style>html{color-scheme:light}body{margin:0;padding:28px;font-family:'+designTokens.font+';color:'+designTokens.ink+';background:'+designTokens.surface+';line-height:1.75;overflow-wrap:anywhere}img,svg{max-width:100%;height:auto}*{box-sizing:border-box}table{max-width:100%}a{pointer-events:none}</style></head><body>'+displayReportHtml(html,citations)+'</body></html>';
 }
 
 export function InsightReport({answer,onOpen}:{answer:Answer;onOpen:(id:string)=>void}){
