@@ -151,9 +151,14 @@ for variant in VARIANTS:
     assert 'INSTRUMENTATION_STATUS_CODE: -4' not in (output / (variant + '.log')).read_text(), 'Matrix must not skip generated scenes'
     archive_path = f'files/ui-iterations/round-{args.label or args.round}'
     if args.label == 'rollout':
-        instrument('dev.mote.collector.UiRolloutInstrumentedTest',
-                   {'uiIterationFixture': 'true', 'uiIterationRound': args.label, 'uiIterationVariant': variant, 'uiRolloutCameraBackend': 'emulated'},
-                   output / ('rollout-surfaces-' + variant + '.log'), 1)
+        shell('pm', 'grant', PACKAGE, 'android.permission.CAMERA')
+        try:
+            instrument('dev.mote.collector.UiRolloutInstrumentedTest',
+                       {'uiIterationFixture': 'true', 'uiIterationRound': args.label, 'uiIterationVariant': variant, 'uiRolloutCameraBackend': 'emulated'},
+                       output / ('rollout-surfaces-' + variant + '.log'), 1)
+        finally:
+            # Revoking this UID's runtime permission ends it; never do it inside instrumentation.
+            shell('pm', 'revoke', PACKAGE, 'android.permission.CAMERA')
     archive = adb('exec-out', 'run-as', PACKAGE, 'tar', '-cf', '-', archive_path)
     destination = output / variant; destination.mkdir()
     with tarfile.open(fileobj=io.BytesIO(archive)) as bundle:

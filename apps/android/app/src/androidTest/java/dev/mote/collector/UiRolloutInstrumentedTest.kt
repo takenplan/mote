@@ -93,17 +93,12 @@ class UiRolloutInstrumentedTest {
         }
         // The host verifies both AVD camera backends from config.ini before this explicit grant.
         require(args.getString("uiRolloutCameraBackend") == "emulated")
-        val cameraGranted = context.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        try {
-            if (!cameraGranted) instrumentation.uiAutomation.grantRuntimePermission(context.packageName, android.Manifest.permission.CAMERA)
-            render("rollout-scanner", "扫描连接二维码", Intent(context, ConnectionScanActivity::class.java)) { activity ->
-                val preview = views(activity.window.decorView).filterIsInstance<com.journeyapps.barcodescanner.DecoratedBarcodeView>().singleOrNull()
-                val bounds = android.graphics.Rect()
-                preview != null && preview.isLaidOut && preview.width >= activity.moteDp(160) && preview.height >= activity.moteDp(160) &&
-                    preview.getGlobalVisibleRect(bounds) && bounds.width() == preview.width && bounds.height() == preview.height
-            }
-        } finally {
-            if (!cameraGranted) instrumentation.uiAutomation.revokeRuntimePermission(context.packageName, android.Manifest.permission.CAMERA)
+        assertEquals(android.content.pm.PackageManager.PERMISSION_GRANTED, context.checkSelfPermission(android.Manifest.permission.CAMERA))
+        render("rollout-scanner", "扫描连接二维码", Intent(context, ConnectionScanActivity::class.java)) { activity ->
+            val preview = views(activity.window.decorView).filterIsInstance<com.journeyapps.barcodescanner.DecoratedBarcodeView>().singleOrNull()
+            val bounds = android.graphics.Rect()
+            preview != null && preview.isLaidOut && preview.width >= activity.moteDp(160) && preview.height >= activity.moteDp(160) &&
+                preview.getGlobalVisibleRect(bounds) && bounds.width() == preview.width && bounds.height() == preview.height
         }
     }
 }

@@ -200,7 +200,16 @@ internal object GeneratedWindowRendering {
             "rollout-scanner" -> Triple("scanner", "content", "扫描连接二维码")
             "rollout-calendar" -> Triple("calendar", "restriction", "日程建议")
             "rollout-pairing" -> Triple("rollout-pairing", "content", "连接中央节点")
-            else -> error("A new generated scene needs an explicit readiness contract: $name")
+            else -> if (name.startsWith("rollout-central-")) {
+                val centralPage = name.removePrefix("rollout-central-")
+                val title = CentralScreens.pages.single { it.first == centralPage }.second
+                when (centralPage) {
+                    "overview" -> Triple(centralPage, "content", "模型已配置")
+                    "files" -> Triple(centralPage, "empty", "当前范围内暂无条目。没有列出不代表不存在。")
+                    "notes" -> Triple(centralPage, "restriction", "图片和录音会先归档。是否提取文字或转写录音取决于中央处理设置；请在资料库查看状态。每个附件最多 50 MiB。")
+                    else -> Triple(centralPage, "content", title)
+                }
+            } else error("A new generated scene needs an explicit readiness contract: $name")
         }
         val shownText = (listOf(base) + overlays).flatMap(::views).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
         val actualMarker = MoteI18n.text(marker)
