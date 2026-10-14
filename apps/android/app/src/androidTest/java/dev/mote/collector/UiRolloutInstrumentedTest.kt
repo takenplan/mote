@@ -66,6 +66,33 @@ class UiRolloutInstrumentedTest {
                     for (button in views(root).filterIsInstance<Button>().filter { it.isShown }) {
                         if (button.getGlobalVisibleRect(bounds)) assertTrue("$name action must fit horizontally: ${button.text}", bounds.width() == button.width)
                     }
+                    fun assertControlGap(before: View, after: View) {
+                        val first = IntArray(2); val second = IntArray(2)
+                        before.getLocationOnScreen(first); after.getLocationOnScreen(second)
+                        assertTrue("$name controls retain the shared 8dp gap", second[1] - first[1] - before.height >= activity.moteDp(DesignTokens.spaceInline))
+                    }
+                    when (name) {
+                        "rollout-pairing" -> assertControlGap(
+                            views(root).filterIsInstance<android.widget.EditText>().single { it.hint.toString() == MoteI18n.text("设备名称") },
+                            views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text("保存设备名称") })
+                        "rollout-bulk-dedupe" -> assertControlGap(
+                            views(root).filterIsInstance<android.widget.Spinner>().single(),
+                            views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text("开始全量扫描") })
+                        "rollout-queue" -> assertControlGap(
+                            views(root).filterIsInstance<android.widget.Spinner>().single(),
+                            views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text("刷新") })
+                        "rollout-recovery" -> {
+                            for (key in listOf("立即同步待发记录", "检查两端记录状态")) assertEquals(true,
+                                views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text(key) }.getTag(R.id.mote_primary))
+                            for (key in listOf("全量补传 · 本机保留的记录", "停止本次检查 / 准备补传", "查看待上传队列")) assertEquals(false,
+                                views(root).filterIsInstance<Button>().single { it.text.toString() == MoteI18n.text(key) }.getTag(R.id.mote_primary))
+                        }
+                        "rollout-activity-statistics" -> {
+                            val disclosures = views(root).filterIsInstance<Button>().filter { it.text.toString().endsWith(MoteI18n.text(" · 展开 / 收起")) }
+                            assertEquals("All three actual statistic detail controls are present", 3, disclosures.size)
+                            disclosures.zipWithNext().forEach { (before, after) -> assertControlGap(before, after) }
+                        }
+                    }
                     GeneratedWindowRendering.save(activity, directory, name)
                     File(directory, "$name.txt").writeText(labels(activity).joinToString("\n"))
                     assertFalse("Drawing maintenance never starts capture", settings.enabled)

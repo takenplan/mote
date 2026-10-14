@@ -160,7 +160,7 @@ class ActivityStatsActivity : MoteActivity() {
                 summary.addView(MoteUi.button(Button(this).apply {
                     text = block.substringBefore('\n') + MoteI18n.text(" · 展开 / 收起")
                     setOnClickListener { detail.visibility = if (detail.visibility == android.view.View.GONE) android.view.View.VISIBLE else android.view.View.GONE }
-                }))
+                }), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) })
             }
             summary.addView(detail, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 16 })
         }

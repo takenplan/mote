@@ -27,13 +27,13 @@ class SyncRecoveryActivity : MoteActivity() {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val body = moteDetailPage(title = MoteI18n.text("同步与恢复"))
         fun text(value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0,moteDp(8),0,moteDp(8)) }.also(body::addView)
-        fun button(label: String, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { action() } }).also { body.addView(it, LinearLayout.LayoutParams(-1,-2)) }
+        fun button(label: String, primary: Boolean = false, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { action() } }, primary).also { body.addView(it, LinearLayout.LayoutParams(-1,-2)) }
         text(MoteI18n.text("手机负责采集，中央端负责归档。已上传的本机副本按保留时间清理。"))
         summary = text(MoteI18n.text("正在读取本机同步状态…"))
         button(MoteI18n.text("查看待上传队列")) { startActivity(Intent(this, SyncQueueActivity::class.java)) }
-        button(MoteI18n.text("立即同步待发记录")) { runAction { UploadWorker.schedule(this, Settings(this).read(), true) } }
+        button(MoteI18n.text("立即同步待发记录"), primary = true) { runAction { UploadWorker.schedule(this, Settings(this).read(), true) } }
         text(MoteI18n.text("从未确认的记录继续发送；上传中断只重发未确认记录。同一条记录重试不会生成重复副本。仍遵守 Wi-Fi 设置。"))
-        button(MoteI18n.text("检查两端记录状态")) { runAction { SyncRecoveryWorker.start(this, false) } }
+        button(MoteI18n.text("检查两端记录状态"), primary = true) { runAction { SyncRecoveryWorker.start(this, false) } }
         text(MoteI18n.text("只检查手机仍保留的采集记录在中央端是否可见；不会把“中央存在”直接当作上传确认，也不会删除或恢复记录。"))
         button(MoteI18n.text("全量补传 · 本机保留的记录")) {
             MoteDialogBuilder(this).setTitle(MoteI18n.text("重新上传本机保留的数据？"))

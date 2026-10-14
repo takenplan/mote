@@ -29,7 +29,7 @@ class SyncQueueActivity : MoteActivity() {
         val body = moteDetailPage(title = MoteI18n.text("待上传队列"))
         summary = TextView(this).also(body::addView)
         speed = TextView(this).apply { MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.muted); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceItem)) }.also(body::addView)
-        categories = Spinner(this).also(body::addView)
+        categories = Spinner(this).also { body.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }) }
         body.addView(Button(this).apply { text = MoteI18n.text("刷新"); setOnClickListener { load() } })
         rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also(body::addView)
         paging = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also(body::addView)
