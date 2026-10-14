@@ -34,7 +34,8 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     // Inputs intentionally scroll long values and textareas scroll full drafts;
     // their outer bounds must fit, while button labels must fit their controls.
     const clipped=Array.from(document.querySelectorAll('main button,main input,main select,main textarea,dialog[open] button')).filter(visible).filter(e=>{const b=e.getBoundingClientRect();return b.width>0&&(b.left<-.5||b.right>innerWidth+.5||(e.tagName==='BUTTON'&&e.scrollWidth>e.clientWidth+2));}).map(e=>({id:e.id,text:e.textContent.slice(0,80),bounds:bounds(e),scroll:e.scrollWidth,client:e.clientWidth}));
-    return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},horizontalOverflow:document.documentElement.scrollWidth>innerWidth,clipped,footer:footer.hidden?null:{...bounds(footer),reserved:parseFloat(document.documentElement.style.getPropertyValue('--settings-save-height')),buttons:Array.from(footer.querySelectorAll('button')).map(e=>({text:e.textContent,bounds:bounds(e)}))}};
+    const sidebarControls=Array.from(document.querySelectorAll('.sidebar .nav-item')).map(e=>({name:e.getAttribute('aria-label')||e.textContent.trim(),...bounds(e)}));
+    return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},horizontalOverflow:document.documentElement.scrollWidth>innerWidth,clipped,sidebarControls,sidebarStatus:{text:document.querySelector('#sidebar-state').textContent,...bounds(document.querySelector('#sidebar-state'))},footer:footer.hidden?null:{...bounds(footer),reserved:parseFloat(document.documentElement.style.getPropertyValue('--settings-save-height')),buttons:Array.from(footer.querySelectorAll('button')).map(e=>({text:e.textContent,bounds:bounds(e)}))}};
   }
   async function capture(name,page,consumer) {
     const readiness=consumer?{page,marker:consumer,ready:true,locale:await js('document.documentElement.lang'),state:'generated connected answer'}:await ready(page);await frames();
@@ -42,6 +43,8 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     const layout=await js('('+geometry.toString()+')()');
     assert.equal(layout.horizontalOverflow,false,'No horizontal overflow '+name);
     assert.deepEqual(layout.clipped,[],'Complete controls '+name);
+    assert(layout.sidebarControls.every(e=>e.top>=0&&e.bottom<=layout.viewport.height+1),'All four navigation actions visible '+name);
+    assert(layout.sidebarStatus.height>1&&layout.sidebarStatus.bottom<=layout.viewport.height+1,'Actual capture status stays visible '+name);
     if(layout.footer){assert(Math.abs(layout.footer.height-layout.footer.reserved)<1,'Actual footer reserved '+name);assert(layout.footer.buttons.every(x=>x.bounds.top>=layout.footer.top&&x.bounds.bottom<=layout.footer.bottom+1),'Footer actions inside '+name);}
     const png=(await window.webContents.capturePage()).toPNG();
     const item={file:name+'.png',name,page,generatedOnly:true,readiness,layout,zoom:window.webContents.getZoomFactor(),bitmap:{width:png.readUInt32BE(16),height:png.readUInt32BE(20)},sha256:createHash('sha256').update(png).digest('hex')};
