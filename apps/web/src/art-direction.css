@@ -309,7 +309,23 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
 .source-heading-actions { flex-wrap:wrap; max-width:100%; }
 .session-lifetime-control select { flex-shrink:0; min-inline-size:220px; }
 .discovery-inline-guidance .text-button { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
-.file-processing-settings fieldset { grid-template-columns:minmax(0,1fr); }
+.runtime-settings fieldset { min-inline-size:0; margin:0; padding:var(--mote-space-panel); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); display:grid; grid-template-columns:minmax(0,1fr); gap:var(--mote-space-item); }
+.runtime-settings .preference-grid label { display:grid; gap:var(--mote-space-inline); min-inline-size:0; }
+.runtime-settings input:not([type=checkbox]),.runtime-settings select { width:100%; min-inline-size:0; }
+.runtime-settings fieldset>.button { justify-self:start; }
+.memory-settings>.memory-recipe-selection { margin-block-start:var(--mote-space-group); padding-block-start:var(--mote-space-panel); border-block-start:var(--mote-border-width) solid var(--mote-divider); }
+.memory-settings fieldset { border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); padding:var(--mote-space-panel); }
+.memory-settings fieldset>label { display:flex; align-items:flex-start; gap:var(--mote-space-inline); }
+.memory-settings fieldset>label>input[type=checkbox] { flex-shrink:0; margin-inline:0; margin-block-start:3px; }
+.memory-settings form>p { margin-block:var(--mote-space-item); }
+.memory-recipe-selection>label { display:grid; gap:var(--mote-space-inline); margin-block:var(--mote-space-item); }
+.memory-recipe-selection>label>select { min-inline-size:0; max-inline-size:32rem; width:100%; }
+.perception-settings form>label,.perception-settings details>label { display:block; margin-block:var(--mote-space-item); }
+.perception-settings input[type=checkbox] { margin-inline-end:var(--mote-space-inline); }
+.perception-settings details>.button { margin-block:var(--mote-space-item); }
+.perception-settings label>input:not([type=checkbox]),.perception-settings label>select { display:block; width:100%; min-inline-size:0; margin-block-start:var(--mote-space-inline); }
+.source-connectors fieldset { min-inline-size:0; border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); padding:var(--mote-space-panel); margin-block:var(--mote-space-panel); }
+.file-processing-settings fieldset { grid-template-columns:minmax(0,1fr); border-radius:var(--mote-radius-container); }
 .file-processing-settings details { min-width:0; }
 .file-processing-settings .text-button { max-width:100%; white-space:normal; overflow-wrap:anywhere; }
 @media(max-width:760px) {

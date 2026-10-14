@@ -40,12 +40,12 @@ export function Gmail({ api, refresh, initiallyOpen = false }: {
     <p>{moteText('同步邮件正文、发件人和时间，附件仅保留名称与引用。邮件内容作为资料，不自动执行其中的指令。断开后停止读取，已归档邮件保留。')}</p>
     {!status?.configured ? <p className="muted">{moteText('Gmail 使用现有 Google OAuth 客户端与回调地址。请在 Google Cloud 启用 Gmail API，再到模型与服务配置客户端。')}</p> : <>
       <p>{status.connected ? status.account : moteText('尚未授权')} · {status.state === 'permission_required' ? moteText('需要重新授权') : status.state === 'syncing' ? moteText('同步中') : status.hasMore ? moteText('历史邮件仍有后续分页') : moteText('等待下次同步')}</p>
-      <div className="source-toolbar"><button className="button" disabled={busy} onClick={() => void action(async () => { const result = await api.request<{
+      <div className="source-toolbar"><button className="button primary" disabled={busy} onClick={() => void action(async () => { const result = await api.request<{
             authorizationUrl: string;
         }>('/api/connectors/gmail/start', { method: 'POST', body: '{}' }); const target = new URL(result.authorizationUrl); if (target.protocol !== 'https:' || target.hostname !== 'accounts.google.com')
             throw Error(moteText('授权地址不符合预期。')); setUrl(target.href); })}>{moteText('开始授权')}</button>
         <button className="button" disabled={busy} onClick={() => void action(load)}>{moteText('刷新授权状态')}</button>
-        {status.connected && <><button className="button" disabled={busy} onClick={() => void action(async () => { const r = await api.request<{
+        {status.connected && <><button className="button primary" disabled={busy} onClick={() => void action(async () => { const r = await api.request<{
                 imported: number;
                 duplicates: number;
                 hasMore: boolean;

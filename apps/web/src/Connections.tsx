@@ -230,7 +230,7 @@ export function Connections({ api, serverUrl, devices }: {
         <p>{moteText("生成标准 HTTP MCP 连接 JSON，粘贴到支持 URL 与 Bearer 请求头的客户端。")}</p>
         <label>{moteText("访问权限")}<select aria-label={moteText("MCP 访问权限")} value={mcpAccess} disabled={!!busy || !inventory?.mcp.enabled} onChange={event => setMcpAccess(event.target.value as 'read' | 'write')}><option value="read">{moteText("只读归档资料")}</option><option value="write" disabled={!inventory?.mcp.writeEnabled}>{moteText("仅写入指定来源")}</option></select></label>
         {inventory && !inventory.mcp.enabled ? <small>{moteText("尚未启用 MCP。请在设置 → 模型与服务 → 来源与外部应用中开启 MCP，并配置独立读令牌后重启；写入还需明确启用并设置允许的信源。")}</small> : <small>{mcpAccess === 'write' ? moteText("仅可写入：{0}。", inventory?.mcp.writeSourceIds.join('、') || moteText("未配置")) : moteText("只读权限能检索归档中的个人资料，请只交给你信任的应用。")}{' '}{moteText("只接受 OAuth 的客户端暂不能直接使用此 JSON。")}</small>}
-        <button className="button" disabled={!!busy || !label.trim() || !inventory?.mcp.enabled || !!mcp} onClick={createMcp}><Link2 size={16}/>{busy === 'mcp' ? moteText("正在生成…") : moteText("生成 MCP JSON")}</button>
+        <button className="button primary" disabled={!!busy || !label.trim() || !inventory?.mcp.enabled || !!mcp} onClick={createMcp}><Link2 size={16}/>{busy === 'mcp' ? moteText("正在生成…") : moteText("生成 MCP JSON")}</button>
       </div>
     </div>
     {invite && !expired && <div className="connection-invitation" aria-label={moteText("连接邀请")}>
