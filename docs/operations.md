@@ -26,3 +26,13 @@ and a publication `outcome`; an all-invalidated terminal task is skipped in its
 execution envelope without changing persisted scheduling state. Action analysis
 alerts require a surviving job and matching current evidence. See the
 [current-status regression](validation/current-status-counts.md).
+
+Startup recovery also respects activation. A manual Memory job created without
+an explicit start remains dormant; `run()` persists activation before scheduling.
+Activated unfinished work can recover under its saved scope, while paused,
+cancelled or revoked work cannot. Ordinary query dependency checks use current
+permission metadata in batches and yield during asynchronous preparation so the
+existing execution lease can renew; the final external-request and publication
+fences still revalidate all dependencies. Counters and status must not report
+success merely because a model returned or a task was admitted. See the
+[query lease and activation regressions](validation/query-lease-and-memory-activation-2026-10-14.md).

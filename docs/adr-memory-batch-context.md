@@ -7,6 +7,11 @@ candidate-capacity completion and semantic subdivision for its new versioned
 recipes. The batch-local scope, request packing and legacy-task decisions below
 remain in force.
 
+The 2026-10-14 [simplification decision](adr-ask-evidence-quality-and-simple-context.md)
+also supersedes the host character budgets and automatic halving described here.
+Current work preserves complete targets, independent review and exact authority;
+explicitly classified transient failures use bounded shared-engine recovery.
+
 Memory extraction carried the same package goal, instructions and complete member
 contract in both `question` and `taskContext.memoryWork`. A valid wide batch could
 therefore exceed the Agent question limit before its model session started. This

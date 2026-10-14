@@ -106,11 +106,11 @@ for(const correctWhileWaiting of [false,true])test(`HTTP source-only query opens
         const found=await call('capability_execute',{name:'sources',version:capability.data.version,argumentsJson:JSON.stringify({query:'Generated metadata phone'})});assert.equal(found.data.items.length,1);assert.ok(found.data.items[0].sourceContextRef);
         const opened=await call('attribution_context',{sourceContextRef:found.data.items[0].sourceContextRef,length:12000}),context=JSON.parse(opened.data.text);
         assert.equal(context.sourceContextStatements[0].description,'Generated phone calls; the anonymous speaker identity remains unknown.');assert.equal(bridge.records.size,0);
-        assert.equal(node.featureServices.delegation.sourceContextDependencies('query:'+runId).length,1,'actual tool disclosure is durable before yield');
+        assert.equal(node.featureServices.delegation.sourceContextDependencies('query:'+runId).length,2,'metadata and description disclosure are durable before yield');
         return submit(input,'Generated independent worker check');
       }
       assert.equal(correctWhileWaiting,false,'stale saved context must not invoke a resumed model fragment');
-      assert.equal(input.contextSourceContextDependencies?.length,1);return {...answer(),sourceContextDependencies:bridge.sourceContextDependencies};
+      assert.equal(input.contextSourceContextDependencies?.length,2);return {...answer(),sourceContextDependencies:bridge.sourceContextDependencies};
     }catch(error){fixtureFailure=error;throw error;}finally{await bridge.close();}
   };
   node=await buildApp(config,{backgroundWorker:false,agent:{configured:true,query,close:async()=>releaseWorker()}});t.after(async()=>{releaseWorker();await node.app.close();rmSync(dataDir,{recursive:true,force:true});});
@@ -122,7 +122,7 @@ for(const correctWhileWaiting of [false,true])test(`HTTP source-only query opens
   if(correctWhileWaiting){const changed=await node.app.inject({method:'PATCH',url:contextUrl,headers,payload:{expectedVersion:1,description:'Generated calls from a shared phone; neither speaker is identified as me.'}});assert.equal(changed.statusCode,200);releaseWorker();}
   let run:any;
   for(let i=0;i<120;i++){await new Promise(resolve=>setTimeout(resolve,20));run=(await node.app.inject({url:'/api/query-runs/'+runId,headers})).json();if(run.status!=='running')break;}
-  assert.equal(run.status,correctWhileWaiting?'failed':'completed');assert.equal(run.sourceContextDependencies.length,1);assert.equal(run.sourceContextDependencies[0].version,1);assert.ok(run.conversationId);
+  assert.equal(run.status,correctWhileWaiting?'failed':'completed');assert.equal(run.sourceContextDependencies.length,2);assert.equal(run.sourceContextDependencies[0].version,1);assert.ok(run.conversationId);
   const conversation=(await node.app.inject({url:'/api/conversations/'+run.conversationId,headers})).json();assert.equal(conversation.turns[0].question,'Generated owner metadata question');
   if(correctWhileWaiting){assert.equal(fragments,1);assert.equal(conversation.turns[0].status,'failed');assert.equal(node.featureServices.delegation.result('query:'+runId),undefined);}
   else{assert.equal(fragments,2);assert.deepEqual(conversation.turns[0].result.sourceContextDependencies,run.sourceContextDependencies);assert.deepEqual(conversation.turns[0].result.citations,[]);}

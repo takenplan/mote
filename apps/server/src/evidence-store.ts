@@ -160,8 +160,8 @@ export class EvidenceStore {
     // Remove only orphan content-addressed files left by interrupted writes/transactions.
     if(!options.maintenance)this.sweep();
   }
-  private record(row:Row):CaptureRecord {
-    const ocrRow=this.db.prepare("SELECT json FROM perception_results WHERE capture_id=? AND kind='ocr' AND current=1").get(row.id);
+  private record(row:Row,metadataOnly=false):CaptureRecord {
+    const ocrRow=this.db.prepare(`SELECT ${metadataOnly?"json_remove(json,'$.text','$.transcript')":"json"} json FROM perception_results WHERE capture_id=? AND kind='ocr' AND current=1`).get(row.id);
     const ocr=ocrRow?JSON.parse(String(ocrRow.json)):undefined;
     const jobs=row.blob_hash?this.db.prepare("SELECT kind,state,error FROM perception_jobs WHERE capture_id=? AND kind='ocr'").all(row.id):[];
     const original=JSON.parse(row.json);
@@ -171,7 +171,7 @@ export class EvidenceStore {
     const ocrJob=!original.ocrText&&captureOcrState(original).status==='disabled'?jobs.find(j=>j.kind==='ocr'):undefined;
     const enabled=this.db.prepare("SELECT json_extract(value,'$.enabled') AS enabled FROM settings WHERE key='perception'").get()?.enabled!==0;
     const {transcript:_,text:ocrText,...ocrMetadata}=ocr??{};
-    return {...original,...(ocr?{ocrText:ocr.text,ocr:{status:'completed',updatedAt:ocr.generatedAt}}:ocrJob?{ocr:centralOcrState({state:String(ocrJob.state),error:ocrJob.error===null?null:String(ocrJob.error)},enabled)}:{}),...(ocr?{perception:{results:[{kind:'ocr',...ocrMetadata,textLength:typeof ocrText==='string'?ocrText.length:0}],layers:['L1']}}:{}),...(row.blob_hash?{perceptionJobs:jobs}:{}),receivedAt:row.received_at,blobHash:row.blob_hash,imageMime:row.mime,indexingStatus:row.index_status,...(row.summary?{summary:row.summary}:{})};
+    return {...original,...(ocr?{ocrText:ocr.text,ocr:{status:'completed',updatedAt:ocr.generatedAt}}:ocrJob?{ocr:centralOcrState({state:String(ocrJob.state),error:ocrJob.error===null?null:String(ocrJob.error)},enabled)}:{}),...(ocr?{perception:{results:[{kind:'ocr',...ocrMetadata,textLength:typeof ocrText==='string'?ocrText.length:0}],layers:['L1']}}:{}),...(row.blob_hash?{perceptionJobs:jobs}:{}),receivedAt:row.received_at,blobHash:row.blob_hash,imageMime:row.mime,indexingStatus:row.index_status,...(row.summary?{summary:row.summary}:{}),...(metadataOnly?{ocrText:''}:{})};
   }
   private clauses(range:Range={}) {
     const clauses:string[]=["(NOT EXISTS(SELECT 1 FROM source_versions v WHERE v.capture_id=captures.id) OR EXISTS(SELECT 1 FROM source_heads h WHERE h.capture_id=captures.id AND h.deleted=0) OR id IN (SELECT capture_id FROM file_heads))"]; const values:(string|number)[]=[];
@@ -382,7 +382,15 @@ export class EvidenceStore {
     const more=rows.length>limit;const items=rows.slice(0,limit).map(r=>this.record(r));const last=items.at(-1);
     return {items,nextCursor:more&&last?Buffer.from(JSON.stringify({t:new Date(sourceContentTime(last)).toISOString(),id:last.id})).toString('base64url'):null,totalCount};
   }
-  evidence(ids:string[]) {return ids.slice(0,200).map(id=>this.db.prepare('SELECT * FROM captures WHERE id=?').get(id) as Row|undefined).filter((x):x is Row=>Boolean(x)).map(r=>this.record(r));}
+  evidence(ids:string[]) {return ids.map(id=>this.db.prepare('SELECT * FROM captures WHERE id=?').get(id) as Row|undefined).filter((x):x is Row=>Boolean(x)).map(r=>this.record(r));}
+  /** Host authorization only. Preserve permission/processing metadata without
+   * copying original or derived bodies into repeated dependency fences. */
+  evidenceMetadata(ids:readonly string[]) {
+    const rows=this.db.prepare(`SELECT c.id,c.received_at,c.blob_hash,c.mime,c.index_status,NULL summary,
+      json_set(json_remove(c.json,'$.ocrText','$.summary'),'$.ocrText',CASE WHEN length(json_extract(c.json,'$.ocrText'))>0 THEN 'x' ELSE '' END) json
+      FROM captures c JOIN json_each(?) selected ON selected.value=c.id`).all(JSON.stringify([...new Set(ids)])) as Row[];
+    return rows.map(row=>this.record(row,true));
+  }
   isCurrentEvidence(id:string):boolean {
     return Boolean(this.db.prepare('SELECT id FROM captures WHERE id=? AND (NOT EXISTS(SELECT 1 FROM source_versions v WHERE v.capture_id=captures.id) OR EXISTS(SELECT 1 FROM source_heads h WHERE h.capture_id=captures.id AND h.deleted=0))').get(id));
   }
@@ -585,7 +593,7 @@ export class EvidenceStore {
     this.db.prepare("UPDATE devices SET json=json_set(json,'$.lastSeenAt',?) WHERE id=?").run(new Date().toISOString(),deviceId);
   }
   devices():DeviceRecord[] {return (this.db.prepare('SELECT json FROM devices').all() as {json:string}[]).map(r=>JSON.parse(r.json));}
-  activity(range:Range={}):Activity {
+  activity(range:Range={},onContributor?:(id:string)=>void):Activity {
     // Assign overlapping sample intervals once per device before applying content/app filters.
     // A filtered query must not reassign another app's already measured interval to its own samples.
     const extended:Range={deviceId:range.deviceId,after:range.after?new Date(Date.parse(range.after)-21600000).toISOString():undefined,before:range.before?new Date(Date.parse(range.before)+300000).toISOString():undefined};
@@ -600,9 +608,15 @@ export class EvidenceStore {
       if(c.source!=='screen'&&c.source!=='activity')continue;
       const t=Date.parse(c.capturedAt),end=Math.min(t,upper),start=Math.max(t-c.durationMs,lower,ends.get(c.deviceId)??-Infinity),durationMs=Math.max(0,end-start);
       if((t<lower||t>=upper)&&!durationMs)continue;
-      if(durationMs>0)ends.set(c.deviceId,Math.max(ends.get(c.deviceId)??-Infinity,end));
+      if(durationMs>0){
+        ends.set(c.deviceId,Math.max(ends.get(c.deviceId)??-Infinity,end));
+        // Earlier samples can clip a later selected app even when this sample
+        // is excluded by the requested app/source/collection filter.
+        onContributor?.(c.id);
+      }
       const activity=c.source==='activity';
       if(range.source&&c.source!==range.source||range.appId!==undefined&&c.appId!==range.appId||range.collection==='activity'&&!activity||range.collection==='content'&&(activity||c.privacy.collection==='activity'))continue;
+      onContributor?.(c.id);
       const appKey=JSON.stringify(c.appId?['id',c.appId]:['name',c.appName]);
       const app=apps.get(appKey)??{appId:c.appId,appName:c.appName||moteText("未识别应用"),durationMs:0,captures:0,activityEvents:0,contentCaptures:0};
       const d=devices.get(c.deviceId)??{deviceId:c.deviceId,deviceName:c.deviceName,durationMs:0,captures:0,activityEvents:0,contentCaptures:0};
@@ -611,14 +625,14 @@ export class EvidenceStore {
     }
     return {apps:[...apps.values()].sort((a,b)=>b.durationMs-a.durationMs),devices:[...devices.values()],totalDurationMs,captures,activityEvents,contentCaptures};
   }
-  mediaActivity(range:MediaActivityRange={}) {
+  mediaActivity(range:MediaActivityRange={},onContributor?:(id:string)=>void) {
     // Intervals end at capturedAt and can overlap the exclusive upper bound.
     // Snapshot metadata on screen/activity events never participates in media accounting.
     const {where,values}=this.clauses({deviceId:range.deviceId,source:'media',after:range.after,before:range.before?new Date(Date.parse(range.before)+60000).toISOString():undefined});
     // SQLite sorts interval starts before streaming; rich session metadata is parsed one row at a time.
     const rows=this.db.prepare(`SELECT * FROM captures${where} ORDER BY unixepoch(captured_at,'subsec')*1000-json_extract(json,'$.durationMs') ASC,captured_at ASC,id ASC`).iterate(...values);
     const record=this.record.bind(this);
-    return mediaActivity((function*(){for(const row of rows)yield record(row as unknown as Row);})(),range);
+    return mediaActivity((function*(){for(const row of rows)yield record(row as unknown as Row);})(),range,onContributor);
   }
   reserveMetadata(bytes:number){if(this.options.maxStorageBytes&&this.logicalBytes()+bytes>this.options.maxStorageBytes)throw new StoreError('Vault storage limit reached',507);}
   logicalBytes() { return this.ledger.bytes(); }

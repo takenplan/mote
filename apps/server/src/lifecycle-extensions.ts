@@ -73,9 +73,10 @@ export function registerMemoryExtensions({integrationSettings,lifecycle,store,fi
   }});
 }
 
-/** Active windows own their retry schedule; only detached queued jobs need recovery. */
+/** Active windows own their retry schedule. Creation alone never activates a
+ * manual task; only an explicitly started detached job may recover on startup. */
 export function recoverableMemoryJobs(store:Store,_lifecycle:MemoryLifecycle):string[]{
-  return (store.db.prepare("SELECT id,json FROM memory_jobs WHERE json_extract(json,'$.status') IN ('queued','running') OR (json_extract(json,'$.inputPlanVersion')=1 AND json_extract(json,'$.status')='waiting_for_input')").all() as {id:string;json:string}[]).filter(row=>{
+  return (store.db.prepare("SELECT id,json FROM memory_jobs WHERE json_extract(json,'$.activationRequired')=0 AND (json_extract(json,'$.status') IN ('queued','running') OR (json_extract(json,'$.inputPlanVersion')=1 AND json_extract(json,'$.status')='waiting_for_input'))").all() as {id:string;json:string}[]).filter(row=>{
     const job=JSON.parse(row.json) as {importJobId?:string;originKey?:string};
     // Material work is resumed only by its durable, currently authorized queue.
     if(job.originKey?.startsWith('material:'))return false;

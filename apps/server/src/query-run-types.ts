@@ -7,4 +7,5 @@ export interface QueryRun {
   sourceContextDependencies?:SourceContextDeclaration[];
   error?:{code:string;message:string};availableAt?:number;
   execution?:ExecutionEnvelope;
+  operationUsage?:import('./usage.js').OperationUsage;
 }

@@ -56,6 +56,9 @@ test('incomplete history fails closed and queued derived dialogue rechecks sourc
  let release!:()=>void,entered!:()=>void,n=0;const held=new Promise<void>(resolve=>release=resolve),full=new Promise<void>(resolve=>entered=resolve);
  const occupying=Array.from({length:limit},()=>gate.run(async()=>{if(++n===limit)entered();await held;}));await full;
  const queued=f.node.agent.query({question:'Generated queued history',conversation:context});
+ // Preparation now yields while checking lineage; revoke only once this
+ // generated query has actually reached the occupied admission queue.
+ for(let attempt=0;attempt<100&&gate.snapshot().waiting===0;attempt++)await new Promise<void>(resolve=>setImmediate(resolve));
  assert.equal(gate.snapshot().waiting,1);f.node.store.db.prepare('UPDATE source_heads SET deleted=1 WHERE source_id=? AND external_id=?').run('generated-context-files','recording');release();await Promise.all(occupying);
  await assert.rejects(queued,/context_evidence_restricted/);assert.equal(f.calls.length,0,'queued history was never sent after its source was revoked');
 });

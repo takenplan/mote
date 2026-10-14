@@ -4,8 +4,8 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {AgentContextBudgetError,AgentResponseError,type QueryInput} from '@mote/agent';
-import type {QueryResult} from '@mote/shared';
+import {AgentResponseError,type QueryInput} from '@mote/agent';
+import {ProviderFailure,type QueryResult} from '@mote/shared';
 import {Store} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
 import {MemoryStore,MemoryOutputValidationError} from '../src/memory.js';
@@ -15,6 +15,8 @@ import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {fixtureMemoryPlan} from './fixtures/memory-planning.js';
+import {startBridge} from '../../../packages/agent/dist/bridge.js';
+import {materialId} from '../src/materials.js';
 
 const contract='range-evaluation@1';
 const at='2026-10-13T00:00:00Z';
@@ -47,7 +49,60 @@ for(const count of [8,32,80])test(`${count} selected exact-quoted candidates com
  assert.equal(done.status,'completed');assert.equal(done.batches.length,1);assert.equal(done.memoryIds.length,count);
  assert.equal(f.extracts.length,1);assert.equal(f.reviews.length,1);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,1);
  assert.equal(done.batches[0].coverage![0].state,'checked');assert.equal(done.batches[0].coverage![0].memoryIds.length,count);
- assert.ok(!done.batches[0].splitHistory?.length);assert.equal((f.reviews[0].taskContext!.untrustedMemoryDraft as {capacity?:unknown}).capacity,undefined,'new independent review receives selected candidates and coverage, without semantic saturation');
+ assert.equal(done.batches.length,1);assert.equal((f.reviews[0].taskContext!.untrustedMemoryDraft as {capacity?:unknown}).capacity,undefined,'new independent review receives selected candidates and coverage, without semantic saturation');
+});
+
+for(const changeDuringReview of [false,true])test(`240 short targets form one initial range-evaluation batch and ${changeDuringReview?'fence an original correction during review':'receive one complete extraction and independent review'}`,async t=>{
+ const texts=Array.from({length:240},(_,index)=>`Generated paragraph ${index}.`),f=await fixture(t,texts);
+ const read=async(input:QueryInput,answer:QueryResult)=>{
+  const bridge=await startBridge({search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async({ids})=>f.memories.readEvidence(ids),activity:async()=>({}),devices:async()=>[]},input);
+  try{assert.equal(bridge.seedEvidence.length,240);assert.equal(bridge.deliveredRanges.length,240);assert.deepEqual(new Set(bridge.seedEvidence.map(record=>record.id)),new Set(f.ids));return {...answer,evidenceReadRanges:bridge.deliveredRanges,evidenceDependencies:bridge.evidenceDependencies};}finally{await bridge.close();}
+ };
+ let extractionError:unknown;
+ f.setGenerate(async input=>{try{assert.equal(work(input).members.length,240);assert.equal(input.evidenceReadRanges!.length,240);assert.equal(Object.keys(input.processingEvidence!).length,240);return await read(input,result(input,[{member:work(input).members[0],quote:texts[0]},{member:work(input).members[239],quote:texts[239]}]));}catch(error){extractionError=error;throw error;}});
+ f.setReview(async(input,draft)=>{assert.equal(work(input).members.length,240);const reviewed=await read(input,{...draft,runId:randomUUID()});if(changeDuringReview)await f.sources.upsert('generated-ranges',{externalId:'239',revision:'2',observedAt:at,kind:'file',layer:'original',text:'Generated corrected last paragraph.'});return reviewed;});
+ const job=f.create();assert.equal(job.totalBatches,1);const before=job.batches[0].evidenceRanges;
+ const done=await f.pipeline.run(job.id);if(extractionError)throw extractionError;assert.equal(f.extracts.length,1);assert.equal(f.reviews.length,1,JSON.stringify(done));assert.equal(done.batches.length,1);assert.deepEqual(done.batches[0].evidenceRanges,before);
+ if(changeDuringReview){assert.notEqual(done.status,'completed');assert.equal(done.memoryCount,0);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);return;}
+ assert.equal(done.status,'completed');assert.equal(done.batches[0].coverage!.length,240);assert.equal(done.batches[0].coverage!.filter(row=>row.state==='checked').length,2);assert.equal(done.batches[0].coverage!.filter(row=>row.state==='no_candidates').length,238);assert.equal(done.memoryCount,2);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,240);
+ for(const memoryId of done.memoryIds){const memory=f.memories.get(memoryId);assert.equal(memory.reviewReceipt!.decision,'independent');for(const span of memory.evidence!)assert.equal(f.memories.readEvidence([span.id])[0].ocrText.slice(span.offset!,span.offset!+span.length!),span.quote);}
+});
+
+test('a wide saved range batch resumes only its independent review after restart without repartitioning targets',async t=>{
+ const texts=Array.from({length:150},(_,index)=>`Generated restart paragraph ${index}.`),f=await fixture(t,texts);let entered!:()=>void,hold=true;const reviewEntered=new Promise<void>(resolve=>entered=resolve);
+ f.setGenerate(async input=>result(input,[{member:work(input).members[149],quote:texts[149]}]));
+ f.setReview(async(input,draft)=>{assert.equal(work(input).members.length,150);if(hold){entered();return new Promise((_,reject)=>input.signal!.addEventListener('abort',()=>reject(input.signal!.reason),{once:true}));}return {...draft,runId:randomUUID()};});
+ const job=f.create(),initial=job.batches[0].evidenceRanges,first=f.pipeline.run(job.id);await reviewEntered;hold=false;await f.restart();await first;
+ const done=await f.pipeline.run(job.id);assert.equal(done.status,'completed');assert.equal(done.totalBatches,1);assert.deepEqual(done.batches[0].evidenceRanges,initial);assert.equal(f.extracts.length,1);assert.equal(f.reviews.length,2);assert.equal(done.batches[0].coverage!.length,150);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,150);
+});
+
+test('the formal Memory job API coalesces 270 authorized paragraphs across Materials once under concurrent drains',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-wide-memory-http-')),calls:QueryInput[]=[];
+ const config:Config={dataDir:directory,token:'generated-wide-memory-token',tokenPath:'generated',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-model',modelProvider:'custom',modelProtocol:'openai-completions',modelBaseUrl:'https://generated.invalid/v1',apiKey:'generated-unused',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false,agentTraceEnabled:false,logLevel:'silent'};
+ let node:Awaited<ReturnType<typeof buildApp>>,outsideId:string,selected:string[]=[];
+ const failures:unknown[]=[];
+ node=await buildApp(config,{backgroundWorker:false,createModelAgent:async(_settings,reader)=>({configured:true,close:async()=>{},query:async input=>{
+  calls.push(input);const bridge=await startBridge(reader,input);
+  try{
+   assert.equal(work(input).members.length,270);assert.equal(bridge.seedEvidence.length,270);assert.equal(input.processingMaterialInputs!.length,2);
+   assert.deepEqual(new Set(bridge.seedEvidence.map(record=>record.id)),new Set(selected));
+   const denied=await fetch(bridge.url+'/context_evidence',{method:'POST',headers:{authorization:'Bearer '+bridge.token},body:JSON.stringify({id:outsideId,offset:0,length:1})});assert.equal(denied.status,400,'unselected Material receives no context or target authority');
+   const members=work(input).members,picks=[members[0],members[269]].map(member=>({member,quote:bridge.records.get(member.id)!.ocrText}));
+   return {...result(input,picks),evidenceReadRanges:bridge.deliveredRanges,evidenceDependencies:bridge.evidenceDependencies,sourceContextDependencies:bridge.sourceContextDependencies};
+  }catch(error){failures.push(error);throw error;}finally{await bridge.close();}
+ }})});await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
+ for(const [index,count] of [135,135,1].entries()){
+  const sourceId='generated-wide-'+index,texts=Array.from({length:count},(_,line)=>`Generated ${index} paragraph ${line}.`);
+  node.sources.register({id:sourceId,name:sourceId,kind:'custom',deviceId:'generated',platform:'import'});
+  const original=await node.sources.upsert(sourceId,{externalId:'body',revision:'1',observedAt:at,kind:'message',layer:'original',text:texts.join('\n')});
+  const material=node.materials.publish({id:materialId(sourceId,'generated-paragraphs'),kind:'mote.note',schemaVersion:1,title:'Generated paragraphs',origin:{sourceId,externalId:'generated-paragraphs',deviceId:'generated',firstAt:at,lastAt:at},members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],blocks:texts.map((text,line)=>({id:'line-'+line,kind:'text' as const,format:'plain',text,memberIds:[original.id]})),artifacts:[{key:'source-body',state:'ready',blockIds:texts.map((_,line)=>'line-'+line)}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
+  const ids=node.materials.input(material.ref,['source-body'])!.evidenceIds;if(index<2)selected.push(...ids);else outsideId=ids[0];
+ }
+ const created=await node.app.inject({method:'POST',url:'/api/memory-jobs',headers:{authorization:'Bearer '+config.token},payload:{evidenceIds:selected,recipes:[{id:'mote.personal-memory',version:'5'}]}});assert.equal(created.statusCode,202,created.body);
+ const drains=await Promise.all(Array.from({length:3},()=>node.memoryPipeline.run(created.json().id)));if(failures.length)throw failures[0];
+ for(const done of drains){assert.equal(done.status,'completed',JSON.stringify({status:done.status,errorCode:done.errorCode,batches:done.batches.map(batch=>({status:batch.status,errorCode:batch.errorCode,validationFailures:batch.validationFailures})),calls:calls.map(input=>input.traceContext?.phase)}));assert.equal(done.batches.length,1);assert.equal(done.memoryCount,2);assert.equal(done.batches[0].coverage!.length,270);assert.deepEqual(new Set(done.batches[0].evidenceRanges.map(range=>range.id)),new Set(selected));}
+ assert.deepEqual(calls.map(input=>input.traceContext?.phase),['extract','review']);assert.equal(node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,270);
+ const read=await node.app.inject({url:'/api/memory-jobs/'+created.json().id,headers:{authorization:'Bearer '+config.token}});assert.equal(read.statusCode,200);assert.equal(read.json().completedBatches,1);
 });
 
 test('model selection may retain one useful claim while independent review assesses every other target',async t=>{
@@ -158,14 +213,11 @@ for(const variant of ['coding-original','personal-correction','coding-correction
  const before=f.memories.list().length,done=await f.pipeline.run(f.pipeline.create({evidenceIds:[id]}).id);assert.equal(done.status,'completed');assert.equal(done.memoryIds.length,0);assert.equal(f.memories.list().length,before,'reassessment does not restate a confirmed owner correction');assert.equal(f.reviews.length,1);
 });
 
-test('measured context failure partitions members without using the text recovery budget, preserving exact independently reviewed leaves',async t=>{
- const long=facts(8).join('\n')+'\n'+'🌱'.repeat(2000),f=await fixture(t,[long,...Array.from({length:6},()=> 'Generated short neutral input.')]);
- f.setGenerate(async input=>{const members=work(input).members;if(members.length>1||members[0].length>600)throw new AgentContextBudgetError('task',81000,80000,{memoryWork:81000});return result(input);});
- const done=await f.pipeline.run(f.create().id),longLeaves=done.batches.filter(batch=>!batch.supersededBy&&batch.evidenceRanges.some(range=>range.id===f.ids[0]));
- assert.equal(done.status,'completed');assert.ok(longLeaves.length>2,'member partitions do not exhaust text subdivision before the generated original fits');
- const ranges=longLeaves.flatMap(batch=>batch.evidenceRanges).sort((a,b)=>a.offset-b.offset);let end=0;for(const range of ranges){assert.equal(range.offset,end);end+=range.length;assert.ok(range.length<=600);const segment=long.slice(range.offset,end);assert.ok(!/[\uDC00-\uDFFF]/.test(segment[0])&&!/[\uD800-\uDBFF]/.test(segment.at(-1)!),'resource recovery never tears a UTF-16 surrogate pair');}assert.equal(end,long.length);
- assert.equal(f.reviews.length,done.batches.filter(batch=>!batch.supersededBy).length);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,longLeaves.length+6);
- assert.deepEqual(new Set(f.extracts.flatMap(input=>input.evidenceIds)),new Set(f.ids),'recovery uses only the original grant');
+test('actual provider context capacity leaves exact target ranges unfinished without recursion',async t=>{
+ const text=facts(8).join('\n')+'\n'+'🌱'.repeat(2000),f=await fixture(t,[text,...Array.from({length:6},()=> 'Generated short neutral input.')]);
+ f.setGenerate(async()=>{throw new ProviderFailure({category:'permanent',code:'processing_limit'});});
+ const job=f.create(),failed=await f.pipeline.run(job.id);assert.equal(failed.status,'failed');assert.equal(failed.batches.length,job.batches.length);assert.equal(f.extracts.length,job.batches.length);assert.equal(f.reviews.length,0);
+ assert.ok(failed.batches.every(batch=>batch.errorCode==='processing_limit'&&!batch.supersededBy));assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
 });
 
 test('an actual output-limit error remains failed and one explicit retry preserves completed siblings across restart',async t=>{
@@ -187,14 +239,9 @@ test('an oversized adapter answer is rejected rather than trimmed into apparent 
  f.setGenerate(async input=>result(input));const done=await f.pipeline.retry(job.id);assert.equal(done.status,'completed');assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,1);
 });
 
-test('an unrecoverable measured input budget keeps the existing four-level text bound and leaves every terminal range unfinished',async t=>{
- const f=await fixture(t,['Generated large bounded source.'.padEnd(8192,'.')]);
- f.setGenerate(async()=>{throw new AgentContextBudgetError('task',81000,80000,{memoryWork:81000});});
- const failed=await f.pipeline.run(f.create().id),leaves=failed.batches.filter(batch=>!batch.supersededBy);
- assert.equal(failed.status,'failed');assert.equal(failed.batches.length,31);assert.equal(leaves.length,16);assert.equal(f.extracts.length,31);assert.equal(f.reviews.length,0);
- assert.ok(leaves.every(batch=>batch.errorCode==='host_context_budget'&&batch.evidenceRanges[0].length===512));
- const ranges=leaves.flatMap(batch=>batch.evidenceRanges).sort((a,b)=>a.offset-b.offset);assert.deepEqual(ranges.map(range=>[range.offset,range.length]),Array.from({length:16},(_,index)=>[index*512,512]));
- assert.equal(f.memories.list().length,0);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
+test('actual oversized response fails once with no partial proposal or checkpoint',async t=>{
+ const f=await fixture(t,['Generated large original.'.padEnd(8192,'.')]);f.setGenerate(async()=>{throw new AgentResponseError('Generated actual transport response capacity','response_too_large');});
+ const failed=await f.pipeline.run(f.create().id);assert.equal(failed.status,'failed');assert.equal(failed.batches.length,1);assert.equal(f.extracts.length,1);assert.equal(f.reviews.length,0);assert.equal(failed.batches[0].errorCode,'model_output_capacity');assert.equal(f.memories.list().length,0);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
 });
 
 test('absent saved work contract and pinned old recipes retain legacy capacity behavior without implicit replay',async t=>{

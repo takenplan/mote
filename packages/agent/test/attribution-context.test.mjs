@@ -27,7 +27,7 @@ async function open(t,context,extra={}){
 async function pages(call,locator,length=12000){
  let text='',offset=0,expectedFingerprint;const results=[];
  do {const result=await call('attribution_context',{...locator,offset,length,...(expectedFingerprint?{expectedFingerprint}:{})});assert.equal(result.status,200,JSON.stringify(result.body));
-  assert.ok(JSON.stringify(result.body).length<=16000);const page=result.body.data;assert.equal(page.offset,offset);assert.equal(page.citationAuthority,false);
+  assert.ok(result.body.data.text.length<=length);const page=result.body.data;assert.equal(page.offset,offset);assert.equal(page.citationAuthority,false);
   if(expectedFingerprint)assert.equal(page.contextFingerprint,expectedFingerprint);else expectedFingerprint=page.contextFingerprint;
   text+=page.text;offset=page.nextOffset;results.push(result);
  }while(offset!==null);
@@ -47,21 +47,21 @@ test('two catalog items and tiny material pages omit long statement prose withou
  assert.ok(f.bridge.evidenceDependencies.ids.includes(f.fixture.originals[0].id),'context participates in hidden lineage, not citation authority');
 });
 
-test('12000-unit notes and 8000-unit owner replies reassemble without increasing either budget',async t=>{
+test('12000-unit notes and 8000-unit owner replies reassemble through normal pages',async t=>{
  const instruction='Generated narrator scope. '.repeat(600).slice(0,12000),answer='The owner is only the narrator. '.repeat(300).slice(0,8000),f=await open(t,{instruction,answer});
  assert.equal(instruction.length,12000);assert.equal(answer.length,8000);
  assert.equal((await f.call('material_catalog',{limit:2})).status,200);
  const result=await pages(f.call,{ref:materialRef});assert.equal(result.text,JSON.stringify(f.context));assert.deepEqual(JSON.parse(result.text),f.context);
- assert.ok(f.bridge.deliveredCharacters<=48000);assert.equal(f.bridge.records.size,0);
+ assert.ok(f.bridge.deliveredCharacters>0);assert.equal(f.bridge.records.size,0);
 });
 
-test('escaped 12000-unit notes and 8000-unit owner replies reassemble exactly across budget-fitted UTF-16 pages',async t=>{
+test('escaped 12000-unit notes and 8000-unit owner replies reassemble exactly across requested UTF-16 pages',async t=>{
  const instruction=('"\\\n😀X').repeat(2000).slice(0,12000),answer='Visitor scope remains separate. '.repeat(300).slice(0,8000),f=await open(t,{instruction,answer});
  assert.equal(instruction.length,12000);assert.equal(answer.length,8000);
  assert.equal((await f.call('material_catalog',{limit:2})).status,200);
  const before=f.bridge.deliveredCharacters;
  const result=await pages(f.call,{ref:materialRef});assert.equal(result.text,JSON.stringify(f.context));assert.deepEqual(JSON.parse(result.text),f.context);
- assert.ok(result.results.length>1);assert.ok(f.bridge.trace.some(row=>row.attributionPage?.budgetLimited));
+ assert.ok(result.results.length>1);assert.ok(f.bridge.trace.filter(row=>row.attributionPage).every(row=>row.attributionPage.returnedLength<=row.attributionPage.requestedLength));
  assert.equal(f.bridge.records.size,0);assert.equal(f.bridge.deliveredCharacters,before+result.results.reduce((n,r)=>n+JSON.stringify(r.body).length,0));
 });
 
@@ -86,18 +86,10 @@ test('continuations fence context changes, invalid locators and task authority',
  assert.equal(f.bridge.records.size,0);assert.equal(taskTools({question:'Extract',evidenceIds:[f.fixture.originals[0].id]}).includes('attribution_context'),false);
 });
 
-test('extreme escaping exhausts the unchanged total budget with an explicit unread tail',async t=>{
+test('extreme escaping reassembles the entire context beyond retired character quotas',async t=>{
  const f=await open(t,{instruction:'"\\\n'.repeat(4000),answer:'"\\\n'.repeat(2667).slice(0,8000)});
  assert.equal((await f.call('material_catalog',{limit:2})).status,200);
- for(const length of [1,128])assert.equal((await f.call('material_read',{ref:materialRef,length})).status,200,'ordinary body pages remain usable before context disclosure');
- let offset=0,fingerprint,received='',lastPage;
- for(let attempt=0;attempt<10;attempt++){
-  const result=await f.call('attribution_context',{ref:materialRef,offset,length:12000,...(fingerprint?{expectedFingerprint:fingerprint}:{})});
-  if(result.status!==200){assert.equal(result.body.toolError.code,'evidence_budget_exceeded');assert.ok(lastPage.nextOffset!==null);break;}
-  lastPage=result.body.data;received+=lastPage.text;offset=lastPage.nextOffset;fingerprint=lastPage.contextFingerprint;
-  assert.notEqual(offset,null,'this fixture deliberately exceeds one query budget');
- }
- assert.ok(received.length<JSON.stringify(f.context).length);assert.equal(received,JSON.stringify(f.context).slice(0,received.length));assert.ok(f.bridge.deliveredCharacters<=48000);assert.equal(f.bridge.records.size,0);
+ const result=await pages(f.call,{ref:materialRef});assert.equal(result.text,JSON.stringify(f.context));assert.ok(f.bridge.deliveredCharacters>48000);assert.equal(f.bridge.records.size,0);
 });
 
 test('UTF-16 boundaries, selected scope and declaration-only locators never expand original authority',async t=>{

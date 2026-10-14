@@ -107,17 +107,17 @@ for (const protocol of ['deepseek','openai-completions','openai-responses','anth
       assert.equal(result.trace.at(-1).tool,'attribution_context');assert.equal(result.trace.at(-1).attributionPage.returnedLength,128);
     },{reader:fixture.reader},actions,JSON.stringify({answer:'Generated scoped context remains partially inspected.',citationIds:[]}));
   });
-  test(`real Harness ${protocol} receives one budget-fitted material result with its continuation`,{timeout:60000},async()=>{
+  test(`real Harness ${protocol} receives one requested material result with its continuation`,{timeout:60000},async()=>{
     const fixture=generatedMaterialPages();
     const actions=[{name:'material_catalog',args:{}},{name:'material_read',args:{ref:materialRef,length:10000}}];
     await withProvider(protocol,async(agent,requests)=>{
       const result=await agent.query({question:'Read a generated material page'});
       assert.equal(requests.length,3,'local fitting does not request an extra provider turn');
-      assert.deepEqual(fixture.attempts.map(args=>args.length),[10000,5000]);
+      assert.deepEqual(fixture.attempts.map(args=>args.length),[10000]);
       const pages=[];const walk=value=>{if(typeof value==='string'){try{const parsed=JSON.parse(value.split('\n')[0]);if(parsed.data?.pagination)pages.push(parsed);}catch{}}else if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')Object.values(value).forEach(walk);};walk(requests[2].body);
-      assert.equal(pages.length,1);assert.ok(JSON.stringify(pages[0]).length<=16000);
-      assert.equal(pages[0].data.pagination.limitedBy,'host_budget');assert.equal(pages[0].data.textRange.nextOffset,5000);
-      assert.deepEqual(result.trace.at(-1).materialPage,{readAttempts:2,requestedLength:10000,returnedLength:5000,budgetLimited:true});
+      assert.equal(pages.length,1);assert.ok(JSON.stringify(pages[0]).length>16000);
+      assert.equal(pages[0].data.pagination.limitedBy,undefined);assert.equal(pages[0].data.textRange.nextOffset,null);
+      assert.deepEqual(result.trace.at(-1).materialPage,{requestedLength:10000,returnedLength:10000});
     },{reader:fixture.reader},actions,JSON.stringify({answer:'Generated mechanical result.',citationIds:[]}));
   });
   test(`real Harness ${protocol} appends distinct images and successful duplicate metadata`, {timeout:60000}, async()=>{
@@ -147,7 +147,7 @@ for (const protocol of ['deepseek','openai-completions','openai-responses','anth
       for(const request of requests.slice(0,4))assert.ok(!JSON.stringify(request.body).includes(output.data),'metadata does not disclose pixels');
       assert.equal(JSON.stringify(requests[4].body).split(output.data).length-1,1);assert.equal(JSON.stringify(requests[5].body).split(output.data).length-1,1);
       const texts=[];const walk=value=>{if(typeof value==='string'){try{const parsed=JSON.parse(value.split('\n')[0]);if(parsed.imageView)texts.push(parsed);}catch{}}else if(Array.isArray(value))value.forEach(walk);else if(value&&typeof value==='object')Object.values(value).forEach(walk);};walk(requests[4].body);
-      const delivered=texts.find(t=>t.imageView.delivery==='prepared');assert.ok(delivered);assert.deepEqual(delivered.imageView.region,input.region);assert.equal(delivered.imageBudget.remainingPayloads,3);assert.ok(delivered.hostBudget.remainingCalls>0);
+      const delivered=texts.find(t=>t.imageView.delivery==='prepared');assert.ok(delivered);assert.deepEqual(delivered.imageView.region,input.region);assert.equal(delivered.imageBudget.remainingPayloads,3);assert.ok(delivered.toolUsage.calls>0);
       assert.match(JSON.stringify(requests[5].body),/already_disclosed/);assert.deepEqual(answer.trace.filter(t=>t.tool==='read_image').map(t=>t.imageView.delivery),['metadata','prepared','already_disclosed']);
     },{reader:imageReader},actions);
   });

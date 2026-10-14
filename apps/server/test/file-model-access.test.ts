@@ -38,6 +38,8 @@ test('local file outputs are available to remote and local models across every e
  const segmentRef=formatArtifactRef(segment.id,segment.revision);
  const excerpt=randomUUID();await node.store.ingest({id:excerpt,deviceId:'fixture-device',deviceName:'Generated',platform:'import',source:'note',capturedAt:'2026-09-20T00:00:00Z',durationMs:0,ocrText:text});
  node.store.db.prepare('INSERT INTO file_evidence_links(parent_id,capture_id) VALUES(?,?)').run(parent.id,excerpt);
+ const dependencies=[parent.id,chunk,record.id,excerpt],hostReader=node.featureServices.evidenceReader;
+ assert.equal(hostReader.contextDependenciesAllowed(dependencies),dependencies.every(id=>hostReader.deletionContextAllowed(id)),'batch metadata checks preserve file, attachment-parent and Material permission semantics');
  inspect=async reader=>{
   const scope={deviceId:'fixture-device'};
   const [raw,chunks,materialEvidence,catalog,search,timeline,memories,segments,items,history,excerptEvidence]=await Promise.all([

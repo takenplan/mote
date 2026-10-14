@@ -22,6 +22,7 @@ export class MemoryPublication {
   private activeOwnerWork=0;
   private dispose?:()=>Promise<void>;
   private poll?:ReturnType<typeof setInterval>;
+  private stopped=false;
   revokeEvidence?:(ids:string[])=>Promise<void>;
   constructor(readonly store:Store,readonly memories:MemoryStore,readonly bindings:MemoryBindings,private executor?:ExecutionEngine){
     store.db.exec('CREATE TABLE IF NOT EXISTS memory_publications(id TEXT PRIMARY KEY,json TEXT NOT NULL,state TEXT NOT NULL);');
@@ -56,7 +57,7 @@ export class MemoryPublication {
     const memoryIds=new Set(pending.flatMap(row=>{const value=JSON.parse(String(row.json));return value.deleted?value.memoryIds as string[]:[];}));
     return ['memory_provider_receipts','memory_provider_writes'].some(table=>this.store.db.prepare('SELECT json FROM '+table).all().some(row=>{const value=JSON.parse(String(row.json));return value.namespace?.instanceId===instanceId&&memoryIds.has(value.key?.memoryId);}));
   }
-  private scheduleReconcile(){if(!this.executor||!this.pending()||this.store.db.prepare("SELECT 1 FROM execution_steps WHERE kind='memory.provider-reconcile' AND state IN ('waiting','running')").get())return;const id='memory-provider-reconcile:'+randomUUID();this.executor.enqueue(id,'memory.provider-reconcile',{}, {id});void this.executor.tick().catch(()=>{});}
+  private scheduleReconcile(){if(this.stopped||!this.executor||!this.pending()||this.store.db.prepare("SELECT 1 FROM execution_steps WHERE kind='memory.provider-reconcile' AND state IN ('waiting','running')").get())return;const id='memory-provider-reconcile:'+randomUUID();this.executor.enqueue(id,'memory.provider-reconcile',{}, {id});void this.executor.tick().catch(()=>{});}
   private async write(operationId:string,memory:Memory,assertAuthority:()=>void,automatic=false){
     const binding=this.bindings.binding();if(!binding.namespace)return;
     const key=memoryProviderKey(memory),opId=operationId+':'+sha256(JSON.stringify({key,memory}));
@@ -151,5 +152,6 @@ export class MemoryPublication {
     const result=this.memories.delete(id);this.queueErases([id]);
     await this.reconcile();this.scheduleReconcile();const pending=Number(this.store.db.prepare("SELECT count(*) n FROM memory_provider_erases WHERE json_extract(json,'$.memoryId')=? AND state='submitted'").get(id)!.n);return {...result,externalErase:pending?'pending':'acknowledged',physicalEraseVerified:false};
   }
-  async close(){if(this.poll)clearInterval(this.poll);await this.dispose?.();}
+  stop(){this.stopped=true;if(this.poll)clearInterval(this.poll);this.poll=undefined;}
+  async close(){this.stop();await this.dispose?.();}
 }

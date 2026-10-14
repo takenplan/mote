@@ -31,7 +31,6 @@ import {
   AgentResponseError,
   AgentTimeoutError,
   AgentProviderError,
-  AgentContextBudgetError,
   type AgentOptions,
   type AgentAnswer,
   type QueryInput,
@@ -41,7 +40,7 @@ export * from "./types.js";
 export {AgentYieldError,hostControlDefinitions,hostControlInstructions,type HostControlChannel,type HostControlDefinition,type HostControlResult} from './host-controls.js';
 export {ContextToolError} from './tool-errors.js';
 export {originalEvidenceReceipt} from './bridge.js';
-export {extractionSeedScopeFitsBudget} from './extraction-seed-budget.js';
+export {extractionSeedScopeValid} from './extraction-seed-scope.js';
 export {validateInlineCitations} from "./citations.js";
 export {validateModelOptions} from './model-runtime.js';
 
@@ -208,7 +207,7 @@ export function createAgent(options: AgentOptions) {
       bridge = await startBridge(
         options.reader,
         {...input,onTrace:trace},
-        options.maxToolCalls ?? 24,
+        options.maxToolCalls,
       );
     } catch (error) {
       trace({type:'run.failed',stage:'starting',status:'failed',payload:{errorName:error instanceof Error?error.name:'UnknownError'}});
@@ -223,7 +222,7 @@ export function createAgent(options: AgentOptions) {
     let primaryFailure = false;
     let abortListener: (() => void) | undefined;
     try {
-      const {prompt,metrics}=assembleContext(input,bridge.seedEvidence,system,taskTools(input).map(name=>contextToolDefinitions(input).find(t=>t[0]===name)),options.maxTokens??DEFAULT_MODEL_MAX_TOKENS,options.maxToolCalls??24);
+      const {prompt,metrics}=assembleContext(input,bridge.seedEvidence,system,taskTools(input).map(name=>contextToolDefinitions(input).find(t=>t[0]===name)),options.maxTokens??DEFAULT_MODEL_MAX_TOKENS,options.maxToolCalls);
       trace({type:'context.assembled',stage:'starting',payload:{prompt,metrics,seedEvidence:bridge.seedEvidence}});
       transportObserver=await observeModelTransport(options.authorizeModelRequest);
       await mkdir(join(root, "workspace"));
@@ -357,11 +356,11 @@ export function createAgent(options: AgentOptions) {
     } catch (error) {
       primaryFailure = true;
       if(error instanceof AgentYieldError){trace({type:'run.yielded',status:'waiting'});throw error;}
-      trace({type:'run.failed',status:'failed',payload:{errorName:error instanceof Error?error.name:'UnknownError',reason:error instanceof AgentResponseError?error.reason:undefined,...(error instanceof AgentContextBudgetError?{code:error.code,budget:error.budget,characters:error.characters,limit:error.limit,sections:error.sections}:{})}});
+      trace({type:'run.failed',status:'failed',payload:{errorName:error instanceof Error?error.name:'UnknownError',reason:error instanceof AgentResponseError?error.reason:undefined}});
       // The SDK message may contain child stderr. Class identity establishes the
       // timeout; never inspect or forward provider/runtime message text.
       if (error instanceof RequestTimeoutError) throw new AgentTimeoutError();
-      if (error instanceof AgentContextBudgetError || error instanceof AgentTimeoutError || error instanceof AgentResponseError || error instanceof AgentClosedError || error instanceof ProviderFailure) throw error;
+      if (error instanceof AgentTimeoutError || error instanceof AgentResponseError || error instanceof AgentClosedError || error instanceof ProviderFailure) throw error;
       throw new AgentProviderError();
     } finally {
       modelAdmission.abort();

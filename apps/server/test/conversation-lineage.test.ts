@@ -13,6 +13,7 @@ import {MemoryStore} from '../src/memory.js';
 import {installEvidenceDependencies} from '../src/evidence-dependencies.js';
 import type {EvidenceDependencies,QueryResult} from '@mote/shared';
 import {resolveDependencies} from '../src/conversation-lineage.js';
+import {MaterialStore,materialId} from '../src/materials.js';
 
 const answer=(ids?:string[]):QueryResult=>({answer:'Generated derived answer',citations:[],trace:[],runId:randomUUID(),...(ids?{evidenceDependencies:{version:1,complete:true,ids} as EvidenceDependencies}:{})});
 test('lightweight stores recursively resolve derived ancestors and stop at cycles',t=>{
@@ -23,6 +24,24 @@ test('lightweight stores recursively resolve derived ancestors and stop at cycle
  const insert=store.db.prepare('INSERT INTO file_evidence_links(parent_id,capture_id) VALUES(?,?)');
  insert.run(ids[1],ids[0]);insert.run(ids[2],ids[1]);insert.run(ids[0],ids[2]);
  assert.deepEqual(new Set(resolveDependencies(store,{version:1,complete:true,ids:[ids[0]]})!.ids),new Set(ids));
+});
+
+test('set traversal preserves cross-graph file, Memory and Material ancestors through a cycle',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-lineage-cross-cycle-')),store=new Store(directory),materials=new MaterialStore(store);
+ t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
+ const raw=randomUUID(),at='2026-10-01T00:00:00Z';await store.ingest({id:raw,deviceId:'generated',deviceName:'Generated',platform:'import',source:'note',capturedAt:at,durationMs:0,ocrText:'Generated cross-source support.'});
+ const material=materials.publish({id:materialId('generated-cycle','body'),kind:'mote.note',schemaVersion:1,title:'Generated cycle original',origin:{sourceId:'generated-cycle',externalId:'body',deviceId:'generated'},members:[{id:raw,kind:'capture',ref:'capture:'+raw}],blocks:[{id:'body',kind:'text',format:'plain',text:'Generated cross-source support.',memberIds:[raw]}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
+ const anchor=materials.evidenceIds(material.ref)[0],memories=new MemoryStore(store,ids=>[...store.evidence(ids),...materials.evidence(ids)],id=>store.isCurrentEvidence(id)||materials.isCurrentEvidence(id));
+ const memory=memories.extract(fixtureMemoryResult(memories,{answer:JSON.stringify({memories:[{title:'Generated cross-source claim',statement:`Generated support [${anchor}]`,uncertainty:'Generated only',evidenceIds:[anchor],evidence:[{id:anchor,quote:'Generated cross-source support.'}]}]}),citations:[{id:anchor,capturedAt:at,appName:'Generated',excerpt:''}],trace:[],runId:randomUUID()}),'generated').items[0];
+ const graph=randomUUID(),file=randomUUID(),artifact='a'.repeat(64);
+ store.archive.enableMaterialLineage();
+ store.db.exec('CREATE TABLE generated_lineage_edges(parent_id TEXT,child_id TEXT); DROP VIEW evidence_dependency_edges; CREATE VIEW evidence_dependency_edges AS SELECT parent_id,child_id FROM generated_lineage_edges UNION ALL SELECT evidence_id,anchor_id FROM material_evidence_dependencies;');
+ for(const [parent,child] of [[file,graph],[artifact,graph],[graph,anchor]])store.db.prepare('INSERT INTO generated_lineage_edges VALUES(?,?)').run(parent,child);
+ store.db.prepare('INSERT INTO file_evidence_links(parent_id,capture_id) VALUES(?,?)').run(memory.id,file);
+ const current=store.archive.save(artifact,artifact,'generated',{kind:'generated',text:'Generated interpretation',metadata:{}},[],'generated','1','generated',[],[],[{ref:material.ref,offset:0,length:30}]);
+ assert.equal(current.id,artifact);
+ const resolved=resolveDependencies(store,{version:1,complete:true,ids:[graph]})!;
+ assert.deepEqual(new Set(resolved.ids),new Set([graph,file,artifact,memory.id,anchor,raw]));assert.equal(resolved.complete,true);
 });
 for(const operation of ['delete','prune','revise'] as const)test(`${operation} invalidates uncited reads and summaries in A while independent B survives`,async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-lineage-')),store=new Store(directory),conversations=new Conversations(store),working=new WorkingMemory(store,conversations);

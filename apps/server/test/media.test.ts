@@ -132,7 +132,9 @@ test('media API allows full client reads and writes with explicit device filters
   assert.equal((await app.inject({url:'/api/capture-browser?source=media',headers:collector})).json().items[0].media.sessions[0].title,'虚构海边故事');
   for(const query of ['screenLocked=maybe','after=bad','appVisibility=guess','after='+at(20)+'&before='+at(10)])assert.equal((await app.inject({url:'/api/media-activity?'+query,headers:owner})).statusCode,400);
   assert.equal((await app.inject({url:'/api/media-activity?screenLocked=false',headers:owner})).json().totalDurationMs,0);
-  assert.deepEqual(await reader!.mediaActivity!({deviceId:'phone'}),scoped);
+  const {disclosureDependencies,...agentResult}=await reader!.mediaActivity!({deviceId:'phone'});
+  assert.deepEqual(agentResult,scoped);
+  assert.deepEqual(disclosureDependencies,{version:1,complete:true,ids:[own.id]});
   await app.inject({method:'DELETE',url:'/api/connections/'+paired.credentialId,headers:owner});
   assert.equal((await app.inject({url:'/api/media-activity?deviceId=phone',headers:collector})).statusCode,401);
 });

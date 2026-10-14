@@ -115,6 +115,9 @@ Central（server + web）、macOS、Android 使用各自产品版本；当前版
 | [范围评估回归矩阵](memory-range-evaluation-validation.md) | 新旧入口、选取与未完成状态、实际资源恢复、授权和重启场景；执行结果单独记录 |
 | [系统改造方案（2026-10-10，已确认）](design/system-refactor-2026-10-10.md) | 14模块变更、5组选型、旅程、supersession和发布路线；拟议收益不是实测结果 |
 | [系统改造验证方案](design/system-refactor-validation-2026-10-10.md) | 22条真实入口旅程、质量rubric、同模型性能对照与发布门槛；结果见本次验收记录 |
+| [问答证据与简化上下文决定](adr-ask-evidence-quality-and-simple-context.md) | 模型覆盖、移除近似预算与二分、录音时间/正文、质量实验与实际恢复边界 |
+| [跨来源状态问答回归](ask-quality-validation.md) | 多来源与续问的生成资料场景、固定输入比较方法、证据覆盖和验证边界 |
+| [大范围续问与 Memory 启动回归](validation/query-lease-and-memory-activation-2026-10-14.md) | 完整依赖批量授权、租约续期、删除栅栏与显式启动后的重启恢复；生成 HTTP/provider 回归证据 |
 | [0.0.13-validation](0.0.13-validation.md) | 0.0.13 验证记录 |
 | [0.0.2-validation](0.0.2-validation.md) | 0.0.2 验收记录 |
 | [0.0.3-validation](0.0.3-validation.md) | 0.0.3 验收记录 |

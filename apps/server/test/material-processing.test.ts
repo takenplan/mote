@@ -177,7 +177,7 @@ test('activity-only media material is found by activity collection despite media
   assert.equal(reader.segments({id:outputId,source:'media',collection:'content'}).items.length,0);
 });
 
-test('material-only artifacts with more than 1,000 distinct originals fail closed in model artifact views',async t=>{
+test('material-only artifacts retain complete lineage beyond 1,000 originals while bounding public navigation',async t=>{
   const {store,materials,reader,runtime}=fixture(t);
   const at='2026-09-24T01:00:00.000Z';
   const originals=Array.from({length:2000},(_,index)=>({id:randomUUID(),deviceId:'generated-device',deviceName:'Generated device',
@@ -196,5 +196,9 @@ test('material-only artifacts with more than 1,000 distinct originals fail close
   const outputId=runtime.view().jobs.find(item=>item.id===job)!.outputs[0]!;
   assert.equal(store.archive.get(outputId)?.text,'Generated summary\n');
   assert.equal(reader.materialRead({ref:record.ref,deviceId:'generated-device'}).text,'Generated summary\n');
-  assert.equal(reader.segments({id:outputId,deviceId:'generated-device'}).items.length,0);
+  const page=reader.segments({id:outputId,deviceId:'generated-device'});
+  assert.equal(page.items.length,1);assert.equal(page.items[0].evidenceCount,2000);
+  assert.equal(page.items[0].members.length,30);assert.equal(page.items[0].membersTruncated,true);
+  store.delete(originals[1999].id);
+  assert.equal(reader.segments({id:outputId,deviceId:'generated-device'}).items.length,0,'a deleted contributor still revokes the derived artifact');
 });

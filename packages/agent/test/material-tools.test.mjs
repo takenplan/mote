@@ -92,7 +92,7 @@ test('a reader that ignores a smaller page request cannot grant its original evi
   const large='x'.repeat(12000),largePage={...page,text:large,textRange:{offset:0,total:12000,nextOffset:null},spans:[{...page.spans[0],pageRange:{start:0,end:12000},materialRange:{start:0,end:12000},memberIds:Array.from({length:32},(_,i)=>`member-${i}-${'m'.repeat(110)}`)}]};
   const {call}=await fixture(t,{...baseReader,materialRead:async()=>largePage});
   assert.equal((await call('material_catalog',{})).status,200);
-  const denied=await call('material_read',{ref,length:12000});assert.equal(denied.status,400);assert.match(denied.body.error,/Invalid material read page/);
+  const denied=await call('material_read',{ref,length:6000});assert.equal(denied.status,400);assert.match(denied.body.error,/Invalid material read page/);
   assert.equal((await call('evidence',{ids:[original.id]})).status,400);
 });
 
@@ -142,9 +142,9 @@ test('material sourceEvidence cannot turn semantic layers, stale text or split U
  }
 });
 
-test('sourceEvidence counts against the full result budget and a rejected page grants no citations',async t=>{
+test('sourceEvidence preserves exact original support beyond retired result character quotas',async t=>{
  const source={...original,ocrText:'"'.repeat(11999)};
  const oversized={...page,text:'x',textRange:{offset:0,total:1,nextOffset:null},spans:[],sourceSpans:[{record:source,offset:0,length:source.ocrText.length}]};
  const {bridge,call}=await fixture(t,{...baseReader,evidence:async()=>[source],materialRead:async()=>oversized});
- await call('material_catalog');const result=await call('material_read',{ref,length:1});assert.equal(result.status,400);assert.equal(result.body.toolError.code,'evidence_budget_exceeded');assert.equal(bridge.records.has(source.id),false);assert.equal(bridge.trace.some(row=>row.tool==='material_read'),false);
+ await call('material_catalog');const result=await call('material_read',{ref,length:1});assert.equal(result.status,200);assert.equal(result.body.data.sourceEvidence[0].ocrText,source.ocrText);assert.equal(bridge.records.has(source.id),true);assert.ok(JSON.stringify(result.body).length>16000);
 });

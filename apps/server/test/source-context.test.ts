@@ -133,6 +133,8 @@ test('portable backups retain source-only descriptions and version history; olde
   assert.equal(restoredSources.contexts.getAtVersion(sourceId,1,first.fingerprint)?.description,description);
   const tampered=structuredClone(archive);tampered.materials!.sourceContext!.declarations[0].description='Tampered exact owner note';reseal(tampered);
   await assert.rejects(target.importArchive(tampered),/Invalid portable source context/);assert.deepEqual(restoredSources.contexts.current(sourceId),current);
+  const metadataForgery=structuredClone(archive);(metadataForgery.sources![0].sourceContext as any).kind='metadata';
+  await assert.rejects(target.importArchive(metadataForgery),'a host query metadata pin cannot become an owner description pointer through portable input');assert.deepEqual(restoredSources.contexts.current(sourceId),current);
   const missing=structuredClone(archive);delete missing.materials!.sourceContext;reseal(missing);
   const emptyDirectory=mkdtempSync(join(tmpdir(),'mote-source-context-missing-')),empty=new Store(emptyDirectory);t.after(()=>{empty.close();rmSync(emptyDirectory,{recursive:true,force:true});});
   await assert.rejects(empty.importArchive(missing),/missing or changed/);assert.equal(empty.db.prepare('SELECT count(*) n FROM source_connections').get()!.n,0);

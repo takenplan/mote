@@ -5,7 +5,11 @@ Date: 2026-10-10. Status: accepted by the owner; implementation validation is re
 For new versioned recipes, the candidate-enumeration/saturation and semantic
 subdivision responsibilities below are superseded by the 2026-10-13
 [range-evaluation decision](adr-memory-range-evaluation.md). Legacy pinned work
-retains this contract; the other decisions remain in force.
+retains its fixed semantic contract. The 2026-10-14
+[simplification decision](adr-ask-evidence-quality-and-simple-context.md) removes
+host character/tool quotas and all automatic Memory halving. Current recovery
+keeps frozen targets and uses only bounded, explicitly classified transient
+failures; the other decisions remain in force.
 
 The normal query path directly retrieves and verifies evidence. The same durable
 query coordinator may delegate independent research when the model chooses it.
@@ -24,12 +28,12 @@ revalidate and receive cited originals again.
 
 Ordinary ready automatic Memory inputs enter bounded structural work packages
 without a mandatory model planner. Packing uses exact recipe and input contracts,
-existing member/text budgets and source fairness. It does not decide semantic
+configured initial packing and source fairness. It does not decide semantic
 relatedness or wait to fill a package. Each member keeps its receipt contextTime,
-attribution and evidence range. Full coverage and capacity are validated for every
-target. Saturated uncommitted batches are subdivided without dropping checked
-targets. Existing accepted proposals and genuine needs_context feedback retain
-their scoped planning path.
+attribution and evidence range. Full target coverage is independently reviewed.
+Actual capacity failures retain their unfinished target rather than generating
+smaller successful substitutes. Existing accepted proposals and genuine
+needs_context feedback retain their scoped planning path.
 
 Independent review remains mandatory, including packages with no candidates.
 Coding understanding candidates may replace extraction only under the exact full,

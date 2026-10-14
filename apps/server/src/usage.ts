@@ -11,6 +11,7 @@ export function estimateCost(tokens:TokenUsage|undefined,price:ModelPrice|undefi
   if(uncached<0)return null;
   return (uncached*price.input+tokens.outputTokens*price.output+tokens.cacheReadTokens*price.cacheRead+tokens.cacheWriteTokens*price.cacheWrite)/1e6;
 }
+export type OperationUsage={operationId:string;wallDurationMs:number;modelDurationMs:number;total:UsageTotals;items:UsageReceipt[]};
 export class UsageLedger {
   constructor(private readonly store:Store){
     store.db.exec('CREATE TABLE IF NOT EXISTS model_usage(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,json TEXT NOT NULL); CREATE INDEX IF NOT EXISTS model_usage_created ON model_usage(created_at); CREATE TABLE IF NOT EXISTS model_prices(id TEXT PRIMARY KEY,json TEXT NOT NULL)');
@@ -33,6 +34,14 @@ export class UsageLedger {
       update:(tokens:TokenUsage)=>{receipt.tokens=structuredClone(tokens);receipt.durationMs=Date.now()-started;receipt.estimatedCost=estimateCost(tokens,price);this.save(receipt);},
       finish:(status:'completed'|'failed')=>{receipt.status=status;receipt.durationMs=Date.now()-started;this.save(receipt);return structuredClone(receipt);},
     };
+  }
+  /** Fold every durable fragment receipt, including yielded coordinators,
+   * delegated research, working context, writers and independent reviewers. */
+  operation(operationId:string,createdAt?:string,finishedAt?:string):OperationUsage{
+    const items=(this.store.db.prepare("SELECT json FROM model_usage WHERE json_extract(json,'$.attribution.operationId')=? ORDER BY created_at,id").all(operationId) as {json:string}[]).map(row=>JSON.parse(row.json) as UsageReceipt);
+    const start=createdAt?Date.parse(createdAt):items.length?Math.min(...items.map(item=>Date.parse(item.createdAt))):Date.now();
+    const end=finishedAt?Date.parse(finishedAt):items.length?Math.max(...items.map(item=>Date.parse(item.createdAt)+item.durationMs)):start;
+    return {operationId,wallDurationMs:Math.max(0,end-start),modelDurationMs:items.reduce((sum,item)=>sum+item.durationMs,0),total:usageTotals(items),items};
   }
   summary(from:string,to:string,timeZone:string,filters:UsageFilters={},groupBy:UsageGroupBy='agent',page=1,pageSize=20):UsageSummary {
     const day=new Intl.DateTimeFormat('en-CA',{timeZone,year:'numeric',month:'2-digit',day:'2-digit'});

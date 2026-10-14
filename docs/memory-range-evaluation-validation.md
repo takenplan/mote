@@ -5,6 +5,13 @@ All automated source text, model output and transport credentials are generated
 fixtures. The matrix records required outcomes and implemented regression
 assertions; executed check results belong in the evidence section below.
 
+The resource-subdivision rows and executed results below record the 2026-10-13
+implementation boundary. The 2026-10-14
+[simplification decision](adr-ask-evidence-quality-and-simple-context.md) supersedes
+automatic halving and artificial target-count clipping; actual capacity failures
+now retain the original unfinished scope. Current wide-target, lease and activation
+regressions are recorded [separately](validation/query-lease-and-memory-activation-2026-10-14.md).
+
 ## Contract and state transitions
 
 | Input / transition | Required outcome |

@@ -125,8 +125,11 @@ export class RecordingConnector {
     return {id,empty:true,fileId:file.id,metadata,observedAt:new Date().toISOString()};
    }
    if(!this.ctx.files)throw new ExecutionFailure('blocked','recording_storage_unavailable');
+   // The owner's corpus-date policy accepts source creation time as an authored
+   // time anchor. It does not assign the described events an occurrence date.
+   const corpusTime=metadata.recordedAt??metadata.createdAt;
    const ack=await this.ctx.files.transcriptRevision(sourceId,{externalId:id,kind:'file',title:metadata.title,observedAt:new Date().toISOString(),deleted:false,
-    ...(metadata.uri?{uri:metadata.uri}:{}),document:{contentRole:'transcript',...(metadata.recordedAt?{recordedAt:metadata.recordedAt,timeBasis:'recorded'}:{timeBasis:'unknown'})}},result.rawText,result.transcript,authorize);
+    ...(metadata.uri?{uri:metadata.uri}:{}),document:{contentRole:'transcript',...(corpusTime?{recordedAt:corpusTime,timeBasis:'recorded'}:{timeBasis:'unknown'})}},result.rawText,result.transcript,authorize);
    this.observe('publish','completed',step,{count:ack.duplicate?0:1});
    const prior=this.ctx.store.db.prepare('SELECT file_id FROM recording_media WHERE source_id=? AND external_id=?').get(sourceId,id);
    if(prior)grant.commit(()=>new ArchivedFileStore(this.ctx.store).attach(ack.id,[String(prior.file_id)]));
