@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { initialize, profilePaths, loadProfile, atomicJson, setPublicUrl, isolatedEnvironment, composeArgs, composeEnvironment, effectiveConfiguration, repository } from './profile-lib.mjs';
+import { initialize, profilePaths, loadProfile, atomicJson, setPublicUrl, isolatedEnvironment, composeArgs, composeEnvironment, effectiveConfiguration, repository, updateProfileConfiguration } from './profile-lib.mjs';
 import { CLOUDFLARED_IMAGE, configureTunnel, tunnelTokenPath, assertTunnelToken, dockerTunnelUser, nativeTunnelArgs, nativeTunnelIdentity, stopNativeTunnel } from './tunnel-lib.mjs';
 import { cli, command, updateEnvironment } from './profile-fixtures.mjs';
 
@@ -18,7 +18,7 @@ let p;
 const reload = profile => loadProfile(profilePaths(profile,home));
 const noSecrets = value => { assert.equal(JSON.stringify(value).includes(synthetic),false,'Fixture credential must never be returned'); };
 const waitFor = async operation => { const until = Date.now()+12000; while (!await operation()) { if (Date.now()>until) throw Error('Synthetic process fixture timed out'); await sleep(40); } };
-const configure = (profile, options, execute = async () => '') => configureTunnel(profile,options,{execute,persist: meta => atomicJson(profile.metaFile,meta),persistPublicUrl:url=>setPublicUrl(profile,url)});
+const configure = (profile, options, execute = async () => '') => configureTunnel(profile,options,{execute,persist: async meta => { await updateProfileConfiguration(profile,document => {document.server.tunnelEnabled=meta.tunnel.enabled;document.server.tunnelProvider=meta.tunnel.enabled?'cloudflare':'';document.server.tunnelProtocol=meta.tunnel.protocol;});await atomicJson(profile.metaFile,meta);},persistPublicUrl:url=>setPublicUrl(profile,url)});
 try {
   await writeFile(source,synthetic+'\n',{mode:0o600});
   await initialize(profilePaths('dev',home)); await initialize(profilePaths('test',home),{runtime:'docker'});
@@ -28,9 +28,9 @@ try {
   const prod = await reload('prod'); assert.equal(prod.dataDir,external);
   assert.equal(effectiveConfiguration(prod).storage.source,external);
   const config = JSON.parse((await cli(home,'prod','config')).stdout); noSecrets(config);
-  assert.equal(config.processEnvFile,prod.envFile); assert.equal(config.storage.mount,null);
-  assert.equal(isolatedEnvironment(prod).MOTE_STORAGE_MOUNT,'');
-  assert.equal(effectiveConfiguration(docker).processEnvFile,'/app/deploy/empty.env');
+  assert.equal(config.configurationFile,prod.configFile); assert.equal(config.storage.mount,null);
+  assert.equal(isolatedEnvironment(prod).MOTE_STORAGE_MOUNT,undefined);
+  assert.equal(effectiveConfiguration(docker).configurationFile,docker.configFile);
   assert.equal(effectiveConfiguration(docker).storage.source,docker.meta.volume);
   await assert.rejects(initialize(profilePaths('dev',join(directory,'escape')),{'data-dir':external}),/inside/);
   await assert.rejects(initialize(profilePaths('prod',join(directory,'wrong')),{'data-dir':external,runtime:'docker'}),/native/);
@@ -39,7 +39,7 @@ try {
   assert.equal((await loadProfile(profilePaths('prod',join(directory,'volume')))).meta.volume,'explicit-private-vault');
   const envOriginal = await readFile(p.envFile,'utf8');
   for (const entry of ['DOCKER_CONTEXT=remote','DOCKER_HOST=tcp://remote:2375','COMPOSE_FILE=elsewhere','TUNNEL_TOKEN=synthetic','CLOUDFLARED_CONFIG=elsewhere']) {
-    await writeFile(p.envFile,envOriginal+'\n'+entry+'\n'); await assert.rejects(reload('dev'),/not allowed|belong/);
+    await writeFile(p.envFile,envOriginal+'\n'+entry+'\n'); await assert.rejects(reload('dev'),/could not be parsed/);
   }
   await writeFile(p.envFile,envOriginal);
   const metaOriginal = await readFile(p.metaFile,'utf8');
@@ -61,11 +61,11 @@ try {
   assert.equal(p.meta.tunnel.publicUrl,undefined); assert.equal(p.meta.tunnel.image,CLOUDFLARED_IMAGE);
   noSecrets(p.meta); noSecrets(nativeTunnelArgs(p)); noSecrets(effectiveConfiguration(p));
   p=await updateEnvironment(p,{MOTE_PUBLIC_URL:'https://edited.synthetic.invalid'});
-  assert.equal(isolatedEnvironment(p).MOTE_PUBLIC_URL,'https://edited.synthetic.invalid');
+  assert.equal(effectiveConfiguration(p).listener.publicUrl,'https://edited.synthetic.invalid');
   const publicEnv=await readFile(p.envFile,'utf8');
-  await writeFile(p.envFile,publicEnv+'\nMOTE_PUBLIC_URL=https://last.synthetic.invalid\n');
-  await assert.rejects(setPublicUrl(p,'https://new.synthetic.invalid'),/safely/);
-  assert.equal(await readFile(p.envFile,'utf8'),publicEnv+'\nMOTE_PUBLIC_URL=https://last.synthetic.invalid\n');
+  await writeFile(p.envFile,publicEnv+'\nserver: { publicUrl: https://last.synthetic.invalid }\n');
+  await assert.rejects(setPublicUrl(p,'https://new.synthetic.invalid'),/YAML is invalid/);
+  assert.equal(await readFile(p.envFile,'utf8'),publicEnv+'\nserver: { publicUrl: https://last.synthetic.invalid }\n');
   await writeFile(p.envFile,publicEnv);
   await assert.rejects(configure(p,{enable:true,protocol:'bad'}),/metadata/);
   await assert.rejects(configure(p,{enable:true,'public-url':'https://synthetic.invalid/?private=value'}),/HTTPS origin/);

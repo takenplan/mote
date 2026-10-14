@@ -8,6 +8,7 @@ export class MaintenanceWorker {
   private state={status:'starting',lastCompletedAt:null as string|null,durationMs:0,failures:0};
   constructor(private config:Config){this.start();}
   snapshot(){return {...this.state};}
+  configureContentEncryption(enabled:boolean){this.config.contentEncryptionEnabled=enabled;if(this.child?.connected)try{this.child.send({type:'content-encryption',enabled},()=>{});}catch{/* Restart uses the current authoritative write policy. */}}
   private start(){
     if(this.closed)return;
     const extension=import.meta.url.endsWith('.ts')?'ts':'js';

@@ -6,7 +6,7 @@ import { createServer } from 'node:net';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
-import { repository, profilePaths, loadProfile } from './profile-lib.mjs';
+import { repository, profilePaths, loadProfile, updateProfileConfiguration } from './profile-lib.mjs';
 
 export async function freePort() {
   const server = createServer(); await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
@@ -30,20 +30,37 @@ export async function cli(home, profile, action, args = [], options = {}) {
   else assert.equal(result.code, 0, `${action}: ${result.stderr}`);
   return result;
 }
+// Legacy fixture call sites keep their names, but all edits go into the single YAML.
 export async function updateEnvironment(p, values) {
-  let body = await readFile(p.envFile, 'utf8');
-  for (const [key, value] of Object.entries(values)) {
-    assert.match(key, /^MOTE_[A-Z0-9_]+$/); assert.ok(!/[\r\n]/.test(value));
-    const quote = ["'", '"', '`'].find(character => !String(value).includes(character));
-    assert.ok(quote, 'Fixture dotenv values need an unambiguous quote delimiter');
-    const line = `${key}=${quote}${String(value)}${quote}`;
-    body = new RegExp(`^${key}=.*$`, 'm').test(body) ? body.replace(new RegExp(`^${key}=.*$`, 'm'), () => line) : body + line + '\n';
-  }
-  await writeFile(p.envFile, body, { mode: 0o600 }); return loadProfile(profilePaths(p.profile, p.home));
+  const fields = {
+    MOTE_HOST: ['server.host', 'string'], MOTE_PORT: ['server.port', 'number'], MOTE_TOKEN: ['server.token', 'string'], MOTE_PUBLIC_URL: ['server.publicUrl', 'string'],
+    MOTE_DATA_DIR: ['storage.dataDir', 'string'], MOTE_DATA_KEY: ['storage.dataKey', 'string'], MOTE_CONTENT_ENCRYPTION: ['storage.contentEncryptionEnabled', 'boolean'],
+    MOTE_MAX_STORAGE_MB: ['storage.maxStorageBytes', 'MiB'], MOTE_MAX_EXPORT_MB: ['storage.maxExportBytes', 'MiB'], MOTE_RETENTION_DAYS: ['storage.retentionDays', 'number'],
+    MOTE_MODEL: ['models.deployment.model', 'string'], MOTE_MODEL_API_KEY: ['models.deployment.apiKey', 'string'], MOTE_MODEL_BASE_URL: ['models.deployment.baseUrl', 'string'],
+    MOTE_EMBEDDING_MODEL: ['models.embedding.model', 'string'], MOTE_EMBEDDING_API_KEY: ['models.embedding.apiKey', 'string'],
+    MOTE_DIAGNOSTICS_ENABLED: ['diagnostics.enabled', 'boolean'], MOTE_DEBUG: ['diagnostics.debug', 'boolean'], MOTE_AGENT_TRACE_ENABLED: ['diagnostics.traceEnabled', 'boolean'],
+    MOTE_LOG_DIR: ['diagnostics.directory', 'string'], MOTE_LOG_LEVEL: ['diagnostics.level', 'string'], MOTE_LOG_MAX_MB: ['diagnostics.maxBytes', 'MiB'], MOTE_LOG_MAX_FILES: ['diagnostics.maxFiles', 'number'],
+    MOTE_PUBLIC_URL: ['server.publicUrl', 'string'], MOTE_TLS_DOMAIN: ['server.tls.domain', 'string'],
+  };
+  await updateProfileConfiguration(p, document => {
+    for (const [key, value] of Object.entries(values)) {
+      const field = fields[key]; assert.ok(field, `Unknown fixture config field ${key}`);
+      const [path, type] = field, segments = path.split('.'); let parent = document;
+      for (const segment of segments.slice(0, -1)) parent = parent[segment] ??= {};
+      parent[segments.at(-1)] = type === 'boolean' ? value === '1' || value === true : type === 'MiB' ? Number(value) * 1024 * 1024 : type === 'number' ? Number(value) : String(value);
+    }
+  });
+  return loadProfile(profilePaths(p.profile, p.home));
 }
 export async function initializeFixture(home, profile, options = {}) {
   await cli(home, profile, 'init', ['--port', String(await freePort()), ...(options.runtime ? ['--runtime', options.runtime] : []), ...(options.image ? ['--image', options.image] : [])]);
-  return updateEnvironment(await loadProfile(profilePaths(profile, home)), { MOTE_CONTENT_ENCRYPTION: '1', MOTE_DATA_KEY: options.dataKey ?? randomBytes(32).toString('hex'), MOTE_DIAGNOSTICS_ENABLED: '1', MOTE_MODEL: '' });
+  const p = await loadProfile(profilePaths(profile, home));
+  await updateProfileConfiguration(p, document => {
+    document.models.deployment = { provider: 'custom', protocol: 'openai-completions', baseUrl: '', model: '', reasoningEffort: 'auto', maxTokens: 8192, modelRequestTimeoutMs: 120000, agentTimeoutMs: 300000, allowUnauthenticatedLocal: false, apiKey: '', headers: {}, extraBody: {} };
+    // Lifecycle journeys have no media models or dependency-installation side effects.
+    document.media.workerToken = '';
+  });
+  return updateEnvironment(p, { MOTE_CONTENT_ENCRYPTION: '1', MOTE_DATA_KEY: options.dataKey ?? randomBytes(32).toString('hex'), MOTE_DIAGNOSTICS_ENABLED: '1' });
 }
 export async function request(p, path, { status = 200, method = 'GET', body, token = p.env.MOTE_TOKEN, binary = false } = {}) {
   const response = await fetch(p.url + path, { method, redirect: 'error', signal: AbortSignal.timeout(15000), headers: { Authorization: `Bearer ${token}`, 'X-Mote-Ingress-Version':'2', ...(body ? { 'Content-Type': 'application/json' } : {}) }, ...(body ? { body: JSON.stringify(body) } : {}) });

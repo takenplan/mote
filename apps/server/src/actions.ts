@@ -11,8 +11,16 @@ import {semanticProductsSchema} from './semantic-extraction.js';
 import {Store,StoreError,sha256} from './store.js';
 import type {FileStore} from './files.js';
 import type {Connections,ConnectionCredential} from './connections.js';
+import { ConfigServiceError, type ConfigService } from './config-service.js';
+import { actionsRuntimeSettingsSchema, type ActionsRuntimeSettings } from './actions-configuration.js';
 
 const settingsSchema=z.object({enabled:z.boolean(),timeZone:actionZone,reviewDeviceIds:z.array(z.string().min(1).max(200)).max(100)}).strict();
+const authorizationSchema=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),reviewDeviceIds:settingsSchema.shape.reviewDeviceIds}).strict();
+const settingsUpdateSchema=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),authorizationRevision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),settings:settingsSchema}).strict();
+/** Runtime file failures must report an already committed permission withdrawal. */
+export class ActionSettingsSaveError extends Error {
+  constructor(readonly code:string,readonly statusCode:number,readonly revokedDeviceIds:string[],readonly authorizationRevision:number,readonly revision:number|undefined){super('Action authorization was revoked; refresh the settings before retrying');this.name='ActionSettingsSaveError';}
+}
 const proposedSchema=z.object({actions:z.array(z.object({kind:z.enum(['calendar.create','calendar.update','calendar.cancel','calendar.complete']),event:calendarDraftSchema,uncertainty:z.string().max(2000),evidence:z.array(z.object({id:z.string().uuid(),quote:z.string().min(1).max(2000)}).strict()).min(1).max(20),sameAs:z.string().uuid().nullable()}).strict()).max(8)}).strict();
 const fingerprint=(r:CaptureRecord)=>sha256(JSON.stringify([r.id,r.ocrText,r.metadata,r.provenance,(r as CaptureRecord & {fileEvidence?:{captureId:string}}).fileEvidence]));
 type Job={key:string;id:string;offset:number;length:number;fingerprint:string};
@@ -20,7 +28,10 @@ type Job={key:string;id:string;offset:number;length:number;fingerprint:string};
 export class Actions {
   private running?:Promise<void>;private closed=false;private abort=new AbortController();
   readonly engine:ExecutionEngine;private owned:boolean;private unregister:()=>void;
-  constructor(readonly store:Store,private files:FileStore,private query:(input:QueryInput)=>Promise<QueryResult>,private configured:()=>boolean,private options:{executor?:ExecutionEngine;semanticArtifacts?:(ids:string[],operationId?:string)=>Promise<string[]>}={}){
+  private runtimeSettings:ActionsRuntimeSettings;
+  private settingsTail:Promise<void>=Promise.resolve();
+  constructor(readonly store:Store,private files:FileStore,private query:(input:QueryInput)=>Promise<QueryResult>,private configured:()=>boolean,private options:{executor?:ExecutionEngine;semanticArtifacts?:(ids:string[],operationId?:string)=>Promise<string[]>;configService?:ConfigService}={}){
+    this.runtimeSettings=actionsRuntimeSettingsSchema.parse(options.configService?.current('actions')??{});
     store.db.exec(`CREATE TABLE IF NOT EXISTS action_meta(key TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS action_proposals(id TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS action_semantic_checkpoints(artifact_id TEXT PRIMARY KEY REFERENCES context_artifacts(id) ON DELETE CASCADE,revision TEXT NOT NULL);
@@ -30,6 +41,10 @@ export class Actions {
       CREATE TRIGGER IF NOT EXISTS action_chunk_added AFTER INSERT ON file_chunks BEGIN INSERT INTO action_chunk_changes(id) VALUES(NEW.id); END;
       CREATE TRIGGER IF NOT EXISTS action_artifact_changed AFTER UPDATE OF current ON file_artifacts BEGIN INSERT INTO action_chunk_changes(id) SELECT id FROM file_chunks WHERE artifact_id=NEW.id; END;
       CREATE INDEX IF NOT EXISTS action_jobs_status ON action_jobs(status);`);
+    options.configService?.setHandler<ActionsRuntimeSettings>('actions',next=>{
+      const previous=structuredClone(this.runtimeSettings),candidate=structuredClone(next);
+      return {apply:()=>{},publish:()=>{this.runtimeSettings=candidate;},rollback:()=>{this.runtimeSettings=previous;}};
+    });
     this.engine=options.executor??new ExecutionEngine(store);this.owned=!options.executor;
     // The engine's durable transitions project identically even when another host
     // cancels a step without loading this domain's in-memory handler.
@@ -60,8 +75,65 @@ export class Actions {
   }
   private meta<T>(key:string,fallback:T):T {const r=this.store.db.prepare('SELECT json FROM action_meta WHERE key=?').get(key) as {json:string}|undefined;return r?JSON.parse(r.json):fallback;}
   private setMeta(key:string,value:unknown){this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(value)));this.store.db.prepare('INSERT INTO action_meta VALUES(?,?) ON CONFLICT(key) DO UPDATE SET json=excluded.json').run(key,JSON.stringify(value));}
-  settings():ActionSettings{return this.meta('settings',{enabled:false,timeZone:'Asia/Shanghai',reviewDeviceIds:[]});}
-  configure(raw:unknown){const settings=settingsSchema.parse(raw);this.setMeta('settings',settings);return settings;}
+  private reviewAuthorization():z.infer<typeof authorizationSchema>{
+    const saved=this.meta<unknown>('review-devices',undefined);
+    if(saved!==undefined)return authorizationSchema.parse(saved);
+    const legacy=this.meta<Partial<ActionSettings>>('settings',{});
+    // Only the historical grant list is retained. Old enabled/timeZone values never override YAML.
+    return authorizationSchema.parse({revision:0,reviewDeviceIds:legacy.reviewDeviceIds??[]});
+  }
+  authorizationRevision():number{return this.reviewAuthorization().revision;}
+  settings():ActionSettings{return {...structuredClone(this.runtimeSettings),reviewDeviceIds:this.reviewAuthorization().reviewDeviceIds};}
+  private saveReviewAuthorization(reviewDeviceIds:string[],expectedRevision:number):number{
+    const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
+    try{
+      const previous=this.reviewAuthorization();
+      if(previous.revision!==expectedRevision)throw new StoreError('Action review authorization changed; refresh the settings',409);
+      if(JSON.stringify(previous.reviewDeviceIds)===JSON.stringify(reviewDeviceIds)){if(own)db.exec('COMMIT');return previous.revision;}
+      if(previous.revision===Number.MAX_SAFE_INTEGER)throw new StoreError('Action review authorization is unavailable',503);
+      const json=JSON.stringify(authorizationSchema.parse({revision:previous.revision+1,reviewDeviceIds}));
+      const replaced=db.prepare("SELECT json FROM action_meta WHERE key='review-devices'").get()??db.prepare("SELECT json FROM action_meta WHERE key='settings'").get();
+      // Replacing a grant record reserves only growth; removing grants remains possible at quota.
+      const growth=Buffer.byteLength(json)-Buffer.byteLength(String(replaced?.json??''));if(growth>0)this.store.reserveMetadata(growth);
+      db.prepare("INSERT INTO action_meta VALUES('review-devices',?) ON CONFLICT(key) DO UPDATE SET json=excluded.json").run(json);
+      db.prepare("DELETE FROM action_meta WHERE key='settings'").run();
+      if(own)db.exec('COMMIT');return previous.revision+1;
+    }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
+  }
+  /** Standalone fixtures keep runtime policy in memory while device grants remain durable. */
+  configure(raw:unknown){
+    if(this.options.configService)throw new StoreError('Use the configuration transaction to save action settings',409);
+    const settings=settingsSchema.parse(raw);this.saveReviewAuthorization(settings.reviewDeviceIds,this.authorizationRevision());this.runtimeSettings=actionsRuntimeSettingsSchema.parse({enabled:settings.enabled,timeZone:settings.timeZone});return this.settings();
+  }
+  async saveSettings(raw:unknown):Promise<ActionSettings&{revision:number;authorizationRevision:number}>{
+    const input=settingsUpdateSchema.parse(raw);
+    const work=this.settingsTail.then(async()=>{
+      if(this.closed||this.store.db.isTransaction)throw new StoreError('Action settings are unavailable',503);
+      const initial=this.reviewAuthorization();
+      if(initial.revision!==input.authorizationRevision)throw new StoreError('Action review authorization changed; refresh the settings',409);
+      const removed=initial.reviewDeviceIds.filter(id=>!input.settings.reviewDeviceIds.includes(id));
+      let expectedAuthorizationRevision=initial.revision;
+      // Withdrawals cannot be held up by an invalid/unavailable runtime file. New grants require a successful runtime transaction.
+      if(removed.length)expectedAuthorizationRevision=this.saveReviewAuthorization(initial.reviewDeviceIds.filter(id=>input.settings.reviewDeviceIds.includes(id)),expectedAuthorizationRevision);
+      try{
+        const runtime={enabled:input.settings.enabled,timeZone:input.settings.timeZone};
+        if(this.options.configService)await this.options.configService.update('actions',runtime,input.revision);
+        else this.runtimeSettings=actionsRuntimeSettingsSchema.parse(runtime);
+        if(this.closed||this.store.db.isTransaction)throw new StoreError('Action settings are unavailable',503);
+        let authorizationRevision:number;
+        try{authorizationRevision=this.saveReviewAuthorization(input.settings.reviewDeviceIds,expectedAuthorizationRevision);}
+        catch(error){if(error instanceof StoreError&&error.statusCode===409)throw error;throw new StoreError('Action review authorization is unavailable',503);}
+        return {...this.settings(),revision:this.options.configService?.revision??input.revision,authorizationRevision};
+      }catch(error){
+        if(removed.length){let revision:number|undefined;try{revision=this.options.configService?.revision;}catch{/* Use only the known authority revision when the file result is uncertain. */}
+          throw new ActionSettingsSaveError(error instanceof ConfigServiceError?error.code:'actions_settings_unavailable',error instanceof ConfigServiceError?error.statusCode:503,removed,this.authorizationRevision(),revision);
+        }
+        throw error;
+      }
+    });
+    this.settingsTail=work.then(()=>{},()=>{});return work;
+  }
+  configurationView(){return {...(this.options.configService?{revision:this.options.configService.revision}:{}),authorizationRevision:this.authorizationRevision()};}
   read(ids:string[]){return [...this.store.evidence(ids),...this.files.evidence(ids)];}
   current(id:string){return this.files.isCurrentEvidence(id)||this.store.isCurrentEvidence(id);}
   private save(a:ActionProposal){a.updatedAt=new Date().toISOString();this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(a)));this.store.db.prepare('INSERT INTO action_proposals VALUES(?,?) ON CONFLICT(id) DO UPDATE SET json=excluded.json').run(a.id,JSON.stringify(a));return a;}
@@ -232,15 +304,18 @@ export class Actions {
       for(const a of [...merges,...proposals])this.save(a);checkpointShared();
       };
   }
-  async close(){this.closed=true;this.abort.abort();if(this.owned)await this.engine.close();await this.running;this.unregister();}
+  async close(){this.closed=true;this.abort.abort();await this.settingsTail;if(this.owned)await this.engine.close();await this.running;this.unregister();}
 
 }
 export function registerActions(app:FastifyInstance,actions:Actions,connections:Connections,credential:(req:FastifyRequest)=>ConnectionCredential|undefined){
   const access=(req:FastifyRequest)=>{const c=credential(req);if(c){connections.assertActive(c);if(!c.deviceId||!actions.settings().reviewDeviceIds.includes(c.deviceId))throw new StoreError(moteText("请在中央网页的行动设置中授权此设备查看和确认日程建议"),403);}return c;};
   const own=(req:FastifyRequest,deviceId:string)=>{const c=access(req);if(c&&c.deviceId!==deviceId)throw new StoreError(moteText("只能操作本设备日历"),403);return deviceId;};
-  app.get('/api/actions',async req=>{access(req);const {cursor}=z.object({cursor:z.coerce.number().int().min(0).default(0)}).strict().parse(req.query);return {...actions.page(cursor),settings:actions.settings(),targets:actions.targets(),progress:actions.progress()};});
+  app.get('/api/actions',async req=>{access(req);const {cursor}=z.object({cursor:z.coerce.number().int().min(0).default(0)}).strict().parse(req.query);return {...actions.page(cursor),...actions.configurationView(),settings:actions.settings(),targets:actions.targets(),progress:actions.progress()};});
   app.get('/api/actions/deliveries',async req=>{const {deviceId}=z.object({deviceId:z.string().min(1).max(200)}).strict().parse(req.query);return {items:actions.deliveries(own(req,deviceId))};});
-  app.put('/api/actions/settings',{bodyLimit:16384},async req=>actions.configure(req.body));
+  app.put('/api/actions/settings',{bodyLimit:16384},async(req,reply)=>{
+    try{return await actions.saveSettings(req.body);}
+    catch(error){if(error instanceof ActionSettingsSaveError)return reply.code(error.statusCode).send({error:error.code,message:moteText('配置未能应用，请检查配置状态后重试。'),authorizationRevoked:true,revokedDeviceIds:error.revokedDeviceIds,authorizationRevision:error.authorizationRevision,...(error.revision===undefined?{}:{revision:error.revision})});throw error;}
+  });
   app.post('/api/actions/retry',async()=>{actions.retry();void actions.tick();return {ok:true};});
   app.post('/api/actions/targets',{bodyLimit:65536},async req=>{const raw=req.body as {deviceId:string};const c=credential(req);if(c)connections.assertOwnDevice(c,raw);return actions.registerTarget(raw);});
   app.post('/api/actions/:id/confirm',{bodyLimit:16384},async req=>{access(req);const raw=req.body as {target?:{deviceId?:unknown}};if(raw?.target?.deviceId)own(req,z.string().parse(raw.target.deviceId));return actions.confirm((req.params as {id:string}).id,req.body);});

@@ -27,7 +27,7 @@ node=await buildApp(${JSON.stringify(config)},{backgroundWorker:false,createMode
  const transcript=recipe==='fixture.transcript-memory';
  return {answer:JSON.stringify({memories:[{domain:'personal',title:transcript?'合成转写记忆':'合成正文记忆',statement:(transcript?'Generated transcript records a preference for explicit retry policies.':'Generated body records a preference for written checklists.')+' ['+id+']',uncertainty:'Generated test fixture only.',admission:{layer:'memory',reason:'Generated explicit owner preference',scope:'Generated test fixture',attribution:'user'},evidenceIds:[id],evidence:[{id,quote:evidence.ocrText.trim()}]}]}),citations:[{id,capturedAt:evidence.capturedAt,appName:evidence.appName,excerpt:''}],trace:[],runId:randomUUID()};
 }})});
-const lifecycle=node.lifecycle.settings();for(const name of ['extraction','consolidation','working','insights'])lifecycle[name].enabled=false;node.lifecycle.configure(lifecycle);
+const lifecycle=node.lifecycle.settings();for(const name of ['extraction','consolidation','working','insights'])lifecycle[name].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings:lifecycle});
 // Controlled generated processing output exercises real Material revisions and input wake-ups.
 node.materialOrganizer.tick=async()=>0;
 for(const [id,requires] of [['fixture.body-memory',['source-body']],['fixture.transcript-memory',['extracted-text']]])node.memoryStrategies.registerRecipe({id,version:'1',requires,extract:{id:'mote.context-extraction',version:'3.4.0'},review:{id:'mote.personal-review',version:'2'}});

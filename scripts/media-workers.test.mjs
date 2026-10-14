@@ -37,7 +37,7 @@ test('workers start before model files, restart after exit, and stop with the pa
   const root=await fixture(t),controller=new AbortController();
   const code=`const fs=require('node:fs');const path=require('node:path');const name=path.basename(__filename);fs.appendFileSync(name+'.started',process.pid+'\\n');fs.writeFileSync(name+'.arguments',JSON.stringify(process.argv.slice(2)));setInterval(()=>{if(fs.existsSync('models-ready'))fs.writeFileSync(name+'.ready','yes')},20);`;
   for(const name of ['ocr-server.py','transcription-server.py'])await writeFile(join(root,'scripts',name),code);
-  const workers=startMediaWorkers({root,signal:controller.signal,env:{MOTE_RUNTIME:'docker',MOTE_MEDIA_MODEL_DIR:join(root,'models'),MOTE_MEDIA_PYTHON:process.execPath,MOTE_MEDIA_WORKER_TOKEN:'fixture'},report:()=>{}});
+  const workers=startMediaWorkers({root,signal:controller.signal,runtime:'docker',configuration:{modelDirectory:join(root,'models'),python:process.execPath,workerToken:'fixture'},report:()=>{}});
   t.after(()=>workers.close());
   const wait=async predicate=>{const until=Date.now()+10000;while(!await predicate()){assert.ok(Date.now()<until,'worker fixture timed out');await new Promise(r=>setTimeout(r,25));}};
   const pids=async name=>(await readFile(join(root,name+'.started'),'utf8').catch(()=>'' )).trim().split('\n').filter(Boolean).map(Number);

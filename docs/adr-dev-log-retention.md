@@ -14,21 +14,26 @@ resolver. Each log family has its own bounded retention: structured logs and
 native supervisor logs can each occupy 300 MiB by default. Size and UTC-day
 rotation still remove the oldest file; no fixed retention duration is promised.
 
-New DEV profiles store `auto` to select the profile default. Legacy metadata has
-no provenance for numeric settings, so an existing `2` cannot reliably be
-identified as a template default. All explicit numeric values remain overrides.
-The deliberate `log-retention --defaults --profile dev` command opts an existing
-profile into the default without changing file count, event count or unrelated
-configuration. It reports before/after capacity and requires a later normal
-restart. Reading configuration does not mutate it.
+The [unified configuration ADR](adr-unified-configuration.md) supersedes this
+change's original env/`auto` representation: new YAML profiles omit
+`diagnostics.maxBytes` to select the profile default. Explicit numeric bytes
+remain overrides, including a deliberately converted legacy 2 MiB value. Legacy
+metadata cannot prove whether that value was a customization. The deliberate
+`log-retention --defaults --profile dev` command removes only this capacity
+field through the canonical atomic YAML writer and increments its revision,
+without changing file/event counts, unrelated fields or credentials. It reports
+before/after capacity and requires a later normal restart. Repeated adoption and
+configuration inspection do not mutate the file. Old env-only profiles require
+explicit offline YAML preparation under the unified configuration decision.
 
-`auto` and capacities above 8 MiB require a target build with the new resolver.
-Startup, adoption and deployment switches preflight this capability; upgrade or
+Startup, adoption and deployment switches preflight target YAML support;
+capacities above 8 MiB additionally require the expanded resolver. Upgrade or
 rollback rejects an incompatible target before stopping or restoring anything.
-Owners returning to old code must deliberately select an explicit capacity in
-its 0.1–8 MiB range. There is no automatic capacity downgrade. A smaller writer
-can discard oversized old logs, so retained diagnostic files need preservation
-before such a downgrade when they are still needed.
+An env-only target cannot consume this configuration even with a small limit.
+For YAML-aware targets without expansion, owners deliberately select an explicit
+`diagnostics.maxBytes` in the 0.1–8 MiB range. There is no automatic downgrade or
+format conversion. A smaller writer can discard oversized old logs, so retained
+diagnostic files need preservation before such a downgrade when still needed.
 
 The former absolute trace-record ceiling of 8 MiB is now independent of retention
 capacity, still capped by a smaller configured file. Raising DEV files from 2 to
@@ -43,9 +48,9 @@ accumulating events. Full raw downloads remain bounded by the selected file.
 | Category | Supersession check |
 | --- | --- |
 | KEEP | UTC/size rotation, filenames, owner authentication, locks, 0600/0700 modes, safe support filtering, malformed raw text, memory/queue limits and nonfatal diagnostic failures. |
-| CHANGE | DEV file capacity/default representation, explicit legacy opt-in, common configuration resolver and traversal of larger files. |
-| REMOVE | Universal 8 MiB internal/supervisor clamp and documentation describing all defaults as 6 MiB total. |
-| EXCEPTION | Other profiles retain existing capacity policy; explicit numbers remain stable; old releases require an explicit compatible setting before rollback; native supervisor and Docker stdout retain their own privacy and rotation behavior. |
+| CHANGE | DEV file capacity/YAML omission default representation, explicit numeric opt-in, common configuration resolver and traversal of larger files. |
+| REMOVE | Env/auto authority under the unified configuration decision, universal 8 MiB internal/supervisor clamp and documentation describing all defaults as 6 MiB total. |
+| EXCEPTION | Other profiles retain existing capacity policy; explicit numbers remain stable; older YAML-aware releases require an explicit compatible setting before rollback; env-only targets are rejected; native supervisor and Docker stdout retain their own privacy and rotation behavior. |
 | UNKNOWN | Historical customization intent and how many hours a future workload can retain. |
 
 The reviewed surface includes profile initialization/loading, exec/native/Docker

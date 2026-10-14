@@ -6,29 +6,31 @@ Mote 的查询和洞察可由 DeepSeek Harness 或本机 Codex App Server 执行
 
 在中央网页 **系统管理 → 模型**（`#/system/models`） 选择服务，填写模型 ID 和 API key，保存后立即用于后续问答、回顾和记忆提取；正在执行的请求继续使用原配置。预设、协议、只写凭据和合成连接测试见[模型服务配置](model-providers.md)。
 
-也可以在所选私有 `mote.env` 中提供启动默认值；修改文件需要重启，页面已保存的模型覆盖值仍优先：
+也可以直接修改私有 `mote.yaml` 的模型领域；文件与设置页共用同一配置来源，校验成功后由新请求使用，进行中的请求保留旧快照。下面是 `models` 片段，主文件还需包含 `version: 1` 与非负整数 `revision`：
 
-```dotenv
-MOTE_MODEL_PROVIDER=deepseek
-MOTE_MODEL_PROTOCOL=deepseek
-MOTE_MODEL=你的模型ID
-MOTE_MODEL_BASE_URL=https://api.deepseek.com
-MOTE_MODEL_API_KEY=你的模型服务凭据
-MOTE_MODEL_REASONING_EFFORT=auto
-MOTE_MODEL_HEADERS={}
-MOTE_MODEL_EXTRA_BODY={}
-MOTE_MODEL_MAX_TOKENS=65536
-MOTE_MODEL_REQUEST_TIMEOUT_MS=300000
-MOTE_AGENT_TIMEOUT_MS=600000
+```yaml
+models:
+  deployment:
+    provider: deepseek
+    protocol: deepseek
+    model: 你的模型ID
+    baseUrl: https://api.deepseek.com
+    apiKey: ${MODEL_API_KEY}
+    reasoningEffort: auto
+    headers: {}
+    extraBody: {}
+    maxTokens: 65536
+    modelRequestTimeoutMs: 300000
+    agentTimeoutMs: 600000
 ```
 
-使用 `MOTE_ENV_FILE` 选择独立配置文件，或通过 [环境 CLI](deployment.md) 启动。没有模型或凭据时 `/api/status` 返回 `agent.configured=false`，问答返回 503；采集、笔记、存档与时间线仍可使用。
+使用 `MOTE_CONFIG_FILE` 选择独立配置文件，或通过 [环境 CLI](deployment.md) 启动。`${MODEL_API_KEY}` 只在声明的密钥字段展开；普通环境变量不覆盖配置。旧 `MOTE_ENV_FILE` 启动方式需要显式转换为新文件选择器。没有模型或凭据时 `/api/status` 返回 `agent.configured=false`，问答返回 503；采集、笔记、存档与时间线仍可使用。
 
 模型服务需要支持所选协议的流式输出和工具调用，不能把“兼容 OpenAI”理解成支持每个模型及参数。可选 DeepSeek、Chat Completions、Responses、Anthropic Messages、Google 原生 Gemini 五种 HTTP 协议，另支持 `codex-app-server` 本机协议。推理强度通常用 `auto` 交给模型决定；DeepSeek 预设保留既有的 `high` 默认，也可改成 `auto`。HTTP 协议的 `off`、`low`、`high`、`max` 需模型支持；Codex 的可用挡位按所选模型的 `model/list` 目录展示。输出预算默认 65,536 token，范围 1–128000，实际不得超过所选模型限制；提高预算可能增加耗时和费用。
 
-显式设置 `MOTE_MODEL_ALLOW_UNAUTHENTICATED_LOCAL=1` 可使用无需凭据的 loopback 模型服务。它不允许远端免密地址；容器内的 loopback 指容器自身。
+显式设置模型的 `allowUnauthenticatedLocal: true` 可使用无需凭据的 loopback 模型服务。它不允许远端免密地址；容器内的 loopback 指容器自身。
 
-可选 `MOTE_EMBEDDING_MODEL`、`MOTE_EMBEDDING_BASE_URL`、`MOTE_EMBEDDING_API_KEY` 在中央节点启用向量索引。未启用时仍有本地全文/文本检索。问答向所选模型发送检索到的文本证据；embedding 则向其独立配置的服务发送待索引文本。普通文本工具不返回原图；模型可通过受控图片工具按需请求，只有开启 `allowQueryImages` 后才披露，见 [中央感知](central-perception.md)。
+可选 `models.embedding.model`、`baseUrl`、`apiKey` 在中央节点启用向量索引；embedding 配置改变需重启。未启用时仍有本地全文/文本检索。问答向所选模型发送检索到的文本证据；embedding 则向其独立配置的服务发送待索引文本。普通文本工具不返回原图；模型可通过受控图片工具按需请求，只有开启 `allowQueryImages` 后才披露，见 [中央感知](central-perception.md)。
 
 `read_image` 支持采屏原图、普通上传图片及来源记录中的图片附件。模型先发现并展开文字证据，再传入对应 `id`；附件另传该记录声明的 `attachmentId`。当前单来源正式资料的证据锚点也可解析到已核对的原始记录，不能借多来源摘要获得全部原图权限。附件必须同时存在于原文声明和宿主保存的关联中，读取时复核来源权限、删除状态及关联。明确选择的历史文件版本返回对应原件，不静默跳到最新版；源条目删除会撤销历史图片访问。
 
@@ -76,7 +78,7 @@ Codex 与 HTTP Harness 对最终输出最多允许 3 次修正，即首次输出
 
 网页通过 `POST /api/insight-runs` 启动回顾并立即取得 HTTP 202 和运行编号；请求包含 UUID `requestId`、可选 `prompt` 及上述时间/设备范围。同一编号同一请求可安全重试，不会重复调用模型。`GET /api/insight-runs` 返回最近的运行，`GET /api/insight-runs/:id` 返回阶段、结果或错误。界面展示启动、模型处理、实际只读工具及返回数量、结果校验、完成/失败状态；这些是执行进度，不是模型的私有思维链。刷新或离开页面后仍可恢复运行状态；网络断开自动重连，节点重启造成的中断明确标为失败。旧的同步 `POST /api/insights` 继续兼容。运行记录只保留固定阶段与计数，不复制提示词、模型对话或报告正文；报告仍受原始证据删除失效规则约束。
 
-自动回顾由持久化 [记忆生命周期](memory-lifecycle.md) 策略调度；默认已启用，有增量且数量达标或最长等待到达时使用配置的模型。`MOTE_INSIGHT_INTERVAL_HOURS` 仅在初始化时以正数设置旧 intervalHours 字段，设为 0 不会关闭现行自动工作流；应修改洞察策略的 enabled。主题、习惯和待办判断属于模型推理，不是检索关键词的固定映射。
+自动回顾由 [记忆生命周期](memory-lifecycle.md) 策略调度；策略的当前设置持久化在主 YAML 的 `memory` 领域。默认已启用，有增量且数量达标或最长等待到达时使用配置的模型；可通过 `memory.insights.enabled` 关闭后续自动回顾，历史任务保留入队时的授权与策略快照。主题、习惯和待办判断属于模型推理，不是检索关键词的固定映射。
 
 遇到问题可在 [运行诊断](troubleshooting.md) 用 HTTP 请求编号检查 Agent 开始、完成、耗时与错误类别。诊断日志不保存模型对话或工具参数；界面中的“检索过程”属于有访问权限的回答详情。
 
@@ -88,7 +90,7 @@ Harness 查询创建独立临时目录、Harness home 和会话，通过带随�
 
 捕获内容带 `untrusted_personal_context` 来源标记，通过工具结果提供，始终作为证据。该安排不能保证模型绝不受提示注入误导，但其工具权限不能因此扩大。
 
-查询不再设置默认工具总次数或字符/token近似读取配额，也不在超限时自动砍半。页面按请求范围正常读取；原文、归属声明与授权上下文共用精确披露合同。实际模型和传输容量失败明确返回，token/字符继续作为观测计量。宽范围问题由模型维护证据覆盖和具体缺口，必要时使用现有研究委派。见[简化上下文与质量决定](adr-ask-evidence-quality-and-simple-context.md)。模型设置将单次模型请求期限与 Agent 总运行期限分开：`MOTE_MODEL_REQUEST_TIMEOUT_MS` 限制一次 Provider API 请求（5000–600000 毫秒），`MOTE_AGENT_TIMEOUT_MS` 限制从 Agent 开始到完成的整个周期（5000–3600000 毫秒），后者包含工具循环、重试和校验。Codex Server 不暴露内部单次模型生成请求，因此模型请求期限显示为不适用；`MOTE_AGENT_TIMEOUT_MS` 可以留空。页面保存后立即生效，直接改环境文件则需重启并确认没有页面覆盖值。Web 从 `/api/status.agent.agentTimeoutMs` 读取生效值，为有总期限的模型操作预留额外 60 秒用于传输和清理；没有总期限的 Codex 操作仍受入口代理和工具自身限制。反向代理仍可能在更短时间断开，延长 Agent 期限不等于延长公网入口限制。超时关闭子进程；结束后清理 bridge、会话目录与子进程。客户端超时、模型容量、输出预算和源记录完整性需要一起考虑，不能仅凭 HTTP 200 判断答案语义完整。
+查询不再设置默认工具总次数或字符/token近似读取配额，也不在超限时自动砍半。页面按请求范围正常读取；原文、归属声明与授权上下文共用精确披露合同。实际模型和传输容量失败明确返回，token/字符继续作为观测计量。宽范围问题由模型维护证据覆盖和具体缺口，必要时使用现有研究委派。见[简化上下文与质量决定](adr-ask-evidence-quality-and-simple-context.md)。模型设置将单次模型请求期限与 Agent 总运行期限分开：模型的 `modelRequestTimeoutMs` 限制一次 Provider API 请求（5000–600000 毫秒），`agentTimeoutMs` 限制从 Agent 开始到完成的整个周期（5000–3600000 毫秒），后者包含工具循环、重试和校验。Codex Server 不暴露内部单次模型生成请求，因此模型请求期限显示为不适用；`agentTimeoutMs` 可以为 `null`。页面和主 YAML 保存后均用于后续请求，正在执行的请求继续使用原快照。Web 从 `/api/status.agent.agentTimeoutMs` 读取生效值，为有总期限的模型操作预留额外 60 秒用于传输和清理；没有总期限的 Codex 操作仍受入口代理和工具自身限制。反向代理仍可能在更短时间断开，延长 Agent 期限不等于延长公网入口限制。超时关闭子进程；结束后清理 bridge、会话目录与子进程。客户端超时、模型容量、输出预算和源记录完整性需要一起考虑，不能仅凭 HTTP 200 判断答案语义完整。
 
 续问保留实际披露资料的完整私有依赖；依赖身份和来源声明不会变成发给模型的正文或引用资格。宿主按当前元数据批量校验同一 Material/文件的权限，并在异步前置核对中让出事件循环，使共享执行器的 30 秒租约按既有 10 秒周期续租。外联请求和提交前仍同步重验当前授权与版本；优化不会削减依赖、延长租约或让删除后的旧对话恢复。生成回归见[租约与启动授权验证](validation/query-lease-and-memory-activation-2026-10-14.md)。
 

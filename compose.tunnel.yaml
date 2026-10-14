@@ -1,4 +1,4 @@
-# Remotely managed Cloudflare Tunnel. Configure the dashboard origin as http://mote:47832.
+# Remotely managed Cloudflare Tunnel. Configure the dashboard origin using mote config: http://mote:<server.port>.
 # No host ports, no Docker socket, and no token in command/environment/config output.
 services:
   cloudflared:

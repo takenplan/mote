@@ -224,7 +224,7 @@ async function open(vault:string){
     node.memoryStrategies.registerIntegrationRecipe({id:defaultMemoryIntegrationRecipe.id,version:'1',integrate:{id:defaultMemoryIntegrationStrategy.id,version:'1'},review:{id:defaultMemoryIntegrationReview.id,version:defaultMemoryIntegrationReview.version}});
     node.memoryIntegrationSettings.configure({recipe:{id:defaultMemoryIntegrationRecipe.id,version:'1'}});
   }
-  const settings=node.lifecycle.settings();for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;node.lifecycle.configure(settings);
+  const settings=node.lifecycle.settings();for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
   const query=node.agent.query.bind(node.agent);
   node.agent.query=async input=>{
     assert.ok(!recoveryValidateOnly,'Recovery source validation forbids agent admission');

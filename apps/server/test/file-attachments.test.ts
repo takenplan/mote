@@ -32,10 +32,10 @@ async function fixture(t:import('node:test').TestContext){
    return fixtureMemoryWorkResult(input,{answer:JSON.stringify({memories}),citations:visible.map(r=>({id:r.id,capturedAt:r.capturedAt,appName:r.appName,excerpt:''})),trace:[],runId:randomUUID()});
   }})});
   await node.processing.runtime.ready;node.processing.runtime.registry.get('image.http').process=async input=>{ocrCalls++;if(failed.has(input.file.id))throw Error('Generated processing failure');return {durationMs:0,segments:[{startMs:0,endMs:0,text:words,imageLocation:location}]};};
-  const settings=node.lifecycle.settings();for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;node.lifecycle.configure(settings);
-  node.perception.configure({...node.perception.settings(),allowQueryImages:true,understandingEnabled:false});await node.app.ready();
+  const settings=node.lifecycle.settings();for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
+  await node.perception.save({revision:node.configService.revision,settings:{...node.perception.settings(),allowQueryImages:true,understandingEnabled:false}});await node.app.ready();
  };
- await start();node.processing.update({revision:node.processing.view().revision,settings:{...node.processing.view().settings,enabled:true,imageProcessor:'image.http',imageEndpoint:'http://127.0.0.1:9008/ocr',summarize:false},policy:fixtureFilePolicy({...node.processing.view().settings,enabled:true,imageProcessor:'image.http',imageEndpoint:'http://127.0.0.1:9008/ocr',summarize:false},node.processing.runtime.registry)});
+ await start();await node.processing.save({revision:node.processing.view().revision,settings:{...node.processing.view().settings,enabled:true,imageProcessor:'image.http',imageEndpoint:'http://127.0.0.1:9008/ocr',summarize:false},policy:fixtureFilePolicy({...node.processing.view().settings,enabled:true,imageProcessor:'image.http',imageEndpoint:'http://127.0.0.1:9008/ocr',summarize:false},node.processing.runtime.registry)});
  const bytes=await sharp({create:{width:8,height:8,channels:3,background:'#abcdef'}}).png().toBuffer();
  for(const sourceId of ['generated-images','generated-notes'])node.sources.register({id:sourceId,name:sourceId,kind:'upload',deviceId:'generated-attachments',platform:'import',retention:'archive'});
  const upload=async(key:string)=>{const begun=node.files.begin({sourceId:'generated-images',item:{externalId:key,revision:'1',observedAt:'2026-09-27T00:00:00Z',kind:'file',layer:'original',title:key,mimeType:'image/png',text:''},sha256:sha256(bytes),sizeBytes:bytes.length},()=>{});node.files.part(begun.uploadId,0,bytes,()=>{});return (await node.files.commit(begun.uploadId,()=>{})).id as string;};
@@ -111,7 +111,7 @@ test('content reuse is opt-in and exact processor settings and versions are requ
  const f=await fixture(t),processor=f.node.processing.runtime.registry.get('image.http');processor.reuseByContent=false;
  await f.upload('first');await f.node.processing.tick();await f.upload('second');await f.node.processing.tick();assert.equal(f.ocrCalls(),2);
  processor.reuseByContent=true;await f.upload('third');await f.node.processing.tick();assert.equal(f.ocrCalls(),3,'a processor declared context-sensitive cannot retroactively share its prior products');
- f.node.processing.update({revision:f.node.processing.view().revision,settings:{...f.node.processing.view().settings,imageEndpoint:'http://127.0.0.1:9008/changed'},policy:fixtureFilePolicy({...f.node.processing.view().settings,imageEndpoint:'http://127.0.0.1:9008/changed'},f.node.processing.runtime.registry)});
+ await f.node.processing.save({revision:f.node.processing.view().revision,settings:{...f.node.processing.view().settings,imageEndpoint:'http://127.0.0.1:9008/changed'},policy:fixtureFilePolicy({...f.node.processing.view().settings,imageEndpoint:'http://127.0.0.1:9008/changed'},f.node.processing.runtime.registry)});
  await f.upload('different-settings');await f.node.processing.tick();assert.equal(f.ocrCalls(),4);
  processor.version='generated-next-version';await f.upload('different-version');await f.node.processing.tick();assert.equal(f.ocrCalls(),5);
 });

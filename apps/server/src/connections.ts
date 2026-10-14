@@ -86,8 +86,8 @@ export class Connections {
   revoke(id:string){z.string().uuid().parse(id);return this.serialize(async()=>{const found=this.credentials.find(c=>c.id===id);if(!found)throw new ConnectionError('connection_not_found',404,moteText("未找到此连接。"));if(!found.revokedAt)await this.persist(this.credentials.map(c=>c.id===id?{...c,revokedAt:new Date(this.clock()).toISOString()}:c));return {revoked:true as const,id};});}
   mintMcp(raw:unknown,config?:ConnectorConfig){
     const input=z.object({serverUrl:z.string().max(2048),label,access:z.enum(['read','write'])}).strict().parse(raw),url=serverUrl(input.serverUrl);
-    if(!config?.mcpEnabled)throw new ConnectionError('mcp_disabled',409,moteText("请先配置 MOTE_MCP_READ_TOKEN 并开启 MOTE_MCP_ENABLED，然后重启节点。"));
-    if(input.access==='write'&&(!config.mcpWriteEnabled||!config.mcpWriteSourceIds?.length))throw new ConnectionError('mcp_write_disabled',409,moteText("请先配置 MOTE_MCP_WRITE_TOKEN、MOTE_MCP_WRITE_SOURCE_IDS，并开启 MOTE_MCP_WRITE_ENABLED 后重启节点。"));
+    if(!config?.mcpEnabled)throw new ConnectionError('mcp_disabled',409,moteText("请先在 mote.yaml 配置 connectors.mcpReadToken 并开启 connectors.mcpEnabled，然后重启节点。"));
+    if(input.access==='write'&&(!config.mcpWriteEnabled||!config.mcpWriteSourceIds?.length))throw new ConnectionError('mcp_write_disabled',409,moteText("请先在 mote.yaml 配置 connectors.mcpWriteToken、connectors.mcpWriteSourceIds，并开启 connectors.mcpWriteEnabled 后重启节点。"));
     const sourceIds=input.access==='write'?z.array(z.string().min(1).max(128)).min(1).max(500).parse([...new Set(config.mcpWriteSourceIds)]):undefined;
     return this.serialize(async()=>{
       const token=randomBytes(32).toString('base64url');const c:ConnectionCredential={id:randomUUID(),label:input.label,scope:input.access==='write'?'mcp-write':'mcp-read',createdAt:new Date(this.clock()).toISOString(),serverUrl:url,hash:digest(token),...(sourceIds?{writeSourceIds:sourceIds}:{})};

@@ -58,6 +58,7 @@ export class GoogleCalendarConnector {
   private running?:Promise<{imported:number;duplicates:number;calendars:number}>;
   private sequence:Promise<unknown>=Promise.resolve();
   private closed=false;private timer?:ReturnType<typeof setInterval>;private abort=new AbortController();
+  private initialized=false;private syncIntervalMs?:number;
   private state:'idle'|'syncing'|'error'|'permission_required'='idle';private code?:string;private lastSyncAt?:string;
   private readonly fetcher:typeof fetch;private readonly clock:()=>number;
   constructor(private ctx:ConnectorContext,private dependencies:GoogleDependencies={}) {
@@ -73,8 +74,14 @@ export class GoogleCalendarConnector {
   async init(){
     const saved=await this.file.read();
     if(saved){if(saved.version!==1||!saved.tokens||!Array.isArray(saved.calendars)||!saved.checkpoints)throw new ConnectorError('google_credentials_invalid',503);this.saved=saved;}
-    const interval=Math.max(60000,this.ctx.config.connectors?.syncIntervalMs??300000);
-    if(this.configured){this.timer=setInterval(()=>{if(this.saved.calendars.length&&!this.closed)void this.sync().catch(()=>{});},interval);this.timer.unref();}
+    this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??300000);
+  }
+  configureSyncInterval(intervalMs:number){
+    const interval=Math.max(60000,intervalMs);
+    if(this.timer&&this.syncIntervalMs===interval)return;
+    if(this.timer)clearInterval(this.timer);this.timer=undefined;this.syncIntervalMs=interval;
+    if(!this.initialized||this.closed||!this.configured)return;
+    this.timer=setInterval(()=>{if(this.saved.calendars.length&&!this.closed)void this.sync().catch(()=>{});},interval);this.timer.unref();
   }
   private oauth():OAuth {
     if(!this.configured)throw new ConnectorError('google_not_configured',503);
@@ -190,5 +197,5 @@ export class GoogleCalendarConnector {
     }catch(error){this.code=error instanceof ConnectorError?error.code:'google_sync_failed';this.state=error instanceof ConnectorError&&[401,403].includes(error.statusCode)?'permission_required':'error';for(const c of this.saved.calendars)if(this.ctx.sources.getSource(this.sourceId(c.id)).enabled)this.ctx.sources.reportStatus(this.sourceId(c.id),{state:this.state,code:this.code});throw error instanceof ConnectorError?error:new ConnectorError('google_sync_failed',502);}
   }
   disconnect(){return this.serialize(async()=>{for(const c of this.saved.calendars)this.ctx.sources.update(this.sourceId(c.id),{enabled:false});this.pending.clear();await this.file.clear();this.saved={version:1,tokens:{},calendars:[],checkpoints:{}};this.state='idle';this.code=undefined;return this.status();});}
-  async close(){this.closed=true;if(this.timer)clearInterval(this.timer);this.pending.clear();this.abort.abort();await this.sequence;await this.file.flush();}
+  async close(){this.closed=true;if(this.timer)clearInterval(this.timer);this.timer=undefined;this.pending.clear();this.abort.abort();await this.sequence;await this.file.flush();}
 }

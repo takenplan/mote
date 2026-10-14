@@ -9,10 +9,16 @@ import {materialId} from '../src/materials.js';
 import type {Config} from '../src/config.js';
 import type {ModelSettings,ModelSettingsView} from '@mote/shared/models';
 import type {QueryInput} from '@mote/agent';
+import {ConfigService} from '../src/config-service.js';
+import {modelDomainSchema,defaultModelDomain} from '../src/model-settings.js';
 import {generatedMemoryOutput} from './fixtures/memory-planning.js';
 
 const settings:ModelSettings={provider:'custom',protocol:'openai-completions',model:'first-model',baseUrl:'https://fixture.invalid/v1',apiKey:'fixture-original-secret',headers:{},extraBody:{},reasoningEffort:'auto',maxTokens:8192,modelRequestTimeoutMs:120000,agentTimeoutMs:120000,allowUnauthenticatedLocal:false};
 const headers={authorization:'Bearer synthetic-profile-owner'};
+function configServiceFor(directory:string,deployment:ModelSettings){
+ const service=new ConfigService({path:join(directory,'mote.yaml'),initialDocument:{version:1,revision:0,models:{...defaultModelDomain(),deployment}},watch:false});
+ service.register({id:'models',schema:modelDomainSchema,defaultValue:defaultModelDomain()});return service;
+}
 test('profiles route each request and feature independently; credentials, restarts and deletes are scoped',async t=>{
   const directory=await mkdtemp(join(tmpdir(),'mote-profiles-'));
   const cfg:Config={dataDir:directory,token:'synthetic-profile-owner',tokenPath:'fixture',host:'127.0.0.1',port:47832,maxStorageBytes:10000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:settings.model,modelProvider:settings.provider,modelProtocol:settings.protocol,modelBaseUrl:settings.baseUrl,apiKey:settings.apiKey,allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''};
@@ -63,9 +69,9 @@ test('profiles route each request and feature independently; credentials, restar
   response=await node.app.inject({method:'DELETE',url:'/api/model-settings',headers,payload:{revision:view.revision}});view=response.json();
   assert.equal(view.profiles?.length,2,'restoring default must preserve other profiles and routes');
   assert.equal(view.defaults?.memory,'second');
-  response=await node.app.inject({method:'PUT',url:'/api/model-settings/defaults',headers,payload:{revision:oldRevision,defaults,defaultModels:view.defaultModels}});assert.equal(response.statusCode,409);
+  response=await node.app.inject({method:'PUT',url:'/api/model-settings/defaults',headers,payload:{revision:oldRevision,defaults,defaultModels:view.defaultModels}});assert.equal(response.statusCode,200,'an identical reset and defaults write do not advance the revision');
   assert.equal(JSON.stringify(view).includes('fixture-second-secret'),false);
-  assert.equal((await readFile(join(directory,'model-settings.json'),'utf8')).includes('fixture-second-secret'),true);
+  assert.equal((await readFile(join(directory,'mote.yaml'),'utf8')).includes('fixture-second-secret'),true);
   await node.app.close();node=await buildApp(cfg,{createModelAgent:factory});
   assert.equal((await query()).json().answer,'second-model');
   assert.equal(node.modelSettings.select('memory').settings.apiKey,'fixture-second-secret');
@@ -75,7 +81,7 @@ test('profiles route each request and feature independently; credentials, restar
 test('Codex profiles accept a local login transport and reject arbitrary process or HTTP configuration',async t=>{
   const {ModelSettingsStore}=await import('../src/model-settings.js');
   const directory=await mkdtemp(join(tmpdir(),'mote-codex-settings-'));
-  const store=new ModelSettingsStore({directory,environment:settings,prepare:async()=>({activate(){},async dispose(){}}),probe:async()=>({ok:true,code:'ok',message:'',durationMs:1})});
+  const store=new ModelSettingsStore({configService:configServiceFor(directory,settings),prepare:async()=>({activate(){},async dispose(){}}),probe:async()=>({ok:true,code:'ok',message:'',durationMs:1})});
   t.after(async()=>{await store.close();await rm(directory,{recursive:true,force:true});});await store.initialize();
   const local={...settings,provider:'codex',protocol:'codex-app-server',baseUrl:'',serviceTier:'default',model:'fixture-codex',apiKey:null,modelRequestTimeoutMs:null,agentTimeoutMs:null};
   await store.updateProfile('local',{revision:0,name:'Codex fixture',settings:local});
@@ -88,7 +94,7 @@ test('Codex profiles accept a local login transport and reject arbitrary process
 test('deployment is read-only; copies retain secrets server-side, stay independent and preserve module models',async t=>{
   const {ModelSettingsStore}=await import('../src/model-settings.js');
   const directory=await mkdtemp(join(tmpdir(),'mote-provider-copy-'));
-  const options={directory,environment:settings,prepare:async()=>({activate(){},async dispose(){}}),probe:async()=>({ok:true as const,code:'ok' as const,message:'',durationMs:1})};
+  const options={configService:configServiceFor(directory,settings),prepare:async()=>({activate(){},async dispose(){}}),probe:async()=>({ok:true as const,code:'ok' as const,message:'',durationMs:1})};
   const store=new ModelSettingsStore(options);
   t.after(async()=>{await store.close();await rm(directory,{recursive:true,force:true});});
   let view=await store.initialize();
@@ -113,9 +119,9 @@ test('deployment is read-only; copies retain secrets server-side, stay independe
   assert.equal(view.defaultModels?.chat,'chat-specific','editing a preset preserves module models');
   await assert.rejects(store.deleteProfile('copy',{revision:view.revision}),{code:'model_profile_in_use'});
   await store.close();
-  const restarted=new ModelSettingsStore({...options,environment:{...settings,model:'changed-env'}});await restarted.initialize();
+  const restarted=new ModelSettingsStore({...options,configService:configServiceFor(directory,{...settings,model:'changed-env'})});await restarted.initialize();
   assert.equal(restarted.select('chat').settings.model,'chat-specific');assert.equal(restarted.select('chat','copy').settings.model,'edited-default');
-  assert.equal(restarted.select('chat','env:deployment').settings.model,'changed-env');
+  assert.equal(restarted.select('chat','env:deployment').settings.model,settings.model);
   view=restarted.view();
   await assert.rejects(restarted.updateDefaults({revision:view.revision,defaults:view.defaults,defaultModels:{chat:'invalid\nmodel'}}),{code:'model_settings_invalid'});
   await restarted.updateDefaults({revision:view.revision,defaults:{...view.defaults,chat:'env:deployment'},defaultModels:{...view.defaultModels,chat:undefined}});

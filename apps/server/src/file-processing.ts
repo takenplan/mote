@@ -10,8 +10,6 @@ import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-e
 import { moteText } from './i18n.js';
 import {ServerDiagnostics,safeError,type Operation,type EventFields} from './diagnostics.js';
 import {randomUUID} from 'node:crypto';
-import {readFileSync,existsSync,renameSync,rmSync,openSync,closeSync,fsyncSync,writeFileSync} from 'node:fs';
-import {join} from 'node:path';
 import {z} from 'zod';
 import {ProviderFailure,fileProcessingSchema,transcriptSchema,diarizationSchema,type AttributionContext,type CaptureRecord,type FileProcessingSettings,type Transcript,type Diarization,filePolicySchema,fileTypePattern,type FilePolicy,type ProcessingService} from '@mote/shared';
 import type {ContextRecord} from '@mote/agent';
@@ -25,30 +23,34 @@ import {alignDialogue,applySemanticGroups,TURN_GROUP_PROMPT} from './file-dialog
 import {defaultFileRecipe,defaultFileOutput,type FileRecipeContext} from './file-recipes.js';
 export {HttpTranscriptionProvider,type TranscriptionProvider} from './file-processors.js';
 
+import type {ConfigService} from './config-service.js';
+import {processingConfigurationSchema,defaultProcessingConfiguration,type ProcessingConfiguration} from './processing-configuration.js';
+import {isDeepStrictEqual} from 'node:util';
+import {effectiveProcessorParameters} from './processor-parameters.js';
+import {mediaRuntimeSettings,type MediaRuntimeSettings} from './media-configuration.js';
+
 import {createDefaultFilePolicy,publicFilePolicy,parseFilePolicy,selectFilePolicy,effectiveFileSettings,type AppliedFilePolicy} from './file-policy.js';
 
 type Saved={revision:string;settings:FileProcessingSettings;policy:FilePolicy};
 type Job={capture_id:string;state:string;stage:string;attempts:number;summary_state:string;policy_json:string|null;reuse_allowed:number};
 type Step={fingerprint:string;state:string;artifact_id:string|null;attempts:number};
-const managedAsrEndpoint=()=>process.env.MOTE_MEDIA_ASR_ENDPOINT??'http://127.0.0.1:9009/transcribe';
 export type FileAnalysis=(records:ContextRecord[],prompt:string,settings:FileProcessingSettings&{analysisModel?:ProcessingService;modelSnapshot?:ModelSettings},signal?:AbortSignal,host?:{operationId:string;jobId:string;requestId:string})=>Promise<{answer:string;citations:{id:string}[]}>;
 export type SummarizeFiles=(records:ContextRecord[],signal?:AbortSignal)=>Promise<{answer:string;citations:{id:string}[]}>;
 export class FileProcessing {
-  imageControl?:{owns(id:string):boolean;prepare():string[];tick():Promise<void>;retry(id:string,recompute?:boolean,confirmUnknown?:boolean):{queued:boolean};cancel(id:string):{state:string};cancellation(id:string):{canCancel:boolean;wait:'running'|'unknown'|null}};
-  private saved:Saved;private path:string;readonly engine:ExecutionEngine;private owned:boolean;private execution=new AsyncLocalStorage<{step:ExecutionStep;signal:AbortSignal;deadline:number}>();private abort=new AbortController();private stopping=false;
+  imageControl?:{owns(id:string):boolean;prepare():string[];tick():Promise<void>;retry(id:string,recompute?:boolean,confirmUnknown?:boolean):{queued:boolean};cancel(id:string):{state:string};cancellation(id:string):{canCancel:boolean;wait:'running'|'unknown'|null};configurationChanged?():void};
+  private saved:Saved;private readonly media:MediaRuntimeSettings;readonly engine:ExecutionEngine;private owned:boolean;private execution=new AsyncLocalStorage<{step:ExecutionStep;signal:AbortSignal;deadline:number}>();private abort=new AbortController();private stopping=false;
   private activeProcessorCalls=new Set<string>();private manualCancellation=false;
   private closing?:Promise<void>;
   private reconciledEpoch?:string;private configurationEpoch?:string;private configurationCache=new Map<string,{fingerprint:string;receipt:Record<string,unknown>}>();
   readonly runtime:FileProcessorRuntime;
   private unregister:Array<()=>Promise<void>>=[];
-  constructor(readonly files:FileStore,provider?:TranscriptionProvider,private summarize?:SummarizeFiles,private options:{executor?:ExecutionEngine;contextProcessors?:import('./processing-runtime.js').ContextProcessorRegistry;pluginContext?:Context;plugins?:Plugin[];modules?:string[];analyze?:FileAnalysis;analysisSnapshot?:(settings:Parameters<FileAnalysis>[2])=>ModelSettings;analysisRevision?:()=>number;diagnostics?:ServerDiagnostics;mediaAssets?:MediaAssets;contextForEvidence?:(record:CaptureRecord)=>AttributionContext}={}){
+  constructor(readonly files:FileStore,provider?:TranscriptionProvider,private summarize?:SummarizeFiles,private options:{executor?:ExecutionEngine;contextProcessors?:import('./processing-runtime.js').ContextProcessorRegistry;pluginContext?:Context;plugins?:Plugin[];modules?:string[];analyze?:FileAnalysis;analysisSnapshot?:(settings:Parameters<FileAnalysis>[2])=>ModelSettings;analysisRevision?:()=>number;diagnostics?:ServerDiagnostics;mediaAssets?:MediaAssets;media?:Partial<MediaRuntimeSettings>;configService?:ConfigService;configuration?:ProcessingConfiguration;contextForEvidence?:(record:CaptureRecord)=>AttributionContext}={}){
+    this.media=mediaRuntimeSettings(options.media);
     installEvidenceDependencies(files.store);
     files.store.db.exec('CREATE TABLE IF NOT EXISTS file_diarization_overrides(capture_id TEXT PRIMARY KEY REFERENCES file_versions(capture_id) ON DELETE CASCADE,json TEXT NOT NULL)');
-    this.path=join(files.store.directory,'file-processing.json');
-    const restored=files.store.db.prepare("SELECT value FROM settings WHERE key='image-file-policy'").get();
-    const prior=existsSync(this.path)?JSON.parse(readFileSync(this.path,'utf8')):restored?{...JSON.parse(String(restored.value)),settings:fileProcessingSchema.parse({localEndpoint:managedAsrEndpoint(),endpoint:managedAsrEndpoint()})}:undefined;
     this.runtime=new FileProcessorRuntime(provider,options.plugins,options.modules,options.contextProcessors,options.pluginContext);
-    this.saved=prior?z.object({revision:z.string(),settings:fileProcessingSchema,policy:filePolicySchema}).strict().parse(prior):{revision:'initial',settings:fileProcessingSchema.parse({localEndpoint:managedAsrEndpoint(),endpoint:managedAsrEndpoint()}),policy:createDefaultFilePolicy(this.runtime.registry,managedAsrEndpoint())};
+    const initial=options.configService?.current<ProcessingConfiguration>('processing')??options.configuration??defaultProcessingConfiguration(this.media);
+    this.saved={revision:options.configService?String(options.configService.revision):'initial',...processingConfigurationSchema.parse(initial)};
     this.publishImagePolicy();
     files.store.db.exec("CREATE TABLE IF NOT EXISTS file_configuration_snapshots(capture_id TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,fingerprint TEXT NOT NULL,receipt TEXT NOT NULL,PRIMARY KEY(capture_id,fingerprint))");
     files.store.db.exec("CREATE TABLE IF NOT EXISTS file_processor_waits(resource_key TEXT PRIMARY KEY,capture_id TEXT NOT NULL,token TEXT NOT NULL,state TEXT NOT NULL CHECK(state IN ('running','unknown'))); UPDATE file_processor_waits SET state='unknown' WHERE state='running'");
@@ -57,6 +59,16 @@ export class FileProcessing {
     this.engine=options.executor??new ExecutionEngine(files.store);this.owned=!options.executor;
     files.processingReceiptCurrent=(input,phase)=>this.validInput(input,phase);
     files.snapshotInputResupplied=id=>{if(this.closing||this.stopping)return;if(this.imageControl?.owns(id))this.imageControl.prepare();else this.enqueue(id,'pipeline');};
+    options.configService?.setHandler<ProcessingConfiguration>('processing',async next=>{
+      await this.runtime.ready;
+      // Private YAML is a complete candidate, not a masked public form. Omission
+      // removes credentials, and registry defaults must not mutate its effective value.
+      const value={settings:fileProcessingSchema.parse(next.settings),policy:parseFilePolicy(next.policy,this.saved.policy,this.runtime.registry,{preserveCredentials:false,applyParameterDefaults:false})};
+      const previous=structuredClone(this.saved),before=this.pendingFingerprints(),revision=String(options.configService!.revision+1);
+      // A later plugin may await or fail in apply. Publish the runtime snapshot
+      // and its intake projection only at the shared synchronous commit barrier.
+      return {apply:()=>{},publish:()=>this.publishConfiguration(value,revision),rollback:()=>this.publishConfiguration(previous,previous.revision),complete:()=>this.completeConfiguration(before)};
+    });
     for(const phase of ['pipeline','summary'] as const)this.unregister.push(this.engine.register({kind:'files.'+phase,pool:'files.'+phase,concurrency:()=>1,timeoutMs:()=>this.saved.settings.timeoutMs,
       resourceKeys:step=>{const hash=phase==='pipeline'&&files.store.db.prepare('SELECT object_hash FROM file_versions WHERE capture_id=?').get(String(step.input.captureId))?.object_hash;return hash?['file-extraction:'+sha256(JSON.stringify([hash,step.input.revision]))]:[];},
       validate:step=>this.validStep(step,phase),
@@ -66,11 +78,13 @@ export class FileProcessing {
       project:step=>this.project(step,phase),classify:error=>error instanceof StoreError&&error.statusCode===409?new ExecutionFailure('blocked','processor_not_configured'):error instanceof StoreError&&error.statusCode===422?new ExecutionFailure('permanent','unsupported_format'):error instanceof StoreError&&error.statusCode===413?new ExecutionFailure('permanent','processing_limit'):new ExecutionFailure('transient',phase==='summary'?'summary_failed':'provider_failed',30000),
     }));
   }
+  /** Validate installed-processor contracts before the application serves requests. */
+  async initializeConfiguration(){await this.runtime.ready;parseFilePolicy(this.saved.policy,this.saved.policy,this.runtime.registry,{preserveCredentials:false,applyParameterDefaults:false});}
   private log(event:string,id?:string,fields:EventFields={},level:'debug'|'info'|'warn'|'error'='info') {
     this.options.diagnostics?.record(event,{jobId:id,...fields},level);
   }
-  view(){const {apiKey,localWorkerApiKey,...settings}=this.saved.settings;return {revision:this.saved.revision,settings:{...settings,apiKeyConfigured:!!apiKey,localWorkerApiKeyConfigured:!!localWorkerApiKey},execution:'central',runtime:'cordis',policy:publicFilePolicy(this.policy()),policyConfigured:true,processors:this.runtime.registry.list(),capabilities:{intake:this.runtime.intake.list(),...this.runtime.recipes.list(),outputs:this.runtime.outputs.list()}};}
-  private policy(){const policy=structuredClone(this.saved.policy);for(const service of policy.services)if((service.id==='asr-local'&&service.endpoint===managedAsrEndpoint()||service.kind==='image'&&service.endpoint===(process.env.MOTE_MEDIA_OCR_ENDPOINT??'http://127.0.0.1:9010/ocr'))&&!service.apiKey&&this.options.mediaAssets)service.apiKey=process.env.MOTE_MEDIA_WORKER_TOKEN;return policy;}
+  view(){const {apiKey,localWorkerApiKey,...settings}=this.saved.settings;return {revision:this.options.configService?String(this.options.configService.revision):this.saved.revision,settings:{...settings,apiKeyConfigured:!!apiKey,localWorkerApiKeyConfigured:!!localWorkerApiKey},execution:'central',runtime:'cordis',policy:publicFilePolicy(this.policy()),policyConfigured:true,processors:this.runtime.registry.list(),capabilities:{intake:this.runtime.intake.list(),...this.runtime.recipes.list(),outputs:this.runtime.outputs.list()}};}
+  private policy(){const policy=structuredClone(this.saved.policy);for(const service of policy.services)if((service.id==='asr-local'&&service.endpoint===this.media.asrEndpoint||service.kind==='image'&&service.endpoint===this.media.ocrEndpoint)&&!service.apiKey&&this.options.mediaAssets)service.apiKey=this.media.workerToken;return policy;}
   /** Shared image policy and service references; secrets never enter the receipt. */
   imageConfiguration(sourceId:string,mime:string,override?:string,prior?:AppliedFilePolicy){
     const policy=this.policy();let applied=prior??selectFilePolicy(policy,sourceId,mime,this.saved.revision);
@@ -78,23 +92,29 @@ export class FileProcessing {
     return {applied,settings:applied.profile.processorId==='archive'?{...this.currentSettings(),analysisModel:undefined}:effectiveFileSettings(applied,policy,this.saved.settings,this.runtime.registry)};
   }
   imageDefault(){return this.imageConfiguration('', 'image/png').applied;}
-  configureImageDefault(input:{endpoint?:string;processorId?:string;profileId?:string}){
+  imageDefaultDraft(input:{endpoint?:string;processorId?:string;profileId?:string}):ProcessingConfiguration{
     const view=this.view(),policy=structuredClone(this.saved.policy),id='central-image',serviceId='central-image-ocr';
     if(input.profileId){if(!policy.profiles.some(p=>p.id===input.profileId))throw new StoreError('Image profile is unavailable',409);}
     else {
-      const endpoint=input.endpoint||process.env.MOTE_MEDIA_OCR_ENDPOINT||'http://127.0.0.1:9010/ocr';
+      const endpoint=input.endpoint||this.media.ocrEndpoint;
       const existing=policy.services.find(s=>s.id===serviceId),service={id:serviceId,name:'Central OCR',kind:'image' as const,execution:isLoopback(endpoint)?'local' as const:'remote' as const,endpoint,model:'',...(existing?.endpoint===endpoint&&existing.apiKey?{apiKey:existing.apiKey}:{})};
       policy.services=policy.services.filter(s=>s.id!==serviceId);policy.services.push(service);
       policy.profiles=policy.profiles.filter(p=>p.id!==id);policy.profiles.push({id,name:'Central images',processorId:input.processorId??'image.http',serviceId,parameters:{},diarizationProcessor:'audio.diarize',summarize:false});
     }
     policy.rules=policy.rules.filter(r=>r.sourceId!==undefined||r.type!=='image/*');policy.rules.unshift({type:'image/*',profileId:input.profileId??id});
-    this.update({revision:view.revision,settings:view.settings,policy});return this.imageDefault();
+    return this.draft({revision:view.revision,settings:view.settings,policy});
   }
-  localService(id?:string){if(!id)return {endpoint:this.saved.settings.localEndpoint,apiKey:this.saved.settings.localWorkerApiKey??(this.options.mediaAssets&&this.saved.settings.localEndpoint===managedAsrEndpoint()?process.env.MOTE_MEDIA_WORKER_TOKEN:undefined)};const service=this.policy().services.find(s=>s.id===id);if(!service||service.kind!=='asr'||service.execution!=='local')throw new StoreError(moteText("需要选择已保存的本地录音服务"),400);return service;}
+  configureImageDefault(input:{endpoint?:string;processorId?:string;profileId?:string}){
+    const next=this.imageDefaultDraft(input);this.update({revision:this.view().revision,...next});return this.imageDefault();
+  }
+  async saveImageDefault(input:{endpoint?:string;processorId?:string;profileId?:string}){
+    const next=this.imageDefaultDraft(input);await this.save({revision:this.view().revision,...next});return this.imageDefault();
+  }
+  localService(id?:string){if(!id)return {endpoint:this.saved.settings.localEndpoint,apiKey:this.saved.settings.localWorkerApiKey??(this.options.mediaAssets&&this.saved.settings.localEndpoint===this.media.asrEndpoint?this.media.workerToken:undefined)};const service=this.policy().services.find(s=>s.id===id);if(!service||service.kind!=='asr'||service.execution!=='local')throw new StoreError(moteText("需要选择已保存的本地录音服务"),400);return service;}
   currentSettings(){return structuredClone(this.saved.settings);}
   private publishImagePolicy(){
     const policy={...this.saved.policy,services:this.saved.policy.services.map(({apiKey,...service})=>service)};
-    this.files.store.db.prepare("INSERT INTO settings VALUES('image-file-policy',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify({revision:this.saved.revision,policy}));
+    this.files.store.db.prepare("INSERT INTO settings VALUES('image-file-policy-effective',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify({revision:this.saved.revision,policy}));
   }
   private scopedPolicy(id:string,applied:AppliedFilePolicy){
     const row=this.files.store.db.prepare('SELECT json FROM file_diarization_overrides WHERE capture_id=?').get(id);
@@ -103,7 +123,7 @@ export class FileProcessing {
     Object.assign(result.profile.parameters,{speakerCount:options.speakerCount,speakerMin:options.range?.min??null,speakerMax:options.range?.max??null});
     return result;
   }
-  private modelVersion(processor:FileProcessor,settings:FileProcessingSettings){if(!processor.managedModel||!this.options.mediaAssets||settings.endpoint!==managedAsrEndpoint())return '';if(processor.stage==='extract')return ASR_MODEL_VERSION;if(processor.managedModel==='speaker-wespeaker')return JSON.stringify([MEDIA_CATALOG['speaker-wespeaker'].version,SEGMENTATION_MODEL_SHA256]);return MEDIA_CATALOG[processor.managedModel].version;}
+  private modelVersion(processor:FileProcessor,settings:FileProcessingSettings){if(!processor.managedModel||!this.options.mediaAssets||settings.endpoint!==this.media.asrEndpoint)return '';if(processor.stage==='extract')return ASR_MODEL_VERSION;if(processor.managedModel==='speaker-wespeaker')return JSON.stringify([MEDIA_CATALOG['speaker-wespeaker'].version,SEGMENTATION_MODEL_SHA256]);return MEDIA_CATALOG[processor.managedModel].version;}
   private configuration(id:string,phase:'pipeline'|'summary'){
     const row=this.files.store.db.prepare("SELECT v.source_id,json_extract(v.manifest,'$.item.mimeType') AS mime,j.policy_json FROM file_versions v LEFT JOIN file_jobs j ON j.capture_id=v.capture_id WHERE v.capture_id=?").get(id);
     if(!row)throw new StoreError('File not found',404);
@@ -119,7 +139,7 @@ export class FileProcessing {
       try{const plan=this.runtime.recipes.resolve(defaultFileRecipe(descriptor),{semanticTurns:resolved.analysisSettings.semanticTurns});const output=defaultFileOutput(descriptor);this.runtime.outputs.get(output);result.fingerprint=sha256(JSON.stringify([result.fingerprint,plan.fingerprint,output]));result.receipt={...result.receipt,recipe:plan.recipe,stagePins:plan.pins,output};}
       catch{result.fingerprint=sha256(JSON.stringify([result.fingerprint,'file-capability-unavailable']));result.receipt={...result.receipt,capabilityUnavailable:true};}
     }
-    if(resolved.managedModels.length&&this.options.mediaAssets&&resolved.analysisSettings.endpoint===managedAsrEndpoint()){
+    if(resolved.managedModels.length&&this.options.mediaAssets&&resolved.analysisSettings.endpoint===this.media.asrEndpoint){
       const versions=Object.fromEntries(resolved.managedModels.map(role=>[role,MEDIA_CATALOG[role].version]));result.fingerprint=sha256(JSON.stringify([result.fingerprint,versions]));result.receipt={...result.receipt,mediaModelVersions:versions};
     }
     if(this.options.analysisSnapshot&&(phase==='summary'&&resolved.allowSummary&&resolved.analysisSettings.summarize||phase==='pipeline'&&resolved.dialogue&&resolved.analysisSettings.semanticTurns)){
@@ -150,9 +170,9 @@ export class FileProcessing {
     }
     this.reconciledEpoch=epoch;
   }
-  update(raw:unknown){
+  private draft(raw:unknown):ProcessingConfiguration{
     const input=z.object({revision:z.string(),settings:z.record(z.unknown()),policy:z.unknown()}).strict().parse(raw);
-    if(input.revision!==this.saved.revision)throw new StoreError('Processing settings changed; refresh before saving',409);
+    if(input.revision!==this.view().revision)throw new StoreError('Processing settings changed; refresh before saving',409);
     const next={...input.settings};delete next.apiKeyConfigured;delete next.localWorkerApiKeyConfigured;
     for(const [key,endpoint] of [['apiKey','endpoint'],['localWorkerApiKey','localEndpoint']] as const){
       if(next[key]===undefined){if(next[endpoint]!==this.saved.settings[endpoint]&&this.saved.settings[key])throw new StoreError('Changing provider requires clearing or replacing its key',409);next[key]=this.saved.settings[key];}
@@ -160,19 +180,39 @@ export class FileProcessing {
     }
     const settings=fileProcessingSchema.parse(next);
     const policy=parseFilePolicy(input.policy,this.saved.policy,this.runtime.registry);
-    const saved:Saved={revision:randomUUID(),settings,policy},temp=this.path+'.'+randomUUID()+'.tmp';
+    return {settings,policy};
+  }
+  /** Internal fixture control; production commands must use the file transaction. */
+  update(raw:unknown){
+    if(this.options.configService)throw new StoreError('Use the configuration transaction to save processing settings',409);
+    const next=this.draft(raw);
+    if(!isDeepStrictEqual(next,this.configurationSnapshot())){const before=this.pendingFingerprints();this.publishConfiguration(next,randomUUID());this.completeConfiguration(before);}
+    return this.view();
+  }
+  async save(raw:unknown){
+    const next=this.draft(raw);
+    if(!this.options.configService)return this.update(raw);
+    const revision=Number((raw as {revision:string}).revision);
+    await this.options.configService.replace('processing',next,revision);
+    return this.view();
+  }
+  /** Private snapshots are only for domain preparation and generated fixtures. */
+  configurationSnapshot():ProcessingConfiguration{return structuredClone({settings:this.saved.settings,policy:this.saved.policy});}
+  private publishConfiguration(next:ProcessingConfiguration,revision:string){
+    this.saved={revision,...structuredClone(next)};this.publishImagePolicy();
+  }
+  private pendingFingerprints(){
     const before=new Map<string,string>();
     for(const row of this.files.store.db.prepare("SELECT capture_id,state,summary_state FROM file_jobs WHERE state IN ('waiting','blocked','failed','running') OR summary_state IN ('waiting','failed','running')").all())for(const phase of ['pipeline','summary'] as const){
       const id=String(row.capture_id);if(phase==='pipeline'&&row.state==='succeeded'||phase==='summary'&&row.state==='succeeded'&&!['waiting','failed','running'].includes(String(row.summary_state)))continue;before.set(id+':'+phase,this.configuration(id,phase).fingerprint);
     }
-
-    try{writeFileSync(temp,JSON.stringify(saved),{mode:0o600,flag:'wx'});const fd=openSync(temp,'r');try{fsyncSync(fd);}finally{closeSync(fd);}renameSync(temp,this.path);}finally{rmSync(temp,{force:true});}
-    this.saved=saved;
-    this.publishImagePolicy();
+    return before;
+  }
+  private completeConfiguration(before:Map<string,string>){
     for(const [key,fingerprint] of before){const phase=key.endsWith(':pipeline')?'pipeline':'summary',id=key.slice(0,-phase.length-1);if(fingerprint!==this.configuration(id,phase).fingerprint)this.requeueChanged(id,phase);}
+    this.imageControl?.configurationChanged?.();
 
     this.log('file.settings',undefined,{operation:'file_settings'});
-    return this.view();
   }
   private workerKey(id:string,phase:'pipeline'|'summary'='pipeline'){
     const hash=this.files.store.db.prepare('SELECT object_hash FROM file_versions WHERE capture_id=?').get(id)?.object_hash;
@@ -304,7 +344,7 @@ export class FileProcessing {
   private previews=new Map<string,{revision:string;expires:number;items:{id:string;fingerprint:string}[]}>();
   preview(raw:unknown){
     const q=z.object({revision:z.string(),sourceId:z.string().max(128).optional(),type:fileTypePattern.default('*/*'),profileId:z.string().max(100).optional()}).strict().parse(raw);
-    if(q.revision!==this.saved.revision)throw new StoreError(moteText("设置已改变，请刷新后重新预览"),409);
+    if(q.revision!==this.view().revision)throw new StoreError(moteText("设置已改变，请刷新后重新预览"),409);
     const now=Date.now();for(const [key,p] of this.previews)if(p.expires<now)this.previews.delete(key);
     if(this.previews.size>=20)this.previews.delete(this.previews.keys().next().value!);
     const mime=q.type==='*/*'?'%':q.type.replace('*','%');
@@ -317,7 +357,7 @@ export class FileProcessing {
       items.push({id,title:file.item.title,profileName:selected.profile.name,rule:selected.rule,fingerprint:this.jobFingerprint(id)});
     }
     const token=randomUUID();this.previews.set(token,{revision:this.saved.revision,expires:now+600000,items:items.map(({id,fingerprint})=>({id,fingerprint}))});
-    return {token,revision:this.saved.revision,count:items.length,skipped,bounded:rows.length>1000||items.length===100,items:items.map(({fingerprint,...item})=>item)};
+    return {token,revision:this.view().revision,count:items.length,skipped,bounded:rows.length>1000||items.length===100,items:items.map(({fingerprint,...item})=>item)};
   }
   private jobFingerprint(id:string){return sha256(JSON.stringify(this.files.store.db.prepare('SELECT * FROM file_jobs WHERE capture_id=?').get(id)));}
   reprocess(raw:unknown){
@@ -446,11 +486,11 @@ export class FileProcessing {
       let processorId:string|undefined,effective=base;
       try{
         applied=this.scopedPolicy(id,job.state==='succeeded'&&job.policy_json?JSON.parse(job.policy_json):selectFilePolicy(this.saved.policy,file.sourceId,mime,revision));
-        processorId=applied!.profile.processorId;parameters=applied!.profile.parameters;
+        processorId=applied!.profile.processorId;parameters=processorId==='archive'?applied!.profile.parameters:effectiveProcessorParameters(this.runtime.registry.get(processorId),applied!.profile.parameters);
         if(processorId!=='archive')settings=effectiveFileSettings(applied!,this.policy(),base,this.runtime.registry);
         if(!processorId||processorId==='archive'){this.log('file.blocked',id,{category:processorId==='archive'?'archive_only':'unsupported_format'},processorId==='archive'?'info':'warn');db.prepare('UPDATE file_jobs SET policy_json=? WHERE capture_id=?').run(applied?JSON.stringify(applied):null,id);throw new ExecutionFailure('blocked',processorId==='archive'?'archive_only':'unsupported_format');}
         const processor=this.runtime.registry.get(processorId);
-        effective={...settings,audioProcessor:processorId,...(processor.localOnly&&processor.serviceKind==='asr'&&!applied?{endpoint:settings.localEndpoint,apiKey:settings.localWorkerApiKey??(this.options.mediaAssets&&settings.localEndpoint===managedAsrEndpoint()?process.env.MOTE_MEDIA_WORKER_TOKEN:undefined)}:{})};
+        effective={...settings,audioProcessor:processorId,...(processor.localOnly&&processor.serviceKind==='asr'&&!applied?{endpoint:settings.localEndpoint,apiKey:settings.localWorkerApiKey??(this.options.mediaAssets&&settings.localEndpoint===this.media.asrEndpoint?this.media.workerToken:undefined)}:{})};
         if(processor.localOnly&&processor.serviceKind&&!isLoopback(effective.endpoint))throw new StoreError('Local processing requires a loopback service',409);
       }catch(error){if(error instanceof ExecutionFailure)throw error;this.log('file.blocked',id,{category:'not_configured'},'warn');throw new ExecutionFailure('blocked','processor_not_configured');}
     return {db,base,revision,job,file,mime,applied,settings,parameters,processorId:processorId!,effective};
@@ -469,7 +509,7 @@ export class FileProcessing {
         try{this.runtime.recipes.resolve(defaultFileRecipe(processor),{semanticTurns:settings.semanticTurns});this.runtime.outputs.get(defaultFileOutput(processor));}catch{return new ExecutionFailure('blocked','file_capability_unavailable');}
         if(processor.stage!=='extract'||!processor.mediaTypes.some(t=>t.endsWith('/')?mime.startsWith(t):t===mime||t.endsWith('/*')&&mime.startsWith(t.slice(0,-1))))return new ExecutionFailure('blocked','unsupported_format');
         const stages=[processor,...(processor.dialogue?[this.runtime.registry.get(settings.diarizationProcessor)]:[])];
-        if(stages.some(stage=>stage.managedModel&&effective.endpoint===managedAsrEndpoint()&&this.options.mediaAssets&&!this.options.mediaAssets.ready(stage.managedModel)))return new ExecutionFailure('blocked','model_missing');
+        if(stages.some(stage=>stage.managedModel&&effective.endpoint===this.media.asrEndpoint&&this.options.mediaAssets&&!this.options.mediaAssets.ready(stage.managedModel)))return new ExecutionFailure('blocked','model_missing');
       }
     }catch(error){return error instanceof ExecutionFailure?error:new ExecutionFailure('blocked','processor_not_configured');}
   }

@@ -13,7 +13,8 @@ import {SourceStore} from '../src/sources.js';
 import {FileStore} from '../src/files.js';
 import {FileProcessing,type TranscriptionProvider} from '../src/file-processing.js';
 import {buildApp} from '../src/app.js';
-import {configFromEnv} from '../src/config.js';
+import {configFromFile} from '../src/config.js';
+import {serializeConfigDocument} from '@mote/shared/config-file';
 
 function fixture(t:any,key?:string){const dir=mkdtempSync(join(tmpdir(),'mote-files-'));const options={dataKey:key,contentEncryptionEnabled:Boolean(key),maxStorageBytes:100*1024*1024};const store=new Store(dir,options);const sources=new SourceStore(store),files=new FileStore(store,sources);sources.register({id:'phone',name:'Synthetic phone',kind:'local-files',deviceId:'phone',platform:'android',retention:'archive'});t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});return {dir,store,sources,files,options};}
 const owner=()=>{};
@@ -94,11 +95,9 @@ test('processing settings never expose credentials or silently reuse them at ano
 });
 
 test('HTTP binary ingest, authenticated playback cookie, range, unauthenticated denial and full client access and explicit source filters',async t=>{
- const dir=mkdtempSync(join(tmpdir(),'mote-file-http-'));const priorEnv=process.env.MOTE_ENV_FILE;const env=join(dir,'test.env');writeFileSync(env,`MOTE_DATA_DIR=${dir}
-MOTE_TOKEN=generated-files-owner-token-1234567890
-MOTE_MODEL=
-MOTE_LOG_LEVEL=silent
-`);process.env.MOTE_ENV_FILE=env;let config;try{config=configFromEnv();}finally{if(priorEnv===undefined)delete process.env.MOTE_ENV_FILE;else process.env.MOTE_ENV_FILE=priorEnv;}
+ const dir=mkdtempSync(join(tmpdir(),'mote-file-http-')),configFile=join(dir,'mote.yaml');
+ writeFileSync(configFile,serializeConfigDocument({version:1,revision:0,server:{profile:'test',token:'generated-files-owner-token-1234567890'},storage:{dataDir:dir},models:{deployment:{model:''}},diagnostics:{level:'silent'}}),{mode:0o600});
+ const config=configFromFile(configFile);
  const {app,connections}=await buildApp(config,{agent:{configured:false,query:async()=>{throw Error();},close:async()=>{}}});t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
  const headers={authorization:`Bearer ${config.token}`};
  await app.inject({method:'POST',url:'/api/sources',headers,payload:{id:'phone',name:'Generated',kind:'local-files',deviceId:'phone',platform:'android',retention:'archive'}});

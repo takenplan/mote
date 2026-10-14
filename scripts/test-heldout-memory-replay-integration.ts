@@ -28,7 +28,7 @@ export type IntegrationManifest=Omit<PhaseManifest,'task'|'limits'>&{task:{kind:
 /** Complete structural scan, never LIMIT/slice/semantic ranking. Reads a closed snapshot. */
 export function integrationSelection(db:DatabaseSync,contextTime:string):IntegrationSelection {
   check(Number.isFinite(Date.parse(contextTime)),'integration_clock_invalid');sqliteCheck(db);
-  const lifecycle=lifecycleSettingsSchema.parse(JSON.parse(String(db.prepare('SELECT json FROM memory_lifecycle_settings WHERE id=1').get()!.json)));
+  const lifecycle=lifecycleSettingsSchema.parse(JSON.parse(String(db.prepare('SELECT json FROM memory_lifecycle_effective WHERE id=1').get()!.json)));
   check(['extraction','consolidation','insights','working'].every(key=>!lifecycle[key as keyof Pick<typeof lifecycle,'extraction'|'consolidation'|'insights'|'working'>].enabled),'integration_background_enabled');
   check(lifecycle.consolidation.maxItems===30,'integration_frozen_capacity_changed');
   check(Number(db.prepare("SELECT count(*) n FROM memory_batches WHERE json_extract(json,'$.status')!='completed'").get()!.n)===0,'integration_extraction_unfinished');

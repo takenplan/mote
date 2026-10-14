@@ -85,7 +85,7 @@ let node:Awaited<ReturnType<typeof buildApp>>|undefined;
 async function open(vault:string){
  node=await buildApp(config(vault),{backgroundWorker:false});const settings=node.lifecycle.settings();
  for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;
- node.lifecycle.configure(settings);await node.app.ready();
+ await node.lifecycle.save({revision:node.configService.revision,settings});await node.app.ready();
  const selected=node.modelSettings.select('chat').settings;
  assert.equal(selected.model,'gpt-6-sol');assert.equal(selected.reasoningEffort,'max');assert.equal(selected.protocol,'codex-app-server');assert.equal(selected.agentTimeoutMs,300000);
  assert.equal(node.store.db.prepare('PRAGMA quick_check').get()!.quick_check,'ok');

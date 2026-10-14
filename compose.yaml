@@ -1,23 +1,36 @@
 name: ${MOTE_COMPOSE_PROJECT:?Use node scripts/mote.mjs compose with a profile}
 services:
+  storage-init:
+    image: ${MOTE_IMAGE:?Profile image is required}
+    user: "0:0"
+    restart: "no"
+    command: ["node", "scripts/storage-owner-entry.mjs", "${MOTE_CONTAINER_USER:?Profile owner is required}", "/data", "${MOTE_MODELS_DIRECTORY:?Configured model directory is required}"]
+    volumes:
+      - mote-data:/data
+      - mote-models:${MOTE_MODELS_DIRECTORY:?Configured model directory is required}
+    network_mode: none
   mote:
     image: ${MOTE_IMAGE:?Profile image is required}
     build: .
+    user: ${MOTE_CONTAINER_USER:?Profile owner is required}
     restart: unless-stopped
     ports:
-      - "127.0.0.1:${MOTE_PORT:?Profile port is required}:47832"
+      - "127.0.0.1:${MOTE_PORT:?Profile port is required}:${MOTE_PORT:?Profile port is required}"
     env_file:
-      - path: ${MOTE_DOCKER_ENV_FILE:?Generated raw profile environment is required}
+      - path: ${MOTE_DOCKER_ENV_FILE:?Generated secret environment is required}
         format: raw
     environment:
-      MOTE_ENV_FILE: /app/deploy/empty.env
-      MOTE_HOST: 0.0.0.0
-      MOTE_PORT: 47832
-      MOTE_DATA_DIR: /data
-      MOTE_LOG_DIR: /data/logs
+      MOTE_CONFIG_FILE: /config/mote.yaml
     volumes:
       - mote-data:/data
-      - mote-models:/models
+      - mote-models:${MOTE_MODELS_DIRECTORY:?Configured model directory is required}
+      # Mount the parent directory so an atomic YAML replacement remains visible.
+      - type: bind
+        source: ${MOTE_CONFIG_DIRECTORY:?Profile configuration directory is required}
+        target: /config
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -30,40 +43,32 @@ services:
         max-file: "3"
   ocr-worker:
     image: ${MOTE_IMAGE:?Profile image is required}
+    user: ${MOTE_CONTAINER_USER:?Profile owner is required}
     restart: unless-stopped
     network_mode: "service:mote"
     depends_on:
       mote:
         condition: service_started
     env_file:
-      - path: ${MOTE_MEDIA_DOCKER_ENV_FILE:?Generated media environment is required}
+      - path: ${MOTE_DOCKER_ENV_FILE:?Generated secret environment is required}
         format: raw
+    environment:
+      MOTE_CONFIG_FILE: /config/mote.yaml
     volumes:
-      - mote-models:/models:ro
-    command: ["/opt/mote-media-venv/bin/python", "scripts/ocr-server.py", "--model-root", "/models/ocr", "--port", "9010"]
+      - mote-models:${MOTE_MODELS_DIRECTORY:?Configured model directory is required}:ro
+      - type: bind
+        source: ${MOTE_CONFIG_DIRECTORY:?Profile configuration directory is required}
+        target: /config
+        read_only: true
+    command: ["node", "scripts/media-worker-entry.mjs", "ocr"]
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     init: true
   asr-worker:
-    image: ${MOTE_IMAGE:?Profile image is required}
-    restart: unless-stopped
-    network_mode: "service:mote"
-    depends_on:
-      mote:
-        condition: service_started
-    env_file:
-      - path: ${MOTE_MEDIA_DOCKER_ENV_FILE:?Generated media environment is required}
-        format: raw
-    volumes:
-      - mote-models:/models:ro
-    command: ["/opt/mote-media-venv/bin/python", "scripts/transcription-server.py", "--model", "/models/dialogue", "--segmentation-model", "/models/dialogue/segmentation.onnx", "--speaker-model", "/models/dialogue/speaker.onnx", "--timeout", "3600", "--port", "9009"]
-    security_opt:
-      - no-new-privileges:true
-    cap_drop:
-      - ALL
-    init: true
+    extends: ocr-worker
+    command: ["node", "scripts/media-worker-entry.mjs", "asr"]
 volumes:
   mote-data:
     name: ${MOTE_VOLUME:?Profile-specific volume is required}

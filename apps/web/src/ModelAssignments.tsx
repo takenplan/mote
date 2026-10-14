@@ -1,6 +1,6 @@
+import {invalidateConfiguration} from './configuration-cache';
 import { useResource } from './useResource';
 import { ModelStartGuide } from './ModelStartGuide';
-import { resources } from './resource-cache';
 import { ApiError } from './api';
 import { useUnsavedChanges } from './unsaved';
 import { moteText } from '@mote/shared/i18n';
@@ -53,7 +53,7 @@ export function ModelAssignments({ api, revision, onApplied, onManage }: {
         setView(next);
         setDefaults(next.defaults);
         setModels(next.defaultModels);
-        resources(api).invalidate(key => key.startsWith('/api/model-settings'));
+        invalidateConfiguration(api);
         setNotice(moteText("模块分配已保存，新请求立即生效。"));
         onApplied();
     }

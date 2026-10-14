@@ -71,7 +71,7 @@ npm run start -w @mote/desktop -- --profile=default
 open -n "apps/desktop/release/mac-arm64/Mote Collector.app" --args --profile=dev
 ```
 
-`--profile` 优先于 `MOTE_PROFILE`。命名环境仅在 `MOTE_PROFILE` 精确匹配时才接受启动器注入的 `MOTE_URL` / `MOTE_TOKEN`；缺 profile 的 ambient 节点/令牌或切换 CLI profile 后遗留的凭据均不继承。它们只用于新环境首次配置，已有节点和已加密凭据始终成对保留。`MOTE_ENV_FILE` 由统一启动器读取，采集器不另行寻找 `.env`。dev/test 等非 default、非 prod 环境的自动配置拒绝回环 47832；确需连接另一节点，用户仍可在原生设置中显式填写地址与新令牌。
+`--profile` 优先于 `MOTE_PROFILE`。命名环境仅在 `MOTE_PROFILE` 精确匹配时才接受启动器注入的 `MOTE_URL` / `MOTE_TOKEN`；缺 profile 的 ambient 节点/令牌或切换 CLI profile 后遗留的凭据均不继承。它们只用于新环境首次配置，已有节点和已加密凭据始终成对保留。统一启动器从选定 `mote.yaml` 派生连接信息，`MOTE_CONFIG_FILE` 选择中央文件；采集器的本机采集、隐私与队列设置仍独立保存，不并入中央 YAML，也不另行寻找 `.env`。dev/test 等非 default、非 prod 环境的自动配置拒绝回环 47832；确需连接另一节点，用户仍可在原生设置中显式填写地址与新令牌。
 
 每个 profile 独立保存设备 UUID、Keychain 加密令牌、原生草稿、队列、模型和数值/事件诊断。浏览器中央页面使用浏览器自己的登录会话。新环境不自动复制模型或用户资料，可手动导入公开模型。支持包不跨环境读取。普通启动不会自动把 dev 变成日常环境；Finder 无参数启动进入 default。
 

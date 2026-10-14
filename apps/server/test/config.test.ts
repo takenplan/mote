@@ -4,238 +4,271 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { serializeConfigDocument } from '@mote/shared/config-file';
+import { configFromFile, configFromDocument, parseConfigDocument, readConfigDocument, resolveConfigDocument, configDocumentDomains, registerBuiltinDomains, ConfigError } from '../src/config.js';
+import { ConfigService } from '../src/config-service.js';
 
 const moduleUrl = new URL('../src/config.ts', import.meta.url).href;
-function readConfig(env: Record<string, string>) {
-  return spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e',
-    `import {configFromEnv} from ${JSON.stringify(moduleUrl)}; console.log(JSON.stringify(configFromEnv()));`], {
-    env: { PATH: process.env.PATH, ...env }, encoding: 'utf8', timeout: 15000,
+function readConfig(env: Record<string, string>, cwd?: string) {
+  return spawnSync(process.execPath, ['--import', new URL('../../../node_modules/tsx/dist/loader.mjs', import.meta.url).pathname, '--input-type=module', '-e',
+    `import {configFromFile} from ${JSON.stringify(moduleUrl)}; console.log(JSON.stringify(configFromFile()));`], {
+    env: { PATH: process.env.PATH, ...env }, encoding: 'utf8', timeout: 15000, cwd,
   });
 }
-test('explicit server profiles isolate paths and generated credentials and keep restart identity', t => {
-  const root = mkdtempSync(join(tmpdir(), 'mote-config-'));
+function fixture(t: { after(fn: () => void): void }, name = 'config') {
+  const root = mkdtempSync(join(tmpdir(), `mote-${name}-`));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const configs = ['dev', 'test'].map((name, index) => {
-    const directory = join(root, name); mkdirSync(directory);
-    const file = join(directory, 'mote.env');
-    writeFileSync(file, `MOTE_PROFILE=${name}\nMOTE_DATA_DIR=./archive\nMOTE_PORT=${47842 + index * 10}\nMOTE_LOG_DIR=./events\nMOTE_DEBUG=1\n`);
-    const first = readConfig({ MOTE_ENV_FILE: file });
-    assert.equal(first.status, 0, first.stderr);
-    const config = JSON.parse(first.stdout);
-    assert.equal(config.profile, name);
-    assert.equal(config.port, 47842 + index * 10);
-    assert.equal(config.dataDir, join(directory, 'archive'));
-    assert.equal(config.logDirectory, join(directory, 'events'));
-    assert.equal(config.diagnosticsDebug, true);
-    assert.equal(config.agentTraceEnabled, name === 'dev');
-    assert.equal(config.logMaxBytes, (name === 'dev' ? 100 : 2) * 1024 * 1024);
-    assert.equal(config.model, '');
-    assert.equal(config.apiKey, '');
+  const file = join(root, 'mote.yaml');
+  const write = (patch: Record<string, unknown> = {}) => writeFileSync(file, serializeConfigDocument({ version: 1, revision: 0, storage: { dataDir: './vault' }, ...patch }));
+  write(); return { root, file, write, vault: join(root, 'vault') };
+}
+
+test('YAML profiles isolate paths and private generated credentials across restarts', t => {
+  const { root } = fixture(t);
+  const configs = ['dev', 'test'].map((profile, index) => {
+    const directory = join(root, profile); mkdirSync(directory);
+    const file = join(directory, 'mote.yaml');
+    writeFileSync(file, serializeConfigDocument({ version: 1, revision: 0, server: { profile, port: 47842 + index * 10 }, storage: { dataDir: './archive' }, diagnostics: { directory: './events', debug: true } }));
+    const result = readConfig({ MOTE_CONFIG_FILE: file }); assert.equal(result.status, 0, result.stderr);
+    const config = JSON.parse(result.stdout);
+    assert.equal(config.profile, profile); assert.equal(config.port, 47842 + index * 10);
+    assert.equal(config.dataDir, join(directory, 'archive')); assert.equal(config.logDirectory, join(directory, 'events'));
+    assert.equal(config.diagnosticsDebug, true); assert.equal(config.agentTraceEnabled, profile === 'dev');
+    assert.equal(config.logMaxBytes, (profile === 'dev' ? 100 : 2) * 1024 * 1024);
+    assert.equal(config.model, ''); assert.equal(config.apiKey, '');
     assert.equal(config.token, readFileSync(join(directory, 'archive/access-token'), 'utf8').trim());
-    const next = readConfig({ MOTE_ENV_FILE: file });
-    assert.equal(next.status, 0, next.stderr);
-    assert.equal(JSON.parse(next.stdout).token, config.token);
+    assert.equal(JSON.parse(readConfig({ MOTE_CONFIG_FILE: file }).stdout).token, config.token);
     return config;
   });
   assert.notEqual(configs[0].token, configs[1].token);
 });
-test('missing files and invalid diagnostic configuration fail before creating a vault', t => {
-  const root = mkdtempSync(join(tmpdir(), 'mote-config-invalid-'));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const vault = join(root, 'vault');
-  const absent = readConfig({ MOTE_ENV_FILE: join(root, 'missing'), MOTE_DATA_DIR: vault });
-  assert.notEqual(absent.status, 0);
-  assert.match(absent.stderr, /missing, unreadable or invalid/);
-  for (const setting of ['MOTE_LOG_LEVEL=verbose', 'MOTE_LOG_MAX_FILES=1.5', 'MOTE_LOG_MAX_MB=100.1', 'MOTE_DEBUG=yes', 'MOTE_AGENT_TRACE_ENABLED=yes', 'MOTE_PROFILE=../prod']) {
-    const file = join(root, 'invalid.env'); writeFileSync(file, `MOTE_DATA_DIR=${vault}\n${setting}\n`);
-    const result = readConfig({ MOTE_ENV_FILE: file });
-    assert.notEqual(result.status, 0, setting);
+
+test('YAML retention preserves explicit capacities and enforces profile limits before creating storage', t => {
+  const { file, write, vault } = fixture(t, 'log-retention');
+  const mib = 1024 * 1024;
+  for (const [profile, maxBytes, expected] of [
+    ['dev', undefined, 100 * mib], ['dev', 2 * mib, 2 * mib],
+    ['dev', Math.floor(0.1 * mib), Math.floor(0.1 * mib)], ['dev', 100 * mib, 100 * mib],
+    ['test', undefined, 2 * mib], ['prod', undefined, 2 * mib], ['default', 8 * mib, 8 * mib],
+  ] as const) {
+    write({ server: { profile }, diagnostics: { ...(maxBytes === undefined ? {} : { maxBytes }), maxFiles: 4, maxEntries: 3000 } });
+    const loaded = configFromFile(file, { initializeCredentials: false });
+    assert.equal(loaded.logMaxBytes, expected); assert.equal(loaded.logMaxFiles, 4); assert.equal(loaded.logMaxEntries, 3000);
+    assert.equal(existsSync(vault), false);
+  }
+  for (const [profile, maxBytes] of [['dev', 100 * mib + 1], ['dev', Math.floor(0.1 * mib) - 1], ['test', 8 * mib + 1], ['prod', 100 * mib], ['dev', 'synthetic-private-limit']] as const) {
+    write({ server: { profile }, diagnostics: { maxBytes } });
+    assert.throws(() => configFromFile(file), (error: ConfigError) => error.field === 'diagnostics.maxBytes' && !error.message.includes('synthetic-private-limit'));
     assert.equal(existsSync(vault), false);
   }
 });
 
-test('log retention defaults and explicit limits agree across profile and configuration sources', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-log-retention-'));
-  t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env');writeFileSync(file,'MOTE_PROFILE=dev\nMOTE_DATA_DIR=./vault\nMOTE_LOG_MAX_MB=auto\n');
-  for(const [profile,value,expected] of [
-    ['dev','auto',100],['dev','2',2],['dev','0.1',0.1],['dev','100',100],
-    ['test','auto',2],['prod','auto',2],['default','8',8],
-  ]){
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_PROFILE:profile,MOTE_LOG_MAX_MB:value});
-    assert.equal(result.status,0,result.stderr);const config=JSON.parse(result.stdout);
-    assert.equal(config.logMaxBytes,Math.floor(Number(expected)*1024*1024));
-    assert.equal(config.logMaxFiles,3);assert.equal(config.logMaxEntries,2000);
-    assert.equal(config.configuration.sources.MOTE_LOG_MAX_MB,'environment');
-  }
-  const inherited=readConfig({MOTE_ENV_FILE:file});assert.equal(inherited.status,0,inherited.stderr);
-  assert.equal(JSON.parse(inherited.stdout).logMaxBytes,100*1024*1024);
-  assert.equal(JSON.parse(inherited.stdout).configuration.sources.MOTE_LOG_MAX_MB,'env-file');
-  const invalidVault=join(root,'invalid-vault');
-  for(const [profile,value] of [['dev','100.1'],['dev','0.09'],['dev',''],['dev','Infinity'],['test','8.1'],['prod','100'],['dev','synthetic-private-limit']]){
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_DATA_DIR:invalidVault,MOTE_PROFILE:profile,MOTE_LOG_MAX_MB:value});
-    assert.notEqual(result.status,0);assert.match(result.stderr,/MOTE_LOG_MAX_MB/);
-    assert.ok(!result.stderr.includes('synthetic-private-limit'));assert.equal(existsSync(invalidVault),false);
-  }
+test('retention saves validate profile capacity together and expose restart metadata', async t => {
+  const { file, write } = fixture(t, 'log-retention-save');
+  write({ server: { profile: 'dev' } });
+  const config = configFromFile(file, { initializeCredentials: false });
+  const service = new ConfigService({ path: file, watch: false, initialDocument: config.configuration.document });
+  registerBuiltinDomains(service, config); t.after(() => service.close()); await service.initialize();
+  assert.equal(service.current<{ maxBytes: number }>('diagnostics').maxBytes, 100 * 1024 * 1024);
+  const revision = service.revision;
+  await assert.rejects(service.update('diagnostics', { maxBytes: 101 * 1024 * 1024 }, revision));
+  assert.equal(service.revision, revision);
+  assert.equal(configDocumentDomains().find(domain => domain.id === 'diagnostics')?.fields?.find(field => field.path === 'maxBytes')?.effect, 'restart');
 });
 
-test('Codex launch paths load from the private environment file without becoming model parameters',t=>{
-  const root=mkdtempSync(join(tmpdir(),'mote-config-codex-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env');writeFileSync(file,'MOTE_DATA_DIR=./vault\nMOTE_MODEL_PROVIDER=codex\nMOTE_MODEL=fixture\nMOTE_CODEX_BIN=/fixture/bin/codex\nMOTE_CODEX_HOME=./login\n');
-  const result=readConfig({MOTE_ENV_FILE:file});assert.equal(result.status,0,result.stderr);
-  const config=JSON.parse(result.stdout);assert.equal(config.modelProtocol,'codex-app-server');assert.equal(config.modelBaseUrl,'');assert.equal(config.modelRequestTimeoutMs,null);assert.equal(config.agentTimeoutMs,null);assert.equal(config.codexBin,'/fixture/bin/codex');assert.equal(config.codexHome,join(root,'login'));assert.deepEqual(config.modelExtraBody,{});
-  const blankAgent=JSON.parse(readConfig({MOTE_ENV_FILE:file,MOTE_AGENT_TIMEOUT_MS:''}).stdout);assert.equal(blankAgent.agentTimeoutMs,null);
+test('selected YAML ignores ordinary ambient environment variables and old environment files', t => {
+  const { file, write, root } = fixture(t);
+  write({ server: { port: 48123 }, execution: { agentConcurrency: 6 }, models: { deployment: { model: 'file-model' } } });
+  const old = join(root, 'mote.env'); writeFileSync(old, 'MOTE_PORT=49999\nMOTE_MODEL=old-file-model\n');
+  const result = readConfig({ MOTE_CONFIG_FILE: file, MOTE_ENV_FILE: old, MOTE_PORT: '49998', MOTE_MODEL: 'ambient-model', MOTE_AGENT_CONCURRENCY: '64', MOTE_MODEL_API_KEY: 'synthetic-ambient-secret' });
+  assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(result.stdout);
+  assert.equal(config.port, 48123); assert.equal(config.agentConcurrency, 6); assert.equal(config.model, 'file-model'); assert.equal(config.apiKey, '');
+  assert.equal(config.configuration.configFile, file); assert.equal(config.configuration.envFile, null);
 });
 
-test('startup reports the invalid setting without its private supplied value', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-message-'));
-  t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env');
-  const secret='synthetic-private-setting-do-not-echo';
-  writeFileSync(file,`MOTE_DEBUG=${secret}\nMOTE_DATA_DIR=./vault\n`);
-  const entry=new URL('../src/index.ts',import.meta.url);
-  const result=spawnSync(process.execPath,['--import','tsx',entry.pathname],{env:{PATH:process.env.PATH,MOTE_ENV_FILE:file},encoding:'utf8',timeout:15000});
-  assert.notEqual(result.status,0);
-  assert.equal(result.stderr.includes(secret),false);
-  assert.equal(result.stderr.includes(root),false);
-  assert.deepEqual(JSON.parse(result.stderr.trim()),{event:'server.start_failed',category:'configuration',field:'MOTE_DEBUG'});
+test('missing YAML and obsolete env syntax fail before creating storage', t => {
+  const { root, file, vault } = fixture(t);
+  assert.notEqual(readConfig({ MOTE_CONFIG_FILE: join(root, 'missing.yaml') }).status, 0);
+  writeFileSync(file, `MOTE_DATA_DIR=${vault}\nMOTE_PORT=47832\n`);
+  assert.notEqual(readConfig({ MOTE_CONFIG_FILE: file }).status, 0); assert.equal(existsSync(vault), false);
 });
 
-test('provider/public URLs, encryption key and declared metadata validate before creating a vault', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-safe-url-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const vault=join(root,'vault'),file=join(root,'mote.env');
-  for(const setting of [
-    'MOTE_MODEL_BASE_URL=ftp://provider.invalid',
-    'MOTE_MODEL_BASE_URL=https://synthetic-user:synthetic-secret@provider.invalid/v1',
-    'MOTE_MODEL_BASE_URL=https://provider.invalid/v1?key=synthetic-secret',
-    'MOTE_MODEL_BASE_URL="https://provider.invalid/v1#synthetic-secret"',
-    'MOTE_EMBEDDING_BASE_URL=javascript:synthetic-secret',
-    'MOTE_PUBLIC_URL=http://192.0.2.2:8080',
-    'MOTE_PUBLIC_URL=https://mote.example.invalid/prefix',
-    'MOTE_ALLOWED_ORIGINS=https://app.invalid/private-path',
-    'MOTE_DATA_KEY=synthetic-invalid-key',
-    'MOTE_RUNTIME=unsupported', 'MOTE_STORAGE_KIND=unsupported', 'MOTE_TUNNEL_PROTOCOL=unsupported', 'MOTE_TOKEN=too-short',
+test('an obsolete environment-file selector fails instead of silently choosing a different cwd profile', t => {
+  const { root, vault } = fixture(t), legacy = join(root, 'old-profile.env');
+  writeFileSync(legacy, 'MOTE_DATA_DIR=./old-profile-data\n');
+  const result = readConfig({ MOTE_ENV_FILE: legacy }, root);
+  assert.notEqual(result.status, 0); assert.match(result.stderr, /MOTE_ENV_FILE/); assert.match(result.stderr, /MOTE_CONFIG_FILE/);
+  assert.equal(existsSync(vault), false); assert.equal(existsSync(join(root, 'old-profile-data')), false);
+});
+
+test('pure bootstrap loading neither creates the vault nor reads or generates its private credential', t => {
+  const { file, write, vault } = fixture(t);
+  const pure = configFromFile(file, { initializeCredentials: false });
+  assert.equal(pure.token, ''); assert.equal(pure.tokenPath, join(vault, 'access-token')); assert.equal(existsSync(vault), false);
+  mkdirSync(vault); writeFileSync(join(vault, 'access-token'), 'invalid-token');
+  assert.equal(configFromFile(file, { initializeCredentials: false }).token, '');
+  assert.throws(() => configFromFile(file), (error: ConfigError) => error.field === 'server.token');
+  const snapshot = readConfigDocument(file); write({ storage: { dataDir: './other-vault' } });
+  const projected = configFromDocument(snapshot, file, undefined, { initializeCredentials: false });
+  assert.equal(projected.dataDir, vault); assert.equal(existsSync(join(vault, '..', 'other-vault')), false);
+});
+
+test('bootstrap normalization derives profile and managed media defaults from the initialized file snapshot', async t => {
+  const { file, write, vault } = fixture(t);
+  write({ server: { profile: 'dev' }, media: { ocrEndpoint: 'http://127.0.0.1:19101/ocr' } });
+  const seed = configFromFile(file, { initializeCredentials: false }), service = new ConfigService({ path: file, watch: false, initialDocument: seed.configuration.document });
+  registerBuiltinDomains(service, seed); t.after(() => service.close());
+  write({ server: { profile: 'test' }, storage: { dataDir: './selected-vault' }, media: { ocrEndpoint: 'http://127.0.0.1:19102/ocr' } });
+  await service.initialize();
+  assert.equal(service.current<{ profile: string }>('server').profile, 'test');
+  assert.equal(service.current<{ traceEnabled: boolean }>('diagnostics').traceEnabled, false);
+  assert.equal(service.current<{ policy: { services: { id: string; endpoint: string }[] } }>('processing').policy.services.find(item => item.id === 'central-image-ocr')?.endpoint, 'http://127.0.0.1:19102/ocr');
+  const projected = configFromDocument(service.document(), file, undefined, { initializeCredentials: false });
+  assert.equal(projected.dataDir, join(vault, '..', 'selected-vault')); assert.equal(projected.agentTraceEnabled, false);
+  assert.equal(existsSync(vault), false); assert.equal(existsSync(projected.dataDir), false);
+});
+
+test('version, revision, strict fields, types and bounded values validate before storage', t => {
+  const { file, write, vault } = fixture(t);
+  for (const patch of [
+    { version: 2 }, { revision: -1 }, { revision: Number.MAX_SAFE_INTEGER + 1 },
+    { server: { port: 65536 } }, { server: { profile: '../prod' } }, { server: { privateTypo: 'synthetic-private' } },
+    { diagnostics: { debug: 'synthetic-private' } }, { diagnostics: { level: 'verbose' } }, { diagnostics: { maxFiles: 1.5 } },
+    { execution: { agentConcurrency: 65 } }, { execution: { interactiveConcurrency: 0 } }, { storage: { maxExportBytes: 0 } },
   ]) {
-    writeFileSync(file,`MOTE_DATA_DIR=${vault}\n${setting}\n`);
-    const result=readConfig({MOTE_ENV_FILE:file});assert.notEqual(result.status,0,setting);assert.equal(existsSync(vault),false);
-    assert.ok(!result.stderr.includes('synthetic-secret'));
+    write(patch); const result = readConfig({ MOTE_CONFIG_FILE: file }); assert.notEqual(result.status, 0, JSON.stringify(patch));
+    assert.equal(existsSync(vault), false); assert.equal(result.stderr.includes('synthetic-private'), false);
   }
 });
 
-test('configuration sources track process overrides, selected file and defaults without storing secret values in context', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-source-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env');
-  writeFileSync(file,'MOTE_PROFILE=test\nMOTE_DATA_DIR=./vault\nMOTE_MODEL=file-model\nMOTE_MODEL_API_KEY=synthetic-private-model-key\nMOTE_MODEL_BASE_URL=\nMOTE_PORT=47852\nMOTE_RUNTIME=docker\nMOTE_STORAGE_KIND=docker-volume\nMOTE_STORAGE_SOURCE=synthetic-volume\nMOTE_STORAGE_MOUNT=/data\nMOTE_CONFIG_FILE=/synthetic/host/mote.env\nMOTE_PUBLIC_URL=https://mote.example.invalid\n');
-  const result=readConfig({MOTE_ENV_FILE:file,MOTE_PORT:'48123'});assert.equal(result.status,0,result.stderr);
-  const config=JSON.parse(result.stdout),context=config.configuration;
-  assert.equal(config.port,48123);assert.equal(config.model,'file-model');assert.equal(config.modelBaseUrl,'https://api.deepseek.com/anthropic');
-  assert.equal(context.envFile,file);assert.equal(context.hostConfigFile,'/synthetic/host/mote.env');assert.equal(context.baseDir,root);
-  assert.equal(context.sources.MOTE_PORT,'environment');assert.equal(context.sources.MOTE_MODEL,'env-file');assert.equal(context.sources.MOTE_MODEL_BASE_URL,undefined);
-  assert.equal(context.runtime,'docker');assert.equal(context.storageSource,'synthetic-volume');assert.equal(context.publicUrl,'https://mote.example.invalid');
-  assert.ok(!JSON.stringify(context).includes('synthetic-private-model-key'));assert.ok(!JSON.stringify(context).includes(config.token));
-});
-
-test('Python import packs default to none and require pinned absolute trusted configuration',t=>{
-  const root=mkdtempSync(join(tmpdir(),'mote-config-import-pack-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env');writeFileSync(file,'MOTE_DATA_DIR=./vault\n');
-  const defaults=readConfig({MOTE_ENV_FILE:file});assert.equal(defaults.status,0,defaults.stderr);assert.deepEqual(JSON.parse(defaults.stdout).importPythonPacks,[]);
-  const pack={id:'fixture.pack',version:'1',packRoot:join(root,'pack'),script:'parse.py',scriptSha256:'a'.repeat(64),pythonExecutable:'/usr/bin/python3',maxInputFiles:256,config:{timeZoneOffset:'+08:00'}};
-  const valid=readConfig({MOTE_ENV_FILE:file,MOTE_IMPORT_PYTHON_PACKS:JSON.stringify([pack])});assert.equal(valid.status,0,valid.stderr);assert.deepEqual(JSON.parse(valid.stdout).importPythonPacks,[pack]);
-  for(const invalid of [[{...pack,scriptSha256:'not-pinned'}],[{...pack,script:'../outside.py'}],[{...pack,maxInputFiles:4001}],[{...pack,config:{oversized:'a'.repeat(8193)}}],[pack,pack]]){
-    const vault=join(root,'invalid-'+Math.random().toString(36).slice(2));
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_DATA_DIR:vault,MOTE_IMPORT_PYTHON_PACKS:JSON.stringify(invalid)});
-    assert.notEqual(result.status,0);assert.match(result.stderr,/MOTE_IMPORT_PYTHON_PACKS/);assert.equal(existsSync(vault),false);
+test('URL and credential failures do not expose supplied values or create storage', t => {
+  const { file, write, vault } = fixture(t);
+  for (const patch of [
+    { models: { deployment: { baseUrl: 'ftp://fixture.invalid' } } },
+    { models: { deployment: { baseUrl: 'https://synthetic-user:synthetic-secret@fixture.invalid/v1' } } },
+    { models: { deployment: { baseUrl: 'https://fixture.invalid/v1?key=synthetic-secret' } } },
+    { models: { deployment: { baseUrl: 'http://fixture.invalid/v1' } } },
+    { server: { publicUrl: 'http://192.0.2.2' } }, { server: { publicUrl: 'https://fixture.invalid/prefix' } },
+    { server: { allowedOrigins: ['https://fixture.invalid/path'] } }, { server: { token: 'short-synthetic-secret' } },
+    { storage: { dataDir: './vault', dataKey: 'synthetic-secret' } },
+    { models: { embedding: { model: 'fixture' } } },
+    { connectors: { mcpEnabled: true, mcpReadToken: 'short-synthetic-secret' } },
+    { connectors: { googleClientId: 'synthetic-secret' } },
+    { connectors: { googleClientId: 'fixture', googleClientSecret: 'synthetic-secret', googleRedirectUri: 'https://fixture.invalid/wrong-path' } },
+  ]) {
+    write(patch); const result = readConfig({ MOTE_CONFIG_FILE: file }); assert.notEqual(result.status, 0);
+    assert.equal(existsSync(vault), false); assert.equal(result.stderr.includes('synthetic-secret'), false);
   }
 });
 
-test('model request and Agent deadlines have independent defaults and bounded overrides before creating storage', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-timeout-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env'),vault=join(root,'vault');
-  writeFileSync(file,`MOTE_DATA_DIR=${vault}\n`);
-  const defaults=JSON.parse(readConfig({MOTE_ENV_FILE:file}).stdout);assert.equal(defaults.modelRequestTimeoutMs,300000);assert.equal(defaults.agentTimeoutMs,600000);
-  for(const value of ['5000','300000','600000']){
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_MODEL_REQUEST_TIMEOUT_MS:value,MOTE_AGENT_TIMEOUT_MS:value});assert.equal(result.status,0,result.stderr);
-    const parsed=JSON.parse(result.stdout);assert.equal(parsed.modelRequestTimeoutMs,Number(value));assert.equal(parsed.agentTimeoutMs,Number(value));
-  }
-  const invalidVault=join(root,'invalid-vault');
-  for(const value of ['4999','3600001','5000.5','Infinity','synthetic-secret-invalid-timeout']){
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_DATA_DIR:invalidVault,MOTE_AGENT_TIMEOUT_MS:value});assert.notEqual(result.status,0);
-    assert.match(result.stderr,/MOTE_AGENT_TIMEOUT_MS/);assert.equal(result.stderr.includes('synthetic-secret-invalid-timeout'),false);
-    assert.equal(existsSync(invalidVault),false);
-  }
-  const requestTooLarge=readConfig({MOTE_ENV_FILE:file,MOTE_MODEL_REQUEST_TIMEOUT_MS:'600001'});assert.notEqual(requestTooLarge.status,0);assert.match(requestTooLarge.stderr,/MOTE_MODEL_REQUEST_TIMEOUT_MS/);
-  const maxAgent=readConfig({MOTE_ENV_FILE:file,MOTE_AGENT_TIMEOUT_MS:'3600000'});assert.equal(maxAgent.status,0,maxAgent.stderr);assert.equal(JSON.parse(maxAgent.stdout).agentTimeoutMs,3600000);
+test('explicit secret references resolve only declared sensitive locations and remain unexpanded in the saved document', t => {
+  const { file, write } = fixture(t);
+  write({ server: { token: '${GENERATED_OWNER}' }, models: { deployment: { apiKey: '${GENERATED_API_KEY}', model: '${ORDINARY_MODEL}', headers: { 'X-Fixture': 'Bearer ${GENERATED_API_KEY}' }, extraBody: { vendor: { credential: '${GENERATED_API_KEY}' } } } } });
+  const env = { MOTE_CONFIG_FILE: file, GENERATED_OWNER: 'synthetic-owner-token-of-sufficient-length', GENERATED_API_KEY: 'synthetic-private-model-key', ORDINARY_MODEL: 'must-not-expand' };
+  const result = readConfig(env); assert.equal(result.status, 0, result.stderr);
+  const config = JSON.parse(result.stdout);
+  assert.equal(config.token, env.GENERATED_OWNER); assert.equal(config.apiKey, env.GENERATED_API_KEY); assert.equal(config.model, '${ORDINARY_MODEL}');
+  assert.deepEqual(config.modelHeaders, { 'X-Fixture': 'Bearer synthetic-private-model-key' });
+  assert.equal(JSON.stringify(config.configuration).includes('synthetic-private'), false); assert.equal(JSON.stringify(config.configuration).includes(env.GENERATED_OWNER), false);
+  const saved = parseConfigDocument(readFileSync(file, 'utf8'), env);
+  assert.equal((saved.models as { deployment: { apiKey: string } }).deployment.apiKey, '${GENERATED_API_KEY}');
+  assert.equal(readFileSync(file, 'utf8').includes('synthetic-private'), false);
 });
 
-test('model provider presets supply explicit protocols, endpoints and compatible reasoning defaults', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-providers-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env');writeFileSync(file,'MOTE_DATA_DIR=./vault\n');
+test('missing secret references and MCP owner-token conflicts fail safely before storage', t => {
+  const { file, write, vault } = fixture(t);
+  write({ models: { deployment: { apiKey: '${ABSENT_FIXTURE_SECRET}' } } });
+  const missing = readConfig({ MOTE_CONFIG_FILE: file }); assert.notEqual(missing.status, 0); assert.equal(existsSync(vault), false);
+  assert.equal(missing.stderr.includes('ABSENT_FIXTURE_SECRET'), false);
+  const token = 'synthetic-distinctness-token-of-sufficient-length';
+  write({ server: { token }, connectors: { mcpEnabled: true, mcpReadToken: token } });
+  assert.notEqual(readConfig({ MOTE_CONFIG_FILE: file }).status, 0); assert.equal(existsSync(vault), false);
+});
+
+test('provider presets and Codex launch paths share the domain model schema', t => {
+  const { file, write, root } = fixture(t);
   const cases = [
-    {provider:'deepseek',protocol:'deepseek',url:'https://api.deepseek.com/anthropic',reasoning:'high',local:false},
-    {provider:'openai',protocol:'openai-responses',url:'https://api.openai.com/v1',reasoning:'auto',local:false},
-    {provider:'anthropic',protocol:'anthropic-messages',url:'https://api.anthropic.com',reasoning:'auto',local:false},
-    {provider:'gemini',protocol:'google-generative-ai',url:'https://generativelanguage.googleapis.com/v1beta',reasoning:'auto',local:false},
-    {provider:'ollama',protocol:'openai-completions',url:'http://localhost:11434/v1',reasoning:'auto',local:true},
+    { provider: 'deepseek', protocol: 'deepseek', url: 'https://api.deepseek.com/anthropic', reasoning: 'high', local: false },
+    { provider: 'openai', protocol: 'openai-responses', url: 'https://api.openai.com/v1', reasoning: 'auto', local: false },
+    { provider: 'anthropic', protocol: 'anthropic-messages', url: 'https://api.anthropic.com', reasoning: 'auto', local: false },
+    { provider: 'gemini', protocol: 'google-generative-ai', url: 'https://generativelanguage.googleapis.com/v1beta', reasoning: 'auto', local: false },
+    { provider: 'ollama', protocol: 'openai-completions', url: 'http://localhost:11434/v1', reasoning: 'auto', local: true },
   ];
   for (const expected of cases) {
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_MODEL_PROVIDER:expected.provider});assert.equal(result.status,0,result.stderr);
-    const config=JSON.parse(result.stdout);
-    assert.equal(config.modelProvider,expected.provider);assert.equal(config.modelProtocol,expected.protocol);
-    assert.equal(config.modelBaseUrl,expected.url);assert.equal(config.modelReasoningEffort,expected.reasoning);
-    assert.equal(config.allowUnauthenticatedLocal,expected.local);assert.deepEqual(config.modelHeaders,{});assert.deepEqual(config.modelExtraBody,{});
-    assert.equal(config.model,'');assert.equal(config.apiKey,'');
+    write({ models: { deployment: { provider: expected.provider } } });
+    const result = readConfig({ MOTE_CONFIG_FILE: file }); assert.equal(result.status, 0, result.stderr); const config = JSON.parse(result.stdout);
+    assert.equal(config.modelProvider, expected.provider); assert.equal(config.modelProtocol, expected.protocol); assert.equal(config.modelBaseUrl, expected.url);
+    assert.equal(config.modelReasoningEffort, expected.reasoning); assert.equal(config.allowUnauthenticatedLocal, expected.local);
   }
-  const legacy=readConfig({MOTE_ENV_FILE:file});assert.equal(legacy.status,0,legacy.stderr);
-  assert.equal(JSON.parse(legacy.stdout).modelProtocol,'deepseek');assert.equal(JSON.parse(legacy.stdout).modelReasoningEffort,'high');
+  write({ models: { deployment: { provider: 'codex', model: 'fixture' }, codex: { executable: '/fixture/bin/codex', home: './login' } } });
+  const result = readConfig({ MOTE_CONFIG_FILE: file }); assert.equal(result.status, 0, result.stderr); const config = JSON.parse(result.stdout);
+  assert.equal(config.modelProtocol, 'codex-app-server'); assert.equal(config.modelRequestTimeoutMs, null); assert.equal(config.agentTimeoutMs, null);
+  assert.equal(config.codexBin, '/fixture/bin/codex'); assert.equal(config.codexHome, join(root, 'login'));
 });
 
-test('custom protocols and advanced JSON parameters load without adding secret values to configuration provenance', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-advanced-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env');writeFileSync(file,'MOTE_DATA_DIR=./vault\n');
-  const headers={Authorization:'Bearer synthetic-private-header'},extra={vendor:{credential:'synthetic-private-extra'},temperature:0.2};
-  for (const protocol of ['openai-completions','openai-responses','anthropic-messages','google-generative-ai','deepseek']) {
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_MODEL_PROVIDER:'custom',MOTE_MODEL_PROTOCOL:protocol,
-      MOTE_MODEL_BASE_URL:'https://fixture.example.invalid/custom/v1',MOTE_MODEL:'fixture/manual-model-id',
-      MOTE_MODEL_API_KEY:'synthetic-private-api-key',MOTE_MODEL_HEADERS:JSON.stringify(headers),MOTE_MODEL_EXTRA_BODY:JSON.stringify(extra),
-      MOTE_MODEL_REASONING_EFFORT:'auto',MOTE_MODEL_MAX_TOKENS:'1'});
-    assert.equal(result.status,0,result.stderr);const config=JSON.parse(result.stdout);
-    assert.equal(config.modelProvider,'custom');assert.equal(config.modelProtocol,protocol);assert.equal(config.model,'fixture/manual-model-id');
-    assert.equal(config.modelReasoningEffort,'auto');assert.equal(config.modelMaxTokens,1);assert.deepEqual(config.modelHeaders,headers);assert.deepEqual(config.modelExtraBody,extra);
-    assert.equal(config.configuration.sources.MOTE_MODEL_HEADERS,'environment');assert.equal(config.configuration.sources.MOTE_MODEL_EXTRA_BODY,'environment');
-    assert.ok(!JSON.stringify(config.configuration).includes('synthetic-private'));assert.ok(!result.stderr.includes('synthetic-private'));
-  }
-  const overridden=readConfig({MOTE_ENV_FILE:file,MOTE_MODEL_PROVIDER:'openai',MOTE_MODEL_PROTOCOL:'openai-completions',MOTE_MODEL_REASONING_EFFORT:'off',MOTE_MODEL_MAX_TOKENS:'128000'});
-  assert.equal(overridden.status,0,overridden.stderr);const config=JSON.parse(overridden.stdout);
-  assert.equal(config.modelProtocol,'openai-completions');assert.equal(config.modelBaseUrl,'https://api.openai.com/v1');assert.equal(config.modelReasoningEffort,'off');assert.equal(config.modelMaxTokens,128000);
-});
-
-test('model provider, protocol and advanced parameter failures do not echo supplied values or create storage', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-model-reject-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env'),vault=join(root,'vault');writeFileSync(file,`MOTE_DATA_DIR=${vault}\n`);
-  const invalid: Record<string,string>[] = [
-    {MOTE_MODEL_PROVIDER:'synthetic-private-provider'}, {MOTE_MODEL_PROTOCOL:'synthetic-private-protocol'},
-    {MOTE_MODEL_REASONING_EFFORT:'synthetic-private-reasoning'}, {MOTE_MODEL_HEADERS:'synthetic-private-invalid-json'},
-    {MOTE_MODEL_EXTRA_BODY:'["synthetic-private"]'}, {MOTE_MODEL_HEADERS:'{"Host":"synthetic-private"}'},
-    {MOTE_MODEL_HEADERS:'{"X-Test":"synthetic-private\\r\\nInjected: value"}'}, {MOTE_MODEL_HEADERS:'{"X-Test":123}'},
-    {MOTE_MODEL_EXTRA_BODY:'{"tools":["synthetic-private"]}'}, {MOTE_MODEL_EXTRA_BODY:'{"generationConfig":{"maxOutputTokens":999999}}'},
-    {MOTE_MODEL_EXTRA_BODY:'{"store":true}'}, {MOTE_MODEL_EXTRA_BODY:'{"previous_response_id":"synthetic-private"}'},
-    {MOTE_MODEL_EXTRA_BODY:'{"__proto__":{"secret":"synthetic-private"}}'},
-    {MOTE_MODEL_HEADERS:JSON.stringify({'X-Test':'synthetic-private'+'x'.repeat(16384)})},
-    {MOTE_MODEL_MAX_TOKENS:'0'}, {MOTE_MODEL_MAX_TOKENS:'128001'}, {MOTE_MODEL_MAX_TOKENS:'1.5'},
-  ];
-  for (const change of invalid) {
-    const result=readConfig({MOTE_ENV_FILE:file,...change});assert.notEqual(result.status,0,Object.keys(change).join(','));
-    assert.ok(!result.stderr.includes('synthetic-private'));assert.equal(existsSync(vault),false);
+test('model advanced validation and deadlines use the same rules before storage', t => {
+  const { file, write, vault } = fixture(t);
+  for (const deployment of [
+    { provider: 'synthetic-private-provider' }, { protocol: 'synthetic-private-protocol' }, { headers: { Host: 'synthetic-private' } },
+    { headers: { 'X-Fixture': 'synthetic-private\r\nInjected: value' } }, { headers: { 'X-Fixture': 123 } },
+    { extraBody: { tools: ['synthetic-private'] } }, { extraBody: { store: true } }, { extraBody: { previous_response_id: 'synthetic-private' } },
+    { extraBody: JSON.parse('{"__proto__":{"secret":"synthetic-private"}}') }, { extraBody: { vendor: { constructor: 'synthetic-private' } } },
+    { maxTokens: 0 }, { maxTokens: 128001 }, { agentTimeoutMs: 4999 }, { agentTimeoutMs: 3600001 }, { modelRequestTimeoutMs: 600001 },
+  ]) {
+    write({ models: { deployment } }); const result = readConfig({ MOTE_CONFIG_FILE: file }); assert.notEqual(result.status, 0);
+    assert.equal(existsSync(vault), false); assert.equal(result.stderr.includes('synthetic-private'), false);
   }
 });
 
-test('model transport requires remote HTTPS while loopback HTTP remains configurable', t => {
-  const root=mkdtempSync(join(tmpdir(),'mote-config-model-tls-'));t.after(()=>rmSync(root,{recursive:true,force:true}));
-  const file=join(root,'mote.env'),vault=join(root,'vault');writeFileSync(file,`MOTE_DATA_DIR=${vault}\n`);
-  for (const url of ['http://fixture.example.invalid/v1','http://192.168.1.2/v1','http://127.0.0.1.attacker.invalid/v1']) {
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_MODEL_BASE_URL:url});assert.notEqual(result.status,0);assert.equal(existsSync(vault),false);
+test('trusted Python packs retain pinned validation in YAML', t => {
+  const { file, write, root, vault } = fixture(t);
+  const pack = { id: 'fixture.pack', version: '1', packRoot: join(root, 'pack'), script: 'parse.py', scriptSha256: 'a'.repeat(64), pythonExecutable: '/usr/bin/python3', config: { timeZoneOffset: '+08:00' } };
+  write({ plugins: { importPythonPacks: [pack] } }); const valid = readConfig({ MOTE_CONFIG_FILE: file }); assert.equal(valid.status, 0, valid.stderr);
+  assert.deepEqual(JSON.parse(valid.stdout).importPythonPacks, [pack]); rmSync(vault, { recursive: true });
+  for (const packs of [[{ ...pack, script: '../outside.py' }], [{ ...pack, scriptSha256: 'not-pinned' }], [{ ...pack, config: { oversized: 'x'.repeat(8193) } }], [pack, pack]]) {
+    write({ plugins: { importPythonPacks: packs } }); assert.notEqual(readConfig({ MOTE_CONFIG_FILE: file }).status, 0); assert.equal(existsSync(vault), false);
   }
-  for (const url of ['https://fixture.example.invalid/v1','http://127.0.0.1:11434/v1','http://localhost:11434/v1','http://[::1]:11434/v1']) {
-    const result=readConfig({MOTE_ENV_FILE:file,MOTE_MODEL_BASE_URL:url});assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).modelBaseUrl,url);
+});
+
+test('startup emits only a stable field code when YAML validation fails', t => {
+  const { file, write, root } = fixture(t);
+  write({ diagnostics: { debug: 'synthetic-private-setting-do-not-echo' } });
+  const result = spawnSync(process.execPath, ['--import', 'tsx', new URL('../src/index.ts', import.meta.url).pathname], { env: { PATH: process.env.PATH, MOTE_CONFIG_FILE: file }, encoding: 'utf8', timeout: 15000 });
+  assert.notEqual(result.status, 0); assert.equal(result.stderr.includes('synthetic-private'), false); assert.equal(result.stderr.includes(root), false);
+  assert.deepEqual(JSON.parse(result.stderr.trim()), { event: 'server.start_failed', category: 'configuration', field: 'diagnostics.debug' });
+});
+
+test('registered metadata covers every default field with a real apply policy', () => {
+  const domains = configDocumentDomains();
+  for (const domain of domains) for (const field of domain.fields ?? []) assert.ok(field.effect, `${domain.id}.${field.path}`);
+  for (const id of ['server', 'storage', 'media', 'updates']) {
+    const domain = domains.find(value => value.id === id)!;
+    for (const key of Object.keys(domain.defaultValue as object)) assert.ok(domain.fields?.some(field => field.path === key || field.path.startsWith(key + '.')), `${id}.${key}`);
   }
+  assert.equal(domains.find(value => value.id === 'storage')?.fields?.find(field => field.path === 'dataDir')?.effect, 'migration');
+  assert.equal(domains.find(value => value.id === 'execution')?.fields?.find(field => field.path === 'agentConcurrency')?.effect, 'next-admission');
+  assert.equal(domains.find(value => value.id === 'connectors')?.fields?.find(field => field.path === 'syncIntervalMs')?.effect, 'immediate');
+  const saved = parseConfigDocument('version: 1\nrevision: 0\n');
+  assert.equal((resolveConfigDocument(saved).execution as { agentConcurrency: number }).agentConcurrency, 8);
+  assert.throws(() => parseConfigDocument('version: 2\nrevision: 0\n'), ConfigError);
+});
+
+test('sensitive object keys cannot enter configuration field metadata', t => {
+  const { file, write } = fixture(t);
+  write({ models: { deployment: { headers: { 'X-Synthetic-Private-Key': 'fixture' }, extraBody: { vendor: { 'synthetic-private-object-key': 'fixture' } } } }, plugins: { configuration: { 'synthetic-private-plugin-key': { value: 'fixture' } } } });
+  const config = configFromFile(file);
+  const metadata = JSON.stringify(configDocumentDomains(config).map(domain => ({ id: domain.id, fields: domain.fields })));
+  for (const privateKey of ['X-Synthetic-Private-Key', 'synthetic-private-object-key', 'synthetic-private-plugin-key']) assert.equal(metadata.includes(privateKey), false);
+});
+
+test('partial processing settings inherit managed media defaults from the same YAML snapshot', t => {
+  const { file, write } = fixture(t);
+  write({ media: { ocrEndpoint: 'http://127.0.0.1:19101/ocr', asrEndpoint: 'http://127.0.0.1:19102/transcribe' }, processing: { settings: { timeoutMs: 5000 } } });
+  const config = configFromFile(file), processing = config.configuration.document?.processing as { settings: { timeoutMs: number; localEndpoint: string }; policy: { services: { id: string; endpoint: string }[] } };
+  assert.equal(processing.settings.timeoutMs, 5000); assert.equal(processing.settings.localEndpoint, 'http://127.0.0.1:19102/transcribe');
+  assert.equal(processing.policy.services.find(service => service.id === 'central-image-ocr')?.endpoint, 'http://127.0.0.1:19101/ocr');
+  const domain = configDocumentDomains(config).find(domain => domain.id === 'processing')!;
+  const parsed = domain.schema.parse(domain.resolve?.({ settings: { timeoutMs: 6000 } })) as typeof processing;
+  assert.equal(parsed.settings.localEndpoint, processing.settings.localEndpoint); assert.equal(parsed.settings.timeoutMs, 6000);
 });

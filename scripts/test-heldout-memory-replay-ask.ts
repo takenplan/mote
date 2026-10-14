@@ -39,7 +39,7 @@ export async function inventory(db:DatabaseSync){
   check(all.captures.every(r=>!r.summary&&!r.embedding&&!r.embedding_model&&!r.blob_hash),'ask_unclassified_capture_derivative');
   check(all.memory_batches.every(r=>JSON.parse(r.json).status==='completed'),'ask_unfinished_memory_batch');
   check(all.memory_lifecycle_state.every(r=>!JSON.parse(r.json).active),'ask_active_lifecycle');
-  const lifecycle=JSON.parse(all.memory_lifecycle_settings[0].json);check(['extraction','consolidation','insights','working'].every(k=>lifecycle[k].enabled===false),'ask_background_enabled');
+  const lifecycle=JSON.parse(all.memory_lifecycle_effective[0].json);check(['extraction','consolidation','insights','working'].every(k=>lifecycle[k].enabled===false),'ask_background_enabled');
   check(all.execution_steps.every(r=>!['waiting','running'].includes(r.state)),'ask_active_execution');
   check(all.processing_jobs.every(r=>!['waiting','running','pending'].includes(r.state)),'ask_active_processing');
   check(all.model_usage.every(r=>JSON.parse(r.json).status!=='running'),'ask_running_inherited_usage');

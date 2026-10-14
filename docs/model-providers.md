@@ -24,7 +24,7 @@ API key、自定义请求头和高级请求参数只显示“已配置／未配�
 
 **测试连接**由中央节点向所填模型发送少量固定合成内容，并使用独立的合成记录验证工具调用和引用。测试不连接个人资料库，不上传个人截图、OCR 或笔记，也不会保存草稿；请求可能产生模型费用。测试最多采用 30 秒 Agent 期限，若设置更短则使用较短期限。测试成功表明本次连接和工具往返通过，不代表全部问题的回答质量或长期可用性。
 
-**恢复部署配置**是旧版默认预设的兼容操作：清除 `default` 覆盖并回到启动配置，保留自定义预设与模块分配。该项立即使用本次中央启动时读取的环境配置。它不会编辑 `mote.env`；如果刚修改过该文件，需要重启中央才能读到新文件内容。并发修改发生版本冲突时，先重新读取当前配置，再决定是否重做修改。
+**恢复部署配置**将默认项重新指向当前 YAML 中的 `models.deployment`，保留自定义预设与模块分配，并通过同一配置事务保存。该部署项仍在模型页面只读，可在 `mote.yaml` 编辑；有效的模型修改准备成功后用于新请求。在途请求保留原运行时。并发修改发生全局 revision 冲突时，先重新读取配置，再决定是否重做修改。
 
 ## 服务预设
 
@@ -106,7 +106,7 @@ Chat 协议下，OpenAI、Azure 和 MiniMax 使用 `max_completion_tokens`，其
 codex -c 'cli_auth_credentials_store="file"' login
 ```
 
-默认从服务器进程的 `CODEX_HOME` 或该用户的 `~/.codex` 获取登录文件。可用服务器环境变量 `MOTE_CODEX_BIN` 指定可信 Codex 可执行文件，`MOTE_CODEX_HOME` 指定已有登录目录。这两个宿主配置不接受网页输入、模型参数或模型工具修改。Docker 部署需要容器内有 CLI 与受保护的可访问登录文件；宿主桌面程序的存在本身不够。
+默认从服务器进程的 `CODEX_HOME` 或该用户的 `~/.codex` 获取登录文件。可在 `mote.yaml` 的 `models.codex.executable` 指定可信 Codex 可执行文件，`models.codex.home` 指定已有登录目录；这两个字段需要重启。这两个宿主配置不接受网页输入、模型参数或模型工具修改。Docker 部署需要容器内有 CLI 与受保护的可访问登录文件；宿主桌面程序的存在本身不够。
 
 每次请求启动独立进程和临时 home，只链接登录文件，不继承个人 MCP、插件、hooks、历史会话或用户指令。查询使用只读沙箱、关闭环境访问与原生执行工具，动态工具仅调用 Mote 已有证据桥。当前验证过的 Codex 0.154.0 还会提供仅修改临时运行计划的 `update_plan`，不访问或修改用户资料。导入有单独的可写临时工作区，不接入归档查询工具；仍须经过原有预览、确认和宿主校验。
 
@@ -114,30 +114,32 @@ App Server 的动态工具接口为实验接口，兼容性取决于安装的 CL
 
 Codex 预设可独立选择 **速度模式：Standard / Fast**，不会改变推理强度。Fast 可用性取决于账户、模型、工作区和 CLI 版本，且会增加额度或费用消耗；页面按模型目录禁用明确不支持的 Fast，缺少速度目录时可用“测试连接”验证。保存后，查询、Memory、回顾、文件分析和导入均使用该预设的速度模式。Mote 在自己的临时配置中设置 `service_tier`，Fast 还启用 `features.fast_mode`，并将 `serviceTier` 传给 `thread/start`；Codex 目录和线程返回的 `priority` 是 Fast 的协议别名，Mote 统一映射为 `fast`；返回的线程档位不匹配时终止请求。当前 Codex 预设必须显式保存速度模式；缺少该字段的旧预设不自动补值，需要重新配置。[官方速度模式说明](https://learn.chatgpt.com/docs/agent-configuration/speed)、[配置参考中的档位映射](https://learn.chatgpt.com/docs/config-file/config-reference)
 
-## 环境配置与保存位置
+## YAML 配置与保存位置
 
-也可以在所选私有 `mote.env` 中设置默认值。修改环境文件后重启中央；部署配置保持只读；页面自定义预设与模块分配独立持久化。普通初始预设 ID 为 `primary`，只读部署预设为 `env:deployment`；模块始终引用实际存在的预设，没有旧 `default` 别名。
+页面和手改文件共用私有 `mote.yaml` 的 `models` 领域。部署项 `models.deployment` 仍在页面只读，预设保存在 `models.profiles`，功能分配和单独模型 ID 分别在 `models.defaults` 与 `models.defaultModels`。部署项 ID 保留为 `env:deployment`，该 ID 不表示还有环境变量覆盖。普通初始预设为 `primary`；模块引用实际存在的预设。
 
-```dotenv
-MOTE_MODEL_PROVIDER=qwen
-MOTE_MODEL_PROTOCOL=openai-completions
-MOTE_MODEL_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-MOTE_MODEL=填写控制台提供的模型ID
-MOTE_MODEL_API_KEY=填写该地域的API密钥
-MOTE_MODEL_REASONING_EFFORT=auto
-MOTE_MODEL_MAX_TOKENS=65536
-MOTE_MODEL_REQUEST_TIMEOUT_MS=300000
-MOTE_AGENT_TIMEOUT_MS=600000
-MOTE_MODEL_HEADERS={}
-MOTE_MODEL_EXTRA_BODY={}
-MOTE_MODEL_ALLOW_UNAUTHENTICATED_LOCAL=0
+```yaml
+models:
+  deployment:
+    provider: qwen
+    protocol: openai-completions
+    baseUrl: https://dashscope.aliyuncs.com/compatible-mode/v1
+    model: 填写控制台提供的模型ID
+    apiKey: "${QWEN_API_KEY}"
+    reasoningEffort: auto
+    maxTokens: 65536
+    modelRequestTimeoutMs: 300000
+    agentTimeoutMs: 600000
+    headers: {}
+    extraBody: {}
+    allowUnauthenticatedLocal: false
 ```
 
-`MOTE_MODEL_PROVIDER` 使用上表 ID，未设时为 `deepseek`；`MOTE_MODEL_PROTOCOL` 未设时采用该预设协议。`MOTE_MODEL_HEADERS` 和 `MOTE_MODEL_EXTRA_BODY` 必须是 JSON 对象，每个环境变量最多 16 KiB。不要用 shell 的 `source` 执行配置文件；不要将真实密钥放进命令参数或提交到仓库。完整默认值见[服务端配置参考](server-configuration.md)。
+只有敏感字段中的显式 `${NAME}` 引用会解析相应环境凭据；普通环境变量不覆盖文件。`headers` 和 `extraBody` 是 YAML 对象，也按敏感数据保护。未修改的密钥引用在其他字段保存时仍保持引用。不要通过 shell `source` 执行配置，不要把真实密钥放进命令参数或提交到仓库。完整启动与生效方式见 [服务端配置参考](server-configuration.md)。
 
-页面保存的值位于 `<MOTE_DATA_DIR>/model-settings.json`，文件权限为 `0600`。当前持久文件为 version 2，必须包含完整的 `profiles`、`defaults` 和 `defaultModels`。格式 3 中央不读取旧文件；升级时需备份旧配置，再重新填写模型预设与模块分配。`defaults` 保存模块的预设 ID，`defaultModels` 保存模块显式指定的模型 ID；缺省跟随预设默认。只读部署预设不把环境凭据额外写入此文件；仅在主动复制时持久化副本。保存多个配置后不要直接降级到不认识这些字段的旧服务端。文件包含每套配置的真实 API key、请求头和高级参数；权限限制不等于文件内容加密。若自行复制或备份此文件，副本也包含密钥，需作为私有凭据管理。HTTP 资料导出、安全支持包和标准 CLI 归档备份不包含该文件；迁移模型设置需单独保护并转移该文件，或在新节点重新填写。
+保存先统一校验、准备新运行时，再原子写入 YAML，最后切换后续请求。所有领域共用全局 revision，相同内容不会产生新版本。`model-settings.json` 不再作为来源；旧文件不自动读取、删除或迁移。升级前保存私有备份，明确将所需预设与功能分配写入新 YAML。配置文件和副本可能包含真实 API key、请求头与高级参数，0600 文件权限不等于加密；安全支持包和 HTTP 资料导出不包含它。
 
-保存先验证配置并准备新运行时，再原子替换文件、同步目录，最后切换后续请求。恢复部署配置仍保存递增 revision 的空覆盖标记，防止旧页面覆盖新状态。文件损坏或不可读时不会静默恢复成另一套模型凭据；若写入结果无法确认，页面提示重新读取或检查服务状态。
+运行中无效文件或准备失败保留原有效模型，错误不泄露配置值。应用失败区分已保存候选与旧有效值；写入结果不确定时先读取配置状态再处理。模型配置改造不删除业务数据库、历史回答、授权或 Memory 检查点。
 
 ## 所有者 API
 
@@ -145,10 +147,10 @@ MOTE_MODEL_ALLOW_UNAUTHENTICATED_LOCAL=0
 
 | 方法与路径 | 行为 |
 |---|---|
-| `GET /api/model-settings` | 返回 `version:1`、`revision`、`source:environment\|saved` 和默认项的公开设置、新增 `profiles`（含 `readOnly/source`）、`defaults`、`defaultModels`；所有配置的敏感字段只有 `apiKeyConfigured`、`headersConfigured`、`extraBodyConfigured` |
+| `GET /api/model-settings` | 返回 `version:1`、`revision`、`source:file` 和默认项的公开设置、新增 `profiles`（含 `readOnly/source`）、`defaults`、`defaultModels`；所有配置的敏感字段只有 `apiKeyConfigured`、`headersConfigured`、`extraBodyConfigured` |
 | `PUT /api/model-settings` | 接受 `{revision, settings, allowCredentialReuse?}`；基础模型参数完整提交，敏感字段可省略或设为 `null` |
 | `POST /api/model-settings/test` | 与 PUT 相同的草稿和确认规则；返回固定 `ok/code/message/durationMs`，不修改持久配置 |
-| `DELETE /api/model-settings` | 接受 `{revision}`；恢复本次启动的环境模型配置并递增 revision |
+| `DELETE /api/model-settings` | 接受 `{revision}`；恢复当前 YAML 部署模型分配，经全局配置事务保存 |
 | `PUT /api/model-settings/profiles/:id` | 接受 `{revision,name,settings,allowCredentialReuse?}`；创建或更新一套独立配置 |
 | `DELETE /api/model-settings/profiles/:id` | 接受 `{revision}`；正在被功能默认值引用的项不能删除 |
 | `POST /api/model-settings/profiles/:id/test` | 接受 `{revision,settings,allowCredentialReuse?}`；仅使用该项的凭据和合成记录 |
@@ -157,11 +159,11 @@ MOTE_MODEL_ALLOW_UNAUTHENTICATED_LOCAL=0
 | `GET /api/model-settings/profiles/:id/models` | 使用已保存连接加载目录；模块选择器与本次模型入口共用 |
 | `PUT /api/model-settings/defaults` | 接受 `{revision,defaults:{chat,memory,insight,import,file},defaultModels:{chat?,memory?,insight?,import?,file?}}`；预设与模型覆盖整组原子保存 |
 
-配置 ID 为 1–80 个字母、数字、下划线或连字符，以字母或数字开头；普通初始项为 `primary`，环境部署项为只读的 `env:deployment`；`default` 已退役。所有修改共用一个 revision，防止并发页面互相覆盖。`POST /api/query`、`/api/insights`、`/api/insight-runs`、`/api/memories/extract`、`/api/memory-jobs` 支持可选 `modelProfileId`；不存在的 ID 会返回错误，省略时采用相应功能默认值。每次问答的显式选择只影响这一轮，不修改功能默认值。
+配置 ID 为 1–80 个字母、数字、下划线或连字符，以字母或数字开头；普通初始项为 `primary`，YAML 部署项为页面只读的 `env:deployment`；`default` 已退役。所有修改共用一个 revision，防止并发页面互相覆盖。`POST /api/query`、`/api/insights`、`/api/insight-runs`、`/api/memories/extract`、`/api/memory-jobs` 支持可选 `modelProfileId`；不存在的 ID 会返回错误，省略时采用相应功能默认值。每次问答的显式选择只影响这一轮，不修改功能默认值。
 
 `settings` 的基础字段为 `provider`、`protocol`、`baseUrl`、`model`、`reasoningEffort`、`maxTokens`、`modelRequestTimeoutMs`、`agentTimeoutMs`、`allowUnauthenticatedLocal`。`provider` 必须是注册预设 ID，未列出的服务使用 `custom`。模型名称可留空关闭 AI；HTTP 协议只允许在模型也为空时省略实际地址内容；Codex 的地址必须为空，不能设置 HTTP 密钥、请求头或高级参数。非 Codex 的 `modelRequestTimeoutMs` 为 5000–600000 毫秒整数，`agentTimeoutMs` 为 5000–3600000 毫秒整数；Codex 的 `modelRequestTimeoutMs` 为 `null`，`agentTimeoutMs` 可为 `null`。
 
-在「系统管理 → 模型 → 高级设置」调整输出预算。默认值为 **65,536 tokens**，提供 8,192、16,384、32,768、65,536、128,000 档位和自定义输入；保存后立即生效，重启后保留。已显式保存或在环境文件设置的旧值不会因软件升级被覆盖。单次响应预算包含正文、HTML 和服务商计入的推理 token，不是整个 Agent 任务的累计用量，也不等于字数、图片尺寸或文件大小。达到输出上限时会尝试一次更简短的完整回答；仍失败会显示明确的输出超限提示。
+在「系统管理 → 模型 → 高级设置」调整输出预算。默认值为 **65,536 tokens**，提供 8,192、16,384、32,768、65,536、128,000 档位和自定义输入；保存后立即生效，重启后保留。已显式保存或在 YAML 中设置的值不会因软件升级被覆盖。单次响应预算包含正文、HTML 和服务商计入的推理 token，不是整个 Agent 任务的累计用量，也不等于字数、图片尺寸或文件大小。达到输出上限时会尝试一次更简短的完整回答；仍失败会显示明确的输出超限提示。
 
 预算选择与真实模型复现记录见[回答截断与输出预算](query-output-budget.md)。
 

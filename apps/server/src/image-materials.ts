@@ -14,7 +14,7 @@ export function imageMaterialProjection(store:Store,id:string):ImageMaterialProj
  });
  const jobs=store.db.prepare('SELECT kind,state,error FROM perception_jobs WHERE capture_id=?').all(id).map(row=>({name:String(row.kind),state:products.some(p=>p.name===row.kind)?'ready' as const:row.state==='succeeded'&&row.kind==='ocr'?'ready' as const:['waiting','running'].includes(String(row.state))?'pending' as const:['failed','blocked'].includes(String(row.state))?'failed' as const:'unavailable' as const,...(row.error?{reason:String(row.error)}:{})}));
  if(!jobs.length&&!archiveOnly)jobs.push({name:'ocr',state:'pending'});
- const settings=store.db.prepare("SELECT value FROM settings WHERE key='perception'").get();
+ const settings=store.db.prepare("SELECT value FROM settings WHERE key='perception-effective'").get();
  if(input.understanding_enabled&&!archiveOnly&&!policy?.profile?.imageRecipe&&(!settings||JSON.parse(String(settings.value)).understandingEnabled!==false)&&!jobs.some(j=>j.name==='understanding'))jobs.push({name:'understanding',state:'pending'});
  return {archiveOnly,products,jobs};
 }

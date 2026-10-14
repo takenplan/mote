@@ -9,7 +9,7 @@ import {formatEvidenceRef} from '@mote/shared';
 import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {Store} from '../src/store.js';
-import {ModelSettingsStore} from '../src/model-settings.js';
+import {parse} from 'yaml';
 
 const inactive={configured:false,query:async()=>{throw Error('No fixture model call authorized');},close:async()=>{}};
 const config=(dataDir:string):Config=>({dataDir,token:'generated-contract-owner',tokenPath:'generated',profile:'test',host:'127.0.0.1',port:0,maxStorageBytes:20_000_000,maxExportBytes:20_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'https://generated.invalid',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''});
@@ -42,12 +42,12 @@ test('current resource IDs, typed readers, explicit policies and frozen Memory j
  node.store.db.prepare("UPDATE memory_jobs SET json=json_remove(json,'$.contextTime') WHERE id=?").run(job.id);assert.throws(()=>node.memoryPipeline.get(job.id),/Unsupported Memory job/);
 });
 
-test('current model registry persists version 2 and refuses a retired single-model envelope unchanged',async t=>{
+test('current model registry persists in mote.yaml and ignores the retired JSON source',async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-profile-contract-')),node=await buildApp(config(directory),{agent:inactive,backgroundWorker:false,createModelAgent:async()=>inactive});
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
  await node.modelSettings.update({revision:0,settings:{...node.modelSettings.current(),model:'generated-model'}});
- const path=join(directory,'model-settings.json'),saved=JSON.parse(readFileSync(path,'utf8'));assert.equal(saved.version,2);assert.ok(saved.profiles.some((profile:{id:string})=>profile.id==='primary'));assert.ok(saved.defaults);assert.ok(saved.defaultModels);assert.equal(saved.settings,undefined);
- const retired=JSON.stringify({version:1,revision:1,settings:node.modelSettings.current()});writeFileSync(path,retired);
- const rejected=new ModelSettingsStore({directory,environment:node.modelSettings.current(),prepare:async()=>({activate(){},async dispose(){}}),probe:async()=>({ok:true,code:'ok',message:'Generated',durationMs:0})});
- await assert.rejects(rejected.initialize());assert.equal(readFileSync(path,'utf8'),retired);
+ const path=join(directory,'mote.yaml'),saved=parse(readFileSync(path,'utf8'));assert.equal(saved.version,1);assert.ok(saved.models.profiles.some((profile:{id:string})=>profile.id==='primary'));assert.ok(saved.models.defaults);assert.ok(saved.models.defaultModels);assert.equal(saved.models.settings,undefined);
+ const retired=JSON.stringify({version:1,revision:999,settings:{...node.modelSettings.current(),model:'retired-model'}});writeFileSync(join(directory,'model-settings.json'),retired);
+ await node.app.close();const restarted=await buildApp(config(directory),{agent:inactive,backgroundWorker:false,createModelAgent:async()=>inactive});t.after(()=>restarted.app.close());
+ assert.equal(restarted.modelSettings.current().model,'generated-model');assert.equal(readFileSync(join(directory,'model-settings.json'),'utf8'),retired);
 });

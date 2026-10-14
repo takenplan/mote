@@ -31,3 +31,7 @@ deploy/generated
 **/*.p12
 **/*.p8
 **/*-private.pem
+
+**/mote.yaml
+
+**/.*.runtime.json

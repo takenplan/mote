@@ -52,9 +52,10 @@ test('owner model saves apply to new queries while an existing query retains its
   assert.equal(status.agent.model, 'next-fixture'); assert.equal(status.agent.protocol, 'openai-completions'); assert.equal(status.agent.maxTokens, 65536);
   const current = (await app.inject({ url: '/api/configuration', headers })).json();
   const fields = current.groups.flatMap((group: any) => group.fields);
-  assert.equal(fields.find((field: any) => field.key === 'model').value, 'next-fixture');
+  assert.equal(fields.find((field: any) => field.key === 'model').value, 'original-fixture','the configuration field describes the deployment profile saved in YAML');
+  const modelDomain=current.domains.find((domain:any)=>domain.id==='models');assert.equal(modelDomain.effective.defaults.chat,'primary');assert.equal(modelDomain.effective.profiles.find((profile:any)=>profile.id==='primary').settings.model,'next-fixture');
   assert.equal(fields.find((field: any) => field.key === 'model').restartRequired, false);
-  assert.equal(fields.find((field: any) => field.key === 'model').source, 'derived');
+  assert.equal(fields.find((field: any) => field.key === 'model').source, 'config-file');
   assert.equal(cfg.model, 'original-fixture', 'Hot settings must not mutate the caller configuration snapshot');
   finish(); const completed=(await pending).json();assert.equal(completed.answer, 'original-fixture');assert.equal(completed.configuration.model,'original-fixture');assert.ok(completed.configuration.fingerprint);assert.equal(completed.configuration.owner,'models');
   await new Promise(resolve => setImmediate(resolve)); assert.deepEqual(closed, ['original-fixture']);
@@ -88,7 +89,7 @@ test('model settings enforce owner authorization, optimistic revisions, explicit
   t.after(() => restarted.app.close());
   assert.equal((await restarted.app.inject({ url: '/api/status', headers })).json().agent.model, 'fixture-new');
   response = await restarted.app.inject({ method: 'DELETE', url: '/api/model-settings', headers, payload: { revision: view.revision } });
-  assert.equal(response.statusCode, 200, response.body); assert.equal(response.json().source, 'environment');
+  assert.equal(response.statusCode, 200, response.body); assert.equal(response.json().source, 'file');
   assert.equal((await restarted.app.inject({ url: '/api/status', headers })).json().agent.model, 'original-fixture');
 });
 
@@ -123,4 +124,33 @@ test('connection probe redacts thrown provider text and requires an actual evide
   assert.equal(failed.code, 'provider_error'); assert.equal(JSON.stringify(failed).includes('sensitive'), false); assert.equal(closed, 1);
   const unsupported = await testModelConnection(settings, async () => ({ configured: true, query: async () => answer('fixture without tools'), close: async () => {} }));
   assert.equal(unsupported.code, 'invalid_response');
+});
+
+test('profile deletion and edits retain scalar and composite YAML credential references',async t=>{
+ const {readFile,writeFile}=await import('node:fs/promises'),{parse,stringify}=await import('yaml');
+ const variable='MOTE_SYNTHETIC_CONFIG_REFERENCE',previous=process.env[variable];process.env[variable]='synthetic-reference-value-never-materialize';
+ t.after(()=>{if(previous===undefined)delete process.env[variable];else process.env[variable]=previous;});
+ const node=await fixture(t,async settings=>({configured:true,query:async()=>answer(settings.model),close:async()=>{}})),path=join(node.directory,'mote.yaml'),doc=parse(await readFile(path,'utf8'));
+ const referenced={...node.modelSettings.current(),apiKey:'${MOTE_SYNTHETIC_CONFIG_REFERENCE}',headers:{Authorization:'Bearer ${MOTE_SYNTHETIC_CONFIG_REFERENCE}'},extraBody:{vendor_options:{credential:'${MOTE_SYNTHETIC_CONFIG_REFERENCE}'}}};
+ doc.models.deployment=structuredClone(referenced);doc.models.profiles=[{id:'first',name:'First fixture',settings:structuredClone(referenced)},{id:'second',name:'Second fixture',settings:structuredClone(referenced)}];
+ await writeFile(path,stringify(doc));await node.configService.reload();
+ let view=node.modelSettings.view();const removed=await node.app.inject({method:'DELETE',url:'/api/model-settings/profiles/first',headers,payload:{revision:view.revision}});assert.equal(removed.statusCode,200,removed.body);view=removed.json();
+ const {apiKey:_key,headers:_headers,extraBody:_body,...parameters}=node.modelSettings.select('chat','second').settings;
+ const renamed=await node.app.inject({method:'PUT',url:'/api/model-settings/profiles/second',headers,payload:{revision:view.revision,name:'Renamed fixture',settings:parameters}});assert.equal(renamed.statusCode,200,renamed.body);
+ const disk=await readFile(path,'utf8');assert.equal(disk.includes(process.env[variable]!),false);const saved=parse(disk);assert.equal(saved.models.profiles[0].id,'second');assert.equal(saved.models.profiles[0].settings.apiKey,'${MOTE_SYNTHETIC_CONFIG_REFERENCE}');assert.equal(saved.models.profiles[0].settings.headers.Authorization,'Bearer ${MOTE_SYNTHETIC_CONFIG_REFERENCE}');assert.equal(saved.models.profiles[0].settings.extraBody.vendor_options.credential,'${MOTE_SYNTHETIC_CONFIG_REFERENCE}');
+ assert.equal(renamed.body.includes(process.env[variable]!),false);
+});
+
+test('the normal file watcher reloads models while old requests keep their generation and invalid edits keep the last valid model',async t=>{
+ const {readFile,writeFile}=await import('node:fs/promises'),{parse,stringify}=await import('yaml');
+ let release!:()=>void,started!:()=>void;const held=new Promise<void>(resolve=>{release=resolve;}),began=new Promise<void>(resolve=>{started=resolve;}),closed:string[]=[];
+ const node=await fixture(t,async settings=>({configured:true,query:async input=>{if(input.question==='hold file generation'){started();await held;}return answer(settings.model);},close:async()=>{closed.push(settings.model);}}));
+ t.after(()=>release());
+ const pending=node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'hold file generation'}});await began;
+ const path=join(node.directory,'mote.yaml'),doc=parse(await readFile(path,'utf8'));doc.models.deployment.model='file-hot-model';await writeFile(path,stringify(doc));
+ const waitFor=async(check:()=>boolean)=>{const until=Date.now()+5000;while(!check()){if(Date.now()>until)throw Error('Fixture configuration watcher did not settle');await new Promise(resolve=>setTimeout(resolve,20));}};
+ await waitFor(()=>node.modelSettings.current().model==='file-hot-model');assert.equal((await node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'new file generation'}})).json().answer,'file-hot-model');assert.equal(closed.includes('original-fixture'),false);
+ const committed=await readFile(path,'utf8');await writeFile(path,committed);await new Promise(resolve=>setTimeout(resolve,350));assert.equal(node.modelSettings.view().revision,1,'identical self and external writes do not rebuild resources or advance revision');
+ await writeFile(path,'version: 1\nrevision: 1\nmodels: [invalid]\n');await waitFor(()=>node.configService.view().lastError!==null);assert.equal(node.modelSettings.current().model,'file-hot-model');
+ release();assert.equal((await pending).json().answer,'original-fixture');await new Promise(resolve=>setImmediate(resolve));assert.equal(closed.includes('original-fixture'),true);
 });

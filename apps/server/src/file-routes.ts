@@ -78,7 +78,7 @@ export function registerFileRoutes(app:FastifyInstance,files:FileStore,processin
   app.post('/api/file-processing/match',async req=>processing.match(req.body));
   app.post('/api/file-processing/preview',async req=>processing.preview(req.body));
   app.post('/api/file-processing/reprocess',async req=>processing.reprocess(req.body));
-  app.put('/api/file-processing',{bodyLimit:262144},async req=>processing.update(req.body));
+  app.put('/api/file-processing',{bodyLimit:262144},async req=>processing.save(req.body));
   return (req:FastifyRequest)=>{
     if(req.routeOptions.url!=='/api/files/:id/content'||!['GET','HEAD'].includes(req.method))return false;
     if(!z.string().uuid().safeParse(id(req)).success?z.string().uuid().parse(id(req)):undefined)return false;

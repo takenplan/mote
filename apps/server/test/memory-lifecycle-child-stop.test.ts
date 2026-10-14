@@ -25,7 +25,7 @@ test('owner immediate stop cancels the default automatic lifecycle failed child 
   node.store.archive.save(artifactId,artifactId,artifactId,{kind:'semantic',text:'Generated previously completed interpretation',metadata:{complete:true,evidenceRanges:[{id:sourceId,offset:0,length:text.length}]}},[{id:sourceId,fingerprint:node.store.archive.fingerprint(sourceId)!}],'generated','1','generated');
   const settings=node.lifecycle.settings();settings.extraction.minChanges=1;
   for(const id of ['consolidation','insights','working'] as const)settings[id].enabled=false;
-  node.lifecycle.configure(settings);await node.lifecycle.tick();
+  await node.lifecycle.save({revision:node.configService.revision,settings});await node.lifecycle.tick();
   const extraction=node.lifecycle.view().extensions.find(extension=>extension.id==='extraction')!,window=extraction.active!;
   assert.equal(window.manual,false);assert.ok(window.checkpoint);
   const child=node.memoryPipeline.get(window.checkpoint!);

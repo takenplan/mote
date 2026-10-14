@@ -20,24 +20,22 @@
 
 ## 配置
 
-将配置写入实际使用的中央节点环境文件，重启后生效。显式使用 `MOTE_ENV_FILE` 时只读取指定文件；不要把开发、验证和日常资料库放在同一个数据目录。环境和部署方式见 [deployment.md](deployment.md)。
+将配置写入实际使用的主 `mote.yaml`，也可在设置页保存同一文件。使用 `MOTE_CONFIG_FILE` 显式选择文件；旧 `MOTE_ENV_FILE` 启动方式会拒绝，需要离线准备 YAML 后改用新选择器。诊断开关、级别与 trace 校验成功后立即生效，日志目录和容量参数需重启。不要把开发、验证和日常资料库放在同一个数据目录。环境和部署方式见 [deployment.md](deployment.md)。
 
 | 配置项 | 默认值 | 含义 |
 |---|---|---|
-| `MOTE_DIAGNOSTICS_ENABLED` | `1` | `0` 时不读取、积累或写入诊断事件；即时数值状态仍可查看 |
-| `MOTE_DEBUG` | `0` | `1` 时将非 silent 级别提升为 debug，额外记录阶段开始事件，便于发现尚未完成的阶段 |
-| `MOTE_AGENT_TRACE_ENABLED` | dev 为 `1`，其它环境为 `0` | 0/1；把详细 Agent 请求上下文、prompt、模型输出、工具调用、校验和状态写入普通 central 日志，可能包含个人内容 |
-| `MOTE_LOG_LEVEL` | `info` | `debug`、`info`、`warn`、`error`、`silent`；`silent` 优先于 debug 开关 |
-| `MOTE_LOG_DIR` | 数据目录下的 `logs` | 每个节点使用独立目录；不会出现在支持包内 |
-| `MOTE_LOG_MAX_MB` | dev 为 `100`，其它为 `2` | `auto`/未设置使用默认值；显式数值 dev 允许 `0.1`–`100` MiB，其它允许 `0.1`–`8` MiB；跨 UTC 日期或达到上限时轮转 |
-| `MOTE_LOG_MAX_FILES` | `3` | 保留文件数，允许 `1`–`10` |
-| `MOTE_LOG_MAX_ENTRIES` | `2000` | 内存事件上限，允许 `100`–`5000` |
+| `diagnostics.enabled` | `true` | `false` 时不读取、积累或写入诊断事件；即时数值状态仍可查看 |
+| `diagnostics.debug` | `false` | `true` 时将非 silent 级别提升为 debug，额外记录阶段开始事件，便于发现尚未完成的阶段 |
+| `diagnostics.traceEnabled` | dev 为 `true`，其它环境为 `false` | 把详细 Agent 请求上下文、prompt、模型输出、工具调用、校验和状态写入普通 central 日志，可能包含个人内容 |
+| `diagnostics.level` | `info` | `debug`、`info`、`warn`、`error`、`silent`；`silent` 优先于 debug 开关 |
+| `diagnostics.directory` | 数据目录下的 `logs` | 每个节点使用独立目录；不会出现在支持包内 |
+| `diagnostics.maxBytes` | DEV `104857600`，其它 `2097152` | 省略使用 profile 默认值；显式字节值 DEV 允许 `0.1`–`100` MiB，其它 `0.1`–`8` MiB；跨 UTC 日期或达到上限时轮转 |
+| `diagnostics.maxFiles` | `3` | 保留文件数，允许 `1`–`10` |
+| `diagnostics.maxEntries` | `2000` | 内存事件上限，允许 `100`–`5000` |
 
-debug 开关只增加固定事件，不记录请求正文、模型输入输出、令牌、原图、来源文本、文件路径、设备名称或原始 URL/query。另行开启 `MOTE_AGENT_TRACE_ENABLED=1` 后，开发诊断会在普通 central 日志中记录这些详细内容；模型与 SDK 异常按类型或 HTTP 状态映射为固定类别，不会返回异常原文或堆栈。
+debug 开关只增加固定事件，不记录请求正文、模型输入输出、令牌、原图、来源文本、文件路径、设备名称或原始 URL/query。另行开启 `diagnostics.traceEnabled: true` 后，开发诊断会在普通 central 日志中记录这些详细内容；模型与 SDK 异常按类型或 HTTP 状态映射为固定类别，不会返回异常原文或堆栈。
 
-文件名仍为 `central.0.ndjson`、`central.1.ndjson` 等，`0` 是当前文件；服务端在 UTC 日期变化时切换文件，达到 `MOTE_LOG_MAX_MB` 时也会继续按大小轮转。DEV 默认结构化日志的磁盘上限为 300 MiB，其它环境为 6 MiB，另有一个很小的进程锁文件。原生监督日志 `central.log` 独立轮转，使用同样的容量配置，因此 DEV 两组日志合计最多 600 MiB；Docker stdout 保持部署层自己的上限。容量不保证能回查固定小时数。
-
-旧 DEV 中显式的 `MOTE_LOG_MAX_MB=2` 不会被静默覆盖；使用 [默认值迁移命令](deployment.md#dev-log-retention) 后在下次重启生效。文件数和内存事件数保持用户现有配置。日志文件权限为 `600`，新建目录权限为 `700`。只有取得该日志目录写锁的节点才会读取和轮转它；第二个活跃写入者会报告写入失败，不会覆盖另一个节点的日志。崩溃留下的失效锁和未写完的尾行会在重启时处理。旧的 `central.N.ndjson` 文件仍按原编号读取，网页分页、原始日志接口和支持包导出不需要迁移。
+文件名仍为 `central.0.ndjson`、`central.1.ndjson` 等，`0` 是当前文件；服务端在 UTC 日期变化时切换文件，达到 `diagnostics.maxBytes` 时也会继续按大小轮转。DEV 默认结构化日志的磁盘上限为 300 MiB，其它环境为 6 MiB，另有一个很小的进程锁文件。原生监督日志 `central.log` 独立轮转，使用同样的容量配置，所以 DEV 两组默认合计最多 600 MiB；Docker stdout 仍使用部署层上限。不保证固定保留时长。显式 `diagnostics.maxBytes: 2097152` 不会被静默覆盖；已有 YAML DEV 可用 [默认值迁移命令](deployment.md#dev-log-retention) 后在下次正常重启生效。日志文件权限为 `600`，新建目录权限为 `700`。只有取得该日志目录写锁的节点才会读取和轮转它；第二个活跃写入者会报告写入失败，不会覆盖另一个节点的日志。崩溃留下的失效锁和未写完的尾行会在重启时处理。旧的 `central.N.ndjson` 文件仍按原编号读取，网页分页、原始日志接口和支持包导出不需要迁移。
 
 内存写入队列最多保留 1024 条待写事件，另有最多 64 条正在写入；单条结构化日志最多 20 KiB，超出时截断可选字段并标记 `truncated`，不会丢弃整条事件。突发流量或磁盘故障时允许丢弃诊断事件，`droppedEvents` 和 `writeFailures` 会增加，业务隐私检查与入库不因此被绕过。关闭服务会等待当前日志写入结束。禁用诊断不会主动删除已经存在的历史日志文件。
 
@@ -58,7 +56,7 @@ debug 开关只增加固定事件，不记录请求正文、模型输入输出�
 
 事件分页返回 `{items,nextSeq,oldestSeq}`。下一次请求使用 `nextSeq`；`afterSeq=0` 从最早保留的事件开始。若只想显示最近 200 条，先读取快照，再以 `max(0,lastSeq-200)` 为游标。若游标早于 `oldestSeq`，更早事件已超过保留范围；若换成另一资料库或日志已被清空，应重置游标。
 
-支持包中的 `scope` 为 `central-safe-support`。它只包含固定事件和数值；即使开发环境开启详细 Agent trace，也会排除 trace 正文，不包含 `.env`、访问令牌、模型凭据、数据库、截图、问题、答案、笔记、Agent 工具参数或任意异常文本。旧日志被读取时也按同一字段白名单过滤。支持包用于排错，不能用于恢复资料库。
+支持包中的 `scope` 为 `central-safe-support`。它只包含固定事件和数值；即使开发环境开启详细 Agent trace，也会排除 trace 正文，不包含主 YAML、访问令牌、模型凭据、数据库、截图、问题、答案、笔记、Agent 工具参数或任意异常文本。旧日志被读取时也按同一字段白名单过滤。支持包用于排错，不能用于恢复资料库。
 
 ## 如何判断卡在哪个阶段
 
@@ -81,13 +79,13 @@ debug 开关只增加固定事件，不记录请求正文、模型输入输出�
 | `timeout` | HTTP 504；明确达到 Agent 本地 deadline、SDK 请求超时，或操作取消；用请求编号定位最后成功的阶段 |
 | `internal` | 未归入上述类别的失败；用请求编号定位最后成功的阶段 |
 
-模型超时分为两层：`MOTE_MODEL_REQUEST_TIMEOUT_MS` 是单次 HTTP Provider 请求期限（5000–600000 毫秒），`MOTE_AGENT_TIMEOUT_MS` 是整个 Agent 运行期限（5000–3600000 毫秒）。可在“系统管理 → 模型”修改并保存后立即生效，或修改环境文件后重启；页面已保存的模型设置优先于环境文件。在节点设置或 `/api/status.agent.agentTimeoutMs` 核对生效值。Codex Server 的单次模型请求不由 Mote 暴露，Agent 总运行期限可以留空；没有总期限时仍可能受到入口代理、工具或 Codex 自身限制。达到本机期限或 SDK 明确抛出请求超时类时，返回 `timeout`，不会再混入回答格式错误 `agent_response`。这个分类只证明发生了超时，不能单独确定原因是模型推理、网络还是工具等待。错误响应和诊断不引用模型、SDK stderr 或请求正文；清理失败也不会覆盖已确定的原始查询错误。
+模型超时分为两层：模型的 `modelRequestTimeoutMs` 是单次 HTTP Provider 请求期限（5000–600000 毫秒），`agentTimeoutMs` 是整个 Agent 运行期限（5000–3600000 毫秒）。可在“系统管理 → 模型”修改，或修改主 YAML 的 `models.deployment`（预设位于 `models.profiles[].settings`）；两者保存同一配置，新请求使用新值，在途请求保留旧快照。在节点设置或 `/api/status.agent.agentTimeoutMs` 核对生效值。Codex Server 的单次模型请求不由 Mote 暴露，Agent 总运行期限可以为 `null`；没有总期限时仍可能受到入口代理、工具或 Codex 自身限制。达到本机期限或 SDK 明确抛出请求超时类时，返回 `timeout`，不会再混入回答格式错误 `agent_response`。这个分类只证明发生了超时，不能单独确定原因是模型推理、网络还是工具等待。错误响应和诊断不引用模型、SDK stderr 或请求正文；清理失败也不会覆盖已确定的原始查询错误。
 
 当设备显示离线时，先区分“最近一次客户端上报”与“中央已经保存的资料”。离线状态或旧的 `lastCaptureAt` 不能证明之后没有归档。客户端上报的队列量也可能过时。中央 `queue.index` 给出当前索引状态；`textReady` 表示文本原文已可检索，未配置 embedding 并不妨碍文本归档。
 
 Cloudflare Tunnel 的 connector 连接状态与中央 API 健康状态分别检查：先通过本机 `status` 确认中央可用，再核对公网域名、Tunnel origin 与 connector。502、524、413 分别可能对应 origin 不可达、代理等待超时和入口上传限制。中央 UI 会显示 HTTP 状态与排查提示，不将代理返回的 HTML 作为应用内容。完整命令见 [Tunnel 排错](cloudflare-tunnel.md#排错与入口限制)。
 
-启动与退出在终端中只输出固定 JSON 事件。`server.start_failed` 的 `data_directory_in_use` 表示另一个活跃节点持有资料库锁，`port_in_use` 表示监听端口冲突，`permission` 表示目录权限受限。`configuration` 类别会同时给出无效配置项的 `field`（例如 `MOTE_DEBUG`），不包含用户填写的值。通用 `startup` 类别需要检查所选环境文件和运行依赖；终端不会打印可能包含凭据或私人路径的底层异常。
+启动与退出在终端中只输出固定 JSON 事件。`server.start_failed` 的 `data_directory_in_use` 表示另一个活跃节点持有资料库锁，`port_in_use` 表示监听端口冲突，`permission` 表示目录权限受限。`configuration` 类别会同时给出无效配置项的 `field`（例如 `diagnostics.debug`），不包含用户填写的值。通用 `startup` 类别需要检查所选主 YAML 和运行依赖；终端不会打印可能包含凭据或私人路径的底层异常。
 
 ## 验证范围
 

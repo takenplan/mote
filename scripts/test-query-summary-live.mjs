@@ -8,12 +8,15 @@ import {DeepSeekHarness} from '@deepseek-ai/dsh-sdk-client';
 import {captureSchema} from '@mote/shared';
 import {loadProfile,profilePaths} from './profile-lib.mjs';
 import {buildApp} from '../apps/server/dist/app.js';
-import {modelSettingsFromConfig,applyModelSettings} from '../apps/server/dist/model-agent.js';
+import {applyModelSettings} from '../apps/server/dist/model-agent.js';
+import {readConfigDocument,resolveConfigDocument} from '../apps/server/dist/config.js';
 
 const profile=process.argv[2];if(!profile)throw Error('Pass a profile explicitly to use its model connection with generated data');
-const p=await loadProfile(profilePaths(profile)),e=p.env;
-let settings=modelSettingsFromConfig({modelProvider:e.MOTE_MODEL_PROVIDER||'deepseek',modelProtocol:e.MOTE_MODEL_PROTOCOL||undefined,modelBaseUrl:e.MOTE_MODEL_BASE_URL,model:e.MOTE_MODEL,apiKey:e.MOTE_MODEL_API_KEY,modelReasoningEffort:e.MOTE_MODEL_REASONING_EFFORT||undefined,modelMaxTokens:Number(e.MOTE_MODEL_MAX_TOKENS||65536),modelTimeoutMs:Number(e.MOTE_MODEL_TIMEOUT_MS||120000),modelHeaders:JSON.parse(e.MOTE_MODEL_HEADERS||'{}'),modelExtraBody:JSON.parse(e.MOTE_MODEL_EXTRA_BODY||'{}'),allowUnauthenticatedLocal:e.MOTE_MODEL_ALLOW_UNAUTHENTICATED_LOCAL==='1'});
-try{const saved=JSON.parse(await readFile(join(p.dataDir,'model-settings.json'),'utf8'));if(saved.settings)settings=saved.settings;}catch(error){if(error.code!=='ENOENT')throw Error('Cannot read saved connection; contents suppressed');}
+const p=await loadProfile(profilePaths(profile));
+const selected=resolveConfigDocument(readConfigDocument(p.configFile)).models;
+const selectedId=selected.defaults.chat;
+const settings=structuredClone(selected.profiles.find(entry=>entry.id===selectedId)?.settings??selected.deployment);
+if(selected.defaultModels.chat)settings.model=selected.defaultModels.chat;
 const root=await mkdtemp(join(tmpdir(),'mote-query-generated-')),out=join(process.cwd(),'.mote/query-summary-live',String(Date.now()));await mkdir(out,{recursive:true});
 const original=DeepSeekHarness.prototype.run;let rounds=0,node;
 DeepSeekHarness.prototype.run=async function(...args){

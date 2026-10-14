@@ -1,18 +1,20 @@
-import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { parseEnv } from 'node:util';
+import { readConfigDocument } from './config-file.js';
 
-/** Load only explicitly selected files; inherited variables never trigger implicit file reads. */
-export function loadEnvironment(baseDirectory: string, options: {env?:NodeJS.ProcessEnv} = {}) {
+/** CLI/device connections derive from the selected YAML; this is not server configuration precedence. */
+export function loadEnvironment(baseDirectory: string, options: {env?:NodeJS.ProcessEnv} = {}): { env: NodeJS.ProcessEnv; baseDir: string; envFile: string | undefined; configFile: string | undefined } {
   const inherited = options.env ?? process.env;
-  const selected = inherited.MOTE_ENV_FILE;
-  if (selected !== undefined && !selected.trim()) throw new Error('MOTE_ENV_FILE must name an existing environment file');
-  const envFile = selected === undefined ? undefined : resolve(selected);
-  const baseDir = envFile === undefined ? resolve(baseDirectory) : dirname(envFile);
-  if (envFile !== undefined && !existsSync(envFile)) throw new Error('The selected MOTE_ENV_FILE does not exist');
-  const fileValues = envFile ? parseEnv(readFileSync(envFile, 'utf8')) : {};
-  // A file cannot redirect itself or retroactively select a different profile file.
-  delete fileValues.MOTE_ENV_FILE;
+  if (inherited.MOTE_ENV_FILE !== undefined) throw new Error('MOTE_ENV_FILE is unsupported; select the authoritative mote.yaml with MOTE_CONFIG_FILE');
+  const selected = inherited.MOTE_CONFIG_FILE;
+  if (selected !== undefined && !selected.trim()) throw new Error('MOTE_CONFIG_FILE must name an existing YAML configuration');
   const explicit = Object.fromEntries(Object.entries(inherited).filter((entry):entry is [string,string] => entry[1] !== undefined));
-  return {env:{...fileValues,...explicit},baseDir,envFile};
+  if (selected === undefined) return { env: explicit, baseDir: resolve(baseDirectory), envFile: undefined, configFile: undefined };
+  const loaded = readConfigDocument(selected, inherited), server = loaded.document.server as Record<string, unknown> | undefined, storage = loaded.document.storage as Record<string, unknown> | undefined;
+  const host = ['0.0.0.0', '::'].includes(String(server?.host)) ? '127.0.0.1' : String(server?.host ?? '127.0.0.1');
+  const url = `http://${host.includes(':') ? `[${host}]` : host}:${server?.port ?? 47832}`;
+  // The selected file wins over ambient ordinary connection values too. Device bridges
+  // are already derived by the profile launcher and remain a convenience for Electron.
+  const env = { ...explicit, MOTE_CONFIG_FILE: loaded.configFile, MOTE_PROFILE: String(server?.profile ?? 'default'), MOTE_URL: url,
+    MOTE_PORT: String(server?.port ?? 47832), MOTE_DATA_DIR: String(storage?.dataDir ?? './data'), MOTE_TOKEN: String(server?.token ?? '') };
+  return { env, baseDir: dirname(loaded.configFile), envFile: loaded.configFile, configFile: loaded.configFile };
 }

@@ -2,7 +2,7 @@ import {fixtureFilePolicy} from './fixtures/file-policy.js';
 import {readAgentCredential} from './login-fixture.js';
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,rmSync,existsSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {type Plugin} from '@deepseek-ai/cordis';
@@ -15,9 +15,9 @@ import {type ProcessorInput} from '../src/file-processors.js';
 import {TURN_GROUP_PROMPT} from '../src/file-dialogue.js';
 import {installFileRecipes} from '../src/file-recipes.js';
 import {buildApp} from '../src/app.js';
-import {configFromEnv} from '../src/config.js';
+import {configFromDocument} from '../src/config.js';
 
-function fixtureConfig(directory:string){const prior=process.env.MOTE_DATA_DIR;process.env.MOTE_DATA_DIR=directory;try{return configFromEnv();}finally{if(prior===undefined)delete process.env.MOTE_DATA_DIR;else process.env.MOTE_DATA_DIR=prior;}}
+function fixtureConfig(directory:string){return configFromDocument({version:1,revision:0,storage:{dataDir:directory}},join(directory,'mote.yaml'));}
 async function fixture(t:any){
  const dir=mkdtempSync(join(tmpdir(),'mote-policy-')),store=new Store(dir,{dataKey:'41'.repeat(32)}),sources=new SourceStore(store),files=new FileStore(store,sources),calls:ProcessorInput[]=[];
  for(const id of ['phone','nas'])sources.register({id,name:id,kind:'local-files',deviceId:id,platform:'android',retention:'archive'});
@@ -32,7 +32,7 @@ async function fixture(t:any){
  const save=(policy:any=processing.view().policy,settings:any={})=>processing.update({revision:processing.view().revision,settings:{...processing.view().settings,enabled:true,...settings},policy});
  async function upload(name:string,mime='audio/wav',sourceId='phone',layer:'original'|'reference'='original',revision='1',previousRevision:string|null=null){const bytes=Buffer.from('Generated fixture '+name),manifest:FileRevision={sourceId,previousRevision,item:{externalId:name,revision,observedAt:new Date().toISOString(),title:name,kind:'file',layer,text:'',mimeType:mime,deleted:false},relativePath:name,sizeBytes:bytes.length,...(layer==='original'?{sha256:sha256(bytes)}:{})};if(layer==='reference')return (await files.revision(manifest,()=>{})).id;const session=files.begin(manifest,()=>{});files.part(session.uploadId,0,bytes,()=>{});return (await files.commit(session.uploadId,()=>{})).id;}
  t.after(async()=>{await processing.close();store.close();rmSync(dir,{force:true,recursive:true});});
- return {dir,store,files,calls,analyses,save,upload,get processing(){return processing;},async restart(){await processing.close();processing=new FileProcessing(files,provider,undefined,options);await processing.runtime.ready;}};
+ return {dir,store,files,calls,analyses,save,upload,get processing(){return processing;},async restart(){const configuration=processing.configurationSnapshot();await processing.close();processing=new FileProcessing(files,provider,undefined,{...options,configuration});await processing.runtime.ready;}};
 }
 function customPolicy(f:Awaited<ReturnType<typeof fixture>>):FilePolicy{
  const policy=f.processing.view().policy as FilePolicy;
@@ -40,12 +40,12 @@ function customPolicy(f:Awaited<ReturnType<typeof fixture>>):FilePolicy{
  policy.rules.find(r=>r.type==='audio/*')!.profileId='two';policy.rules.push({sourceId:'phone',type:'audio/*',profileId:'four'});return policy;
 }
 
-test('explicit policy persists services and credentials atomically and rejects flat settings writes',async t=>{
+test('explicit policy preserves private domain snapshots and rejects flat settings writes',async t=>{
  const f=await fixture(t),v=f.processing.view();f.processing.update({revision:v.revision,settings:{...v.settings,enabled:true,imageEndpoint:'http://127.0.0.1:9912/image',apiKey:'generated-cloud-secret',localWorkerApiKey:'generated-worker-secret',sourceProfiles:{phone:'audio.local-dialogue'},speakerCount:4},policy:fixtureFilePolicy({...v.settings,enabled:true,imageEndpoint:'http://127.0.0.1:9912/image',apiKey:'generated-cloud-secret',localWorkerApiKey:'generated-worker-secret',sourceProfiles:{phone:'audio.local-dialogue'},speakerCount:4},f.processing.runtime.registry)});
  const migrated=f.processing.view();assert.equal(migrated.policyConfigured,true);assert.equal(migrated.policy.rules.find(r=>r.sourceId==='phone')?.type,'audio/*');assert.ok(!JSON.stringify(migrated).includes('generated-'));
  f.save();await f.restart();assert.equal(f.processing.view().policyConfigured,true);assert.equal(f.processing.match({sourceId:'phone',mimeType:'audio/wav'}).profile.parameters.speakerCount,4);
- assert.ok(readFileSync(join(f.dir,'file-processing.json'),'utf8').includes('generated-worker-secret'));
- const persisted=JSON.parse(readFileSync(join(f.dir,'file-processing.json'),'utf8'));assert.equal(persisted.policy.services.find((s:any)=>s.id==='image-api').apiKey,'generated-cloud-secret');
+ assert.equal(existsSync(join(f.dir,'file-processing.json')),false);
+ const persisted=f.processing.configurationSnapshot();assert.equal(persisted.policy.services.find((s:any)=>s.id==='image-api').apiKey,'generated-cloud-secret');
  const current=f.processing.view();assert.throws(()=>f.processing.update({revision:current.revision,settings:{...current.settings,speakerCount:8}}));
  f.processing.update({revision:current.revision,settings:{...current.settings,maxAudioMinutes:300},policy:fixtureFilePolicy({...current.settings,maxAudioMinutes:300},f.processing.runtime.registry)});assert.equal(f.processing.view().settings.maxAudioMinutes,300);
 });
@@ -80,7 +80,7 @@ test('service credentials are never transferred to changed destinations; local p
 test('completed results retain their policy until previewed reprocessing, and stale previews cannot execute',async t=>{
  const f=await fixture(t);f.save(customPolicy(f));const id=await f.upload('sample.wav');await f.processing.tick();const original=f.files.chunks(id)[0].id,revision=f.processing.explain(id).applied!.revision;
  const policy=f.processing.view().policy;policy.profiles.find(p=>p.id==='four')!.parameters.speakerCount=3;f.save(policy);await f.processing.tick();assert.equal(f.calls.length,1);assert.equal(f.files.chunks(id)[0].id,original);assert.equal(f.processing.explain(id).applied!.revision,revision);assert.equal(f.processing.explain(id).current.profile.parameters.speakerCount,3);
- const stale=f.processing.preview({revision:f.processing.view().revision});f.save();assert.throws(()=>f.processing.reprocess({token:stale.token}),{statusCode:409});
+ const stale=f.processing.preview({revision:f.processing.view().revision});f.save(undefined,{maxAudioMinutes:f.processing.view().settings.maxAudioMinutes+1});assert.throws(()=>f.processing.reprocess({token:stale.token}),{statusCode:409});
  const preview=f.processing.preview({revision:f.processing.view().revision,sourceId:'phone',type:'audio/*'});assert.equal(preview.count,1);assert.equal(f.processing.reprocess({token:preview.token}).queued,1);assert.throws(()=>f.processing.reprocess({token:preview.token}),{statusCode:409});await f.processing.tick();assert.equal(f.calls.length,2);assert.equal(f.calls[1].parameters?.speakerCount,3);assert.notEqual(f.files.chunks(id)[0].id,original);
 });
 

@@ -1,7 +1,7 @@
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setImmediate as yieldTurn} from 'node:timers/promises';
@@ -10,21 +10,26 @@ import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {Store,sha256} from '../src/store.js';
 import {fixtureFilePolicy} from './fixtures/file-policy.js';
+import type {FileProcessor} from '../src/file-processors.js';
 
 const transcript:Transcript={durationMs:1000,segments:[{startMs:0,endMs:1000,text:'Generated shutdown fixture'}]};
 function deferred<T=void>(){let resolve!:(value:T)=>void;const promise=new Promise<T>(done=>resolve=done);return {promise,resolve};}
-async function fixture(t:TestContext){
+async function fixture(t:TestContext,processors:FileProcessor[]=[]){
  const directory=mkdtempSync(join(tmpdir(),'mote-shutdown-')),store=new Store(directory);
- const config:Config={dataDir:directory,token:'generated-shutdown-token',tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:100_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'silent'};
+ const fixtureKey='mote.shutdown-processors.'+randomUUID(),modulePath=join(directory,'generated-processors.mjs');
+ // This trusted generated module installs the test closures before startup
+ // validates persisted processor settings, on both the first run and restart.
+ if(processors.length){Reflect.set(globalThis,Symbol.for(fixtureKey),processors);writeFileSync(modulePath,`export default {name:'generated-shutdown-processors',inject:['moteFileProcessors'],apply(ctx){const processors=globalThis[Symbol.for(${JSON.stringify(fixtureKey)})];if(!processors)throw Error('Generated processors are unavailable');for(const processor of processors)ctx.effect(()=>ctx.moteFileProcessors.register(processor));}};`);}
+ const config:Config={dataDir:directory,token:'generated-shutdown-token',tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:100_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'silent',fileProcessorModules:processors.length?[modulePath]:[]};
  const nodes:Awaited<ReturnType<typeof buildApp>>[]=[];
  const start=async(agent?:import('../src/app.js').QueryAgent)=>{const node=await buildApp(config,{store,agent});nodes.push(node);await node.app.ready();return node;};
- t.after(async()=>{for(const node of nodes)await node.app.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ t.after(async()=>{for(const node of nodes)await node.app.close();Reflect.deleteProperty(globalThis,Symbol.for(fixtureKey));store.close();rmSync(directory,{recursive:true,force:true});});
  return {store,start};
 }
 type Node=Awaited<ReturnType<typeof buildApp>>;
-function configure(node:Node,settings:Record<string,unknown>={}){
+async function configure(node:Node,settings:Record<string,unknown>={}){
  const saved={...node.processing.currentSettings(),enabled:true,summarize:false,...settings};
- node.processing.update({revision:node.processing.view().revision,settings:saved,policy:fixtureFilePolicy(saved,node.processing.runtime.registry)});
+ await node.processing.save({revision:node.processing.view().revision,settings:saved,policy:fixtureFilePolicy(saved,node.processing.runtime.registry)});
 }
 async function upload(node:Node,name:string,mimeType='audio/wav'){
  if(!node.sources.listSources().some(source=>source.id==='fixture'))node.sources.register({id:'fixture',name:'Generated shutdown files',kind:'local-files',deviceId:'fixture',platform:'macos',retention:'archive'});
@@ -47,12 +52,10 @@ test('app.close stops publication polling before executor disposal and retains p
 });
 
 test('app.close preserves 180 model waits, queues, retry deadlines and explicit cancellation; restart resumes eligible files',async t=>{
- const f=await fixture(t);let ready=false,calls=0;
- const start=async()=>{const node=await f.start();node.featureServices.mediaAssets.ready=()=>ready;
-  node.processing.runtime.registry.register({id:'fixture.audio',name:'Generated model wait',version:'1',stage:'extract',serviceKind:'asr',localOnly:true,managedModel:'dialogue',mediaTypes:['audio/'],async process(){calls++;return transcript;}});
-  return node;
- };
- const node=await start();node.featureHost.stop();configure(node,{audioProcessor:'fixture.audio'});const missing:string[]=[];
+ let ready=false,calls=0;
+ const f=await fixture(t,[{id:'fixture.audio',name:'Generated model wait',version:'1',stage:'extract',serviceKind:'asr',localOnly:true,managedModel:'dialogue',mediaTypes:['audio/'],async process(){calls++;return transcript;}}]);
+ const start=async()=>{const node=await f.start();node.featureServices.mediaAssets.ready=()=>ready;return node;};
+ const node=await start();node.featureHost.stop();await configure(node,{audioProcessor:'fixture.audio'});const missing:string[]=[];
  for(let i=0;i<180;i++)missing.push(await upload(node,`missing-${i}.wav`));
  while(node.processing.prepare().length)await node.executor.tick();
  assert.equal(calls,0);for(const id of missing){assert.equal(fileStep(node,id).state,'blocked');assert.equal(fileStep(node,id).error,'model_missing');assert.equal(fileStep(node,id).attempts,0);}
@@ -75,13 +78,13 @@ test('app.close preserves 180 model waits, queues, retry deadlines and explicit 
 });
 
 test('app.close interrupts a child, keeps completed extraction and unknown requests, and fences late results across restart',async t=>{
- const f=await fixture(t),entered=deferred(),response=deferred<unknown>();let asrCalls=0,diarizeCalls=0,signal!:AbortSignal;
- const start=async()=>{const node=await f.start();node.featureServices.mediaAssets.ready=()=>true;
-  node.processing.runtime.registry.register({id:'fixture.dialogue',name:'Generated dialogue',version:'1',stage:'extract',serviceKind:'asr',localOnly:true,dialogue:true,mediaTypes:['audio/'],async process(){asrCalls++;return transcript;}});
-  node.processing.runtime.registry.register({id:'fixture.diarize',name:'Generated diarization',version:'1',stage:'diarize',localOnly:true,mediaTypes:['audio/'],async process(input){signal=input.signal;if(++diarizeCalls===1){entered.resolve();return response.promise;}return {durationMs:1000,engine:'fixture',expectedSpeakers:null,observedSpeakers:1,overlapDetection:'unknown',segments:[{startMs:0,endMs:1000,speaker:'SPEAKER_0'}],samples:[],warnings:[]};}});
-  return node;
- };
- const node=await start();configure(node,{audioProcessor:'fixture.dialogue',diarizationProcessor:'fixture.diarize'});const id=await upload(node,'checkpoint.wav'),run=node.processing.tick();await entered.promise;
+ const entered=deferred(),response=deferred<unknown>();let asrCalls=0,diarizeCalls=0,signal!:AbortSignal;
+ const f=await fixture(t,[
+  {id:'fixture.dialogue',name:'Generated dialogue',version:'1',stage:'extract',serviceKind:'asr',localOnly:true,dialogue:true,mediaTypes:['audio/'],async process(){asrCalls++;return transcript;}},
+  {id:'fixture.diarize',name:'Generated diarization',version:'1',stage:'diarize',localOnly:true,mediaTypes:['audio/'],async process(input){signal=input.signal;if(++diarizeCalls===1){entered.resolve();return response.promise;}return {durationMs:1000,engine:'fixture',expectedSpeakers:null,observedSpeakers:1,overlapDetection:'unknown',segments:[{startMs:0,endMs:1000,speaker:'SPEAKER_0'}],samples:[],warnings:[]};}},
+ ]);
+ const start=async()=>{const node=await f.start();node.featureServices.mediaAssets.ready=()=>true;return node;};
+ const node=await start();await configure(node,{audioProcessor:'fixture.dialogue',diarizationProcessor:'fixture.diarize'});const id=await upload(node,'checkpoint.wav'),run=node.processing.tick();await entered.promise;
  const extraction=node.files.detail(id).artifacts.find((artifact:any)=>artifact.kind==='transcript')!;
  await node.app.close();await run;
  assert.equal(signal.aborted,true);assert.equal(fileStep(node,id).state,'waiting');assert.equal(fileStep(node,id).error,'interrupted');assert.equal(node.files.detail(id).job.state,'waiting');

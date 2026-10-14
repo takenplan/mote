@@ -28,7 +28,7 @@ test('fresh app installs current defaults and intake projections before receivin
  const directory=mkdtempSync(join(tmpdir(),'mote-fresh-baseline-')),node=await buildApp(config(directory),{agent:inactive,backgroundWorker:false});
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
  assert.equal(node.processing.imageDefault().profile.processorId,'image.http');assert.equal(node.lifecycle.settings().extraction.enabled,true);
- assert.throws(()=>node.lifecycle.configure({...node.lifecycle.settings(),extraction:{...node.lifecycle.settings().extraction,enabled:false}}));
+ await assert.rejects(async()=>await node.lifecycle.save({revision:node.configService.revision,settings:{...node.lifecycle.settings(),extraction:{...node.lifecycle.settings().extraction,enabled:false}}}));
  assert.throws(()=>node.sourcePipelines.configure('generated',{memory:false}));
  assert.throws(()=>node.featureServices.queryRuns.start(randomUUID(),{}),{statusCode:400});
  assert.equal(node.store.db.prepare("SELECT count(*) n FROM settings WHERE key IN ('model-budgets','image-policy-migrated')").get()!.n,0);

@@ -19,6 +19,7 @@
     "@mote/agent": "0.1.0",
     "@mote/shared": "0.1.0",
     "better-sqlite3": "12.10.0",
+    "chokidar": "4.0.3",
     "exceljs": "^4.4.0",
     "fastify": "^5.6.0",
     "fflate": "^0.8.2",

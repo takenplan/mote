@@ -36,6 +36,7 @@ export class RecordingConnector {
  private readonly owned:boolean;
  private disposers:(()=>Promise<void>)[]=[];
  private timer?:ReturnType<typeof setInterval>;
+ private initialized=false;private syncIntervalMs?:number;
  private closed=false;
  private error?:string;
  constructor(private ctx:ConnectorContext,readonly provider:RecordingProvider){
@@ -64,8 +65,16 @@ export class RecordingConnector {
    classify:error=>error instanceof ExecutionFailure?error:error instanceof z.ZodError?new ExecutionFailure('permanent','recording_contract_invalid'):error instanceof StoreError&&[400,409,410,413].includes(error.statusCode)?new ExecutionFailure('blocked','recording_archive_rejected'):error instanceof ConnectorError&&error.code==='recording_transcript_not_ready'?new ExecutionFailure('transient','recording_transcript_not_ready'):error instanceof ConnectorError&&['lark_permission_required','lark_not_connected','lark_not_configured','lark_cli_missing','dingtalk_cli_missing','dingtalk_not_connected','dingtalk_permission_required'].includes(error.code)?new ExecutionFailure('blocked','recording_authorization_required'):
     new ExecutionFailure('transient','recording_provider_failed'),
   }));
-  this.timer=setInterval(()=>{void this.tick().catch(()=>{this.error='recording_sync_failed';});},Math.max(1000,Math.min(this.ctx.config.connectors?.syncIntervalMs??300000,300000)));this.timer.unref();
+  this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??300000);
   void this.engine.tick();
+ }
+ configureSyncInterval(intervalMs:number){
+  // This wake also drives durable retries; retain the existing five-minute ceiling.
+  const interval=Math.max(1000,Math.min(intervalMs,300000));
+  if(this.timer&&this.syncIntervalMs===interval)return;
+  if(this.timer)clearInterval(this.timer);this.timer=undefined;this.syncIntervalMs=interval;
+  if(!this.initialized||this.closed)return;
+  this.timer=setInterval(()=>{void this.tick().catch(()=>{this.error='recording_sync_failed';});},interval);this.timer.unref();
  }
  private observe(phase:Phase|'decode'|'publish',state:'started'|'completed'|'failed',step:ExecutionStep,extra:{count?:number;bytes?:number;durationMs?:number}={}){
   this.ctx.diagnostics?.record(`source.${state}`,{operation:`recording_${phase}`,attempt:step.attempts,...extra},state==='failed'?'warn':'info');
@@ -192,7 +201,7 @@ export class RecordingConnector {
  }
  private count(states:string[]){return Number(this.ctx.store.db.prepare("SELECT count(*) n FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN (SELECT value FROM json_each(?)) AND json_extract(input,'$.epoch')=?").get(JSON.stringify(phases.map(p=>this.kind(p))),JSON.stringify(states),this.saved.epoch)!.n);}
  retry(){const rows=this.ctx.store.db.prepare("SELECT id FROM execution_steps WHERE kind IN (SELECT value FROM json_each(?)) AND state IN ('failed','blocked') AND json_extract(input,'$.epoch')=?").all(JSON.stringify(phases.map(p=>this.kind(p))),this.saved.epoch) as {id:string}[];for(const row of rows)if(this.valid(this.engine.get(row.id)!))this.engine.retry(row.id);void this.engine.tick();return this.status();}
- async close(){this.closed=true;clearInterval(this.timer);for(const dispose of this.disposers)await dispose();if(this.owned)await this.engine.close();await this.provider.close?.();await this.file.flush();}
+ async close(){this.closed=true;clearInterval(this.timer);this.timer=undefined;for(const dispose of this.disposers)await dispose();if(this.owned)await this.engine.close();await this.provider.close?.();await this.file.flush();}
 }
 
 /** New providers use this same manifest; no new owner transport or task engine. */
@@ -200,7 +209,7 @@ export function recordingManifest(id:string,create:(ctx:ConnectorContext)=>Recor
  apiVersion:1,id:`${id}-recordings`,statusKey:`${id}-recordings`,sourceKinds:[{kind:`${id}.recordings`,capabilities:{lifecycle:'continuous',discovery:'provider-list',listening:'polling',readOriginal:'explicit-provider-read',synchronization:'revisions',externalWrite:false}}],
  create:ctx=>{
   ctx.store.db.exec('CREATE TABLE IF NOT EXISTS recording_media(source_id TEXT NOT NULL,external_id TEXT NOT NULL,file_id TEXT NOT NULL REFERENCES archived_files(id) ON DELETE CASCADE,PRIMARY KEY(source_id,external_id))');
-  const provider=create(ctx);if(provider.id!==id)throw Error('Recording manifest and provider identity differ');const connector=new RecordingConnector(ctx,provider),status=()=>({...connector.status(),category:'recordings' as const,...options});return {status,init:()=>connector.init(),close:()=>connector.close(),configure:host=>{
+  const provider=create(ctx);if(provider.id!==id)throw Error('Recording manifest and provider identity differ');const connector=new RecordingConnector(ctx,provider),status=()=>({...connector.status(),category:'recordings' as const,...options});return {status,init:()=>connector.init(),configureSyncInterval:interval=>connector.configureSyncInterval(interval),close:()=>connector.close(),configure:host=>{
    const path=`/api/connectors/${id}-recordings` as const;
    host.ownerRoute({method:'GET',path,handler:status});
    host.ownerRoute({method:'GET',path:`${path}/items`,handler:req=>connector.items(z.object({includeExports:z.enum(['true','false']).optional()}).strict().parse(req.query).includeExports==='true')});

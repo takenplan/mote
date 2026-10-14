@@ -8,6 +8,7 @@ import {Store,StoreError,sha256} from './store.js';
 import type {FileStore} from './files.js';
 import type {ArchivedFileStore} from './archived-files.js';
 import {privateDirectory,privateFile} from './private-storage.js';
+import {ConfigService,type PreparedConfigChange} from './config-service.js';
 
 const hashName=/^[a-f0-9]{64}$/;
 const uuidName='[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}';
@@ -20,9 +21,17 @@ export class ContentStorageService {
   private progress:Progress={state:'idle',total:0,processed:0,converted:0,skipped:0,failed:0};
   private stopped=false;
   private work?:Promise<void>;
-  constructor(private store:Store,private files:FileStore,private archived:ArchivedFileStore){}
-  snapshot(){return {enabled:this.store.contentEncryption.enabled,keyConfigured:Boolean(this.store.key),job:{...this.progress}};}
-  configure(enabled:boolean){if(this.progress.state==='running')throw new StoreError(moteText("批量解密期间请等待完成或取消后再修改加密设置"),409);this.store.contentEncryption.setEnabled(enabled);return this.snapshot();}
+  constructor(private store:Store,private files:FileStore,private archived:ArchivedFileStore,private configService?:ConfigService,private onEncryptionApplied?:(enabled:boolean)=>void){
+    configService?.setHandler<{contentEncryptionEnabled:boolean}>('storage',(next,previous)=>this.prepare(next.contentEncryptionEnabled,previous.contentEncryptionEnabled));
+  }
+  snapshot(){return {enabled:this.store.contentEncryption.enabled,keyConfigured:Boolean(this.store.key),job:{...this.progress},...(this.configService?{revision:this.configService.revision}:{})};}
+  prepare(enabled:boolean,previous:boolean):PreparedConfigChange {
+    if(enabled!==previous&&this.progress.state==='running')throw new StoreError(moteText("批量解密期间请等待完成或取消后再修改加密设置"),409);
+    this.store.contentEncryption.prepareEnabled(enabled);
+    return {apply:()=>{},publish:()=>this.store.contentEncryption.setEnabled(enabled),rollback:()=>this.store.contentEncryption.setEnabled(previous),complete:()=>this.onEncryptionApplied?.(enabled)};
+  }
+  configure(enabled:boolean){if(this.configService)throw new StoreError('Save content storage policy through ConfigService',409);const prepared=this.prepare(enabled,this.store.contentEncryption.enabled);prepared.apply();prepared.publish?.();return this.snapshot();}
+  async save(input:{enabled:boolean;revision:number}){if(!this.configService)throw new StoreError('Configuration service is unavailable',503);await this.configService.update('storage',{contentEncryptionEnabled:input.enabled},input.revision);return this.snapshot();}
   start(){
     if(this.progress.state==='running')return this.snapshot();
     if(this.store.contentEncryption.enabled)throw new StoreError(moteText("请先关闭内容加密，再批量解密已有文件"),409);
@@ -103,7 +112,7 @@ export class ContentStorageService {
 }
 export function registerContentStorage(app:FastifyInstance,service:ContentStorageService){
   app.get('/api/content-storage',async()=>service.snapshot());
-  app.put('/api/content-storage',async req=>service.configure(z.object({enabled:z.boolean()}).strict().parse(req.body).enabled));
+  app.put('/api/content-storage',async req=>service.save(z.object({enabled:z.boolean(),revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)}).strict().parse(req.body)));
   app.post('/api/content-storage/decrypt',async(req,reply)=>{z.object({}).strict().parse(req.body??{});return reply.code(202).send(service.start());});
   app.post('/api/content-storage/decrypt/cancel',async()=>service.cancel());
 }

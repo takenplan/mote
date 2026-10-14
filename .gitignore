@@ -27,6 +27,8 @@ __pycache__/
 
 # Explicit per-environment credentials, including custom locations inside this checkout
 **/mote.env
+**/mote.yaml
+!mote.example.yaml
 
 # Release credentials are never source or build artifacts.
 *.keystore
@@ -48,3 +50,6 @@ __pycache__/
 !/scripts/release/*.mjs
 
 /apps/desktop/release-dev/
+
+# Private listener metadata is volatile process state, not configuration.
+.*.runtime.json

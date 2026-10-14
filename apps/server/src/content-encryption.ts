@@ -26,15 +26,22 @@ export class ContentEncryption {
     const setting=(key:string)=>(db.prepare('SELECT value FROM settings WHERE key=?').get(key) as {value:string}|undefined)?.value;
     const identity=setting('content-key-id');
     if(identity&&(!this.key||fingerprint(this.key)!==identity))throw Error('Vault encryption key mismatch. Restore the original MOTE_DATA_KEY or content-key; existing encrypted data is retained.');
-    this.enabled=setting('content-encryption-enabled')==='1'||(setting('content-encryption-enabled')===undefined&&options.contentEncryptionEnabled===true);
+    this.enabled=options.contentEncryptionEnabled===true;
     if(this.enabled)this.ensureKey();
   }
   private ensureKey():Buffer {
+    // A maintenance process may have started before the owner enabled encryption.
+    // Reuse the managed identity created by the authoritative configuration transaction.
+    const localKey=join(this.directory,'content-key');
+    if(!this.key&&existsSync(localKey)){privateFile(localKey);const value=readFileSync(localKey,'utf8').trim();if(!/^[a-f0-9]{64}$/i.test(value))throw Error('Invalid stored content encryption key');this.key=Buffer.from(value,'hex');}
+    const identity=(this.db.prepare('SELECT value FROM settings WHERE key=?').get('content-key-id') as {value:string}|undefined)?.value;
+    if(identity&&(!this.key||fingerprint(this.key)!==identity))throw Error('Vault encryption key mismatch');
     if(!this.key){this.key=randomBytes(32);replaceContentFile(join(this.directory,'content-key'),Buffer.from(this.key.toString('hex')+'\n'));}
     this.db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('content-key-id',fingerprint(this.key));
     return this.key;
   }
-  setEnabled(enabled:boolean){if(enabled)this.ensureKey();this.db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('content-encryption-enabled',enabled?'1':'0');this.enabled=enabled;}
+  prepareEnabled(enabled:boolean){if(enabled)this.ensureKey();}
+  setEnabled(enabled:boolean){if(enabled)this.ensureKey();this.enabled=enabled;}
   finishDecryption(){
     if(this.enabled)throw Error('Disable content encryption before converting stored content');
     // Retain any locally generated key for future opt-in writes, but fully decrypted
