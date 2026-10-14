@@ -2,7 +2,7 @@ import {ImageProgress} from './ImageProgress';
 import {formatEvidenceRef} from '@mote/shared';
 import {memorySourceRoute} from './memory-source-route';
 import { decodeSourceText,captureOcrState,parseEvidenceRef,systemEventText,type CapturePreview } from '@mote/shared';
-import { moteText } from '@mote/shared/i18n';
+import { getLocale, moteText } from '@mote/shared/i18n';
 import {
 ArrowRight,
 ArrowUp,
@@ -342,7 +342,7 @@ export function LoginDialog({ destination, onConnected, onClose }: {
       <div className="modal-icon"><ShieldCheck size={24}/></div>
       <div className="eyebrow">{moteText("MOTE · 中央管理界面")}</div>
       <h2 id="connect-title">{moteText("登录 Mote")}</h2>
-      <p className="muted-copy">{moteText("此服务就是中央节点，负责接收和归档客户端采集的数据。验证管理令牌后，进入「")}{destination}」。</p>
+      <p className="muted-copy">{moteText("此服务就是中央节点，负责接收和归档客户端采集的数据。验证管理令牌后，进入「")}{destination}{getLocale()==='en'?'”.':'」。'}</p>
       <form onSubmit={connect}>
         <p className="login-endpoint">{moteText("当前服务")}{' '}<strong>{window.location.origin}</strong></p>
         <label>{moteText("管理访问令牌")}<input ref={tokenInput} aria-label={moteText("管理访问令牌")} autoFocus type="password" autoComplete="off" placeholder={moteText("输入此节点的管理令牌")} value={token} onChange={e=>setToken(e.target.value)} required disabled={busy}/></label>
@@ -351,7 +351,7 @@ export function LoginDialog({ destination, onConnected, onClose }: {
         {error && <ErrorNotice text={error}/>}
         <button className="button primary full" disabled={busy}>{busy ? <Spinner label={moteText("正在验证令牌…")}/> : <>{moteText("登录并继续")}<ArrowRight size={16}/></>}</button>
       </form>
-      <details className="connection-help"><summary>{moteText("在哪里获取管理令牌？")}</summary><p>{moteText("在部署机器上运行")}{' '}<code>node scripts/mote.mjs token --profile dev</code>{moteText("（日常环境使用对应名称），或读取部署配置中的")}{' '}<code>MOTE_TOKEN</code>{moteText("。设备扫码使用单独的一次性邀请。")}</p></details>
+      <details className="connection-help"><summary>{moteText("在哪里获取管理令牌？")}</summary><p>{moteText("在部署机器上运行")}{' '}<code>node scripts/mote.mjs token --profile dev</code>{' '}{moteText("（日常环境使用对应名称），或读取部署配置中的")}{' '}<code>MOTE_TOKEN</code>{moteText("。设备扫码使用单独的一次性邀请。")}</p></details>
     </section>
   </div>;
 }
