@@ -4,13 +4,14 @@ import { parseArgs } from 'node:util';
 import { writeFile,readFile,stat } from 'node:fs/promises';
 import { join,resolve } from 'node:path';
 import {fileURLToPath} from 'node:url';
-import { profilePaths, initialize, loadProfile, isolatedEnvironment, withProfileLock, startNative, nativeIdentity, health, compose, execute, backupProfile, restoreProfile, atomicJson, launchdXml, effectiveConfiguration, setPublicUrl } from './profile-lib.mjs';
+import { profilePaths, initialize, loadProfile, isolatedEnvironment, withProfileLock, startNative, nativeIdentity, health, compose, execute, backupProfile, restoreProfile, atomicJson, launchdXml, effectiveConfiguration, setPublicUrl, setDevLogRetentionDefaults } from './profile-lib.mjs';
 import { ensureMediaRuntime, probeMediaCommands } from './media-workers.mjs';
 import { configureTunnel, runNativeTunnel, nativeTunnelArgs, nativeTunnelIdentity, stopNativeTunnel } from './tunnel-lib.mjs';
 import { startProfile as start, stopProfile as stop, changeProfileDeployment } from './update-deploy.mjs';
 const help = `Mote central profiles (Node 24+, default: dev; prod requires --profile prod)
   init [--profile dev|test|prod] [--home PATH] [--runtime native|docker] [--port N] [--image TAG] [--data-dir NATIVE_PATH | --volume DOCKER_VOLUME]
   start|run|stop|status|config|token [--profile NAME] [--home PATH]
+  log-retention --defaults [--profile dev] [--home PATH] (adopt DEV per-file default; restart separately)
   run-all [--profile NAME] [--home PATH] (native central + configured tunnel; Ctrl+C stops both)
   exec [--profile NAME] [--home PATH] -- COMMAND ARG...
   compose [--profile NAME] [--home PATH] -- build|ps|...
@@ -40,7 +41,7 @@ let values, positionals;
 try { ({ values, positionals } = parseArgs({ args: raw, allowPositionals: true, options: {
   profile: { type: 'string', default: 'dev' }, home: { type: 'string' }, runtime: { type: 'string' }, port: { type: 'string' }, image: { type: 'string' }, release: { type: 'string' }, version: { type: 'string' },
   'data-dir': { type: 'string' }, volume: { type: 'string' }, 'token-file': { type: 'string' }, 'public-url': { type: 'string' }, protocol: { type: 'string' }, binary: { type: 'string' },
-  out: { type: 'string' }, from: { type: 'string' }, role:{type:'string'}, node: { type: 'string' }, python: {type:'string'}, enable: { type: 'boolean' }, disable: { type: 'boolean' }, 'restore-data': { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
+  out: { type: 'string' }, from: { type: 'string' }, role:{type:'string'}, node: { type: 'string' }, python: {type:'string'}, enable: { type: 'boolean' }, disable: { type: 'boolean' }, defaults: { type: 'boolean' }, 'restore-data': { type: 'boolean' }, help: { type: 'boolean', short: 'h' },
 } })); } catch { console.error('Mote: Invalid arguments; use --help. Credentials are never accepted as argument values.'); process.exit(1); }
 const command = positionals[0] ?? 'help';
 const print = value => console.info(JSON.stringify(value));
@@ -85,6 +86,10 @@ async function main() {
     return;
   }
   if (command === 'config') { print(effectiveConfiguration(p)); return; }
+  if (command === 'log-retention') {
+    if (!values.defaults) throw Error('log-retention requires the explicit --defaults flag');
+    print(await withProfileLock(p, async () => setDevLogRetentionDefaults(await loadProfile(paths)))); return;
+  }
   if (command === 'media-runtime') {
     if (p.meta.runtime !== 'native') throw Error('Docker bundles the media runtime in its image');
     const result=await withProfileLock(p,async()=>{

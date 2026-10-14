@@ -25,9 +25,10 @@ async function fixture(operation) {
 const build = async path => { await mkdir(join(path, 'apps/server/dist'), { recursive: true }); await mkdir(join(path, 'apps/web/dist'), { recursive: true }); await writeFile(join(path, 'apps/server/dist/index.js'), '// synthetic build artifact'); await writeFile(join(path, 'apps/web/dist/index.html'), '<!doctype html>synthetic'); };
 test('ordinary Docker profile commands work in a clean checkout without compiled shared code or node_modules', async () => fixture(async directory => {
   await mkdir(join(directory, 'scripts'));
-  for (const name of ['mote.mjs', 'profile-lib.mjs', 'media-workers.mjs', 'tunnel-lib.mjs', 'update-deploy.mjs', 'update-private.mjs']) await copyFile(join(repository, 'scripts', name), join(directory, 'scripts', name));
+  for (const name of ['mote.mjs', 'profile-lib.mjs', 'media-workers.mjs', 'tunnel-lib.mjs', 'update-deploy.mjs', 'update-private.mjs', 'plugin-memory-backup.mjs', 'hindsight-backup.mjs']) await copyFile(join(repository, 'scripts', name), join(directory, 'scripts', name));
   await copyFile(join(repository, 'package.json'), join(directory, 'package.json'));
   await mkdir(join(directory,'apps/server'),{recursive:true}); await copyFile(join(repository,'apps/server/package.json'),join(directory,'apps/server/package.json'));
+  await mkdir(join(directory,'apps/server/src')); await copyFile(join(repository,'apps/server/src/log-retention-config.mjs'),join(directory,'apps/server/src/log-retention-config.mjs'));
   await copyFile(join(repository, '.env.example'), join(directory, '.env.example'));
   const entry = join(directory, 'scripts/mote.mjs'), args = ['--profile', 'synthetic-clean-checkout', '--home', join(directory, 'profiles')];
   const initialized = JSON.parse(await execute(process.execPath, [entry, 'init', ...args, '--runtime', 'docker'], { capture: true }));

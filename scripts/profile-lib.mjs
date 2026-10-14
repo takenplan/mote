@@ -11,6 +11,7 @@ import { DatabaseSync } from 'node:sqlite';
 import {safePluginBackupPath} from './plugin-memory-backup.mjs';
 import {restoreHindsight} from './hindsight-backup.mjs';
 import { validateTunnel, tunnelTokenPath, dockerTunnelUser, removeTunnelSidecars, assertTunnelToken } from './tunnel-lib.mjs';
+import { logRetentionFromEnv, MiB } from '../apps/server/src/log-retention-config.mjs';
 
 export const repository = resolve(fileURLToPath(new URL('../', import.meta.url)));
 export const ports = { dev: 47842, test: 47852, prod: 47832 };
@@ -62,7 +63,7 @@ export async function initialize(paths, options = {}) {
     MOTE_MODEL_REASONING_EFFORT: 'high', MOTE_MODEL_MAX_TOKENS: '65536', MOTE_MODEL_REQUEST_TIMEOUT_MS: '', MOTE_AGENT_TIMEOUT_MS: '',
     MOTE_EMBEDDING_MODEL: '', MOTE_EMBEDDING_BASE_URL: '', MOTE_EMBEDDING_API_KEY: '',
     MOTE_RETENTION_DAYS: '0', MOTE_MAX_STORAGE_MB: '10240', MOTE_MAX_EXPORT_MB: '64', MOTE_INSIGHT_INTERVAL_HOURS: '0',
-    MOTE_LOG_DIR: './logs', MOTE_DIAGNOSTICS_ENABLED: '1', MOTE_DEBUG: '0', MOTE_AGENT_TRACE_ENABLED: paths.profile === 'dev' ? '1' : '0', MOTE_LOG_LEVEL: 'info', MOTE_LOG_MAX_MB: '2', MOTE_LOG_MAX_FILES: '3', MOTE_LOG_MAX_ENTRIES: '2000',
+    MOTE_LOG_DIR: './logs', MOTE_DIAGNOSTICS_ENABLED: '1', MOTE_DEBUG: '0', MOTE_AGENT_TRACE_ENABLED: paths.profile === 'dev' ? '1' : '0', MOTE_LOG_LEVEL: 'info', MOTE_LOG_MAX_MB: paths.profile === 'dev' ? 'auto' : '2', MOTE_LOG_MAX_FILES: '3', MOTE_LOG_MAX_ENTRIES: '2000',
     MOTE_PUBLIC_URL: '',
     MOTE_TLS_DOMAIN: '', MOTE_TLS_HTTP_PORT: '80', MOTE_TLS_HTTPS_PORT: '443',
   };
@@ -139,9 +140,57 @@ export function effectiveConfiguration(p) {
     credentials: { accessTokenConfigured: Boolean(p.env.MOTE_TOKEN), modelKeyConfigured: Boolean(p.env.MOTE_MODEL_API_KEY), embeddingKeyConfigured: Boolean(p.env.MOTE_EMBEDDING_API_KEY) },
     models: { model: p.env.MOTE_MODEL || '', endpoint: endpoint(p.env.MOTE_MODEL_BASE_URL), embeddingModel: p.env.MOTE_EMBEDDING_MODEL || '', embeddingEndpoint: endpoint(p.env.MOTE_EMBEDDING_BASE_URL) },
     archive: { retentionDays: Number(p.env.MOTE_RETENTION_DAYS || 0), maxStorageMiB: Number(p.env.MOTE_MAX_STORAGE_MB || 10240), maxExportMiB: Number(p.env.MOTE_MAX_EXPORT_MB || 64) },
+    diagnostics: effectiveLogRetention(p),
     updates: { repository: p.env.MOTE_UPDATE_REPOSITORY || 'utopiafar/mote', channel: p.env.MOTE_UPDATE_CHANNEL || 'stable', verifiedManifestRequired: true, installation: 'explicit-profile-command' },
     tunnel: { configured: tunnel.enabled, provider: tunnel.enabled ? 'cloudflare' : null, protocol: tunnel.protocol, connected: 'not-checked', originService: p.meta.runtime === 'docker' ? 'http://mote:47832' : p.url, supervision: p.meta.runtime === 'docker' ? 'compose' : 'foreground-runner' },
     apply: 'Edit the selected private configuration and restart this profile; existing archive data is not moved automatically' };
+}
+export function effectiveLogRetention(p) {
+  const limits = logRetentionFromEnv(p.env, p.profile);
+  return {
+    logMaxMiB: limits.maxBytes / MiB,
+    logMaxFiles: limits.maxFiles,
+    logMaxEntries: limits.maxEntries,
+    logMaxMiBSource: limits.source,
+  };
+}
+export async function assertLogRetentionCompatible(p, { execute: run = execute } = {}) {
+  const limits = logRetentionFromEnv(p.env, p.profile);
+  if (p.env.MOTE_LOG_MAX_MB !== 'auto' && limits.maxBytes <= 8 * MiB) return;
+  const message = 'The selected release/image could not be verified to support this log capacity. Use an updated release/image, or deliberately configure an explicit MOTE_LOG_MAX_MB of 8 or less; no fallback was applied';
+  try {
+    if (p.meta.runtime === 'native') {
+      if (!(await lstat(join(resolve(p.meta.release), 'apps/server/dist/log-retention-config.mjs'))).isFile()) throw Error('Capability marker missing');
+    } else {
+      await run('docker', ['run', '--rm', '--pull', 'never', '--network', 'none', '--entrypoint', 'node', p.meta.image, '--input-type=module', '-e', "import {accessSync} from 'node:fs'; accessSync('/app/apps/server/dist/log-retention-config.mjs');"], { capture: true, timeoutMs: 15000 });
+    }
+  } catch { throw Error(message); }
+}
+export async function setDevLogRetentionDefaults(p) {
+  if (p.profile !== 'dev') throw Error('log-retention --defaults is only available for the dev profile');
+  const raw = await readFile(p.envFile, 'utf8'), beforeValues = parseEnv(raw);
+  const before = effectiveLogRetention({ ...p, env: beforeValues });
+  const assignment = /^[\t ]*(?:export[\t ]+)?MOTE_LOG_MAX_MB[\t ]*=.*$/gm;
+  const matches = [...raw.matchAll(assignment)];
+  if (matches.length > 1) throw Error('Cannot update MOTE_LOG_MAX_MB safely; remove duplicate keys or edit this field manually');
+  await assertLogRetentionCompatible({ ...p, env: { ...beforeValues, MOTE_LOG_MAX_MB: 'auto' } });
+  const changed = beforeValues.MOTE_LOG_MAX_MB !== 'auto';
+  if (changed) {
+    const entry = "MOTE_LOG_MAX_MB='auto'";
+    const next = matches.length ? raw.replace(assignment, entry) : raw + '\n' + entry + '\n';
+    const afterValues = parseEnv(next);
+    const otherValues = values => JSON.stringify(Object.entries(values).filter(([key]) => key !== 'MOTE_LOG_MAX_MB').sort());
+    if (afterValues.MOTE_LOG_MAX_MB !== 'auto' || otherValues(beforeValues) !== otherValues(afterValues)) throw Error('Cannot update MOTE_LOG_MAX_MB safely; edit this field manually');
+    const temp = `${p.envFile}.${randomUUID()}.tmp`;
+    try {
+      const fd = await open(temp, 'wx', 0o600);
+      try { await fd.writeFile(next); await fd.sync(); } finally { await fd.close(); }
+      await rename(temp, p.envFile);
+    } finally { await rm(temp, { force: true }); }
+  }
+  const after = effectiveLogRetention({ ...p, env: { ...beforeValues, MOTE_LOG_MAX_MB: 'auto' } });
+  const summary = limits => ({ maxFileMiB: limits.logMaxMiB, maxFiles: limits.logMaxFiles });
+  return { profile: p.profile, changed, before: summary(before), after: summary(after), restartRequired: true };
 }
 export function isolatedEnvironment(p, extra = {}) {
   const env = { ...process.env };
@@ -224,6 +273,7 @@ async function ensurePortFree(p) {
   });
 }
 export async function startNative(p, foreground = false) {
+  await assertLogRetentionCompatible(p);
   const current = await nativeIdentity(p);
   if (current.running) {
     if (!current.managed) throw Error('Recorded PID belongs to another process; refusing to use or stop it');
@@ -281,7 +331,20 @@ export function composeEnvironment(p) {
 export function composeArgs(p, args) {
   return ['compose', '--project-name', p.project, '--project-directory', repository, '--env-file', join(repository, 'deploy/empty.env'), '-f', join(repository, 'compose.yaml'), ...(p.meta.tls ? ['-f', join(repository, 'compose.tls.yaml')] : []), ...(validateTunnel(p.meta.tunnel).enabled ? ['-f', join(repository, 'compose.tunnel.yaml')] : []), ...args];
 }
+export function composeOperation(args) {
+  const valueOptions = new Set(['--project-name', '-p', '--file', '-f', '--project-directory', '--env-file', '--profile', '--parallel', '--ansi', '--progress']);
+  for (let index = 0; index < args.length; index++) {
+    const value = args[index];
+    if (value === '--') return args[index + 1];
+    if (!value.startsWith('-')) return value;
+    if (valueOptions.has(value)) index++;
+    // Equals-form and attached short values occupy one argument. Other flags
+    // occupy no value here; Docker receives and validates the original args.
+  }
+  return undefined;
+}
 export async function compose(p, args, options = {}) {
+  if (['up', 'create', 'run', 'restart'].includes(composeOperation(args))) await assertLogRetentionCompatible(p);
   // Parse dotenv once with Node, then pass literal values to Compose raw env_file. No root .env or shell interpolation.
   const tunnel = validateTunnel(p.meta.tunnel);
   if (tunnel.enabled && ['up','create','run','restart'].includes(args[0])) { await assertTunnelToken(p); p.tunnelUser = await dockerTunnelUser(p, execute); }

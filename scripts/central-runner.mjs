@@ -3,12 +3,11 @@ import { spawn } from 'node:child_process';
 import { appendFileSync, statSync, renameSync, rmSync, mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { startMediaWorkers } from './media-workers.mjs';
+import { logRetentionFromEnv } from '../apps/server/src/log-retention-config.mjs';
 
 const [entry, logPath, marker] = process.argv.slice(2);
 if (!entry || !logPath || !/^--mote-instance=[a-f0-9-]{36}$/.test(marker ?? '')) throw Error('Invalid central supervisor invocation');
-const bounded = (value, fallback, min, max) => Number.isFinite(Number(value)) ? Math.max(min, Math.min(max, Number(value))) : fallback;
-const maxBytes = Math.floor(bounded(process.env.MOTE_LOG_MAX_MB ?? 2, 2, 0.1, 8) * 1024 * 1024);
-const maxFiles = Math.floor(bounded(process.env.MOTE_LOG_MAX_FILES ?? 3, 3, 1, 10));
+const { maxBytes, maxFiles } = logRetentionFromEnv(process.env, process.env.MOTE_PROFILE);
 const maxBufferedBytes = 16 * 1024;
 let buffered = [], bufferedBytes = 0, logFailed = false;
 mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 });

@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import type { ConfigurationField, ConfigurationValue, ServerConfiguration } from '@mote/shared';
 import { DEFAULT_AGENT_TIMEOUT_MS, DEFAULT_MODEL_MAX_TOKENS, DEFAULT_MODEL_REQUEST_TIMEOUT_MS, modelProvider } from '@mote/shared/models';
 import { repositoryRoot, type Config } from './config.js';
+import { defaultLogMaxBytes } from './log-retention-config.mjs';
 
 /** Strip credential-bearing URL components even for programmatic Config callers that bypass env validation. */
 export function configurationUrl(value: string | null | undefined): string | null {
@@ -115,7 +116,7 @@ export function serverConfiguration(config: Config, options: { modelSource?: 'en
         field('logLevel', moteText("配置的日志级别"), config.logLevel ?? 'info', moteText("支持 debug、info、warn、error、silent。调试模式会将非 silent 级别提升为 debug。"), 'MOTE_LOG_LEVEL'),
         field('effectiveLogLevel', moteText("实际诊断日志级别"), config.logLevel === 'silent' ? 'silent' : config.diagnosticsDebug ? 'debug' : config.logLevel ?? 'info', moteText("silent 优先；其余情况下 MOTE_DEBUG=1 使用 debug。诊断总开关关闭时，任何级别均不记录事件。")),
         field('logDirectory', moteText("日志目录"), logDir, moteText("结构化中央日志的实际路径；Docker 通常位于 /data/logs。"), 'MOTE_LOG_DIR', ownerPath),
-        field('logMaxBytes', moteText("每份结构化日志上限"), config.logMaxBytes ?? 2 * 1024 * 1024, moteText("独立于资料容量上限。"), 'MOTE_LOG_MAX_MB', { unit: 'bytes' }),
+        field('logMaxBytes', moteText("每份结构化日志上限"), config.logMaxBytes ?? defaultLogMaxBytes(config.profile), moteText("独立于资料容量上限。"), 'MOTE_LOG_MAX_MB', { unit: 'bytes' }),
         field('logMaxFiles', moteText("日志文件数上限"), config.logMaxFiles ?? 3, moteText("有限轮转的总文件数量；Docker/进程管理器输出另有部署级上限。"), 'MOTE_LOG_MAX_FILES', { unit: 'files' }),
         field('logMaxEntries', moteText("内存事件条数上限"), config.logMaxEntries ?? 2000, moteText("达到上限后保留较新的固定事件。"), 'MOTE_LOG_MAX_ENTRIES', { unit: 'entries' }),
       ] },

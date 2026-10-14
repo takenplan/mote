@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp,readFile,readdir,rm,writeFile,stat } from 'node:fs/promises';
+import { mkdtemp,open,readFile,readdir,rm,writeFile,stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -61,6 +61,95 @@ test('opt-in Agent trace is written to the ordinary central log and survives rel
   const event=d.events().items.find(row=>row.event==='agent.trace');assert.ok(event);assert.equal(event?.requestId,requestId);assert.equal(event?.jobId,jobId);assert.equal((event?.trace as Record<string,unknown>).traceId,traceId);assert.equal((event?.trace as Record<string,unknown>).payload&&((event?.trace as Record<string,unknown>).payload as Record<string,unknown>).prompt,marker);
   const exported=await d.exportRange(new Date(Date.now()-1000).toISOString(),new Date(Date.now()+1000).toISOString());assert.deepEqual(exported.events,[]);
   await d.close();const reloaded=new ServerDiagnostics({directory,traceEnabled:true});await reloaded.init();assert.equal(reloaded.events().items.filter(row=>row.event==='agent.trace').length,1);assert.equal(reloaded.snapshot().agentTrace.enabled,true);await reloaded.close();
+});
+
+test('100 MiB retention keeps real generated trace logs above the old 8 MiB ceiling across reads and restart',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'mote-diagnostics-large-')),now=new Date('2026-09-20T12:00:00.000Z');
+  const options={directory,maxBytes:100*1024*1024,maxFiles:3,maxEntries:3,traceEnabled:true,now:()=>now};
+  const d=new ServerDiagnostics(options);let restarted:ServerDiagnostics|undefined;t.after(async()=>{await restarted?.close();await d.close();await rm(directory,{recursive:true,force:true});});await d.init();
+  for(let index=0;index<9;index++){d.agentTrace({type:'fixture.model.completed',step:index,payload:'生成的 diagnostic fixture '.repeat(33_000)});await d.flush();}
+  d.record('server.started');await d.flush();
+  const size=(await stat(join(directory,'central.0.ndjson'))).size;assert.ok(size>8*1024*1024);assert.ok(size<100*1024*1024);
+  assert.equal(d.snapshot().limits.maxFileBytes,100*1024*1024);assert.equal(d.snapshot().retainedEvents,3);assert.equal(d.snapshot().droppedEvents,0);
+  assert.equal(Buffer.byteLength(await d.readRaw()),size);
+  // Pagination and safe export must traverse lines directly, without materializing a raw file first.
+  t.mock.method(d,'readRaw',async()=>{throw new Error('whole-file reader must not be used');});
+  const latest=await d.readPage(0,1,2);assert.equal(latest.totalLines,10);assert.deepEqual(latest.items.map(line=>JSON.parse(line).seq),[9,10]);
+  const oldest=await d.readPage(0,999,2);assert.equal(oldest.page,5);assert.deepEqual(oldest.items.map(line=>JSON.parse(line).seq),[1,2]);
+  const filtered=await d.readPage(0,1,2,'system');assert.equal(filtered.totalLines,1);assert.equal(JSON.parse(filtered.items[0]).event,'server.started');
+  const exported=await d.exportRange('2026-09-20T12:00:00.000Z','2026-09-21T00:00:00.000Z');
+  assert.deepEqual(exported.events.map(event=>event.seq),[10]);assert.equal(exported.oldestRetainedAt,now.toISOString());assert.equal(exported.retentionLimited,false);assert.equal(exported.invalidLines,0);
+  await d.close();restarted=new ServerDiagnostics(options);await restarted.init();
+  assert.deepEqual(restarted.recent().map(event=>event.seq),[8,9,10]);assert.equal(restarted.snapshot().readFailures,0);assert.equal(restarted.snapshot().lastSeq,10);
+  restarted.record('server.started');await restarted.flush();assert.equal(JSON.parse((await restarted.readPage(0,1,1)).items[0]).seq,11);
+});
+
+test('large-file retention does not expand ordinary or per-trace payload limits',async t=>{
+  const root=await mkdtemp(join(tmpdir(),'mote-diagnostics-trace-limits-'));t.after(()=>rm(root,{recursive:true,force:true}));
+  for(const maxBytes of [2*1024*1024,8*1024*1024,100*1024*1024]){
+    const d=new ServerDiagnostics({directory:join(root,String(maxBytes)),maxBytes,traceEnabled:true});await d.init();
+    try{
+      d.agentTrace({type:'fixture.accepted',payload:['x'.repeat(900_000),'x'.repeat(900_000)]});await d.flush();
+      assert.equal(d.recent()[0].trace?.truncated,undefined);
+      if(maxBytes>2*1024*1024){d.agentTrace({type:'fixture.near_trace_ceiling',payload:Array.from({length:8},()=> 'x'.repeat(1_000_000))});await d.flush();assert.equal(d.recent().at(-1)!.trace?.truncated,undefined);}
+      const payload=Array.from({length:maxBytes===2*1024*1024?3:9},()=> 'x'.repeat(1_000_000));
+      d.agentTrace({type:'fixture.too_large',payload});await d.flush();assert.equal(d.recent().at(-1)!.trace?.truncated,true);assert.equal(typeof d.recent().at(-1)!.trace?.payload,'string');
+      d.agentTrace({type:'fixture.string_limit',payload:'x'.repeat(1_000_001)});await d.flush();const trace=d.recent().at(-1)!.trace!;assert.equal(trace.truncated,true);assert.equal((trace.payload as string).length,1_000_000);
+      for(const line of (await d.readRaw()).trim().split('\n'))assert.ok(Buffer.byteLength(line)+1<=Math.min(maxBytes,8*1024*1024));
+      const ordinary=serializeDiagnosticEvent({seq:1,at:'2026-09-20T12:00:00.000Z',instanceId:randomUUID(),event:'server.started',level:'info',padding:'x'.repeat(100*1024)} as never);
+      assert.ok(Buffer.byteLength(ordinary)<=20*1024);assert.equal(JSON.parse(ordinary).truncated,true);
+    }finally{await d.close();}
+  }
+  assert.equal(new ServerDiagnostics({directory:join(root,'default')}).snapshot().limits.maxFileBytes,2*1024*1024);
+  assert.equal(new ServerDiagnostics({directory:join(root,'clamped'),maxBytes:200*1024*1024}).snapshot().limits.maxFileBytes,100*1024*1024);
+});
+
+test('100 MiB boundary rotates three files within a 300 MiB disk ceiling and still rotates at UTC midnight',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'mote-diagnostics-large-boundary-')),maxBytes=100*1024*1024,instanceId=randomUUID();let now=new Date('2026-09-20T23:59:59.000Z');
+  let d:ServerDiagnostics|undefined;t.after(async()=>{await d?.close();await rm(directory,{recursive:true,force:true});});
+  // Sparse generated fixtures reach the exact disk-size boundary without writing 300 MiB of payloads.
+  // Newlines every MiB bound the malformed fixture lines; each file also contains a valid event.
+  for(let index=0;index<3;index++){
+    const file=await open(join(directory,`central.${index}.ndjson`),'w');
+    try{
+      await file.writeFile(JSON.stringify({seq:3-index,at:now.toISOString(),instanceId,event:'server.started',level:'info'})+'\n');await file.truncate(maxBytes);
+      for(let position=1024*1024-1;position<maxBytes;position+=1024*1024)await file.write('\n',position,'utf8');
+    }finally{await file.close();}
+  }
+  assert.equal((await Promise.all([0,1,2].map(async index=>(await stat(join(directory,`central.${index}.ndjson`))).size))).reduce((sum,size)=>sum+size,0),300*1024*1024);
+  d=new ServerDiagnostics({directory,maxBytes,maxFiles:3,now:()=>now});await d.init();
+  assert.equal(d.snapshot().lastSeq,3);assert.equal((await stat(join(directory,'central.0.ndjson'))).size,maxBytes);
+  d.record('server.started');await d.flush();assert.equal(JSON.parse((await d.readPage(0,1,1)).items[0]).seq,4);
+  const history=await open(join(directory,'central.1.ndjson'),'r');try{assert.equal((await history.stat()).size,maxBytes);const head=Buffer.alloc(512);const {bytesRead}=await history.read(head,0,512,0);assert.equal(JSON.parse(head.subarray(0,bytesRead).toString().split('\n')[0]).seq,3);}finally{await history.close();}
+  const files=(await readdir(directory)).filter(name=>/^central\.\d+\.ndjson$/.test(name));assert.equal(files.length,3);
+  const sizes=await Promise.all(files.map(async name=>(await stat(join(directory,name))).size));assert.ok(sizes.every(size=>size<=maxBytes));assert.ok(sizes.reduce((sum,size)=>sum+size,0)<=300*1024*1024);
+  now=new Date('2026-09-21T00:00:00.000Z');d.record('server.started');await d.flush();
+  assert.equal(JSON.parse((await d.readPage(0,1,1)).items[0]).seq,5);assert.equal(JSON.parse((await d.readPage(1,1,1)).items[0]).seq,4);
+  assert.equal((await stat(join(directory,'central.2.ndjson'))).size,maxBytes);await d.close();
+});
+
+test('chunked readers preserve dense ordinary log ordering across many chunk boundaries',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'mote-diagnostics-dense-')),instanceId=randomUUID(),at='2026-09-20T12:00:00.000Z';
+  const rows=Array.from({length:10_000},(_,index)=>JSON.stringify({seq:index+1,at,instanceId,event:'source.completed',level:'info',operation:'evidence',count:index}));
+  await writeFile(join(directory,'central.0.ndjson'),rows.join('\n')+'\n');assert.ok((await stat(join(directory,'central.0.ndjson'))).size>64*1024);
+  const d=new ServerDiagnostics({directory,maxBytes:100*1024*1024,maxEntries:17});t.after(async()=>{await d.close();await rm(directory,{recursive:true,force:true});});await d.init();
+  assert.equal(d.snapshot().lastSeq,10_000);assert.equal(d.snapshot().readFailures,0);assert.equal(d.snapshot().retainedEvents,17);
+  assert.deepEqual((await d.readPage(0,1,3,'source')).items.map(line=>JSON.parse(line).seq),[9998,9999,10_000]);
+  const oldest=await d.readPage(0,9999,3);assert.equal(oldest.page,3334);assert.deepEqual(oldest.items.map(line=>JSON.parse(line).seq),[1]);
+  const exported=await d.exportRange(at,'2026-09-21T00:00:00.000Z');assert.equal(exported.events.length,10_000);assert.deepEqual(exported.events.map(event=>event.seq),Array.from({length:10_000},(_,index)=>index+1));assert.equal(exported.invalidLines,0);
+});
+
+test('chunked raw pages retain multibyte text, blank-line rules and incomplete malformed tails',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'mote-diagnostics-chunk-text-')),d=new ServerDiagnostics({directory,maxBytes:100*1024*1024});
+  t.after(async()=>{await d.close();await rm(directory,{recursive:true,force:true});});await d.init();
+  const first='x'.repeat(64*1024-2)+'中文🚲 fixture',at='2026-09-20T12:00:00.000Z';
+  const ordinary=JSON.stringify({seq:1,at,instanceId:randomUUID(),event:'server.started',level:'info'}),partial='{"unfinished":"generated fixture';
+  const raw=first+'\n\n'+ordinary+'\n'+partial;await writeFile(join(directory,'central.0.ndjson'),raw);
+  const allocations:number[]=[],allocate=Buffer.allocUnsafe;t.mock.method(Buffer,'allocUnsafe',(size:number)=>{allocations.push(size);return allocate(size);});
+  assert.equal(await d.readRaw(),raw);assert.ok(allocations.includes(Buffer.byteLength(raw)));assert.ok(!allocations.includes(100*1024*1024));
+  const latest=await d.readPage(0,1,2);assert.deepEqual(latest.items,[ordinary,partial]);assert.equal(latest.totalLines,3);
+  assert.deepEqual((await d.readPage(0,2,2)).items,[first]);assert.deepEqual((await d.readPage(0,2,1,'unknown')).items,[first]);
+  const exported=await d.exportRange(at,'2026-09-21T00:00:00.000Z');assert.equal(exported.invalidLines,2);assert.deepEqual(exported.events.map(event=>event.seq),[1]);
 });
 
 test('log rotation, memory, pending queue and forward cursor remain bounded under bursts',async t=>{

@@ -112,9 +112,13 @@
 | `MOTE_AGENT_TRACE_ENABLED` | dev 为 `1`，其它环境为 `0` | 0/1；显式记录 Agent 请求上下文、完整 prompt、模型输出、工具参数/结果、校验和阶段状态到普通 `central.N.ndjson`。可能包含个人内容，只建议开发环境开启 |
 | `MOTE_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` / `silent` |
 | `MOTE_LOG_DIR` | 空 | 为空使用数据目录下 `logs/`；CLI 原生新环境为 `./logs`；Docker 强制 `/data/logs` |
-| `MOTE_LOG_MAX_MB` | `2` | 0.1–8 MiB，每个结构化日志文件上限；跨 UTC 日期或达到上限时轮转，单条日志最多 20 KiB，超出截断而非丢弃 |
+| `MOTE_LOG_MAX_MB` | dev 为 `100`，其它为 `2` | `auto` 或未设置使用 profile 默认值；显式数值 dev 允许 0.1–100 MiB，其它 profile 允许 0.1–8 MiB。跨 UTC 日期或达到上限时轮转 |
 | `MOTE_LOG_MAX_FILES` | `3` | 1–10 整数，轮转文件总数 |
 | `MOTE_LOG_MAX_ENTRIES` | `2000` | 100–5000 整数，内存最近事件上限 |
+
+新建 DEV profile 写入 `MOTE_LOG_MAX_MB=auto`，默认结构化日志为 100 MiB × 3，最多 300 MiB；其它环境保留 2 MiB × 3。显式数值不会随版本升级改变，包括旧 DEV 模板中的 `2`。已有 DEV 使用 [默认值迁移命令](deployment.md#dev-log-retention) 主动迁移，命令不自动重启。容量独立于资料容量，不保证固定保留时长；跨 UTC 日期仍会轮转。
+
+普通结构化事件仍最多 20 KiB。详细 Agent trace 单条序列化记录最多取「文件容量」和 8 MiB 中较小值，保留此前允许的单条硬上限；DEV 扩容后，原本受 2 MiB 文件限制的 trace 可记录至 8 MiB，超大 trace 仍以带 `truncated` 的摘要替代。字符串最多 1,000,000 字符、数组 500 项、对象 250 个键、嵌套 8 层的边界不变。该容量设置不改变模型输入、输出或传输授权。
 
 配置页面包含私有路径，不能当作安全支持包公开分享；`GET /api/configuration` 同样要求节点所有者令牌。安全诊断包仍只含固定事件、计数和耗时，即使开发环境开启详细 Agent trace 也会排除其正文。Cloudflare connector 使用独立日志级别，不继承 `MOTE_DEBUG`；不要自行开启会记录 Authorization headers 的 cloudflared debug。排错流程见 [运行诊断](troubleshooting.md)。
 
