@@ -3,11 +3,13 @@ require('./fixture-language.cjs');
 /** Two real renderers and owner APIs, generated PCM/transcripts and a proposal stub. */
 const {app,BrowserWindow}=require('electron'),{mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync}=require('node:fs');
 const {tmpdir}=require('node:os'),{join,resolve}=require('node:path'),{spawn,execFileSync}=require('node:child_process'),{randomBytes,createHash}=require('node:crypto'),assert=require('node:assert/strict');
+const {diarizationPresentation,englishFileBoundaries,selectedCorrectionCaption}=require('./file-presentation-probe.cjs');
+const presentationOnly=process.argv.includes('--presentation-only');
 const repo=resolve(__dirname,'..'),root=mkdtempSync(join(tmpdir(),'mote-file-correction-ui-'));
 const outputRoot=process.env.MOTE_UI_OUTPUT_DIR||join(repo,'.mote/file-corrections-ui');mkdirSync(outputRoot,{recursive:true});const out=mkdtempSync(join(outputRoot,'run-'));
 app.setPath('userData',join(root,'browser'));app.on('window-all-closed',()=>{});
-const report={status:'running',head:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),personalDataUsed:false,modelInvoked:false,transcriptionStub:true,proposalStub:true,physicalDevicesTested:false,checks:[],httpErrors:[],crashes:[]};
-report.codeHashes=Object.fromEntries(['scripts/test-file-corrections-ui.cjs','scripts/file-corrections-fixture.mjs','apps/server/dist/capture-browser.js','apps/server/dist/materials.js','apps/server/dist/source-material-view.js','apps/server/dist/evidence-reader.js','apps/server/dist/evidence-routes.js','apps/server/dist/evidence-scope-record.js','apps/web/dist/index.html'].map(path=>[path,createHash('sha256').update(readFileSync(join(repo,path))).digest('hex')]));
+const report={status:'running',head:execFileSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).trim(),personalDataUsed:false,modelInvoked:false,transcriptionStub:true,proposalStub:true,presentationOnly,physicalDevicesTested:false,checks:[],httpErrors:[],crashes:[]};
+report.codeHashes=Object.fromEntries(['scripts/test-file-corrections-ui.cjs','scripts/file-corrections-fixture.mjs','scripts/file-presentation-fixture.mjs','scripts/file-presentation-probe.cjs','apps/server/dist/capture-browser.js','apps/server/dist/materials.js','apps/server/dist/source-material-view.js','apps/server/dist/evidence-reader.js','apps/server/dist/evidence-routes.js','apps/server/dist/evidence-scope-record.js','apps/web/dist/index.html'].map(path=>[path,createHash('sha256').update(readFileSync(join(repo,path))).digest('hex')]));
 const save=()=>writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n');
 const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));let server;const windows=[];
 async function until(fn,label,timeout=20000){const end=Date.now()+timeout;while(Date.now()<end){if(await fn())return;await delay(100);}throw Error('Timeout: '+label);}
@@ -17,7 +19,7 @@ async function run(){
  await app.whenReady();const token=randomBytes(32).toString('hex'),ready=join(root,'ready.json'),configPath=join(root,'config.json');
  const config={dataDir:join(root,'vault'),token,tokenPath:join(root,'token'),host:'127.0.0.1',port:0,maxStorageBytes:30000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'silent'};
  writeFileSync(configPath,JSON.stringify({config,ready}),{mode:0o600});
- server=spawn('node',[join(repo,'scripts/file-corrections-fixture.mjs'),configPath],{cwd:repo,env:Object.fromEntries(['PATH','HOME','TMPDIR','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]])),stdio:['ignore','ignore','pipe']});let stderr='';server.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-12000);report.fixtureStderr=stderr;});
+ server=spawn('node',[join(repo,presentationOnly?'scripts/file-presentation-fixture.mjs':'scripts/file-corrections-fixture.mjs'),configPath],{cwd:repo,env:Object.fromEntries(['PATH','HOME','TMPDIR','LANG'].filter(k=>process.env[k]).map(k=>[k,process.env[k]])),stdio:['ignore','ignore','pipe']});let stderr='';server.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-12000);report.fixtureStderr=stderr;});
  await until(()=>{if(server.exitCode!==null)throw Error(stderr);return existsSync(ready);},'fixture server');
  const info=JSON.parse(readFileSync(ready,'utf8')),endpoint='http://127.0.0.1:'+info.port;
  const request=async(path,body)=>{const r=await fetch(endpoint+path,{method:body?'POST':'GET',headers:{authorization:'Bearer '+token,'content-type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});assert.ok(r.ok,`${path}: ${r.status} ${await(r.ok?Promise.resolve(''):r.text())}`);return r.json();};
@@ -31,18 +33,49 @@ async function run(){
  writeFileSync(join(out,'before-material.png'),(await material.wc.capturePage()).toPNG());
  const file=await open();await file.click('文件与录音');await until(()=>file.js(`!!document.querySelector('.file-card')`),'file row');await file.js(`document.querySelector('.file-card').click()`);await file.click('展开转写 / 原文片段');await until(()=>file.js(`document.querySelectorAll('.file-text').length===2`),'file transcript');
  check('confirmed names visible beside transcript',await file.js(`[...document.querySelectorAll('.file-text')].some(e=>e.parentElement.textContent.includes('林工（生成）'))`));
- // A real loaded per-file form retains scopes/limits and the same R5 execution role.
- await file.click('单文件分人设置');
- for(const width of [1180,820,390,320]){
-  file.win.setSize(width,950);await until(()=>file.js(`innerWidth===${width}`),'diarization viewport');
-  await file.js(`(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.value='range';select.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
-  await until(()=>file.js(`document.querySelectorAll('.file-diarization-fields input[type=number]').length===2`),'original range fields');
-  const appearance=await file.js(`(()=>{const f=document.querySelector('.file-diarization-fields'),s=getComputedStyle(f),e=f.querySelector('button[type=submit]');e.scrollIntoView({block:'center',behavior:'instant'});const r=e.getBoundingClientRect(),dock=document.getElementById('primary-navigation').getBoundingClientRect();return {border:s.borderTopStyle,radius:parseFloat(s.borderTopLeftRadius),primary:e.classList.contains('primary'),bounds:r.top>=0&&r.bottom<(innerWidth<=760?dock.top:innerHeight)&&r.left>=0&&r.right<=innerWidth,hit:document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===e,limit:[...f.querySelectorAll('input')].every(i=>i.max==='16'),fit:f.scrollWidth<=f.clientWidth}})()`);
-  check('per-file diarization cold rounded group, primary submit and original16-person bounds at '+width,appearance.border==='solid'&&appearance.radius>0&&appearance.primary&&appearance.bounds&&appearance.hit&&appearance.limit&&appearance.fit);
-  writeFileSync(join(out,'file-diarization-'+width+'.png'),(await file.wc.capturePage()).toPNG());
+ // The actual language control reloads the same file, then native controls drive all count modes.
+ async function reopenFile(locale){
+  if(await file.js('document.documentElement.lang')!==locale){
+   await file.js(`(()=>{window.confirm=()=>true;const s=[...document.querySelectorAll('.language-selector select')].find(e=>e.getClientRects().length);s.value=${JSON.stringify(locale)};s.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
+   await until(()=>file.js(`document.documentElement.lang===${JSON.stringify(locale)}&&!!document.querySelector('.file-card')`),'actual file language reload');
+   await file.js("document.querySelector('.file-card').click();true");
+   await until(()=>file.js("!!document.querySelector('.file-detail')"),'file detail restored');
+  }
  }
- await file.js(`(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.value='unknown';select.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);await file.click('单文件分人设置');file.win.setSize(1180,950);
+ for(const locale of ['zh-CN','en']){
+  await reopenFile(locale);
+  await file.js("document.querySelectorAll('.file-detail details:not([open])').forEach(e=>e.querySelector('summary').click());true");
+  for(const width of [1440,820,390,320])for(const mode of ['unknown','exact','range']){
+   file.win.setSize(width,950);await until(()=>file.js(`innerWidth===${width}`),'diarization viewport');
+   await file.js(`(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.value=${JSON.stringify(mode)};select.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
+   await until(()=>file.js(`document.querySelectorAll('.file-diarization-fields input[type=number]').length===${mode==='unknown'?0:mode==='exact'?1:2}`),'original count fields');
+   const appearance=await file.js('('+diarizationPresentation.toString()+')()');
+   check(`per-file selected values and whole primary action remain readable ${locale}/${width}/${mode}`,appearance.border==='solid'&&appearance.radius>0&&appearance.primary&&appearance.buttonComplete&&appearance.hit&&appearance.limit&&appearance.fit&&appearance.selections.every(s=>s.complete)&&appearance.words.every(w=>w.lines===1));
+   report.presentation??=[];report.presentation.push({locale,width,mode,appearance});
+   writeFileSync(join(out,`file-diarization-${locale}-${width}-${mode}.png`),(await file.wc.capturePage()).toPNG());
+  }
+  if(locale==='en'){
+   const boundaries=await file.js('('+englishFileBoundaries.toString()+')()');
+   check('English file status and policy labels retain word boundaries',Object.values(boundaries).every(Boolean));report.englishBoundaries=boundaries;
+  }
+ }
+ await reopenFile('zh-CN');file.win.setSize(1180,950);
+ await file.js("document.querySelectorAll('.file-detail details[open]').forEach(e=>e.querySelector('summary').click());true");
  await file.click('场次关联与术语复核');await file.click('检查可能的识别错误');await until(()=>file.js(`!!document.querySelector('.file-detail input[type="checkbox"]:not(:disabled)')`),'proposal');
+ if(presentationOnly){
+  await reopenFile('en');
+  await file.js("document.querySelectorAll('.file-detail details:not([open])').forEach(e=>e.querySelector('summary').click());true");
+  await until(()=>file.js("!!document.querySelector('.file-detail input[type=checkbox]:not(:disabled)')"),'persisted generated proposal');
+  await file.js("document.querySelector('.file-detail input[type=checkbox]:not(:disabled)').click();true");
+  for(const width of [1440,390,320]){file.win.setSize(width,950);await until(()=>file.js('innerWidth==='+width),'confirmation width');const caption=await file.js('('+selectedCorrectionCaption.toString()+')()');check('English selected correction action is complete and reachable at '+width,caption.present&&caption.enabled&&caption.complete&&caption.hit);writeFileSync(join(out,'selected-correction-en-'+width+'.png'),(await file.wc.capturePage()).toPNG());}
+  await file.click('Confirm selected corrections');
+  await until(async()=>{const state=await request('/api/fixture/state');return state.chunks.some(chunk=>chunk.ocrText.includes('周六'));},'real English correction confirmation');
+  await file.click('Expand transcript / source segments');
+  await until(()=>file.js("[...document.querySelectorAll('.file-text')].some(element=>element.textContent.includes('周六'))"),'corrected English reading consumer');
+  check('English confirmation updates the actual readable transcript',true);
+  check('only the generated proposal was used',(await request('/api/fixture/state')).proposalStubCalls===1);
+  assert.ok(report.checks.every(check=>check.pass),JSON.stringify(report.checks.filter(check=>!check.pass)));report.status='passed';return;
+ }
  await file.js(`document.querySelector('.file-detail input[type="checkbox"]:not(:disabled)').click()`);await file.click('确认所选校正');await until(async()=>{const s=await request('/api/fixture/state');return s.chunks.some(c=>c.ocrText.includes('周六'));},'confirmed source change');
  await file.click('展开转写 / 原文片段');await until(()=>file.js(`document.querySelector('.file-detail')?.textContent.includes('下一次讨论安排在周六')`),'updated transcript');
  const pending=await request('/api/fixture/state');report.pending={coverage:pending.material.coverage,memories:pending.memories.map(m=>({title:m.title,status:m.status}))};

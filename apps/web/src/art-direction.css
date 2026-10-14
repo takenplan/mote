@@ -361,3 +361,11 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
  .recording-scope-form .lark-range { grid-template-columns:minmax(0,1fr); }
  .recording-scope-form .lark-range label:last-child { grid-column:auto; }
 }
+
+.file-diarization-selection { display:none; }
+@media(max-width:760px) {
+ .file-diarization-settings { padding:var(--mote-space-item); }
+ .file-diarization-fields { padding:var(--mote-space-inline); }
+ .file-diarization-selection { display:block; color:var(--mote-muted); font-size:var(--mote-font-support); line-height:1.6; overflow-wrap:anywhere; min-width:0; }
+ .file-diarization-fields>.button { max-width:100%; overflow-wrap:normal; word-break:normal; }
+}
