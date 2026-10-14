@@ -28,7 +28,7 @@ export function createSyncHistoryUi(api: DesktopApi, navigate: (page: DesktopPag
   let runId = '', contentOffset = 0, contentSource: SyncSource | undefined, contentOutcome: 'received' | 'unconfirmed' | undefined, selected: SyncHistoryItem | undefined, chunkOffset = 0;
   let pending: Awaited<ReturnType<DesktopApi['syncHistoryPending']>> = [];
   (el('upload-day') as HTMLInputElement).value = localDay();
-  const failure = (error: unknown) => error instanceof Error ? error.message : moteText('状态读取失败，请重试。');
+  const failure = (error: unknown) => error instanceof Error ? error.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : moteText('状态读取失败，请重试。');
   const setText = (id: string, s: string) => { el(id).textContent = s; };
   async function refresh() {
     if (!active || refreshing) return;

@@ -8,11 +8,16 @@ const assert=require('node:assert/strict');
 module.exports=async function({window,js,outputDirectory,kind,navigate,run,items,archive}) {
   const repo=resolve(__dirname,'../../..'),sha=p=>createHash('sha256').update(readFileSync(p)).digest('hex');
   const reference=JSON.parse(readFileSync(join(repo,'.mote/ui-rollout/mac/canonical-final/rollout-manifest.json'),'utf8'));
-  const sourceIdentity=Object.fromEntries(Object.keys(reference.sourceIdentity).map(f=>[f,sha(join(repo,f))]));
+  const productSourceFiles=spawnSync('git',['ls-files','apps/desktop/src','apps/desktop/native','packages/shared/src','packages/shared/design-tokens.json'],{cwd:repo,encoding:'utf8'}).stdout.trim().split('\n');
+  const sourceIdentity=Object.fromEntries(productSourceFiles.map(f=>[f,sha(join(repo,f))]));
+  const formatterSource='apps/desktop/src/sync-history-ui.ts';
+  const referenceSourceIdentity=Object.fromEntries(productSourceFiles.map(f=>{const blob=spawnSync('git',['show',reference.parentCommit+':'+f],{cwd:repo});assert.equal(blob.status,0,'Reference product source exists: '+f);return[f,createHash('sha256').update(blob.stdout).digest('hex')];}));
   const buildIdentity=Object.fromEntries(Object.keys(reference.buildIdentity).map(f=>[f,sha(join(__dirname,'../dist',f))]));
   const nativeIdentity=Object.fromEntries(Object.keys(reference.nativeIdentity).map(f=>[f,sha(join(__dirname,'../native/bin',f))]));
-  assert.deepEqual(sourceIdentity,reference.sourceIdentity,'Supplement keeps final product source');
-  assert.deepEqual(buildIdentity,reference.buildIdentity,'Supplement keeps final product dist');
+  const changedSourceInputs=Object.keys(sourceIdentity).filter(f=>sourceIdentity[f]!==referenceSourceIdentity[f]);
+  const changedBuildInputs=Object.keys(buildIdentity).filter(f=>buildIdentity[f]!==reference.buildIdentity[f]);
+  assert.deepEqual(changedSourceInputs,[formatterSource],'Only the reviewed upload error formatter source changes');
+  assert.deepEqual(changedBuildInputs,['ui-bundle.js'],'Only the renderer bundle containing the formatter changes');
   assert.deepEqual(nativeIdentity,reference.nativeIdentity,'Supplement keeps final native build');
   const fixtureIdentity=Object.fromEntries(['ui-dialog-rollout.cjs','ui-smoke.cjs','sync-history-smoke.cjs'].map(f=>[f,sha(join(__dirname,f))]));
   const parentCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).stdout.trim();
@@ -52,13 +57,16 @@ module.exports=async function({window,js,outputDirectory,kind,navigate,run,items
         await js('document.querySelector('+JSON.stringify('[data-upload-key="'+items[1].key+'"]')+').click();true;');await until('!!document.querySelector(".upload-content-text")&&!document.querySelector(".upload-content-image")','escaped text');
         assert.equal(await js('Boolean(window.fixtureExecuted)'),false,'Untrusted evidence never executes');await whole('upload-content-text-'+condition,'upload-content-dialog');
         const captureId=(await js('window.mote.syncHistoryContent('+JSON.stringify(run)+','+JSON.stringify(items[1].key)+')')).captureId,saved=archive.get(captureId);archive.delete(captureId);
-        await js('document.querySelector("#upload-preview-refresh").click();true;');await until('!!document.querySelector("#upload-content-preview [role=alert]")','expired evidence');await whole('upload-content-expired-'+condition,'upload-content-dialog');archive.set(captureId,saved);
+        await js('document.querySelector("#upload-preview-refresh").click();true;');await until('!!document.querySelector("#upload-content-preview [role=alert]")','expired evidence');
+        const displayedError=await js('document.querySelector("#upload-content-preview [role=alert]").textContent');
+        assert.equal(displayedError,language==='en'?'Archived content is missing or has expired; the sync receipt remains available.':'归档内容不存在或已按保留策略清理；同步凭据仍可查看。','Complete translated retention/receipt fact without internal IPC wrapper');
+        await whole('upload-content-expired-'+condition,'upload-content-dialog');archive.set(captureId,saved);
         await js('document.querySelector("#upload-content-dialog [data-upload-close]").click();true;');
       }
       journeys.push({name:kind==='capture'?'actual scope confirmation and Cancel':'actual receipt, generated screenshot, escaped text and expired material dialogs',language,variant,verified:true});
     }
   }
   assert.equal((await js('window.mote.status()')).running,false,'No collection');
-  const manifest={platform:'mac',parentCommit,workingTreeChanges,sourceIdentity,buildIdentity,nativeIdentity,fixtureIdentity,captures,journeys,passed:true,generatedOnly:true,productProducer:reference.parentCommit,boundary:'Hidden real Electron main/preload/renderer. Same final31339 product and native build. Capture canceled; three generated upload records via real SyncHistory and loopback archive. No personal screen/account/calendar/live model/OS permission activation. Full dialog scroll intervals captured with24CSSpx overlap; native picker/permission fixture adapters remain explicit.'};
+  const manifest={platform:'mac',parentCommit,workingTreeChanges,sourceIdentity,buildIdentity,nativeIdentity,fixtureIdentity,captures,journeys,passed:true,generatedOnly:true,unchangedReferenceProducer:reference.parentCommit,unchangedReferenceManifest:'.mote/ui-rollout/mac/canonical-final/rollout-manifest.json',referenceSourceIdentity,referenceBuildIdentity:reference.buildIdentity,changedSourceInputs,changedBuildInputs,boundary:'Hidden real Electron main/preload/renderer. Fresh upload dialogs for the reviewed error formatter; every tracked baseline source and built input is identical to final31339 except sync-history-ui.ts and its ui-bundle.js, with native binaries unchanged. Three generated upload records via real SyncHistory and loopback archive. No personal screen/account/calendar/live model/OS permission activation. Full dialog scroll intervals captured with24CSSpx overlap; native picker/permission fixture adapters remain explicit.'};
   writeFileSync(join(outputDirectory,'dialog-manifest.json'),JSON.stringify(manifest,null,2));return manifest;
 };

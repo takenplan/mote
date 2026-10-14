@@ -147,6 +147,7 @@ app.on('browser-window-created', (_event, window) => {
     await js('document.querySelector("#upload-preview-refresh").click()');
     await wait('Boolean(document.querySelector("#upload-content-preview [role=alert]"))', 'Expired archive preview');
     assert((await js('document.querySelector("#upload-content-preview").textContent')).includes('清理'));
+    assert(!(await js('document.querySelector("#upload-content-preview [role=alert]").textContent')).includes('Error invoking remote method'), 'Archive error displays the user-facing fact without the IPC transport wrapper');
     assert.equal((await js(`window.mote.syncHistoryContents({runId:${JSON.stringify(run)}})`)).run.received, 23);
     await js('document.querySelector("#upload-content-back").click()');
     await wait('Boolean(document.querySelector("#upload-view-all")) && document.querySelector("#upload-receipt-dialog").open', 'Return to receipt after native close event');
