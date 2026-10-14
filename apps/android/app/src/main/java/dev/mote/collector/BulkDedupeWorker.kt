@@ -13,7 +13,7 @@ import java.time.Instant
 /** Only local metadata is persisted; pixels live in bounded worker-local buffers. */
 class BulkDedupeStore(context: Context) {
     companion object { private val fileLock = Any() }
-    private val dir = File(context.noBackupFilesDir, "bulk-dedupe").apply { check(isDirectory || mkdirs()) }
+    private val dir = requireStorageDirectory(File(context.noBackupFilesDir, "bulk-dedupe"))
     private val cipher = context.localContentCipher()
     fun quarantine() = DurableQueue(File(dir, "pending"), cipher, role = DurableQueue.Role.QUARANTINE).apply { onMutation = { LocalStateChanges.changed(records = it, storage = true) } }
     fun read(name: String): JSONObject = synchronized(fileLock) {
