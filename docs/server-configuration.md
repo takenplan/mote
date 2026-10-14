@@ -1,168 +1,126 @@
 # 服务端配置参考
 
-中央受管理 OCR/ASR 的 profile 运行时、模型目录与内部 Worker 配置另见 [中央 OCR 与录音转写](ocr-asr-implementation-plan.md)。
+中央使用一份私有 `mote.yaml`。网页设置与手改文件更新同一来源，ConfigService 按领域校验、准备资源、原子保存并应用。选型与边界见 [统一配置 ADR](adr-unified-configuration.md)，任务快照和授权见 [配置归属](configuration-ownership.md)。
 
-中央当前一级入口为今天、资料库、问一问、行动、连接。系统管理包含模型、费用、处理任务、存储和诊断，用户设置管理会话与语言；模型入口为 `#/system/models`，诊断为 `#/system/diagnostics`。当前使用资料库 collection 与明确路由，导航见 [Slate UI](ui-slate.md)。
+中央一级入口为今天、资料库、问一问、行动、连接。系统管理包含模型、费用、处理任务、存储和诊断；模型入口为 `#/system/models`，诊断为 `#/system/diagnostics`。已有设置页面仍提供草稿、保存与当前生效值。页面没有覆盖的配置可直接编辑文件。
 
-每类设置将 **配置草稿** 与 **当前生效值** 分开显示。**系统管理 → 模型** 提供厂商和本机服务预设、模型 ID、协议及只写 API key；点击“保存并应用”立即用于后续模型请求，重启后仍保留。预设本身不会发请求；手动“测试连接”只发送合成内容，可能产生模型费用。详见[模型服务配置](model-providers.md)。保留周期、容量和同步间隔仍提供配置草稿；外部应用的可写来源可从已注册来源中勾选。
+## 文件启动和编辑
 
-其他部署设置选择「检查配置草稿」后，可以下载 `mote-config-changes.env`。文件仅包含本次修改的非敏感环境变量，不包含已配置的令牌或密钥，也不会直接写入节点或热更新。将这些变量合并到原部署配置，保留令牌、密钥与目录等其余设置，再重启节点并刷新生效配置。**不要用变更片段覆盖整个配置文件，也不要用 shell 的 `source` 执行它。** 草稿仅在当前设置子页面内保留；返回上级菜单、切换页面、刷新或断开连接后会丢弃。
+| 运行方式 | 配置来源 | 路径基准 |
+| --- | --- | --- |
+| CLI 命名环境 | `<home>/<profile>/mote.yaml` | YAML 所在目录 |
+| 直接启动 | `MOTE_CONFIG_FILE` 指定的文件；未指定时为当前目录 `mote.yaml` | YAML 所在目录 |
+| Docker CLI 部署 | 同一宿主 profile 目录挂载为 `/config`，中央读取 `/config/mote.yaml` | 按 YAML 中明确的容器路径 |
 
-「当前生效值」通过认证 API 读取正在运行的进程配置，显示配置来源。文件修改但服务尚未重启时，页面仍显示旧值。完整数据库与图片目录、日志目录、Docker 卷来源及环境变量名可在「开发者选项 → 部署与全部生效配置」展开查看。模型 API key 可在模型服务页填写新值，但不回显旧值；其他访问和加密凭据仍在各自配置入口管理。
+```sh
+# 只展示操作方式；不要对正在运行的日常环境执行测试初始化或重启。
+node scripts/mote.mjs init --profile dev
+node scripts/mote.mjs config --profile dev
+node scripts/mote.mjs start --profile dev
+# 直接启动已准备的文件
+MOTE_CONFIG_FILE=/absolute/private/mote.yaml npm start
+```
 
-在部署机器上运行 `node scripts/mote.mjs config --profile prod --home /srv/mote/profiles`，可以离线查看所选环境的配置文件与存储映射。CLI 读取部署环境文件，不合并 Web 保存的模型覆盖值，因此应以网页显示的当前生效模型为准。访问令牌、图片加密密钥和模型 API key 只显示配置状态，获取节点访问令牌使用单独的 `token` 命令。
+CLI 默认选 `dev`，日常节点明确使用 `--profile prod`。环境隔离、安装、停止与部署命令见 [开发指南](development.md) 和 [部署指南](deployment.md)。`profile.json` 保存发行版本、容器镜像/卷与 Tunnel 生命周期选择，不提供运行时普通参数覆盖。
 
-## 配置在哪里、如何生效
+普通 `MOTE_*` 环境变量不再覆盖 YAML。仅 `MOTE_CONFIG_FILE` 选择文件，凭据可在指定敏感字段中写 `${NAME}` 引用，例如 `server.token: "${MOTE_TOKEN}"`；引用的环境变量缺失会报配置错误。普通字段不展开 shell、`~`、`$HOME` 或命令替换。不要通过 shell `source` 执行 YAML。新配置文件为 0600，父目录为 0700；私有配置副本也可能包含密钥。
 
-| 运行方式 | 配置来源 | 相对路径基准 |
-|---|---|---|
-| CLI 命名环境 | `<home>/<profile>/mote.env`；部署元数据在同目录 `profile.json` | `mote.env` 所在目录 |
-| 直接启动并指定 `MOTE_ENV_FILE` | 仅指定的文件；不存在会启动失败 | 指定文件所在目录 |
-| 直接启动并仅指定 `MOTE_DATA_DIR` | 进程环境变量；不自动读取根 `.env` | 启动基准目录，通常是仓库根目录 |
-| Docker CLI 部署 | 宿主机环境文件生成私有 `generated/docker.env`，注入容器 | 容器数据固定 `/data`，日志 `/data/logs` |
+最小配置可省略没有自定义值的领域：
 
-直接启动的 `MOTE_PROFILE` 默认是 `default`；必须显式设置 `MOTE_ENV_FILE` 或 `MOTE_DATA_DIR` 之一，不要求两者同时设置。`MOTE_DATA_DIR` 可以是相对路径。指定环境文件时，进程环境变量覆盖文件值。CLI 会清除继承的 `MOTE_*`、`COMPOSE_*`，只装入显式选定的环境；Docker 另强制使用容器监听与挂载路径。容器内 `/app/deploy/empty.env` 是启动占位文件，实际应编辑页面显示的宿主机 profile 配置文件。
+```yaml
+version: 1
+revision: 0
+server:
+  profile: dev
+  host: 127.0.0.1
+  port: 47842
+storage:
+  dataDir: ./data
+execution:
+  interactiveConcurrency: 2
+  agentConcurrency: 8
+  llmConcurrency: 4
+  memoryConcurrency: 3
+perception:
+  allowQueryImages: false
+  allowExternalProcessing: false
+```
 
-编辑环境文件后按顺序执行 `stop`、`start`，然后在设置中刷新生效配置。模型页面保存的覆盖值仍然优先；要重新使用环境中的模型字段，选择“恢复部署配置”。页面保存模型配置不需要此重启流程。使用 launchd 等进程管理器时，由该管理器执行停止和重启，避免两个管理器竞争。CLI 默认 `dev`；日常节点必须明确 `--profile prod`。完整操作见 [部署指南](deployment.md)。
+只有旧 `MOTE_ENV_FILE` 而未提供明确新文件选择器的启动命令会被拒绝，避免误启动当前目录的另一环境；使用 `MOTE_CONFIG_FILE` 或 CLI 明确选定 YAML。
 
-配置文件不展开 shell 表达式：用绝对路径或相对路径，不要写 `~`、`$HOME` 或 `$(...)`。含空格或 `#` 的值用单引号或双引号包裹；不要通过 `source mote.env` 加载配置。新环境文件权限为 0600、目录为 0700。
+启动会验证配置；缺失、无效或不可读的文件导致启动失败。运行中无效文件保留最后有效值，并在已认证配置视图显示固定错误码，不回显私有输入。
 
-## 数据实际存在哪里
+手改文件时保留读取到的 `revision`，服务在接纳真正变更后递增它。网页命令同样携带读取到的全局 revision；陈旧草稿或并发文件编辑返回冲突，先刷新后重做修改。相同内容不增加 revision；网页自己的写入监听事件不再次保存。编辑器原子替换、短暂写入与对象键顺序变化均经稳定读取和真正 diff 处理。
 
-| 内容 | 原生进程 | Docker |
-|---|---|---|
-| 日记、OCR、时间线、设备信息、索引、已保存的洞察 | `<MOTE_DATA_DIR>/mote.sqlite`，运行时有 WAL 辅助文件 | `/data/mote.sqlite`，持久化到所选命名卷 |
-| 截图与文件原件资产 | `<MOTE_DATA_DIR>/files/objects/<sha256>/<part>.plain\|.aes`，每片最多 4 MiB；仅支持当前 chunk 资产，不读取旧 `blobs/`、`files/<hash>` 或无后缀内容 | `/data/files/objects/`，同一卷；格式以资产目录为准 |
-| 结构化运行日志 | `MOTE_LOG_DIR`；为空时为数据目录下 `logs/` | `/data/logs`，同一卷 |
-| 原生进程监督日志 | profile 的 `logs/central.log` 及轮转文件 | Docker logging driver，独立于 `/data/logs` |
-| CLI 离线备份 | 默认 `<profile>/backups/`；`backup --out` 可指定其它目录 | 备份仍写入宿主机选定位置，不在数据卷内 |
-| Mote 访问令牌、部署模型凭据、图片加密 key | 私有 `mote.env`；未设访问令牌的直接启动使用数据目录 `access-token` | 宿主机私有配置注入；标准归档备份不复制凭据 |
-| Web 保存的模型配置与凭据 | `<MOTE_DATA_DIR>/model-settings.json`，0600，内容包含密钥 | `/data/model-settings.json`；不进入资料导出、安全支持包或标准 CLI 归档备份，私有文件副本须独立保护 |
-| Tunnel 凭据 | profile 的 `secrets/cloudflared-token` | 只挂载给 cloudflared，中央容器不读取此文件 |
-| 客户端截图队列、草稿、Qwen 权重 | 分别在 Mac / Android App 本地目录 | 不属于中央节点配置或中央备份 |
+配置视图区分 **已保存值**、**当前有效值** 和 **生效方式**。`applied` 表示领域已应用；`restart-required` 保留本次启动的有效值；`invalid` 表示候选应用失败。准备失败不替换当前配置；应用失败会回滚有效值，已保存候选保留为失败状态，便于修复。写入结果无法确认时报告 `config_commit_uncertain`，不要据此反复覆盖文件。
 
-普通问答的完成回答和失败轮次保存在中央 SQLite 对话历史中；网页通过持久化 query run 展示进度并恢复结果。洞察独立保存版本化报告。完整离线备份包含对话，当前 HTTP 便携归档导出不包含对话，见 [对话历史](conversations.md)。
+## 生效方式与领域
 
-**Docker 的宿主机 profile 下 `data/` 不是容器资料库。** 数据保存在界面或 `config` 输出标出的命名卷里。Linux Docker Engine 可用 `docker volume inspect <卷名> --format '{{.Mountpoint}}'` 查询 Docker 管理的位置；Docker Desktop 的卷位于其 Linux 虚拟机，不能把虚拟机里的路径当作 macOS Finder 目录。修改 Docker profile 的 `MOTE_DATA_DIR` 不会改变 `/data` 的挂载。
+| YAML 领域 / 字段 | 当前行为 |
+| --- | --- |
+| `models.deployment`、`models.profiles`、`models.defaults`、`models.defaultModels` | 准备成功后新模型请求使用新快照；在途请求继续使用旧运行时 |
+| `execution.*Concurrency` | 后续准入生效；降低名额不会终止正在运行的任务 |
+| `diagnostics.enabled/debug/traceEnabled/level` | 立即调整同一个日志写入器 |
+| `connectors.syncIntervalMs` | 立即调整同步调度；不会自行重新授权来源 |
+| `processing.settings/policy` | 按现有服务、处理器、任务指纹与撤权语义应用；完成结果需显式重处理 |
+| `perception` | 图片行为和权限运行时应用；concurrency 作用于后续准入；端点、处理器及选中方案由 `processing.policy` 投影 |
+| `workflows` | 普通 DAG 各通道启用与并发；新名额作用于后续准入，停用阻止旧在途结果发布；任务与输入授权仍在领域数据库 |
+| `actions.enabled/timeZone` | 运行时应用；审核设备授权仍由领域 API/数据库维护，不能由 YAML 授权 |
+| `memory` | 新接纳窗口使用新调度与预算，在途窗口使用冻结设置；历史授权和不可变策略版本不改变 |
+| `server`；`updates`；`media` | 需要重启；保存不会重启服务或部署媒体 Worker |
+| `models.embedding/codex`；日志目录及轮转上限；连接器模块/OAuth/MCP 配置；插件模块列表 | 需要重启 |
+| `storage.dataDir/dataKey` | 需要显式迁移；保存不移动数据库、原件或转换密文 |
+| `storage.contentEncryptionEnabled` | 立即改变后续原件写入格式，已有文件保持原格式且可读取；批量解密仍需明确发起 |
+| `storage` 的其余启动参数 | 本轮需要重启，包括容量、保留周期及导出预算 |
+| 插件配置 | 注册 schema、敏感字段与 handler 后应用；模块安装、实例、启用及历史授权仍走原插件领域 |
 
-原生节点可在新建时用 `init --profile prod --data-dir /Volumes/ContextData/mote` 选择另一块本地磁盘。Docker 可用 `init --runtime docker --profile prod --volume mote-personal-data` 为新环境选择命名卷。不要让两个节点共用一个资料库；dev/test 必须使用各自环境范围内的目录和卷。当前 CLI 不提供自定义 Docker bind mount，避免把宿主机目录配置误当成已生效挂载。
+不是所有字段都已支持热更新。当前监听地址、数据目录、embedding、Worker 进程、模块安装没有通用无中断重建机制。字段生效元数据来自领域注册，以已认证配置视图为准。需要重启时由用户选定的 CLI 或进程管理器执行停止、启动，再核对有效值；不要让多个管理器竞争。
 
-在同一存储代际内迁移数据时，先停止并备份，在新机器或新环境初始化空目录/卷，设置原内容加密 key，再 `restore`，最后验收并更新客户端地址。只编辑目录、卷名或图片加密 key 不会自动迁移数据。SQLite 应使用本地块存储；NAS 可运行服务，但不要把活动 WAL 数据库放到 SMB/NFS 共享上。
+## 常用参数
 
-## 网络与访问
+数值类型使用 YAML 数字，开关使用 `true` / `false`，列表使用数组，容量和时间单位由字段名与配置元数据标明。
 
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `MOTE_ENV_FILE` | 未设置 | 仅显式指定时读取配置文件；CLI 自动提供。不指定时必须设置 `MOTE_DATA_DIR`，根 `.env` 不自动加载 |
-| `MOTE_PROFILE` | `default`（直接启动） | CLI 另外默认选择 `dev`，支持 `dev` / `test` / `prod` 与显式命名隔离环境；CLI 拒绝 `legacy` 名 |
-| `MOTE_HOST` | `127.0.0.1` | 监听地址；Docker 强制 `0.0.0.0`，宿主机端口仍仅发布 loopback |
-| `MOTE_PORT` | `47832` | 1–65535 整数；CLI dev/test 分别 47842/47852，Docker 容器内部始终 47832 |
-| `MOTE_PUBLIC_URL` | 空 | 客户端使用的公开 HTTPS 基址，例如 `https://mote.example.com`；不创建 DNS、Tunnel 路由或证书 |
-| `MOTE_TOKEN` | 自动生成 | 中央所有者 Bearer 令牌；命名环境生成 32 字节随机值。连接授权页可发放独立可撤销 owner 配对凭据；MCP 读/指定来源写凭据另行限权 |
-| `MOTE_ALLOWED_ORIGINS` | 本机 5173 开发前端两个 origin | 逗号分隔的浏览器跨域来源；CLI test 使用 5174。完整 origin，包括协议和端口，不是 API 路径 |
+| 字段 | 默认 / 范围 | 用途 |
+| --- | --- | --- |
+| `server.host/port` | `127.0.0.1` / `47832` | 监听；CLI dev/test 使用独立端口，远程长期部署通过 HTTPS 与强令牌 |
+| `server.publicUrl/allowedOrigins` | 空 / 本机开发 origins | 公开基址声明与浏览器 CORS 白名单，不创建 DNS、TLS 或 Tunnel |
+| `server.token` | 私有随机凭据 | 所有者令牌；敏感值不回显 |
+| `storage.dataDir` | `./data` | SQLite 与原件根目录，相对 YAML 解析 |
+| `storage.maxStorageBytes` | 10 GiB | 逻辑资料容量；满后拒绝新增摄取，不自动删旧资料 |
+| `storage.maxExportBytes` | 64 MiB，最高 256 MiB | HTTP 归档预算；大库使用离线备份 |
+| `storage.retentionDays` | 0，最高 36500 | 0 关闭按时间删除；正数按既有保留规则清理 |
+| `storage.contentEncryptionEnabled/dataKey` | false / 空 | 原件内容加密与私有密钥；SQLite 原文不因该项加密 |
+| `execution.interactiveConcurrency/agentConcurrency/llmConcurrency/memoryConcurrency` | 2 / 8 / 4 / 3 | 分离通道和处理池的执行名额 |
+| `diagnostics.enabled/debug/traceEnabled/level` | true / false / false / info | 固定结构化诊断和显式详细 Agent trace；CLI dev 可设置 trace 为 true |
+| `diagnostics.directory/maxBytes/maxFiles/maxEntries` | 数据目录 logs / 2 MiB / 3 / 2000 | 日志目录、文件轮转和内存保留上限 |
+| `connectors.syncIntervalMs` | 900000，60000–86400000 | 自动拉取已授权来源的间隔 |
+| `media.ocrEndpoint/asrEndpoint` | loopback 9010 `/ocr` / 9009 `/transcribe` | 受管理媒体服务；与已保存的自定义处理服务区分 |
+| `media.modelDirectory/python/ocrPort/asrPort/workerToken` | 数据目录 media-models / python3 / 9010 / 9009 / 空 | 媒体目录、进程与私有 Worker 凭据；CLI 新环境配置 profile 独立资源 |
 
-同域中央网页无需额外配置跨域来源。不同域的浏览器前端才需要将其 origin 加入白名单。公开 URL 与节点 Bearer 令牌分别填入客户端，令牌不放 URL。Cloudflare Tunnel 与 Caddy 是两种可选入口；详见 [Tunnel 部署](cloudflare-tunnel.md)。
+模型协议、推理参数、截止时间与高级对象见 [模型服务配置](model-providers.md)。字段采用原 ModelSettings 名称；API key、headers 和 extraBody 都按敏感数据保护。模型目录和“测试连接”只在用户明确请求时访问 Provider，连接测试可能产生费用。
 
-## 存储与保留
+文件策略使用 `processing.policy.services/profiles/rules`，结构与现有设置页面一致；受安装处理器支持的参数由插件注册信息校验。服务地址变化不能隐式继承旧密钥，页面要求重新填写、清除或按模型领域明确确认复用。图片页修改端点/方案与行为开关使用同一配置事务。
 
-本轮采用 MVP 破坏升级：中央只接受 `backend_epoch=4` 的库，模型 registry 为 version 2，HTTP 便携归档为完整 version 2。旧库、旧资产包装、旧模型/文件处理配置和旧便携包不自动转换。旧安装先用旧程序完成所需导出并停止，保留完整目录与凭据备份，再使用新空目录；明确放弃旧资料时才运行 reset。操作与风险见 [MVP 基线](adr-mvp-baseline.md)。离线备份是当前库的快照，不是跨代升级工具。
+普通 DAG 通道参数属于 `workflows`；Action 开关和时区属于 `actions`，审核设备列表是业务授权而不是文件配置。授权变更仍走原领域 API，跨文件和数据库的部分失败会明确报告并要求刷新，文件热更不能授予设备新权限。
 
-| 变量 | 默认值 | 范围及行为 |
-|---|---|---|
-| `MOTE_DATA_DIR` | `./data` | SQLite 与原件根目录；有显式 env 文件时相对该文件解析，否则相对启动基准目录；Docker 强制 `/data` |
-| `MOTE_CONTENT_ENCRYPTION` | `0` | 图片与文件内容加密初始开关；开发者页面保存的选择优先，默认明文 |
-| `MOTE_DATA_KEY` | 空 | 可选 64 位十六进制 AES-256-GCM 内容密钥；配置密钥本身不会开启加密，显式开启且未配置时生成资料库私有 `content-key`；SQLite 原文保持明文 |
-| `MOTE_MAX_STORAGE_MB` | `10240` | 1–1000000 MiB；图片及记录的逻辑容量上限，达到后拒绝新增摄取（507），不会自动删除旧资料腾空间 |
-| `MOTE_MAX_EXPORT_MB` | `64` | 1–256 MiB；HTTP 归档导入/导出预算，大资料库使用离线备份 |
-| `MOTE_RETENTION_DAYS` | `0` | 0–36500 天；0 关闭按时间清理，非零会周期性删除超期记录及不再引用的图片 |
+Memory 运行参数属于 `memory`，选中策略、不可变版本、来源授权、插件实例和任务回执属于领域数据库。它们不是 YAML 运行设置的覆盖层，不能通过文件热更新扩大历史任务权限。设备本地截图隐私和客户端存储不并入中央文件。
 
-容量预算不是文件系统配额。SQLite 索引、WAL、日志、备份、容器镜像与客户端队列会额外占用磁盘。设置中的数据与备份页显示实际归档文件占用及逻辑预算，但不能代替宿主机剩余空间监测。备份应放到另一位置并保留足够临时空间；Docker 离线备份阶段约需两份归档空间。
+## 存储、秘密与升级
 
-## Agent 与索引模型
+| 内容 | 位置 / 边界 |
+| --- | --- |
+| SQLite、WAL、业务数据和任务 | `<storage.dataDir>/mote.sqlite` 与领域表 |
+| 原件资产 | `<storage.dataDir>/files/objects/<sha256>/<part>.plain|.aes`，片大小遵循资产协议 |
+| 模型、处理、运行设置与私有配置 | `mote.yaml`；不进入安全支持包或普通资料导出 |
+| 有效摄取配置投影 | SQLite 派生键；启动和同步发布时从 YAML 重建，不作为读取来源 |
+| 连接器账户、插件/来源实例、配对与撤销状态 | 各领域私有存储 |
+| Tunnel token | profile 的私有 secrets 文件，仅交给 Tunnel 进程 |
+| 客户端队列、设备隐私和草稿 | 各设备本地存储 |
 
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `MOTE_MODEL_PROVIDER` | `deepseek` | 注册厂商／服务预设 ID；未列出的服务选择 `custom`，见[预设列表](model-providers.md#服务预设) |
-| `MOTE_MODEL_PROTOCOL` | 所选预设 | `deepseek` / `openai-completions` / `openai-responses` / `anthropic-messages` / `google-generative-ai` / `codex-app-server` |
-| `MOTE_MODEL` | 空 | 支持工具调用的模型或部署 ID；未设时归档可用、AI 功能显示未配置 |
-| `MOTE_MODEL_BASE_URL` | 所选预设，默认 DeepSeek 地址 | 协议基址；远程 HTTPS、仅回环 HTTP；禁止 URL 账号密码、query 或 fragment |
-| `MOTE_MODEL_API_KEY` | 空 | 中央 Agent 的模型凭据；不下发到采集客户端 |
-| `MOTE_MODEL_HEADERS` | `{}` | 字符串请求头 JSON 对象，环境变量最多 16 KiB；私有保存、禁止受保护传输头 |
-| `MOTE_MODEL_EXTRA_BODY` | `{}` | 当前协议的高级参数 JSON 对象，环境变量最多 16 KiB；不能覆盖消息、工具、输出上限等运行字段 |
-| `MOTE_MODEL_ALLOW_UNAUTHENTICATED_LOCAL` | 本机服务预设为 `1`，其他为 `0` | 显式允许无密钥的回环模型服务，正常远程服务保持 0 |
-| `MOTE_MODEL_REASONING_EFFORT` | 通用 `auto`，DeepSeek `high` | `auto` 由模型决定；`off` / `low` / `high` / `max` 需模型支持 |
-| `MOTE_MODEL_MAX_TOKENS` | `65536` | 1–128000 整数；单次 HTTP 模型输出预算，非总请求/账户预算，仍须符合所选模型限制；Codex 自行管理输出预算 |
-| `MOTE_MODEL_REQUEST_TIMEOUT_MS` | `300000` | 非 Codex Provider 的单次模型 API 请求期限，5000–600000 毫秒整数；不包含后续工具循环。Codex Server 不暴露内部单次模型请求，此项为不适用 |
-| `MOTE_AGENT_TIMEOUT_MS` | `600000` | 一次 Agent 从开始到完成的总期限，5000–3600000 毫秒整数；包含多次模型请求、工具调用和校验。Codex Server 可留空，留空表示不设置 Mote 的总期限。旧 `MOTE_MODEL_TIMEOUT_MS` 已退役 |
-| `MOTE_CODEX_BIN` | `codex`（PATH） | 可信的本机 Codex CLI 可执行路径；网页不能设置此值 |
-| `MOTE_CODEX_HOME` | `CODEX_HOME` 或 `~/.codex` | 服务端系统用户的 Codex 文件登录目录；仅链接 `auth.json`，不加载该目录的其他设置，见[本机 Codex](model-providers.md#本机-codex) |
-| `MOTE_INSIGHT_INTERVAL_HOURS` | `0` | 0–168 小时；只在首次建立生命周期策略时以正数初始化洞察 intervalHours；0 不会关闭现行默认自动工作流。后续以数据库中的 enabled、minChanges、maxWaitHours 为准，见 [调度规则](memory-lifecycle.md) |
-| `MOTE_EMBEDDING_MODEL` | 空 | 可选 embedding 模型；未配置时使用本地文本索引 |
-| `MOTE_EMBEDDING_BASE_URL` | 空 | 启用 embedding 必填，模型请求可达的服务基址 |
-| `MOTE_EMBEDDING_API_KEY` | 空 | embedding 服务凭据，独立于 Agent key |
+CLI `config` 离线读取 YAML 并隐藏敏感字段，不执行请求或运行迁移。在线配置 API 只允许所有者，且包含私有路径；不要公开分享它作为安全诊断包。详细 Agent trace 可能含 prompt、个人内容、模型输出和工具过程；安全支持包仍排除这些正文，见 [运行诊断](troubleshooting.md)。
 
-中央模型接收查询与检索到的文本证据；启用 embedding 还会发送待索引的原文。端侧 Qwen 运行时及下载配置已移除。本机 OCR 只处理明确的文字隐私规则，中央 OCR/ASR 安装与模型配置见 [媒体处理](ocr-asr-implementation-plan.md)。
+Docker 使用明确的 `/data`、`/data/logs`、`/models` 和 `/config` 路径及所选命名卷；宿主 profile 下的 `data/` 不能当作容器资料库。挂载配置的父目录使原子 rename 对中央可见。配置身份/权限与容器用户检查失败时停止，而不是放宽私有文件权限。
 
-## 日志与调试
+此次仅破坏旧内部配置格式，不改变业务数据库 epoch。`mote.env`、`model-settings.json`、`file-processing.json` 和旧 SQLite 运行配置键停止作为权威来源，旧文件/行不自动删除、转换或覆盖新 YAML。升级前保留私有配置与密钥备份，在离线环境明确准备 `mote.yaml`；CLI 遇到仅有旧 env 的 profile 提示手工转换。无需也不应因配置升级重置已有资料库。
 
-| 变量 | 默认值 | 范围及说明 |
-|---|---|---|
-| `MOTE_DIAGNOSTICS_ENABLED` | `1` | 0/1；关闭后不积累或持久化结构化诊断事件，即时状态仍可看 |
-| `MOTE_DEBUG` | `0` | 0/1；增加固定阶段事件，将非 silent 的日志级别提升为 debug；不记录原文或模型提示词 |
-| `MOTE_AGENT_TRACE_ENABLED` | dev 为 `1`，其它环境为 `0` | 0/1；显式记录 Agent 请求上下文、完整 prompt、模型输出、工具参数/结果、校验和阶段状态到普通 `central.N.ndjson`。可能包含个人内容，只建议开发环境开启 |
-| `MOTE_LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` / `silent` |
-| `MOTE_LOG_DIR` | 空 | 为空使用数据目录下 `logs/`；CLI 原生新环境为 `./logs`；Docker 强制 `/data/logs` |
-| `MOTE_LOG_MAX_MB` | `2` | 0.1–8 MiB，每个结构化日志文件上限；跨 UTC 日期或达到上限时轮转，单条日志最多 20 KiB，超出截断而非丢弃 |
-| `MOTE_LOG_MAX_FILES` | `3` | 1–10 整数，轮转文件总数 |
-| `MOTE_LOG_MAX_ENTRIES` | `2000` | 100–5000 整数，内存最近事件上限 |
-
-配置页面包含私有路径，不能当作安全支持包公开分享；`GET /api/configuration` 同样要求节点所有者令牌。安全诊断包仍只含固定事件、计数和耗时，即使开发环境开启详细 Agent trace 也会排除其正文。Cloudflare connector 使用独立日志级别，不继承 `MOTE_DEBUG`；不要自行开启会记录 Authorization headers 的 cloudflared debug。排错流程见 [运行诊断](troubleshooting.md)。
-
-## 部署层配置
-
-Caddy 使用 profile 文件中的 `MOTE_TLS_DOMAIN`、`MOTE_TLS_HTTP_PORT`（80）、`MOTE_TLS_HTTPS_PORT`（443），由 `tls --enable/--disable` 管理入口。Cloudflare 使用 `tunnel` 命令维护 profile 元数据与私有 token 文件；公开 URL、协议和 origin 的对应关系见 [Tunnel 指南](cloudflare-tunnel.md)。
-
-`MOTE_CONFIG_FILE` 由 CLI 注入，标记宿主机可编辑的环境文件；`MOTE_ENV_FILE` 是进程实际加载的文件，两者在 Docker 内可能不同。`MOTE_RUNTIME`、`MOTE_STORAGE_KIND`、`MOTE_STORAGE_SOURCE`、`MOTE_STORAGE_MOUNT` 等由 CLI 注入的字段用于说明部署映射；修改这些说明字段不会挂载磁盘。实际目录/卷必须通过部署配置设置。容器映射、备份目录和客户端本地目录不是通过网页远程修改的选项。
-
-## 发行版本与更新
-
-当前 DEV 按 `central-vX.Y.Z`、`desktop-vX.Y.Z`、`android-vX.Y.Z` 独立发布；中央提供源码包，需独立构建后使用 `upgrade`。当前 DEV 不附签名 manifest 或 GHCR 镜像，因此不能通过签名更新通道获取。保留的更新 API/CLI 只接受显式组件身份与所属组件标签的可信清单，不接受旧统一 `vX.Y.Z` 标签，见 [更新指南](updating.md)。
-
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `MOTE_UPDATE_REPOSITORY` | `utopiafar/mote` | GitHub `owner/repository`；只改变发现位置，不能替换程序内置发行公钥 |
-| `MOTE_UPDATE_CHANNEL` | `stable` | `stable` 正式版或 `preview` 预发行版；中央重启后生效，CLI 每次读取所选 profile |
-
-中央不会因启动、打开配置页或发现新版本而自动安装。认证的 `GET /api/software-update` 读取最近状态；`POST /api/software-update/check` 仅允许空请求体，手动检查固定配置的 GitHub Release。同一分钟内合并检查，失败只返回固定错误代码。`release_not_found` 表示尚无所选渠道的可信发行资产，不能据此绕过签名校验。
-
-页面为独立命名的原生/Docker 环境给出检查、更新与回退命令；未知运行方式不生成可执行安装命令。直接进程不能据此假定已由部署 CLI 接管。HTTP 不接受任意仓库 URL、目标路径、签名密钥或 shell，不停止中央或更改资料库。已有 `/api/updates` 仍是归档条目的增量同步接口，与软件发行检查无关。
-
-安装使用 `node scripts/mote.mjs update --profile 名称 --home /绝对路径`，原生准备独立源码目录，Docker 使用 manifest 中的固定镜像 digest；两者均先验证签名，复用备份、健康检查和显式回退；这套事务不包含跨存储代际的自动转换。详细的凭据、连接器游标、磁盘空间及 launchd 停机操作见 [部署与更新](deployment.md#升级与回退)。
-
-## 来源、Google Calendar 与 MCP
-
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `MOTE_MCP_ENABLED` | `0` | 开启 `/mcp`；通过 Cloudflare Tunnel 时沿用节点 HTTPS 地址 |
-| `MOTE_MCP_READ_TOKEN` | 空 | 独立随机读令牌，启用时至少 32 字符；不要复用所有者令牌 |
-| `MOTE_MCP_WRITE_ENABLED` | `0` | 开放指定来源的归档写回，与内部只读查询 Agent 分离 |
-| `MOTE_MCP_WRITE_TOKEN` | 空 | 独立写令牌，至少 32 字符，与读令牌及所有者令牌不同 |
-| `MOTE_MCP_WRITE_SOURCE_IDS` | 空 | 允许写入的已注册来源 ID，逗号分隔；开启写入时必须指定 |
-| `MOTE_MCP_ALLOW_LOCAL` | `0` | 仅开发测试时允许回环 MCP；不会开放内网任意地址 |
-| `MOTE_GOOGLE_CLIENT_ID` | 空 | Google Cloud Web OAuth 客户端 ID |
-| `MOTE_GOOGLE_CLIENT_SECRET` | 空 | OAuth 客户端密钥；仅保存于私有配置 |
-| `MOTE_GOOGLE_REDIRECT_URI` | 空 | 完整 `/oauth/google/callback` 地址，必须与 Google 登记一致；非回环地址要求 HTTPS |
-| `MOTE_CONNECTOR_SYNC_INTERVAL_SECONDS` | `900` | 已授权来源自动同步间隔，范围 60–86400 秒 |
-| `MOTE_CONNECTOR_PLUGINS` | `[]` | 最多 30 个可信已安装连接器模块的 JSON 列表；支持包名或 `file:` URL，在中央进程内执行；详见[接入与正式资料架构](material-architecture.md) |
-
-Google 三项配置需要一起填写，然后在“来源”页完成账户授权并选择日历。令牌保存在 `MOTE_DATA_DIR/connectors/` 的私有文件中，不进入 HTTP 资料导出或诊断包；迁移外部授权时请按[连接器说明](connectors.md)操作。修改环境文件后重启中央节点。
-
-原始资料、Shadow、快照、索引与 Memory 的保存和失效策略见[资料分层](context-layers.md)。
-
-
-Agent execution limits default to 8 Agent runs, 4 LLM turns, and 3 independent memory
-batches (`MOTE_AGENT_CONCURRENCY`, `MOTE_LLM_CONCURRENCY`, `MOTE_MEMORY_CONCURRENCY`).
-The model settings page saves runtime overrides immediately; diagnostics preferences
-also apply immediately. Both survive restarts. See
-[memory validation and scheduling](memory-validation-diagnostics.md) for admission,
-conflict handling, trace fields and same-conversation correction behavior.
+实际数据目录或加密密钥迁移仍需停止、备份、按同一存储代际恢复和验收；只编辑 YAML 不迁移数据。SQLite 使用本地块存储，活动 WAL 不放 SMB/NFS。离线备份是否包含私有配置以相应备份契约为准，单独保护凭据副本。没有自动重启、生产迁移、部署或降级转换。

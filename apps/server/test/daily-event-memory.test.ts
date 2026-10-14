@@ -49,7 +49,7 @@ test('generated screenshot and field HTTP intake runs daily extraction/review, s
     return {answer:generatedMemoryOutput(input,candidates),citations:records.filter(record=>daily).map(record=>({id:record.id,capturedAt:record.capturedAt,appName:record.appName,excerpt:''})),trace:[],runId:randomUUID()};
   }})};
   let node=await buildApp(config,dependencies);await node.app.ready();t.after(async()=>{await node.app.close();rmSync(dir,{recursive:true,force:true});});
-  const setup=()=>{node.processing.configureImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async input=>({durationMs:0,segments:[{startMs:0,endMs:0,text:data.ocr.get(input.file.id)!}]});};setup();
+  const setup=async()=>{await node.processing.saveImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async input=>({durationMs:0,segments:[{startMs:0,endMs:0,text:data.ocr.get(input.file.id)!}]});};await setup();
   const publish=async()=>{await node.perception.tick();for(let i=0;i<20;i++)if(await node.materialOrganizer.tick(100)===0)break;};
   const run=async()=>{node.store.db.prepare('UPDATE material_memory_requests SET ready_at=0').run();await node.sourcePipelines.drainMemory(node.memoryPipeline,true,100);for(const job of node.memoryPipeline.list())if(['queued','running','waiting_for_model'].includes(job.status))await node.memoryPipeline.run(job.id);};
   for(const value of data.all){const r=await node.app.inject({method:'POST',url:'/api/captures',headers,payload:value});assert.equal(r.statusCode,201,r.body);}

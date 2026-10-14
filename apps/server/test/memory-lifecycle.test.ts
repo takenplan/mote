@@ -11,23 +11,26 @@ import {ExecutionEngine} from '../src/execution-engine.js';
 import {MemoryStore} from '../src/memory.js';
 import {MemoryPipeline} from '../src/memory-pipeline.js';
 import {MemoryLifecycle} from '../src/memory-lifecycle.js';
+import {ConfigService} from '../src/config-service.js';
+import {lifecycleSettingsSchema,defaultLifecycleSettings} from '../src/memory-configuration.js';
 import {Conversations} from '../src/conversations.js';
 import {WorkingMemory} from '../src/working-memory.js';
 import {seedMemoryFixtures} from '../../../scripts/memory-fixtures.js';
 const empty=()=>({answer:'{"memories":[]}',citations:[],trace:[],runId:randomUUID()});
 function fixture(t:TestContext){const directory=mkdtempSync(join(tmpdir(),'mote-lifecycle-fixture-')),store=new Store(directory);t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});return store;}
 function event(store:Store,id=randomUUID()){store.db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'upsert',?)").run(id,new Date().toISOString());return id;}
+async function memoryService(store:Store){const service=new ConfigService({path:join(store.directory,'mote.yaml'),watch:false,initialDocument:{version:1,revision:0,memory:structuredClone(defaultLifecycleSettings)}});service.register({id:'memory',schema:lifecycleSettingsSchema,defaultValue:defaultLifecycleSettings});await service.initialize();return service;}
 
 test('automatic insights require both the configured interval and increments across restart; manual requests remain immediate',async t=>{
- const store=fixture(t);let now=0,calls=0,lifecycle=new MemoryLifecycle(store,()=>true,()=>now);
+ const store=fixture(t);let now=0,calls=0,service=await memoryService(store),lifecycle=new MemoryLifecycle(store,()=>true,()=>now,undefined,undefined,service);
  const register=()=>lifecycle.register({id:'insights',version:'generated',stream:'evidence',async run(){calls++;}});register();
- const settings=lifecycle.settings();lifecycle.configure({...settings,insights:{...settings.insights,intervalHours:24,minChanges:2,maxWaitHours:1/60}});
+ const settings=lifecycle.settings();await lifecycle.save({revision:service.revision,settings:{...settings,insights:{...settings.insights,intervalHours:24,minChanges:2,maxWaitHours:1/60}}});
  event(store);event(store);now=3600000;await lifecycle.tick();assert.equal(calls,0);assert.equal(lifecycle.view().extensions[0].status,'waiting_for_interval');assert.equal(lifecycle.view().extensions[0].dueAt,24*3600000);
- await lifecycle.close();lifecycle=new MemoryLifecycle(store,()=>true,()=>now);t.after(()=>lifecycle.close());register();
+ await lifecycle.close();await service.close();service=await memoryService(store);lifecycle=new MemoryLifecycle(store,()=>true,()=>now,undefined,undefined,service);t.after(async()=>{await lifecycle.close();await service.close();});register();
  now=24*3600000-1;await lifecycle.tick();assert.equal(calls,0);now++;await lifecycle.tick();assert.equal(calls,1);
  event(store);now+=48*3600000;await lifecycle.tick();assert.equal(calls,1);assert.equal(lifecycle.view().extensions[0].status,'waiting_for_increment');
  event(store);await lifecycle.tick();assert.equal(calls,2);await lifecycle.tick();assert.equal(calls,2,'no empty repeat');
- lifecycle.configure({...lifecycle.settings(),insights:{...settings.insights,enabled:false}});
+ await lifecycle.save({revision:service.revision,settings:{...lifecycle.settings(),insights:{...settings.insights,enabled:false}}});
  lifecycle.request('insights',[randomUUID()],'generated-manual');await lifecycle.tick();assert.equal(calls,3);
 });
 

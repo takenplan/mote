@@ -56,7 +56,7 @@ export interface ModelSettingsPublic extends ModelSettingsParameters {
 export interface ModelSettingsView {
   version: 1;
   revision: number;
-  source: 'environment' | 'saved';
+  source: 'environment' | 'saved' | 'file';
   settings: ModelSettingsPublic;
   /** Every supported node exposes its complete profile assignments. */
   profiles: ModelProfilePublic[];
@@ -72,7 +72,7 @@ export const DEFAULT_MODEL_PROFILE_ID = 'primary';
 export const DEPLOYMENT_MODEL_PROFILE_ID = 'env:deployment';
 export const MODEL_FEATURE_LABELS: Record<ModelFeature, string> = {get chat() { return moteText("Chat 问答"); }, get memory() { return moteText("Memory 记忆提取"); }, get insight() { return moteText("个人回顾"); }, get import() { return moteText("资料导入"); }, get file() { return moteText("文件分析"); }};
 export interface ModelProfile {id: string; name: string; settings: ModelSettings}
-export interface ModelProfilePublic {id: string; name: string; settings: ModelSettingsPublic; readOnly?: boolean; source?: 'environment' | 'saved'}
+export interface ModelProfilePublic {id: string; name: string; settings: ModelSettingsPublic; readOnly?: boolean; source?: 'environment' | 'saved' | 'file'}
 export interface ModelSelection {profileId: string; profileName: string; provider: string; model: string}
 export interface ModelSettingsInput extends ModelSettingsParameters {
   /** Omitted secrets retain their saved value; null explicitly clears them. */

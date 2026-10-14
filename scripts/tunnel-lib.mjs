@@ -85,7 +85,7 @@ export async function configureTunnel(p, options, { execute, persist, persistPub
   if (options['token-file']) await writeToken(p, options['token-file']);
   if (options['public-url']) { const url = publicOrigin(options['public-url']); await persistPublicUrl(url); p.env.MOTE_PUBLIC_URL = url; }
   delete next.publicUrl; p.meta.tunnel = next; await persist(p.meta);
-  return { configured: true, connected: 'not-checked', originService: p.meta.runtime === 'docker' ? 'http://mote:47832' : p.url,
+  return { configured: true, connected: 'not-checked', originService: p.meta.runtime === 'docker' ? `http://mote:${p.port}` : p.url,
     publicUrl: p.env.MOTE_PUBLIC_URL || null, protocol: next.protocol, metrics: p.meta.runtime === 'docker' ? TUNNEL_METRICS : '127.0.0.1:0',
     applyWith: p.meta.runtime === 'docker' ? 'start (pulls the pinned cloudflared image if missing)' : 'tunnel-run (foreground, externally supervised)',
     dashboardRequired: 'Configure the published hostname and origin service in Cloudflare; this command does not configure DNS or account routing' };

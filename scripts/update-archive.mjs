@@ -32,7 +32,7 @@ export async function extractSourceArchive(archive, directory, prefix) {
     if (!path.startsWith(prefix)) throw Error('Release archive root does not match its version');
     const name = path.slice(prefix.length).replace(/\/$/, '');
     if (!name && type === '5') continue;
-    if (!name || /[\\\x00-\x1f\x7f]/.test(name) || name.split('/').some(part => !part || part === '.' || part === '..' || ['.git', '.mote', 'node_modules', '.env', 'mote.env'].includes(part))) throw Error('Unsafe release archive path');
+    if (!name || /[\\\x00-\x1f\x7f]/.test(name) || name.split('/').some(part => !part || part === '.' || part === '..' || ['.git', '.mote', 'node_modules', '.env', 'mote.env', 'mote.yaml'].includes(part))) throw Error('Unsafe release archive path');
     if (seen.has(name)) throw Error('Duplicate release archive entry'); seen.add(name);
     if (entries.length >= 20000 || (type === '5' && size !== 0)) throw Error('Release archive entry count is invalid');
     entries.push({ name, directory: type === '5', body, executable: Boolean(mode & 0o111) });

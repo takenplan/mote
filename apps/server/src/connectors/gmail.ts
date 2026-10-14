@@ -57,6 +57,7 @@ export class GmailConnector {
   private sequence:Promise<unknown>=Promise.resolve();
   private running?:Promise<{imported:number;duplicates:number;hasMore:boolean}>;
   private abort=new AbortController();private closed=false;private timer?:ReturnType<typeof setInterval>;
+  private initialized=false;private syncIntervalMs?:number;
   private state:'idle'|'syncing'|'error'|'permission_required'='idle';private code?:string;private lastSyncAt?:string;
   constructor(private ctx:ConnectorContext,private dependencies:GoogleDependencies={}){
     this.archives=new ArchivedFileStore(ctx.store);
@@ -71,7 +72,14 @@ export class GmailConnector {
   private check(){if(this.closed||this.abort.signal.aborted)throw new ConnectorError('connector_closed',503);}
   private oauth(){if(!this.configured)throw new ConnectorError('google_not_configured',503);const c=this.ctx.config.connectors!;return this.dependencies.oauthFactory?.()??new OAuth2Client({clientId:c.googleClientId,clientSecret:c.googleClientSecret,redirectUri:c.googleRedirectUri,transporterOptions:{timeout:20000}});}
   async init(){const saved=await this.file.read();if(saved){if(saved.version!==1||!saved.tokens)throw new ConnectorError('gmail_credentials_invalid',503);this.saved=saved;}
-    if(this.configured){this.timer=setInterval(()=>{if(this.saved.account)void this.sync().catch(()=>{});},Math.max(60000,this.ctx.config.connectors?.syncIntervalMs??300000));this.timer.unref();}}
+    this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??300000);}
+  configureSyncInterval(intervalMs:number){
+    const interval=Math.max(60000,intervalMs);
+    if(this.timer&&this.syncIntervalMs===interval)return;
+    if(this.timer)clearInterval(this.timer);this.timer=undefined;this.syncIntervalMs=interval;
+    if(!this.initialized||this.closed||!this.configured)return;
+    this.timer=setInterval(()=>{if(this.saved.account&&!this.closed)void this.sync().catch(()=>{});},interval);this.timer.unref();
+  }
   async start(){this.check();for(const [key,value]of this.pending)if(value.expires<this.clock())this.pending.delete(key);
     const oauth=this.oauth(),codes=await oauth.generateCodeVerifierAsync(),state=`gmail.${randomBytes(32).toString('base64url')}`;this.check();this.pending.set(state,{verifier:codes.codeVerifier,expires:this.clock()+600000});
     return {authorizationUrl:oauth.generateAuthUrl({access_type:'offline',scope:[gmailScope],prompt:'consent',state,code_challenge:codes.codeChallenge,code_challenge_method:'S256' as never}),expiresIn:600};}
@@ -157,5 +165,5 @@ export class GmailConnector {
   async disconnect(){this.abort.abort();return this.serializeDisconnect();}
   private async serializeDisconnect(){await this.sequence.catch(()=>{});this.checkClosed();if(this.saved.account)this.ctx.sources.update(this.sourceId,{enabled:false});this.pending.clear();await this.file.clear();this.saved={version:1,tokens:{}};this.abort=new AbortController();this.state='idle';this.code=undefined;return this.status();}
   private checkClosed(){if(this.closed)throw new ConnectorError('connector_closed',503);}
-  async close(){this.closed=true;this.abort.abort();if(this.timer)clearInterval(this.timer);this.pending.clear();await this.sequence;await this.file.flush();}
+  async close(){this.closed=true;this.abort.abort();if(this.timer)clearInterval(this.timer);this.timer=undefined;this.pending.clear();await this.sequence;await this.file.flush();}
 }

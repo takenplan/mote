@@ -44,7 +44,7 @@ try{
   catch(error){call.status='failed';call.failure=error instanceof Error?error.message:String(error);throw error;}
   finally{call.durationMs=Date.now()-Date.parse(call.startedAt);await save();progress('model-finish',{number:call.number,phase,status:call.status,durationMs:call.durationMs});}
  };
- const lifecycle=node.lifecycle.settings();for(const key of ['working','consolidation','insights'] as const)lifecycle[key].enabled=false;node.lifecycle.configure(lifecycle);
+ const lifecycle=node.lifecycle.settings();for(const key of ['working','consolidation','insights'] as const)lifecycle[key].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings:lifecycle});
  base=await node.app.listen({host:'127.0.0.1',port:0});
  await request('POST','/api/sources',{id:sourceId,name:'Generated Coding refactor journey',kind:'coding-agent',deviceId:'generated-coding-device',platform:'macos',retention:'archive'});
  await request('PUT','/api/memory-recipe-settings',{sourceId,recipes:[{id:'mote.coding-memory',version:'2'}]});

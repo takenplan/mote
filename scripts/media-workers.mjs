@@ -3,7 +3,8 @@
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, join, isAbsolute } from 'node:path';
+import { dirname, join, isAbsolute, resolve } from 'node:path';
+import { readConfigDocument } from '../packages/shared/src/config-file.ts';
 
 export function mediaEnvironment(env) {
   const clean=Object.fromEntries(['PATH', 'HOME', 'LANG', 'TMPDIR', 'TMP', 'TEMP'].filter(key => env[key] !== undefined).map(key => [key, env[key]]));
@@ -37,8 +38,13 @@ export async function probeMediaCommands(python, env, run) {
   catch { throw Error('media.runtime.ffmpeg_missing'); }
 }
 
-export function startMediaWorkers({ root = process.cwd(), env = process.env, signal, report = event => console.info(JSON.stringify({ event })) } = {}) {
-  if (!env.MOTE_MEDIA_MODEL_DIR || !env.MOTE_MEDIA_WORKER_TOKEN) return { ready: Promise.resolve(), close: async () => {} };
+export function startMediaWorkers({ root = process.cwd(), env = process.env, configuration, runtime, signal, report = event => console.info(JSON.stringify({ event })) } = {}) {
+  if (!configuration && env.MOTE_CONFIG_FILE) {
+    const loaded = readConfigDocument(env.MOTE_CONFIG_FILE, env);
+    configuration = { ...(loaded.document.media ?? {}) }; runtime = loaded.document.server?.runtime;
+    for (const key of ['modelDirectory', 'python']) if (configuration[key] && (key !== 'python' || /[\\/]/.test(configuration[key]))) configuration[key] = resolve(loaded.baseDir, configuration[key]);
+  }
+  if (!configuration?.modelDirectory || !configuration?.workerToken) return { ready: Promise.resolve(), close: async () => {} };
   const controller = new AbortController(), waits = new Set();
   const abort = () => controller.abort();
   signal?.addEventListener('abort', abort, { once: true });
@@ -66,15 +72,15 @@ export function startMediaWorkers({ root = process.cwd(), env = process.env, sig
     controller.signal.addEventListener('abort', finish, { once: true });
     if (controller.signal.aborted) finish();
   });
-  const python = env.MOTE_MEDIA_PYTHON || 'python3';
+  const python = configuration.python || 'python3';
   const ready = (async () => {
-    if (env.MOTE_RUNTIME === 'native') {
+    if (runtime === 'native') {
       for (;;) {
         controller.signal.throwIfAborted();
         try {
           report('media.runtime.preparing');
-          await ensureMediaRuntime({ root, python, env, run });
-          try { await probeMediaCommands(python, env, run); report('media.runtime.ready'); }
+          await ensureMediaRuntime({ root, python, env: { ...env, MOTE_RUNTIME: runtime }, run });
+          try { await probeMediaCommands(python, { ...env, MOTE_RUNTIME: runtime }, run); report('media.runtime.ready'); }
           catch { report('media.runtime.ffmpeg_missing'); }
           // Keep control endpoints and OCR available while a system command is missing.
           break;
@@ -85,10 +91,10 @@ export function startMediaWorkers({ root = process.cwd(), env = process.env, sig
         }
       }
     }
-    const workerEnv = { ...mediaEnvironment(env), PYTHONUNBUFFERED: '1', MOTE_MEDIA_WORKER_TOKEN: env.MOTE_MEDIA_WORKER_TOKEN };
+    const workerEnv = { ...mediaEnvironment({ ...env, MOTE_RUNTIME: runtime }), PYTHONUNBUFFERED: '1', MOTE_MEDIA_WORKER_TOKEN: configuration.workerToken };
     const specs = [
-      ['ocr-server.py', ['--model-root', join(env.MOTE_MEDIA_MODEL_DIR, 'ocr'), '--port', env.MOTE_MEDIA_OCR_PORT || '9010']],
-      ['transcription-server.py', ['--model', join(env.MOTE_MEDIA_MODEL_DIR, 'dialogue'), '--segmentation-model', join(env.MOTE_MEDIA_MODEL_DIR, 'dialogue/segmentation.onnx'), '--speaker-model', join(env.MOTE_MEDIA_MODEL_DIR, 'dialogue/speaker.onnx'), '--wespeaker-model', join(env.MOTE_MEDIA_MODEL_DIR, 'speaker-wespeaker/speaker.onnx'), '--timeout', '3600', '--port', env.MOTE_MEDIA_ASR_PORT || '9009']],
+      ['ocr-server.py', ['--model-root', join(configuration.modelDirectory, 'ocr'), '--port', String(configuration.ocrPort ?? 9010)]],
+      ['transcription-server.py', ['--model', join(configuration.modelDirectory, 'dialogue'), '--segmentation-model', join(configuration.modelDirectory, 'dialogue/segmentation.onnx'), '--speaker-model', join(configuration.modelDirectory, 'dialogue/speaker.onnx'), '--wespeaker-model', join(configuration.modelDirectory, 'speaker-wespeaker/speaker.onnx'), '--timeout', '3600', '--port', String(configuration.asrPort ?? 9009)]],
     ];
     await Promise.all(specs.map(async ([script, args]) => {
       while (!controller.signal.aborted) {

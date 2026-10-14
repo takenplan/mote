@@ -1,7 +1,7 @@
 import { rename, stat, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { compose, startNative, stopNative, nativeIdentity, execute, dockerContainer, backupProfile, restoreProfile, verifiedBackup, atomicJson } from './profile-lib.mjs';
+import { compose, startNative, stopNative, nativeIdentity, execute, dockerContainer, backupProfile, restoreProfile, verifiedBackup, atomicJson, updateProfileConfiguration } from './profile-lib.mjs';
 import { preserveConnectorState, restoreConnectorState } from './update-private.mjs';
 
 export async function startProfile(p) { return p.meta.runtime === 'docker' ? compose(p, ['up', '--detach', '--no-build', '--wait'], { timeoutMs: 120000 }).then(() => ({ started: true, project: p.project, url: p.url })) : startNative(p); }
@@ -52,6 +52,7 @@ export async function changeProfileDeployment(p, options = {}) {
     delete p.meta.backup;
     if (!next.releaseVersion) delete p.meta.releaseVersion;
     if (!next.releaseTag) delete p.meta.releaseTag;
+    if (rollbackVolume) await updateProfileConfiguration(p, document => { document.storage.source = rollbackVolume; });
     await atomicJson(p.metaFile, p.meta);
     if (rollback) { await restoreProfile(p, next.backup); await restoreConnectorState(p, privateConnectors); }
     // Failure retains the snapshot and selection record. Never automatically run old code on migrated data.

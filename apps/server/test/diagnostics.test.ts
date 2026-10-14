@@ -262,11 +262,11 @@ test('saved diagnostic preferences apply immediately and survive app restart',as
  let {app}=await buildApp({...config(directory),diagnosticsEnabled:false},{agent:inactive});
  const headers={authorization:'Bearer synthetic-observability-token-only'};
  try{
-  const update=await app.inject({method:'PUT',url:'/api/diagnostics-settings',headers,payload:{enabled:true,debug:true,traceEnabled:true,level:'debug'}});assert.equal(update.statusCode,200,update.body);
+  const revision=(await app.inject({url:'/api/diagnostics-settings',headers})).json().revision;const update=await app.inject({method:'PUT',url:'/api/diagnostics-settings',headers,payload:{revision,enabled:true,debug:true,traceEnabled:true,level:'debug'}});assert.equal(update.statusCode,200,update.body);
   const status=(await app.inject({url:'/api/diagnostics',headers}));assert.equal(status.statusCode,200);
   assert.equal((await app.inject({url:'/api/diagnostics-settings',headers})).json().traceEnabled,true);
-  const execution=await app.inject({method:'PUT',url:'/api/execution-settings',headers,payload:{agentConcurrency:6,llmConcurrency:3,memoryConcurrency:2}});assert.equal(execution.statusCode,200,execution.body);
-  const invalid=await app.inject({method:'PUT',url:'/api/execution-settings',headers,payload:{agentConcurrency:0,llmConcurrency:3,memoryConcurrency:2}});assert.equal(invalid.statusCode,400);
+  const execution=await app.inject({method:'PUT',url:'/api/execution-settings',headers,payload:{revision:update.json().revision,agentConcurrency:6,llmConcurrency:3,memoryConcurrency:2}});assert.equal(execution.statusCode,200,execution.body);
+  const invalid=await app.inject({method:'PUT',url:'/api/execution-settings',headers,payload:{revision:execution.json().revision,agentConcurrency:0,llmConcurrency:3,memoryConcurrency:2}});assert.equal(invalid.statusCode,400);
  }finally{await app.close();}
  ({app}=await buildApp(config(directory),{agent:inactive}));try{assert.equal((await app.inject({url:'/api/diagnostics-settings',headers})).json().traceEnabled,true);const settings=(await app.inject({url:'/api/execution-settings',headers})).json();assert.equal(settings.agentConcurrency,6);assert.equal(settings.queues.agents.limit,6);}finally{await app.close();}
 });

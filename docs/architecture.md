@@ -27,6 +27,8 @@ flowchart LR
   X --- A
 ```
 
+中央当前系统配置统一为私有 `mote.yaml` 与 Cordis 生命周期中的 ConfigService：网页和文件编辑共用校验、revision、准备和应用事务。业务数据库、不可变 Memory 策略与历史授权、任务配置快照、设备本地隐私仍属于各领域。热更新与需重启/迁移字段明确区分，见 [统一配置 ADR](adr-unified-configuration.md) 和 [配置归属](configuration-ownership.md)。
+
 ## 代码目录与责任
 
 | 目录 | 当前责任 |

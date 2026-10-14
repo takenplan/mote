@@ -34,7 +34,7 @@ async function save(){if(node&&report.operationId){const receipts=(node.store.db
 try{
  node=await buildApp(config,{backgroundWorker:false});await node.app.ready();
  const selectedModel=node.modelSettings.select('memory').settings;assert.equal(selectedModel.model,'gpt-6-sol');assert.equal(selectedModel.reasoningEffort,'max');assert.equal(selectedModel.protocol,'codex-app-server');
- const settings=node.lifecycle.settings();for(const name of ['extraction','consolidation','insights','working'] as const)settings[name].enabled=false;node.lifecycle.configure(settings);
+ const settings=node.lifecycle.settings();for(const name of ['extraction','consolidation','insights','working'] as const)settings[name].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
  const prior=new Map((node.store.db.prepare('SELECT id,json FROM memories').all() as {id:string;json:string}[]).map(r=>[r.id,r.json]));
  const evidenceIds=[...new Set(selected.flatMap((m:any)=>m.evidenceIds))] as string[];
  report.originals=node.memories.readEvidence(evidenceIds).map(r=>({id:r.id,text:r.ocrText,textSha256:sha256(r.ocrText)}));

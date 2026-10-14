@@ -22,7 +22,7 @@ if(recoveryOnly){
  const db=new DatabaseSync(join(config.dataDir,'mote.sqlite'),{readOnly:true});
  try{
   const rows=db.prepare('SELECT id,json FROM model_usage').all();assert.ok(rows.every(r=>JSON.parse(r.json).status==='completed'));
-  const settings=JSON.parse(db.prepare('SELECT json FROM memory_lifecycle_settings').get().json);
+  const settings=JSON.parse(db.prepare('SELECT json FROM memory_lifecycle_effective').get().json);
   for(const key of ['extraction','consolidation','insights','working'])assert.equal(settings[key].enabled,key==='extraction','Recovery preserves continuous extraction and optional automation policy');
   const jobs=db.prepare('SELECT id,json FROM memory_jobs').all();assert.equal(jobs.length,1);assert.equal(jobs[0].id,recoveryOnly.jobId);assert.equal(JSON.parse(jobs[0].json).status,'waiting_for_input');
   const memories=db.prepare('SELECT id,json FROM memories').all();assert.deepEqual(Object.fromEntries(memories.map(r=>[r.id,fixtureHelpers.sha(r.json)])),recoveryOnly.memoryHashes);
@@ -46,7 +46,7 @@ node=await buildApp(config,{backgroundWorker:false,createModelAgent:async(_setti
 }})});
 // Model selection is a separate provider capability from query(); keep both local and generated.
 node.app.addHook('onRequest',async(req,reply)=>{if(recovery&&!recovery.allows(req.method,new URL(req.url,'http://127.0.0.1').pathname))return reply.code(403).send({error:'recovery_only_write_forbidden'});if(req.method==='GET'&&/^\/api\/model-settings\/profiles\/[^/?]+\/models$/.test(req.url))return reply.send({items:[{id:'fixture',name:'Generated fixture'}]});});
-const lifecycle=node.lifecycle.settings();for(const key of ['extraction','consolidation','insights','working']){if(recovery)assert.equal(lifecycle[key].enabled,key==='extraction');else lifecycle[key].enabled=key==='extraction';}if(!recovery)node.lifecycle.configure(lifecycle);
+const lifecycle=node.lifecycle.settings();for(const key of ['extraction','consolidation','insights','working']){if(recovery)assert.equal(lifecycle[key].enabled,key==='extraction');else lifecycle[key].enabled=key==='extraction';}if(!recovery)await node.lifecycle.save({revision:node.configService.revision,settings:lifecycle});
 let peakRss=0,controlRecord,controlState='pending';sample=setInterval(()=>peakRss=Math.max(peakRss,process.memoryUsage().rss),100);
 function controlDraft(record){const c=fixture.control;return {id:c.materialId,kind:'mote.message',schemaVersion:1,title:c.title,origin:{sourceId:c.sourceId,externalId:c.externalId,deviceId:c.deviceId,firstAt:c.observedAt,lastAt:c.observedAt},members:[{id:'original',kind:'capture',ref:'capture:'+record.id}],blocks:[{id:'body',kind:'text',format:'plain',text:c.body,memberIds:['original']},...(controlState==='ready'?[{id:'transcript',kind:'text',format:'transcript',text:c.transcript,memberIds:['original']}]:[])],artifacts:[{key:'source-body',state:'ready',revision:'body-v1',blockIds:['body']},{key:'extracted-text',state:controlState,revision:controlState+'-v1',blockIds:controlState==='ready'?['transcript']:[]}],coverage:{state:controlState==='ready'?'complete':'partial'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}};}
 if(interactive){

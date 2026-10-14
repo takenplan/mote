@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util';
 import { writeFile,readFile,stat } from 'node:fs/promises';
 import { join,resolve } from 'node:path';
 import {fileURLToPath} from 'node:url';
-import { profilePaths, initialize, loadProfile, isolatedEnvironment, withProfileLock, startNative, nativeIdentity, health, compose, execute, backupProfile, restoreProfile, atomicJson, launchdXml, effectiveConfiguration, setPublicUrl } from './profile-lib.mjs';
+import { profilePaths, initialize, loadProfile, isolatedEnvironment, withProfileLock, startNative, nativeIdentity, health, compose, execute, backupProfile, restoreProfile, atomicJson, launchdXml, effectiveConfiguration, setPublicUrl, updateProfileConfiguration, migrateStorageOwner } from './profile-lib.mjs';
 import { ensureMediaRuntime, probeMediaCommands } from './media-workers.mjs';
 import { configureTunnel, runNativeTunnel, nativeTunnelArgs, nativeTunnelIdentity, stopNativeTunnel } from './tunnel-lib.mjs';
 import { startProfile as start, stopProfile as stop, changeProfileDeployment } from './update-deploy.mjs';
@@ -17,6 +17,7 @@ const help = `Mote central profiles (Node 24+, default: dev; prod requires --pro
   backup [--profile NAME] [--home PATH] [--out NEW_DIRECTORY]
   restore --from BACKUP [--profile NAME] [--home PATH]
   launchd [--profile NAME] [--home PATH] [--node ABSOLUTE_NODE]
+  migrate-storage-owner [--profile NAME] [--home PATH] (Docker only, stopped; preserve a backup first)
   media-runtime [--profile NAME] [--home PATH] [--python PYTHON_BINARY] (Native profile, stopped)
   media-import --role ocr|dialogue|speaker-wespeaker --from DIRECTORY [--profile NAME] [--home PATH] (verified offline model bundle)
   tunnel --enable --token-file PRIVATE_FILE [--public-url HTTPS_ORIGIN] [--protocol auto|http2|quic] [--binary ABSOLUTE_CLOUDFLARED]
@@ -28,11 +29,11 @@ const help = `Mote central profiles (Node 24+, default: dev; prod requires --pro
   update [--profile NAME] [--home PATH] [--version VERSION]
   rollback --restore-data [--profile NAME] [--home PATH]
 Prefix commands with: node scripts/mote.mjs
-No command installs launchd, publishes images, deletes old volumes or changes the legacy root .env.
+No command installs launchd, publishes images, deletes old volumes or changes a legacy configuration or archive automatically.
 Tunnel tokens are accepted only through private files, never argument values or environment.
 Native tunnel-run is foreground; generated launchd services are never installed automatically.
 Only token intentionally prints a central credential. Backups exclude credentials and encryption keys.
-When encryption has been used, preserve MOTE_DATA_KEY or the vault content-key file separately for restore.`;
+When encryption has been used, preserve storage.dataKey or the vault content-key file separately for restore.`;
 const split = process.argv.indexOf('--');
 const raw = process.argv.slice(2, split < 0 ? undefined : split);
 const tail = split < 0 ? [] : process.argv.slice(split + 1);
@@ -61,7 +62,7 @@ async function main() {
       await withProfileLock(p, async () => {
         if ((await nativeIdentity(p)).running || (await nativeTunnelIdentity(p)).running)
           throw Error('Stop the existing central and tunnel before run-all; this command only owns new processes');
-        await configureTunnel(p, { enable: true }, { execute, persist: meta => atomicJson(p.metaFile, meta), persistPublicUrl: url => setPublicUrl(p, url) });
+        await configureTunnel(p, { enable: true }, { execute, persist: async meta => { await updateProfileConfiguration(p, document => { const tunnel = meta.tunnel; document.server.tunnelEnabled = Boolean(tunnel?.enabled); document.server.tunnelProvider = tunnel?.enabled ? 'cloudflare' : ''; document.server.tunnelProtocol = tunnel?.protocol ?? 'auto'; }); await atomicJson(p.metaFile, meta); }, persistPublicUrl: url => setPublicUrl(p, url) });
         if (interrupted) return;
         central = await startNative(p, true);
         centralWait = central.wait();
@@ -89,7 +90,7 @@ async function main() {
     if (p.meta.runtime !== 'native') throw Error('Docker bundles the media runtime in its image');
     const result=await withProfileLock(p,async()=>{
       if((await nativeIdentity(p)).running)throw Error('Stop this profile before installing the Native media runtime');
-      const python=join(p.directory,'media-venv/bin/python');
+      const python=resolve(p.directory,p.document.media.python);
       const changed=await ensureMediaRuntime({root:resolve(p.meta.release),python,env:isolatedEnvironment(p),sourcePython:values.python||'python3',run:(command,args,env)=>execute(command,args,{env,timeoutMs:30*60*1000,capture:true})});
       await probeMediaCommands(python,isolatedEnvironment(p),(command,args,env)=>execute(command,args,{env,capture:true}));
       return {profile:p.profile,installed:true,changed,python,runtimeReady:true};
@@ -101,10 +102,10 @@ async function main() {
     await withProfileLock(p,async()=>{
       if(p.meta.runtime==='native'){
         const script=fileURLToPath(new URL('media-import.mjs',import.meta.url));
-        await execute(process.execPath,[script,join(p.directory,'models'),values.role,source],{env:isolatedEnvironment(p),timeoutMs:10*60*1000});
+        await execute(process.execPath,[script,p.modelDirectory,values.role,source],{env:isolatedEnvironment(p),timeoutMs:10*60*1000});
       }else{
         if(/[,:]/.test(source))throw Error('Docker model import source path cannot contain comma or colon');
-        await execute('docker',['run','--rm','--network','none','--mount',`type=volume,source=${p.meta.volume}-models,target=/models`,'--mount',`type=bind,source=${source},target=/import,readonly`,p.meta.image,'node','scripts/media-import.mjs','/models',values.role,'/import'],{env:isolatedEnvironment(p),timeoutMs:10*60*1000});
+        await execute('docker',['run','--rm','--network','none','--mount',`type=volume,source=${p.meta.modelsVolume || p.meta.volume+'-models'},target=${p.modelDirectory}`,'--mount',`type=bind,source=${source},target=/import,readonly`,p.meta.image,'node','scripts/media-import.mjs',p.modelDirectory,values.role,'/import'],{env:isolatedEnvironment(p),timeoutMs:10*60*1000});
       }
     });return;
   }
@@ -114,7 +115,7 @@ async function main() {
     print({ profile: p.profile, currentVersion: checked.currentVersion, latestVersion: checked.manifest.version, available: checked.available, verified: true, channel: checked.manifest.channel, releaseUrl: checked.manifest.notesUrl, runtime: p.meta.runtime }); return;
   }
   if (command === 'tunnel') {
-    print(await withProfileLock(p, () => configureTunnel(p, values, { execute, persist: meta => atomicJson(p.metaFile, meta), persistPublicUrl: url => setPublicUrl(p,url) }))); return;
+    print(await withProfileLock(p, () => configureTunnel(p, values, { execute, persist: async meta => { await updateProfileConfiguration(p, document => { const tunnel = meta.tunnel; document.server.tunnelEnabled = Boolean(tunnel?.enabled); document.server.tunnelProvider = tunnel?.enabled ? 'cloudflare' : ''; document.server.tunnelProtocol = tunnel?.protocol ?? 'auto'; }); await atomicJson(p.metaFile, meta); }, persistPublicUrl: url => setPublicUrl(p,url) }))); return;
   }
   if (command === 'tunnel-run') {
     if (p.meta.runtime !== 'native') throw Error('Use start for Docker tunnel profiles');
@@ -133,7 +134,7 @@ async function main() {
   if (command === 'token') { console.info(p.env.MOTE_TOKEN); return; }
   if (command === 'status') {
     const state = p.meta.runtime === 'native' ? await nativeIdentity(p) : { compose: await compose(p, ['ps', '--all', '--format', 'json'], { capture: true }) };
-    print({ profile: p.profile, runtime: p.meta.runtime, envFile: p.envFile, dataDir: p.meta.runtime === 'native' ? p.dataDir : p.meta.volume, port: p.port, url: p.url, healthy: await health(p), tunnel: { ...effectiveConfiguration(p).tunnel, ...(p.meta.runtime === 'native' ? await nativeTunnelIdentity(p) : {}) }, ...state }); return;
+    print({ profile: p.profile, runtime: p.meta.runtime, configurationFile: p.configFile, dataDir: p.meta.runtime === 'native' ? p.dataDir : p.meta.volume, port: p.port, url: p.url, healthy: await health(p), tunnel: { ...effectiveConfiguration(p).tunnel, ...(p.meta.runtime === 'native' ? await nativeTunnelIdentity(p) : {}) }, ...state }); return;
   }
   if (command === 'exec') {
     if (!tail.length) throw Error('exec requires -- COMMAND ARG...');
@@ -147,19 +148,20 @@ async function main() {
     if (p.meta.runtime !== 'native') throw Error('launchd requires a native profile');
     const { label, contents } = launchdXml(p, values.node);
     const path = join(p.directory, 'generated', `${label}.plist`); await writeFile(path, contents, { mode: 0o600 });
-    print({ generated: path, label, installed: false, envFile: p.envFile }); return;
+    print({ generated: path, label, installed: false, configurationFile: p.configFile }); return;
   }
   if (command === 'tls') {
     if (p.meta.runtime !== 'docker' || values.enable === values.disable) throw Error('tls requires a Docker profile and exactly one of --enable / --disable');
     p.meta.tls = Boolean(values.enable);
-    if (p.meta.tls && !/^[a-z0-9][a-z0-9.-]*\.[a-z0-9-]+$/i.test(p.env.MOTE_TLS_DOMAIN ?? '')) throw Error('Set MOTE_TLS_DOMAIN in this private profile first');
-    await withProfileLock(p, () => atomicJson(p.metaFile, p.meta)); print({ tls: p.meta.tls, applyWith: `start --profile ${p.profile}` }); return;
+    if (p.meta.tls && !/^[a-z0-9][a-z0-9.-]*\.[a-z0-9-]+$/i.test(p.env.MOTE_TLS_DOMAIN ?? '')) throw Error('Set server.tls.domain in this private mote.yaml first');
+    await withProfileLock(p, async () => { await updateProfileConfiguration(p, document => { document.server.tls.enabled = p.meta.tls; }); await atomicJson(p.metaFile, p.meta); }); print({ tls: p.meta.tls, applyWith: `start --profile ${p.profile}` }); return;
   }
   let result;
   await withProfileLock(p, async () => {
     if (command === 'start') result = await start(p);
     else if (command === 'run') { if (p.meta.runtime !== 'native') throw Error('Use start for a Docker profile'); result = await startNative(p, true); }
     else if (command === 'stop') result = await stop(p);
+    else if (command === 'migrate-storage-owner') result = await migrateStorageOwner(p);
     else if (command === 'backup') result = { backup: await backupProfile(p, values.out) };
     else if (command === 'restore') { if (!values.from) throw Error('restore requires --from BACKUP'); result = await restoreProfile(p, values.from); }
     else if (command === 'update') {

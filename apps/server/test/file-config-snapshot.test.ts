@@ -22,7 +22,7 @@ async function fixture(t:any,options:ConstructorParameters<typeof FileProcessing
  processing.update({revision:processing.view().revision,settings:{...processing.view().settings,enabled:true,audioProcessor:'audio.http'},policy:fixtureFilePolicy({...processing.view().settings,enabled:true,audioProcessor:'audio.http'},processing.runtime.registry)});
  const bytes=Buffer.from('generated audio fixture'),manifest={sourceId:'audio',previousRevision:null,item:{externalId:'generated.wav',revision:'1',observedAt:'2024-01-01T00:00:00.000Z',title:'Generated audio',kind:'file',layer:'original',text:'',mimeType:'audio/wav',deleted:false},relativePath:'generated.wav',sizeBytes:bytes.length,sha256:sha256(bytes)};
  const session=files.begin(manifest,()=>{});files.part(session.uploadId,0,bytes,()=>{});const id=(await files.commit(session.uploadId,()=>{})).id;
- return {dir,store,files,get processing(){return processing;},id,calls,started,finish,async restart(){await processing.close();processing=new FileProcessing(files,provider,undefined,options);await processing.runtime.ready;}};
+ return {dir,store,files,get processing(){return processing;},id,calls,started,finish,async restart(configuration=processing.configurationSnapshot()){await processing.close();processing=new FileProcessing(files,provider,undefined,{...options,configuration});await processing.runtime.ready;}};
 }
 
 test('unrelated image settings preserve an active audio grant and its immutable processing snapshot',async t=>{
@@ -84,11 +84,10 @@ test('legacy fingerprints without declared dependencies require fresh extraction
  assert.equal(f.files.detail(f.id).job.state,'succeeded');assert.equal(f.calls.length,2,'old keys do not prove the new dependency contract');
 });
 
-test('restart reconciles a persisted config change but requires acknowledgement of the interrupted request',async t=>{
+test('restart reconciles an injected current configuration change but requires acknowledgement of the interrupted request',async t=>{
  const f=await fixture(t),running=f.processing.tick();await f.started;
  const settings={...f.processing.currentSettings(),endpoint:'http://127.0.0.1:9050/transcribe'},saved={revision:randomUUID(),settings,policy:fixtureFilePolicy(settings,f.processing.runtime.registry)};
- writeFileSync(join(f.dir,'file-processing.json'),JSON.stringify(saved),{mode:0o600});
- await f.restart();f.finish();await running;
+ await f.restart({settings:saved.settings,policy:saved.policy});f.finish();await running;
  await f.processing.tick();assert.equal(f.processing.cancellation(f.id).wait,'unknown');assert.equal(f.calls.length,1);
  assert.throws(()=>f.processing.retry(f.id),{statusCode:409});f.processing.retry(f.id,'transcribe',false,true);
  for(const until=Date.now()+5000;Date.now()<until&&f.files.detail(f.id).job.state!=='succeeded';){await f.processing.tick();if(f.files.detail(f.id).job.state!=='succeeded')await new Promise(r=>setTimeout(r,25));}

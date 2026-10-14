@@ -6,21 +6,18 @@ import {Store,StoreError,sha256} from './store.js';
 import type {FileProcessorRuntime} from './file-processors.js';
 import {MEDIA_CATALOG,type MediaAssets} from './media-assets.js';
 import {requestLocalJson} from './local-http.js';
-const managedOcrEndpoint=()=>process.env.MOTE_MEDIA_OCR_ENDPOINT??'http://127.0.0.1:9010/ocr';
-async function managedOcrReady(){
-  const token=process.env.MOTE_MEDIA_WORKER_TOKEN;if(!token)return false;
-  const url=new URL(managedOcrEndpoint());url.pathname='/health';
+import {mediaRuntimeSettings,type MediaRuntimeSettings} from './media-configuration.js';
+async function managedOcrReady(media:MediaRuntimeSettings){
+  const token=media.workerToken;if(!token)return false;
+  const url=new URL(media.ocrEndpoint);url.pathname='/health';
   try{const value=await requestLocalJson(url,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(1200),limit:4096}) as {version?:number;execution?:string;ocr?:boolean};
     return value.version===1&&value.execution==='local'&&value.ocr===true;
   }catch{return false;}
 }
 
-const endpoint=z.string().max(2048).refine(value=>{if(!value)return true;try{const u=new URL(value);return ['http:','https:'].includes(u.protocol)&&!u.username&&!u.password&&!u.search&&!u.hash&&(u.protocol==='https:'||['127.0.0.1','localhost','[::1]'].includes(u.hostname));}catch{return false;}},'Use HTTPS or loopback HTTP');
-export const perceptionSettingsSchema=z.object({
-  ocrProcessorId:z.string().max(100).default('image.http'),concurrency:z.number().int().min(1).max(8).default(1),
-  providerRevision:z.string().min(1).max(128).default('1'),enabled:z.boolean().default(true),ocrEndpoint:endpoint.default(''),
-  allowExternalProcessing:z.boolean().default(false),allowQueryImages:z.boolean().default(false),
-}).strict();
+import {perceptionSettingsSchema} from './perception-configuration.js';
+export {perceptionSettingsSchema} from './perception-configuration.js';
+
 export type PerceptionSettings=z.infer<typeof perceptionSettingsSchema>;
 /** Durable screenshot adapter for the existing processor runtime. Ingest triggers create jobs atomically. */
 export class Perception {
@@ -28,23 +25,25 @@ export class Perception {
   private inFlight=new Map<string,Promise<unknown>>();
   private historicalPreviews=new Map<string,{expires:number;items:{id:string;hash:string}[]}>();
   private workerReady=false;private workerCheckedAt=0;private workerProbe?:Promise<void>;
-  private unregister:Array<()=>Promise<void>>=[];
-  constructor(private store:Store,private runtime:FileProcessorRuntime,engine?:ExecutionEngine,private mediaAssets?:MediaAssets,private probeOcr:()=>Promise<boolean>=managedOcrReady){
+  private unregister:Array<()=>Promise<void>>=[];private readonly media:MediaRuntimeSettings;private currentSettings:PerceptionSettings;
+  constructor(private store:Store,private runtime:FileProcessorRuntime,engine?:ExecutionEngine,private mediaAssets?:MediaAssets,private probeOcr?:()=>Promise<boolean>,media?:Partial<MediaRuntimeSettings>,configuration?:PerceptionSettings){
+    this.media=mediaRuntimeSettings(media);
     this.engine=engine??new ExecutionEngine(store);this.owned=!engine;
-    if(mediaAssets&&!store.db.prepare("SELECT 1 FROM settings WHERE key='perception'").get())store.db.prepare("INSERT INTO settings VALUES('perception',?)").run(JSON.stringify(perceptionSettingsSchema.parse({enabled:true,ocrProcessorId:'image.http',ocrEndpoint:managedOcrEndpoint(),concurrency:1})));
+    this.currentSettings=perceptionSettingsSchema.parse(configuration??(mediaAssets?{enabled:true,ocrProcessorId:'image.http',ocrEndpoint:this.media.ocrEndpoint,concurrency:1}:{}));
+    this.publishSettings();
     this.unregister.push(this.engine.register({kind:'perception.ocr',pool:'image-ocr',concurrency:()=>this.settings().concurrency,
       validate:step=>this.valid(step),admit:step=>this.admit(step),execute:(step,signal)=>this.process(step,signal),commit:(step,result)=>this.commit(step,result),project:step=>this.project(step),
       classify:error=>error instanceof z.ZodError?new ExecutionFailure('permanent','invalid_processor_output'):new ExecutionFailure('transient','processor_failed',60000),
     }));
   }
-  private execution(settings:PerceptionSettings){return sha256(JSON.stringify([settings.enabled,settings.allowExternalProcessing,settings.providerRevision,settings.ocrProcessorId,settings.ocrEndpoint,settings.ocrEndpoint===managedOcrEndpoint()&&this.mediaAssets?MEDIA_CATALOG.ocr.version:'']));}
+  private execution(settings:PerceptionSettings){return sha256(JSON.stringify([settings.enabled,settings.allowExternalProcessing,settings.providerRevision,settings.ocrProcessorId,settings.ocrEndpoint,settings.ocrEndpoint===this.media.ocrEndpoint&&this.mediaAssets?MEDIA_CATALOG.ocr.version:'']));}
   private valid(step:ExecutionStep){return !this.closed&&step.input.kind==='ocr'&&this.store.imageReference(String(step.input.captureId))?.blobHash===step.input.blobHash&&this.execution(this.settings())===step.input.configRevision;}
   private admit(step:ExecutionStep){
     const settings=this.settings(),url=settings.ocrEndpoint;
     if(!settings.enabled)return new ExecutionFailure('blocked','processing_disabled');
     if(!url)return new ExecutionFailure('blocked','provider_not_configured');
-    if(url===managedOcrEndpoint()&&this.mediaAssets&&!this.mediaAssets.ready('ocr'))return new ExecutionFailure('blocked','model_missing');
-    if(url===managedOcrEndpoint()&&this.mediaAssets&&!this.workerReady)return new ExecutionFailure('waiting','ocr_worker_unavailable',5000);
+    if(url===this.media.ocrEndpoint&&this.mediaAssets&&!this.mediaAssets.ready('ocr'))return new ExecutionFailure('blocked','model_missing');
+    if(url===this.media.ocrEndpoint&&this.mediaAssets&&!this.workerReady)return new ExecutionFailure('waiting','ocr_worker_unavailable',5000);
     if(!settings.allowExternalProcessing&&!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname))return new ExecutionFailure('blocked','external_processing_disabled');
     try{const processor=this.runtime.registry.get(settings.ocrProcessorId);if(step.input.processorVersion&&step.input.processorVersion!==processor.version)return new ExecutionFailure('blocked','processor_version_unavailable');}catch{return new ExecutionFailure('blocked','processor_unavailable');}
   }
@@ -53,11 +52,12 @@ export class Perception {
     const state=step.state==='waiting'&&step.error==='processor_failed'?'failed':step.state;
     this.store.db.prepare('UPDATE perception_jobs SET state=?,attempts=?,available_at=?,error=? WHERE capture_id=? AND kind=?').run(state,step.attempts,step.availableAt,step.error??null,String(step.input.captureId),String(step.input.kind));
   }
-  settings(){const row=this.store.db.prepare("SELECT value FROM settings WHERE key='perception'").get();return perceptionSettingsSchema.strip().parse(row?JSON.parse(String(row.value)):{});}
+  settings(){return structuredClone(this.currentSettings);}
+  private publishSettings(){this.store.db.prepare("INSERT INTO settings VALUES('perception-effective',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(this.currentSettings));}
   view(){return {recent:this.store.db.prepare("SELECT capture_id AS id,kind,state,error,auto_eligible AS autoEligible FROM perception_jobs WHERE kind='ocr' ORDER BY created_at DESC LIMIT 40").all(),settings:this.settings(),jobs:this.store.db.prepare("SELECT kind,state,auto_eligible AS autoEligible,count(*) AS count FROM perception_jobs WHERE kind='ocr' GROUP BY kind,state,auto_eligible").all()};}
   configure(raw:unknown){
     const previous=this.settings(),value=perceptionSettingsSchema.parse(raw);
-    this.store.db.prepare("INSERT INTO settings VALUES('perception',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(value));
+    this.currentSettings=value;this.publishSettings();
     if(this.execution(previous)!==this.execution(value)){
       this.engine.cancelKind('perception.ocr');
       this.store.db.prepare("UPDATE perception_jobs SET state='waiting',attempts=0,available_at=0 WHERE kind='ocr' AND state IN ('failed','blocked','running')").run();
@@ -93,11 +93,11 @@ export class Perception {
   /** Compatibility helper for callers/tests; production ticks the shared engine. */
   async tick(){await this.refreshWorker();const ids=this.prepare(true);await this.engine.drain(ids);}
   private refreshWorker(){
-    if(this.closed||!this.mediaAssets||this.settings().ocrEndpoint!==managedOcrEndpoint())return Promise.resolve();
+    if(this.closed||!this.mediaAssets||this.settings().ocrEndpoint!==this.media.ocrEndpoint)return Promise.resolve();
     if(!this.mediaAssets.ready('ocr')){this.workerReady=false;return Promise.resolve();}
     if(this.workerProbe)return this.workerProbe;
     this.workerProbe=(async()=>{
-      const ready=await this.probeOcr().catch(()=>false);if(this.closed||this.settings().ocrEndpoint!==managedOcrEndpoint())return;
+      const ready=await (this.probeOcr??(()=>managedOcrReady(this.media)))().catch(()=>false);if(this.closed||this.settings().ocrEndpoint!==this.media.ocrEndpoint)return;
       this.workerReady=ready;this.workerCheckedAt=Date.now();
       if(ready)for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind='perception.ocr' AND state='waiting' AND error='ocr_worker_unavailable'").all()){
         const step=this.engine.get(String(row.id));if(step&&this.valid(step))this.engine.retry(step.id,false);
@@ -127,7 +127,7 @@ export class Perception {
     const record=this.store.evidence([id])[0];
     if(!step.input.requested&&record.ocrText&&record.ocr?.status==='completed')return {skip:true};
     const processor=this.runtime.registry.get(settings.ocrProcessorId);
-    const fingerprint=sha256(JSON.stringify([step.input.blobHash,processor.id,processor.version,'ocr',url,settings.providerRevision,url===managedOcrEndpoint()&&this.mediaAssets?MEDIA_CATALOG.ocr.version:'']));
+    const fingerprint=sha256(JSON.stringify([step.input.blobHash,processor.id,processor.version,'ocr',url,settings.providerRevision,url===this.media.ocrEndpoint&&this.mediaAssets?MEDIA_CATALOG.ocr.version:'']));
     const cached=this.store.db.prepare('SELECT json FROM perception_results WHERE fingerprint=? LIMIT 1').get(fingerprint);
     let result:unknown;
     if(cached)result=JSON.parse(String(cached.json)).transcript;
@@ -135,7 +135,7 @@ export class Perception {
       let task=this.inFlight.get(fingerprint);
       if(!task){
         const image=this.store.image(id);
-        task=processor.process({file:{id,title:'Screenshot',mimeType:image.mime,sizeBytes:image.bytes.length},settings:fileProcessingSchema.parse({imageEndpoint:url,...(url===managedOcrEndpoint()&&this.mediaAssets?{apiKey:process.env.MOTE_MEDIA_WORKER_TOKEN}:{})}),maxAudioMs:0,signal,readOriginal:async function*(){yield image.bytes;}});
+        task=processor.process({file:{id,title:'Screenshot',mimeType:image.mime,sizeBytes:image.bytes.length},settings:fileProcessingSchema.parse({imageEndpoint:url,...(url===this.media.ocrEndpoint&&this.mediaAssets?{apiKey:this.media.workerToken}:{})}),maxAudioMs:0,signal,readOriginal:async function*(){yield image.bytes;}});
         this.inFlight.set(fingerprint,task);const forget=()=>{if(this.inFlight.get(fingerprint)===task)this.inFlight.delete(fingerprint);};signal.addEventListener('abort',forget,{once:true});void task.finally(()=>{forget();signal.removeEventListener('abort',forget);}).catch(()=>{});
       }
       result=await task;

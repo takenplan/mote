@@ -24,7 +24,7 @@ function fixture(t:TestContext){
   t.after(()=>{store.close();rmSync(directory,{recursive:true,force:true});});
   const sources=new SourceStore(store),materials=new MaterialStore(store),sourceId='generated-files';
   sources.register({id:sourceId,name:'Generated old audio folder',kind:'local-files',deviceId:'generated-device',platform:'android',retention:'archive',initialSync:'new_only',enabled:false});
-  return {directory,store,sources,materials,sourceId,reopen(){store.close();store=new Store(directory,{dataKey:'ab'.repeat(32)});return store;}};
+  return {directory,store,sources,materials,sourceId,reopen(contentEncryptionEnabled=false){store.close();store=new Store(directory,{dataKey:'ab'.repeat(32),contentEncryptionEnabled});return store;}};
 }
 function draft(sourceId:string,captureId:string,externalId=item.externalId):MaterialDraft{
   return {id:materialId(sourceId,externalId),kind:'mote.message',schemaVersion:1,title:item.title,origin:{sourceId,externalId},
@@ -151,7 +151,7 @@ test('portable materials restore their exact source declaration versions without
 test('private source descriptions follow encryption, restart and explicit bulk decryption',async t=>{
   const f=fixture(t),saved=f.sources.updateContext(f.sourceId,{expectedVersion:0,description});
   assert.match(String(f.store.db.prepare('SELECT json FROM source_context_declarations').get()!.json),/^json:/);
-  f.store.contentEncryption.setEnabled(true);let store=f.reopen();const contexts=new SourceContextStore(store);
+  f.store.contentEncryption.setEnabled(true);let store=f.reopen(true);const contexts=new SourceContextStore(store);
   assert.match(String(store.db.prepare('SELECT json FROM source_context_declarations').get()!.json),/^aes:/);assert.deepEqual(contexts.current(f.sourceId),saved);
   store.contentEncryption.setEnabled(false);const service=new ContentStorageService(store,new FileStore(store,new SourceStore(store)),new ArchivedFileStore(store));service.start();
   for(let i=0;i<1000&&service.snapshot().job.state==='running';i++)await setImmediate();assert.equal(service.snapshot().job.failed,0);await service.close();

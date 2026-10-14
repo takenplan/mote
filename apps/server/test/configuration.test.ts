@@ -8,6 +8,7 @@ import type { ConfigurationField, ServerConfiguration } from '@mote/shared';
 import { buildApp, type QueryAgent } from '../src/app.js';
 import { serverConfiguration, configurationUrl } from '../src/configuration.js';
 import type { Config } from '../src/config.js';
+import {parse,stringify} from 'yaml';
 
 const inactive: QueryAgent = { configured: false, query: async () => { throw Error('No model call belongs in configuration tests'); }, close: async () => {} };
 function fixture(directory: string): Config {
@@ -65,7 +66,7 @@ test('URL projections strip credentials, query and fragment even when Config byp
   assert.equal(configurationUrl('file:///private/credentials'), null); assert.equal(configurationUrl('not a URL'), null);
 });
 
-test('owner configuration is authenticated and read-only; changes on disk await restart and support remains path/secret-free', async t => {
+test('owner configuration ignores obsolete env files and support remains path/secret-free', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'mote-configuration-owner-')), config = fixture(directory);
   const file = config.configuration!.hostConfigFile!; await writeFile(file, 'MOTE_MODEL=synthetic-file-value\n', { mode: 0o600 });
   const { app, diagnostics } = await buildApp(config, { agent: inactive });
@@ -96,6 +97,44 @@ test('owner configuration is authenticated and read-only; changes on disk await 
   }
 });
 
+test('owner configuration uses the shared YAML for API edits, restart state, file reload and revision conflicts',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'mote-configuration-file-')),config=fixture(directory);
+  const {app,configService}=await buildApp(config,{agent:inactive,backgroundWorker:false});
+  t.after(async()=>{await app.close();await rm(directory,{recursive:true,force:true});});
+  const headers={authorization:`Bearer ${config.token}`};
+  const view=()=>app.inject({url:'/api/configuration',headers});
+  const update=(id:string,value:unknown,revision:number)=>app.inject({method:'PUT',url:'/api/configuration/'+id,headers,payload:{value,revision}});
+  const initial=(await view()).json<ServerConfiguration>();
+  assert.equal(initial.readOnly,false);assert.equal(initial.configFile,configService.path);assert.equal(initial.lastError,null);
+  assert.ok(initial.domains!.some(domain=>domain.id==='models'));
+  for(const secret of [config.token,config.apiKey,config.embeddingApiKey,config.dataKey!])assert.ok(!JSON.stringify(initial).includes(secret));
+  assert.equal((await app.inject({method:'PUT',url:'/api/configuration/server',payload:{revision:initial.revision,value:{port:47833}}})).statusCode,401);
+  assert.equal((await app.inject({method:'PUT',url:'/api/configuration/server',headers,payload:{value:{port:47833}}})).statusCode,400);
+  const saved=await update('server',{port:47833},initial.revision!);assert.equal(saved.statusCode,200,saved.body);
+  const savedView=saved.json<ServerConfiguration>(),port=fields(savedView).get('listenPort')!;
+  assert.equal(port.value,47832);assert.equal(port.savedValue,47833);assert.equal(port.effect,'restart');assert.equal(savedView.restartRequired,true);
+  assert.equal((await update('execution',{agentConcurrency:2},initial.revision!)).statusCode,409);
+  const execution=await update('execution',{agentConcurrency:2},savedView.revision!);assert.equal(execution.statusCode,200,execution.body);
+  assert.equal((await app.inject({url:'/api/execution-settings',headers})).json().agentConcurrency,2);
+  const raw=parse(await readFile(configService.path,'utf8'));assert.equal(raw.server.port,47833);assert.equal(raw.models.deployment.apiKey,config.apiKey);
+  assert.equal((await update('server',{unknownSetting:'generated'},execution.json().revision)).statusCode,400);
+  const reuse=await update('models',{embedding:{baseUrl:'https://replacement.example.invalid/v1'}},execution.json().revision);
+  assert.equal(reuse.statusCode,409);assert.equal(reuse.json().error,'model_settings_credential_reuse');
+  const deploymentReuse=await update('models',{deployment:{baseUrl:'https://replacement.example.invalid/v1'}},execution.json().revision);
+  assert.equal(deploymentReuse.statusCode,409);assert.equal(deploymentReuse.json().error,'model_settings_credential_reuse');
+  assert.equal((await view()).json().revision,execution.json().revision);
+  raw.diagnostics.debug=false;await writeFile(configService.path,stringify(raw),{mode:0o600});await configService.reload();
+  const reloaded=(await view()).json<ServerConfiguration>();assert.equal(fields(reloaded).get('diagnosticsDebug')!.value,false);
+  assert.ok(reloaded.revision!>execution.json().revision);
+  const beforeInvalid=await readFile(configService.path,'utf8');
+  await writeFile(configService.path,'version: 1\nrevision: 0\nserver: [generated-invalid-secret\n',{mode:0o600});
+  await assert.rejects(configService.reload());
+  const invalid=await view();assert.equal(invalid.statusCode,200);assert.equal(invalid.json().lastError.code,'config_invalid');
+  assert.equal(fields(invalid.json()).get('diagnosticsDebug')!.value,false);assert.ok(!invalid.body.includes('generated-invalid-secret'));
+  await writeFile(configService.path,beforeInvalid,{mode:0o600});await configService.reload();
+  assert.equal((await view()).json().lastError,null);
+});
+
 test('request bursts preserve authentication and configuration access without a request quota', async t => {
   const directory = await mkdtemp(join(tmpdir(), 'mote-configuration-burst-')), config = fixture(directory);
   const { app } = await buildApp(config, { agent: inactive, backgroundWorker: false });
@@ -111,4 +150,17 @@ test('request bursts preserve authentication and configuration access without a 
     assert.equal(response.statusCode, 503);
     assert.equal(response.json().error, 'model_not_configured');
   }
+});
+
+test('generic model editor requires a credential-reuse decision before sending saved credentials to another endpoint',async t=>{
+  const directory=await mkdtemp(join(tmpdir(),'mote-configuration-credentials-')),config=fixture(directory);
+  const {app,configService}=await buildApp(config,{agent:inactive,backgroundWorker:false});
+  t.after(async()=>{await app.close();await rm(directory,{recursive:true,force:true});});
+  const headers={authorization:`Bearer ${config.token}`},value={embedding:{baseUrl:'https://replacement.example.invalid/v1'}};
+  const blocked=await app.inject({method:'PUT',url:'/api/configuration/models',headers,payload:{revision:configService.revision,value}});
+  assert.equal(blocked.statusCode,409);assert.equal(blocked.json().error,'model_settings_credential_reuse');
+  const allowed=await app.inject({method:'PUT',url:'/api/configuration/models',headers,payload:{revision:configService.revision,value,allowCredentialReuse:true}});
+  assert.equal(allowed.statusCode,200,allowed.body);assert.equal(allowed.json().restartRequired,true);
+  assert.equal(parse(await readFile(configService.path,'utf8')).models.embedding.apiKey,config.embeddingApiKey);
+  assert.ok(!allowed.body.includes(config.embeddingApiKey));
 });

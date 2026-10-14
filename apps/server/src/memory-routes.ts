@@ -25,7 +25,7 @@ export function registerMemoryRoutes(app:FastifyInstance,{memoryIntegrationSetti
   app.post('/api/memories/:id/correct',async req=>memoryPipeline.publication?memoryPipeline.publication.withOwnerWork(()=>memoryPipeline.publication!.correct((req.params as {id:string}).id,req.body)):memories.correct((req.params as {id:string}).id,req.body));
   app.delete('/api/memories/:id',async req=>memoryPipeline.publication?memoryPipeline.publication.delete((req.params as {id:string}).id):memories.delete((req.params as {id:string}).id));
   app.get('/api/memory-settings',async()=>lifecycle.view());
-  app.put('/api/memory-settings',{bodyLimit:8192},async req=>lifecycle.configure(req.body));
+  app.put('/api/memory-settings',{bodyLimit:8192},async req=>lifecycle.save(req.body));
   app.post('/api/memory-settings/extraction/:id/retry',async(req,reply)=>{
     const id=jobId(req.params),extraction=lifecycle.view().extensions.find(extension=>extension.id==='extraction');
     if(extraction?.status!=='failed'||extraction.active?.id!==id)throw new StoreError('Failed extraction window not found',409);

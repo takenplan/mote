@@ -1,33 +1,33 @@
 import { moteText } from '@mote/shared/i18n';
-import {useEffect,useState} from 'react';
-import {type Api,errorMessage} from './api';
+import {useEffect,useRef,useState} from 'react';
+import {ApiError,type Api,errorMessage} from './api';
+import {useResource} from './useResource';
+import {invalidateConfiguration} from './configuration-cache';
 
 interface StorageState {
   enabled:boolean;
+  revision:number;
   job:{state:'idle'|'running'|'completed'|'cancelled';total:number;processed:number;converted:number;skipped:number;failed:number};
 }
 export function ContentStorage({api,onChange}:{api:Api;onChange?:()=>void}) {
-  const [state,setState]=useState<StorageState>();
+  const [view,setView]=useState<{api:Api;value:StorageState}>();
+  const state=view?.api===api?view.value:undefined,activeApi=useRef(api);activeApi.current=api;
+  const setState=(value:StorageState)=>{if(activeApi.current===api)setView(previous=>previous?.api===api&&previous.value.revision>value.revision?previous:{api,value});};
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
-  useEffect(()=>{
-    let active=true;let timer:ReturnType<typeof setTimeout>|undefined;
-    const poll=async()=>{
-      try{const next=await api.request<StorageState>('/api/content-storage');if(active){setState(next);if(next.job.state==='running')timer=setTimeout(()=>void poll(),500);}}
-      catch(e){if(active)setError(errorMessage(e));}
-    };
-    void poll();return()=>{active=false;if(timer)clearTimeout(timer);};
-  },[api,state?.job.state]);
+  const read=useResource<StorageState>(api,'/api/content-storage',state?.job.state==='running'?500:undefined);
+  useEffect(()=>{setError('');setBusy(false);},[api]);
+  useEffect(()=>{if(read.data)setState(read.data);if(read.error){setError(errorMessage(read.error));if(read.error instanceof ApiError&&[401,403,404,410].includes(read.error.status))setView(undefined);}},[api,read.data,read.error]);
   async function change(path:string,method:string,body:object) {
     setBusy(true);setError('');
-    try{setState(await api.request<StorageState>(path,{method,body:JSON.stringify(body)}));onChange?.();}
-    catch(e){setError(errorMessage(e));}finally{setBusy(false);}
+    try{const next=await api.request<StorageState>(path,{method,body:JSON.stringify(body)});if(activeApi.current===api){setState(next);invalidateConfiguration(api);onChange?.();}}
+    catch(e){if(activeApi.current===api)setError(e instanceof ApiError&&e.status===409?moteText('配置已被其他会话更新。请重新读取生效配置，再编辑并保存。'):errorMessage(e));}finally{if(activeApi.current===api)setBusy(false);}
   }
   const running=state?.job.state==='running';
   return <section className="panel" aria-labelledby="content-storage-title">
     <div className="section-heading"><div><h2 id="content-storage-title">{moteText("内容存储")}</h2><p>{moteText("中央节点 · 默认明文保存")}</p></div></div>
     <label className="check-field"><input type="checkbox" checked={state?.enabled??false} disabled={!state||busy||running}
-      onChange={event=>void change('/api/content-storage','PUT',{enabled:event.target.checked})}/>{moteText("加密后续保存的图片和原件")}</label>
+      onChange={event=>void change('/api/content-storage','PUT',{enabled:event.target.checked,revision:state!.revision})}/>{moteText("加密后续保存的图片和原件")}</label>
     <p className="fine-print">{moteText("开关立即生效，已有文件保持原格式并可继续读取。记录正文和索引存储在 SQLite 中；客户端的本地存储可在各自开发者选项中设置。")}</p>
     <div className="diagnostics-actions">
       <button className="button subtle" disabled={!state||state.enabled||busy||running} onClick={()=>void change('/api/content-storage/decrypt','POST',{})}>{moteText("一次性批量解密")}</button>
@@ -40,5 +40,6 @@ export function ContentStorage({api,onChange}:{api:Api;onChange?:()=>void}) {
       {state.job.failed>0&&<p>{moteText("失败项保留原文件，请检查原密钥和存储空间后重试。")}</p>}
     </div>}
     {error&&<p className="notice error" role="alert">{error}</p>}
+    {error&&<button className="button subtle" disabled={busy} onClick={()=>void api.request<StorageState>('/api/content-storage').then(value=>{if(activeApi.current===api){setState(value);setError('');}},e=>{if(activeApi.current===api)setError(errorMessage(e));})}>{moteText('重新读取')}</button>}
   </section>;
 }

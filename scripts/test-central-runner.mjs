@@ -7,10 +7,13 @@ import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { command } from './profile-fixtures.mjs';
 import { repository } from './profile-lib.mjs';
+import { serializeConfigDocument } from '../packages/shared/src/config-file.ts';
 
 const directory = await mkdtemp(join(tmpdir(), 'mote-central-runner-fixture-'));
 const runner = join(repository, 'scripts/central-runner.mjs');
-const settings = { MOTE_LOG_MAX_MB: '0.1', MOTE_LOG_MAX_FILES: '3' };
+const configFile = join(directory, 'mote.yaml');
+await writeFile(configFile, serializeConfigDocument({ version: 1, revision: 0, diagnostics: { maxBytes: Math.floor(0.1 * 1024 * 1024), maxFiles: 3 } }), { mode: 0o600 });
+const settings = { MOTE_CONFIG_FILE: configFile, MOTE_LOG_MAX_MB: '8', MOTE_LOG_MAX_FILES: '10' };
 const launch = (entry, log) => [runner, entry, log, `--mote-instance=${randomUUID()}`];
 try {
   const noisy = join(directory, 'noisy.mjs'), log = join(directory, 'bounded.log');

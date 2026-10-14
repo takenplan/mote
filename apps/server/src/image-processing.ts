@@ -12,13 +12,15 @@ import {linkOperationParent} from './operation-projection.js';
 import {imageOutput} from './evidence-image.js';
 import {writeFileTranscriptChunks} from './file-transcript-chunks.js';
 import {invalidateRetiredFileEvidence} from './evidence-dependencies.js';
-import {perceptionSettingsSchema} from './perception.js';
+import {imageSettingsSchema,perceptionConfigurationSchema,defaultPerceptionConfiguration,type PerceptionConfiguration} from './perception-configuration.js';
+import type {ConfigService} from './config-service.js';
+import {effectiveProcessorParameters} from './processor-parameters.js';
 import {MEDIA_CATALOG,type MediaAssets} from './media-assets.js';
 import {requestLocalJson} from './local-http.js';
 import type {MaterialStore} from './materials.js';
 import {APPLEDOUBLE_REASON,isAppleDouble} from './appledouble.js';
 
-const settingsSchema=perceptionSettingsSchema.extend({understandingEnabled:z.boolean().default(true),profileId:z.string().max(100).optional()});
+const settingsSchema=imageSettingsSchema;
 export type ImageSettings=z.infer<typeof settingsSchema>;
 export type ImageUnderstanding={
  selection(service?:ProcessingService):{fingerprint:string;configured:boolean;receipt:Record<string,unknown>};
@@ -27,16 +29,24 @@ export type ImageUnderstanding={
 type PlanStep={name:string;kind:string;stage:{id:string;version:string};dependsOn:string[]};
 type JobRow={capture_id:string;kind:string;state:string;error:string|null;attempts:number;available_at:number;auto_eligible:number};
 const historicalSchema=z.object({after:z.string().datetime({offset:true}).optional(),before:z.string().datetime({offset:true}).optional(),sourceId:z.string().max(128).optional(),mode:z.enum(['complete','recompute']).default('complete')}).strict();
-const managedEndpoint=()=>process.env.MOTE_MEDIA_OCR_ENDPOINT??'http://127.0.0.1:9010/ocr';
+import {mediaRuntimeSettings,type MediaRuntimeSettings} from './media-configuration.js';
 /** One intake ledger and one executor for all accepted image originals. The
  * adapters only retain source-specific publication/retention semantics. */
 export class ImageProcessing {
  readonly engine:ExecutionEngine;readonly inputs:ImageInputRegistry;
  private unregister:Array<()=>Promise<void>>=[];private disposeInputs:()=>void;
  private attachments:ImageAttachmentIntake;private closed=false;private workerReady=false;private checkedAt=0;private probe?:Promise<void>;
- private prepareCursor=0;
+ private prepareCursor=0;private readonly media:MediaRuntimeSettings;private savedSettings:PerceptionConfiguration;
  private previews=new Map<string,{expires:number;watermark:number;query:z.infer<typeof historicalSchema>}>();
- constructor(private store:Store,private processing:FileProcessing,engine:ExecutionEngine,private options:{understanding?:ImageUnderstanding;mediaAssets?:MediaAssets;materials?:MaterialStore;probeOcr?:()=>Promise<boolean>}={}){
+ constructor(private store:Store,private processing:FileProcessing,engine:ExecutionEngine,private options:{understanding?:ImageUnderstanding;mediaAssets?:MediaAssets;media?:Partial<MediaRuntimeSettings>;configService?:ConfigService;configuration?:PerceptionConfiguration;materials?:MaterialStore;probeOcr?:()=>Promise<boolean>}={}){
+  this.media=mediaRuntimeSettings(options.media);
+  this.savedSettings=perceptionConfigurationSchema.parse(options.configService?.current<PerceptionConfiguration>('perception')??options.configuration??defaultPerceptionConfiguration());
+  this.publishSettings();
+  options.configService?.setHandler<PerceptionConfiguration>('perception',next=>{
+   const value=perceptionConfigurationSchema.parse(next),previous=structuredClone(this.savedSettings);
+   // Permissions must remain old while any domain awaits resource preparation.
+   return {apply:()=>{},publish:()=>this.publishConfiguration(value),rollback:()=>this.publishConfiguration(previous),complete:()=>this.completeSettings(value)};
+  });
   this.engine=engine;this.inputs=processing.runtime.imageInputs;installImageSchema(store);
   this.disposeInputs=installImageInputs(store,processing.files,this.inputs);
   this.attachments=new ImageAttachmentIntake(store,processing.files);
@@ -90,11 +100,11 @@ export class ImageProcessing {
  private binding(row:ImageInputRow){return this.processing.imageConfiguration(row.source_id,row.mime,row.override_id??undefined,row.policy_json?JSON.parse(row.policy_json):undefined);}
  private recipe(row:ImageInputRow){const binding=this.binding(row);return {...this.processing.runtime.imageRecipes.resolve(binding.applied.profile.imageRecipe??DEFAULT_IMAGE_RECIPE,Boolean(row.understanding_enabled&&this.settings().understandingEnabled)),binding};}
  settings():ImageSettings{
-  const row=this.store.db.prepare("SELECT value FROM settings WHERE key='perception'").get(),saved=settingsSchema.strip().parse(row?JSON.parse(String(row.value)):{}),applied=this.processing.imageDefault();
+  const saved=this.savedSettings,applied=this.processing.imageDefault();
   const service=applied.services.find(s=>s.id===applied.profile.serviceId);
   return {...saved,ocrEndpoint:service?.endpoint??'',ocrProcessorId:applied.profile.processorId,profileId:applied.profile.id};
  }
- view(){return {settings:this.settings(),recent:this.store.db.prepare('SELECT j.capture_id AS id,j.kind,j.state,j.error,i.auto_eligible AS autoEligible FROM perception_jobs j JOIN image_inputs i ON i.capture_id=j.capture_id ORDER BY j.created_at DESC LIMIT 40').all(),jobs:this.store.db.prepare('SELECT j.kind,j.state,i.auto_eligible AS autoEligible,count(*) AS count FROM perception_jobs j JOIN image_inputs i ON i.capture_id=j.capture_id GROUP BY j.kind,j.state,i.auto_eligible').all(),inputs:this.inputs.list(),recipes:this.processing.runtime.imageRecipes.list(),backfills:this.store.db.prepare('SELECT id,state,queued,cursor,watermark FROM image_backfills ORDER BY rowid DESC LIMIT 20').all(),model:this.options.understanding?.selection(this.processing.imageConfiguration('', 'image/png').settings.analysisModel).receipt??null};}
+ view(){return {...(this.options.configService?{revision:this.options.configService.revision}:{}),settings:this.settings(),recent:this.store.db.prepare('SELECT j.capture_id AS id,j.kind,j.state,j.error,i.auto_eligible AS autoEligible FROM perception_jobs j JOIN image_inputs i ON i.capture_id=j.capture_id ORDER BY j.created_at DESC LIMIT 40').all(),jobs:this.store.db.prepare('SELECT j.kind,j.state,i.auto_eligible AS autoEligible,count(*) AS count FROM perception_jobs j JOIN image_inputs i ON i.capture_id=j.capture_id GROUP BY j.kind,j.state,i.auto_eligible').all(),inputs:this.inputs.list(),recipes:this.processing.runtime.imageRecipes.list(),backfills:this.store.db.prepare('SELECT id,state,queued,cursor,watermark FROM image_backfills ORDER BY rowid DESC LIMIT 20').all(),model:this.options.understanding?.selection(this.processing.imageConfiguration('', 'image/png').settings.analysisModel).receipt??null};}
  detail(id:string){
   const row=this.row(id);if(!row||!this.store.isCurrentEvidence(id))throw new StoreError('Image not found',404);
   const exists=(name:string)=>Boolean(this.store.db.prepare('SELECT 1 FROM sqlite_master WHERE name=?').get(name));
@@ -105,17 +115,36 @@ export class ImageProcessing {
   let policy;try{policy=this.binding(row).applied;}catch{policy=row.policy_json?JSON.parse(row.policy_json):null;}
   return {id,exclusion:this.exclusion(id),wait:this.processing.imageProcessorWait(id),original:{state:this.original(row)?'ready':'unavailable',hash:row.hash,mimeType:row.mime},policy,automatic:Boolean(row.auto_eligible),understandingEnabled:Boolean(row.understanding_enabled&&this.settings().understandingEnabled),products,jobs,materials:materials.map(m=>({id:m.id,state:m.state??'pending'})),memory};
  }
+ private publishSettings(){this.store.db.prepare("INSERT INTO settings VALUES('perception-effective',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(this.savedSettings));}
+ private publishConfiguration(next:PerceptionConfiguration){
+  this.savedSettings=structuredClone(next);this.publishSettings();
+ }
+ private completeSettings(next:PerceptionConfiguration){
+  for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind LIKE 'images.%' AND state IN ('waiting','running','blocked','failed')").all()){
+   const step=this.engine.get(String(row.id));if(!step||step.kind==='images.excluded')continue;
+   let external=false;
+   if(step.kind==='images.ocr')try{const image=this.row(String(step.input.captureId));const endpoint=image&&this.binding(image).settings.imageEndpoint;external=Boolean(endpoint&&!['localhost','127.0.0.1','[::1]'].includes(new URL(endpoint).hostname));}catch{external=true;}
+   if(!next.enabled||!next.allowExternalProcessing&&external||!this.valid(step))this.engine.cancel(step.id);
+  }
+ }
+ configurationChanged(){this.completeSettings(this.savedSettings);}
  configure(raw:unknown){
+  if(this.options.configService)throw new StoreError('Use the configuration transaction to save image settings',409);
   const previous=this.settings(),next=settingsSchema.parse(raw);
   if(next.profileId!==previous.profileId&&next.profileId)this.processing.configureImageDefault({profileId:next.profileId});
   else if(next.ocrEndpoint!==previous.ocrEndpoint||next.ocrProcessorId!==previous.ocrProcessorId)this.processing.configureImageDefault({endpoint:next.ocrEndpoint,processorId:next.ocrProcessorId});
-  // Service endpoints and credentials live solely in file processing policy.
+  const {ocrEndpoint,ocrProcessorId,profileId,...saved}=next;this.publishConfiguration(saved);this.completeSettings(saved);return this.view();
+ }
+ async save(raw:unknown){
+  if(!this.options.configService)return this.configure(raw);
+  const input=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),settings:settingsSchema}).strict().parse(raw),next=input.settings,previous=this.settings();
   const {ocrEndpoint,ocrProcessorId,profileId,...saved}=next;
-  this.store.db.prepare("INSERT INTO settings VALUES('perception',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(saved));
-  for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind LIKE 'images.%' AND state IN ('waiting','running','blocked','failed')").all()){
-   const step=this.engine.get(String(row.id));if(step&&step.kind!=='images.excluded'&&!this.valid(step))this.engine.cancel(step.id);
-  }
-  return this.view();
+  const patches:Record<string,unknown>={perception:saved};
+  if(next.profileId!==previous.profileId&&next.profileId)patches.processing=this.processing.imageDefaultDraft({profileId:next.profileId});
+  else if(next.ocrEndpoint!==previous.ocrEndpoint||next.ocrProcessorId!==previous.ocrProcessorId)patches.processing=this.processing.imageDefaultDraft({endpoint:next.ocrEndpoint,processorId:next.ocrProcessorId});
+  // Each candidate is complete. Replacement preserves explicit credential
+  // deletion in the processing policy while committing both domains together.
+  await this.options.configService.updateMany(patches,input.revision,true);return this.view();
  }
  private fingerprint(row:ImageInputRow,step:PlanStep){
   const {binding,fingerprint:recipe}=this.recipe(row),settings=this.settings(),processor=this.processing.runtime.registry.get(binding.applied.profile.processorId);
@@ -128,7 +157,7 @@ export class ImageProcessing {
   // Declaration and correction versions (including cleared values) fence ABA.
   const context=step.kind==='ocr'&&processor.reuseByContent===true&&this.processing.runtime.imageRecipes.get(step.stage).reuseByContent===true?null:{...this.context(record),...(meaningful?{attributionContext:attribution}:{})};
   return sha256(JSON.stringify([row.hash,row.mime,processorContract(processor),processor.output?this.processing.runtime.outputs.list():null,processorSettingsFingerprint(processor,binding.settings,binding.applied.profile.parameters),settings.providerRevision,
-   binding.settings.imageEndpoint===managedEndpoint()?MEDIA_CATALOG.ocr.version:'',step.stage,step.kind==='ocr'?null:recipe,dependencyProducts,model,context]));
+   binding.settings.imageEndpoint===this.media.ocrEndpoint?MEDIA_CATALOG.ocr.version:'',step.stage,step.kind==='ocr'?null:recipe,dependencyProducts,model,context]));
  }
  private materials(){return this.options.materials??this.processing.files.sources.pipelines?.materials;}
  /** Context correction retires interpretations, keeps reusable OCR, and waits
@@ -179,7 +208,7 @@ export class ImageProcessing {
    if(processor.stage!=='extract'||!processor.mediaTypes.some(t=>t.endsWith('/')?row.mime.startsWith(t):t===row.mime||t.endsWith('/*')&&row.mime.startsWith(t.slice(0,-1))))return new ExecutionFailure('blocked','unsupported_format');
    if(processor.serviceKind&&!url)return new ExecutionFailure('blocked','provider_not_configured');
    if(url&&!settings.allowExternalProcessing&&!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname))return new ExecutionFailure('blocked','external_processing_disabled');
-   if(url===managedEndpoint()&&this.options.mediaAssets){if(!this.options.mediaAssets.ready('ocr'))return new ExecutionFailure('blocked','model_missing');if(!this.workerReady)return new ExecutionFailure('waiting','ocr_worker_unavailable',5000);}
+   if(url===this.media.ocrEndpoint&&this.options.mediaAssets){if(!this.options.mediaAssets.ready('ocr'))return new ExecutionFailure('blocked','model_missing');if(!this.workerReady)return new ExecutionFailure('waiting','ocr_worker_unavailable',5000);}
   }else if(stage.kind==='understanding'&&!this.options.understanding?.selection(plan.binding.settings.analysisModel).configured)return new ExecutionFailure('blocked','model_unconfigured');
  }
  private project(step:ExecutionStep){
@@ -206,8 +235,8 @@ export class ImageProcessing {
  private async refreshWorker(){
   if(this.probe)return this.probe;
   this.probe=(async()=>{
-   const token=process.env.MOTE_MEDIA_WORKER_TOKEN;
-   const check=async()=>{if(!token)return false;const url=new URL(managedEndpoint());url.pathname='/health';try{const value=await requestLocalJson(url,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(1200),limit:4096,requireOfflineExecution:false}) as {ocr?:boolean};return value.ocr===true;}catch{return false;}};
+   const token=this.media.workerToken;
+   const check=async()=>{if(!token)return false;const url=new URL(this.media.ocrEndpoint);url.pathname='/health';try{const value=await requestLocalJson(url,{headers:{Authorization:`Bearer ${token}`},signal:AbortSignal.timeout(1200),limit:4096,requireOfflineExecution:false}) as {ocr?:boolean};return value.ocr===true;}catch{return false;}};
    this.workerReady=await (this.options.probeOcr??check)().catch(()=>false);this.checkedAt=Date.now();
    if(this.workerReady&&!this.closed)for(const job of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind='images.ocr' AND error='ocr_worker_unavailable' AND state='waiting'").all())this.engine.retry(String(job.id),false);
   })().finally(()=>{this.probe=undefined;});return this.probe;
@@ -265,7 +294,7 @@ export class ImageProcessing {
   const dependencies=Object.fromEntries(plan.steps.find(s=>s.name===step.input.name)!.dependsOn.map(name=>[name,this.product(row.capture_id,name)?JSON.parse(String(this.product(row.capture_id,name)!.json)).payload:undefined]));
   const readImage=async(input:Omit<import('@mote/shared').ImageReadInput,'id'>)=>{signal.throwIfAborted();const bytes:Buffer[]=[];for await(const part of original.read())bytes.push(part);return imageOutput(Buffer.concat(bytes),original.mimeType,{...input,id:row.capture_id},()=>this.valid(step));};
   const payload=await stage.run({record,hash:original.hash,mimeType:original.mimeType,dependencies,signal,readImage,
-   ocr:async()=>{const processor=this.processing.runtime.registry.get(plan.binding.applied.profile.processorId);const raw=await this.processing.runImageProcessor(row.capture_id,'image-product:'+String(step.input.fingerprint),signal,()=>processor.process({file:{id:record.id,title:record.windowTitle||record.appName||'Image',mimeType:original.mimeType,sizeBytes:original.sizeBytes},parameters:plan.binding.applied.profile.parameters,settings:plan.binding.settings,maxAudioMs:0,signal,readOriginal:()=>original.read()}));return processor.output?this.processing.runtime.outputs.decode(processor.output,raw).transcript:transcriptSchema.parse(raw);},
+   ocr:async()=>{const processor=this.processing.runtime.registry.get(plan.binding.applied.profile.processorId);const raw=await this.processing.runImageProcessor(row.capture_id,'image-product:'+String(step.input.fingerprint),signal,()=>processor.process({file:{id:record.id,title:record.windowTitle||record.appName||'Image',mimeType:original.mimeType,sizeBytes:original.sizeBytes},parameters:effectiveProcessorParameters(processor,plan.binding.applied.profile.parameters),settings:plan.binding.settings,maxAudioMs:0,signal,readOriginal:()=>original.read()}));return processor.output?this.processing.runtime.outputs.decode(processor.output,raw).transcript:transcriptSchema.parse(raw);},
    understand:async()=>{if(!this.options.understanding)throw new ExecutionFailure('blocked','model_unconfigured');return this.options.understanding.run({record,original,ocr:dependencies.ocr as Transcript|undefined,signal,readImage:input=>readImage(input),operationId:step.operationId,service:plan.binding.settings.analysisModel});},
   });
   if(stage.kind==='ocr'){const transcript=transcriptSchema.parse(payload);if(transcript.durationMs!==0||transcript.segments.map(s=>s.text).join('\n').length>100000)throw new StoreError('Invalid image OCR output',422);return {payload:transcript,kind:'ocr'};}

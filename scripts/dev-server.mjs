@@ -121,8 +121,7 @@ async function assertFreePort(p) {
 }
 
 export function serverEnvironment(p) {
-  // DV runs should expose every structured diagnostic event, including debug-stage events.
-  return isolatedEnvironment(p, p.profile === 'dev' ? { MOTE_DEBUG: '1', MOTE_LOG_LEVEL: 'debug' } : {});
+  return isolatedEnvironment(p);
 }
 
 export async function runDevServer(options = {}, root = repository) {
@@ -151,7 +150,7 @@ export async function runDevServer(options = {}, root = repository) {
         cwd: root, env: serverEnvironment(p), signal, graceMs: 20000,
       });
       // Register before health checks: stop/status work on this source run too.
-      await atomicJson(p.processFile, { pid: server.child.pid, marker, envFile: p.envFile, release: root, startedAt: new Date().toISOString() });
+      await atomicJson(p.processFile, { pid: server.child.pid, marker, configurationFile: p.configFile, dataDir: p.dataDir, release: root, startedAt: new Date().toISOString() });
       console.info(`[dev] Starting Mote; waiting up to ${Math.ceil(startupTimeoutMs / 1000)} seconds for HTTP readiness…`);
       const deadline = Date.now() + startupTimeoutMs;
       while (true) {
@@ -168,7 +167,7 @@ export async function runDevServer(options = {}, root = repository) {
         await sleep(100, undefined, { signal });
       }
       console.info(`[dev] Mote ${version} (${p.profile}) ready at ${p.url}. Web rebuilt. Ctrl+C to stop.`);
-      console.info(`[dev] Owner token: ${p.env.MOTE_TOKEN}`);
+      console.info(`[dev] Owner token configured; use mote token --profile ${p.profile} when explicitly needed.`);
     });
     const result = await server.done;
     signal.throwIfAborted();

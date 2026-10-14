@@ -25,7 +25,7 @@ async function fixture(t:import('node:test').TestContext){
   return {runId:'generated-'+randomUUID(),citations:memories.flatMap(memory=>memory.evidenceIds.map((id:string)=>({id,capturedAt:'2026-09-01T00:00:00Z',appName:'Generated',excerpt:''}))),trace:[],answer:JSON.stringify({memories,coverage,...fixtureMemoryCapacity(input)})};
  };
  const node=await buildApp(config,{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:generate},createModelAgent:async()=>({configured:true,close:async()=>{},query:generate})});await node.app.ready();
- const settings=node.lifecycle.settings();for(const id of ['working','consolidation','insights'] as const)settings[id].enabled=false;node.lifecycle.configure(settings);
+ const settings=node.lifecycle.settings();for(const id of ['working','consolidation','insights'] as const)settings[id].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
  const api=(method:'GET'|'POST'|'PUT',url:string,payload?:unknown)=>node.app.inject({method,url,payload,headers:{authorization:'Bearer '+config.token,'x-mote-ingress-version':'2'}});
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
  const originals:string[]=[];

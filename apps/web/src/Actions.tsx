@@ -1,36 +1,50 @@
 import {formatEvidenceRef} from '@mote/shared';
 import {Todos} from './Todos';
 import { moteText } from '@mote/shared/i18n';
-import React,{useEffect,useState} from 'react';
+import React,{useEffect,useRef,useState} from 'react';
 import type {ActionProposal,ActionSettings,ActionTarget,CalendarDraft} from '@mote/shared';
 import {calendarEventSchema,calendarWallTime,calendarInstant} from '@mote/shared';
 import {createApi,errorMessage,ApiError} from './api';
 import {useResource} from './useResource';
 import {useOperationUpdates} from './useOperationUpdates';
 import {failureMessage} from './failure-message';
+import {invalidateConfiguration} from './configuration-cache';
+import {useUnsavedChanges} from './unsaved';
 
 declare global {interface Window {moteCalendar?:{connect:()=>Promise<{deviceId:string}>;execute:(id:string)=>Promise<void>}}}
-type State={nextCursor:number|null;total:number;items:ActionProposal[];settings:ActionSettings;targets:ActionTarget[];progress:{configured:boolean;running:boolean;jobs:{status:string;count:number}[];error:string|null;errorCode?:string|null}};
+type State={revision:number;authorizationRevision:number;nextCursor:number|null;total:number;items:ActionProposal[];settings:ActionSettings;targets:ActionTarget[];progress:{configured:boolean;running:boolean;jobs:{status:string;count:number}[];error:string|null;errorCode?:string|null}};
 const kindLabels:Record<string,string>={'calendar.create':moteText('添加日程'),'calendar.update':moteText('更新日程'),'calendar.cancel':moteText('取消日程'),'calendar.complete':moteText('标记安排完成')};
 const labels:Record<string,string>={proposed:moteText("待确认"),dismissed:moteText("已忽略"),approved:moteText("等待客户端写入"),executing:moteText("正在写入 / 等待回执"),succeeded:moteText("已添加"),uncertain:moteText("保存结果待核实"),stale:moteText("原文已更新或删除")};
 export function Actions({api,onOpen}:{api:ReturnType<typeof createApi>;onOpen:(id:string)=>void}){
+ const activeApi=useRef(api);activeApi.current=api;
+ const [timeZoneEdit,setTimeZoneEdit]=useState<{api:typeof api;revision:number;authorizationRevision:number;initialTimeZone:string;settings:ActionSettings}>(),[settingsError,setSettingsError]=useState(false),[withdrawalApplied,setWithdrawalApplied]=useState(false);
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[review,setReview]=useState<ActionProposal>(),[draft,setDraft]=useState<CalendarDraft>(),[target,setTarget]=useState(''),[localId,setLocalId]=useState<string>(),[tab,setTab]=useState('proposed'),[cursor,setCursor]=useState(0);
  const read=useResource<State>(api,`/api/actions?cursor=${cursor}`,15000),deviceRead=useResource<{items:{deviceId:string;deviceName:string}[]}>(api,'/api/devices');
  const data=read.data,devices=deviceRead.data?.items??[],feedError=useOperationUpdates(api);
+ const timeZoneDraft=timeZoneEdit?.api===api?timeZoneEdit:undefined;
+ useUnsavedChanges(Boolean(timeZoneDraft&&timeZoneDraft.settings.timeZone!==timeZoneDraft.initialTimeZone));
  const refresh=async()=>{read.refresh();};
- useEffect(()=>{setReview(undefined);setDraft(undefined);setLocalId(undefined);setError('');},[api]);
- useEffect(()=>{if(read.error instanceof ApiError&&[401,403,404,410].includes(read.error.status)){setReview(undefined);setDraft(undefined);}},[read.error]);
- const run=async(fn:()=>Promise<unknown>)=>{setBusy(true);setError('');try{await fn();await refresh();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}};
+ useEffect(()=>{setReview(undefined);setDraft(undefined);setLocalId(undefined);setError('');setTimeZoneEdit(undefined);setSettingsError(false);setWithdrawalApplied(false);setBusy(false);},[api]);
+ useEffect(()=>{if(read.error instanceof ApiError&&[401,403,404,410].includes(read.error.status)){setReview(undefined);setDraft(undefined);setTimeZoneEdit(undefined);}},[read.error]);
+ const run=async(fn:()=>Promise<unknown>)=>{setBusy(true);setError('');try{await fn();if(activeApi.current===api)await refresh();}catch(e){if(activeApi.current===api)setError(errorMessage(e));}finally{if(activeApi.current===api)setBusy(false);}};
  const post=(path:string,body:unknown)=>api.request(path,{method:'POST',body:JSON.stringify(body)});
- const settings=async(next:ActionSettings)=>{await api.request('/api/actions/settings',{method:'PUT',body:JSON.stringify(next)});};
+ const settings=async(next:ActionSettings,versions:{revision:number;authorizationRevision:number}=data!)=>{
+  const withdrawn=data?.settings.reviewDeviceIds.filter(id=>!next.reviewDeviceIds.includes(id))??[];
+  setWithdrawalApplied(false);
+  try{await api.request('/api/actions/settings',{method:'PUT',body:JSON.stringify({revision:versions.revision,authorizationRevision:versions.authorizationRevision,settings:next})});if(activeApi.current===api){setTimeZoneEdit(undefined);setSettingsError(false);invalidateConfiguration(api);}}
+  catch(e){
+   if(activeApi.current===api){setSettingsError(true);invalidateConfiguration(api);if(withdrawn.length)try{const current=await api.request<State>(`/api/actions?cursor=${cursor}`);if(activeApi.current===api&&withdrawn.every(id=>!current.settings.reviewDeviceIds.includes(id)))setWithdrawalApplied(true);}catch{/* The refreshed permission controls remain authoritative when the extra read fails. */}}
+   throw e instanceof ApiError&&e.status===409?new Error(moteText('配置已被其他会话更新。请重新读取生效配置，再编辑并保存。')):e;
+  }
+ };
  const item=review,current=data?.items.find(a=>a.id===review?.id),reviewChanged=!!review&&(!current||current.version!==review.version||current.status!=='proposed'||!!current.resolution);
  const choices=data?.targets.flatMap(t=>t.calendars.map(c=>({value:JSON.stringify({deviceId:t.deviceId,calendarId:c.id}),label:`${t.deviceName} · ${c.title}`})))??[];
  const edit=(a:ActionProposal)=>{setReview(structuredClone(a));setTarget(a.related?.target?JSON.stringify(a.related.target):'');setDraft({...a.event,start:a.event.start&&!a.event.allDay?calendarWallTime(a.event.start,a.event.timeZone??'UTC').slice(0,16):a.event.start,end:a.event.end&&!a.event.allDay?calendarWallTime(a.event.end,a.event.timeZone??'UTC').slice(0,16):a.event.end});};
  return <section><div className="page-heading"><div className="eyebrow">{moteText("把安排留在你的日历里")}</div><h1>{moteText("行动 · 日程建议")}</h1><p>{moteText("从上传资料和持续采集中发现安排。每条由你核对，写入已有日历并带上 #Mote 来源标记。")}</p></div>
  <Todos api={api} onOpen={onOpen}/>
  {(error||read.error!==undefined||deviceRead.error!==undefined)&&<div className="error-banner" role="alert">{error||errorMessage(read.error??deviceRead.error)}</div>}
- {read.loading&&!data&&<p role="status">{moteText('正在读取…')}</p>}{feedError!==undefined&&<p role="status">{moteText('进度连接暂时中断，正在自动重连。')}</p>}
- {data&&<details className="panel action-settings"><summary>{moteText("发现设置与设备授权")}</summary><label><input type="checkbox" checked={data.settings.enabled} disabled={busy} onChange={e=>void run(()=>settings({...data.settings,enabled:e.target.checked}))}/> {' '}{moteText("分析已归档及后续新增的上传资料和持续采集内容")}</label><p className="muted">{moteText("使用当前配置的模型；原文可能发送给该模型服务。本地限定文件不会发送。日程写入始终需要逐条确认。")}</p><label>{moteText("解释时间使用的时区")}<input aria-label={moteText("默认时区")} defaultValue={data.settings.timeZone} onBlur={e=>{if(e.target.value!==data.settings.timeZone)void run(()=>settings({...data.settings,timeZone:e.target.value}));}}/></label><p>{moteText("允许以下设备查看跨来源日程建议、相关原文片段并逐条确认：")}</p>{devices.map(d=><label key={d.deviceId}><input type="checkbox" checked={data.settings.reviewDeviceIds.includes(d.deviceId)} disabled={busy} onChange={e=>void run(()=>settings({...data.settings,reviewDeviceIds:e.target.checked?[...data.settings.reviewDeviceIds,d.deviceId]:data.settings.reviewDeviceIds.filter(id=>id!==d.deviceId)}))}/>{d.deviceName}</label>)}</details>}
+ {withdrawalApplied&&<p className="notice" role="status">{moteText('所选设备授权已撤销；其余设置请重新读取后确认。')}</p>}{error&&settingsError&&<button className="button subtle" disabled={busy} onClick={()=>{setTimeZoneEdit(undefined);setSettingsError(false);setWithdrawalApplied(false);setError('');read.refresh();}}>{moteText('重新读取并还原草稿')}</button>}{read.loading&&!data&&<p role="status">{moteText('正在读取…')}</p>}{feedError!==undefined&&<p role="status">{moteText('进度连接暂时中断，正在自动重连。')}</p>}
+ {data&&<details className="panel action-settings"><summary>{moteText("发现设置与设备授权")}</summary><label><input type="checkbox" checked={data.settings.enabled} disabled={busy} onChange={e=>void run(()=>settings({...data.settings,enabled:e.target.checked}))}/> {' '}{moteText("分析已归档及后续新增的上传资料和持续采集内容")}</label><p className="muted">{moteText("使用当前配置的模型；原文可能发送给该模型服务。本地限定文件不会发送。日程写入始终需要逐条确认。")}</p><label>{moteText("解释时间使用的时区")}<input aria-label={moteText("默认时区")} value={timeZoneDraft?.settings.timeZone??data.settings.timeZone} disabled={busy} onFocus={()=>{if(!timeZoneDraft)setTimeZoneEdit({api,revision:data.revision,authorizationRevision:data.authorizationRevision,initialTimeZone:data.settings.timeZone,settings:structuredClone(data.settings)});}} onChange={e=>setTimeZoneEdit(current=>current?.api===api?{...current,settings:{...current.settings,timeZone:e.target.value}}:{api,revision:data.revision,authorizationRevision:data.authorizationRevision,initialTimeZone:data.settings.timeZone,settings:{...data.settings,timeZone:e.target.value}})} onBlur={()=>{if(timeZoneDraft&&timeZoneDraft.settings.timeZone!==timeZoneDraft.initialTimeZone)void run(()=>settings(timeZoneDraft.settings,timeZoneDraft));else setTimeZoneEdit(undefined);}}/></label><p>{moteText("允许以下设备查看跨来源日程建议、相关原文片段并逐条确认：")}</p>{devices.map(d=><label key={d.deviceId}><input type="checkbox" checked={data.settings.reviewDeviceIds.includes(d.deviceId)} disabled={busy} onChange={e=>void run(()=>settings({...data.settings,reviewDeviceIds:e.target.checked?[...data.settings.reviewDeviceIds,d.deviceId]:data.settings.reviewDeviceIds.filter(id=>id!==d.deviceId)}))}/>{d.deviceName}</label>)}</details>}
  <div className="action-toolbar"><button className="button" disabled={busy} onClick={()=>void refresh()}>{moteText("刷新")}</button>{window.moteCalendar&&<button className="button" disabled={busy} onClick={()=>void run(async()=>{const r=await window.moteCalendar!.connect();setLocalId(r.deviceId);})}>{moteText("连接这台 Mac 的日历")}</button>}<button className="button subtle" disabled={busy} onClick={()=>void run(()=>post('/api/actions/retry',{}))}>{moteText("重试分析失败的批次")}</button></div>
  <p className="muted">{moteText("在 Android 的「日程建议」中连接本机日历。网页可确认并交给指定设备，客户端联网后会同步已确认日程；打开日程页面可立即同步。")}</p>
  {data&&!data.progress.configured&&<p role="status">{moteText("尚未配置模型；资料继续归档，配置后再开始分析。")}</p>}{data?.progress.error&&<p role="alert">{failureMessage(data.progress.errorCode??'action_analysis_failed')}</p>}

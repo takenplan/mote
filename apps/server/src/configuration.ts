@@ -1,6 +1,6 @@
 import { moteText } from './i18n.js';
 import { join, resolve } from 'node:path';
-import type { ConfigurationField, ConfigurationValue, ServerConfiguration } from '@mote/shared';
+import type { ConfigServiceView, ConfigurationField, ConfigurationValue, ServerConfiguration } from '@mote/shared';
 import { DEFAULT_AGENT_TIMEOUT_MS, DEFAULT_MODEL_MAX_TOKENS, DEFAULT_MODEL_REQUEST_TIMEOUT_MS, modelProvider } from '@mote/shared/models';
 import { repositoryRoot, type Config } from './config.js';
 
@@ -16,7 +16,7 @@ export function configurationUrl(value: string | null | undefined): string | nul
 }
 
 /** Explicit owner-only projection. Never spread Config or read mutable env files while serving requests. */
-export function serverConfiguration(config: Config, options: { modelSource?: 'environment' | 'saved' } = {}): ServerConfiguration {
+export function serverConfiguration(config: Config, options: { modelSource?: 'environment' | 'saved' | 'file'; service?: ConfigServiceView } = {}): ServerConfiguration {
   const context = config.configuration;
   const runtime = context?.runtime ?? 'unknown';
   const dataDir = resolve(config.dataDir), logDir = resolve(config.logDirectory ?? join(dataDir, 'logs'));
@@ -40,7 +40,7 @@ export function serverConfiguration(config: Config, options: { modelSource?: 'en
   const host = config.host.includes(':') && !config.host.startsWith('[') ? `[${config.host}]` : config.host;
   const hasAgentKey = Boolean(config.apiKey.trim()), hasEmbeddingKey = Boolean(config.embeddingApiKey.trim());
   const localWithoutKey = Boolean(config.allowUnauthenticatedLocal && (() => { try { return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(config.modelBaseUrl).hostname); } catch { return false; } })());
-  return {
+  const view: ServerConfiguration = {
     version: 1, profile: config.profile ?? 'default', runtime, envFile: context?.hostConfigFile ?? context?.envFile ?? null, baseDir,
     readOnly: true, restartRequired: true,
     description: moteText("此接口只读展示中央的生效配置，只向已认证的节点所有者提供。模型可在模型设置中保存并立即生效；其余部署设置修改后需重启中央。路径不会加入安全支持包。"),
@@ -113,7 +113,7 @@ export function serverConfiguration(config: Config, options: { modelSource?: 'en
         field('diagnosticsDebug', moteText("调试模式"), config.diagnosticsDebug ?? false, moteText("增加允许的固定调试事件，不开放任意正文日志。"), 'MOTE_DEBUG'),
         field('agentTraceEnabled', moteText("详细 Agent 执行跟踪"), config.agentTraceEnabled ?? config.profile === 'dev', moteText("显式记录 Agent 的请求上下文、组装后的 prompt、模型输出、工具参数与结果、校验和阶段状态到 central 日志。包含个人内容，只建议开发环境开启；开发环境默认开启。"), 'MOTE_AGENT_TRACE_ENABLED'),
         field('logLevel', moteText("配置的日志级别"), config.logLevel ?? 'info', moteText("支持 debug、info、warn、error、silent。调试模式会将非 silent 级别提升为 debug。"), 'MOTE_LOG_LEVEL'),
-        field('effectiveLogLevel', moteText("实际诊断日志级别"), config.logLevel === 'silent' ? 'silent' : config.diagnosticsDebug ? 'debug' : config.logLevel ?? 'info', moteText("silent 优先；其余情况下 MOTE_DEBUG=1 使用 debug。诊断总开关关闭时，任何级别均不记录事件。")),
+        field('effectiveLogLevel', moteText("实际诊断日志级别"), config.logLevel === 'silent' ? 'silent' : config.diagnosticsDebug ? 'debug' : config.logLevel ?? 'info', moteText("silent 优先；其余情况下调试模式使用 debug。诊断总开关关闭时，任何级别均不记录事件。")),
         field('logDirectory', moteText("日志目录"), logDir, moteText("结构化中央日志的实际路径；Docker 通常位于 /data/logs。"), 'MOTE_LOG_DIR', ownerPath),
         field('logMaxBytes', moteText("每份结构化日志上限"), config.logMaxBytes ?? 2 * 1024 * 1024, moteText("独立于资料容量上限。"), 'MOTE_LOG_MAX_MB', { unit: 'bytes' }),
         field('logMaxFiles', moteText("日志文件数上限"), config.logMaxFiles ?? 3, moteText("有限轮转的总文件数量；Docker/进程管理器输出另有部署级上限。"), 'MOTE_LOG_MAX_FILES', { unit: 'files' }),
@@ -126,7 +126,7 @@ export function serverConfiguration(config: Config, options: { modelSource?: 'en
         field('publicUrl', moteText("公开节点地址"), configurationUrl(context?.publicUrl), moteText("用户明确设置的 HTTPS 或本机测试地址，不改变中央监听，不自动配置 DNS、TLS 或隧道路由。"), 'MOTE_PUBLIC_URL'),
         field('allowedOrigins', moteText("允许的浏览器来源"), config.allowedOrigins.map(origin => { const url = configurationUrl(origin); return url ? new URL(url).origin : null; }).filter((origin): origin is string => origin !== null), moteText("CORS 浏览器 origin 白名单。配置仅控制浏览器跨源请求，不能替代令牌鉴权。"), 'MOTE_ALLOWED_ORIGINS'),
         field('accessTokenConfigured', moteText("访问令牌已配置"), Boolean(config.token), moteText("只显示状态，不显示令牌、哈希、前后缀或可恢复片段。"), 'MOTE_TOKEN', { ...secret, source: config.tokenFromEnvironment ? context?.sources.MOTE_TOKEN ?? 'environment' : 'derived' }),
-        field('accessTokenSource', moteText("访问令牌来源"), config.tokenFromEnvironment === undefined ? 'programmatic' : config.tokenFromEnvironment ? 'configured-value' : 'private-token-file', moteText("configured-value 来自进程/所选配置；private-token-file 来自资料库私有 access-token 文件；programmatic 表示由调用方传入。文件内容不返回。")),
+        field('accessTokenSource', moteText("访问令牌来源"), config.tokenFromEnvironment === undefined ? 'programmatic' : config.tokenFromEnvironment ? 'configured-value' : 'private-token-file', moteText("configured-value 来自 server.token；private-token-file 来自资料库私有 access-token 文件；programmatic 表示由调用方传入。文件内容不返回。")),
         field('clientConnectionsPath', moteText("独立连接凭据位置"), join(dataDir, 'connectors', 'client-connections.json'), moteText("保存凭据哈希、权限和撤销状态，不保存明文令牌。随本数据目录使用，最多 500 条／2 MiB；在设备页管理。"), undefined, ownerPath),
         field('tunnelConfigured', moteText("隧道已声明启用"), context?.tunnelEnabled ?? false, moteText("只有部署配置状态，不代表隧道已经连接或公网路由可达。"), 'MOTE_TUNNEL_ENABLED'),
         field('tunnelProvider', moteText("隧道提供方"), context?.tunnelProvider ?? null, moteText("由部署工具声明；隧道凭据文件与 token 不进入此接口。"), 'MOTE_TUNNEL_PROVIDER'),
@@ -134,4 +134,71 @@ export function serverConfiguration(config: Config, options: { modelSource?: 'en
       ] },
     ],
   };
+  if (options.service) projectConfigService(view, options.service);
+  return view;
+}
+
+const domainPaths: Record<string, [string, string]> = {
+  updateRepository: ['updates', 'repository'], updateChannel: ['updates', 'channel'],
+  profile: ['server', 'profile'], listenHost: ['server', 'host'], listenPort: ['server', 'port'],
+  publicUrl: ['server', 'publicUrl'], allowedOrigins: ['server', 'allowedOrigins'],
+  dataDirectory: ['storage', 'dataDir'], storageKind: ['storage', 'kind'], storageSource: ['storage', 'source'], storageMount: ['storage', 'mount'],
+  maxStorageBytes: ['storage', 'maxStorageBytes'], retentionDays: ['storage', 'retentionDays'],
+  maxExportBytes: ['storage', 'maxExportBytes'], dataKeyConfigured: ['storage', 'dataKey'],
+  modelProvider: ['models', 'deployment.provider'], modelProtocol: ['models', 'deployment.protocol'], model: ['models', 'deployment.model'],
+  modelBaseUrl: ['models', 'deployment.baseUrl'], modelApiKeyConfigured: ['models', 'deployment.apiKey'],
+  modelHeadersConfigured: ['models', 'deployment.headers'], modelExtraBodyConfigured: ['models', 'deployment.extraBody'],
+  modelReasoningEffort: ['models', 'deployment.reasoningEffort'], modelMaxTokens: ['models', 'deployment.maxTokens'],
+  modelRequestTimeoutMs: ['models', 'deployment.modelRequestTimeoutMs'], agentTimeoutMs: ['models', 'deployment.agentTimeoutMs'],
+  allowUnauthenticatedLocal: ['models', 'deployment.allowUnauthenticatedLocal'],
+  embeddingModel: ['models', 'embedding.model'], embeddingBaseUrl: ['models', 'embedding.baseUrl'], embeddingApiKeyConfigured: ['models', 'embedding.apiKey'],
+  interactiveConcurrency: ['execution', 'interactiveConcurrency'], agentConcurrency: ['execution', 'agentConcurrency'],
+  llmConcurrency: ['execution', 'llmConcurrency'], memoryConcurrency: ['execution', 'memoryConcurrency'],
+  mcpEnabled: ['connectors', 'mcpEnabled'], mcpReadTokenConfigured: ['connectors', 'mcpReadToken'],
+  mcpWriteEnabled: ['connectors', 'mcpWriteEnabled'], mcpWriteTokenConfigured: ['connectors', 'mcpWriteToken'],
+  mcpWriteSourceIds: ['connectors', 'mcpWriteSourceIds'], mcpAllowLocal: ['connectors', 'allowLocalMcp'],
+  googleClientConfigured: ['connectors', 'googleClientId'], googleSecretConfigured: ['connectors', 'googleClientSecret'],
+  googleRedirectUri: ['connectors', 'googleRedirectUri'], connectorSyncInterval: ['connectors', 'syncIntervalMs'],
+  diagnosticsEnabled: ['diagnostics', 'enabled'], diagnosticsDebug: ['diagnostics', 'debug'], agentTraceEnabled: ['diagnostics', 'traceEnabled'],
+  logLevel: ['diagnostics', 'level'], logDirectory: ['diagnostics', 'directory'],
+  logMaxBytes: ['diagnostics', 'maxBytes'], logMaxFiles: ['diagnostics', 'maxFiles'], logMaxEntries: ['diagnostics', 'maxEntries'],
+  connectorDirectory: ['connectors', 'directory'], tunnelConfigured: ['server', 'tunnelEnabled'], tunnelProvider: ['server', 'tunnelProvider'],
+  tunnelProtocol: ['server', 'tunnelProtocol'],
+};
+function pathValue(value: unknown, path: string): unknown {
+  for (const key of path.split('.')) value = value && typeof value === 'object' ? (value as Record<string, unknown>)[key] : undefined;
+  return value;
+}
+function displayValue(value: unknown, field: ConfigurationField): ConfigurationValue | undefined {
+  if (value === undefined) return undefined;
+  if (field.visibility === 'secret-status') return Boolean(value);
+  if (field.key === 'connectorSyncInterval' && typeof value === 'number') return value / 1000;
+  if (['modelBaseUrl', 'embeddingBaseUrl', 'googleRedirectUri', 'publicUrl'].includes(field.key)) return configurationUrl(typeof value === 'string' ? value : null);
+  return typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null || Array.isArray(value) && value.every(item => typeof item === 'string') ? value as ConfigurationValue : undefined;
+}
+/** Retain familiar presentation groups while the registry is the source of saved/effective state. */
+export function projectConfigService(view: ServerConfiguration, service: ConfigServiceView): void {
+  Object.assign(view, service, {readOnly: false, envFile: service.configFile, restartRequired: service.domains.some(domain => domain.status === 'restart-required')});
+  view.description = moteText('页面与手改文件使用同一份配置；保存后按各项生效方式应用。');
+  const modelGroup = view.groups.find(group => group.id === 'model');
+  if (modelGroup) modelGroup.description = moteText('模型配置保存在同一份配置文件中。新请求使用新配置，正在进行的请求保留原快照。');
+  const modelSource = view.groups.flatMap(group => group.fields).find(field => field.key === 'modelSettingsSource');
+  if (modelSource) { modelSource.value = 'config-file'; modelSource.description = moteText('页面与手改文件使用同一份配置；保存后按各项生效方式应用。'); }
+  for (const group of view.groups) for (const field of group.fields) {
+    delete field.envVar;
+    field.source = 'derived'; field.restartRequired = false;
+    const mapping = domainPaths[field.key], domain = mapping && service.domains.find(domain => domain.id === mapping[0]);
+    if (!mapping || !domain) continue;
+    const path = mapping[1], metadata = domain.fields.find(candidate => candidate.path === path)
+      ?? domain.fields.find(candidate => path.startsWith(candidate.path + '.'));
+    const effective = displayValue(pathValue(domain.effective, path), field), saved = displayValue(pathValue(domain.saved, path), field);
+    if (effective !== undefined) field.value = effective;
+    if (saved !== undefined) field.savedValue = saved;
+    field.domain = domain.id; field.path = path; field.source = 'config-file';
+    field.effect = metadata?.effect ?? (domain.status === 'restart-required' ? 'restart' : 'immediate');
+    field.restartRequired = field.effect === 'restart' || field.effect === 'migration';
+  }
+  const file = view.groups.flatMap(group => group.fields).find(field => field.key === 'configurationFile');
+  if (file) { file.value = service.configFile; file.source = 'config-file'; }
+  view.groups = view.groups.filter(group => group.id !== 'deployment');
 }

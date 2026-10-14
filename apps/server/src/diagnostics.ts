@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
 import { mkdir, open, readdir, rename, stat, unlink,type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
+import type {PreparedConfigChange} from './config-service.js';
 
 export type LogLevel = 'debug'|'info'|'warn'|'error'|'silent';
 export type Stage = 'ingest'|'index'|'agent'|'source'|'maintenance'|'file';
@@ -258,12 +259,48 @@ export class ServerDiagnostics {
     }catch{this.writeFailures++;this.nextAttempt=Date.now()+30000;}
   }
   private configurationQueue:Promise<unknown>=Promise.resolve();
-  configure(value:{enabled:boolean;debug:boolean;traceEnabled:boolean;level:LogLevel}){const task=this.configurationQueue.then(()=>this.applyConfiguration(value));this.configurationQueue=task.catch(()=>{});return task;}
-  private async applyConfiguration(value:{enabled:boolean;debug:boolean;traceEnabled:boolean;level:LogLevel}){
+  configure(value:{enabled:boolean;debug:boolean;traceEnabled:boolean;level:LogLevel}){if(this.closed)return Promise.reject(new Error('Diagnostics are closed'));const task=this.configurationQueue.then(async()=>{
+    const candidate=await this.prepareConfiguration(value);
+    try{await candidate.apply();candidate.publish?.();candidate.complete?.();return this.snapshot();}
+    catch(error){await candidate.rollback?.();await candidate.dispose?.();throw error;}
+  });this.configurationQueue=task.catch(()=>{});return task;}
+  /** Prepare file ownership without enabling detailed traces before the transaction publishes. */
+  async prepareConfiguration(value:{enabled:boolean;debug:boolean;traceEnabled:boolean;level:LogLevel}):Promise<PreparedConfigChange>{
+    if(this.closed)throw new Error('Diagnostics are closed');
     await this.init();await this.flush();
-    this.enabled=value.enabled;this.level=value.level==='silent'?'silent':value.debug?'debug':value.level;this.traceEnabled=value.traceEnabled&&value.enabled&&this.level!=='silent';
-    if(this.enabled&&this.level!=='silent'&&!this.lock){this.entries=[];this.traceEvents=0;await this.load();}
-    return this.snapshot();
+    if(this.closed)throw new Error('Diagnostics are closed');
+    const level=value.level==='silent'?'silent':value.debug?'debug':value.level;
+    // An isolated writer can read history and acquire the directory lock while
+    // every request continues to see this logger's committed flags and entries.
+    const writer=value.enabled&&level!=='silent'&&!this.lock?new ServerDiagnostics({...this.options,enabled:true,debug:value.debug,level,traceEnabled:false}):undefined;
+    await writer?.init();
+    if(this.closed){await writer?.close();throw new Error('Diagnostics are closed');}
+    let published=false,rolledBack=false;
+    let previous:{enabled:boolean;level:LogLevel;traceEnabled:boolean;lock?:FileHandle;writable:boolean;entries:DiagnosticEvent[];seq:number;traceEvents:number;currentBytes:number;currentDay?:string}|undefined;
+    return {
+      apply:()=>{},
+      publish:()=>{
+        previous={enabled:this.enabled,level:this.level,traceEnabled:this.traceEnabled,lock:this.lock,writable:this.writable,entries:this.entries,seq:this.seq,traceEvents:this.traceEvents,currentBytes:this.currentBytes,currentDay:this.currentDay};
+        published=true;
+        if(writer){
+          const entries=new Map([...writer.entries,...this.entries].map(entry=>[`${entry.instanceId}:${entry.seq}`,entry]));
+          this.entries=[...entries.values()].sort((a,b)=>a.at.localeCompare(b.at)||a.seq-b.seq).slice(-this.maxEntries);
+          this.traceEvents=this.entries.filter(entry=>entry.event==='agent.trace').length;
+          this.seq=Math.max(this.seq,writer.seq);this.currentBytes=writer.currentBytes;this.currentDay=writer.currentDay;
+          this.lock=writer.lock;writer.lock=undefined;this.writable=writer.writable;writer.writable=false;
+          this.writeFailures+=writer.writeFailures;this.readFailures+=writer.readFailures;this.nextAttempt=Math.max(this.nextAttempt,writer.nextAttempt);
+        }
+        this.enabled=value.enabled;this.level=level;this.traceEnabled=value.traceEnabled&&value.enabled&&level!=='silent';
+      },
+      rollback:()=>{
+        if(!published||!previous)return;
+        rolledBack=true;
+        if(writer){writer.lock=this.lock;this.lock=previous.lock;this.writable=previous.writable;this.entries=previous.entries;this.seq=previous.seq;this.traceEvents=previous.traceEvents;this.currentBytes=previous.currentBytes;this.currentDay=previous.currentDay;}
+        this.enabled=previous.enabled;this.level=previous.level;this.traceEnabled=previous.traceEnabled;
+      },
+      dispose:async()=>{if(writer&&(!published||rolledBack))await writer.close();},
+      complete:()=>{if(writer){writer.closed=true;writer.writable=false;}},
+    };
   }
   run<T>(requestId:string,task:()=>T):T {return this.context.run(uuid.test(requestId)?requestId:randomUUID(),task);}
   requestId():string|undefined {return this.context.getStore();}
@@ -395,7 +432,7 @@ export class ServerDiagnostics {
   async flush() {while(this.pending)await this.pending;}
   close():Promise<void> {if(this.closingPromise)return this.closingPromise;this.closed=true;this.closingPromise=this.finishClose();return this.closingPromise;}
   private async finishClose() {
-    await this.initialization;await this.flush();
+    await this.initialization;await this.configurationQueue;await this.flush();
     const lock=this.lock;this.lock=undefined;this.writable=false;
     if(lock){try{const identity=await lock.stat(),path=join(this.options.directory,'central.lock'),current=await stat(path);if(identity.ino===current.ino&&identity.dev===current.dev)await unlink(path);}catch{this.writeFailures++;}finally{await lock.close();}}
   }

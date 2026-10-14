@@ -1,17 +1,29 @@
 #!/usr/bin/env node
 // Real Docker integration, synthetic data only. No image publication or model API calls.
-// Requires Node 24+ and a running Docker daemon; no npm dependencies are needed.
+// Requires Node 24+, installed locked dependencies and a running Docker daemon.
+// --fixture-only validates generated YAML/mount arguments without contacting Docker.
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import { mkdtemp, writeFile, readFile, stat, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { readConfigDocument, serializeConfigDocument } from '../packages/shared/src/config-file.ts';
+import { dockerConfigurationUser } from './profile-lib.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const runId = randomUUID();
 const image = `mote-container-fixture:${runId}`;
 const container = `mote-container-fixture-${runId}`;
+const storageInitializer = `${container}-storage-init`;
 const volume = `mote-container-fixture-${runId}`;
+const modelsVolume = `${volume}-models`;
+const configurationDirectory = await mkdtemp(join(tmpdir(), 'mote-container-config-'));
+const configFile = join(configurationDirectory, 'mote.yaml');
+const fixtureOnly = process.argv.includes('--fixture-only');
+let containerUser = `${process.getuid?.() ?? 1000}:${process.getgid?.() ?? 1000}`;
 const fixtureToken = `synthetic-container-token-only-${runId}`;
 const dockerEnv = { ...process.env, MOTE_TOKEN: fixtureToken, MOTE_DATA_KEY: randomBytes(32).toString('hex') };
 const abort = new AbortController();
@@ -59,11 +71,21 @@ async function waitForHealth() {
   throw new Error('Container did not reach Docker healthy status within 120 seconds');
 }
 
+function volumeMounts() {
+  return ['--mount', `type=volume,source=${volume},target=/data`, '--mount', `type=volume,source=${modelsVolume},target=/models`];
+}
+function startArguments() {
+  return ['run', '--detach', '--name', container, '--label', `dev.mote.fixture=${runId}`, '--user', containerUser,
+    '--publish', '127.0.0.1::47832', ...volumeMounts(),
+    '--mount', `type=bind,source=${configurationDirectory},target=/config`, '--env', 'MOTE_CONFIG_FILE=/config/mote.yaml', '--env', 'MOTE_TOKEN', '--env', 'MOTE_DATA_KEY',
+    '--health-interval', '2s', '--health-start-period', '1s', '--health-timeout', '5s', '--health-retries', '30', image];
+}
 async function startContainer() {
-  await docker(['run', '--detach', '--name', container, '--label', `dev.mote.fixture=${runId}`,
-    '--publish', '127.0.0.1::47832', '--mount', `type=volume,source=${volume},target=/data`,
-    '--env', 'MOTE_TOKEN', '--env', 'MOTE_DATA_KEY',
-    '--health-interval', '2s', '--health-start-period', '1s', '--health-timeout', '5s', '--health-retries', '30', image], { capture: true });
+  // Match Compose's initialization policy: only empty roots are initialized;
+  // any legacy nonempty ownership mismatch refuses without migration.
+  await docker(['run', '--rm', '--name', storageInitializer, '--label', `dev.mote.fixture=${runId}`, '--network', 'none', '--user', '0:0', ...volumeMounts(), image,
+    'node', 'scripts/storage-owner-entry.mjs', containerUser, '/data', '/models'], { capture: true });
+  await docker(startArguments(), { capture: true });
   await waitForHealth();
   return baseUrl();
 }
@@ -76,7 +98,7 @@ async function baseUrl() {
 async function request(base, path, { status = 200, method = 'GET', body, token = fixtureToken } = {}) {
   const response = await fetch(`${base}${path}`, {
     method, redirect: 'error', signal: AbortSignal.any([abort.signal, AbortSignal.timeout(15_000)]),
-    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { 'X-Mote-Ingress-Version': '2', ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   const text = await response.text();
@@ -106,35 +128,59 @@ async function assertDuplicate(base) {
   await assertSavedNote(base);
 }
 
+async function prepareConfiguration() {
+  const document = { version: 1, revision: 0,
+    server: { profile: 'test', runtime: 'docker', host: '0.0.0.0', port: 47832, token: '${MOTE_TOKEN}' },
+    storage: { dataDir: '/data', kind: 'docker-volume', source: volume, mount: '/data', dataKey: '${MOTE_DATA_KEY}', contentEncryptionEnabled: true },
+    models: { deployment: { model: '' } }, diagnostics: { directory: '/data/logs', level: 'silent', traceEnabled: false },
+    media: { modelDirectory: '/models', workerToken: '' },
+  };
+  await writeFile(configFile, serializeConfigDocument(document), { flag: 'wx', mode: 0o600 });
+  assert.equal((await stat(configFile)).mode & 0o777, 0o600); assert.equal((await stat(configurationDirectory)).mode & 0o777, 0o700);
+  const loaded = readConfigDocument(configFile, dockerEnv);
+  assert.equal(loaded.document.server.token, fixtureToken); assert.equal(loaded.document.storage.dataKey, dockerEnv.MOTE_DATA_KEY);
+  assert.deepEqual(loaded.savedDocument, document); assert.equal(loaded.document.models.deployment.model, '');
+  const argv = startArguments();
+  assert.ok(argv.includes(`type=bind,source=${configurationDirectory},target=/config`)); assert.ok(!argv.some(value => value.startsWith('MOTE_ENV_FILE=')));
+  assert.deepEqual(argv.flatMap((value, index) => value === '--env' ? [argv[index + 1]] : []), ['MOTE_CONFIG_FILE=/config/mote.yaml', 'MOTE_TOKEN', 'MOTE_DATA_KEY']);
+  assert.ok(argv.includes(containerUser)); assert.ok(!argv.join(' ').includes(fixtureToken));
+}
 try {
-  await docker(['version', '--format', '{{.Server.Version}}'], { capture: true, timeoutMs: 30_000 });
-  daemonAvailable = true;
-  console.info('[container] Building the repository Dockerfile (local tag only)');
-  await docker(['build', '--tag', image, '--file', 'Dockerfile', '.'], { timeoutMs: 15 * 60_000 });
-  await docker(['volume', 'create', '--label', `dev.mote.fixture=${runId}`, volume], { capture: true });
-  let base = await startContainer();
-  assert.equal((await request(base, '/api/health', { token: null })).json().ok, true);
-  const page = await request(base, '/', { token: null });
-  assert.match(page.response.headers.get('content-type') ?? '', /text\/html/);
-  assert.match(page.text, /<div id="root"><\/div>/, 'Built web UI must be served from the runtime image');
-  await request(base, '/api/notes', { status: 401, token: null });
-  await request(base, '/api/notes', { status: 401, token: 'synthetic-wrong-token-only' });
-  await request(base, '/api/notes', { method: 'POST', body: note, status: 401, token: null });
-  console.info('[container] Healthy runtime, bundled web UI and 401 authentication checks passed');
-  const created = (await request(base, '/api/notes', { method: 'POST', status: 201, body: note })).json();
-  assert.equal(created.id, note.id); assert.equal(created.duplicate, false);
-  await assertSavedNote(base); await assertDuplicate(base);
-  console.info('[container] Synthetic note create/read and duplicate ACK checks passed');
-  await docker(['restart', '--time', '10', container], { capture: true });
-  await waitForHealth(); base = await baseUrl();
-  await assertSavedNote(base); await assertDuplicate(base);
-  console.info('[container] Same-container restart preserved the note and idempotency key');
-  // Recreating with the same named /data volume also rules out accidental storage in the writable container layer.
-  await docker(['rm', '--force', container], { capture: true });
-  base = await startContainer();
-  await assertSavedNote(base); await assertDuplicate(base);
-  await request(base, '/api/notes', { status: 401, token: null });
-  console.info('[container] Replacement container recovered the named volume; all real Docker checks passed');
+  await prepareConfiguration();
+  if (fixtureOnly) console.info(JSON.stringify({ status: 'passed', fixtureOnly: true, privateYaml: true, parentDirectoryMount: true, declaredSecretReferences: true, noAutomaticMigration: true }));
+  else {
+    await docker(['version', '--format', '{{.Server.Version}}'], { capture: true, timeoutMs: 30_000 });
+    daemonAvailable = true;
+    containerUser = await dockerConfigurationUser({ configFile }, (_command, args, options) => docker(args, options));
+    console.info('[container] Building the repository Dockerfile (local tag only)');
+    await docker(['build', '--tag', image, '--file', 'Dockerfile', '.'], { timeoutMs: 15 * 60_000 });
+    for (const name of [volume, modelsVolume]) await docker(['volume', 'create', '--label', `dev.mote.fixture=${runId}`, name], { capture: true });
+    const mainConfiguration = await readFile(configFile, 'utf8');
+    let base = await startContainer();
+    assert.equal((await request(base, '/api/health', { token: null })).json().ok, true);
+    const page = await request(base, '/', { token: null });
+    assert.match(page.response.headers.get('content-type') ?? '', /text\/html/);
+    assert.match(page.text, /<div id="root"><\/div>/, 'Built web UI must be served from the runtime image');
+    await request(base, '/api/notes', { status: 401, token: null });
+    await request(base, '/api/notes', { status: 401, token: 'synthetic-wrong-token-only' });
+    await request(base, '/api/notes', { method: 'POST', body: note, status: 401, token: null });
+    console.info('[container] Healthy runtime, bundled web UI and 401 authentication checks passed');
+    const created = (await request(base, '/api/notes', { method: 'POST', status: 201, body: note })).json();
+    assert.equal(created.id, note.id); assert.equal(created.duplicate, false);
+    await assertSavedNote(base); await assertDuplicate(base);
+    console.info('[container] Synthetic note create/read and duplicate ACK checks passed');
+    await docker(['restart', '--time', '10', container], { capture: true });
+    await waitForHealth(); base = await baseUrl();
+    await assertSavedNote(base); await assertDuplicate(base);
+    console.info('[container] Same-container restart preserved the note and idempotency key');
+    // Recreating with the same named /data volume also rules out accidental storage in the writable container layer.
+    await docker(['rm', '--force', container], { capture: true });
+    base = await startContainer();
+    await assertSavedNote(base); await assertDuplicate(base);
+    await request(base, '/api/notes', { status: 401, token: null });
+    assert.equal(await readFile(configFile, 'utf8'), mainConfiguration, 'Restart and replacement share the same unchanged main configuration');
+    console.info('[container] Replacement container recovered the named volumes and shared YAML; all real Docker checks passed');
+  }
 } catch (error) {
   console.error(`[container] FAILED: ${error instanceof Error ? error.message : String(error)}`);
   if (daemonAvailable) {
@@ -145,8 +191,9 @@ try {
 } finally {
   if (daemonAvailable) {
     // Exact UUID names only: never prune unrelated containers, volumes, images or build caches.
-    await docker(['rm', '--force', container], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
-    await docker(['volume', 'rm', volume], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
+    for (const name of [container, storageInitializer]) await docker(['rm', '--force', name], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
+    for (const name of [volume, modelsVolume]) await docker(['volume', 'rm', name], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
     await docker(['image', 'rm', image], { capture: true, cleanup: true, timeoutMs: 30_000 }).catch(() => undefined);
   }
+  await rm(configurationDirectory, { recursive: true, force: true });
 }

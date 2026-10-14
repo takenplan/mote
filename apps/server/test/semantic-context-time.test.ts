@@ -16,6 +16,8 @@ import {requestMemoryIntegration} from '../src/memory-integration.js';
 import {defaultMemoryIntegrationRecipe} from '../src/memory-integration-policy.js';
 import {reviewMemory,memoryReviewReceipt} from '../src/memory-review.js';
 import {Store} from '../src/store.js';
+import {ConfigService} from '../src/config-service.js';
+import {lifecycleSettingsSchema,defaultLifecycleSettings} from '../src/memory-configuration.js';
 
 // Mechanical, independently generated text fixtures; all model calls are local stubs.
 const early='2001-01-02T03:04:05+08:00',later='2001-02-02T03:04:05+08:00',expiry='2001-03-01T00:00:00Z';
@@ -27,12 +29,12 @@ const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(done=>
 const ids=(page:{items:unknown[]})=>page.items.map(item=>(item as {id:string}).id).sort();
 const catalogIds=(value:unknown)=>(value as {entries:{id:string}[]}).entries.map(item=>item.id).sort();
 const realTime=(value:string|undefined,start:number)=>{assert.ok(value);assert.ok(Date.parse(value)>=start&&Date.parse(value)<=Date.now(),value);};
-function disabled(node:Node){const s=node.lifecycle.settings();node.lifecycle.configure({...s,consolidation:{...s.consolidation,enabled:false},insights:{...s.insights,enabled:false},working:{...s.working,enabled:false}});}
+async function disabled(node:Node){const s=node.lifecycle.settings();await node.lifecycle.save({revision:node.configService.revision,settings:{...s,consolidation:{...s.consolidation,enabled:false},insights:{...s.insights,enabled:false},working:{...s.working,enabled:false}}});}
 async function appFixture(t:TestContext,query:(input:QueryInput,reader:ContextReader)=>Promise<QueryResult>,clock?:()=>string){
   const directory=mkdtempSync(join(tmpdir(),'mote-semantic-clock-'));
   const node=await buildApp(config(directory),{backgroundWorker:false,semanticContextTime:clock,createModelAgent:async(_settings,reader)=>({configured:true,close:async()=>{},query:async input=>{const result=await query(input,reader);return input.responseMode==='memory-extraction'?fixtureMemoryWorkResult(input,result):result;}})});
   t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
-  disabled(node);await node.app.ready();return {node,directory};
+  await disabled(node);await node.app.ready();return {node,directory};
 }
 async function note(node:Node,text:string){
   const id=randomUUID();await node.store.ingest({id,deviceId:'generated',deviceName:'Generated device',platform:'import',source:'note',capturedAt:'2000-12-01T00:00:00Z',durationMs:0,ocrText:text});return node.store.evidence([id])[0];
@@ -122,7 +124,7 @@ test('Ask samples before model queuing and every working summary inherits the sa
   // These owner-generated prefixes read no original evidence. Their complete
   // empty lineage is explicit, as a real host receipt would record it.
   for(let i=0;i<5;i++)conversationId=conversations.append(conversationId?conversations.get(conversationId):undefined,{question:'Generated prefix '+i},{...empty('X'.repeat(2000)),evidenceDependencies:{version:1,complete:true,ids:[]}}).conversationId;
-  const settings=node.lifecycle.settings();node.lifecycle.configure({...settings,contextCharacters:4000,summaryCharacters:1000});
+  const settings=node.lifecycle.settings();await node.lifecycle.save({revision:node.configService.revision,settings:{...settings,contextCharacters:4000,summaryCharacters:1000}});
   const compacted=await node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Generated follow-up',conversationId}});assert.equal(compacted.statusCode,200,compacted.body);
   assert.ok(calls.some(input=>input.skill==='working-memory'));assert.ok(calls.every(input=>input.contextTime===early));assert.equal(samples,1);
   const blocker=node.app.inject({method:'POST',url:'/api/query',headers,payload:{question:'Generated blocker'}});await entered.promise;
@@ -152,15 +154,16 @@ test('invalid host times fail before model work or creation of a lifecycle windo
 for(const manual of [false,true])test(`${manual?'manual':'automatic'} lifecycle windows retain semantic time across retries and restart`,async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-window-clock-')),store=new Store(directory);let now=Date.now(),semantic=early,samples=0,calls=0,fail=true;
   const windows:LifecycleWindow[]=[],clock=()=>{samples++;return semantic;};
-  let lifecycle=new MemoryLifecycle(store,()=>true,()=>now,undefined,clock);
+  const service=new ConfigService({path:join(directory,'mote.yaml'),watch:false,initialDocument:{version:1,revision:0,memory:structuredClone(defaultLifecycleSettings)}});service.register({id:'memory',schema:lifecycleSettingsSchema,defaultValue:defaultLifecycleSettings});await service.initialize();
+  let lifecycle=new MemoryLifecycle(store,()=>true,()=>now,undefined,clock,service);
   const register=()=>lifecycle.register({id:'consolidation',version:'generated',stream:'evidence',async run(window,checkpoint){calls++;windows.push(window);checkpoint('generated checkpoint');if(fail)throw Error('Generated failure');}});
-  register();const settings=lifecycle.settings();lifecycle.configure({...settings,consolidation:{...settings.consolidation,minChanges:1}});
-  t.after(async()=>{await lifecycle.close();store.close();rmSync(directory,{recursive:true,force:true});});
+  register();const settings=lifecycle.settings();await lifecycle.save({revision:service.revision,settings:{...settings,consolidation:{...settings.consolidation,minChanges:1}}});
+  t.after(async()=>{await lifecycle.close();await service.close();store.close();rmSync(directory,{recursive:true,force:true});});
   const id=randomUUID();if(manual)lifecycle.request('consolidation',[id],'generated checkpoint');else store.db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'upsert',?)").run(id,new Date().toISOString());
   await lifecycle.tick();assert.equal(samples,1);assert.equal(calls,1);assert.equal(windows[0].contextTime,early);assert.equal(windows[0].startedAt,now);
   const original=lifecycle.view().extensions[0].active!.id,retryAt=lifecycle.view().extensions[0].retryAt!;assert.ok(retryAt>now);
   semantic=later;now++;await lifecycle.tick();assert.equal(calls,1);assert.equal(samples,1);
-  await lifecycle.close();lifecycle=new MemoryLifecycle(store,()=>true,()=>now,undefined,clock);register();
+  await lifecycle.close();lifecycle=new MemoryLifecycle(store,()=>true,()=>now,undefined,clock,service);register();
   assert.equal(lifecycle.view().extensions[0].active?.id,original);await lifecycle.tick();assert.equal(calls,1);
   now=retryAt;await lifecycle.tick();assert.equal(calls,2);assert.equal(samples,1);assert.equal(windows[1].contextTime,early);assert.equal(windows[1].startedAt,windows[0].startedAt);
   fail=false;lifecycle.retry('consolidation',original);await lifecycle.tick();assert.equal(calls,3);assert.equal(samples,1);assert.equal(windows[2].contextTime,early);
@@ -179,7 +182,7 @@ test('integration windows missing their frozen clock are refused without samplin
 test('a queued integration survives closing and reopening its SQLite vault without resampling',async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-reopened-clock-')),calls:QueryInput[]=[];let semantic=early,samples=0;
   const dependencies={backgroundWorker:false,semanticContextTime:()=>{samples++;return semantic;},agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{calls.push(input);return empty('{"memories":[]}');}}};
-  let node=await buildApp(config(directory),dependencies);disabled(node);
+  let node=await buildApp(config(directory),dependencies);await disabled(node);
   t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
   const card=await timedCard(node),queued=requestMemoryIntegration({recipe:defaultMemoryIntegrationRecipe,inputs:[{id:card.id,version:card.version,fingerprint:card.fingerprint}]},{lifecycle:node.lifecycle,memories:node.memories,pipeline:node.memoryPipeline});
   assert.equal(samples,1);await node.app.close();semantic=later;

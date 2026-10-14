@@ -29,7 +29,7 @@ try{
     catch(error){call.status='failed';throw error;}
     finally{call.durationMs=Date.now()-call.startedAt;await save();console.log(JSON.stringify({phase:call.phase,status:call.status,durationMs:call.durationMs}));}
   };
-  const settings=node.lifecycle.settings();for(const key of ['working','consolidation','insights'] as const)settings[key].enabled=false;node.lifecycle.configure(settings);
+  const settings=node.lifecycle.settings();for(const key of ['working','consolidation','insights'] as const)settings[key].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
   const base=await node.app.listen({host:'127.0.0.1',port:0});
   const request=async(method:string,path:string,payload?:unknown)=>{const response=await fetch(base+path,{method,headers:{authorization:'Bearer '+token,'x-mote-ingress-version':'2',...(payload===undefined?{}:{'content-type':'application/json'})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});const value=await response.json();assert.ok(response.ok,`${method} ${path}: ${response.status}`);return value;};
   for(const input of inputs){

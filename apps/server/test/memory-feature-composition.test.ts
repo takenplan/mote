@@ -52,8 +52,8 @@ test('HTTP composed personal policy reads context, reviews over 32 selected cand
  const open=async()=>{node=await buildApp(config,dependencies);await node.app.ready();};await open();
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
  const api=(method:'GET'|'POST'|'PUT',url:string,payload?:unknown)=>node.app.inject({method,url,payload,headers:{authorization:'Bearer '+config.token,'x-mote-ingress-version':'2'}});
- const settings=(await api('GET','/api/memory-settings')).json().settings;
- const configured=await api('PUT','/api/memory-settings',{...settings,batchCharacters:2048});assert.equal(configured.statusCode,200,configured.body);
+ const view=(await api('GET','/api/memory-settings')).json(),settings=view.settings;
+ const configured=await api('PUT','/api/memory-settings',{revision:view.revision,settings:{...settings,batchCharacters:2048}});assert.equal(configured.statusCode,200,configured.body);
  const created=await api('POST','/api/sources',{id:'generated-composition',name:'Generated composition',kind:'custom',deviceId:'generated',platform:'import',retention:'archive'});assert.equal(created.statusCode,200,created.body);
  const item={externalId:'generated-diary',observedAt:at,kind:'message',layer:'original',document:{contentRole:'authored',recordedAt:'2025-02-03T00:00:00Z',timeBasis:'recorded'}};
  const inserted=await api('PUT','/api/sources/generated-composition/items',{...item,revision:'1',text:original});assert.equal(inserted.statusCode,200,inserted.body);

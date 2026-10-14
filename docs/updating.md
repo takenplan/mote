@@ -2,9 +2,11 @@
 
 当前开发阶段按 **Central、macOS、Android** 独立创建 DEV prerelease。请打开 [GitHub Releases](https://github.com/utopiafar/mote/releases)，选择 `central-v…`、`desktop-v…` 或 `android-v…` 对应的发布；各端的版本号不能相互比较。`releases/latest` 不代表某个端的最新 prerelease。当前发布不附 `mote-release.json` 或 GHCR 镜像，保留的签名更新器不能用于获取当前 DEV 版本。
 
-## 本轮 MVP 破坏升级
+## 配置格式与历史存储边界
 
-本轮中央使用 `backend_epoch=4`，Desktop/Android 本机与队列格式为 3，模型 registry 为 version 2，HTTP 便携归档为完整 version 2。旧 schema、客户端/模型/文件处理配置、队列、内容包装和精简/旧便携包明确拒绝，不自动迁移或清空目录。先用旧版本导出需保留内容，停止全部写入，备份完整旧目录、凭据与密钥，再使用新空目录或新 profile；明确放弃资料时才执行 reset。中央手动 reset、新目录和客户端清理步骤见 [本次清理实施记录](audits/mvp-baseline-cleanup-2026-10-09.md)。旧二进制与完整旧备份须一起保留，才能跨代回滚。
+本次统一配置只改变中央配置来源：主文件为 YAML version 1，旧 env、模型/文件 JSON 与 SQLite 当前运行设置不自动转换，也不再覆盖主文件。中央仍使用 `backend_epoch=4`，Desktop/Android 本机与队列格式仍为 3，HTTP 便携归档仍为完整 version 2。同代资料库可以保留原目录；先备份并离线准备 `mote.yaml`，保留访问令牌和内容密钥，再由所有者明确启动。仅转换配置无需新空资料库或 reset。
+
+此前的 MVP 存储基线曾切换数据库、客户端、内容包装和便携格式。从该历史基线之前升级时，旧格式仍明确拒绝，不自动迁移或清空目录。先用相应旧版本导出需保留内容，停止全部写入，备份完整旧目录、凭据与密钥，再使用新空目录或新 profile；明确放弃资料时才执行 reset。历史跨代的中央手动 reset、新目录和客户端清理步骤见 [MVP 清理实施记录](audits/mvp-baseline-cleanup-2026-10-09.md)。旧二进制与完整旧备份须一起保留，才能跨代回滚。
 
 ## Mac App
 
@@ -24,7 +26,7 @@ npm run build:libs
 npm run build -w @mote/server -w @mote/web
 ```
 
-受管理的 profile 用 `upgrade --release /absolute/built-checkout` 切换；Docker 先自行构建镜像，再用 `upgrade --image <image>`。同代切换沿用原 profile、`--home`、当前配置、数据目录/卷及密钥，CLI 会停止目标环境并创建一致性备份后切换。跨代必须先用旧程序完成旧备份，再为新版本选择新空目录/卷并重设模型和文件 policy；不能直接将新版本 `upgrade` 指向旧库。非 CLI 托管进程需管理员自行停止与备份，不能假定 CLI 已接管它。直接启动默认 `profile=default`，要求显式 `MOTE_ENV_FILE` 或 `MOTE_DATA_DIR` 之一，不再自动读取根 `.env`。
+受管理的 profile 用 `upgrade --release /absolute/built-checkout` 切换；Docker 先自行构建镜像，再用 `upgrade --image <image>`。同代切换沿用原 profile、`--home`、主 YAML、数据目录/卷及密钥，CLI 会停止目标环境并创建一致性备份后切换；尚未转换旧配置时必须先离线准备新 YAML。跨越历史存储基线仍须先用旧程序完成旧备份，再为新版本选择新空目录/卷并重设模型和文件 policy；不能直接将新版本 `upgrade` 指向不兼容旧库。非 CLI 托管进程需管理员自行停止与备份，不能假定 CLI 已接管它。直接启动默认 `profile=default`，读取工作目录的 `mote.yaml`，或使用 `MOTE_CONFIG_FILE` 显式选择文件；普通环境变量和根 `.env` 不提供配置覆盖。
 
 ```sh
 node scripts/mote.mjs upgrade --profile prod --home /srv/mote/profiles --release /srv/mote/releases/next

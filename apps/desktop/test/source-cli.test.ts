@@ -5,6 +5,7 @@ import { mkdtemp, mkdir, readdir, realpath, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { sourceAck } from './fixtures';
+import { serializeConfigDocument } from '@mote/shared/config-file';
 let root: string; let server: Server; let url: string; let items: Record<string, unknown>[]; let fail: boolean;
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'mote-source-cli-'))); items = []; fail = false;
@@ -27,8 +28,10 @@ beforeEach(async () => {
 afterEach(async () => { server?.closeAllConnections(); await new Promise<void>(done => server?.close(() => done())); await rm(root, { recursive: true, force: true }); });
 async function run(profile: string, args: string[] = [], token = 'synthetic-cli-token', confirmTransient = true) {
   const directory = join(root, profile); await mkdir(directory, { recursive: true });
-  const envFile = join(directory, 'mote.env'); await writeFile(envFile, `MOTE_PROFILE=${profile}\nMOTE_URL=${url}\nMOTE_TOKEN=${token}\n`);
-  const child = spawn(process.execPath, ['--import', 'tsx', resolve('../../scripts/import-files.ts'), '--root', join(root, 'selected'), ...(confirmTransient ? ['--allow-transient-upload'] : []), ...args], { cwd: resolve('../..'), env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('MOTE_'))), MOTE_ENV_FILE: envFile }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const configFile = join(directory, 'mote.yaml');
+  const connection = new URL(url);
+  await writeFile(configFile, serializeConfigDocument({ version: 1, revision: 0, server: { profile, host: connection.hostname, port: Number(connection.port), token }, storage: { dataDir: './data' } }), { mode: 0o600 });
+  const child = spawn(process.execPath, ['--import', 'tsx', resolve('../../scripts/import-files.ts'), '--root', join(root, 'selected'), ...(confirmTransient ? ['--allow-transient-upload'] : []), ...args], { cwd: resolve('../..'), env: { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('MOTE_'))), MOTE_CONFIG_FILE: configFile }, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = ''; child.stdout.on('data', chunk => output += chunk); child.stderr.on('data', () => {});
   const code = await new Promise<number | null>((done, reject) => { child.once('error', reject); child.once('exit', done); });
   return { code, output, directory };
@@ -63,15 +66,15 @@ it('CLI credential change at the same URL isolates old pending text and submits 
 }, 15000);
 it('CLI dry-run writes no sync state, while reference mode sends no body', async () => {
   await mkdir(join(root, 'selected')); await writeFile(join(root, 'selected', 'a.md'), '合成引用正文');
-  const dry = await run('dev', ['--dry-run']); expect(dry.code).toBe(0); expect((await readdir(dry.directory))).toEqual(['mote.env']); expect(items).toHaveLength(0);
+  const dry = await run('dev', ['--dry-run']); expect(dry.code).toBe(0); expect((await readdir(dry.directory))).toEqual(['mote.yaml']); expect(items).toHaveLength(0);
   expect((await run('dev', ['--retention', 'reference'])).code).toBe(0); expect(items[0].text).toBe(''); expect(items[0].layer).toBe('reference');
 }, 15000);
 
 
 it('CLI refuses snapshot bytes without explicit consent before creating an outbox or contacting central',async()=>{
  await mkdir(join(root,'selected'));await writeFile(join(root,'selected','a.md'),'Generated consent fixture');
- const blocked=await run('dev',[],'synthetic-cli-token',false);expect(blocked.code).not.toBe(0);expect(items).toHaveLength(0);expect(await readdir(blocked.directory)).toEqual(['mote.env']);
- const dry=await run('dev',['--dry-run'],'synthetic-cli-token',false);expect(dry.code).toBe(0);expect(items).toHaveLength(0);expect(await readdir(dry.directory)).toEqual(['mote.env']);
+ const blocked=await run('dev',[],'synthetic-cli-token',false);expect(blocked.code).not.toBe(0);expect(items).toHaveLength(0);expect(await readdir(blocked.directory)).toEqual(['mote.yaml']);
+ const dry=await run('dev',['--dry-run'],'synthetic-cli-token',false);expect(dry.code).toBe(0);expect(items).toHaveLength(0);expect(await readdir(dry.directory)).toEqual(['mote.yaml']);
  const reference=await run('dev',['--retention','reference'],'synthetic-cli-token',false);expect(reference.code).toBe(0);expect(items).toHaveLength(1);expect(items[0].layer).toBe('reference');expect(items[0].text).toBe('');
 },15000);
 

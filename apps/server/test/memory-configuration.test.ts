@@ -1,0 +1,55 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { serializeConfigDocument } from '@mote/shared/config-file';
+import { ConfigService } from '../src/config-service.js';
+import { parseConfigDocument, readConfigDocument, registerBuiltinDomains } from '../src/config.js';
+import { MemoryLifecycle, storedMemoryLifecycleSettings, type LifecycleWindow } from '../src/memory-lifecycle.js';
+import { Store } from '../src/store.js';
+
+test('Memory settings save to the single YAML, ignore the old SQLite key and use revision conflicts', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'mote-memory-config-')), file = join(directory, 'mote.yaml'), store = new Store(join(directory, 'vault'));
+  const service = new ConfigService({ path: file, watch: false, initialDocument: parseConfigDocument('version: 1\nrevision: 0\nmemory:\n  batchCharacters: 1000\n') });
+  registerBuiltinDomains(service); await service.initialize();
+  store.db.exec('CREATE TABLE memory_lifecycle_settings(id INTEGER PRIMARY KEY,json TEXT NOT NULL)');
+  store.db.prepare('INSERT INTO memory_lifecycle_settings VALUES(1,?)').run(JSON.stringify({ batchCharacters: 600 }));
+  const lifecycle = new MemoryLifecycle(store, () => true, Date.now, undefined, undefined, service);
+  t.after(async () => { await lifecycle.close(); await service.close(); store.close(); rmSync(directory, { recursive: true, force: true }); });
+  assert.equal(lifecycle.settings().batchCharacters, 1000); assert.equal(storedMemoryLifecycleSettings(store).batchCharacters, 1000);
+  assert.throws(() => lifecycle.configure(lifecycle.settings()), /configuration transaction/);
+  await lifecycle.save({ revision: 0, settings: { ...lifecycle.settings(), batchCharacters: 700 } });
+  assert.equal(service.revision, 1); assert.equal(lifecycle.view().revision, 1); assert.equal(lifecycle.settings().batchCharacters, 700);
+  assert.equal((readConfigDocument(file).memory as { batchCharacters: number }).batchCharacters, 700);
+  assert.deepEqual(JSON.parse(String(store.db.prepare('SELECT json FROM memory_lifecycle_settings WHERE id=1').get()!.json)), { batchCharacters: 600 });
+  await assert.rejects(lifecycle.save({ revision: 0, settings: { ...lifecycle.settings(), batchCharacters: 500 } }), (error: { code?: string }) => error.code === 'config_conflict');
+  assert.equal(lifecycle.settings().batchCharacters, 700);
+  const invalid = readConfigDocument(file); invalid.memory = { batchCharacters: 100 };
+  writeFileSync(file, serializeConfigDocument(invalid)); await assert.rejects(service.reload(), (error: { code?: string }) => error.code === 'config_invalid');
+  assert.equal(lifecycle.settings().batchCharacters, 700); assert.equal(storedMemoryLifecycleSettings(store).batchCharacters, 700);
+});
+
+test('external Memory budget edits affect the next admitted window while active snapshots and restart persist', async t => {
+  const directory = mkdtempSync(join(tmpdir(), 'mote-memory-window-config-')), file = join(directory, 'mote.yaml'), store = new Store(join(directory, 'vault'));
+  let service = new ConfigService({ path: file, watch: false, initialDocument: parseConfigDocument('version: 1\nrevision: 0\nmemory:\n  batchCharacters: 1000\n  extraction:\n    minChanges: 1\n    maxItems: 1\n') });
+  registerBuiltinDomains(service); await service.initialize();
+  let lifecycle = new MemoryLifecycle(store, () => true, () => 0, undefined, undefined, service);
+  let release!: () => void, entered!: () => void;
+  const ready = new Promise<void>(resolve => { entered = resolve; }), snapshots: LifecycleWindow[] = [];
+  lifecycle.register({ id: 'extraction', version: 'generated', stream: 'evidence', async run(window) { snapshots.push(window); if (snapshots.length === 1) { entered(); await new Promise<void>(resolve => { release = resolve; }); } } });
+  const event = () => store.db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'upsert',?)").run(randomUUID(), new Date().toISOString());
+  t.after(async () => { release?.(); await lifecycle.close(); await service.close(); store.close(); rmSync(directory, { recursive: true, force: true }); });
+  event(); const running = lifecycle.tick(); await ready;
+  const changed = readConfigDocument(file); changed.memory = { ...lifecycle.settings(), batchCharacters: 256 };
+  writeFileSync(file, serializeConfigDocument(changed)); await service.reload();
+  assert.equal(service.revision, 1); assert.equal(lifecycle.settings().batchCharacters, 256); assert.equal(snapshots[0].settings.batchCharacters, 1000);
+  event(); release(); await running; await lifecycle.tick();
+  assert.deepEqual(snapshots.map(window => window.settings.batchCharacters), [1000, 256]);
+  const persisted = readFileSync(file, 'utf8'); assert.equal((readConfigDocument(file).memory as { batchCharacters: number }).batchCharacters, 256);
+  await lifecycle.close(); await service.close();
+  service = new ConfigService({ path: file, watch: false }); registerBuiltinDomains(service); await service.initialize();
+  lifecycle = new MemoryLifecycle(store, () => true, () => 0, undefined, undefined, service);
+  assert.equal(lifecycle.settings().batchCharacters, 256); assert.equal(service.revision, 1); assert.equal(readFileSync(file, 'utf8'), persisted);
+});

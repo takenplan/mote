@@ -40,7 +40,7 @@ export function installImageSchema(store:Store){
   name TEXT NOT NULL,kind TEXT NOT NULL,fingerprint TEXT NOT NULL,json TEXT NOT NULL,current INTEGER NOT NULL DEFAULT 1);
  CREATE INDEX IF NOT EXISTS image_product_reuse ON image_products(fingerprint,current);
  CREATE TRIGGER IF NOT EXISTS image_policy_intake AFTER INSERT ON image_inputs BEGIN
-  UPDATE image_inputs SET policy_json=mote_image_policy((SELECT value FROM settings WHERE key='image-file-policy'),new.source_id,new.mime,new.override_id) WHERE capture_id=new.capture_id;
+  UPDATE image_inputs SET policy_json=mote_image_policy((SELECT value FROM settings WHERE key='image-file-policy-effective'),new.source_id,new.mime,new.override_id) WHERE capture_id=new.capture_id;
  END;
  CREATE TABLE IF NOT EXISTS image_intake_overrides(capture_id TEXT PRIMARY KEY REFERENCES captures(id) ON DELETE CASCADE,profile_id TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS image_attachment_intents(
@@ -48,12 +48,12 @@ export function installImageSchema(store:Store){
   state TEXT NOT NULL DEFAULT 'waiting',error TEXT,available_at INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(parent_id,file_id));
  CREATE TRIGGER IF NOT EXISTS image_capture_intake AFTER INSERT ON captures WHEN new.blob_hash IS NOT NULL BEGIN
   INSERT INTO image_inputs(capture_id,adapter,source_id,hash,mime,revision,understanding_enabled,created_at)
-   VALUES(new.id,'mote.capture-image','screen:'||mote_image_device_hash(new.device_id),new.blob_hash,new.mime,new.fingerprint,coalesce((SELECT json_extract(value,'$.understandingEnabled') FROM settings WHERE key='perception'),1),CAST(strftime('%s','now') AS INTEGER)*1000);
+   VALUES(new.id,'mote.capture-image','screen:'||mote_image_device_hash(new.device_id),new.blob_hash,new.mime,new.fingerprint,coalesce((SELECT json_extract(value,'$.understandingEnabled') FROM settings WHERE key='perception-effective'),1),CAST(strftime('%s','now') AS INTEGER)*1000);
  END;
  CREATE TRIGGER IF NOT EXISTS image_file_intake AFTER INSERT ON file_versions
   WHEN json_extract(new.manifest,'$.item.mimeType') LIKE 'image/%' AND coalesce(json_extract(new.manifest,'$.item.deleted'),0)=0 BEGIN
   INSERT INTO image_inputs(capture_id,adapter,source_id,hash,mime,revision,override_id,understanding_enabled,created_at)
-   VALUES(new.capture_id,'mote.file-image',new.source_id,coalesce(new.object_hash,json_extract(new.manifest,'$.sha256')),json_extract(new.manifest,'$.item.mimeType'),new.revision,json_extract(new.manifest,'$.processingProfileId'),coalesce((SELECT json_extract(value,'$.understandingEnabled') FROM settings WHERE key='perception'),1),CAST(strftime('%s','now') AS INTEGER)*1000);
+   VALUES(new.capture_id,'mote.file-image',new.source_id,coalesce(new.object_hash,json_extract(new.manifest,'$.sha256')),json_extract(new.manifest,'$.item.mimeType'),new.revision,json_extract(new.manifest,'$.processingProfileId'),coalesce((SELECT json_extract(value,'$.understandingEnabled') FROM settings WHERE key='perception-effective'),1),CAST(strftime('%s','now') AS INTEGER)*1000);
  END;
  CREATE TRIGGER IF NOT EXISTS image_attachment_intake AFTER INSERT ON capture_files
   WHEN EXISTS(SELECT 1 FROM archived_files a WHERE a.id=new.file_id AND (json_extract(a.json,'$.mimeType') LIKE 'image/%' OR json_extract(a.json,'$.mimeType')='application/octet-stream' AND EXISTS(SELECT 1 FROM captures c,json_each(c.json,'$.provenance.document.attachments') d WHERE c.id=new.capture_id AND json_extract(d.value,'$.id')=new.file_id AND json_extract(d.value,'$.mimeType') LIKE 'image/%'))) BEGIN

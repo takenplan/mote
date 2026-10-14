@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useResource } from './useResource';
 import { processingState, localModelState } from './processing-state';
 import { useUnsavedChanges } from './unsaved';
 import { moteText } from '@mote/shared/i18n';
-import { type Api, errorMessage } from './api';
+import { ApiError,type Api, errorMessage } from './api';
+import {invalidateConfiguration} from './configuration-cache';
 import type { ProcessingProfile } from '@mote/shared';
 type Settings = {
     providerRevision: string;
@@ -16,6 +17,7 @@ type Settings = {
     profileId?: string;
 };
 type View = {
+    revision: number;
     settings: Settings;
     model: {
         model?: string;
@@ -46,6 +48,7 @@ export function PerceptionSettings({ api, onMemory, onAdvanced }: {
     onMemory?: () => void;
     onAdvanced?: () => void;
 }) {
+    const activeApi=useRef(api);activeApi.current=api;
     const read = useResource<View>(api, '/api/perception', 5000), policy = useResource<{
         policy: {
             profiles: ProcessingProfile[];
@@ -59,7 +62,7 @@ export function PerceptionSettings({ api, onMemory, onAdvanced }: {
     const models = useResource<{
         ocr: ModelState;
     }>(api, '/api/media-models', 5000), ocr = models.data?.ocr;
-    const [settings, setSettings] = useState<Settings>(), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(false);
+    const [settings, setSettings] = useState<Settings>(), [revision,setRevision] = useState<number>(), [dirty, setDirty] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [saved, setSaved] = useState(false);
     const [range, setRange] = useState({ after: '', before: '', sourceId: '', mode: 'complete' as 'complete' | 'recompute' }), [preview, setPreview] = useState<{
         token: string;
         count: number;
@@ -71,23 +74,22 @@ export function PerceptionSettings({ api, onMemory, onAdvanced }: {
         }[];
     }>(api, '/api/sources');
     useUnsavedChanges(dirty);
-    useEffect(() => { setSettings(undefined); setDirty(false); setError(''); setSaved(false); setPreview(null); }, [api]);
-    useEffect(() => { if (read.data && !dirty)
-        setSettings(read.data.settings); }, [read.data, dirty]);
+    useEffect(() => { setSettings(undefined); setRevision(undefined); setDirty(false); setError(''); setSaved(false); setPreview(null); }, [api]);
+    useEffect(() => { if (read.data && !dirty&&(read.data.revision??0)>=(revision??0)){setSettings(read.data.settings);setRevision(read.data.revision);}if(read.error instanceof ApiError&&[401,403,404,410].includes(read.error.status)){setSettings(undefined);setRevision(undefined);setDirty(false);} }, [read.data, read.error, dirty]);
     const change = <K extends keyof Settings>(key: K, value: Settings[K]) => { setSettings(current => current ? { ...current, [key]: value } : current); setDirty(true); setSaved(false); };
     async function action(work: () => Promise<void>) { setBusy(true); setError(''); try {
         await work();
     }
     catch (error) {
-        setError(errorMessage(error));
+        if(activeApi.current!==api)return;setError(error instanceof ApiError&&error.status===409?moteText('配置已被其他会话更新。请重新读取生效配置，再编辑并保存。'):errorMessage(error));
     }
     finally {
-        setBusy(false);
+        if(activeApi.current===api)setBusy(false);
     } }
     const profiles = policy.data?.policy?.profiles.filter(p => p.processorId === 'archive' || p.imageRecipe || policy.data?.processors?.some(x => x.id === p.processorId && x.stage === 'extract' && x.mediaTypes.some(t => t.startsWith('image/')))) ?? [];
     return <section className="panel perception-settings"><h2>{moteText('图片')}</h2><p>{moteText('正式接纳的截图、导入图片、同步图片和资料附件共享中央方案。原件先保存，各步骤独立完成。')}</p>
- {(error || read.error !== undefined) && <p role="alert">{error || errorMessage(read.error)}</p>}
- {settings && read.error === undefined && <form onSubmit={e => { e.preventDefault(); void action(async () => { const result = await api.request<View>('/api/perception', { method: 'PUT', body: JSON.stringify(settings) }); setSettings(result.settings); setDirty(false); setSaved(true); read.refresh(); policy.refresh(); }); }}>
+ {(error || read.error !== undefined) && <p role="alert">{error || errorMessage(read.error)}</p>}{error&&<button className="button subtle" disabled={busy} onClick={()=>{setDirty(false);setError('');read.refresh();}}>{moteText('重新读取并还原草稿')}</button>}
+ {settings && read.error === undefined && <form onSubmit={e => { e.preventDefault(); void action(async () => { const result = await api.request<View>('/api/perception', { method: 'PUT', body: JSON.stringify({revision,settings}) });if(activeApi.current!==api)return; setSettings(result.settings);setRevision(result.revision); setDirty(false); setSaved(true); invalidateConfiguration(api); }); }}>
  <label><input type="checkbox" checked={settings.enabled} onChange={e => change('enabled', e.target.checked)}/>{moteText('自动处理新图片')}</label>
  <label>{moteText('中央图片方案')}<select value={settings.profileId ?? ''} onChange={e => change('profileId', e.target.value)}>{profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
  <p>{moteText('文字识别服务')} · {settings.ocrEndpoint || moteText('仅保存原件')}</p>

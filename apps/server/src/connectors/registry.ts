@@ -27,6 +27,8 @@ export interface ConnectorHost {
 }
 export interface ConnectorInstance {
   init?():Promise<void>;
+  /** Replace future polling timers without cancelling an operation already in progress. */
+  configureSyncInterval?(intervalMs:number):void;
   configure?(host:ConnectorHost):void;
   status?():unknown;
   /** Only trusted deployment modules should mount a custom transport with its own authorization. */
@@ -160,6 +162,13 @@ export class ConnectorRegistry {
     }
   }
   inventory(){return this.instances.map(({manifest})=>({id:manifest.id,version:String(manifest.apiVersion),sourceKinds:manifest.sourceKinds.map(k=>typeof k==='string'?k:k.kind),active:!this.closed}));}
+  configureSyncInterval(intervalMs:number){
+    if(this.closed)return;
+    z.number().int().positive().max(2_147_483_647).parse(intervalMs);
+    const config=this.context.config.connectors??={directory:`${this.context.config.dataDir}/connectors`};
+    config.syncIntervalMs=intervalMs;
+    for(const {instance} of this.instances)instance.configureSyncInterval?.(intervalMs);
+  }
   async close(){
     if(this.closed)return;
     this.closed=true;

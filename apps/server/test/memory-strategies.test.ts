@@ -49,7 +49,7 @@ async function fixture(t:any){
     return fixtureMemoryWorkResult(input,{answer:JSON.stringify(understanding(input)?{summary:'Generated bounded conversation interpretation',evidence:[{id,quote,offset:range?.offset??0}],workRecords:[],events:[],memoryCandidates:memories,actionCues:[]}:{memories}),citations:[{id,capturedAt:record.capturedAt,appName:record.appName,excerpt:''}],trace:[],runId:randomUUID()});
   }}};
   let node=await buildApp(config,dependencies);await node.app.ready();
-  const disable=()=>{const settings=node.lifecycle.settings();node.lifecycle.configure({...settings});};disable();
+  const disable=async()=>{const settings=node.lifecycle.settings();await node.lifecycle.save({revision:node.configService.revision,settings:{...settings}});};await disable();
   t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
   const add=async(sourceId:string,coding=false,revision='1')=>{
     if(!node.sources.listSources().some(s=>s.id===sourceId))node.sources.register({id:sourceId,name:'Generated source',kind:coding?'coding-agent':'custom',deviceId:'fixture',platform:'import'});
@@ -63,7 +63,7 @@ async function fixture(t:any){
     const response=await node.app.inject({method:'POST',url:'/api/memory-jobs',headers:{authorization:'Bearer '+config.token},payload:{contextTime,evidenceIds,recipes:ids.map(id=>id.startsWith('mote.')?{id,version:'2'}:ref(id))}});
     assert.equal(response.statusCode,202,response.body);return node.memoryPipeline.run(response.json().id);
   };
-  return {get node(){return node;},calls,control,add,run,async restart(changed=false){await node.app.close();const selectedConfig={...config};if(changed){const changedPath=join(directory,'changed-strategies.mjs');writeFileSync(changedPath,readFileSync(modulePath,'utf8').replace('GENERATED_EXTRACTION_1','Changed generation'));selectedConfig.connectors={...config.connectors!,modules:[changedPath]};}node=await buildApp(selectedConfig,dependencies);await node.app.ready();disable();},count:(phase:string)=>calls.filter(c=>(c.traceContext?.phase??'extract')===phase).length};
+  return {get node(){return node;},calls,control,add,run,async restart(changed=false){let selectedModule=modulePath;if(changed){selectedModule=join(directory,'changed-strategies.mjs');writeFileSync(selectedModule,readFileSync(modulePath,'utf8').replace('GENERATED_EXTRACTION_1','Changed generation'));}await node.configService.update('connectors',{modules:[selectedModule]},node.configService.revision);await node.app.close();node=await buildApp(config,dependencies);await node.app.ready();await disable();},count:(phase:string)=>calls.filter(c=>(c.traceContext?.phase??'extract')===phase).length};
 }
 
 test('installed recipes compose independent products, replace either strategy, and reuse extraction across sources and restart',async t=>{

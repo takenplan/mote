@@ -19,7 +19,7 @@ try{
   report.code={};for(const path of ['apps/server/src/daily-event-memory-policy.ts','apps/server/src/material-organizers.ts','apps/server/src/memory-recipe-settings.ts','apps/server/src/evidence-reader.ts','packages/agent/src/instructions.ts'])report.code[path]=createHash('sha256').update(await readFile(path)).digest('hex');
   await writeFile(join(output,'manifest.json'),JSON.stringify({inputs:data.all.map(({imageBase64,...record})=>({...record,generatedImage:Boolean(imageBase64)})),ocr:Object.fromEntries(data.ocr),rubric:['ordinary article/product events retained','Oct 9 and Oct 10 in Asia/Shanghai separately recallable','Mira opinion never owner opinion','draft plan not complete','unpaid order distinct from paid order','paid but not shipped does not establish receipt/ownership','completed expense submission not reimbursement payment','exact quotes and current originals preserved']},null,2)+'\n',{mode:0o600});
   node=await buildApp(config,{backgroundWorker:true});
-  const settings=node.lifecycle.settings();for(const key of ['working','consolidation','insights'] as const)settings[key].enabled=false;node.lifecycle.configure(settings);
+  const settings=node.lifecycle.settings();for(const key of ['working','consolidation','insights'] as const)settings[key].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
   node.processing.configureImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});
   node.processing.runtime.registry.get('image.http').process=async input=>({durationMs:0,segments:[{startMs:0,endMs:0,text:data.ocr.get(input.file.id)!}]});
   const query=node.agent.query.bind(node.agent);node.agent.query=async input=>{

@@ -153,8 +153,8 @@ async function runCase(fixture:ContextJourneyCase){
         node!.store.db.prepare("UPDATE memory_lifecycle_state SET json=? WHERE id='consolidation'").run(JSON.stringify({...state,cursor:0,lastSuccess:0,failures:0}));
       }
       const settings=node!.lifecycle.settings();settings.consolidation.enabled=true;settings.consolidation.minChanges=1;settings.consolidation.maxItems=50;
-      node!.lifecycle.configure(settings);
-      try{await node!.lifecycle.tick();}finally{settings.consolidation.enabled=false;node!.lifecycle.configure(settings);}
+      await node!.lifecycle.save({revision:node!.configService.revision,settings});
+      try{await node!.lifecycle.tick();}finally{settings.consolidation.enabled=false;await node!.lifecycle.save({revision:node!.configService.revision,settings});}
       result.consolidation=node!.lifecycle.view();const state=node!.lifecycle.view().extensions.find(extension=>extension.id==='consolidation');
       assert.ok(state?.lastRun&&!state.error,JSON.stringify(state));
       const consolidated=node!.memories.list({deviceId,tier:'consolidated',includeHistory:true,limit:200});
@@ -199,7 +199,7 @@ try{
   node=await buildApp(config);
   const settings=node.lifecycle.settings();
   for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;
-  node.lifecycle.configure(settings);await node.app.ready();
+  await node.lifecycle.save({revision:node.configService.revision,settings});await node.app.ready();
   assert.equal(node.modelSettings.current().model,config.model);assert.equal(node.modelSettings.current().reasoningEffort,'max');
   for(const id of selected)await runCase(supplied.cases.find(c=>c.id===id)!);
   report.status=cases.every(c=>c.status==='passed')?'passed':'failed';

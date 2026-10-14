@@ -93,17 +93,18 @@ test('fresh connector startup installs continuous processing before intake',asyn
   let calls=0;
   const dependencies={agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{calls++;return empty(input,node);}}};
   let node=await buildApp(cfg,dependencies);await node.app.ready();
+  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
   const settings=node.lifecycle.settings();
-  await node.app.close();
   writeFileSync(modulePath,`export default {apiVersion:1,id:'generated-startup',sourceKinds:['custom'],create:ctx=>({init:async()=>{
     ctx.sources.register({id:'startup',name:'Generated startup',kind:'custom',deviceId:'fixture',platform:'import'});
     await ctx.sources.upsert('startup',{externalId:'original',revision:'1',observedAt:'2020-01-01T00:00:00Z',text:'Generated startup original',kind:'message',layer:'original'});
   }})};`);
-  node=await buildApp({...cfg,connectors:{modules:[modulePath]}},dependencies);
-  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
+  await node.configService.update('connectors',{...node.configService.saved<Record<string,unknown>>('connectors'),modules:[modulePath]},node.configService.revision);
+  await node.app.close();
+  node=await buildApp(cfg,dependencies);
   const grant=node.store.db.prepare('SELECT authorized FROM memory_input_authorizations WHERE source_id=?').get('startup');
   assert.equal(grant?.authorized,1);
-  node.lifecycle.configure(settings);await node.materialOrganizer.tick();
+  await node.lifecycle.save({revision:node.configService.revision,settings});await node.materialOrganizer.tick();
   assert.equal(calls,0,'intake and deterministic publication do not invoke a model');
   assert.equal(node.materials.list({query:'startup original'}).items.length,1);
   assert.equal(node.materialMemoryWork.catalog().length,1);

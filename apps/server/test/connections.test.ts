@@ -18,13 +18,14 @@ const inactive:QueryAgent={configured:false,query:async()=>{throw Error('No mode
 const owner='synthetic-owner-for-connection-tests';
 const headers=(token=owner)=>({authorization:`Bearer ${token}`,'x-mote-ingress-version':'2'});
 function config(directory:string):Config{return {dataDir:directory,token:owner,tokenPath:join(directory,'owner-token'),host:'127.0.0.1',port:0,profile:'test',tokenFromEnvironment:true,maxStorageBytes:30*1024*1024,maxExportBytes:4*1024*1024,retentionDays:0,insightIntervalHours:0,allowedOrigins:['https://synthetic.invalid'],model:'',modelBaseUrl:'https://api.deepseek.com',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:true};}
-async function fixture(t:TestContext,options:{clock?:()=>number;mcp?:boolean;maxStorageBytes?:number}={}){
+async function fixture(t:TestContext,options:{clock?:()=>number;mcp?:boolean;mcpWriteEnabled?:boolean;maxStorageBytes?:number}={}){
   const directory=await mkdtemp(join(tmpdir(),'mote-connections-')),cfg=config(directory),store=new Store(directory,{maxStorageBytes:options.maxStorageBytes}),sources=new SourceStore(store);
-  if(options.mcp)cfg.connectors={directory:join(directory,'connectors'),mcpEnabled:true,mcpReadToken:'synthetic-static-read-mcp-token-123456789',mcpWriteEnabled:true,mcpWriteToken:'synthetic-static-write-mcp-token-123456789',mcpWriteSourceIds:['allowed']};
+  if(options.mcp)cfg.connectors={directory:join(directory,'connectors'),mcpEnabled:true,mcpReadToken:'synthetic-static-read-mcp-token-123456789',mcpWriteEnabled:options.mcpWriteEnabled??true,mcpWriteToken:'synthetic-static-write-mcp-token-123456789',mcpWriteSourceIds:['allowed']};
   const connections=new Connections(store,sources,{clock:options.clock});
-  const value=await buildApp(cfg,{store,agent:inactive,connections});
+  let value=await buildApp(cfg,{store,agent:inactive,connections});
+  const restart=async()=>{await value.app.close();value=await buildApp(cfg,{store,agent:inactive,connections:new Connections(store,sources,{clock:options.clock})});return value;};
   t.after(async()=>{await value.app.close();store.close();await rm(directory,{recursive:true,force:true});});
-  return {...value,directory,cfg};
+  return {...value,directory,cfg,restart};
 }
 const invite=(app:Awaited<ReturnType<typeof buildApp>>['app'],deviceId?:string)=>app.inject({method:'POST',url:'/api/connections/invitations',headers:headers(),payload:{serverUrl:'https://synthetic.invalid',label:'Synthetic phone',...(deviceId?{deviceId}:{})}});
 const redeem=(app:Awaited<ReturnType<typeof buildApp>>['app'],code:string,deviceId='synthetic-phone')=>app.inject({method:'POST',url:'/api/connections/redeem',payload:{code,deviceId,deviceName:'Synthetic phone',platform:'android'}});
@@ -176,7 +177,7 @@ test('large MCP scopes cannot create an unreadable credential file and a full re
 });
 
 test('minted MCP credentials use the real SDK with independent read/write, fixed sources and revocation',async t=>{
-  const {app,cfg,sources}=await fixture(t,{mcp:true});sources.register(source('allowed','mcp-owner'));sources.register(source('later','mcp-owner'));
+  const initial=await fixture(t,{mcp:true}),{sources,restart}=initial;let app=initial.app,configService=initial.configService;sources.register(source('allowed','mcp-owner'));sources.register(source('later','mcp-owner'));
   await app.listen({host:'127.0.0.1',port:0});const endpoint=new URL('/mcp',app.listeningOrigin),clients:Client[]=[];
   t.after(async()=>{await Promise.allSettled(clients.map(c=>c.close()));});
   const mint=async(access:'read'|'write')=>{const r=await app.inject({method:'POST',url:'/api/connections/mcp',headers:headers(),payload:{serverUrl:app.listeningOrigin,label:'Synthetic MCP',access}});assert.equal(r.statusCode,200);return r.json();};
@@ -187,20 +188,26 @@ test('minted MCP credentials use the real SDK with independent read/write, fixed
   assert.ok((await reader.listTools()).tools.some(t=>t.name==='mote_timeline'));assert.ok(!(await reader.listTools()).tools.some(t=>t.name==='mote_put_item'));
   assert.deepEqual((await writer.listTools()).tools.map(t=>t.name),['mote_put_item']);
   assert.equal((await writer.callTool({name:'mote_put_item',arguments:{sourceId:'allowed',item:item()}})).isError,undefined);
-  cfg.connectors!.mcpWriteSourceIds!.push('later');
+  await configService.update('connectors',{mcpWriteSourceIds:['allowed','later']},configService.revision);
+  assert.deepEqual(configService.current<{mcpWriteSourceIds:string[]}>('connectors').mcpWriteSourceIds,['allowed'],'saved authorization configuration takes effect after restart');
+  const port=new URL(app.listeningOrigin).port;({app,configService}=await restart());await app.listen({host:'127.0.0.1',port:Number(port)});
+  assert.deepEqual(configService.current<{mcpWriteSourceIds:string[]}>('connectors').mcpWriteSourceIds,['allowed','later']);
   assert.equal((await writer.callTool({name:'mote_put_item',arguments:{sourceId:'later',item:item()}})).isError,true,'A broader later config must not widen the issued credential');
   assert.equal((await app.inject({url:'/api/configuration',headers:write.config.mcpServers.mote.headers})).statusCode,403);
   assert.equal((await app.inject({method:'POST',url:'/mcp',headers:headers(),payload:{}})).statusCode,401);
   await app.inject({method:'DELETE',url:`/api/connections/${read.credential.id}`,headers:headers()});
   await assert.rejects(reader.listTools());
-  cfg.connectors!.mcpWriteEnabled=false;await assert.rejects(writer.listTools());
+  await configService.update('connectors',{mcpWriteEnabled:false},configService.revision);
+  assert.equal(configService.current<{mcpWriteEnabled:boolean}>('connectors').mcpWriteEnabled,true);
+  ({app,configService}=await restart());await app.listen({host:'127.0.0.1',port:Number(port)});
+  assert.equal(configService.current<{mcpWriteEnabled:boolean}>('connectors').mcpWriteEnabled,false);await assert.rejects(writer.listTools());
 });
 
 test('disabled MCP minting fails with actionable fixed codes and accurate safe diagnostics',async t=>{
   const {app,diagnostics}=await fixture(t);
   const mint=()=>app.inject({method:'POST',url:'/api/connections/mcp',headers:headers(),payload:{serverUrl:'https://synthetic.invalid',label:'Synthetic',access:'write'}});
   const disabled=await mint();assert.equal(disabled.statusCode,409);assert.equal(disabled.json().error,'mcp_disabled');
-  const enabled=await fixture(t,{mcp:true});enabled.cfg.connectors!.mcpWriteEnabled=false;
+  const enabled=await fixture(t,{mcp:true,mcpWriteEnabled:false});
   const write=await enabled.app.inject({method:'POST',url:'/api/connections/mcp',headers:headers(),payload:{serverUrl:'https://synthetic.invalid',label:'Synthetic',access:'write'}});assert.equal(write.statusCode,409);assert.equal(write.json().error,'mcp_write_disabled');assert.equal(enabled.connections.inventory().items.length,0);
   const events=[...diagnostics.events(0,100).items,...enabled.diagnostics.events(0,100).items].filter(e=>e.event==='request.failed');assert.equal(events.length,2);assert.ok(events.every(e=>e.statusCode===409&&e.category==='conflict'&&e.route==='connections'));
 });

@@ -59,7 +59,7 @@ async function start(){
     }catch(error){call.status=error instanceof Error&&error.name==='AgentYieldError'?'yielded':'failed';call.errorName=error instanceof Error?error.name:'Unknown';throw error;}
     finally{call.durationMs=Date.now()-Date.parse(call.startedAt);await save();progress('model-finish',{number:call.number,phase:call.phase,status:call.status,durationMs:call.durationMs});}
   };
-  const settings=node.lifecycle.settings();settings.working.enabled=false;settings.consolidation.enabled=false;settings.insights.enabled=false;node.lifecycle.configure(settings);
+  const settings=node.lifecycle.settings();settings.working.enabled=false;settings.consolidation.enabled=false;settings.insights.enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
   base=await node.app.listen({host:'127.0.0.1',port:0});
 }
 async function close(){await node?.app.close();node=undefined;}

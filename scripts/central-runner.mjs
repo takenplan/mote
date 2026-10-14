@@ -3,12 +3,15 @@ import { spawn } from 'node:child_process';
 import { appendFileSync, statSync, renameSync, rmSync, mkdirSync, chmodSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { startMediaWorkers } from './media-workers.mjs';
+import { readConfigDocument } from '../packages/shared/src/config-file.ts';
 
 const [entry, logPath, marker] = process.argv.slice(2);
 if (!entry || !logPath || !/^--mote-instance=[a-f0-9-]{36}$/.test(marker ?? '')) throw Error('Invalid central supervisor invocation');
-const bounded = (value, fallback, min, max) => Number.isFinite(Number(value)) ? Math.max(min, Math.min(max, Number(value))) : fallback;
-const maxBytes = Math.floor(bounded(process.env.MOTE_LOG_MAX_MB ?? 2, 2, 0.1, 8) * 1024 * 1024);
-const maxFiles = Math.floor(bounded(process.env.MOTE_LOG_MAX_FILES ?? 3, 3, 1, 10));
+const loaded = process.env.MOTE_CONFIG_FILE ? readConfigDocument(process.env.MOTE_CONFIG_FILE) : undefined;
+const diagnostics = loaded?.document.diagnostics ?? {};
+const maxBytes = Math.floor(diagnostics.maxBytes ?? 2 * 1024 * 1024);
+const maxFiles = diagnostics.maxFiles ?? 3;
+if (!Number.isFinite(maxBytes) || maxBytes < Math.floor(0.1 * 1024 * 1024) || maxBytes > 8 * 1024 * 1024 || !Number.isInteger(maxFiles) || maxFiles < 1 || maxFiles > 10) throw Error('Invalid YAML diagnostics log bounds');
 const maxBufferedBytes = 16 * 1024;
 let buffered = [], bufferedBytes = 0, logFailed = false;
 mkdirSync(dirname(logPath), { recursive: true, mode: 0o700 });
@@ -55,7 +58,7 @@ const workers = startMediaWorkers({ report: event => { safeWrite(JSON.stringify(
 function stopWorkers(){void workers.close();}
 const events = new Set(['server.listening', 'server.stopped', 'server.stop_failed', 'server.start_failed']);
 const categories = new Set(['data_directory_in_use', 'port_in_use', 'permission', 'startup', 'shutdown', 'configuration']);
-const fields = new Set(['MOTE_RUNTIME', 'MOTE_PUBLIC_URL', 'MOTE_CONFIG_FILE', 'MOTE_STORAGE_KIND', 'MOTE_STORAGE_SOURCE', 'MOTE_STORAGE_MOUNT', 'MOTE_TUNNEL_ENABLED', 'MOTE_TUNNEL_PROVIDER', 'MOTE_TUNNEL_PROTOCOL', 'MOTE_ALLOWED_ORIGINS', 'MOTE_MODEL_BASE_URL', 'MOTE_MODEL_API_KEY', 'MOTE_MODEL', 'MOTE_EMBEDDING_MODEL', 'MOTE_EMBEDDING_API_KEY', 'MOTE_ENV_FILE', 'MOTE_PROFILE', 'MOTE_DATA_DIR', 'MOTE_PORT', 'MOTE_TOKEN', 'MOTE_DATA_KEY', 'MOTE_LOG_LEVEL', 'MOTE_MODEL_REASONING_EFFORT', 'MOTE_MODEL_MAX_TOKENS', 'MOTE_MODEL_REQUEST_TIMEOUT_MS', 'MOTE_AGENT_TIMEOUT_MS','MOTE_AGENT_CONCURRENCY','MOTE_LLM_CONCURRENCY','MOTE_MEMORY_CONCURRENCY', 'MOTE_MAX_STORAGE_MB', 'MOTE_MAX_EXPORT_MB', 'MOTE_RETENTION_DAYS', 'MOTE_INSIGHT_INTERVAL_HOURS', 'MOTE_MODEL_ALLOW_UNAUTHENTICATED_LOCAL', 'MOTE_DIAGNOSTICS_ENABLED', 'MOTE_DEBUG', 'MOTE_AGENT_TRACE_ENABLED', 'MOTE_LOG_DIR', 'MOTE_LOG_MAX_MB', 'MOTE_LOG_MAX_FILES', 'MOTE_LOG_MAX_ENTRIES', 'MOTE_EMBEDDING_BASE_URL']);
+const fields = new Set(['MOTE_CONFIG_FILE', 'version', 'revision', 'server', 'storage', 'execution', 'diagnostics', 'models', 'connectors', 'plugins', 'updates', 'media']);
 function safeLine(line, stream, byteCount = Buffer.byteLength(line)) {
   let event = { event: 'process.output_suppressed', stream, bytes: byteCount };
   try {
@@ -65,7 +68,7 @@ function safeLine(line, stream, byteCount = Buffer.byteLength(line)) {
       if (Number.isInteger(candidate.port) && candidate.port > 0 && candidate.port <= 65535) event.port = candidate.port;
       if (candidate.tokenConfigured === true) event.tokenConfigured = true;
       if (categories.has(candidate.category)) event.category = candidate.category;
-      if (candidate.category === 'configuration' && fields.has(candidate.field)) event.field = candidate.field;
+      if (candidate.category === 'configuration' && typeof candidate.field === 'string' && fields.has(candidate.field.split('.')[0])) event.field = candidate.field;
     }
   } catch { /* Arbitrary SDK/runtime output is never a diagnostic payload. */ }
   // Only allowlisted/suppressed JSON enters this bounded buffer; raw output never does.

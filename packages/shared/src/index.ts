@@ -12,7 +12,7 @@ export * from './file-index.js';
 export * from './source-presentation.js';
 export * from './metadata.js';
 export * from './imports.js';
-export type { ServerConfiguration, ConfigurationGroup, ConfigurationField, ConfigurationValue, ConfigurationSource } from './configuration.js';
+export type { ServerConfiguration, ConfigurationGroup, ConfigurationField, ConfigurationValue, ConfigurationSource, ConfigurationEffect, ConfigFieldMetadata, ConfigDomainView, ConfigServiceView } from './configuration.js';
 
 export const platformSchema = z.enum(['macos', 'windows', 'linux', 'android', 'import']);
 export const sourceSchema = z.enum(['screen', 'ui_page', 'activity', 'media', 'notification', 'device_event', 'file', 'note', 'calendar', 'event', 'message', 'metric', 'memory']);

@@ -31,6 +31,8 @@ flowchart LR
 
 Native profile 的 supervisor 启动两个只监听 `127.0.0.1` 的 Python Worker；Docker Compose 用共享 `mote` 网络命名空间连接两个 sidecar，只有中央 API 发布宿主端口。内部请求使用从 profile 主令牌派生的独立 Bearer 令牌。模型放在 Native profile 私有目录或 Docker profile 专属模型卷；Docker Worker 以只读方式挂载该卷。远程服务仍需单独配置 HTTPS 和显式外发权限，不是默认回退路径。
 
+受管理 Worker 的目录、Python、端口、端点与凭据由 `mote.yaml` 的 `media` 领域提供，中央不再直接读取普通 `MOTE_MEDIA_*` 环境配置。该领域使用启动有效快照；资源变更需要明确重启 Worker 和中央。文件/图片处理服务、方案与路由位于同一 YAML 的 `processing` 领域，图片行为位于 `perception`；页面和文件修改共用配置事务。已有业务任务保留不可变策略快照和授权，配置变化不会自动处理未获授权的历史资料。详见 [服务端配置参考](server-configuration.md)。
+
 ## 模型安装与运行
 
 `apps/server/src/media-assets.ts` 固定模型版本、文件名、大小、SHA-256 与官方/镜像 URL。下载先取国内镜像，失败回退官方；只有全部文件校验通过，才把暂存目录原子切为当前版本。OCR 包同时安装 ONNX 和 `inference.yml`。`GET /api/media-models` 提供模型进度及 Worker 健康；`POST /api/media-models/{ocr|dialogue}/install` 只接受内置模型和来源选项，不接收任意 URL。模型文件通过 `media-import` 从本地目录按相同 SHA-256 校验后导入。

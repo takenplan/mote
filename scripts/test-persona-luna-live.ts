@@ -28,7 +28,7 @@ try{
   }finally{source.close();}
  }
  node=await buildApp(config);
- const settings=node.lifecycle.settings();for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;node.lifecycle.configure(settings);
+ const settings=node.lifecycle.settings();for(const key of ['consolidation','insights','working'] as const)settings[key].enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
  assert.equal(node.modelSettings.current().model,'gpt-5.6-luna');assert.equal(node.modelSettings.current().reasoningEffort,'max');
  for(const sourceId of ['persona-journal','persona-observations'])node.sources.register({id:sourceId,name:sourceId==='persona-journal'?'林舟工作日志（合成）':'窗口观察（合成）',kind:'custom',deviceId:'synthetic-persona',platform:'import'});
  const journalIds:string[]=[],journalOriginals:unknown[]=[],anchors:Record<string,string>={},ingestStarted=performance.now();
@@ -71,7 +71,7 @@ try{
  report.completedJournalRecords=journalIds.filter(id=>node!.store.db.prepare('SELECT 1 FROM memory_checkpoints WHERE evidence_id=?').get(id)).length;
  if(!allowPartial)assert.equal(report.completedJournalRecords,45,'Not every authored journal completed extraction');
  console.log(JSON.stringify({stage:'extracted',...report.extraction as object,...report.quality as object}));await save();
- settings.consolidation={...settings.consolidation,enabled:true,minChanges:1,maxItems:50};node.lifecycle.configure(settings);
+ settings.consolidation={...settings.consolidation,enabled:true,minChanges:1,maxItems:50};await node.lifecycle.save({revision:node.configService.revision,settings});
  const consolidationStarted=performance.now();await node.lifecycle.tick();
  const consolidation=node.lifecycle.view().extensions.find(extension=>extension.id==='consolidation')!;
  report.memoriesAfterConsolidation=node.store.db.prepare('SELECT id FROM memories').all().map(row=>node!.memories.get(String(row.id)));
@@ -79,7 +79,7 @@ try{
  report.consolidation={durationMs:Math.round(performance.now()-consolidationStarted),state:consolidation,memories:node.memories.page({tier:'consolidated',includeHistory:true,level:'detail',limit:100}).items};await save();
  if(!allowPartial){assert.equal(consolidation.failures,0,JSON.stringify(report.consolidation));assert.ok(consolidation.lastRun);}
  console.log(JSON.stringify({stage:'consolidated',durationMs:(report.consolidation as {durationMs:number}).durationMs,count:(report.consolidation as {memories:unknown[]}).memories.length}));
- settings.consolidation.enabled=false;node.lifecycle.configure(settings);
+ settings.consolidation.enabled=false;await node.lifecycle.save({revision:node.configService.revision,settings});
  const started=performance.now(),response=await node.app.inject({method:'POST',url:'/api/query',headers:{authorization:`Bearer ${token}`},payload:{question:'回顾林舟在 8 月 1 日至 9 月 14 日的 ORBIT 项目：哪些同步设计、保留期限和评审安排发生过变化，理由与验证结果是什么？9 月 10 日与明澈的演练确认完成了吗？请优先查看记忆，再核对原始证据；只陈述这个项目及确有归属的事实，给出可追溯引用。',after:fixture.authoredAfter,before:fixture.authoredBefore,timeZone:'Asia/Shanghai'}});
  assert.equal(response.statusCode,200,response.body);const result=response.json();
  report.query={durationMs:Math.round(performance.now()-started),...result};await save();

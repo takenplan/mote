@@ -169,7 +169,7 @@ export class EvidenceStore {
     const snapshotIndex=this.db.prepare('SELECT json FROM file_snapshot_index WHERE capture_id=?').get(row.id);
     if(snapshotIndex&&original.provenance?.document)original.provenance.document.fileIndex=JSON.parse(String(snapshotIndex.json));
     const ocrJob=!original.ocrText&&captureOcrState(original).status==='disabled'?jobs.find(j=>j.kind==='ocr'):undefined;
-    const enabled=this.db.prepare("SELECT json_extract(value,'$.enabled') AS enabled FROM settings WHERE key='perception'").get()?.enabled!==0;
+    const enabled=this.db.prepare("SELECT json_extract(value,'$.enabled') AS enabled FROM settings WHERE key='perception-effective'").get()?.enabled!==0;
     const {transcript:_,text:ocrText,...ocrMetadata}=ocr??{};
     return {...original,...(ocr?{ocrText:ocr.text,ocr:{status:'completed',updatedAt:ocr.generatedAt}}:ocrJob?{ocr:centralOcrState({state:String(ocrJob.state),error:ocrJob.error===null?null:String(ocrJob.error)},enabled)}:{}),...(ocr?{perception:{results:[{kind:'ocr',...ocrMetadata,textLength:typeof ocrText==='string'?ocrText.length:0}],layers:['L1']}}:{}),...(row.blob_hash?{perceptionJobs:jobs}:{}),receivedAt:row.received_at,blobHash:row.blob_hash,imageMime:row.mime,indexingStatus:row.index_status,...(row.summary?{summary:row.summary}:{})};
   }
@@ -186,7 +186,7 @@ export class EvidenceStore {
     }
     if(range.source) {clauses.push("json_extract(json,'$.source') = ?");values.push(range.source);}
     if(range.ocrStatus) {
-      clauses.push("(CASE WHEN EXISTS (SELECT 1 FROM perception_results pr WHERE pr.capture_id=captures.id AND pr.kind='ocr' AND pr.current=1) THEN 'completed' WHEN mote_ocr_status(json)='disabled' AND json_extract(json,'$.ocrText')='' AND EXISTS (SELECT 1 FROM perception_jobs pj WHERE pj.capture_id=captures.id AND pj.kind='ocr') THEN (SELECT mote_central_ocr_status(pj.state,pj.error,COALESCE((SELECT json_extract(value,'$.enabled') FROM settings WHERE key='perception'),1)) FROM perception_jobs pj WHERE pj.capture_id=captures.id AND pj.kind='ocr') ELSE mote_ocr_status(json) END) = ?");
+      clauses.push("(CASE WHEN EXISTS (SELECT 1 FROM perception_results pr WHERE pr.capture_id=captures.id AND pr.kind='ocr' AND pr.current=1) THEN 'completed' WHEN mote_ocr_status(json)='disabled' AND json_extract(json,'$.ocrText')='' AND EXISTS (SELECT 1 FROM perception_jobs pj WHERE pj.capture_id=captures.id AND pj.kind='ocr') THEN (SELECT mote_central_ocr_status(pj.state,pj.error,COALESCE((SELECT json_extract(value,'$.enabled') FROM settings WHERE key='perception-effective'),1)) FROM perception_jobs pj WHERE pj.capture_id=captures.id AND pj.kind='ocr') ELSE mote_ocr_status(json) END) = ?");
       values.push(range.ocrStatus);
     }
     if(range.collection==='activity')clauses.push("json_extract(json,'$.privacy.collection') = 'activity'");

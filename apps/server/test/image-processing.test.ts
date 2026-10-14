@@ -29,6 +29,7 @@ import {generatedAppleDouble} from './fixtures/appledouble.js';
 import {isAppleDouble} from '../src/appledouble.js';
 import {Operations} from '../src/operations.js';
 import {MEDIA_CATALOG} from '../src/media-assets.js';
+import {DEFAULT_MEDIA_OCR_ENDPOINT} from '../src/media-configuration.js';
 
 async function fixture(t:import('node:test').TestContext){
  const directory=mkdtempSync(join(tmpdir(),'mote-unified-images-')),store=new Store(directory),materials=new MaterialStore(store);let clock=Date.now();const memoryWork=new MaterialMemoryWork(store,materials,()=>clock,()=>true);
@@ -198,8 +199,8 @@ test('production image intake enters the existing automatic Memory pipeline once
  // This regression isolates the existing zero-outcome personal strategy. Daily
  // event behavior has a separate screenshot+field intake journey.
  node.memoryRecipeSettings.configure({scope:'capture',recipes:[{id:'mote.personal-memory',version:'2'}]});
- node.processing.configureImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async()=>({durationMs:0,segments:[]});
- const settings=node.lifecycle.settings();settings.extraction.enabled=true;node.lifecycle.configure(settings);
+ await node.processing.saveImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async()=>({durationMs:0,segments:[]});
+ const settings=node.lifecycle.settings();settings.extraction.enabled=true;await node.lifecycle.save({revision:node.configService.revision,settings});
  const bytes=await sharp({create:{width:16,height:16,channels:3,background:'#ddeeff'}}).png().toBuffer(),id=randomUUID();
  await node.store.ingest({id,deviceId:'generated-screen',deviceName:'Generated screen',platform:'android',source:'screen',capturedAt:'2026-10-01T00:00:00Z',durationMs:0,ocrText:'',ocr:{status:'disabled'},privacy:{excluded:false,redacted:false,mode:'local'},imageMime:'image/png',imageBase64:bytes.toString('base64')});
  await node.perception.tick();for(let i=0;i<20;i++)if(await node.materialOrganizer.tick(100)===0)break;
@@ -246,7 +247,7 @@ test('truly default attribution preserves the prior image interpretation fingerp
  // correction must not turn a cached default-context interpretation into work.
  const legacyContext={id:record.id,source:record.source,capturedAt:record.capturedAt,appName:record.appName,title:record.windowTitle,sourceVersion:record.provenance?{sourceId:record.provenance.sourceId,revision:record.provenance.revision,document:{contentRole:record.provenance.document?.contentRole,timeBasis:record.provenance.document?.timeBasis,recordedAt:record.provenance.document?.recordedAt,attachmentOf:record.provenance.document?.attachmentOf}}:undefined};
  const dependencies=stage.dependsOn.map(name=>f.store.db.prepare('SELECT fingerprint FROM image_products WHERE capture_id=? AND name=? AND current=1').get(id,name)?.fingerprint??null);
- const expected=sha256(JSON.stringify([row.hash,row.mime,processorContract(processor),processor.output?f.processing.runtime.outputs.list():null,processorSettingsFingerprint(processor,binding.settings,binding.applied.profile.parameters),settings.providerRevision,binding.settings.imageEndpoint===(process.env.MOTE_MEDIA_OCR_ENDPOINT??'http://127.0.0.1:9010/ocr')?MEDIA_CATALOG.ocr.version:'',stage.stage,recipe.fingerprint,dependencies,'fixture-model-1',legacyContext]));
+ const expected=sha256(JSON.stringify([row.hash,row.mime,processorContract(processor),processor.output?f.processing.runtime.outputs.list():null,processorSettingsFingerprint(processor,binding.settings,binding.applied.profile.parameters),settings.providerRevision,binding.settings.imageEndpoint===DEFAULT_MEDIA_OCR_ENDPOINT?MEDIA_CATALOG.ocr.version:'',stage.stage,recipe.fingerprint,dependencies,'fixture-model-1',legacyContext]));
  assert.equal(f.store.db.prepare("SELECT fingerprint FROM image_products WHERE capture_id=? AND kind='understanding' AND current=1").get(id)!.fingerprint,expected);
 });
 
@@ -333,7 +334,7 @@ test('owner source correction before the first image Material withdraws cached a
  let visual=0;
  const node=await buildApp(config,{backgroundWorker:false,createModelAgent:async(_settings,reader)=>({configured:true,close:async()=>{},query:async input=>{visual++;await reader.readImage!({id:input.directImages![0].id});return {answer:JSON.stringify({text:'Generated source interpretation',regions:[]}),citations:[],trace:[],runId:randomUUID()};}})});
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});await node.app.ready();
- node.processing.configureImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async()=>({durationMs:0,segments:[{startMs:0,endMs:0,text:'Generated original source text'}]});
+ await node.processing.saveImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async()=>({durationMs:0,segments:[{startMs:0,endMs:0,text:'Generated original source text'}]});
  const bytes=await sharp({create:{width:16,height:16,channels:3,background:'#ddeeff'}}).png().toBuffer(),id=randomUUID();
  await node.store.ingest({id,deviceId:'generated-screen',deviceName:'Generated screen',platform:'android',source:'screen',capturedAt:'2026-10-01T00:00:00Z',durationMs:0,ocrText:'',ocr:{status:'disabled'},privacy:{excluded:false,redacted:false,mode:'local'},imageMime:'image/png',imageBase64:bytes.toString('base64')});
  await node.perception.tick();assert.equal(visual,1);assert.equal(node.materials.list().items.length,0);

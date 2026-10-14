@@ -70,7 +70,7 @@ test('shared executor shutdown preserves restartable perception work and fences 
  await store.ingest(input);first.configure({...first.settings(),ocrEndpoint:'http://localhost/ocr'});first.prepare();const running=engine.tick();await started;
  await engine.close();await first.close();await running;
  assert.equal(store.db.prepare("SELECT state FROM perception_jobs WHERE capture_id=? AND kind='ocr'").get(input.id)!.state,'waiting');
- const nextEngine=new ExecutionEngine(store),next=new Perception(store,runtime,nextEngine);t.after(async()=>{await nextEngine.close();await next.close();});
+ const nextEngine=new ExecutionEngine(store),next=new Perception(store,runtime,nextEngine,undefined,undefined,undefined,first.settings());t.after(async()=>{await nextEngine.close();await next.close();});
  runtime.registry.get('image.http').process=async()=>({durationMs:0,segments:[{startMs:0,endMs:0,text:'Recovered current result'}]});
  await next.tick();release();await new Promise(r=>setImmediate(r));assert.equal(store.evidence([input.id])[0].ocrText,'Recovered current result');
 });

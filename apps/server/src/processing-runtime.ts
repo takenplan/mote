@@ -8,6 +8,8 @@ import {artifactOutput,type ArtifactOutput} from './evidence-archive.js';
 import {parseMaterialRef,type MaterialReadPage,type MaterialStore} from './materials.js';
 import {StoreError,type Store} from './store.js';
 import {BackendPluginScope} from './backend-plugin-scope.js';
+import type {ConfigService} from './config-service.js';
+import {workflowConfigurationSchema,defaultWorkflowConfiguration,WORKFLOW_LANES,type WorkflowConfiguration} from './workflow-configuration.js';
 import {InstallationEpochs} from './installation-epochs.js';
 
 const fingerprint=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)??'null').digest('hex');
@@ -42,20 +44,20 @@ const productInputSchema=z.discriminatedUnion('authority',[
 ]);
 const stepSchema=z.object({name:z.string().regex(/^[\w.-]{1,80}$/),processor:z.string().max(100),inputs:z.array(z.string().uuid()).max(100).default([]),materialInputs:z.array(materialInputSchema).max(32).default([]),productInputs:z.array(productInputSchema).max(32).default([]),dependsOn:z.array(z.string().max(80)).max(32).default([]),artifactInputs:z.array(z.object({id:z.string().length(64),revision:z.string().length(64)}).strict()).max(32).default([]),config:z.record(z.unknown()).default({})}).strict();
 export type ProcessingStep=z.input<typeof stepSchema>;
-const lanePolicy=z.object({concurrency:z.number().int().min(1).max(8),enabled:z.boolean().default(true)}).strict();
-const policies=z.object({extract:lanePolicy,aggregate:lanePolicy,semantic:lanePolicy,memory:lanePolicy}).strict();
 type ParentGrant={stepId:string;fence:string};
 type ConsumerGrant={sourceId:string;bindingId:string;version:string;bindingFingerprint:string};
 type Job={contextInputs?:ProcessingInput[];productInputs?:z.output<typeof productInputSchema>[];products?:Record<string,string>;consumerGrant?:ConsumerGrant;parentGrant?:ParentGrant;id:string;processor:string;version:string;lane:ProcessingLane;inputs:ProcessingInput[];materialInputs:ProcessingMaterialInput[];config:Record<string,unknown>;dependencies:string[];artifactInputs:{id:string;revision:string}[];outputs:string[]};
-const lanes:ProcessingLane[]=['extract','aggregate','semantic','memory'];
+const lanes=WORKFLOW_LANES;
 /** Durable DAG with fenced commits and per-lane admission. Cordis owns plugin life;
  * this host owns retries, lineage, cancellation and transaction boundaries. */
 export class ProcessingRuntime {
   readonly registry=new ContextProcessorRegistry();readonly consumers=new MaterialConsumerRegistry();
   consumerAllowed:(sourceId:string,bindingId:string)=>boolean=()=>false;readonly context:Context;private readonly pluginScope:BackendPluginScope;
   readonly ready:Promise<void>;readonly engine:ExecutionEngine;private owned:boolean;private stopping=false;
-  private unregister:Array<()=>Promise<void>>=[];
-  constructor(readonly store:Store,plugins:Plugin[]=[],private limits:Partial<Record<ProcessingLane,{concurrency:number;enabled?:boolean}>>={},private now=Date.now,engine?:ExecutionEngine,private materials?:MaterialStore,root?:Context){
+  private unregister:Array<()=>Promise<void>>=[];private policy:WorkflowConfiguration;private policyEpoch=Object.fromEntries(WORKFLOW_LANES.map(lane=>[lane,0])) as Record<ProcessingLane,number>;
+  constructor(readonly store:Store,plugins:Plugin[]=[],private limits:Partial<Record<ProcessingLane,{concurrency:number;enabled?:boolean}>>={},private now=Date.now,engine?:ExecutionEngine,private materials?:MaterialStore,root?:Context,private configService?:ConfigService){
+    this.policy=workflowConfigurationSchema.parse(configService?.current('workflows')??defaultWorkflowConfiguration(limits));
+    configService?.setHandler<WorkflowConfiguration>('workflows',next=>{const value=workflowConfigurationSchema.parse(next),previous=this.settings();return {apply:()=>{},publish:()=>{this.policy=structuredClone(value);},rollback:()=>{this.policy=structuredClone(previous);},complete:()=>this.completePolicy(value,previous)};});
     this.pluginScope=new BackendPluginScope(root);this.context=this.pluginScope.context;
     this.pluginScope.provide('moteContextProcessors',this.registry);this.pluginScope.provide('moteMaterialConsumers',this.consumers);
     store.db.exec(`CREATE TABLE IF NOT EXISTS processing_jobs(id TEXT PRIMARY KEY,lane TEXT NOT NULL,state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,available_at INTEGER NOT NULL DEFAULT 0,lease_until INTEGER NOT NULL DEFAULT 0,fence TEXT,error TEXT,json TEXT NOT NULL);
@@ -138,13 +140,24 @@ export class ProcessingRuntime {
       this.engine.enqueue('workflow:material:'+material.id,'material-consumer.plan',{ref,bindingId,bindingFingerprint},{id:fingerprint(['material-consumer.plan',ref,bindingId,bindingFingerprint]),generation:{slot:'consumer:'+bindingId,version:material.revision}});
     }
   }
-  settings(){const saved=this.store.db.prepare("SELECT value FROM settings WHERE key='processing-policy'").get();return saved?policies.parse(JSON.parse(String(saved.value))):policies.parse(Object.fromEntries(lanes.map(lane=>[lane,{concurrency:this.limits[lane]?.concurrency??(lane==='aggregate'?2:1),enabled:this.limits[lane]?.enabled??true}])));}
+  settings(){return structuredClone(this.policy);}
+  /** Standalone generated fixtures have explicit in-memory policy only. */
   configure(input:unknown){
-    const policy=policies.parse(input),db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
+    if(this.configService)throw new StoreError('Use the configuration transaction to save workflow settings',409);
+    const value=workflowConfigurationSchema.parse(input),previous=this.settings();this.policy=value;this.completePolicy(value,previous);return this.settings();
+  }
+  async save(input:unknown){
+    const parsed=z.object({revision:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),settings:workflowConfigurationSchema}).strict().parse(input);
+    if(this.configService)await this.configService.replace('workflows',parsed.settings,parsed.revision);
+    else {const previous=this.settings();this.policy=parsed.settings;this.completePolicy(parsed.settings,previous);}
+    return {revision:this.configService?.revision??0,settings:this.settings()};
+  }
+  private completePolicy(policy:WorkflowConfiguration,previous:WorkflowConfiguration){
+    const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
     try{
-      db.prepare("INSERT INTO settings VALUES('processing-policy',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").run(JSON.stringify(policy));
+      for(const lane of lanes)if(previous[lane].enabled&&!policy[lane].enabled)this.policyEpoch[lane]++;
       for(const row of db.prepare("SELECT e.id,p.lane FROM execution_steps e JOIN processing_jobs p ON p.id=e.id WHERE e.state='blocked' AND e.error='processing_disabled'").all())if(policy[row.lane as ProcessingLane].enabled)this.engine.retry(String(row.id),false);
-      if(own)db.exec('COMMIT');return this.settings();
+      if(own)db.exec('COMMIT');
     }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
   view(args:{state?:string;cursor?:number;limit?:number}={}){
@@ -157,7 +170,7 @@ export class ProcessingRuntime {
       return {id:String(row.id),engine:'context-dag' as const,title:job.processor,state,attempts:Number(row.attempts),lane:String(row.lane),reason:row.error?String(row.error):undefined,availableAt:Number(row.available_at),dependencies:job.dependencies,outputs:job.outputs,products:job.products,
         allowedActions:[...(['failed','blocked','cancelled'].includes(state)?['retry-step' as const]:[]),...(!['succeeded','cancelled'].includes(state)?['cancel' as const]:[])]};
     });
-    return {jobs,limit,nextCursor:rows.length>limit?Number(rows[limit-1].rowid):null,settings:this.settings(),processors:this.registry.list(),consumers:this.consumers.list(),queues:this.store.db.prepare('SELECT lane,state,COUNT(*) AS count FROM processing_jobs GROUP BY lane,state').all(),delivery:'at_least_once; output commit is fenced; provider retries may incur additional cost'};}
+    return {...(this.configService?{revision:this.configService.revision}:{}),jobs,limit,nextCursor:rows.length>limit?Number(rows[limit-1].rowid):null,settings:this.settings(),processors:this.registry.list(),consumers:this.consumers.list(),queues:this.store.db.prepare('SELECT lane,state,COUNT(*) AS count FROM processing_jobs GROUP BY lane,state').all(),delivery:'at_least_once; output commit is fenced; provider retries may incur additional cost'};}
   retry(id:string){this.job(id);const state=this.engine.get(id)?.state;if(!state||!['failed','blocked','cancelled'].includes(state))throw new StoreError('Workflow step cannot be retried in its current state',409);this.engine.retry(id);}
   cancel(id:string){this.job(id);const state=this.engine.get(id)?.state;if(!state||state==='succeeded'||state==='cancelled')throw new StoreError('Workflow step cannot be cancelled in its current state',409);this.engine.cancel(id);}
   private job(id:string):Job{const row=this.store.db.prepare('SELECT json FROM processing_jobs WHERE id=?').get(id);if(!row)throw new StoreError('Workflow step unavailable',404);return JSON.parse(String(row.json));}
@@ -188,13 +201,15 @@ export class ProcessingRuntime {
     if(!this.settings()[job.lane].enabled)return new ExecutionFailure('blocked','processing_disabled');
   }
   private async process(job:Job,signal:AbortSignal,step:ExecutionStep){
-    const installationEpoch=this.registry.epochs.get(job.processor);
+    const installationEpoch=this.registry.epochs.get(job.processor),policyEpoch=this.policyEpoch[job.lane];
     const outputs=await this.registry.get(job.processor)!.process({...this.inputs(job),config:job.config,signal,execution:{operationId:step.operationId,jobId:job.id,stepId:step.id}});
-    return {installationEpoch,outputs};
+    return {installationEpoch,policyEpoch,outputs};
   }
   private commit(job:Job,result:unknown){
+    if(!this.settings()[job.lane].enabled)throw new ExecutionFailure('blocked','processing_disabled');
     if(!this.valid(job))throw new ExecutionFailure('stale','evidence_changed');
-    const prepared=result as {installationEpoch?:string;outputs:unknown};
+    const prepared=result as {installationEpoch?:string;policyEpoch?:number;outputs:unknown};
+    if(prepared.policyEpoch!==this.policyEpoch[job.lane])throw new ExecutionFailure('blocked','processing_disabled');
     if(!this.registry.epochs.matches(job.processor,prepared.installationEpoch))throw new ExecutionFailure('blocked','processor_instance_unavailable');
     if(this.registry.get(job.processor)?.version!==job.version)throw new ExecutionFailure('blocked','processor_version_unavailable');
     const outputs=z.array(artifactOutput).min(1).max(16).parse(prepared.outputs);if(JSON.stringify(outputs).length>200000)throw new ProcessingFailure('permanent','output_limit');
