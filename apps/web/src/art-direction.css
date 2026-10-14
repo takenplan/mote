@@ -440,3 +440,10 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
 /* Use the shared panel rhythm instead of the legacy large empty-state inset. */
 .todos-panel,.actions-page .actions-empty { padding:var(--mote-space-panel); }
 .failed-answer .button { margin-block-start:var(--mote-space-item); }
+
+/* Keep the selected parsing-method caption complete in constrained import forms. */
+.import-parser-field { container-type:inline-size; container-name:import-parser; }
+.import-parser-selection { display:none; }
+@container import-parser (max-width:520px) {
+ .import-parser-selection { display:block; white-space:normal; overflow-wrap:anywhere; }
+}
