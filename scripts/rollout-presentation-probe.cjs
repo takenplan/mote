@@ -18,8 +18,8 @@ function rolloutPresentation() {
  role('.config-draft-footer button',['测试连接','Test connection'],'secondary');
  role('.file-detail button',['建议匹配日程场次','Suggest matching calendar sessions','检查可能的识别错误','Check possible recognition errors','重新转写 / 提取','Transcribe / Extract again','重新分离说话人（保留转写）','Separate speakers again (keep transcript)'],'primary');
  for(const selector of ['.todos-panel','.actions-page .actions-empty']){const e=document.querySelector(selector),h=e?.querySelector('h2');if(!visible(e)||!visible(h))continue;const r=e.getBoundingClientRect(),t=h.getBoundingClientRect();add('Authored panel retains practical text lane '+selector,t.left-r.left>=8&&t.left-r.left<=32,{panel:r.toJSON(),heading:t.toJSON(),inset:t.left-r.left});}
- for(const selector of ['.model-selector','.memory-integration'])for(const e of document.querySelectorAll(selector)){
-  const select=e.querySelector('select'),caption=e.querySelector(selector==='.model-selector'?'.model-selector-selection':'.memory-integration-selection');
+ for(const selector of ['.model-selector','.memory-integration','.import-parser-field'])for(const e of document.querySelectorAll(selector)){
+  const select=e.querySelector('select'),caption=e.querySelector(selector==='.model-selector'?'.model-selector-selection':selector==='.memory-integration'?'.memory-integration-selection':'.import-parser-selection');
   if(!visible(e)||!visible(select)||!select.selectedOptions[0])continue;
   const text=select.selectedOptions[0].textContent.trim(),s=getComputedStyle(select),c=document.createElement('canvas').getContext('2d');c.font=s.font||`${s.fontWeight} ${s.fontSize} ${s.fontFamily}`;
   const required=c.measureText(text).width+parseFloat(s.paddingLeft)+parseFloat(s.paddingRight)+24,nativeFits=required<=select.clientWidth;
