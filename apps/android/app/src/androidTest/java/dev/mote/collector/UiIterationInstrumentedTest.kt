@@ -356,7 +356,7 @@ class UiIterationInstrumentedTest {
                             root.postOnAnimation(object : Runnable {
                                 override fun run() {
                                     val insets = requireNotNull(root.rootWindowInsets)
-                                    samples.put(org.json.JSONObject().put("frameTimeNs", android.view.Choreographer.getInstance().frameTimeNanos)
+                                    samples.put(org.json.JSONObject().put("callbackTimeNs", System.nanoTime())
                                         .put("imeVisible", insets.isVisible(android.view.WindowInsets.Type.ime()))
                                         .put("imeBottom", insets.getInsets(android.view.WindowInsets.Type.ime()).bottom)
                                         .put("rootWidth", root.width).put("rootHeight", root.height).put("rootLayoutRequested", root.isLayoutRequested)
