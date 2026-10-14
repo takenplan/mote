@@ -114,6 +114,12 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     }
     assert.equal((await js('window.mote.status()')).running,false,'No real collection');return finish();
   }
+  if(process.env.MOTE_UI_ROLLOUT_MASK_PROBE==='1') {
+    await navigate('privacy');await ready('privacy');await js('document.querySelector("[data-mask=notification]").click();document.querySelector("#mask-preview").scrollIntoView({block:"center",behavior:"instant"});true;');await frames();
+    const probe=await js('(()=>{const g=document.querySelector("#mask-preview-regions"),r=g.querySelector("rect"),b=r?.getBoundingClientRect();return {groupNamespace:g.namespaceURI,groupOwnerSvg:g.ownerSVGElement?.id??null,rectOwnerSvg:r?.ownerSVGElement?.id??null,rectBounds:b?{width:b.width,height:b.height}:null,rectFill:r?getComputedStyle(r).fill:null,logicalMask:JSON.parse(document.querySelector("#masks").value)};})()');
+    writeFileSync(join(outputDirectory,'mask-probe.json'),JSON.stringify(probe,null,2));await capture('privacy-mask-probe','privacy');
+    assert.equal(probe.groupNamespace,'http://www.w3.org/2000/svg','Mask group stays in SVG namespace');assert.equal(probe.rectOwnerSvg,'mask-preview','Configured mask paints inside actual SVG');assert(probe.rectBounds.width>1&&probe.rectBounds.height>1,'Configured mask has actual visible bounds');return finish();
+  }
   const original='Generated rollout original  双空格 🐾\n\nA note keeps its exact original, source and time.';
   await navigate('notes');await until(()=>js('!document.querySelector("#note-text").disabled'),'draft');
   await js('document.querySelector("#note-text").value='+JSON.stringify(original)+';document.querySelector("#note-text").dispatchEvent(new Event("input"));document.querySelector("#note-form").requestSubmit();true;');
@@ -154,7 +160,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
         if(page==='sources') {
           await js('document.querySelector("#source-calendar-permissions").closest("details").open=true;document.querySelector("#source-calendar-permissions").closest("details").scrollIntoView({block:"start",behavior:"instant"});true;');
           await capture(['source-scope',language==='en'?'en':'zh',variant].join('-'),page);
-          await js('document.querySelector("#source-retention").closest(".form-grid").scrollIntoView({block:"start",behavior:"instant"});true;');await capture(['source-policy',language==='en'?'en':'zh',variant].join('-'),page);
+          await js('document.querySelector("#source-retention").closest(".form-grid").scrollIntoView({block:"center",behavior:"instant"});true;');await capture(['source-policy',language==='en'?'en':'zh',variant].join('-'),page);
           await js('document.querySelector("#source-agent-discover").closest("details").open=true;document.querySelector("#source-agent-discover").click();true;');await until(()=>js('!document.querySelector("#source-agent-choice").hidden&&!document.querySelector("#source-agent-add").disabled'),'generated agent picker');
           await js('document.querySelector("#source-agent-add").closest(".actions").scrollIntoView({block:"end",behavior:"instant"});true;');await capture(['source-agent-picker',language==='en'?'en':'zh',variant].join('-'),page);
           await js('document.querySelector("#source-calendar-connect").click();true;');await until(()=>js('!document.querySelector("#source-calendars").hidden&&!document.querySelector("#source-calendar-add").disabled'),'generated calendar picker');
@@ -165,8 +171,11 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
           await js('document.querySelector("#add-app-rule").click();true;');await until(()=>js('document.querySelector("#installed-app-choice").options.length===1&&!document.querySelector("#use-installed-app").disabled'),'generated installed app picker');
           await js('document.querySelector("#app-picker").scrollIntoView({block:"center",behavior:"instant"});true;');await capture(['privacy-app-picker',language==='en'?'en':'zh',variant].join('-'),page);
           await js('document.querySelector("#exclude-installed-app").click();document.querySelector("#app-collection-rules").scrollIntoView({block:"center",behavior:"instant"});true;');assert.equal(await js('document.querySelector("#app-collection-rules select").value'),'off','Exact app exclusion scope');await capture(['privacy-app-rule',language==='en'?'en':'zh',variant].join('-'),page);
-          await js('document.querySelector("#settings-reset").click();document.querySelector("[data-mask=notification]").click();document.querySelector("#mask-preview").scrollIntoView({block:"start",behavior:"instant"});true;');await capture(['privacy-mask',language==='en'?'en':'zh',variant].join('-'),page);
-          assert.equal(await js('document.querySelectorAll("#mask-editor input[type=range]").length'),4,'Full generated mask controls');await js('document.querySelector("#mask-editor").scrollIntoView({block:"end",behavior:"instant"});true;');await capture(['privacy-mask-controls',language==='en'?'en':'zh',variant].join('-'),page);
+          await js('document.querySelector("#settings-reset").click();true;');await navigate('connection');await navigate('privacy');await ready(page);
+          await js('document.querySelector("[data-mask=notification]").click();document.querySelector("#mask-preview").scrollIntoView({block:"center",behavior:"instant"});true;');
+          assert.equal(await js('(()=>{const g=document.querySelector("#mask-preview-regions"),r=g.querySelector("rect"),b=r?.getBoundingClientRect();return g.namespaceURI==="http://www.w3.org/2000/svg"&&r?.ownerSVGElement?.id==="mask-preview"&&b.width>1&&b.height>1;})()'),true,'Configured mask stays in actual SVG and paints visible region');
+          await capture(['privacy-mask',language==='en'?'en':'zh',variant].join('-'),page);
+          assert.equal(await js('document.querySelectorAll("#mask-editor input[type=range]").length'),4,'Full generated mask controls');await js('document.querySelector("#mask-editor").scrollIntoView({block:"center",behavior:"instant"});true;');await capture(['privacy-mask-controls',language==='en'?'en':'zh',variant].join('-'),page);
           await js('document.querySelector("#settings-reset").click();true;');journeys.push({name:'generated installed-app picker, exact exclusion rule, mask diagram/sliders and Reset',language,variant,verified:true,settingsCommitted:false,personalScreenRead:false});await reloadCleanUi(page);
         }
       }
