@@ -152,7 +152,7 @@ internal object GeneratedWindowRendering {
         }
         return evidence
     }
-    fun save(activity: Activity, directory: File, name: String, overlays: List<View> = emptyList()) {
+    fun save(activity: Activity, directory: File, name: String, overlays: List<View> = emptyList(), includeScrollEvidence: Boolean = true) {
         require(activity.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("/emu64a:"))
         require(InstrumentationRegistry.getArguments().getString("uiIterationFixture") == "true")
         require(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
@@ -266,5 +266,54 @@ internal object GeneratedWindowRendering {
             File(directory, "$name.json").writeText(metadata.toString(2))
             check(geometryFailures.isEmpty()) { "Real dialog button geometry failed for $name; evidence saved in ${File(directory, "$name.json")}: ${geometryFailures.joinToString("; ")}" }
         } finally { bitmap.recycle() }
+        if (includeScrollEvidence && InstrumentationRegistry.getArguments().getString("uiScrollEvidence") == "true")
+            saveScrollEvidence(activity, directory, name, overlays)
+    }
+
+    /** Real scroll positions in unchanged app windows; separate from the canonical first frames. */
+    private fun saveScrollEvidence(activity: Activity, canonicalDirectory: File, name: String, overlays: List<View>) {
+        val variant = InstrumentationRegistry.getArguments().getString("uiIterationVariant", "default")!!
+        val state = canonicalDirectory.takeIf { it.path.contains("/ui-state-evidence/") }?.name
+        val directory = File(activity.filesDir, "ui-scroll-evidence/$variant/$name" + (state?.let { "/state-$it" } ?: "")).apply { mkdirs() }
+        val targetWindows = if (overlays.isEmpty()) listOf(activity.window.decorView) else overlays
+        val evidence = JSONArray()
+        for ((index, scroll) in targetWindows.flatMap(::views).filterIsInstance<android.widget.ScrollView>().filter { it.isShown }.withIndex()) {
+            val visible = Rect()
+            if (!scroll.getGlobalVisibleRect(visible) || scroll.childCount != 1 || visible.height() <= 0) continue
+            val viewport = scroll.height - scroll.paddingTop - scroll.paddingBottom
+            val contentHeight = scroll.getChildAt(0).height
+            val end = (contentHeight - viewport).coerceAtLeast(0)
+            val original = scroll.scrollY
+            val offsets = mutableListOf<Int>()
+            if (end > 0) {
+                // A log is an intentionally bounded reading panel: prove middle/end, not every repeated log line.
+                if (name == "rollout-logs") offsets += listOf(end / 2, end)
+                else {
+                    val step = (minOf(viewport, visible.height()) - activity.moteDp(32)).coerceAtLeast(activity.moteDp(128))
+                    var next = step
+                    while (next < end) { offsets += next; next += step }
+                    offsets += end
+                }
+            }
+            val frames = JSONArray()
+            try {
+                for (offset in offsets.distinct().filter { it != original }) {
+                    scroll.scrollTo(scroll.scrollX, offset)
+                    val frameDirectory = File(directory, "scroll-$index-${scroll.scrollY}").apply { mkdirs() }
+                    save(activity, frameDirectory, name, overlays, includeScrollEvidence = false)
+                    val metadataFile = File(frameDirectory, "$name.json")
+                    val metadata = JSONObject(metadataFile.readText()).put("supplementState", state ?: JSONObject.NULL).put("scrollEvidence", JSONObject()
+                        .put("canonicalScene", name).put("canonicalDirectory", canonicalDirectory.path)
+                        .put("scrollY", scroll.scrollY).put("viewportHeight", viewport).put("contentHeight", contentHeight)
+                        .put("maximumScrollY", end).put("kind", if (name == "rollout-logs") "bounded-log-panel" else "page-continuation"))
+                    metadataFile.writeText(metadata.toString(2))
+                    frames.put(JSONObject().put("directory", frameDirectory.name).put("scrollY", scroll.scrollY))
+                }
+            } finally { scroll.scrollTo(scroll.scrollX, original) }
+            evidence.put(JSONObject().put("scrollIndex", index).put("originalScrollY", original).put("viewportHeight", viewport)
+                .put("visibleHeight", visible.height()).put("contentHeight", contentHeight).put("maximumScrollY", end).put("frames", frames))
+        }
+        File(directory, "coverage.json").writeText(JSONObject().put("canonicalScene", name).put("scrollViews", evidence)
+            .put("automaticVisualAcceptance", false).toString(2))
     }
 }

@@ -55,7 +55,7 @@ class BulkDedupeActivity : MoteActivity() {
             adapter = ArrayAdapter(this@BulkDedupeActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("精确"), MoteI18n.text("保守"), MoteI18n.text("均衡"), MoteI18n.text("激进")))
             isEnabled = false
         }; body.addView(modes); controls += modes
-        action(body, MoteI18n.text("开始全量扫描")) {
+        action(body, MoteI18n.text("开始全量扫描"), primary = true) {
             val mode = modeValues[modes.selectedItemPosition]
             submit(workDataOf("action" to "scan", "mode" to mode))
         }
@@ -257,9 +257,9 @@ class BulkDedupeActivity : MoteActivity() {
         }
     }
     private fun label(parent: LinearLayout, value: String, size: Float = 14f) = TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(6), 0, moteDp(6)) }.also(parent::addView)
-    private fun action(parent: LinearLayout, value: String, requiresIdle: Boolean = true, callback: () -> Unit) = Button(this).apply {
+    private fun action(parent: LinearLayout, value: String, requiresIdle: Boolean = true, primary: Boolean = false, callback: () -> Unit) = Button(this).apply {
         text = value; setOnClickListener { if (!requiresIdle || !busy) callback() }
-    }.also { parent.addView(it); if (requiresIdle) controls += it }
+    }.also { MoteUi.button(it, primary); parent.addView(it); if (requiresIdle) controls += it }
     override fun onSaveInstanceState(outState: Bundle) { outState.putStringArrayList("selected", ArrayList(selected)); outState.putInt("page", page); outState.putBoolean("pending", pending); super.onSaveInstanceState(outState) }
     override fun onDestroy() { imageGeneration++; dialogs.forEach { it.dismiss() }; list.removeAllViews(); pageBitmaps.forEach { it.recycle() }; pageBitmaps.clear(); executor.shutdownNow(); images.shutdownNow(); super.onDestroy() }
 }

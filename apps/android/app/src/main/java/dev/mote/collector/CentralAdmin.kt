@@ -635,7 +635,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 fields.add(check to id); body.addView(check)
             }
             val collect = if (lark) form(pick(current, "documents", "pastDays", "futureDays", "timeZone", "autoSync"), ui.card()) else ({ JSONObject() })
-            ui.button(MoteI18n.text("保存设置")) {
+            ui.button(MoteI18n.text("保存设置"), true) {
                 val payload = collect().put("calendarIds", JSONArray(fields.filter { it.first.isChecked }.map { it.second }))
                 ui.work(MoteI18n.text("正在保存…"), { api.put(path + if (lark) "/selection" else "/calendars", payload) }) { screens.refresh() }
             }
@@ -670,7 +670,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 val empty = value.optJSONObject("counts")?.optInt("empty") ?: 0
                 if (empty > 0) ui.text(MoteI18n.text("采集完成，暂无文字：{0} 条", empty), parent = card)
                 ui.button(MoteI18n.text("同步步骤与状态"), parent = card) { recordingSteps(path) }
-                ui.button(MoteI18n.text("连接已授权账号"), parent = card) { action(path + "/connect") { recordings() } }
+                ui.button(MoteI18n.text("连接已授权账号"), true, parent = card) { action(path + "/connect") { recordings() } }
                 ui.button(MoteI18n.text("同步范围"), parent = card) {
                     val selection = JSONObject(value.getJSONObject("selection").toString()).put("backupAudio", true)
                     edit(MoteI18n.text("同步范围"), path + "/selection", selection)

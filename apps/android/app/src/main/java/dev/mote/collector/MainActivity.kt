@@ -342,7 +342,7 @@ class MainActivity : MoteActivity() {
             status = text(settings.message(), DesignTokens.fontSupport, MoteUi.muted)
             captureProgress = ProgressBar(this@MainActivity, null, android.R.attr.progressBarStyleHorizontal).apply { isIndeterminate = true; visibility = View.GONE }
             content.addView(captureProgress)
-            captureAction = button(MoteI18n.text("开始采集")) { if (settings.enabled) stopCapture() else startCapture() }
+            captureAction = button(MoteI18n.text("开始采集"), primary = !settings.enabled) { if (settings.enabled) stopCapture() else startCapture() }
             text(MoteI18n.text("未连接节点也能采集；随时可以暂停。"), DesignTokens.fontMeta, MoteUi.muted)
         }
         text(MoteI18n.text("屏幕与应用活动"), DesignTokens.fontSupport, MoteUi.muted)
@@ -1281,6 +1281,7 @@ class MainActivity : MoteActivity() {
         // Capture controls reflect cheap live state before optional statistics/diagnostics.
         // A slow inventory must not make a successful Start look unresponsive.
         val action = if (settings.enabled) MoteI18n.text("暂停采集") else MoteI18n.text("开始采集")
+        MoteUi.button(captureAction, primary = !settings.enabled)
         if (captureAction.text != action) {
             captureAction.text = action
             captureTitle.text = if (settings.enabled) MoteI18n.text("正在本机采集") else MoteI18n.text("采集已暂停")

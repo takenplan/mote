@@ -31,13 +31,13 @@ class SourcesActivity : MoteActivity() {
         restoringDraft = lastNonConfigurationInstance as? Draft
         val content = moteDetailPage(title = MoteI18n.text("来源管理"))
         content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted) })
-        fun action(label: String, callback: () -> Unit) { content.addView(Button(this).apply { text = label; setOnClickListener { callback() } }) }
+        fun action(label: String, primary: Boolean = false, callback: () -> Unit) { content.addView(MoteUi.button(Button(this).apply { text = label; setOnClickListener { callback() } }, primary)) }
         operationStatus = TextView(this); content.addView(operationStatus)
         action(MoteI18n.text("连接本机日历")) {
             if (checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) chooseCalendars()
             else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR), 301)
         }
-        action(MoteI18n.text("立即扫描并同步")) { work(MoteI18n.text("正在调度扫描与同步…")) { SourceWork.schedule(applicationContext, true, syncExplicit = true) } }
+        action(MoteI18n.text("立即扫描并同步"), primary = true) { work(MoteI18n.text("正在调度扫描与同步…")) { SourceWork.schedule(applicationContext, true, syncExplicit = true) } }
         action(MoteI18n.text("来源限制与同步说明")) { MoteDialogBuilder(this).setTitle(MoteI18n.text("来源说明")).setMessage(MoteI18n.text("文件快照和原件归档都会上传完整文件，由中央解析或转写。快照处理后删除中央临时原件，保留提取正文；原件归档长期保留文件。每文件最多 512 MiB，支持断网续传。仅文件目录不读取正文。超限或扫描不完整不会推断文件已删除。\n系统后台任务约每 15 分钟检查一次。")).setPositiveButton(MoteI18n.text("知道了"), null).show() }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(list)
         MoteUi.styleTree(content)

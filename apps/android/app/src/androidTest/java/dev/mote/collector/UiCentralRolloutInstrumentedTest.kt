@@ -90,6 +90,43 @@ class UiCentralRolloutInstrumentedTest {
                     assertFalse(settings.enabled)
                 }
             }
+            if (args.getString("uiScrollEvidence") == "true") {
+                fun click(key: String) {
+                    waitFor(scenario, "control $key") { activity -> !activity.isWorking && views(activity.window.decorView).filterIsInstance<Button>().any {
+                        it.isShown && it.text.toString() == MoteI18n.text(key)
+                    } }
+                    scenario.onActivity { activity ->
+                        assertTrue(views(activity.window.decorView).filterIsInstance<Button>().single {
+                            it.isShown && it.text.toString() == MoteI18n.text(key)
+                        }.performClick())
+                    }
+                    waitFor(scenario, key) { !it.isWorking && GeneratedWindowRendering.hasNoPendingLabels(it.window.decorView) }
+                }
+                val forms = listOf(
+                    "models-provider" to listOf("模型配置"),
+                    "models-defaults" to listOf("模型配置", "功能默认模型"),
+                    "models-copy" to listOf("模型配置", "复制为新预设"),
+                    "execution-settings" to listOf("并发与执行设置"),
+                    "processing-settings" to listOf("处理设置"),
+                    "memory-automatic" to listOf("记忆设置", "记忆自动处理"),
+                    "memory-extraction-recipe" to listOf("记忆设置", "记忆提取配方"),
+                    "memory-consolidation-recipe" to listOf("记忆设置", "记忆整合"),
+                    "external-applications" to listOf("来源与外部应用")
+                )
+                for ((state, steps) in forms) {
+                    scenario.onActivity { it.navigate("settings") }
+                    waitFor(scenario, "settings for $state") { !it.isWorking && labels(it).contains(MoteI18n.text("模型配置")) }
+                    steps.forEach(::click); instrumentation.waitForIdleSync()
+                    scenario.onActivity { activity ->
+                        val target = File(context.filesDir, "ui-state-evidence/$variant/central-$state").apply { mkdirs() }
+                        GeneratedWindowRendering.save(activity, target, "rollout-central-settings")
+                        val metadata = File(target, "rollout-central-settings.json")
+                        metadata.writeText(org.json.JSONObject(metadata.readText()).put("supplementState", "central-$state")
+                            .put("automaticVisualAcceptance", false).toString(2))
+                        assertFalse(settings.enabled)
+                    }
+                }
+            }
         }
     }
 }
