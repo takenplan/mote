@@ -7,6 +7,7 @@ import type { ConfigurationSource, ServerConfiguration } from '@mote/shared';
 import { DEFAULT_AGENT_TIMEOUT_MS, DEFAULT_MODEL_MAX_TOKENS, DEFAULT_MODEL_REQUEST_TIMEOUT_MS, MAX_AGENT_TIMEOUT_MS, MAX_MODEL_REQUEST_TIMEOUT_MS, MODEL_PROTOCOLS, MODEL_REASONING_EFFORTS, modelProvider } from '@mote/shared/models';
 import { validateModelOptions } from '@mote/agent';
 import {z} from 'zod';
+import { logRetentionFromEnv, LogRetentionError } from './log-retention-config.mjs';
 
 const importPythonPackSchema=z.object({
   id:z.string().regex(/^[a-z][a-z0-9.-]{2,127}$/),version:z.string().min(1).max(64),description:z.string().trim().min(1).max(200).optional(),
@@ -62,6 +63,8 @@ export function configFromEnv() {
   const choice=<T extends string>(name:string,values:readonly T[],fallback:T):T=>{const value=text(name)||fallback;if(!values.includes(value as T))throw new ConfigError(name,`${name} has an unsupported value`);return value as T;};
   const profile=env.MOTE_PROFILE||'default';
   if(!/^[a-z0-9][a-z0-9_-]{0,31}$/.test(profile))throw new ConfigError('MOTE_PROFILE','MOTE_PROFILE must be a short lowercase profile name');
+  let logRetention:ReturnType<typeof logRetentionFromEnv>;
+  try{logRetention=logRetentionFromEnv(env,profile);}catch(error){if(error instanceof LogRetentionError)throw new ConfigError(error.field,error.message);throw error;}
   if(!env.MOTE_ENV_FILE&&!env.MOTE_DATA_DIR)throw new ConfigError('MOTE_DATA_DIR','Named server profiles require MOTE_ENV_FILE or an explicit MOTE_DATA_DIR');
   const dataDir=resolve(baseDir,env.MOTE_DATA_DIR??'data');
   const logLevel=env.MOTE_LOG_LEVEL||'info';
@@ -111,8 +114,7 @@ export function configFromEnv() {
     diagnosticsEnabled:flag('MOTE_DIAGNOSTICS_ENABLED',true),diagnosticsDebug:flag('MOTE_DEBUG',false),agentTraceEnabled:flag('MOTE_AGENT_TRACE_ENABLED',profile==='dev'),
     logLevel:logLevel as 'debug'|'info'|'warn'|'error'|'silent',
     logDirectory:env.MOTE_LOG_DIR?resolve(baseDir,env.MOTE_LOG_DIR):join(dataDir,'logs'),
-    logMaxBytes:number('MOTE_LOG_MAX_MB',2,0.1,8)*1024*1024,
-    logMaxFiles:number('MOTE_LOG_MAX_FILES',3,1,10,true),logMaxEntries:number('MOTE_LOG_MAX_ENTRIES',2000,100,5000,true),
+    logMaxBytes:logRetention.maxBytes,logMaxFiles:logRetention.maxFiles,logMaxEntries:logRetention.maxEntries,
   };
   try{validateModelOptions({provider:config.modelProvider,protocol:config.modelProtocol,baseUrl:config.modelBaseUrl,model:config.model,reasoningEffort:config.modelReasoningEffort,maxTokens:config.modelMaxTokens,headers:modelHeaders,extraBody:modelExtraBody});}
   catch{throw new ConfigError('MOTE_MODEL_PROTOCOL','Model protocol, endpoint or advanced parameters are invalid');}

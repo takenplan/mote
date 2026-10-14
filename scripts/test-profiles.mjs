@@ -22,6 +22,9 @@ try {
   assert.equal(devMedia.MOTE_MEDIA_OCR_ENDPOINT, `http://127.0.0.1:${devMedia.MOTE_MEDIA_OCR_PORT}/ocr`);
   assert.equal((await stat(dev.envFile)).mode & 0o777, 0o600);
   assert.equal(dev.env.MOTE_LOG_DIR, './logs'); assert.equal(dev.env.MOTE_LOG_MAX_ENTRIES, '2000'); assert.equal(dev.env.MOTE_AGENT_TRACE_ENABLED, '1'); assert.equal(test.env.MOTE_AGENT_TRACE_ENABLED, '0');
+  assert.equal(dev.env.MOTE_LOG_MAX_MB, 'auto'); assert.equal(test.env.MOTE_LOG_MAX_MB, '2');
+  assert.equal(JSON.parse((await cli(home, 'dev', 'config')).stdout).diagnostics.logMaxMiB, 100);
+  assert.equal(JSON.parse((await cli(home, 'test', 'config')).stdout).diagnostics.logMaxMiB, 2);
   const hostile = { MOTE_PROFILE: 'prod', MOTE_ENV_FILE: '/missing/formal.env', MOTE_DATA_DIR: '/missing/formal-data', MOTE_TOKEN: 'synthetic-hostile-ambient-token', MOTE_MODEL: 'ambient-model-must-not-load', MOTE_MODEL_API_KEY: 'synthetic-ambient-key', MOTE_DEBUG: '1' };
   const isolated = await cli(home, undefined, 'exec', ['--', process.execPath, '-e', "console.log(JSON.stringify({profile:process.env.MOTE_PROFILE,file:process.env.MOTE_ENV_FILE,model:process.env.MOTE_MODEL,key:process.env.MOTE_MODEL_API_KEY,debug:process.env.MOTE_DEBUG,url:process.env.MOTE_URL}))"], { env: hostile });
   assert.deepEqual(JSON.parse(isolated.stdout), { profile: 'dev', file: dev.envFile, model: '', key: '', debug: '0', url: dev.url });
@@ -38,6 +41,23 @@ try {
 
   await cli(home, 'dev', 'start', [], { env: hostile }); await cli(home, 'test', 'start');
   assert.equal(JSON.parse((await cli(home, 'dev', 'status')).stdout).healthy, true);
+  assert.deepEqual((await request(dev, '/api/diagnostics')).limits, { maxFileBytes: 100 * 1024 * 1024, maxFiles: 3, maxEvents: 2000 });
+  assert.deepEqual((await request(test, '/api/diagnostics')).limits, { maxFileBytes: 2 * 1024 * 1024, maxFiles: 3, maxEvents: 2000 });
+  // Upgrading an existing numeric DEV setting never overwrites it. Adopting the
+  // larger default is explicit and applies only after the owner's next restart.
+  await cli(home, 'dev', 'stop');
+  dev = await updateEnvironment(dev, { MOTE_LOG_MAX_MB: '2' });
+  const legacyEnv = await readFile(dev.envFile);
+  await cli(home, 'dev', 'start');
+  assert.deepEqual(await readFile(dev.envFile), legacyEnv);
+  assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 2 * 1024 * 1024);
+  const adoption = JSON.parse((await cli(home, 'dev', 'log-retention', ['--defaults'])).stdout);
+  assert.deepEqual(adoption, { profile: 'dev', changed: true, before: { maxFileMiB: 2, maxFiles: 3 }, after: { maxFileMiB: 100, maxFiles: 3 }, restartRequired: true });
+  assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 2 * 1024 * 1024);
+  await cli(home, 'dev', 'stop'); await cli(home, 'dev', 'start');
+  dev = await loadProfile(profilePaths('dev', home));
+  assert.equal((await request(dev, '/api/diagnostics')).limits.maxFileBytes, 100 * 1024 * 1024);
+  console.info('[profiles] DEV 100 MiB/test 2 MiB defaults, legacy numeric preservation and explicit adoption across real restart passed');
   await request(dev, '/api/status', { status: 401, token: test.env.MOTE_TOKEN });
   const saved = note(), screen = capture();
   await request(dev, '/api/notes', { method: 'POST', body: saved, status: 201 });
@@ -93,6 +113,7 @@ try {
   const release = join(directory, 'release-next'); await mkdir(join(release, 'apps/server/dist'), { recursive: true });
   await writeFile(join(release, 'package.json'), '{"type":"module"}');
   await writeFile(join(release, 'apps/server/dist/index.js'), `import ${JSON.stringify(new URL('apps/server/dist/index.js', 'file://' + repository + '/').href)};\n`);
+  await cp(join(repository, 'apps/server/dist/log-retention-config.mjs'), join(release, 'apps/server/dist/log-retention-config.mjs'));
   await cli(home, 'dev', 'start'); await cli(home, 'dev', 'upgrade', ['--release', release]);
   assert.equal((await request(dev, `/api/notes/${saved.id}`)).ocrText, saved.text);
   const afterUpgrade = note(); await request(dev, '/api/notes', { method: 'POST', body: afterUpgrade, status: 201 });

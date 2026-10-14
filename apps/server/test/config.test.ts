@@ -28,6 +28,7 @@ test('explicit server profiles isolate paths and generated credentials and keep 
     assert.equal(config.logDirectory, join(directory, 'events'));
     assert.equal(config.diagnosticsDebug, true);
     assert.equal(config.agentTraceEnabled, name === 'dev');
+    assert.equal(config.logMaxBytes, (name === 'dev' ? 100 : 2) * 1024 * 1024);
     assert.equal(config.model, '');
     assert.equal(config.apiKey, '');
     assert.equal(config.token, readFileSync(join(directory, 'archive/access-token'), 'utf8').trim());
@@ -45,11 +46,36 @@ test('missing files and invalid diagnostic configuration fail before creating a 
   const absent = readConfig({ MOTE_ENV_FILE: join(root, 'missing'), MOTE_DATA_DIR: vault });
   assert.notEqual(absent.status, 0);
   assert.match(absent.stderr, /missing, unreadable or invalid/);
-  for (const setting of ['MOTE_LOG_LEVEL=verbose', 'MOTE_LOG_MAX_FILES=1.5', 'MOTE_DEBUG=yes', 'MOTE_AGENT_TRACE_ENABLED=yes', 'MOTE_PROFILE=../prod']) {
+  for (const setting of ['MOTE_LOG_LEVEL=verbose', 'MOTE_LOG_MAX_FILES=1.5', 'MOTE_LOG_MAX_MB=100.1', 'MOTE_DEBUG=yes', 'MOTE_AGENT_TRACE_ENABLED=yes', 'MOTE_PROFILE=../prod']) {
     const file = join(root, 'invalid.env'); writeFileSync(file, `MOTE_DATA_DIR=${vault}\n${setting}\n`);
     const result = readConfig({ MOTE_ENV_FILE: file });
     assert.notEqual(result.status, 0, setting);
     assert.equal(existsSync(vault), false);
+  }
+});
+
+test('log retention defaults and explicit limits agree across profile and configuration sources', t => {
+  const root=mkdtempSync(join(tmpdir(),'mote-config-log-retention-'));
+  t.after(()=>rmSync(root,{recursive:true,force:true}));
+  const file=join(root,'mote.env');writeFileSync(file,'MOTE_PROFILE=dev\nMOTE_DATA_DIR=./vault\nMOTE_LOG_MAX_MB=auto\n');
+  for(const [profile,value,expected] of [
+    ['dev','auto',100],['dev','2',2],['dev','0.1',0.1],['dev','100',100],
+    ['test','auto',2],['prod','auto',2],['default','8',8],
+  ]){
+    const result=readConfig({MOTE_ENV_FILE:file,MOTE_PROFILE:profile,MOTE_LOG_MAX_MB:value});
+    assert.equal(result.status,0,result.stderr);const config=JSON.parse(result.stdout);
+    assert.equal(config.logMaxBytes,Math.floor(Number(expected)*1024*1024));
+    assert.equal(config.logMaxFiles,3);assert.equal(config.logMaxEntries,2000);
+    assert.equal(config.configuration.sources.MOTE_LOG_MAX_MB,'environment');
+  }
+  const inherited=readConfig({MOTE_ENV_FILE:file});assert.equal(inherited.status,0,inherited.stderr);
+  assert.equal(JSON.parse(inherited.stdout).logMaxBytes,100*1024*1024);
+  assert.equal(JSON.parse(inherited.stdout).configuration.sources.MOTE_LOG_MAX_MB,'env-file');
+  const invalidVault=join(root,'invalid-vault');
+  for(const [profile,value] of [['dev','100.1'],['dev','0.09'],['dev',''],['dev','Infinity'],['test','8.1'],['prod','100'],['dev','synthetic-private-limit']]){
+    const result=readConfig({MOTE_ENV_FILE:file,MOTE_DATA_DIR:invalidVault,MOTE_PROFILE:profile,MOTE_LOG_MAX_MB:value});
+    assert.notEqual(result.status,0);assert.match(result.stderr,/MOTE_LOG_MAX_MB/);
+    assert.ok(!result.stderr.includes('synthetic-private-limit'));assert.equal(existsSync(invalidVault),false);
   }
 });
 

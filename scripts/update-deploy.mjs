@@ -1,7 +1,7 @@
 import { rename, stat, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { compose, startNative, stopNative, nativeIdentity, execute, dockerContainer, backupProfile, restoreProfile, verifiedBackup, atomicJson } from './profile-lib.mjs';
+import { compose, startNative, stopNative, nativeIdentity, execute, dockerContainer, backupProfile, restoreProfile, verifiedBackup, atomicJson, assertLogRetentionCompatible } from './profile-lib.mjs';
 import { preserveConnectorState, restoreConnectorState } from './update-private.mjs';
 
 export async function startProfile(p) { return p.meta.runtime === 'docker' ? compose(p, ['up', '--detach', '--no-build', '--wait'], { timeoutMs: 120000 }).then(() => ({ started: true, project: p.project, url: p.url })) : startNative(p); }
@@ -21,6 +21,7 @@ export async function changeProfileDeployment(p, options = {}) {
     if (!options.image) throw Error('Docker upgrade requires --image; build or pull it first');
     next = { image: await execute('docker', ['image', 'inspect', '--format', '{{.Id}}', options.image], { capture: true }) };
   }
+  await assertLogRetentionCompatible({ ...p, meta: { ...p.meta, ...next } });
   let wasRunning;
   if (p.meta.runtime === 'docker') {
     const container = await dockerContainer(p);

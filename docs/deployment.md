@@ -46,7 +46,25 @@ node scripts/mote.mjs stop --profile prod --home "$HOME/Library/Application Supp
 
 启动环境保留原有绕过规则并补齐 IPv4/IPv6 loopback，统一大小写代理变量。本机语音、图像处理和 worker 健康探测另使用强制直连传输，即使直接启动中央并遗漏 `NO_PROXY`，也不会通过环境代理发送本机处理原件或授权头。
 
-原生 stdout/stderr 先经监督进程白名单化：保留固定启动/停止事件，未知 SDK 输出只记流类型与字节数，再写入有上限的 `logs/central.log`，默认每份 2 MiB、总共 3 份；包括单次大输出与反复重启。中央结构化诊断独立写入 `MOTE_LOG_DIR`，使用同样的容量配置，并限制 2000 条记录。`MOTE_DEBUG=0` 默认关闭调试级别。修改参数后重启该环境。
+原生 stdout/stderr 先经监督进程白名单化：保留固定启动/停止事件，未知 SDK 输出只记流类型与字节数，再写入有上限的 `logs/central.log`；包括单次大输出与反复重启。DEV 默认每份 100 MiB、总共 3 份，其它 profile 每份 2 MiB、3 份。中央结构化诊断独立写入 `MOTE_LOG_DIR`，使用同样的容量配置，内存仍默认限制 2000 条记录。DEV 两组日志各最多 300 MiB，合计最多 600 MiB；Docker stdout 不受这个配置控制。`MOTE_DEBUG=0` 默认关闭调试级别。修改参数后重启该环境。
+
+<a id="dev-log-retention"></a>
+
+### 已有 DEV 的日志容量升级
+
+旧 profile 没有记录模板默认值的来源，无法区分 `2` 是模板值还是主动定制。升级代码不会重写任何显式数值；新建 DEV 使用 `MOTE_LOG_MAX_MB=auto`，未设置时也采用 100 MiB 默认值。使用更新后的 CLI 主动将已有 DEV 切到默认容量：
+
+```sh
+node scripts/mote.mjs config --profile dev
+node scripts/mote.mjs log-retention --defaults --profile dev
+node scripts/mote.mjs config --profile dev
+```
+
+自定义 `--home` 时三个命令都需传入同一个目录。迁移命令只将所选 DEV 的 `MOTE_LOG_MAX_MB` 设置为 `auto`，保留文件数、内存条数、凭据及其它配置，输出迁移前后容量、是否改动和需要重启的标记；不启动、停止或重启服务，不修改已有日志。重复执行不再写文件。test、prod 和其它 profile 不支持此迁移命令。
+
+`config` 中的 `diagnostics` 展示所选文件解析后的容量及来源，运行进程的实际容量看中央 `GET /api/diagnostics`。下次正常重启该 DEV 时生效；若希望保留定制值（包括 2 MiB），不要执行迁移，继续使用显式数值即可。需要固定 100 MiB 而不跟随后续默认值时，可主动填写 `MOTE_LOG_MAX_MB=100`。无效容量配置会报错，不会退回较小值。
+
+`auto` 和大于 8 MiB 的容量要求目标中央版本支持本次日志配置。启动、迁移及升级/回退会预检目标构建；不支持时明确报错，升级/回退不会先停服务或恢复资料。先升级至支持的 release/image，再采用 DEV 默认值。需要回退到旧版本时，先主动将该字段改为旧版本支持的显式数值（0.1–8 MiB）；不会自动降低容量。较小容量的旧写入器可能截断超限历史日志，需要保留排错资料时先自行保存日志副本。原生预检检查目标构建中的日志配置模块；Docker 预检在无网络、无资料卷的临时容器中检查相同模块。
 
 ### 生成与安装 launchd 配置
 

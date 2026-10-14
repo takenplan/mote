@@ -1,4 +1,5 @@
 import {memoryReadRanges} from './memory-read-context.js';
+import {defaultLogMaxBytes} from './log-retention-config.mjs';
 import {OwnerQuestions} from './owner-questions.js';
 import {CODING_DIALOGUE_SCHEMA_VERSION,formatEvidenceRef} from '@mote/shared';
 import {imageOutput} from './evidence-image.js';
@@ -148,7 +149,7 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
       finally{diagnostics.record('agent.harness_timing',{jobId:input?.traceContext?.jobId,batchId:input?.traceContext?.batchId,lane,unit:'harness_session',queueWaitMs,durationMs:performance.now()-admittedAt,status},'info');}
     },signal??input?.signal,input?.traceContext?.operationId??modelOperation.getStore());
   };
-  const diagnostics=new ServerDiagnostics({...runtimeSettings.diagnostics(),directory:config.logDirectory??join(config.dataDir,'logs'),maxBytes:config.logMaxBytes,maxFiles:config.logMaxFiles,maxEntries:config.logMaxEntries});
+  const diagnostics=new ServerDiagnostics({...runtimeSettings.diagnostics(),directory:config.logDirectory??join(config.dataDir,'logs'),maxBytes:config.logMaxBytes??defaultLogMaxBytes(config.profile),maxFiles:config.logMaxFiles,maxEntries:config.logMaxEntries});
   await diagnostics.init();
   const executor=new ExecutionEngine(store);
   backendContext.provide('moteExecution',executor);
