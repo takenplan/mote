@@ -58,7 +58,11 @@ Mac 最终产品输入为 `c38053ae0b1e97063658cd33181b2b166e77ac3f`，后续滚
 
 ## 受影响检查
 
-`npm run check:affected -- --base origin/main` 依据最新主分支选择全部受影响消费者，执行 `check:local` 及 Android Debug JVM。当前最终检查待执行；早期通过只证明当时源码，不能代替最终检查。
+最终源码 `961bba8b` 对最新 `origin/main`（`71d4aca6`）运行 `npm run check:affected -- --base origin/main`，计划选择全部受影响消费者。`check:local` 的构建、类型、翻译及测试通过：Desktop 442，Server 1606（另跳过一项），Web 375，Agent 289（另跳过一项），diagnostics 5，shared 179，工具链 65，客户端 4；中央运行器回归也通过。英文与 Android catalog 共 8196 条消息检查通过。
+
+选择器在最后 Android 阶段因本机未配置 `JAVA_HOME` 无法启动 Java，原退出码与日志保留，不写成整条命令退出零。随后使用已有 OpenJDK 21 与 SDK，单独完成同一计划的 `:app:testDebugUnitTest`：319 项通过，零失败、错误或跳过；源码未变，已通过的 TypeScript 检查未重复。所选检查计划至此全部完成。
+
+最新 Web 产品构建通过；13 项计数／分组／回执控件回归及 64 项 Memory／插件控件复测通过。Memory 样式入口调整后的产物恰为原基础 CSS 加原 Memory CSS，规则内容及顺序相同；这是构建核对，不是视觉复验。首轮三项 Web 失败及修复记录保留。后续仅补充本验证说明，按文档范围核对格式、语法与链接。
 
 已有生成 UI 自动化运行确认 Web 165 场景的内容就绪与输入身份，并通过待办添加、服务端读回、完成、筛选及重新打开旅程。Android `5602df37` Development／AndroidTest 构建、JVM 319 项（零失败／错误／跳过）与 lint 通过；统计及 ImportAdvanced 各四条件仪器入口通过。阅读窗口与任务返回、输入法下随手记保存另有既有生成旅程。旧 Navigation 启动目录竞态失败保留，幂等目录修复有三个 JVM 回归；最新已安装 `5602df37` 完整 Navigation suite 中八项控件／行为测试通过，两项需显式视觉开关的用例按要求跳过，零失败。此前失败的实际入口在本次复测中通过；无新增截图或视觉调用。
 
