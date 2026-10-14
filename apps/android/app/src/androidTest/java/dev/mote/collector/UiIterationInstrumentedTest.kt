@@ -344,6 +344,42 @@ class UiIterationInstrumentedTest {
                         if (!shown) Thread.sleep(25)
                     }
                     assertTrue("Generated note keyboard must actually open", shown)
+                    if (args.getString("uiImeLayoutEvidence") == "true") {
+                        val samples = org.json.JSONArray()
+                        val sampled = java.util.concurrent.CountDownLatch(1)
+                        scenario.onActivity { activity ->
+                            val root = activity.window.decorView
+                            val field = views(root).filterIsInstance<android.widget.EditText>().single { it.isShown }
+                            val originalValue = field.text.toString()
+                            val originalStart = field.selectionStart; val originalEnd = field.selectionEnd
+                            val originalFocus = activity.currentFocus
+                            root.postOnAnimation(object : Runnable {
+                                override fun run() {
+                                    val insets = requireNotNull(root.rootWindowInsets)
+                                    samples.put(org.json.JSONObject().put("frameTimeNs", android.view.Choreographer.getInstance().frameTimeNanos)
+                                        .put("imeVisible", insets.isVisible(android.view.WindowInsets.Type.ime()))
+                                        .put("imeBottom", insets.getInsets(android.view.WindowInsets.Type.ime()).bottom)
+                                        .put("rootWidth", root.width).put("rootHeight", root.height).put("rootLayoutRequested", root.isLayoutRequested)
+                                        .put("focusPreserved", activity.currentFocus === originalFocus).put("fieldFocused", field.hasFocus())
+                                        .put("originalValue", originalValue).put("actualValue", field.text.toString())
+                                        .put("originalSelectionStart", originalStart).put("originalSelectionEnd", originalEnd)
+                                        .put("selectionStart", field.selectionStart).put("selectionEnd", field.selectionEnd)
+                                        .put("scrollViews", org.json.JSONArray(views(root).filterIsInstance<android.widget.ScrollView>().filter { it.isShown }.map { scroll ->
+                                            org.json.JSONObject().put("width", scroll.width).put("height", scroll.height)
+                                                .put("scrollX", scroll.scrollX).put("scrollY", scroll.scrollY).put("layoutRequested", scroll.isLayoutRequested)
+                                                .put("childWidth", scroll.getChildAt(0)?.width).put("childHeight", scroll.getChildAt(0)?.height)
+                                                .put("childLayoutRequested", scroll.getChildAt(0)?.isLayoutRequested)
+                                        })))
+                                    if (samples.length() < 20) root.postOnAnimation(this) else sampled.countDown()
+                                }
+                            })
+                        }
+                        assertTrue("Owned View IME diagnostics observe asynchronous real UI frames", sampled.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                        File(directory, "note-ime-initial-layout-frames.json").writeText(org.json.JSONObject()
+                            .put("generatedOnly", true).put("diagnosticOnly", true).put("automaticVisualAcceptance", false)
+                            .put("sampling", "Twenty actual postOnAnimation callbacks; no screenshot, text, focus or selection mutation")
+                            .put("frames", samples).toString(2))
+                    }
                     render("note-keyboard")
                     scenario.onActivity { activity ->
                         val root = activity.window.decorView
