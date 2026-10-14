@@ -107,7 +107,7 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
                 capabilities(instance.capabilities, target); instance.issues.forEach { ui.text(it, parent = target) }
                 if ("configure" in instance.allowedActions) ui.button(MoteI18n.text("配置"), parent = target) { configuration(item, instance) }
                 listOf("check" to MoteI18n.text("核验能力"), "enable" to MoteI18n.text("启用"), "disable" to MoteI18n.text("停用")).forEach { (action, label) ->
-                    if (action in instance.allowedActions) ui.button(label, parent = target) { submit(PluginControlClient.instanceAction(instance.id, action, instance.revision)) }
+                    if (action in instance.allowedActions) ui.button(label, action == "enable", parent = target) { submit(PluginControlClient.instanceAction(instance.id, action, instance.revision)) }
                 }
                 ui.button(MoteI18n.text("查看记忆方案"), parent = target) { tab = "memory"; load() }
             }

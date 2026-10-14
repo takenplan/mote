@@ -236,7 +236,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 if (current.getString("revision") == item.getString("revision")) {
                     ui.text(MoteI18n.text("纠正内容归属（可选）"), parent = card)
                     val (choice, options) = relationSelector(context.optJSONObject("correction")?.optString("ownerRelation").orEmpty().let { if (it == "null") "" else it }, false, card)
-                    ui.button(MoteI18n.text("保存归属声明"), parent = card) {
+                    ui.button(MoteI18n.text("保存归属声明"), true, parent = card) {
                         val relation = options[choice.selectedItemPosition]
                         ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/materials/" + enc(id) + "/context", JSONObject().put("expectedRevision", item.getString("revision")).put("ownerRelation", relation.ifEmpty { null } ?: JSONObject.NULL)) }) { updated -> material(id, updated.getString("revision")) }
                     }
@@ -283,7 +283,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 if (fileEvidence != null) ui.button(MoteI18n.text("纠正此段"), parent = card) {
                     val original = if (fileEvidence.optString("speaker").isNotBlank()) chunk.optString("ocrText").removePrefix("[" + fileEvidence.getString("speaker") + "] ") else chunk.optString("ocrText")
                     val text = ui.field(MoteI18n.text("校正此段文字"), original, multiline = true, parent = card)
-                    ui.button(MoteI18n.text("保存校正"), parent = card) {
+                    ui.button(MoteI18n.text("保存校正"), true, parent = card) {
                         val value = text.text.toString()
                         ui.work(MoteI18n.text("正在保存…"), {
                             api.post("/api/files/" + enc(id) + "/corrections", JSONObject().put("artifactId", fileEvidence.getString("artifactId"))
@@ -324,7 +324,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 val policies = listOf("archive", "snapshot", "reference")
                 val policy = Spinner(ui).apply { adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, policies)
                     setSelection(policies.indexOf(row.optString("retention")).coerceAtLeast(0)) }; card.addView(policy)
-                ui.button(MoteI18n.text("保存设置"), parent = card) {
+                ui.button(MoteI18n.text("保存设置"), true, parent = card) {
                     val api = client; val request = JSONObject().put("name", name.text.toString()).put("enabled", enabled.isChecked).put("retention", policies[policy.selectedItemPosition]).put("ownerRelation", relations[relation.selectedItemPosition].ifEmpty { null } ?: JSONObject.NULL)
                     ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/sources/" + enc(row.getString("id")), request) }) { screens.refresh() }
                 }
@@ -360,7 +360,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             val statement = ui.field(MoteI18n.text("陈述"), row.optString("statement"), multiline = true)
             val title = ui.field(MoteI18n.text("标题"), row.optString("title"))
             val uncertainty = ui.field(MoteI18n.text("不确定性"), row.optString("uncertainty"), multiline = true)
-            ui.button(MoteI18n.text("保存校正")) {
+            ui.button(MoteI18n.text("保存校正"), true) {
                 val corrected = JSONObject().put("title", title.text.toString()).put("statement", statement.text.toString()).put("uncertainty", uncertainty.text.toString()).put("version", row.optInt("version", 1))
                 ui.work(MoteI18n.text("正在保存…"), { api.post("/api/memories/" + enc(id) + "/correct", corrected) }) { memory(id) }
             }

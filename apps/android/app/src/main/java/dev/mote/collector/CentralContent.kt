@@ -338,7 +338,7 @@ internal class CentralContent(
         return MoteUi.field(EditText(this).apply {
             hint = label; contentDescription = label; setText(value); isSaveEnabled = false
             MoteUi.textInput(this, InputType.TYPE_CLASS_TEXT or if (password) InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_TEXT_FLAG_CAP_SENTENCES, multiline)
-        }).also(parent::addView)
+        }).also { parent.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }) }
     }
     internal fun card(parent: LinearLayout = body): LinearLayout = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@CentralContent, DesignTokens.surface)

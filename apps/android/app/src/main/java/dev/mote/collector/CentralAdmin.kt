@@ -380,12 +380,12 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             configuration(MoteI18n.text("行动设置"), "/api/actions", "/api/actions/settings") { it.getJSONObject("settings") }
         }
         val todo = ui.field(MoteI18n.text("待办标题"))
-        ui.button(MoteI18n.text("添加待办")) {
+        ui.button(MoteI18n.text("添加待办"), true) {
             action("/api/todos", JSONObject().put("id", UUID.randomUUID().toString()).put("title", todo.text.toString()).put("description", "").put("dueAt", JSONObject.NULL).put("evidenceIds", JSONArray()))
         }
         library.paged("/api/todos?limit=30", ui.card()) { row, card ->
             ui.text(row.getString("title"), DesignTokens.fontSection.toFloat(), card); ui.text(row.optString("description"), parent = card); ui.text(row.optString("status"), parent = card)
-            if (row.optString("status") == "open") ui.button(MoteI18n.text("标记完成"), parent = card) {
+            if (row.optString("status") == "open") ui.button(MoteI18n.text("标记完成"), true, parent = card) {
                 val api = client
                 ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/todos/" + enc(row.getString("id")), JSONObject().put("version", row.getInt("version")).put("status", "completed")) }) { screens.refresh() }
             }
@@ -482,7 +482,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     private fun vault() {
         read("/api/status")
-        ui.button(MoteI18n.text("重新建立索引")) { action("/api/index/retry") }
+        ui.button(MoteI18n.text("重新建立索引"), true) { action("/api/index/retry") }
         ui.button(MoteI18n.text("中央元数据导出")) { ui.saveCentral("/api/export-bundle?mode=metadata", "mote-central-metadata.tar.gz", "application/gzip") }
         ui.button(MoteI18n.text("中央资料与附件导出")) { ui.saveCentral("/api/export-bundle?mode=data", "mote-central-data.tar.gz", "application/gzip") }
         ui.button(MoteI18n.text("导入")) { ui.navigate("imports") }
@@ -516,7 +516,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("实际读取记录")) { read("/api/agent-view/events?afterSeq=0") }
         val question = ui.field(MoteI18n.text("你的问题"), multiline = true)
-        ui.button(MoteI18n.text("首次上下文")) { action("/api/agent-view/startup", JSONObject().put("question", question.text.toString()).put("timeZone", ZoneId.systemDefault().id)) { values(it, ui.card()) } }
+        ui.button(MoteI18n.text("首次上下文"), true) { action("/api/agent-view/startup", JSONObject().put("question", question.text.toString()).put("timeZone", ZoneId.systemDefault().id)) { values(it, ui.card()) } }
     }
     private fun agentDetail(row: JSONObject, path: String, offset: Int = 0) {
         val kind = row.optString("expand")
@@ -548,7 +548,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 require(url.scheme == "https" && url.host == "accounts.google.com")
                 ui.startActivity(Intent(Intent.ACTION_VIEW, url))
             } }
-            ui.button(MoteI18n.text("立即同步")) { action("/api/connectors/$provider/sync") }
+            ui.button(MoteI18n.text("立即同步"), true) { action("/api/connectors/$provider/sync") }
             ui.button(MoteI18n.text("断开连接")) { val api = client; ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/$provider") }) { screens.refresh() } }
         }
         ui.button(MoteI18n.text("选择 Google 日历")) { calendarSelection(false) }
@@ -566,7 +566,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                     val resource = resources.getJSONObject(i); val choice = CheckBox(ui).apply { text = resource.optString("name"); setOnCheckedChangeListener { _, checked -> if (checked) selected.add(resource.getString("uri")) else selected.remove(resource.getString("uri")) } }; body.addView(choice)
                 }
                 val name = ui.field(MoteI18n.text("来源名称"), "MCP")
-                ui.button(MoteI18n.text("导入所选资源")) {
+                ui.button(MoteI18n.text("导入所选资源"), true) {
                     require(selected.isNotEmpty()) { MoteI18n.text("请选择资源") }
                     importMcp(payload, name.text.toString(), JSONObject().put("resourceUris", JSONArray(selected)))
                 }
@@ -576,7 +576,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                     ui.text(tool.getString("name"), DesignTokens.fontRow.toFloat(), card); ui.text(tool.optString("description"), parent = card)
                     val args = ui.field(MoteI18n.text("工具参数 JSON"), "{}", multiline = true, parent = card)
                     val approved = CheckBox(ui).apply { text = MoteI18n.text("我确认此工具只读") }; card.addView(approved)
-                    ui.button(MoteI18n.text("导入工具结果"), parent = card) {
+                    ui.button(MoteI18n.text("导入工具结果"), true, parent = card) {
                         require(approved.isChecked) { MoteI18n.text("请确认工具只读后再执行") }
                         importMcp(payload, name.text.toString(), JSONObject().put("tool", JSONObject().put("name", tool.getString("name"))
                             .put("arguments", JSONObject(args.text.toString())).put("confirmedReadOnly", true)))
@@ -588,7 +588,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun lark() {
         val target = ui.card(); read("/api/connectors/lark", target)
         listOf("check" to "检查状态", "install" to "安装 CLI", "setup" to "开始配置", "login" to "登录", "sync" to "立即同步", "cancel" to "取消").forEach { (command, label) ->
-            ui.button(MoteI18n.text(label)) { action("/api/connectors/lark/$command") { target.removeAllViews(); values(it, target) } }
+            ui.button(MoteI18n.text(label), command in setOf("install", "setup", "sync")) { action("/api/connectors/lark/$command") { target.removeAllViews(); values(it, target) } }
         }
         ui.button(MoteI18n.text("选择日历")) {
             calendarSelection(true)
@@ -675,7 +675,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                     val selection = JSONObject(value.getJSONObject("selection").toString()).put("backupAudio", true)
                     edit(MoteI18n.text("同步范围"), path + "/selection", selection)
                 }
-                ui.button(MoteI18n.text("立即同步"), parent = card) { action(path + "/sync") { recordings() } }
+                ui.button(MoteI18n.text("立即同步"), true, parent = card) { action(path + "/sync") { recordings() } }
                 ui.button(MoteI18n.text("重试失败步骤"), parent = card) { action(path + "/retry") { recordings() } }
                 ui.button(MoteI18n.text("断开连接"), parent = card) { ui.work(MoteI18n.text("正在处理…"), { api.delete(path) }) { recordings() } }
                 ui.button(MoteI18n.text("最近归档的录音"), parent = card) {

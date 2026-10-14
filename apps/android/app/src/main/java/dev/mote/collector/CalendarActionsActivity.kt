@@ -30,7 +30,7 @@ class CalendarActionsActivity : MoteActivity() {
         button(body, MoteI18n.text("连接本机日历")) { if (calendarPermissions()) connect() else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR), 401) }
         button(body, MoteI18n.text("最新建议")) { cursor = 0; refresh() }
         button(body, MoteI18n.text("更早建议")) { if (nextCursor > 0) { cursor = nextCursor; refresh() } }
-        button(body, MoteI18n.text("刷新并同步已确认日程")) { sync() }
+        button(body, MoteI18n.text("刷新并同步已确认日程"), primary = true) { sync() }
         status = TextView(this); body.addView(status)
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; body.addView(list)
         MoteUi.styleTree(body)
@@ -39,7 +39,7 @@ class CalendarActionsActivity : MoteActivity() {
     override fun onResume() { super.onResume(); handler.postDelayed(poll, 20000) }
     override fun onPause() { handler.removeCallbacks(poll); super.onPause() }
     private fun text(parent: LinearLayout, value: String, size: Float = DesignTokens.fontBody.toFloat()) { parent.addView(TextView(this).apply { text = value; MoteUi.type(this, if (size >= 20f) DesignTokens.fontSection else size.toInt(), medium = size >= 20f); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)); setTextIsSelectable(true) }) }
-    private fun button(parent: LinearLayout, title: String, fn: () -> Unit) { parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener { if (!task.busy) fn() } }), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }) }
+    private fun button(parent: LinearLayout, title: String, primary: Boolean = false, fn: () -> Unit) { parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener { if (!task.busy) fn() } }, primary), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }) }
     private fun calendarPermissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     private fun work(label: String, fn: () -> JSONObject) { task.start(label, { status.text = it }, {
         if (!::client.isInitialized) client = CalendarActions(applicationContext, foreground = true)
@@ -77,7 +77,7 @@ class CalendarActionsActivity : MoteActivity() {
                 button(card, if (kind == "calendar.create") MoteI18n.text("核对并添加到日历") else MoteI18n.text("核对变更")) { edit(a, data) }
                 button(card, MoteI18n.text("忽略这条建议")) { work(MoteI18n.text("正在保存选择…")) { client.dismiss(a); client.list(cursor) } }
             }
-            if (a.optJSONObject("target")?.optString("deviceId") == deviceId && state in listOf("approved", "executing", "uncertain")) button(card, MoteI18n.text("写入 / 核实保存结果")) { work(MoteI18n.text("正在写入已确认日程…")) { client.execute(a.getString("id")); client.list(cursor) } }
+            if (a.optJSONObject("target")?.optString("deviceId") == deviceId && state in listOf("approved", "executing", "uncertain")) button(card, MoteI18n.text("写入 / 核实保存结果"), primary = true) { work(MoteI18n.text("正在写入已确认日程…")) { client.execute(a.getString("id")); client.list(cursor) } }
         }
     }
     private fun edit(action: JSONObject, data: JSONObject) {
