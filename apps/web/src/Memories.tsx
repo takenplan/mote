@@ -18,7 +18,6 @@ import {MemoryIntegration,currentIntegrationCandidate} from './MemoryIntegration
 import type {Material} from './Materials';
 import type {MemoryRecipeRef} from './memory-recipes';
 import {type Api,errorMessage,dateTime,type Range,type FileEvidence} from './api';
-import './memory-presentation.css';
 
 interface MemoryEvidence {
   id:string;sourceId?:string;externalId?:string;revision?:string;capturedAt:string;receivedAt:string;
