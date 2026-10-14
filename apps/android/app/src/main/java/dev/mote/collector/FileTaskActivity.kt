@@ -126,7 +126,7 @@ class FileTaskActivity : MoteActivity() {
     private fun showForm() {
         building = true; body.removeAllViews(); presetButtons.clear()
         fun label(text: String, target: LinearLayout = body) = TextView(this).apply {
-            this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontBody); setPadding(0, moteDp(16), 0, moteDp(6)); target.addView(this)
+            this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontBody); setTextColor(MoteUi.ink); setPadding(0, moteDp(16), 0, moteDp(6)); target.addView(this)
         }
         fun hint(text: String, target: LinearLayout = body) = TextView(this).apply { this.text = MoteI18n.text(text); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); target.addView(this, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceInline); bottomMargin = moteDp(DesignTokens.spaceInline) }) }
         fun field(value: String, tagValue: String, target: LinearLayout = body, numeric: Boolean = false, multiline: Boolean = false) = EditText(this).apply {
@@ -142,10 +142,11 @@ class FileTaskActivity : MoteActivity() {
                 } })
         }
         window.decorView.findViewWithTag<TextView>("detail-title").text = MoteI18n.text(if (savedSource != null) "文件来源设置" else if (source.tree) "同步文件夹" else "导入文件")
+        window.decorView.findViewWithTag<android.view.View>("detail-add-action")?.visibility = if (savedSource == null) View.VISIBLE else View.GONE
         hint(if (source.tree) "持续收集文件夹中的新增文件和修改。" else if (source.syncContinuously) "持续同步这个文件的修改。" else "导入一次，不跟踪后续修改。")
         status = TextView(this); body.addView(status)
         pickButton = Button(this).apply { tag = "file-task:pick"; setOnClickListener { pick() }; body.addView(this) }
-        selectedInfo = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12)); background = MoteUi.shape(this@FileTaskActivity); body.addView(this) }
+        selectedInfo = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(moteDp(12), moteDp(12), moteDp(12), moteDp(12)); background = MoteUi.shape(this@FileTaskActivity); body.addView(this) }
         if (source.tree) {
             label("收集哪些文件")
             val choices = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }; body.addView(choices)
@@ -173,7 +174,7 @@ class FileTaskActivity : MoteActivity() {
             tag = "file-task:retention"; setSelection(listOf("snapshot", "archive", "reference").indexOf(source.retention))
             body.addView(this)
         }
-        retentionHelp = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); body.addView(this) }
+        retentionHelp = TextView(this).apply { MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); body.addView(this) }
         advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
         body.addView(Button(this).apply { text = MoteI18n.text("高级设置"); tag = "file-task:advanced"; setOnClickListener { advanced.visibility = if (advanced.visibility == View.VISIBLE) View.GONE else View.VISIBLE; persistDraft() } })
         body.addView(advanced)

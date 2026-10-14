@@ -47,6 +47,12 @@ class UiInventoryRolloutInstrumentedTest {
             ActivityScenario.launch<Activity>(intent).use { scenario ->
                 waitFor(name) { var ready = false; scenario.onActivity { ready = GeneratedWindowRendering.hasNoPendingLabels(it.window.decorView) && text(it).contains(MoteI18n.text(marker)) }; ready }
                 scenario.onActivity { activity ->
+                    if (name in setOf("rollout-file-task-settings", "rollout-folder-task-settings"))
+                        assertFalse("Saved source configuration has no unrelated record action", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") })
+                    if (name == "rollout-file-original") {
+                        val original = views(activity.window.decorView).filterIsInstance<TextView>().single { it.text.toString() == "Generated original 中文.\nAn archive preserves the original evidence.\n" }
+                        assertEquals("Literal originals use the shared reading ink", MoteUi.ink, original.currentTextColor)
+                    }
                     GeneratedWindowRendering.save(activity, directory, name)
                     File(directory, "$name.txt").writeText(text(activity).joinToString("\n"))
                     assertFalse(settings.enabled)

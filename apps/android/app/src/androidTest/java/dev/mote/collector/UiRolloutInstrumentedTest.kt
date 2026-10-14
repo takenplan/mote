@@ -55,6 +55,8 @@ class UiRolloutInstrumentedTest {
                 instrumentation.waitForIdleSync(); Thread.sleep(100)
                 scenario.onActivity { activity ->
                     val root = activity.window.decorView
+                    val palette = activity.obtainStyledAttributes(intArrayOf(android.R.attr.colorAccent))
+                    try { assertEquals("Native controls inherit the shared blue accent", MoteUi.accent, palette.getColor(0, 0)) } finally { palette.recycle() }
                     assertTrue(activity.window.attributes.flags and WindowManager.LayoutParams.FLAG_SECURE != 0)
                     assertFalse("Maintenance pages do not begin unrelated records", views(root).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") })
                     val title = views(root).filterIsInstance<TextView>().single { it.isShown && it.tag?.toString() in setOf("local-page-title", "detail-title") }

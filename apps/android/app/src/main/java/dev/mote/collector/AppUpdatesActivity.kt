@@ -30,8 +30,8 @@ class AppUpdatesActivity : MoteActivity() {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         if (BuildConfig.APPLICATION_ID.endsWith(".dev")) {
             val body = moteDetailPage(title = MoteI18n.text("应用更新"))
-            body.addView(TextView(this).apply { text = "Mote DEV · ${BuildConfig.VERSION_NAME}"; MoteUi.type(this, DesignTokens.fontSection, medium = true); setPadding(0, moteDp(DesignTokens.spaceItem), 0, moteDp(DesignTokens.spaceInline)) })
-            body.addView(TextView(this).apply { text = MoteI18n.text("开发阶段仅提供 DEV 安装包，请到 GitHub 下载并手动安装。"); MoteUi.type(this, DesignTokens.fontSupport); setPadding(0, 0, 0, moteDp(DesignTokens.spaceItem)) })
+            body.addView(TextView(this).apply { text = "Mote DEV · ${BuildConfig.VERSION_NAME}"; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceItem), 0, moteDp(DesignTokens.spaceInline)) })
+            body.addView(TextView(this).apply { text = MoteI18n.text("开发阶段仅提供 DEV 安装包，请到 GitHub 下载并手动安装。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, 0, 0, moteDp(DesignTokens.spaceItem)) })
             body.addView(MoteUi.button(Button(this).apply {
                 text = MoteI18n.text("下载 DEV 安装包")
                 setOnClickListener { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/utopiafar/mote/releases"))) }.onFailure { Toast.makeText(this@AppUpdatesActivity, MoteI18n.text("无法打开 GitHub，请安装或启用浏览器后重试"), Toast.LENGTH_LONG).show() } }

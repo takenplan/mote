@@ -30,7 +30,7 @@ class SourcesActivity : MoteActivity() {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         restoringDraft = lastNonConfigurationInstance as? Draft
         val content = moteDetailPage(title = MoteI18n.text("来源管理"))
-        content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); MoteUi.type(this, DesignTokens.fontBody) })
+        content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted) })
         fun action(label: String, callback: () -> Unit) { content.addView(Button(this).apply { text = label; setOnClickListener { callback() } }) }
         operationStatus = TextView(this); content.addView(operationStatus)
         action(MoteI18n.text("连接本机日历")) {
@@ -93,13 +93,15 @@ class SourcesActivity : MoteActivity() {
                 else {
                     if (rows.getOrThrow().isEmpty()) list.addView(TextView(this).apply { text = MoteI18n.text("尚未连接来源。权限只在点击连接时申请。") })
                     for ((source, summary) in rows.getOrThrow()) {
-                        list.addView(TextView(this).apply { text = source.name; MoteUi.type(this, DesignTokens.fontSection); setPadding(0, moteDp(20), 0, moteDp(4)) })
-                        list.addView(TextView(this).apply { text = summary; MoteUi.type(this, DesignTokens.fontSupport) })
-                        list.addView(Button(this).apply { text = MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源"); setOnClickListener {
+                        val group = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@SourcesActivity); setPadding(moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline)) }
+                        list.addView(group, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceItem) })
+                        group.addView(TextView(this).apply { text = source.name; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)) })
+                        group.addView(TextView(this).apply { text = summary.removePrefix("\n${source.name}\n"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, 0, 0, moteDp(DesignTokens.spaceInline)) })
+                        group.addView(Button(this).apply { text = MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源"); setOnClickListener {
                             work(MoteI18n.text("正在保存来源设置…")) { localSources().save(source.copy(enabled = !source.enabled)); SourceWork.schedule(applicationContext, true) }
                         } })
-                        if (source.kind == "local-files") list.addView(Button(this).apply { text = MoteI18n.text("重新授权或选择范围"); setOnClickListener { edit(source) } })
-                        list.addView(Button(this).apply { text = MoteI18n.text("设置 · {0}", source.name); setOnClickListener { edit(source) } })
+                        if (source.kind == "local-files") group.addView(Button(this).apply { text = MoteI18n.text("重新授权或选择范围"); setOnClickListener { edit(source) } })
+                        group.addView(Button(this).apply { text = MoteI18n.text("设置 · {0}", source.name); setOnClickListener { edit(source) } })
                     }
                 }
                 MoteUi.styleTree(list)

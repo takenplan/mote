@@ -35,9 +35,9 @@ class StorageStatisticsActivity : MoteActivity() {
                     if (isFinishing || isDestroyed) return@runOnUiThread
                     refresh.isEnabled = true; result.removeAllViews()
                     report.onSuccess { (summary, types, days) ->
-                        result.addView(TextView(this).apply { text = summary; MoteUi.type(this, DesignTokens.fontSection, medium = true) })
+                        result.addView(TextView(this).apply { text = summary; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink) })
                         for ((title, rows) in listOf(MoteI18n.text("按文件类型") to types, MoteI18n.text("按日期") to days)) {
-                            result.addView(TextView(this).apply { text = title; MoteUi.type(this, DesignTokens.fontSection, medium = true); setPadding(0, moteDp(DesignTokens.spaceItem), 0, moteDp(DesignTokens.spaceInline)) }); val maximum = rows.values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
+                            result.addView(TextView(this).apply { text = title; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceItem), 0, moteDp(DesignTokens.spaceInline)) }); val maximum = rows.values.maxOrNull()?.coerceAtLeast(1L) ?: 1L
                             for ((label, bytes) in rows) { result.addView(TextView(this).apply { text = "$label · ${"%.2f".format(bytes / 1048576.0)} MiB" }); result.addView(ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal).apply { max = 1000; progress = (bytes.toDouble() / maximum * 1000).toInt() }) }
                         }
                     }.onFailure { result.addView(TextView(this).apply { text = MoteI18n.text("统计读取失败，请重试。") }) }

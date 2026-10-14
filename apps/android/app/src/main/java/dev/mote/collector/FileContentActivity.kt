@@ -40,7 +40,7 @@ class FileContentActivity : MoteActivity() {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         offset = savedInstanceState?.getInt("offset", 0) ?: 0
         savedInstanceState?.getString("exportRevision")?.let { revision -> exportVersion = Triple(savedInstanceState.getString("exportSource", ""), savedInstanceState.getString("exportExternal", ""), revision) }
-        content = moteDetailPage()
+        content = moteDetailPage().apply { background = MoteUi.shape(this@FileContentActivity, DesignTokens.surface, MoteUi.readingRadius) }
     }
     override fun onSaveInstanceState(state: Bundle) {
         state.putInt("offset", offset); exportVersion?.let { (source, external, revision) -> state.putString("exportSource", source); state.putString("exportExternal", external); state.putString("exportRevision", revision) }
@@ -142,10 +142,10 @@ class FileContentActivity : MoteActivity() {
     }
     private fun render(detail: Detail) {
         val row = detail.row; val item = detail.item
-        text(item.optString("title"), 27f)
-        text(MoteI18n.text("来源：{0}", detail.source.name), DesignTokens.fontSupport.toFloat())
-        text(item.optString("observedAt"), 12f)
-        transportStatus = text(LocalContentPresentation.fileStatus(row), 15f)
+        text(item.optString("title"), DesignTokens.fontTitleMobile.toFloat()).apply { MoteUi.type(this, DesignTokens.fontTitleMobile, medium = true) }
+        text(MoteI18n.text("来源：{0}", detail.source.name), DesignTokens.fontSupport.toFloat()).setTextColor(MoteUi.muted)
+        text(item.optString("observedAt"), DesignTokens.fontMeta.toFloat()).setTextColor(MoteUi.muted)
+        transportStatus = text(LocalContentPresentation.fileStatus(row), DesignTokens.fontBody.toFloat())
         folderProgress = if (detail.folderSummary.isNotBlank()) text(detail.folderSummary, DesignTokens.fontSupport.toFloat()) else null
         if (detail.capture != null) text(LocalContentPresentation.centralStatus(detail.file, detail.material), 15f)
         if (detail.failed) text(MoteI18n.text("中央暂不可用 · 保留本机状态，恢复连接后重试"), DesignTokens.fontSupport.toFloat())
@@ -185,6 +185,6 @@ class FileContentActivity : MoteActivity() {
             contentResolver.openOutputStream(destination)?.use { output -> fileArchives().exportPending(selected.first, selected.second, selected.third, output) } ?: error("Destination unavailable")
         }) { result -> Toast.makeText(this, MoteI18n.text(if (result.isSuccess) "本机原件已导出" else "原件导出未完成，请重新打开内容后重试"), Toast.LENGTH_LONG).show(); load() }
     }
-    private fun text(value: String, size: Float = DesignTokens.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setTextIsSelectable(true); setPadding(0, moteDp(8), 0, moteDp(8)) }.also(content::addView)
+    private fun text(value: String, size: Float = DesignTokens.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setTextColor(MoteUi.ink); setTextIsSelectable(true); setPadding(0, moteDp(8), 0, moteDp(8)) }.also(content::addView)
     private fun button(value: String, action: () -> Unit) = content.addView(MoteUi.button(Button(this).apply { text = value; setOnClickListener { action() } }))
 }

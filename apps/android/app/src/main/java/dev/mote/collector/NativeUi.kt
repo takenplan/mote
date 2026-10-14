@@ -278,6 +278,7 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
     // Content and source tasks share Add; maintenance pages keep their configuration duty.
     val allowsAdd = this is CaptureRecordsActivity || this is FileContentActivity || this is FileTaskActivity || this is SourcesActivity
     if (primary != null && allowsAdd) header.addView(MoteUi.button(Button(this).apply {
+        tag = "detail-add-action"
         text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
         setOnClickListener { showMoteAddActions() }
     }), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(14) })
