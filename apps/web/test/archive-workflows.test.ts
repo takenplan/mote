@@ -36,6 +36,24 @@ test('report document places the restrictive resource policy before any generate
   assert.ok(!html.includes('allow-scripts'));
 });
 
+test('full-document reports without citations keep one effective host policy and retain authored presentation',()=>{
+  const dom=new JSDOM('<!doctype html><body></body>');
+  const previous=Object.getOwnPropertyDescriptor(globalThis,'document');
+  Object.defineProperty(globalThis,'document',{configurable:true,value:dom.window.document});
+  try{
+    const stored='<html><head><meta http-equiv="Content-Security-Policy" content="default-src \'none\'"><style>p{color:green}</style></head><body><h1>Generated report</h1><p>Uncited facts still need review.</p></body></html>';
+    const result=reportDocument(stored,[]),rendered=new JSDOM(result);
+    const policies=rendered.window.document.querySelectorAll('meta[http-equiv="content-security-policy" i]');
+    assert.equal(policies.length,1);
+    assert.equal(policies[0].parentElement?.tagName,'HEAD');
+    assert.match(policies[0].getAttribute('content')??'',/script-src 'none';.*connect-src 'none'/);
+    assert.match(result,/<style>p\{color:green\}<\/style>/);
+    assert.match(result,/<h1>Generated report<\/h1><p>Uncited facts still need review\.<\/p>/);
+    assert.ok(stored.includes('Content-Security-Policy'),'the stored artifact remains unchanged');
+    rendered.window.close();
+  }finally{if(previous)Object.defineProperty(globalThis,'document',previous);else Reflect.deleteProperty(globalThis,'document');dom.window.close();}
+});
+
 test('report display shortens only verified visible citation text in an inert copy',()=>{
   const other='22222222-2222-4222-8222-222222222222';
   const requests:string[]=[];

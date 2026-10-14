@@ -101,7 +101,7 @@ function rendererReadiness() {
  if(!expectedPage||!visible(content)||page!==expectedPage)return {...base,reason:'requested consumer is not mounted'};
  const busy=[...document.querySelectorAll('[data-page-loading],.loading,.load-more .spin,[aria-busy="true"]')].filter(visible);
  if(busy.length||base.pendingApi||performance.now()-(window.__moteUiApiSettledAt??0)<120)return {...base,reason:'consumer or requests still loading',busy:busy.map(element=>element.getAttribute('data-page-loading')||element.className||element.tagName)};
- const login=document.querySelector('.connect-modal');
+ const login=document.querySelector('.connect-modal[role="dialog"]');
  if(visible(login)){
   const input=login.querySelector('input[type=password]');
   if(!visible(input)||input.disabled)return {...base,reason:'Actual login consumer is not ready'};
@@ -189,7 +189,7 @@ async function clickLabel(labels, expectedRoute, name) {
 }
 async function capture(name, context = {}) {
   const readiness = await readyConsumer(name);
-  await js('window.scrollTo(0,0); new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+  await js((context.preserveScroll ? '' : 'window.scrollTo(0,0); ')+'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   const state = await js(`(() => {
     const visible=e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';
     const controls=[...document.querySelectorAll('button,a[href],input,textarea,select,summary')].filter(visible);
@@ -353,6 +353,33 @@ async function consumerMatrix() {
       window.setSize(1440,1000);
     }
   }
+}
+async function rolloutExpandedFitJourney() {
+  for(const language of ['zh-CN','en']){
+    window.setSize(1440,1000);await route('today','.home-page');
+    if(await js('document.documentElement.lang')!==language)await chooseLanguage(language,true,'.home-page');
+    await route('preferences','.settings-destinations');window.setSize(820,900);
+    await until(()=>js('innerWidth===820'),'session caption tablet viewport');
+    const caption=await js(`(()=>{
+      const select=document.querySelector('.session-lifetime-control select');select.scrollIntoView({block:'center'});
+      const style=getComputedStyle(select),canvas=document.createElement('canvas'),context=canvas.getContext('2d');context.font=style.font;
+      return {label:select.selectedOptions[0].textContent,width:select.getBoundingClientRect().width,required:context.measureText(select.selectedOptions[0].textContent).width+parseFloat(style.paddingLeft)+parseFloat(style.paddingRight)+18};
+    })()`);
+    assert.ok(caption.width>=caption.required,'The selected session lifetime remains fully readable: '+caption.label);
+    await capture('settings-session-fit-'+language,{scene:'settings-session-fit',variant:'tablet',preserveScroll:true,reviewSelection:true});
+    for(const [path,selector,scene]of [['system/models?category=model','.memory-settings','modules-expanded-fit'],['system/models?category=file-processing','.file-processing-settings','file-settings-expanded-fit']]){
+      window.setSize(1440,1000);await route(path,'.server-settings');
+      await js(`document.querySelectorAll('.server-settings details:not([open])').forEach(detail=>detail.querySelector('summary')?.click());true`);
+      await until(()=>js(`!!document.querySelector(${JSON.stringify(selector)})`),'actual expanded '+scene);await readyConsumer(scene);
+      window.setSize(320,740);await until(()=>js('innerWidth===320'),'expanded minimum viewport');
+      assert.equal(await js(`document.documentElement.scrollWidth<=innerWidth&&document.querySelector(${JSON.stringify(selector)}).scrollWidth<=document.querySelector(${JSON.stringify(selector)}).clientWidth`),true,'Expanded settings and controls fit the minimum viewport: '+scene);
+      const target=scene==='modules-expanded-fit'?'.memory-settings .discovery-inline-guidance':'.file-processing-settings .policy-card';
+      await js(`document.querySelector(${JSON.stringify(target)}).scrollIntoView({block:'center'});true`);
+      await capture(scene+'-'+language,{scene,variant:'minimum',preserveScroll:true,reviewSelection:true});
+    }
+    journeys.push({name:'expanded settings and complete session caption',language,status:'verified',checks:['selected lifetime caption at820','expanded module guidance at320','expanded file plan actions and fields at320']});
+  }
+  window.setSize(1440,1000);await route('today','.home-page');
 }
 async function authenticate(token) {
   await js("document.querySelector('.simple-welcome button').click();true");
@@ -598,6 +625,7 @@ async function run() {
   writeFileSync(join(output, 'language-confirmations.json'), JSON.stringify({ generatedOnly: true, simulatedConfirmations: true, confirmations }, null, 2), {mode: 0o600});
   await settingsJourneys();
   await consumerMatrix();
+  if(rollout)await rolloutExpandedFitJourney();
   if(artRound>=2||rollout)await mobileNoteFocusJourney();
   if(artRound||rollout)await artReaderMatrix();
   await route('today','.home-page');
