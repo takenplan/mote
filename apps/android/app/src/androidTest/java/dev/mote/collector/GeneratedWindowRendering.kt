@@ -183,7 +183,7 @@ internal object GeneratedWindowRendering {
             "rollout-about" -> Triple("rollout-about", "content", "关于与更新")
             "rollout-developer" -> Triple("rollout-developer", "content", "开发者选项")
             "rollout-diagnostics" -> Triple("rollout-diagnostics", "content", "诊断与支持")
-            "rollout-capture" -> Triple("rollout-capture", "content", "屏幕与应用活动")
+            "rollout-capture" -> Triple("rollout-capture", "content", "采集与存储")
             "rollout-processing" -> Triple("rollout-processing", "content", "图像质量与去重")
             "rollout-storage-settings" -> Triple("rollout-storage-settings", "content", "本机存储")
             "rollout-updates" -> Triple("rollout-updates", "content", "应用更新")
@@ -240,6 +240,11 @@ internal object GeneratedWindowRendering {
                 .put("language", MoteI18n.language()).put("screenWidthDp", configuration.screenWidthDp)
                 .put("densityDpi", configuration.densityDpi).put("fontScale", configuration.fontScale)
                 .put("actualIme", base.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
+            if (name == "rollout-scanner") {
+                val preview = views(base).filterIsInstance<com.journeyapps.barcodescanner.DecoratedBarcodeView>().single()
+                metadata.put("scannerPreview", viewGeometry(preview).put("cameraBackend", "host-verified-emulated")
+                    .put("minimumTestSizeDp", 160).put("cameraImagePixelsClaimed", false))
+            }
             File(directory, "$name.json").writeText(metadata.toString(2))
             check(geometryFailures.isEmpty()) { "Real dialog button geometry failed for $name; evidence saved in ${File(directory, "$name.json")}: ${geometryFailures.joinToString("; ")}" }
         } finally { bitmap.recycle() }

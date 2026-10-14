@@ -71,7 +71,7 @@ class UiRolloutInstrumentedTest {
             }
         }
         for ((page, title) in listOf("PERMISSIONS" to "权限与后台运行", "ABOUT" to "关于与更新", "DEVELOPER" to "开发者选项",
-            "DIAGNOSTICS" to "诊断与支持", "CAPTURE" to "屏幕与应用活动", "PROCESSING" to "图像质量与去重", "STORAGE" to "本机存储")) {
+            "DIAGNOSTICS" to "诊断与支持", "CAPTURE" to "采集与存储", "PROCESSING" to "图像质量与去重", "STORAGE" to "本机存储")) {
             val scene = when (page) { "PROCESSING" -> "processing"; "STORAGE" -> "storage-settings"; else -> page.lowercase() }
             render("rollout-$scene", title, Intent(context, MainActivity::class.java).putExtra("page", page))
         }
