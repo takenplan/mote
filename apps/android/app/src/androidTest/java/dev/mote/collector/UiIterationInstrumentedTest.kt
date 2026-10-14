@@ -149,6 +149,23 @@ class UiIterationInstrumentedTest {
                                 views(root).filterIsInstance<TextView>().any { it.isShown && it.text.toString() in setOf("Mote", "‹  " + MoteI18n.text("返回上级")) })
                         }
                         GeneratedWindowRendering.save(activity, directory, name)
+                        if (args.getString("uiScrollEvidence") == "true") {
+                            val evidenceDirectory = File(context.filesDir, "ui-scroll-evidence/$variant/$name")
+                            val coverage = org.json.JSONObject(File(evidenceDirectory, "coverage.json").readText()).getJSONArray("scrollViews")
+                            for (index in 0 until coverage.length()) {
+                                val scroll = coverage.getJSONObject(index)
+                                if (scroll.getInt("originalScrollY") > 0 && scroll.getInt("maximumScrollY") > 0) {
+                                    val frames = scroll.getJSONArray("frames")
+                                    val upper = (0 until frames.length()).map { frames.getJSONObject(it) }.singleOrNull { it.getInt("scrollY") == 0 }
+                                    assertNotNull("A focused lower control must retain this same page's complete upper prefix: $name", upper)
+                                    val frameDirectory = File(evidenceDirectory, requireNotNull(upper).getString("directory"))
+                                    assertTrue("The same-instance upper prefix has actual image evidence", File(frameDirectory, "$name.png").isFile)
+                                    val proof = org.json.JSONObject(File(frameDirectory, "$name.json").readText())
+                                    assertTrue(proof.getBoolean("generatedOnly")); assertTrue(proof.getBoolean("secureWindow"))
+                                    assertEquals(0, proof.getJSONObject("scrollEvidence").getInt("scrollY"))
+                                }
+                            }
+                        }
                         File(directory, "$name.txt").writeText(views(root).filterIsInstance<TextView>().filter { it.isShown }.joinToString("\n") { it.text.toString() })
                     }
                 }
@@ -197,7 +214,12 @@ class UiIterationInstrumentedTest {
                 scrollTo("立即同步")
                 render("home-sync-details")
                 scenario.onActivity { activity ->
-                    val labels = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }.map { it.text.toString() }
+                    val shown = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }
+                    val labels = shown.map { it.text.toString() }
+                    assertEquals("Home's immediate synchronization task uses the execution action role", android.graphics.Color.WHITE,
+                        shown.single { it.text.toString() == MoteI18n.text("立即同步") }.currentTextColor)
+                    assertEquals("Home's connection settings remains a navigation action", MoteUi.accent,
+                        shown.single { it.text.toString() == MoteI18n.text("连接设置") }.currentTextColor)
                     assertTrue("Receipt and processing has its own explicit role", labels.contains(MoteI18n.text("接收与整理状态")))
                     assertTrue("The exact receipt versus processing distinction remains visible", labels.contains(MoteI18n.text("本机保存、中央接收与整理完成分别显示；接收确认不代表已经可以搜索。")))
                     assertTrue("Processing remains explicitly unknown in this generated offline fixture", labels.any { it.contains(MoteI18n.text("中央处理状态待查询，请在中央任务中心查看")) })
@@ -260,7 +282,16 @@ class UiIterationInstrumentedTest {
                 assertEquals("Language, plugins and permissions must have distinct actual rendered icons", 3, settingsIconHashes.distinct().size)
                 scenario.onActivity { activity -> views(activity.window.decorView).single { it.isShown && it.tag == "menu:${MoteI18n.text("连接与同步")}" }.performClick() }
                 render("connection")
-                scenario.onActivity { activity -> assertFalse("Connection settings keeps record addition out of its task", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") }) }
+                scenario.onActivity { activity ->
+                    val shown = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.isShown }
+                    assertFalse("Connection settings keeps record addition out of its task", shown.any { it.contentDescription == MoteI18n.text("添加内容") })
+                    val retry = shown.single { it.text.toString() == MoteI18n.text("立即重试同步") }
+                    assertEquals("The immediate synchronization task uses the execution action role", android.graphics.Color.WHITE, retry.currentTextColor)
+                    for (label in listOf("验证已保存的采集连接", "保存并打开中央界面")) {
+                        val secondary = shown.single { it.text.toString() == MoteI18n.text(label) }
+                        assertEquals("Diagnostics and central navigation retain their secondary role", MoteUi.accent, secondary.currentTextColor)
+                    }
+                }
                 tab("LIBRARY"); awaitVisible("这里还没有内容。点击添加，选择文件、屏幕或随手记。"); render("content")
                 scenario.onActivity { activity -> assertTrue("Content still offers the shared record action", views(activity.window.decorView).any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") }) }
                 tab("ASK")

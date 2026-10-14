@@ -7,6 +7,7 @@ require('./fixture-background.cjs');
  * This records UI journey evidence. It does not assign model/human quality scores.
  */
 require('./fixture-language.cjs');
+const {controlCaptionPresentation}=require('./control-caption-probe.cjs');
 const { app, BrowserWindow } = require('electron');
 const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } = require('node:fs');
 const { tmpdir } = require('node:os');
@@ -349,6 +350,22 @@ async function consumerMatrix() {
           assert.equal(await js("document.querySelector('.library-navigation').getClientRects().length"),0,'Compact library has one category control');
           assert.equal(await js("document.querySelectorAll('.library-compact-categories select').length"),1);
           assert.equal(await js("document.querySelector('.library-compact-categories select').value"),'materials');
+        }
+        if(rollout&&scene==='agent-view'&&width<=760){
+          const presentation=await js('('+controlCaptionPresentation.toString()+')(".agent-inspector .section-tabs")');
+          assert.equal(presentation.controls.length,4,'All four Agent tabs remain present');
+          assert.ok(presentation.controls.every(control=>control.complete&&control.hit&&control.words.every(word=>word.lines===1)),'Agent captions retain whole words and reachable bounds');
+          assert.deepEqual(presentation.after,presentation.before,'Caption inspection preserves labels');
+          assert.ok(presentation.scrollRestored,'Caption inspection preserves document and inner scroll positions');
+          journeys.push({name:'Agent compact tabs retain full natural words',language,width,presentation});
+          if(language==='en'&&width===390){
+            await js("[...document.querySelectorAll('.agent-inspector .section-tabs button')].find(button=>button.textContent==='Published materials').click();true");
+            await until(()=>js("document.querySelectorAll('.materials-browser .source-item').length>0"),'actual Agent published material cards');
+            assert.ok(await js("[...document.querySelectorAll('.materials-browser .source-item p')].every(element=>/\\d+\\s+characters\\b/.test(element.textContent))"),'Material counts retain English word boundaries');
+            await js("document.querySelector('.agent-inspector .section-tabs button').click();true");
+            await readyConsumer('Agent scope restored after published material count check');
+            await js('window.scrollTo(0,0);true');
+          }
         }
         await capture(scene+'-'+(language==='en'?'en':'zh')+'-'+width,{scene,variant,reviewSelection:true,notes:scene==='privacy'?'Existing Sources and external apps settings, including write scopes; this is not a newly invented standalone privacy page.':''});
       }

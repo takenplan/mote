@@ -315,6 +315,9 @@ internal object GeneratedWindowRendering {
             val original = scroll.scrollY
             val offsets = mutableListOf<Int>()
             if (end > 0) {
+                // A journey can focus a lower control before saving its canonical frame.
+                // Retain this same window's actual upper prefix as well as its continuations.
+                if (original > 0) offsets += 0
                 // A log is an intentionally bounded reading panel: prove middle/end, not every repeated log line.
                 if (name == "rollout-logs") offsets += listOf(end / 2, end)
                 else {

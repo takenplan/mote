@@ -328,7 +328,7 @@ class MainActivity : MoteActivity() {
             centralConnectionTitle = text(MoteI18n.text("正在检查…"), DesignTokens.fontRow).apply { MoteUi.type(this, DesignTokens.fontRow, medium = true) }
             centralConnectionStatus = text(MoteI18n.text("正在读取保存的连接与同步状态…"), DesignTokens.fontSupport, MoteUi.muted)
             text(MoteI18n.text("本机保存、中央接收与整理完成分别显示；接收确认不代表已经可以搜索。"), DesignTokens.fontMeta, MoteUi.muted)
-            rowButtons(MoteI18n.text("立即同步"), { retrySync() }, MoteI18n.text("连接设置"), { showPage(Page.CONNECTION) })
+            rowButtons(MoteI18n.text("立即同步"), { retrySync() }, MoteI18n.text("连接设置"), { showPage(Page.CONNECTION) }, leftPrimary = true)
             homeSendAction = button(MoteI18n.text("暂停全部发送")) { changeSendPause() }
             menu(MoteI18n.text("发送中的内容"), MoteI18n.text("查看待发条目、阻塞原因与恢复操作"), "sync") { startActivity(Intent(this@MainActivity, SyncQueueActivity::class.java)) }
             content = previous
@@ -631,7 +631,7 @@ class MainActivity : MoteActivity() {
                 else startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "overview"))
             }
         }
-        button(MoteI18n.text("立即重试同步")) { retrySync() }
+        button(MoteI18n.text("立即重试同步"), true) { retrySync() }
         menu(MoteI18n.text("待上传队列"), MoteI18n.text("查看采集、随手记和来源待发条目"), "sync") { startActivity(Intent(this, SyncQueueActivity::class.java)) }
         menu(MoteI18n.text("同步与恢复"), MoteI18n.text("两端检查、补传与冲突处理"), "sync") { startActivity(Intent(this, SyncRecoveryActivity::class.java)) }
         val advancedSync = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
@@ -2028,11 +2028,11 @@ class MainActivity : MoteActivity() {
         text = label; setOnClickListener { action() }
         layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(10) }; content.addView(this)
     }
-    private fun rowButtons(left: String, leftAction: () -> Unit, right: String, rightAction: () -> Unit) {
+    private fun rowButtons(left: String, leftAction: () -> Unit, right: String, rightAction: () -> Unit, leftPrimary: Boolean = false) {
         val compact = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
         val row = LinearLayout(this).apply { orientation = if (compact) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL; gravity = Gravity.CENTER }
         listOf(left to leftAction, right to rightAction).forEachIndexed { index, (label, action) ->
-            row.addView(MoteUi.button(Button(this)).apply { text = label; setOnClickListener { action() } },
+            row.addView(MoteUi.button(Button(this), primary = index == 0 && leftPrimary).apply { text = label; setOnClickListener { action() } },
                 (if (compact) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f)).apply { if (index == 0) { if (compact) bottomMargin = dp(DesignTokens.spaceInline) else marginEnd = dp(DesignTokens.spaceInline) } })
         }
         content.addView(row, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) })

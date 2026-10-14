@@ -18,6 +18,8 @@
 .memories-page { container-type:inline-size; }
 /* The same compact Memory pattern applies when the embedding lane is narrow. */
 @container(max-width:640px) {
+ .memories-page .memory-filters { flex-wrap:wrap; }
+ .memories-page .memory-filters button { flex:1 1 140px; overflow-wrap:normal; word-break:normal; }
  .memories-page .workspace-layout { grid-template-columns:minmax(0,1fr); gap:var(--mote-space-item); }
  .memories-page .workspace-list {
   position:static;

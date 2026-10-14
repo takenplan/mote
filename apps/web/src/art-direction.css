@@ -230,6 +230,10 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
 .section-heading p,.provider-card small,.provider-test-note,.preference-field small,.preference-field>span,.preference-note,.settings-footnote,.settings-description,.effective-field small,.field-label>small,.form-footer>.muted,.source-item p,.sources-page .source-select small,.source-toolbar>span,.model-selector,.model-used,.device-sync-summary p,.connection-list p,.connections small,.connections label,.memory-input-progress p,.memory-recipe-progress p,.memory-progress>.muted { font-size:var(--mote-font-support); line-height:1.6; }
 input::placeholder,textarea::placeholder { color:var(--mote-muted); }
 .section-tabs button,.segmented-nav button,.tabs>button { white-space:normal; overflow-wrap:anywhere; }
+@media(max-width:760px) {
+ .agent-inspector .section-tabs { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+ .agent-inspector .section-tabs button { min-width:0; overflow-wrap:normal; word-break:normal; }
+}
 .segmented-nav { background:var(--mote-background); border-color:var(--mote-border); border-radius:var(--mote-radius-control); }
 .segmented-nav button.active { color:var(--mote-accent); box-shadow:none; }
 .provider-card,.workspace-select,.source-select { border-radius:var(--mote-radius-control); }
@@ -345,10 +349,10 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
  .transfer-export>.transfer-export-actions { grid-column:1/-1; }
 }
 
-.file-diarization-fields { min-width:0; display:grid; gap:var(--mote-space-item); margin-block:var(--mote-space-item); padding:var(--mote-space-item); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); }
+.file-diarization-fields { min-width:0; display:flex; flex-direction:column; gap:var(--mote-space-item); margin-block:var(--mote-space-item); padding:var(--mote-space-item); border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); }
 .file-diarization-fields label { display:grid; gap:var(--mote-space-inline); min-width:0; container-type:inline-size; }
 .file-diarization-fields input,.file-diarization-fields select { width:100%; min-width:0; }
-.file-diarization-fields button { justify-self:start; }
+.file-diarization-fields button { align-self:flex-start; }
 
 .lark-disconnect-confirmation { display:block; }
 .lark-disconnect-confirmation>.lark-buttons { margin-bottom:0; }

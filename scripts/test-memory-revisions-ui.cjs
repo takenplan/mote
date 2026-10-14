@@ -6,6 +6,7 @@ const {mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync}=requi
 const {tmpdir}=require('node:os'),{join,resolve}=require('node:path'),{pathToFileURL}=require('node:url');
 const {spawn}=require('node:child_process'),{randomBytes}=require('node:crypto'),assert=require('node:assert/strict');
 const {memoryCorrectionPresentation}=require('./memory-presentation-probe.cjs');
+const {controlCaptionPresentation}=require('./control-caption-probe.cjs');
 const repo=resolve(__dirname,'..'),root=mkdtempSync(join(tmpdir(),'mote-memory-ui-'));
 const outputRoot=process.env.MOTE_MEMORY_UI_OUTPUT||join(repo,'.mote/memory-revisions-ui');mkdirSync(outputRoot,{recursive:true});
 const out=mkdtempSync(join(outputRoot,'run-'));
@@ -94,6 +95,12 @@ await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(${JSON.stringify(
  await js(`localStorage.setItem('mote.language','en');location.reload()`);await click('Library');await chooseMemories();await until(()=>js(`document.querySelectorAll('.workspace-select').length===1`),'English current list');await select(corrected.title);
  check('English view translates activation and correction while retaining source text',await js(`document.querySelector('.memory-detail .status-label')?.textContent==='Active'&&[...document.querySelectorAll('.memory-detail button')].some(b=>b.textContent==='Correct memory')&&document.querySelector('.memory-detail').textContent.includes('批量操作')`));
  window.setSize(1280,1000);await screenshot('automatic-memory-english');
+ for(const width of [390,320]){
+  window.setSize(width,1000);await until(()=>js('innerWidth==='+width),'English status control viewport');
+  const presentation=await js('('+controlCaptionPresentation.toString()+')(".memory-filters")');
+  check('English Memory status captions retain whole words and original three controls at '+width,presentation.scrollRestored&&presentation.controls.length===3&&presentation.controls.every(control=>control.complete&&control.hit&&control.words.every(word=>word.lines===1))&&JSON.stringify(presentation.before)===JSON.stringify(presentation.after));
+  report.statusPresentation??=[];report.statusPresentation.push({width,presentation});
+ }
  report.passed=true;writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n');console.log(JSON.stringify(report));
 }
 run().catch(async error=>{report.error=String(error);console.error(error);if(window){writeFileSync(join(out,'failure.png'),(await window.webContents.capturePage()).toPNG());console.error((await window.webContents.executeJavaScript('document.body.innerText')).slice(-5000));}writeFileSync(join(out,'report.json'),JSON.stringify(report,null,2)+'\n');process.exitCode=1;}).finally(async()=>{
