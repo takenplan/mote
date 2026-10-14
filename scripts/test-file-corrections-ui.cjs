@@ -4,6 +4,7 @@ require('./fixture-language.cjs');
 const {app,BrowserWindow}=require('electron'),{mkdtempSync,mkdirSync,writeFileSync,readFileSync,readdirSync,existsSync,rmSync}=require('node:fs');
 const {tmpdir}=require('node:os'),{join,resolve}=require('node:path'),{spawn,execFileSync}=require('node:child_process'),{randomBytes,createHash}=require('node:crypto'),assert=require('node:assert/strict');
 const {diarizationPresentation,englishFileBoundaries,selectedCorrectionCaption}=require('./file-presentation-probe.cjs');
+const {rolloutPresentation}=require('./rollout-presentation-probe.cjs');
 const presentationOnly=process.argv.includes('--presentation-only');
 const repo=resolve(__dirname,'..'),root=mkdtempSync(join(tmpdir(),'mote-file-correction-ui-'));
 const outputRoot=process.env.MOTE_UI_OUTPUT_DIR||join(repo,'.mote/file-corrections-ui');mkdirSync(outputRoot,{recursive:true});const out=mkdtempSync(join(outputRoot,'run-'));
@@ -68,6 +69,7 @@ async function run(){
    }else await file.js(`(()=>{const select=document.querySelectorAll('.file-diarization-fields select')[1];select.value=${JSON.stringify(mode)};select.dispatchEvent(new Event('change',{bubbles:true}));return true})()`);
    await until(()=>file.js(`document.querySelectorAll('.file-diarization-fields input[type=number]').length===${mode==='unknown'?0:mode==='exact'?1:2}`),'original count fields');
    const appearance=await file.js('('+diarizationPresentation.toString()+')()');
+   const roles=await file.js('('+rolloutPresentation.toString()+')()');check('Actual named file execution roles '+locale+'/'+width+'/'+mode,roles.checks.every(item=>item.pass));report.rolePresentation??=[];report.rolePresentation.push({locale,width,mode,...roles});
    check(`per-file selected values and whole primary action remain readable ${locale}/${width}/${mode}`,appearance.border==='solid'&&appearance.radius>0&&appearance.primary&&appearance.buttonComplete&&appearance.hit&&appearance.limit&&appearance.fit&&appearance.selections.every(s=>s.complete)&&appearance.words.every(w=>w.lines===1)&&appearance.mediumLayout.masterHidden===(width<=1100));
    report.presentation??=[];report.presentation.push({locale,width,mode,appearance});
    writeFileSync(join(out,`file-diarization-${locale}-${width}-${mode}.png`),(await file.wc.capturePage()).toPNG());

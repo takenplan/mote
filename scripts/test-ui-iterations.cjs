@@ -16,6 +16,7 @@ const { spawn, spawnSync } = require('node:child_process');
 const { createHash, randomBytes, randomUUID } = require('node:crypto');
 const net = require('node:net');
 const assert = require('node:assert/strict');
+const {rolloutPresentation}=require('./rollout-presentation-probe.cjs');
 
 const args = process.argv.slice(2);
 const roundIndex = args.indexOf('--round');
@@ -192,6 +193,7 @@ async function clickLabel(labels, expectedRoute, name) {
 }
 async function capture(name, context = {}) {
   const readiness = await readyConsumer(name);
+  if(rollout){const presentation=await js('('+rolloutPresentation.toString()+')()');assert.ok(presentation.checks.every(check=>check.pass),'Actual rollout presentation: '+name+' '+JSON.stringify(presentation.checks.filter(check=>!check.pass)));journeys.push({name:'presentation '+name,action:'actual renderer named-role/full-selection/focus/panel-lane guards',checks:presentation.checks,status:'guard-passed',visualAcceptance:false});}
   await js((context.preserveScroll ? '' : 'window.scrollTo(0,0); ')+'new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
   const state = await js(`(() => {
     const visible=e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden';
