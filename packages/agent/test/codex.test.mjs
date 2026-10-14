@@ -47,6 +47,11 @@ readline.createInterface({input:process.stdin}).on('line',line=>{
  }else if(m.method==='turn/start'){
   turns++;
   if(['max','medium'].includes(mode)&&m.params.effort!==mode)process.exit(4);
+  if(mode.startsWith('rpc-')){
+   const actualChars=m.params.input.reduce((total,item)=>total+(item.type==='text'?Array.from(item.text).length:0),0);
+   const data=mode==='rpc-invalid-params'?{}:{input_error_code:mode==='rpc-lookalike-input-too-large'?'input_too_large_secret':'input_too_large',max_chars:mode==='rpc-input-too-large-invalid-counts'?'synthetic-private-secret':1048576,actual_chars:mode==='rpc-input-too-large-invalid-counts'?-1:actualChars,private_detail:'synthetic-private-secret'};
+   send({id:m.id,error:{code:-32602,message:'synthetic-private-secret',data}});return;
+  }
   send({id:m.id,result:{turn:{id:'turn-fixture'}}});
   if(['usage-timeout','usage-exit','usage-late-exit'].includes(mode)){usage(100);if(mode==='usage-exit')setTimeout(()=>process.exit(23),20);return;}
   if(mode.startsWith('import')){const count=turns;send({method:'item/completed',params:{threadId:'thread-fixture',item:{id:'import-fixture',type:'agentMessage',text:mode==='import-invalid'||mode==='import-repairs'&&count<4?'Generated invalid preview':JSON.stringify({summary:'Generated import preview',recordsPath:null,warnings:[]})}}});send({method:'turn/completed',params:{threadId:'thread-fixture',turn:{status:'completed'}}});return;}
@@ -153,16 +158,28 @@ test('Codex native attribution tool transports a bounded current context page wi
   assert.deepEqual(answer.citations,[]);assert.equal(answer.trace.at(-1).tool,'attribution_context');assert.equal(answer.trace.at(-1).attributionPage.returnedLength,128);
 });
 
-test('Codex tool completion carries one fitted material page and preserves its original requested range',async t=>{
+test('Codex tool completion carries one requested material page and preserves its original requested range',async t=>{
   const root=await fake(t,'material-page'),fixture=generatedMaterialPages();
   const agent=createAgent({reader:fixture.reader,protocol:'codex-app-server',model:'fixture',agentTimeoutMs:5000});t.after(()=>agent.close());
   const answer=await agent.query({question:'Read a generated material page'}),rpc=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse);
   const result=rpc.find(message=>message.id===1000).result;assert.equal(result.success,true);assert.equal(result.contentItems.length,1);
-  const page=JSON.parse(result.contentItems[0].text);assert.equal(result.contentItems[0].type,'inputText');assert.ok(result.contentItems[0].text.length<=16000);
-  assert.equal(page.data.pagination.limitedBy,'host_budget');assert.equal(page.data.textRange.nextOffset,5000);
-  assert.deepEqual(fixture.attempts.map(args=>args.length),[10000,5000]);assert.equal(rpc.filter(message=>message.method==='turn/start').length,1);
-  assert.deepEqual(answer.trace.at(-1).arguments,{ref:materialRef,offset:0,length:10000});assert.equal(answer.trace.at(-1).materialPage.readAttempts,2);
+  const page=JSON.parse(result.contentItems[0].text);assert.equal(result.contentItems[0].type,'inputText');assert.ok(result.contentItems[0].text.length>16000);
+  assert.equal(page.data.pagination.limitedBy,undefined);assert.equal(page.data.textRange.nextOffset,null);
+  assert.deepEqual(fixture.attempts.map(args=>args.length),[10000]);assert.equal(rpc.filter(message=>message.method==='turn/start').length,1);
+  assert.deepEqual(answer.trace.at(-1).arguments,{ref:materialRef,offset:0,length:10000});assert.equal(answer.trace.at(-1).materialPage.returnedLength,10000);
 });
+test('Codex receives large complete material responses without a replacement bridge byte quota or shrinking',async t=>{
+ const root=await fake(t,'material-page'),fixture=generatedMaterialPages(),source={...fixture.originals[0],provenance:{externalId:'x'.repeat(1500000)}},raw=fixture.reader.materialRead;
+ fixture.reader.evidence=async({ids})=>fixture.originals.filter(r=>ids.includes(r.id)).map(r=>r.id===source.id?source:r);
+ fixture.reader.materialRead=async args=>({...await raw(args),sourceSpans:[{record:source,offset:0,length:6000}]});
+ const agent=createAgent({reader:fixture.reader,protocol:'codex-app-server',model:'fixture',agentTimeoutMs:5000});t.after(()=>agent.close());
+ await agent.query({question:'Read a generated material page'});
+ const rpc=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse),response=rpc.find(message=>message.id===1000).result;
+ assert.equal(response.success,true);assert.ok(response.contentItems[0].text.length>1500000);assert.equal(JSON.parse(response.contentItems[0].text).data.sourceEvidence[0].provenance.externalId,source.provenance.externalId);
+ assert.deepEqual(fixture.attempts.map(args=>args.length),[10000]);
+ await assert.rejects(access(await readFile(join(root,'runtime-home'),'utf8')),{code:'ENOENT'});
+});
+
 test('Codex preserves the requested Max effort without silently downgrading it',async t=>{
   await fake(t,'max');const agent=createAgent({reader,protocol:'codex-app-server',model:'fixture',reasoningEffort:'max',agentTimeoutMs:5000});t.after(()=>agent.close());
   assert.equal((await agent.query({question:'Generated fixture'})).citations[0].id,record.id);
@@ -187,6 +204,34 @@ test('Codex still rejects oversized protocol frames with bounded diagnostic meta
  await assert.rejects(session.run('Generated oversize'),e=>e instanceof AgentProviderError&&e.details.category==='permanent'&&e.details.code==='processing_limit');
  assert.ok(events.some(e=>e.type==='codex.transport.failed'&&e.payload.code==='frame_limit'));
  assert.ok(JSON.stringify(events).length<10000);
+});
+test('Codex maps a native input_too_large rejection without trimming, splitting or retrying the generated turn',async t=>{
+ const root=await fake(t,'rpc-input-too-large'),events=[],prompt='Generated native capacity fixture '+ 'x'.repeat(1048576)+'😀';
+ const session=new CodexSession({model:'fixture',reasoningEffort:'high',agentTimeoutMs:5000},async()=>{assert.fail('Rejected input must not start a tool');},event=>events.push(event));t.after(()=>session.close());
+ await session.start('Generated protocol fixture',codexContextTools);
+ await assert.rejects(session.run(prompt),error=>error instanceof AgentProviderError&&error.details.category==='permanent'&&error.details.code==='processing_limit'&&!error.message.includes('synthetic-private-secret'));
+ const messages=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse),turns=messages.filter(message=>message.method==='turn/start');
+ assert.equal(turns.length,1);assert.equal(turns[0].params.input.length,1);assert.equal(turns[0].params.input[0].text,prompt);assert.equal(turns[0].params.effort,'high');
+ assert.deepEqual(events.find(event=>event.type==='codex.rpc.failed').payload,{requestId:4,code:-32602,input_error_code:'input_too_large',max_chars:1048576,actual_chars:Array.from(prompt).length});
+ assert.ok(!events.some(event=>event.type==='codex.turn/started'||event.type==='codex.thread/tokenUsage/updated'));
+ assert.ok(!JSON.stringify(events).includes('synthetic-private-secret'));assert.ok(!JSON.stringify(events).includes(prompt));
+});
+test('Codex query preserves exact native input-limit classification and only records safe numeric metadata',async t=>{
+ for(const [mode,code,metadata] of [
+  ['rpc-input-too-large','processing_limit',{input_error_code:'input_too_large',max_chars:1048576}],
+  ['rpc-input-too-large-invalid-counts','processing_limit',{input_error_code:'input_too_large'}],
+  ['rpc-invalid-params','provider_failed',{}],
+  ['rpc-lookalike-input-too-large','provider_failed',{}],
+ ])await t.test(mode,async t=>{
+  const root=await fake(t,mode),events=[],agent=createAgent({reader,protocol:'codex-app-server',model:'fixture',agentTimeoutMs:5000});t.after(()=>agent.close());
+  await assert.rejects(agent.query({question:'Generated exact RPC failure',onTrace:event=>events.push(event)}),error=>error instanceof AgentProviderError&&error.details.category==='permanent'&&error.details.code===code&&!error.message.includes('synthetic-private-secret'));
+  const rpc=(await readFile(join(root,'rpc.ndjson'),'utf8')).trim().split('\n').map(JSON.parse),turns=rpc.filter(message=>message.method==='turn/start'),payload=events.find(event=>event.type==='codex.rpc.failed').payload;
+  assert.equal(turns.length,1,'A permanent native rejection must not be automatically replayed');assert.ok(!events.some(event=>event.type==='model.started'&&event.payload?.repair));
+  assert.equal(payload.requestId,4);assert.equal(payload.code,-32602);
+  if(mode==='rpc-input-too-large')assert.deepEqual(payload,{requestId:4,code:-32602,...metadata,actual_chars:Array.from(turns[0].params.input[0].text).length});
+  else assert.deepEqual(payload,{requestId:4,code:-32602,...metadata});
+  assert.ok(!JSON.stringify(events).includes('synthetic-private-secret'));assert.ok(!JSON.stringify(events).includes('private_detail'));
+ });
 });
 test('Codex discloses a selected image to the model while keeping its bytes out of Agent traces',async t=>{
  const root=await fake(t,'image-flow'),events=[],data=Buffer.alloc(3*1024*1024,123).toString('base64'),parent={...record,provenance:{document:{attachments:[{id:'generated-image',mimeType:'image/png'}]}}};
@@ -354,7 +399,7 @@ test('Codex receives a nested region schema and metadata, then native region plu
  assertRegionSchema(assert,messages.find(m=>m.method==='thread/start').params.dynamicTools.find(t=>t.name==='read_image').inputSchema);
  const metadata=messages.find(m=>m.id===1001).result,first=messages.find(m=>m.id===1002).result,repeat=messages.find(m=>m.id===1003).result;
  assert.deepEqual(metadata.contentItems.map(x=>x.type),['inputText']);assert.equal(JSON.parse(metadata.contentItems[0].text).imageBudget.remainingPayloads,4);
- const delivered=JSON.parse(first.contentItems[0].text);assert.deepEqual(delivered.imageView.region,{x:1,y:2,width:4,height:5});assert.equal(delivered.imageView.delivery,'prepared');assert.equal(delivered.imageBudget.remainingPayloads,3);assert.ok(delivered.hostBudget.remainingCalls>0);
+ const delivered=JSON.parse(first.contentItems[0].text);assert.deepEqual(delivered.imageView.region,{x:1,y:2,width:4,height:5});assert.equal(delivered.imageView.delivery,'prepared');assert.equal(delivered.imageBudget.remainingPayloads,3);assert.ok(delivered.toolUsage.calls>0);
  assert.equal(first.contentItems[1].type,'inputImage');assert.deepEqual(repeat.contentItems.map(x=>x.type),['inputText']);assert.equal(JSON.parse(repeat.contentItems[0].text).imageDisclosure.status,'already_disclosed');
  const imageData=first.contentItems[1].imageUrl.split(',')[1];assert.ok(!JSON.stringify(events).includes(imageData));
  assert.deepEqual(answer.trace.filter(t=>t.tool==='read_image').map(t=>t.imageView.delivery),['metadata','prepared','already_disclosed']);

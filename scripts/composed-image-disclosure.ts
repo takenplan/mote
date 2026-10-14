@@ -7,7 +7,7 @@ export type ImageDisclosureProtocol='one-original'|'bounded-views';
 type Selection={id:string;attachmentId?:string;view:'image'|'metadata';expectedImageSha256?:string;region:{x:number;y:number;width:number;height:number}|null};
 type Json=Record<string,any>;
 type Metadata=Awaited<ReturnType<ReturnType<typeof sharp>['metadata']>>;
-type Read={selection:Selection;kind:'metadata'|'payload'|'repeat';imageView?:Json;firstSelection?:Selection;firstImageView?:Json;imageBudget?:Json;hostBudget?:Json;payloadKey?:string;mimeType?:string;encodedCharacters?:number};
+type Read={selection:Selection;kind:'metadata'|'payload'|'repeat';imageView?:Json;firstSelection?:Selection;firstImageView?:Json;imageBudget?:Json;toolUsage?:Json;payloadKey?:string;mimeType?:string;encodedCharacters?:number};
 const digest=(value:Buffer|string)=>createHash('sha256').update(value).digest('hex');
 function imageMime(format:string|undefined){
  const mime=format==='png'?'image/png':format==='jpeg'?'image/jpeg':format==='webp'?'image/webp':undefined;
@@ -95,7 +95,7 @@ export class ComposedImageDisclosure {
     if(this.protocol==='bounded-views'){assert.ok(result.imageDisclosure.firstImageView);assert.deepEqual(viewWithoutDelivery(result.imageDisclosure.firstImageView),viewWithoutDelivery(first.imageView!));assert.equal(result.imageDisclosure.firstImageView.delivery,'prepared');}
     row.payloadKey=key;row.mimeType=mimeType;row.firstSelection=selection(result.imageDisclosure.firstSelection);if(result.imageDisclosure.firstImageView)row.firstImageView=structuredClone(result.imageDisclosure.firstImageView);
    }
-   if(this.protocol==='bounded-views'){assert.deepEqual(result.imageBudget,{remainingPayloads:4-this.first.size,maxRegionSide:2048,maxOutputBytes:8*1024*1024});assert.ok(Number.isSafeInteger(result.hostBudget?.remainingCalls)&&result.hostBudget.remainingCalls>=0);assert.ok(Number.isSafeInteger(result.hostBudget?.remainingCharactersBeforeResult)&&result.hostBudget.remainingCharactersBeforeResult>=0);assert.equal(result.hostBudget.unit,'utf16_characters');row.imageBudget=structuredClone(result.imageBudget);row.hostBudget=structuredClone(result.hostBudget);}
+   if(this.protocol==='bounded-views'){assert.deepEqual(result.imageBudget,{remainingPayloads:4-this.first.size,maxRegionSide:2048,maxOutputBytes:8*1024*1024});assert.ok(Number.isSafeInteger(result.toolUsage?.calls)&&result.toolUsage.calls>=0);assert.ok(Number.isSafeInteger(result.toolUsage?.deliveredCharactersBeforeResult)&&result.toolUsage.deliveredCharactersBeforeResult>=0);assert.equal(result.toolUsage.unit,'utf16_characters');row.imageBudget=structuredClone(result.imageBudget);row.toolUsage=structuredClone(result.toolUsage);}
    this.reads.push(row);
   }catch(error){this.failed=error instanceof Error?error.message:String(error);throw error;}
  }
@@ -110,7 +110,7 @@ export class ComposedImageDisclosure {
    if(row.kind==='payload'){assert.equal(result.image?.mimeType,row.mimeType);assert.equal(result.image?.encodedCharacters,row.encodedCharacters);assert.equal(result.imageDisclosure,undefined);}
    else{assert.equal(result.image,undefined);if(row.kind==='repeat'){assert.equal(result.imageDisclosure?.status,'already_disclosed');assert.equal(result.imageDisclosure.mimeType,row.mimeType);assert.equal(result.imageDisclosure.mimeType+':'+result.imageDisclosure.sha256,row.payloadKey);sameSelection(selection(result.imageDisclosure.firstSelection),row.firstSelection!);if(row.firstImageView)assert.deepEqual(result.imageDisclosure.firstImageView,row.firstImageView);}else assert.equal(result.imageDisclosure,undefined);}
    if(row.imageView){const delivery=row.kind==='payload'?'prepared':row.kind==='repeat'?'already_disclosed':'metadata';for(const view of [reads[i].imageView,result.imageView]){assert.ok(view);assert.deepEqual(viewWithoutDelivery(view),viewWithoutDelivery(row.imageView));assert.equal(view.delivery,delivery);}}
-   if(this.protocol==='bounded-views'){assert.deepEqual(result.imageBudget,row.imageBudget,'Adapter dropped the image quota');assert.deepEqual(result.hostBudget,row.hostBudget,'Adapter dropped the context quota');}
+   if(this.protocol==='bounded-views'){assert.deepEqual(result.imageBudget,row.imageBudget,'Adapter dropped the image quota');assert.deepEqual(result.toolUsage,row.toolUsage,'Adapter dropped usage observations');}
   }
   this.adapterVerified=true;return this.snapshot();
  }

@@ -5,7 +5,10 @@ export const ownerRelationSchema=z.enum(['owner','third_party','mixed','unknown'
 export type OwnerRelation=z.infer<typeof ownerRelationSchema>;
 /** Source-scoped exact owner prose lives in private storage; persisted evidence
  * carries only its immutable host-owned identity. Empty prose is a versioned clear. */
-export const sourceContextDeclarationSchema=z.object({sourceId:z.string().min(1).max(128).regex(/^[a-zA-Z0-9_.:-]+$/),version:z.number().int().positive(),fingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
+export const sourceDescriptionDeclarationSchema=z.object({sourceId:z.string().min(1).max(128).regex(/^[a-zA-Z0-9_.:-]+$/),version:z.number().int().positive(),fingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
+/** Query host receipts may additionally pin connection metadata. They are never
+ * owner description pointers or attribution declarations. */
+export const sourceContextDeclarationSchema=sourceDescriptionDeclarationSchema.extend({kind:z.literal('metadata').optional()}).strict();
 export type SourceContextDeclaration=z.infer<typeof sourceContextDeclarationSchema>;
 export const sourceContextSnapshotSchema=z.object({sourceId:sourceContextDeclarationSchema.shape.sourceId,version:z.number().int().nonnegative(),description:z.string().max(12000),fingerprint:sourceContextDeclarationSchema.shape.fingerprint.optional(),updatedAt:z.string().datetime({offset:true}).optional()}).strict();
 export type SourceContextSnapshot=z.infer<typeof sourceContextSnapshotSchema>;
@@ -24,7 +27,7 @@ export const attributionContextSchema=z.object({
    * It is separate from a reply to a Material question and does not set ownerRelation. */
   importDeclarations:z.array(z.object({id:z.string().uuid(),version:z.number().int().positive(),fingerprint:z.string().regex(/^[a-f0-9]{64}$/),captureIds:z.array(z.string().uuid()).min(1)}).strict()).optional(),
   importStatements:z.array(z.object({id:z.string().uuid(),version:z.number().int().positive(),instruction:z.string().max(12000),captureIds:z.array(z.string().uuid()).min(1)}).strict()).optional(),
-  sourceContextDeclarations:z.array(sourceContextDeclarationSchema).optional(),
+  sourceContextDeclarations:z.array(sourceDescriptionDeclarationSchema).optional(),
   sourceContextStatements:z.array(z.object({sourceId:sourceContextDeclarationSchema.shape.sourceId,version:z.number().int().positive(),description:z.string().max(12000)}).strict()).optional(),
 }).strict();
 export type AttributionContext=z.infer<typeof attributionContextSchema>;

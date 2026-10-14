@@ -37,15 +37,15 @@ test('source disclosure rejects broad requests and ignores unrequested, out-of-s
   assert.deepEqual(value.body.data.sourceEvidence,[]);assert.equal(value.body.data.sourceCoverage.partial,true);assert.equal(bridge.records.size,0);
 });
 
-test('source ranges are bounded and an oversized response never grants citation authority',async t=>{
+test('source ranges remain bounded while large Memory prose does not impose a replacement byte quota',async t=>{
   const large={...record,ocrText:'x'.repeat(10000)},spans=Array.from({length:5},(_,i)=>({record:large,offset:i*2000,length:4000}));
   const limited=await fixture(t,{...result,sourceSpans:spans});
   const value=await limited.call({id:'generated-memory',includeEvidence:true});assert.equal(value.status,200);
   assert.equal(value.body.data.sourceEvidence.length,3);assert.equal(value.body.data.sourceEvidence.every(r=>r.ocrText.length===2000),true);
   assert.equal(value.body.data.sourceCoverage.partial,true);
-  const denied=await fixture(t,{...result,items:[{...result.items[0],statement:'x'.repeat(17000)}]});
-  const rejected=await denied.call({id:'generated-memory',includeEvidence:true});assert.equal(rejected.status,400);assert.match(rejected.body.error,/evidence budget/);
-  assert.equal(denied.bridge.records.size,0);assert.deepEqual(denied.bridge.evidenceDependencies.ids,[]);
+  const full=await fixture(t,{...result,items:[{...result.items[0],statement:'x'.repeat(1500000)}]});
+  const delivered=await full.call({id:'generated-memory',includeEvidence:true});assert.equal(delivered.status,200);assert.equal(delivered.body.data.items[0].statement.length,1500000);
+  assert.equal(full.bridge.records.get(record.id).ocrText,quote);assert.equal(full.bridge.records.has('generated-memory'),false);
 });
 
 test('disjoint supporting quotes preserve exact offsets in the citation ledger',async t=>{

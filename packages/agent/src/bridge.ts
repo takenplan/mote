@@ -4,17 +4,17 @@ import {pinContextTools,registeredContextToolDefinitions,NATIVE_CONTEXT_TOOLS} f
 import {validateCapabilityArguments} from './capability-schema.js';
 import {rememberEvidence,evidenceLayers,projectEvidencePresentation,copyEvidencePresentation} from './evidence-ledger.js';
 import {AgentYieldError,hostControlDefinitions} from './host-controls.js';
-import {taskTools,dispatchTools,HOST_CONTEXT_LIMITS,retrievalLimits} from './task-context.js';
+import {taskTools,dispatchTools} from './task-context.js';
 import {actionEvidenceText,parseEvidenceRef,parseEvidenceId,formatEvidenceRef} from '@mote/shared';
 import {ContextToolError} from './tool-errors.js';
 import {AgentResponseError,reportTrace,reportProgress} from './types.js';
 import {sourceProtocolInstructions} from './instructions.js';
-import {extractionSeedScopeFitsBudget} from './extraction-seed-budget.js';
+import {extractionSeedScopeValid} from './extraction-seed-scope.js';
 import { createServer, type Server } from "node:http";
 import { randomBytes, timingSafeEqual, createHash } from "node:crypto";
 import type { AddressInfo } from "node:net";
 import { displayTime } from './time.js';
-import {stateSeriesSchema,fileEvidenceSchema,recordMetadataSchema, sourceMetadataSchema, sourceSchema,documentSchema,sourceContentTime,attributionContextSchema,sourceContextDeclarationSchema} from '@mote/shared';
+import {stateSeriesSchema,fileEvidenceSchema,recordMetadataSchema, sourceMetadataSchema, sourceSchema,documentSchema,sourceContentTime,attributionContextSchema,sourceContextDeclarationSchema,type SourceContextDeclaration} from '@mote/shared';
 import type {
   ContextReader,
   ContextRecord,
@@ -232,7 +232,7 @@ function materialMetadata(value: unknown, scope: ContextRange): Record<string, u
 export async function startBridge(
   reader: ContextReader,
   bounds: QueryInput,
-  maxToolCalls: number,
+  maxToolCalls?: number,
 ) {
   bounds=pinContextTools({...bounds,...(bounds.evidenceIds?{evidenceIds:[...bounds.evidenceIds]}:{}),...(bounds.evidenceRanges?{evidenceRanges:bounds.evidenceRanges.map(range=>({...range}))}:{}),...(bounds.evidenceReadRanges?{evidenceReadRanges:Object.freeze(bounds.evidenceReadRanges.map(range=>Object.freeze({...range})))}:{})},reader);
   const contributions=new Map((bounds.toolContributions??[]).map(tool=>[tool.name,tool]));
@@ -243,8 +243,8 @@ export async function startBridge(
   const trace: ToolTrace[] = [];
   const records = new Map<string, ContextRecord>();
   const remember=(record:ContextRecord)=>{rememberEvidence(records,record);try{bounds.onEvidence?.([record]);}catch{/* Receipt observation cannot grant new reads. */}};
-  const sourceContextDependencies=new Map<string,{sourceId:string;version:number;fingerprint:string}>();
-  const rememberSourcePin=(pin:{sourceId:string;version:number;fingerprint:string})=>{
+  const sourceContextDependencies=new Map<string,SourceContextDeclaration>();
+  const rememberSourcePin=(pin:SourceContextDeclaration)=>{
     const key=JSON.stringify(pin);if(sourceContextDependencies.has(key))return;
     sourceContextDependencies.set(key,{...pin});bounds.onSourceContextDependencies?.([...sourceContextDependencies.values()].map(value=>Object.freeze({...value})));
   };
@@ -270,13 +270,12 @@ export async function startBridge(
     (!bounds.taskContext?.previousSummary&&!bounds.taskContext?.turns?.length||bounds.contextEvidenceDependencies?.complete===true);
   const rememberDisclosureDependencies=(receipt:unknown)=>{
     const value=receipt&&typeof receipt==='object'&&!Array.isArray(receipt)?receipt as Record<string,unknown>:undefined;
-    if(!value||value.version!==1||typeof value.complete!=='boolean'||!Array.isArray(value.ids)||value.ids.length>1000||
+    if(!value||value.version!==1||typeof value.complete!=='boolean'||!Array.isArray(value.ids)||
       Object.keys(value).some(key=>!['version','complete','ids'].includes(key))||value.ids.some(id=>typeof id!=='string'||!parseEvidenceId(id))){completeLineage=false;return;}
     completeLineage &&= value.complete;
     for(const id of value.ids as string[])disclosedIds.add(parseEvidenceId(id)!);
   };
   const restricted = bounds.evidenceIds !== undefined;
-  const limits=retrievalLimits(bounds);
   const permitted = new Map<string,ContextRecord>();
   const ranges = bounds.evidenceRanges ?? bounds.evidenceIds?.map(id=>({id,offset:0,length:12000})) ?? [];
   const readRanges=bounds.evidenceReadRanges??[];
@@ -286,9 +285,9 @@ export async function startBridge(
   if(bounds.evidenceRanges&&!restricted)throw hostError('Evidence ranges require explicit evidence IDs');
   if(bounds.evidenceReadRanges&&!restricted)throw hostError('Context read ranges require a bounded extraction session');
   if(restricted){
-    if(!bounds.evidenceIds||!extractionSeedScopeFitsBudget(bounds.evidenceIds,ranges))throw hostError('Invalid extraction evidence scope');
-    if(readRanges.length>100||readRanges.some(r=>typeof r.id!=='string'||!r.id||!Number.isSafeInteger(r.offset)||r.offset<0||!Number.isSafeInteger(r.length)||r.length<1||!Number.isSafeInteger(r.offset+r.length)))throw hostError('Invalid context evidence read scope');
-    const ids=[...new Set([...bounds.evidenceIds,...readRanges.map(r=>r.id)])];if(ids.length>100)throw hostError('Context evidence read scope exceeds the original ID bound');
+    if(!bounds.evidenceIds||!extractionSeedScopeValid(bounds.evidenceIds,ranges))throw hostError('Invalid extraction evidence scope');
+    if(readRanges.some(r=>typeof r.id!=='string'||!r.id||!Number.isSafeInteger(r.offset)||r.offset<0||!Number.isSafeInteger(r.length)||r.length<1||!Number.isSafeInteger(r.offset+r.length)))throw hostError('Invalid context evidence read scope');
+    const ids=[...new Set([...bounds.evidenceIds,...readRanges.map(r=>r.id)])];
     for(const raw of await reader.evidence({...range({},bounds),ids}))if(ids.includes(raw.id)){const record=bounds.skill==='calendar-extraction'?{...raw,ocrText:actionEvidenceText(raw)}:raw;permitted.set(record.id,record);originalPins.set(record.id,originalPin(record));}
     const scope=range({},bounds);
     for(const id of ids){
@@ -305,7 +304,6 @@ export async function startBridge(
     for(const r of readRanges){const text=permitted.get(r.id)?.ocrText;if(text!==undefined&&(r.offset+r.length>text.length||splitsPair(text,r.offset)||splitsPair(text,r.offset+r.length)))throw hostError('Context read range must stay inside original text and UTF-16 boundaries');}
   }
   const seedEvidence=ranges.flatMap(r=>{const record=permitted.get(r.id);return record?[project(record,r.offset,r.length,bounds.timeZone)]:[];});
-  if(Buffer.byteLength(JSON.stringify(seedEvidence))>1_500_000)throw hostError('Extraction evidence exceeds the byte budget');
   for(const record of seedEvidence){remember(record);disclosedIds.add(record.id);}
   rememberSourceContexts(seedEvidence);
   const directImages=bounds.directImages??[];
@@ -339,15 +337,16 @@ export async function startBridge(
     value.settle();
   };
   let calls = 0;
-  let progressMessages=0;
   let ready = false;
   let rejectFailure!:(error:Error)=>void;
   const failure=new Promise<never>((_,reject)=>rejectFailure=reject);void failure.catch(()=>{});
   let previousFailure='',repeatedFailures=0;
-  const budgetError=()=>new ContextToolError('evidence_budget_exceeded','Context result exceeds the evidence budget. Request fewer records or a shorter range. If no useful reads fit, finish with existing evidence and explicitly state incomplete coverage.','use_existing_evidence',{remainingCharacters:Math.max(0,limits.totalToolCharacters-deliveredCharacters),perResultCharacters:limits.toolResultCharacters});
-  // Budget metadata is host-owned, outside untrusted tool data. Its serialized
-  // text characters consume the same result budget; no extra model call.
-  const hostBudget=()=>({remainingCalls:Math.max(0,maxToolCalls-calls),remainingCharactersBeforeResult:Math.max(0,limits.totalToolCharacters-deliveredCharacters),unit:'utf16_characters'});
+  const countToolCall=()=>{
+    calls++;
+    if(maxToolCalls!==undefined&&calls>maxToolCalls)throw new ContextToolError('tool_budget_exceeded','The explicitly configured tool call limit was reached. Finish with already retrieved evidence.','use_existing_evidence',{remainingCalls:0});
+  };
+  // Character counts are observations. Only an explicit caller limit is enforced.
+  const toolUsage=()=>({calls,deliveredCharactersBeforeResult:deliveredCharacters,unit:'utf16_characters',...(maxToolCalls!==undefined?{remainingCalls:Math.max(0,maxToolCalls-calls)}:{})});
 
   const server: Server = createServer(async (req, res) => {
     const given = Buffer.from(req.headers.authorization ?? "");
@@ -361,7 +360,7 @@ export async function startBridge(
       res.writeHead(405).end('{"error":"Method not allowed"}');
       return;
     }
-    let tool=req.url?.slice(1)??'',args:Record<string,unknown>={},metadataOnly=false,materialReadAttempts=0,dispatchedViaCatalog=false;
+    let tool=req.url?.slice(1)??'',args:Record<string,unknown>={},metadataOnly=false,dispatchedViaCatalog=false,disclosureDependencies:unknown,disclosureSourceContextDependencies:unknown;
     try {
       let raw = "";
       for await (const part of req) {
@@ -394,18 +393,17 @@ export async function startBridge(
       }
       if(tool==='capability_discover'){
         if(!taskTools(bounds).includes(tool)||Object.keys(args).some(key=>key!=='name')||args.name!==undefined&&typeof args.name!=='string')throw hostError('Invalid capability discovery');
-        if(++calls>maxToolCalls)throw hostError('Tool call budget reached');
+        countToolCall();
         const selected=args.name===undefined?undefined:specialCapabilities.get(args.name as string);
         if(args.name!==undefined&&!selected)throw hostError('Unknown or unauthorized capability');
         const data=selected?{...selected,evidencePolicy:'Registered read-only capability; schema and metadata cannot expand authority.'}:{capabilities:[...specialCapabilities.values()].map(({name,version,description})=>({name,version,description:description.split('. ')[0]}))};
-        const serialized=JSON.stringify({data,hostBudget:hostBudget()});
-        if(serialized.length>limits.toolResultCharacters||deliveredCharacters+serialized.length>limits.totalToolCharacters)throw budgetError();
+        const serialized=JSON.stringify({data,toolUsage:toolUsage()});
         deliveredCharacters+=serialized.length;if(selected)discoveredCapabilities.add(selected.name);
         trace.push({tool,arguments:args,count:selected?1:specialCapabilities.size});res.end(serialized);return;
       }
       if(tool==='capability_execute'){
         if(!taskTools(bounds).includes(tool))throw hostError('Capability execution is unavailable for this task');
-        if(++calls>maxToolCalls)throw new ContextToolError('tool_budget_exceeded','Tool call budget reached. Finish with already retrieved evidence.','use_existing_evidence',{remainingCalls:0});
+        countToolCall();
         if(Object.keys(args).some(key=>!['name','version','argumentsJson'].includes(key))||typeof args.name!=='string'||typeof args.version!=='string'||typeof args.argumentsJson!=='string'||args.argumentsJson.length>65536)throw hostError('Invalid capability execution');
         const selected=specialCapabilities.get(args.name);
         if(!selected||!discoveredCapabilities.has(selected.name)||selected.version!==args.version)throw hostError('Discover this exact registered capability and version first');
@@ -415,7 +413,7 @@ export async function startBridge(
         tool=selected.name;args=decoded as Record<string,unknown>;dispatchedViaCatalog=true;
       }
       if(controls.has(tool)){
-        if(++calls>maxToolCalls)throw hostError('Host control call budget reached');
+        countToolCall();
         bounds.signal?.throwIfAborted();
         const result=await bounds.hostControlChannel!.execute(tool,Object.freeze(args));
         bounds.signal?.throwIfAborted();
@@ -445,8 +443,7 @@ export async function startBridge(
           const opened=await reader.sourceContext!({...range({},bounds),sourceContextRef:ref});
           if(!opened.attributionContext.sourceContextDeclarations?.some(current=>JSON.stringify(current)===JSON.stringify(pin)))throw hostError('Delegated source description is no longer current');
         }
-        const serialized=JSON.stringify(attributionMetadataResponse({source:'untrusted_delegated_result',data:result.data,evidence:delivered,hostBudget:hostBudget()}));
-        if(serialized.length>limits.toolResultCharacters||deliveredCharacters+serialized.length>limits.totalToolCharacters)throw budgetError();
+        const serialized=JSON.stringify(attributionMetadataResponse({source:'untrusted_delegated_result',data:result.data,evidence:delivered,toolUsage:toolUsage()}));
         for(const record of delivered){remember(record);discovered.add(record.id);disclosedIds.add(record.id);expanded.add(record.id);}
         for(const id of dependencyIds)disclosedIds.add(id);
         for(const pin of sourcePins)rememberSourcePin(pin);
@@ -461,7 +458,6 @@ export async function startBridge(
       if(!dispatchTools(bounds).includes(tool)||!dispatchedViaCatalog&&!taskTools(bounds).includes(tool))throw hostError('Tool is unavailable for this task; use the discovered capability gateway');
       if(tool==='progress_update'){
         if(typeof args.message!=='string'||!args.message.trim()||args.message.length>600)throw hostError('Progress message must contain 1–600 characters');
-        if(++progressMessages>16)throw hostError('Progress message limit reached');
         reportProgress(bounds,{stage:'model',message:args.message.trim()});
         res.end('{"ok":true}');return;
       }
@@ -481,9 +477,7 @@ export async function startBridge(
       };
       if(tool==='evidence'&&Array.isArray(args.ids))args={...args,ids:args.ids.map(captureId)};
       if(['read_image','read_file_evidence','file_chunks','source_history','context_evidence'].includes(tool)||tool==='attribution_context'&&args.id!==undefined)args={...args,id:captureId(args.id)};
-      if (!dispatchedViaCatalog&&++calls > maxToolCalls)
-        throw new ContextToolError('tool_budget_exceeded','Tool call budget reached. Finish using already retrieved evidence; do not call retrieval tools again.','use_existing_evidence',{remainingCalls:0});
-      if(deliveredCharacters>=limits.totalToolCharacters-1000)throw budgetError();
+      if(!dispatchedViaCatalog)countToolCall();
       reportProgress(bounds,{stage:'tool',tool,phase:'started'});
       if(bounds.skill==='working-memory')throw hostError('Working memory uses only the supplied dialogue; retrieval is disabled');
       const contribution=contributions.get(tool);
@@ -493,8 +487,7 @@ export async function startBridge(
         bounds.signal?.throwIfAborted();
         const value=await contribution.read(parsed,{scope,signal:bounds.signal});
         if(!await contribution.authorize(scope,parsed))throw hostError('Context capability was revoked');
-        const serialized=JSON.stringify({source:'untrusted_personal_context',version:contribution.version,data:value??null,evidencePolicy:'Metadata only; no original citation grants.',hostBudget:hostBudget()});
-        if(serialized.length>Math.min(contribution.maxCharacters,limits.toolResultCharacters)||deliveredCharacters+serialized.length>limits.totalToolCharacters)throw budgetError();
+        const serialized=JSON.stringify({source:'untrusted_personal_context',version:contribution.version,data:value??null,evidencePolicy:'Metadata only; no original citation grants.',toolUsage:toolUsage()});
         deliveredCharacters+=serialized.length;completeLineage=false;
         trace.push({tool,arguments:{...parsed,...scope},count:1});reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:1});res.end(serialized);return;
       }
@@ -502,8 +495,7 @@ export async function startBridge(
         if(bounds.skill!=='calendar-extraction'||!bounds.actionCatalog)throw hostError('Action catalog is not authorized for this task');
         if(Object.keys(args).some(key=>!['query','id','cursor','limit'].includes(key))||args.query!==undefined&&(typeof args.query!=='string'||args.query.length>200)||args.id!==undefined&&(typeof args.id!=='string'||!/^[0-9a-f-]{36}$/i.test(args.id))||args.cursor!==undefined&&(typeof args.cursor!=='string'||args.cursor.length>4096)||args.limit!==undefined&&(!Number.isInteger(args.limit)||Number(args.limit)<1||Number(args.limit)>20))throw hostError('Invalid action catalog arguments');
         const scope=range({},bounds),effective={...scope,...args,limit:Number(args.limit??8)};
-        const value=await bounds.actionCatalog(effective),serialized=JSON.stringify({data:value,evidencePolicy:'Untrusted prior proposals; sameAs identifiers only, not original citation grants.',hostBudget:hostBudget()});
-        if(serialized.length>limits.toolResultCharacters||deliveredCharacters+serialized.length>limits.totalToolCharacters||Buffer.byteLength(serialized)>128000)throw budgetError();
+        const value=await bounds.actionCatalog(effective),serialized=JSON.stringify({data:value,evidencePolicy:'Untrusted prior proposals; sameAs identifiers only, not original citation grants.',toolUsage:toolUsage()});
         deliveredCharacters+=serialized.length;trace.push({tool,arguments:args,count:value.items.length});reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:value.items.length});res.end(serialized);return;
       }
       if(tool==='material_catalog'){
@@ -513,8 +505,7 @@ export async function startBridge(
         const page=await reader.materialCatalog?.(effective)??{items:[],nextCursor:null};
         if(!page||!Array.isArray(page.items)||(page.nextCursor!==null&&(typeof page.nextCursor!=='string'||page.nextCursor.length>4096)))throw hostError('Invalid material catalog page');
         const items=page.items.slice(0,scope.limit).map(item=>materialMetadata(item,scope)).filter((item):item is Record<string,unknown>=>Boolean(item));
-        const serialized=JSON.stringify({source:'untrusted_personal_context',data:{items,nextCursor:page.nextCursor},hostBudget:hostBudget()});
-        if(serialized.length>limits.toolResultCharacters||deliveredCharacters+serialized.length>limits.totalToolCharacters||Buffer.byteLength(serialized)>1_500_000)throw budgetError();
+        const serialized=JSON.stringify({source:'untrusted_personal_context',data:{items,nextCursor:page.nextCursor},toolUsage:toolUsage()});
         deliveredCharacters+=serialized.length;
         rememberSourceContexts(items);
         for(const item of items)pinnedMaterials.add(item.ref as string);
@@ -527,59 +518,47 @@ export async function startBridge(
         if(!Number.isSafeInteger(offset)||Number(offset)<0||!Number.isSafeInteger(length)||Number(length)<1||Number(length)>12000)throw hostError('Invalid material read range');
         if(!reader.materialRead)throw hostError('Material reading is unavailable');
         const scope=range({},bounds);
-        let effectiveLength=Number(length);
-        // length bounds the body, not its provenance/envelope. Retry only local
-        // reads of this same pinned window; halving 1–12000 terminates in 14 reads.
-        for(let readAttempts=1;readAttempts<=14;readAttempts++){
-          if(closing||res.destroyed)return;
-          bounds.signal?.throwIfAborted();
-          materialReadAttempts=readAttempts;
-          const page=await reader.materialRead({...scope,ref:args.ref,offset:Number(offset),length:effectiveLength});
-          bounds.signal?.throwIfAborted();
-          const material=materialMetadata(page.material,scope);
-          if(!material||material.ref!==args.ref||typeof page.text!=='string'||page.text.length>effectiveLength||!page.textRange||page.textRange.offset!==offset||!Number.isSafeInteger(page.textRange.total)||page.textRange.total<Number(offset)+page.text.length||page.textRange.nextOffset!==(Number(offset)+page.text.length<page.textRange.total?Number(offset)+page.text.length:null)||page.text.length===0&&Number(offset)<page.textRange.total||!Array.isArray(page.spans)||page.spans.length>64||!Array.isArray(page.originalRefs))throw hostError('Invalid material read page');
-          const spans=page.spans.map(span=>{
-            const pageRange=span?.pageRange as {start?:unknown;end?:unknown}|undefined;
-            const materialRange=span?.materialRange as {start?:unknown;end?:unknown}|undefined;
-            if(!span||typeof span.blockId!=='string'||span.blockId.length>128||typeof span.kind!=='string'||!['text','asset'].includes(span.kind)||!Array.isArray(span.memberIds)||span.memberIds.length>32||span.memberIds.some(id=>typeof id!=='string'||id.length>128)||!pageRange||!materialRange||!Number.isSafeInteger(pageRange.start)||!Number.isSafeInteger(pageRange.end)||Number(pageRange.start)<0||Number(pageRange.end)<Number(pageRange.start)||Number(pageRange.end)>page.text.length||!Number.isSafeInteger(materialRange.start)||!Number.isSafeInteger(materialRange.end)||Number(materialRange.start)<0||Number(materialRange.end)<Number(materialRange.start))throw hostError('Invalid material span');
-            const attribution=attributionContextSchema.safeParse(span.attributionContext);
-            return {blockId:span.blockId,kind:span.kind,...(attribution.success?{attributionContext:attribution.data}:{}),...(typeof span.format==='string'&&span.format.length<=128?{format:span.format}:{}),pageRange:{start:pageRange.start,end:pageRange.end},materialRange:{start:materialRange.start,end:materialRange.end},memberIds:span.memberIds};
-          });
-          const refs=[...new Set(page.originalRefs.slice(0,30).map(ref=>{const parsed=parseEvidenceRef(ref);return parsed?.kind==='capture'?parsed.id:undefined;}))];
-          if(refs.some(id=>typeof id!=='string'||!id||id.length>300))throw hostError('Invalid material original reference');
-          const ids=refs as string[];
-          let originals:ContextRecord[]=[];
-          if(ids.length){
-            originals=await reader.evidence({...scope,ids});
-            const valid=new Set(originals.filter(record=>{const at=sourceContentTime(record);return (!scope.deviceId||record.deviceId===scope.deviceId)&&(!scope.after||Date.parse(at)>=Date.parse(scope.after))&&(!scope.before||Date.parse(at)<Date.parse(scope.before));}).map(record=>record.id));
-            if(ids.some(id=>!valid.has(id)))throw hostError('Material original is missing or outside the selected scope');
-          }
-          const total=Number.isSafeInteger(page.originalRefsTotal)&&page.originalRefsTotal>=ids.length?page.originalRefsTotal:ids.length;
-          const sourceEvidence:ContextRecord[]=[];
-          // A locator/ancestry is not proof. Reauthorize each host-mapped span,
-          // match its exact current original bytes and preserve original offsets.
-          for(const span of (page.sourceSpans??[]).slice(0,30)){
-            const fresh=originals.find(record=>record.id===span.record.id);
-            if(!fresh||fresh.contentLayer==='L2_model_interpretation'||span.record.contentLayer==='L2_model_interpretation'||!Number.isSafeInteger(span.offset)||span.offset<0||!Number.isSafeInteger(span.length)||span.length<1||span.offset+span.length>fresh.ocrText.length||splitsPair(fresh.ocrText,span.offset)||splitsPair(fresh.ocrText,span.offset+span.length)||fresh.ocrText!==span.record.ocrText)continue;
-            sourceEvidence.push(project(fresh,span.offset,span.length,bounds.timeZone));
-          }
-          if(closing||res.destroyed)return;
-          bounds.signal?.throwIfAborted();
-          const data={material,text:page.text,textRange:{offset:page.textRange.offset,total:page.textRange.total,nextOffset:page.textRange.nextOffset},spans,originalRefs:ids.map(id=>formatEvidenceRef('capture',id)),originalRefsTotal:total,originalRefsTruncated:page.originalRefsTruncated||total>ids.length||page.originalRefs.length>ids.length,sourceEvidence,sourceCoverage:{references:total,delivered:sourceEvidence.length,partial:total>new Set(sourceEvidence.map(record=>record.id)).size||page.originalRefsTruncated},pagination:{requestedLength:Number(length),returnedLength:page.text.length,limitedBy:readAttempts>1?'host_budget':null}};
-          const serialized=JSON.stringify(attributionMetadataResponse({source:'untrusted_personal_context',data,hostBudget:hostBudget(),...(sourceProtocolInstructions(sourceEvidence)?{hostSourceSemantics:sourceProtocolInstructions(sourceEvidence)}:{})}));
-          if(serialized.length>limits.toolResultCharacters||deliveredCharacters+serialized.length>limits.totalToolCharacters||Buffer.byteLength(serialized)>1_500_000){
-            if(effectiveLength===1||page.text.length===0)throw budgetError();
-            effectiveLength=Math.max(1,Math.floor(effectiveLength/2));
-            continue;
-          }
-          deliveredCharacters+=serialized.length;
-          rememberSourceContexts(data);
-          for(const id of ids){discovered.add(id);disclosedIds.add(id);}
-          for(const record of sourceEvidence){remember(record);expanded.add(record.id);}
-          rememberDisclosureDependencies(page.disclosureDependencies);
-          trace.push({tool,arguments:{ref:args.ref,offset,length},count:1,materialPage:{readAttempts,requestedLength:Number(length),returnedLength:page.text.length,budgetLimited:readAttempts>1}});reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:1});res.end(serialized);return;
+        if(closing||res.destroyed)return;
+        bounds.signal?.throwIfAborted();
+        const page=await reader.materialRead({...scope,ref:args.ref,offset:Number(offset),length:Number(length)});
+        bounds.signal?.throwIfAborted();
+        const material=materialMetadata(page.material,scope);
+        if(!material||material.ref!==args.ref||typeof page.text!=='string'||page.text.length>Number(length)||!page.textRange||page.textRange.offset!==offset||!Number.isSafeInteger(page.textRange.total)||page.textRange.total<Number(offset)+page.text.length||page.textRange.nextOffset!==(Number(offset)+page.text.length<page.textRange.total?Number(offset)+page.text.length:null)||page.text.length===0&&Number(offset)<page.textRange.total||!Array.isArray(page.spans)||page.spans.length>64||!Array.isArray(page.originalRefs))throw hostError('Invalid material read page');
+        const spans=page.spans.map(span=>{
+          const pageRange=span?.pageRange as {start?:unknown;end?:unknown}|undefined;
+          const materialRange=span?.materialRange as {start?:unknown;end?:unknown}|undefined;
+          if(!span||typeof span.blockId!=='string'||span.blockId.length>128||typeof span.kind!=='string'||!['text','asset'].includes(span.kind)||!Array.isArray(span.memberIds)||span.memberIds.length>32||span.memberIds.some(id=>typeof id!=='string'||id.length>128)||!pageRange||!materialRange||!Number.isSafeInteger(pageRange.start)||!Number.isSafeInteger(pageRange.end)||Number(pageRange.start)<0||Number(pageRange.end)<Number(pageRange.start)||Number(pageRange.end)>page.text.length||!Number.isSafeInteger(materialRange.start)||!Number.isSafeInteger(materialRange.end)||Number(materialRange.start)<0||Number(materialRange.end)<Number(materialRange.start))throw hostError('Invalid material span');
+          const attribution=attributionContextSchema.safeParse(span.attributionContext);
+          return {blockId:span.blockId,kind:span.kind,...(attribution.success?{attributionContext:attribution.data}:{}),...(typeof span.format==='string'&&span.format.length<=128?{format:span.format}:{}),pageRange:{start:pageRange.start,end:pageRange.end},materialRange:{start:materialRange.start,end:materialRange.end},memberIds:span.memberIds};
+        });
+        const refs=[...new Set(page.originalRefs.slice(0,30).map(ref=>{const parsed=parseEvidenceRef(ref);return parsed?.kind==='capture'?parsed.id:undefined;}))];
+        if(refs.some(id=>typeof id!=='string'||!id||id.length>300))throw hostError('Invalid material original reference');
+        const ids=refs as string[];
+        let originals:ContextRecord[]=[];
+        if(ids.length){
+          originals=await reader.evidence({...scope,ids});
+          const valid=new Set(originals.filter(record=>{const at=sourceContentTime(record);return (!scope.deviceId||record.deviceId===scope.deviceId)&&(!scope.after||Date.parse(at)>=Date.parse(scope.after))&&(!scope.before||Date.parse(at)<Date.parse(scope.before));}).map(record=>record.id));
+          if(ids.some(id=>!valid.has(id)))throw hostError('Material original is missing or outside the selected scope');
         }
-        throw budgetError();
+        const total=Number.isSafeInteger(page.originalRefsTotal)&&page.originalRefsTotal>=ids.length?page.originalRefsTotal:ids.length;
+        const sourceEvidence:ContextRecord[]=[];
+        // A locator/ancestry is not proof. Reauthorize each host-mapped span,
+        // match its exact current original bytes and preserve original offsets.
+        for(const span of (page.sourceSpans??[]).slice(0,30)){
+          const fresh=originals.find(record=>record.id===span.record.id);
+          if(!fresh||fresh.contentLayer==='L2_model_interpretation'||span.record.contentLayer==='L2_model_interpretation'||!Number.isSafeInteger(span.offset)||span.offset<0||!Number.isSafeInteger(span.length)||span.length<1||span.offset+span.length>fresh.ocrText.length||splitsPair(fresh.ocrText,span.offset)||splitsPair(fresh.ocrText,span.offset+span.length)||fresh.ocrText!==span.record.ocrText)continue;
+          sourceEvidence.push(project(fresh,span.offset,span.length,bounds.timeZone));
+        }
+        if(closing||res.destroyed)return;
+        bounds.signal?.throwIfAborted();
+        const data={material,text:page.text,textRange:{offset:page.textRange.offset,total:page.textRange.total,nextOffset:page.textRange.nextOffset},spans,originalRefs:ids.map(id=>formatEvidenceRef('capture',id)),originalRefsTotal:total,originalRefsTruncated:page.originalRefsTruncated||total>ids.length||page.originalRefs.length>ids.length,sourceEvidence,sourceCoverage:{references:total,delivered:sourceEvidence.length,partial:total>new Set(sourceEvidence.map(record=>record.id)).size||page.originalRefsTruncated},pagination:{requestedLength:Number(length),returnedLength:page.text.length}};
+        const serialized=JSON.stringify(attributionMetadataResponse({source:'untrusted_personal_context',data,toolUsage:toolUsage(),...(sourceProtocolInstructions(sourceEvidence)?{hostSourceSemantics:sourceProtocolInstructions(sourceEvidence)}:{})}));
+        deliveredCharacters+=serialized.length;
+        rememberSourceContexts(data);
+        for(const id of ids){discovered.add(id);disclosedIds.add(id);}
+        for(const record of sourceEvidence){remember(record);expanded.add(record.id);}
+        rememberDisclosureDependencies(page.disclosureDependencies);
+        trace.push({tool,arguments:{ref:args.ref,offset,length},count:1,materialPage:{requestedLength:Number(length),returnedLength:page.text.length}});reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:1});res.end(serialized);return;
       }
       if(tool==='attribution_context'){
         if(Object.keys(args).some(key=>!['id','ref','sourceContextRef','offset','length','expectedFingerprint'].includes(key))||
@@ -622,17 +601,8 @@ export async function startBridge(
         const start=Number(offset),requestedLength=Number(length);
         if(start>text.length||splitsPair(text,start))throw hostError('Attribution offset exceeds its context or splits a UTF-16 pair');
         let end=Math.min(text.length,start+requestedLength);if(splitsPair(text,end))end--;
-        const serialize=(stop:number)=>JSON.stringify({source:'untrusted_personal_context',data:{...locator,contextFingerprint,offset:start,total:text.length,nextOffset:stop<text.length?stop:null,text:text.slice(start,stop),citationAuthority:false},hostBudget:hostBudget()});
-        const fits=(serialized:string)=>serialized.length<=limits.toolResultCharacters&&deliveredCharacters+serialized.length<=limits.totalToolCharacters&&Buffer.byteLength(serialized)<=1_500_000;
-        let serialized=serialize(end);
-        if(!fits(serialized)){
-          let low=start+1,high=end-1,fittedEnd=-1;
-          while(low<=high){const probe=Math.floor((low+high)/2),stop=splitsPair(text,probe)?probe-1:probe;
-            if(stop<=start){low=probe+1;continue;}
-            const candidate=serialize(stop);if(fits(candidate)){fittedEnd=stop;serialized=candidate;low=probe+1;}else high=probe-1;
-          }
-          if(fittedEnd<0)throw budgetError();end=fittedEnd;
-        }
+        const serialize=(stop:number)=>JSON.stringify({source:'untrusted_personal_context',data:{...locator,contextFingerprint,offset:start,total:text.length,nextOffset:stop<text.length?stop:null,text:text.slice(start,stop),citationAuthority:false},toolUsage:toolUsage()});
+        const serialized=serialize(end);
         if(end===start&&start<text.length)throw hostError('Attribution length must deliver a complete UTF-16 character');
         deliveredCharacters+=serialized.length;
         // Context disclosure participates in deletion/correction lineage only;
@@ -640,7 +610,7 @@ export async function startBridge(
         rememberSourceContexts({attributionContext:parsed.data});
         if('id' in locator)disclosedIds.add(locator.id);else if('ref' in locator)rememberDisclosureDependencies(dependencies);
         trace.push({tool,arguments:{...locator,offset:start,length:requestedLength,...(args.expectedFingerprint?{expectedFingerprint:args.expectedFingerprint}:{})},count:1,
-          attributionPage:{contextFingerprint,offset:start,total:text.length,requestedLength,returnedLength:end-start,budgetLimited:end<Math.min(text.length,start+requestedLength)}});
+          attributionPage:{contextFingerprint,offset:start,total:text.length,requestedLength,returnedLength:end-start}});
         reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:1});res.end(serialized);return;
       }
       if(restricted){
@@ -654,18 +624,9 @@ export async function startBridge(
           const text=fresh.ocrText,grantEnd=grant.offset+grant.length;
           if(splitsPair(text,start))throw new ContextToolError('invalid_evidence_range','Context offset splits a UTF-16 pair. Use the returned continuation offset.','correct_arguments');
           let end=Math.min(grantEnd,start+requestedLength);if(splitsPair(text,end))end--;
-          const serialize=(stop:number)=>{const record=project(fresh,start,stop-start,bounds.timeZone);record.textRange={...(record.textRange as object),nextOffset:stop<grantEnd?stop:null};return {record,text:JSON.stringify({source:'untrusted_personal_context',data:[record],readRange:{offset:grant.offset,length:grant.length},hostBudget:hostBudget()})};};
-          const available=Math.min(limits.toolResultCharacters,limits.totalToolCharacters-deliveredCharacters);
+          const serialize=(stop:number)=>{const record=project(fresh,start,stop-start,bounds.timeZone);record.textRange={...(record.textRange as object),nextOffset:stop<grantEnd?stop:null};return {record,text:JSON.stringify({source:'untrusted_personal_context',data:[record],readRange:{offset:grant.offset,length:grant.length},toolUsage:toolUsage()})};};
           if(end<=start)throw new ContextToolError('invalid_evidence_range','This page cannot deliver a complete Unicode character; request at least two UTF-16 units.','correct_arguments');
-          let page=serialize(end);
-          if(page.text.length>available){
-            let low=start+1,high=end,best:ReturnType<typeof serialize>|undefined,bestEnd=start;
-            while(low<=high){const probe=Math.floor((low+high)/2),stop=splitsPair(text,probe)?probe-1:probe;
-              if(stop<=start){low=probe+1;continue;}
-              const candidate=serialize(stop);if(candidate.text.length<=available){best=candidate;bestEnd=stop;low=probe+1;}else high=probe-1;
-            }
-            if(!best)throw budgetError();page=best;end=bestEnd;
-          }
+          const page=serialize(end);
           remember(page.record);discovered.add(id);disclosedIds.add(id);expanded.add(id);rememberSourceContexts(page.record);
           deliveredRanges.push({id,offset:start,length:end-start});deliveredCharacters+=page.text.length;
           trace.push({tool,arguments:{id,offset:start,length:requestedLength,returnedLength:end-start},count:1});
@@ -685,8 +646,7 @@ export async function startBridge(
             return project(record,Number(offset),Number(length),bounds.timeZone);
           });
         }
-        const serialized=JSON.stringify({source:'untrusted_personal_context',data,hostBudget:hostBudget()});
-        if(serialized.length>limits.toolResultCharacters||deliveredCharacters+serialized.length>limits.totalToolCharacters)throw budgetError();
+        const serialized=JSON.stringify({source:'untrusted_personal_context',data,toolUsage:toolUsage()});
         deliveredCharacters+=serialized.length;
         trace.push({tool,arguments:{ids:args.ids,ranges:ranges.filter(r=>(args.ids as string[]).includes(r.id))},count:data.length});
         reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:data.length});
@@ -721,12 +681,11 @@ export async function startBridge(
           const sendImageResult=(result:Record<string,unknown>,entry:ToolTrace)=>{
             const {image:payload,imageDelivery:receipt,...text}=result;
             const characters=JSON.stringify(text).length;
-            if(characters>limits.toolResultCharacters||deliveredCharacters+characters>limits.totalToolCharacters){if(typeof receipt==='string')imageDelivery(receipt,false);throw budgetError();}
             deliveredCharacters+=characters;trace.push(entry);reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:1});res.end(JSON.stringify(result));
           };
           if(metadata){
             if(image.data!==undefined||imageView?.output)throw hostError('Metadata must not include image bytes');
-            sendImageResult({source:'untrusted_personal_context',...selection,imageView:publicView,imageBudget:imageBudget(),hostBudget:hostBudget()},{tool,arguments:selection,count:1,imageView:publicView});
+            sendImageResult({source:'untrusted_personal_context',...selection,imageView:publicView,imageBudget:imageBudget(),toolUsage:toolUsage()},{tool,arguments:selection,count:1,imageView:publicView});
             // Metadata alone cannot claim empty complete disclosure. A later
             // confirmed pixel read supplies this original's actual lineage.
             metadataImageIds.add(selection.id);return;
@@ -748,7 +707,7 @@ export async function startBridge(
           const firstSelection=existing?.selection;
           if(!existing&&disclosedImages.size>=4)throw new ContextToolError('image_budget_exceeded','Image disclosure budget exceeded. Finish with existing evidence and state incomplete visual coverage.','use_existing_evidence',{remainingPayloads:0});
           // No await between checking and recording: concurrent identical reads
-          // append at most one image. Repeats still consume the normal tool budget.
+          // append at most one image. Repeats remain observable tool calls.
           let delivery:ImageDelivery|undefined;
           if(!existing){
             let settle!:()=>void;const ready=new Promise<void>(resolve=>settle=resolve),token=randomBytes(24).toString('hex');
@@ -762,7 +721,7 @@ export async function startBridge(
           sendImageResult({source:'untrusted_personal_context',...selection,...(publicView?{imageView:publicView}:{}),...(firstSelection?{
             imageDisclosure:{status:'already_disclosed',sha256,mimeType:image.mimeType,firstSelection,...(existing?.imageView?{firstImageView:existing.imageView}:{})},
             message:'These exact image bytes were already supplied in this query. Use the earlier image with this selection’s own source attribution.',
-          }:{image:{mimeType:image.mimeType,data:image.data},imageDelivery:delivery!.token}),imageBudget:imageBudget(),hostBudget:hostBudget()},{tool,arguments:selection,count:1,...(publicView?{imageView:publicView}:{})});
+          }:{image:{mimeType:image.mimeType,data:image.data},imageDelivery:delivery!.token}),imageBudget:imageBudget(),toolUsage:toolUsage()},{tool,arguments:selection,count:1,...(publicView?{imageView:publicView}:{})});
           if(existing?.confirmed){if(!records.has(selection.id))remember(project({...record,ocrText:''},0,0,bounds.timeZone));disclosedIds.add(selection.id);}
           return;
         }
@@ -777,8 +736,16 @@ export async function startBridge(
       let pagination: { nextCursor: string | null; totalCount?: number } | undefined;
       if (tool === "devices") {
         value = await reader.devices();
+        let observedAt:string|undefined;
+        if(value&&typeof value==='object'&&!Array.isArray(value)){
+          const page=value as Record<string,unknown>;
+          if(!Array.isArray(page.items))throw hostError('Device reader returned invalid metadata');
+          disclosureDependencies=page.disclosureDependencies;disclosureSourceContextDependencies=page.sourceContextDependencies;
+          if(typeof page.observedAt==='string'&&Number.isFinite(Date.parse(page.observedAt)))observedAt=page.observedAt;else completeLineage=false;
+          value=page.items;
+        }
         if (bounds.deviceId && Array.isArray(value)) value = value.filter(device => device.deviceId === bounds.deviceId);
-        if (Array.isArray(value)) value = value.map(device => projectDevice(device, bounds.timeZone));
+        if (Array.isArray(value)) value = value.map(device => ({...projectDevice(device,bounds.timeZone),...(observedAt?{directoryObservedAt:observedAt,displayDirectoryObservedAt:displayTime(observedAt,bounds.timeZone)}:{})}));
       }
       else if(tool==='read_file_evidence'){
         if(typeof args.id!=='string'||!records.has(args.id))throw hostError('Discover the file before requesting evidence');
@@ -859,19 +826,17 @@ export async function startBridge(
           throw hostError("ids must contain 1–30 record identifiers");
         // Evidence expansion only reads records discovered in this run, inside its scope.
         const ids = args.ids as string[];
-        if(ids.length>5)throw hostError('Expand at most five evidence spans per call');
         if (ids.some((id) => !discovered.has(id)))
           throw hostError(
             "Discover records with search_context or timeline before expanding evidence",
           );
         if(args.layer!==undefined&&!['ocr','semantic'].includes(String(args.layer)))throw hostError('Invalid derived layer');
         const scope=range({},bounds);
-        for (const [key, fallback, min, max] of [["offset", 0, 0, 100000], ["length", Math.max(1,Math.min(12000,Math.floor((Math.min(limits.toolResultCharacters,limits.totalToolCharacters-deliveredCharacters)-1200*ids.length)/ids.length))), 1, 12000]] as const) {
+        for (const [key, fallback, min, max] of [["offset", 0, 0, 100000], ["length", 12000, 1, 12000]] as const) {
           const n = args[key] ?? fallback;
           if (typeof n !== "number" || !Number.isSafeInteger(n) || n < min || n > max) throw hostError(`${key} must be an integer from ${min} to ${max}`);
           if (key === "offset") textOffset = n; else textLength = n;
         }
-        if(textLength*ids.length+1200*ids.length>Math.min(limits.toolResultCharacters,limits.totalToolCharacters-deliveredCharacters))throw budgetError();
         value = (await reader.evidence({ ids })).filter(r=>{
           const at=sourceContentTime(r);return ids.includes(r.id)&&(!scope.deviceId||r.deviceId===scope.deviceId)&&(!scope.after||Date.parse(at)>=Date.parse(scope.after))&&(!scope.before||Date.parse(at)<Date.parse(scope.before));
         }).map(r=>args.layer==='semantic'?{...r,ocrText:String(r.summary??''),contentLayer:'L2_model_interpretation'}:{...r,...(r.sourceType==='screen'?{contentLayer:'L1_machine_extraction'}:{})});
@@ -883,7 +848,8 @@ export async function startBridge(
         const ids=bounds.incrementalEvidenceIds??[],offset=args.cursor===undefined?0:Number(args.cursor),limit=Math.min(Number(args.limit??30),30);
         if(!Number.isSafeInteger(offset)||offset<0||!Number.isSafeInteger(limit)||limit<1)throw hostError('Invalid changes page');
         const scope=range({},bounds);effective={...filters,limit};
-        value=(await reader.evidence({ids:ids.slice(offset,offset+limit)})).filter(r=>{const at=sourceContentTime(r);return (!scope.deviceId||r.deviceId===scope.deviceId)&&(!scope.after||Date.parse(at)>=Date.parse(scope.after))&&(!scope.before||Date.parse(at)<Date.parse(scope.before));});
+        const selectedIds=new Set(ids.slice(offset,offset+limit));
+        value=(await reader.evidence({ids:[...selectedIds]})).filter(r=>{const at=sourceContentTime(r);return selectedIds.has(r.id)&&(!scope.deviceId||r.deviceId===scope.deviceId)&&(!scope.after||Date.parse(at)>=Date.parse(scope.after))&&(!scope.before||Date.parse(at)<Date.parse(scope.before));});
         if(args.view!==undefined&&!['overview','text'].includes(String(args.view)))throw new ContextToolError('invalid_changes_view','view must be overview or text.','correct_arguments');
         metadataOnly=args.view==='overview'||(args.view===undefined&&bounds.skill==='personal-insight');
         if(metadataOnly){discoveredMemoryIds.push(...(value as ContextRecord[]).map(r=>r.id));value=(value as ContextRecord[]).map(r=>({id:r.id,capturedAt:r.capturedAt,contentAt:sourceContentTime(r),appName:r.appName,sourceType:r.sourceType,characters:r.ocrText.length}));}
@@ -945,23 +911,33 @@ export async function startBridge(
             return project(record,offset,textLength,bounds.timeZone);
           });
       }
+      if(['sources','context_index','activity','media_activity'].includes(tool)&&value&&typeof value==='object'&&!Array.isArray(value)){
+        const {disclosureDependencies:receipt,sourceContextDependencies:pins,...data}=value as Record<string,unknown>;disclosureDependencies=receipt;disclosureSourceContextDependencies=pins;value=data;
+      }
       const safeValue = JSON.parse(JSON.stringify(value ?? null));
       const serialized = JSON.stringify(attributionMetadataResponse({
         source: "untrusted_personal_context",
         data: safeValue,
-        hostBudget:hostBudget(),
+        toolUsage:toolUsage(),
         ...(sourceProtocolInstructions([...(Array.isArray(value)?value:[]) as ContextRecord[],...memoryEvidence])?{hostSourceSemantics:sourceProtocolInstructions([...(Array.isArray(value)?value:[]) as ContextRecord[],...memoryEvidence])}:{}),
         ...(retrieval?{retrieval}:{}),
         ...(pagination ? { pagination } : {}),
       }));
-      if (serialized.length > limits.toolResultCharacters || deliveredCharacters+serialized.length>limits.totalToolCharacters || Buffer.byteLength(serialized) > 1_500_000)
-        throw budgetError();
       deliveredCharacters+=serialized.length;
       rememberSourceContexts(safeValue);
       for(const id of [...discoveredMemoryIds,...derivedIds])disclosedIds.add(id);
-      // Aggregate tools do not yet expose exact contributing IDs. Keep their
-      // runs conservative instead of falsely claiming complete provenance.
-      if(['devices','sources','activity','media_activity','context_index'].includes(tool)||metadataOnly)completeLineage=false;
+      // Private host receipts fence metadata without granting original reads.
+      // Aggregate tools without contributor receipts remain conservative.
+      if(['sources','context_index','devices','activity','media_activity'].includes(tool)){
+        rememberDisclosureDependencies(disclosureDependencies);
+        if(disclosureSourceContextDependencies!==undefined){
+          const pins=sourceContextDeclarationSchema.array().safeParse(disclosureSourceContextDependencies);
+          if(pins.success)for(const pin of pins.data)rememberSourcePin(pin);else completeLineage=false;
+        }
+      }
+      // Changes overviews are projected from the exact current originals above;
+      // their contributor IDs are complete even when their bodies remain unread.
+      else if(metadataOnly&&tool!=='changes')completeLineage=false;
       for(const id of discoveredMemoryIds)discovered.add(id);
       // Only a successfully serialized, deliverable tool result authorizes evidence.
       if (!metadataOnly&&(tool === "search_context" || tool === "timeline" || tool === "evidence" || tool==='source_items' || tool==='source_history' || tool==='file_chunks' || tool==='changes')) {
@@ -987,9 +963,9 @@ export async function startBridge(
       const signature=JSON.stringify([tool,issue.code,canonical(args)]);
       repeatedFailures=signature===previousFailure?repeatedFailures+1:1;previousFailure=signature;
       if(repeatedFailures>=3)issue=new ContextToolError('repeated_tool_failure','The same invalid tool request failed three times. This run has stopped; no output will be committed.','stop',{originalCode:issue.code});
-      reportTrace(bounds,{type:'tool.rejected',stage:'tool',tool,status:'rejected',payload:{...issue.toJSON(),call:calls,repeatCount:repeatedFailures,remainingCalls:Math.max(0,maxToolCalls-calls),remainingCharacters:Math.max(0,limits.totalToolCharacters-deliveredCharacters),...(materialReadAttempts?{materialPage:{readAttempts:materialReadAttempts}}:{})}});
-      res.writeHead(400).end(JSON.stringify({error:issue.message,toolError:issue.toJSON(),hostBudget:hostBudget()}));
-      if(issue.recovery==='stop'||calls>maxToolCalls+2)rejectFailure(issue.code==='image_disclosure_disabled'
+      reportTrace(bounds,{type:'tool.rejected',stage:'tool',tool,status:'rejected',payload:{...issue.toJSON(),call:calls,repeatCount:repeatedFailures,...toolUsage()}});
+      res.writeHead(400).end(JSON.stringify({error:issue.message,toolError:issue.toJSON(),toolUsage:toolUsage()}));
+      if(issue.recovery==='stop'||maxToolCalls!==undefined&&calls>maxToolCalls+2)rejectFailure(issue.code==='image_disclosure_disabled'
         ?new AgentResponseError('Original-image access for queries is off.','image_disclosure_disabled')
         :new AgentResponseError('Tool failure recovery exhausted.','tool_failure'));
 

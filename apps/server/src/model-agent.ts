@@ -4,7 +4,9 @@ import type { Config } from './config.js';
 import type { QueryAgent } from './app.js';
 import type { PreparedModelSettings } from './model-settings.js';
 
-export type ModelAgentFactory = (settings: ModelSettings, reader: ContextReader) => Promise<QueryAgent>;
+/** Trusted adapters must retain the host's admission and fresh transport fence. */
+export type ModelAgentHostHooks=Readonly<Pick<AgentOptions,'runModel'|'authorizeModelRequest'>>;
+export type ModelAgentFactory = (settings: ModelSettings, reader: ContextReader,host?:ModelAgentHostHooks) => Promise<QueryAgent>;
 export const createModelAgent = async (settings:ModelSettings, reader:ContextReader, codex?:AgentOptions['codex'],runModel?:AgentOptions['runModel'],authorizeModelRequest?:AgentOptions['authorizeModelRequest']):Promise<QueryAgent> => createAgent({ ...settings, reader, runModel, authorizeModelRequest, requestTimeoutMs: settings.modelRequestTimeoutMs, agentTimeoutMs: settings.agentTimeoutMs, codex });
 
 /** A registry generation is immutable. ReloadableAgent leases it for the entire query. */
@@ -103,7 +105,7 @@ export class ReloadableAgent implements QueryAgent {
 }
 
 /** This reader is intentionally independent from the archive, source store and indexer. */
-export async function testModelConnection(settings: ModelSettings, factory: ModelAgentFactory = createModelAgent): Promise<ModelTestResult> {
+export async function testModelConnection(settings: ModelSettings, factory: ModelAgentFactory = (settings,reader)=>createModelAgent(settings,reader)): Promise<ModelTestResult> {
   const started = Date.now(), id = '7a8f56d1-45de-47b7-90bb-5e84d411c3d6';
   const record = { id, capturedAt: '2026-01-01T00:00:00.000Z', appName: 'Mote synthetic connection test', ocrText: 'This generated test record confirms a read-only model tool round trip. No personal archive is connected.' };
   const reader: ContextReader = {

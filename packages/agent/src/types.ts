@@ -237,10 +237,10 @@ export interface Citation {
 }
 export interface ToolTrace {
   imageView?:import('@mote/shared').ImageViewTrace;
-  /** Host-local page fitting, not extra model/provider calls. */
-  materialPage?:{readAttempts:number;requestedLength:number;returnedLength:number;budgetLimited:boolean};
+  /** Requested and delivered normal page lengths; no capacity fitting. */
+  materialPage?:{requestedLength:number;returnedLength:number};
   /** A host context disclosure page never grants original citation authority. */
-  attributionPage?:{contextFingerprint:string;offset:number;total:number;requestedLength:number;returnedLength:number;budgetLimited:boolean};
+  attributionPage?:{contextFingerprint:string;offset:number;total:number;requestedLength:number;returnedLength:number};
   tool: string;
   arguments: Record<string, unknown>;
   count: number;
@@ -283,16 +283,6 @@ export class AgentConfigurationError extends Error {
   constructor(message = 'Invalid model connection settings.') {
     super(message);
     this.name = 'AgentConfigurationError';
-  }
-}
-
-/** A host packing failure, observed before a model request, not a provider failure. */
-export class AgentContextBudgetError extends Error {
-  readonly statusCode=413;
-  readonly code='host_context_budget';
-  constructor(readonly budget:'task'|'input',readonly characters:number,readonly limit:number,readonly sections:Record<string,number>={}){
-    super(`Host ${budget} context exceeds its input budget (${characters} > ${limit} characters); use a smaller task batch`);
-    this.name='AgentContextBudgetError';
   }
 }
 

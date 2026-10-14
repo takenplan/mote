@@ -161,6 +161,7 @@ test('trusted rules are explicit over source, operation, phase and representatio
   assert.equal((await agent.memories!({id:restrictedMemoryId})).items.length,0);
   assert.equal((await agent.catalog!({path:'/context/memory'})).entries.some((entry:any)=>entry.id===restrictedMemoryId),false);
   assert.equal(reader.evidence(fixtureCaptureRefs([id])).length,1,'the original remains in the owner archive');
+  assert.equal(reader.contextDependenciesAllowed([id]),reader.deletionContextAllowed(id),'private metadata retains the hard raw Coding prohibition');
 });
 
 test('ordinary recipe routes keep pending query material visible and require a named Memory grant',async t=>{
@@ -206,6 +207,8 @@ test('a replaced Material revision revokes prior query refs and synthetic anchor
     fidelity:{state:'derived' as const},retention:{original:'retained' as const,policy:'keep' as const}});
   const old=materials.publish(draft('Generated superseded disclosure')),reader=new EvidenceReader(store,sources,undefined,undefined,undefined,materials,undefined,recipes);
   const agent=reader.agent({diagnostics}),oldAnchor=materials.evidenceIds(old.ref)[0];
+  const sameAuthorization=(ids:string[])=>assert.equal(reader.contextDependenciesAllowed(ids),ids.every(id=>reader.deletionContextAllowed(id)));
+  sameAuthorization([raw.id,oldAnchor]);
   assert.match((await agent.materialRead!({ref:old.ref})).text,/superseded disclosure/);
   assert.deepEqual((await agent.evidence({ids:[oldAnchor]})).map(row=>row.id),[oldAnchor]);
   const current=materials.publish(draft('Generated corrected disclosure'),{expectedRevision:old.revision});
@@ -215,6 +218,8 @@ test('a replaced Material revision revokes prior query refs and synthetic anchor
   assert.match((await agent.materialRead!({ref:current.ref})).text,/corrected disclosure/);
   assert.deepEqual((await agent.evidence({ids:[materials.evidenceIds(current.ref)[0]]})).map(row=>row.id),[materials.evidenceIds(current.ref)[0]]);
   assert.match(materials.read(old.ref).text,/superseded disclosure/,'owner history remains available');
+  sameAuthorization([oldAnchor]);sameAuthorization([materials.evidenceIds(current.ref)[0]]);
+  materials.redactUntilRebuilt(current.id);sameAuthorization([oldAnchor]);assert.equal(reader.contextDependenciesAllowed([oldAnchor]),false,'redaction revokes the private historical dependency too');
 });
 
 test('Coding append retains an active prefix anchor under the current Material scope',async t=>{
@@ -237,7 +242,7 @@ test('Coding append retains an active prefix anchor under the current Material s
     blocks:[{id:'section-1',kind:'text',format:'markdown-fragment',text:'Generated new tail',memberIds:[member.id]}]},
     {expectedRevision:old.revision,codingSnapshot:{checkpoint:'checkpoint-2',appendEpoch:1,headCount:2}});
   assert.ok(materials.evidenceIds(current.ref).includes(prefix));
-  const agent=new EvidenceReader(store,sources,undefined,undefined,undefined,materials).agent({diagnostics});
+  const reader=new EvidenceReader(store,sources,undefined,undefined,undefined,materials),agent=reader.agent({diagnostics});
   await assert.rejects(agent.materialRead!({ref:old.ref}),/Material not found/);
   const active=await agent.evidence({ids:[prefix]});assert.equal(active.length,1);
   assert.ok(active[0].provenance?.uri?.startsWith(current.ref),'active prefix must resolve against the current Material head');
@@ -246,6 +251,11 @@ test('Coding append retains an active prefix anchor under the current Material s
   assert.match((await agent.materialRead!({ref:current.ref})).text,/Generated active prefix/);
   const page=await agent.materialRead!({ref:current.ref,offset:0,length:10});
   assert.deepEqual(page.originalRefs,[`capture:${prefix}`],'the current prefix page must cite its active original anchor');
+  assert.equal(reader.contextDependenciesAllowed([prefix]),reader.deletionContextAllowed(prefix));
+  const rebuilt=materials.publish({...base,blocks:[{id:'section-0',kind:'text',format:'markdown-fragment',text:'Generated rebuilt prefix',memberIds:[member.id]}]},
+    {expectedRevision:current.revision,codingSnapshot:{checkpoint:'checkpoint-3',appendEpoch:2,headCount:1}});
+  const anchors=[prefix,...materials.evidenceIds(rebuilt.ref)];assert.equal(reader.contextDependenciesAllowed(anchors),anchors.every(id=>reader.deletionContextAllowed(id)),'full rebuild visibility is unchanged');
+  materials.retire(rebuilt.id,{expectedRevision:rebuilt.revision});assert.equal(reader.contextDependenciesAllowed(anchors),false);assert.equal(anchors.every(id=>reader.deletionContextAllowed(id)),false);
 });
 
 test('bounded Coding products use original conversation dates, expand only covered anchors and reject legacy tool projections',async t=>{
@@ -301,11 +311,13 @@ test('a source tombstone revokes model access to prior raw revisions',async t=>{
     text:'Generated private body',kind:'message',layer:'original'});
   const reader=new EvidenceReader(store,sources),agent=reader.agent({diagnostics});
   assert.equal((await agent.evidence({ids:[old.id]})).length,1);
+  assert.equal(reader.contextDependenciesAllowed([old.id]),true);
   await sources.upsert('generated-source',{externalId:'item-1',revision:'2',observedAt:'2026-09-20T01:00:00.000Z',
     text:'',kind:'message',layer:'original',deleted:true});
   assert.deepEqual(await agent.evidence({ids:[old.id]}),[]);
   assert.equal((await agent.search({query:'Generated private body'})).length,0);
   assert.equal(reader.evidence(fixtureCaptureRefs([old.id])).length,1,'owner history remains available');
+  assert.equal(reader.contextDependenciesAllowed([old.id]),false);assert.equal(reader.contextDependenciesAllowed([old.id]),reader.deletionContextAllowed(old.id));
 });
 
 test('synthetic Material evidence obeys named Memory readiness without blocking unrelated raw captures',async t=>{

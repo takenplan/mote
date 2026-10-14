@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {materialDependencyStatus,type MaterialInputPin} from './material-readiness.js';
 import {scopeRecord} from './evidence-scope-record.js';
-import {CODING_DIALOGUE_SCHEMA_VERSION,sourceContentTime,parseEvidenceRef,evidenceRefId,formatEvidenceRef,formatArtifactRef,parseArtifactRef,sourceItemKinds,sourceTextFormat,decodeSourceText,type CaptureRecord} from '@mote/shared';
+import {CODING_DIALOGUE_SCHEMA_VERSION,attributionContextSchema,sourceContentTime,parseEvidenceRef,evidenceRefId,formatEvidenceRef,formatArtifactRef,parseArtifactRef,sourceItemKinds,sourceTextFormat,decodeSourceText,type AttributionContext,type SourceContextDeclaration,type CaptureRecord} from '@mote/shared';
 import {ContextToolError,type ContextReader} from '@mote/agent';
 import {StoreError,type Store,type Range} from './store.js';
 import {MemoryStore,memoryEvidenceFingerprint} from './memory.js';
@@ -10,7 +10,7 @@ import type {FileStore} from './files.js';
 import type {Indexer} from './indexer.js';
 import type {FileEvidence} from './file-evidence.js';
 import type {ServerDiagnostics} from './diagnostics.js';
-import {materialId,type MaterialStore,type MaterialMember,type MaterialRecord} from './materials.js';
+import {materialId,parseMaterialRef,type MaterialStore,type MaterialMember,type MaterialRecord} from './materials.js';
 import {contextIndex,contextIndexAsync} from './context-index.js';
 import {browseSourceContexts,parseSourceContextRef} from './source-context-catalog.js';
 import {SourceContextStore} from './source-context.js';
@@ -29,8 +29,13 @@ import type {ManualMemoryInputPlanRequest} from './memory-input-plans.js';
 import type {MemoryBindings} from './memory-bindings.js';
 import {MemoryProviderError,memoryProviderKey,memoryProviderRecordSchema,memoryProviderNamespaceSchema,memoryBodyDigest,withMemoryHostState} from './memory-provider-contract.js';
 import {memorySchema,type Memory} from './memory-schema.js';
+import {combineSourceContextDependencies,sourceContextDependenciesCurrent} from './source-context-lineage.js';
 export type MemoryReadSnapshot=ReturnType<MemoryBindings['retainSnapshot']>;
 type MemoryExposure={policy:EvidenceExposurePolicy;operation:EvidenceOperation};
+/** Host-only disclosure receipt. Catalog metadata is neither a body read nor
+ * an extraction target, and its fingerprints never reach model transport. */
+export type MemoryCatalogMetadataReceipt={complete:boolean;members:{id:string;materialId?:string;sourceId?:string;attribution?:string}[];sourceContextDependencies:SourceContextDeclaration[]};
+const attributionMetadata=(context:AttributionContext)=>{const {ownerStatements:_,importStatements:__,sourceContextStatements:___,...metadata}=context;return JSON.stringify(metadata);};
 
 export {parseEvidenceRef} from '@mote/shared';
 type ScreenOriginalGrant={kind:'material'|'segment';ref:string;scope:Range};
@@ -56,7 +61,10 @@ export class EvidenceReader {
     // Memory dependencies must use the canonical Material anchor. The query
     // projection below decorates it with source metadata for display and must
     // not replace its identity when validating a durable dependency.
-    this.memories=new MemoryStore(store,ids=>[...store.evidence(ids),...(materials?.evidence(ids)??[]),...(files?.evidence(ids)??[])].map(record=>({...record,...(materials?{attributionContext:materials.contextForEvidence(record)}:{})})),id=>Boolean(materials?.isCurrentEvidence(id)||files?.isCurrentEvidence(id)||store.isCurrentEvidence(id)));
+    this.memories=new MemoryStore(store,ids=>{
+      const records=[...store.evidence(ids),...(materials?.evidence(ids)??[]),...(files?.evidence(ids)??[])],contexts=materials?.contextsForEvidence(records);
+      return records.map((record,index)=>({...record,...(contexts?{attributionContext:contexts[index]}:{})}));
+    },id=>Boolean(materials?.isCurrentEvidence(id)||files?.isCurrentEvidence(id)||store.isCurrentEvidence(id)));
   }
   imageReference(ref:string,scope:Range={}){
     const id=evidenceRefId(ref,'capture');if(!id)return;
@@ -66,21 +74,24 @@ export class EvidenceReader {
   evidence(refs:string[],scope:Range={}){
     return this.readEvidence(refs,scope,false);
   }
-  private evidenceById(ids:string[],scope:Range={}){return this.evidence(ids.map(id=>formatEvidenceRef('capture',z.string().uuid().parse(id))),scope);}
+  private evidenceById(ids:string[],scope:Range={},batchViews?:{scoped:Map<string,boolean>;heads:Map<string,CaptureRecord|undefined>}){return this.readEvidence(ids.map(id=>formatEvidenceRef('capture',z.string().uuid().parse(id))),scope,false,batchViews);}
   /** Owner archive views may inspect retained old quotes; model tools stay current-only. */
   archivedEvidence(refs:string[],scope:Range={}){
     return this.readEvidence(refs,scope,true);
   }
-  private readEvidence(refs:string[],scope:Range,includeHistorical:boolean){
+  private readEvidence(refs:string[],scope:Range,includeHistorical:boolean,batchViews?:{scoped:Map<string,boolean>;heads:Map<string,CaptureRecord|undefined>}){
     const ids=[...new Set(refs.map(ref=>parseEvidenceRef(ref)).filter(ref=>ref?.kind==='capture').map(ref=>ref!.id))];
     const materialRecords=(this.materials?.evidence(ids)??[]).flatMap(record=>{
       const ref=record.provenance?.uri?.split('#')[0];if(!ref)return [];
       const prior=this.materials?.get(ref),current=prior&&this.materials?.get(prior.id);
       const active=current&&this.currentMaterialAnchor(record,current);
       const material=active?current:includeHistorical?prior:undefined;
-      if(!material||!this.scopedMaterial(material.ref,scope))return [];
+      if(!material)return [];
+      if(batchViews&&!batchViews.scoped.has(material.ref))batchViews.scoped.set(material.ref,Boolean(this.scopedMaterial(material.ref,scope)));
+      if(!(batchViews?batchViews.scoped.get(material.ref):this.scopedMaterial(material.ref,scope)))return [];
       const selected=active??record;
-      const head=this.materialHead(material,scope);
+      if(batchViews&&!batchViews.heads.has(material.ref))batchViews.heads.set(material.ref,this.materialHead(material,scope));
+      const head=batchViews?batchViews.heads.get(material.ref):this.materialHead(material,scope);
       return [head?this.materialCard(material,head,undefined,selected)??selected:selected];
     });
     return [...this.store.evidence(ids),...materialRecords,...(this.files?.evidence(ids)??[])].map(record=>({...record,...(this.materials?{attributionContext:this.materials.contextForEvidence(record)}:{})})).filter(record=>withinEvidenceScope(record,scope));
@@ -227,13 +238,12 @@ export class EvidenceReader {
     const pending=[{id,revision}],seen=new Set<string>(),directMembers=new Set<string>(),materialRefs=new Map<string,{ref:string;offset?:number;length?:number}[]>();
     while(pending.length){
       const ref=pending.pop()!,key=JSON.stringify(ref);if(seen.has(key))continue;seen.add(key);
-      if(seen.size>1000)return;
       const row=this.store.db.prepare('SELECT revision,json FROM context_artifacts WHERE id=?').get(ref.id);
       if(!row||row.revision!==ref.revision)return;
       const value=JSON.parse(String(row.json)) as {members:string[];parents?:{id:string;revision:string}[];materialInputs?:{ref:string;offset?:number;length?:number}[]};
-      for(const member of value.members){directMembers.add(member);if(directMembers.size>1000)return;}
-      for(const input of value.materialInputs??[]){const pages=materialRefs.get(input.ref)??[];pages.push(input);materialRefs.set(input.ref,pages);if(materialRefs.size>1000||pages.length>1000)return;}
-      pending.push(...value.parents??[]);if(pending.length>1000)return;
+      for(const member of value.members)directMembers.add(member);
+      for(const input of value.materialInputs??[]){const pages=materialRefs.get(input.ref)??[];pages.push(input);materialRefs.set(input.ref,pages);}
+      pending.push(...value.parents??[]);
     }
     if(!directMembers.size&&!materialRefs.size)return;
     // A material-only artifact still has original captures. The material source
@@ -244,19 +254,19 @@ export class EvidenceReader {
       if(!this.materials)return;
       let material:MaterialRecord|undefined;
       try{material=this.materials.get(ref);}catch{return;}
-      if(!material||material.ref!==ref||this.materials.get(material.id)?.revision!==material.revision||members.size+material.memberCount>1000)return;
+      if(!material||material.ref!==ref||this.materials.get(material.id)?.revision!==material.revision)return;
       const scoped=this.scopedMaterial(ref,scope);if(!scoped)return;
       if(scoped.members[0]?.kind==='archive'){
         const add=(id:string)=>{members.add(id);archiveTimes.set(id,{firstAt:material.origin.firstAt,lastAt:material.origin.lastAt});};
         if(material.kind==='mote.coding-session'&&inputs.every(input=>Number.isSafeInteger(input.offset)&&Number.isSafeInteger(input.length))){
           for(const input of inputs){let page;try{page=this.materials.read(ref,{offset:input.offset,length:input.length});}catch{return;}
-            for(const span of page.spans){if(!span.evidenceId)return;add(span.evidenceId);if(members.size>1000)return;}}
-        }else for(const id of this.materials.evidenceIds(ref)){add(id);if(members.size>1000)return;}
+            for(const span of page.spans){if(!span.evidenceId)return;add(span.evidenceId);}}
+        }else for(const id of this.materials.evidenceIds(ref))add(id);
         continue;
       }
       for(const member of scoped.members){
         const captureId=evidenceRefId(member.ref,'capture');if(!captureId)return;
-        members.add(captureId);if(members.size>1000)return;
+        members.add(captureId);
       }
     }
     let firstAt:string|undefined,lastAt:string|undefined;
@@ -346,27 +356,23 @@ export class EvidenceReader {
     const page=this.materials.list({query:args.query,sourceId:args.sourceId,kind:args.kind,deviceId:args.deviceId,after:args.after,before:args.before,limit:args.limit,cursor:args.cursor});
     return {...page,items:page.items.filter(item=>Boolean(this.scopedMaterial(item.ref,args)))};
   }
-  /** Record metadata/body lineage without loading text or expanding read grants.
-   * If a bounded proof cannot cover all contributors, invalidate conservatively. */
+  /** Record all metadata/body contributors without loading their text or
+   * expanding model read grants. Only genuinely missing lineage is incomplete. */
   private materialDisclosureDependencies(refs:readonly string[]){
-    const ids=new Set<string>();let complete=true;const maximum=1000;
-    const add=(id:string)=>{if(ids.has(id))return;if(ids.size>=maximum){complete=false;return;}ids.add(id);};
+    const ids=new Set<string>();let complete=true;
     for(const ref of refs){
-      if(ids.size>=maximum){complete=false;break;}
       const material=this.materials?.get(ref);if(!material){complete=false;continue;}
-      const anchors=this.materials!.evidenceIds(ref,undefined,maximum-ids.size+1);
-      for(const id of anchors)add(id);
+      const anchors=this.materials!.evidenceIds(ref);
+      for(const id of anchors)ids.add(id);
       if(!material.memberCount)complete=false;
-      for(let offset=0;offset<material.memberCount&&offset<=maximum;offset+=200){
+      for(let offset=0;offset<material.memberCount;offset+=200){
         const page=this.materials!.members(ref,{offset,limit:200});
         for(const member of page.items){
           if(member.kind==='archive'){if(!anchors.length)complete=false;continue;}
           const id=member.kind==='capture'?evidenceRefId(member.ref,'capture'):undefined;
-          if(id)add(id);else complete=false;
+          if(id)ids.add(id);else complete=false;
         }
-        if(page.nextOffset!==null&&page.nextOffset>maximum){complete=false;break;}
       }
-      if(ids.size>=maximum&&refs.at(-1)!==ref)complete=false;
     }
     return {version:1 as const,complete,ids:[...ids]};
   }
@@ -510,21 +516,145 @@ export class EvidenceReader {
     if(material)return this.materialExposure(material,'expand',policy)&&policy.allows({sourceKind:this.materialKind(material),sourceId:material.origin.sourceId,representation:'material',operation:'expand',phase:material.coverage.state});
     return this.captureExposure(record,'expand',policy,'capture',true);
   }
-  private materialMembersAvailable(material:MaterialRecord):boolean {
+  /** Validate every disclosed dependency without loading its body. Reuse only
+   * within this synchronous check: the next external request/commit gets a fresh
+   * view, including current source tombstones and attachment/Material policy. */
+  contextDependenciesAllowed(ids:readonly string[],policy:EvidenceExposurePolicy=defaultEvidenceExposurePolicy):boolean {
+    const selected=[...new Set(ids)],encoded=JSON.stringify(selected),db=this.store.db;
+    if(!selected.length)return true;
+    const anchors=this.materials?db.prepare(`SELECT e.id,e.material_id,e.revision,e.block_id FROM material_evidence e
+      JOIN json_each(?) wanted ON wanted.value=e.id JOIN material_heads h ON h.id=e.material_id
+      JOIN material_revisions r ON r.material_id=e.material_id AND r.revision=e.revision
+      WHERE h.retired=0 AND r.sequence>=h.min_visible_sequence AND (
+        EXISTS(SELECT 1 FROM material_blocks b WHERE b.material_id=e.material_id AND b.revision=e.revision AND b.block_id=e.block_id)
+        OR EXISTS(SELECT 1 FROM material_block_versions b WHERE b.material_id=e.material_id AND b.from_revision=e.revision AND b.block_id=e.block_id AND b.anchor_id=e.id))`)
+      .all(encoded) as {id:string;material_id:string;revision:string;block_id:string}[]:[];
+    const fileChunks=this.files?db.prepare(`SELECT c.id,c.capture_id FROM file_chunks c JOIN file_artifacts a ON a.id=c.artifact_id
+      JOIN file_versions v ON v.capture_id=c.capture_id JOIN json_each(?) wanted ON wanted.value=c.id WHERE a.current=1`)
+      .all(encoded) as {id:string;capture_id:string}[]:[];
+    const captures=new Map(this.store.evidenceMetadata([...selected,...fileChunks.map(chunk=>chunk.capture_id)]).map(record=>[record.id,record]));
+    const anchorMap=new Map(anchors.map(anchor=>[anchor.id,anchor])),chunkMap=new Map(fileChunks.map(chunk=>[chunk.id,chunk]));
+    const derived=new Set(db.prepare(`SELECT wanted.value id FROM json_each(?) wanted WHERE
+      EXISTS(SELECT 1 FROM memories m WHERE m.id=wanted.value) OR EXISTS(SELECT 1 FROM context_artifacts a WHERE a.id=wanted.value)
+      OR EXISTS(SELECT 1 FROM file_artifacts a WHERE a.id=wanted.value)`).all(encoded).map(row=>String(row.id)));
+    const metadata=new Map<string,MaterialRecord|undefined>(),materialAllowed=new Map<string,boolean>(),fileAllowed=new Map<string,boolean>(),attachmentAllowed=new Map<string,boolean>(),headDeleted=new Map<string,boolean>();
+    const material=(ref:string)=>{if(!metadata.has(ref))metadata.set(ref,this.materials?.authorizationMetadata(ref));return metadata.get(ref);};
+    const attachment=(id:string)=>{if(!attachmentAllowed.has(id))attachmentAllowed.set(id,fileAttachmentAvailable(this.store,id,true));return attachmentAllowed.get(id)!;};
+    const tombstone=(sourceId:string,externalId:string)=>{const key=JSON.stringify([sourceId,externalId]);if(!headDeleted.has(key))headDeleted.set(key,Boolean(db.prepare('SELECT deleted FROM source_heads WHERE source_id=? AND external_id=?').get(sourceId,externalId)?.deleted));return headDeleted.get(key)!;};
+    const allowMaterial=(current:MaterialRecord)=>{if(!materialAllowed.has(current.ref))materialAllowed.set(current.ref,this.materialExposure(current,'expand',policy,undefined,false,undefined,true)&&policy.allows({sourceKind:this.materialKind(current),sourceId:current.origin.sourceId,representation:'material',operation:'expand',phase:current.coverage.state}));return materialAllowed.get(current.ref)!;};
+    const allowRecord=(record:CaptureRecord,attachmentId=record.id)=>{
+      if(!attachment(attachmentId))return false;
+      const p=record.provenance;if(p?.sourceId&&p.externalId&&tombstone(p.sourceId,p.externalId))return false;
+      const current=p?.sourceId&&p.externalId?material(materialId(p.sourceId,p.externalId)):undefined;
+      return current?allowMaterial(current):this.captureExposure(record,'expand',policy,'capture',true,true);
+    };
+    for(const id of selected){
+      const capture=captures.get(id);if(capture){if(!allowRecord(capture))return false;continue;}
+      const anchor=anchorMap.get(id);
+      if(anchor){const prior=material(`material:${anchor.material_id}@${anchor.revision}`),current=prior&&material(prior.id);
+        if(!prior||!current||!attachment(id)||tombstone(prior.origin.sourceId,prior.id)||!allowMaterial(current))return false;continue;}
+      const chunk=chunkMap.get(id);
+      if(chunk){if(!fileAllowed.has(chunk.capture_id)){const parent=captures.get(chunk.capture_id);fileAllowed.set(chunk.capture_id,Boolean(parent&&allowRecord({...parent,id,provenance:parent.provenance?{...parent.provenance,layer:'derived'}:undefined},chunk.capture_id)));}if(!fileAllowed.get(chunk.capture_id))return false;continue;}
+      if(!derived.has(id))return false;
+    }
+    return true;
+  }
+  /** Revalidate a restricted Memory read immediately before model transport.
+   * A loaded seed is not a retained permission. All records and Formal output
+   * selections are fresh; reuse is confined to this synchronous check. */
+  processingEvidenceAllowed(ids:readonly string[],fingerprints:Readonly<Record<string,string>>|undefined,inputs:readonly MaterialInputPin[]|undefined,policy:EvidenceExposurePolicy=defaultEvidenceExposurePolicy):boolean {
+    const selected=[...new Set(ids)],selectedIds=new Set(selected);
+    if(!selected.length)return true;
+    if(!fingerprints||selected.some(id=>!fingerprints[id]))return false;
+    const records=new Map(this.memories.readCurrentEvidence(selected).map(record=>[record.id,record]));
+    const materialPermissions=new Map<string,boolean>(),materials=new Map<string,MaterialRecord|undefined>(),granted=new Map<string,Set<string>>();
+    const material=(id:string)=>{if(!materials.has(id))materials.set(id,this.materials?.get(id));return materials.get(id);};
+    for(const pin of inputs??[]){
+      // A future context read grant is not an already-disclosed original.
+      // Unused independent originals can change without retiring this seed.
+      if(!pin.evidenceIds.some(id=>selectedIds.has(id)))continue;
+      const current=material(pin.materialId),selection=current&&this.materials?.input(current.ref,pin.required);
+      if(!current||!selection?.ready||selection.fingerprint!==pin.fingerprint||!this.materialExposure(current,'memory',policy,pin.required,false,true))return false;
+      const currentIds=new Set(selection.evidenceIds);if(pin.evidenceIds.some(id=>!currentIds.has(id)))return false;
+      const permissions=granted.get(pin.materialId)??new Set<string>();for(const id of pin.evidenceIds)permissions.add(id);granted.set(pin.materialId,permissions);
+    }
+    for(const id of selected){
+      const record=records.get(id);if(!record||memoryEvidenceFingerprint(record)!==fingerprints[id])return false;
+      const ref=record.provenance?.uri?.startsWith('material:')?record.provenance.uri.split('#')[0]:undefined;
+      if(ref){
+        const prior=material(ref),current=prior&&material(prior.id);if(!current)return false;
+        if(inputs?.length){if(!granted.get(current.id)?.has(id))return false;}
+        else{if(!materialPermissions.has(current.ref))materialPermissions.set(current.ref,this.materialExposure(current,'memory',policy));if(!materialPermissions.get(current.ref))return false;}
+      }else if(!this.captureExposure(record,'memory',policy,'capture',true))return false;
+    }
+    return true;
+  }
+  /** These are the host member vectors actually serialized in memoryWork,
+   * including declaration prose shared by the lossless wire dictionaries. */
+  memoryCatalogMetadata(task:unknown):MemoryCatalogMetadataReceipt|undefined {
+    if(!task||typeof task!=='object'||Array.isArray(task))return;
+    const work=(task as {memoryWork?:unknown}).memoryWork;if(!work||typeof work!=='object'||Array.isArray(work))return;
+    const w=work as Record<string,unknown>,history=(value:unknown)=>Array.isArray(value)?value.flatMap(item=>item&&typeof item==='object'?[...(Array.isArray(item.targets)?item.targets:[]),...(Array.isArray(item.contextMembers)?item.contextMembers:[])]:[]):[];
+    const feedback=w.feedback&&typeof w.feedback==='object'?w.feedback as Record<string,unknown>:undefined;
+    const rows=[...(['members','contextMembers','authorizedMembers'] as const).flatMap(key=>Array.isArray(w[key])?w[key]:[]),...history(w.history),
+      ...(feedback? [...(Array.isArray(feedback.targets)?feedback.targets:[]),...(Array.isArray(feedback.authorized)?feedback.authorized:[]),...history(feedback.history)]:[])];
+    if(!rows.length)return;
+    const members=new Map<string,MemoryCatalogMetadataReceipt['members'][number]>(),pins:SourceContextDeclaration[][]=[];let complete=true;
+    for(const value of rows){
+      if(!value||typeof value!=='object'||!z.string().uuid().safeParse(value.id).success){complete=false;continue;}
+      const row=value as Record<string,unknown>,attribution=row.attributionContext===undefined?undefined:attributionContextSchema.safeParse(row.attributionContext);
+      if(attribution&&!attribution.success){complete=false;continue;}
+      let materialId:string|undefined;
+      try{if(row.materialRef!==undefined){if(typeof row.materialRef!=='string')throw Error();materialId=parseMaterialRef(row.materialRef).id;}}catch{complete=false;continue;}
+      const member={id:row.id as string,...(materialId?{materialId}:{}),...(typeof row.sourceId==='string'?{sourceId:row.sourceId}:{}),...(attribution?.success?{attribution:attributionMetadata(attribution.data)}:{})};
+      members.set(JSON.stringify(member),member);
+      if(attribution?.success)pins.push(attribution.data.sourceContextDeclarations??[]);
+    }
+    return {complete,members:[...members.values()],sourceContextDependencies:combineSourceContextDependencies(pins)};
+  }
+  /** Fresh metadata only: a new unread body revision can retire its old read
+   * grant without changing a still-readable source/Material declaration. */
+  memoryCatalogMetadataAllowed(receipt:MemoryCatalogMetadataReceipt,policy:EvidenceExposurePolicy=defaultEvidenceExposurePolicy):boolean {
+    if(!receipt.complete||!sourceContextDependenciesCurrent(this.sources.contexts,receipt.sourceContextDependencies))return false;
+    const ids=[...new Set(receipt.members.map(member=>member.id))],encoded=JSON.stringify(ids),db=this.store.db;
+    const anchors=new Map(this.materials?db.prepare('SELECT e.id,e.material_id FROM material_evidence e JOIN json_each(?) wanted ON wanted.value=e.id').all(encoded).map(row=>[String(row.id),String(row.material_id)]):[]);
+    const chunks=new Map(this.files?db.prepare('SELECT c.id,c.capture_id FROM file_chunks c JOIN json_each(?) wanted ON wanted.value=c.id').all(encoded).map(row=>[String(row.id),String(row.capture_id)]):[]);
+    const captures=new Map(this.store.evidenceMetadata([...ids,...chunks.values()]).map(record=>[record.id,record]));
+    const currentMaterials=new Map<string,MaterialRecord|undefined>(),permissions=new Map<string,boolean>();
+    const material=(id:string)=>{if(!currentMaterials.has(id))currentMaterials.set(id,this.materials?.authorizationMetadata(id));return currentMaterials.get(id);};
+    const rawIds:string[]=[];
+    for(const member of receipt.members){
+      const materialId=anchors.get(member.id);
+      if(member.materialId&&member.materialId!==materialId)return false;
+      if(materialId){
+        const current=material(materialId);if(!current||member.sourceId&&member.sourceId!==current.origin.sourceId)return false;
+        if(!permissions.has(materialId))permissions.set(materialId,this.materialExposure(current,'memory',policy,undefined,true,undefined,true));
+        if(!permissions.get(materialId))return false;
+      }else rawIds.push(member.id);
+    }
+    if(!this.contextDependenciesAllowed(rawIds,policy))return false;
+    // The existing resolver joins only current manifests/declaration stores;
+    // these placeholder records never load original or derived body payloads.
+    const records=ids.map(id=>({...captures.get(id)??captures.get(chunks.get(id)??''),id,ocrText:''}) as CaptureRecord),contexts=this.materials?.contextsForEvidence(records);
+    if(!contexts&&receipt.members.some(member=>member.attribution!==undefined))return false;
+    const currentContexts=new Map(ids.map((id,index)=>[id,contexts?.[index]&&attributionMetadata(attributionContextSchema.parse(contexts[index]))]));
+    return receipt.members.every(member=>member.attribution===undefined||member.attribution===currentContexts.get(member.id));
+  }
+  private materialMembersAvailable(material:MaterialRecord,metadataOnly=false):boolean {
     if(!this.materials)return false;
     for(let offset=0;offset<material.memberCount;offset+=200){
       const page=this.materials.members(material.ref,{offset,limit:200});
       if(!page.items.length)return false;
       for(const member of page.items){
         if(member.kind==='capture'){
-          const id=evidenceRefId(member.ref,'capture');if(!id||!fileAttachmentAvailable(this.store,id))return false;
+          const id=evidenceRefId(member.ref,'capture');if(!id||!fileAttachmentAvailable(this.store,id,metadataOnly))return false;
         }
       }
     }
     return true;
   }
-  private captureExposure(record:CaptureRecord,operation:EvidenceOperation,policy:EvidenceExposurePolicy,representation:EvidenceRepresentation='capture',screenOriginalGrant=false){
-    if(!fileAttachmentAvailable(this.store,record.id))return false;
+  private captureExposure(record:CaptureRecord,operation:EvidenceOperation,policy:EvidenceExposurePolicy,representation:EvidenceRepresentation='capture',screenOriginalGrant=false,metadataOnly=false){
+    if(!fileAttachmentAvailable(this.store,record.id,metadataOnly))return false;
     const provenance=record.provenance,materialRef=provenance?.uri?.startsWith('material:')?provenance.uri.split('#')[0]:undefined;
     const material=materialRef?this.materials?.get(materialRef):undefined;
     if(materialRef){
@@ -533,7 +663,7 @@ export class EvidenceReader {
       // Coding append keeps unchanged prefix anchors active across revisions.
       if(!material)return false;
       const current=this.materials?.get(material.id);
-      return Boolean(current&&this.materials?.isCurrentEvidence(record.id)&&this.materialExposure(current,operation,policy));
+      return Boolean(current&&this.materials?.isCurrentEvidence(record.id)&&this.materialExposure(current,operation,policy,undefined,false,undefined,metadataOnly));
     }
     // A tombstone revokes model access to every historical revision of that
     // source item. Owner archive/history APIs can still inspect those bytes.
@@ -548,7 +678,7 @@ export class EvidenceReader {
   }
   /** The built-in authored organizer binds a logical Material to one current
    * owner capture. A string prefix alone is never an authorization claim. */
-  private authoredMaterialOriginal(material:MaterialRecord):CaptureRecord|undefined {
+  private authoredMaterialOriginal(material:MaterialRecord,metadataOnly=false):CaptureRecord|undefined {
     if(!this.materials||material.memberCount!==1)return;
     if(!this.store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='material_organizer_groups'").get())return;
     const owners=this.store.db.prepare('SELECT organizer_id,version,group_json FROM material_organizer_groups WHERE material_id=? AND active=1').all(material.id) as
@@ -562,21 +692,21 @@ export class EvidenceReader {
       material.origin.deviceId!==group.deviceId||material.id!==materialId(expectedSource,group.captureId))return;
     const members=this.materials.members(material.ref,{limit:2}).items;
     if(members.length!==1||members[0].kind!=='capture'||evidenceRefId(members[0].ref,'capture')!==group.captureId)return;
-    const original=this.store.evidence([group.captureId])[0];
+    const original=(metadataOnly?this.store.evidenceMetadata([group.captureId]):this.store.evidence([group.captureId]))[0];
     if(!original||!this.store.isCurrentEvidence(original.id)||original.deviceId!==group.deviceId||
       original.provenance||material.kind!==`mote.${original.source}`)return;
     return original;
   }
-  private materialExposure(material:MaterialRecord,operation:EvidenceOperation,policy:EvidenceExposurePolicy,required?:readonly string[],planning=false){
+  private materialExposure(material:MaterialRecord,operation:EvidenceOperation,policy:EvidenceExposurePolicy,required?:readonly string[],planning=false,selectionReady?:boolean,metadataOnly=false){
     // Reject a Coding projection that does not declare the current clean
     // dialogue contract before any model exposure.
     if(material.kind==='mote.coding-session'&&material.schemaVersion<CODING_DIALOGUE_SCHEMA_VERSION)return false;
-    if(!this.materialMembersAvailable(material))return false;
-    if(!planning&&required&&!this.materials?.input(material.ref,required)?.ready)return false;
+    if(!this.materialMembersAvailable(material,metadataOnly))return false;
+    if(!planning&&required&&!(selectionReady??this.materials?.input(material.ref,required)?.ready))return false;
     if(operation==='memory'&&this.sourceItemRecipes){
-      const original=this.authoredMaterialOriginal(material);
+      const original=this.authoredMaterialOriginal(material,metadataOnly);
       if(original){
-        if(!this.captureExposure(original,'memory',policy))return false;
+        if(!this.captureExposure(original,'memory',policy,'capture',false,metadataOnly))return false;
       }else{
         try{
           const source=this.sources.getSource(material.origin.sourceId),pipeline=this.sourcePipelines?.select(source);
@@ -905,15 +1035,17 @@ export class EvidenceReader {
       }
       return operation('expand')==='expand'&&Boolean(currentGrants()?.get(id)?.some(source=>grantIsCurrent(id,source)));
     };
-    const boundedEvidenceAllowed=(record:CaptureRecord)=>{
-      const inputs=options.currentMaterialInputs?.();
+    const boundedEvidenceAllowed=(record:CaptureRecord,batch?:{canonical:Map<string,CaptureRecord>;selections:Map<MaterialInputPin,boolean>;inputs?:readonly MaterialInputPin[]})=>{
+      const inputs=batch?batch.inputs:options.currentMaterialInputs?.();
       if(operation('expand')==='memory'&&inputs?.length&&record.provenance?.uri?.startsWith('material:')){
-        const expected=options.currentProcessingEvidence?.()?.[record.id],canonical=expected&&this.memories.readEvidence([record.id])[0];
+        const expected=options.currentProcessingEvidence?.()?.[record.id],canonical=expected&&(batch?batch.canonical.get(record.id):this.memories.readEvidence([record.id])[0]);
         if(!canonical||memoryEvidenceFingerprint(canonical)!==expected)return false;
         return inputs.some(pin=>{
           if(!pin.evidenceIds.includes(record.id))return false;
+          if(batch?.selections.has(pin))return batch.selections.get(pin)!;
           const material=this.materials?.get(pin.materialId),selection=material&&this.materials?.input(material.ref,pin.required);
-          return Boolean(selection?.ready&&selection.fingerprint===pin.fingerprint&&material&&this.materialExposure(material,'memory',policy,pin.required));
+          const allowed=Boolean(selection?.ready&&selection.fingerprint===pin.fingerprint&&material&&this.materialExposure(material,'memory',policy,pin.required));
+          batch?.selections.set(pin,allowed);return allowed;
         });
       }
       return this.captureExposure(record,operation('expand'),policy,'capture',hasScreenGrant(record.id));
@@ -921,7 +1053,18 @@ export class EvidenceReader {
     return {
       catalog:async args=>{
         const pin=this.memoryToolSnapshot(options.currentGrantContext?.());
-        try{return await contextIndexAsync(this.store,{page:scope=>this.memoryPageAsync({...scope,asOf:scope?.asOf??options.currentContextTime?.()},false,pin.snapshot,{policy,operation:operation('discover')})},this.sources,args,scope=>this.agentSegments(scope,policy,operation('discover')));}finally{pin.release();}
+        try{
+          const page=await contextIndexAsync(this.store,{page:scope=>this.memoryPageAsync({...scope,asOf:scope?.asOf??options.currentContextTime?.()},false,pin.snapshot,{policy,operation:operation('discover')})},this.sources,args,scope=>this.agentSegments(scope,policy,operation('discover'))),ids=new Set<string>();let complete=true;
+          for(const value of page.entries){const entry=value as {layer?:string;id?:string;revision?:string};
+            if(entry.layer==='source'||!entry.id)continue;
+            if(entry.layer==='memory'){
+              const dependencies=this.store.db.prepare('SELECT evidence_id FROM memory_dependencies WHERE memory_id=?').all(entry.id);if(!dependencies.length){complete=false;continue;}
+              ids.add(entry.id);for(const row of dependencies)for(const id of this.memories.dependencyIds(String(row.evidence_id)))ids.add(id);
+            }else if(entry.revision){const originals=this.artifactMembers(entry.id,entry.revision,args);if(!originals){complete=false;continue;}for(const id of originals.members)for(const dependency of this.memories.dependencyIds(id))ids.add(dependency);
+            }else complete=false;
+          }
+          return {...page,disclosureDependencies:{version:1 as const,complete,ids:[...ids]}};
+        }finally{pin.release();}
       },
       materialCatalog:async args=>{const page=this.materialCatalog(args),items=page.items.filter(material=>this.materialExposure(material,operation('discover'),policy));return {...page,items,disclosureDependencies:this.materialDisclosureDependencies(items.map(item=>item.ref))};},
       materialRead:async args=>{
@@ -964,7 +1107,7 @@ export class EvidenceReader {
       },
       readFileEvidence:async args=>{const id=z.string().uuid().parse(args.id),original=this.evidenceById([id],args)[0];if(!original||!this.captureExposure(original,operation('expand'),policy))return {status:'unavailable'};return this.readFileEvidence({...args,id:formatEvidenceRef('capture',id)});},
       fileChunks:async args=>{const parsed=z.string().uuid().safeParse(args.id);if(!parsed.success||!this.files)return [];const id=parsed.data,parent=this.evidenceById([this.files.version(id).capture_id],args)[0];if(!parent||!this.captureExposure(parent,operation('expand'),policy))return [];return this.chunks({...args,id:formatEvidenceRef('capture',id)}).filter(record=>this.captureExposure(record,operation('expand'),policy));},
-      mediaActivity:async args=>diagnostics.measure('source','activity',()=>store.mediaActivity(args),result=>({count:result.observations})),
+      mediaActivity:async args=>diagnostics.measure('source','activity',()=>{const ids=new Set<string>(),result=store.mediaActivity(args,id=>ids.add(id));return {...result,disclosureDependencies:{version:1 as const,complete:true,ids:[...ids]}};},result=>({count:result.observations})),
       sourceHistory:async args=>this.sourceHistory({...args,id:formatEvidenceRef('capture',z.string().uuid().parse(args.id))}).filter(record=>this.captureExposure(record,operation('expand'),policy)),
       sources:async args=>browseSourceContexts(store,sources,args),
       sourceContext:async args=>{
@@ -1013,6 +1156,16 @@ export class EvidenceReader {
         return {...page,references,sourceSpans,sourceCoverage:{references:refs.length,delivered:sourceSpans.length,partial}};
         }finally{pin.release();}
       },
-      search:async args=>diagnostics.measure('source','search',async()=>{const results=await this.agentSearch(args,policy,operation('discover'));return Object.assign(this.context(results),{retrieval:results.retrieval});},rows=>({count:rows.length})),timeline:async args=>diagnostics.measure('source','timeline',()=>{const page=this.agentTimeline(args,policy,operation('discover'));return {...page,items:this.context(page.items)};},page=>({count:page.items.length})),evidence:async args=>diagnostics.measure('source','evidence',()=>this.context(this.evidenceById(args.ids,args).filter(boundedEvidenceAllowed)),rows=>({count:rows.length})),activity:async args=>diagnostics.measure('source','activity',()=>store.activity(args),result=>({count:result.captures})),devices:async()=>diagnostics.measure('source','devices',()=>store.devices(),rows=>({count:rows.length}))};
+      search:async args=>diagnostics.measure('source','search',async()=>{const results=await this.agentSearch(args,policy,operation('discover'));return Object.assign(this.context(results),{retrieval:results.retrieval});},rows=>({count:rows.length})),timeline:async args=>diagnostics.measure('source','timeline',()=>{const page=this.agentTimeline(args,policy,operation('discover'));return {...page,items:this.context(page.items)};},page=>({count:page.items.length})),evidence:async args=>diagnostics.measure('source','evidence',()=>{
+        const read=()=>{
+          const inputs=options.currentMaterialInputs?.(),canonical=new Map<string,CaptureRecord>();
+          if(inputs?.length)for(const record of this.memories.readEvidence(args.ids.map(ref=>evidenceRefId(ref,'capture')??ref)))if(!canonical.has(record.id))canonical.set(record.id,record);
+          const batch={inputs,canonical,selections:new Map<MaterialInputPin,boolean>()};
+          return this.context(this.evidenceById(args.ids,args,{scoped:new Map(),heads:new Map()}).filter(record=>boundedEvidenceAllowed(record,batch)));
+        };
+        return this.materials?this.materials.withReadMetadata(read):read();
+      },rows=>({count:rows.length})),
+      activity:async args=>diagnostics.measure('source','activity',()=>{const ids=new Set<string>(),result=store.activity(args,id=>ids.add(id));return {...result,disclosureDependencies:{version:1 as const,complete:true,ids:[...ids]}};},result=>({count:result.captures})),
+      devices:async()=>diagnostics.measure('source','devices',()=>({items:store.devices(),observedAt:new Date().toISOString(),disclosureDependencies:{version:1 as const,complete:true,ids:[]}}),page=>({count:page.items.length}))};
   }
 }

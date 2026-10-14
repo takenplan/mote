@@ -16,6 +16,7 @@ import { negotiateLocale } from '@mote/shared/i18n';
 import Fastify,{ type FastifyReply,type FastifyRequest } from 'fastify';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID,timingSafeEqual } from 'node:crypto';
+import {setImmediate as yieldEventLoop} from 'node:timers/promises';
 import { existsSync,readFileSync } from 'node:fs';
 import { dirname,join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
@@ -26,6 +27,7 @@ import { ActivityProjection } from './activity.js';
 import { Operations } from './operations.js';
 import { DelegationRuntime,type DelegationWork } from './delegation-runtime.js';
 import { DelegatedQueryRuns } from './delegated-query-runs.js';
+import {runQueryQualityExperiment,type QueryQualityStrategy,type QueryQualityStage,type QueryQualityCheckpoint} from './query-quality-experiment.js';
 import { registerMemoryDelegation } from './memory-delegation.js';
 import { agentDeadline } from './agent-deadline.js';
 import { installAgentFeatures } from './agent-feature-host.js';
@@ -41,7 +43,7 @@ import { combineDependencies,resolveDependencies } from './conversation-lineage.
 import {SourceContextStore} from './source-context.js';
 import {assertSourceContextDependencies,combineSourceContextDependencies} from './source-context-lineage.js';
 import { ServerDiagnostics,safeError,type AgentTraceContext } from './diagnostics.js';
-import { EvidenceReader } from './evidence-reader.js';
+import { EvidenceReader,type MemoryCatalogMetadataReceipt } from './evidence-reader.js';
 import { EvidenceExposurePolicy } from './evidence-exposure.js';
 import { ExecutionEngine,ExecutionFailure } from './execution-engine.js';
 import { ExecutionSettings } from './execution-settings.js';
@@ -119,7 +121,7 @@ function parseCaptureBundle(body:unknown):CaptureInput[] {
   catch(error){if(error instanceof z.ZodError)throw error;throw new StoreError('Invalid capture bundle JSONL');}
 }
 const serverVersion=(JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8')) as {version:string}).version;
-export async function buildApp(config:Config,dependencies?:{webRoot?:string;connectorTesting?:import('./connectors/index.js').ConnectorTestDependencies;semanticContextTime?:()=>string;backgroundWorker?:boolean;memoryExtensions?:LifecycleExtension[];store?:Store;agent?:QueryAgent;connections?:Connections;createModelAgent?:ModelAgentFactory;transcriptionProvider?:TranscriptionProvider;prepareImport?:(input:ImportPreparation)=>Promise<ImportPreparationResult>;observeImport?:(workspace:string,event:unknown)=>void}) {
+export async function buildApp(config:Config,dependencies?:{queryQualityExperiment?:QueryQualityStrategy;webRoot?:string;connectorTesting?:import('./connectors/index.js').ConnectorTestDependencies;semanticContextTime?:()=>string;backgroundWorker?:boolean;memoryExtensions?:LifecycleExtension[];store?:Store;agent?:QueryAgent;connections?:Connections;createModelAgent?:ModelAgentFactory;transcriptionProvider?:TranscriptionProvider;prepareImport?:(input:ImportPreparation)=>Promise<ImportPreparationResult>;observeImport?:(workspace:string,event:unknown)=>void}) {
   config={...config};
   const eventLoop=monitorEventLoopDelay({resolution:20});eventLoop.enable();
   // A foreground node must not block listen() on a full orphan-blob sweep. When
@@ -138,9 +140,10 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
   const interactiveGate=new ConcurrencyGate(execution.interactiveConcurrency),interactiveModelGate=new ConcurrencyGate(execution.interactiveConcurrency);
   const modelContext=new AsyncLocalStorage<QueryInput>();
   const modelOperation=new AsyncLocalStorage<string>();
-  const authorizeModelRequest=()=>assertModelEvidence(modelContext.getStore());
+  const assertModelPurpose=(input:QueryInput|undefined)=>{if(dependencies?.queryQualityExperiment&&!input?.traceContext?.operationId?.startsWith('query:'))throw new StoreError('Isolated Ask experiment does not authorize background model work',409);};
+  const authorizeModelRequest=()=>{assertModelPurpose(modelContext.getStore());assertModelEvidence(modelContext.getStore());};
   const runModelFor=(settings:import('@mote/shared/models').ModelSettings):NonNullable<import('@mote/agent').AgentOptions['runModel']>=>(task,signal)=>{
-    signal?.throwIfAborted();providerAdmission.check(settings);
+    signal?.throwIfAborted();assertModelPurpose(modelContext.getStore());providerAdmission.check(settings);
     const queuedAt=performance.now(),input=modelContext.getStore(),gate=input?.executionLane==='interactive'?interactiveModelGate:llmGate;input?.onTrace?.({type:'model.queued',stage:'model',payload:{...gate.snapshot(),unit:'harness_session',lane:input?.executionLane??'background'}});
     input?.onProgress?.({stage:'model',message:moteText('等待模型执行名额')});
     return gate.run(async()=>{providerAdmission.check(settings);assertModelEvidence(input);input?.onProgress?.({stage:'model',message:moteText('模型处理中')});const admittedAt=performance.now(),lane=input?.executionLane??'background',queueWaitMs=admittedAt-queuedAt;input?.onTrace?.({type:'model.admitted',stage:'model',payload:{...gate.snapshot(),unit:'harness_session',lane,queueWaitMs}});let status:'completed'|'failed'|'yielded'='failed';
@@ -196,20 +199,39 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
   ]));
   const contextFailure=(code:'context_lineage_incomplete'|'context_evidence_restricted')=>Object.assign(new StoreError(code,409),{code});
   const sourceContextDependencies=(input:QueryInput|undefined)=>combineSourceContextDependencies([input?.conversation?.sourceContextDependencies,input?.contextSourceContextDependencies]);
-  const assertModelEvidence=(input:QueryInput|undefined)=>{
+  const assertModelContext=(input:QueryInput|undefined)=>{
     assertSourceContextDependencies(sourceContexts,sourceContextDependencies(input));
     if(input?.derivedContextEvidenceIds?.some(id=>!evidenceReader.deletionContextAllowed(id,new EvidenceExposurePolicy())))throw new StoreError('Derived context evidence is no longer permitted for this model',409);
     const conversationText=Boolean(input?.conversation?.workingMemory?.text||input?.conversation?.turns.some(turn=>!turn.evidenceDeleted&&turn.answer));
     const taskText=Boolean(input?.taskContext?.previousSummary||input?.taskContext?.turns?.length);
     if((conversationText&&input?.conversation?.evidenceDependencies?.complete!==true)||((taskText||input?.openingMemories?.length)&&input?.contextEvidenceDependencies?.complete!==true)||input?.openingMemories?.length&&!input?.contextEvidenceDependencies?.ids.length)throw contextFailure('context_lineage_incomplete');
-    const dependencies=contextDependencies(input),policy=new EvidenceExposurePolicy();
-    for(const id of dependencies?.ids??[]){
-      // Derived nodes are retained in the fence alongside their resolved original
-      // ancestors. They never grant a raw read; current originals carry policy.
-      const original=memories.readEvidence([id])[0];
-      if(original){if(!evidenceReader.deletionContextAllowed(id,policy))throw contextFailure('context_evidence_restricted');}
-      else if(!store.db.prepare('SELECT 1 FROM memories WHERE id=? UNION SELECT 1 FROM context_artifacts WHERE id=? UNION SELECT 1 FROM file_artifacts WHERE id=?').get(id,id,id))throw contextFailure('context_evidence_restricted');
+  };
+  const assertModelEvidence=(input:QueryInput|undefined)=>{
+    const catalog=(input as (QueryInput&{memoryCatalogMetadata?:MemoryCatalogMetadataReceipt})|undefined)?.memoryCatalogMetadata;
+    if(catalog&&!evidenceReader.memoryCatalogMetadataAllowed(catalog,new EvidenceExposurePolicy()))throw Object.assign(new ProviderFailure({category:'permanent',code:'context_evidence_restricted'}),{statusCode:409,code:'context_evidence_restricted'});
+    assertModelContext(input);
+    // Derived nodes remain in the fence alongside every original ancestor.
+    // Private metadata checks never disclose bodies or grant raw reads.
+    if(!evidenceReader.contextDependenciesAllowed(contextDependencies(input)?.ids??[],new EvidenceExposurePolicy()))throw contextFailure('context_evidence_restricted');
+    // The bridge may already hold restricted originals while deletion or a
+    // Formal input/owner declaration changes. Check the frozen Memory grant at
+    // every outbound request as well as before entering the agent; publication
+    // validation alone cannot recall a seed already sent to the provider.
+    if(input?.responseMode==='memory-extraction'&&input.evidenceIds!==undefined&&!evidenceReader.processingEvidenceAllowed(
+      [...input.evidenceIds,...((input as QueryInput&{processingDisclosedEvidenceIds?:string[]}).processingDisclosedEvidenceIds??[])],input.processingEvidence,input.processingMaterialInputs,new EvidenceExposurePolicy(),
+    ))throw Object.assign(new ProviderFailure({category:'permanent',code:'context_evidence_restricted'}),{statusCode:409,code:'context_evidence_restricted'});
+  };
+  const assertModelEvidenceAsync=async(input:QueryInput)=>{
+    assertModelContext(input);
+    const ids=contextDependencies(input)?.ids??[],policy=new EvidenceExposurePolicy();
+    // This is scheduling granularity, not a scope or processing limit. Inspect
+    // every dependency while allowing lease renewal, cancellation and intake.
+    for(let offset=0;offset<ids.length;offset+=256){
+      input.signal?.throwIfAborted();
+      if(!evidenceReader.contextDependenciesAllowed(ids.slice(offset,offset+256),policy))throw contextFailure('context_evidence_restricted');
+      await yieldEventLoop();
     }
+    input.signal?.throwIfAborted();
   };
   const agentFeatures=await installAgentFeatures(backendContext,evidenceReader.agent({diagnostics,allowQueryImages:()=>perception.settings().allowQueryImages,
     exposurePolicy:new EvidenceExposurePolicy(),
@@ -254,9 +276,17 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
   });
   const agent=new ReloadableAgent(()=>diagnostics.record('agent.failed',{category:'internal'},'error'));
   const codex={executable:config.codexBin,home:config.codexHome};
+  const pinProcessingEvidence=(input:QueryInput):QueryInput=>{
+    const supplied=input as QueryInput&{memoryCatalogMetadata?:MemoryCatalogMetadataReceipt};
+    if(!supplied.memoryCatalogMetadata){const receipt=evidenceReader.memoryCatalogMetadata(input.taskContext);if(receipt)input={...input,memoryCatalogMetadata:receipt,contextSourceContextDependencies:combineSourceContextDependencies([input.contextSourceContextDependencies,receipt.sourceContextDependencies])} as QueryInput;}
+    if(!input.evidenceIds||input.executionLane==='interactive')return input;
+    const missing=input.evidenceIds.filter(id=>!input.processingEvidence?.[id]);
+    return missing.length?{...input,processingEvidence:{...Object.fromEntries(memories.readEvidence(missing).map(record=>[record.id,memoryEvidenceFingerprint(record)])),...input.processingEvidence}}:input;
+  };
   const wrapAgent=(inner:QueryAgent,settings:import('@mote/shared/models').ModelSettings):QueryAgent=>({get configured(){return inner.configured;},close:()=>inner.close(),query:async input=>{
-    assertModelEvidence(input);
-    if(input.evidenceIds&&input.executionLane!=='interactive')input={...input,processingEvidence:{...Object.fromEntries(memories.readEvidence(input.evidenceIds).map(record=>[record.id,memoryEvidenceFingerprint(record)])),...input.processingEvidence}};
+    assertModelPurpose(input);
+    await assertModelEvidenceAsync(input);
+    input=pinProcessingEvidence(input);
     input.signal?.throwIfAborted();providerAdmission.check(settings);
     input.onProgress?.({stage:'starting',phase:'started',message:moteText('等待 Agent 执行名额')});
     const queuedAt=performance.now(),lane=input.executionLane==='interactive'?'interactive':'background';
@@ -268,7 +298,10 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
       finally{evidenceReader.releaseMemorySnapshot(input);diagnostics.record('agent.fragment_timing',{jobId:input.traceContext?.jobId,batchId:input.traceContext?.batchId,lane,unit:'agent_fragment',queueWaitMs,durationMs:performance.now()-admittedAt,status},'info');}
     },input.signal,input.traceContext?.operationId);
   }});
-  const factory:ModelAgentFactory=async(settings,reader)=>wrapAgent(await (dependencies?.createModelAgent?dependencies.createModelAgent(settings,reader):createModelAgent(settings,reader,codex,runModelFor(settings),authorizeModelRequest)),settings);
+  const factory:ModelAgentFactory=async(settings,reader)=>{
+    const host={runModel:runModelFor(settings),authorizeModelRequest};
+    return wrapAgent(await (dependencies?.createModelAgent?dependencies.createModelAgent(settings,reader,host):createModelAgent(settings,reader,codex,host.runModel,host.authorizeModelRequest)),settings);
+  };
   let initialAgent=dependencies?.agent?wrapAgent(dependencies.agent,modelSettingsFromConfig(config)):undefined;
   const modelSettings=new ModelSettingsStore({
     directory:config.dataDir,environment:modelSettingsFromConfig(config),codex,
@@ -441,6 +474,7 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
   const activeQueries=new Set<Promise<QueryResult>>();
   function queryAgent(input:QueryInput,operation:'query'|'insight'='query',moduleId='conversations',usageOwner:'query'|'caller'='query') {
     if(closing)throw new StoreError('Central node is shutting down',503);
+    input=pinProcessingEvidence(input);
     if(input.skill==='personal-insight'&&!input.validateOutput)input={...input,validateOutput:validateInsightOutput};
     const profile=modelSettings.select(input.responseMode==='memory-extraction'||input.skill==='memory-extraction'||input.skill==='coding-memory'||moduleId==='memories'?'memory':input.skill==='personal-insight'?'insight':'chat',input.modelProfileId);
     input={...input,language:input.language??requestLocale.getStore()??'zh-CN',modelProfileId:profile.id,modelOverride:input.modelOverride??profile.settings.model};
@@ -465,7 +499,12 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
     const meter=usageOwner==='query'?usageLedger.start(profile.settings.provider,input.modelOverride??profile.settings.model,input.skill??operation,{agentId:'context-query',moduleId,skillId:input.skill??null,operationId:input.traceContext?.operationId,jobId:input.traceContext?.jobId,requestId:diagnostics.requestId()}):undefined;
     const deadline=agentDeadline(input.signal,profile.settings.agentTimeoutMs),taskSignal=deadline.signal;
     let disclosedSourcePins=sourceContextDependencies(input);
-    const observed:QueryInput={...input,contextSourceContextDependencies:disclosedSourcePins,signal:taskSignal,traceContext,
+    const disclosedProcessingIds:string[]=[],processingIds=new Set<string>();
+    const observed:QueryInput&{processingDisclosedEvidenceIds?:string[]}={...input,contextSourceContextDependencies:disclosedSourcePins,signal:taskSignal,traceContext,
+      ...(input.responseMode==='memory-extraction'&&input.evidenceIds!==undefined?{processingDisclosedEvidenceIds:disclosedProcessingIds,onEvidence:(records:readonly import('@mote/agent').ContextRecord[])=>{
+        for(const record of records)if(!processingIds.has(record.id)){processingIds.add(record.id);disclosedProcessingIds.push(record.id);}
+        input.onEvidence?.(records);
+      }}:{}),
       onSourceContextDependencies:pins=>{
         const next=combineSourceContextDependencies([disclosedSourcePins,pins]);
         assertSourceContextDependencies(sourceContexts,next);
@@ -476,7 +515,7 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
     const heartbeat=setInterval(()=>diagnostics.record('agent.heartbeat',{jobId:input.traceContext?.jobId,elapsedMs:Date.now()-startedAt,idleMs:Date.now()-lastActivity,activeQueries:agentGate.snapshot().active},'info'),30000);heartbeat.unref();
     const promise=diagnostics.measure('agent',operation,()=>agent.query(observed).then(result=>{
       taskSignal?.throwIfAborted();
-      assertModelEvidence(input);
+      assertModelEvidence(observed);
       const evidenceDependencies=resolveDependencies(store,combineDependencies([contextDependencies(input),result.evidenceDependencies]));
       // Metadata/declaration reads also pin their original Material lineage.
       // They need correction fences even when no original quote was expanded.
@@ -620,7 +659,7 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
       return originals;
     },
   });
-  type SavedQuery={hostRequest:unknown;language?:QueryInput['language'];prepared?:QueryInput;configurationFingerprint?:string};
+  type SavedQuery={hostRequest:unknown;language?:QueryInput['language'];prepared?:QueryInput;configurationFingerprint?:string;qualityStrategy?:QueryQualityStrategy;qualityStages?:Partial<Record<QueryQualityStage,QueryResult>>};
   async function prepareDelegatedQuery(body:unknown,work:DelegationWork,signal:AbortSignal,onProgress:QueryInput['onProgress']):Promise<QueryInput>{
     signal.throwIfAborted();if(!agent.configured)throw new AgentNotConfiguredError();
     const saved=delegation.journal.payload<SavedQuery>(work.id);
@@ -650,13 +689,41 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
       if(freshImages.some((image,index)=>image.hash!==directImages[index].hash||image.mimeType!==directImages[index].mimeType||image.sizeBytes!==directImages[index].sizeBytes))throw new StoreError('Query attachment changed during preparation',409);
       for(const image of directImages){const version=files.version(image.id);if(!store.evidence([image.id]).length||!fileAttachmentAvailable(store,image.id)||store.db.prepare('SELECT deleted FROM source_heads WHERE source_id=? AND external_id=?').get(version.source_id,version.external_id)?.deleted)throw new StoreError('Query attachment is no longer available',409);}
       delegation.recordEvidence(work.id,[...(contextDependencies(prepared)?.ids??[]),...directImages.map(image=>image.id)]);
-      delegation.journal.savePayload(work.id,{...saved,prepared,configurationFingerprint:modelConfiguration(profile.id,{...profile.settings,model},modelSettings.view().revision).fingerprint});
+      delegation.journal.savePayload(work.id,{...saved,prepared,configurationFingerprint:modelConfiguration(profile.id,{...profile.settings,model},modelSettings.view().revision).fingerprint,...(dependencies?.queryQualityExperiment?{qualityStrategy:dependencies.queryQualityExperiment}:{})});
     });
     return {...prepared,signal,onProgress};
   }
+  function qualityCheckpoint(input:QueryInput):QueryQualityCheckpoint|undefined{
+    if(!dependencies?.queryQualityExperiment||!input.hostControlChannel)return;
+    const work=delegation.get(input.traceContext!.operationId!),stepId=work.id+':coordinator:'+work.revision,fence=String(store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(stepId)?.fence??'');
+    const assertCurrent=()=>{
+      input.signal?.throwIfAborted();
+      if(!fence||!executor.isCurrentInputGrant(stepId,fence))throw new StoreError('Query stage grant expired',409);
+      const saved=delegation.journal.payload<SavedQuery>(work.id);
+      if(saved.qualityStrategy!==dependencies.queryQualityExperiment)throw new StoreError('Query experiment strategy changed',409);
+      const selected=modelSettings.select('chat',saved.prepared!.modelProfileId),current=modelConfiguration(selected.id,{...selected.settings,model:saved.prepared!.modelOverride??selected.settings.model},modelSettings.view().revision);
+      if(saved.configurationFingerprint!==current.fingerprint)throw new StoreError('Query model configuration changed',409);
+      assertModelEvidence(saved.prepared);
+    };
+    const assertResult=(result:QueryResult)=>{assertModelEvidence({question:'',contextEvidenceDependencies:result.evidenceDependencies});assertSourceContextDependencies(sourceContexts,result.sourceContextDependencies);};
+    return {assertCurrent,read:stage=>{
+      assertCurrent();const result=delegation.journal.payload<SavedQuery>(work.id).qualityStages?.[stage];if(result)assertResult(result);return result;
+    },write:(stage,result)=>{
+      const own=!store.db.isTransaction;if(own)store.db.exec('BEGIN IMMEDIATE');
+      try{
+        assertCurrent();assertResult(result);
+        delegation.recordEvidence(work.id,[...(result.evidenceDependencies?.ids??[]),...result.citations.map(citation=>citation.id)]);
+        delegation.recordSourceContextDependencies(work.id,result.sourceContextDependencies??[]);
+        const saved=delegation.journal.payload<SavedQuery>(work.id);saved.qualityStages={...saved.qualityStages,[stage]:result};delegation.journal.savePayload(work.id,saved);
+        if(own)store.db.exec('COMMIT');
+      }catch(error){if(own&&store.db.isTransaction)store.db.exec('ROLLBACK');throw error;}
+    }};
+  }
   queryRuns=new DelegatedQueryRuns(store,delegation,{
     contextTime:()=>freezeSemanticContextTime(dependencies?.semanticContextTime),
-    prepare:prepareDelegatedQuery,query:input=>queryAgent(input),
+    prepare:prepareDelegatedQuery,
+    query:input=>runQueryQualityExperiment(input,dependencies?.queryQualityExperiment??'base',(next,stage)=>queryAgent({...next,traceContext:{...next.traceContext,phase:'quality.'+stage}},'query',stage==='base'?'conversations':'query.'+stage),qualityCheckpoint(input)),
+    operationUsage:(operationId,createdAt,finishedAt)=>usageLedger.operation(operationId,createdAt,finishedAt),
     commit:(body,result,work)=>{
       const {conversationId,question,attachmentIds=[]}=queryWithAttachmentsSchema.parse(body),saved=delegation.journal.payload<SavedQuery>(work.id),prepared=saved.prepared!;
       assertModelEvidence(prepared);
@@ -722,6 +789,7 @@ export async function buildApp(config:Config,dependencies?:{webRoot?:string;conn
   app.addHook('preClose',async()=>{
     closing=true;eventLoop.disable();queryRuns.interrupt();
     featureHost.stop();
+    memoryPublication.stop();
     // Interrupt execution while its handlers, checkpoints and storage remain
     // available. Fastify then drains HTTP requests before resource disposal.
     // Provider transports must be interrupted while the executor drains. A

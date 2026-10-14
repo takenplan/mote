@@ -7,7 +7,7 @@ import {sourceTextBoundaries} from '../../shared/dist/source-presentation.js';
 
 const words='生成引句：“先做试页” / "quoted" \\ slash\n第二行 😀👩‍💻。';
 function source(text=words,format='source-record-json-v1'){
-  const raw=format==='speech-json-v1'?JSON.stringify({speaker:'SPEAKER_0',text}):JSON.stringify({captureId:randomUUID(),capturedAt:'2026-09-27T00:00:00Z',source:'message',appName:'Generated source',text});
+  const raw=format==='speech-text-v2'?JSON.stringify({speaker:'SPEAKER_0'})+'\n'+text:format==='speech-json-v1'?JSON.stringify({speaker:'SPEAKER_0',text}):JSON.stringify({captureId:randomUUID(),capturedAt:'2026-09-27T00:00:00Z',source:'message',appName:'Generated source',text});
   return {id:randomUUID(),capturedAt:'2026-09-27T00:00:00Z',appName:'Generated source',ocrText:raw,sourceType:'message',evidencePresentation:format,provenance:{revision:'generated-v1'}};
 }
 const readerFor=record=>({search:async()=>[record],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[record],devices:async()=>[],activity:async()=>({})});
@@ -17,7 +17,7 @@ async function seeded(record,ranges,run){
   try{await run(bridge);}finally{await bridge.close();}
 }
 test('known source and speech wrappers display decoded text while original proof and ranges stay exact',async()=>{
-  for(const format of ['source-record-json-v1','speech-json-v1']){
+  for(const format of ['source-record-json-v1','speech-json-v1','speech-text-v2']){
     const record=source(words,format);
     await seeded(record,[[0,record.ocrText.length]],async bridge=>{
       assert.equal(answer(bridge).citations[0].excerpt,words);
@@ -46,6 +46,19 @@ test('unread gaps and tails never enter citation text, including a truncated JSO
     assert.ok(!JSON.stringify(bridge.seedEvidence).includes('UNREAD_'));
   });
   await seeded(record,[[0,first]],async bridge=>assert.equal(answer(bridge).citations[0].excerpt,'…'));
+});
+test('plain speech excerpts exclude metadata and preserve only delivered text across partial pages',async()=>{
+  const record=source('已读 "引句" \\ slash\nUNREAD_GAP_MUST_NOT_APPEAR\n已读后段😀\nUNREAD_TAIL_MUST_NOT_APPEAR','speech-text-v2');
+  const first=record.ocrText.indexOf('已读 "'),gap=record.ocrText.indexOf('UNREAD_GAP'),second=record.ocrText.indexOf('已读后段'),tail=record.ocrText.indexOf('UNREAD_TAIL');
+  await seeded(record,[[0,gap],[second,tail-second]],async bridge=>{
+    const excerpt=answer(bridge).citations[0].excerpt;
+    assert.equal(excerpt,'已读 "引句" \\ slash\n … 已读后段😀\n …');
+    assert.doesNotMatch(excerpt,/UNREAD|speaker|SPEAKER_0/u);
+    assert.ok(!JSON.stringify(bridge.seedEvidence).includes('UNREAD_'));
+    assert.equal(bridge.records.get(record.id).deliveredRanges[0].text,record.ocrText.slice(0,gap));
+  });
+  await seeded(record,[[0,first]],async bridge=>assert.equal(answer(bridge).citations[0].excerpt,'…'));
+  await seeded(record,[[second,tail-second]],async bridge=>assert.equal(answer(bridge).citations[0].excerpt,'… 已读后段😀\n …'));
 });
 test('JSON escapes and surrogate pairs are decoded only when their complete raw spans were delivered',async()=>{
   const record=source('开头 "引号"\n😀 后段');record.ocrText=record.ocrText.replace('😀','\\ud83d\\ude00');

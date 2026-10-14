@@ -19,7 +19,7 @@ import {recordingMemoryRecipe} from '../src/connectors/recording-memory.js';
 const raw='Generated diary export\n\nOwner 00:00:00.000\nI felt proud of finishing a generated prototype.\n\nOwner 00:00:02.500\nI prefer quiet mornings for focused work.\n';
 const selection={enabled:true,start:'2026-09-01T00:00:00Z',end:'2026-10-01T00:00:00Z',autoSync:false,backupAudio:true};
 const wav=Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(200)]);
-async function fixture(t:import('node:test').TestContext){
+async function fixture(t:import('node:test').TestContext,createProvider?:(directory:string)=>RecordingProvider){
  const directory=await mkdtemp(join(tmpdir(),'mote-recording-fixture-'));
  const state={account:'generated-owner',text:raw,ids:['r1','r1'],mediaFails:false,transcriptFails:false,pages:false,cycle:false,held:undefined as undefined|Promise<void>,switchAfterRead:false};
  const calls:{phase:string;id?:string;start?:string;end?:string}[]=[],models:QueryInput[]=[];
@@ -29,16 +29,17 @@ async function fixture(t:import('node:test').TestContext){
   transcript:async()=>{calls.push({phase:'transcript'});if(state.held)await state.held;if(state.transcriptFails)throw new ExecutionFailure('blocked','generated_transcript_unavailable');if(state.switchAfterRead)state.account='another-generated-owner';return {rawText:state.text,transcript:feishuTranscript(state.text,5000)};},
   media:async()=>{calls.push({phase:'media'});if(state.mediaFails)throw new ExecutionFailure('blocked','generated_media_permission');return {mimeType:'audio/wav',bytes:wav};},
  };
+ const activeProvider=createProvider?.(directory)??provider;
  const config:Config={dataDir:directory,token:'generated-recording-owner-token',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:50_000_000,maxExportBytes:10_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:true};
  let node:Awaited<ReturnType<typeof buildApp>>;
- const deps={backgroundWorker:false,connectorTesting:{recordings:[provider]},agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{
+ const deps={backgroundWorker:false,connectorTesting:{recordings:[activeProvider]},agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{
   if(await planGeneratedMemory(input))return {answer:'Generated packages submitted.',citations:[],trace:[],runId:randomUUID()};
   models.push(input);const evidence=node.memories.readEvidence(input.evidenceIds!)[0],id=evidence.id;
   return {answer:generatedMemoryOutput(input,[{domain:'personal',title:'Generated pride',statement:`Felt proud of a generated prototype [${id}]`,uncertainty:'Generated evidence only; speaker label unverified.',admission:{layer:'memory',reason:'Generated personal experience',scope:'Generated diary',attribution:'user'},evidenceIds:[id],evidence:[{id,quote:evidence.ocrText.trim()}]}]),citations:[{id,capturedAt:evidence.capturedAt,appName:evidence.appName,excerpt:''}],trace:[],runId:randomUUID()};
  }}};
  node=await buildApp(config,deps);await node.app.ready();
- const request=async(method:'GET'|'POST'|'PUT'|'DELETE',suffix='',payload?:unknown)=>{const res=await node.app.inject({method,url:'/api/connectors/feishu-recordings'+suffix,headers:{authorization:'Bearer '+config.token},...(payload?{payload}:{})});assert.equal(res.statusCode,200,res.body);return res.json();};
- const flush=async()=>{for(let n=0;n<30;n++){const steps=node.store.db.prepare("SELECT id FROM execution_steps WHERE kind LIKE 'recording.feishu.%' AND state IN ('waiting','running') AND available_at<=? LIMIT 100").all(Date.now()) as {id:string}[];if(!steps.length)break;await node.executor.drain(steps.map(s=>s.id));}await node.materialOrganizer.tick(100);await node.sourcePipelines.tick(100);};
+ const request=async(method:'GET'|'POST'|'PUT'|'DELETE',suffix='',payload?:unknown)=>{const res=await node.app.inject({method,url:'/api/connectors/'+activeProvider.id+'-recordings'+suffix,headers:{authorization:'Bearer '+config.token},...(payload?{payload}:{})});assert.equal(res.statusCode,200,res.body);return res.json();};
+ const flush=async()=>{for(let n=0;n<30;n++){const steps=node.store.db.prepare("SELECT id FROM execution_steps WHERE kind LIKE ? AND state IN ('waiting','running') AND available_at<=? LIMIT 100").all('recording.'+activeProvider.id+'.%',Date.now()) as {id:string}[];if(!steps.length)break;await node.executor.drain(steps.map(s=>s.id));}await node.materialOrganizer.tick(100);await node.sourcePipelines.tick(100);};
  t.after(async()=>{await node.app.close();await rm(directory,{recursive:true,force:true});});
  return {get node(){return node;},config,directory,state,calls,models,request,flush,async connect(){await request('POST','/connect');return request('PUT','/selection',selection);},async restart(){await node.app.close();node=await buildApp(config,deps);await node.app.ready();},async memory(){await node.sourcePipelines.drainMemory(node.memoryPipeline,true,100);await Promise.all(node.memoryPipeline.list().filter(j=>['queued','running'].includes(j.status)).map(j=>node.memoryPipeline.run(j.id)));}};
 }
@@ -80,21 +81,21 @@ test('recording intake produces complete material and Memory, bypasses ASR, pres
  await f.request('DELETE');assert.equal((await f.request('GET')).connected,false);assert.equal(f.node.sources.getSource(source.id).enabled,false);assert.equal(f.node.sources.history(source.id,'r1').length,1);
 });
 
-test('recording v2 carries scoped owner source prose with unknown default through formal intake and independent review; v1 stays available',async t=>{
+test('recording v3 carries scoped owner prose and full-range selection through formal intake and independent review',async t=>{
  const f=await fixture(t);await f.connect();const status=await f.request('GET'),sourceId=status.sourceId;
  const description='Generated recordings are my spoken diary; quoted people and navigation announcements are not my own experiences.';
  const updated=await f.node.app.inject({method:'PATCH',url:'/api/sources/'+sourceId+'/context',headers:{authorization:'Bearer '+f.config.token},payload:{expectedVersion:0,description}});assert.equal(updated.statusCode,200,updated.body);
- assert.equal(f.node.memoryStrategies.resolve({id:'mote.recording-memory',version:'1'}).binding.extract.version,'1');assert.equal(recordingMemoryRecipe.version,'2');
+ assert.equal(f.node.memoryStrategies.resolve({id:'mote.recording-memory',version:'1'}).binding.extract.version,'1');assert.equal(f.node.memoryStrategies.resolve({id:'mote.recording-memory',version:'2'}).binding.extract.version,'2');assert.equal(recordingMemoryRecipe.version,'3');assert.equal(f.node.memoryStrategies.resolve(recordingMemoryRecipe).binding.workContract,'range-evaluation@1');
  await f.flush();await f.memory();const jobs=f.node.memoryPipeline.list().map(j=>f.node.memoryPipeline.get(j.id));
- assert.ok(jobs.length>0);assert.ok(jobs.every(j=>j.status==='completed'&&j.recipes?.every(r=>r.id===recordingMemoryRecipe.id&&r.version==='2')));
+ assert.ok(jobs.length>0);assert.ok(jobs.every(j=>j.status==='completed'&&j.recipes?.every(r=>r.id===recordingMemoryRecipe.id&&r.version==='3')));
  assert.ok(f.models.some(input=>input.taskContext?.untrustedMemoryDraft),'independent reviewer sees the actual recording work');
  for(const input of f.models){
   const members=(input.taskContext?.memoryWork as {members:{attributionContext?:{ownerRelation:string;basis:string;sourceContextStatements?:{description:string}[]}}[]})?.members;assert.ok(members?.length);
   for(const member of members){assert.equal(member.attributionContext?.ownerRelation,'unknown');assert.equal(member.attributionContext?.basis,'default');assert.equal(member.attributionContext?.sourceContextStatements?.[0].description,description);}
-  assert.match(input.question,/sourceContextStatements/);assert.match(input.question,/not a veto/);assert.match(input.question,/background\/navigation/);
+  assert.match(input.question,/sourceContextStatements/);assert.match(input.question,/not a veto/);assert.match(input.question,/background\/navigation/);assert.match(input.question,/source creation\/start timestamp/);assert.equal((input.taskContext?.memoryWork as {workContract?:string})?.workContract,'range-evaluation@1');assert.doesNotMatch(input.question,/propose at most 8/);
  }
- const recipe2=f.node.memoryStrategies.resolve(recordingMemoryRecipe).binding,recipe1=f.node.memoryStrategies.resolve({id:recordingMemoryRecipe.id,version:'1'}).binding;
- await f.restart();assert.deepEqual(f.node.memoryStrategies.resolve(recordingMemoryRecipe).binding,recipe2);assert.deepEqual(f.node.memoryStrategies.resolve({id:recordingMemoryRecipe.id,version:'1'}).binding,recipe1);
+ const recipe3=f.node.memoryStrategies.resolve(recordingMemoryRecipe).binding,recipe1=f.node.memoryStrategies.resolve({id:recordingMemoryRecipe.id,version:'1'}).binding,recipe2=f.node.memoryStrategies.resolve({id:recordingMemoryRecipe.id,version:'2'}).binding;
+ await f.restart();assert.deepEqual(f.node.memoryStrategies.resolve(recordingMemoryRecipe).binding,recipe3);assert.deepEqual(f.node.memoryStrategies.resolve({id:recordingMemoryRecipe.id,version:'1'}).binding,recipe1);assert.deepEqual(f.node.memoryStrategies.resolve({id:recordingMemoryRecipe.id,version:'2'}).binding,recipe2);
  assert.equal((await f.request('GET')).selection.autoSync,false);
 });
 
@@ -123,17 +124,71 @@ test('switching vendor account during a transcript read blocks publication; paus
 test('export parsers preserve speaker/timeline, long speech, structured DingTalk paragraphs and reject incomplete data and unsafe paths',async t=>{
  const text='甲 00:00:00.040\n'+('x'.repeat(7999)+'😀').repeat(2)+'\n\n乙 00:00:02.000\nEnd\n';const parsed=feishuTranscript(text,4000)!;assert.ok(parsed.segments.length>2);assert.equal(parsed.segments[0].startMs,40);assert.equal(parsed.segments.at(-1)?.speaker,'乙');assert.ok(parsed.segments.every(s=>s.text.length<=8000));
  assert.throws(()=>feishuTranscript('not a transcript',100));assert.throws(()=>feishuTranscript('A 00:00:02.000\nText\nB 00:00:01.000\nText',4000));
- const dws=dingtalkTranscript({taskUuid:'generated',complete:true,paragraphList:[{speakerNick:'Unknown',words:[{text:'Generated words'}]}]});assert.ok(dws.rawText.includes('Generated words'));assert.equal(dws.transcript.segments[0].untimed,true);assert.throws(()=>dingtalkTranscript({taskUuid:'generated',complete:false,paragraphList:[]}));
+ const dws=dingtalkTranscript({taskUuid:'generated',complete:true,paragraphList:[{nickName:'Unknown',paragraph:'Generated words',sentenceList:[{sentence:'Generated words'}]}]});assert.ok(dws.rawText.includes('Generated words'));assert.equal(dws.transcript!.segments[0].untimed,true);assert.equal(dws.transcript!.segments[0].text,'Generated words');assert.throws(()=>dingtalkTranscript({taskUuid:'generated',complete:false,paragraphList:[]}));
  const args=dwsArguments({kind:'search',start:selection.start,end:selection.end},'corp:user');assert.ok(args.includes('corp:user'));assert.ok(!args.includes('--query'));
  const dir=await mkdtemp(join(tmpdir(),'mote-export-contract-'));t.after(()=>rm(dir,{recursive:true,force:true}));await mkdir(join(dir,'safe'));await writeFile(join(dir,'outside'),'private fixture');await assert.rejects(recordingFile(join(dir,'safe'),'../outside',100));
 });
 
-test('Feishu CLI adapter validates actual envelopes and reads only controlled exports; creation time is not a recording date',async t=>{
+test('vendor adapters retain source corpus dates and validate actual envelopes and controlled exports',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'mote-feishu-format-'));t.after(()=>rm(directory,{recursive:true,force:true}));
  const provider=createFeishuRecordings(directory,async command=>{switch(command.kind){case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'generated'}}});case 'minutes-search':return JSON.stringify({ok:true,data:{items:[{token:'r1'}],has_more:false}});case 'minutes-metadata':return JSON.stringify({data:{minute:{token:'r1',title:'Generated',create_time:String(Date.parse('2026-09-20T00:00:00Z')),duration:'5000'}}});case 'minutes-transcript':{const path=resolve(directory,'lark-runtime',command.outputDir,'transcript.txt');await writeFile(path,raw);return JSON.stringify({data:{minutes:[{minute_token:'r1',artifacts:{transcript_file:path}}]}});}case 'minutes-media':await writeFile(resolve(directory,'lark-runtime',command.output),wav);return '{}';default:return '{}';}});
  const account=await provider.account(),signal=new AbortController().signal;assert.equal((await provider.discover(account,selection,signal)).ids[0],'r1');const metadata=await provider.metadata(account,'r1',signal);assert.equal(metadata.recordedAt,undefined);assert.ok(metadata.createdAt);assert.equal((await provider.transcript(account,metadata,signal)).transcript!.segments.length,2);assert.equal((await provider.media(account,metadata,signal)).mimeType,'audio/wav');
- const dws=createDingtalkRecordings(directory,async command=>command.kind==='status'?{authenticated:true,corp_id:'corp',user_id:'user'}:command.kind==='metadata'?{data:{taskUuid:'d1',basic:{result:{uuid:'d1',title:'Generated'}}}}:command.kind==='search'?{data:{minutes:[{taskUuid:'d1'}],complete:true},meta:{pagination:{endpoint_exhausted:true}}}:{data:{taskUuid:'d1',complete:true,paragraphList:[{text:'Generated'}]}});
- const da=await dws.account();assert.equal((await dws.metadata(da,'d1',signal)).title,'Generated');assert.equal((await dws.discover(da,selection,signal)).ids[0],'d1');assert.ok((await dws.transcript(da,{id:'d1',title:'Generated',durationMs:0},signal)).transcript!.segments.length);
+ const dws=createDingtalkRecordings(directory,async command=>command.kind==='status'?{authenticated:true,corp_id:'corp',user_id:'user'}:command.kind==='metadata'?{data:{taskUuid:'d1',basic:{result:{uuid:'d1',title:'Generated',startTime:Date.parse('2026-09-20T00:00:00Z'),duration:5000}}}}:command.kind==='search'?{data:{minutes:[{taskUuid:'d1'}],complete:true},meta:{pagination:{endpoint_exhausted:true}}}:{data:{taskUuid:'d1',complete:true,paragraphList:[{paragraph:'Generated'}]}});
+ const da=await dws.account(),dm=await dws.metadata(da,'d1',signal);assert.equal(dm.title,'Generated');assert.equal(dm.createdAt,'2026-09-20T00:00:00.000Z');assert.equal(dm.durationMs,5000);assert.equal((await dws.discover(da,selection,signal)).ids[0],'d1');assert.ok((await dws.transcript(da,dm,signal)).transcript!.segments.length);
+});
+
+test('DingTalk primary text is lossless, retains genuine repeated paragraphs and has decoded paragraph locations',()=>{
+ const speech='Generated "quote" \\ newline\n'+('x'.repeat(7999)+'😀').repeat(2),paragraph={paragraph:speech,nickName:'Unverified vendor label',paragraphId:7,sentenceList:[{sentence:speech,wordList:[{word:speech}]}]};
+ const payload={taskUuid:'generated',complete:true,providerExtra:'Retain unknown original fields',paragraphList:[paragraph,{...paragraph,paragraphId:8}]};
+ const result=dingtalkTranscript(payload,5000),segments=result.transcript!.segments;
+ assert.deepEqual(JSON.parse(result.rawText),payload);
+ assert.equal(segments.filter(s=>s.documentLocation!.rowNumber===1).map(s=>s.text).join(''),speech);
+ assert.equal(segments.filter(s=>s.documentLocation!.rowNumber===2).map(s=>s.text).join(''),speech,'identical speech in another paragraph is a real retained occurrence');
+ for(const row of [1,2]){let offset=0;for(const segment of segments.filter(s=>s.documentLocation!.rowNumber===row)){assert.equal(segment.documentLocation!.offset,offset);assert.equal(segment.documentLocation!.length,segment.text.length);assert.equal(speech.slice(offset,offset+segment.text.length),segment.text);assert.ok(segment.text.length<=8000);assert.equal(segment.speaker,'Unverified vendor label');assert.equal(segment.untimed,true);offset+=segment.text.length;}}
+ assert.equal(result.transcript!.durationMs,5000);assert.equal(result.transcript!.coverage,'full');
+ assert.throws(()=>dingtalkTranscript({taskUuid:'generated',complete:true,paragraphList:[{sentenceList:[{sentence:'Unknown primary format'}]}]}),(error:any)=>error.code==='recording_transcript_format_unsupported');
+ assert.throws(()=>dingtalkTranscript({taskUuid:'generated',complete:true,paragraphList:[{paragraph:'   '}]}),(error:any)=>error.code==='recording_transcript_format_unsupported');
+});
+
+test('DingTalk actual connector intake keeps raw JSON, uses source corpus time, avoids redundant quote ambiguity and creates current revisions',async t=>{
+ const sourceTime='2026-09-20T00:00:00.000Z',speech='I felt proud of finishing a generated prototype.',state={speech};
+ const payload=()=>({taskUuid:'d1',complete:true,providerExtra:'Generated original metadata',paragraphList:[0,1].map(index=>({paragraphId:index+1,nickName:'Generated vendor label',paragraph:state.speech,sentenceList:[{sentence:state.speech,wordList:[{word:state.speech}]}]}))});
+ const f=await fixture(t,directory=>createDingtalkRecordings(directory,async(command,profile)=>{
+  if(command.kind==='status')return {authenticated:true,corp_id:'corp',user_id:'user'};
+  assert.equal(profile,'corp:user');
+  if(command.kind==='search')return {data:{minutes:[{taskUuid:'d1'}],complete:true},meta:{pagination:{endpoint_exhausted:true}}};
+  if(command.kind==='metadata')return {data:{taskUuid:'d1',basic:{result:{taskUuid:'d1',title:'Generated corpus diary',startTime:Date.parse(sourceTime),duration:5000}}}};
+  if(command.kind==='transcript')return {data:payload()};
+  if(command.kind==='media'){await writeFile(resolve(directory,'dws-runtime',command.output),wav);return {data:{ok:true,succeeded:1,results:[{taskUuid:'d1'}]}};}
+  throw Error('Unexpected generated command');
+ }));
+ await f.connect();await f.flush();const status=await f.request('GET'),head=f.node.sources.getItem(status.sourceId,'d1')!;
+ assert.equal(status.counts.transcripts,1);assert.equal(status.counts.failed,0);assert.equal(head.document?.recordedAt,sourceTime);assert.equal(head.document?.timeBasis,'recorded');assert.equal(head.document?.occurredAt,undefined);assert.notEqual(head.observedAt,sourceTime);
+ assert.equal(f.node.sources.listItems({sourceId:status.sourceId,after:sourceTime,before:'2026-09-21T00:00:00Z'}).items.length,1,'corpus date participates in normal source retrieval');
+ const retained=JSON.parse(Buffer.concat([...f.node.files.bytes(head.captureId)]).toString());assert.deepEqual(JSON.parse(retained.rawText),payload());
+ const chunks=f.node.files.chunks(head.captureId);assert.equal(chunks.length,2);assert.ok(chunks.every(chunk=>chunk.ocrText.includes(speech)&&!chunk.ocrText.includes('sentenceList')));
+ const material=f.node.materials.list({sourceId:status.sourceId}).items[0],pin=f.node.materials.input(material.ref,['extracted-text'])!;
+ assert.equal(pin.ready,true);assert.equal(pin.evidenceIds.length,2);assert.ok(!f.node.materials.read(material.ref).text.includes('sentenceList'));assert.ok(f.node.memories.readEvidence(pin.evidenceIds).every(record=>record.provenance?.document?.recordedAt===sourceTime));
+ await f.memory();const initial=f.node.memoryPipeline.list().map(job=>f.node.memoryPipeline.get(job.id));assert.ok(initial.length);assert.ok(initial.every(job=>job.status==='completed'));assert.ok(initial.every(job=>job.batches.every(batch=>!batch.validationFailures?.some(failure=>failure.code==='quote_ambiguous'))));
+ const oldMemoryIds=initial.flatMap(job=>job.memoryIds),modelCount=f.models.length;assert.ok(oldMemoryIds.length);
+ await f.request('POST','/sync');await f.flush();await f.memory();assert.equal(f.models.length,modelCount);assert.equal(f.node.sources.history(status.sourceId,'d1').length,1);
+ state.speech=speech.replace('proud','happy');await f.request('POST','/sync');await f.flush();assert.equal(f.node.sources.history(status.sourceId,'d1').length,2);assert.ok(oldMemoryIds.every(id=>f.node.memories.get(id).status==='stale'));assert.equal(Buffer.concat([...f.node.files.bytes(head.captureId)]).toString(),JSON.stringify(retained),'prior original asset is immutable');
+ await f.memory();assert.ok(f.models.length>modelCount);await f.restart();await f.flush();await f.memory();assert.equal((await f.request('GET')).counts.transcripts,1);
+});
+
+test('DingTalk unsupported structure is retained as an explicit failure and retry publishes only a supported primary paragraph',async t=>{
+ const state={paragraphs:[{unknownSpeech:'Generated original remains available'}] as Record<string,unknown>[]};
+ const f=await fixture(t,directory=>createDingtalkRecordings(directory,async command=>{
+  if(command.kind==='status')return {authenticated:true,corp_id:'corp',user_id:'user'};
+  if(command.kind==='search')return {data:{minutes:[{taskUuid:'d1'}],complete:true}};
+  if(command.kind==='metadata')return {data:{taskUuid:'d1',basic:{result:{taskUuid:'d1',title:'Generated unsupported diary',startTime:Date.parse('2026-09-20T00:00:00Z'),duration:5000}}}};
+  if(command.kind==='transcript')return {data:{taskUuid:'d1',complete:true,paragraphList:state.paragraphs}};
+  if(command.kind==='media'){await writeFile(resolve(directory,'dws-runtime',command.output),wav);return {data:{ok:true,succeeded:1,results:[{taskUuid:'d1'}]}};}
+  throw Error('Unexpected generated command');
+ }));
+ await f.connect();await f.flush();await f.memory();let status=await f.request('GET');assert.equal(status.counts.transcripts,0);assert.equal(status.counts.failed,1);assert.equal(status.counts.empty,0);assert.equal(f.models.length,0);assert.ok(status.steps.some((step:any)=>step.error==='recording_transcript_format_unsupported'));
+ const item=(await f.request('GET','/items?includeExports=true')).items[0];assert.equal(item.unsupported,true);assert.deepEqual(JSON.parse(new ArchivedFileStore(f.node.store).read(item.export.id).toString()).paragraphList,state.paragraphs);
+ await f.restart();assert.equal((await f.request('GET')).counts.failed,1);state.paragraphs=[{paragraph:'I felt proud of finishing a generated prototype.',nickName:'Unverified'}];await f.request('POST','/retry');await f.flush();await f.memory();status=await f.request('GET');assert.equal(status.counts.transcripts,1);assert.equal(status.counts.failed,0);assert.ok(f.models.length>0);assert.ok(new ArchivedFileStore(f.node.store).read(item.export.id).toString().includes('unknownSpeech'));
 });
 
 test('a long provider transcript keeps every fine-grained segment in the material and Memory input beyond the ordinary 2000-block limit',async t=>{

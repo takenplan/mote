@@ -1,4 +1,4 @@
-import {formatArtifactRef,formatEvidenceRef} from '@mote/shared';
+import {formatArtifactRef,formatEvidenceRef,type SourceContextDeclaration} from '@mote/shared';
 import type {Store,Range} from './store.js';
 import type {MemoryStore} from './memory.js';
 import type {SourceStore} from './sources.js';
@@ -18,7 +18,8 @@ export function contextIndex(store:Store,memories:Pick<MemoryStore,'page'>,sourc
  const entries:unknown[]=[];
  // The root describes capabilities, not corpus statistics. Avoid a full-vault
  // count on the first screen; actual pages are loaded only on expansion.
- if(path==='/context'&&!args.query)return {path,entries:CONTEXT_DIRECTORIES,nextCursor:null,coverage:{scope:'directory_metadata'},next:'Search multiple layers with query, or select a path. This directory is not exhaustive evidence.'};
+ if(path==='/context'&&!args.query)return {path,entries:CONTEXT_DIRECTORIES,nextCursor:null,coverage:{scope:'directory_metadata'},next:'Search multiple layers with query, or select a path. This directory is not exhaustive evidence.',disclosureDependencies:{version:1 as const,complete:true,ids:[]},sourceContextDependencies:[] as SourceContextDeclaration[]};
+ const sourceContextDependencies:SourceContextDeclaration[]=[];
  let nextCursor:string|null=null;
  if(path==='/context'||path==='/context/memory'){
   const page=memories.page({...args,layer:'memory',limit});if(path==='/context/memory')nextCursor=page.nextCursor;
@@ -31,10 +32,11 @@ export function contextIndex(store:Store,memories:Pick<MemoryStore,'page'>,sourc
  if(path==='/context/sources'||path==='/context'&&args.query){
   const page=browseSourceContexts(store,sources,{...args,cursor:path==='/context/sources'?args.cursor:undefined,limit});
   if(path==='/context/sources')nextCursor=page.nextCursor;
+  sourceContextDependencies.push(...page.sourceContextDependencies);
   for(const source of page.items)entries.push({layer:'source',...source,title:source.name,expand:'source_items'});
  }
 
- return {path,entries,nextCursor,coverage:{scope:'bounded_candidates',originals:'Not searched by this overview. Use search_context for exact or fresh facts; missing candidates do not establish absence.'}};
+ return {path,entries,nextCursor,coverage:{scope:'bounded_candidates',originals:'Not searched by this overview. Use search_context for exact or fresh facts; missing candidates do not establish absence.'},sourceContextDependencies};
 }
 
 /** Resolves replaceable retrieval before rendering the same directory UI. */

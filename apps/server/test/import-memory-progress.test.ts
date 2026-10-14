@@ -5,7 +5,6 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {QueryInput} from '@mote/agent';
-import {AgentContextBudgetError} from '@mote/agent';
 import type {Config} from '../src/config.js';
 import {buildApp} from '../src/app.js';
 import {importMemoryProgress} from '../src/import-memory-progress.js';
@@ -13,7 +12,7 @@ import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 
 const config=(dataDir:string):Config=>({dataDir,token:'generated-progress-token',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:20_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false});
 
-for(const mode of ['failed','waiting'] as const)test(`import receipt progress preserves committed split siblings when another member is ${mode}`,async t=>{
+for(const mode of ['failed','waiting'] as const)test(`import receipt progress preserves committed configured batches when another member is ${mode}`,async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-import-memory-progress-'));let badId='';
   const node=await buildApp(config(directory),{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{
     if((input.taskContext?.memoryWork as {feedback?:unknown})?.feedback){
@@ -21,19 +20,19 @@ for(const mode of ['failed','waiting'] as const)test(`import receipt progress pr
       return {runId:'generated-stop',trace:[],citations:[],answer:'Generated context stop submitted'};
     }
     const members=(input.taskContext?.memoryWork as {members:MemoryWorkMember[]}).members;
-    if(members.length>1)throw new AgentContextBudgetError('task',81000,80000,{memoryWork:81000});
     if(members.length===1&&members[0].inputKey===badId&&mode==='failed')throw Error('Generated terminal model failure');
     return {runId:'generated-'+(input.taskContext?.untrustedMemoryDraft?'review':'draft'),trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:members.length===1&&member.inputKey===badId&&mode==='waiting'?'needs_context':'no_candidates',candidateIndexes:[],...(members.length===1&&member.inputKey===badId&&mode==='waiting'?{reason:'Generated missing context'}:{})}))})};
   }}});
   await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
+  node.lifecycle.configure({...node.lifecycle.settings(),batchCharacters:256});
   node.sources.register({id:'generated',name:'Generated originals',kind:'custom',deviceId:'generated',platform:'import'});
   const ids:string[]=[];
-  for(let index=0;index<2;index++)ids.push((await node.sources.upsert('generated',{externalId:String(index),revision:'1',text:'Generated original '+index,observedAt:'2026-09-01T00:00:00Z',kind:'file',layer:'original'})).id);
+  for(let index=0;index<2;index++)ids.push((await node.sources.upsert('generated',{externalId:String(index),revision:'1',text:('Generated original '+index).padEnd(200,'.'),observedAt:'2026-09-01T00:00:00Z',kind:'file',layer:'original'})).id);
   badId=ids[1];await node.materialOrganizer.tick();await node.sourcePipelines.tick();
   assert.equal(await node.sourcePipelines.drainMemory(node.memoryPipeline,true,10),1);
   const jobId=String(node.store.db.prepare('SELECT job_id FROM memory_input_authorizations WHERE capture_id=?').get(ids[0])!.job_id),job=await node.memoryPipeline.run(jobId);
   assert.equal(job.status,mode==='failed'?'failed':'waiting_for_input');
-  assert.ok(job.batches.some(batch=>batch.supersededBy?.length&&batch.status==='completed'));
+  assert.ok(job.batches.some(batch=>batch.status==='completed'));assert.ok(job.batches.every(batch=>!batch.supersededBy));
   assert.equal(node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,1);
   assert.equal(importMemoryProgress(node.store,[ids[0]])!.completed,1);
   assert.equal(importMemoryProgress(node.store,[ids[1]])![mode==='failed'?'failed':'pending'],1,JSON.stringify({progress:importMemoryProgress(node.store,[ids[1]]),batches:job.batches.map(batch=>({status:batch.status,error:batch.errorCode,coverage:batch.coverage}))}));
@@ -53,20 +52,20 @@ test('one committed subrange never completes an original whose remaining range f
   const directory=mkdtempSync(join(tmpdir(),'mote-import-memory-ranges-'));let failSecondHalf=true;
   const node=await buildApp(config(directory),{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{
     const members=(input.taskContext?.memoryWork as {members:MemoryWorkMember[]}).members;
-    if(members[0].length>1500)throw new AgentContextBudgetError('task',81000,80000,{memoryWork:81000});
     if(members[0].offset>0&&failSecondHalf)throw Error('Generated failed second half');
     return {runId:'generated-range',trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:'no_candidates',candidateIndexes:[]}))})};
   }}});
   await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
+  node.lifecycle.configure({...node.lifecycle.settings(),batchCharacters:1024});
   node.sources.register({id:'generated',name:'Generated long original',kind:'custom',deviceId:'generated',platform:'import'});
   const {id}=await node.sources.upsert('generated',{externalId:'long',revision:'1',text:'Generated bounded source. '.repeat(80),observedAt:'2026-09-01T00:00:00Z',kind:'file',layer:'original'});
   await node.materialOrganizer.tick();await node.sourcePipelines.tick();assert.equal(await node.sourcePipelines.drainMemory(node.memoryPipeline,true,10),1);
   const jobId=String(node.store.db.prepare('SELECT job_id FROM memory_input_authorizations WHERE capture_id=?').get(id)!.job_id),job=await node.memoryPipeline.run(jobId);
-  assert.equal(job.status,'failed');assert.ok(job.batches.some(batch=>batch.supersededBy?.length));assert.equal(node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,1);
+  assert.equal(job.status,'failed');assert.ok(job.batches.every(batch=>!batch.supersededBy));assert.equal(node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,1);
   const progress=importMemoryProgress(node.store,[id])!;assert.equal(progress.completed,0);assert.equal(progress.failed,1);
   failSecondHalf=false;assert.equal((await node.memoryPipeline.retry(jobId)).status,'completed');
-  assert.equal(node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,2);
-  assert.equal(importMemoryProgress(node.store,[id])!.completed,1,'all committed leaf intervals cover the complete original after retry');
+  assert.equal(node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,job.totalBatches);
+  assert.equal(importMemoryProgress(node.store,[id])!.completed,1,'all originally configured intervals cover the complete original after retry');
 });
 
 test('legacy jobs keep whole-job import progress without package coverage metadata',async t=>{

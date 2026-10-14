@@ -72,7 +72,7 @@ async function fixture(t:TestContext,scenario:Scenario){
    const claim=(title:string,statement:string,spans:{quote:string;offset:number}[])=>({domain:'personal',title,statement:statement+` [${member.id}]`,uncertainty:'The generated diary supports the narrator inference; guest plans remain attributed to the guest. A future picnic is not completed.',admission:{layer:'observation',reason:'A concrete generated diary experience',scope:'The retrospective 2024 diary only',attribution:'inferred'},evidenceIds:[member.id],evidence:spans.map(span=>({id:member.id,...span}))});
    const memories:any[]=[];
    if(target.length===1&&target[0].offset===256&&target[0].length===256){
-    assert.ok(input.evidenceReadRanges?.some(range=>range.id===member.id&&range.offset===0&&range.length===diary.length),'the frozen selected original remains readable after subdivision');
+    assert.ok(input.evidenceReadRanges?.some(range=>range.id===member.id&&range.offset===0&&range.length===diary.length),'the frozen selected original remains readable after configured initial partitioning');
     const denied=await tool('context_evidence',{id:['cross-original-context','review-only-context','unused-context-correction','unused-context-deletion'].includes(scenario)?randomUUID():otherId,offset:0,length:12});assert.equal(denied.status,400,'an original outside this job selection has no read grant');
     const ordinary=await tool('evidence',{ids:[member.id],offset:0,length:header.length});assert.equal(ordinary.status,input.traceContext?.phase==='review'?200:400,'ordinary evidence uses only the seeds supplied to its own phase');
     const prefix={quote:header,offset:0},event={quote:repair,offset:256};
@@ -102,12 +102,13 @@ async function fixture(t:TestContext,scenario:Scenario){
      corrected=true;const material=node.materials.get(materialRef)!;node.materials.correctContext(material.id,material.revision,'third_party');
     }
    }
-   const answer=JSON.stringify({memories,coverage:members.map(targetMember=>({key:targetMember.key,state:memories.length&&targetMember.key===member.key?'checked':'no_candidates',candidateIndexes:targetMember.key===member.key?memories.map((_memory,index)=>index):[]})),capacity:{saturated:target.some(range=>range.length>=512)}});
+   const answer=JSON.stringify({memories,coverage:members.map(targetMember=>({key:targetMember.key,state:memories.length&&targetMember.key===member.key?'checked':'no_candidates',candidateIndexes:targetMember.key===member.key?memories.map((_memory,index)=>index):[]})),capacity:{saturated:false}});
    const result=parseAnswer(JSON.stringify({answer,citationIds:[...new Set(memories.flatMap(memory=>memory.evidenceIds))]}),bridge.records);
    call.readRanges=bridge.deliveredRanges;
    return {...result,trace:bridge.trace,runId:randomUUID(),evidenceReadRanges:bridge.deliveredRanges,evidenceDependencies:bridge.evidenceDependencies,sourceContextDependencies:bridge.sourceContextDependencies};
   }catch(error){spyFailures.push(error instanceof Error?error.message:String(error));throw error;}finally{await bridge.close();}
  }})});
+ node.lifecycle.configure({...node.lifecycle.settings(),batchCharacters:256});
  await node.app.ready();t.after(async()=>{await node.app.close();rmSync(dataDir,{recursive:true,force:true});});
  const headers={authorization:'Bearer '+token,'x-mote-ingress-version':'2'},api=(method:'GET'|'POST'|'PUT'|'DELETE',url:string,payload?:unknown)=>node.app.inject({method,url,headers,payload});
  const created=await api('POST','/api/imports',{instruction,files:[{name:'generated.md',dataBase64:Buffer.from(diary).toString('base64')}]});assert.equal(created.statusCode,202,created.body);
@@ -128,9 +129,9 @@ async function fixture(t:TestContext,scenario:Scenario){
 
 const failureSummary=(f:Awaited<ReturnType<typeof fixture>>)=>JSON.stringify({spyFailures:f.spyFailures,batches:f.done.batches.map((batch:any)=>({offset:batch.evidenceRanges[0]?.offset,length:batch.evidenceRanges[0]?.length,status:batch.status,error:batch.errorCode,failures:batch.validationFailures}))});
 
-test('HTTP diary import preserves model-selected retrospective and continuation reads through split extraction, independent review and publication',{timeout:30000},async t=>{
+test('HTTP diary import preserves model-selected retrospective and continuation reads through configured range extraction, independent review and publication',{timeout:30000},async t=>{
  const f=await fixture(t,'read-context');assert.equal(f.done.status,'completed',failureSummary(f));
- const parents=f.done.batches.filter((batch:any)=>batch.supersededBy?.length);assert.equal(parents.length,3);assert.ok(parents.every((batch:any)=>batch.memoryIds.length===0&&batch.coverage.every((member:any)=>member.reason==='memory_capacity_saturated')));
+ assert.ok(f.done.batches.every((batch:any)=>!batch.supersededBy),'processing never recursively halves the originally selected ranges');
  const middle=f.calls.filter(call=>call.target[0].offset===256&&call.target[0].length===256);assert.deepEqual(middle.map(call=>call.phase),['extract','review']);
  for(const call of middle){assert.deepEqual(call.contextReads.map(range=>({offset:range.offset,length:range.length})),[{offset:0,length:header.length},{offset:480,length:cat.length}]);assert.ok(call.readRanges.some(range=>range.offset===0&&range.length>=header.length));assert.ok(call.readRanges.some(range=>range.offset<=480&&range.offset+range.length>=480+cat.length));}
  const leaf=f.done.batches.find((batch:any)=>batch.evidenceRanges[0]?.offset===256&&batch.evidenceRanges[0]?.length===256);
@@ -142,13 +143,13 @@ test('HTTP diary import preserves model-selected retrospective and continuation 
  assert.equal(f.node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,4,'only exact independently reviewed leaf targets are checkpointed');
 });
 
-for(const scenario of ['unread-quote','context-only-candidate'] as const)test(`HTTP split Memory rejects ${scenario} before saving the corrected independently reviewed target`,{timeout:30000},async t=>{
+for(const scenario of ['unread-quote','context-only-candidate'] as const)test(`HTTP configured-range Memory rejects ${scenario} before saving the corrected independently reviewed target`,{timeout:30000},async t=>{
  const f=await fixture(t,scenario);assert.equal(f.done.status,'completed',failureSummary(f));assert.equal(f.rejections.length,1);assert.equal(f.done.memoryIds.length,2);
  assert.ok(f.done.batches.some((batch:any)=>batch.validationFailures?.some((failure:any)=>failure.phase==='extract')));
  assert.ok(f.done.memoryIds.every((id:string)=>!f.node.memories.get(id).title.includes('Unread')&&!f.node.memories.get(id).title.includes('Context-only')));
 });
 
-test('HTTP split Memory cannot publish context read before an owner correction supersedes the selected Material',{timeout:30000},async t=>{
+test('HTTP configured-range Memory cannot publish context read before an owner correction supersedes the selected Material',{timeout:30000},async t=>{
  const f=await fixture(t,'corrected-during-read');assert.notEqual(f.done.status,'completed');assert.equal(f.done.memoryIds.length,0);assert.equal(f.node.memories.list().length,0);assert.equal(f.node.materials.get(f.material.ref),undefined);
  assert.equal(f.node.materials.get(f.material.id)!.attributionContext?.ownerRelation,'third_party');
 });
@@ -190,11 +191,15 @@ test('a reviewer-only context read gains durable dependencies before publication
  const removed=await f.api('GET','/api/memories/'+dependent.id);assert.equal(removed.statusCode,404,removed.body);
 });
 
-for(const scenario of ['unused-context-correction','unused-context-deletion'] as const)test(`HTTP independent target continues after ${scenario} before a possible context read`,{timeout:30000},async t=>{
- const f=await fixture(t,scenario);assert.equal(f.done.memoryIds.length,2,failureSummary(f));
- const middle=f.calls.filter(call=>call.target.length===1&&call.target[0].offset===256&&call.target[0].length===256);assert.deepEqual(middle.map(call=>call.phase),['extract','review']);
+for(const scenario of ['unused-context-correction','unused-context-deletion'] as const)test(`HTTP Memory rejects already-disclosed catalog metadata after ${scenario} before a possible body read`,{timeout:30000},async t=>{
+ const f=await fixture(t,scenario);assert.equal(f.done.memoryIds.length,0,failureSummary(f));
+ assert.notEqual(f.done.status,'completed');assert.ok(f.done.batches.some((batch:{errorCode?:string})=>batch.errorCode==='context_evidence_restricted'));
+ // The custom fixture mutates inside its extraction callback. The real host
+ // final fence refuses that output before invoking a reviewer or publishing.
+ // Native first-request fencing is covered by memory-catalog-metadata-http.
+ const middle=f.calls.filter(call=>call.target.length===1&&call.target[0].offset===256&&call.target[0].length===256);assert.deepEqual(middle.map(call=>call.phase),['extract']);
  for(const call of middle){assert.ok(!call.seedIds.includes(f.otherId));assert.ok(!call.readRanges.some(range=>range.id===f.otherId));assert.ok(!call.contextReads.some(range=>range.id===f.otherId));}
- assert.ok(f.done.memoryIds.every((id:string)=>f.node.memories.get(id).status==='published'&&!f.node.memories.get(id).evidenceIds.includes(f.otherId)));
+ assert.ok(f.done.batches.filter((batch:{errorCode?:string})=>batch.errorCode==='context_evidence_restricted').every((batch:{attempts:number})=>batch.attempts===1),'metadata revocation is not a provider retry');
 });
 
 test('a persisted legacy job resumes its private draft after restart without granting broader context or extracting again',async t=>{
@@ -207,7 +212,7 @@ test('a persisted legacy job resumes its private draft after restart without gra
   return {answer:JSON.stringify({memories:[{title:'Generated legacy repair',statement:`The narrator reported repairing a blue bicycle [${member.id}]`,uncertainty:'The generated legacy source only.',admission:{layer:'observation',reason:'A generated concrete event',scope:'This source only',attribution:'observed'},evidenceIds:[member.id],evidence:[{id:member.id,quote:repair,offset:0}]}],coverage:[{key:member.key,state:'checked',candidateIndexes:[0]}],capacity:{saturated:false}}),citations:[{id:member.id,capturedAt:'2025-02-03T12:45:27Z',appName:'Generated',excerpt:repair}],trace:[],runId:'generated-legacy-extraction-'+extracts};
  },review:async(input:QueryInput,draft:QueryResult)=>reviewMemory(input,draft,async reviewed=>{
   reviews++;assert.equal(reviewed.evidenceReadRanges,undefined);
-  if(failReview)throw new ProviderFailure({category:'transient',code:'provider_timeout',retryAfterMs:0});
+  if(failReview)throw new ProviderFailure({category:'permanent',code:'provider_timeout',retryAfterMs:0});
   return {...draft,runId:'generated-legacy-review-'+reviews};
  })});
  let pipeline=new MemoryPipeline(options());

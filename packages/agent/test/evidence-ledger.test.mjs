@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {rememberEvidence,evidenceLayers} from '../dist/evidence-ledger.js';
 import {startBridge} from '../dist/bridge.js';
+import {parseAnswer} from '../dist/index.js';
 import {randomUUID} from 'node:crypto';
 test('evidence keeps delivered ranges per revision and layer without replacing original citation authority',()=>{
  const records=new Map(),original={id:'generated',ocrText:'Original',evidenceFingerprint:'v1',contentLayer:'L0_source_text',textRange:{start:0,end:8}};
@@ -19,6 +20,82 @@ test('bridge lineage includes successfully disclosed uncited originals and deriv
  const bridge=await startBridge(reader,{question:'Synthetic disclosure'},8);
  const call=async(tool,args)=>{const response=await catalogRequest(bridge,tool,args);assert.equal(response.status,200);return response.json();};
  try{await call('search_context',{query:'synthetic'});await call('memories',{id:'generated-memory'});assert.deepEqual(new Set(bridge.evidenceDependencies.ids),new Set([a.id,b.id,'generated-memory']));assert.equal(bridge.evidenceDependencies.complete,true);await call('devices',{});assert.equal(bridge.evidenceDependencies.complete,false);}finally{await bridge.close();}
+});
+test('source and index host receipts retain dialogue lineage without disclosing private receipts or granting citations',async()=>{
+ const id=randomUUID(),receipt={version:1,complete:true,ids:[id]};
+ for(const tool of ['sources','context_index'])for(const dependencies of [receipt,{version:1,complete:true,ids:[]},undefined,{version:1,complete:false,ids:[id]},{version:1,complete:true,ids:['not-an-evidence-id']},{...receipt,unexpected:true}]){
+  const body={items:[{name:'Generated source metadata',citationAuthority:false}],disclosureDependencies:dependencies};
+  const reader={search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[],devices:async()=>[],activity:async()=>({}),sources:async()=>body,catalog:async()=>body};
+  const bridge=await startBridge(reader,{question:'Generated source metadata continuation'});
+  try{
+   const response=await catalogRequest(bridge,tool,{});assert.equal(response.status,200);const disclosed=await response.json();
+   assert.equal('disclosureDependencies' in disclosed.data,false);assert.equal(bridge.records.size,0);
+   assert.equal(bridge.evidenceDependencies.complete,dependencies===receipt||dependencies?.ids.length===0);
+   if(dependencies===receipt)assert.deepEqual(bridge.evidenceDependencies.ids,[id]);
+  }finally{await bridge.close();}
+ }
+});
+test('source metadata pins remain private, survive dialogue continuation and do not replace description pins',async()=>{
+ const description={sourceId:'generated-source',version:1,fingerprint:'a'.repeat(64)},metadata={sourceId:'generated-source',version:1,fingerprint:'b'.repeat(64),kind:'metadata'};
+ const sourceContextRef='source-context:'+Buffer.from(description.sourceId).toString('base64url')+'@1#'+description.fingerprint,observed=[];
+ const reader={search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[],devices:async()=>[],activity:async()=>({}),sources:async()=>({items:[{name:'Generated source',sourceContextRef,statusObservedAt:'2026-10-14T00:00:00Z'}],disclosureDependencies:{version:1,complete:true,ids:[]},sourceContextDependencies:[metadata]})};
+ const bridge=await startBridge(reader,{question:'Generated source metadata',onSourceContextDependencies:pins=>observed.push(pins)});
+ try{
+  const response=await catalogRequest(bridge,'sources',{});assert.equal(response.status,200);const value=await response.json();
+  assert.equal(value.data.sourceContextDependencies,undefined);assert.equal(value.data.disclosureDependencies,undefined);assert.equal(value.data.items[0].statusObservedAt,'2026-10-14T00:00:00Z');
+  assert.deepEqual(bridge.sourceContextDependencies,[description,metadata]);assert.deepEqual(observed.at(-1),[description,metadata]);assert.equal(bridge.evidenceDependencies.complete,true);assert.equal(bridge.records.size,0);
+  const next=await startBridge(reader,{question:'Generated follow-up',conversation:{turns:[],omittedTurns:0,evidenceDependencies:bridge.evidenceDependencies,sourceContextDependencies:bridge.sourceContextDependencies}});
+  try{assert.deepEqual(next.sourceContextDependencies,[description,metadata]);assert.equal(next.evidenceDependencies.complete,true);}finally{await next.close();}
+ }finally{await bridge.close();}
+ const invalid=await startBridge({...reader,sources:async()=>({items:[],disclosureDependencies:{version:1,complete:true,ids:[]},sourceContextDependencies:[{...metadata,fingerprint:'invalid'}]})},{question:'Generated invalid receipt'});
+ try{assert.equal((await catalogRequest(invalid,'sources',{})).status,200);assert.equal(invalid.evidenceDependencies.complete,false);assert.deepEqual(invalid.sourceContextDependencies,[]);}finally{await invalid.close();}
+});
+test('measured activity receipts retain all contributors without granting citation authority or imposing a new ID quota',async()=>{
+ const ids=Array.from({length:1005},()=>randomUUID()),receipt={version:1,complete:true,ids};
+ for(const tool of ['activity','media_activity'])for(const dependencies of [receipt,undefined]){
+  const aggregate={observations:ids.length,totalDurationMs:1005,disclosureDependencies:dependencies},reader={search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[],devices:async()=>[],activity:async()=>aggregate,mediaActivity:async()=>aggregate};
+  const bridge=await startBridge(reader,{question:'Generated measured state'});
+  try{
+   const response=await catalogRequest(bridge,tool,{});assert.equal(response.status,200);const value=await response.json();
+   assert.equal(value.data.disclosureDependencies,undefined);assert.equal(value.data.observations,1005);assert.equal(bridge.evidenceDependencies.complete,Boolean(dependencies));assert.equal(bridge.records.size,0);
+   if(dependencies){assert.deepEqual(bridge.evidenceDependencies.ids,ids);assert.throws(()=>parseAnswer(JSON.stringify({answer:'Generated unread proof',citationIds:[ids[0]]}),bridge.records),/not retrieved/);}
+  }finally{await bridge.close();}
+ }
+});
+test('device directory snapshots keep hard device scope, drop body fields and remain historical across new heartbeat reports',async()=>{
+ let status='paused',reportedAt='2026-10-13T00:00:00Z';
+ const reader={search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[],activity:async()=>({}),devices:async()=>({items:['selected-device','unselected-device'].map(deviceId=>({deviceId,deviceName:'Generated device',platform:'android',status,lastSeenAt:reportedAt,lastCaptureAt:reportedAt,queueDepth:0,ocrText:'UNREAD_PERSONAL_BODY',filePath:'/private/generated'})),observedAt:'2026-10-14T00:00:00Z',disclosureDependencies:{version:1,complete:true,ids:[]}})};
+ const input={question:'Generated device observation',deviceId:'selected-device'},bridge=await startBridge(reader,input);
+ try{
+  const response=await catalogRequest(bridge,'devices',{});assert.equal(response.status,200);const value=await response.json();
+  assert.equal(value.data.length,1);assert.equal(value.data[0].deviceId,input.deviceId);assert.equal(value.data[0].healthReport.statusAsReported,'paused');assert.equal(value.data[0].healthReport.receivedAt,reportedAt);assert.equal(value.data[0].directoryObservedAt,'2026-10-14T00:00:00Z');assert.doesNotMatch(JSON.stringify(value),/UNREAD_PERSONAL_BODY|filePath|disclosureDependencies/);
+  assert.deepEqual(bridge.evidenceDependencies,{version:1,complete:true,ids:[]});assert.equal(bridge.records.size,0);
+  status='capturing';reportedAt='2026-10-14T00:00:01Z';
+  const next=await startBridge(reader,{...input,conversation:{turns:[{question:'Generated prior',answer:'An earlier device report said paused.',createdAt:'2026-10-14T00:00:00Z',scope:{}}],omittedTurns:0,evidenceDependencies:bridge.evidenceDependencies}});
+  try{const current=await catalogRequest(next,'devices',{});assert.equal(current.status,200);const data=(await current.json()).data;assert.equal(data[0].healthReport.statusAsReported,'capturing');assert.equal(data[0].healthReport.receivedAt,reportedAt);assert.equal(next.evidenceDependencies.complete,true);assert.equal(next.records.size,0);}finally{await next.close();}
+ }finally{await bridge.close();}
+ const missing=await startBridge({...reader,devices:async()=>({items:[],disclosureDependencies:{version:1,complete:true,ids:[]}})},input);
+ try{assert.equal((await catalogRequest(missing,'devices',{})).status,200);assert.equal(missing.evidenceDependencies.complete,false);}finally{await missing.close();}
+});
+test('changes metadata preserves exact filtered snapshot lineage through continuation without granting unread citations',async()=>{
+ const original={id:randomUUID(),capturedAt:'2026-10-01T00:00:00Z',deviceId:'selected-device',appName:'Generated app',ocrText:'UNREAD_ORIGINAL_BODY'},outside={...original,id:randomUUID(),deviceId:'unselected-device'},unrequested={...original,id:randomUUID(),appName:'UNREQUESTED_APP'};
+ const reader={search:async()=>[],timeline:async()=>({items:[],nextCursor:null}),evidence:async()=>[original,outside,unrequested],activity:async()=>({}),devices:async()=>[]};
+ for(const selected of [[],[original.id,outside.id]]){
+  const input={question:'Generated snapshot coverage',deviceId:original.deviceId,incrementalEvidenceIds:selected},bridge=await startBridge(reader,input);
+  try{
+   const response=await catalogRequest(bridge,'changes',{view:'overview'});assert.equal(response.status,200);const value=await response.json(),ids=selected.length?[original.id]:[];
+   assert.deepEqual(value.data.map(row=>row.id),ids);assert.doesNotMatch(JSON.stringify(value),/UNREAD_ORIGINAL_BODY|UNREQUESTED_APP|unselected-device/);
+   assert.deepEqual(bridge.evidenceDependencies,{version:1,complete:true,ids});assert.equal(bridge.records.size,0);
+   assert.throws(()=>parseAnswer(JSON.stringify({answer:'Generated unread claim',citationIds:[original.id]}),bridge.records),/not retrieved/);
+   const result=parseAnswer(JSON.stringify({answer:'Generated metadata observation.',citationIds:[]}),bridge.records);
+   const next=await startBridge(reader,{...input,conversation:{turns:[{question:input.question,answer:result.answer,createdAt:'2026-10-14T00:00:00Z',scope:{deviceId:input.deviceId}}],omittedTurns:0,evidenceDependencies:bridge.evidenceDependencies}});
+   try{
+    assert.equal(next.evidenceDependencies.complete,true);assert.equal(next.records.size,0);
+    assert.equal((await catalogRequest(next,'evidence',{ids:[original.id]})).status,400,'historical dependency IDs never grant an original read');
+    assert.equal((await catalogRequest(next,'changes',{view:'overview'})).status,200);assert.deepEqual(next.evidenceDependencies,{version:1,complete:true,ids});assert.equal(next.records.size,0);
+   }finally{await next.close();}
+  }finally{await bridge.close();}
+ }
 });
 test('file evidence preserves owner-confirmed speaker metadata as untrusted data and revisions it independently of speech',async()=>{
  const attribution={name:'Generated Alice',confirmedBy:'owner',confirmationId:randomUUID(),confirmedAt:'2026-09-26T00:00:00.000Z'};

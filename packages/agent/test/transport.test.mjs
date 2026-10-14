@@ -57,7 +57,7 @@ test('body limits cover error responses and cumulative turns while forbidding re
   await assert.rejects(second.text(),/byte budget/);
 });
 
-test('authenticated bridge reads keep their existing independent evidence budget', async () => {
+test('authenticated bridge reads do not consume the provider response stream boundary', async () => {
   const transport=boundedModelFetch(async()=>new Response('x'.repeat(200)),bridge,128);
   assert.equal((await (await transport(bridge+'/timeline')).text()).length,200);
   await assert.rejects((await transport(bridge+'.attacker.invalid/timeline')).text(),/byte budget/);

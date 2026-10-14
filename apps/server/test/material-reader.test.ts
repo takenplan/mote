@@ -71,7 +71,7 @@ test('host material disclosure receipts retain scoped answers during unrelated p
   assert.equal(conversations.get(saved.conversationId).turns[0].evidenceDeleted,true);
 });
 
-test('oversized material metadata lineage retains a bounded conservative receipt',async t=>{
+test('large material metadata lineage retains every private dependency',async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-material-lineage-bound-')),store=new Store(directory),materials=new MaterialStore(store);
   const diagnostics=new ServerDiagnostics({directory:join(directory,'logs'),enabled:false});await diagnostics.init();
   t.after(async()=>{await diagnostics.close();store.close();rmSync(directory,{recursive:true,force:true});});
@@ -81,5 +81,7 @@ test('oversized material metadata lineage retains a bounded conservative receipt
     members:[{id,kind:'capture',ref:`capture:${id}`}],coverage:{state:'complete'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}});
   const agent=new EvidenceReader(store,new SourceStore(store),undefined,undefined,undefined,materials).agent({diagnostics});
   const page=await agent.materialCatalog!({});assert.equal(page.items[0].ref,material.ref);
-  assert.equal(page.disclosureDependencies!.complete,false);assert.equal(page.disclosureDependencies!.ids.length,1000);
+  assert.equal(page.disclosureDependencies!.complete,true);
+  assert.deepEqual(new Set(page.disclosureDependencies!.ids),new Set([...materials.evidenceIds(material.ref),id]));
+  assert.equal(page.disclosureDependencies!.ids.length,1002);
 });

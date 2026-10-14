@@ -1,6 +1,6 @@
 import {z} from 'zod';
 import {createHash} from 'node:crypto';
-import {sourceContextDeclarationSchema,sourceContextSnapshotSchema,sourceContextUpdateSchema,type AttributionContext,type SourceContextDeclaration,type SourceContextSnapshot} from '@mote/shared';
+import {sourceContextDeclarationSchema,sourceDescriptionDeclarationSchema,sourceContextSnapshotSchema,sourceContextUpdateSchema,type AttributionContext,type SourceContextDeclaration,type SourceContextSnapshot} from '@mote/shared';
 import {StoreError,type Store} from './store.js';
 import {encodeMemoryPrivate,decodeMemoryPrivate} from './memory-private-storage.js';
 
@@ -36,12 +36,18 @@ export class SourceContextStore {
   }
   identity(sourceId:string):SourceContextDeclaration|undefined{
     const source=this.source(sourceId);if(!source.sourceContext)return undefined;
-    const pin=sourceContextDeclarationSchema.parse({sourceId,...source.sourceContext as object});
+    const pin=sourceDescriptionDeclarationSchema.parse({sourceId,...source.sourceContext as object});
     if(!this.getAtVersion(pin.sourceId,pin.version,pin.fingerprint))throw new StoreError('Source context declaration is missing or changed',409);
     return pin;
   }
   current(sourceId:string):SourceContextSnapshot{
     const pin=this.identity(sourceId);return pin?this.getAtVersion(pin.sourceId,pin.version,pin.fingerprint)!:{sourceId,version:0,description:''};
+  }
+  /** Stable owner configuration disclosed by the source directory. Runtime
+   * progress is point-in-time metadata and cannot revoke an ordinary query. */
+  metadataIdentity(sourceId:string):SourceContextDeclaration{
+    const source=this.source(sourceId),value={sourceId,name:source.name,kind:source.kind,deviceId:source.deviceId,retention:source.retention,enabled:source.enabled};
+    return {sourceId,version:1,kind:'metadata',fingerprint:createHash('sha256').update(JSON.stringify(['source-directory-metadata@1',value])).digest('hex')};
   }
   getAtVersion(sourceId:string,version:number,expectedFingerprint?:string):SourceContextSnapshot|undefined{
     sourceContextDeclarationSchema.shape.sourceId.parse(sourceId);z.number().int().positive().parse(version);
@@ -53,7 +59,7 @@ export class SourceContextStore {
     return value;
   }
   open(pins:SourceContextDeclaration[]):NonNullable<AttributionContext['sourceContextStatements']>{
-    return pins.flatMap(pin=>{const value=this.getAtVersion(pin.sourceId,pin.version,pin.fingerprint);return value?[{sourceId:value.sourceId,version:value.version,description:value.description}]:[];});
+    return pins.flatMap(pin=>{if(pin.kind==='metadata')return [];const value=this.getAtVersion(pin.sourceId,pin.version,pin.fingerprint);return value?[{sourceId:value.sourceId,version:value.version,description:value.description}]:[];});
   }
   /** Caller owns the surrounding transaction and invalidation hook. Repeating
    * an acknowledged value is harmless; a lost response can retry one version. */

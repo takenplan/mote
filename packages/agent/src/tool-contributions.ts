@@ -11,7 +11,8 @@ export interface ContextToolContribution {
   version:string;
   description:string;
   fields:Record<string,Record<string,unknown>>;
-  maxCharacters:number;
+  /** Optional caller metadata; not a delivery quota. */
+  maxCharacters?:number;
   parse(args:Record<string,unknown>):Record<string,unknown>;
   authorize(scope:Readonly<ContextRange>,args:Readonly<Record<string,unknown>>):boolean|Promise<boolean>;
   read(args:Readonly<Record<string,unknown>>,context:{scope:Readonly<ContextRange>;signal?:AbortSignal}):unknown|Promise<unknown>;
@@ -20,7 +21,6 @@ export class ContextToolRegistry {
   private entries=new Map<string,ContextToolContribution>();
   register(tool:ContextToolContribution){
     if(!/^[a-z][a-z0-9_]{0,63}$/.test(tool.name)||tool.name.startsWith('delegation_')||!tool.version||this.entries.has(tool.name)||CONTEXT_TOOLS.some(([name])=>name===tool.name)||['skill','_ready','capability_discover','capability_execute'].includes(tool.name))throw Error('Invalid or duplicate context tool');
-    if(!Number.isSafeInteger(tool.maxCharacters)||tool.maxCharacters<1||tool.maxCharacters>16000)throw Error('Invalid context tool budget');
     const entry=Object.freeze({...tool,fields:structuredClone(tool.fields)});this.entries.set(tool.name,entry);
     return ()=>{if(this.entries.get(tool.name)===entry)this.entries.delete(tool.name);};
   }
@@ -48,7 +48,7 @@ export function registeredContextToolDefinitions(input:QueryInput){
 export const NATIVE_CONTEXT_TOOLS=new Set(['material_catalog','material_read','attribution_context','search_context','timeline','evidence','context_evidence','memories','read_image','progress_update']);
 export const CAPABILITY_TOOLS:[string,string,Record<string,Record<string,unknown>>][]=[
   ['capability_discover','List registered read-only special capabilities as brief metadata. Pass an exact listed name to obtain its pinned version and argument schema before capability_execute. This host catalog cannot expand scope or authorize citations.',{name:{type:'string',description:'Exact registered capability name; omit for the brief list'}}],
-  ['capability_execute','Execute one previously discovered registered read-only capability. Copy its exact name/version and encode arguments as a JSON object string following the discovered schema. The host validates schema, current authority, scope and the shared budgets. No URL, RPC, shell, code or write capability is available.',{name:{type:'string',required:true},version:{type:'string',required:true},argumentsJson:{type:'string',required:true,description:'JSON object matching the discovered argument schema'}}],
+  ['capability_execute','Execute one previously discovered registered read-only capability. Copy its exact name/version and encode arguments as a JSON object string following the discovered schema. The host validates schema, current authority, scope and transport boundaries. No URL, RPC, shell, code or write capability is available.',{name:{type:'string',required:true},version:{type:'string',required:true},argumentsJson:{type:'string',required:true,description:'JSON object matching the discovered argument schema'}}],
 ];
 export function contextToolDefinitions(input:QueryInput){
   const registered=registeredContextToolDefinitions(input);

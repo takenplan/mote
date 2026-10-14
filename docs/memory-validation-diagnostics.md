@@ -11,8 +11,8 @@ log level must include warnings). Logs obey existing rotation and retention limi
 Each batch also retains its last 20 `validationFailures` in the database and the
 `GET /api/memory-jobs/:id` response. Existing historical entries remain readable;
 new optional fields do not require a database migration. The job/batch terminal
-error stays `invalid_model_output` for compatibility; inspect the failure history
-for the precise validation code.
+error can report the broader `invalid_model_output`; inspect the failure history
+and retained prior-validation receipt for the precise validation code.
 
 Optional `fieldPath`, `problem` and `maxCandidates` identify schema-owned locations
 and, for legacy work only, its candidate capacity without logging rejected values
@@ -20,9 +20,12 @@ or arbitrary keys. New `range-evaluation@1` work has no candidate-count quota.
 Explicit incomplete assessment retains its range/reason with
 `memory_evaluation_incomplete`; it is not inferred from array length or repaired
 by count-driven splitting. See the [range-evaluation ADR](adr-memory-range-evaluation.md).
-Host context budget failures use `host_context_budget`, with numeric section
-measurements in the Agent trace. They are separate from model-output repair and
-provider failure. See [context and canonical evidence ADR](adr-memory-context-and-canonical-evidence.md).
+Host character estimates no longer reject requests or emit new
+`host_context_budget` failures. Historical diagnostics retain their dated meaning.
+Actual provider `processing_limit` or output-capacity failures keep the complete
+target unfinished; there is no automatic halving. Inspect structured failure and
+validation receipts rather than inferring a failure from observed token/character
+counts. See the [simplification decision](adr-ask-evidence-quality-and-simple-context.md).
 
 Memory requests use batch-local `member_N` coverage keys on the model wire. The
 Agent decodes only exact supplied aliases before host validation; persistent
@@ -106,8 +109,8 @@ No live-model concurrency/load test was performed during this investigation.
 Host output validation now runs before the provider session closes. The host supplies
 only a fixed error code, trusted repair instructions and numeric candidate/span
 positions. HTTP Harness reuses the same session ID and Codex App Server starts a new
-turn on the same thread. Previously retrieved evidence, tool-call budget, scope and
-run deadline remain in force. At most three corrections are allowed across output JSON,
+turn on the same thread. Previously delivered evidence, scope and run deadline
+remain in force. Ordinary queries have no default total tool-call quota. At most three corrections are allowed across output JSON,
 citations and host validation combined (four candidate outputs including the initial
 response). Each correction receives the latest concrete validation error; a valid
 response stops immediately. Exhaustion terminates the run;

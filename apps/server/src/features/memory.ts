@@ -13,6 +13,8 @@ export function register(app:FastifyInstance,{ownerQuestions,materials,automatic
    for(const id of recoverableMemoryJobs(store,lifecycle))void scope.run(()=>memoryPipeline.run(id));
  });
  if(automaticMemoryScheduling)scope?.every(60000,()=>lifecycle.tick());scope?.defer(()=>memoryDelegation.close());scope?.defer(()=>memoryPipeline.close());scope?.defer(()=>lifecycle.close());
-app.addHook('onReady',async()=>{for(const id of recoverableMemoryJobs(store,lifecycle))void scope?.run(()=>memoryPipeline.run(id));});
+ // Recovery resumes persisted activation, including manual work. Unstarted
+ // create-only jobs stay dormant regardless of model readiness at startup.
+ app.addHook('onReady',async()=>{for(const id of recoverableMemoryJobs(store,lifecycle))void scope?.run(()=>memoryPipeline.run(id));});
 registerMemoryRoutes(app,{memoryIntegrationSettings,memoryRecipeSettings,store,files,evidenceReader,memories,memoryPipeline,lifecycle,modelSettings,query:input=>queryAgent(input,'query','memories'),reviewExtraction});
 }

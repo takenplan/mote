@@ -151,16 +151,13 @@ test('checked member links only its independently reviewed memories while other 
  assert.deepEqual(done.batches[0].coverage!.find(member=>member.state==='checked')!.memoryIds,done.memoryIds);assert.equal(done.batches[0].coverage!.filter(member=>member.state==='no_candidates').length,3);
 });
 
-for(const mode of ['missing','saturated'] as const)test(`${mode} coverage subdivides only the incomplete package and never checkpoints its parent`,async t=>{
- const f=await fixture(t);f.setGenerate(input=>members(input).length===4?output(input,'large',false,mode==='missing'?members(input).slice(0,2):members(input),mode==='saturated'):output(input,'small'));
- const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'completed');assert.equal(done.batches.length,3);
- const parent=done.batches.find(batch=>batch.supersededBy);assert.equal(parent?.supersededBy?.length,2);
- const leaves=done.batches.filter(batch=>!batch.supersededBy);assert.equal(leaves.flatMap(batch=>batch.coverage!).length,4);assert.ok(leaves.every(batch=>batch.coverage!.every(member=>member.state==='no_candidates')));
- assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,4);assert.equal(f.seen.length,mode==='missing'?4:3);assert.equal(f.reviews.length,mode==='missing'?2:3);
+for(const mode of ['missing','saturated'] as const)test(`${mode} coverage remains unfinished without creating recursive packages`,async t=>{
+ const f=await fixture(t);f.setGenerate(input=>output(input,'large',false,mode==='missing'?members(input).slice(0,2):members(input),mode==='saturated'));
+ const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'failed');assert.equal(done.batches.length,1);assert.ok(!done.batches[0].supersededBy);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);assert.equal(f.memories.list().length,0);
 });
 
 test('review timeout preserves the private package draft and retries only fresh independent review',async t=>{
- const f=await fixture(t);f.setReview(async()=>{throw new ProviderFailure({category:'transient',code:'provider_timeout',retryAfterMs:0});});const job=f.create(),failed=await f.pipeline.run(job.id);
+ const f=await fixture(t);f.setReview(async()=>{throw new ProviderFailure({category:'permanent',code:'provider_timeout',retryAfterMs:0});});const job=f.create(),failed=await f.pipeline.run(job.id);
  assert.equal(failed.status,'failed');assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_extraction_drafts').get()!.n,1);
  f.setReview(async(_input,draft)=>({...draft,runId:'new-review'}));const done=await f.pipeline.retry(job.id);assert.equal(done.status,'completed');assert.equal(f.seen.length,1);assert.equal(f.reviews.length,2);
 });
@@ -216,18 +213,9 @@ test('compatible reviewers reuse a complete draft when transport target ordering
  assert.equal(f.seen.length,1,'transport order does not change an otherwise exact generation contract');assert.equal(f.reviews.length,2,'each reviewer remains independent');
 });
 
-test('host packing failure subdivides exact ranges without publishing or checkpointing its parent; children still require independent review',async t=>{
- const {AgentContextBudgetError}=await import('@mote/agent'),f=await fixture(t,4);
- f.setGenerate(input=>{if(members(input).length>1)throw new AgentContextBudgetError('task',81000,80000,{memoryWork:81000});return output(input,'generated-small');});
- const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'completed');assert.equal(f.reviews.length,4);
- assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,4);
- const parents=done.batches.filter(b=>b.supersededBy?.length);assert.equal(parents.length,3);assert.ok(parents.every(b=>!b.reviewReceipt&&b.memoryIds.length===0&&b.coverage?.every(m=>m.reason==='host_context_budget')));
- assert.ok(done.batches.every(b=>b.attempts===1));assert.equal(f.memories.list().length,0);
-});
-
-test('unsplittable host budget failure keeps its distinct code and cannot trigger provider retries or save results',async t=>{
- const {AgentContextBudgetError}=await import('@mote/agent'),f=await fixture(t,1);f.setGenerate(()=>{throw new AgentContextBudgetError('task',81000,80000);});
- const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'failed');assert.equal(done.batches[0].errorCode,'host_context_budget');assert.equal(done.batches[0].attempts,1);assert.equal(f.reviews.length,0);assert.equal(f.memories.list().length,0);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
+for(const count of [1,4])test(`actual provider context rejection for ${count} target members stays terminal without splitting`,async t=>{
+ const f=await fixture(t,count);f.setGenerate(()=>{throw new ProviderFailure({category:'permanent',code:'processing_limit'});});
+ const done=await f.pipeline.run(f.create().id);assert.equal(done.status,'failed');assert.equal(done.batches.length,1);assert.equal(done.batches[0].errorCode,'processing_limit');assert.equal(done.batches[0].attempts,1);assert.equal(f.reviews.length,0);assert.equal(f.memories.list().length,0);assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);
 });
 
 test('schema and coverage repair identify exact host fields and actual capacity without leaking rejected values',async t=>{

@@ -30,7 +30,7 @@ const summarize=(value:Bucket)=>({durationMs:value.durationMs,observations:value
  * Keep only one union end per device/bucket and bounded evidence, never all sample metadata.
  * Only explicit, bounded playing intervals are measured; point observations imply no elapsed playback.
  */
-export function mediaActivity(records:Iterable<CaptureRecord>,range:MediaActivityRange={}) {
+export function mediaActivity(records:Iterable<CaptureRecord>,range:MediaActivityRange={},onContributor?:(id:string)=>void) {
   const all=bucket(),apps=new Map<string,Bucket&{appId:string;appName:string}>(),devices=new Map<string,Bucket&{deviceId:string;deviceName:string}>();
   const visibility={foreground:duration(),background:duration(),unknown:duration()};
   const screenLock={locked:duration(),unlocked:duration(),unknown:duration()};
@@ -50,6 +50,9 @@ export function mediaActivity(records:Iterable<CaptureRecord>,range:MediaActivit
     // Defensive even for old/restored data: screenshots and unobserved gaps cannot add duration.
     const measured=media.status==='available'&&record.durationMs>0&&record.durationMs<=60000&&media.sessions.length===1&&sessions.length===1&&sessions[0].playbackState==='playing'&&sessions[0].appId===record.appId&&end>start;
     if((t<lower||t>=upper)&&!measured)continue;
+    // The host observes every actual contributor independently of the bounded
+    // public navigation IDs. This receipt grants no original read or citation.
+    onContributor?.(record.id);
     const interval:Interval|undefined=measured?{deviceId:record.deviceId,start,end}:undefined;
     const device=devices.get(record.deviceId)??{...bucket(),deviceId:record.deviceId,deviceName:record.deviceName};
     for(const value of [all,device])observe(value,record.id,interval);

@@ -33,6 +33,19 @@ async function upload(node:Node,name:string,mimeType='audio/wav'){
 }
 function fileStep(node:Node,id:string){return node.executor.list({operationId:'file:'+id,kind:'files.pipeline',limit:100}).items[0]!;}
 
+test('app.close stops publication polling before executor disposal and retains pending reconciliation for restart',async t=>{
+ const f=await fixture(t),entered=deferred(),finish=deferred();t.mock.timers.enable({apis:['setInterval']});
+ const node=await f.start({configured:false,query:async()=>{throw Error('No model in generated shutdown fixture');},close:async()=>{entered.resolve();await finish.promise;}});
+ const pending={namespace:{ownerId:'generated',instanceId:'generated-unavailable',bindingRevision:1},memoryId:'generated-pending'};
+ f.store.db.prepare("INSERT INTO memory_provider_erases VALUES(?,?,'submitted')").run('generated-pending',JSON.stringify(pending));
+ const close=node.app.close();await entered.promise;assert.throws(()=>node.executor.enqueue('late-reconcile','memory.provider-reconcile',{}),{statusCode:503});
+ assert.doesNotThrow(()=>t.mock.timers.tick(6000),'publication timer must not enqueue after the executor has closed');finish.resolve();await close;
+ assert.equal(f.store.db.prepare("SELECT state FROM memory_provider_erases WHERE id='generated-pending'").get()!.state,'submitted');
+ const next=await f.start({configured:false,query:async()=>{throw Error('No model in generated restart fixture');},close:async()=>{}});next.featureHost.stop();
+ await next.executor.tick();assert.equal(f.store.db.prepare("SELECT state FROM memory_provider_erases WHERE id='generated-pending'").get()!.state,'submitted','unknown provider outcome remains durable and is not marked erased');
+ assert.ok(next.executor.list({kind:'memory.provider-reconcile',limit:100}).items.length>0,'fresh process schedules retained reconciliation');
+});
+
 test('app.close preserves 180 model waits, queues, retry deadlines and explicit cancellation; restart resumes eligible files',async t=>{
  const f=await fixture(t);let ready=false,calls=0;
  const start=async()=>{const node=await f.start();node.featureServices.mediaAssets.ready=()=>ready;

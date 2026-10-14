@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {buildContextEnvelope,taskTools} from '../dist/task-context.js';
+import {ARCHIVE_RECENCY_INSTRUCTIONS,buildContextEnvelope,taskTools} from '../dist/task-context.js';
 import {systemInstructions} from '../dist/instructions.js';
 
 test('proposal lifecycle has one instruction contract while the envelope supplies only host state',()=>{
@@ -30,11 +30,46 @@ test('opening memory hints are separate from cited evidence and include verifica
  assert.equal(envelope.untrustedEvidence,undefined);
  assert.equal(envelope.hostAttributionContext,undefined);
 });
+test('all archive roles receive recency responsibility while selected scope and Memory publication dates stay unchanged',()=>{
+ const lead={id:'generated-memory',title:'Generated older account',statement:'Generated earlier state',uncertainty:'A dated observation',status:'published',tier:'episode',createdAt:'2026-09-18T00:00:00Z',validFrom:'2026-08-01T00:00:00Z'};
+ const scope={after:'2026-06-01T00:00:00Z',before:'2026-09-18T00:00:00Z',contextTime:'2026-09-18T00:00:00Z',timeZone:'UTC'};
+ let responsibility;
+ for(const role of ['answer','research','writer','review']){
+  const input={question:'Generated '+role+' task',...scope,openingMemories:[lead],traceContext:{phase:'quality.'+role}};
+  const envelope=buildContextEnvelope(input,[]);
+  assert.ok(systemInstructions(input).includes(ARCHIVE_RECENCY_INSTRUCTIONS));
+  assert.ok(envelope.retrievalInstruction.includes(ARCHIVE_RECENCY_INSTRUCTIONS));
+  assert.equal(envelope.retrievalInstruction.split(ARCHIVE_RECENCY_INSTRUCTIONS).length,2);
+  responsibility??=envelope.retrievalInstruction;assert.equal(envelope.retrievalInstruction,responsibility,'no role-specific or question-keyword dispatch changes retrieval responsibility');
+  assert.deepEqual(envelope.selectedTimeRange,{after:scope.after,before:scope.before});
+  assert.equal(envelope.currentTime,scope.contextTime);assert.deepEqual(envelope.untrustedMemoryLeads,[lead]);
+  assert.equal(envelope.untrustedEvidence,undefined,'a recency instruction does not synthesize original evidence');
+ }
+ for(const input of [{question:'Generated extraction',evidenceIds:['one']},{question:'Generated calendar',skill:'calendar-extraction'},{question:'Generated compaction',skill:'working-memory'},{question:'Generated host-only',hostRetrieval:'none'}]){
+  assert.equal(buildContextEnvelope(input,[]).retrievalInstruction,undefined);
+ }
+});
+test('archive roles receive progress precision checks while generated plans and outcomes remain unmodified evidence',()=>{
+ const originals=[
+  {id:'generated-plan',ocrText:'I plan to label the tool drawers on Saturday. The bolts are sorted; drawer labeling has not been reported.'},
+  {id:'generated-advance',ocrText:'The paper glider passed its first balance check. The launch test and durability trial are still pending.'},
+  {id:'generated-start',ocrText:'I set up the practice board and began the juggling exercise. Recording the next session is still a plan.'},
+ ].map(original=>({...original,capturedAt:'2017-08-19T06:30:00Z',appName:'Generated',sourceType:'note'}));
+ const before=structuredClone(originals);
+ for(const phase of ['answer','research','writer','review']){
+  const input={question:'Generated state-change review',traceContext:{phase:'quality.'+phase}},envelope=buildContextEnvelope(input,originals);
+  assert.ok(envelope.retrievalInstruction.includes(ARCHIVE_RECENCY_INSTRUCTIONS));
+  assert.match(envelope.retrievalInstruction,/intention or plan, explicitly started or ongoing action, and supported completion or outcome/);
+  assert.match(envelope.retrievalInstruction,/unknown final outcome does not erase that progress/);
+  assert.deepEqual(envelope.untrustedEvidence.map(({id,ocrText})=>({id,ocrText})),originals.map(({id,ocrText})=>({id,ocrText})),'the host passes originals rather than rewriting plans, choosing outcomes or inserting an expected answer');
+ }
+ assert.deepEqual(originals,before);
+});
 test('host context lineage is retained for fences without being disclosed to the model or granting citation reads',async t=>{
  const id='6f28159f-242b-5442-9a0c-a17958985a52',deps={version:1,complete:true,ids:[id]},lead={id:'generated-memory',title:'Generated',statement:'Generated decision',uncertainty:'Fixture',status:'published',tier:'episode',createdAt:'2026-09-18T00:00:00Z'};
- const input={question:'Generated',contextEvidenceDependencies:deps,openingMemories:[lead],conversation:{turns:[{question:'Generated earlier',answer:'Generated answer',createdAt:lead.createdAt,scope:{}}],omittedTurns:0,evidenceDependencies:deps}};
- const envelope=buildContextEnvelope(input,[]);assert.equal(envelope.conversation.evidenceDependencies,undefined);assert.equal(JSON.stringify(envelope).includes(id),false);
- const bridge=await startBridge(reader,input,6);t.after(()=>bridge.close());assert.deepEqual(bridge.evidenceDependencies,deps);assert.equal(bridge.records.has(id),false,'lineage cannot confer citation authority');
+ const pin={sourceId:'generated-source',version:1,fingerprint:'a'.repeat(64),kind:'metadata'},input={question:'Generated',contextEvidenceDependencies:deps,openingMemories:[lead],conversation:{turns:[{question:'Generated earlier',answer:'Generated answer',createdAt:lead.createdAt,scope:{}}],omittedTurns:0,evidenceDependencies:deps,sourceContextDependencies:[pin]}};
+ const envelope=buildContextEnvelope(input,[]);assert.equal(envelope.conversation.evidenceDependencies,undefined);assert.equal(envelope.conversation.sourceContextDependencies,undefined);assert.equal(JSON.stringify(envelope).includes(id),false);assert.equal(JSON.stringify(envelope).includes(pin.fingerprint),false);
+ const bridge=await startBridge(reader,input,6);t.after(()=>bridge.close());assert.deepEqual(bridge.evidenceDependencies,deps);assert.deepEqual(bridge.sourceContextDependencies,[pin]);assert.equal(bridge.records.has(id),false,'lineage cannot confer citation authority');
  const missing=await startBridge(reader,{question:'Generated',openingMemories:[lead],contextEvidenceDependencies:{version:1,complete:true,ids:[]}},6);t.after(()=>missing.close());assert.equal(missing.evidenceDependencies.complete,false,'nonempty derived lead cannot claim empty complete lineage');
 });
 test('scope and validity on an opening lead do not grant citations to its inline original locator',async t=>{
@@ -56,7 +91,7 @@ test('shared context separates long task input and retains incremental semantics
  const archive=buildContextEnvelope({question:'Browse generated'},[]);
  assert.match(archive.disclosurePolicy,/material_catalog.*material_read.*evidence before citing/);
  assert.match(archive.disclosurePolicy,/source tags.*untrusted/);
- assert.throws(()=>buildContextEnvelope({...input,taskContext:{turns:[{turnId:'t1',answer:'x'.repeat(80000)}]}},[]));
+ assert.equal(buildContextEnvelope({...input,taskContext:{turns:[{turnId:'t1',answer:'x'.repeat(80000)}]}},[]).untrustedTaskContext.turns[0].answer.length,80000);
 });
 test('search localizes late match and separate reads retain both citation spans',async t=>{
  const {bridge,call}=await fixture(t);
@@ -85,13 +120,13 @@ test('revision changes retire prior spans and repeated spans do not duplicate ci
  rememberEvidence(records,{...first,ocrText:'new',evidenceFingerprint:'v2',textRange:{start:100,end:103}});
  assert.deepEqual(records.get(record.id).deliveredRanges,[{start:100,end:103,text:'new'}]);
 });
-test('host context accounts for schema and system input before admitting a task',async()=>{
+test('host context observes schema and system size without approximating provider capacity',async()=>{
  const {assembleContext}=await import('../dist/task-context.js');
  const {metrics}=assembleContext({question:'generated'},[],'system',[{name:'evidence'}],4096);
- assert.equal(metrics.system,6);assert.equal(metrics.outputTokenReserve,4096);assert.equal(metrics.unit,'utf16_characters');
- assert.throws(()=>assembleContext({question:'generated'},[],'x'.repeat(180000),[],4096),/input budget/);
+ assert.equal(metrics.system,6);assert.equal(metrics.outputTokenReserve,4096);assert.equal(metrics.unit,'utf16_characters');assert.equal(metrics.evidence,2,'absent seed fields are not counted as delivered wire fields');
+ assert.equal(assembleContext({question:'generated'},[],'x'.repeat(180000),[],4096).metrics.system,180000);
  const limited=JSON.parse(assembleContext({question:'generated'},[],'system',[],4096,7).prompt);
- assert.equal(limited.contextBudget.maxToolCalls,7);
+ assert.equal(limited.maxToolCalls,7);
  assert.equal(buildContextEnvelope({question:'Extract',evidenceIds:['one']},[]).retrievalInstruction,undefined,'Bounded extraction is not given archive convergence instructions');
 });
 
@@ -103,7 +138,8 @@ test('bounded evidence does not silently change an ordinary answer into memory e
 test('bounded extraction supplies the unchanged procedure, draft and originals without archive discovery instructions',()=>{
  const input={question:'Exact host admission contract',skill:'memory-extraction',evidenceIds:[record.id],evidenceRanges:[{id:record.id,offset:0,length:record.ocrText.length}],taskContext:{untrustedMemoryDraft:{memories:[{statement:'Untrusted draft'}]}}};
  const envelope=buildContextEnvelope(input,[record]);
- assert.equal(envelope.request,input.question);assert.deepEqual(envelope.untrustedEvidence,[record]);assert.deepEqual(envelope.untrustedTaskContext,input.taskContext);
+ const {commonContextRef,...body}=envelope.untrustedEvidence[0];
+ assert.equal(envelope.request,input.question);assert.deepEqual(JSON.parse(JSON.stringify({...envelope.evidenceContexts[commonContextRef],...body})),record);assert.deepEqual(envelope.untrustedTaskContext,input.taskContext);
  assert.match(envelope.procedure,/Preserve the subject, speaker, tense, uncertainty/);
  assert.match(envelope.procedureInstruction,/no skill tool call is required/);
  assert.match(envelope.disclosurePolicy,/Archive discovery tools are unavailable/);
@@ -116,7 +152,7 @@ test('host derived-context dependencies are authorization metadata and never new
 });
 
 
-test('large Memory catalogs and review drafts use lossless shared declaration references within the unchanged budget',async()=>{
+test('large Memory catalogs and review drafts share exact declaration and source metadata without a host quota',async()=>{
  const {assembleContext}=await import('../dist/task-context.js');
  const context={version:1,ownerRelation:'unknown',basis:'default',sourceContextStatements:[{description:'Generated source declaration. '.repeat(80),version:1}]};
  const members=Array.from({length:24},(_,i)=>({key:String(i).padStart(64,'a'),id:'generated-'+i,offset:i*100,length:100,fingerprint:'f'.repeat(64),contextTime:'2026-10-01T00:00:00Z',attributionContext:context,state:'pending',memoryIds:[]}));
@@ -125,7 +161,7 @@ test('large Memory catalogs and review drafts use lossless shared declaration re
  assert.ok(JSON.stringify(input.taskContext).length>80000);
  const {prompt,metrics}=assembleContext(input,[],'Generated system',[],4096),wire=JSON.parse(prompt).untrustedTaskContext.memoryWork;
  assert.ok(metrics.task<80000);assert.equal(wire.members.length,24);assert.equal(wire.authorizedMembers.length,24);
- for(const [i,m] of wire.members.entries()){assert.equal(m.key,'member_'+i);assert.equal(m.offset,members[i].offset);assert.equal(m.contextTime,members[i].contextTime);assert.deepEqual(wire.attributionContexts[m.attributionContextRef],context);assert.equal(wire.authorizedMembers[i].memberRef,m.key);}
+ for(const [i,m] of wire.members.entries()){const shared=wire.commonContexts[m.commonContextRef];assert.equal(m.key,'member_'+i);assert.equal(m.offset,members[i].offset);assert.equal(shared.contextTime,members[i].contextTime);assert.deepEqual(wire.attributionContexts[shared.attributionContextRef],context);assert.equal(wire.authorizedMembers[i].memberRef,m.key);assert.equal(m.fingerprint,undefined);}
  assert.equal(input.taskContext.memoryWork.members[0].attributionContext,context,'wire compaction cannot mutate host authority or cache inputs');
  const changed={...members[0],attributionContext:{...context,ownerRelation:'owner'}};
  const other=JSON.parse(assembleContext({...input,taskContext:{...input.taskContext,memoryWork:{...work,authorizedMembers:[changed]}}},[],'Generated',[],4096).prompt).untrustedTaskContext.memoryWork;
@@ -149,13 +185,8 @@ test('coverage aliases round-trip only exact identities from this call, includin
  assert.equal(task.memoryWork.members[0].key,keys[0]);assert.deepEqual(task.untrustedMemoryDraft,draft);
 });
 
-test('oversized host context is a typed local failure with content-free measurements',async()=>{
- const {assembleContext}=await import('../dist/task-context.js'),{AgentContextBudgetError}=await import('../dist/index.js');
- assert.throws(()=>assembleContext({question:'Generated',taskContext:{turns:[],draft:'x'.repeat(81000)}},[],'system',[],4096),e=>e instanceof AgentContextBudgetError&&e.code==='host_context_budget'&&e.budget==='task'&&e.limit===80000&&e.sections.draft===81002);
-});
-
-test('Codex rejects oversized host input before starting the executable or a model turn',async()=>{
- const {createCodexAgent}=await import('../dist/codex-agent.js'),{AgentContextBudgetError}=await import('../dist/index.js'),traces=[];
- const agent=createCodexAgent({reader,model:'generated-only',protocol:'codex-app-server',codex:{executable:'/generated/nonexistent-codex',home:'/generated/no-auth-home'}});
- try{await assert.rejects(agent.query({question:'Generated',taskContext:{turns:[],draft:'x'.repeat(81000)},onTrace:e=>traces.push(e)}),e=>e instanceof AgentContextBudgetError);assert.ok(!traces.some(e=>e.type==='model.started'||e.type==='codex.model.selected'));assert.equal(traces.find(e=>e.type==='run.failed').payload.code,'host_context_budget');}finally{await agent.close();}
+test('large host task context is retained and measured without local character rejection',async()=>{
+ const {assembleContext}=await import('../dist/task-context.js');
+ const draft='x'.repeat(181000),assembled=assembleContext({question:'Generated',taskContext:{turns:[],draft}},[],'system',[],4096),wire=JSON.parse(assembled.prompt);
+ assert.equal(wire.untrustedTaskContext.draft,draft);assert.ok(assembled.metrics.task>180000);assert.equal(wire.contextBudget,undefined);assert.equal(wire.maxToolCalls,undefined);
 });

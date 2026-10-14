@@ -18,6 +18,7 @@ type QueryCallbacks={
   query:(input:QueryInput)=>Promise<QueryResult>;
   commit:(body:unknown,result:QueryResult,work:DelegationWork)=>Receipt;
   failure?:(body:unknown,error:unknown)=>Receipt;
+  operationUsage?:(operationId:string,createdAt:string,finishedAt:string)=>import('./usage.js').OperationUsage;
 };
 
 /** Replayable request receipts. Durable coordination owns model fragments;
@@ -60,7 +61,9 @@ export class DelegatedQueryRuns {
         if(saved.deadlineAt!==undefined&&Date.now()>=saved.deadlineAt)throw new AgentTimeoutError();
         const receipt=callbacks.commit(saved.hostRequest,result,work);
         Object.assign(run,receipt,{status:'completed',updatedAt:new Date().toISOString(),evidenceDependencies:result.evidenceDependencies,sourceContextDependencies:result.sourceContextDependencies});delete run.error;
-        this.save(run);if(this.foreground.has(id))this.results.set(id,{...result,...receipt});this.notify(id);
+        const operationUsage=callbacks.operationUsage?.(work.operationId,run.createdAt,run.updatedAt);
+        if(operationUsage)run.operationUsage=operationUsage;
+        this.save(run);if(this.foreground.has(id))this.results.set(id,{...result,...receipt,...(operationUsage?{operationUsage}:{})});this.notify(id);
         }catch(error){throw this.executionFailure(error);}
       },
       validate:work=>this.exists(work.id.slice('query:'.length)),
@@ -91,6 +94,7 @@ export class DelegatedQueryRuns {
     }catch{if(own&&this.store.db.isTransaction)this.store.db.exec('ROLLBACK');}
   }
   private restoredFailure(saved:SavedFailure|undefined,work:DelegationWork):unknown{
+    if(work.error==='source_context_changed')return Object.assign(new StoreError('Source context changed; retry with current context',409),{code:'source_context_changed'});
     if(saved?.reason)return saved.kind==='response'?Object.assign(new Error(saved.message),{name:'AgentResponseError',reason:saved.reason}):new ProviderFailure({category:'permanent',code:saved.reason as ProviderFailure['details']['code']});
     if(saved?.kind==='provider')return Object.assign(new Error(saved.message),{name:'AgentProviderError'});
     if(saved?.category==='timeout'||work.error==='timeout')return new AgentTimeoutError();
@@ -149,6 +153,7 @@ export class DelegatedQueryRuns {
     else if(run.status==='failed'){this.finishFailure(run,work);if(!run.error){const failure=safeError(this.restoredFailure(undefined,work));run.error={code:work.error==='evidence_deleted'?'deleted':work.error==='source_context_changed'?'source_context_changed':failure.category,message:failure.message};}}
     if(run.status!=='running'&&!this.foreground.has(id))this.errors.delete(id);
     run.updatedAt=work.updatedAt;
+    if(this.callbacks.operationUsage)run.operationUsage=this.callbacks.operationUsage(work.operationId,run.createdAt,run.status==='running'?new Date().toISOString():run.updatedAt);
     const executionStatus=run.status==='running'&&work.status==='waiting'?(work.wait?'waiting':step?.error?'retry_wait':'queued'):run.status;
     const attempts=Number(this.store.db.prepare("SELECT coalesce(sum(attempts),0) n FROM execution_steps WHERE operation_id=? AND kind='delegation.coordinator.query'").get(work.operationId)?.n??0);
     run.execution=executionEnvelope({status:executionStatus,attempts,errorCode:run.error?.code??step?.error,availableAt:step?.availableAt,updatedAt:run.updatedAt});
@@ -182,10 +187,10 @@ export class DelegatedQueryRuns {
     const read=()=>{if(!this.exists(id))throw new StoreError('Query was deleted while running',409);return this.get(id);};
     while(read().status==='running'){if(this.interrupted)throw new StoreError('Central node is shutting down; the saved work will resume',503);await new Promise<void>(resolve=>{const listeners=this.waiters.get(id)??new Set();listeners.add(resolve);this.waiters.set(id,listeners);});}
     const run=read(),savedResult=run.status==='completed'?this.runtime.result<QueryResult>('query:'+id):undefined,result=this.results.get(id)??(savedResult&&run.conversationId&&run.turnId?{...savedResult,conversationId:run.conversationId,turnId:run.turnId}:undefined);this.results.delete(id);
-    if(run.status==='completed'&&result)return result as unknown as T;
+    if(run.status==='completed'&&result)return {...result,...(run.operationUsage?{operationUsage:run.operationUsage}:{})} as unknown as T;
     if(run.error?.code==='timeout')throw new AgentTimeoutError();
     const failed=this.errors.get(id);this.errors.delete(id);if(failed!==undefined)throw failed;
-    const error=new StoreError(run.error?.message??'Query did not complete',409);if(run.conversationId&&run.turnId)Object.assign(error,{conversation:{conversationId:run.conversationId,turnId:run.turnId}});throw error;
+    const error=new StoreError(run.error?.message??'Query did not complete',409);if(run.error?.code==='source_context_changed')Object.assign(error,{code:'source_context_changed'});if(run.conversationId&&run.turnId)Object.assign(error,{conversation:{conversationId:run.conversationId,turnId:run.turnId}});throw error;
     }finally{this.foreground.delete(id);this.foregroundRequests.delete(id);this.results.delete(id);this.errors.delete(id);}
   }
   async close(){clearInterval(this.timer);for(const id of this.waiters.keys())this.notify(id);}
