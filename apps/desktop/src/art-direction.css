@@ -196,6 +196,15 @@ summary { min-height:var(--mote-control-height); padding-block:var(--mote-space-
 .upload-segment button[aria-pressed=true],.upload-bar-value { color:var(--mote-ink); }
 .content-reading-dialog,.upload-dialog { scroll-padding:var(--mote-space-panel); }
 .note-composer #note-text { min-height:180px; }
+#content-detail-title,#record-detail-title { outline-color:var(--mote-accent); }
+#content-detail-title:focus,#record-detail-title:focus { outline:3px solid var(--mote-accent); outline-offset:3px; border-radius:var(--mote-radius-control); }
+/* At high zoom or short windows, the same document scroll exposes the field,
+   hint and Save together without two fixed surfaces consuming the reading lane. */
+@media(max-height:480px) {
+  .workspace-toolbar { position:static; }
+  .save-row { position:static; margin-top:var(--mote-space-group); }
+  main { padding-bottom:var(--mote-space-group); }
+}
 @media(max-width:1000px) {
   .save-row { padding-inline:var(--mote-space-page); }
   .save-row { grid-template-columns:1fr; gap:var(--mote-space-inline); }

@@ -117,9 +117,11 @@ function updateSettingsHint(): void {
 // than a fixed estimate so the final configuration controls remain scrollable.
 const settingsSaveBar = byId('settings-save-bar');
 function reserveSettingsFooter(): void {
-  document.documentElement.style.setProperty('--settings-save-height', `${settingsSaveBar.hidden ? 0 : settingsSaveBar.getBoundingClientRect().height}px`);
+  const fixed = !settingsSaveBar.hidden && getComputedStyle(settingsSaveBar).position === 'fixed';
+  document.documentElement.style.setProperty('--settings-save-height', `${fixed ? settingsSaveBar.getBoundingClientRect().height : 0}px`);
 }
 new ResizeObserver(reserveSettingsFooter).observe(settingsSaveBar);
+window.addEventListener('resize', reserveSettingsFooter);
 function markSettingsDirty(): void { settingsDirty = true; updateSettingsHint(); }
 settingsForm.addEventListener('input', markSettingsDirty);
 settingsForm.addEventListener('change', markSettingsDirty);

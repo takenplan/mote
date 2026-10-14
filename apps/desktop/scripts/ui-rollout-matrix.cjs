@@ -35,7 +35,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     // their outer bounds must fit, while button labels must fit their controls.
     const clipped=Array.from(document.querySelectorAll('main button,main input,main select,main textarea,dialog[open] button')).filter(visible).filter(e=>{const b=e.getBoundingClientRect();return b.width>0&&(b.left<-.5||b.right>innerWidth+.5||(e.tagName==='BUTTON'&&e.scrollWidth>e.clientWidth+2));}).map(e=>({id:e.id,text:e.textContent.slice(0,80),bounds:bounds(e),scroll:e.scrollWidth,client:e.clientWidth}));
     const sidebarControls=Array.from(document.querySelectorAll('.sidebar .nav-item')).map(e=>({name:e.getAttribute('aria-label')||e.textContent.trim(),...bounds(e)}));
-    return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},horizontalOverflow:document.documentElement.scrollWidth>innerWidth,clipped,sidebarControls,sidebarStatus:{text:document.querySelector('#sidebar-state').textContent,...bounds(document.querySelector('#sidebar-state'))},footer:footer.hidden?null:{...bounds(footer),reserved:parseFloat(document.documentElement.style.getPropertyValue('--settings-save-height')),buttons:Array.from(footer.querySelectorAll('button')).map(e=>({text:e.textContent,bounds:bounds(e)}))}};
+    return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},horizontalOverflow:document.documentElement.scrollWidth>innerWidth,clipped,sidebarControls,sidebarStatus:{text:document.querySelector('#sidebar-state').textContent,...bounds(document.querySelector('#sidebar-state'))},footer:footer.hidden?null:{...bounds(footer),position:getComputedStyle(footer).position,reserved:parseFloat(document.documentElement.style.getPropertyValue('--settings-save-height')),buttons:Array.from(footer.querySelectorAll('button')).map(e=>({text:e.textContent,bounds:bounds(e)}))}};
   }
   async function capture(name,page,consumer) {
     const readiness=consumer?{page,marker:consumer,ready:true,locale:await js('document.documentElement.lang'),state:'generated connected answer'}:await ready(page);await frames();
@@ -45,7 +45,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     assert.deepEqual(layout.clipped,[],'Complete controls '+name);
     assert(layout.sidebarControls.every(e=>e.top>=0&&e.bottom<=layout.viewport.height+1),'All four navigation actions visible '+name);
     assert(layout.sidebarStatus.height>1&&layout.sidebarStatus.bottom<=layout.viewport.height+1,'Actual capture status stays visible '+name);
-    if(layout.footer){assert(Math.abs(layout.footer.height-layout.footer.reserved)<1,'Actual footer reserved '+name);assert(layout.footer.buttons.every(x=>x.bounds.top>=layout.footer.top&&x.bounds.bottom<=layout.footer.bottom+1),'Footer actions inside '+name);}
+    if(layout.footer){assert(Math.abs((layout.footer.position==='fixed'?layout.footer.height:0)-layout.footer.reserved)<1,'Only fixed footer is reserved '+name);assert(layout.footer.buttons.every(x=>x.bounds.top>=layout.footer.top&&x.bounds.bottom<=layout.footer.bottom+1),'Footer actions inside '+name);}
     const png=(await window.webContents.capturePage()).toPNG();
     const item={file:name+'.png',name,page,generatedOnly:true,readiness,layout,zoom:window.webContents.getZoomFactor(),bitmap:{width:png.readUInt32BE(16),height:png.readUInt32BE(20)},sha256:createHash('sha256').update(png).digest('hex')};
     writeFileSync(join(outputDirectory,item.file),png);captures.push(item);return item;
@@ -99,6 +99,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
       await navigate('records');await ready('records');
       await js('document.querySelector('+JSON.stringify('#content-feed [data-content-key="'+key+'"]')+').click();true;');
       await until(()=>js('document.querySelector("#content-detail-dialog").open&&document.querySelector("#content-detail-status").getAttribute("aria-busy")==="false"'),'exact reader');
+      assert.equal(await js('getComputedStyle(document.querySelector("#content-detail-title")).outlineColor'),await js('getComputedStyle(document.querySelector(".nav-item.selected")).color'),'Reader heading uses shared blue focus role');
       assert.equal(await js('document.querySelector("#content-detail-body").textContent'),original,'Exact note original');
       await capture(['reader',language==='en'?'en':'zh',variant].join('-'),'records');
       await js('document.querySelector("#content-processing summary").click();true;');assert.equal(await js('document.querySelectorAll("#content-detail-stages li").length'),4,'Full processing help');
@@ -111,15 +112,30 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
       journeys.push({name:'dirty footer, Keep and Discard',language,variant,verified:true});
     }
     window.webContents.setZoomFactor(2);window.setSize(820,620);await frames();
-    for(const page of ['overview','notes','connection','privacy','developer']) {await navigate(page);await ready(page);await js('Array.from(document.querySelectorAll("[data-page]:not([hidden]) details")).forEach(e=>e.open=true);window.scrollTo(0,document.documentElement.scrollHeight);true;');await capture([page,language==='en'?'en':'zh','zoom200'].join('-'),page);}
+    for(const page of ['overview','notes','connection','privacy','developer']) {
+      await navigate(page);await ready(page);await js('Array.from(document.querySelectorAll("[data-page]:not([hidden]) details")).forEach(e=>e.open=true);true;');
+      const target={overview:'.home-add-grid [data-add-choice=folder]',notes:'#note-text',connection:'#device-name',privacy:'#default-collection',developer:'#diagnostic-interval'}[page];
+      await js('document.querySelector('+JSON.stringify(target)+').scrollIntoView({block:"center"});document.querySelector('+JSON.stringify(target)+').focus();true;');await frames();
+      const lane=await js('(()=>{const e=document.querySelector('+JSON.stringify(target)+'),r=e.getBoundingClientRect(),t=document.querySelector(".workspace-toolbar"),f=document.querySelector("#settings-save-bar");const top=getComputedStyle(t).position==="sticky"?t.getBoundingClientRect().bottom:0,bottom=!f.hidden&&getComputedStyle(f).position==="fixed"?f.getBoundingClientRect().top:innerHeight;return {target:'+JSON.stringify(target)+',top,bottom,fieldTop:r.top,fieldBottom:r.bottom,fieldHeight:r.height,focused:document.activeElement===e};})()');
+      assert(lane.focused&&lane.fieldTop>=lane.top+6&&lane.fieldBottom<=lane.bottom-6,'Full focused field and outline visible in reading lane '+page+' '+language);
+      const captured=await capture([page,language==='en'?'en':'zh','zoom200'].join('-'),page);captured.readingLane=lane;
+      journeys.push({name:'true200% full focused input and readable document lane',page,language,verified:true,lane});
+    }
     await navigate('notes');await ready('notes');
-    await js('document.querySelector("#note-text").value='+JSON.stringify('Generated real keyboard save '+language)+';document.querySelector("#note-text").dispatchEvent(new Event("input"));document.querySelector("#save-note").scrollIntoView({block:"center"});document.querySelector("#save-note").focus();true;');
+    const keyboardText='Generated real keyboard save '+language;
+    await js('document.querySelector("#note-text").value="";document.querySelector("#note-text").dispatchEvent(new Event("input"));document.querySelector("#note-text").scrollIntoView({block:"center"});document.querySelector("#note-text").focus();true;');
     // Emulate renderer focus only for this exact hidden generated window.
     // No native app activation or physical keyboard focus is claimed.
     window.webContents.debugger.attach('1.3');
     try {
       await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});
-      window.webContents.focus();assert.equal(await js('document.activeElement.id'),'save-note','Actual Save keyboard target');
+      window.webContents.focus();assert.equal(await js('document.activeElement.id'),'note-text','Actual input keyboard target');
+      for(const character of keyboardText)window.webContents.sendInputEvent({type:'char',keyCode:character});
+      await until(()=>js('document.querySelector("#note-text").value==='+JSON.stringify(keyboardText)),'Real character input at200%');
+      window.webContents.sendInputEvent({type:'keyDown',keyCode:'Tab'});window.webContents.sendInputEvent({type:'keyUp',keyCode:'Tab'});
+      await until(()=>js('document.activeElement.id==="save-note"'),'Actual Tab reaches Save');
+      await js('document.querySelector("#save-note").scrollIntoView({block:"center"});true;');await frames();
+      assert.equal(await js('(()=>{const r=document.querySelector("#save-note").getBoundingClientRect();return r.top>=6&&r.bottom<=innerHeight-6;})()'),true,'Keyboard Save and outline fully visible');
       window.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});
       window.webContents.sendInputEvent({type:'char',keyCode:'\r'});
       window.webContents.sendInputEvent({type:'keyUp',keyCode:'Enter'});
@@ -151,18 +167,19 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
   await js('document.querySelector("#diagnostics-sample").click();true;');await until(()=>js('!document.querySelector("#feedback").hidden'),'generated diagnostic error');await capture('diagnostics-error','developer');
   // Exercise the connected answer through the real history action and IPC.
   // Auth/answer data are generated adapters, and evidence opens are recorded.
-  const baseStatus=await js('window.mote.status()'),authenticatedStatus={...baseStatus,config:{...baseStatus.config,serverUrl:'http://127.0.0.1:47999',tokenConfigured:true}};
+  const baseStatus=await js('window.mote.status()');
+  const authenticateStatus=status=>({...status,config:{...status.config,serverUrl:'http://127.0.0.1:47999',tokenConfigured:true}});
   const citationId='11111111-2222-4333-8444-555555555555',conversationId='22222222-3333-4444-8555-666666666666';
   const excerpt='Generated original  双空格 🐾\n'.repeat(24)+'Original final line stays readable.';
   const conversation={id:conversationId,title:'Generated connected answer',turns:[{question:'Generated long answer with evidence',status:'completed',result:{answer:'**Generated answer** ['+citationId+']\n\n'+Array.from({length:6},(_,i)=>'- Complete generated finding '+(i+1)+' ['+citationId+']').join('\n'),citations:[{id:citationId,appName:'Generated source',capturedAt:'2026-10-14',excerpt}]}}]};
   const previousAsk=ipcMain._invokeHandlers.get('mote:ask'),previousStatus=ipcMain._invokeHandlers.get('mote:get-status'),previousCentral=ipcMain._invokeHandlers.get('mote:central'),previousSend=window.webContents.send;
   const openedEvidence=[];
-  ipcMain.removeHandler('mote:get-status');ipcMain.handle('mote:get-status',()=>authenticatedStatus);
+  ipcMain.removeHandler('mote:get-status');ipcMain.handle('mote:get-status',async event=>authenticateStatus(await previousStatus(event)));
   ipcMain.removeHandler('mote:ask');ipcMain.handle('mote:ask',(_event,command)=>command==='history'?{items:[{id:conversationId,title:conversation.title}]}:command==='conversation'?conversation:{items:[]});
   ipcMain.removeHandler('mote:central');ipcMain.handle('mote:central',(_event,page,id)=>{openedEvidence.push({page,id});});
-  window.webContents.send=function(channel,...args){return previousSend.call(this,channel,...(channel==='mote:status'?[authenticatedStatus]:args));};
+  window.webContents.send=function(channel,...args){return previousSend.call(this,channel,...(channel==='mote:status'?[authenticateStatus(args[0])]:args));};
   try {
-    window.webContents.send('mote:status',authenticatedStatus);
+    window.webContents.send('mote:status',authenticateStatus(baseStatus));
     for(const language of ['zh-CN','en']) {
       window.webContents.setZoomFactor(1);await changeLanguage(language);
       await navigate('ask');await until(()=>js('document.querySelector("#ask-history button")&&!document.querySelector("#ask-history button").disabled'),'connected generated history');
@@ -189,7 +206,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
   } finally {
     window.webContents.send=previousSend;
     for(const [channel,handler] of [['mote:get-status',previousStatus],['mote:ask',previousAsk],['mote:central',previousCentral]]){ipcMain.removeHandler(channel);ipcMain.handle(channel,handler);}
-    window.webContents.send('mote:status',baseStatus);
+    window.webContents.send('mote:status',await js('window.mote.status()'));
   }
   journeys.push({name:'renderer reload, failed note input, connection error and synthetic running status',verified:true,collectionStarted:false});
   assert.equal((await js('window.mote.status()')).running,false,'No real collection');
