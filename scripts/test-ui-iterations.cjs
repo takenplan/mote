@@ -379,6 +379,19 @@ async function rolloutExpandedFitJourney() {
       await js(`document.querySelector(${JSON.stringify(target)}).scrollIntoView({block:'center'});true`);
       await capture(scene+'-'+language,{scene,variant:'minimum',preserveScroll:true,reviewSelection:true});
     }
+    await route('system/storage','#content-storage-title');
+    for(const width of [390,320]){
+      window.setSize(width,844);await until(()=>js('innerWidth==='+width),'compact export fit');
+      const description=await js(`(()=>{const p=document.querySelector('.transfer-export p'),r=p.getBoundingClientRect();return {text:p.textContent,width:r.width,viewport:innerWidth,buttons:document.querySelectorAll('.transfer-export button').length}})()`);
+      assert.ok(description.width>=description.viewport*.55,'Export exclusions keep a readable compact paragraph width');assert.equal(description.buttons,3,'All original export ranges remain available');
+      await js("document.querySelector('.transfer-export').scrollIntoView({block:'center'});true");
+      for(let index=0;index<3;index++){
+        const fit=await js(`(()=>{const e=document.querySelectorAll('.transfer-export button')[${index}];e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect(),n=document.getElementById('primary-navigation').getBoundingClientRect();return r.top>=0&&r.bottom<n.top&&r.left>=0&&r.right<=innerWidth&&document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===e})()`);
+        assert.ok(fit,'Each unchanged export range is reachable above compact dock');
+      }
+      await capture('storage-export-fit-'+language+'-'+width,{scene:'storage-export-fit',variant:'minimum',preserveScroll:true,reviewSelection:true});
+      journeys.push({name:'readable compact export exclusions and all range actions',language,width,description,status:'verified'});
+    }
     journeys.push({name:'expanded settings and complete session caption',language,status:'verified',checks:['selected lifetime caption at820','expanded module guidance at320','expanded file plan actions and fields at320']});
   }
   window.setSize(1440,1000);await route('today','.home-page');

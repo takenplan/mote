@@ -335,3 +335,12 @@ h1[tabindex="-1"]:focus-visible,h2[tabindex="-1"]:focus-visible,h3[tabindex="-1"
 @media(max-width:760px) {
  .session-lifetime-control select { min-inline-size:0; }
 }
+
+/* Export facts retain their reading width before the same three compact actions. */
+.transfer-action.transfer-export>.transfer-export-actions { display:flex; flex:0 0 auto; flex-wrap:wrap; gap:var(--mote-space-item); min-width:0; }
+@media(max-width:760px) {
+ .transfer-export { display:grid; grid-template-columns:37px minmax(0,1fr); gap:var(--mote-space-item); }
+ .transfer-export>div:nth-child(2) { min-width:0; }
+ .transfer-export p { max-width:none; }
+ .transfer-export>.transfer-export-actions { grid-column:1/-1; }
+}

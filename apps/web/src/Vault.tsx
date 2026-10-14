@@ -149,7 +149,7 @@ export function Vault({ api, status, refresh, disconnect, embedded = false, }: {
             </div>
             <ArrowDownToLine size={21} className="muted-icon"/>
           </div>
-          <div className="transfer-action">
+          <div className="transfer-action transfer-export">
             <div className="transfer-icon">
               <ArrowDownToLine size={19}/>
             </div>
@@ -157,9 +157,11 @@ export function Vault({ api, status, refresh, disconnect, embedded = false, }: {
               <h3>{moteText("导出资料")}</h3>
               <p>{moteText("记录、原始影像和校验信息。访问令牌不会包含在内。")}</p>
             </div>
+            <div className="transfer-export-actions">
             <button className="button subtle" disabled={!!busy} onClick={() => void action("export", () => exportArchive())}>
               {busy === "export" ? (<LoaderCircle className="spin" size={16}/>) : (moteText("导出"))}
             </button><button className="button subtle" disabled={Boolean(busy)} onClick={() => void action('export', () => exportArchive('metadata'))}>{moteText("导出元数据")}</button><button className="button subtle" disabled={Boolean(busy)} onClick={() => void action('export', () => exportArchive('data'))}>{moteText("导出资料与附件")}</button>
+            </div>
           </div>
           <div className="transfer-action">
             <div className="transfer-icon">
