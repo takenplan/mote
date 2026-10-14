@@ -16,6 +16,8 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
   const parentCommit=spawnSync('git',['rev-parse','HEAD'],{cwd:repo,encoding:'utf8'}).stdout.trim();
   const workingTreeChanges=spawnSync('git',['status','--porcelain','--','apps/desktop','packages/shared/design-tokens.json'],{cwd:repo,encoding:'utf8'}).stdout;
   const captures=[],journeys=[];
+  const supplement=process.env.MOTE_UI_ROLLOUT_SUPPLEMENT==='1',observations=[],coverage=[];
+  const fixtureIdentity=Object.fromEntries(['apps/desktop/scripts/ui-rollout-matrix.cjs','apps/desktop/scripts/ui-smoke.cjs','scripts/fixture-background.cjs','scripts/fixture-language.cjs'].map(file=>[file,digest(join(repo,file))]));
   const delay=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   async function until(read,label) { const end=Date.now()+15000; while(Date.now()<end){if(await read())return;await delay(30);}throw Error('Rollout readiness: '+label); }
   const frames=()=>js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
@@ -35,9 +37,45 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     // their outer bounds must fit, while button labels must fit their controls.
     const clipped=Array.from(document.querySelectorAll('main button,main input,main select,main textarea,dialog[open] button')).filter(visible).filter(e=>{const b=e.getBoundingClientRect();return b.width>0&&(b.left<-.5||b.right>innerWidth+.5||(e.tagName==='BUTTON'&&e.scrollWidth>e.clientWidth+2));}).map(e=>({id:e.id,text:e.textContent.slice(0,80),bounds:bounds(e),scroll:e.scrollWidth,client:e.clientWidth}));
     const sidebarControls=Array.from(document.querySelectorAll('.sidebar .nav-item')).map(e=>({name:e.getAttribute('aria-label')||e.textContent.trim(),...bounds(e)}));
-    return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},horizontalOverflow:document.documentElement.scrollWidth>innerWidth,clipped,sidebarControls,sidebarStatus:{text:document.querySelector('#sidebar-state').textContent,...bounds(document.querySelector('#sidebar-state'))},footer:footer.hidden?null:{...bounds(footer),position:getComputedStyle(footer).position,reserved:parseFloat(document.documentElement.style.getPropertyValue('--settings-save-height')),buttons:Array.from(footer.querySelectorAll('button')).map(e=>({text:e.textContent,bounds:bounds(e)}))}};
+    const toolbar=document.querySelector('.workspace-toolbar'),readingTop=getComputedStyle(toolbar).position==='sticky'?Math.max(0,toolbar.getBoundingClientRect().bottom):0,readingBottom=!footer.hidden&&getComputedStyle(footer).position==='fixed'?r.top:innerHeight;
+    const activePage=document.querySelector('[data-page]:not([hidden])'),pageBounds=bounds(activePage);
+    const dialogs=Array.from(document.querySelectorAll('dialog[open]')).map(e=>({...bounds(e),id:e.id,scrollTop:e.scrollTop,scrollHeight:e.scrollHeight,clientHeight:e.clientHeight,reading:{top:e.scrollTop,bottom:e.scrollTop+e.clientHeight},readerOriginalThrough:e.id==='content-detail-dialog'?document.querySelector('#content-processing summary').getBoundingClientRect().bottom-e.getBoundingClientRect().top+e.scrollTop:null}));
+    return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},document:{scrollY,scrollHeight:document.documentElement.scrollHeight,reading:{top:scrollY+readingTop,bottom:scrollY+readingBottom},readingTop,readingBottom,pageBounds:{top:pageBounds.top+scrollY,bottom:pageBounds.bottom+scrollY}},dialogs,horizontalOverflow:document.documentElement.scrollWidth>innerWidth,clipped,sidebarControls,sidebarStatus:{text:document.querySelector('#sidebar-state').textContent,...bounds(document.querySelector('#sidebar-state'))},footer:footer.hidden?null:{...bounds(footer),position:getComputedStyle(footer).position,reserved:parseFloat(document.documentElement.style.getPropertyValue('--settings-save-height')),buttons:Array.from(footer.querySelectorAll('button')).map(e=>({text:e.textContent,bounds:bounds(e)}))}};
   }
-  async function capture(name,page,consumer) {
+  function uncovered(region,intervals) {
+    const sorted=intervals.map(x=>({top:Math.max(region.top,x.top),bottom:Math.min(region.bottom,x.bottom)})).filter(x=>x.bottom>x.top).sort((a,b)=>a.top-b.top);
+    const gaps=[];let cursor=region.top;for(const x of sorted){if(x.top>cursor+1)gaps.push({top:cursor,bottom:x.top});cursor=Math.max(cursor,x.bottom);}if(cursor<region.bottom-1)gaps.push({top:cursor,bottom:region.bottom});return gaps;
+  }
+  async function fillCoverage(name,page,items,selector,dialogId,readerChanged,consumer) {
+    const saved=await js('({y:scrollY,dialogs:Array.from(document.querySelectorAll("dialog[open]")).map(e=>({id:e.id,top:e.scrollTop}))})');
+    const region=dialogId?{top:0,bottom:items.at(-1).layout.dialogs.find(x=>x.id===dialogId).scrollHeight}:selector?await js('(()=>{const r=document.querySelector('+JSON.stringify(selector)+').getBoundingClientRect();return {top:r.top+scrollY,bottom:r.bottom+scrollY};})()'):items.at(-1).layout.document.pageBounds;
+    const intervals=items.map((item,index)=>{const r=dialogId?item.layout.dialogs.find(x=>x.id===dialogId).reading:item.layout.document.reading;return readerChanged&&index===0?{top:r.top,bottom:Math.min(r.bottom,item.layout.dialogs.find(x=>x.id===dialogId).readerOriginalThrough)}:r;});
+    const plan={name,page,region,baseline:items.map((x,i)=>({referenceFile:x.file,reading:intervals[i]})),uncoveredBefore:uncovered(region,intervals),supplementalFiles:[]};
+    let count=0;
+    while(uncovered(region,intervals).length) {
+      const gap=uncovered(region,intervals)[0],before=gap.top;
+      if(++count>150)throw Error('Coverage did not converge '+name);
+      if(dialogId)await js('document.querySelector('+JSON.stringify('#'+dialogId)+').scrollTop='+Math.max(0,gap.top-24)+';true;');
+      else await js('window.scrollTo({top:'+Math.max(0,gap.top-items.at(-1).layout.document.readingTop-24)+',behavior:"instant"});true;');
+      const item=await capture(name+'-middle-'+count,page,consumer,true);const range=dialogId?item.layout.dialogs.find(x=>x.id===dialogId).reading:item.layout.document.reading;
+      intervals.push(range);plan.supplementalFiles.push({file:item.file,reading:range});
+      const remaining=uncovered(region,intervals);if(remaining[0]?.top===before&&remaining[0]?.bottom===gap.bottom)throw Error('Unreachable visual region '+name);
+    }
+    plan.uncoveredAfter=uncovered(region,intervals);coverage.push(plan);
+    await js('window.scrollTo({top:'+saved.y+',behavior:"instant"});'+saved.dialogs.map(x=>'document.querySelector('+JSON.stringify('#'+x.id)+').scrollTop='+x.top+';').join('')+'true;');await frames();
+  }
+  async function supplementAt(item) {
+    const byName=name=>observations.find(x=>x.name===name),name=item.name;
+    if(/^(overview|records|notes|ask|settings|connection|sync|capture|privacy|permissions|activity|statistics|developer|about|sources|uploads|screen|compression)-(zh|en)-(normal|compact|large)-end$/.test(name))await fillCoverage(name,item.page,[byName(name.replace(/-end$/,'-top')),item]);
+    if(/^.+-(zh|en)-zoom200$/.test(name)&&!name.startsWith('keyboard-save'))await fillCoverage(name,item.page,[item]);
+    if(/^import-end-/.test(name))await fillCoverage(name,item.page,[byName(name.replace('import-end-','import-')),item],'#source-confirmation');
+    if(/^add-chooser-end-/.test(name))await fillCoverage(name,item.page,[byName(name.replace('add-chooser-end-','add-chooser-')),item],null,'add-dialog');
+    if(/^reader-status-/.test(name))await fillCoverage(name,item.page,[byName(name.replace('reader-status-','reader-')),item],null,'content-detail-dialog',true);
+    if(/^dirty-footer-end-/.test(name))await fillCoverage(name,item.page,[byName(name.replace('dirty-footer-end-','dirty-footer-')),item]);
+    if(/^ask-evidence-(zh|en)-/.test(name))await fillCoverage(name,item.page,[byName(name.replace('ask-evidence-','ask-evidence-start-')),item],'.ask-evidence',null,false,'.ask-excerpt');
+    if(/^ask-reference-focus-/.test(name))await fillCoverage(name,item.page,[byName(name.replace('ask-reference-focus-','ask-connected-')),byName(name.replace('ask-reference-focus-','ask-answer-')),byName(name.replace('ask-reference-focus-','ask-answer-end-')),item],null,null,false,'.ask-answer');
+  }
+  async function capture(name,page,consumer,forceWrite=false) {
     const readiness=consumer?{page,marker:consumer,ready:true,locale:await js('document.documentElement.lang'),state:'generated connected answer'}:await ready(page);await frames();
     if(consumer)assert.equal(await js('!!document.querySelector('+JSON.stringify(consumer)+')'),true,'Actual connected answer consumer');
     const layout=await js('('+geometry.toString()+')()');
@@ -46,9 +84,9 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     assert(layout.sidebarControls.every(e=>e.top>=0&&e.bottom<=layout.viewport.height+1),'All four navigation actions visible '+name);
     assert(layout.sidebarStatus.height>1&&layout.sidebarStatus.bottom<=layout.viewport.height+1,'Actual capture status stays visible '+name);
     if(layout.footer){assert(Math.abs((layout.footer.position==='fixed'?layout.footer.height:0)-layout.footer.reserved)<1,'Only fixed footer is reserved '+name);assert(layout.footer.buttons.every(x=>x.bounds.top>=layout.footer.top&&x.bounds.bottom<=layout.footer.bottom+1),'Footer actions inside '+name);}
-    const png=(await window.webContents.capturePage()).toPNG();
-    const item={file:name+'.png',name,page,generatedOnly:true,readiness,layout,zoom:window.webContents.getZoomFactor(),bitmap:{width:png.readUInt32BE(16),height:png.readUInt32BE(20)},sha256:createHash('sha256').update(png).digest('hex')};
-    writeFileSync(join(outputDirectory,item.file),png);captures.push(item);return item;
+    const item={file:name+'.png',name,page,generatedOnly:true,readiness,layout,zoom:window.webContents.getZoomFactor()};
+    if(!supplement||forceWrite){const png=(await window.webContents.capturePage()).toPNG();item.bitmap={width:png.readUInt32BE(16),height:png.readUInt32BE(20)};item.sha256=createHash('sha256').update(png).digest('hex');writeFileSync(join(outputDirectory,item.file),png);captures.push(item);}
+    if(supplement&&!forceWrite){observations.push(item);await supplementAt(item);}return item;
   }
   async function changeLanguage(language) {
     if(await js('document.documentElement.lang')===language)return;
@@ -59,7 +97,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
   }
   const fixtureMetadata={productVersion:require('../package.json').version,appVersionAdapter:true,developmentMetadataAdapter:process.env.MOTE_UI_ROLLOUT_DEV_ABOUT==='1'};
   function finish() {
-    const manifest={platform:'mac',generatedOnly:true,passed:true,parentCommit,workingTreeChanges,sourceIdentity,buildIdentity,nativeIdentity,fixtureMetadata,captures,journeys,boundary:'Hidden real Electron product / temporary generated profile. Native picker and permission responses are generated. Product appVersion adapter; DEV-only branch uses package metadata adapter. Real Electron zoom and key events with explicit hidden renderer focus emulation; no foreground OS focus, personal capture, account, live model or physical device.',profile};
+    const manifest={platform:'mac',generatedOnly:true,passed:true,parentCommit,workingTreeChanges,sourceIdentity,buildIdentity,nativeIdentity,fixtureIdentity,fixtureMetadata,captures,journeys,supplement,coverage,observations,boundary:'Hidden real Electron product / temporary generated profile. Native picker and permission responses are generated. Product appVersion adapter; DEV-only branch uses package metadata adapter. Real Electron zoom and key events with explicit hidden renderer focus emulation; no foreground OS focus, personal capture, account, live model or physical device. Supplement mode replays reference checkpoints in fresh generated profiles on the identical product source/dist; actual scroll reading intervals identify missing spans with24CSSpx overlap. Reference equivalence is based on matching viewport/generated states and exact product hashes, not byte-identical dynamic IDs/times.',profile};
     writeFileSync(join(outputDirectory,'rollout-manifest.json'),JSON.stringify(manifest,null,2));return manifest;
   }
   if(fixtureMetadata.developmentMetadataAdapter) {
