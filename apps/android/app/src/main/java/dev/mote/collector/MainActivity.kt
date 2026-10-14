@@ -1281,9 +1281,9 @@ class MainActivity : MoteActivity() {
         // Capture controls reflect cheap live state before optional statistics/diagnostics.
         // A slow inventory must not make a successful Start look unresponsive.
         val action = if (settings.enabled) MoteI18n.text("暂停采集") else MoteI18n.text("开始采集")
-        MoteUi.button(captureAction, primary = !settings.enabled)
         if (captureAction.text != action) {
             captureAction.text = action
+            MoteUi.button(captureAction, primary = !settings.enabled)
             captureTitle.text = if (settings.enabled) MoteI18n.text("正在本机采集") else MoteI18n.text("采集已暂停")
             captureProgress.visibility = if (settings.enabled) View.VISIBLE else View.GONE
             status.text = settings.message()
@@ -1310,7 +1310,11 @@ class MainActivity : MoteActivity() {
                         homeSendAction.text = MoteI18n.text(if (loadedConfig.syncPaused) "恢复全部发送" else "暂停全部发送")
                         homeScreenAction.text = MoteI18n.text(if (settings.enabled && loadedConfig.screenCollectionEnabled) "暂停屏幕记录" else "记录屏幕")
                     }
-                    captureTitle.text = snapshot.title; captureAction.text = snapshot.action
+                    captureTitle.text = snapshot.title
+                    if (captureAction.text != snapshot.action) {
+                        captureAction.text = snapshot.action
+                        MoteUi.button(captureAction, primary = !settings.enabled)
+                    }
                     captureProgress.visibility = if (settings.enabled) View.VISIBLE else View.GONE
                     status.text = snapshot.status
                     totalsStatus.text = snapshot.totals; if (::technicalStatus.isInitialized) technicalStatus.text = snapshot.technical
