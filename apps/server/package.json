@@ -7,7 +7,7 @@
     "predev": "node ../../scripts/check-dependencies.mjs && npm run build -w @mote/shared && npm run build -w @mote/agent",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
-    "build": "tsc -p tsconfig.json && cp src/import-parser.mjs dist/import-parser.mjs && cp src/import-disposition-validation.mjs src/import-disposition-validation.d.mts dist/ && cp src/plugin-worker.mjs dist/plugin-worker.mjs && cp src/hindsight-worker.py dist/hindsight-worker.py",
+    "build": "tsc -p tsconfig.json && cp src/import-parser.mjs dist/import-parser.mjs && cp src/import-disposition-validation.mjs src/import-disposition-validation.d.mts src/log-retention-config.mjs src/log-retention-config.d.mts dist/ && cp src/plugin-worker.mjs dist/plugin-worker.mjs && cp src/hindsight-worker.py dist/hindsight-worker.py",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test --test-concurrency=4 --test-timeout=120000 test/*.test.ts"
   },

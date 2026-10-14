@@ -2,6 +2,7 @@ import {ProviderFailure} from '@mote/shared';
 import {AgentYieldError} from '@mote/agent';
 import {validationFeedback,validationLocation} from './memory-validation.js';
 import { moteText } from './i18n.js';
+import { MAX_LOG_FILE_BYTES,MAX_TRACE_EVENT_BYTES } from './log-retention-config.mjs';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 import { constants } from 'node:fs';
@@ -78,6 +79,34 @@ const validStage=(value:unknown):value is DiagnosticStage=>typeof value==='strin
 const processStartedAt=Date.now()-process.uptime()*1000;
 type Metrics = Partial<Record<typeof numberKeys[number],number>>;
 type QueuedLine = {line:string;day:string};
+type LogLineRange={position:number;length:number;terminated:boolean;chunk?:Buffer;offset?:number};
+
+/** Scan byte offsets so readers do not split or retain an entire diagnostic file. */
+async function* logLineRanges(file:FileHandle,size:number):AsyncGenerator<LogLineRange> {
+  const buffer=Buffer.allocUnsafe(Math.min(size,64*1024));let position=0,start=0;
+  while(position<size) {
+    const {bytesRead}=await file.read(buffer,0,Math.min(buffer.length,size-position),position);
+    if(!bytesRead)break;
+    let offset=0;
+    while(offset<bytesRead) {
+      const end=buffer.indexOf(10,offset);if(end<0||end>=bytesRead)break;
+      yield {position:start,length:position+end-start,terminated:true,...(start>=position?{chunk:buffer,offset:start-position}:{})};start=position+end+1;offset=end+1;
+    }
+    position+=bytesRead;
+  }
+  if(start<position)yield {position:start,length:position-start,terminated:false};
+}
+async function readLogText(file:FileHandle,position:number,length:number):Promise<string> {
+  const buffer=Buffer.allocUnsafe(length);let read=0;
+  while(read<length) {
+    const {bytesRead}=await file.read(buffer,read,length-read,position+read);if(!bytesRead)break;read+=bytesRead;
+  }
+  return buffer.subarray(0,read).toString('utf8');
+}
+async function readLogLine(file:FileHandle,range:LogLineRange):Promise<string> {
+  // The scanner's chunk is valid until its next iteration; ordinary short lines need no extra I/O.
+  return range.chunk?range.chunk.toString('utf8',range.offset!,range.offset!+range.length):readLogText(file,range.position,range.length);
+}
 export type EventFields = Metrics & { lane?:'background'|'interactive';unit?:'agent_fragment'|'harness_session';status?:'completed'|'failed'|'yielded';requestId?:string;jobId?:string;batchId?:string;runId?:string;evidenceId?:string;validationCode?:string;toolErrorCode?:string;validationPhase?:'extract'|'review';fieldPath?:string;problem?:string;method?:'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'HEAD'|'OPTIONS';operation?:Operation;route?:string;category?:string;reason?:string };
 export interface DiagnosticEvent extends EventFields { seq:number;at:string;instanceId:string;event:string;level:Exclude<LogLevel,'silent'>;stage?:DiagnosticStage;truncated?:boolean;trace?:Record<string,unknown> }
 export interface ServerDiagnosticsOptions { enabled?:boolean;debug?:boolean;level?:LogLevel;directory:string;maxBytes?:number;maxFiles?:number;maxEntries?:number;now?:()=>Date;traceEnabled?:boolean }
@@ -199,7 +228,7 @@ export class ServerDiagnostics {
   private traceEvents=0;
   constructor(private readonly options:ServerDiagnosticsOptions) {
     this.enabled=options.enabled??true;this.level=options.level==='silent'?'silent':options.debug?'debug':levels.includes(options.level as LogLevel)?options.level!:'info';
-    this.maxBytes=bounded(options.maxBytes,2*1024*1024,1024,8*1024*1024);
+    this.maxBytes=bounded(options.maxBytes,2*1024*1024,1024,MAX_LOG_FILE_BYTES);
     this.maxFiles=bounded(options.maxFiles,3,1,10);
     this.maxEntries=bounded(options.maxEntries,2000,1,5000);
     this.now=options.now??(()=>new Date());
@@ -237,20 +266,19 @@ export class ServerDiagnostics {
       for(let index=this.maxFiles-1;index>=0;index--) {
         try {
           const file=await open(this.path(index),constants.O_RDWR|constants.O_NOFOLLOW);
-          let raw:string;
           try {
             await file.chmod(0o600);
             const size=(await file.stat()).size;
             if(size>this.maxBytes){this.readFailures++;await file.truncate(0);continue;}
-            raw=await file.readFile('utf8');
-            if(raw&&!raw.endsWith('\n')){raw=raw.slice(0,raw.lastIndexOf('\n')+1);await file.truncate(Buffer.byteLength(raw));this.readFailures++;}
+            for await(const range of logLineRanges(file,size)) {
+              if(!range.terminated){await file.truncate(range.position);this.readFailures++;break;}
+              if(!range.length)continue;
+              const line=await readLogLine(file,range);
+              let parsed:unknown;try{parsed=JSON.parse(line);}catch{this.readFailures++;continue;}
+              try {const event=cleanEvent(parsed);if(event){this.entries.push(event);if(event.event==='agent.trace')this.traceEvents++;this.seq=Math.max(this.seq,event.seq);if(index===0)currentDay=logDay(event.at);if(this.entries.length>this.maxEntries){const removed=this.entries.shift();if(removed?.event==='agent.trace')this.traceEvents--;}}}catch{this.readFailures++;}
+            }
           }
           finally {await file.close();}
-          for(const line of raw.split('\n')) {
-            if(!line)continue;
-            let parsed:unknown;try{parsed=JSON.parse(line);}catch{this.readFailures++;continue;}
-            try {const event=cleanEvent(parsed);if(event){this.entries.push(event);if(event.event==='agent.trace')this.traceEvents++;this.seq=Math.max(this.seq,event.seq);if(index===0)currentDay=logDay(event.at);if(this.entries.length>this.maxEntries){const removed=this.entries.shift();if(removed?.event==='agent.trace')this.traceEvents--;}}}catch{this.readFailures++;}
-          }
         }catch(e){if((e as NodeJS.ErrnoException).code!=='ENOENT')this.readFailures++;}
       }
       try{this.currentBytes=(await stat(this.path(0))).size;}catch{}
@@ -306,8 +334,9 @@ export class ServerDiagnostics {
     const at=this.now().toISOString();
     const entry:DiagnosticEvent={seq:++this.seq,at,instanceId:this.instanceId,event:'agent.trace',level:'debug',stage:'agent',...fields({requestId:context.requestId??this.context.getStore(),jobId:context.jobId}),trace};
     let line=JSON.stringify(entry)+'\n';
-    if(Buffer.byteLength(line)>this.maxBytes){entry.trace={type:trace.type,traceId,runId:trace.runId,truncated:true,payload:'trace payload exceeded the configured log file limit'};line=JSON.stringify(entry)+'\n';}
-    if(Buffer.byteLength(line)>this.maxBytes){this.dropped++;return;}
+    const traceLimit=Math.min(this.maxBytes,MAX_TRACE_EVENT_BYTES);
+    if(Buffer.byteLength(line)>traceLimit){entry.trace={type:trace.type,traceId,runId:trace.runId,truncated:true,payload:'trace payload exceeded the diagnostic event limit'};line=JSON.stringify(entry)+'\n';}
+    if(Buffer.byteLength(line)>traceLimit){this.dropped++;return;}
     this.traceEvents++;this.entries.push(entry);if(this.entries.length>this.maxEntries){const removed=this.entries.shift();if(removed?.event==='agent.trace')this.traceEvents--;}
     if(!this.writable||this.queue.length>=Math.min(this.maxEntries,1024)||Date.now()<this.nextAttempt){this.dropped++;return;}
     this.queue.push({line,day:logDay(at)});this.startWrite();
@@ -353,17 +382,18 @@ export class ServerDiagnostics {
   /** Return the current file verbatim, including incomplete/malformed text for troubleshooting. */
   async readRaw(index=0):Promise<string> {
     if(!Number.isInteger(index)||index<0||index>=this.maxFiles)throw Object.assign(new Error('Invalid log file'),{statusCode:400});
+    return this.readLog(index,()=>'',(file,size)=>readLogText(file,0,size));
+  }
+  private async readLog<T>(index:number,missing:()=>T,read:(file:FileHandle,size:number)=>Promise<T>):Promise<T> {
     await this.flush();
     try {
       const file=await open(this.path(index),constants.O_RDONLY|constants.O_NOFOLLOW);
       try {
-        if((await file.stat()).size>this.maxBytes)throw new Error('Log exceeds read limit');
-        const buffer=Buffer.alloc(this.maxBytes);
-        const {bytesRead}=await file.read(buffer,0,buffer.length,0);
-        return buffer.subarray(0,bytesRead).toString('utf8');
+        const size=(await file.stat()).size;if(size>this.maxBytes)throw new Error('Log exceeds read limit');
+        return await read(file,size);
       } finally {await file.close();}
     } catch(error) {
-      if((error as NodeJS.ErrnoException).code==='ENOENT')return '';
+      if((error as NodeJS.ErrnoException).code==='ENOENT')return missing();
       this.readFailures++;throw error;
     }
   }
@@ -372,25 +402,37 @@ export class ServerDiagnostics {
     if(!Number.isInteger(page)||page<1)throw Object.assign(new Error('Invalid log page'),{statusCode:400});
     if(!Number.isInteger(pageSize)||pageSize<1||pageSize>500)throw Object.assign(new Error('Invalid log page size'),{statusCode:400});
     if(!diagnosticStageFilters.includes(stage))throw Object.assign(new Error('Invalid log stage'),{statusCode:400});
-    const lines=(await this.readRaw(index)).split('\n').filter(line=>line.length>0).filter(line=>stage==='all'||this.lineStage(line)===stage);
-    const totalLines=lines.length,totalPages=Math.max(1,Math.ceil(totalLines/pageSize)),currentPage=Math.min(page,totalPages);
-    const end=totalLines-(currentPage-1)*pageSize,start=Math.max(0,end-pageSize);
-    return {items:lines.slice(start,end),page:currentPage,pageSize,totalLines,totalPages,hasPrevious:currentPage<totalPages,hasNext:currentPage>1};
+    return this.readLog(index,()=>({items:[] as string[],page:1,pageSize,totalLines:0,totalPages:1,hasPrevious:false,hasNext:false}),async(file,size)=>{
+      const matches=async(range:LogLineRange)=>range.length>0&&(stage==='all'||this.lineStage(await readLogLine(file,range))===stage);
+      let totalLines=0;for await(const range of logLineRanges(file,size))if(await matches(range))totalLines++;
+      const totalPages=Math.max(1,Math.ceil(totalLines/pageSize)),currentPage=Math.min(page,totalPages);
+      const end=totalLines-(currentPage-1)*pageSize,start=Math.max(0,end-pageSize),items:string[]=[];let current=0;
+      for await(const range of logLineRanges(file,size)) {
+        if(!await matches(range))continue;
+        if(current>=start&&current<end)items.push(await readLogLine(file,range));
+        if(++current>=end)break;
+      }
+      return {items,page:currentPage,pageSize,totalLines,totalPages,hasPrevious:currentPage<totalPages,hasNext:currentPage>1};
+    });
   }
   private lineStage(line:string):DiagnosticStage {
     try {const value=JSON.parse(line) as Record<string,unknown>;return validStage(value.stage)?value.stage:typeof value.event==='string'?eventStage(value.event):'unknown';}catch{return 'unknown';}
   }
   async exportRange(after:string,before:string) {
     await this.flush();
-    const records:DiagnosticEvent[]=[];const seen=new Set<string>();let invalidLines=0;
-    for(let index=this.maxFiles-1;index>=0;index--)for(const line of (await this.readRaw(index)).split('\n')) {
-      if(!line.trim())continue;
-      let record:DiagnosticEvent|undefined;try {record=cleanEvent(JSON.parse(line));}catch {}
-      if(!record){invalidLines++;continue;}
-      const key=record.instanceId+':'+record.seq;if(seen.has(key))continue;seen.add(key);records.push(record);
-    }
+    const records:DiagnosticEvent[]=[];const seen=new Set<string>(),retained:{oldestAt:string|null}={oldestAt:null};let invalidLines=0;
+    for(let index=this.maxFiles-1;index>=0;index--)await this.readLog(index,()=>undefined,async(file,size)=>{
+      for await(const range of logLineRanges(file,size)) {
+        if(!range.length)continue;const line=await readLogLine(file,range);if(!line.trim())continue;
+        let record:DiagnosticEvent|undefined;try {record=cleanEvent(JSON.parse(line));}catch {}
+        if(!record){invalidLines++;continue;}
+        const key=record.instanceId+':'+record.seq;if(seen.has(key))continue;seen.add(key);
+        if(retained.oldestAt===null||record.at<retained.oldestAt)retained.oldestAt=record.at;
+        if(record.event!=='agent.trace'&&record.at>=after&&record.at<before)records.push(record);
+      }
+    });
     records.sort((a,b)=>a.at.localeCompare(b.at)||a.seq-b.seq);
-    return {after,before,oldestRetainedAt:records[0]?.at??null,retentionLimited:!records.length||records[0].at>after,invalidLines,events:records.filter(e=>e.event!=='agent.trace'&&e.at>=after&&e.at<before)};
+    return {after,before,oldestRetainedAt:retained.oldestAt,retentionLimited:retained.oldestAt===null||retained.oldestAt>after,invalidLines,events:records};
   }
   async flush() {while(this.pending)await this.pending;}
   close():Promise<void> {if(this.closingPromise)return this.closingPromise;this.closed=true;this.closingPromise=this.finishClose();return this.closingPromise;}
