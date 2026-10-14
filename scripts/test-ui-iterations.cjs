@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 /**
  * Actual Central renderer, isolated loopback server, generated evidence only.
  * Build first: npm run build:central
@@ -5,7 +6,6 @@
  * Add --review to retain the synthetic node for an independent browser evaluator.
  * This records UI journey evidence. It does not assign model/human quality scores.
  */
-require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 const { app, BrowserWindow } = require('electron');
 const { mkdtempSync, mkdirSync, writeFileSync, readFileSync, readdirSync, rmSync } = require('node:fs');

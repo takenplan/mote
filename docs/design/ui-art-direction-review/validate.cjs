@@ -1,3 +1,4 @@
+require('../../../scripts/fixture-background.cjs');
 /** Actual hidden Chromium verification of every candidate, never the personal desktop. */
 const {app,BrowserWindow}=require('electron'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),assert=require('node:assert/strict'),{pathToFileURL}=require('node:url'),os=require('node:os');
 const repo=path.resolve(__dirname,'../../..'),arg=process.argv.indexOf('--folder'),folder=arg>=0?path.resolve(process.argv[arg+1]):path.join(repo,'.mote/ui-art-direction-review');

@@ -165,6 +165,8 @@ summary { min-height:var(--mote-control-height); padding-block:var(--mote-space-
 .permission-badge.granted { color:var(--mote-success); background:color-mix(in srgb,var(--mote-success) 8%,var(--mote-surface)); }
 .permission-badge.denied { color:var(--mote-danger); background:color-mix(in srgb,var(--mote-danger) 8%,var(--mote-surface)); }
 .permission-badge.unknown { color:var(--mote-muted); background:var(--mote-background); }
+[data-page=permissions] .permission-badge { margin:0 var(--mote-space-item) var(--mote-space-item) 0; vertical-align:middle; }
+.ask-inline-citation { min-height:24px; padding:2px var(--mote-space-inline); font-size:var(--mote-font-meta); line-height:1.5; background:var(--mote-tint); border-color:var(--mote-control-border); }
 .central-status.syncing { background:var(--mote-surface); border-color:var(--mote-border); }
 .central-status.syncing .central-status-icon { color:var(--mote-accent); background:var(--mote-tint); }
 .central-status.error { background:var(--mote-surface); border-color:var(--mote-danger); }
@@ -180,7 +182,8 @@ summary { min-height:var(--mote-control-height); padding-block:var(--mote-space-
 .mask-control input[type=range] { accent-color:var(--mote-accent); }
 .mask-control output { color:var(--mote-accent); }
 .page [aria-busy=true]::before,#feedback[aria-busy=true]::before { border-color:var(--mote-border); border-top-color:var(--mote-accent); }
-#feedback { color:var(--mote-danger); border-color:var(--mote-danger); background:color-mix(in srgb,var(--mote-danger) 8%,var(--mote-surface)); border-radius:var(--mote-radius-control); box-shadow:none; font-size:var(--mote-font-support); }
+#feedback { color:var(--mote-warning); border-color:var(--mote-warning); background:color-mix(in srgb,var(--mote-warning) 8%,var(--mote-surface)); border-radius:var(--mote-radius-control); box-shadow:none; font-size:var(--mote-font-support); }
+#feedback[aria-busy=true] { color:var(--mote-accent); border-color:var(--mote-border); background:var(--mote-tint); }
 #feedback.success { color:var(--mote-success); border-color:var(--mote-success); background:color-mix(in srgb,var(--mote-success) 8%,var(--mote-surface)); }
 .compression-compare h3 { font-size:var(--mote-font-row); }
 .about-brand { gap:var(--mote-space-panel); padding:var(--mote-space-item) 0 var(--mote-space-group); flex-wrap:wrap; }

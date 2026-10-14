@@ -1,3 +1,4 @@
+require('../../../scripts/fixture-background.cjs');
 /** Background-only actual Chromium check for the offline, generated review artifact. */
 const {app,BrowserWindow}=require('electron');
 const {mkdtempSync,rmSync,mkdirSync,writeFileSync,readFileSync,existsSync}=require('node:fs');

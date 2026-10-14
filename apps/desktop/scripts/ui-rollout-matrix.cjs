@@ -36,8 +36,9 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
     const clipped=Array.from(document.querySelectorAll('main button,main input,main select,main textarea,dialog[open] button')).filter(visible).filter(e=>{const b=e.getBoundingClientRect();return b.width>0&&(b.left<-.5||b.right>innerWidth+.5||(e.tagName==='BUTTON'&&e.scrollWidth>e.clientWidth+2));}).map(e=>({id:e.id,text:e.textContent.slice(0,80),bounds:bounds(e),scroll:e.scrollWidth,client:e.clientWidth}));
     return {viewport:{width:innerWidth,height:innerHeight,devicePixelRatio},horizontalOverflow:document.documentElement.scrollWidth>innerWidth,clipped,footer:footer.hidden?null:{...bounds(footer),reserved:parseFloat(document.documentElement.style.getPropertyValue('--settings-save-height')),buttons:Array.from(footer.querySelectorAll('button')).map(e=>({text:e.textContent,bounds:bounds(e)}))}};
   }
-  async function capture(name,page) {
-    const readiness=await ready(page);await frames();
+  async function capture(name,page,consumer) {
+    const readiness=consumer?{page,marker:consumer,ready:true,locale:await js('document.documentElement.lang'),state:'generated connected answer'}:await ready(page);await frames();
+    if(consumer)assert.equal(await js('!!document.querySelector('+JSON.stringify(consumer)+')'),true,'Actual connected answer consumer');
     const layout=await js('('+geometry.toString()+')()');
     assert.equal(layout.horizontalOverflow,false,'No horizontal overflow '+name);
     assert.deepEqual(layout.clipped,[],'Complete controls '+name);
@@ -133,7 +134,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
   await js('document.querySelector("#note-text").value="";document.querySelector("#note-text").dispatchEvent(new Event("input"));true;');
   ipcMain.removeHandler('mote:connection-preview');ipcMain.handle('mote:connection-preview',()=>{throw Error('Generated connection preview failure');});
   await navigate('connection');await js('document.querySelector("#connection-input").value="Generated invalid invitation";document.querySelector("#connection-preview").click();true;');
-  await until(()=>js('document.querySelector("#connection-state").textContent.includes("Generated")'),'preview error');await capture('connection-preview-error','connection');
+  await until(()=>js('document.querySelector("#feedback").textContent.includes("Generated connection preview failure")&&!document.querySelector("#settings-fields").disabled'),'preview error');await capture('connection-preview-error','connection');
   const {Collector}=require('../dist/collector'),originalStatus=Collector.prototype.status;
   Collector.prototype.status=function(){const value=originalStatus.call(this);assert.equal(value.running,false);return {...value,running:true,state:'capturing'};};
   try{window.webContents.send('mote:status',{...(await js('window.mote.status()')),running:true,state:'capturing'});await navigate('capture');await capture('generated-running-settings','capture');assert.equal(await js('document.querySelector("#save-hint").textContent.includes("自动恢复")'),true,'Running save consequence visible');}
@@ -145,6 +146,47 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
   await navigate('developer');await js('document.querySelector("[data-page=developer] .advanced-settings").open=true;true;');
   ipcMain.removeHandler('mote:diagnostics-sample');ipcMain.handle('mote:diagnostics-sample',()=>{throw Error('Generated diagnostic sample failure');});
   await js('document.querySelector("#diagnostics-sample").click();true;');await until(()=>js('!document.querySelector("#feedback").hidden'),'generated diagnostic error');await capture('diagnostics-error','developer');
+  // Exercise the connected answer through the real history action and IPC.
+  // Auth/answer data are generated adapters, and evidence opens are recorded.
+  const baseStatus=await js('window.mote.status()'),authenticatedStatus={...baseStatus,config:{...baseStatus.config,serverUrl:'http://127.0.0.1:47999',tokenConfigured:true}};
+  const citationId='11111111-2222-4333-8444-555555555555',conversationId='22222222-3333-4444-8555-666666666666';
+  const excerpt='Generated original  双空格 🐾\n'.repeat(24)+'Original final line stays readable.';
+  const conversation={id:conversationId,title:'Generated connected answer',turns:[{question:'Generated long answer with evidence',status:'completed',result:{answer:'**Generated answer** ['+citationId+']\n\n'+Array.from({length:6},(_,i)=>'- Complete generated finding '+(i+1)+' ['+citationId+']').join('\n'),citations:[{id:citationId,appName:'Generated source',capturedAt:'2026-10-14',excerpt}]}}]};
+  const previousAsk=ipcMain._invokeHandlers.get('mote:ask'),previousStatus=ipcMain._invokeHandlers.get('mote:get-status'),previousCentral=ipcMain._invokeHandlers.get('mote:central'),previousSend=window.webContents.send;
+  const openedEvidence=[];
+  ipcMain.removeHandler('mote:get-status');ipcMain.handle('mote:get-status',()=>authenticatedStatus);
+  ipcMain.removeHandler('mote:ask');ipcMain.handle('mote:ask',(_event,command)=>command==='history'?{items:[{id:conversationId,title:conversation.title}]}:command==='conversation'?conversation:{items:[]});
+  ipcMain.removeHandler('mote:central');ipcMain.handle('mote:central',(_event,page,id)=>{openedEvidence.push({page,id});});
+  window.webContents.send=function(channel,...args){return previousSend.call(this,channel,...(channel==='mote:status'?[authenticatedStatus]:args));};
+  try {
+    window.webContents.send('mote:status',authenticatedStatus);
+    for(const language of ['zh-CN','en']) {
+      window.webContents.setZoomFactor(1);await changeLanguage(language);
+      await navigate('ask');await until(()=>js('document.querySelector("#ask-history button")&&!document.querySelector("#ask-history button").disabled'),'connected generated history');
+      await js('document.querySelector("#ask-history button").click();true;');await until(()=>js('document.querySelectorAll(".ask-inline-citation").length===7&&!document.querySelector("#ask-refresh").disabled'),'connected full answer');
+      for(const [variant,zoom] of [['normal',1],['compact',1],['large',1.3]]) {
+        window.setSize(variant==='normal'?1140:820,variant==='normal'?840:620);window.webContents.setZoomFactor(zoom);await frames();
+        await js('window.scrollTo(0,0);true;');await capture(['ask-connected',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-answer');
+        const references=await js('Array.from(document.querySelectorAll(".ask-inline-citation")).map(e=>({height:e.getBoundingClientRect().height,complete:e.scrollWidth<=e.clientWidth+1}))');
+        assert(references.every(e=>e.height>=24&&e.height<=32&&e.complete),'Compact complete inline references');
+        assert.equal(await js('getComputedStyle(document.querySelector(".ask-evidence button")).minHeight'),'48px','Full original action retains control role');
+        await js('document.querySelector(".ask-evidence summary").click();true;');assert.equal(await js('document.querySelector(".ask-excerpt").textContent'),excerpt,'Full generated evidence excerpt');
+        await js('document.querySelector(".ask-excerpt").scrollIntoView({block:"end"});true;');await capture(['ask-evidence',language==='en'?'en':'zh',variant].join('-'),'ask','.ask-excerpt');
+        await js('document.querySelector(".ask-evidence summary").click();document.querySelector(".ask-inline-citation").scrollIntoView({block:"center"});document.querySelector(".ask-inline-citation").focus();true;');
+        window.webContents.debugger.attach('1.3');
+        try{await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:true});window.webContents.focus();window.webContents.sendInputEvent({type:'keyDown',keyCode:'Enter'});window.webContents.sendInputEvent({type:'char',keyCode:'\r'});window.webContents.sendInputEvent({type:'keyUp',keyCode:'Enter'});await until(()=>openedEvidence.at(-1)?.id===citationId,'real citation IPC');}
+        finally{await window.webContents.debugger.sendCommand('Emulation.setFocusEmulationEnabled',{enabled:false});window.webContents.debugger.detach();}
+        assert.equal(await js('document.activeElement.classList.contains("ask-inline-citation")'),true,'Citation keyboard focus remains on source action');
+        await js('document.querySelector(".ask-evidence button").click();true;');await until(()=>openedEvidence.at(-1)?.id===citationId,'full original IPC');
+        assert.deepEqual(openedEvidence.at(-1),{page:'ask',id:citationId});openedEvidence.length=0;
+        journeys.push({name:'connected long answer, complete excerpt, citation keyboard focus and original evidence IPC',language,variant,verified:true,generatedResponse:true,browserOpenStubbed:true});
+      }
+    }
+  } finally {
+    window.webContents.send=previousSend;
+    for(const [channel,handler] of [['mote:get-status',previousStatus],['mote:ask',previousAsk],['mote:central',previousCentral]]){ipcMain.removeHandler(channel);ipcMain.handle(channel,handler);}
+    window.webContents.send('mote:status',baseStatus);
+  }
   journeys.push({name:'renderer reload, failed note input, connection error and synthetic running status',verified:true,collectionStarted:false});
   assert.equal((await js('window.mote.status()')).running,false,'No real collection');
   assert.equal((await js('window.mote.sources()')).length,0,'No source import committed');
