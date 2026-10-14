@@ -268,7 +268,21 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val item = row.getJSONObject("item")
             ui.text(item.optString("title"), DesignTokens.fontTitleMobile.toFloat()); ui.text(item.optString("mimeType")); ui.text(item.optString("text"))
-            values(row.optJSONObject("job") ?: JSONObject(), ui.card())
+            val job = row.optJSONObject("job")
+            val cancellation = row.optJSONObject("cancellation")
+            val processing = ui.card()
+            ui.text(MoteI18n.text("处理状态") + " · " + processingState(job?.optString("state").orEmpty(), job?.optString("error").orEmpty(), job == null), parent = processing)
+            if (job != null) {
+                ui.text(MoteI18n.text("阶段") + " · " + job.optString("stage"), parent = processing)
+                ui.text(MoteI18n.text("摘要") + " · " + processingState(job.optString("summary_state"), job.optString("error")), parent = processing)
+                if (!job.isNull("error") && job.optString("error").isNotBlank()) ui.text(job.getString("error"), parent = processing)
+            }
+            if (row.optBoolean("originMissing")) ui.text(MoteI18n.text(" · 来源已不可见，中央归档仍可使用").trim(), parent = processing)
+            when (cancellation?.optString("wait")) {
+                "running" -> ui.text(MoteI18n.text("外部结果尚未确认，停止请求不代表远端工作已结束。"), parent = processing)
+                "unknown" -> ui.text(MoteI18n.text("上次处理是否结束未知，重试可能重复执行。请确认后继续。"), parent = processing)
+            }
+            if (job != null) ui.disclosure(MoteI18n.text("处理详情")) { target -> ui.text(job.toString(2), parent = target) }
             if (row.optBoolean("hasOriginal")) {
                 if (item.optString("mimeType").startsWith("image/")) ui.button(MoteI18n.text("查看原图")) { image("/api/files/" + enc(id) + "/content", body) }
                 if (item.optString("mimeType").startsWith("audio/")) ui.button(MoteI18n.text("播放录音")) { screens.playAudio("/api/files/" + enc(id) + "/content", body) }
@@ -293,7 +307,6 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 }
             }
             if (!chunks.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { file(id, chunks.getInt("nextOffset")) }
-            val cancellation = row.optJSONObject("cancellation")
             if (cancellation?.optBoolean("canCancel") == true) ui.button(MoteI18n.text("停止处理")) {
                 ui.work(MoteI18n.text("正在停止处理…"), { api.post("/api/files/" + enc(id) + "/cancel") }) { file(id, offset) }
             }
@@ -309,6 +322,20 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/files/" + enc(id)) }) { screens.refresh() }
             } }
         }
+    }
+    private fun processingState(state: String, reason: String = "", notScheduled: Boolean = false): String {
+        val key = CentralProcessingPresentation.stateKey(state, reason, notScheduled) ?: when (state) {
+            "waiting" -> "等待处理"
+            "running" -> "运行中"
+            "blocked" -> "受阻"
+            "failed" -> "处理失败"
+            "succeeded" -> "已完成"
+            "cancelled" -> "已取消"
+            "skipped" -> "已跳过"
+            "stale" -> "来源变化待重验"
+            else -> return state
+        }
+        return MoteI18n.text(key)
     }
     private fun sources() {
         ui.button(MoteI18n.text("本机来源")) { ui.startActivity(android.content.Intent(ui, SourcesActivity::class.java)) }
@@ -348,7 +375,11 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("记忆设置")) { CentralAdmin(screens).memorySettings() }
         paged("/api/memories?limit=30", ui.card()) { row, card ->
             ui.text(row.getString("title"), DesignTokens.fontSection.toFloat(), card)
-            val status = when (row.optString("status")) {
+            ui.text(memoryStatus(row) + " · " + row.getInt("evidenceCount") + " " + MoteI18n.text("条证据"), parent = card)
+            ui.button(MoteI18n.text("查看详情"), parent = card) { memory(row.getString("id")) }
+        }
+    }
+    private fun memoryStatus(row: JSONObject): String = when (row.optString("status")) {
                 "proposed" -> MoteI18n.text("待重新处理")
                 "published" -> when {
                     !row.isNull("supersededBy") && row.optString("supersededBy").isNotBlank() &&
@@ -359,16 +390,33 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 }
                 "stale" -> MoteI18n.text("需要重验")
                 else -> row.optString("status")
-            }
-            ui.text(status + " · " + row.getInt("evidenceCount") + " " + MoteI18n.text("条证据"), parent = card)
-            ui.button(MoteI18n.text("查看详情"), parent = card) { memory(row.getString("id")) }
-        }
     }
     private fun memory(id: String) {
         val api = client
         ui.work(MoteI18n.text("正在读取记忆…"), { api.get("/api/memories/" + enc(id)) }) { row ->
-            body.removeAllViews(); screens.setBack { screens.refresh() }; values(row, ui.card())
+            body.removeAllViews(); screens.setBack { screens.refresh() }
             val evidenceIds = row.optJSONArray("evidenceIds") ?: JSONArray()
+            ui.text(row.getString("title"), DesignTokens.fontTitleMobile.toFloat())
+            ui.text(memoryStatus(row) + " · " + evidenceIds.length() + " " + MoteI18n.text("条证据"))
+            ui.text(row.optString("statement"))
+            val facts = ui.card()
+            ui.text(MoteI18n.text("版本 {0}", row.optInt("version", 1)), parent = facts)
+            listOf("validFrom" to "生效于", "validUntil" to "失效于").forEach { (field, label) ->
+                if (!row.isNull(field) && row.optString(field).isNotBlank()) ui.text(MoteI18n.text(label) + " · " + row.getString(field), parent = facts)
+            }
+            if (!row.isNull("correction") && row.has("correction")) ui.text(MoteI18n.text("这是用户主动纠正的版本，原始说明已保留。"), parent = facts)
+            row.optJSONObject("admission")?.let { admission ->
+                ui.text(MoteI18n.text(if (admission.optString("layer") == "memory") "精选记忆" else "事件与资料"), DesignTokens.fontSection.toFloat(), facts)
+                ui.text(admission.optString("reason"), parent = facts); ui.text(admission.optString("scope"), parent = facts)
+                if (admission.optString("attribution").isNotBlank()) ui.text(admission.getString("attribution"), parent = facts)
+            }
+            // Applicability, relationships and evidence validity remain direct facts.
+            listOf("coding", "scopeRefs", "relations", "supersededBy", "supersededAt", "staleReason").forEach { field ->
+                if (!row.isNull(field) && row.has(field)) values(JSONObject().put(field, row.get(field)), facts)
+            }
+            ui.text(MoteI18n.text("不确定性"), DesignTokens.fontSection.toFloat(), facts)
+            ui.text(row.optString("uncertainty"), parent = facts)
+            ui.disclosure(MoteI18n.text("元数据")) { target -> ui.text(row.toString(2), parent = target) }
             for (i in 0 until evidenceIds.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (i + 1)) { captureEvidence(evidenceIds.getString(i)) }
             val statement = ui.field(MoteI18n.text("陈述"), row.optString("statement"), multiline = true)
             val title = ui.field(MoteI18n.text("标题"), row.optString("title"))

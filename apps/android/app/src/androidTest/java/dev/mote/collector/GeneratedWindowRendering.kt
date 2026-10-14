@@ -63,6 +63,7 @@ internal object GeneratedWindowRendering {
                 if (view is ViewGroup) {
                     put("layoutMode", view.layoutMode).put("clipChildren", view.clipChildren).put("clipToPadding", view.clipToPadding)
                 }
+                put("minimumHeight", view.minimumHeight).put("measuredHeight", view.measuredHeight)
                 if (view is android.widget.LinearLayout) put("baselineAligned", view.isBaselineAligned)
             }
     }
@@ -76,6 +77,7 @@ internal object GeneratedWindowRendering {
     /** Compare actual child pixels with the same overlay draw; property-only checks miss parent clipping. */
     private fun dialogButtons(overlay: View, appBitmap: Bitmap, origin: IntArray, failures: MutableList<String>): JSONArray {
         val evidence = JSONArray()
+        val nativePicker = views(overlay).any { it is android.widget.DatePicker || it is android.widget.TimePicker }
         val actionIds = setOf(android.R.id.button1, android.R.id.button2, android.R.id.button3)
         for (button in views(overlay).filter { it.isShown && it.id in actionIds && it !is CompoundButton }) {
             val full = fullBounds(button)
@@ -102,6 +104,10 @@ internal object GeneratedWindowRendering {
             }
             if (!button.isLaidOut || button.width <= 0 || button.height <= 0) {
                 errors += "Button has not completed real layout: laidOut=${button.isLaidOut}, requested=${button.isLayoutRequested}, size=${button.width}x${button.height}"
+            } else if (nativePicker) {
+                // Android's unmodified date/time picker uses its platform action pattern.
+                // Mote dialogs continue to require the exact drawn control border below.
+                geometry.put("nativePickerPlatformPattern", true).put("pixelBorderContract", "native platform picker; full geometry required; visually review actual pixels")
             } else {
                 val isolated = Bitmap.createBitmap(button.width, button.height, Bitmap.Config.ARGB_8888)
                 try {
@@ -209,7 +215,12 @@ internal object GeneratedWindowRendering {
             "rollout-scanner" -> Triple("scanner", "content", "扫描连接二维码")
             "rollout-calendar" -> Triple("calendar", "restriction", "日程建议")
             "rollout-pairing" -> Triple("rollout-pairing", "content", "连接中央节点")
-            else -> if (name.startsWith("rollout-central-")) {
+            else -> if (name.startsWith("rollout-detail-central-")) {
+                val centralPage = name.removePrefix("rollout-detail-central-")
+                val title = CentralScreens.pages.single { it.first == centralPage }.second
+                if (centralPage == "files") Triple(centralPage, "content", "Generated original.txt")
+                else Triple(centralPage, "content", title)
+            } else if (name.startsWith("rollout-central-")) {
                 val centralPage = name.removePrefix("rollout-central-")
                 val title = CentralScreens.pages.single { it.first == centralPage }.second
                 when (centralPage) {
@@ -275,7 +286,8 @@ internal object GeneratedWindowRendering {
         val variant = InstrumentationRegistry.getArguments().getString("uiIterationVariant", "default")!!
         val state = canonicalDirectory.takeIf { it.path.contains("/ui-state-evidence/") }?.name
         val directory = File(activity.filesDir, "ui-scroll-evidence/$variant/$name" + (state?.let { "/state-$it" } ?: "")).apply { mkdirs() }
-        val targetWindows = if (overlays.isEmpty()) listOf(activity.window.decorView) else overlays
+        // Nested native pickers cover the prior form; continuation belongs to the focused window.
+        val targetWindows = if (overlays.isEmpty()) listOf(activity.window.decorView) else overlays.takeLast(1)
         val evidence = JSONArray()
         for ((index, scroll) in targetWindows.flatMap(::views).filterIsInstance<android.widget.ScrollView>().filter { it.isShown }.withIndex()) {
             val visible = Rect()

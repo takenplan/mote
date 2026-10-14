@@ -298,6 +298,24 @@ class MoteDialogBuilder(context: Context) : android.app.AlertDialog.Builder(cont
         override fun onViewAttachedToWindow(view: View) {
         window.setBackgroundDrawable(MoteUi.shape(context, Color.WHITE, MoteUi.readingRadius))
         MoteUi.styleTree(window.decorView)
+        // Some platform dialogs wrap stacked actions in a ScrollView whose
+        // minimum height reserves only one action. Keep every styled action
+        // visible and let the existing message area take the remaining height.
+        val actions = listOf(android.content.DialogInterface.BUTTON_POSITIVE, android.content.DialogInterface.BUTTON_NEGATIVE,
+            android.content.DialogInterface.BUTTON_NEUTRAL).mapNotNull(dialog::getButton).firstOrNull()?.parent as? View
+        val panel = actions?.parent as? ScrollView
+        fun reserveActions() {
+            if (panel == null || actions == null) return
+            val required = actions.measuredHeight + panel.paddingTop + panel.paddingBottom
+            if (required > 0 && panel.minimumHeight != required) {
+                panel.minimumHeight = required
+                // A request raised from the child's layout can be suppressed
+                // during the dialog's second layout pass. Queue the real pass.
+                panel.post { panel.requestLayout() }
+            }
+        }
+        actions?.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> reserveActions() }
+        reserveActions()
         val original = window.callback
         window.callback = object : android.view.Window.Callback by original {
             override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {

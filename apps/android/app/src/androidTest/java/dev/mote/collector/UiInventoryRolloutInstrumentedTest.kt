@@ -57,6 +57,20 @@ class UiInventoryRolloutInstrumentedTest {
                     File(directory, "$name.txt").writeText(text(activity).joinToString("\n"))
                     assertFalse(settings.enabled)
                 }
+                if (args.getString("uiScrollEvidence") == "true" && name in setOf("rollout-folder-task", "rollout-file-task-settings", "rollout-folder-task-settings")) {
+                    scenario.onActivity { activity ->
+                        assertTrue(views(activity.window.decorView).filterIsInstance<Button>().single { it.isShown && it.text.toString() == MoteI18n.text("高级设置") }.performClick())
+                    }
+                    instrumentation.waitForIdleSync()
+                    scenario.onActivity { activity ->
+                        val state = "advanced-$name"
+                        val target = File(context.filesDir, "ui-state-evidence/$variant/$state").apply { mkdirs() }
+                        GeneratedWindowRendering.save(activity, target, name)
+                        val metadata = File(target, "$name.json")
+                        metadata.writeText(org.json.JSONObject(metadata.readText()).put("supplementState", state).put("automaticVisualAcceptance", false).toString(2))
+                        assertFalse(settings.enabled)
+                    }
+                }
             }
         }
         render("rollout-legacy-sources", Intent(context, MainActivity::class.java).putExtra("page", "SOURCES"), "已支持的来源")
