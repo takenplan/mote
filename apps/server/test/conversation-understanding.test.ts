@@ -18,14 +18,14 @@ const user=`## user · Recorded: ${userTime}\n\nGenerated fixture: Keep the mono
 const assistant=`## assistant · Recorded: ${assistantTime}\n\nGenerated fixture: PR #123 is ready; automatic tests passed. Device checks are still pending.\n\n`;
 const body=user+assistant+'Generated unselected original remains searchable.';
 const config={owner:'models' as const,fingerprint:'a'.repeat(64),revision:1,profileId:'generated',provider:'openai',model:'fixture',configured:true};
-async function fixture(t:TestContext){
+async function fixture(t:TestContext,originalBody=body){
  const dir=mkdtempSync(join(tmpdir(),'mote-conversation-understanding-')),store=new Store(dir),materials=new MaterialStore(store);
  t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
  const id='00000000-0000-4000-8000-000000000123';
  await store.ingest({id,deviceId:'fixture',deviceName:'Generated',platform:'import',source:'message',capturedAt:'2026-01-01T00:00:00Z',durationMs:0,ocrText:'Generated source membership'});
  const material=materials.publish({id:materialId('fixture','conversation'),kind:'mote.coding-session',schemaVersion:6,title:'Generated session',
   origin:{sourceId:'fixture',externalId:'conversation',deviceId:'fixture',provider:'codex',projectKey:'generated-project',projectIdentity:'workspace',sessionId:'generated-session'},
-  blocks:[{id:'section-0',kind:'text',format:'markdown-fragment',text:body,memberIds:['source']}],members:[{id:'source',kind:'capture',ref:'capture:'+id}],
+  blocks:[{id:'section-0',kind:'text',format:'markdown-fragment',text:originalBody,memberIds:['source']}],members:[{id:'source',kind:'capture',ref:'capture:'+id}],
   coverage:{state:'complete'},artifacts:[{key:'conversation',state:'ready'}],fidelity:{state:'derived',limitations:['metadata_projected','tools_excluded']},retention:{original:'retained',policy:'keep'}});
  const anchor=materials.evidenceIds(material.ref)[0],records=materials.evidence([anchor]);
  // Preserve the host read fields on versions predating the read-span extension.
@@ -132,4 +132,14 @@ test('the version two producer retains more than eight candidates and explicit f
  const coverage=[{key:members[0].key,state:'checked',candidateIndexes:Array.from({length:9},(_,index)=>index)},{key:members[1].key,state:'no_candidates',candidateIndexes:[]}];
  const outputs=await processor(f,async request=>{assert.ok(request.taskContext?.memoryWork);return result(f.anchor,{...output,coverage,capacity:{saturated:false}});}).process({...base,materials:pages,config:{...base.config,memoryWork:work,generationContract:'d'.repeat(64)}});
  const metadata=outputs[0].metadata;assert.equal(metadata.productsVersion,2);assert.equal((metadata.memoryCandidates as unknown[]).length,9);assert.deepEqual(metadata.memoryCoverage,coverage);assert.deepEqual(metadata.memoryCapacity,{saturated:false});assert.equal(metadata.runId,'generated-understanding');assert.equal(metadata.generationContract,'d'.repeat(64));
+});
+
+test('range-evaluation conversation products preserve 80 selected candidates and their contract without a semantic capacity envelope',async t=>{
+ const lines=Array.from({length:80},(_,index)=>`Generated owner requires option ${index} for the project.`),originalBody=user+lines.join('\n')+'\n\n'+assistant;
+ const f=await fixture(t,originalBody),base=input(f.page()),member={key:'a'.repeat(64),id:f.anchor,offset:0,length:originalBody.length,fingerprint:'c'.repeat(64),contextTime:userTime,state:'pending' as const,memoryIds:[]};
+ const work={workContract:'range-evaluation@1',members:[member],instruction:'Assess this complete original and choose useful generated project context'},value=products(f.anchor);
+ value.memoryCandidates=lines.map((quote,index)=>({...value.memoryCandidates[0],title:'Generated selected project requirement '+index,statement:`The owner requires generated option ${index} in the project [${f.anchor}]`,evidence:[{id:f.anchor,quote}]}));
+ const coverage=[{key:member.key,state:'checked',candidateIndexes:lines.map((_,index)=>index)}];
+ const outputs=await processor(f,async request=>{assert.equal((request.taskContext!.memoryWork as {workContract:string}).workContract,'range-evaluation@1');return result(f.anchor,{...value,coverage});}).process({...base,config:{...base.config,memoryWork:work,generationContract:'d'.repeat(64)}});
+ const metadata=outputs[0].metadata;assert.equal(metadata.productsVersion,3);assert.equal(metadata.workContract,'range-evaluation@1');assert.equal((metadata.memoryCandidates as unknown[]).length,80);assert.deepEqual(metadata.memoryCoverage,coverage);assert.equal(metadata.memoryCapacity,undefined);assert.equal(metadata.generationContract,'d'.repeat(64));assert.equal(f.memories.list().length,0,'unreviewed shared candidates remain private products');
 });

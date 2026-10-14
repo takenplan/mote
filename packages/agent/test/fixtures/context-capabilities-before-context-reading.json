@@ -1,0 +1,107 @@
+[
+  {
+    "name": "action_catalog",
+    "version": "1",
+    "fingerprint": "38f7c0b8efe5d9939505409c8faedbb18a8ddda6fc760c5ede0f41cb5867b87c"
+  },
+  {
+    "name": "activity",
+    "version": "1",
+    "fingerprint": "797f1135a7f5279edf17518c60e7687397ea786288c41614c45a48a9a507339e"
+  },
+  {
+    "name": "attribution_context",
+    "version": "1",
+    "fingerprint": "7523da0e3e6ce811763401f3f782e04a91a9ac83702e02f6e2d4b07e0c4d0111"
+  },
+  {
+    "name": "changes",
+    "version": "1",
+    "fingerprint": "480886827dec539da64b92a165b2bfb2505620940960e375a1db7c97b9fec5e2"
+  },
+  {
+    "name": "context_index",
+    "version": "1",
+    "fingerprint": "9023304f7f1eb4e4b99acc236f59dfcbfee08593d190f91de34a359fef83989e"
+  },
+  {
+    "name": "devices",
+    "version": "1",
+    "fingerprint": "7a884020959b45f27a876d6eae7f8f7f35f7a5cd525ff962dcad235f00fcd7ef"
+  },
+  {
+    "name": "evidence",
+    "version": "1",
+    "fingerprint": "ce7a7661305f85f1648d96ec3a00083eceac9bc7315e792fb6f3ed121779be70"
+  },
+  {
+    "name": "file_chunks",
+    "version": "1",
+    "fingerprint": "9cf23b037ed4bf68982eda83e169ff154f48024b6b61c17911732610392929bd"
+  },
+  {
+    "name": "material_catalog",
+    "version": "1",
+    "fingerprint": "148979dd9656d0260ff8d2037152ee4ae1c645d1a07d6e01c206a3b3e9b5a85d"
+  },
+  {
+    "name": "material_read",
+    "version": "1",
+    "fingerprint": "82288f69ddf3481b8e098bda0c33c7155ac2800460d16372d3f7178ccf1972e4"
+  },
+  {
+    "name": "media_activity",
+    "version": "1",
+    "fingerprint": "57d19c2664be641ee2f29f634d766bde752285bc17e4683abf8508a30f367ea1"
+  },
+  {
+    "name": "memories",
+    "version": "1",
+    "fingerprint": "3d8d405093a76f9bff1594da3135a13ae8ae515a1dfaf38074bf559c2055d357"
+  },
+  {
+    "name": "progress_update",
+    "version": "1",
+    "fingerprint": "d9fc1e1c300265b8441c78d36f5a6a6024088532055ffa00bf0e3837d986e8e1"
+  },
+  {
+    "name": "read_file_evidence",
+    "version": "1",
+    "fingerprint": "09b73b14c9f40e16b81e4df56eafbfe46ffa4eb7dbd422fd0335370fe11d8706"
+  },
+  {
+    "name": "read_image",
+    "version": "1",
+    "fingerprint": "5ff76115c9e26efb4b4e4035288692fd2352d2df29dc8bf83b771ae2ec146f0d"
+  },
+  {
+    "name": "search_context",
+    "version": "1",
+    "fingerprint": "d956918758796a7453db63bea671f86f151355ef8e5a54167685c2e4362db6c6"
+  },
+  {
+    "name": "segments",
+    "version": "1",
+    "fingerprint": "0970e4d4db1cdb2a001732e8edd6bc95eaf3b6126278b4ac2f708114a5979122"
+  },
+  {
+    "name": "source_history",
+    "version": "1",
+    "fingerprint": "4fc58df5e7fcf998f04041c7fa9e6c78e1414c4e50465487b13133eba74be9cc"
+  },
+  {
+    "name": "source_items",
+    "version": "1",
+    "fingerprint": "8b5cb73a35564b7a2b0c7defb6f9a2d3477d8d474aa36a1caf0762721f6caaae"
+  },
+  {
+    "name": "sources",
+    "version": "1",
+    "fingerprint": "880f16e703d65800bc2a867ba8978aa6052b5754ab40847e884f9757de32d32a"
+  },
+  {
+    "name": "timeline",
+    "version": "1",
+    "fingerprint": "53834c191033b70bd6971b105a1f7d2beeb36206e0b1d695349bf3ee3a84b98c"
+  }
+]

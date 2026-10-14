@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 /** Dedicated Android fixture AVD -> real node -> desktop client + real web renderer.
  * Build development/androidTest APKs, shared/server/web and desktop TypeScript first.
  * Run: node_modules/.bin/electron scripts/dedupe-cross-e2e.cjs

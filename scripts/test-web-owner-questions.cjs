@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Isolated real server and renderer; all source text and model output are generated. */
 const {app,BrowserWindow}=require('electron');

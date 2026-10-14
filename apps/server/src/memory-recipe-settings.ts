@@ -4,7 +4,8 @@ import type {MemoryStrategies} from './memory-strategies.js';
 import {memoryRecipeBindingSchema,memoryStrategyRefSchema,type MemoryRecipeBinding} from './memory-strategy-contract.js';
 import {DAILY_EVENT_RECIPE} from './daily-event-memory-policy.js';
 import {isCaptureMemorySource} from './capture-memory-source.js';
-import {PERSONAL_MEMORY_RECIPE} from './bounded-personal-memory-policy.js';
+import {PERSONAL_MEMORY_RECIPE,PERSONAL_MEMORY_RECIPE_V3} from './bounded-personal-memory-policy.js';
+import {RANGE_SELECTION_PERSONAL_RECIPE,RANGE_SELECTION_DAILY_RECIPE} from './memory-range-selection-policy.js';
 
 export const memoryRecipeScope=(binding:MemoryRecipeBinding)=>'recipe/'+sha256(JSON.stringify(binding));
 const bindingsSchema=z.array(memoryRecipeBindingSchema).min(1).max(9);
@@ -23,24 +24,29 @@ export class MemoryRecipeSettings {
       CREATE TABLE IF NOT EXISTS memory_recipe_legacy_scopes(setting_id TEXT NOT NULL REFERENCES memory_recipe_settings(id) ON DELETE CASCADE,scope TEXT NOT NULL,PRIMARY KEY(setting_id,scope));
       CREATE TABLE IF NOT EXISTS memory_recipe_legacy_exclusions(source_id TEXT PRIMARY KEY REFERENCES source_connections(id) ON DELETE CASCADE);`);
     if(!store.db.prepare("SELECT 1 FROM memory_recipe_settings WHERE id='default'").get()){
-      const initial=[strategies.resolve(PERSONAL_MEMORY_RECIPE).binding];
+      const initial=[strategies.resolve(RANGE_SELECTION_PERSONAL_RECIPE).binding];
       store.reserveMetadata(Buffer.byteLength(JSON.stringify(initial))+128);
       store.db.prepare("INSERT INTO memory_recipe_settings VALUES('default',NULL,?)").run(JSON.stringify(initial));
     }
+    this.upgradeBuiltInDefaults();
+    this.upgradeRangeEvaluationDefaults();
     // Establish the new capture-only default once; it never changes saved source
     // overrides, old receipts or later owner choices. Other sources keep defaults.
     if(!store.db.prepare("SELECT 1 FROM memory_recipe_settings WHERE id='capture-default'").get()){
-      const prior=this.selection(),daily=strategies.resolve(DAILY_EVENT_RECIPE).binding;
-      const initial=prior.some(binding=>memoryRecipeScope(binding)===memoryRecipeScope(daily))?prior:[...prior,daily];
+      const prior=this.selection(),daily=strategies.resolve(RANGE_SELECTION_DAILY_RECIPE).binding;
+      const initial=prior.some(binding=>binding.recipe.id===daily.recipe.id)?prior:[...prior,daily];
       store.reserveMetadata(Buffer.byteLength(JSON.stringify(initial))+128);
       store.db.prepare("INSERT INTO memory_recipe_settings VALUES('capture-default',NULL,?)").run(JSON.stringify(initial));
     }
-    this.upgradeBuiltInDefaults();
   }
   private upgradeBuiltInDefaults(){
-    const db=this.store.db,id='bounded-personal@3';if(db.prepare('SELECT 1 FROM memory_recipe_default_upgrades WHERE id=?').get(id))return;
-    const old=this.strategies.resolve({id:'mote.personal-memory',version:'2'}).binding,
-      next=this.strategies.resolve(PERSONAL_MEMORY_RECIPE).binding,daily=this.strategies.resolve(DAILY_EVENT_RECIPE).binding;
+    this.upgradeBuiltInDefault('bounded-personal@3',{id:'mote.personal-memory',version:'2'},PERSONAL_MEMORY_RECIPE_V3);
+    this.upgradeBuiltInDefault('context-reading-personal@4',PERSONAL_MEMORY_RECIPE_V3,PERSONAL_MEMORY_RECIPE);
+  }
+  private upgradeBuiltInDefault(id:string,prior:Parameters<MemoryStrategies['resolve']>[0],current:Parameters<MemoryStrategies['resolve']>[0]){
+    const db=this.store.db;if(db.prepare('SELECT 1 FROM memory_recipe_default_upgrades WHERE id=?').get(id))return;
+    const old=this.strategies.resolve(prior).binding,
+      next=this.strategies.resolve(current).binding,daily=this.strategies.resolve(DAILY_EVENT_RECIPE).binding;
     db.exec('BEGIN IMMEDIATE');
     try{
       for(const [setting,expected] of [['default',[old]],['capture-default',[old,daily]]] as const){
@@ -48,9 +54,25 @@ export class MemoryRecipeSettings {
         if(!row||String(row.json)!==JSON.stringify(expected))continue;
         const json=JSON.stringify(expected.map(binding=>memoryRecipeScope(binding)===memoryRecipeScope(old)?next:binding));
         this.store.reserveMetadata(Buffer.byteLength(json)+256);
-        // Keep already authorized version-2 receipts runnable. This does not
+        // Keep already authorized prior-version receipts runnable. This does not
         // create receipts, reauthorize revoked work, or publish historical data.
         db.prepare('INSERT OR IGNORE INTO memory_recipe_legacy_scopes VALUES(?,?)').run(setting,memoryRecipeScope(old));
+        db.prepare('UPDATE memory_recipe_settings SET json=? WHERE id=?').run(json,setting);
+      }
+      db.prepare('INSERT INTO memory_recipe_default_upgrades VALUES(?)').run(id);db.exec('COMMIT');
+    }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
+  }
+  private upgradeRangeEvaluationDefaults(){
+    const db=this.store.db,id='range-evaluation@1';if(db.prepare('SELECT 1 FROM memory_recipe_default_upgrades WHERE id=?').get(id))return;
+    const oldPersonal=this.strategies.resolve(PERSONAL_MEMORY_RECIPE).binding,oldDaily=this.strategies.resolve(DAILY_EVENT_RECIPE).binding,
+      personal=this.strategies.resolve(RANGE_SELECTION_PERSONAL_RECIPE).binding,daily=this.strategies.resolve(RANGE_SELECTION_DAILY_RECIPE).binding;
+    db.exec('BEGIN IMMEDIATE');
+    try{
+      for(const [setting,expected,next] of [['default',[oldPersonal],[personal]],['capture-default',[oldPersonal,oldDaily],[personal,daily]]] as const){
+        const row=db.prepare('SELECT json FROM memory_recipe_settings WHERE id=?').get(setting);
+        if(!row||String(row.json)!==JSON.stringify(expected))continue;
+        const json=JSON.stringify(next);this.store.reserveMetadata(Buffer.byteLength(json)+expected.length*256);
+        for(const binding of expected)db.prepare('INSERT OR IGNORE INTO memory_recipe_legacy_scopes VALUES(?,?)').run(setting,memoryRecipeScope(binding));
         db.prepare('UPDATE memory_recipe_settings SET json=? WHERE id=?').run(json,setting);
       }
       db.prepare('INSERT INTO memory_recipe_default_upgrades VALUES(?)').run(id);db.exec('COMMIT');

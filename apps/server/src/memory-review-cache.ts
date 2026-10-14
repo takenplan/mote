@@ -1,4 +1,5 @@
 import type {QueryResult} from '@mote/shared';
+import {retainedMemoryReadReceipt} from './memory-read-context.js';
 
 /** Process-local, bounded review reuse. Never persisted or shared across archives. */
 export class MemoryReviewCache {
@@ -13,7 +14,7 @@ export class MemoryReviewCache {
   }
   put(key:string,result:QueryResult){
     // A reused verdict is not another model call or another usage receipt.
-    const json=JSON.stringify({answer:result.answer,citations:result.citations,trace:[],runId:result.runId}),bytes=Buffer.byteLength(json);
+    const json=JSON.stringify({answer:result.answer,citations:result.citations,trace:[],runId:result.runId,...retainedMemoryReadReceipt(result)}),bytes=Buffer.byteLength(json);
     if(bytes>this.maxBytes)return;
     this.remove(key);
     while(this.entries.size&&(this.entries.size>=this.maxEntries||this.bytes+bytes>this.maxBytes))this.remove(this.entries.keys().next().value!);

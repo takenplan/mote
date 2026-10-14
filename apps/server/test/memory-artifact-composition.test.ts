@@ -6,7 +6,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import type {QueryInput} from '@mote/agent';
+import {parseAnswer,type QueryInput} from '@mote/agent';
 import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {sha256} from '../src/store.js';
@@ -24,18 +24,44 @@ async function fixture(t:import('node:test').TestContext,remote=false){
   const config:Config={dataDir:directory,token:'generated-artifact-token',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelProvider:'custom',modelProtocol:'openai-completions',modelBaseUrl:'http://127.0.0.1:1234/v1',apiKey:'',allowUnauthenticatedLocal:true,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false};
   if(remote)Object.assign(config,{modelBaseUrl:'https://generated.invalid',apiKey:'fixture',allowUnauthenticatedLocal:false});
   let node:Awaited<ReturnType<typeof buildApp>>,asrCalls=0;
-  const calls:QueryInput[]=[],control:{failASR:boolean;failCoding:boolean;transcript:string;segments?:string[];review?:(input:QueryInput)=>Promise<void>}={failASR:false,failCoding:false,transcript};
+  const boundaryChecks:{phase:string|undefined;targetCount:number;seedCount:number;siblingSeeded:boolean;ungrantedIds:string[]}[]=[];
+  const calls:QueryInput[]=[],control:{failASR:boolean;failCoding:boolean;transcript:string;segments?:string[];probeReadBoundaries?:boolean;review?:(input:QueryInput)=>Promise<void>}={failASR:false,failCoding:false,transcript};
   const start=async()=>{
     node=await buildApp(config,{backgroundWorker:false,
       transcriptionProvider:{transcribe:async input=>{for await(const _ of input.body){}asrCalls++;if(control.failASR)throw Error('Generated ASR failure');const texts=control.segments??[control.transcript];return {durationMs:1000,segments:texts.map((text,i)=>({startMs:Math.floor(i*1000/texts.length),endMs:Math.floor((i+1)*1000/texts.length),text}))};}},
       createModelAgent:async(_settings,reader)=>({configured:true,close:async()=>{},query:async input=>{
         const plan=await fixtureMemoryPlan(input);if(plan)return plan;
         calls.push(input);
-        // Exercise the actual model-facing reader, not only MemoryStore reads.
+        // The reader can serve explicitly authorized context originals. The
+        // model-facing bridge separately restricts ordinary evidence to seeds.
         const visible=await reader.evidence({ids:input.evidenceIds!});assert.equal(visible.length,input.evidenceIds!.length,'named ready inputs reach the model-facing reader');
+        const readable=new Set([...(input.evidenceIds??[]),...(input.evidenceReadRanges??[]).map(range=>range.id)]);
         for(const pin of input.processingMaterialInputs??[]){
           const all=node.materials.evidenceIds(pin.materialId),bounded=await reader.evidence({ids:all});
-          assert.deepEqual(bounded.map(r=>r.id).sort(),pin.evidenceIds.filter(id=>input.evidenceIds!.includes(id)).sort(),'other outputs are outside this bounded read');
+          assert.deepEqual(bounded.map(r=>r.id).sort(),pin.evidenceIds.filter(id=>readable.has(id)).sort(),'unselected outputs remain outside target and context authority');
+        }
+        const bridge=control.probeReadBoundaries?await (await import('../../../packages/agent/dist/bridge.js')).startBridge(reader,input,24):undefined;
+        try{
+        if(bridge){
+          const members=(input.taskContext!.memoryWork as {members:{id:string}[]}).members,targets=new Set(members.map(member=>member.id)),seeds=new Set(input.evidenceIds!);
+          const sibling=input.evidenceReadRanges!.find(range=>!targets.has(range.id));assert.ok(sibling,'the selected original catalog contains another batch target');
+          const ungrantedIds=[...new Set((input.processingMaterialInputs??[]).flatMap(pin=>node.materials.evidenceIds(pin.materialId)).filter(id=>!readable.has(id)))];
+          assert.ok(ungrantedIds.length,'source-record metadata is not selected by the transcript recipe');
+          assert.deepEqual(await reader.evidence({ids:ungrantedIds}),[],'the internal reader must also deny unselected material outputs');
+          const tool=async(name:string,args:Record<string,unknown>)=>{const response=await fetch(bridge.url+'/'+name,{method:'POST',headers:{authorization:'Bearer '+bridge.token,'content-type':'application/json'},body:JSON.stringify(args)});return {status:response.status,body:await response.json()};};
+          const ordinary=await tool('evidence',{ids:input.evidenceIds});assert.equal(ordinary.status,200);
+          assert.deepEqual(ordinary.body.data.map((record:{id:string})=>record.id).sort(),[...seeds].sort());
+          const siblingSeeded=seeds.has(sibling.id),before=await tool('evidence',{ids:[sibling.id]});
+          assert.equal(before.status,siblingSeeded?200:400,'ordinary evidence can only reread this phase\'s actual seeds');
+          if(!siblingSeeded){assert.equal(before.body.toolError.code,'evidence_scope_denied');assert.equal(bridge.records.has(sibling.id),false);assert.throws(()=>parseAnswer(JSON.stringify({answer:`Unread sibling [${sibling.id}]`,citationIds:[sibling.id]}),bridge.records),/not retrieved/);}
+          const context=await tool('context_evidence',{id:sibling.id,offset:sibling.offset,length:sibling.length});assert.equal(context.status,200,JSON.stringify(context.body));
+          const original=node.memories.readEvidence([sibling.id])[0];assert.equal(context.body.data[0].ocrText,original.ocrText.slice(sibling.offset,sibling.offset+sibling.length));
+          assert.doesNotThrow(()=>parseAnswer(JSON.stringify({answer:`Read selected sibling [${sibling.id}]`,citationIds:[sibling.id]}),bridge.records));
+          assert.equal((await tool('evidence',{ids:[sibling.id]})).status,siblingSeeded?200:400,'a context read does not widen the ordinary evidence tool');
+          assert.equal((await tool('context_evidence',{id:ungrantedIds[0],offset:0,length:1})).status,400);
+          assert.equal((await tool('evidence',{ids:[ungrantedIds[0]]})).status,400);
+          assert.equal(bridge.records.has(ungrantedIds[0]),false,'rejected outputs gain no quote authority');
+          boundaryChecks.push({phase:input.traceContext?.phase,targetCount:targets.size,seedCount:seeds.size,siblingSeeded,ungrantedIds});
         }
         const evidence=node.memories.readEvidence(input.evidenceIds!)[0],id=evidence.id;
         const recipe=node.memoryPipeline.get(input.traceContext!.jobId!).batches.find(b=>b.id===input.traceContext!.batchId)!.strategy!.recipe.id;
@@ -49,7 +75,9 @@ async function fixture(t:import('node:test').TestContext,remote=false){
           if(coding&&control.failCoding)throw Error('Generated review failure');
           memories=[candidates[coding?1:0]];
         }
-        return fixtureMemoryWorkResult(input,{answer:JSON.stringify({memories}),citations:[{id,capturedAt:evidence.capturedAt,appName:evidence.appName,excerpt:''}],trace:[],runId:randomUUID()});
+        const result=fixtureMemoryWorkResult(input,{answer:JSON.stringify({memories}),citations:[{id,capturedAt:evidence.capturedAt,appName:evidence.appName,excerpt:''}],trace:[],runId:randomUUID()});
+        return {...result,...(bridge?{trace:bridge.trace,evidenceReadRanges:bridge.deliveredRanges,evidenceDependencies:bridge.evidenceDependencies,sourceContextDependencies:bridge.sourceContextDependencies}:{})};
+        }finally{await bridge?.close();}
       }})});
     const extract={id:'mote.context-extraction',version:'3.4.0'};
     node.memoryStrategies.registerReview({id:'fixture.record-review',version:'1',input:'memory-candidates@1',output:'memory-candidates@1',permissions:['evidence.read'],policy:'Generated index policy: keep only an observation supported by the supplied record.'});
@@ -70,7 +98,7 @@ async function fixture(t:import('node:test').TestContext,remote=false){
   const queue=async()=>{const p=node.memoryPipeline;await node.sourcePipelines.drainMemory({create:i=>p.create(i),get:id=>p.get(id),cancel:id=>p.cancel(id),run:async()=>{}},true,100);await new Promise(resolve=>setImmediate(resolve));};
   const run=async()=>{await queue();await Promise.all(node.memoryPipeline.list().filter(j=>['queued','running'].includes(j.status)).map(j=>node.memoryPipeline.run(j.id)));};
   t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
-  return {get node(){return node;},control,calls,upload,organize,queue,run,request:(payload:Record<string,unknown>)=>node.app.inject({method:'POST',url:'/api/memory-jobs',headers:{authorization:'Bearer '+config.token},payload}),count:(phase:string)=>calls.filter(c=>c.traceContext?.phase===phase).length,asrCalls:()=>asrCalls,async restart(){await node.app.close();await start();}};
+  return {get node(){return node;},control,calls,boundaryChecks,upload,organize,queue,run,request:(payload:Record<string,unknown>)=>node.app.inject({method:'POST',url:'/api/memory-jobs',headers:{authorization:'Bearer '+config.token},payload}),count:(phase:string)=>calls.filter(c=>c.traceContext?.phase===phase).length,asrCalls:()=>asrCalls,async restart(){await node.app.close();await start();}};
 }
 
 test('ready record index survives failed media, restart and recovery; two waiting recipes share one extraction',async t=>{
@@ -180,12 +208,17 @@ test('manual recipes persist independent waiting inputs and resume only the orig
   assert.equal(f.count('extract'),2);assert.equal(f.count('review'),2);assert.equal(f.asrCalls(),2);
 });
 
-test('a multi-batch consumer cannot read other batches through its shared material input pin',async t=>{
+test('a multi-batch consumer keeps ordinary evidence seed-bound while explicit context grants permit selected siblings only',async t=>{
   const f=await fixture(t);f.node.memoryRecipeSettings.configure({recipes:[extractedPersonal]});
+  f.control.probeReadBoundaries=true;
   f.control.segments=Array.from({length:21},(_,i)=>`Generated prototype verification in segment ${i}.`);
   await f.upload();await f.node.processing.tick();await f.organize();await f.run();
   const jobs=f.node.memoryPipeline.list().map(j=>f.node.memoryPipeline.get(j.id));assert.equal(jobs.length,1);
   assert.equal(jobs[0].status,'completed');assert.equal(jobs[0].totalBatches,2);assert.equal(jobs[0].materialInputs![0].evidenceIds.length,21);
-  assert.equal(f.calls.length,4);assert.ok(f.calls.every(call=>call.evidenceIds!.length<21));
+  assert.equal(f.calls.length,4);assert.ok(f.calls.filter(call=>call.traceContext?.phase==='extract').every(call=>call.evidenceIds!.length<21));
+  assert.equal(f.boundaryChecks.length,4);assert.ok(f.boundaryChecks.filter(check=>check.phase==='extract').every(check=>!check.siblingSeeded));
+  assert.ok(f.boundaryChecks.filter(check=>check.phase==='review').every(check=>check.siblingSeeded),'independent review receives the exact sibling original actually read by extraction');
+  assert.ok(f.boundaryChecks.every(check=>check.ungrantedIds.length>0));
+  assert.deepEqual(jobs[0].batches.map(batch=>batch.evidenceRanges.length).sort((a,b)=>a-b),[1,20],'context reads never add targets or coverage');
   assert.equal(f.asrCalls(),1);
 });

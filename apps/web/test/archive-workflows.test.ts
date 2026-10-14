@@ -106,3 +106,14 @@ test('memory status exposes admission waits, idle review, exact rejection and ba
  const paused=renderToStaticMarkup(React.createElement(MemoryProgress,{job:{...job,status:'paused'},onAction:()=>{}}));assert.match(paused,/继续整理/);
  const completed=renderToStaticMarkup(React.createElement(MemoryProgress,{job:{...job,status:'completed',memoryIds:[]}}));assert.match(completed,/本次没有发现需要新增的记忆/);
 });
+
+
+test('Memory invalidated inputs are separated from failures without offering a misleading retry',()=>{
+ const invalid:MemoryJob={...job,status:'failed',outcome:'input_invalidated',failedBatches:0,invalidatedBatches:2,inputPlans:{total:2,waiting:0,blocked:0,stale:2,completed:0},recipeProgress:[{recipe:{id:'mote.personal-memory',version:'3'},inputs:{total:2,waiting:0,blocked:0,stale:2,completed:0},completedBatches:0,failedBatches:0,invalidatedBatches:2,reasons:[{code:'evidence_changed',materialRef:'material:generated'}]}]};
+ const html=renderToStaticMarkup(React.createElement(MemoryProgress,{job:invalid,onRetry:()=>{},onAction:()=>{},onOpen:()=>{}}));
+ assert.match(html,/资料已更新，本次结果失效/);assert.match(html,/2 批输入已失效/);assert.match(html,/2 项输入已失效/);assert.match(html,/查看来源与处理/);
+ assert.doesNotMatch(html,/重新检查未完成方案|部分记忆提取需要重试|取消未完成方案|2 批失败|记忆提取完成/);
+ const mixed=renderToStaticMarkup(React.createElement(MemoryProgress,{job:{...invalid,outcome:'processing_failed',failedBatches:1},onRetry:()=>{}}));
+ assert.match(mixed,/1 批失败/);assert.match(mixed,/2 批输入已失效/);assert.match(mixed,/重新检查未完成方案/);
+ for(const status of ['paused','cancelled'] as const){const stopped=renderToStaticMarkup(React.createElement(MemoryProgress,{job:{...invalid,status,outcome:undefined},onRetry:()=>{},onAction:()=>{}}));assert.doesNotMatch(stopped,/资料已更新，本次结果失效|重新检查未完成方案/);}
+});

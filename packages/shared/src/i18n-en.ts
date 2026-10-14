@@ -8181,5 +8181,9 @@ export const english: Readonly<Record<string, string>> = {
   "窗口标题": "Window title",
   "已有文件 · 不现场录音 · 附件先归档 · 每个附件最多 50 MiB。": "Existing files · No live recording · Attachments archive first · Up to 50 MiB per attachment.",
   "附件与处理说明": "Attachments and processing",
-  "文字识别与音频转写按中央处理设置进行；可在资料库核对各阶段状态。": "OCR and audio transcription follow Central processing settings. Inspect each stage in the Library."
+  "文字识别与音频转写按中央处理设置进行；可在资料库核对各阶段状态。": "OCR and audio transcription follow Central processing settings. Inspect each stage in the Library.",
+  "资料已更新，本次结果失效": "The source changed; this result is no longer valid.",
+  " · {0} 批输入已失效": " · {0} batches have invalidated input",
+  " · {0} 项输入已失效": " · {0} inputs are no longer valid",
+  "历史结果保留；请查看当前资料版本。失效输入不能直接重试。": "Historical results are retained. Review the current source version; invalidated input cannot be retried directly."
 };

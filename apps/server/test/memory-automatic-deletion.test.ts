@@ -96,6 +96,21 @@ test('deletion survives restart and rejects a paraphrase from duplicated origina
  assert.equal(f.memories.extract(fixtureMemoryResult(f.memories,check.result),'fixture',{reviewReceipt:check.receipt,skillVersion:'entirely-different-strategy@9'}).items.length,0);assert.equal(f.memories.list().length,0);
 });
 
+for(const rejectAll of [false,true])test(`deletion review remaps selected candidate ownership when ${rejectAll?'all candidates':'the first and middle candidates'} are removed`,async t=>{
+ const f=await fixture(t),id=await f.add('Generated deletion routing original.'),[old]=await save(f,output(f,[id],'Generated removed conclusion'));
+ f.memories.delete(old.id);f.restart();
+ const candidates=Array.from({length:4},(_,index)=>({...JSON.parse(output(f,[id]).answer).memories[0],title:'Generated candidate '+index}));
+ const coverage=[{key:'a'.repeat(64),state:'checked',candidateIndexes:[0,1,2,3]},{key:'b'.repeat(64),state:'checked',candidateIndexes:[0,2]},{key:'c'.repeat(64),state:'incomplete',candidateIndexes:[0,2],reason:'Generated final passage was not assessed'}];
+ const draft={...output(f,[id]),answer:JSON.stringify({memories:candidates,coverage})};let comparisons=0;
+ const reviewed=await f.memories.deletions.review({question:'Generated deletion constraints',responseMode:'memory-extraction',evidenceIds:[id],taskContext:{turns:[],memoryWork:{workContract:'range-evaluation@1'}}},draft,async input=>{
+  comparisons++;assert.match(input.question,/Host Memory deletion review/);const candidate=(input.taskContext!.untrustedMemoryDraft as {candidate:{title:string}}).candidate;
+  return {...draft,runId:'generated-deletion-verdict-'+comparisons,answer:JSON.stringify({sameConclusion:rejectAll||['Generated candidate 0','Generated candidate 2'].includes(candidate.title),newSupportEvidenceIds:[]})};
+ });
+ const value=JSON.parse(reviewed.answer);assert.equal(comparisons,4);assert.deepEqual(value.memories.map((candidate:{title:string})=>candidate.title),rejectAll?[]:['Generated candidate 1','Generated candidate 3']);
+ assert.deepEqual(value.coverage,[{...coverage[0],state:rejectAll?'no_candidates':'checked',candidateIndexes:rejectAll?[]:[0,1]},{...coverage[1],state:'no_candidates',candidateIndexes:[]},{...coverage[2],candidateIndexes:[]}]);
+ assert.equal(f.memories.list().length,0);assert.equal(f.store.evidence([id])[0].ocrText,'Generated deletion routing original.');
+});
+
 test('deleting a twice-corrected Memory routes every superseded original through bounded semantic review',async t=>{
  const f=await fixture(t),text='Generated owner wanted an Android quick-recording entry for a sample project.',originalId=await f.add(text),[original]=await save(f,output(f,[originalId],'Generated quick-recording plan'));
  const unrelatedId=await f.add('Generated unrelated preference for a different sample.'),[unrelated]=await save(f,output(f,[unrelatedId],'Unrelated generated preference'));

@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 const {app,BrowserWindow}=require('electron');app.on('window-all-closed',()=>{});
 const {mkdtempSync,mkdirSync,readFileSync,writeFileSync,existsSync,rmSync}=require('node:fs');const {tmpdir}=require('node:os');const {join,resolve}=require('node:path');const {spawn}=require('node:child_process');const assert=require('node:assert/strict');

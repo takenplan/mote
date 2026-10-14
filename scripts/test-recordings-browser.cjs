@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 const {app,BrowserWindow}=require('electron');
 const {spawn}=require('node:child_process');

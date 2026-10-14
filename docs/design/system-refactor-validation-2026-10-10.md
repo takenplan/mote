@@ -2,6 +2,8 @@
 
 日期：2026-10-10。对应 [系统改造技术方案](system-refactor-2026-10-10.md)。本文件保留验证设计；实际已执行范围与未验证项见 [验收记录](../validation/system-refactor-2026-10-10.md)，矩阵不能代替完成证据。
 
+> 2026-10-13：候选容量/饱和拆分矩阵是旧固定契约的历史验证要求。新范围评估契约的模型选取、显式未完成、实际资源恢复及版本兼容要求见 [ADR](../adr-memory-range-evaluation.md) 和 [当前验证矩阵](../memory-range-evaluation-validation.md)。旧任务与绑定仍需保留其历史回归。
+
 ## 1. 验收账本
 
 每次验收固定 commit、组件版本、epoch/wire/Ingress、Node/系统/设备、启动命令、模型/profile/reasoning、并发、语料 manifest/hash、实验组和缓存状态。每项记录 PASS / FAIL / NOT RUN / BLOCKED，以及可复现命令、证据路径、遗留问题。生成语料、真实模型、私人资料和真机证据分别标识。

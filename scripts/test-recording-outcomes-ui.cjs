@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 const {app,BrowserWindow}=require('electron');
 const {mkdtempSync,mkdirSync,existsSync,readFileSync,writeFileSync,rmSync}=require('node:fs');

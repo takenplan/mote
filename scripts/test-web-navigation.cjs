@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Isolated real renderer and central node. Only generated notes, credentials and device state. */
 const {app,BrowserWindow}=require('electron');

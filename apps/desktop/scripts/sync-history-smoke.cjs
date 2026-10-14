@@ -1,3 +1,4 @@
+require('../../../scripts/fixture-background.cjs');
 require('../../../scripts/fixture-language.cjs');
 const { app, ipcMain, nativeImage, safeStorage } = require('electron');
 const { mkdtempSync, writeFileSync, mkdirSync } = require('node:fs');

@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Real renderer and owner API; generated sources, no personal data or model. */
 const {app,BrowserWindow}=require('electron');

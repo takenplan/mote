@@ -84,7 +84,7 @@ application.run()
     await writeFile(join(applications, '.mote-update-lock', 'owner.json'), JSON.stringify({ nonce: interrupted.job.nonce, pid: dead.pid }));
     assert.equal(await recoverInterruptedUpdate({ directory: updates, helper, bundlePath: target, version: '0.5.0', profile: 'test' }), 'recovered');
     await assert.rejects(readFile(join(applications, '.mote-update-lock', 'owner.json')), { code: 'ENOENT' });
-    await run('/usr/bin/open', ['-n', target, '--args', '--profile=second']); await until(async () => (await inspectBundle(helper, target, '0.5.0', process.arch)).otherInstances > 0);
+    await run('/usr/bin/open', ['-g', '-n', target, '--args', '--profile=second']); await until(async () => (await inspectBundle(helper, target, '0.5.0', process.arch)).otherInstances > 0);
     await assert.rejects(prepareInstall({ directory: updates, helper, target, staged: valid, stagedDigest: before.digest, oldVersion: '0.5.0', newVersion: '0.7.0', arch: process.arch, profile: 'test' }), /UPDATE_OTHER_PROFILES_RUNNING/); await stopFixture();
     for (const [path, body] of preserved) assert.deepEqual(await readFile(path), body);
     console.log(JSON.stringify({ ok: true, generatedAppCopiesOnly: true, nativeAtomicReplacement: true, sameProfileRelaunch: true, startupFailureRollback: true, resignedStageTamperRejected: true, concurrentProfileBlocked: true, interruptedPreparationRecovered: true, preservedProfileFiles: preserved.size, realKeychainNotModified: true }));

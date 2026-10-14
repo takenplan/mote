@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 /** Two real renderers and owner APIs, generated PCM/transcripts and a proposal stub. */
 const {app,BrowserWindow}=require('electron'),{mkdtempSync,mkdirSync,writeFileSync,readFileSync,existsSync,rmSync}=require('node:fs');

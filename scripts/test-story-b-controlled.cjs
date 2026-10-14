@@ -1,3 +1,4 @@
+require('./fixture-background.cjs');
 /** Offscreen visual/readability check for the generated Story B capture pages. No product services. */
 const { app, BrowserWindow } = require('electron');
 const assert = require('node:assert/strict');

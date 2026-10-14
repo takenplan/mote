@@ -1,3 +1,4 @@
+require('../../../scripts/fixture-background.cjs');
 require('../../../scripts/fixture-language.cjs');
 const { app, dialog, Menu, ipcMain, shell, nativeImage } = require('electron');
 const { randomUUID } = require('node:crypto');

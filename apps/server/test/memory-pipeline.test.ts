@@ -1,4 +1,5 @@
 import {fixtureMemoryResult,fixtureMemoryPipeline} from './fixtures/memory-result.js';
+import {fixtureMemoryWorkResult} from './fixtures/memory-planning.js';
 import {test,type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
@@ -175,7 +176,9 @@ test('new revisions are queued and completed old batches become visibly invalida
   const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>empty()});t.after(()=>pipeline.close());
   const job=pipeline.create({evidenceIds:[a.id]});await pipeline.run(job.id);
   const b=await sources.upsert('generated',item('a','新的合成版本','2','2026-09-15T02:00:00Z'));
-  assert.equal(pipeline.get(job.id).status,'failed');assert.equal(pipeline.create({evidenceIds:[b.id]}).totalBatches,1);
+  const invalid=pipeline.get(job.id);assert.equal(invalid.status,'failed');assert.equal(invalid.outcome,'input_invalidated');assert.equal(invalid.failedBatches,0);assert.equal(invalid.invalidatedBatches,1);assert.equal(invalid.execution?.status,'skipped');
+  const summary=pipeline.page().items.find(row=>row.id===job.id)!;assert.equal(summary.outcome,invalid.outcome);assert.equal(summary.failedBatches,0);assert.equal(summary.invalidatedBatches,1);assert.equal(summary.execution?.status,'skipped');assert.equal(summary.errorCode,'evidence_changed');
+  assert.equal(pipeline.create({evidenceIds:[b.id]}).totalBatches,1);
   assert.throws(()=>memories.extract(fixtureMemoryResult(memories,result(a.id)),'fixture',{expectedFingerprints:{[a.id]:memoryEvidenceFingerprint(store.evidence([a.id])[0])}}),{statusCode:409});
 });
 
@@ -289,8 +292,8 @@ test('cancelling extraction or review fences late models and saves no memory or 
   const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item('cancel-'+phase));
   let enter!:()=>void,release!:(value:ReturnType<typeof result>)=>void,signal:AbortSignal|undefined;
   const entered=new Promise<void>(r=>{enter=r;}),held=new Promise<ReturnType<typeof result>>(r=>{release=r;});
-  const pipeline=fixtureMemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,
-   query:async input=>{signal=input.signal;if(phase==='extract'){enter();return held;}const draft=result(a.id,{offset:0,quote:item().text}),value=JSON.parse(draft.answer);value.memories[0].admission={layer:'memory',reason:'Explicit fixture instruction',scope:'Fixture only',attribution:'user'};return {...draft,answer:JSON.stringify(value)};},
+  const pipeline=new MemoryPipeline({store,memories,model:()=> 'fixture',configured:()=>true,
+   query:async input=>{signal=input.signal;if(phase==='extract'){enter();return held;}const draft=result(a.id,{offset:0,quote:item().text}),value=JSON.parse(draft.answer);value.memories[0].admission={layer:'memory',reason:'Explicit fixture instruction',scope:'Fixture only',attribution:'user'};return fixtureMemoryWorkResult(input,{...draft,answer:JSON.stringify(value)});},
    ...(phase==='review'?{review:async()=>{enter();return held;}}:{})});
   const job=pipeline.create({evidenceIds:[a.id]}),running=pipeline.run(job.id);await entered;
   pipeline.cancel(job.id);release(result(a.id));const done=await running;
@@ -365,4 +368,33 @@ test('memory keeps provider retry deadlines and refuses premature manual retry',
  const {ProviderFailure}=await import('@mote/shared');const {store,sources,memories}=fixture(t),capture=await sources.upsert('generated',item());let calls=0;
  const pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query:async()=>{calls++;throw new ProviderFailure({category:'transient',code:'rate_limited',retryAfterMs:12000});}});
  try{const job=pipeline.create({evidenceIds:[capture.id]}),failed=await pipeline.run(job.id);assert.equal(failed.status,'failed');assert.equal(failed.errorCode,'rate_limited');assert.ok(failed.availableAt!>Date.now());assert.ok(failed.execution!.failure!.retryAfterMs!>0);await assert.rejects(pipeline.retry(job.id),error=>error instanceof ProviderFailure&&error.details.code==='rate_limited');assert.equal(calls,1);assert.equal(store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,0);}finally{await pipeline.close();}
+});
+
+
+test('Memory count migration separates invalidated batches without changing scheduling or replaying model work',async t=>{
+ const {store,sources,memories}=fixture(t),a=await sources.upsert('generated',item());let calls=0;
+ const options={store,memories,model:()=> 'fixture',configured:()=>true,query:async()=>{calls++;return empty();}};
+ let pipeline=fixtureMemoryPipeline(options);const job=pipeline.create({evidenceIds:[a.id]});await pipeline.run(job.id);
+ await sources.upsert('generated',item('a','Generated changed evidence','2'));
+ await pipeline.close();
+ const batch=JSON.parse(String(store.db.prepare('SELECT json FROM memory_batches WHERE job_id=?').get(job.id)!.json));
+ const clone={...batch,id:crypto.randomUUID(),index:1,status:'failed',errorCode:'memory_capacity_saturated',attempts:2};
+ store.db.prepare('INSERT INTO memory_batches(id,job_id,idx,json) VALUES(?,?,?,?)').run(clone.id,job.id,1,JSON.stringify(clone));
+ const batchRows=()=>store.db.prepare('SELECT id,json FROM memory_batches ORDER BY id').all().map(row=>({id:row.id,body:JSON.parse(String(row.json))}));
+ const before=batchRows(),jobBefore=JSON.parse(String(store.db.prepare('SELECT json FROM memory_jobs WHERE id=?').get(job.id)!.json));
+ store.db.exec(`DROP TRIGGER batch_count_insert; DROP TRIGGER batch_count_delete; DROP TRIGGER batch_count_update;
+  DROP TABLE memory_job_counts; CREATE TABLE memory_job_counts(job_id TEXT PRIMARY KEY,total INTEGER,completed INTEGER,failed INTEGER,running INTEGER,pending INTEGER,attempts INTEGER);
+  DELETE FROM settings WHERE key='memory-job-counts-version';`);
+ store.db.prepare('INSERT INTO memory_job_counts VALUES(?,2,0,2,0,0,3)').run(job.id);
+ pipeline=fixtureMemoryPipeline(options);t.after(()=>pipeline.close());
+ const mixed=pipeline.get(job.id),summary=pipeline.page().items.find(row=>row.id===job.id)!;
+ assert.equal(mixed.status,'failed');assert.equal(mixed.outcome,'processing_failed');assert.equal(mixed.failedBatches,1);assert.equal(mixed.invalidatedBatches,1);assert.equal(mixed.errorCode,'memory_capacity_saturated');assert.equal(mixed.execution?.status,'failed');
+ assert.equal(summary.failedBatches,1);assert.equal(summary.invalidatedBatches,1);assert.equal(summary.outcome,mixed.outcome);assert.equal(summary.execution?.status,'failed');assert.equal(summary.errorCode,mixed.errorCode);
+ assert.deepEqual(batchRows(),before);assert.deepEqual(JSON.parse(String(store.db.prepare('SELECT json FROM memory_jobs WHERE id=?').get(job.id)!.json)),jobBefore);assert.equal(calls,1);
+ await pipeline.close();pipeline=fixtureMemoryPipeline(options);assert.equal(pipeline.get(job.id).invalidatedBatches,1);assert.equal(calls,1,'repeat restart does not replay');
+ // Counters stay transactional for subsequent state transitions and deletion.
+ store.db.exec('BEGIN');store.db.prepare("UPDATE memory_batches SET json=json_set(json,'$.status','completed') WHERE id=?").run(clone.id);store.db.exec('ROLLBACK');assert.equal(pipeline.get(job.id).failedBatches,1);
+ store.db.prepare("UPDATE memory_batches SET json=json_set(json,'$.status','completed') WHERE id=?").run(clone.id);assert.equal(pipeline.get(job.id).failedBatches,0);assert.equal(pipeline.get(job.id).outcome,'input_invalidated');
+ store.db.prepare('DELETE FROM memory_batches WHERE id=?').run(clone.id);assert.equal(pipeline.get(job.id).totalBatches,1);
+ for(const status of ['paused','cancelled']){store.db.prepare("UPDATE memory_jobs SET json=json_set(json,'$.status',?) WHERE id=?").run(status,job.id);assert.equal(pipeline.get(job.id).status,status);assert.equal(pipeline.get(job.id).outcome,undefined);}
 });

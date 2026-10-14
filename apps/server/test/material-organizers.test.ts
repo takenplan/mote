@@ -11,6 +11,8 @@ import {FileStore} from '../src/files.js';
 import {ArchivedFileStore} from '../src/archived-files.js';
 import {MaterialStore,materialId} from '../src/materials.js';
 import {MaterialOrganizerRuntime,type MaterialOrganizer} from '../src/material-organizers.js';
+import {Operations} from '../src/operations.js';
+import {linkOperationParent} from '../src/operation-projection.js';
 import {MaterialMemoryWork} from '../src/material-memory-work.js';
 
 function fixture(t:TestContext){
@@ -298,7 +300,7 @@ test('failed organizer keeps discovered work durable and restart retries the fen
   await assert.rejects(runtime.tick(),/generated organizer failure/);
   assert.equal(runtime.status().cursor,1,'the cursor records durable discovery even when execution fails');
   assert.equal(store.db.prepare("SELECT COUNT(*) n FROM material_organizer_inputs WHERE organizer_id='fixture.probe'").get()!.n,1);
-  assert.equal(runtime.status().pendingSteps,1);
+  assert.equal(runtime.status().pendingSteps,0);assert.equal(runtime.status().failedSteps,1);
   const succeeding:MaterialOrganizer={...custom,build:()=>undefined};
   const restarted=new MaterialOrganizerRuntime(store,materials,[succeeding]);
   assert.equal(await restarted.tick(),0,'recovery consumes the persisted step without rediscovering the capture');
@@ -358,7 +360,7 @@ test('new higher priority organizer backfills old captures and replaces the fall
   assert.equal(materials.get(id)?.revision,fallback.revision);
   assert.match(materials.read(fallback.ref).text,/Generated body/);
   assert.equal(organizers.status().backfills.find(row=>row.id===plugin.id)?.complete,true,'the scan completed, while its execution remains failed');
-  assert.ok(organizers.status().pendingSteps>0);
+  assert.equal(organizers.status().pendingSteps,0);assert.ok(organizers.status().failedSteps>0);
   unregister();
   organizers.registry.register(plugin);
   assert.equal(await organizers.tick(),0,'the corrected pinned component retries its durable step');
@@ -446,4 +448,32 @@ test('paged backfill replaces a multi-member coding group before all old mapping
   assert.equal(restarted.status().backfills.find(row=>row.id===plugin.id)?.complete,true);
   assert.equal(materials.list({sourceId:'fixture-session-source'}).items.length,1);
   assert.equal(materials.get(id)?.kind,'fixture.coding-session');
+});
+
+
+test('organizer status excludes historical failures and counts current failures separately through source revisions',async t=>{
+ const {store,sources,materials}=fixture(t);let fail=true;
+ const runtime=new MaterialOrganizerRuntime(store,materials,[{id:'fixture.status-count',version:'1',slot:'source-item',priority:100,exclusive:true,
+  select:r=>r.provenance?.sourceId==='fixture-status'?{sourceId:'fixture-status',externalId:r.provenance.externalId}:undefined,
+  identity:g=>materialId(g.sourceId,g.externalId),build:()=>{if(fail)throw Error('Generated failure');return undefined;}}]);
+ t.after(()=>runtime.executor.close());
+ sources.register({id:'fixture-status',kind:'custom',name:'Generated source',deviceId:'fixture-device',platform:'import'});
+ const item={externalId:'generated',revision:'1',kind:'message',layer:'original',observedAt:at(0),text:'Generated v1'};
+ await sources.upsert('fixture-status',item);await assert.rejects(runtime.tick(),/Generated failure/);
+ assert.equal(runtime.status().pendingSteps,0);assert.equal(runtime.status().failedSteps,1);
+ const old=store.db.prepare("SELECT id,operation_id FROM execution_steps WHERE kind='material.organizer' AND state='failed'").get()!;
+ linkOperationParent(store,'workflow:fixture-parent',String(old.operation_id));
+ assert.equal(runtime.status().failedSteps,1,'parent membership does not multiply a step');
+ runtime.executor.retry(String(old.id),false);assert.equal(runtime.status().pendingSteps,1);assert.equal(runtime.status().failedSteps,0);
+ await runtime.tick();assert.equal(runtime.status().pendingSteps,0);assert.equal(runtime.status().failedSteps,1);
+ fail=false;await sources.upsert('fixture-status',{...item,revision:'2',text:'Generated v2'});
+ assert.equal(runtime.status().failedSteps,1,'a saved source update alone must not hide failure before a replacement exists');
+ await runtime.tick();assert.equal(runtime.status().pendingSteps,0);assert.equal(runtime.status().failedSteps,0);
+ const detail=new Operations(store).detail(String(old.operation_id));assert.equal(detail.operation.state,'succeeded');
+ assert.equal(detail.steps.find(step=>step.id===old.id)?.current,false);assert.equal(detail.steps.find(step=>step.id===old.id)?.state,'failed');
+ fail=true;await sources.upsert('fixture-status',{...item,revision:'3',text:'Generated v3'});await assert.rejects(runtime.tick(),/Generated failure/);
+ assert.equal(runtime.status().failedSteps,1);assert.equal(runtime.status().pendingSteps,0);
+ await runtime.executor.close();
+ const restarted=new MaterialOrganizerRuntime(store,materials);t.after(()=>restarted.executor.close());
+ assert.equal(restarted.status().failedSteps,1,'a missing plugin must not silently remove the current failure');
 });

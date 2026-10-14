@@ -1,3 +1,4 @@
+require('../../../scripts/fixture-background.cjs');
 require('../../../scripts/fixture-language.cjs');
 const { app, ipcMain } = require('electron');
 const { mkdtempSync, writeFileSync } = require('node:fs');

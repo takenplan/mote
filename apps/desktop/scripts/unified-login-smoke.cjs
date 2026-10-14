@@ -1,3 +1,4 @@
+require('../../../scripts/fixture-background.cjs');
 require('../../../scripts/fixture-language.cjs');
 /** Real native IPC and generated central fixture only. Capture stays stopped throughout. */
 const {app,safeStorage,dialog}=require('electron');
