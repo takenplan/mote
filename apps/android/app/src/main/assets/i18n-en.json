@@ -810,7 +810,7 @@
   "设置已保存。新文件和未完成任务使用新配置；已完成文件保留原结果。": "Settings saved. New and unfinished tasks use the new configuration; completed results are preserved.",
   "处理开关与预算": "Processing and budgets",
   "启用中央文件处理": "Enable central file processing",
-  "单文件超时（秒）": "Per-file timeout (seconds)",
+  "单次文件处理超时（秒）": "File processing call timeout (seconds)",
   "1. 类型策略": "1. Type policies",
   "具体 MIME 类型优先于类型通配符；未配置的格式按“其他”处理。PDF 处理插件可由管理员接入 Cordis，接入后可在此选择。": "Exact MIME types take precedence over wildcards. Unconfigured formats use Other. Administrators can add a PDF plugin through Cordis, then select it here.",
   "文件类型": "File type",
@@ -8231,5 +8231,6 @@
   "内部规划失败，未完成范围已保留": "Internal planning failed; unfinished coverage is preserved",
   "本次整合的记忆或原始证据当前不可读，未完成窗口已保留。请检查来源与授权后重试。": "The selected memories or original evidence are currently unreadable. The unfinished window is preserved. Check sources and permissions before retrying.",
   "本次整合未读到记忆正文或原始证据，未完成窗口已保留，未记为成功。": "This integration received no memory bodies or original evidence. The unfinished window is preserved and has not been marked successful.",
-  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again."
+  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again.",
+  "可留空；累计实际执行的模型、工具与修正时间，不包含等待执行名额。": "May be left blank; counts admitted model, tool and correction time, excluding waits for execution capacity."
 }

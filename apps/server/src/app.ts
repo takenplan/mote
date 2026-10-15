@@ -521,7 +521,9 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     trace({type:'query.started',stage:'starting',payload:{question:input.question,taskContext:input.taskContext??null,conversation:input.conversation??null,evidenceIds:input.evidenceIds??null,evidenceRanges:input.evidenceRanges??null,evidenceReadRanges:input.evidenceReadRanges??null,scope:{after:input.after??null,before:input.before??null,deviceId:input.deviceId??null,timeZone:input.timeZone??null},skill:input.skill??null,responseMode:input.responseMode??'answer'}});
     const revision=store.deletionRevision();
     const meter=usageOwner==='query'?usageLedger.start(profile.settings.provider,input.modelOverride??profile.settings.model,input.skill??operation,{agentId:'context-query',moduleId,skillId:input.skill??null,operationId:input.traceContext?.operationId,jobId:input.traceContext?.jobId,requestId:diagnostics.requestId()}):undefined;
-    const deadline=agentDeadline(input.signal,profile.settings.agentTimeoutMs),taskSignal=deadline.signal;
+    // Agent implementations account admitted model/tool/repair work. A second
+    // wall-clock deadline here would charge host resource-gate waiting again.
+    const deadline=agentDeadline(input.signal,null),taskSignal=deadline.signal;
     let disclosedSourcePins=sourceContextDependencies(input);
     const disclosedProcessingIds:string[]=[],processingIds=new Set<string>();
     const observed:QueryInput&{processingDisclosedEvidenceIds?:string[]}={...input,contextSourceContextDependencies:disclosedSourcePins,signal:taskSignal,traceContext,

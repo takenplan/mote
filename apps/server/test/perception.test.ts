@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {dirname,join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import sharp from 'sharp';
+import {ProviderFailure} from '@mote/shared';
 import {Store} from '../src/store.js';
 import {Perception} from '../src/perception.js';
 import {FileProcessorRuntime} from '../src/file-processors.js';
@@ -20,6 +21,18 @@ test('managed OCR waits for model, processes new captures and requires preview f
  writeFileSync(join(root,'complete.json'),JSON.stringify({version:MEDIA_CATALOG.ocr.version}));await p.tick();assert.equal(store.db.prepare("SELECT state FROM perception_jobs WHERE capture_id=? AND kind='ocr'").get(newer)!.state,'succeeded');assert.equal(calls(),1);
  assert.equal(store.db.prepare("SELECT state FROM perception_jobs WHERE capture_id=? AND kind='ocr'").get(input.id)!.state,'waiting');
  const preview=p.previewHistoricalOcr();assert.equal(preview.count,1);assert.equal(p.processHistoricalOcr({token:preview.token}).queued,1);await p.tick();assert.equal(store.db.prepare("SELECT state FROM perception_jobs WHERE capture_id=? AND kind='ocr'").get(input.id)!.state,'succeeded');
+});
+
+test('managed OCR busy feedback defers the shared worker without exhausting another image',async t=>{
+ t.mock.timers.enable({apis:['Date'],now:Date.now()});
+ const {store,p,input,runtime}=await setup(t);let calls=0;
+ runtime.registry.get('image.http').process=async()=>{if(++calls===1)throw new ProviderFailure({category:'transient',code:'rate_limited',executionStarted:false,retryAfterMs:5000});return {durationMs:0,segments:[{startMs:0,endMs:0,text:'Generated resumed OCR'}]};};
+ const ids=[input.id,randomUUID(),randomUUID()];
+ for(let index=0;index<ids.length;index++){const bytes=await sharp({create:{width:16,height:16,channels:3,background:['#ff0000','#00ff00','#0000ff'][index]}}).png().toBuffer();await store.ingest({...input,id:ids[index],imageBase64:bytes.toString('base64')});}
+ p.configure({...p.settings(),ocrEndpoint:'http://127.0.0.1:9010/ocr',concurrency:3});await p.tick();
+ assert.equal(calls,1);assert.ok(p.engine.list({kind:'perception.ocr',limit:100}).items.every(step=>step.state==='waiting'&&step.attempts===0));
+ t.mock.timers.tick(5001);await p.tick();
+ assert.equal(calls,4);assert.ok(p.engine.list({kind:'perception.ocr',limit:100}).items.every(step=>step.state==='succeeded'&&step.attempts===1));
 });
 test('atomic intake, immutable originals, versioned searchable results and cached identical images',async t=>{const {store,p,input,calls}=await setup(t);await store.ingest(input);assert.equal(store.db.prepare('SELECT count(*) n FROM perception_jobs').get()!.n,1);const before=store.db.prepare('SELECT json,fingerprint FROM captures WHERE id=?').get(input.id);p.configure({...p.settings(),ocrEndpoint:'http://127.0.0.1/ocr'});await p.tick();assert.deepEqual(store.db.prepare('SELECT json,fingerprint FROM captures WHERE id=?').get(input.id),before);assert.equal(store.search({query:'中文错误'}).length,1);assert.equal(store.search({query:'错误'}).length,1);assert.equal(store.search({query:'MODULE_NOT_FOUND'}).length,1);assert.equal(store.evidence([input.id])[0].ocrText,'合成中文错误 MODULE_NOT_FOUND');assert.equal((await store.ingest(input)).duplicate,true);await store.ingest({...input,id:randomUUID()});await p.tick();assert.equal(calls(),1);assert.ok(store.updates(0).items.some(i=>i.operation==='supersede'));});
 test('failed OCR processing preserves the archived original and last searchable result',async t=>{const {store,p,input,runtime}=await setup(t);await store.ingest(input);p.configure({...p.settings(),ocrEndpoint:'http://localhost/ocr'});await p.tick();runtime.registry.get('image.http').process=async()=>{throw Error('private error');};p.configure({...p.settings(),ocrEndpoint:'http://localhost/new-ocr'});p.retry(input.id);await p.tick();assert.equal(store.db.prepare("SELECT state FROM perception_jobs WHERE capture_id=? AND kind='ocr'").get(input.id)!.state,'failed');assert.ok(store.image(input.id));assert.equal(store.evidence([input.id])[0].ocrText,'合成中文错误 MODULE_NOT_FOUND');});

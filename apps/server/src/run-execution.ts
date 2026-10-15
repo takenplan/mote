@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-engine.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
 import {executionEnvelope,type ExecutionEnvelope} from '@mote/shared/execution';
@@ -7,7 +8,7 @@ import {StoreError,type Store} from './store.js';
 export type RunExecutionOptions={executor?:ExecutionEngine;concurrency?:()=>number};
 export type RunDeadline={timeoutMs?:number|null};
 export type RunExecutionContext={signal:AbortSignal;operationId:string;jobId:string;commit:<T>(write:()=>T)=>T};
-type Pending={work:(signal:AbortSignal,execution:RunExecutionContext)=>Promise<unknown>;done:Promise<void>;finish:()=>void;timer?:ReturnType<typeof setTimeout>};
+type Pending={work:(signal:AbortSignal,execution:RunExecutionContext)=>Promise<unknown>;done:Promise<void>;finish:()=>void};
 /** Non-replayable interactive work uses the same claims and commit fences as
  * background work. Only identifiers enter durable inputs; prompts stay in their
  * existing vault. A restart records interruption, never resubmits a model call. */
@@ -25,7 +26,8 @@ export class RunExecution {
  constructor(private store:Store,readonly kind:'query'|'insight',private callbacks:{exists?:(id:string)=>boolean;project:(id:string,step:ExecutionStep)=>void;commit:(id:string,result:unknown)=>void;failure:(id:string,error:unknown)=>void},options:RunExecutionOptions={}){
   this.engine=options.executor??new ExecutionEngine(store);
   store.db.exec('CREATE TABLE IF NOT EXISTS run_execution_owners(id TEXT PRIMARY KEY,lease_until INTEGER NOT NULL)');
-  this.unregister=this.engine.register({kind:`${kind}.run.${this.ownerId}`,pool:kind==='query'?'interactive-query':'personal-insight',concurrency:options.concurrency??(()=>kind==='query'?4:1),maxAttempts:1,timeoutMs:2147483647,
+  this.unregister=this.engine.register({kind:`${kind}.run.${this.ownerId}`,pool:kind==='query'?'interactive-query':'personal-insight',concurrency:options.concurrency??(()=>kind==='query'?4:1),policy:EXECUTION_POLICIES.orchestration,maxAttempts:1,
+   timeoutMs:step=>typeof step.input.timeoutMs==='number'?step.input.timeoutMs:null,
    validate:step=>this.pending.has(String(step.input.runId))&&(this.callbacks.exists?.(String(step.input.runId))??true),
    execute:async(step,signal)=>{const id=String(step.input.runId),pending=this.pending.get(id)!;
     const fence=String(store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(step.id)?.fence??'');
@@ -34,7 +36,7 @@ export class RunExecution {
     catch(error){if(!signal.aborted){try{commit(()=>this.callbacks.failure(id,error));}catch{/* A revoked/deleted run cannot write failure history. */}}throw error;}
    },
    commit:(step,result)=>this.callbacks.commit(String(step.input.runId),result),
-   classify:error=>new ExecutionFailure('permanent',error instanceof ExecutionFailure?error.code:'run_failed'),
+   classify:error=>new ExecutionFailure('permanent',error instanceof ExecutionFailure?error.code:error instanceof DOMException&&error.name==='TimeoutError'?'timeout':'run_failed'),
    project:step=>{const id=String(step.input.runId);if(this.engine.closed&&step.state==='waiting'){this.engine.fail(step.id,'interrupted');return;}this.callbacks.project(id,step);if(!['waiting','running'].includes(step.state))this.finish(id);},
   });
  }
@@ -58,12 +60,8 @@ export class RunExecution {
   this.renewOwner();this.startHeartbeat();this.started.add(this.id(id));let finish!:()=>void;const done=new Promise<void>(resolve=>finish=resolve),pending:Pending={work,done,finish};this.pending.set(id,pending);
   const own=!this.store.db.isTransaction;if(own)this.store.db.exec('BEGIN IMMEDIATE');
   try{journal?.();
-   this.engine.enqueue(this.id(id),`${this.kind}.run.${this.ownerId}`,{runId:id,ownerId:this.ownerId,...(options.timeoutMs!==undefined&&options.timeoutMs!==null?{deadlineAt:Date.now()+Math.max(1,options.timeoutMs)}:{})},{id:this.id(id)});
+   this.engine.enqueue(this.id(id),`${this.kind}.run.${this.ownerId}`,{runId:id,ownerId:this.ownerId,...(options.timeoutMs!==undefined&&options.timeoutMs!==null?{timeoutMs:Math.max(1,options.timeoutMs)}:{})},{id:this.id(id)});
    if(own)this.store.db.exec('COMMIT');
-   if(options.timeoutMs!==undefined&&options.timeoutMs!==null){
-    const delay=Math.max(1,Math.min(2147483647,options.timeoutMs));
-    pending.timer=setTimeout(()=>this.engine.fail(this.id(id),'timeout'),delay);pending.timer.unref();
-   }
    void this.engine.tick().catch(error=>{this.callbacks.failure(id,error);this.engine.fail(this.id(id),'run_failed');});
   }catch(error){if(own&&this.store.db.isTransaction)this.store.db.exec('ROLLBACK');this.pending.delete(id);this.started.delete(this.id(id));finish();throw error;}
  }
@@ -83,7 +81,7 @@ export class RunExecution {
   for(const id of [...this.observed]){const step=this.sync(id);if(!step||!['waiting','running'].includes(step.state))continue;const owner=this.store.db.prepare('SELECT lease_until FROM run_execution_owners WHERE id=?').get(String(step.input.ownerId));if(!owner||Number(owner.lease_until)<=Date.now()){this.engine.fail(step.id,'interrupted');this.sync(id);}}
   if(!this.pending.size&&!this.observed.size){clearInterval(this.heartbeat);this.heartbeat=undefined;}
  },250);this.heartbeat.unref();}
- private finish(id:string){const pending=this.pending.get(id);if(!pending)return;clearTimeout(pending.timer);this.pending.delete(id);pending.finish();queueMicrotask(()=>{void this.engine.drain([this.id(id)]).finally(()=>this.started.delete(this.id(id))).catch(()=>{});});}
+ private finish(id:string){const pending=this.pending.get(id);if(!pending)return;this.pending.delete(id);pending.finish();queueMicrotask(()=>{void this.engine.drain([this.id(id)]).finally(()=>this.started.delete(this.id(id))).catch(()=>{});});}
  async wait(id:string){this.sync(id);await this.pending.get(id)?.done;await this.engine.drain([this.id(id)]);}
  async close(){for(const id of [...this.pending.keys()])this.sync(id);await Promise.all([...this.pending.values()].map(value=>value.done));await this.engine.drain([...this.started]);this.started.clear();clearInterval(this.heartbeat);this.heartbeat=undefined;this.store.db.prepare('DELETE FROM run_execution_owners WHERE id=?').run(this.ownerId);}
  /** Revoke only this feature's work; other owners and shared pools remain live. */

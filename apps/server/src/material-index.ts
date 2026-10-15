@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-engine.js';
 import {StoreError} from './store.js';
 import type {MaterialStore} from './materials.js';
@@ -22,7 +23,7 @@ export class MaterialIndexRuntime {
   private closed=false;
   private unregister:()=>Promise<void>;
   constructor(readonly materials:MaterialStore,readonly engine:ExecutionEngine){
-    this.unregister=engine.register({kind:KIND,pool:'material.index',concurrency:()=>2,
+    this.unregister=engine.register({kind:KIND,pool:'material.index',concurrency:()=>2,policy:EXECUTION_POLICIES.deterministic,timeoutMs:300000,
       resourceKeys:step=>[`material:${(step.input as Input).materialId}`],
       validate:step=>this.valid(step),execute:async(step,signal)=>{signal.throwIfAborted();return this.projection(step);},
       commit:(step,result)=>this.commit(step,result as Projection),project:step=>this.project(step),

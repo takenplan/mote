@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from '../execution-policy.js';
 import {recordingMemoryRecipe} from './recording-memory.js';
 import {z} from 'zod';
 import {StoreError} from '../store.js';
@@ -54,7 +55,7 @@ export class RecordingConnector {
   const value=await this.file.read();if(value)this.saved=savedSchema.parse(value);
   if(this.saved.account)this.registerSource();
   for(const phase of phases)this.disposers.push(this.engine.register({kind:this.kind(phase),pool:`recording.${phase}`,concurrency:()=>phase==='media'?1:2,
-   timeoutMs:phase==='media'?300000:120000,maxAttempts:5,maxRecoveryWindowMs:24*3600000,
+   policy:EXECUTION_POLICIES.networkAcquisition,timeoutMs:null,
    validate:step=>this.valid(step),resourceKeys:step=>[`recording:${this.provider.id}:${step.input.account}:${step.input.id??'discovery'}:${phase}`],
    execute:async(step,signal,grant)=>{
     const started=Date.now();this.observe(phase,'started',step);
@@ -62,8 +63,8 @@ export class RecordingConnector {
      const result=await this.execute(phase,step,signal,grant);this.observe(phase,'completed',step,{durationMs:Date.now()-started});return result;
     }catch(e){this.observe(phase,'failed',step,{durationMs:Date.now()-started});throw e;}
    },commit:(step,result)=>this.commit(phase,step,result),
-   classify:error=>error instanceof ExecutionFailure?error:error instanceof z.ZodError?new ExecutionFailure('permanent','recording_contract_invalid'):error instanceof StoreError&&[400,409,410,413].includes(error.statusCode)?new ExecutionFailure('blocked','recording_archive_rejected'):error instanceof ConnectorError&&error.code==='recording_transcript_not_ready'?new ExecutionFailure('transient','recording_transcript_not_ready'):error instanceof ConnectorError&&['lark_permission_required','lark_not_connected','lark_not_configured','lark_cli_missing','dingtalk_cli_missing','dingtalk_not_connected','dingtalk_permission_required'].includes(error.code)?new ExecutionFailure('blocked','recording_authorization_required'):
-    new ExecutionFailure('transient','recording_provider_failed'),
+   classify:error=>error instanceof ExecutionFailure?error:error instanceof z.ZodError?new ExecutionFailure('permanent','recording_contract_invalid'):error instanceof StoreError&&[400,409,410,413].includes(error.statusCode)?new ExecutionFailure('blocked','recording_archive_rejected'):error instanceof ConnectorError&&['lark_operation_timeout','dingtalk_operation_timeout'].includes(error.code)?new ExecutionFailure('transient','provider_timeout'):error instanceof ConnectorError&&error.code==='recording_transcript_not_ready'?new ExecutionFailure('transient','recording_transcript_not_ready'):error instanceof ConnectorError&&['lark_permission_required','lark_not_connected','lark_not_configured','lark_cli_missing','dingtalk_cli_missing','dingtalk_not_connected','dingtalk_permission_required'].includes(error.code)?new ExecutionFailure('blocked','recording_authorization_required'):
+    new ExecutionFailure('permanent','recording_provider_failed'),
   }));
   this.initialized=true;this.configureSyncInterval(this.ctx.config.connectors?.syncIntervalMs??300000);
   void this.engine.tick();

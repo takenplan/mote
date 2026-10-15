@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {canonicalRunStatus,executionEnvelope,retryDelay,standardRetryPolicy} from '../dist/execution.js';
+import {canonicalRunStatus,executionEnvelope,retryDelay} from '../dist/execution.js';
 
 test('current domain states have explicit execution projections',()=>{
   assert.equal(canonicalRunStatus({state:'completed'}),'succeeded');
@@ -25,9 +25,21 @@ test('failure scope distinguishes item failures from shared provider waits',()=>
 });
 
 test('backoff is bounded and deterministic when randomness is injected',()=>{
-  assert.equal(retryDelay(standardRetryPolicy,1,()=>0),24000);
-  assert.equal(retryDelay(standardRetryPolicy,2,()=>1),72000);
-  assert.equal(retryDelay({...standardRetryPolicy,maxDelayMs:50000},20,()=>.5),50000);
+  const taskPolicy={maxAttempts:4,maxDurationMs:3600000,maxRecoveryWindowMs:86400000,baseDelayMs:30000,maxDelayMs:3600000,jitterRatio:.2};
+  assert.equal(retryDelay(taskPolicy,1,()=>0),24000);
+  assert.equal(retryDelay(taskPolicy,2,()=>1),72000);
+  assert.equal(retryDelay({...taskPolicy,maxDelayMs:50000},20,()=>.5),50000);
+});
+
+test('capacity waiting is automatic and does not request configuration changes',()=>{
+ const next=Date.now()+5000;
+ const waiting=executionEnvelope({state:'waiting',attempts:0,errorCode:'rate_limited',availableAt:next});
+ assert.equal(waiting.waiting.reason,'resource_limit');assert.equal(waiting.failure.recovery,'auto_retry');
+ assert.equal(waiting.waiting.requiredAction,undefined);assert.ok(waiting.waiting.retryAfterMs>0&&waiting.waiting.retryAfterMs<=5000);
+ const unavailable=executionEnvelope({state:'waiting',errorCode:'provider_unavailable',availableAt:next});
+ assert.equal(unavailable.waiting.requiredAction,undefined);
+ const historical=executionEnvelope({state:'failed',attempts:4,errorCode:'rate_limited'});
+ assert.equal(historical.status,'failed');assert.equal(historical.failure.recovery,'needs_action');assert.equal(historical.waiting,undefined);
 });
 
 test('shutdown interruption distinguishes replayable tasks from runs requiring explicit retry',()=>{

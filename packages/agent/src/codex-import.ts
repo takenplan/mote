@@ -13,8 +13,7 @@ export function createCodexImportAgent(options:Omit<AgentOptions,'reader'>){
   let closed=false;const sessions=new Set<CodexSession>(),pending=new Set<Promise<ImportAgentResult>>();
   async function execute(input:ImportAgentInput,onUsage?:(usage:TokenUsage)=>void):Promise<ImportAgentResult>{
     if(closed)throw new AgentProviderError();if(!options.model?.trim())throw new AgentNotConfiguredError();
-    const agentTimeoutMs = options.agentTimeoutMs === undefined ? 120000 : options.agentTimeoutMs;
-    const session=new CodexSession({...options,agentTimeoutMs},async()=>{throw new AgentProviderError();},undefined,onUsage);sessions.add(session);
+    const session=new CodexSession(options,async()=>{throw new AgentProviderError();},undefined,onUsage);sessions.add(session);
     try{
       await session.start(skillContent('document-import'),[],input.workspace);
       let text=await session.run(JSON.stringify({...input,language:input.language??'zh-CN',languageInstruction:'Use the selected language for summaries and warnings; preserve original quotes and schema keys.',requiredSkill:'document-import',importedAt:new Date().toISOString(),nodeExecutable:process.execPath}),importAnswerSchema);

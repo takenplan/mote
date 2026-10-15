@@ -3,16 +3,19 @@ import {createRequire} from 'node:module';
 import {StoreError} from './store.js';
 export type AssetPreparation={directory:string;staging:string;destinationRoot:string;hash?:string;bytes:number;partBytes:number;parts:{part:number;hash:string;bytes:number}[];encryption:{enabled:boolean;key?:string}};
 export type PreparedAsset={hash:string;checksums:string[];destination?:{dev:number;ino:number;mtimeMs:number}};
+// Hashing, encryption and durable writes cover an entire supported original.
+const ASSET_EXECUTION_TIMEOUT_MS=15*60*1000;
 let active=0;const queue:(()=>void)[]=[];
 /** File bytes, crypto and durable staging run in at most two child processes.
  * No worker opens the vault database or holds a metadata transaction. */
 export async function prepareAsset(task:AssetPreparation,signal?:AbortSignal):Promise<PreparedAsset>{
  signal?.throwIfAborted();
  const controller=new AbortController(),deadline=controller.signal,abortParent=()=>controller.abort(signal?.reason);
- const timeout=setTimeout(()=>controller.abort(new DOMException('Asset preparation timed out','TimeoutError')),120000);timeout.unref();
+ let timeout:ReturnType<typeof setTimeout>|undefined;
  signal?.addEventListener('abort',abortParent,{once:true});let admitted=false;
  try{
  await new Promise<void>((resolve,reject)=>{const enter=()=>{deadline.removeEventListener('abort',abort);active++;admitted=true;resolve();};const abort=()=>{const index=queue.indexOf(enter);if(index>=0)queue.splice(index,1);reject(deadline.reason);};deadline.addEventListener('abort',abort,{once:true});if(active<2)enter();else queue.push(enter);});
+ timeout=setTimeout(()=>controller.abort(new DOMException('Asset preparation timed out','TimeoutError')),ASSET_EXECUTION_TIMEOUT_MS);timeout.unref();
  return await new Promise<PreparedAsset>((resolve,reject)=>{
   const extension=import.meta.url.endsWith('.ts')?'ts':'js';
   const child=fork(new URL(`./asset-worker.${extension}`,import.meta.url),[],{stdio:['ignore','ignore','ignore','ipc'],execArgv:extension==='ts'?['--import',createRequire(import.meta.url).resolve('tsx')]:[]});let settled=false;

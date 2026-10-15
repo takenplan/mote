@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {MaterialConsumerRegistry} from './material-consumers.js';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep,type ExecutionState} from './execution-engine.js';
 import type {ProcessingJobView} from '@mote/shared';
@@ -66,10 +67,10 @@ export class ProcessingRuntime {
     if(materials)store.archive.enableMaterialLineage();
     this.engine=engine??new ExecutionEngine(store,now);this.owned=!engine;
     for(const lane of lanes)this.unregister.push(this.engine.register({kind:'context-dag.'+lane,pool:lane,concurrency:()=>this.settings()[lane].concurrency,
-      timeoutMs:lane==='semantic'?300000:120000,validate:step=>this.valid(this.job(step.id)),admit:step=>this.admit(this.job(step.id)),execute:(step,signal)=>this.process(this.job(step.id),signal,step),commit:(step,result)=>this.commit(this.job(step.id),result),project:step=>this.project(step),
-      classify:error=>{const category=error instanceof ProcessingFailure?error.category:error instanceof z.ZodError?'permanent':error instanceof StoreError?(error.statusCode===409?'blocked':error.statusCode<500?'permanent':'transient'):'transient';return new ExecutionFailure(category,category);},
+      policy:lane==='semantic'?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.deterministic,timeoutMs:lane==='semantic'?null:900000,validate:step=>this.valid(this.job(step.id)),admit:step=>this.admit(this.job(step.id)),execute:(step,signal)=>this.process(this.job(step.id),signal,step),commit:(step,result)=>this.commit(this.job(step.id),result),project:step=>this.project(step),
+      classify:error=>{const category=error instanceof ProcessingFailure?error.category:error instanceof z.ZodError?'permanent':error instanceof StoreError?(error.statusCode===409?'blocked':'permanent'):'permanent';return new ExecutionFailure(category,category);},
     }));
-    this.unregister.push(this.engine.register({kind:'material-consumer.plan',pool:'material-consumer.plan',concurrency:()=>2,
+    this.unregister.push(this.engine.register({kind:'material-consumer.plan',pool:'material-consumer.plan',concurrency:()=>2,policy:EXECUTION_POLICIES.deterministic,timeoutMs:300000,
       validate:step=>{const material=this.materials?.get(String(step.input.ref));return Boolean(material&&this.materials?.get(material.id)?.ref===material.ref&&this.consumerAllowed(material.origin.sourceId,String(step.input.bindingId)));},
       admit:step=>{
         const binding=this.consumers.get(String(step.input.bindingId));

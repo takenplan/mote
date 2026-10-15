@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import type {MemoryPipeline,MemoryBatch} from './memory-pipeline.js';
 import {memoryFeedbackBatchId,type MemoryFeedbackRequest} from './memory-feedback.js';
 import {DelegationRuntime,type DelegationProduct} from './delegation-runtime.js';
@@ -28,7 +29,7 @@ export function registerMemoryFeedbackStatus(options:{runtime:DelegationRuntime;
   if(leaves.some(batch=>batch.status!=='completed'))return new ExecutionFailure('waiting','memory_feedback_pending',1000);
   return {leaves};
  };
- return runtime.engine.register({kind:'memory.feedback-status',pool:'memory.feedback-status',concurrency:()=>8,maxAttempts:1,
+ return runtime.engine.register({kind:'memory.feedback-status',pool:'memory.feedback-status',concurrency:()=>8,policy:EXECUTION_POLICIES.control,
   validate:valid,
   admit:step=>{const state=inspect(step);return state instanceof ExecutionFailure?state:undefined;},
   execute:async step=>{const state=inspect(step);if(state instanceof ExecutionFailure)throw state;const selected=input(step);

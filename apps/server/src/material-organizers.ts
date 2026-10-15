@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {codingProjectContext} from './coding-project.js';
 import {uiPageCaptureSource} from './capture-memory-source.js';
 import {DAILY_EVENT_RECIPE} from './daily-event-memory-policy.js';
@@ -657,7 +658,7 @@ export class MaterialOrganizerRuntime {
     this.sourceItemRecipes=new SourceItemRecipeCatalog(store,sourceItem.version);
     this.executor=executor??new ExecutionEngine(store);
     materials.bindIndexEngine(this.executor);
-    this.unregister=this.executor.register({kind:ORGANIZER_STEP,pool:'material-organizer',concurrency:()=>8,
+    this.unregister=this.executor.register({kind:ORGANIZER_STEP,pool:'material-organizer',concurrency:()=>8,policy:EXECUTION_POLICIES.deterministic,timeoutMs:900000,
       resourceKeys:step=>[`material:${(step.input as OrganizerJobInput).materialId}`],
       validate:step=>!this.closed&&this.valid(step),
       execute:async(step,signal)=>{try{

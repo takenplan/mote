@@ -29,5 +29,16 @@ test('direct local health requests remain bounded, abortable and reject redirect
 test('only explicit local not-started receipts release an unavailable-provider guard',async t=>{
  const server=createServer((req,res)=>{req.resume();res.writeHead(503,req.url==='/known'?{'X-Mote-Execution':'local','X-Mote-Execution-Started':'false'}:req.url==='/untrusted'?{'X-Mote-Execution-Started':'false'}:{});res.end('{}');});server.listen(0,'127.0.0.1');await once(server,'listening');t.after(()=>new Promise<void>(r=>server.close(()=>r())));
  const url='http://127.0.0.1:'+(server.address() as {port:number}).port;
- for(const [path,offline,known] of [['/known',true,true],['/known',false,false],['/untrusted',true,false],['/ambiguous',true,false]] as const)await assert.rejects(requestLocalJson(url+path,{signal:AbortSignal.timeout(1000),requireOfflineExecution:offline}),(error:any)=>error instanceof ProviderFailure&&error.details.code==='provider_unavailable'&&(error.details.executionStarted===false)===known);
+ for(const [path,offline,known] of [['/known',true,true],['/known',false,true],['/untrusted',true,false],['/ambiguous',true,false]] as const)await assert.rejects(requestLocalJson(url+path,{signal:AbortSignal.timeout(1000),requireOfflineExecution:offline}),(error:any)=>error instanceof ProviderFailure&&error.details.code==='provider_unavailable'&&(error.details.executionStarted===false)===known);
+});
+
+test('an early worker busy response stops original streaming and retains its typed receipt',async t=>{
+ let yielded=0,closed=false;
+ const server=createServer((_req,res)=>{res.writeHead(429,{'X-Mote-Execution':'local','X-Mote-Execution-Started':'false','Retry-After':'5'});res.end('{}');});
+ server.listen(0,'127.0.0.1');await once(server,'listening');
+ t.after(async()=>{server.closeAllConnections();await new Promise<void>(r=>server.close(()=>r()));});
+ const body=(async function*(){try{for(let i=0;i<100;i++){yielded++;yield Buffer.alloc(64*1024);await new Promise(r=>setTimeout(r,2));}}finally{closed=true;}})();
+ await assert.rejects(requestLocalJson('http://127.0.0.1:'+(server.address() as {port:number}).port+'/ocr',{method:'POST',headers:{'Content-Length':String(100*64*1024)},body,signal:AbortSignal.timeout(2000)}),e=>e instanceof ProviderFailure&&e.details.code==='rate_limited'&&e.details.executionStarted===false&&e.details.retryAfterMs===5000);
+ for(let i=0;i<20&&!closed;i++)await new Promise(r=>setTimeout(r,5));
+ assert.equal(closed,true);assert.ok(yielded<100,'A rejected request must not continue consuming the original');
 });

@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {ProviderFailure,providerHttpFailure,type TokenUsage} from '@mote/shared';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-engine.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
@@ -25,7 +26,7 @@ export class Indexer {
   readonly engine:ExecutionEngine;private owned:boolean;private unregister:(()=>void)[]=[];
   constructor(private store:Store,private config:Pick<Config,'embeddingModel'|'embeddingBaseUrl'|'embeddingApiKey'>,private diagnostics?:ServerDiagnostics,private files?:FileStore,private admission?:(input:{bytes:number;operationId?:string})=>{finish:(usage?:TokenUsage,failed?:boolean)=>void},private options:{executor?:ExecutionEngine;operationId?:()=>string|undefined}={}) {
     this.engine=options.executor??new ExecutionEngine(store);this.owned=!options.executor;
-    for(const kind of ['capture','file'] as const)this.unregister.push(this.engine.register({kind:'embedding.'+kind,pool:'embedding',concurrency:()=>2,timeoutMs:45000,
+    for(const kind of ['capture','file'] as const)this.unregister.push(this.engine.register({kind:'embedding.'+kind,pool:'embedding',concurrency:()=>2,policy:EXECUTION_POLICIES.modelCall,timeoutMs:300000,
       validate:step=>this.valid(step),admit:()=>this.closing?new ExecutionFailure('blocked','indexer_closed'):!this.configured?new ExecutionFailure('blocked','embedding_not_configured'):undefined,
       execute:async(step,signal)=>{const combined=AbortSignal.any([signal,this.abort.signal]);return withExecutionCancellation(combined,async()=>{const text=this.inputText(step);return this.performEmbedding(text,45000,combined,step.operationId);});},
       commit:(step,result)=>{const id=String(step.input.evidenceId);if(kind==='capture')this.store.indexed(id,result as number[],this.config.embeddingModel);else this.files!.indexed(id,result as number[],this.config.embeddingModel);},
@@ -54,17 +55,17 @@ export class Indexer {
   get configured() {return Boolean(this.config.embeddingModel&&this.config.embeddingBaseUrl);}
   private queryCache=new Map<string,{at:number;vector:number[]}>();
   async embed(text:string,timeoutMs=45000,signal?:AbortSignal,operationId?:string):Promise<number[]> {
-    const id='embedding-query:'+randomUUID(),selectedParent=operationId??this.options.operationId?.(),parent=selectedParent??'embedding:'+randomUUID(),external=AbortSignal.any([this.abort.signal,...(signal?[signal]:[])]),deadline=AbortSignal.timeout(timeoutMs);let value:number[]|undefined;
-    try{return await this.engine.runStep({id,operationId:parent,kind:'embedding.query',pool:'embedding.query',optional:!!selectedParent,input:{requestHash:sha256(text),modelFingerprint:this.modelFingerprint()},signal:external,timeoutMs,
+    const id='embedding-query:'+randomUUID(),selectedParent=operationId??this.options.operationId?.(),parent=selectedParent??'embedding:'+randomUUID(),external=AbortSignal.any([this.abort.signal,...(signal?[signal]:[])]);let value:number[]|undefined,deadline:AbortSignal|undefined;
+    try{return await this.engine.runStep({id,operationId:parent,kind:'embedding.query',pool:'embedding.query',optional:!!selectedParent,input:{requestHash:sha256(text),modelFingerprint:this.modelFingerprint()},signal:external,policy:EXECUTION_POLICIES.modelCall,maxAttempts:1,timeoutMs,
       validate:()=>!this.closing&&!external.aborted,
-      execute:async requestSignal=>{try{return await withExecutionCancellation(AbortSignal.any([requestSignal,deadline]),()=>this.performEmbedding(text,timeoutMs,AbortSignal.any([requestSignal,deadline]),parent));}catch(error){if(deadline.aborted&&!external.aborted)throw new ProviderFailure({category:'permanent',code:'embedding_timeout'});throw error;}},commit:result=>{value=result as number[];},read:()=>value,project:()=>{},
+      execute:async requestSignal=>{const callDeadline=AbortSignal.timeout(timeoutMs);deadline=callDeadline;try{return await withExecutionCancellation(AbortSignal.any([requestSignal,callDeadline]),()=>this.performEmbedding(text,timeoutMs,AbortSignal.any([requestSignal,callDeadline]),parent));}catch(error){if(callDeadline.aborted&&!external.aborted)throw new ProviderFailure({category:'permanent',code:'embedding_timeout'});throw error;}},commit:result=>{value=result as number[];},read:()=>value,project:()=>{},classify:error=>new ExecutionFailure('permanent',error instanceof DOMException&&error.name==='TimeoutError'?'embedding_timeout':'embedding_invalid'),
     });}catch(error){
       const step=this.engine.get(id);
       // Query vectors are single attempts: retain the observed cause, never leave
       // an in-memory question queued for replay after lexical fallback.
       if(step&&['waiting','running'].includes(step.state)){
         if(external.aborted)this.engine.cancel(id);
-        else this.engine.fail(id,error instanceof ProviderFailure?error.details.code:error instanceof ExecutionFailure&&error.code!=='step_pending'?error.code:deadline.aborted?'embedding_timeout':'embedding_capacity');
+        else this.engine.fail(id,error instanceof ProviderFailure?error.details.code:error instanceof ExecutionFailure&&error.code!=='step_pending'?error.code:deadline?.aborted?'embedding_timeout':'embedding_capacity');
       }
       throw error;
     }

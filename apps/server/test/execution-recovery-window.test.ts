@@ -8,7 +8,7 @@ test('provider recovery window persists across retry/restart and does not consum
  await engine.close();now=15001;engine=new ExecutionEngine(store,()=>now);engine.register(handler);await engine.drain([id]);assert.equal(engine.get(id)!.error,'recovery_window_exhausted');assert.equal(calls,2);
  engine.retry(id);await engine.drain([id]);assert.equal(calls,3);assert.equal(engine.get(id)!.state,'waiting');
 });
-test('a Retry-After beyond the recovery window stops without sleeping or resending',async t=>{
+test('a real failure Retry-After beyond an explicit recovery budget stops without resending',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'mote-long-retry-')),store=new Store(dir),engine=new ExecutionEngine(store,()=>10000);t.after(async()=>{await engine.close();store.close();rmSync(dir,{recursive:true,force:true});});
- engine.register({kind:'fixture',pool:'fixture',concurrency:()=>1,maxRecoveryWindowMs:1000,validate:()=>true,execute:async()=>{throw new ExecutionFailure('transient','rate_limited',2000);},commit:()=>{}});const id=engine.enqueue('fixture:two','fixture',{});await engine.drain([id]);assert.equal(engine.get(id)!.state,'failed');assert.equal(engine.get(id)!.error,'recovery_window_exhausted');assert.equal(engine.get(id)!.attempts,1);
+ engine.register({kind:'fixture',pool:'fixture',concurrency:()=>1,maxAttempts:4,maxRecoveryWindowMs:1000,validate:()=>true,execute:async()=>{throw new ExecutionFailure('transient','provider_unavailable',2000);},commit:()=>{}});const id=engine.enqueue('fixture:two','fixture',{});await engine.drain([id]);assert.equal(engine.get(id)!.state,'failed');assert.equal(engine.get(id)!.error,'recovery_window_exhausted');assert.equal(engine.get(id)!.attempts,1);
 });

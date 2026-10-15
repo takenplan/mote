@@ -246,11 +246,22 @@ test('portable archives retain deletion intent, reject identity tampering atomic
 });
 
 
-test('the complete deletion comparison has a deadline even when a model ignores cancellation',async t=>{
+test('an explicitly bounded deletion comparison times out even when a model ignores cancellation',async t=>{
  const f=await fixture(t),id=await f.add('Generated bounded review'),draft=output(f,[id]),[old]=await save(f,draft);f.memories.delete(old.id);
  const guard=new MemoryDeletions(f.store,ids=>f.store.evidence(ids),20);let signal:AbortSignal|undefined;
  await assert.rejects(guard.review({question:'Generated'},draft,async input=>{signal=input.signal;return new Promise(()=>{});}),{name:'AgentTimeoutError'});
  assert.equal(signal?.aborted,true);assert.equal(f.memories.list().length,0);
+});
+
+test('default multi-call deletion review does not inherit the former five-minute workflow deadline',async t=>{
+ const f=await fixture(t),id=await f.add('Generated long deletion review'),draft=output(f,[id]),[old]=await save(f,draft);f.memories.delete(old.id);
+ let entered!:()=>void,release!:()=>void,signal:AbortSignal|undefined;
+ const started=new Promise<void>(resolve=>entered=resolve),held=new Promise<void>(resolve=>release=resolve);
+ t.after(()=>release());t.mock.timers.enable({apis:['setTimeout']});
+ const pending=f.memories.deletions.review({question:'Generated'},draft,async input=>{signal=input.signal;entered();await held;return {...draft,answer:JSON.stringify({sameConclusion:true,newSupportEvidenceIds:[]})};});
+ const outcome=pending.then(result=>({result,error:undefined}),error=>({result:undefined,error}));
+ await started;t.mock.timers.tick(300001);await new Promise<void>(resolve=>setImmediate(resolve));
+ assert.equal(signal?.aborted,false);release();const completed=await outcome;assert.equal(completed.error,undefined);assert.equal(JSON.parse(completed.result!.answer).memories.length,0);
 });
 
 

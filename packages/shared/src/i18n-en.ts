@@ -20,22 +20,17 @@ export const english: Readonly<Record<string, string>> = {
   "当天没有随手记。选择其他日期，或添加一条随手记。": "No quick notes for this day. Choose another date or add a note.",
   "文件、屏幕记录与想法，先存本机。连接中央整理后，可搜索和提问。": "Save files, screen records and thoughts locally. Connect to central and process them to search or ask.",
   "已填写的中央地址：{0}；连接并确认后才会发送。": "Configured central address: {0}. Sending starts only after connecting and confirming.",
-
   "暂不可用": "Temporarily unavailable",
   "模型、存储、记忆、洞察等中央功能": "Central features such as models, storage, memories, and insights",
   "此客户端支持的中央功能": "Central features supported by this client",
-
   "连接中央后，查看完整资料库、记忆、洞察与处理进度。": "Connect to central to explore the full library, memories, insights, and processing progress.",
   "全部功能与设置 →": "All features and settings →",
   "模型、存储、记忆、洞察与全部中央功能": "Models, storage, memories, insights, and all central features",
-
   "中央资料库暂不可用。连接中央后，可浏览已归档的资料；文件和随手记仍可在本机保存和查看。": "The central library is unavailable. Connect to central to browse archived materials. You can still save and view files and quick notes on this device.",
   "中央功能需要连接中央；文件和随手记仍可在本机保存和查看。": "Central features require a connection. You can still save and view files and quick notes on this device.",
-
   "文件、屏幕记录和想法先保存在本机；连接中央并完成整理后，可搜索和提问。": "Files, screen records, and thoughts are saved on this device first. Connect to central and complete processing to search and ask questions.",
   "保存之后，回看或提问": "After saving, browse or ask",
   "问一问 →": "Ask →",
-
   "请先在 mote.yaml 配置 connectors.mcpReadToken 并开启 connectors.mcpEnabled，然后重启节点。": "Configure connectors.mcpReadToken and enable connectors.mcpEnabled in mote.yaml, then restart the node.",
   "请先在 mote.yaml 配置 connectors.mcpWriteToken、connectors.mcpWriteSourceIds，并开启 connectors.mcpWriteEnabled 后重启节点。": "Configure connectors.mcpWriteToken and connectors.mcpWriteSourceIds, enable connectors.mcpWriteEnabled in mote.yaml, then restart the node.",
   "来自中央节点的配置文件；页面和手改文件使用同一份设置。": "Uses the central node configuration file. The page and manual file edits share the same settings.",
@@ -816,7 +811,7 @@ export const english: Readonly<Record<string, string>> = {
   "设置已保存。新文件和未完成任务使用新配置；已完成文件保留原结果。": "Settings saved. New and unfinished tasks use the new configuration; completed results are preserved.",
   "处理开关与预算": "Processing and budgets",
   "启用中央文件处理": "Enable central file processing",
-  "单文件超时（秒）": "Per-file timeout (seconds)",
+  "单次文件处理超时（秒）": "File processing call timeout (seconds)",
   "1. 类型策略": "1. Type policies",
   "具体 MIME 类型优先于类型通配符；未配置的格式按“其他”处理。PDF 处理插件可由管理员接入 Cordis，接入后可在此选择。": "Exact MIME types take precedence over wildcards. Unconfigured formats use Other. Administrators can add a PDF plugin through Cordis, then select it here.",
   "文件类型": "File type",
@@ -8237,5 +8232,6 @@ export const english: Readonly<Record<string, string>> = {
   "内部规划失败，未完成范围已保留": "Internal planning failed; unfinished coverage is preserved",
   "本次整合的记忆或原始证据当前不可读，未完成窗口已保留。请检查来源与授权后重试。": "The selected memories or original evidence are currently unreadable. The unfinished window is preserved. Check sources and permissions before retrying.",
   "本次整合未读到记忆正文或原始证据，未完成窗口已保留，未记为成功。": "This integration received no memory bodies or original evidence. The unfinished window is preserved and has not been marked successful.",
-  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again."
+  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again.",
+  "可留空；累计实际执行的模型、工具与修正时间，不包含等待执行名额。": "May be left blank; counts admitted model, tool and correction time, excluding waits for execution capacity."
 };

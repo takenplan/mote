@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import type {ExecutionEnvelope} from './execution.js';
 import {sourceIdSchema,sourceItemSchema} from './sources.js';
 
 export const initialSyncSchema=z.enum(['all','new_only']);
@@ -85,10 +86,17 @@ export const fileProcessingSchema=z.object({
   sourceProfiles:z.record(sourceIdSchema,z.string().regex(/^[a-z][a-z0-9.-]{0,99}$/)).default({}),
   typeProfiles:z.record(z.string().regex(/^[a-z0-9.+-]+\/(?:[a-z0-9.+-]+|\*)$/),z.string().regex(/^[a-z][a-z0-9.-]{0,99}$/)).default({}),
   maxAudioMinutes:z.number().int().min(1).max(1440).default(120),
-  timeoutMs:z.number().int().min(1000).max(3600000).default(600000),
+  // Call protection only; durable file workflows have no overall deadline.
+  timeoutMs:z.number().int().min(1000).max(3600000).default(3600000),
 }).strict().superRefine((v,c)=>{
   if((v.speakerMin===null)!==(v.speakerMax===null)||v.speakerMin!==null&&(v.speakerCount!==null||v.speakerMax!<v.speakerMin))c.addIssue({code:'custom',message:'Choose unknown, exact count or a complete ordered range'});
   for(const endpoint of [v.endpoint,v.imageEndpoint].filter(Boolean))try{const u=new URL(endpoint);if(u.username||u.password||u.hash||u.search||!['http:','https:'].includes(u.protocol))throw Error();const local=['127.0.0.1','localhost','[::1]'].includes(u.hostname);if(!local&&(!v.allowRemote||u.protocol!=='https:'))throw Error();}catch{c.addIssue({code:'custom',message:'Use a local endpoint or explicitly allow an HTTPS remote endpoint'});}
   for(const endpoint of [v.localEndpoint])try{const u=new URL(endpoint);if(!['http:','https:'].includes(u.protocol)||!['127.0.0.1','localhost','[::1]'].includes(u.hostname)||u.username||u.password||u.search||u.hash)throw Error();}catch{c.addIssue({code:'custom',message:'Local processing endpoints must use loopback'});}
 });
 export type FileProcessingSettings=z.infer<typeof fileProcessingSchema>;
+
+/** Independent canonical receipts for archived-file processing and summary work. */
+export type FileProcessingJobView={
+ state:string;stage?:string;attempts?:number;error?:string|null;summary_state:string;availableAt?:number;inputVersion?:string|null;
+ execution?:ExecutionEnvelope;summaryExecution?:ExecutionEnvelope;summaryAvailableAt?:number;
+};

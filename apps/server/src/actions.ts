@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep,type ExecutionState} from './execution-engine.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
 import {linkOperationParent} from './operation-projection.js';
@@ -51,7 +52,7 @@ export class Actions {
     const projectSql="UPDATE action_jobs SET status=CASE new.state WHEN 'waiting' THEN 'pending' WHEN 'succeeded' THEN 'completed' ELSE new.state END,attempts=new.attempts WHERE key=json_extract(new.input,'$.jobKey');";
     store.db.exec(`CREATE TRIGGER IF NOT EXISTS action_execution_created AFTER INSERT ON execution_steps WHEN new.kind='actions.extract' BEGIN ${projectSql} END; CREATE TRIGGER IF NOT EXISTS action_execution_changed AFTER UPDATE OF state,attempts ON execution_steps WHEN new.kind='actions.extract' BEGIN ${projectSql} END;`);
 
-    this.unregister=this.engine.register({kind:'actions.extract',pool:'actions.extract',concurrency:()=>1,maxAttempts:2,
+    this.unregister=this.engine.register({kind:'actions.extract',pool:'actions.extract',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:2,
       validate:step=>this.validJob(String(step.input.jobKey)),
       admit:()=>this.closed?new ExecutionFailure('blocked','actions_closed'):!this.settings().enabled?new ExecutionFailure('blocked','actions_disabled'):!this.configured()?new ExecutionFailure('blocked','model_not_configured'):undefined,
       execute:(step,signal)=>withExecutionCancellation(AbortSignal.any([signal,this.abort.signal]),()=>this.analyze(this.job(String(step.input.jobKey))!,step,AbortSignal.any([signal,this.abort.signal]))),

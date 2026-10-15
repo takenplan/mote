@@ -14,9 +14,12 @@ import type {Config} from '../src/config.js';
 async function fixture(t:TestContext,query:(input:QueryInput)=>Promise<QueryResult>){
   const directory=mkdtempSync(join(tmpdir(),'mote-host-deadline-'));
   const config:Config={dataDir:directory,dataKey:undefined,token:'generated-host-deadline-token',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-fixture',modelProvider:'custom',modelProtocol:'openai-completions',modelBaseUrl:'http://127.0.0.1:1234/v1',apiKey:'',allowUnauthenticatedLocal:true,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false,agentTimeoutMs:5000};
-  // The real host creates the deadline and usage receipt. The fixture never
-  // constructs a provider or makes a network request.
-  const node=await buildApp(config,{backgroundWorker:false,agent:{configured:true,close:async()=>{},query}});
+  // The generated Agent owns its actual execution budget after host admission.
+  // The real host propagates its typed failure and owns the usage receipt.
+  const node=await buildApp(config,{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async input=>{
+    const call=agentDeadline(input.signal,config.agentTimeoutMs!);
+    try{const result=await query({...input,signal:call.signal});call.signal?.throwIfAborted();return result;}finally{call.dispose();}
+  }}});
   t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
   return {...node,headers:{authorization:'Bearer '+config.token},receipts:()=>node.store.db.prepare('SELECT json FROM model_usage').all().map(row=>JSON.parse(String(row.json)) as UsageReceipt)};
 }
@@ -119,5 +122,5 @@ test('host deadline disposal clears timers and listeners on completion or either
   assert.equal(disposed.signal!.aborted,false);assert.equal(getEventListeners(completed.signal,'abort').length,0);
 
   const alreadyCancelled=agentDeadline(cancelled.signal,80);assert.equal(alreadyCancelled.signal!.reason,firstReason);
-  const unlimited=agentDeadline(completed.signal,null);assert.equal(unlimited.signal,completed.signal);unlimited.dispose();
+  const unlimited=agentDeadline(completed.signal,null);assert.equal(unlimited.signal!.reason,completed.signal.reason);unlimited.dispose();
 });

@@ -71,7 +71,8 @@ test('endpoint safety and numeric bounds are checked before any request', () => 
   for (const maxTokens of ['', '0', '128001', 'NaN']) assert.throws(() => modelSettingsRequest(snapshot, {...draft, maxTokens}), /token 上限/);
   for (const maxTokens of ['65536','96000','128000']) {const request=modelSettingsRequest(snapshot,{...draft,maxTokens});assert.equal(request.settings.maxTokens,Number(maxTokens));assert.equal(Object.hasOwn(request.settings,'apiKey'),false);}
   for (const timeoutSeconds of ['', '4', '601', 'NaN']) assert.throws(() => modelSettingsRequest(snapshot, {...draft, modelRequestTimeoutSeconds: timeoutSeconds}), /模型请求/);
-  for (const timeoutSeconds of ['', '4', '3601', 'NaN']) assert.throws(() => modelSettingsRequest(snapshot, {...draft, agentTimeoutSeconds: timeoutSeconds}), /Agent 总运行/);
+  for (const timeoutSeconds of ['4', '3601', 'NaN']) assert.throws(() => modelSettingsRequest(snapshot, {...draft, agentTimeoutSeconds: timeoutSeconds}), /Agent 总运行/);
+  assert.equal(modelSettingsRequest(snapshot,{...draft,agentTimeoutSeconds:''}).settings.agentTimeoutMs,null);
   const local = modelSettingsRequest(snapshot, {...draft, baseUrl: 'http://127.0.0.1:11434/v1', allowUnauthenticatedLocal: true, apiKeyAction: 'clear', headersAction: 'clear', extraBodyAction: 'clear'});
   assert.equal(local.settings.modelRequestTimeoutMs, 120000); assert.equal(local.settings.agentTimeoutMs, 120000);
 });

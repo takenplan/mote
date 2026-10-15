@@ -45,11 +45,6 @@ export const retryPolicySchema=z.object({
 }).strict();
 export type RetryPolicy=z.infer<typeof retryPolicySchema>;
 
-export const standardRetryPolicy:RetryPolicy={
-  maxAttempts:3,maxDurationMs:10*60*1000,maxRecoveryWindowMs:6*60*60*1000,
-  baseDelayMs:30_000,maxDelayMs:60*60*1000,jitterRatio:.2,
-};
-
 export const executionEnvelopeSchema=z.object({
   status:runStatusSchema,
   attempts:z.number().int().nonnegative(),
@@ -102,11 +97,13 @@ function failureFor(input:DomainExecutionInput,status:RunStatus):TaskFailure|und
   const retryable=new Set(['provider_failed','model_failed','agent_response','timeout','network','rate_limited','worker_interrupted','provider_unavailable','provider_timeout','provider_network']);
   const waiting=new Set(['provider_quota','recovery_window_exhausted','configuration_changed','model_unconfigured','provider_authentication','provider_endpoint','provider_redirect','worker_offline','awaiting_confirmation','processor_response_unknown','processor_not_configured','not_configured']);
   const recovery:FailureRecovery=code==='interrupted'?(status==='failed'?'needs_action':'auto_retry'):code==='processing_disabled'||waiting.has(code)?'needs_action':retryable.has(code)?(status==='failed'?'needs_action':'auto_retry'):'permanent';
-  const scope:FailureScope=code==='interrupted'?'system':waiting.has(code)||['rate_limited','provider_unavailable','provider_timeout','provider_network'].includes(code)?'provider':code==='worker_offline'?'system':'item';
+  const scope:FailureScope=code==='interrupted'?'system':waiting.has(code)||['rate_limited','processor_capacity','processor_still_running','provider_unavailable','provider_timeout','provider_network'].includes(code)?'provider':code==='worker_offline'?'system':'item';
   const safeMessage=code==='recovery_window_exhausted'?'The automatic recovery window ended. Retry explicitly to start a new window.':code==='provider_quota'?'The provider quota is exhausted. Restore the account quota before continuing.':code==='configuration_changed'?'The relevant model configuration changed. Retry to use the current configuration; completed batches are preserved.':code==='model_unconfigured'?'Model configuration is required before this step can continue.':
     code==='interrupted'?(status==='failed'?'The server stopped during processing. Retry explicitly to resume.':'The server stopped during processing. The retained task can resume.'):
     code==='processor_response_unknown'?'The previous processing outcome is unknown. Acknowledge possible duplicate execution before retrying.':
     code==='processing_disabled'?'The processing lane is disabled. Enable it to continue.':
+    code==='rate_limited'||code==='processor_capacity'?'The processing resource is busy. The task will resume when capacity is available.':
+    code==='processor_still_running'?'The previous processing call is still running.':
     code==='provider_unavailable'?'The configured provider is unavailable.':
     code==='worker_offline'?'The required worker is offline.':
     code==='evidence_changed'?'The input version changed before this result could be published.':
@@ -117,10 +114,10 @@ function failureFor(input:DomainExecutionInput,status:RunStatus):TaskFailure|und
 function waitFor(input:DomainExecutionInput,status:RunStatus,failure?:TaskFailure):WaitCondition|undefined {
   if(status!=='waiting')return undefined;
   const code=failure?.code??stringValue(input.errorCode);
-  const reason:WaitReason=['model_unconfigured','provider_unavailable','provider_authentication','provider_endpoint','provider_redirect'].includes(code??'')?'provider_unavailable':
+  const reason:WaitReason=['rate_limited','processor_capacity','processor_still_running'].includes(code??'')?'resource_limit':['model_unconfigured','provider_unavailable','provider_authentication','provider_endpoint','provider_redirect'].includes(code??'')?'provider_unavailable':
     code==='processor_response_unknown'?'outcome_unknown':['not_configured','processor_not_configured'].includes(code??'')?'configuration':code==='awaiting_confirmation'?'user_confirmation':code==='worker_offline'?'worker_offline':
     code==='dependency'?'dependency':code==='configuration'?'configuration':'dependency';
-  return {reason,...(failure?.scope==='provider'?{resource:'configured-provider'}:{}),...(failure?.retryAfterMs!==undefined?{retryAfterMs:failure.retryAfterMs}:{}),...(reason==='outcome_unknown'?{requiredAction:'acknowledge_unknown_execution'}:{}),...(reason==='provider_unavailable'?{requiredAction:'update_configuration'}:{})};
+  return {reason,...(failure?.scope==='provider'?{resource:'configured-provider'}:{}),...(failure?.retryAfterMs!==undefined?{retryAfterMs:failure.retryAfterMs}:{}),...(reason==='outcome_unknown'?{requiredAction:'acknowledge_unknown_execution'}:{}),...(['model_unconfigured','provider_authentication','provider_endpoint','provider_redirect'].includes(code??'')?{requiredAction:'update_configuration'}:{})};
 }
 
 function actions(status:RunStatus, failure?:TaskFailure):ExecutionAction[] {

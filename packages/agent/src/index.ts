@@ -1,5 +1,6 @@
 import {SYSTEM_PROMPT,systemInstructions} from './instructions.js';
 import {AgentYieldError} from './host-controls.js';
+import {ActiveExecutionBudget,DEFAULT_AGENT_EXECUTION_TIMEOUT_MS} from './active-budget.js';
 import {observeModelTransport} from './model-transport-observer.js';
 import {contextToolDefinitions,pinContextTools} from './tool-contributions.js';
 export {ContextToolRegistry,contextToolDefinitions,type ContextToolContribution} from './tool-contributions.js';
@@ -218,7 +219,7 @@ export function createAgent(options: AgentOptions) {
     trace({type:'instructions.assembled',stage:'starting',payload:{system,tools:taskTools(input).map(name=>contextToolDefinitions(input).find(tool=>tool[0]===name))}});
     let harness: DeepSeekHarness | undefined;
     let transportObserver:Awaited<ReturnType<typeof observeModelTransport>>|undefined;
-    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const budget=new ActiveExecutionBudget(options.agentTimeoutMs===undefined?DEFAULT_AGENT_EXECUTION_TIMEOUT_MS:options.agentTimeoutMs);
     let primaryFailure = false;
     let abortListener: (() => void) | undefined;
     try {
@@ -296,7 +297,7 @@ export function createAgent(options: AgentOptions) {
         reportProgress(input,{stage:'model'});
         trace({type:'model.started',stage:'model',phase:'started',payload:{prompt}});
         const modelStarted=performance.now();
-        let result = await (options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>harness!.run(prompt, { sessionId: runId, onNotification }),modelSignal);
+        let result = await (options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>budget.run(()=>harness!.run(prompt, { sessionId: runId, onNotification })),modelSignal);
         trace({type:'model.completed',stage:'model',phase:'completed',durationMs:performance.now()-modelStarted,payload:{response:result.finalResponse,events:result.events}});
         checkProviderResult(result);
         if (!bridge.ready) throw new AgentResponseError("The read-only agent tools were not verified.", 'tools_unverified');
@@ -319,7 +320,7 @@ export function createAgent(options: AgentOptions) {
             });
             trace({type:'model.started',stage:'model',phase:'started',payload:{prompt:repairPrompt,repair:true,repairAttempt:repair+1}});
             const repairStarted=performance.now();
-            result = await (options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>harness!.run(repairPrompt, { sessionId: runId, onNotification }),modelSignal);
+            result = await (options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>budget.run(()=>harness!.run(repairPrompt, { sessionId: runId, onNotification })),modelSignal);
             trace({type:'model.completed',stage:'model',phase:'completed',durationMs:performance.now()-repairStarted,payload:{response:result.finalResponse,events:result.events,repair:true,repairAttempt:repair+1}});
             checkProviderResult(result);
             reportProgress(input,{stage:'validating'});
@@ -328,13 +329,6 @@ export function createAgent(options: AgentOptions) {
         }
       };
       input.signal?.throwIfAborted();
-      const agentTimeoutMs = options.agentTimeoutMs === undefined ? 120_000 : options.agentTimeoutMs;
-      const deadline = agentTimeoutMs === null ? [] : [new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(
-          () => reject(new AgentTimeoutError()),
-          agentTimeoutMs,
-        );
-      })];
       const answer = await Promise.race([
         new Promise<never>((_,reject)=>{
           abortListener=()=>reject(new DOMException('Query cancelled','AbortError'));
@@ -343,7 +337,6 @@ export function createAgent(options: AgentOptions) {
         readAnswer(),
         bridge.failure,
         transportObserver.failure,
-        ...deadline,
       ]);
       trace({type:'run.completed',stage:'validating',phase:'completed',status:'succeeded',payload:{citations:answer.citations.map(citation=>citation.id),toolCalls:bridge.trace}});
       return {
@@ -365,7 +358,6 @@ export function createAgent(options: AgentOptions) {
     } finally {
       modelAdmission.abort();
       if (abortListener) input.signal?.removeEventListener('abort',abortListener);
-      if (timeout) clearTimeout(timeout);
       const cleanup = await Promise.allSettled([
         Promise.resolve().then(() => harness?.close()),
         Promise.resolve().then(() => bridge.close()),

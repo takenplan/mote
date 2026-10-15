@@ -110,7 +110,7 @@ codex -c 'cli_auth_credentials_store="file"' login
 
 每次请求启动独立进程和临时 home，只链接登录文件，不继承个人 MCP、插件、hooks、历史会话或用户指令。查询使用只读沙箱、关闭环境访问与原生执行工具，动态工具仅调用 Mote 已有证据桥。当前验证过的 Codex 0.154.0 还会提供仅修改临时运行计划的 `update_plan`，不访问或修改用户资料。导入有单独的可写临时工作区，不接入归档查询工具；仍须经过原有预览、确认和宿主校验。
 
-App Server 的动态工具接口为实验接口，兼容性取决于安装的 CLI。配置警告、额外审批请求、未知执行工具和错误返回会终止请求；不会降级为另一个服务商。设置中的“单次模型请求超时”对 Codex Server 不适用：App Server 不把内部模型生成作为 Mote 可见的单次 Provider 请求；Mote 只可选择是否设置“Agent 总运行超时”，它覆盖整个 `turn` 及其中的工具循环，留空则不设置 Mote 总期限。响应字节预算仍由 Mote 限制，输出 token 上限由 Codex 管理，页面的 HTTP 输出预算不传给 Codex。设置页从本机 `model/list` 读取所选模型的 `supportedReasoningEfforts` 和 `defaultReasoningEffort`；`auto` 不指定推理强度，Mote 的当前 `off` 选择对应 App Server 的 `none`，其余挡位按原值传给 `turn/start.effort`。目录不可用或手动填写目录外模型时，页面仍显示通用选项，具体支持情况须通过测试连接验证。
+App Server 的动态工具接口为实验接口，兼容性取决于安装的 CLI。配置警告、额外审批请求、未知执行工具和错误返回会终止请求；不会降级为另一个服务商。设置中的“单次模型请求超时”对 Codex Server 不适用：App Server 不把内部模型生成作为 Mote 可见的单次 Provider 请求；Mote 只可选择是否设置“Agent 总运行超时”，它累计实际获准执行的 `turn`、工具循环与结果修正时间，不包含中央模型名额等待；留空则不设置 Mote 的执行时间预算。响应字节预算仍由 Mote 限制，输出 token 上限由 Codex 管理，页面的 HTTP 输出预算不传给 Codex。设置页从本机 `model/list` 读取所选模型的 `supportedReasoningEfforts` 和 `defaultReasoningEffort`；`auto` 不指定推理强度，Mote 的当前 `off` 选择对应 App Server 的 `none`，其余挡位按原值传给 `turn/start.effort`。目录不可用或手动填写目录外模型时，页面仍显示通用选项，具体支持情况须通过测试连接验证。
 
 Codex 预设可独立选择 **速度模式：Standard / Fast**，不会改变推理强度。Fast 可用性取决于账户、模型、工作区和 CLI 版本，且会增加额度或费用消耗；页面按模型目录禁用明确不支持的 Fast，缺少速度目录时可用“测试连接”验证。保存后，查询、Memory、回顾、文件分析和导入均使用该预设的速度模式。Mote 在自己的临时配置中设置 `service_tier`，Fast 还启用 `features.fast_mode`，并将 `serviceTier` 传给 `thread/start`；Codex 目录和线程返回的 `priority` 是 Fast 的协议别名，Mote 统一映射为 `fast`；返回的线程档位不匹配时终止请求。当前 Codex 预设必须显式保存速度模式；缺少该字段的旧预设不自动补值，需要重新配置。[官方速度模式说明](https://learn.chatgpt.com/docs/agent-configuration/speed)、[配置参考中的档位映射](https://learn.chatgpt.com/docs/config-file/config-reference)
 
@@ -129,7 +129,7 @@ models:
     reasoningEffort: auto
     maxTokens: 65536
     modelRequestTimeoutMs: 300000
-    agentTimeoutMs: 600000
+    agentTimeoutMs: 3600000
     headers: {}
     extraBody: {}
     allowUnauthenticatedLocal: false
@@ -161,7 +161,7 @@ models:
 
 配置 ID 为 1–80 个字母、数字、下划线或连字符，以字母或数字开头；普通初始项为 `primary`，YAML 部署项为页面只读的 `env:deployment`；`default` 已退役。所有修改共用一个 revision，防止并发页面互相覆盖。`POST /api/query`、`/api/insights`、`/api/insight-runs`、`/api/memories/extract`、`/api/memory-jobs` 支持可选 `modelProfileId`；不存在的 ID 会返回错误，省略时采用相应功能默认值。每次问答的显式选择只影响这一轮，不修改功能默认值。
 
-`settings` 的基础字段为 `provider`、`protocol`、`baseUrl`、`model`、`reasoningEffort`、`maxTokens`、`modelRequestTimeoutMs`、`agentTimeoutMs`、`allowUnauthenticatedLocal`。`provider` 必须是注册预设 ID，未列出的服务使用 `custom`。模型名称可留空关闭 AI；HTTP 协议只允许在模型也为空时省略实际地址内容；Codex 的地址必须为空，不能设置 HTTP 密钥、请求头或高级参数。非 Codex 的 `modelRequestTimeoutMs` 为 5000–600000 毫秒整数，`agentTimeoutMs` 为 5000–3600000 毫秒整数；Codex 的 `modelRequestTimeoutMs` 为 `null`，`agentTimeoutMs` 可为 `null`。
+`settings` 的基础字段为 `provider`、`protocol`、`baseUrl`、`model`、`reasoningEffort`、`maxTokens`、`modelRequestTimeoutMs`、`agentTimeoutMs`、`allowUnauthenticatedLocal`。`provider` 必须是注册预设 ID，未列出的服务使用 `custom`。模型名称可留空关闭 AI；HTTP 协议只允许在模型也为空时省略实际地址内容；Codex 的地址必须为空，不能设置 HTTP 密钥、请求头或高级参数。非 Codex 的 `modelRequestTimeoutMs` 为 5000–600000 毫秒整数，`agentTimeoutMs` 可为 5000–3600000 毫秒整数或 `null`；Codex 的 `modelRequestTimeoutMs` 为 `null`。新 HTTP 模型预设的 Agent 执行预算默认一小时，已有显式数值保持不变。所有协议的 Agent 预算都排除中央模型名额等待，模型输出修正共享本次实际执行预算；工作流本身的策略另见[任务执行策略](task-execution-policies.md)。
 
 在「系统管理 → 模型 → 高级设置」调整输出预算。默认值为 **65,536 tokens**，提供 8,192、16,384、32,768、65,536、128,000 档位和自定义输入；保存后立即生效，重启后保留。已显式保存或在 YAML 中设置的值不会因软件升级被覆盖。单次响应预算包含正文、HTML 和服务商计入的推理 token，不是整个 Agent 任务的累计用量，也不等于字数、图片尺寸或文件大小。达到输出上限时会尝试一次更简短的完整回答；仍失败会显示明确的输出超限提示。
 

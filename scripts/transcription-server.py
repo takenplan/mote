@@ -79,7 +79,7 @@ def main():
                     'faster_whisper': importlib.util.find_spec('faster_whisper') is not None,
                     'sherpa_onnx': importlib.util.find_spec('sherpa_onnx') is not None}
 
-        def reject_before_execution(self, status, message):
+        def reject_before_execution(self, status, message, retry_after=None):
             # A transport fact for the host's issued-call ledger, never a guess
             # from an HTTP status or provider's free-form error text.
             data = json.dumps({'error': message, 'executionStarted': False}).encode()
@@ -87,6 +87,8 @@ def main():
             self.send_header('Content-Type', 'application/json')
             self.send_header('X-Mote-Execution', 'local')
             self.send_header('X-Mote-Execution-Started', 'false')
+            if retry_after is not None:
+                self.send_header('Retry-After', str(retry_after))
             self.send_header('Content-Length', str(len(data)))
             self.end_headers()
             self.wfile.write(data)
@@ -123,7 +125,8 @@ def main():
                 self.reject_before_execution(503, 'Local diarization model unavailable')
                 return
             if not busy.acquire(blocking=False):
-                self.reject_before_execution(429, 'Local worker busy')
+                # Recheck cadence, not an estimate of when this call will finish.
+                self.reject_before_execution(429, 'Local worker busy', retry_after=5)
                 return
             worker = None
             released = False

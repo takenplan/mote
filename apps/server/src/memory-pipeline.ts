@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {MEMORY_VISUAL_EVIDENCE_CONTRACT} from './memory-image-proof.js';
 import {memoryImageGrants,assertMemoryImageGrants,uninspectedMemoryImageTargets} from './memory-image-grants.js';
 import {ActivityMemoryIndex} from './activity-memory-index.js';
@@ -212,12 +213,12 @@ export class MemoryPipeline {
     this.store.db.exec('CREATE TABLE IF NOT EXISTS memory_engine_stage_cleanups(id TEXT PRIMARY KEY,json TEXT NOT NULL,state TEXT NOT NULL);');
     this.store.db.exec('CREATE TABLE IF NOT EXISTS memory_engine_stage_drafts(id TEXT PRIMARY KEY,json TEXT NOT NULL,checkpoint_id TEXT); CREATE INDEX IF NOT EXISTS memory_engine_stage_checkpoint ON memory_engine_stage_drafts(checkpoint_id);');
     if(options.settleEngineDraft){
-      this.unregister.push(this.engine.register({kind:'memory.engine-stage-cleanup',pool:'plugin-control',concurrency:()=>1,validate:()=>true,execute:async step=>{const row=this.store.db.prepare('SELECT json,state FROM memory_engine_stage_cleanups WHERE id=?').get(String(step.input.id));if(row?.state==='pending')try{await options.settleEngineDraft!(JSON.parse(String(row.json)));}catch{throw new ExecutionFailure('waiting','memory_engine_cleanup_pending',5000);}},commit:step=>{this.store.db.prepare("UPDATE memory_engine_stage_cleanups SET state='acknowledged' WHERE id=?").run(String(step.input.id));}}));
+      this.unregister.push(this.engine.register({kind:'memory.engine-stage-cleanup',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,validate:()=>true,execute:async step=>{const row=this.store.db.prepare('SELECT json,state FROM memory_engine_stage_cleanups WHERE id=?').get(String(step.input.id));if(row?.state==='pending')try{await options.settleEngineDraft!(JSON.parse(String(row.json)));}catch{throw new ExecutionFailure('waiting','memory_engine_cleanup_pending',5000);}},commit:step=>{this.store.db.prepare("UPDATE memory_engine_stage_cleanups SET state='acknowledged' WHERE id=?").run(String(step.input.id));}}));
       for(const row of this.store.db.prepare("SELECT id FROM memory_engine_stage_cleanups WHERE state='pending'").all())this.queueEngineStageCleanup(String(row.id));
       for(const row of this.store.db.prepare("SELECT DISTINCT d.checkpoint_id FROM memory_engine_stage_drafts d JOIN execution_steps e ON e.id=d.checkpoint_id WHERE e.state IN ('succeeded','failed','cancelled','stale')").all()){const step=this.engine.get(String(row.checkpoint_id));if(step)this.finalizeEngineStep(step);}
     }
     this.recover();
-    this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,timeoutMs:3600000,
+    this.unregister.push(this.engine.register({kind:'memory.batch',pool:'memory.batch',concurrency:()=>this.options.concurrency?.()??1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:4,
       resourceKeys:step=>(step.input.evidenceIds as string[]).map(id=>'memory-evidence:'+id),
       validate:step=>this.validateStep(step),validateGrant:step=>{try{const job=this.storedJob(String(step.input.jobId));if(['cancelled','paused'].includes(job.status))return false;this.assertAutomatic(job);return true;}catch{return false;}},admit:step=>{
         const job=this.storedJob(String(step.input.jobId));
@@ -246,7 +247,7 @@ export class MemoryPipeline {
       commit:(step,output)=>this.commitBatch(step,output as BatchOutput|undefined),
       project:step=>this.projectStep(step),
     }));
-    this.unregister.push(this.engine.register({kind:'memory.input',pool:'memory.input',concurrency:()=>4,maxAttempts:1,timeoutMs:30000,
+    this.unregister.push(this.engine.register({kind:'memory.input',pool:'memory.input',concurrency:()=>4,policy:EXECUTION_POLICIES.deterministic,timeoutMs:300000,
       validate:step=>{const plan=this.inputPlans.get(String(step.input.planId));return Boolean(plan&&this.options.materialSourceCurrent?.(plan.sourcePin,plan.materialId));},
       admit:step=>{const plan=this.inputPlans.get(String(step.input.planId))!,job=this.storedJob(plan.jobId);if(this.closed||['paused','pausing','cancelled'].includes(job.status))return new ExecutionFailure('blocked',this.closed?'awaiting_activation':job.status);const state=this.evaluatePlan(plan,job);if(state.state!=='ready')return new ExecutionFailure(state.state==='waiting'?'waiting':state.state==='stale'?'stale':'blocked',state.code,30000);},
       execute:async()=>undefined,commit:step=>this.bindInput(step),classify:error=>error instanceof StoreError&&error.statusCode===507?new ExecutionFailure('blocked','storage_full'):new ExecutionFailure('permanent',error instanceof StoreError&&error.statusCode===413?'memory_input_limit':'memory_input_failed'),project:step=>{if(this.store.db.prepare('SELECT 1 FROM memory_jobs WHERE id=?').get(String(step.input.jobId))){this.refreshJob(String(step.input.jobId));this.wake();}}

@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import { moteText } from './i18n.js';
 import {randomUUID} from 'node:crypto';
 import {readdir,lstat} from 'node:fs/promises';
@@ -75,7 +76,7 @@ export class ImportStore {
     store.db.exec('CREATE TABLE IF NOT EXISTS import_jobs(id TEXT PRIMARY KEY,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,json TEXT NOT NULL)');
     store.db.exec('CREATE TABLE IF NOT EXISTS import_create_requests(request_id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL,job_id TEXT NOT NULL)');
     this.executor=runtime.executor??new ExecutionEngine(store);
-    for(const phase of ['prepare','commit'] as const)this.unregister.push(this.executor.register({kind:`imports.${phase}`,pool:'imports',concurrency:()=>1,maxAttempts:1,timeoutMs:2147483647,validate:step=>{
+    for(const phase of ['prepare','commit'] as const)this.unregister.push(this.executor.register({kind:`imports.${phase}`,pool:'imports',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:1,validate:step=>{
       const row=store.db.prepare('SELECT json FROM import_jobs WHERE id=?').get(String(step.input.jobId)) as {json:string}|undefined;
       return Boolean(!this.closed&&row&&step.input.phase===phase&&step.id===this.phaseId(JSON.parse(row.json) as InternalJob,phase));
     },execute:async(step,signal,grant)=>{

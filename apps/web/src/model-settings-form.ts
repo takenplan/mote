@@ -71,8 +71,7 @@ export function modelSettingsRequest(snapshot: ModelSettingsView, draft: ModelSe
   const modelRequestTimeoutValid = typeof modelRequestTimeoutMs === 'number' && Number.isSafeInteger(modelRequestTimeoutMs) && modelRequestTimeoutMs >= 5000 && modelRequestTimeoutMs <= MAX_MODEL_REQUEST_TIMEOUT_MS;
   if (!Number.isSafeInteger(maxTokens) || maxTokens < 1 || maxTokens > 128000) throw new Error(moteText("输出 token 上限须为 1–128000 之间的整数。"));
   if (draft.protocol !== 'codex-app-server' && (!draft.modelRequestTimeoutSeconds || !modelRequestTimeoutValid)) throw new Error(moteText("单次模型请求超时须为 5–600 秒。"));
-  if (draft.protocol !== 'codex-app-server' && (agentTimeoutMs === null || !Number.isSafeInteger(agentTimeoutMs) || agentTimeoutMs < 5000 || agentTimeoutMs > MAX_AGENT_TIMEOUT_MS)) throw new Error(moteText("Agent 总运行超时须为 5–3600 秒。"));
-  if (draft.protocol === 'codex-app-server' && agentTimeoutMs !== null && (!Number.isSafeInteger(agentTimeoutMs) || agentTimeoutMs < 5000 || agentTimeoutMs > MAX_AGENT_TIMEOUT_MS)) throw new Error(moteText("Agent 总运行超时须为空，或为 5–3600 秒。"));
+  if (agentTimeoutMs !== null && (!Number.isSafeInteger(agentTimeoutMs) || agentTimeoutMs < 5000 || agentTimeoutMs > MAX_AGENT_TIMEOUT_MS)) throw new Error(moteText("Agent 总运行超时须为空，或为 5–3600 秒。"));
   if (retainedCredentialsNeedConfirmation(draft, snapshot.settings) && !draft.allowCredentialReuse) throw new Error(moteText("服务或地址已改变。请填写新凭据、清除旧凭据，或明确允许在新地址复用。"));
   const settings: ModelSettingsUpdate['settings'] = {
     provider: draft.provider,

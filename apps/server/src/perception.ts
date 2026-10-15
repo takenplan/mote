@@ -1,11 +1,13 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-engine.js';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import {fileProcessingSchema,transcriptSchema} from '@mote/shared';
+import {ProviderFailure,fileProcessingSchema,transcriptSchema} from '@mote/shared';
 import {Store,StoreError,sha256} from './store.js';
 import type {FileProcessorRuntime} from './file-processors.js';
 import {MEDIA_CATALOG,type MediaAssets} from './media-assets.js';
-import {requestLocalJson} from './local-http.js';
+import {requestLocalJson,isLoopback} from './local-http.js';
+import {ProcessorAdmission} from './processor-admission.js';
 import {mediaRuntimeSettings,type MediaRuntimeSettings} from './media-configuration.js';
 async function managedOcrReady(media:MediaRuntimeSettings){
   const token=media.workerToken;if(!token)return false;
@@ -22,22 +24,25 @@ export type PerceptionSettings=z.infer<typeof perceptionSettingsSchema>;
 /** Durable screenshot adapter for the existing processor runtime. Ingest triggers create jobs atomically. */
 export class Perception {
   readonly engine:ExecutionEngine;private owned:boolean;private closed=false;
+  private readonly processorAdmission:ProcessorAdmission;
   private inFlight=new Map<string,Promise<unknown>>();
   private historicalPreviews=new Map<string,{expires:number;items:{id:string;hash:string}[]}>();
   private workerReady=false;private workerCheckedAt=0;private workerProbe?:Promise<void>;
   private unregister:Array<()=>Promise<void>>=[];private readonly media:MediaRuntimeSettings;private currentSettings:PerceptionSettings;
   constructor(private store:Store,private runtime:FileProcessorRuntime,engine?:ExecutionEngine,private mediaAssets?:MediaAssets,private probeOcr?:()=>Promise<boolean>,media?:Partial<MediaRuntimeSettings>,configuration?:PerceptionSettings){
-    this.media=mediaRuntimeSettings(media);
+    this.media=mediaRuntimeSettings(media);this.processorAdmission=new ProcessorAdmission(store);
     this.engine=engine??new ExecutionEngine(store);this.owned=!engine;
     this.currentSettings=perceptionSettingsSchema.parse(configuration??(mediaAssets?{enabled:true,ocrProcessorId:'image.http',ocrEndpoint:this.media.ocrEndpoint,concurrency:1}:{}));
     this.publishSettings();
-    this.unregister.push(this.engine.register({kind:'perception.ocr',pool:'image-ocr',concurrency:()=>this.settings().concurrency,
+    this.unregister.push(this.engine.register({kind:'perception.ocr',pool:'image-ocr',concurrency:()=>this.settings().concurrency,policy:EXECUTION_POLICIES.localProcessing,
+      resourceKeys:()=>{const endpoint=this.processorEndpoint();return endpoint&&this.processorAdmission.resourceKey(endpoint)===this.processorAdmission.resourceKey(this.media.ocrEndpoint)?[this.processorAdmission.resourceKey(endpoint)]:[];},
       validate:step=>this.valid(step),admit:step=>this.admit(step),execute:(step,signal)=>this.process(step,signal),commit:(step,result)=>this.commit(step,result),project:step=>this.project(step),
-      classify:error=>error instanceof z.ZodError?new ExecutionFailure('permanent','invalid_processor_output'):new ExecutionFailure('transient','processor_failed',60000),
+      classify:error=>error instanceof z.ZodError?new ExecutionFailure('permanent','invalid_processor_output'):new ExecutionFailure('permanent','processor_failed'),
     }));
   }
   private execution(settings:PerceptionSettings){return sha256(JSON.stringify([settings.enabled,settings.allowExternalProcessing,settings.providerRevision,settings.ocrProcessorId,settings.ocrEndpoint,settings.ocrEndpoint===this.media.ocrEndpoint&&this.mediaAssets?MEDIA_CATALOG.ocr.version:'']));}
   private valid(step:ExecutionStep){return !this.closed&&step.input.kind==='ocr'&&this.store.imageReference(String(step.input.captureId))?.blobHash===step.input.blobHash&&this.execution(this.settings())===step.input.configRevision;}
+  private processorEndpoint(){const settings=this.settings();return this.runtime.registry.list().find(processor=>processor.id===settings.ocrProcessorId)?.serviceKind==='image'&&isLoopback(settings.ocrEndpoint)?settings.ocrEndpoint:undefined;}
   private admit(step:ExecutionStep){
     const settings=this.settings(),url=settings.ocrEndpoint;
     if(!settings.enabled)return new ExecutionFailure('blocked','processing_disabled');
@@ -46,6 +51,7 @@ export class Perception {
     if(url===this.media.ocrEndpoint&&this.mediaAssets&&!this.workerReady)return new ExecutionFailure('waiting','ocr_worker_unavailable',5000);
     if(!settings.allowExternalProcessing&&!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname))return new ExecutionFailure('blocked','external_processing_disabled');
     try{const processor=this.runtime.registry.get(settings.ocrProcessorId);if(step.input.processorVersion&&step.input.processorVersion!==processor.version)return new ExecutionFailure('blocked','processor_version_unavailable');}catch{return new ExecutionFailure('blocked','processor_unavailable');}
+    const endpoint=this.processorEndpoint();if(endpoint)try{this.processorAdmission.check(endpoint);}catch(error){if(error instanceof ProviderFailure)return new ExecutionFailure('waiting',error.details.code,error.details.retryAfterMs);throw error;}
   }
   private project(step:ExecutionStep){
     if(!this.valid(step))return;
@@ -135,7 +141,8 @@ export class Perception {
       let task=this.inFlight.get(fingerprint);
       if(!task){
         const image=this.store.image(id);
-        task=processor.process({file:{id,title:'Screenshot',mimeType:image.mime,sizeBytes:image.bytes.length},settings:fileProcessingSchema.parse({imageEndpoint:url,...(url===this.media.ocrEndpoint&&this.mediaAssets?{apiKey:this.media.workerToken}:{})}),maxAudioMs:0,signal,readOriginal:async function*(){yield image.bytes;}});
+        const endpoint=this.processorEndpoint(),run=()=>processor.process({file:{id,title:'Screenshot',mimeType:image.mime,sizeBytes:image.bytes.length},settings:fileProcessingSchema.parse({imageEndpoint:url,...(url===this.media.ocrEndpoint&&this.mediaAssets?{apiKey:this.media.workerToken}:{})}),maxAudioMs:0,signal,readOriginal:async function*(){yield image.bytes;}});
+        task=endpoint?this.processorAdmission.run(endpoint,run):run();
         this.inFlight.set(fingerprint,task);const forget=()=>{if(this.inFlight.get(fingerprint)===task)this.inFlight.delete(fingerprint);};signal.addEventListener('abort',forget,{once:true});void task.finally(()=>{forget();signal.removeEventListener('abort',forget);}).catch(()=>{});
       }
       result=await task;

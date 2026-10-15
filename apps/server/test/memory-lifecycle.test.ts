@@ -6,6 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AgentTimeoutError} from '@mote/agent';
+import {ProviderFailure} from '@mote/shared';
 import {Store} from '../src/store.js';
 import {ExecutionEngine} from '../src/execution-engine.js';
 import {MemoryStore} from '../src/memory.js';
@@ -63,7 +64,7 @@ test('lifecycle view identifies manual consolidation without attributing an auto
 
 test('restart preserves failed window, snapshot settings and backoff; success alone advances cursor',async t=>{
   const store=fixture(t);let now=0;let lifecycle=new MemoryLifecycle(store,()=>true,()=>now);
-  lifecycle.register({id:'extraction',version:'fixture',stream:'evidence',async run(_w,checkpoint){checkpoint('durable-child');throw Error('fixture failure');}});
+  lifecycle.register({id:'extraction',version:'fixture',stream:'evidence',async run(_w,checkpoint){checkpoint('durable-child');throw new ProviderFailure({category:'transient',code:'provider_network'});}});
   for(let i=0;i<25;i++)event(store);now=6*3600000;await lifecycle.tick();assert.equal(lifecycle.view().extensions[0].cursor,0);await lifecycle.close();
   lifecycle=new MemoryLifecycle(store,()=>true,()=>now);t.after(()=>lifecycle.close());let seen=0;
   lifecycle.register({id:'extraction',version:'fixture',stream:'evidence',async run(w){seen++;assert.equal(w.checkpoint,'durable-child');assert.equal(w.settings.batchCharacters,12000);}});

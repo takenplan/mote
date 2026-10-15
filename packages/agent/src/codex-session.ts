@@ -1,4 +1,5 @@
 import {ContextToolError} from './tool-errors.js';
+import {ActiveExecutionBudget,DEFAULT_AGENT_EXECUTION_TIMEOUT_MS} from './active-budget.js';
 import {codexFailure,codexUsage} from './codex-protocol.js';
 import type {TokenUsage} from '@mote/shared';
 import {normalizeCodexServiceTier} from '@mote/shared/models';
@@ -51,10 +52,11 @@ export class CodexSession {
   private bytes=0;
   private toolQueue=Promise.resolve();
   private timer?:ReturnType<typeof setTimeout>;
+  private budget:ActiveExecutionBudget;
   private usage?:TokenUsage;
   private turnError?:unknown;
   private usageInterrupted=false;
-  constructor(private options:Pick<AgentOptions,'model'|'reasoningEffort'|'serviceTier'|'agentTimeoutMs'|'codex'|'runModel'>,private toolCall:(name:string,args:unknown)=>Promise<unknown>,private observe?:(event:AgentTraceEvent)=>void,private onUsage?:(usage:TokenUsage)=>void){ }
+  constructor(private options:Pick<AgentOptions,'model'|'reasoningEffort'|'serviceTier'|'agentTimeoutMs'|'codex'|'runModel'>,private toolCall:(name:string,args:unknown)=>Promise<unknown>,private observe?:(event:AgentTraceEvent)=>void,private onUsage?:(usage:TokenUsage)=>void){this.budget=new ActiveExecutionBudget(options.agentTimeoutMs===undefined?DEFAULT_AGENT_EXECUTION_TIMEOUT_MS:options.agentTimeoutMs);}
 
   async start(instructions:string,tools:CodexTool[],workspace?:string):Promise<void>{
     if(this.initializing)throw new AgentProviderError();
@@ -96,8 +98,9 @@ export class CodexSession {
       this.child.stderr.on('data',(chunk:Buffer)=>{this.bytes+=chunk.length;if(this.bytes>MAX_RPC_STREAM_BYTES)this.transportLimit('stream_limit',MAX_RPC_STREAM_BYTES);});
       this.child.stdout.setEncoding('utf8');
       this.child.stdout.on('data',(chunk:string)=>this.receive(chunk));
-      const agentTimeoutMs = this.options.agentTimeoutMs === undefined ? 120000 : this.options.agentTimeoutMs;
-      if(agentTimeoutMs!==null)this.timer=setTimeout(()=>this.fail(new AgentTimeoutError()),agentTimeoutMs);
+      // Protocol initialization has its own short transport safeguard. Model
+      // capacity waiting happens later and never consumes this timer.
+      this.timer=setTimeout(()=>this.fail(new AgentTimeoutError()),30000);
       await this.request('initialize',{clientInfo:{name:'mote',title:'Mote',version:'0.1.0'},capabilities:{experimentalApi:true}});
       this.send({method:'initialized',params:{}});
       const login=await this.request('account/read',{});
@@ -116,6 +119,7 @@ export class CodexSession {
       if(this.options.model&&(thread.model!==this.options.model||typeof thread.thread?.model==='string'&&thread.thread.model!==this.options.model))throw new AgentProviderError();
       if(this.options.serviceTier&&(typeof thread.serviceTier!=='string'||normalizeCodexServiceTier(thread.serviceTier)!==this.options.serviceTier))throw new AgentProviderError();
       this.threadId=thread.thread.id;
+      clearTimeout(this.timer);this.timer=undefined;
     }catch(error){throw error instanceof AgentNotConfiguredError||error instanceof AgentTimeoutError||error instanceof AgentProviderError?error:new AgentProviderError();}
   }
 
@@ -206,7 +210,7 @@ export class CodexSession {
       else pending?.resolve([...this.messages.values()].at(-1)??'');
     }
   }
-  run(prompt:string,outputSchema?:unknown):Promise<string>{return (this.options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>this.runTurn(prompt,outputSchema),this.modelAdmission.signal);}
+  run(prompt:string,outputSchema?:unknown):Promise<string>{return (this.options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>this.budget.run(()=>this.runTurn(prompt,outputSchema)).catch(error=>{if(error instanceof AgentTimeoutError)this.fail(error);throw error;}),this.modelAdmission.signal);}
   cancel(reason:unknown):void {
     // The host deadline may expire before this session's own timer. Preserve
     // that cause before cleanup rejects pending work with a generic failure.
