@@ -15,7 +15,7 @@ async function until(fn,label,timeout=30000){const end=Date.now()+timeout;while(
 async function run(){
  await app.whenReady();const token=randomBytes(32).toString('hex'),ready=join(root,'ready'),runner=join(root,'server.mjs');
  const config={dataDir:join(root,'data'),token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:20000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'silent'};
- writeFileSync(runner,`import {buildApp} from ${JSON.stringify(pathToFileURL(join(repo,'apps/server/dist/app.js')).href)};
+ writeFileSync(runner,`import {buildApp} from ${JSON.stringify(pathToFileURL(join(repo,'apps/server/test/fixtures/legacy-app.mjs')).href)};
 import {SourceStore} from ${JSON.stringify(pathToFileURL(join(repo,'apps/server/dist/sources.js')).href)};
 import {writeFileSync} from 'node:fs';import {join} from 'node:path';
 let firstRelease,streamRelease,tailRelease,retryRelease,failTail=true,extracts=0,reviews=0;

@@ -7,7 +7,7 @@ import {join,relative,resolve} from 'node:path';
 import {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import type {UsageReceipt} from '@mote/shared';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';
 import {sha256} from '../apps/server/src/store.js';
@@ -71,7 +71,7 @@ const report:Record<string,any>={status:'running',startedAt:new Date().toISOStri
   'Same-model blind review is not independent factual ground truth.','Source-run generation/usage is excluded from new query and review usage.'],
  head:execFileSync('git',['rev-parse','HEAD'],{cwd:repositoryRoot,encoding:'utf8'}).trim(),
  worktreeDiff:execFileSync('git',['diff','--stat'],{cwd:repositoryRoot,encoding:'utf8'}),arms:[]};
-const codePaths=['scripts/test-memory-ab-live.ts','apps/server/src/app.ts','apps/server/src/opening-memory.ts','apps/server/src/evidence-reader.ts','apps/server/src/agent-feature-host.ts',
+const codePaths=['scripts/test-memory-ab-live.ts','apps/server/test/fixtures/legacy-app.ts','apps/server/src/opening-memory.ts','apps/server/src/evidence-reader.ts','apps/server/src/agent-feature-host.ts',
  'packages/agent/dist/instructions.js','packages/agent/dist/task-context.js','packages/agent/dist/bridge.js','packages/agent/dist/codex-agent.js','packages/agent/dist/index.js','packages/agent/dist/skills.js'];
 // Read every pinned path before making any model call; a missing source is a preflight error.
 report.codeHashes=Object.fromEntries(await Promise.all(codePaths.map(async path=>[path,sha256(await readFile(join(repositoryRoot,path)))])));

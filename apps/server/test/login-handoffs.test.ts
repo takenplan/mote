@@ -8,7 +8,7 @@ import {Connections, type ConnectionFile} from '../src/connections.js';
 import {LoginHandoffs} from '../src/login-handoffs.js';
 import {Store} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
-import {buildApp, type QueryAgent} from '../src/app.js';
+import {buildApp, type QueryAgent} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 const owner='generated-owner-login-fixture-token-123456789';
 const headers=(token=owner)=>({authorization:'Bearer '+token});

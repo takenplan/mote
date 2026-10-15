@@ -26,7 +26,7 @@ import {reviewMemory, memoryReviewReceipt} from '../src/memory-review.js';
 import {SourceStore} from '../src/sources.js';
 import {memoryProviderKey} from '../src/memory-provider-contract.js';
 import {fixtureMemoryResult} from './fixtures/memory-result.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 // Generated executable release, not a Mem0/Hindsight substitute or capability

@@ -4,7 +4,7 @@ import {resolve,join} from 'node:path';
 import {parseEnv} from 'node:util';
 import {randomBytes} from 'node:crypto';
 import {configFromEnv} from '../apps/server/src/config.js';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 
 const directory=resolve(process.env.MOTE_FILE_TEST_DIR??'.mote/file-validation');
 mkdirSync(directory,{recursive:true,mode:0o700});

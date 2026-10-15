@@ -4,7 +4,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
-import {buildApp,type QueryAgent} from '../src/app.js';
+import {buildApp,type QueryAgent} from './fixtures/legacy-app.js';
 import {Store} from '../src/store.js';
 import {ExecutionEngine} from '../src/execution-engine.js';
 import type {Config} from '../src/config.js';

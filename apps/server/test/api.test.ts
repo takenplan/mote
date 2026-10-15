@@ -4,7 +4,7 @@ import { mkdtempSync,rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { buildApp } from '../src/app.js';
+import { buildApp } from './fixtures/legacy-app.js';
 import type { Config } from '../src/config.js';
 
 export const testConfig=(dataDir:string):Config=>({dataDir,token:'fixture-token-never-use-in-production',tokenPath:'fixture-only',host:'127.0.0.1',port:47832,dataKey:undefined,maxStorageBytes:10_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''});

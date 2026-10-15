@@ -14,7 +14,7 @@ import {backup,DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import type {ContextReader,QueryInput} from '@mote/agent';
 import type {QueryResult,UsageReceipt} from '@mote/shared';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {materialId} from '../apps/server/src/materials.js';
 import {sha256} from '../apps/server/src/store.js';
@@ -400,7 +400,7 @@ async function blindPackage(){
 const realFetch=globalThis.fetch;if(preflight||recoveryValidateOnly)globalThis.fetch=async()=>{throw Error('Offline validation forbids network requests');};
 try{
   report.budgetPrecheck=await budgetPrecheck(limits.maximumOuterModelCalls);report.head=execFileSync('git',['rev-parse','HEAD'],{cwd:repositoryRoot,encoding:'utf8'}).trim();
-  const paths=['scripts/test-memory-scenario-live.ts','package-lock.json','apps/server/src/app.ts','apps/server/src/memory-pipeline.ts','apps/server/src/memory-review.ts','apps/server/src/memory-integration.ts','apps/server/src/memory-integration-policy.ts','apps/server/src/memory-policy.ts','apps/server/src/evidence-reader.ts','apps/server/src/evidence-archive.ts','apps/server/src/features/capture.ts','apps/server/src/opening-memory.ts','packages/agent/dist/instructions.js','packages/agent/dist/task-context.js','packages/agent/dist/skills.js','packages/agent/dist/codex-agent.js','packages/agent/dist/codex-session.js','packages/agent/dist/bridge.js'];
+  const paths=['scripts/test-memory-scenario-live.ts','package-lock.json','apps/server/test/fixtures/legacy-app.ts','apps/server/src/memory-pipeline.ts','apps/server/src/memory-review.ts','apps/server/src/memory-integration.ts','apps/server/src/memory-integration-policy.ts','apps/server/src/memory-policy.ts','apps/server/src/evidence-reader.ts','apps/server/src/evidence-archive.ts','apps/server/src/features/capture.ts','apps/server/src/opening-memory.ts','packages/agent/dist/instructions.js','packages/agent/dist/task-context.js','packages/agent/dist/skills.js','packages/agent/dist/codex-agent.js','packages/agent/dist/codex-session.js','packages/agent/dist/bridge.js'];
   report.codeHashes=Object.fromEntries(await Promise.all(paths.map(async path=>[path,sha256(await readFile(join(repositoryRoot,path)))])));
   await mkdir(join(directory,'code'),{mode:0o700});await writeFile(join(directory,'code','working-tree.patch'),execFileSync('git',['diff','--binary'],{cwd:repositoryRoot}),{mode:0o600});
   for(const path of paths)await cp(join(repositoryRoot,path),join(directory,'code',path.replaceAll('/','__')));

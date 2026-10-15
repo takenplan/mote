@@ -7,7 +7,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Store} from '../src/store.js';
 import {MaterialStore,materialId,type MaterialDraft} from '../src/materials.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {MemoryStore,memoryEvidenceFingerprint} from '../src/memory.js';
 import type {Config} from '../src/config.js';
 

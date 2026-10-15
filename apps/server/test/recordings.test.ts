@@ -4,7 +4,7 @@ import {mkdtemp,rm,mkdir,writeFile,readFile} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {ArchivedFileStore} from '../src/archived-files.js';
 import type {Config} from '../src/config.js';
 import type {RecordingProvider} from '../src/connectors/recordings.js';

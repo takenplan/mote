@@ -3,7 +3,7 @@ import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
-import {buildApp} from '../apps/server/dist/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.mjs';
 const connection=process.argv[2];if(!connection)throw Error('Private fixture connection path required');
 const directory=await mkdtemp(join(tmpdir(),'mote-recording-outcomes-ui-')),token=randomBytes(32).toString('hex');
 const provider={id:'feishu',version:'generated-ui@1',account:async()=>({id:'generated-owner',name:'Generated owner'}),discover:async()=>({ids:['empty','unsupported','full']}),metadata:async(_account,id)=>({id,title:'Generated '+id,durationMs:5000}),transcript:async(_account,item)=>item.id==='full'?{rawText:'Generated speech',transcript:{durationMs:5000,coverage:'full',segments:[{startMs:0,endMs:5000,text:'Generated speech'}]}}:item.id==='empty'?{rawText:'2026-09-20 08:00:00 CST|5s\n\nKeywords:\n',transcript:null}:{rawText:'Unknown generated export',transcript:null,formatError:'recording_transcript_format_unsupported'},media:async()=>({mimeType:'audio/wav',bytes:Buffer.concat([Buffer.from('RIFF0000WAVE'),Buffer.alloc(200)])})};

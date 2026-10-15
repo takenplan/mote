@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import type {QueryInput,ContextReader} from '@mote/agent';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {materialId} from '../src/materials.js';
 import {generatedMemoryOutput} from './fixtures/memory-planning.js';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';

@@ -45,7 +45,7 @@ const freePort = () => new Promise((resolve, reject) => { const listener = net.c
   const env = { ...process.env }; for (const key of Object.keys(env)) if (key.startsWith('MOTE_')) delete env[key];
   const repository = resolve(__dirname, '../../..');
   const centralCode = `
-    const {buildApp} = await import(${JSON.stringify(pathToFileURL(join(repository,'apps/server/dist/app.js')).href)});
+    const {buildApp} = await import(${JSON.stringify(pathToFileURL(join(repository,'apps/server/test/fixtures/legacy-app.mjs')).href)});
     const {configFromEnv} = await import(${JSON.stringify(pathToFileURL(join(repository,'apps/server/dist/config.js')).href)});
     const {createHash} = await import('node:crypto');
     const cfg=configFromEnv(),node=await buildApp(cfg,{backgroundWorker:false,agent:{configured:false,query:async()=>{throw Error('Live models forbidden in generated browser fixture');},close:async()=>{}}});

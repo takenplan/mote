@@ -8,6 +8,7 @@ import { createServer } from 'node:net';
 import { createRequire } from 'node:module';
 import { serializeConfigDocument } from '@mote/shared/config-file';
 import { setTimeout as delay } from 'node:timers/promises';
+import {openScopeStorage} from '../src/scope/storage.js';
 
 const loader = createRequire(import.meta.url).resolve('tsx');
 const entry = new URL('../src/index.ts', import.meta.url).href;
@@ -41,6 +42,7 @@ async function stop(child:ChildProcess, exited:Promise<number|null>) {
 
 test('a real central process recovers a previous lock with its own reused PID and serves health', { timeout:20000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'mote-startup-test-'));
+  const storage=openScopeStorage(directory);storage.close();
   const port = await availablePort(); const node = await startNode(directory, port, true);
   t.after(async () => { await stop(node.child, node.exited); await rm(directory, { recursive:true, force:true }); });
   let healthy = false;
@@ -54,19 +56,10 @@ test('a real central process recovers a previous lock with its own reused PID an
     await delay(50);
   }
   assert.ok(healthy, `Central health did not become ready: ${node.output()}`);
-  // Wait for the fork to initialize too: an inherited --eval bootstrap could
-  // replace server.pid just after health becomes available.
-  let maintenanceReady = false;
-  const workerDeadline = Date.now() + 10000;
-  while (Date.now() < workerDeadline) {
-    const response = await fetch(`http://127.0.0.1:${port}/api/status`, {
-      headers:{authorization:'Bearer synthetic-startup-fixture-token-only'}, signal:AbortSignal.timeout(2000),
-    });
-    const status = await response.json() as {runtime?:{maintenance?:{status:string}}};
-    if (status.runtime?.maintenance?.status === 'ready') { maintenanceReady = true; break; }
-    await delay(50);
-  }
-  assert.ok(maintenanceReady, `Maintenance worker did not become ready: ${node.output()}`);
+  // M00 intentionally starts no unscoped maintenance worker. Its production
+  // contract is health plus denied private access until M05/M16 restore workers.
+  const status=await fetch(`http://127.0.0.1:${port}/api/status`,{headers:{authorization:'Bearer synthetic-startup-fixture-token-only'},signal:AbortSignal.timeout(2000)});
+  assert.equal(status.status,401);
   assert.equal(await readFile(join(directory, 'server.pid'), 'utf8'), String(node.child.pid));
   await stop(node.child, node.exited);
   assert.equal(await node.exited, 0);
@@ -75,6 +68,7 @@ test('a real central process recovers a previous lock with its own reused PID an
 
 test('a real central process refuses a lock belonging to another live process without replacing it', { timeout:20000 }, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'mote-startup-test-'));
+  const storage=openScopeStorage(directory);storage.close();
   const path = join(directory, 'server.pid');
   await writeFile(path, String(process.pid));
   const node = await startNode(directory, await availablePort(), false);

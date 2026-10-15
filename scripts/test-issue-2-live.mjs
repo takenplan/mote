@@ -4,7 +4,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {buildApp} from '../apps/server/dist/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.mjs';
 
 const root=await mkdtemp(join(tmpdir(),'mote-issue-2-live-'));
 const token=randomUUID();let node;

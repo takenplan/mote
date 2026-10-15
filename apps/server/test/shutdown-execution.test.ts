@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setImmediate as yieldTurn} from 'node:timers/promises';
 import type {Transcript} from '@mote/shared';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import {Store,sha256} from '../src/store.js';
 import {fixtureFilePolicy} from './fixtures/file-policy.js';
@@ -22,7 +22,7 @@ async function fixture(t:TestContext,processors:FileProcessor[]=[]){
  if(processors.length){Reflect.set(globalThis,Symbol.for(fixtureKey),processors);writeFileSync(modulePath,`export default {name:'generated-shutdown-processors',inject:['moteFileProcessors'],apply(ctx){const processors=globalThis[Symbol.for(${JSON.stringify(fixtureKey)})];if(!processors)throw Error('Generated processors are unavailable');for(const processor of processors)ctx.effect(()=>ctx.moteFileProcessors.register(processor));}};`);}
  const config:Config={dataDir:directory,token:'generated-shutdown-token',tokenPath:'fixture-only',host:'127.0.0.1',port:0,maxStorageBytes:100_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'silent',fileProcessorModules:processors.length?[modulePath]:[]};
  const nodes:Awaited<ReturnType<typeof buildApp>>[]=[];
- const start=async(agent?:import('../src/app.js').QueryAgent)=>{const node=await buildApp(config,{store,agent});nodes.push(node);await node.app.ready();return node;};
+ const start=async(agent?:import('./fixtures/legacy-app.js').QueryAgent)=>{const node=await buildApp(config,{store,agent});nodes.push(node);await node.app.ready();return node;};
  t.after(async()=>{for(const node of nodes)await node.app.close();Reflect.deleteProperty(globalThis,Symbol.for(fixtureKey));store.close();rmSync(directory,{recursive:true,force:true});});
  return {store,start};
 }

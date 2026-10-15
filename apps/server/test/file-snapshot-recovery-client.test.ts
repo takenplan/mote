@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {LocalSourceManager} from '../../desktop/src/source-manager.js';
 import {defaultConfig} from '../../desktop/src/config.js';
 import {DEFAULT_SOURCE_OPTIONS,type SourceOptions} from '../../desktop/src/source-types.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 // Real Desktop manual discovery/outbox/upload and Central routes/pipeline.

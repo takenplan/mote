@@ -1,7 +1,7 @@
 /** Generated-only provider fixture for the real central application and browser entry points. */
 import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {LARK_SCOPES} from '../apps/server/src/connectors/lark.js';
 import type {LarkCommand,LarkRunner} from '../apps/server/src/connectors/lark-cli.js';
 import {ConnectorError} from '../apps/server/src/connectors/types.js';

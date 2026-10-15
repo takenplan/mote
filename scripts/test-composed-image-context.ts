@@ -13,7 +13,7 @@ import {backup,DatabaseSync} from 'node:sqlite';
 import type {UsageReceipt} from '@mote/shared';
 import {startBridge} from '../packages/agent/dist/bridge.js';
 import {contextToolDefinitions} from '../packages/agent/dist/tool-contributions.js';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {materialId} from '../apps/server/src/materials.js';
 import {sha256} from '../apps/server/src/store.js';
@@ -50,7 +50,7 @@ const report:Record<string,any>={status:'running',mode,imageProtocol:protocol,st
  limitations:['Generated fixed sample, not held out or personal data.','OCR is a once-only known-text stub; accuracy is not tested.','Offline preflight proves structure and authorization, not semantic/visual understanding.',
   'One outer query may contain provider-internal requests or one output-validation repair; visible turns are recorded separately.','The 300 second bound is a model call deadline, not a whole-process watchdog.'],
  head:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim()};
-const codeFiles=['scripts/test-composed-image-context.ts','scripts/composed-image-disclosure.ts','apps/server/src/app.ts','apps/server/src/evidence-reader.ts','apps/server/src/evidence-image.ts','apps/server/src/file-attachments.ts','apps/server/src/file-processing.ts',
+const codeFiles=['scripts/test-composed-image-context.ts','scripts/composed-image-disclosure.ts','apps/server/test/fixtures/legacy-app.ts','apps/server/src/evidence-reader.ts','apps/server/src/evidence-image.ts','apps/server/src/file-attachments.ts','apps/server/src/file-processing.ts',
  'packages/agent/dist/bridge.js','packages/agent/dist/codex-agent.js','packages/agent/dist/codex-session.js'];
 report.codeHashes=Object.fromEntries(await Promise.all(codeFiles.map(async path=>[path,sha256(await readFile(join(repositoryRoot,path)))])));
 let node:Node|undefined,currentVault='',seed:Seed,saveChain=Promise.resolve(),ocrAllowed=false;

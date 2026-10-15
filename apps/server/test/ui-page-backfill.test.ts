@@ -5,7 +5,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {uiPageText,type UiPageV2} from '@mote/shared';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {Store} from '../src/store.js';
 import type {Config} from '../src/config.js';
 import type {MaterialMemoryObservation} from '../src/material-memory-work.js';

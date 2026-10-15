@@ -12,7 +12,7 @@ import {backup,DatabaseSync} from 'node:sqlite';
 import {sourceItemSchema} from '@mote/shared';
 import type {QueryResult} from '@mote/shared';
 import type {ContextReader,QueryInput} from '@mote/agent';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {sha256} from '../apps/server/src/store.js';
 import {archiveHash,sourceReceiptId} from '../apps/server/src/source-archive.js';
@@ -151,7 +151,7 @@ async function main(){
   output=await externalNew(process.env.MOTE_HELDOUT_OUTPUT);await mkdir(output,{mode:0o700});await mkdir(join(output,'DO_NOT_OPEN'),{mode:0o700});
   await writeFile(join(output,'DO_NOT_OPEN','README.txt'),'SEALED: contains heldout source text, opaque identities and future answers. Do not inspect during preparation or blind evaluation. Public metadata is in the parent directory.\n',{mode:0o600});
   report.startedAt=new Date().toISOString();report.revision=execFileSync('git',['rev-parse','HEAD'],{cwd:repositoryRoot,encoding:'utf8'}).trim();
-  report.codeHashes=Object.fromEntries(await Promise.all(['scripts/test-heldout-memory-replay.ts','apps/server/src/app.ts','apps/server/src/memory-pipeline.ts','apps/server/src/memory-integration.ts','apps/server/src/memory-lifecycle.ts','apps/server/src/memory.ts','apps/server/src/opening-memory.ts','apps/server/src/evidence-reader.ts','apps/server/src/source-pipelines.ts','apps/server/src/coding-source-plugin.ts','apps/server/src/materials.ts','packages/agent/dist/bridge.js','packages/agent/dist/codex-session.js'].map(async file=>[file,sha256(await readFile(join(repositoryRoot,file)))])));
+  report.codeHashes=Object.fromEntries(await Promise.all(['scripts/test-heldout-memory-replay.ts','apps/server/test/fixtures/legacy-app.ts','apps/server/src/memory-pipeline.ts','apps/server/src/memory-integration.ts','apps/server/src/memory-lifecycle.ts','apps/server/src/memory.ts','apps/server/src/opening-memory.ts','apps/server/src/evidence-reader.ts','apps/server/src/source-pipelines.ts','apps/server/src/coding-source-plugin.ts','apps/server/src/materials.ts','packages/agent/dist/bridge.js','packages/agent/dist/codex-session.js'].map(async file=>[file,sha256(await readFile(join(repositoryRoot,file)))])));
   if(mode!=='prepare'){phase=mode;report.probe=mode==='clock-probe'?await clockProbe():await duplicateProbe();report.status=report.probe.status==='passed'?'prepared':'prepared-product-gap';report.finishedAt=new Date().toISOString();await save();console.log(JSON.stringify({schema:report.schema,status:report.status,output,realModelCalls:0,stubModelCalls:report.stubModelCalls,semanticContentExposed:false}));return;}
   phase='freeze';report.inputs={corpus:{package:'heldout-corpus-v2',...await verifyFreeze(corpus,freezes.corpus)},evaluation:{package:'heldout-eval-v2-1',...await verifyFreeze(evaluation,freezes.evaluation)}};
   // Parse locally; never print values or exception details from these sealed files.

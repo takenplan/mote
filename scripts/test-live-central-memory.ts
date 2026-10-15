@@ -7,7 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {parseEnv} from 'node:util';
 import assert from 'node:assert/strict';
 import {zipSync,strToU8} from 'fflate';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import type {Config} from '../apps/server/src/config.js';
 import {createImportAgent} from '@mote/agent';
 import {modelSettingsFromConfig} from '../apps/server/src/model-agent.js';
