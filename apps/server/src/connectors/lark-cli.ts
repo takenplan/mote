@@ -1,6 +1,7 @@
 import {spawn} from 'node:child_process';
-import {existsSync} from 'node:fs';
-import {mkdir,chmod} from 'node:fs/promises';
+import {randomBytes} from 'node:crypto';
+import {existsSync,constants} from 'node:fs';
+import {mkdir,chmod,open} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {ConnectorError} from './types.js';
 
@@ -52,13 +53,15 @@ export function authorizationUrl(value:string):string|undefined{
 export function larkJson(raw:string):any{
   try{const value=JSON.parse(raw);if(value?.ok===false||(typeof value?.code==='number'&&value.code!==0))throw Error();return value;}catch{throw new ConnectorError('lark_response_invalid',502);}
 }
-export function createLarkRunner(directory:string,optionsConfig:{localProfile?:boolean}={}):LarkRunner{
+export function createLarkRunner(directory:string,optionsConfig:{localProfile?:boolean;isolatedHome?:boolean}={}):LarkRunner{
   const root=resolve(directory,'lark-runtime'),configDir=join(root,'config'),runtime=join(root,'package');
-  return async(command,options={})=>{
+  const execute:LarkRunner=async(command,options={})=>{
+    if(optionsConfig.isolatedHome&&process.platform==='win32')throw new ConnectorError('lark_scoped_keychain_unsupported',503);
     await mkdir(configDir,{recursive:true,mode:0o700});await chmod(root,0o700);await chmod(configDir,0o700);
     // Do not inherit another agent's identity, credential, profile or policy overrides.
     const env:NodeJS.ProcessEnv={};
     for(const key of ['PATH','HOME','USERPROFILE','SystemRoot','WINDIR','TMPDIR','TMP','TEMP','LANG','LC_ALL','HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy','https_proxy','all_proxy','no_proxy'])if(process.env[key])env[key]=process.env[key];
+    if(optionsConfig.isolatedHome){const home=join(root,'home');await mkdir(home,{recursive:true,mode:0o700});Object.assign(env,{HOME:home,USERPROFILE:home,XDG_CONFIG_HOME:join(home,'.config'),XDG_DATA_HOME:join(home,'.local','share'),XDG_CACHE_HOME:join(home,'.cache'),APPDATA:join(home,'AppData','Roaming'),LOCALAPPDATA:join(home,'AppData','Local'),TMPDIR:join(root,'tmp'),TMP:join(root,'tmp'),TEMP:join(root,'tmp')});await mkdir(join(root,'tmp'),{recursive:true,mode:0o700});if(process.platform==='darwin'){const storage=join(home,'Library','Application Support','lark-cli');await mkdir(storage,{recursive:true,mode:0o700});let fd;try{fd=await open(join(storage,'master.key.file'),constants.O_WRONLY|constants.O_NOFOLLOW|constants.O_CREAT|constants.O_EXCL,0o600);await fd.writeFile(randomBytes(32));await fd.sync();}catch(error){if((error as NodeJS.ErrnoException).code!=='EEXIST')throw error;}finally{await fd?.close();}const existing=await open(join(storage,'master.key.file'),constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);try{const stat=await existing.stat();if(!stat.isFile()||stat.nlink!==1||stat.size!==32||(stat.mode&0o077)!==0)throw new ConnectorError('lark_scoped_key_unavailable',503);}finally{await existing.close();}}}
     Object.assign(env,{CI:'1',NO_COLOR:'1',LARKSUITE_CLI_NO_UPDATE_NOTIFIER:'1',LARKSUITE_CLI_NO_SKILLS_NOTIFIER:'1'});
     if(!optionsConfig.localProfile)Object.assign(env,{LARKSUITE_CLI_CONFIG_DIR:configDir,LARKSUITE_CLI_DATA_DIR:join(root,'credentials'),LARKSUITE_CLI_LOG_DIR:join(root,'logs')});
     const local=join(runtime,'node_modules','@larksuite','cli','scripts','run.js');
@@ -89,4 +92,5 @@ export function createLarkRunner(directory:string,optionsConfig:{localProfile?:b
       child.stdin.on('error',()=>{});child.stdin.end(command.kind==='configure'?command.secret:undefined);
     });
   };
+  let verified:Promise<void>|undefined;return async(command,options)=>{if(optionsConfig.isolatedHome&&command.kind!=='version'&&command.kind!=='install')await(verified??=execute({kind:'version'},options).then(value=>{if(value.match(/\b(\d+\.\d+\.\d+)\b/)?.[1]!==LARK_VERSION)throw new ConnectorError('lark_cli_version_unsupported',503);}));return execute(command,options);};
 }

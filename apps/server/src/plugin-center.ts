@@ -97,6 +97,9 @@ export class PluginCenter {
       this.executor.enqueue(input.operationId,'plugin.install',{packageId:id,previewId:input.previewId},{id:'plugin-install:'+input.operationId});
     });return this.view();
   }
+  /** Trusted bundled definitions are supplied by the host, never a request manifest.
+   * Installation records shared code availability only and invokes no user runtime. */
+  installBundled(pkg:StoredPackage,raw:unknown){const input=memoryControlCommandSchema.parse(raw);this.command('install-bundled:'+pkg.view.id,input,()=>this.revision(),()=>{if(!this.store.db.prepare('SELECT 1 FROM plugin_packages WHERE id=?').get(pkg.view.id))this.savePackage(pkg);});return this.view();}
   private validateConfiguration(manifest:PluginManifest,configuration:Record<string,string|number|boolean>,complete=false){
     if(Object.keys(configuration).some(key=>!manifest.configuration.some(field=>field.id===key)))throw new StoreError('Unknown plugin configuration field');
     for(const field of manifest.configuration){const value=configuration[field.id];if(value===undefined||value===''){if(complete&&field.required)throw new StoreError('A required plugin configuration value is missing');continue;}

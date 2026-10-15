@@ -135,6 +135,13 @@
     "status": "partial",
     "notes": "M04 reuses schemas and instance file startup without owner initialization; legacy credential generation remains quarantined."
   },
+  "apps/server/src/connectors/dingtalk-recordings.ts": {
+    "scope": "mixed",
+    "module": "M10",
+    "surfaces": [
+      "directory:path"
+    ]
+  },
   "apps/server/src/connectors/gmail.ts": {
     "scope": "legacy-quarantined",
     "module": "M10",
@@ -143,13 +150,16 @@
     ]
   },
   "apps/server/src/connectors/lark-cli.ts": {
-    "scope": "legacy-quarantined",
+    "scope": "mixed",
     "module": "M10",
     "surfaces": [
-      "directory:configDir"
+      "directory:configDir",
+      "directory:home",
+      "directory:join(root,'tmp')",
+      "directory:storage"
     ]
   },
-  "apps/server/src/connectors/lark-documents.ts": {
+  "apps/server/src/connectors/lark-legacy.ts": {
     "scope": "legacy-quarantined",
     "module": "M10",
     "surfaces": [
@@ -1355,6 +1365,7 @@
     "surfaces": [
       "api:get:'/api/health'",
       "extension:registerConfigurationRoutes:runtime",
+      "extension:registerScopedConnectors:runtime",
       "extension:registerTaskRoutes:runtime"
     ]
   },
@@ -1416,6 +1427,50 @@
       "table:user_model_credential_generations",
       "table:user_model_snapshot_revision",
       "table:user_model_usage"
+    ]
+  },
+  "apps/server/src/scope/connector-routes.ts": {
+    "scope": "user",
+    "module": "M10",
+    "surfaces": [
+      "api:get:'/oauth/google/callback'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/connectors'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/connectors/:provider/install'",
+      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/connectors/:id',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/connectors',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/connectors/:id',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/'+action,service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/disconnect',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/forget',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/operations',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/start',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/sync',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/connectors/:id',service:'connectors'",
+      "extension:host.install:context"
+    ]
+  },
+  "apps/server/src/scope/connector-vault.ts": {
+    "scope": "user",
+    "module": "M10",
+    "surfaces": [
+      "directory:path"
+    ]
+  },
+  "apps/server/src/scope/connectors.ts": {
+    "scope": "user",
+    "module": "M10",
+    "surfaces": [
+      "extension:runtime.services.registerUser:DOMAIN",
+      "table:connector_connections",
+      "table:connector_domain_state",
+      "table:connector_jobs",
+      "table:connector_ledger",
+      "table:connector_oauth",
+      "table:connector_restore",
+      "table:connector_secrets",
+      "table:connector_sources",
+      "table:connector_timers",
+      "task:execution.register:kind:TASK"
     ]
   },
   "apps/server/src/scope/http.ts": {
@@ -1493,6 +1548,46 @@
       "directory:this.area('work')",
       "directory:this.directory",
       "directory:user"
+    ]
+  },
+  "apps/server/src/scope/plugin-routes.ts": {
+    "scope": "mixed",
+    "module": "M09",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/plugins'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/:id/uninstall'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/install'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/resolve'",
+      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/plugin-snapshots/:id',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugin-events',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugins',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/'+action,service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/check',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/snapshots',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-snapshots/:id/invoke',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-snapshots/:id/read',service:PLUGINS_DOMAIN",
+      "extension:plugins.forAdministrator(context).install:request.body"
+    ]
+  },
+  "apps/server/src/scope/plugins.ts": {
+    "scope": "mixed",
+    "module": "M09",
+    "surfaces": [
+      "directory:directory",
+      "directory:path",
+      "directory:probeRoot",
+      "extension:options.services.registerInstance:'plugin-catalog'",
+      "extension:options.services.registerUser:PLUGINS_DOMAIN",
+      "extension:registry.install:id:pkg.manifest.id",
+      "extension:scope.install:ctx=>{ctx.effect(()=>()=>worker.close());ctx.effect(()=>registry.install({id:pkg.manifest.id,version:fixed.version,components:fixed.components}));for(const component of actual.components)ctx.effect(()=>registry.register(pkg.manifest.id,component,(input,hostCall,signal)=>worker.call('invoke',{componentId:component.id,input},signal,hostCall)));}",
+      "extension:this.catalog.install:input",
+      "table:plugin_user_events",
+      "table:plugin_user_instances",
+      "table:plugin_user_restore",
+      "table:plugin_user_snapshots",
+      "table:plugin_user_state",
+      "task:this.options.execution.register:{kind,pool:'plugin-user',concurrency:()=>4,policy:modelFeature?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.control,...(modelFeature?{modelFeature}:{}), parseInput:input=>invokeSchema.parse(input),authorizeInput:(context,input)=>{const value=this.authorized(context,String(input.snapshotId),String(input.componentId));if(this.adapter(value.component.capability).modelFeature!==modelFeature)throw new StoreError('Use the domain model task admission',403);}, validate:task=>{try{const snapshot=this.snapshot(String(task.input.snapshotId));return snapshot.user_id===task.ownership?.userId&&this.currentSnapshot(snapshot);}catch{return false;}}, execute:run=>this.execute(run),commit:(run,value)=>{const invocation=this.invocations.get(run);if(!invocation)throw new ScopeError('invalid_identity',401);invocation.assertCurrent();this.adapter(invocation.component.capability).commit?.(value,invocation);invocation.assertCurrent();}, classify:error=>error instanceof ScopeError?new ExecutionFailure('stale','plugin_authority_revoked'):new ExecutionFailure('blocked','plugin_operation_requires_attention'), }"
     ]
   },
   "apps/server/src/scope/private-data-routes.ts": {
@@ -1720,88 +1815,6 @@
       "extension:backendContext.provide:'moteOwnerQuestions'",
       "extension:registerMemoryExtensions:{integrationSettings:memoryIntegrationSettings,semanticArtifacts,providerCooldownCheck:()=>providerAdmission.check(modelSettings.select('memory').settings),insights:insightRuns,insightTimeout:()=>modelSettings.select('insight').settings.agentTimeoutMs,lifecycle,store,files,memories,pipeline:memoryPipeline,working,query:(input,module)=>queryAgent(input,input.skill==='personal-insight'?'insight':'query',module),model:()=>modelSettings.select('memory').settings.model}",
       "extension:registerPluginRoutes:app"
-    ]
-  },
-  "apps/server/src/scope/configuration.ts": {
-    "scope": "mixed",
-    "module": "M04",
-    "status": "implemented",
-    "surfaces": [
-      "directory:path",
-      "table:model_resource_generations",
-      "table:model_resource_revision",
-      "table:user_configuration_restore_journal",
-      "table:user_configuration_state",
-      "table:user_model_credential_generations",
-      "table:user_model_snapshot_revision",
-      "table:user_model_usage"
-    ]
-  },
-  "apps/server/src/scope/configuration-routes.ts": {
-    "scope": "mixed",
-    "module": "M04",
-    "status": "implemented",
-    "surfaces": [
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/configuration/models'",
-      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/admin/configuration/models'",
-      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/configuration',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/models',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/models/selection/:feature',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/usage',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/configuration',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/configuration/reload',service:'configuration'",
-      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/configuration/:domain',service:'configuration'",
-      "extension:runtime.services.registerInstance:'model-resources'",
-      "extension:runtime.services.registerUser:'configuration'"
-    ]
-  },
-  "apps/server/src/scope/model-snapshots.ts": {
-    "scope": "user",
-    "module": "M04",
-    "status": "implemented",
-    "surfaces": [
-      "directory:path",
-      "table:user_model_snapshots"
-    ]
-  },
-  "apps/server/src/scope/plugin-routes.ts": {
-    "scope": "mixed",
-    "module": "M09",
-    "surfaces": [
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/plugins'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/:id/uninstall'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/install'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/resolve'",
-      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/plugin-snapshots/:id',service:PLUGINS_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugin-events',service:PLUGINS_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugins',service:PLUGINS_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances',service:PLUGINS_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/'+action,service:PLUGINS_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/check',service:PLUGINS_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/snapshots',service:PLUGINS_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-snapshots/:id/invoke',service:PLUGINS_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-snapshots/:id/read',service:PLUGINS_DOMAIN",
-      "extension:plugins.forAdministrator(context).install:request.body"
-    ]
-  },
-  "apps/server/src/scope/plugins.ts": {
-    "scope": "mixed",
-    "module": "M09",
-    "surfaces": [
-      "directory:directory",
-      "directory:path",
-      "directory:probeRoot",
-      "extension:options.services.registerInstance:'plugin-catalog'",
-      "extension:options.services.registerUser:PLUGINS_DOMAIN",
-      "extension:registry.install:id:pkg.manifest.id",
-      "extension:scope.install:ctx=>{ctx.effect(()=>()=>worker.close());ctx.effect(()=>registry.install({id:pkg.manifest.id,version:fixed.version,components:fixed.components}));for(const component of actual.components)ctx.effect(()=>registry.register(pkg.manifest.id,component,(input,hostCall,signal)=>worker.call('invoke',{componentId:component.id,input},signal,hostCall)));}",
-      "extension:this.catalog.install:input",
-      "table:plugin_user_events",
-      "table:plugin_user_instances",
-      "table:plugin_user_restore",
-      "table:plugin_user_snapshots",
-      "table:plugin_user_state",
-      "task:this.options.execution.register:{kind,pool:'plugin-user',concurrency:()=>4,policy:modelFeature?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.control,...(modelFeature?{modelFeature}:{}), parseInput:input=>invokeSchema.parse(input),authorizeInput:(context,input)=>{const value=this.authorized(context,String(input.snapshotId),String(input.componentId));if(this.adapter(value.component.capability).modelFeature!==modelFeature)throw new StoreError('Use the domain model task admission',403);}, validate:task=>{try{const snapshot=this.snapshot(String(task.input.snapshotId));return snapshot.user_id===task.ownership?.userId&&this.currentSnapshot(snapshot);}catch{return false;}}, execute:run=>this.execute(run),commit:(run,value)=>{const invocation=this.invocations.get(run);if(!invocation)throw new ScopeError('invalid_identity',401);invocation.assertCurrent();this.adapter(invocation.component.capability).commit?.(value,invocation);invocation.assertCurrent();}, classify:error=>error instanceof ScopeError?new ExecutionFailure('stale','plugin_authority_revoked'):new ExecutionFailure('blocked','plugin_operation_requires_attention'), }"
     ]
   }
 }

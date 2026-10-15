@@ -71,6 +71,9 @@ export function checkProductionImports(directory=root){
   // M09's adapted package catalog and worker/Cordis lifecycle have no private
   // Store dependency. Only ScopedPluginHost exposes their user capabilities.
   for(const path of ['plugin-center.ts','plugin-release.ts','plugin-runtime.ts','backend-plugin-scope.ts','execution-policy.ts'])allowed.add(sourceRoot+'/'+path);
+  // M10 real provider adapters accept bounded ports only; legacy Store shims
+  // remain in gmail.ts/lark.ts/lark-documents.ts and never enter production.
+  for(const path of ['connectors/types.ts','connectors/google.ts','connectors/gmail-adapter.ts','connectors/lark-adapter.ts','connectors/lark-cli.ts','connectors/lark-recordings.ts','connectors/dingtalk-recordings.ts'])allowed.add(sourceRoot+'/'+path);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){

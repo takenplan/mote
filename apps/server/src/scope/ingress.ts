@@ -93,15 +93,10 @@ export class IngressHost{
      });return receipt(sourceId,id,captures);
     });
    },
-   receiveSourceItems:(sourceId:string,id:string,values:unknown[])=>{
-    const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
-    return batch(sourceId,id,items,()=>{
-     const binding=source(sourceId),archived=new Map<string,string>();
-     if(binding.retention==='archive')for(const item of items)archived.set(captureId(sourceId,item),originals.put(Buffer.from(JSON.stringify(item))).hash);
-     const acks=data().receiveSourceItems(sourceId,items,binding.retention==='archive'?{verify:item=>{if(archived.get(captureId(sourceId,item))!==identityHash(item))throw conflict();}}:undefined).receipts;
-     return receipt(sourceId,id,acks.map(ack=>({...ack,...(archived.has(ack.id)?{original:originals.attach(sourceId,ack.id,archived.get(ack.id)!,'application/json','archive')}:{})})));
-    });
-   },
+   receiveSourceItems:(sourceId:string,id:string,values:unknown[])=>intakeSourceItems(sourceId,id,values),
+   /** Host adapter seam: the original is selected before publication, so one
+    * capture has one immutable descriptor. Worker RPCs never expose this seam. */
+   receiveSourceItemsWithOriginals:(sourceId:string,id:string,values:unknown[],inputs:({bytes:Buffer;mime:string}|undefined)[])=>intakeSourceItems(sourceId,id,values,inputs),
    readOriginal:(ref:string,range?:{offset?:number;length?:number})=>{original(ref);const result=originals.read(ref,range);assert();return result;},
    holdOriginal:(ref:string)=>{const value=original(ref);return originals.pin(value.hash);},
    releaseSnapshot:(ref:string)=>sql.transaction(()=>{const value=original(ref);if(value.retention!=='snapshot')throw new ScopeError('invalid_identity',403);sql.run('DELETE FROM ig_originals WHERE user_id=$user AND id=?',ref.slice(9));}),
@@ -166,6 +161,21 @@ export class IngressHost{
     return originals.gc();
    });},
   };
+  function intakeSourceItems(sourceId:string,id:string,values:unknown[],inputs?:({bytes:Buffer;mime:string}|undefined)[]){
+   const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
+   if(inputs&&(inputs.length!==items.length||inputs.some(v=>v&&(!Buffer.isBuffer(v.bytes)||v.bytes.length>512*1024*1024||!v.mime||v.mime.length>200))))throw new PrivateDataError('invalid_data');
+   return batch(sourceId,id,inputs?{items,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime}:null)}:items,()=>{
+    const binding=source(sourceId),archive=binding.retention==='archive';
+    const descriptors=items.map((item,index)=>{
+     const capture=captureId(sourceId,item),prior=sql.get('SELECT id,hash,mime,retention FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,capture),input=inputs?.[index];
+     if(prior){if(input&&(prior.hash!==bytesHash(input.bytes)||prior.mime!==input.mime))throw conflict();return originals.original('original:'+prior.id);}
+     if(!archive&&!input)return;
+     const object=originals.put(input?.bytes??Buffer.from(JSON.stringify(item)));return {hash:object.hash,mime:input?.mime??'application/json'};
+    });
+    const acks=data().receiveSourceItems(sourceId,items,archive?{verify:item=>{if(!descriptors[items.findIndex(value=>value.externalId===item.externalId&&value.revision===item.revision)])throw conflict();}}:undefined).receipts;
+    return receipt(sourceId,id,acks.map((ack,index)=>{const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));
+   });
+  }
   function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));if(row.authorization_epoch!==context.authorizationEpoch||Number(row.expires)<=Date.now())throw conflict();return row;}
   return Object.freeze(service);
  }
