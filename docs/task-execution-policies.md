@@ -87,4 +87,9 @@ only during that window's scheduled, finite typed-transient recovery. The old
 observation remains failed. Restart alone, an unclassified outcome, a permanent
 failure or cancellation does not authorize a replacement observation.
 
+A confirmed import retains its canonical commit identity across lease
+interruption and resumes after its saved record position. Only that internal
+execution grant can continue an `importing` job; the owner confirmation API still
+requires its reviewed preview, and completed imports are not rerun.
+
 See the [generated regression and verification record](validation/task-execution-policies-2026-10-15.md).
