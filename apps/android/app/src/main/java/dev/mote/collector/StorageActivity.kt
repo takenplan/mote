@@ -35,7 +35,7 @@ class StorageActivity : MoteActivity() {
     override fun onResume() { super.onResume(); localStateJob = observeLocalState { inventory.text = it.storageLabel() }; handler.post(poll); refresh() }
     override fun onPause() { localStateJob?.cancel(); localStateJob = null; handler.removeCallbacks(poll); super.onPause() }
     private fun text(parent: LinearLayout, value: String, size: Float = 15f) {
-        parent.addView(TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(8), 0, moteDp(8)); setTextColor(MoteUi.ink) })
+        parent.addView(TextView(this).apply { text = value; textSize = size; setPadding(0, moteDp(8), 0, moteDp(8)); MoteUi.textColor(this, NativeColorRole.INK) })
     }
     private fun refresh() {
         if (working) return

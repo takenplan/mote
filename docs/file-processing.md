@@ -1,5 +1,7 @@
 # 中央文件处理：Cordis 插件与本地多人录音
 
+2026-10-15 已接受[任务恢复与按类型设计执行预算的原则](adr-task-recovery-and-execution-budgets.md)：每种任务在开发和注册时声明适合自身的宽松默认超时策略，不统一套用 600 秒；明确的资源等待不耗处理失败预算，也不因通用恢复窗口结束主流程。中央各类任务的具体策略见[任务执行策略](task-execution-policies.md)。
+
 ## 用户配置
 
 新上传录音默认由中央本地转写并分离匿名说话人。模型缺失时先归档、等待安装；旧文件不自动补处理。在网页「设置 → 文件与语音」可关闭处理、调整单文件最长时长（默认 120 分钟，1–1440 分钟），也可按来源或类型修改录音方式。没有每日分钟限额。
@@ -22,7 +24,7 @@ ASR 句子与词级时间由模型独立给出。词级时间略超出所属句�
 
 文件详情显示每步进度。分离失败后，已完成的转写仍保留，自动重试使用持久化检查点；可单独重新分离。完整重做转写、变更模型后的手动重处理会生成新产物。已有完成文件不会因全局设置改变而立即重跑。
 
-文件处理超时默认为 10 分钟，可在既有设置中配置为 1 秒至 1 小时；这是整条文件流水线的中央预算，转写与分离不会各获得额外的中央预算。本地音频请求通过 `X-Mote-Processing-Timeout-Ms` 把所配置预算交给 Worker。受管理 Native/Docker Worker 的运行上限为 1 小时，实际请求仍受中央配置和剩余全流程时间限制。自定义 Worker 的 `--timeout` 仍是独立上限，不能被请求头扩大；未携带该请求头的旧客户端沿用其运行时默认值。仅修改中央设置不能扩大旧版或自定义 Worker 的独立上限。实际长音频是否能在配置时间内完成仍需观察，调整超时不改变音频时长上限、模型、原件或说话人确认规则。回归见 [音频处理超时衔接](validation/audio-processing-timeout.md)。
+单次文件处理调用超时默认为 1 小时，可在既有设置中配置为 1 秒至 1 小时；已有显式数值保留，作为单次调用覆盖值。文件 pipeline 和摘要协调器不设整链总期限，转写与分离分别在实际获准执行后开始计时。本地音频请求通过 `X-Mote-Processing-Timeout-Ms` 把调用预算交给 Worker。受管理 Native/Docker Worker 的独立运行上限仍为 1 小时。自定义 Worker 的 `--timeout` 仍是独立上限，不能被请求头扩大；未携带该请求头的旧客户端沿用其运行时默认值。仅修改中央设置不能扩大旧版或自定义 Worker 的独立上限。实际长音频是否能在配置时间内完成仍需观察，调整超时不改变音频时长上限、模型、原件或说话人确认规则。新回归见[任务执行策略验证](validation/task-execution-policies-2026-10-15.md)；[音频处理超时衔接](validation/audio-processing-timeout.md)保留当时的整链时限历史。
 
 原录音永不覆盖。手机删除不会删除中央归档；上传确认只清除 Mote 暂存。日常删除策略与首次 `all` / `new_only` 同步设置见 [文件归档](files.md)。
 
@@ -57,12 +59,12 @@ segmentation: 220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079
   --model .mote/audio/models/whisper-small \
   --segmentation-model .mote/audio/models/segmentation.onnx \
   --speaker-model .mote/audio/models/3dspeaker.onnx \
-  --threads 4 --timeout 600 --port 9009
+  --threads 4 --timeout 3600 --port 9009
 ```
 
 在设置里选择「本地多人录音」，保留 `http://127.0.0.1:9009/transcribe`，保存后点「检测已保存的本地服务」。健康检查确认模型文件/依赖存在；实际可用性以第一次录音处理结果为准。可通过环境变量 `MOTE_TRANSCRIPTION_TOKEN` 配置音频服务令牌，对应网页中的本地服务密钥。不要把密钥写进命令行、模型路径或仓库。
 
-长期部署建议由 systemd / launchd / 容器进程管理器监督。Linux 可复制并调整 [服务模板](../deploy/mote-audio.service)，将模型置于服务用户可读目录，并在升级前停止任务、备份中央数据及模型配置。模型缺失、格式不支持、超时会保留原件和已完成步骤；中央最多自动尝试 4 次，之后手动重试。
+长期部署建议由 systemd / launchd / 容器进程管理器监督。Linux 可复制并调整 [服务模板](../deploy/mote-audio.service)，将模型置于服务用户可读目录，并在升级前停止任务、备份中央数据及模型配置。模型缺失等待依赖就绪，格式不支持明确停止；资源忙进入持久等待，不耗处理失败预算。实际可安全重放的临时调用故障最多尝试 4 次，结果未知仍受原有确认保护；原件与已完成步骤保留。
 
 实现基于官方 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) 时间戳接口和 [sherpa-onnx 离线说话人示例](https://github.com/k2-fsa/sherpa-onnx/blob/master/python-api-examples/offline-speaker-diarization.py)。sherpa-onnx 使用 pyannote 分割与 3D-Speaker 声纹向量，不要求启动云端 pyannote 服务。
 

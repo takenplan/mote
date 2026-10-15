@@ -116,7 +116,7 @@ app.on('browser-window-created', (_event, window) => {
     }
     await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     writeFileSync(join(out,'shared-library.png'),(await window.webContents.capturePage()).toPNG());
-    await js('document.querySelector(".main-nav [data-nav=overview]").click()');
+    await js('document.querySelector("aside [data-nav=overview]").click()');
     await js('document.querySelector("#home-sync-details").open=true;document.querySelector("#home-sync-details [data-nav=uploads]").click()');
     await wait('document.querySelectorAll("[data-upload-run]").length === 20', 'Run pagination');
     assert.equal(await js('document.querySelector("#upload-received").textContent'), '44');

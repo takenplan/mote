@@ -92,7 +92,7 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
         ui.text(MoteI18n.text("安装包、配置实例和当前方案分别管理。"))
         if (data.packages.isEmpty()) { ui.text(MoteI18n.text("还没有安装外部插件。")); ui.button(MoteI18n.text("从 GitHub 添加")) { tab = "discover"; load() } }
         data.packages.forEach { item ->
-            val card = ui.card(); ui.text(item.name + " · " + item.version, DesignTokens.fontRow.toFloat(), card)
+            val card = ui.card(); ui.text(item.name + " · " + item.version, NativeFontRole.ROW, card)
             ui.text(state(item.state) + " · " + state(item.observed), parent = card); source(item.source, card)
             ui.text(if (item.runtime == "worker") MoteI18n.text("中央 Worker") else MoteI18n.text("独立服务"), parent = card)
             item.issues.forEach { ui.text(it, parent = card) }
@@ -101,7 +101,7 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
             val instances = data.instances.filter { it.packageId == item.id }
             if (instances.isEmpty()) ui.text(MoteI18n.text("此安装包尚无配置实例；没有运行，也没有绑定到记忆方案。"), parent = card)
             instances.forEach { instance ->
-                val target = ui.card(card); ui.text(instance.name, DesignTokens.fontSection.toFloat(), target)
+                val target = ui.card(card); ui.text(instance.name, NativeFontRole.SECTION, target)
                 ui.text(instance.scope + " · " + MoteI18n.text("配置版本 {0}", instance.revision), parent = target)
                 ui.text((if (instance.desired) MoteI18n.text("已选择启用") else MoteI18n.text("已选择停用")) + " · " + state(instance.observed), parent = target)
                 capabilities(instance.capabilities, target); instance.issues.forEach { ui.text(it, parent = target) }
@@ -126,11 +126,11 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
             require(selectedRepository.isNotBlank()) { MoteI18n.text("请填写 GitHub 仓库。") }
             ui.work(MoteI18n.text("正在解析…"), { control.resolve(selectedRepository, selectedTag) }) { preview -> installation(preview, data.revision) }
         }.isEnabled = data.installation.optBoolean("supported")
-        data.catalog.forEach { entry -> val target = ui.card(); ui.text(entry.getString("name"), DesignTokens.fontSection.toFloat(), target); ui.text(entry.getString("description"), parent = target); ui.text(entry.getString("repository"), DesignTokens.fontMeta.toFloat(), target); ui.button(MoteI18n.text("选择仓库"), parent = target) { repository.setText(entry.getString("repository")); tag.setText("") } }
+        data.catalog.forEach { entry -> val target = ui.card(); ui.text(entry.getString("name"), NativeFontRole.SECTION, target); ui.text(entry.getString("description"), parent = target); ui.text(entry.getString("repository"), NativeFontRole.META, target); ui.button(MoteI18n.text("选择仓库"), parent = target) { repository.setText(entry.getString("repository")); tag.setText("") } }
     }
     private fun installation(preview: JSONObject, revision: Long) {
         close(); listVisible = false; body.removeAllViews(); screens.setBack { load() }
-        ui.text(MoteI18n.text("安装预览"), DesignTokens.fontTitleMobile.toFloat()); ui.text(preview.getString("name") + " · " + preview.getString("version"), DesignTokens.fontRow.toFloat())
+        ui.text(MoteI18n.text("安装预览"), NativeFontRole.TITLE_MOBILE); ui.text(preview.getString("name") + " · " + preview.getString("version"), NativeFontRole.ROW)
         val target = ui.card(); source(preview.getJSONObject("source"), target)
         ui.text((if (preview.getString("runtime") == "worker") MoteI18n.text("中央 Worker") else MoteI18n.text("独立服务")) + if (preview.getBoolean("restartRequired")) " · " + MoteI18n.text("安装后需重启") else "", parent = target)
         ui.text(MoteI18n.text("访问声明") + " · " + PluginControlProjection.strings(preview.getJSONArray("access")).joinToString(" · ").ifBlank { MoteI18n.text("没有访问声明") }, parent = target)
@@ -148,9 +148,9 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
     }
     private fun buildConfiguration(item: PluginPackage, instance: PluginInstance?, models: JSONObject) {
         body.removeAllViews(); listVisible = false; val fields = instance?.fields ?: item.fields; val initial = instance?.configuration ?: JSONObject()
-        ui.text(MoteI18n.text("配置实例"), DesignTokens.fontTitleMobile.toFloat()); ui.text(MoteI18n.text("配置实例与资料范围，再单独启用。启用不会自动替换当前记忆方案。"))
+        ui.text(MoteI18n.text("配置实例"), NativeFontRole.TITLE_MOBILE); ui.text(MoteI18n.text("配置实例与资料范围，再单独启用。启用不会自动替换当前记忆方案。"))
         val name = ui.field(MoteI18n.text("实例名称"), instance?.name ?: item.name); val scope = ui.field(MoteI18n.text("资料范围"), instance?.scope ?: "default")
-        ui.text(MoteI18n.text("由中央节点核验授权范围；填写范围不会授予新的数据权限。"), DesignTokens.fontMeta.toFloat())
+        ui.text(MoteI18n.text("由中央节点核验授权范围；填写范围不会授予新的数据权限。"), NativeFontRole.META)
         val reads = linkedMapOf<String, () -> Any?>()
         fields.forEach { field ->
             when (field.type) {
@@ -158,18 +158,18 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
                 "select", "model-profile" -> {
                     val options = if (field.type == "model-profile") PluginControlProjection.objects(models.optJSONArray("profiles")).map { it.getString("id") to it.getString("name") } else field.options
                     val choices = listOf("" to MoteI18n.text("请选择")) + options
-                    ui.text(field.label, DesignTokens.fontSupport.toFloat())
+                    ui.text(field.label, NativeFontRole.SUPPORT)
                     val select = Spinner(ui).apply { contentDescription = field.label; adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, choices.map { it.second }); setSelection(choices.indexOfFirst { it.first == initial.optString(field.id) }.coerceAtLeast(0)) }; body.addView(select, LinearLayout.LayoutParams(-1, ui.moteDp(52))); reads[field.id] = { choices[select.selectedItemPosition].first }
                 }
                 "text", "secret-reference", "number" -> {
                     val input = ui.field(field.label, if (initial.has(field.id)) initial.opt(field.id)?.toString().orEmpty() else "")
                     if (field.type == "number") input.inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL or InputType.TYPE_NUMBER_FLAG_SIGNED
                     reads[field.id] = { val text = input.text.toString(); if (field.type == "number" && text.isNotBlank()) text.toDoubleOrNull() ?: text else text }
-                    if (field.type == "secret-reference") ui.text(MoteI18n.text("仅填写服务器保存的凭据引用，不填写凭据本身。") + if (instance?.secretStatus?.optBoolean(field.id) == true) " " + MoteI18n.text("服务器已配置凭据。") else "", DesignTokens.fontMeta.toFloat())
+                    if (field.type == "secret-reference") ui.text(MoteI18n.text("仅填写服务器保存的凭据引用，不填写凭据本身。") + if (instance?.secretStatus?.optBoolean(field.id) == true) " " + MoteI18n.text("服务器已配置凭据。") else "", NativeFontRole.META)
                 }
                 else -> ui.text(MoteI18n.text("此配置字段暂不支持：{0}", field.label))
             }
-            if (field.description.isNotBlank()) ui.text(field.description, DesignTokens.fontMeta.toFloat())
+            if (field.description.isNotBlank()) ui.text(field.description, NativeFontRole.META)
         }
         if (instance == null && item.fields.isEmpty()) ui.text(MoteI18n.text("先创建实例，中央节点返回此插件的配置字段。"))
         fun collect() = JSONObject(initial.toString()).apply { reads.forEach { (id, read) -> val value = read(); if (value == null || value == "") remove(id) else put(id, value) } }
@@ -187,40 +187,40 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
     private fun memory() {
         val data = binding ?: return
         val admission = data.admission; val target = ui.card()
-        ui.text(MoteI18n.text("自动记忆"), DesignTokens.fontSection.toFloat(), target); ui.text(MoteI18n.text("控制自动提取与整合；原件、已有记忆与只读查询保留。独立回顾按自己的设置运行。"), parent = target)
+        ui.text(MoteI18n.text("自动记忆"), NativeFontRole.SECTION, target); ui.text(MoteI18n.text("控制自动提取与整合；原件、已有记忆与只读查询保留。独立回顾按自己的设置运行。"), parent = target)
         val desired = admission.getBoolean("desired"); var resetting = false
         val toggle = Switch(ui).apply {
             text = if (desired) MoteI18n.text("已选择启用") else MoteI18n.text("已选择暂停"); contentDescription = MoteI18n.text("自动记忆"); isChecked = desired; isEnabled = (if (desired) "pause" else "resume") in data.allowedActions
             setOnCheckedChangeListener { _, _ -> if (!resetting) { resetting = true; isChecked = desired; resetting = false; if (!ui.isWorking) submit(PluginControlClient.memoryAction(if (desired) "pause" else "resume", data.revision)) } }
         }; target.addView(toggle); MoteUi.styleTree(toggle)
         ui.text(admissionLabel(admission), parent = target)
-        ui.text(MoteI18n.text("排队 {0} · 运行 {1} · 检查点 {2} · 结果待确认 {3}", admission.getInt("queued"), admission.getInt("running"), admission.getInt("checkpointed"), admission.getInt("resultUnknown")), DesignTokens.fontSupport.toFloat(), target)
-        ui.text(MoteI18n.text("当前准入代次 {0} · 绑定代次 {1}", admission.getLong("generation"), data.generation), DesignTokens.fontMeta.toFloat(), target)
+        ui.text(MoteI18n.text("排队 {0} · 运行 {1} · 检查点 {2} · 结果待确认 {3}", admission.getInt("queued"), admission.getInt("running"), admission.getInt("checkpointed"), admission.getInt("resultUnknown")), NativeFontRole.SUPPORT, target)
+        ui.text(MoteI18n.text("当前准入代次 {0} · 绑定代次 {1}", admission.getLong("generation"), data.generation), NativeFontRole.META, target)
         admission.optString("blockedReason").takeIf(String::isNotBlank)?.let { ui.text(it, parent = target) }
         if (!desired) ui.text(MoteI18n.text("暂停期间的新资料只归档。恢复只处理新资料，不会自动补跑暂停期间的历史。"), parent = target)
         if (admission.getString("state") == "draining") ui.text(MoteI18n.text("已停止新增自动任务；已授权任务保留原范围与代次，完成后停用。"), parent = target)
         if (admission.getInt("resultUnknown") > 0) ui.text(MoteI18n.text("外部结果尚未确认，停止请求不代表远端工作已结束。"), parent = target)
         if ("stop" in data.allowedActions) ui.button(MoteI18n.text("立即停止"), parent = target) { screens.confirm(MoteI18n.text("立即停止自动记忆"), MoteI18n.text("撤销旧任务继续写入的权限，并请求取消运行中的自动记忆任务。外部工作可能无法立刻停止，未确认结果会单独保留。")) { submit(PluginControlClient.memoryAction("stop", data.revision)) } }
-        ui.text(MoteI18n.text("当前记忆方案") + " · " + data.activePlan.name, DesignTokens.fontSection.toFloat())
+        ui.text(MoteI18n.text("当前记忆方案") + " · " + data.activePlan.name, NativeFontRole.SECTION)
         ui.text(MoteI18n.text("准备与生效分开执行。只有范围、正文与索引核验通过后，才能切换写入与查询绑定。"))
-        data.plans.forEach { plan -> val card = ui.card(); ui.text(plan.name, DesignTokens.fontSection.toFloat(), card); ui.text(if (plan.mode == "engine") MoteI18n.text("完整引擎") else MoteI18n.text("模块组合"), parent = card); capabilities(plan.capabilities, card); if (plan.reason.isNotBlank()) ui.text(plan.reason, parent = card)
+        data.plans.forEach { plan -> val card = ui.card(); ui.text(plan.name, NativeFontRole.SECTION, card); ui.text(if (plan.mode == "engine") MoteI18n.text("完整引擎") else MoteI18n.text("模块组合"), parent = card); capabilities(plan.capabilities, card); if (plan.reason.isNotBlank()) ui.text(plan.reason, parent = card)
             if (plan.id == data.activePlan.id) ui.text(MoteI18n.text("当前"), parent = card)
             else ui.button(MoteI18n.text("预览更换"), parent = card) { prepare(plan, data) }.isEnabled = plan.available && "prepare" in plan.allowedActions && "prepare" in data.allowedActions
         }
         ui.disclosure(MoteI18n.text("高级：当前模块与绑定")) { card ->
             ui.text(MoteI18n.text("绑定版本") + " · " + data.revision, parent = card)
-            data.modules.forEach { module -> ui.text(moduleLabel(module.getString("stage")) + " · " + module.getString("name") + " · " + capability(module.getString("state")), parent = card); module.optString("instanceId").takeIf(String::isNotBlank)?.let { ui.text(it, DesignTokens.fontMeta.toFloat(), card) }; module.optString("reason").takeIf(String::isNotBlank)?.let { ui.text(it, parent = card) } }
+            data.modules.forEach { module -> ui.text(moduleLabel(module.getString("stage")) + " · " + module.getString("name") + " · " + capability(module.getString("state")), parent = card); module.optString("instanceId").takeIf(String::isNotBlank)?.let { ui.text(it, NativeFontRole.META, card) }; module.optString("reason").takeIf(String::isNotBlank)?.let { ui.text(it, parent = card) } }
             ui.text(MoteI18n.text("独立审查与授权由 Mote 保留。只展示实际注册与核验过的模块。"), parent = card)
         }
         data.preparation?.let { preparation(it, data) }
     }
     private fun prepare(plan: MemoryPlan, data: MemoryBinding) {
         close(); listVisible = false; body.removeAllViews(); screens.setBack { load() }
-        ui.text(MoteI18n.text("更换方案预览"), DesignTokens.fontTitleMobile.toFloat()); ui.text(data.activePlan.name + " → " + plan.name, DesignTokens.fontSection.toFloat())
+        ui.text(MoteI18n.text("更换方案预览"), NativeFontRole.TITLE_MOBILE); ui.text(data.activePlan.name + " → " + plan.name, NativeFontRole.SECTION)
         ui.text(MoteI18n.text("更换正文权威时须迁移记忆正文、修正与删除标记，再准备索引。同一正文权威只更换检索时可重建索引。准备完成不会自动生效。"))
         ui.text(MoteI18n.text("迁移全部 Mote 保留记忆正文及更正/替代状态。外部原生审计历史和引擎图保留在旧实例及运行备份中，不承诺跨引擎迁移。"))
         capabilities(plan.capabilities, ui.card()); val scope = ui.field(MoteI18n.text("历史授权范围"), "default")
-        ui.text(MoteI18n.text("范围必须已获授权；准备不包含未授权历史或暂停期间的新提取。"), DesignTokens.fontMeta.toFloat())
+        ui.text(MoteI18n.text("范围必须已获授权；准备不包含未授权历史或暂停期间的新提取。"), NativeFontRole.META)
         val fee = CheckBox(ui).apply { text = MoteI18n.text("已确认范围。真实接入可能产生模型与 Embedding 费用，费用以实际服务用量为准。") }; body.addView(fee); MoteUi.styleTree(fee)
         ui.text(MoteI18n.text("生效前会冻结旧方案新增写入，排空并核对尾部任务，验证新绑定；既有查询仍读取固定旧版本。"))
         val start = ui.button(MoteI18n.text("开始准备"), true) { val selectedScope = scope.text.toString().trim(); require(fee.isChecked && selectedScope.isNotBlank()); submit(PluginControlClient.prepare(plan.id, selectedScope, data.revision, fee.isChecked)) { load() } }.apply { isEnabled = false }
@@ -228,7 +228,7 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
         ui.button(MoteI18n.text("取消")) { load() }
     }
     private fun preparation(value: JSONObject, data: MemoryBinding) {
-        val target = ui.card(); ui.text(MoteI18n.text("方案准备") + " · " + preparationState(value.getString("state")), DesignTokens.fontSection.toFloat(), target)
+        val target = ui.card(); ui.text(MoteI18n.text("方案准备") + " · " + preparationState(value.getString("state")), NativeFontRole.SECTION, target)
         ui.text((if (value.getString("kind") == "content-migration") MoteI18n.text("正文迁移与索引准备") else MoteI18n.text("同一正文权威的索引准备")) + " · " + value.getString("scope"), parent = target)
         ui.text(MoteI18n.text("当前阶段：{0}", value.getString("phase")), parent = target)
         ui.text((if (value.getBoolean("oldAdmissionFrozen")) MoteI18n.text("旧方案已冻结新增写入，仍为既有查询提供读取。") else MoteI18n.text("当前方案继续按原绑定服务。")) + MoteI18n.text(" 待核对尾部任务：{0}", value.getInt("tail")), parent = target)
@@ -239,10 +239,10 @@ internal class CentralPlugins(private val screens: CentralScreens, private val r
         listOf("retry" to MoteI18n.text("重试准备"), "cancel" to MoteI18n.text("取消准备"), "activate" to MoteI18n.text("设为当前方案")).forEach { (action, label) ->
             if (action in actions) ui.button(label, action == "activate", target) { submit(PluginControlClient.memoryAction(action, data.revision, value.getString("operationId"))) }.isEnabled = action != "activate" || value.getString("state") == "verified" && "activate" in data.allowedActions
         }
-        ui.text(MoteI18n.text("准备失败或取消不会自动切换。历史范围的迁移不会授权新的自动提取。"), DesignTokens.fontMeta.toFloat(), target)
+        ui.text(MoteI18n.text("准备失败或取消不会自动切换。历史范围的迁移不会授权新的自动提取。"), NativeFontRole.META, target)
     }
-    private fun source(value: JSONObject, target: LinearLayout) { ui.text(value.getString("repository"), DesignTokens.fontSupport.toFloat(), target); ui.text(MoteI18n.text("固定版本") + " · " + value.getString("tag") + " · " + value.getString("commit"), DesignTokens.fontMeta.toFloat(), target); ui.text(MoteI18n.text("完整性摘要") + " · " + value.getString("digest"), DesignTokens.fontMeta.toFloat(), target) }
-    private fun capabilities(values: List<PluginCapability>, target: LinearLayout) { values.forEach { ui.text(it.id + " · " + capability(it.state), DesignTokens.fontSupport.toFloat(), target); if (it.reason.isNotBlank()) ui.text(it.reason, DesignTokens.fontMeta.toFloat(), target) } }
+    private fun source(value: JSONObject, target: LinearLayout) { ui.text(value.getString("repository"), NativeFontRole.SUPPORT, target); ui.text(MoteI18n.text("固定版本") + " · " + value.getString("tag") + " · " + value.getString("commit"), NativeFontRole.META, target); ui.text(MoteI18n.text("完整性摘要") + " · " + value.getString("digest"), NativeFontRole.META, target) }
+    private fun capabilities(values: List<PluginCapability>, target: LinearLayout) { values.forEach { ui.text(it.id + " · " + capability(it.state), NativeFontRole.SUPPORT, target); if (it.reason.isNotBlank()) ui.text(it.reason, NativeFontRole.META, target) } }
     private fun capability(state: String) = when (state) { "verified" -> MoteI18n.text("已核验"); "unsupported" -> MoteI18n.text("不支持"); else -> MoteI18n.text("尚未核验") }
     private fun moduleLabel(stage: String) = when (stage) { "extract" -> MoteI18n.text("记忆提取"); "review" -> MoteI18n.text("独立审查"); "integrate" -> MoteI18n.text("记忆整合"); "repository" -> MoteI18n.text("记忆正文"); "retrieval" -> MoteI18n.text("记忆检索"); else -> stage }
     private fun admissionLabel(value: JSONObject) = when (value.getString("state")) { "enabled" -> MoteI18n.text("自动记忆已启用"); "draining" -> MoteI18n.text("停用中：仍有 {0} 个已授权任务", value.getInt("queued") + value.getInt("running") + value.getInt("checkpointed")); "stopping" -> MoteI18n.text("正在立即停止"); "blocked" -> MoteI18n.text("需要处理"); else -> MoteI18n.text("自动记忆已暂停") }

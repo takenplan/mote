@@ -36,6 +36,7 @@ class NavigationInstrumentedTest {
     private fun editor(activity: MainActivity, hint: String) = views(activity.window.decorView)
         .filterIsInstance<EditText>().single { it.hint?.toString() == hint }
     private fun tab(activity: MainActivity, label: String) {
+        if (label in listOf("首页", "概览")) { activity.openGeneratedHome(); return }
         if (label in listOf("随手记", "记录", "记录屏幕")) {
             activity.openGeneratedAdd(if (label == "记录屏幕") MoteAddAction.SCREEN else MoteAddAction.NOTE)
         } else {
@@ -43,7 +44,7 @@ class NavigationInstrumentedTest {
             val rows = views(activity.window.decorView)
             // Embedded Ask owns its header; use the visible Home tab to reach local Settings.
             if (rows.filterIsInstance<TextView>().none { it.isShown && it.isClickable && it.text.toString() == current }) {
-                rows.single { it.isShown && it.tag == "primary:TODAY" }.performClick()
+                rows.single { it.isShown && it.tag == "primary:LIBRARY" }.performClick()
             }
             views(activity.window.decorView).filterIsInstance<TextView>()
                 .single { it.isShown && it.isClickable && it.text.toString() == current }.performClick()
@@ -86,7 +87,7 @@ class NavigationInstrumentedTest {
             scenario.onActivity { originalNavigation[0] = views(it.window.decorView).single { view -> view is MotePrimaryNavigation } }
             val askMonitor = instrumentation.addMonitor("dev.mote.collector.AskActivity", null, true)
             val centralMonitor = instrumentation.addMonitor(CentralActivity::class.java.name, null, true)
-            try { for (label in listOf("内容", "问一问", "首页", "问一问", "内容", "首页")) {
+            try { for (label in listOf("内容", "问一问", "来源", "活动", "问一问", "内容")) {
                 instrumentation.waitForIdleSync()
                 var x = 0f; var y = 0f
                 scenario.onActivity { activity ->
@@ -122,7 +123,7 @@ class NavigationInstrumentedTest {
             scenario.onActivity { tab(it, "问一问") }
             scenario.onActivity { activity ->
                 val tabs = views(activity.window.decorView).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }
-                assertEquals(listOf("首页", "内容", "问一问"), tabs.map { it.text.toString() })
+                assertEquals(listOf("内容", "问一问", "来源", "活动"), tabs.map { it.text.toString() })
                 assertTrue(tabs.single { it.text == "问一问" }.isSelected)
                 assertFalse(views(activity.window.decorView).filterIsInstance<TextView>().any { it.text == "打开对话" })
                 assertFalse(views(activity.window.decorView).any { it.isShown && it.contentDescription == "返回上一页" })
@@ -132,7 +133,7 @@ class NavigationInstrumentedTest {
             scenario.onActivity { activity ->
                 assertTrue(views(activity.window.decorView).single { it.tag == "primary:ASK" }.isSelected)
                 activity.onBackPressed()
-                assertTrue(views(activity.window.decorView).single { it.tag == "primary:TODAY" }.isSelected)
+                assertTrue(views(activity.window.decorView).single { it.tag == "primary:LIBRARY" }.isSelected)
                 assertFalse(activity.isFinishing)
             }
         } } finally { settings.save(previous, confirmCentralEndpoint = true) }
@@ -173,7 +174,7 @@ class NavigationInstrumentedTest {
             // Add belongs to Home/Content. Finish the real Home transition and its draft decision first.
             scenario.onActivity { activity ->
                 if (views(activity.window.decorView).none { it.isShown && it.contentDescription == MoteI18n.text("添加内容") }) {
-                    views(activity.window.decorView).single { it.isShown && it.tag == "primary:TODAY" }.performClick()
+                    views(activity.window.decorView).single { it.isShown && it.tag == "primary:LIBRARY" }.performClick()
                 }
             }
             instrumentation.waitForIdleSync()
@@ -230,7 +231,7 @@ class NavigationInstrumentedTest {
                 tab(activity, "设置"); menu(activity, "采集与存储")
                 editor(activity, "30").setText("47")
                 views(activity.window.decorView).single { it.tag == "primary:ASK" }.performClick()
-                assertTrue(views(activity.window.decorView).single { it.tag == "primary:TODAY" }.isSelected)
+                assertTrue(views(activity.window.decorView).single { it.tag == "primary:SOURCES" }.isSelected)
             }
             instrumentation.waitForIdleSync()
             instrumentation.runOnMainSync {

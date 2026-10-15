@@ -20,89 +20,130 @@ import android.view.ViewGroup
 import android.widget.*
 
 /** Shared, native presentation for the collector and its detail screens. */
-object MoteUi {
-    val background = DesignTokens.background
-    val ink = DesignTokens.ink
-    val muted = DesignTokens.muted
-    val accent = DesignTokens.accent
-    val tint = DesignTokens.tint
-    val border = DesignTokens.border
-    val controlBorder = DesignTokens.controlBorder
-    val divider = DesignTokens.divider
+internal object MoteUi {
+    val background get() = MoteTheme.background
+    val ink get() = MoteTheme.ink
+    val muted get() = MoteTheme.muted
+    val accent get() = MoteTheme.accent
+    val tint get() = MoteTheme.tint
+    val border get() = MoteTheme.border
+    val controlBorder get() = MoteTheme.controlBorder
+    val divider get() = MoteTheme.divider
 
-    const val containerRadius = DesignTokens.radiusContainer
-    const val readingRadius = DesignTokens.radiusReading
-    const val actionRadius = DesignTokens.radiusControl
+    val containerRadius get() = MoteTheme.radiusContainer
+    val readingRadius get() = MoteTheme.radiusReading
+    val actionRadius get() = MoteTheme.radiusControl
 
-    /** Role sizes scale with the system font; callers choose meaning, never fit-to-space. */
-    fun type(view: TextView, size: Int = DesignTokens.fontBody, medium: Boolean = false) = view.apply {
+    /** Typography and color replay only authored roles; business controls keep identity and listeners. */
+    fun type(view: TextView, role: NativeFontRole = NativeFontRole.BODY, medium: Boolean = false) = view.apply {
+        NativePresentationStyles.bind(this, "type") { value -> applyType(value as TextView, role.size(), medium, role.isHeading) }
+    }
+    fun type(view: TextView, size: Int, medium: Boolean = false) = view.apply {
+        NativePresentationStyles.bind(this, "type") { value -> applyType(value as TextView, size, medium, false) }
+    }
+    private fun applyType(view: TextView, size: Int, medium: Boolean, heading: Boolean) = view.apply {
         textSize = size.toFloat()
-        typeface = Typeface.create(if (medium) "sans-serif-medium" else "sans-serif", Typeface.NORMAL)
-        setLineSpacing(0f, 1.25f)
+        typeface = Typeface.create(Typeface.create(MoteTheme.fontFamily(heading), Typeface.NORMAL), if (heading) MoteTheme.titleWeight else if (medium) MoteTheme.sectionWeight else MoteTheme.bodyWeight, false)
+        setLineSpacing(0f, MoteTheme.lineBody); letterSpacing = if (heading) MoteTheme.letterTitle else 0f
         setTag(R.id.mote_type, size)
     }
-
-    fun shape(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true, strokeColor: Int = border) = GradientDrawable().apply {
+    fun textColor(view: TextView, role: NativeColorRole) { NativePresentationStyles.bind(view, "text-color") { (it as TextView).setTextColor(role.color()) } }
+    fun backgroundColor(view: View, role: NativeColorRole) { NativePresentationStyles.bind(view, "background-color") { it.setBackgroundColor(role.color()) } }
+    fun shape(context: Context, fill: NativeColorRole = NativeColorRole.SURFACE, radius: NativeRadiusRole = NativeRadiusRole.CONTAINER, outline: Boolean? = null, strokeColor: NativeColorRole = NativeColorRole.BORDER): GradientDrawable =
+        NativeThemeShape(context.resources.displayMetrics.density, fill, { radius.dp() }, outline, strokeColor)
+    fun shape(context: Context, fill: NativeColorRole, radius: Int, outline: Boolean? = null, strokeColor: NativeColorRole = NativeColorRole.BORDER): GradientDrawable =
+        NativeThemeShape(context.resources.displayMetrics.density, fill, { radius }, outline, strokeColor)
+    fun shape(context: Context, fill: Int, radius: Int = containerRadius, outline: Boolean = true, strokeColor: Int = border) = GradientDrawable().apply {
         setColor(fill); cornerRadius = context.moteDp(radius).toFloat()
-        if (outline) setStroke(context.moteDp(DesignTokens.borderWidth), strokeColor)
+        if (outline) setStroke(context.moteDp(MoteTheme.borderWidth), strokeColor)
     }
-
-    fun clickable(context: Context, fill: Int = DesignTokens.surface, radius: Int = containerRadius, outline: Boolean = true, strokeColor: Int = border) = RippleDrawable(
-        ColorStateList.valueOf(Color.argb(24, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius, outline, strokeColor), shape(context, Color.WHITE, radius, false)
+    fun clickable(context: Context, fill: NativeColorRole = NativeColorRole.SURFACE, radius: NativeRadiusRole = NativeRadiusRole.CONTAINER, outline: Boolean? = null, strokeColor: NativeColorRole = NativeColorRole.BORDER) = RippleDrawable(
+        ColorStateList.valueOf(Color.argb(32, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius, outline, strokeColor), shape(context, NativeColorRole.SURFACE, radius, false)
+    )
+    fun clickable(context: Context, fill: NativeColorRole, radius: Int, outline: Boolean? = null, strokeColor: NativeColorRole = NativeColorRole.BORDER) = RippleDrawable(
+        ColorStateList.valueOf(Color.argb(32, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius, outline, strokeColor), shape(context, NativeColorRole.SURFACE, radius, false)
+    )
+    fun clickable(context: Context, fill: Int, radius: Int = containerRadius, outline: Boolean = true, strokeColor: Int = border) = RippleDrawable(
+        ColorStateList.valueOf(Color.argb(32, Color.red(accent), Color.green(accent), Color.blue(accent))), shape(context, fill, radius, outline, strokeColor), shape(context, NativeColorRole.SURFACE, radius, false)
     )
 
     enum class ButtonRole { PRIMARY, SECONDARY, TEXT }
 
     fun button(button: Button, primary: Boolean = false, radius: Int = actionRadius) = action(button, if (primary) ButtonRole.PRIMARY else ButtonRole.SECONDARY, radius)
 
-    fun action(button: Button, role: ButtonRole = ButtonRole.SECONDARY, radius: Int = actionRadius) = button.apply {
+    fun action(button: Button, role: ButtonRole = ButtonRole.SECONDARY, radius: Int = actionRadius, applyPadding: Boolean = true): Button = button.apply {
+        NativePresentationStyles.remember(this, "action") { action(it as Button, role, MoteTheme.radiusControl, false) }
         val primary = role == ButtonRole.PRIMARY
-        isAllCaps = false; type(this, DesignTokens.fontAction, medium = true); minHeight = context.moteDp(DesignTokens.controlHeight)
-        setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, if (primary) Color.WHITE else accent)))
+        isAllCaps = false; type(this, NativeFontRole.ACTION, medium = true); minHeight = context.moteDp(MoteTheme.controlHeight)
+        minimumHeight = minHeight
+        setTextColor(ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(muted, if (primary) MoteTheme.primaryInk else ink)))
         setTag(R.id.mote_primary, primary)
         setTag(R.id.mote_button_role, role)
         backgroundTintList = null; background = android.graphics.drawable.StateListDrawable().apply {
             addState(intArrayOf(-android.R.attr.state_enabled), shape(context, if (role == ButtonRole.TEXT) Color.TRANSPARENT else MoteUi.background, radius, role != ButtonRole.TEXT, controlBorder))
-            addState(intArrayOf(), clickable(context, when (role) { ButtonRole.PRIMARY -> accent; ButtonRole.SECONDARY -> DesignTokens.surface; ButtonRole.TEXT -> Color.TRANSPARENT }, radius, role == ButtonRole.SECONDARY, controlBorder))
+            addState(intArrayOf(), clickable(context, when (role) { ButtonRole.PRIMARY -> MoteTheme.primaryBackground; ButtonRole.SECONDARY -> MoteTheme.surface; ButtonRole.TEXT -> Color.TRANSPARENT }, radius, role == ButtonRole.SECONDARY, controlBorder))
         }
-        setPadding(context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceInline))
+        if (applyPadding) setPadding(context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceInline))
     }
 
-    fun field(field: EditText) = field.apply {
-        setTextColor(ink); setHintTextColor(muted); type(this, DesignTokens.fontBody)
+    fun field(field: EditText): EditText = field.apply {
+        NativePresentationStyles.remember(this, "field") { value -> (value as EditText).apply {
+            MoteUi.textColor(this, NativeColorRole.INK); setHintTextColor(MoteTheme.muted); minHeight = context.moteDp(MoteTheme.controlHeight); minimumHeight = minHeight
+        } }
+        textColor(this, NativeColorRole.INK); setHintTextColor(muted); type(this, NativeFontRole.BODY)
         backgroundTintList = null
-        background = shape(context, DesignTokens.surface, DesignTokens.radiusControl, true, controlBorder)
-        setPadding(context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceItem), context.moteDp(DesignTokens.spacePanel), context.moteDp(DesignTokens.spaceItem))
-        minHeight = context.moteDp(DesignTokens.controlHeight)
+        background = shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.CONTROL_BORDER)
+        setPadding(context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem), context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem))
+        minHeight = context.moteDp(MoteTheme.controlHeight)
+        minimumHeight = minHeight
     }
 
-    fun select(spinner: Spinner) = spinner.apply {
+    fun select(spinner: Spinner): Spinner = spinner.apply {
+        NativePresentationStyles.remember(this, "select") { select(it as Spinner) }
+        val existing = adapter
+        if (existing != null && existing !is NativeSpinnerAdapter) {
+            val selected = selectedItemPosition
+            adapter = NativeSpinnerAdapter(existing)
+            if (selected >= 0) setSelection(selected)
+        }
         backgroundTintList = null
         background = android.graphics.drawable.LayerDrawable(arrayOf(
-            shape(context, DesignTokens.surface, actionRadius, true, controlBorder),
+            shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.CONTROL_BORDER),
             MoteNavigationIcon(context, "dropdown", false)
         )).apply {
             setLayerSize(1, context.moteDp(20), context.moteDp(20))
             setLayerGravity(1, Gravity.END or Gravity.CENTER_VERTICAL)
-            setLayerInset(1, 0, 0, context.moteDp(DesignTokens.spaceInline), 0)
+            setLayerInset(1, 0, 0, context.moteDp(MoteTheme.spaceInline), 0)
         }
-        setPadding(context.moteDp(DesignTokens.spaceInline), 0, context.moteDp(36), 0)
-        minimumHeight = context.moteDp(DesignTokens.controlHeight)
+        setPadding(context.moteDp(MoteTheme.spaceInline), 0, context.moteDp(36), 0)
+        minimumHeight = context.moteDp(MoteTheme.controlHeight)
+        setPopupBackgroundDrawable(shape(context, NativeColorRole.SURFACE_RAISED))
     }
 
     fun styleSelects(view: View) {
         if (view is Spinner) select(view)
-        else if (view is ViewGroup) for (index in 0 until view.childCount) styleSelects(view.getChildAt(index))
+        else {
+            if (view is CompoundButton) compound(view)
+            if (view is ProgressBar) progress(view)
+            if (view is ViewGroup) for (index in 0 until view.childCount) styleSelects(view.getChildAt(index))
+        }
     }
+    private fun compound(view: CompoundButton) { NativePresentationStyles.bind(view, "compound") { value -> (value as CompoundButton).apply {
+        setTextColor(MoteTheme.ink); type(this, NativeFontRole.BODY); buttonTintList = ColorStateList.valueOf(MoteTheme.accent); minHeight = context.moteDp(MoteTheme.controlHeight)
+    } } }
+    private fun progress(view: ProgressBar) { NativePresentationStyles.bind(view, "progress") { value -> (value as ProgressBar).apply {
+        indeterminateTintList = ColorStateList.valueOf(MoteTheme.accent); progressTintList = ColorStateList.valueOf(MoteTheme.accent)
+    } } }
 
     /** A selected scope or retention choice must remain fully readable, including at 130%. */
     fun choiceAdapter(context: Context, labels: List<String>) = object : ArrayAdapter<String>(context, android.R.layout.simple_spinner_dropdown_item, labels) {
         private fun present(view: View): View = view.apply {
             (this as? TextView)?.let {
-                type(it, DesignTokens.fontBody); it.setTextColor(ink)
+                type(it, NativeFontRole.BODY); textColor(it, NativeColorRole.INK)
+                MoteUi.backgroundColor(it, NativeColorRole.SURFACE_RAISED)
                 it.isSingleLine = false; it.maxLines = Int.MAX_VALUE; it.ellipsize = null
-                it.gravity = Gravity.CENTER_VERTICAL; it.minHeight = context.moteDp(DesignTokens.controlHeight)
-                it.setPadding(context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline), context.moteDp(DesignTokens.spaceInline))
+                it.gravity = Gravity.CENTER_VERTICAL; it.minHeight = context.moteDp(MoteTheme.controlHeight)
+                it.setPadding(context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spaceInline))
             }
         }
         override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(super.getView(position, convertView, parent))
@@ -115,7 +156,7 @@ object MoteUi {
         if (multiline) { minLines = 2; gravity = Gravity.TOP }
         inputType = if (multiline) android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE else type
         // Password input applies a platform monospace face; retain masking and the shared type face.
-        typeface = Typeface.create("sans-serif", Typeface.NORMAL)
+        typeface = Typeface.create(MoteTheme.fontFamily(false), Typeface.NORMAL)
     }
 
     /** Apply the same controls to dynamic native lists and dialog forms. */
@@ -131,21 +172,35 @@ object MoteUi {
                     (view.parent as? LinearLayout)?.isBaselineAligned = false
             }
             is EditText -> field(view)
+            is ProgressBar -> progress(view)
             is TextView -> if (view.getTag(R.id.mote_type) == null) {
                 val dialogTitle = view.resources.getIdentifier("alertTitle", "id", "android")
-                type(view, if (view.id == dialogTitle) DesignTokens.fontTitleMobile else DesignTokens.fontBody, view.id == dialogTitle)
-                view.setTextColor(ink)
+                type(view, if (view.id == dialogTitle) NativeFontRole.TITLE_MOBILE else NativeFontRole.BODY, view.id == dialogTitle)
+                textColor(view, NativeColorRole.INK)
             }
         }
-        if (view is CompoundButton) { view.setTextColor(ink); type(view, DesignTokens.fontBody); view.buttonTintList = ColorStateList.valueOf(accent); view.minHeight = view.context.moteDp(DesignTokens.controlHeight) }
+        if (view is CompoundButton) compound(view)
         if (view is ViewGroup) for (index in 0 until view.childCount) styleTree(view.getChildAt(index))
     }
+}
+
+/** Native adapters retain their data and selection semantics while the provider owns presentation. */
+private class NativeSpinnerAdapter(private val delegate: SpinnerAdapter) : SpinnerAdapter by delegate {
+    private fun present(view: View): View = view.apply {
+        if (this is TextView) {
+            MoteUi.type(this); MoteUi.textColor(this, NativeColorRole.INK); MoteUi.backgroundColor(this, NativeColorRole.SURFACE_RAISED)
+            minHeight = context.moteDp(MoteTheme.controlHeight)
+            isSingleLine = false; maxLines = Int.MAX_VALUE; ellipsize = null
+        }
+    }
+    override fun getView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getView(position, convertView, parent))
+    override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View = present(delegate.getDropDownView(position, convertView, parent))
 }
 
 fun Context.moteDp(value: Int) = (value * resources.displayMetrics.density).toInt()
 
 /** Small stroke icons keep the navigation legible across system font and emoji versions. */
-class MoteNavigationIcon(context: Context, private val kind: String, active: Boolean) : Drawable() {
+class MoteNavigationIcon(context: Context, private val kind: String, private val active: Boolean) : Drawable() {
     private val size = context.moteDp(23)
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = if (active) MoteUi.accent else MoteUi.muted
@@ -154,6 +209,7 @@ class MoteNavigationIcon(context: Context, private val kind: String, active: Boo
     override fun getIntrinsicWidth() = size
     override fun getIntrinsicHeight() = size
     override fun draw(canvas: Canvas) {
+        paint.color = if (active) MoteTheme.accent else MoteTheme.muted
         canvas.save(); canvas.translate(bounds.left.toFloat(), bounds.top.toFloat()); canvas.scale(bounds.width() / 24f, bounds.height() / 24f)
         fun line(x: Float, y: Float, xx: Float, yy: Float) = canvas.drawLine(x, y, xx, yy, paint)
         fun path(vararg points: Float) {
@@ -195,27 +251,34 @@ class MoteNavigationIcon(context: Context, private val kind: String, active: Boo
 }
 
 /** One primary navigation, including while login or a detail screen is visible. */
-class MotePrimaryNavigation(private val activity: Activity, onSelect: (MotePrimaryTab) -> Unit) : LinearLayout(activity) {
+class MotePrimaryNavigation(private val activity: Activity, private val onSelect: (MotePrimaryTab) -> Unit) : LinearLayout(activity) {
     private val items = linkedMapOf<MotePrimaryTab, TextView>()
-    init {
-        orientation = HORIZONTAL; setPadding(activity.moteDp(10), activity.moteDp(7), activity.moteDp(10), activity.moteDp(9))
-        setBackgroundColor(Color.WHITE)
+    private var selected = MotePrimaryTab.LIBRARY
+    init { refreshPresentation() }
+    fun refreshPresentation() {
+        removeAllViews(); items.clear()
+        val rail = NativeUiPacks.registry.layout().navigation == "adaptive" && resources.configuration.screenWidthDp >= 600
+        orientation = if (rail) VERTICAL else HORIZONTAL
+        setPadding(activity.moteDp(8), activity.moteDp(8), activity.moteDp(8), activity.moteDp(8))
+        MoteUi.backgroundColor(this, NativeColorRole.SIDEBAR)
         contentDescription = MoteI18n.text("主导航")
-        MotePrimaryTab.entries.forEach { tab ->
+        MoteNavigation.primaryTabs().forEach { tab ->
             val item = TextView(activity).apply {
-                text = MoteI18n.text(tab.titleKey); MoteUi.type(this, DesignTokens.fontMeta); gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
+                text = MoteI18n.text(tab.titleKey); MoteUi.type(this, NativeFontRole.META); gravity = Gravity.CENTER; minHeight = activity.moteDp(58)
                 compoundDrawablePadding = activity.moteDp(5); isFocusable = true; tag = "primary:${tab.name}"
                 contentDescription = MoteI18n.text(tab.titleKey); setOnClickListener { onSelect(tab) }
             }
             items[tab] = item
-            addView(item, LayoutParams(0, -2, 1f).apply { marginStart = activity.moteDp(2); marginEnd = activity.moteDp(2) })
+            addView(item, (if (rail) LayoutParams(activity.moteDp(88), -2) else LayoutParams(0, -2, 1f)).apply { marginStart = activity.moteDp(2); marginEnd = activity.moteDp(2) })
         }
+        select(selected)
     }
     fun select(tab: MotePrimaryTab) {
+        selected = tab
         items.forEach { (destination, view) ->
             val active = destination == tab
             view.isSelected = active; view.setTextColor(if (active) MoteUi.accent else MoteUi.muted)
-            view.background = MoteUi.clickable(activity, DesignTokens.surface, outline = false)
+            view.background = MoteUi.clickable(activity, NativeColorRole.SIDEBAR, outline = false)
             view.setCompoundDrawablesWithIntrinsicBounds(null, MoteNavigationIndicator(activity, destination.icon, active), null, null)
         }
     }
@@ -227,7 +290,7 @@ private class MoteNavigationIndicator(context: Context, kind: String, private va
     private val height = context.moteDp(32)
     private val glyphSize = context.moteDp(23)
     private val glyph = MoteNavigationIcon(context, kind, active)
-    private val indicator = MoteUi.shape(context, MoteUi.tint, DesignTokens.radiusIndicator, false)
+    private val indicator = MoteUi.shape(context, NativeColorRole.TINT, NativeRadiusRole.INDICATOR, false)
     override fun getIntrinsicWidth() = width
     override fun getIntrinsicHeight() = height
     override fun draw(canvas: Canvas) {
@@ -253,27 +316,27 @@ fun Activity.openMotePrimary(tab: MotePrimaryTab) {
 private fun Activity.detailTab(): MotePrimaryTab? = when (this) {
     is MainActivity, is CentralActivity -> null
     is CaptureRecordsActivity, is FileContentActivity -> MotePrimaryTab.LIBRARY
-    is CalendarActionsActivity -> MotePrimaryTab.TODAY
-    else -> MotePrimaryTab.TODAY
+    is SourcesActivity, is FileTaskActivity, is ConnectionActivity -> MotePrimaryTab.SOURCES
+    else -> MotePrimaryTab.LIBRARY
 }
 
 fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: String? = null, onBack: () -> Unit = { finish() }): LinearLayout {
     val body = LinearLayout(this).apply {
         orientation = LinearLayout.VERTICAL
-        setPadding(moteDp(DesignTokens.spacePage), moteDp(DesignTokens.spaceItem), moteDp(DesignTokens.spacePage), moteDp(DesignTokens.spaceGroup))
+        setPadding(moteDp(MoteTheme.spacePage), moteDp(MoteTheme.spaceItem), moteDp(MoteTheme.spacePage), moteDp(MoteTheme.spaceGroup))
     }
-    val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(MoteUi.background); moteInsets() }
+    val root = NativeAppShell(this).apply { moteInsets() }
     val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
     header.addView(TextView(this).apply {
         text = if (title == null) "‹  " + MoteI18n.text("返回上级") else "‹"
-        MoteUi.type(this, DesignTokens.fontAction); setTextColor(MoteUi.accent)
+        MoteUi.type(this, NativeFontRole.ACTION); MoteUi.textColor(this, NativeColorRole.ACCENT)
         gravity = Gravity.CENTER_VERTICAL; minHeight = moteDp(48)
         setPadding(moteDp(16), moteDp(4), moteDp(16), moteDp(4))
         contentDescription = MoteI18n.text("返回上一页"); isFocusable = true; setOnClickListener { onBack() }
     }, if (title == null) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(moteDp(48), -2))
     if (title != null) header.addView(TextView(this).apply {
-        text = title; tag = "detail-title"; MoteUi.type(this, DesignTokens.fontAppbar, medium = true); setTextColor(MoteUi.ink)
-        setPadding(0, moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spaceInline))
+        text = title; tag = "detail-title"; MoteUi.type(this, NativeFontRole.APPBAR, medium = true); MoteUi.textColor(this, NativeColorRole.INK)
+        setPadding(0, moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spaceInline))
     }, LinearLayout.LayoutParams(0, -2, 1f))
     // Content and source tasks share Add; maintenance pages keep their configuration duty.
     val allowsAdd = this is CaptureRecordsActivity || this is FileContentActivity || this is FileTaskActivity || this is SourcesActivity
@@ -282,9 +345,9 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
         text = MoteI18n.text("添加"); contentDescription = MoteI18n.text("添加内容")
         setOnClickListener { showMoteAddActions() }
     }), LinearLayout.LayoutParams(-2, -2).apply { marginEnd = moteDp(14) })
-    root.addView(header)
-    root.addView(ScrollView(this).apply { isFillViewport = true; addView(body) }, LinearLayout.LayoutParams(-1, 0, 1f))
-    if (primary != null) root.addView(MotePrimaryNavigation(this) { openMotePrimary(it) }.apply { select(primary) })
+    root.header(header)
+    root.content(ScrollView(this).apply { isFillViewport = true; addView(body) })
+    if (primary != null) root.navigation(MotePrimaryNavigation(this) { openMotePrimary(it) }.apply { select(primary) })
     setContentView(root)
     return body
 }
@@ -292,11 +355,12 @@ fun Activity.moteDetailPage(primary: MotePrimaryTab? = detailTab(), title: Strin
 /** Dynamic dialogs use the same fields/buttons and outside-field keyboard dismissal. */
 class MoteDialogBuilder(context: Context) : android.app.AlertDialog.Builder(context) {
     override fun create(): android.app.AlertDialog = super.create().also { dialog ->
+        dialogs.add(java.lang.ref.WeakReference(dialog))
         val window = dialog.window ?: return@also
         window.decorView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
         override fun onViewDetachedFromWindow(view: View) = Unit
         override fun onViewAttachedToWindow(view: View) {
-        window.setBackgroundDrawable(MoteUi.shape(context, Color.WHITE, MoteUi.readingRadius))
+        window.setBackgroundDrawable(MoteUi.shape(context, NativeColorRole.SURFACE_RAISED, NativeRadiusRole.READING))
         MoteUi.styleTree(window.decorView)
         // Some platform dialogs wrap stacked actions in a ScrollView whose
         // minimum height reserves only one action. Keep every styled action
@@ -335,6 +399,21 @@ class MoteDialogBuilder(context: Context) : android.app.AlertDialog.Builder(cont
         }
         })
     }
+    companion object {
+        private val dialogs = mutableListOf<java.lang.ref.WeakReference<android.app.AlertDialog>>()
+        fun refreshOwned(activity: Activity) {
+            dialogs.removeAll { it.get() == null }
+            dialogs.mapNotNull { it.get() }.filter { it.isShowing }.forEach { dialog ->
+                var owner: Context = dialog.context
+                while (owner is android.content.ContextWrapper && owner !is Activity && owner.baseContext !== owner) owner = owner.baseContext
+                if (owner === activity) dialog.window?.let { window ->
+                    window.setBackgroundDrawable(MoteUi.shape(activity, NativeColorRole.SURFACE_RAISED, NativeRadiusRole.READING))
+                    NativePresentationStyles.refresh(window.decorView)
+                }
+            }
+        }
+    }
+
 }
 
 /** Every Add entry uses this same action set and real native flows. */
@@ -342,7 +421,8 @@ enum class MoteAddAction(val titleKey: String, val subtitleKey: String, val icon
     FOLDER("同步文件夹", "持续收集文件夹里的新内容与修改", "folder"),
     FILE("导入文件", "导入一次，不跟踪后续修改。", "import"),
     SCREEN("记录屏幕", "先选择应用范围，再按需授权", "capture"),
-    NOTE("随手记", "离线也能留下想法与片段", "notes")
+    NOTE("随手记", "离线也能留下想法与片段", "notes"),
+    FEISHU("连接飞书文档", "由中央收集文档与活动线索", "library")
 }
 fun Activity.openMoteAdd(action: MoteAddAction) {
     if (this is MainActivity) { addContent(action); return }
@@ -350,6 +430,7 @@ fun Activity.openMoteAdd(action: MoteAddAction) {
         MoteAddAction.FOLDER, MoteAddAction.FILE -> startActivity(Intent(this, FileTaskActivity::class.java).putExtra("addAction", action.name))
         MoteAddAction.SCREEN -> openMoteLocalPage("PRIVACY")
         MoteAddAction.NOTE -> openMoteLocalPage("NOTES")
+        MoteAddAction.FEISHU -> startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "lark"))
     }
 }
 fun Activity.showMoteAddActions() {

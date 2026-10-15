@@ -19,13 +19,13 @@ const owner='synthetic-owner-for-connection-tests';
 const headers=(token=owner)=>({authorization:`Bearer ${token}`,'x-mote-ingress-version':'2'});
 function config(directory:string):Config{return {dataDir:directory,token:owner,tokenPath:join(directory,'owner-token'),host:'127.0.0.1',port:0,profile:'test',tokenFromEnvironment:true,maxStorageBytes:30*1024*1024,maxExportBytes:4*1024*1024,retentionDays:0,insightIntervalHours:0,allowedOrigins:['https://synthetic.invalid'],model:'',modelBaseUrl:'https://api.deepseek.com',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:true};}
 async function fixture(t:TestContext,options:{clock?:()=>number;mcp?:boolean;mcpWriteEnabled?:boolean;maxStorageBytes?:number}={}){
-  const directory=await mkdtemp(join(tmpdir(),'mote-connections-')),cfg=config(directory),store=new Store(directory,{maxStorageBytes:options.maxStorageBytes}),sources=new SourceStore(store);
+  const directory=await mkdtemp(join(tmpdir(),'mote-connections-')),cfg=config(directory),storageOptions={maxStorageBytes:options.maxStorageBytes},store=new Store(directory,storageOptions),sources=new SourceStore(store);
   if(options.mcp)cfg.connectors={directory:join(directory,'connectors'),mcpEnabled:true,mcpReadToken:'synthetic-static-read-mcp-token-123456789',mcpWriteEnabled:options.mcpWriteEnabled??true,mcpWriteToken:'synthetic-static-write-mcp-token-123456789',mcpWriteSourceIds:['allowed']};
   const connections=new Connections(store,sources,{clock:options.clock});
   let value=await buildApp(cfg,{store,agent:inactive,connections});
   const restart=async()=>{await value.app.close();value=await buildApp(cfg,{store,agent:inactive,connections:new Connections(store,sources,{clock:options.clock})});return value;};
   t.after(async()=>{await value.app.close();store.close();await rm(directory,{recursive:true,force:true});});
-  return {...value,directory,cfg,restart};
+  return {...value,directory,cfg,storageOptions,restart};
 }
 const invite=(app:Awaited<ReturnType<typeof buildApp>>['app'],deviceId?:string)=>app.inject({method:'POST',url:'/api/connections/invitations',headers:headers(),payload:{serverUrl:'https://synthetic.invalid',label:'Synthetic phone',...(deviceId?{deviceId}:{})}});
 const redeem=(app:Awaited<ReturnType<typeof buildApp>>['app'],code:string,deviceId='synthetic-phone')=>app.inject({method:'POST',url:'/api/connections/redeem',payload:{code,deviceId,deviceName:'Synthetic phone',platform:'android'}});
@@ -256,7 +256,10 @@ test('capture batches isolate per-item failure, retry idempotently and validate 
 });
 
 test('batch quota failures preserve accepted receipts and permit idempotent replay',async t=>{
-  const {app}=await fixture(t,{maxStorageBytes:4096});
+  const {app,store,storageOptions}=await fixture(t);
+  // Boot with normal room for installed metadata, then leave a measured intake
+  // budget. The batch must exercise real quota rejection after some receipts.
+  storageOptions.maxStorageBytes=store.logicalBytes()+4096;
   const captures=Array.from({length:25},()=>({id:randomUUID(),deviceId:'quota-fixture',deviceName:'Synthetic quota fixture',platform:'android',capturedAt:new Date().toISOString(),durationMs:0,source:'activity',appId:'fixture.reader',appName:'Generated reader',privacy:{excluded:false,redacted:false,mode:'none',collection:'activity'}}));
   const send=()=>app.inject({method:'POST',url:'/api/captures/batch',headers:headers(),payload:{captures}});
   const first=await send();assert.equal(first.statusCode,200);

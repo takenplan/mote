@@ -5,7 +5,7 @@ import {rmSync} from 'node:fs';
 import {rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {Readable} from 'node:stream';
-import {fileRevisionSchema,FILE_MAX_BYTES,FILE_PART_BYTES,executionEnvelope,transcriptSchema,type SourceItem,type Transcript,type FileRevision,type CaptureRecord,type ArchivedFile,fileEvidenceSchema} from '@mote/shared';
+import {fileRevisionSchema,FILE_MAX_BYTES,FILE_PART_BYTES,executionEnvelope,transcriptSchema,type SourceItem,type Transcript,type FileRevision,type CaptureRecord,type ArchivedFile,type FileProcessingJobView,type ExecutionEnvelope,fileEvidenceSchema} from '@mote/shared';
 import {writeFileTranscriptChunks} from './file-transcript-chunks.js';
 import type {ContextRecord,ContextRange} from '@mote/agent';
 import {Store,StoreError,sha256,type Range} from './store.js';
@@ -244,20 +244,25 @@ export class FileStore {
     const rawSteps=includeArtifacts?db.prepare('SELECT step,processor,version,fingerprint,state,attempts,error,updated_at AS updatedAt FROM file_steps WHERE capture_id=? ORDER BY rowid').all(id) as {step:string;processor:string;version:string;fingerprint:string;state:string;attempts:number;error:string|null;updatedAt:string}[]:[];
     // The execution receipt is authoritative even when a program handler was
     // not registered during restart/recovery. Read mirrors are never replayed.
+    let summaryExecution:ExecutionEnvelope|undefined,summaryAvailableAt:number|undefined;
     const hasExecution=Boolean(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='execution_operation_steps'").get());
     if(hasExecution&&rawJob){
       const parent=db.prepare("SELECT e.state,e.attempts,e.error,e.available_at,e.input,o.optional FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND e.kind='files.pipeline' ORDER BY e.updated_at DESC LIMIT 1").get('file:'+id);
       if(parent&&(!this.processingReceiptCurrent||this.processingReceiptCurrent(JSON.parse(String(parent.input)),'pipeline')))rawJob={...rawJob,state:parent.optional&&parent.state==='blocked'&&parent.error==='archive_only'?'skipped':String(parent.state),attempts:Number(parent.attempts),error:parent.error===null?null:String(parent.error),availableAt:Number(parent.available_at)};
-      const failed=db.prepare("SELECT e.error,json_extract(e.input,'$.name') AS stage FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND e.kind LIKE 'file-step.%' AND e.state='failed' ORDER BY e.updated_at DESC LIMIT 1").get('file:'+id);
+      const failed=db.prepare("SELECT e.error,json_extract(e.input,'$.name') AS stage FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND o.slot='file-pipeline' AND e.kind LIKE 'file-step.%' AND e.state='failed' ORDER BY e.updated_at DESC LIMIT 1").get('file:'+id);
       if(failed&&rawJob.state==='blocked')rawJob={...rawJob,state:'failed',stage:String(failed.stage),error:String(failed.error)};
-      const summary=db.prepare("SELECT e.state,e.error,e.input,o.optional FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND e.kind='files.summary' ORDER BY e.updated_at DESC LIMIT 1").get('file:'+id);
-      if(summary&&(!this.processingReceiptCurrent||this.processingReceiptCurrent(JSON.parse(String(summary.input)),'summary')))rawJob={...rawJob,summary_state:summary.optional&&summary.state==='blocked'&&['archive_only','summary_disabled'].includes(String(summary.error))?'skipped':String(summary.state)};
+      const summary=db.prepare("SELECT e.state,e.attempts,e.error,e.available_at,e.updated_at,e.input,o.optional FROM execution_steps e JOIN execution_operation_steps o ON o.step_id=e.id WHERE o.operation_id=? AND o.active=1 AND e.kind='files.summary' ORDER BY e.updated_at DESC LIMIT 1").get('file:'+id);
+      if(summary&&(!this.processingReceiptCurrent||this.processingReceiptCurrent(JSON.parse(String(summary.input)),'summary'))){
+        const state=summary.optional&&summary.state==='blocked'&&['archive_only','summary_disabled'].includes(String(summary.error))?'skipped':String(summary.state);
+        summaryAvailableAt=Number(summary.available_at);summaryExecution=executionEnvelope({state:state==='waiting'&&summary.error&&summaryAvailableAt>Date.now()?'retry_wait':state,attempts:Number(summary.attempts),errorCode:summary.error,availableAt:summaryAvailableAt,updatedAt:new Date(Number(summary.updated_at)).toISOString()});
+        rawJob={...rawJob,summary_state:state};
+      }
     }
     if(hasExecution)for(const step of rawSteps){
       const receipt=db.prepare('SELECT state,attempts,error,updated_at FROM execution_steps WHERE id=?').get(sha256(JSON.stringify(['file-step',id,step.step,step.fingerprint])));
       if(receipt){step.state=String(receipt.state);step.attempts=Number(receipt.attempts);step.error=receipt.error===null?null:String(receipt.error);step.updatedAt=new Date(Number(receipt.updated_at)).toISOString();}
     }
-    const job=rawJob?{...rawJob,execution:executionEnvelope({state:rawJob.state==='waiting'&&rawJob.error&&rawJob.availableAt>Date.now()?'retry_wait':rawJob.state,attempts:rawJob.attempts,errorCode:rawJob.error??undefined,availableAt:rawJob.availableAt,inputVersion:rawJob.inputVersion??undefined})}:null;
+    const job=rawJob?({...rawJob,execution:executionEnvelope({state:rawJob.state==='waiting'&&rawJob.error&&rawJob.availableAt>Date.now()?'retry_wait':rawJob.state,attempts:rawJob.attempts,errorCode:rawJob.error??undefined,availableAt:rawJob.availableAt,inputVersion:rawJob.inputVersion??undefined}),...(summaryExecution?{summaryExecution,summaryAvailableAt}:{})} satisfies FileProcessingJobView):null;
     const steps=rawSteps.map(({fingerprint,...step})=>({...step,execution:executionEnvelope({state:step.state,attempts:step.attempts,errorCode:step.error??undefined,definitionVersion:step.version,updatedAt:step.updatedAt})}));
     const manifest=JSON.parse(v.manifest),index=this.store.evidence([id])[0]?.provenance?.document?.fileIndex;if(index&&manifest.item.layer==='snapshot')manifest.item.document={...manifest.item.document,fileIndex:index};
     return {captureId:id,...manifest,hasOriginal:!!v.object_hash,originMissing:!!head?.origin_missing,job,artifacts,steps};

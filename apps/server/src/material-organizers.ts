@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {codingProjectContext} from './coding-project.js';
 import {uiPageCaptureSource} from './capture-memory-source.js';
 import {DAILY_EVENT_RECIPE} from './daily-event-memory-policy.js';
@@ -75,7 +76,7 @@ const evidenceContext=(record:CaptureRecord,role?:MaterialEvidenceContext['docum
 /** Model-facing material text is an allowlist, not the stored capture JSON. The
  * latter can contain local file URIs, document paths and provider metadata. */
 const captureText=(record:CaptureRecord)=>{
-  const provenance=record.provenance,document=provenance?.document,coding=document?.coding,fileIndex=document?.fileIndex;
+  const provenance=record.provenance,document=provenance?.document,coding=document?.coding,fileIndex=document?.fileIndex,activity=document?.activity;
   const media=record.metadata?.media;
   return JSON.stringify({
     captureId:record.id,capturedAt:record.capturedAt,source:record.source,
@@ -98,6 +99,11 @@ const captureText=(record:CaptureRecord)=>{
       ...(provenance.calendar?{calendar:provenance.calendar}:{})}}:{}),
     ...(document?{documentTime:{recordedAt:document.recordedAt,occurredAt:document.occurredAt,
       timeBasis:document.timeBasis,contentRole:document.contentRole}}:{}),
+    ...(activity?{documentActivity:{...activity,documentTitle:record.windowTitle,
+      qualification:activity.evidenceBasis==='search-predicate'?'The provider matched the connected account activity predicate in this interval. This is not a complete human event log or an exact action timestamp.':'The provider returned activity metadata; preserve its stated precision and actor scope.',
+      ...(activity.action==='opened'?{readingScope:'Opening does not establish reading duration, finished reading, understanding or agreement. Provider open matching may include connector access.'}:{}),
+      revisionScope:activity.exactRevision?'The provider verified only the explicitly linked revision.':'The content fetched by the connector is the current body, not proof of the revision seen at this activity.',
+    }}:{}),
     ...(fileIndex?{fileIndex:{mode:fileIndex.mode,coverage:fileIndex.coverage,parser:fileIndex.parser,
       status:fileIndex.status,totalCharacters:fileIndex.totalCharacters,offset:fileIndex.offset,length:fileIndex.length}}:{}),
     ...(coding?{coding:{provider:coding.provider,projectKey:coding.projectKey,sessionId:coding.sessionId,
@@ -302,7 +308,7 @@ function imageBlocks(body:MaterialBody,record:CaptureRecord,image:ImageMaterialP
 
 /** A source item keeps its own identity; a coding session is assembled separately. */
 const sourceItem:MaterialOrganizer={
-  id:'mote.source-item',version:'12',slot:'source-item',
+  id:'mote.source-item',version:'13',slot:'source-item',
   select:r=>r.provenance&&!r.provenance.document?.coding?{sourceId:r.provenance.sourceId,externalId:r.provenance.externalId}:undefined,
   identity:g=>materialId(g.sourceId,g.externalId),
   build(reader,g){
@@ -313,8 +319,9 @@ const sourceItem:MaterialOrganizer={
     const {text:_body,...metadata}=JSON.parse(captureText(r));
     body.text('source-record',r.ocrText,r.id,'plain',undefined,undefined,evidenceContext(r));
     const sourceBodyBlocks=body.blocks.map(block=>block.id);
-    body.text('source-metadata',JSON.stringify(metadata),r.ocrText?[]:r.id,'json',undefined,undefined,evidenceContext(r));
-    const sourceBlocks=body.blocks.map(block=>block.id);
+    const metadataStart=body.blocks.length;
+    body.text('source-metadata',JSON.stringify(metadata),r.ocrText&&!r.provenance?.document?.activity?[]:r.id,'json',undefined,undefined,evidenceContext(r));
+    const sourceBlocks=body.blocks.map(block=>block.id),sourceMetadataBlocks=body.blocks.slice(metadataStart).map(block=>block.id);
     for(const c of chunks){
       const structured=c.speaker!==undefined||c.imageLocation!==undefined;
       const text=structured?JSON.stringify({...(c.speaker!==undefined?{speaker:c.speaker}:{}),...(c.speakerAttribution?{speakerAttribution:c.speakerAttribution}:{}),...(c.imageLocation?{imageLocation:c.imageLocation}:{})})+'\n'+c.text:c.text;
@@ -371,7 +378,9 @@ const sourceItem:MaterialOrganizer={
     // Processing readiness belongs to coverage/artifacts. Changing an unrelated
     // processor's state must not change the identity of the authored body.
     const limitations=['metadata_projected',...(reference?['original_body_not_collected']:[])];
+    const activity=r.provenance?.document?.activity;
     const artifacts:MaterialDraft['artifacts']=[
+      ...(activity?[{key:'daily-events',state:'ready' as const,blockIds:sourceMetadataBlocks}]:[]),
       {key:'source-record',blockIds:sourceBodyBlocks.length?sourceBodyBlocks:sourceBlocks,state:'ready'},
       {key:'source-body',blockIds:sourceBodyBlocks,state:reference||!hasSourceBody?'unavailable':'ready',
         ...(reference?{reason:'original_body_not_collected'}:!hasSourceBody?{reason:'source_body_empty'}:{})},
@@ -657,7 +666,7 @@ export class MaterialOrganizerRuntime {
     this.sourceItemRecipes=new SourceItemRecipeCatalog(store,sourceItem.version);
     this.executor=executor??new ExecutionEngine(store);
     materials.bindIndexEngine(this.executor);
-    this.unregister=this.executor.register({kind:ORGANIZER_STEP,pool:'material-organizer',concurrency:()=>8,
+    this.unregister=this.executor.register({kind:ORGANIZER_STEP,pool:'material-organizer',concurrency:()=>8,policy:EXECUTION_POLICIES.deterministic,timeoutMs:900000,
       resourceKeys:step=>[`material:${(step.input as OrganizerJobInput).materialId}`],
       validate:step=>!this.closed&&this.valid(step),
       execute:async(step,signal)=>{try{
@@ -693,8 +702,10 @@ export class MaterialOrganizerRuntime {
             const required=image?['image-original',...artifacts.filter(item=>item.key==='extracted-text'&&item.state==='ready'&&item.blockIds?.length).map(item=>item.key)]:[artifacts.some(item=>item.key==='original')?'extracted-text':'source-body'];
             const attachments=artifacts.filter(item=>item.key.startsWith('attachment/')&&(item.key.endsWith('/original-image')||item.key.endsWith('/text')&&item.state==='ready'&&item.blockIds?.length)).map(item=>item.key);
             const selected=prepared.pinnedSourceHead?this.claimedImageRequirements(input.materialId,prepared.pinnedSourceHead,[...required,...attachments]):[...required,...attachments];
-            if(prepared.pinnedSourceHead)this.memoryWork?.observe(input.materialId,selected,{
+            const activity=Boolean(prepared.pinnedSourceHead&&capture(store,prepared.pinnedSourceHead)?.provenance?.document?.activity);
+            if(prepared.pinnedSourceHead)this.memoryWork?.observe(input.materialId,activity?['daily-events']:selected,{
               inputKey:prepared.pinnedSourceHead,change:input.sourceChanged?'source':'rebuild',
+              ...(activity?{recipeIds:[DAILY_EVENT_RECIPE.id]}:{excludeRecipeIds:[DAILY_EVENT_RECIPE.id]}),
             });
           }else if(input.organizerId===uiPageObject.id){
             const last=prepared.draft.members.at(-1)?.id;
@@ -718,7 +729,8 @@ export class MaterialOrganizerRuntime {
         ON CONFLICT(organizer_id) DO UPDATE SET version=excluded.version,
           cursor_rowid=CASE WHEN version=excluded.version THEN cursor_rowid ELSE 0 END,
           complete=CASE WHEN version=excluded.version THEN complete ELSE excluded.complete END`).run(organizer.id,organizer.version,fresh?1:0);
-      this.retryFailed(organizer.id);
+      // Registration and startup only discover work. Terminal failures require
+      // explicit retry or a new source/component generation.
     });
     for(const organizer of [sourceItem,codingSession,uiPageObject,screenGroup,captureEvent,stateSeries,authored])this.registry.register(organizer);
     for(const organizer of additionalOrganizers)this.registry.register(organizer);
@@ -769,12 +781,6 @@ export class MaterialOrganizerRuntime {
     return snapshot.capture;
   }
 
-  private retryFailed(organizerId:string){
-    for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind=? AND state='failed'").all(ORGANIZER_STEP) as {id:string}[]){
-      const step=this.executor.get(row.id),input=step?.input as OrganizerJobInput|undefined;
-      if(input?.organizerId===organizerId&&this.valid(step!)){this.failures.delete(row.id);this.executor.retry(row.id);}
-    }
-  }
   private retryReadyRetirements(){
     const ids:string[]=[];
     for(const row of this.store.db.prepare(`SELECT e.id FROM execution_steps e WHERE e.kind=? AND e.state='blocked' AND e.error='dependency_failed'

@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {createHash} from 'node:crypto';
 import {ContextToolError,AgentYieldError,type AgentAnswer,type ContextRecord,type HostControlChannel,type HostControlDefinition,type HostControlResult,type QueryInput} from '@mote/agent';
 import {ExecutionEngine,ExecutionFailure,type ExecutionFailureReceipt,type ExecutionGrant,type ExecutionLane,type ExecutionState,type ExecutionStep} from './execution-engine.js';
@@ -34,6 +35,8 @@ export interface DelegationCoordinator {
  id:string;execute:(context:DelegationCoordinatorContext)=>Promise<unknown>;
  /** Host product entry owns this declaration; submitted units inherit it. */
  lane?:ExecutionLane;
+ /** Only this active fragment spends a caller's optional execution budget. */
+ timeoutMs?:(work:DelegationWork,input:unknown)=>number|null;
  /** Metadata planning finishes before the product hands its units to existing jobs. */
  awaitExternal?:boolean;
  /** Pure input authority is checked on every resume and commit. */
@@ -95,7 +98,7 @@ export class DelegationRuntime {
  register(capability:DelegationCapability){
   if(!/^[a-z][a-z0-9.-]{0,63}$/.test(capability.id)||!capability.version||this.capabilities.has(capability.id))throw Error('Invalid or duplicate delegation capability');
   const entry=Object.freeze({...capability});this.capabilities.set(entry.id,entry);
-  if(!entry.proposal)this.unregister.push(this.engine.register({kind:`delegation.unit.${entry.id}`,pool:'delegated-agents',concurrency:this.options.concurrency??(()=>4),timeoutMs:2147483647,maxAttempts:4,
+  if(!entry.proposal)this.unregister.push(this.engine.register({kind:`delegation.unit.${entry.id}`,pool:'delegated-agents',concurrency:this.options.concurrency??(()=>4),policy:EXECUTION_POLICIES.orchestration,maxAttempts:4,
    validate:step=>this.currentUnit(step,entry),
    execute:(step,signal,grant)=>{const unit=this.unit(String(step.input.unitId));return entry.execute(unit,{signal,scope:unit.scope,grant,work:this.get(unit.workId)});},
    commit:(step,result)=>this.commitUnit(step,result as DelegationProduct),project:step=>this.projectUnit(step),
@@ -106,7 +109,8 @@ export class DelegationRuntime {
   if(!/^[a-z][a-z0-9.-]{0,63}$/.test(profile.id)||this.coordinators.has(profile.id))throw Error('Invalid or duplicate delegation coordinator');
   profile=Object.freeze({...profile});
   this.coordinators.set(profile.id,profile);
-  this.unregister.push(this.engine.register({kind:`delegation.coordinator.${profile.id}`,pool:'delegated-agents',concurrency:this.options.concurrency??(()=>4),timeoutMs:2147483647,maxAttempts:4,
+  this.unregister.push(this.engine.register({kind:`delegation.coordinator.${profile.id}`,pool:'delegated-agents',concurrency:this.options.concurrency??(()=>4),policy:EXECUTION_POLICIES.orchestration,maxAttempts:4,
+   timeoutMs:step=>{const work=this.get(String(step.input.workId));return profile.timeoutMs?.(work,this.journal.payload(work.id))??null;},
    validate:step=>this.currentWork(String(step.input.workId),profile),
    execute:async(step,signal,grant)=>{const work=this.get(String(step.input.workId)),controls=this.controlChannel(work.id,grant),input=this.journal.payload(work.id);
     try{const result=await profile.execute({work,input,signal,grant,controls});return {yielded:false,result};}
@@ -117,7 +121,7 @@ export class DelegationRuntime {
     if(work.units.some(unit=>!terminal(unit.status)&&!unit.external))throw new ExecutionFailure('permanent','unfinished_delegation');
     const receipt=profile.commit?.(this.get(work.id),outcome.result);
     this.completePlan(work,profile,outcome.result,receipt);
-   },failureContext:step=>{const work=this.get(String(step.input.workId));return {workId:work.id,...profile.failureContext?.(work,this.journal.payload(work.id))};},project:step=>this.projectCoordinator(step),
+   },classify:error=>error instanceof DOMException&&error.name==='TimeoutError'?new ExecutionFailure('permanent','timeout'):profile.classify?.(error)??new ExecutionFailure('permanent','coordinator_failed'),failureContext:step=>{const work=this.get(String(step.input.workId));return {workId:work.id,...profile.failureContext?.(work,this.journal.payload(work.id))};},project:step=>this.projectCoordinator(step),
   }));
   return profile;
  }
@@ -294,7 +298,7 @@ export class DelegationRuntime {
 
 /** Existing model adapters receive this exact host channel. A child only receives
  * its immutable selected scope; native multi-agent tools remain disabled. */
-export function registerQueryDelegation<T extends Pick<AgentAnswer,'answer'|'citations'> & Partial<Pick<AgentAnswer,'evidenceDependencies'|'sourceContextDependencies'>>>(runtime:DelegationRuntime,options:{query:(input:QueryInput)=>Promise<T>;prepare?:(work:DelegationWork,input:QueryInput,signal:AbortSignal)=>Promise<QueryInput>;commit?:(work:DelegationWork,result:T)=>void;validate?:(work:DelegationWork,input:QueryInput)=>boolean;onProgress?:QueryInput['onProgress'];onTrace?:QueryInput['onTrace']}){
+export function registerQueryDelegation<T extends Pick<AgentAnswer,'answer'|'citations'> & Partial<Pick<AgentAnswer,'evidenceDependencies'|'sourceContextDependencies'>>>(runtime:DelegationRuntime,options:{query:(input:QueryInput)=>Promise<T>;timeoutMs?:(input:QueryInput)=>number|null;prepare?:(work:DelegationWork,input:QueryInput,signal:AbortSignal)=>Promise<QueryInput>;commit?:(work:DelegationWork,result:T)=>void;validate?:(work:DelegationWork,input:QueryInput)=>boolean;onProgress?:QueryInput['onProgress'];onTrace?:QueryInput['onTrace']}){
  runtime.register({id:'context.research',version:'1',description:'Research one model-selected evidential question in the authorized archive scope. Return a grounded answer, original receipts and narrow remaining gaps.',inputSchema:{type:'object',properties:{question:{type:'string'}},required:['question'],additionalProperties:false},validate:unit=>Object.keys(unit.input).every(key=>key==='question')&&typeof unit.input.question==='string'&&unit.input.question.length>0&&unit.input.question.length<=12000,
   execute:async(unit,{signal,work,grant})=>{
    const saved=runtime.journal.payload<QueryInput>(work.id),parent=options.prepare?await options.prepare(work,saved,signal):saved;let evidence:readonly ContextRecord[]=[];
@@ -307,7 +311,7 @@ export function registerQueryDelegation<T extends Pick<AgentAnswer,'answer'|'cit
    return {value:{answer:result.answer,citations:result.citations},summary:result.answer.slice(0,600),dependencies:evidence.filter(record=>record.contentLayer!=='L2_model_interpretation'),dependencyIds:result.evidenceDependencies?.ids??evidence.map(record=>record.id),evidence:evidence.filter(record=>result.citations.some(citation=>citation.id===record.id)),...(sourceContextDependencies.length?{sourceContextDependencies}:{})};
   },
  });
- runtime.registerCoordinator({id:'query',lane:'interactive',validate:(work,input)=>options.validate?.(work,input as QueryInput)??true,
+ runtime.registerCoordinator({id:'query',lane:'interactive',timeoutMs:(_work,input)=>options.timeoutMs?.(input as QueryInput)??null,validate:(work,input)=>options.validate?.(work,input as QueryInput)??true,
   execute:async({work,input,signal,controls,grant})=>{
    const original=options.prepare?await options.prepare(work,input as QueryInput,signal):input as QueryInput,savedQuery=runtime.journal.payload<{queryWorkspace?:QueryWorkspace;queryCapabilitySnapshot?:QueryInput['contextCapabilitySnapshot']}>(work.id),workspace=savedQuery.queryWorkspace;
    grant.commit(()=>runtime.recordSourceContextDependencies(work.id,combineSourceContextDependencies([original.contextSourceContextDependencies,original.conversation?.sourceContextDependencies])));

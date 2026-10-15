@@ -93,6 +93,42 @@ test('question entry pagination reads only the requested material and opens Ask 
  assert.equal(new URLSearchParams(reads[0].split('?')[1]).get('materialId'),'generated-material');assert.equal(new URLSearchParams(reads[0].split('?')[1]).get('state'),'open,deferred,closed,answered');assert.equal(d.querySelector('a')!.getAttribute('href'),ownerQuestionRoute(generated.id));
  await act(async()=>button(d,'继续展开').click());assert.equal(new URLSearchParams(reads[1].split('?')[1]).get('cursor'),'next');
 });
+test('question history stays absent while an empty page polls and displays new questions without flashing retained results',async t=>{
+ const {root,d}=await fixture(t);t.mock.timers.enable({apis:['setTimeout']});const reads:ReturnType<typeof deferred>[]=[];
+ const api={request:async()=>{const read=deferred();reads.push(read);return read.promise;}} as Api;
+ await act(async()=>root.render(React.createElement(OwnerQuestionLinks,{api,history:true})));
+ assert.match(d.querySelector('[role="status"]')!.textContent!,/正在读取/);assert.equal(reads.length,1);
+ await act(async()=>reads[0].resolve({items:[],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history'),null);
+ for(let index=1;index<=2;index++){
+  await act(async()=>t.mock.timers.tick(5000));assert.equal(reads.length,index+1);assert.equal(d.querySelector('.owner-question-history'),null,'a pending empty refresh does not resurrect the section');
+  await act(async()=>reads[index].resolve({items:[],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history'),null);
+ }
+ await act(async()=>t.mock.timers.tick(5000));assert.equal(d.querySelector('.owner-question-history'),null);
+ await act(async()=>reads[3].resolve({items:[generated],nextCursor:null}));const link=d.querySelector('.owner-question-history a')!;assert.equal(link.getAttribute('href'),ownerQuestionRoute(generated.id));
+ await act(async()=>t.mock.timers.tick(5000));assert.equal(d.querySelector('.owner-question-history a'),link);assert.equal(d.querySelector('[role="status"]'),null,'refreshing a loaded page does not show initial loading');
+ await act(async()=>reads[4].resolve({items:[{...generated,title:'更新后的合成问题'}],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history a'),link);assert.match(link.textContent!,/更新后的合成问题/);
+ await act(async()=>t.mock.timers.tick(5000));assert.equal(d.querySelector('.owner-question-history a'),link);
+ await act(async()=>reads[5].resolve({items:[],nextCursor:null}));assert.equal(d.querySelector('.owner-question-history'),null,'answered questions leave the pending history after the read completes');
+});
+test('empty question links preserve initial failure retry and background refresh errors',async t=>{
+ const {root,d}=await fixture(t);t.mock.timers.enable({apis:['setTimeout']});let fail=true,reads=0,pending:ReturnType<typeof deferred>|undefined;
+ const api={request:async()=>{reads++;if(pending)return pending.promise;if(fail)throw new Error('Generated question read failure');return {items:[],nextCursor:null};}} as Api;
+ await act(async()=>root.render(React.createElement(OwnerQuestionLinks,{api,history:true})));
+ assert.match(d.querySelector('[role="alert"]')!.textContent!,/Generated question read failure/);assert.equal(reads,1);
+ pending=deferred();await act(async()=>button(d,'重试').click());assert.match(d.querySelector('[role="status"]')!.textContent!,/正在读取/);assert.equal(reads,2);
+ await act(async()=>pending!.resolve({items:[],nextCursor:null}));pending=undefined;assert.equal(d.querySelector('.owner-question-history'),null);
+ await act(async()=>t.mock.timers.tick(5000));assert.match(d.querySelector('[role="alert"]')!.textContent!,/Generated question read failure/);assert.equal(reads,3);
+ fail=false;pending=deferred();await act(async()=>button(d,'重试').click());assert.equal(d.querySelector('.owner-question-history'),null,'retrying a known empty page does not show a loading section');assert.equal(reads,4);
+ await act(async()=>pending!.resolve({items:[generated],nextCursor:null}));assert.ok(d.querySelector('.owner-question-history a'));assert.equal(d.querySelector('[role="alert"]'),null);
+});
+test('an empty question page with a next cursor keeps its pagination control during refresh',async t=>{
+ const {root,d}=await fixture(t),reads:string[]=[];let pending:ReturnType<typeof deferred>|undefined;
+ const api={request:async(path:string)=>{reads.push(path);if(pending)return pending.promise;return {items:[],nextCursor:'next'};}} as Api;
+ await act(async()=>root.render(React.createElement(OwnerQuestionLinks,{api,materialId:'generated-material'})));const next=button(d,'继续展开');assert.ok(next);
+ pending=deferred();await act(async()=>resources(api).get(reads[0]).refresh());assert.equal(button(d,'继续展开'),next);assert.equal(d.querySelector('[role="status"]'),null);
+ await act(async()=>pending!.resolve({items:[],nextCursor:'next'}));pending=undefined;
+ await act(async()=>next.click());assert.equal(new URLSearchParams(reads.at(-1)!.split('?')[1]).get('cursor'),'next');assert.ok(button(d,'返回第一页'));
+});
 test('answered replies stay reachable from Material and Activity context without returning to the pending Ask queue',async t=>{
  const {root,d}=await fixture(t),reads:string[]=[],answered:OwnerQuestion={...generated,state:'answered',revision:2,continuationId:'memory:generated-continuation',messages:[...generated.messages,{role:'user',text:generated.choices[0].answer,createdAt:when}]};
  const api={request:async(path:string)=>{reads.push(path);if(!path.includes('?'))return answered;const states=new URLSearchParams(path.split('?')[1]).get('state')!.split(',');return {items:states.includes(answered.state)?[answered]:[],nextCursor:null};}} as Api;

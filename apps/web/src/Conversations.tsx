@@ -66,7 +66,9 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   const selectionMade=useRef(false),olderRequest=useRef<AbortController|null>(null);
   const history=useResource<HistoryPage>(api,'/api/conversations?limit=30'),recentRuns=useResource<{items:QueryRun[]}>(api,'/api/query-runs');
   const feedError=useOperationUpdates(api);
-  const loading=history.loading||loadingPage,opening=detail.loading||loadingOlder;
+  // Cached content remains usable while change notifications revalidate it.
+  // Only an unopened/revoked conversation or explicit pagination blocks input.
+  const loading=history.loading||loadingPage,opening=detail.loading&&!conversation||loadingOlder;
   const end = useRef<HTMLDivElement>(null);
   const [run,setRun]=useState<QueryRun|null>(null),[pollError,setPollError]=useState('');
 
@@ -109,10 +111,10 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
         if(current.status==='running'){setBusy(true);timer=setTimeout(()=>void update(),1000);return;}
         if((current.status==='completed'||current.status==='failed')&&current.conversationId){
           setSelectedId(current.conversationId);
+          historyRequest.current?.abort();setLoadingPage(false);setHistoryError('');
           resources(api).invalidate(key=>key.startsWith('/api/conversations'));
           if(current.status==='completed'){setQuestion('');setAttachments([]);}
           else if(pendingQuestion)setQuestion(pendingQuestion);
-          void loadHistory();
         }
         if(current.status==='failed'&&pendingQuestion)setQuestion(pendingQuestion);
         setBusy(false);setPendingQuestion('');operation.current=null;
@@ -214,11 +216,11 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       <button className="button subtle full new-conversation-button" disabled={busy} onClick={startNew}><Plus size={16}/>{moteText("新对话")}</button>
       <FeaturePanels api={api} onOpen={onOpen} value={{kind:'mote.ask.history',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion??'',revision:'1',title:'',text:''}}/>
       {Boolean(historyError||history.error)&&<p className="notice error" role="alert">{historyError||errorMessage(history.error)}</p>}
-      {!loading && !historyError && !history.error && !items.length && <p className="fine-print">{moteText("回答会自动保存在中央节点，随时回来继续。")}</p>}
+      {history.data && !loadingPage && !historyError && !history.error && !items.length && <p className="fine-print">{moteText("回答会自动保存在中央节点，随时回来继续。")}</p>}
       <div className="conversation-list">{items.map(item => <button key={item.id} className={`conversation-item ${!selectedOwnerQuestion&&conversation?.id === item.id ? 'active' : ''} ${item.status === 'failed' ? 'failed' : ''}`} aria-current={!selectedOwnerQuestion&&conversation?.id === item.id ? 'true' : undefined} disabled={busy} onClick={() => void open(item.id)}>
         <strong>{item.title}</strong><span>{item.status === 'failed' ? <><AlertCircle size={12}/>{moteText("未完成")}{' · '}</> : null}{dateTime(item.updatedAt)} · {item.turnCount}{' '}{moteText("轮")}</span>
       </button>)}</div>
-      {loading && <p className="loading" role="status"><LoaderCircle size={15} className="spin"/>{moteText("正在读取历史…")}</p>}
+      {loading && (!history.data||loadingPage) && <p className="loading" role="status"><LoaderCircle size={15} className="spin"/>{moteText("正在读取历史…")}</p>}
       {cursor && <button className="text-button" disabled={loading} onClick={() => void loadHistory(cursor)}>{moteText("加载更早的对话")}</button>}
     </aside>
     {selectedOwnerQuestion?<FeaturePanels api={api} onOpen={onOpen} unavailable={<section className="conversation-content"><p role="status">{moteText('此补充对话暂不可用，请刷新或查看相关资料。')}</p></section>} value={{kind:'mote.ask.question',schemaVersion:1,representation:'workspace',ref:selectedOwnerQuestion,revision:'1',title:'',text:''}}/>:<section className="conversation-content" aria-label={moteText("当前对话")} aria-busy={busy || opening}>

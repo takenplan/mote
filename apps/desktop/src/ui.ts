@@ -1,5 +1,7 @@
 import {createContentLibraryUi} from './content-library-ui';
 import {createSyncHistoryUi} from './sync-history-ui';
+import {createDesktopPresentation} from './presentation';
+import {createWorkActivityUi} from './work-activity-ui';
 import {nativeStatusSummary} from './native-status';
 import { renderAskAnswer, renderAskCitation } from './ask-presentation';
 import { moteText, getLocale } from '@mote/shared/i18n';
@@ -17,7 +19,7 @@ byId('device-name').addEventListener('input', () => markSettingsDirty());
 const pageNames = desktopPages;
 type Page = DesktopPage;
 const navigation = new DesktopNavigation();
-let currentPage: Page = 'overview';
+let currentPage: Page = 'records';
 let settingsDirty = false;
 let captureStorageDirectory = '';
 let settingsApplying = false;
@@ -29,6 +31,9 @@ const settingsPages = new Set<Page>(['connection', 'sync', 'capture', 'privacy',
 const libraryUi=createContentLibraryUi(desktopApi);
 function refreshContent():Promise<void>{return libraryUi.refresh();}
 const syncHistoryUi = createSyncHistoryUi(desktopApi, page => showPage(page));
+const workActivityUi=createWorkActivityUi(desktopApi,page=>showPage(page));
+const presentation=createDesktopPresentation({root:document.body,sidebar:document.querySelector<HTMLElement>('.sidebar')!,toolbar:document.querySelector<HTMLElement>('.workspace-toolbar')!,main:byId('main-content'),navigate:page=>{showPage(page);}});
+window.addEventListener('beforeunload',()=>{workActivityUi.dispose();presentation.dispose();},{once:true});
 let setupReviewed = false;
 try { setupReviewed = localStorage.getItem('mote-desktop-collection-reviewed') === '1'; } catch { /* Collection remains usable without local storage. */ }
 
@@ -49,10 +54,13 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
     }
   }
   if (currentPage === 'uploads' && page !== 'uploads') syncHistoryUi.hide();
+  if (currentPage === 'work' && page !== 'work') workActivityUi.hide();
   currentPage = page;
   if(initialized) renderOperations(currentStatus.operations??[]);
   if (page === 'uploads') syncHistoryUi.show();
+  if (page === 'work') workActivityUi.show();
   const selected = navigation.section;
+  presentation.update({section:selected});
   for (const element of Array.from(document.querySelectorAll<HTMLElement>('[data-page]'))) element.hidden = element.dataset.page !== page;
   for (const button of Array.from(document.querySelectorAll<HTMLElement>('aside [data-nav]'))) {
     const active = button.dataset.nav === selected;
@@ -78,7 +86,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   if (page === 'overview' && initialized) void desktopApi.status().then(render).catch(() => feedback(moteText("状态读取失败，请重试。")));
   return true;
 }
-for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-nav]'))) button.addEventListener('click', () => {
+for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-nav]:not([data-presentation-nav])'))) button.addEventListener('click', () => {
   const page = button.dataset.nav as Page;
   if (pageNames.includes(page)) showPage(page);
 });
@@ -97,6 +105,10 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-ad
   if(action==='note')showPage('notes');
   else if(action==='screen')showPage('screen');
   else if(action==='folder'||action==='file')void beginSourceSelection(action==='folder'?'directory':'files');
+  else if(action==='lark'){
+    if(!currentStatus?.config.serverUrl){showPage('connection');feedback(moteText('先连接你的中央节点，即可打开中央仓库。'));return;}
+    void perform(()=>desktopApi.openCentral('lark'));
+  }
 });
 function reviewCollectionSetup(): void {
   setupReviewed = true;
@@ -147,7 +159,7 @@ document.addEventListener('keydown', event => {
   else if (event.key === 'Escape' && navigation.canGoBack) showPage(navigation.backTarget);
 });
 desktopApi.onNavigate?.(page => { if (pageNames.includes(page)) showPage(page); });
-showPage('overview', false);
+showPage('records', false);
 
 function feedback(message: string, success = false): void {
   const box = byId('feedback'); box.textContent = message; box.hidden = !message; box.className = success ? 'success' : '';
@@ -328,7 +340,7 @@ function renderOperations(jobs:NonNullable<import('./contracts').Status['operati
   byId('background-progress').textContent = operations.map(job => `${job.message}${job.total !== undefined ? ` · ${job.completed ?? 0}/${job.total}` : ''}${job.state === 'running' ? moteText(" · 已用 {0} 秒", Math.floor((Date.now() - job.startedAt) / 1000)) : ''}`).join('；');
 }
 function render(status: import('./contracts').Status): void {
-  syncHistoryUi.update(status);libraryUi.update(status);
+  syncHistoryUi.update(status);libraryUi.update(status);workActivityUi.update(status);
   if(currentStatus&&(currentStatus.authorizationGeneration!==status.authorizationGeneration||currentStatus.config.serverUrl!==status.config.serverUrl||currentStatus.config.tokenConfigured!==status.config.tokenConfigured||currentStatus.config.authSignedOut!==status.config.authSignedOut||currentStatus.config.authExpiresAt!==status.config.authExpiresAt)){
     recordsRevision++;closeRecordDetail();byId('records-grid').replaceChildren();byId('record-detail-title').textContent='';byId('record-detail-meta').textContent='';byId('record-detail-text').textContent='';
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');

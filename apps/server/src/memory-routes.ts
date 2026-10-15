@@ -31,8 +31,16 @@ export function registerMemoryRoutes(app:FastifyInstance,{memoryIntegrationSetti
     if(extraction?.status!=='failed'||extraction.active?.id!==id)throw new StoreError('Failed extraction window not found',409);
     const result=lifecycle.retry('extraction',id,window=>{
       if(!extraction.manualRetryRequired)return;
-      const selected=modelSettings.select('memory'),fingerprint=modelConfiguration(selected.id,selected.settings,modelSettings.view().revision).fingerprint,inputs=new Set(window.ids);
+      if(window.checkpoint){
+        const child=memoryPipeline.get(window.checkpoint);
+        // Only this exact durable backlink authorizes restarting the failed
+        // checkpoint; unrelated jobs retain their terminal receipts.
+        if(child.status==='failed'&&child.importJobId==='lifecycle:'+window.id){const accepted=memoryPipeline.acceptRetry(child.id);void accepted.completion.catch(()=>{});}
+      }
+      if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='processing_jobs'").get())return;
       const rows=store.db.prepare("SELECT e.id,j.json FROM operation_parents p JOIN execution_steps e ON e.operation_id=p.child_id JOIN processing_jobs j ON j.id=e.id WHERE p.parent_id=? AND e.kind='context-dag.semantic' AND e.state IN ('failed','blocked')").all('workflow:lifecycle:'+window.id) as {id:string;json:string}[];
+      if(!rows.length)return;
+      const selected=modelSettings.select('memory'),fingerprint=modelConfiguration(selected.id,selected.settings,modelSettings.view().revision).fingerprint,inputs=new Set(window.ids);
       for(const row of rows){
         const job=JSON.parse(row.json) as {processor?:string;config?:{artifactId?:string;modelFingerprint?:string};artifactInputs?:{id:string;revision:string}[]};
         const artifactId=job.config?.artifactId,source=job.artifactInputs?.[0];
@@ -61,7 +69,7 @@ export function registerMemoryRoutes(app:FastifyInstance,{memoryIntegrationSetti
   app.get('/api/memory-jobs/:id',async req=>memoryPipeline.get(jobId(req.params)));
   app.post('/api/memory-jobs',async(req,reply)=>{
     memoryPipeline.assertNewManualWork();
-    const scope=z.object({...scopeFields,contextTime:z.string().datetime({offset:true}).optional(),recipes:z.array(memoryStrategyRefSchema).min(1).max(9).optional(),modelProfileId:modelProfileIdSchema.optional(),evidenceIds:z.array(z.string().uuid()).min(1).max(20000).optional()}).strict().refine(validRange,{message:'Invalid time range'}).parse(req.body??{});
+    const scope=z.object({...scopeFields,contextTime:z.string().datetime({offset:true}).optional(),recipes:z.array(memoryStrategyRefSchema).min(1).max(10).optional(),modelProfileId:modelProfileIdSchema.optional(),evidenceIds:z.array(z.string().uuid()).min(1).max(20000).optional()}).strict().refine(validRange,{message:'Invalid time range'}).parse(req.body??{});
     const profile=modelSettings.select('memory',scope.modelProfileId);
     const policy=new EvidenceExposurePolicy();
     const bindings=scope.recipes?.map(ref=>{try{return memoryPipeline.strategies.resolve(ref).binding;}catch{throw new StoreError('Memory recipe is unavailable',409);}});

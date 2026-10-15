@@ -12,6 +12,8 @@ import type {Config} from '../src/config.js';
 import {sha256} from '../src/store.js';
 import {materialId} from '../src/materials.js';
 import {TURN_GROUP_PROMPT} from '../src/file-dialogue.js';
+import {createServer} from 'node:http';
+import {fixtureFilePolicy} from './fixtures/file-policy.js';
 
 test('local file outputs are available to remote and local models across every evidence representation',async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-file-content-policy-'));
@@ -97,4 +99,37 @@ test('native local dialogue routes grouping and summaries through the configured
  assert.equal(modelCalls.length,2);assert.equal(modelCalls[0].question,TURN_GROUP_PROMPT);assert.ok(modelCalls.every(call=>call.model==='gpt-6.1-sol'&&call.protocol==='codex-app-server'));
  assert.ok(detail.artifacts.some(a=>a.kind==='dialogue'&&a.semanticGrouping===true));assert.ok(detail.artifacts.some(a=>a.kind==='summary'));assert.equal(node.files.pendingIndex('configured-embedding').length,2);
  assert.deepEqual(node.processing.explain(original.id).capabilities,{dialogue:true,summary:true});
+});
+
+for(const stage of ['summary','semantic grouping'] as const)test(`file ${stage} rejection reaches the real Agent repair conversation before publication`,{timeout:30000},async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-summary-citation-repair-')),requests:any[]=[];let citationId='';
+ const provider=createServer(async(req,res)=>{
+  let raw='';for await(const part of req)raw+=part;requests.push(JSON.parse(raw));
+  citationId=node.files.chunks(original.id)[0].id;
+  const first=requests.length===1,empty=requests.length===2;
+  const answer=stage==='summary'?(empty?'Generated uncited summary':`Generated cited summary [${citationId}]`):JSON.stringify({groups:empty?[[1]]:[[0]]});
+  const delta=first?{role:'assistant',tool_calls:[{index:0,id:'generated-discovery',type:'function',function:{name:'search_context',arguments:'{"query":"generated"}'}}]}:{role:'assistant',content:JSON.stringify({answer,citationIds:stage==='summary'&&empty?[]:[citationId]})};
+  res.writeHead(200,{'Content-Type':'text/event-stream'});res.write(`data: ${JSON.stringify({choices:[{index:0,delta,finish_reason:null}]})}\n\n`);res.end(`data: ${JSON.stringify({choices:[{index:0,delta:{},finish_reason:first?'tool_calls':'stop'}]})}\n\ndata: [DONE]\n\n`);
+ });
+ await new Promise<void>(resolve=>provider.listen(0,'127.0.0.1',resolve));
+ const config:Config={dataDir:directory,token:'generated-summary-repair-token',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:20_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-summary',modelProvider:'custom',modelProtocol:'openai-completions',modelBaseUrl:`http://127.0.0.1:${(provider.address() as {port:number}).port}/v1`,apiKey:'generated',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false,agentTimeoutMs:20000};
+ const node=await buildApp(config,{backgroundWorker:false});await node.app.ready();node.featureHost.stop();
+ t.after(async()=>{await node.app.close();provider.closeAllConnections();await new Promise<void>(resolve=>provider.close(()=>resolve()));rmSync(directory,{recursive:true,force:true});});
+ if(stage==='semantic grouping'){
+  node.processing.runtime.registry.register({id:'fixture.repair-audio',version:'1',name:'Generated audio',stage:'extract',serviceKind:'asr',localOnly:true,dialogue:true,mediaTypes:['audio/'],parameters:[{key:'semanticTurns',label:'Generated grouping',type:'boolean',default:false}],process:async()=>({durationMs:1000,segments:[{startMs:0,endMs:1000,text:'Generated audio grouping evidence'}]})});
+  node.processing.runtime.registry.register({id:'fixture.repair-diarizer',version:'1',name:'Generated diarization',stage:'diarize',localOnly:true,mediaTypes:['audio/'],process:async()=>({durationMs:1000,engine:'generated',expectedSpeakers:null,observedSpeakers:1,overlapDetection:'unknown',segments:[{startMs:0,endMs:1000,speaker:'SPEAKER_0'}],samples:[]})});
+ }
+ const settings={...node.processing.currentSettings(),enabled:true,summarize:stage==='summary',...(stage==='semantic grouping'?{audioProcessor:'fixture.repair-audio',diarizationProcessor:'fixture.repair-diarizer',semanticTurns:true}:{})};await node.processing.save({revision:node.processing.view().revision,settings,policy:fixtureFilePolicy(settings,node.processing.runtime.registry)});
+ node.sources.register({id:'generated-summary-repair',name:'Generated summary repair',kind:'local-files',deviceId:'generated',platform:'import',retention:'archive'});
+ const bytes=Buffer.from('Generated cited summary evidence'),upload=node.files.begin({sourceId:'generated-summary-repair',item:{externalId:stage==='summary'?'generated.txt':'generated.wav',revision:'1',observedAt:'2026-10-15T00:00:00Z',kind:'file',layer:'original',text:'',mimeType:stage==='summary'?'text/plain':'audio/wav'},sizeBytes:bytes.length,sha256:sha256(bytes)},()=>{});
+ node.files.part(upload.uploadId,0,bytes,()=>{});const original=await node.files.commit(upload.uploadId,()=>{});
+ await node.processing.tick();
+ const detail=node.files.detail(original.id);assert.equal(detail.job.state,'succeeded');assert.equal(requests.length,3,'one evidence discovery, one rejected answer and one in-session correction');
+ const messages=requests[2].messages,correction=messages.filter((message:any)=>message.role==='user').at(-1).content;
+ assert.match(typeof correction==='string'?correction:JSON.stringify(correction),stage==='summary'?/invalid_summary_citations/:/invalid_semantic_grouping/);assert.ok(messages.some((message:any)=>message.role==='tool'),'repair preserves the discovered evidence');
+ if(stage==='summary'){
+  assert.equal(detail.job.summary_state,'succeeded');const summary=detail.artifacts.find(artifact=>artifact.kind==='summary')!;assert.deepEqual(summary.sections[0].citationIds,[citationId]);assert.equal(summary.sections[0].answer,`Generated cited summary [${citationId}]`);
+  assert.equal(node.store.db.prepare('SELECT count(*) n FROM file_summary_pages').get()!.n,1);
+ }else assert.ok(detail.artifacts.some(artifact=>artifact.kind==='dialogue'&&artifact.semanticGrouping===true));
+ assert.equal(node.store.db.prepare('SELECT count(*) n FROM file_processor_waits').get()!.n,0);
 });

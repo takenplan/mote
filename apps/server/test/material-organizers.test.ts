@@ -291,7 +291,7 @@ test('a source deletion during build revokes the old worker before publication',
   assert.equal(materials.get(materialKey),undefined);
 });
 
-test('failed organizer keeps discovered work durable and restart retries the fenced step',async t=>{
+test('failed organizer stays terminal across restart until explicitly retried',async t=>{
   const {store,materials}=fixture(t),id=randomUUID();
   const custom:MaterialOrganizer={id:'fixture.probe',version:'1',select:r=>r.id===id?{captureId:r.id}:undefined,
     identity:g=>materialId('fixture-probe',g.captureId),build:()=>{throw Error('generated organizer failure');}};
@@ -301,11 +301,19 @@ test('failed organizer keeps discovered work durable and restart retries the fen
   assert.equal(runtime.status().cursor,1,'the cursor records durable discovery even when execution fails');
   assert.equal(store.db.prepare("SELECT COUNT(*) n FROM material_organizer_inputs WHERE organizer_id='fixture.probe'").get()!.n,1);
   assert.equal(runtime.status().pendingSteps,0);assert.equal(runtime.status().failedSteps,1);
+  const failed=store.db.prepare("SELECT id,attempts FROM execution_steps WHERE kind='material.organizer' AND state='failed'").get()!;
+  await runtime.close();
   const succeeding:MaterialOrganizer={...custom,build:()=>undefined};
   const restarted=new MaterialOrganizerRuntime(store,materials,[succeeding]);
-  assert.equal(await restarted.tick(),0,'recovery consumes the persisted step without rediscovering the capture');
+  t.after(()=>restarted.close());
+  assert.equal(await restarted.tick(),0,'startup cannot replay a deterministic failure');
+  assert.equal(restarted.status().failedSteps,1);
+  assert.equal(store.db.prepare('SELECT attempts FROM execution_steps WHERE id=?').get(failed.id)!.attempts,failed.attempts);
+  restarted.executor.retry(String(failed.id));
+  assert.equal(await restarted.tick(),0,'explicit retry consumes the persisted step without rediscovering the capture');
   assert.equal(store.db.prepare("SELECT COUNT(*) n FROM material_organizer_inputs WHERE organizer_id='fixture.probe'").get()!.n,1);
   assert.equal(restarted.status().pendingSteps,0);
+  assert.equal(restarted.status().failedSteps,0);
 });
 
 test('failed replacement with a different identity rolls back retirement and cursor',async t=>{
@@ -363,6 +371,9 @@ test('new higher priority organizer backfills old captures and replaces the fall
   assert.equal(organizers.status().pendingSteps,0);assert.ok(organizers.status().failedSteps>0);
   unregister();
   organizers.registry.register(plugin);
+  assert.equal(organizers.status().failedSteps,1,'registering the same component version cannot replay a terminal failure');
+  const failed=store.db.prepare("SELECT id FROM execution_steps WHERE kind='material.organizer' AND state='failed' AND json_extract(input,'$.organizerId')=?").get(plugin.id)!;
+  organizers.executor.retry(String(failed.id));
   assert.equal(await organizers.tick(),0,'the corrected pinned component retries its durable step');
   const replacement=materials.get(id)!;
   assert.equal(replacement.kind,'fixture.document');

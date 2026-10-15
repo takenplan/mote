@@ -86,7 +86,7 @@ export function serverConfiguration(config: Config, options: { modelSource?: 'en
         field('agentConcurrency', moteText('Agent 并发'), config.agentConcurrency??8, moteText('运行中的 Agent 上限；可在设置中立即调整。'), 'MOTE_AGENT_CONCURRENCY'),
         field('llmConcurrency', moteText('LLM 执行并发'), config.llmConcurrency??4, moteText('模型运行及工具循环的并发上限。'), 'MOTE_LLM_CONCURRENCY'),
         field('memoryConcurrency', moteText('记忆批次并发'), config.memoryConcurrency??3, moteText('独立证据批次的并发上限。'), 'MOTE_MEMORY_CONCURRENCY'),
-        field('agentTimeoutMs', moteText("Agent 总运行超时"), config.agentTimeoutMs ?? (config.modelProtocol === 'codex-app-server' ? null : DEFAULT_AGENT_TIMEOUT_MS), moteText("从一次 Agent 运行开始到完成，包含多次模型请求、工具调用和结果校验。Codex Server 可留空，留空表示不设置 Mote 的总运行期限。"), 'MOTE_AGENT_TIMEOUT_MS', { unit: 'ms' }),
+        field('agentTimeoutMs', moteText("Agent 总运行超时"), config.agentTimeoutMs === undefined ? (config.modelProtocol === 'codex-app-server' ? null : DEFAULT_AGENT_TIMEOUT_MS) : config.agentTimeoutMs, moteText("可留空；累计实际执行的模型、工具与修正时间，不包含等待执行名额。"), 'MOTE_AGENT_TIMEOUT_MS', { unit: 'ms' }),
         field('allowUnauthenticatedLocal', moteText("允许本机免密模型"), config.allowUnauthenticatedLocal, moteText("只对 localhost、127.0.0.1 或 ::1 的模型地址生效；容器 loopback 指容器本身。"), 'MOTE_MODEL_ALLOW_UNAUTHENTICATED_LOCAL'),
         field('insightIntervalHours', moteText("后台洞察间隔"), config.insightIntervalHours, moteText("0 关闭定时洞察；正数按小时请求已配置的 Agent，模型服务可能产生费用。"), 'MOTE_INSIGHT_INTERVAL_HOURS', { unit: 'hours' }),
       ] },

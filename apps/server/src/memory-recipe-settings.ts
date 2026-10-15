@@ -8,9 +8,11 @@ import {PERSONAL_MEMORY_RECIPE,PERSONAL_MEMORY_RECIPE_V3} from './bounded-person
 import {RANGE_SELECTION_PERSONAL_RECIPE,RANGE_SELECTION_DAILY_RECIPE} from './memory-range-selection-policy.js';
 
 export const memoryRecipeScope=(binding:MemoryRecipeBinding)=>'recipe/'+sha256(JSON.stringify(binding));
-const bindingsSchema=z.array(memoryRecipeBindingSchema).min(1).max(9);
-const selectionSchema=z.array(memoryStrategyRefSchema).min(1).max(9).refine(values=>new Set(values.map(v=>v.id+'@'+v.version)).size===values.length,'Duplicate Memory recipe');
-export const memoryRecipeSettingsQuery=z.object({sourceId:z.string().min(1).max(256).optional(),scope:z.literal('capture').optional()}).strict().refine(value=>!(value.sourceId&&value.scope),'Choose source or capture defaults');
+const bindingsSchema=z.array(memoryRecipeBindingSchema).min(1).max(10);
+const selectionSchema=z.array(memoryStrategyRefSchema).min(1).max(10).refine(values=>new Set(values.map(v=>v.id+'@'+v.version)).size===values.length,'Duplicate Memory recipe');
+export type MemoryRecipeDefaultScope='capture'|'lark-docs';
+const defaultScopeSchema=z.enum(['capture','lark-docs']);
+export const memoryRecipeSettingsQuery=z.object({sourceId:z.string().min(1).max(256).optional(),scope:defaultScopeSchema.optional()}).strict().refine(value=>!(value.sourceId&&value.scope),'Choose source or category defaults');
 
 /** Owner strategy selection is separate from installation. Persist exact selected
  * definitions. A named built-in default upgrade affects future receipts only;
@@ -37,6 +39,22 @@ export class MemoryRecipeSettings {
       const initial=prior.some(binding=>binding.recipe.id===daily.recipe.id)?prior:[...prior,daily];
       store.reserveMetadata(Buffer.byteLength(JSON.stringify(initial))+128);
       store.db.prepare("INSERT INTO memory_recipe_settings VALUES('capture-default',NULL,?)").run(JSON.stringify(initial));
+    }
+    // Cloud document activities have a trusted daily-events input of their own.
+    // Copy once; future owner choices and all source overrides remain exact.
+    if(!store.db.prepare("SELECT 1 FROM memory_recipe_settings WHERE id='lark-docs-default'").get()){
+      const prior=this.selection(),daily=strategies.resolve(RANGE_SELECTION_DAILY_RECIPE).binding;
+      const initial=prior.some(binding=>binding.recipe.id===daily.recipe.id)?prior:[...prior,daily];
+      const legacy=store.db.prepare("SELECT scope FROM memory_recipe_legacy_scopes WHERE setting_id='default'").all();
+      store.reserveMetadata(Buffer.byteLength(JSON.stringify(initial))+128+legacy.length*256);
+      const db=store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
+      try{
+        db.prepare("INSERT INTO memory_recipe_settings VALUES('lark-docs-default',NULL,?)").run(JSON.stringify(initial));
+        // Prior accepted general-default receipts remain runnable after this
+        // category starts inheriting independently. This grants no new input.
+        for(const row of legacy)db.prepare('INSERT INTO memory_recipe_legacy_scopes VALUES(?,?)').run('lark-docs-default',row.scope);
+        if(own)db.exec('COMMIT');
+      }catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
     }
   }
   private upgradeBuiltInDefaults(){
@@ -78,28 +96,32 @@ export class MemoryRecipeSettings {
       db.prepare('INSERT INTO memory_recipe_default_upgrades VALUES(?)').run(id);db.exec('COMMIT');
     }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
   }
-  private key(sourceId?:string,scope?:'capture'){return sourceId===undefined?scope==='capture'?'capture-default':'default':'source:'+sourceId;}
+  private key(sourceId?:string,scope?:MemoryRecipeDefaultScope){return sourceId===undefined?scope?scope+'-default':'default':'source:'+sourceId;}
+  private sourceDefault(sourceId:string){
+    const source=this.store.db.prepare('SELECT json FROM source_connections WHERE id=?').get(sourceId);
+    if(!source)return 'default';
+    const value=JSON.parse(String(source.json));
+    return isCaptureMemorySource(sourceId,value.deviceId)?'capture-default':value.kind==='lark-docs'?'lark-docs-default':'default';
+  }
   private source(sourceId?:string){if(sourceId!==undefined&&!this.store.db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(sourceId))throw new StoreError('Source not found',404);}
-  selection(sourceId?:string,scope?:'capture'):MemoryRecipeBinding[]{
+  selection(sourceId?:string,scope?:MemoryRecipeDefaultScope):MemoryRecipeBinding[]{
     const own=sourceId===undefined?undefined:this.store.db.prepare('SELECT json FROM memory_recipe_settings WHERE id=?').get(this.key(sourceId));
     if(own)return bindingsSchema.parse(JSON.parse(String(own.json)));
-    const source=sourceId===undefined?undefined:this.store.db.prepare('SELECT json FROM source_connections WHERE id=?').get(sourceId);
-    const capture=scope==='capture'||Boolean(source&&isCaptureMemorySource(sourceId!,JSON.parse(String(source.json)).deviceId));
-    return bindingsSchema.parse(JSON.parse(String(this.store.db.prepare('SELECT json FROM memory_recipe_settings WHERE id=?').get(capture?'capture-default':'default')!.json)));
+    const setting=sourceId===undefined?this.key(undefined,scope):this.sourceDefault(sourceId);
+    return bindingsSchema.parse(JSON.parse(String(this.store.db.prepare('SELECT json FROM memory_recipe_settings WHERE id=?').get(setting)!.json)));
   }
   enabled(sourceId:string,binding:MemoryRecipeBinding){
     const scope=memoryRecipeScope(binding);if(this.selection(sourceId).some(selected=>memoryRecipeScope(selected)===scope))return true;
     if(this.store.db.prepare('SELECT 1 FROM memory_recipe_legacy_exclusions WHERE source_id=?').get(sourceId))return false;
     const own=this.store.db.prepare('SELECT 1 FROM memory_recipe_settings WHERE id=?').get(this.key(sourceId));
     if(own)return false;
-    const source=this.store.db.prepare('SELECT json FROM source_connections WHERE id=?').get(sourceId);
-    const setting=source&&isCaptureMemorySource(sourceId,JSON.parse(String(source.json)).deviceId)?'capture-default':'default';
+    const setting=this.sourceDefault(sourceId);
     return Boolean(this.store.db.prepare('SELECT 1 FROM memory_recipe_legacy_scopes WHERE setting_id=? AND scope=?').get(setting,scope));
   }
   available(binding:MemoryRecipeBinding){try{this.strategies.resolvePinned(binding);return true;}catch{return false;}}
-  view(sourceId?:string,scope?:'capture'){this.source(sourceId);const own=sourceId===undefined?undefined:this.store.db.prepare('SELECT json FROM memory_recipe_settings WHERE id=?').get(this.key(sourceId));return {sourceId:sourceId??null,...(scope?{scope}:{}),inherited:sourceId!==undefined&&!own,items:this.selection(sourceId,scope).map(binding=>({binding,available:this.available(binding)}))};}
+  view(sourceId?:string,scope?:MemoryRecipeDefaultScope){this.source(sourceId);const own=sourceId===undefined?undefined:this.store.db.prepare('SELECT json FROM memory_recipe_settings WHERE id=?').get(this.key(sourceId));return {sourceId:sourceId??null,...(scope?{scope}:{}),inherited:sourceId!==undefined&&!own,items:this.selection(sourceId,scope).map(binding=>({binding,available:this.available(binding)}))};}
   configure(raw:unknown){
-    const input=z.object({sourceId:z.string().min(1).max(256).optional(),scope:z.literal('capture').optional(),recipes:selectionSchema.nullable()}).strict().refine(value=>!(value.sourceId&&value.scope),'Choose source or capture defaults').parse(raw);this.source(input.sourceId);
+    const input=z.object({sourceId:z.string().min(1).max(256).optional(),scope:defaultScopeSchema.optional(),recipes:selectionSchema.nullable()}).strict().refine(value=>!(value.sourceId&&value.scope),'Choose source or category defaults').refine(value=>value.sourceId!==undefined||value.scope!==undefined||value.recipes===null||value.recipes.length<=9,'General defaults allow at most nine recipes').parse(raw);this.source(input.sourceId);
     const db=this.store.db;db.exec('BEGIN IMMEDIATE');
     try{
     // Any subsequent explicit owner choice ends grandfathering for this setting.

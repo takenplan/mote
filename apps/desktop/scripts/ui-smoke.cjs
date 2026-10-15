@@ -106,8 +106,10 @@ app.on('browser-window-created', (_event, window) => {
       ipcMain.removeHandler('mote:start');
       ipcMain.handle('mote:start', () => { startRequested = true; return status; });
       assert.equal(status.sync.state, 'unconfigured');
-      assert.deepEqual(await js(`Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(b => b.textContent.trim())`), ['首页','内容','问一问']);
-      assert.equal(await js(`document.querySelectorAll('.home-add-grid [data-add-choice]').length`), 4, 'All four local actions are equal home entries');
+      assert.deepEqual(await js(`Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(b => b.textContent.trim())`), ['内容','问一问','来源','活动']);
+      assert(await js(`!document.querySelector('[data-page=records]').hidden`),'A new profile opens Content');
+      await navigate('overview');
+      assert.equal(await js(`document.querySelectorAll('.home-add-grid [data-add-choice]').length`), 5, 'Local collection and Feishu are equal home entries');
       assert(await js(`(() => {
         const luminance = color => color.match(/\\d+(?:\\.\\d+)?/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,index)=>sum+v*[.2126,.7152,.0722][index],0);
         const background=luminance(getComputedStyle(document.documentElement).backgroundColor);
@@ -118,8 +120,12 @@ app.on('browser-window-created', (_event, window) => {
       })()`), 'Normal-size Home links meet measured 4.5:1 contrast on the actual Slate background');
       assert(await js(`document.querySelector('#start').getClientRects().length === 0`), 'Home starts with content actions');
       await js(`document.querySelector('#note-action').click()`);
-      assert.equal(await js(`document.querySelectorAll('#add-dialog [data-add-choice]').length`),4,'Every Add entry offers the shared four choices');
+      assert.equal(await js(`document.querySelectorAll('#add-dialog [data-add-choice]').length`),5,'Every Add entry offers the shared five choices');
       await js(`document.querySelector('#add-close').click()`);
+      await js(`document.querySelector('.home-add-grid [data-add-choice=lark]').click(); new Promise(resolve => setTimeout(resolve, 100))`);
+      assert(await js(`!document.querySelector('[data-page=connection]').hidden`), 'Feishu explains the missing central connection before opening its cloud settings');
+      assert.equal(externalUrls.length,0,'Disconnected Feishu does not open an unauthenticated browser');
+      await navigate('overview');
       for(let i=0;i<100&&!await js(`document.querySelector('#home-recent').children.length>0`);i++)await new Promise(resolve=>setTimeout(resolve,25));
       writeFileSync(join(outputDirectory, 'first-run-ui-fixture.png'), (await window.webContents.capturePage()).toPNG());
       window.setSize(820, 620);
@@ -164,9 +170,8 @@ app.on('browser-window-created', (_event, window) => {
       await js(`document.querySelector('#workspace-back').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(await js(`!document.querySelector('[data-page="screen"]').hidden && !document.querySelector('#collection-workbench').hidden`), 'Scope setup returns to screen controls without requiring a node');
       await navigate('sources');
-      assert(await js(`document.querySelector('aside [data-nav="overview"]').getAttribute('aria-current') === 'page'`));
-      await js(`document.querySelector('#workspace-back').click(); new Promise(resolve => setTimeout(resolve, 100))`);
-      assert(await js(`!document.querySelector('[data-page="overview"]').hidden`), 'Contextual source controls return to collection');
+      assert(await js(`document.querySelector('aside [data-nav="sources"]').getAttribute('aria-current') === 'page' && document.querySelector('#workspace-back').hidden`),'Sources is a primary destination');
+      await navigate('overview');
       await navigate('screen');
       await js(`document.querySelector('#start').click(); document.querySelector('#capture-confirm-start').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(startRequested, 'No node URL or token needed to request local capture (IPC stub, no screen read)');
@@ -195,23 +200,31 @@ app.on('browser-window-created', (_event, window) => {
       const authenticatedStatus = { ...status, config: { ...status.config, serverUrl: 'http://127.0.0.1:47999', tokenConfigured: true } };
       const previousAskHandler = ipcMain._invokeHandlers.get('mote:ask');
       const previousStatusHandler = ipcMain._invokeHandlers.get('mote:get-status');
+      const previousCentralHandler = ipcMain._invokeHandlers.get('mote:central');
+      const centralPages = [];
       const originalStatusSend = window.webContents.send;
       ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', (_event, command) => command === 'history' || command === 'runs' ? { items: [] } : undefined);
       // Keep both IPC reads and status events in the same synthetic auth state.
       // A late real offline status must not race this isolated authenticated UI scenario.
       ipcMain.removeHandler('mote:get-status'); ipcMain.handle('mote:get-status', () => authenticatedStatus);
+      ipcMain.removeHandler('mote:central'); ipcMain.handle('mote:central', (_event, page) => {centralPages.push(page);});
       window.webContents.send = function(channel, ...args) { return originalStatusSend.call(this, channel, ...(channel === 'mote:status' ? [authenticatedStatus] : args)); };
       try {
         await js(`window.mote.status().then(()=>new Promise(resolve=>requestAnimationFrame(resolve)))`);
         window.webContents.send('mote:status', authenticatedStatus);
         await js(`new Promise(resolve => requestAnimationFrame(resolve)); document.querySelector('#ask-refresh').click(); new Promise(resolve => setTimeout(resolve, 100))`);
         assert(await js(`document.querySelector('#node-login-panel').hidden && document.querySelector('#ask-disconnected').hidden`), 'Refreshing an authenticated Ask does not redisplay the token form');
+        await navigate('overview');
+        await js(`document.querySelector('#note-action').click();document.querySelector('#add-dialog [data-add-choice=lark]').click();new Promise(resolve=>setTimeout(resolve,100))`);
+        assert.deepEqual(centralPages,['lark'],'Connected Feishu Add reaches the dedicated central page through real preload IPC');
       } finally {
         window.webContents.send = originalStatusSend;
         ipcMain.removeHandler('mote:get-status'); ipcMain.handle('mote:get-status', previousStatusHandler);
+        ipcMain.removeHandler('mote:central'); ipcMain.handle('mote:central', previousCentralHandler);
         ipcMain.removeHandler('mote:ask'); ipcMain.handle('mote:ask', previousAskHandler); window.webContents.send('mote:status', status);
       }
       await js(`new Promise(resolve => requestAnimationFrame(resolve)); document.querySelector('#ask-question').value='';`);
+      await navigate('ask');
       await js(`document.querySelector('#ask-disconnected [data-nav="connection"]').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(await js(`!document.querySelector('[data-page="connection"]').hidden`), 'Offline Ask leads to the existing connection setup');
       await navigate('overview');
@@ -468,7 +481,7 @@ app.on('browser-window-created', (_event, window) => {
           await new Promise(resolve=>setTimeout(resolve,25));
         }
         assert.equal(await js('document.documentElement.lang'),preference);
-        // Locale reload restores the existing overview entry; its content loads normally.
+        // Locale reload restores the default Content entry; its content loads normally.
         await new Promise(resolve=>setTimeout(resolve,100));
       };
       await changeFixtureLanguage('en');

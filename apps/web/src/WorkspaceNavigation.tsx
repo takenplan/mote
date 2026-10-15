@@ -12,12 +12,12 @@ export function primaryDestination(page: Page) {
     if (section === 'library')
         return 'archive';
     if (section === 'connections')
-        return 'devices';
+        return 'sources';
     if (page === 'processing')
         return 'activity';
     if (page === 'actions')
         return 'overview';
-    return ['overview', 'archive', 'ask', 'activity', 'devices'].includes(page) ? page : 'about';
+    return ['overview', 'archive', 'ask', 'activity', 'sources'].includes(page) ? page : 'about';
 }
 /** Settings keep their task controls; the complete feature directory remains a discovery surface. */
 export function isSettingsContext(page: Page) {
@@ -28,7 +28,7 @@ export function parentDestination(page:Page):Page|undefined {
     if(page==='coding')return 'archive';
     const section=sectionFor(page);
     if(section==='library'&&page!=='archive')return 'archive';
-    if(section==='connections'&&page!=='devices')return 'devices';
+    if(section==='connections'&&page!=='sources')return 'sources';
     if(page==='settings')return;
     if(page==='processing')return 'activity';
     if(page==='actions')return 'overview';
@@ -48,9 +48,9 @@ export function WorkspaceNavigation({ page, onPage }: {
     </div>;
     }
     if (section === 'connections') {
-        const tools = sections.connections.filter(id => id !== 'devices');
+        const tools = sections.connections.filter(id => id !== 'sources');
         return <div className="workspace-context">
-      {page !== 'devices' && <button className="back-link" aria-label={moteText('返回{0}', pageLabels.devices)} onClick={() => onPage('devices')}><ArrowLeft size={16}/>{moteText('返回上级')}</button>}
+      {page !== 'sources' && <button className="back-link" aria-label={moteText('返回{0}', pageLabels.sources)} onClick={() => onPage('sources')}><ArrowLeft size={16}/>{moteText('返回上级')}</button>}
       <label className="workspace-tool-select"><span>{moteText('来源与连接')}</span><select aria-label={moteText('来源与连接')} value={tools.includes(page) ? page : ''} onChange={event => { if (event.target.value)
             onPage(event.target.value); }}><option value="">{moteText('管理来源或授权')}</option>{tools.map(id => <option value={id} key={id}>{pageLabels[id]}</option>)}</select></label>
     </div>;

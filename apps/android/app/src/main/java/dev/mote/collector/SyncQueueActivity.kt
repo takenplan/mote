@@ -28,8 +28,8 @@ class SyncQueueActivity : MoteActivity() {
         super.onCreate(state); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val body = moteDetailPage(title = MoteI18n.text("待上传队列"))
         summary = TextView(this).also(body::addView)
-        speed = TextView(this).apply { MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.muted); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceItem)) }.also(body::addView)
-        categories = Spinner(this).also { body.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }) }
+        speed = TextView(this).apply { MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceItem)) }.also(body::addView)
+        categories = Spinner(this).also { body.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }) }
         body.addView(Button(this).apply { text = MoteI18n.text("刷新"); setOnClickListener { load() } })
         rows = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }.also(body::addView)
         paging = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also(body::addView)
@@ -79,7 +79,7 @@ class SyncQueueActivity : MoteActivity() {
                 for (i in 0 until items.length()) {
                     val item = items.getJSONObject(i)
                     rows.addView(TextView(this).apply {
-                        MoteUi.type(this, DesignTokens.fontBody); setTextColor(MoteUi.ink); gravity = android.view.Gravity.START
+                        MoteUi.type(this, NativeFontRole.BODY); MoteUi.textColor(this, NativeColorRole.INK); gravity = android.view.Gravity.START
                         setPadding(moteDp(16), moteDp(16), moteDp(16), moteDp(16)); background = MoteUi.clickable(this@SyncQueueActivity); isFocusable = true
                         text = if (source == null) "${item.optString("appName").ifBlank { sourceLabel(item.optString("source")) }} · ${item.getString("status")}\n${java.time.Instant.parse(item.getString("capturedAt")).atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofPattern("MM-dd HH:mm:ss"))}" else "${item.optString("name")}\n${item.getString("status")}"
                         setOnClickListener { startActivity(if (source == null) Intent(this@SyncQueueActivity, CaptureRecordsActivity::class.java).putExtra("recordId", item.getString("id")) else Intent(this@SyncQueueActivity, SourcesActivity::class.java)) }

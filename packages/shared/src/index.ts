@@ -168,7 +168,7 @@ export * from './capture-sessions.js';
 
 export * from './actions.js';
 export * from './execution.js';
-export type {LarkSelection,LarkJob,LarkStatus,LarkCalendar} from './lark.js';
+export type {LarkSelection,LarkJob,LarkStatus,LarkCalendar,LarkDocumentSyncStatus} from './lark.js';
 
 export * from './ui-builtins.js';
 
@@ -181,6 +181,7 @@ export * from './provider-failure.js';
 export * from './evidence-ref.js';
 export type {InsightSnapshot} from './insight-snapshot.js';
 export * from './feature-packs.js';
+export * from './ui-presentation.js';
 export * from './recordings.js';
 
 export * from './activity.js';

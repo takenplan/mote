@@ -11,7 +11,8 @@ import {ExecutionFailure} from './execution-engine.js';
 
 type Receipt={conversationId:string;turnId:string};
 type SavedFailure=ReturnType<typeof safeError>&{kind?:'provider'|'response'};
-type SavedInput=QueryInput&{hostRequest:unknown;deadlineAt?:number;lastFailure?:SavedFailure};
+type SavedInput=QueryInput&{hostRequest:unknown;executionTimeoutMs?:number;lastFailure?:SavedFailure};
+const capacityWaiting=(error:unknown)=>error instanceof ExecutionFailure&&error.category==='waiting'||error instanceof ProviderFailure&&(error.details.admissionWaiting===true||error.details.category==='transient'&&error.details.code==='rate_limited');
 type QueryCallbacks={
   contextTime?:()=>string;
   prepare:(body:unknown,work:DelegationWork,signal:AbortSignal,onProgress:QueryInput['onProgress'])=>Promise<QueryInput>;
@@ -29,17 +30,17 @@ export class DelegatedQueryRuns {
   private errors=new Map<string,unknown>();
   private foreground=new Set<string>();
   /** Only the current trusted HTTP request; never a cached model context. */
-  private foregroundRequests=new Map<string,{hostRequest:unknown;deadlineAt?:number;cancelled?:boolean}>();
+  private foregroundRequests=new Map<string,{hostRequest:unknown;executionTimeoutMs?:number;cancelled?:boolean}>();
   private waiters=new Map<string,Set<()=>void>>();
   private stopped=false;
   private interrupted=false;
   constructor(private store:Store,readonly runtime:DelegationRuntime,private callbacks:QueryCallbacks){
     store.db.exec('CREATE TABLE IF NOT EXISTS query_runs(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL,json TEXT NOT NULL)');
     registerQueryDelegation(runtime,{
+      timeoutMs:input=>(input as SavedInput).executionTimeoutMs??null,
       prepare:async(work,saved,signal)=>{
         const id=work.id.slice('query:'.length),input=saved as SavedInput;
         try{
-          if(input.deadlineAt!==undefined&&Date.now()>=input.deadlineAt)throw new AgentTimeoutError();
           const prepared=await callbacks.prepare(input.hostRequest,work,signal,event=>this.observe(id,event));
           runtime.recordEvidence(work.id,[...(prepared.contextEvidenceDependencies?.ids??[]),...(prepared.conversation?.evidenceDependencies?.ids??[]),...(prepared.directImages?.map(image=>image.id)??[])]);
           return prepared;
@@ -58,7 +59,6 @@ export class DelegatedQueryRuns {
       commit:(work,answer)=>{
         try{
         const id=work.id.slice('query:'.length),saved=runtime.journal.payload<SavedInput>(work.id),run=this.raw(id),result=answer as QueryResult;
-        if(saved.deadlineAt!==undefined&&Date.now()>=saved.deadlineAt)throw new AgentTimeoutError();
         const receipt=callbacks.commit(saved.hostRequest,result,work);
         Object.assign(run,receipt,{status:'completed',updatedAt:new Date().toISOString(),evidenceDependencies:result.evidenceDependencies,sourceContextDependencies:result.sourceContextDependencies});delete run.error;
         const operationUsage=callbacks.operationUsage?.(work.operationId,run.createdAt,run.updatedAt);
@@ -74,6 +74,9 @@ export class DelegatedQueryRuns {
   private raw(id:string):QueryRun{const row=this.store.db.prepare('SELECT json FROM query_runs WHERE id=?').get(id);if(!row)throw new StoreError('Query run not found',404);return JSON.parse(String(row.json));}
   private save(run:QueryRun){this.store.db.prepare('UPDATE query_runs SET json=? WHERE id=?').run(JSON.stringify(run),run.id);}
   private executionFailure(error:unknown,id?:string){
+    // Refused capacity has not failed this synchronous request. Preserve the
+    // host fact so the shared executor can suspend without spending its budget.
+    if(capacityWaiting(error))return error as ProviderFailure|ExecutionFailure;
     // A synchronous query keeps the previous single-attempt HTTP contract;
     // durable background admission can recover structured transient failures.
     if(error instanceof ProviderFailure&&error.details.category==='transient'&&id&&this.foreground.has(id))return new ExecutionFailure('permanent',error.details.code,error.details.retryAfterMs);
@@ -81,6 +84,7 @@ export class DelegatedQueryRuns {
   }
   /** Save only a sanitized attempt receipt. A retry has not failed the conversation. */
   private rememberFailure(id:string,error:unknown){
+    if(capacityWaiting(error))return;
     const work=this.runtime.get('query:'+id),stepId=work.id+':coordinator:'+work.revision,fence=String(this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(stepId)?.fence??'');
     if(work.status!=='running'||!fence)return;
     const own=!this.store.db.isTransaction;if(own)this.store.db.exec('BEGIN IMMEDIATE');
@@ -113,11 +117,11 @@ export class DelegatedQueryRuns {
         // Source deletion deliberately erases the replay payload. The live user
         // request can still retain its question, without resurrecting derived
         // context or trusting a late provider callback after the grant expired.
-        const saved:Pick<SavedInput,'hostRequest'|'deadlineAt'|'lastFailure'>=erasedForeground?foreground!:this.runtime.journal.payload<SavedInput>(work.id);
+        const saved:Pick<SavedInput,'hostRequest'|'lastFailure'>=erasedForeground?foreground!:this.runtime.journal.payload<SavedInput>(work.id);
         const error=erasedForeground?new StoreError('Evidence used by this answer is no longer available',409):this.errors.get(run.id)??this.restoredFailure(saved.lastFailure,current),failure=saved.lastFailure??safeError(error);
-        const timedOut=failure.category==='timeout'||saved.deadlineAt!==undefined&&Date.now()>=saved.deadlineAt;
-        // The host deadline revokes publication, including a failure turn, even
-        // when the model's own timeout wins the scheduler race by a few ms.
+        const timedOut=failure.category==='timeout'||current.error==='timeout';
+        // A timed-out fragment cannot publish a conversation turn after its grant
+        // has expired; waiting time never establishes a timeout.
         const conversation=timedOut?undefined:this.callbacks.failure?.(saved.hostRequest,error),finished={...run,...conversation,error:{code:timedOut?'timeout':current.error==='source_context_changed'?'source_context_changed':failure.reason??failure.category,message:failure.message}};
         this.save(finished);
         if(own)this.store.db.exec('COMMIT');
@@ -142,14 +146,9 @@ export class DelegatedQueryRuns {
     const stepId=work.id+':coordinator:'+work.revision,step=this.runtime.engine.get(stepId);
     if(step&&['failed','blocked','stale','cancelled'].includes(step.state)&&['running','waiting'].includes(work.status)){this.runtime.engine.project(stepId);work=this.runtime.get(work.id);}
     if(['failed','blocked','stale','cancelled'].includes(work.status))this.runtime.engine.abortLocal(stepId);
-    let expired=false;
-    if(['running','waiting'].includes(work.status)){
-      const saved=this.runtime.journal.payload<SavedInput>(work.id);
-      if(saved.deadlineAt!==undefined&&Date.now()>=saved.deadlineAt){this.runtime.cancel(work.id);work=this.runtime.get(work.id);expired=true;}
-    }
-    run.status=expired||run.error?.code==='timeout'?'failed':work.status==='succeeded'?'completed':work.status==='cancelled'?'cancelled':['running','waiting'].includes(work.status)?'running':'failed';
+    run.status=work.error==='timeout'||run.error?.code==='timeout'?'failed':work.status==='succeeded'?'completed':work.status==='cancelled'?'cancelled':['running','waiting'].includes(work.status)?'running':'failed';
     run.sourceContextDependencies=this.runtime.sourceContextDependencies(work.id);
-    if(expired)run.error={code:'timeout',message:moteText('模型执行超时，请重试。')};
+    if(work.error==='timeout')run.error={code:'timeout',message:moteText('模型执行超时，请重试。')};
     else if(run.status==='failed'){this.finishFailure(run,work);if(!run.error){const failure=safeError(this.restoredFailure(undefined,work));run.error={code:work.error==='evidence_deleted'?'deleted':work.error==='source_context_changed'?'source_context_changed':failure.category,message:failure.message};}}
     if(run.status!=='running'&&!this.foreground.has(id))this.errors.delete(id);
     run.updatedAt=work.updatedAt;
@@ -168,8 +167,8 @@ export class DelegatedQueryRuns {
     const request=input as {question:string;conversationId?:string;after?:string;before?:string;deviceId?:string;timeZone?:string;modelProfileId?:string;modelOverride?:string};
     if(request.conversationId&&this.store.db.prepare("SELECT 1 FROM query_runs WHERE json_extract(json,'$.conversationId')=? AND json_extract(json,'$.status')='running'").get(request.conversationId))throw new StoreError('An answer is already running in this conversation',409);
     const at=new Date().toISOString(),contextTime=this.callbacks.contextTime?.()??at,run:QueryRun={id,operationId:'query:'+id,status:'running',createdAt:at,updatedAt:at,events:[],evidenceRevision:this.store.deletionRevision(),...(request.conversationId?{conversationId:request.conversationId}:{})};
-    const saved:SavedInput={question:request.question,hostRequest:input,language:requestLocale.getStore()??'zh-CN',...(deadline.timeoutMs!==undefined&&deadline.timeoutMs!==null?{deadlineAt:Date.now()+Math.max(1,deadline.timeoutMs)}:{})};
-    const foreground=this.foregroundRequests.get(id);if(foreground)foreground.deadlineAt=saved.deadlineAt;
+    const saved:SavedInput={question:request.question,hostRequest:input,language:requestLocale.getStore()??'zh-CN',...(deadline.timeoutMs!==undefined&&deadline.timeoutMs!==null?{executionTimeoutMs:Math.max(1,deadline.timeoutMs)}:{})};
+    const foreground=this.foregroundRequests.get(id);if(foreground)foreground.executionTimeoutMs=saved.executionTimeoutMs;
     this.store.db.exec('BEGIN IMMEDIATE');
     try{
       this.store.reserveMetadata(32768);this.store.db.prepare('INSERT INTO query_runs VALUES(?,?,?)').run(id,requestHash,JSON.stringify(run));

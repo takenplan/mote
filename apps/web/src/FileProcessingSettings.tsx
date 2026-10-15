@@ -1,5 +1,6 @@
 import {invalidateConfiguration} from './configuration-cache';
 import { useResource } from './useResource';
+import { resources } from './resource-cache';
 import { processingState, localModelState } from './processing-state';
 import { useUnsavedChanges } from './unsaved';
 import { moteText } from '@mote/shared/i18n';
@@ -30,11 +31,8 @@ export function FileProcessingSettings({ api }: {
             missingDependencies?: string[];
         };
     }>(api, '/api/media-models'), dialogue = media.data?.dialogue, wespeaker=media.data?.['speaker-wespeaker'];
-    useEffect(() => { if (dialogue && (['downloading', 'verifying', 'installing'].includes(dialogue.state) || dialogue.state === 'ready' && !dialogue.runtimeReady)) {
-        const timer = setInterval(media.refresh, 2000);
-        return () => clearInterval(timer);
-    } }, [dialogue?.state, dialogue?.runtimeReady, media.refresh]);
-    useEffect(()=>{if(wespeaker&&(['downloading','verifying','installing'].includes(wespeaker.state)||wespeaker.state==='ready'&&!wespeaker.runtimeReady)){const timer=setInterval(media.refresh,2000);return()=>clearInterval(timer);}},[wespeaker?.state,wespeaker?.runtimeReady,media.refresh]);
+    const modelsUpdating = [dialogue, wespeaker].some(model => model && (['downloading', 'verifying', 'installing'].includes(model.state) || model.state === 'ready' && !model.runtimeReady));
+    useEffect(() => modelsUpdating ? resources(api).get('/api/media-models').poll(2000) : undefined, [api, modelsUpdating]);
     useUnsavedChanges(dirty);
     useEffect(() => { setSaved(null); setDirty(false); setPreview(null); setMatch(null); setMessage(''); }, [api]);
     useEffect(() => { if (resource.data && !dirty)
@@ -67,7 +65,7 @@ export function FileProcessingSettings({ api }: {
  <div className="policy-card"><strong>{moteText('可选 WeSpeaker 中文声纹模型')} · {localModelState(wespeaker?.state)}</strong><p>{moteText('仅选用此插件的录音使用此模型；下载不会更改默认方案。')}</p>{wespeaker?.state==='ready'?<p>{wespeaker.runtimeReady?moteText('已就绪'):moteText('等待音频 Worker')}</p>:<button className="button" disabled={busy||['downloading','verifying','installing'].includes(wespeaker?.state??'')} onClick={()=>void action(async()=>{await api.request('/api/media-models/speaker-wespeaker/install',{method:'POST',body:JSON.stringify({source:'official'})});media.refresh();})}>{moteText('安装可选声纹模型')}</button>}{wespeaker?.error&&<p role="alert">{wespeaker.error}</p>}</div>
  {resource.loading && !saved && <p role="status">{moteText("正在读取…")}</p>}{readError && <p role="alert" className="error-banner">{errorMessage(readError)}</p>}
  {saved && <><form onSubmit={e => { e.preventDefault(); void action(async () => { setSaved(await api.request('/api/file-processing', { method: 'PUT', body: JSON.stringify({ revision: saved.revision, settings, policy }) })); invalidateConfiguration(api); setDirty(false); setPreview(null); setMessage(moteText("设置已保存。新文件和未完成任务使用新配置；已完成文件保留原结果。")); }); }}>
- <fieldset disabled={busy}><legend>{moteText("处理开关与单文件限制")}</legend><label><input type="checkbox" checked={settings.enabled} onChange={e => edit(s => { s.settings.enabled = e.target.checked; })}/>{moteText("启用中央文件处理")}</label><div className="policy-grid"><label>{moteText("单个音频最长（分钟）")}<input aria-label={moteText("单个音频最长（分钟）")} type="number" min="1" max="1440" value={settings.maxAudioMinutes} onChange={e => edit(s => { s.settings.maxAudioMinutes = Number(e.target.value); })}/></label><label>{moteText("单文件超时（秒）")}<input aria-label={moteText("单文件超时（秒）")} type="number" min="1" max="3600" value={settings.timeoutMs / 1000} onChange={e => edit(s => { s.settings.timeoutMs = Number(e.target.value) * 1000; })}/></label></div></fieldset>
+ <fieldset disabled={busy}><legend>{moteText("处理开关与单文件限制")}</legend><label><input type="checkbox" checked={settings.enabled} onChange={e => edit(s => { s.settings.enabled = e.target.checked; })}/>{moteText("启用中央文件处理")}</label><div className="policy-grid"><label>{moteText("单个音频最长（分钟）")}<input aria-label={moteText("单个音频最长（分钟）")} type="number" min="1" max="1440" value={settings.maxAudioMinutes} onChange={e => edit(s => { s.settings.maxAudioMinutes = Number(e.target.value); })}/></label><label>{moteText("单次文件处理超时（秒）")}<input aria-label={moteText("单次文件处理超时（秒）")} type="number" min="1" max="3600" value={settings.timeoutMs / 1000} onChange={e => edit(s => { s.settings.timeoutMs = Number(e.target.value) * 1000; })}/></label></div></fieldset>
  <fieldset disabled={busy}><legend>{moteText("1. 类型策略")}</legend><p>{moteText("具体 MIME 类型优先于类型通配符；未配置的格式按“其他”处理。PDF 处理插件可由管理员接入 Cordis，接入后可在此选择。")}</p>
  <div className="policy-rules">{policy.rules.map((r: any, i: number) => !r.sourceId && <div className="policy-rule" key={i}><label>{moteText("文件类型")}{types.some(([t]) => t === r.type) ? <strong>{types.find(([t]) => t === r.type)?.[1]}</strong> : <input aria-label={moteText("精确 MIME 类型")} value={r.type} placeholder="application/json" onChange={e => edit(s => { s.policy.rules[i].type = e.target.value; })}/>}</label><label>{moteText("处理方案")}<select aria-label={moteText("处理方案")} value={r.profileId} onChange={e => edit(s => { s.policy.rules[i].profileId = e.target.value; })}>{profileOptions(r.type, r.profileId)}</select></label>{r.type !== '*/*' && <button type="button" className="text-button" onClick={() => edit(s => { s.policy.rules.splice(i, 1); })}>{moteText("删除规则")}</button>}</div>)}</div>
  <button type="button" className="button" onClick={() => edit(s => { s.policy.rules.push({ type: 'application/json', profileId: s.policy.profiles.find((p: any) => p.processorId === 'archive')?.id ?? s.policy.profiles[0].id }); })}>{moteText("添加类型规则")}</button>

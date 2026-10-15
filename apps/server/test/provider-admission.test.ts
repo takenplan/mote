@@ -7,6 +7,7 @@ test('provider cooldown survives reconstruction, shares credentials across model
  const first=new ProviderAdmission(store,()=>now),second=new ProviderAdmission(other,()=>now);
  await assert.rejects(first.run(settings,async()=>{calls++;throw new ProviderFailure({category:'transient',code:'rate_limited',retryAfterMs:12000});}),ProviderFailure);
  await assert.rejects(second.run({...settings,baseUrl:settings.baseUrl+'/'},async()=>{calls++;return 1;}),error=>error instanceof ProviderFailure&&error.details.retryAfterMs===12000);assert.equal(calls,1);
+ assert.throws(()=>second.check(settings),error=>error instanceof ProviderFailure&&error.details.executionStarted===false&&error.details.admissionWaiting===true);
  const saved=JSON.stringify(store.db.prepare('SELECT * FROM provider_cooldowns').all());for(const value of [settings.apiKey,settings.headers['X-Fixture'],settings.baseUrl])assert.ok(!saved.includes(value));
  assert.equal(await second.run({...settings,apiKey:'independent-generated-key'},async()=>42),42);assert.deepEqual(first.snapshot(),{coolingDown:1,nextEligibleAt:22000});
  now=22000;assert.equal(await new ProviderAdmission(store,()=>now).run(settings,async()=>42),42);assert.equal(first.snapshot().coolingDown,0);
@@ -35,6 +36,6 @@ for(const code of ['provider_timeout','provider_network','provider_unavailable']
 test('upstream 429 without Retry-After still defers shared admission',async t=>{
  const dir=mkdtempSync(join(tmpdir(),'mote-provider-429-')),store=new Store(dir);t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
  const admission=new ProviderAdmission(store,()=>10000);
- await assert.rejects(admission.run(settings,async()=>{throw new ProviderFailure({category:'transient',code:'rate_limited'});}),ProviderFailure);
+ await assert.rejects(admission.run(settings,async()=>{throw new ProviderFailure({category:'transient',code:'rate_limited'});}),error=>error instanceof ProviderFailure&&error.details.retryAfterMs===30000);
  assert.throws(()=>admission.check(settings),error=>error instanceof ProviderFailure&&error.details.retryAfterMs===30000);
 });

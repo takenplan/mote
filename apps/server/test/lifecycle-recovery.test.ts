@@ -45,12 +45,12 @@ test('a terminal semantic child counts once and owner retry executes only its li
   await f.node.lifecycle.tick();assert.equal(f.calls(),before+1);assert.equal(f.extraction().failures,1);assert.equal(f.extraction().status,'failed');
 });
 
-test('a retryable failed batch does not appear terminal before its next lifecycle turn',async t=>{
+test('a permanent failed batch remains terminal even when its former retry time is cleared',async t=>{
   const f=await fixture(t);f.save('semantic');await f.node.lifecycle.tick();assert.equal(f.calls(),1);
   const state=JSON.parse(String(f.node.store.db.prepare("SELECT json FROM memory_lifecycle_state WHERE id='extraction'").get()!.json));state.retryAt=0;f.node.store.db.prepare("UPDATE memory_lifecycle_state SET json=? WHERE id='extraction'").run(JSON.stringify(state));
-  const pending=f.extraction();assert.equal(pending.status,'pending');assert.equal(pending.failures,1);
-  const response=await f.node.app.inject({method:'GET',url:'/api/memory-settings',headers:f.owner});assert.equal(response.json().extensions.find((item:{id:string})=>item.id==='extraction').status,'pending');
-  const retry=await f.node.app.inject({method:'POST',url:'/api/memory-settings/extraction/'+pending.active!.id+'/retry',headers:f.owner});assert.equal(retry.statusCode,409);assert.equal(f.calls(),1);
+  const pending=f.extraction();assert.equal(pending.status,'failed');assert.equal(pending.failures,1);assert.equal(pending.manualRetryRequired,true);
+  const response=await f.node.app.inject({method:'GET',url:'/api/memory-settings',headers:f.owner});assert.equal(response.json().extensions.find((item:{id:string})=>item.id==='extraction').status,'failed');
+  await f.node.lifecycle.tick();assert.equal(f.calls(),1);
 });
 
 test('a shared provider cooldown before the first batch waits without charging a failed turn',async t=>{

@@ -101,7 +101,31 @@ test('clean Coding material runs one authorized understanding and reuses its can
 
 for(const failure of ['provider','post-query-parse'] as const)test(`Coding ${failure} failure retains one producer-owned usage receipt per actual call through the real app query wrapper`,async t=>{
  let calls=0;const node=await appFixture(t,async input=>{calls++;assert.ok(isUnderstanding(input));input.onUsage?.(tokens(47,3,failure!=='provider'));if(failure==='provider')throw Error('Generated provider failure');return {answer:'Invalid generated unified output',citations:[],trace:[],runId:randomUUID()};});
- const fixture=await receive(node),job=await node.memoryPipeline.run(manualJob(node,fixture.ids).id);assert.equal(job.status,'failed');assert.equal(calls,failure==='provider'?4:1);const receipts=usage(node);assert.equal(receipts.length,calls,'each actual provider attempt has exactly one producer-owned receipt');assert.ok(receipts.every(receipt=>receipt.operation==='coding-conversation-understanding'&&receipt.status==='failed'&&receipt.tokens?.totalTokens===50&&receipt.tokens.complete===(failure!=='provider')));assert.equal(node.store.archive.page({kind:'semantic'}).items.length,0);assert.equal(node.memories.list().length,0);
+ // An unclassified provider exception has no evidence that repeating the same
+ // call is safe or useful. The producer must retain its one actual-call receipt.
+ const fixture=await receive(node),job=await node.memoryPipeline.run(manualJob(node,fixture.ids).id);assert.equal(job.status,'failed');assert.equal(calls,1);const receipts=usage(node);assert.equal(receipts.length,calls,'each actual provider attempt has exactly one producer-owned receipt');assert.ok(receipts.every(receipt=>receipt.operation==='coding-conversation-understanding'&&receipt.status==='failed'&&receipt.tokens?.totalTokens===50&&receipt.tokens.complete===(failure!=='provider')));assert.equal(node.store.archive.page({kind:'semantic'}).items.length,0);assert.equal(node.memories.list().length,0);
+});
+
+test('an explicit Memory HTTP retry reopens its failed Coding preparation while background observation leaves it terminal',async t=>{
+ let understanding=0,review=0,fail=true;
+ const node=await appFixture(t,async(input,reader)=>{
+  const originals=await supplied(input,reader);
+  if(isUnderstanding(input)){understanding++;if(fail)throw Error('Generated unknown preparation failure');return response(originals[0].id,owner,products(originals[0].id,false));}
+  review++;return response(originals[0].id,owner,input.taskContext!.untrustedMemoryDraft);
+ });
+ const fixture=await receive(node),created=manualJob(node,fixture.ids),failed=await node.memoryPipeline.run(created.id);
+ assert.equal(failed.status,'failed');assert.equal(understanding,1);
+ const child=node.store.db.prepare("SELECT id FROM processing_jobs WHERE json_extract(json,'$.processor')='mote.coding-conversation-understanding'").get()!;
+ assert.equal(node.executor.get(String(child.id))?.state,'failed');
+ await node.workflows.tick();await node.lifecycle.tick();await node.memoryPipeline.run(created.id);
+ assert.equal(understanding,1,'background observation does not retry a terminal preparation');assert.equal(node.executor.get(String(child.id))?.state,'failed');
+ fail=false;
+ const accepted=await node.app.inject({method:'POST',url:`/api/memory-jobs/${created.id}/retry`,headers:{authorization:'Bearer '+token}});
+ assert.equal(accepted.statusCode,202,accepted.body);
+ const completed=await node.memoryPipeline.run(created.id);
+ assert.equal(completed.status,'completed');assert.equal(understanding,2);assert.equal(review,1);
+ assert.equal(node.executor.get(String(child.id))?.state,'succeeded');assert.equal(node.store.db.prepare('SELECT count(*) n FROM processing_jobs').get()!.n,1);
+ await node.workflows.tick();assert.equal(understanding,2,'the successful preparation remains reusable');
 });
 
 test('empty Coding candidates publish work/events and receive independent review without a second extraction',{timeout:15000},async t=>{
@@ -112,15 +136,23 @@ test('empty Coding candidates publish work/events and receive independent review
 });
 
 test('revoking the parent Memory grant during understanding prevents semantic and memory commits',{timeout:15000},async t=>{
- const started=deferred(),release=deferred();let calls=0;
+ const started=deferred(),release=deferred(),producerSettled=deferred();let calls=0;
  t.after(()=>release.resolve());
  const node=await appFixture(t,async(input,reader)=>{calls++;assert.ok(isUnderstanding(input));const originals=await supplied(input,reader);input.onUsage?.(tokens(31,2,false));started.resolve();await release.promise;return response(originals[0].id,owner,products(originals[0].id,true));});
+ const ledger=node.featureServices.usageLedger,startUsage=ledger.start.bind(ledger);
+ ledger.start=(...args)=>{
+  const meter=startUsage(...args);if(args[2]!=='coding-conversation-understanding')return meter;
+  const finish=meter.finish;meter.finish=status=>{const receipt=finish(status);producerSettled.resolve();return receipt;};return meter;
+ };
  const fixture=await receive(node),created=manualJob(node,fixture.ids),running=node.memoryPipeline.run(created.id);
  await started.promise;node.memoryPipeline.cancel(created.id);release.resolve();const job=await running;
  assert.equal(job.status,'cancelled');await node.workflows.tick();
  assert.equal(node.store.archive.page({kind:'semantic'}).items.length,0);assert.equal(node.memories.list().length,0);assert.equal(calls,1);
  const children=node.store.db.prepare("SELECT json FROM processing_jobs WHERE json_extract(json,'$.processor')='mote.coding-conversation-understanding'").all();
  assert.ok(children.length);assert.ok(children.every(row=>{const child=JSON.parse(String(row.json));return child.parentGrant&&child.outputs.length===0;}));
+ // Revoking publication returns before the issued producer unwinds. Observe
+ // its real ledger finish, rather than assuming the cancelled parent drained it.
+ await producerSettled.promise;assert.equal(calls,1);
  const receipts=usage(node);assert.equal(receipts.length,1);assert.equal(receipts[0].operation,'coding-conversation-understanding');assert.equal(receipts[0].status,'failed');assert.equal(receipts[0].tokens?.totalTokens,33);assert.equal(receipts[0].tokens?.complete,false);
 });
 

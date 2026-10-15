@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {InstallationEpochs} from './installation-epochs.js';
 import {z} from 'zod';
 import {MaterialMemoryWork,type MaterialMemoryRunner,type MaterialMemoryPlanner,type MemoryWorkProposal,type MemoryWorkCandidate} from './material-memory-work.js';
@@ -73,11 +74,11 @@ export class SourcePipelineRuntime {
         recipe_id TEXT,recipe_version TEXT,recipe_definition_fingerprint TEXT,recipe_config_fingerprint TEXT,recipe_component_pins TEXT);
       CREATE TABLE IF NOT EXISTS source_pipeline_config(source_id TEXT PRIMARY KEY,json TEXT NOT NULL);`);
     this.memoryWork=memoryWork??new MaterialMemoryWork(store,materials);
-    this.unregisterHandler=this.engine.register({kind:STEP_KIND,pool:'source.archive',concurrency:()=>2,
+    this.unregisterHandler=this.engine.register({kind:STEP_KIND,pool:'source.archive',concurrency:()=>2,policy:EXECUTION_POLICIES.orchestration,
       resourceKeys:step=>[`source.archive:${(step.input as unknown as GroupInput).workId}`],
       validate:step=>this.validWork(step),admit:step=>this.admitWork(step),
       execute:(step,signal)=>this.organizeGroup(step,signal),commit:(step,result)=>this.publishGroup(step,result as PreparedGroup),
-      project:step=>this.projectWork(step),classify:()=>new ExecutionFailure('transient','organization_failed'),timeoutMs:300000});
+      project:step=>this.projectWork(step),classify:()=>new ExecutionFailure('permanent','organization_failed')});
     const pluginScope=this.pluginScope;
     this.ready=(async()=>{for(const plugin of plugins)await pluginScope.install(plugin);})();
   }

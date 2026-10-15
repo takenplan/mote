@@ -54,12 +54,13 @@ class ActionFirstJourneysInstrumentedTest {
     private fun respond(socket: java.net.Socket, status: Int, body: JSONObject) {
         val bytes = body.toString().toByteArray(); socket.getOutputStream().write("HTTP/1.1 $status Fixture\r\nContent-Length: ${bytes.size}\r\nContent-Type: application/json\r\nConnection: close\r\n\r\n".toByteArray()); socket.getOutputStream().write(bytes)
     }
-    @Test fun firstRunShowsFourEqualActionsAndThreeTabsAndOfflineNotesRemainReachable() = fixture { settings ->
+    @Test fun firstRunOpensContentWithFourPrimaryDestinationsAndOfflineNotesRemainReachable() = fixture { settings ->
         ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
             scenario.onActivity { activity ->
                 val rows = views(activity.window.decorView)
-                assertEquals(MoteAddAction.entries.map { "add:${it.name}" }, rows.filter { it.tag?.toString()?.startsWith("add:") == true }.map { it.tag })
-                assertEquals(listOf("首页", "内容", "问一问"), rows.filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() })
+                assertTrue(rows.single { it.tag == "primary:LIBRARY" }.isSelected)
+                assertTrue(rows.any { it.isShown && it.contentDescription == MoteI18n.text("添加内容") })
+                assertEquals(listOf("内容", "问一问", "来源", "活动"), rows.filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }.map { it.text.toString() })
                 activity.openGeneratedAdd(MoteAddAction.SCREEN)
                 assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text == "保存范围并开始记录" })
                 assertFalse(settings.enabled)
@@ -141,7 +142,12 @@ class ActionFirstJourneysInstrumentedTest {
             val connected = settings.read().copy(server = "http://127.0.0.1:${server.localPort}", token = "generated-file-cancellation-token-123456", debugHttp = true, wifiOnly = false, syncMode = "manual"); settings.save(connected, confirmCentralEndpoint = true)
             val sending = client.submit<Boolean> { runCatching { FileUpload.sync(context, source, connected) { true } }.isFailure }
             assertTrue(blocked.await(5, TimeUnit.SECONDS)); SendPauseControl.set(context, true)
-            assertTrue("Stalled file write is cancelled promptly", sending.get(5, TimeUnit.SECONDS)); assertEquals(saved.toString(), queue.next(source.id).toString()); assertArrayEquals(bytes, queue.part(source.id, 0))
+            assertTrue("Stalled file write is cancelled promptly", sending.get(5, TimeUnit.SECONDS))
+            val retry = queue.next(source.id)!!
+            // Failure presentation may change; the pending manifest and spooled bytes must not.
+            assertEquals(saved.getJSONObject("pending").toString(), retry.getJSONObject("pending").toString())
+            assertEquals(saved.getJSONObject("candidate").toString(), retry.getJSONObject("candidate").toString())
+            assertArrayEquals(bytes, queue.part(source.id, 0))
             release.countDown(); response.get(5, TimeUnit.SECONDS)
         } finally { release.countDown(); server.close(); service.shutdownNow(); client.shutdownNow(); context.localSources().remove(source.id); queue.remove(source.id) }
     }

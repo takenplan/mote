@@ -18,7 +18,7 @@ export function OwnerQuestionLinks({api,workId,materialId,operationIds,history=f
   const page=useResource<QuestionPage>(api,path,5000);
   useEffect(()=>setCursor(undefined),[api,workId,materialId,operationScope]);
   const items=page.error===undefined&&Array.isArray(page.data?.items)?page.data.items:[];
-  if(!items.length&&!page.error&&!page.loading&&!page.data?.nextCursor)return null;
+  if(!items.length&&!page.error&&(!page.loading||page.data!==undefined)&&!page.data?.nextCursor)return null;
   return <section className={history?'owner-question-history':'owner-question-links'} aria-label={history?moteText('需要你补充'):moteText('补充问题记录')}>
     <h3>{history?moteText('需要你补充'):moteText('补充问题记录')}</h3>
     {page.error!==undefined&&<p className="notice error" role="alert">{errorMessage(page.error)} <button className="text-button" onClick={page.refresh}>{moteText('重试')}</button></p>}

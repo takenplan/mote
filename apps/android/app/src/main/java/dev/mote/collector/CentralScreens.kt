@@ -66,6 +66,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private var noteHistory = JSONObject()
     private val library = CentralLibrary(this)
     private val admin = CentralAdmin(this)
+    private val activity = CentralWorkActivity(this)
 
     fun show(page: String) {
         currentPage = page; detailBack = null; question = null; messages = null; noteText = null; noteMood = null
@@ -73,6 +74,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             "ask" -> loadAsk()
             "notes" -> loadNotes()
             "overview" -> overview()
+            "activity" -> activity.show()
             "archive", "timeline", "materials", "coding", "files", "memories", "insights", "sources" -> library.show(page)
             else -> admin.show(page)
         }
@@ -80,8 +82,12 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun back(): Boolean = detailBack?.let { detailBack = null; it(); true } ?: false
     fun setBack(action: () -> Unit) { ui.enterDetail(); detailBack = action; question = null; messages = null; close() }
     fun clearBack() { detailBack = null }
-    fun resume() { if (currentPage in setOf("plugins", "extensions")) admin.resume() }
-    fun clearPrivateState() { askState = JSONObject(); question = null; messages = null; noteText = null; noteMood = null; admin.clearPrivateState(); body.removeAllViews() }
+    fun resume() { if (currentPage in setOf("plugins", "extensions")) admin.resume(); if (currentPage == "activity") ui.scheduleActivityPoll() }
+    fun pollWorkActivity() { if (currentPage == "activity") activity.poll() }
+    fun saveWorkState(out: android.os.Bundle) = activity.saveState(out)
+    fun restoreWorkState(value: android.os.Bundle) = activity.restoreState(value)
+    fun openWorkEvidence(ref: String) = library.evidence(CentralEvidenceReference.normalize(ref))
+    fun clearPrivateState() { askState = JSONObject(); question = null; messages = null; noteText = null; noteMood = null; admin.clearPrivateState(); activity.clearPrivateState(); body.removeAllViews() }
     fun refresh() { ui.navigate(currentPage) }
     fun insightRequest(prompt: String): JSONObject = CentralDraftWrites.barrier {
         val saved = insightStore.read()
@@ -107,18 +113,18 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             listOf(api.get("/api/status"), api.get("/api/devices"), api.get("/api/operations?limit=5"))
         }) { data ->
             val status = data[0]
-            ui.text(MoteI18n.text("中央工作台"), DesignTokens.fontTitleMobile.toFloat(), target)
+            ui.text(MoteI18n.text("中央工作台"), NativeFontRole.TITLE_MOBILE, target)
             val agent = status.getJSONObject("agent")
             ui.text(if (agent.optBoolean("configured")) MoteI18n.text("模型已配置") else MoteI18n.text("请先配置模型服务"), parent = target)
             ui.text(agent.optString("model"), parent = target)
             admin.values(status.optJSONObject("storage") ?: JSONObject(), target)
-            ui.text(MoteI18n.text("设备"), DesignTokens.fontSection.toFloat(), target)
+            ui.text(MoteI18n.text("设备"), NativeFontRole.SECTION, target)
             val devices = data[1].optJSONArray("items") ?: JSONArray()
             for (i in 0 until devices.length()) {
                 val device = devices.getJSONObject(i)
                 ui.text(device.optString("deviceName") + " · " + device.optString("lastSeenAt"), parent = target)
             }
-            ui.text(MoteI18n.text("处理任务"), DesignTokens.fontSection.toFloat(), target)
+            ui.text(MoteI18n.text("处理任务"), NativeFontRole.SECTION, target)
             admin.items(data[2], target) { row -> admin.operation(row.optString("id")) }
         }
         ui.button(MoteI18n.text("中央资料库")) { ui.navigate("archive") }
@@ -162,7 +168,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val profiles = modelSettings.getJSONArray("profiles")
         val ids = listOf("") + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("id") }
         val names = listOf(MoteI18n.text("跟随功能默认")) + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("name") }
-        ui.text(MoteI18n.text("模型预设"), DesignTokens.fontSupport.toFloat())
+        ui.text(MoteI18n.text("模型预设"), NativeFontRole.SUPPORT)
         preset = Spinner(ui).apply {
             adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, names)
             setSelection(ids.indexOf(askState.optString("modelProfileId")).coerceAtLeast(0))
@@ -194,7 +200,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             ui.work(MoteI18n.text("正在停止回答…"), { api.post("/api/query-runs/" + encode(id) + "/cancel") }) { run -> receiveRun(run) }
         }
         controlsAsk()
-        ui.text(MoteI18n.text("对话历史"), DesignTokens.fontSection.toFloat())
+        ui.text(MoteI18n.text("对话历史"), NativeFontRole.SECTION)
         val items = history.optJSONArray("items") ?: JSONArray()
         for (i in 0 until items.length()) {
             val item = items.getJSONObject(i)
@@ -281,7 +287,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val turns = conversation.getJSONArray("turns")
             for (i in 0 until turns.length()) {
                 val turn = turns.getJSONObject(i)
-                ui.text(turn.getString("question"), DesignTokens.fontSection.toFloat(), target)
+                ui.text(turn.getString("question"), NativeFontRole.SECTION, target)
                 turn.optJSONObject("result")?.let { answer ->
                     ui.text(answer.optString("answer"), parent = target)
                     val citations = answer.optJSONArray("citations") ?: JSONArray()
@@ -338,18 +344,18 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         ui.text(MoteI18n.text("图片和录音会先归档。是否提取文字或转写录音取决于中央处理设置；请在资料库查看状态。每个附件最多 50 MiB。"))
         val pending = state.getJSONArray("pending")
         if (pending.length() > 0) {
-            ui.text(MoteI18n.text("待同步 {0} 条", pending.length()), DesignTokens.fontSection.toFloat())
+            ui.text(MoteI18n.text("待同步 {0} 条", pending.length()), NativeFontRole.SECTION)
             ui.button(MoteI18n.text("重试同步")) {
                 syncNotes(enqueue = false)
             }
             for (i in 0 until pending.length()) ui.text(pending.getJSONObject(i).getString("text"))
         }
-        ui.text(MoteI18n.text("已经留下的心绪与杂事"), DesignTokens.fontSection.toFloat())
+        ui.text(MoteI18n.text("已经留下的心绪与杂事"), NativeFontRole.SECTION)
         ui.button(MoteI18n.text("刷新")) { refresh() }
         val items = history.optJSONArray("items") ?: JSONArray()
         for (i in 0 until items.length()) {
             val note = items.getJSONObject(i); val card = ui.card()
-            ui.text(note.optString("capturedAt"), DesignTokens.fontSupport.toFloat(), card); ui.text(note.optString("ocrText"), parent = card)
+            ui.text(note.optString("capturedAt"), NativeFontRole.SUPPORT, card); ui.text(note.optString("ocrText"), parent = card)
             ui.button(MoteI18n.text("查看原文"), parent = card) { library.captureEvidence(note.getString("id")) }
         }
         next(history)?.let { cursor -> ui.button(MoteI18n.text("加载更早的随手记")) {
@@ -502,7 +508,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         fun encode(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")
         fun next(value: JSONObject): String? = if (value.isNull("nextCursor") || !value.has("nextCursor")) null else value.opt("nextCursor").toString()
         val pages = listOf(
-            "overview" to "中央工作台", "archive" to "中央资料库", "ask" to "问一问", "notes" to "随手记",
+            "overview" to "中央工作台", "archive" to "中央资料库", "ask" to "问一问", "activity" to "活动", "notes" to "随手记",
             "materials" to "正式资料", "coding" to "Coding 会话同步状态", "timeline" to "片段", "files" to "文件与录音",
             "memories" to "记忆", "insights" to "洞察", "actions" to "行动", "agentView" to "Agent 视角",
             "sources" to "来源", "devices" to "设备", "connections" to "对外授权", "lark" to "飞书",

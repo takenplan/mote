@@ -14,8 +14,50 @@ import {MaterialMemoryWork} from '../src/material-memory-work.js';
 import type {MemoryJob,MemoryBatch} from '../src/memory-pipeline.js';
 function fixture(t:import('node:test').TestContext){const directory=mkdtempSync(join(tmpdir(),'mote-work-activity-')),store=new Store(directory),engine=new ExecutionEngine(store);engine.register({kind:'fixture',pool:'fixture',concurrency:()=>1,validate:()=>true,execute:async()=>null,commit:()=>{}});t.after(async()=>{await engine.close();store.close();rmSync(directory,{force:true,recursive:true});});return {store,engine,activity:new ActivityProjection(store,new Operations(store))};}
 const at='2026-09-20T10:00:00.000Z';
+test('related activity uses exact material and source receipts before pagination, never titles',async t=>{
+ const {store,engine,activity}=fixture(t),materials=new MaterialStore(store),sources=new SourceStore(store);
+ for(const sourceId of ['related-source','other-source'])sources.register({id:sourceId,name:'Same generated display name',kind:'custom',deviceId:'fixture',platform:'import'});
+ const publish=(sourceId:string,externalId:string)=>materials.publish({id:materialId(sourceId,externalId),kind:'mote.file',schemaVersion:1,title:'Identical generated title',origin:{sourceId,externalId},members:[{id:'original',kind:'archive',ref:'archive:'+externalId}],blocks:[{id:'body',kind:'text',format:'plain',text:'Generated private original body',memberIds:['original']}],coverage:{state:'complete'},artifacts:[{key:'body',state:'ready'}],fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
+ const selected=publish('related-source','one'),other=publish('other-source','two');
+ const pin=materials.input(selected.ref,['body'])!;
+ insertJob(store,{id:'related-memory',status:'completed',evidenceIds:pin.evidenceIds,materialInputs:[pin],automaticGrant:{sourceId:'related-source',inputKey:'one',scope:'memory.default'}});
+ insertBatch(store,'related-memory',{id:'related-leaf',status:'completed',evidenceRanges:pin.evidenceIds.map(id=>({id,offset:0,length:5}))});
+ engine.enqueue('material-index:related','fixture',{materialId:selected.id});
+ engine.enqueue('material-index:unrelated','fixture',{materialId:other.id});
+ const first=activity.page({materialId:selected.id,limit:1});
+ assert.equal(first.items.length,1);assert.equal(first.nextCursor,1);
+ assert.deepEqual(first.relation,{coverage:'partial',materialId:selected.id});
+ const second=activity.page({materialId:selected.id,cursor:first.nextCursor!,limit:1});
+ const ids=[...first.items,...second.items].map(item=>item.id);
+ assert.deepEqual(new Set(ids),new Set(['material-index:related','memory-source:related-source']));
+ assert.equal(second.nextCursor,null);
+ assert.doesNotMatch(JSON.stringify(first)+JSON.stringify(second),/private original body/);
+ const bySource=activity.page({sourceId:'related-source'});assert.deepEqual(new Set(bySource.items.map(item=>item.id)),new Set(ids));
+ const absent=activity.page({sourceId:'missing-generated-source'});assert.equal(absent.items.length,0);assert.equal(absent.relation?.coverage,'partial');
+ const app=Fastify();app.setErrorHandler((error,_request,reply)=>reply.code(error.name==='ZodError'?400:(error as {statusCode?:number}).statusCode??500).send({error:error.message}));t.after(()=>app.close());registerActivity(app,activity,req=>req.headers.authorization==='Bearer collector');
+ assert.equal((await app.inject({url:'/api/work-activity?materialId='+selected.id})).statusCode,200);
+ assert.equal((await app.inject({url:'/api/work-activity?sourceId=related-source',headers:{authorization:'Bearer collector'}})).statusCode,403);
+ assert.equal((await app.inject({url:'/api/work-activity?materialId=bad'})).statusCode,400);
+ assert.equal((await app.inject({url:'/api/work-activity?materialId='+selected.id+'&sourceId=related-source'})).statusCode,400);
+});
 function insertJob(store:Store,job:Partial<MemoryJob>&Pick<MemoryJob,'id'|'evidenceIds'>){const value={createdAt:at,updatedAt:at,status:'running',memoryIds:[],materialInputs:[],materialRefs:{},...job};store.db.prepare('INSERT INTO memory_jobs VALUES(?,?,?)').run(value.id,at,JSON.stringify(value));return value;}
 function insertBatch(store:Store,jobId:string,batch:Partial<MemoryBatch>&Pick<MemoryBatch,'id'|'evidenceRanges'>){const value={index:0,status:'pending',memoryIds:[],attempts:0,...batch};store.db.prepare('INSERT INTO memory_batches VALUES(?,?,?,?)').run(value.id,jobId,value.index,JSON.stringify(value));return value;}
+test('formal file activity follows exact original and import membership and drops deleted originals',async t=>{
+ const {store,engine,activity}=fixture(t),sources=new SourceStore(store),materials=new MaterialStore(store);
+ sources.register({id:'generated-file-source',name:'Generated same title',kind:'custom',deviceId:'fixture',platform:'import'});
+ const original=await sources.upsert('generated-file-source',{externalId:'original',revision:'1',observedAt:at,kind:'file',layer:'snapshot',text:'Generated original retained for relationship test'});
+ const material=materials.publish({id:materialId('generated-file-source','formal'),kind:'mote.file',schemaVersion:1,title:'Generated same title',origin:{sourceId:'generated-file-source',externalId:'formal'},members:[{id:'original',kind:'capture',ref:'capture:'+original.id}],blocks:[{id:'body',kind:'text',format:'plain',text:'Generated formal body',memberIds:['original']}],coverage:{state:'complete'},artifacts:[{key:'body',state:'ready'}],fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
+ store.db.exec('CREATE TABLE IF NOT EXISTS import_jobs(id TEXT PRIMARY KEY,created_at TEXT,updated_at TEXT,json TEXT)');
+ for(const [id,captureId] of [['generated-selected',original.id],['generated-other','00000000-0000-4000-8000-000000009999']]){
+  store.db.prepare('INSERT INTO import_jobs VALUES(?,?,?,?)').run(id,at,at,JSON.stringify({id,name:'Generated same title',status:'completed',captureIds:[captureId],progress:{total:1,processed:1,imported:1}}));
+  engine.enqueue('import:'+id,'fixture',{jobId:id});engine.enqueue('file:'+captureId,'fixture',{captureId});
+ }
+ const ids=['import:generated-selected','file:'+original.id];
+ assert.deepEqual(new Set(activity.page({materialId:material.id}).items.map(work=>work.id)),new Set(ids));
+ assert.deepEqual(new Set(activity.page({sourceId:'generated-file-source'}).items.map(work=>work.id)),new Set(ids));
+ store.db.prepare('DELETE FROM captures WHERE id=?').run(original.id);
+ const deleted=activity.page({materialId:material.id});assert.equal(deleted.items.length,0);assert.equal(deleted.relation?.coverage,'partial');
+});
 test('owner clarification counts as needs input in cards, branches and persisted legacy projections',t=>{
  const {store,activity}=fixture(t),ref='00000000-0000-4000-8000-000000000031';
  const job=insertJob(store,{id:'generated-owner-wait',status:'completed',evidenceIds:[ref]});

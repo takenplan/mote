@@ -31,7 +31,9 @@ class PrimaryNavigationTest {
         assertFalse(MoteNavigation.libraryBrowsePages.contains("coding"))
         assertEquals(MotePrimaryTab.LIBRARY, MoteNavigation.centralTab("coding"))
         assertEquals("archive", MoteNavigation.centralParent("coding"))
-        assertEquals(listOf("首页", "内容", "问一问"), MotePrimaryTab.entries.map { it.titleKey })
+        assertEquals(listOf("内容", "问一问", "来源", "活动"), MotePrimaryTab.entries.map { it.titleKey })
+        assertEquals(MotePrimaryTab.SOURCES, MoteNavigation.localTab("SOURCES"))
+        assertEquals(MotePrimaryTab.ACTIVITY, MoteNavigation.centralTab("activity"))
     }
 
     @Test fun deepLinksHaveBackPathsInsideTheirExistingPrimaryDestination() {

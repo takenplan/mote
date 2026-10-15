@@ -52,17 +52,23 @@ test('import repairs final formatting with a bounded budget in the same session 
   alwaysInvalid=true;await assert.rejects(agent.prepare(input),error=>error instanceof AgentResponseError);assert.equal(calls.length,6,'Initial output plus at most three formatting corrections per preparation');
 });
 
-test('import formatting correction shares the initial total deadline without restarting it',async t=>{
-  const realSetTimeout=globalThis.setTimeout;let deadlines=0,calls=0,closed=0;
+test('import formatting correction shares the initial admitted budget without resetting it',async t=>{
+  const realSetTimeout=globalThis.setTimeout,deadlines=[];let now=0,calls=0,closed=0;
+  t.mock.method(performance,'now',()=>now);
   t.mock.method(globalThis,'setTimeout',(callback,milliseconds,...args)=>{
-    if(milliseconds===300000){deadlines++;return realSetTimeout(callback,40,...args);}
+    if(calls>0&&deadlines.length<2){
+      deadlines.push(milliseconds);
+      const timer=realSetTimeout(()=>{},10000);
+      if(deadlines.length===2)queueMicrotask(()=>{now=100;callback(...args);});
+      return timer;
+    }
     return realSetTimeout(callback,milliseconds,...args);
   });
-  t.mock.method(DeepSeekHarness.prototype,'run',async()=>{calls++;if(calls===1){await delay(15);return {events:[],finalResponse:'Generated non-JSON preview'};}return new Promise(()=>{});});
+  t.mock.method(DeepSeekHarness.prototype,'run',async()=>{calls++;if(calls===1){now=30;return {events:[],finalResponse:'Generated non-JSON preview'};}return new Promise(()=>{});});
   t.mock.method(DeepSeekHarness.prototype,'close',async()=>{closed++;});
-  const agent=createImportAgent(options);t.after(()=>agent.close());
+  const agent=createImportAgent({...options,agentTimeoutMs:100});t.after(()=>agent.close());
   await assert.rejects(agent.prepare(input),error=>error instanceof AgentTimeoutError);
-  assert.equal(calls,2);assert.equal(deadlines,1,'A repair must not install another total timeout');assert.equal(closed,1);
+  assert.equal(calls,2);assert.deepEqual(deadlines,[100,70],'The repair receives only the initial budget left after admitted work');assert.equal(closed,1);
 });
 
 test('optional import launch hook receives the isolated root and only forwards its executable to the SDK',async t=>{

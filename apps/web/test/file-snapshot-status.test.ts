@@ -19,3 +19,21 @@ test('snapshot privacy blocks and expired temporary inputs remain visible in the
  await act(async()=>root.render(React.createElement(FileDetail,{api,id,onOpen:()=>{}})));
  assert.match(dom.window.document.body.textContent!,/中央索引待处理，原件不归档/);assert.match(dom.window.document.body.textContent!,/快照的临时输入已清理，请重新同步来源文件后重试/);
 });
+
+test('summary capacity waiting and its canonical retry time remain separate from completed file processing',async t=>{
+ const {executionEnvelope}=await import('@mote/shared');
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();
+ for(const [key,value] of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){backups.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
+ dom.window.localStorage.setItem('mote.language','zh-CN');const root=createRoot(dom.window.document.getElementById('root')!);
+ t.after(async()=>{await act(async()=>root.unmount());for(const [key,descriptor] of backups){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
+ const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',summaryAvailableAt=Date.now()+60000;
+ const row={captureId:id,sourceId:'generated',sizeBytes:16,hasOriginal:true,originMissing:false,item:{title:'Generated recording',layer:'original',mimeType:'audio/wav',observedAt:'2026-10-01T00:00:00Z'},job:{state:'succeeded',summary_state:'waiting',execution:executionEnvelope({state:'succeeded',attempts:1}),summaryExecution:executionEnvelope({state:'retry_wait',attempts:0,errorCode:'rate_limited',availableAt:summaryAvailableAt}),summaryAvailableAt},artifacts:[],cancellation:{canCancel:true,wait:null}};
+ const api={request:async(path:string)=>path.startsWith('/api/operations/changes')?{ids:[],cursor:0,hasMore:false,reset:false}:path==='/api/file-processing'?null:path==='/api/sources'?{items:[]}:path==='/api/files/'+id?row:{},setAgentTimeout:()=>{}} as Api;
+ await act(async()=>root.render(React.createElement(FileDetail,{api,id,onOpen:()=>{}})));
+ assert.match(dom.window.document.body.textContent!,/整体处理：已完成；摘要：等待处理/);
+ assert.match(dom.window.document.body.textContent!,/模型服务暂时限流/);assert.match(dom.window.document.body.textContent!,/预计重试时间/);
+ assert.doesNotMatch(dom.window.document.body.textContent!,/整体处理：处理失败/);
+ row.job.summary_state='failed';row.job.summaryExecution=executionEnvelope({state:'failed',attempts:1,errorCode:'storage_full'});
+ await act(async()=>root.render(React.createElement(FileDetail,{api:{...api},id,onOpen:()=>{}})));
+ assert.match(dom.window.document.body.textContent!,/整体处理：已完成；摘要：处理失败/);assert.match(dom.window.document.body.textContent!,/存储容量已满/);
+});

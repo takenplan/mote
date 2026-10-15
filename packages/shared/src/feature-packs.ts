@@ -1,5 +1,5 @@
 /** Browser-safe feature contracts. Descriptors contain no credentials, paths or executable code. */
-export type FeatureSurface = 'ingress'|'upload'|'data'|'command'|'agent'|'processing'|'page'|'collection'|'card'|'action'|'renderer'|'panel'|'settings'|'home';
+export type FeatureSurface = 'ingress'|'upload'|'data'|'command'|'agent'|'processing'|'page'|'collection'|'card'|'action'|'renderer'|'panel'|'settings'|'home'|'theme'|'layout';
 export type FeatureRequirement = string|{id:string;version:string;host?:'local'|'server'};
 export type FeatureComponent = {id:string;version:string;surface:FeatureSurface;requires?:FeatureRequirement[]};
 export type FeatureManifest = {id:string;version:string;components:FeatureComponent[]};

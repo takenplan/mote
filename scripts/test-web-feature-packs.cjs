@@ -12,8 +12,10 @@ async function until(fn,label){const end=Date.now()+30000;while(Date.now()<end){
 async function port(){return new Promise(resolve=>{const s=net.createServer();s.listen(0,'127.0.0.1',()=>{const p=s.address().port;s.close(()=>resolve(p));});});}
 async function run(){
  await app.whenReady();const endpoint='http://127.0.0.1:'+await port(),token=randomBytes(32).toString('hex'),env={...process.env};for(const k of Object.keys(env))if(k.startsWith('MOTE_'))delete env[k];
- server=spawn('node',[join(repo,'apps/server/dist/index.js')],{cwd:repo,env:{...env,MOTE_PROFILE:'test',MOTE_HOST:'127.0.0.1',MOTE_PORT:new URL(endpoint).port,MOTE_DATA_DIR:join(root,'data'),MOTE_TOKEN:token},stdio:['ignore','ignore','pipe']});
- await until(async()=>{if(server.exitCode!==null)throw Error('Fixture server stopped');try{return(await fetch(endpoint+'/api/health')).ok;}catch{return false;}},'server');
+ const configFile=join(root,'mote.yaml');writeFileSync(configFile,JSON.stringify({version:1,revision:0,server:{profile:'test',host:'127.0.0.1',port:Number(new URL(endpoint).port),token},storage:{dataDir:join(root,'data')}}),{mode:0o600});
+ server=spawn('node',[join(repo,'apps/server/dist/index.js')],{cwd:repo,env:{...env,MOTE_CONFIG_FILE:configFile},stdio:['ignore','ignore','pipe']});
+ let startupError='';server.stderr.on('data',chunk=>{startupError=(startupError+chunk).slice(-12000);});
+ await until(async()=>{if(server.exitCode!==null)throw Error('Fixture server stopped: '+startupError);try{return(await fetch(endpoint+'/api/health')).ok;}catch{return false;}},'server');
  const request=async(path,body)=>{const r=await fetch(endpoint+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json','X-Mote-Ingress-Version':'2'},...(body?{body:JSON.stringify(body)}:{})});assert.ok(r.ok,`${path}: ${r.status}`);return r.json();};
  await request('/api/sources',{id:'fixture-coding',name:'Generated Coding upload',kind:'coding-agent',deviceId:'fixture-device',platform:'macos'});
  const event=i=>({externalId:'event-'+i,revision:'1',observedAt:new Date(Date.now()+i).toISOString(),kind:'message',layer:'original',text:'Generated transcript '+i+': test the everyday plugin flow.',document:{contentRole:'transcript',coding:{version:1,provider:'codex',projectKey:'generated-project',sessionId:'generated-session',eventId:'event-'+i,role:i?'assistant':'user',attribution:i?'agent':'human',channel:i?'final':undefined,part:0,parts:1}}});
@@ -27,11 +29,22 @@ async function run(){
  const click=async label=>{await until(()=>js(`(()=>{const b=[...document.querySelectorAll('button,a[href]')].find(b=>b.getClientRects().length&&b.textContent.trim()===${JSON.stringify(label)});if(!b)return false;b.click();return true})()`),label);};
  await request('/api/captures',{id:require('node:crypto').randomUUID(),deviceId:'fixture-activity',deviceName:'Generated',platform:'macos',source:'activity',capturedAt:new Date().toISOString(),durationMs:60000,appId:'generated.activity',appName:'Generated Activity Browser',privacy:{excluded:false,redacted:false,mode:'none',collection:'activity'}});
  await route('library','.library-navigation');await click('应用活动');await until(()=>js(`document.querySelector('.activity-panel')?.textContent.includes('Generated Activity Browser')`),'library activity fetch without overview');
- await route('library/coding','.coding-uploads');await until(()=>js(`document.querySelector('.coding-uploads').textContent.includes('Generated Coding upload')`),'upload counts');
- assert.match(await js(`document.querySelector('.coding-uploads').textContent`),/已接收事件3/);
- await click('查看聚合正文');await until(()=>js(`!!document.querySelector('.library-master .library-record')`),'material card');await js(`document.querySelector('.library-master .library-record').click()`);
+ // Discover the optional Coding page through the visible source directory.
+ await click('来源');await until(()=>js(`!!document.querySelector('.sources-page')`),'sources destination');
+ await js(`(()=>{const select=document.querySelector('select[aria-label="来源与连接"]');select.value='sourceCatalog';select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ await until(()=>js(`!!document.querySelector('.discovery-source-catalog')`),'source discovery');
+ await until(()=>js(`(()=>{const card=[...document.querySelectorAll('a.discovery-source-card')].find(card=>card.querySelector('h3')?.textContent==='Coding Agent 会话');if(!card)return false;card.click();return true})()`),'discover Coding sync status');
+ await until(()=>js(`location.hash==='#/library?view=coding-status'&&document.querySelector('.coding-uploads')?.textContent.includes('Generated Coding upload')`),'Coding discovery opens sync status');
+ assert.match(await js(`document.querySelector('.coding-uploads').textContent`),/已接收增量事件3/);
+ writeFileSync(join(output,'coding-sync-desktop.png'),(await wc.capturePage()).toPNG());
+ await click('活动');await until(()=>js(`!!document.querySelector('.activity-advanced')`),'Activity destination');await js(`document.querySelector('.activity-advanced > summary').click()`);
+ await until(()=>js(`document.querySelector('.activity-advanced')?.open&&document.querySelector('.coding-receipt-summary')?.getBoundingClientRect().height>0&&document.querySelector('.coding-receipt-summary')?.textContent.includes('已接收 3 条增量')`),'Activity preserves Coding receipt progress');
+ await js(`document.querySelector('.coding-receipt-summary details > summary').click()`);await until(()=>js(`document.querySelector('.coding-receipt-summary .coding-uploads')?.getBoundingClientRect().height>0&&document.querySelector('.coding-receipt-summary .coding-uploads')?.textContent.includes('Generated Coding upload')`),'receipt details preserve publication and memory progress');await delay(200);
+ writeFileSync(join(output,'coding-receipts-desktop.png'),(await wc.capturePage()).toPNG());
+ await click('查看此来源的会话正文');await until(()=>js(`!!document.querySelector('.library-master .library-record')`),'material card');await js(`document.querySelector('.library-master .library-record').click()`);
  await until(()=>js(`document.querySelector('.material-detail')?.textContent.includes('Generated transcript 2')`),'actual published body');
  writeFileSync(join(output,'coding-desktop.png'),(await wc.capturePage()).toPNG());
+ await route('library/coding','.coding-uploads');await click('在处理任务中查看接收状态 →');await until(()=>js(`location.hash==='#/activity?coding=receipts'&&document.querySelector('.activity-advanced')?.open&&!!document.querySelector('.coding-receipt-summary')`),'legacy Coding page returns to current Activity receipts');
  await route('agent','.agent-inspector');await until(()=>js(`document.querySelectorAll('.agent-inspector .agent-entry').length===3`),'model directory');
  await click('正式资料');await until(()=>js(`!!document.querySelector('.agent-inspector .source-item')`),'Agent materials');await js(`document.querySelector('.agent-inspector .source-item').click()`);await until(()=>js(`document.querySelector('.material-detail')?.textContent.includes('Generated transcript 2')`),'Agent read');
  await click('实际输入与读取轨迹');await until(()=>js(`document.querySelector('.agent-inspector').textContent.includes('输入追踪未开启')`),'honest unavailable input');
@@ -45,7 +58,7 @@ async function run(){
  await window.loadURL(endpoint+'/#/library/coding');await until(()=>js(`!!document.querySelector('.notice.error button')`),'capability retry');
  await js(`document.querySelector('.notice.error button').click()`);await until(()=>js(`document.querySelector('.coding-uploads')?.textContent.includes('Generated Coding upload')`),'capability retry recovery');
  wc.session.webRequest.onBeforeRequest(null);
-writeFileSync(join(output,'result.json'),JSON.stringify({passed:true,generatedOnly:true,codingEvents:3,pages:paths.length,checks:['upload counts','assembled body','Agent permissions','honest missing traces','registered capabilities','all pages','mobile layout','library activity fetch','capability error retry']},null,2));console.log('PASS: feature packs, Coding upload, model directory and registered browser pages with generated fixtures.');
+writeFileSync(join(output,'result.json'),JSON.stringify({passed:true,generatedOnly:true,codingEvents:3,pages:paths.length,checks:['visible source discovery to Coding sync status','Activity advanced Coding receipt progress','upload counts','assembled body','Agent permissions','honest missing traces','registered capabilities','all pages','mobile layout','library activity fetch','capability error retry']},null,2));console.log('PASS: feature packs, Coding discovery and receipts, model directory and registered browser pages with generated fixtures.');
 }
 async function finish(code){if(window&&!window.isDestroyed())window.destroy();if(server&&server.exitCode===null){server.kill('SIGTERM');await Promise.race([new Promise(r=>server.once('exit',r)),delay(5000)]);}rmSync(root,{recursive:true,force:true});app.exit(code);}
 run().then(()=>finish(0)).catch(async error=>{console.error(error);if(window&&!window.isDestroyed()){console.error(await window.webContents.executeJavaScript(`JSON.stringify({hash:location.hash,headings:[...document.querySelectorAll('h1')].map(e=>e.textContent),buttons:[...document.querySelectorAll('button')].map(e=>e.textContent),alerts:[...document.querySelectorAll('[role=alert],.notice')].map(e=>e.textContent)})`));writeFileSync(join(output,'failure.png'),(await window.webContents.capturePage()).toPNG());}finish(1);});

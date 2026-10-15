@@ -12,6 +12,7 @@ import {LarkConnector} from './lark.js';
 import type {LarkRunner} from './lark-cli.js';
 import type {ConnectorContext} from './types.js';
 import type {FastifyInstance} from 'fastify';
+import {z} from 'zod';
 
 export type {ConnectorConfig,ConnectorContext} from './types.js';
 export type {ConnectorManifest,ConnectorInstance,ConnectorHost,OwnerRoute,OAuthCallback} from './registry.js';
@@ -74,11 +75,12 @@ function builtins(testing?:ConnectorTestDependencies):ConnectorManifest[]{return
         route('POST','/api/connectors/lark/install',()=>lark.startInstall());
         route('POST','/api/connectors/lark/setup',()=>lark.startSetup());
         route('POST','/api/connectors/lark/configure',req=>lark.configure(req.body));
-        route('POST','/api/connectors/lark/login',()=>lark.login());
+        route('POST','/api/connectors/lark/login',req=>lark.login(z.object({calendar:z.boolean().optional()}).strict().parse(req.body??{}).calendar??false));
         route('POST','/api/connectors/lark/cancel',()=>lark.cancel());
         route('GET','/api/connectors/lark/calendars',()=>lark.calendars());
         route('PUT','/api/connectors/lark/selection',req=>lark.select(req.body));
-        route('POST','/api/connectors/lark/sync',()=>lark.startSync());
+        route('POST','/api/connectors/lark/preview',()=>lark.startPreview());
+        route('POST','/api/connectors/lark/sync',req=>lark.startSync(z.object({document:z.string().trim().min(1).max(4000).optional()}).strict().parse(req.body??{}).document));
         route('DELETE','/api/connectors/lark',()=>lark.disconnect());
       },
       close:()=>lark.close(),

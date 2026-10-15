@@ -62,14 +62,14 @@ class ConnectionActivity : MoteActivity() {
     private fun buildUi(initial: InitialConnection) {
         val config = initial.config
         val root = moteDetailPage(title = MoteI18n.text("连接中央节点"))
-        fun text(value: String, size: Float = DesignTokens.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)) }.also(root::addView)
+        fun text(value: String, size: Float = MoteTheme.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceInline)) }.also(root::addView)
         fun button(label: String, primary: Boolean = false, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { if (!working && !task.busy) runCatching(action).onFailure { showFailure(it) } } }, primary).also(root::addView)
         text(MoteI18n.text("先在中央网页生成一次性邀请。扫码、选择 JSON 文件或粘贴邀请后，核对节点再确认连接；不会自动开始截图。邀请有效期 10 分钟，请勿分享。"))
         currentNode = text(""); refreshCurrentNode()
         button(MoteI18n.text("复制本设备 ID")) { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("Mote device ID", deviceId)); Toast.makeText(this, MoteI18n.text("已复制设备 ID，不含凭据"), Toast.LENGTH_SHORT).show() }
         text(MoteI18n.text("设备名称"))
         name = EditText(this).apply { hint = MoteI18n.text("设备名称"); setSingleLine(); setText(config.deviceName); filters = arrayOf(android.text.InputFilter.LengthFilter(128)) }
-        root.addView(name, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) })
+        root.addView(name, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) })
         button(MoteI18n.text("保存设备名称"), primary = true) {
             val chosen = name.text.toString().trim()
             require(chosen.isNotBlank() && chosen.length <= 128)

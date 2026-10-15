@@ -62,6 +62,18 @@ def main():
             self.end_headers()
             self.wfile.write(body)
 
+        def reject_before_execution(self, status, message, retry_after=None):
+            body = json.dumps({'error': message, 'executionStarted': False}).encode()
+            self.send_response(status)
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('X-Mote-Execution', 'local')
+            self.send_header('X-Mote-Execution-Started', 'false')
+            if retry_after is not None:
+                self.send_header('Retry-After', str(retry_after))
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
         def do_GET(self):
             if not self.authorized():
                 self.send_error(401)
@@ -92,10 +104,11 @@ def main():
                 self.send_error(401)
                 return
             if not ready():
-                self.send_error(503, 'Model not installed')
+                self.reject_before_execution(503, 'Model not installed')
                 return
             if not busy.acquire(blocking=False):
-                self.send_error(429, 'OCR worker busy')
+                # Recheck cadence; actual worker completion remains independent.
+                self.reject_before_execution(429, 'OCR worker busy', retry_after=5)
                 return
             try:
                 size = int(self.headers.get('Content-Length', '-1'))

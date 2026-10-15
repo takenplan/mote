@@ -13,7 +13,7 @@ type Candidate={title:string;statement:string;uncertainty:string;evidenceIds:str
 /** A user's deletion constrains regeneration, not original-evidence retention.
  * Content/provenance identity is deterministic; only a model compares meaning. */
 export class MemoryDeletions {
-  constructor(private store:Store,private read:(ids:string[])=>CaptureRecord[],private reviewTimeoutMs=300000){
+  constructor(private store:Store,private read:(ids:string[])=>CaptureRecord[],private reviewTimeoutMs:number|null=null){
     store.db.exec(`CREATE TABLE IF NOT EXISTS memory_deletions(id TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS memory_deletion_dependencies(deletion_id TEXT NOT NULL REFERENCES memory_deletions(id) ON DELETE CASCADE,evidence_id TEXT NOT NULL,origin_keys TEXT NOT NULL DEFAULT '[]',lineage_keys TEXT NOT NULL DEFAULT '[]',PRIMARY KEY(deletion_id,evidence_id));
       CREATE INDEX IF NOT EXISTS memory_deletion_evidence ON memory_deletion_dependencies(evidence_id);`);
@@ -161,7 +161,9 @@ export class MemoryDeletions {
   /** The candidate and verdict stay in a process-local review receipt. A cached
    * or recovered generation must repeat this check against current deletions. */
   async review(input:QueryInput,result:QueryResult,query:(input:QueryInput)=>Promise<QueryResult>,authorize?:(ids:string[])=>void):Promise<QueryResult>{
-    const deadline=new AbortController(),timer=setTimeout(()=>deadline.abort(new AgentTimeoutError()),this.reviewTimeoutMs);
+    // The number of candidate/rule comparisons varies; each model call keeps its
+    // own provider deadline. An explicit caller/test contract can still cap review.
+    const deadline=new AbortController(),timer=this.reviewTimeoutMs===null?undefined:setTimeout(()=>deadline.abort(new AgentTimeoutError()),this.reviewTimeoutMs);timer?.unref();
     const signal=input.signal?AbortSignal.any([input.signal,deadline.signal]):deadline.signal;
     try{return await withExecutionCancellation(signal,()=>this.compare({...input,signal},result,query,authorize));}finally{clearTimeout(timer);}
   }

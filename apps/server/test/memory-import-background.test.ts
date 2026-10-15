@@ -46,7 +46,12 @@ test('HTTP import of a thousand generated originals rolls through bounded backgr
  const waitForPhase=async(phase:string,timeoutMs:number,ready:(imported:ReturnType<typeof node.imports.get>,checkpoints:number)=>boolean)=>{
   const started=Date.now(),deadline=started+timeoutMs;
   const snapshot=()=>{const imported=node.imports.get(id),checkpoints=Number(node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n);return {imported,checkpoints};};
-  const fail=()=>{const {imported,checkpoints}=snapshot();assert.fail(JSON.stringify({phase,elapsedMs:Date.now()-started,importStatus:imported.status,progress:imported.progress,error:imported.error,checkpoints,extracts,reviews,
+  const fail=()=>{const {imported,checkpoints}=snapshot();assert.fail(JSON.stringify({phase,elapsedMs:Date.now()-started,importStatus:imported.status,progress:imported.progress,error:imported.error,execution:imported.execution,checkpoints,extracts,reviews,
+   importState:node.store.db.prepare("SELECT json_extract(json,'$.failurePhase') failurePhase,json_extract(json,'$.resourceWait') resourceWait,json_extract(json,'$.recordsProcessed') recordsProcessed,json_extract(json,'$.memoryNotified') memoryNotified FROM import_jobs WHERE id=?").get(id),
+   steps:node.store.db.prepare("SELECT id,kind,state,attempts,error,created_at,updated_at,lease_until,available_at,fence IS NOT NULL has_fence FROM execution_steps WHERE kind IN ('imports.prepare','imports.commit') AND json_extract(input,'$.jobId')=? ORDER BY kind").all(id),
+   failures:node.store.db.prepare("SELECT f.json FROM execution_failures f JOIN execution_steps s ON s.id=f.step_id WHERE s.kind IN ('imports.prepare','imports.commit') AND json_extract(s.input,'$.jobId')=?").all(id).map(row=>JSON.parse(String(row.json))),
+   failureReceiptWrites:node.executor.failureDiagnostics(),storage:{logicalBytes:node.store.logicalBytes(),maxBytes:config.maxStorageBytes},
+   eventLoop:{maxMs:node.featureServices.eventLoop.max/1e6,meanMs:node.featureServices.eventLoop.mean/1e6},
    materials:node.store.db.prepare('SELECT count(*) n FROM material_heads').get(),
    requests:node.store.db.prepare('SELECT auto_authorized,error,count(*) n FROM material_memory_requests GROUP BY auto_authorized,error').all(),
    jobs:node.store.db.prepare("SELECT json_extract(json,'$.status') status,json_extract(json,'$.errorCode') error,count(*) n FROM memory_jobs GROUP BY status,error").all()}));};

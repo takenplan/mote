@@ -1,6 +1,7 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import {fileProcessingSchema,transcriptSchema,unknownAttributionContext,type CaptureRecord,type Transcript,type ProcessingService} from '@mote/shared';
+import {ProviderFailure,fileProcessingSchema,transcriptSchema,unknownAttributionContext,type CaptureRecord,type Transcript,type ProcessingService} from '@mote/shared';
 import {Store,StoreError,sha256} from './store.js';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep} from './execution-engine.js';
 import {FileProcessing} from './file-processing.js';
@@ -16,7 +17,8 @@ import {imageSettingsSchema,perceptionConfigurationSchema,defaultPerceptionConfi
 import type {ConfigService} from './config-service.js';
 import {effectiveProcessorParameters} from './processor-parameters.js';
 import {MEDIA_CATALOG,type MediaAssets} from './media-assets.js';
-import {requestLocalJson} from './local-http.js';
+import {requestLocalJson,isLoopback} from './local-http.js';
+import {ProcessorAdmission} from './processor-admission.js';
 import type {MaterialStore} from './materials.js';
 import {APPLEDOUBLE_REASON,isAppleDouble} from './appledouble.js';
 
@@ -36,10 +38,11 @@ export class ImageProcessing {
  readonly engine:ExecutionEngine;readonly inputs:ImageInputRegistry;
  private unregister:Array<()=>Promise<void>>=[];private disposeInputs:()=>void;
  private attachments:ImageAttachmentIntake;private closed=false;private workerReady=false;private checkedAt=0;private probe?:Promise<void>;
+ private readonly processorAdmission:ProcessorAdmission;
  private prepareCursor=0;private readonly media:MediaRuntimeSettings;private savedSettings:PerceptionConfiguration;
  private previews=new Map<string,{expires:number;watermark:number;query:z.infer<typeof historicalSchema>}>();
  constructor(private store:Store,private processing:FileProcessing,engine:ExecutionEngine,private options:{understanding?:ImageUnderstanding;mediaAssets?:MediaAssets;media?:Partial<MediaRuntimeSettings>;configService?:ConfigService;configuration?:PerceptionConfiguration;materials?:MaterialStore;probeOcr?:()=>Promise<boolean>}={}){
-  this.media=mediaRuntimeSettings(options.media);
+  this.media=mediaRuntimeSettings(options.media);this.processorAdmission=new ProcessorAdmission(store);
   this.savedSettings=perceptionConfigurationSchema.parse(options.configService?.current<PerceptionConfiguration>('perception')??options.configuration??defaultPerceptionConfiguration());
   this.publishSettings();
   options.configService?.setHandler<PerceptionConfiguration>('perception',next=>{
@@ -53,7 +56,7 @@ export class ImageProcessing {
   const db=store.db;
   db.exec(`CREATE TABLE IF NOT EXISTS image_backfills(id TEXT PRIMARY KEY,query TEXT NOT NULL,watermark INTEGER NOT NULL,cursor INTEGER NOT NULL DEFAULT 0,queued INTEGER NOT NULL DEFAULT 0,state TEXT NOT NULL DEFAULT 'waiting');`);
   db.exec(`CREATE TABLE IF NOT EXISTS image_exclusions(capture_id TEXT PRIMARY KEY REFERENCES image_inputs(capture_id) ON DELETE CASCADE,hash TEXT NOT NULL,reason TEXT NOT NULL);`);
-  this.unregister.push(engine.register({kind:'images.excluded',pool:'images.excluded',concurrency:()=>1,timeoutMs:()=>1000,
+  this.unregister.push(engine.register({kind:'images.excluded',pool:'images.excluded',concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic,timeoutMs:300000,
    validate:step=>this.exclusion(String(step.input.captureId))===step.input.reason,
    admit:()=>new ExecutionFailure('blocked',APPLEDOUBLE_REASON),execute:async()=>{throw new ExecutionFailure('blocked',APPLEDOUBLE_REASON);},commit:()=>{},
   }));
@@ -62,10 +65,10 @@ export class ImageProcessing {
    const previous=materials.onContextChanged;materials.onContextChanged=(id,cause)=>{previous?.(id,cause);if(cause!=='derived')this.invalidateAttribution(id);};
    const priorSource=materials.onSourceContextChanged;materials.onSourceContextChanged=id=>{priorSource?.(id);for(const row of db.prepare('SELECT capture_id FROM image_inputs WHERE source_id=?').all(id))this.invalidateImageAttribution(String(row.capture_id));};
   }
-  for(const kind of ['ocr','understanding','derived'])this.unregister.push(engine.register({kind:'images.'+kind,pool:'images.'+kind,concurrency:()=>this.settings().concurrency,timeoutMs:()=>this.processing.currentSettings().timeoutMs,
-   resourceKeys:step=>['image-product:'+String(step.input.fingerprint)],validate:step=>this.valid(step),
+  for(const kind of ['ocr','understanding','derived'])this.unregister.push(engine.register({kind:'images.'+kind,pool:'images.'+kind,concurrency:()=>this.settings().concurrency,policy:kind==='ocr'?EXECUTION_POLICIES.localProcessing:kind==='understanding'?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.deterministic,timeoutMs:()=>kind==='ocr'?this.processing.currentSettings().timeoutMs:kind==='derived'?900000:null,
+   resourceKeys:step=>{const endpoint=this.processorEndpoint(step);return ['image-product:'+String(step.input.fingerprint),...(endpoint&&this.processorAdmission.resourceKey(endpoint)===this.processorAdmission.resourceKey(this.media.ocrEndpoint)?[this.processorAdmission.resourceKey(endpoint)]:[])];},validate:step=>this.valid(step),
    admit:step=>this.admit(step),execute:(step,signal)=>this.execute(step,signal),commit:(step,result)=>this.commit(step,result),project:step=>this.project(step),
-   classify:error=>error instanceof StoreError&&error.statusCode===507?new ExecutionFailure('blocked','storage_full'):error instanceof z.ZodError?new ExecutionFailure('permanent','invalid_image_product'):error instanceof StoreError&&[400,413,415,422].includes(error.statusCode)?new ExecutionFailure('permanent','unsupported_image'):new ExecutionFailure('transient','image_processing_failed',30000),
+   classify:error=>error instanceof StoreError&&error.statusCode===507?new ExecutionFailure('blocked','storage_full'):error instanceof z.ZodError?new ExecutionFailure('permanent','invalid_image_product'):error instanceof StoreError&&[400,413,415,422].includes(error.statusCode)?new ExecutionFailure('permanent','unsupported_image'):new ExecutionFailure('permanent','image_processing_failed'),
   }));
  }
  owns(id:string){return Boolean(this.store.db.prepare('SELECT 1 FROM image_inputs WHERE capture_id=?').get(id));}
@@ -196,6 +199,10 @@ export class ImageProcessing {
   if(this.closed||this.exclusion(String(step.input.captureId)))return false;if(step.kind!=='images.ocr'&&this.semanticWithdrawn(String(step.input.captureId)))return false;const row=this.row(String(step.input.captureId));if(!row||row.hash!==step.input.hash||row.generation!==step.input.generation||!this.store.isCurrentEvidence(row.capture_id))return false;
   try{const plan=this.recipe(row),stage=plan.steps.find(s=>s.name===step.input.name);return Boolean(stage&&this.fingerprint(row,stage)===step.input.fingerprint&&this.inputs.get(row.adapter)?.version===step.input.adapterVersion);}catch{return false;}
  }
+ private processorEndpoint(step:ExecutionStep){
+  if(step.kind!=='images.ocr')return;const row=this.row(String(step.input.captureId));if(!row)return;const plan=this.recipe(row),processor=this.processing.runtime.registry.get(plan.binding.applied.profile.processorId),endpoint=plan.binding.settings.imageEndpoint;
+  return processor.serviceKind==='image'&&isLoopback(endpoint)?endpoint:undefined;
+ }
  private admit(step:ExecutionStep){
   const row=this.row(String(step.input.captureId))!,settings=this.settings();
   if(!settings.enabled||!this.binding(row).settings.enabled)return new ExecutionFailure('blocked','processing_disabled');
@@ -208,6 +215,7 @@ export class ImageProcessing {
    if(processor.stage!=='extract'||!processor.mediaTypes.some(t=>t.endsWith('/')?row.mime.startsWith(t):t===row.mime||t.endsWith('/*')&&row.mime.startsWith(t.slice(0,-1))))return new ExecutionFailure('blocked','unsupported_format');
    if(processor.serviceKind&&!url)return new ExecutionFailure('blocked','provider_not_configured');
    if(url&&!settings.allowExternalProcessing&&!['localhost','127.0.0.1','[::1]'].includes(new URL(url).hostname))return new ExecutionFailure('blocked','external_processing_disabled');
+   const endpoint=this.processorEndpoint(step);if(endpoint)try{this.processorAdmission.check(endpoint);}catch(error){if(error instanceof ProviderFailure)return new ExecutionFailure('waiting',error.details.code,error.details.retryAfterMs);throw error;}
    if(url===this.media.ocrEndpoint&&this.options.mediaAssets){if(!this.options.mediaAssets.ready('ocr'))return new ExecutionFailure('blocked','model_missing');if(!this.workerReady)return new ExecutionFailure('waiting','ocr_worker_unavailable',5000);}
   }else if(stage.kind==='understanding'&&!this.options.understanding?.selection(plan.binding.settings.analysisModel).configured)return new ExecutionFailure('blocked','model_unconfigured');
  }
@@ -294,7 +302,7 @@ export class ImageProcessing {
   const dependencies=Object.fromEntries(plan.steps.find(s=>s.name===step.input.name)!.dependsOn.map(name=>[name,this.product(row.capture_id,name)?JSON.parse(String(this.product(row.capture_id,name)!.json)).payload:undefined]));
   const readImage=async(input:Omit<import('@mote/shared').ImageReadInput,'id'>)=>{signal.throwIfAborted();const bytes:Buffer[]=[];for await(const part of original.read())bytes.push(part);return imageOutput(Buffer.concat(bytes),original.mimeType,{...input,id:row.capture_id},()=>this.valid(step));};
   const payload=await stage.run({record,hash:original.hash,mimeType:original.mimeType,dependencies,signal,readImage,
-   ocr:async()=>{const processor=this.processing.runtime.registry.get(plan.binding.applied.profile.processorId);const raw=await this.processing.runImageProcessor(row.capture_id,'image-product:'+String(step.input.fingerprint),signal,()=>processor.process({file:{id:record.id,title:record.windowTitle||record.appName||'Image',mimeType:original.mimeType,sizeBytes:original.sizeBytes},parameters:effectiveProcessorParameters(processor,plan.binding.applied.profile.parameters),settings:plan.binding.settings,maxAudioMs:0,signal,readOriginal:()=>original.read()}));return processor.output?this.processing.runtime.outputs.decode(processor.output,raw).transcript:transcriptSchema.parse(raw);},
+   ocr:async()=>{const processor=this.processing.runtime.registry.get(plan.binding.applied.profile.processorId),endpoint=this.processorEndpoint(step),run=()=>this.processing.runImageProcessor(row.capture_id,'image-product:'+String(step.input.fingerprint),signal,()=>processor.process({file:{id:record.id,title:record.windowTitle||record.appName||'Image',mimeType:original.mimeType,sizeBytes:original.sizeBytes},parameters:effectiveProcessorParameters(processor,plan.binding.applied.profile.parameters),settings:plan.binding.settings,maxAudioMs:0,signal,readOriginal:()=>original.read()}));const raw=await(endpoint?this.processorAdmission.run(endpoint,run):run());return processor.output?this.processing.runtime.outputs.decode(processor.output,raw).transcript:transcriptSchema.parse(raw);},
    understand:async()=>{if(!this.options.understanding)throw new ExecutionFailure('blocked','model_unconfigured');return this.options.understanding.run({record,original,ocr:dependencies.ocr as Transcript|undefined,signal,readImage:input=>readImage(input),operationId:step.operationId,service:plan.binding.settings.analysisModel});},
   });
   if(stage.kind==='ocr'){const transcript=transcriptSchema.parse(payload);if(transcript.durationMs!==0||transcript.segments.map(s=>s.text).join('\n').length>100000)throw new StoreError('Invalid image OCR output',422);return {payload:transcript,kind:'ocr'};}

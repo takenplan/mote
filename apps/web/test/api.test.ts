@@ -71,23 +71,21 @@ test('external authorization failures preserve the node login while revoked cred
   }
 });
 
-test('only model operations use the node deadline plus transport allowance; ordinary requests keep their deadline', async t => {
+test('model operations preserve resource waiting while ordinary requests keep a transport deadline', async t => {
   const durations:number[]=[],signals:AbortSignal[]=[];
   t.mock.method(AbortSignal,'timeout',(ms:number)=>{durations.push(ms);return new AbortController().signal;});
   t.mock.method(globalThis,'fetch',async(_url:unknown,init?:RequestInit)=>{signals.push(init!.signal!);return new Response('{}');});
   const api=createApi({token:'synthetic'});
-  api.setAgentTimeout(300000);
   for(const path of ['/api/query','/api/insights','/api/memories/extract']) await api.request(path,{method:'POST'});
   await api.request('/api/insights'); await api.request('/api/captures',{method:'POST',body:'{}'}); await api.request('/api/query-other',{method:'POST'});
-  assert.deepEqual(durations,[360000,360000,360000,180000,180000,180000]);
-  api.setAgentTimeout(600000);const controller=new AbortController();
+  assert.deepEqual(durations,[180000,180000,180000]);
+  const controller=new AbortController();
   await api.request('/api/query',{method:'POST',signal:controller.signal});
-  assert.equal(durations.at(-1),660000);assert.equal(signals.at(-1)!.aborted,false);
+  assert.deepEqual(durations,[180000,180000,180000]);assert.equal(signals.at(-1)!.aborted,false);
   controller.abort();assert.equal(signals.at(-1)!.aborted,true,'User navigation still cancels a long model request');
-  const beforeUnbounded=durations.length;api.setAgentTimeout(null);await api.request('/api/query',{method:'POST'});assert.equal(durations.length,beforeUnbounded,'An unset Agent deadline must not add a browser deadline');assert.equal(signals.at(-1),undefined);
-  for(const value of [undefined,0,Infinity,3600001,5000.5]){api.setAgentTimeout(value);await api.request('/api/query',{method:'POST'});assert.equal(durations.at(-1),180000);}
+  const beforeUnbounded=durations.length;await api.request('/api/query',{method:'POST'});assert.equal(durations.length,beforeUnbounded,'The browser must not charge queue time against model execution');assert.equal(signals.at(-1),undefined);
   const next=createApi({token:'synthetic-next'});
-  api.setAgentTimeout(600000);await next.request('/api/query',{method:'POST'});assert.equal(durations.at(-1),180000,'New connections do not inherit former server budgets');
+  await next.request('/api/query',{method:'POST'});assert.equal(durations.length,beforeUnbounded);
 });
 
 test('management requests stay on the current service and reject external paths before sending credentials', async t => {

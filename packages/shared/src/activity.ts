@@ -8,7 +8,7 @@ export type WorkBranch={id:string;title:string;state:WorkState;progress?:WorkPro
 export type WorkArtifact={id:string;kind:'answer'|'memory'|'import'|'insight'|'result';title:string;summary?:string;ref?:string;href?:string;count?:number};
 export type WorkEvent={id:string;type:'work.started'|'plan.updated'|'branch.started'|'branch.completed'|'branch.replanned'|'artifact.created'|'work.needs_input'|'work.completed'|'work.failed'|'work.cancelled';at:string;branchId?:string;summary?:string;count?:number};
 export type WorkActivity={id:string;kind:string;goal:string;state:WorkState;createdAt:string;updatedAt:string;progress:WorkProgress;branches:WorkBranch[];branchCounts?:{total:number;running:number;completed:number};branchesNextCursor?:number|null;artifacts:WorkArtifact[];evidence:{count:number;refs:string[];runId?:string};events:WorkEvent[];destination:string;technical:{operationIds:string[];runId?:string}};
-export type WorkActivityPage={items:WorkActivity[];nextCursor:number|null};
+export type WorkActivityPage={items:WorkActivity[];nextCursor:number|null;relation?:{coverage:'partial';materialId?:string;sourceId?:string}};
 /** Tool receipts count returned items, not distinct evidence actually read. */
 export type WorkQueryEvent={stage:'starting'|'model'|'tool'|'validating';at:string;tool?:string;message?:string;count?:number;phase?:'started'|'completed';step?:number};
 export function queryWorkProgress(events:readonly WorkQueryEvent[],completed=false):WorkProgress {

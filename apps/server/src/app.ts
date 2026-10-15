@@ -156,14 +156,18 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const interactiveGate=new ConcurrencyGate(execution.interactiveConcurrency),interactiveModelGate=new ConcurrencyGate(execution.interactiveConcurrency);
   const modelContext=new AsyncLocalStorage<QueryInput>();
   const modelOperation=new AsyncLocalStorage<string>();
+  // Accounting observes trusted admission boundaries, independently of model
+  // input. A host cooldown or gate cancellation can happen before any call.
+  const queryAccounting=new AsyncLocalStorage<{agentStarted:()=>void;modelQueued:()=>void;modelStarted:()=>void}>();
   const assertModelPurpose=(input:QueryInput|undefined)=>{if(dependencies?.queryQualityExperiment&&!input?.traceContext?.operationId?.startsWith('query:'))throw new StoreError('Isolated Ask experiment does not authorize background model work',409);};
   const authorizeModelRequest=()=>{assertModelPurpose(modelContext.getStore());assertModelEvidence(modelContext.getStore());};
   const runModelFor=(settings:import('@mote/shared/models').ModelSettings):NonNullable<import('@mote/agent').AgentOptions['runModel']>=>(task,signal)=>{
     signal?.throwIfAborted();assertModelPurpose(modelContext.getStore());providerAdmission.check(settings);
     const queuedAt=performance.now(),input=modelContext.getStore(),gate=input?.executionLane==='interactive'?interactiveModelGate:llmGate;input?.onTrace?.({type:'model.queued',stage:'model',payload:{...gate.snapshot(),unit:'harness_session',lane:input?.executionLane??'background'}});
     input?.onProgress?.({stage:'model',message:moteText('等待模型执行名额')});
+    queryAccounting.getStore()?.modelQueued();
     return gate.run(async()=>{providerAdmission.check(settings);assertModelEvidence(input);input?.onProgress?.({stage:'model',message:moteText('模型处理中')});const admittedAt=performance.now(),lane=input?.executionLane??'background',queueWaitMs=admittedAt-queuedAt;input?.onTrace?.({type:'model.admitted',stage:'model',payload:{...gate.snapshot(),unit:'harness_session',lane,queueWaitMs}});let status:'completed'|'failed'|'yielded'='failed';
-      try{const result=await task();status='completed';return result;}
+      try{queryAccounting.getStore()?.modelStarted();const result=await task();status='completed';return result;}
       catch(error){if(error instanceof AgentYieldError)status='yielded';throw error;}
       finally{diagnostics.record('agent.harness_timing',{jobId:input?.traceContext?.jobId,batchId:input?.traceContext?.batchId,lane,unit:'harness_session',queueWaitMs,durationMs:performance.now()-admittedAt,status},'info');}
     },signal??input?.signal,input?.traceContext?.operationId??modelOperation.getStore());
@@ -181,6 +185,24 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const sources=new SourceStore(store,sourcePipelines),files=new FileStore(store,sources),ingress=new IngressService(store,sources,files);const fileEvidence=new FileEvidence(sources);
   const mediaAssets=new MediaAssets(config.media?.modelDirectory??join(store.directory,'media-models'));
   const usageLedger=new UsageLedger(store);
+  const admittedUsage=(...args:Parameters<UsageLedger['start']>)=>{
+    let agentStarted=false,modelQueued=false,meter:ReturnType<UsageLedger['start']>|undefined;
+    const start=()=>meter??=usageLedger.start(...args);
+    const accounting={agentStarted:()=>{agentStarted=true;},modelQueued:()=>{modelQueued=true;},modelStarted:()=>{agentStarted=true;start();}};
+    return {
+      run:<T>(task:()=>Promise<T>)=>queryAccounting.run(accounting,task),
+      update:(tokens:import('@mote/shared').TokenUsage)=>start().update(tokens),
+      completed:()=>start().finish('completed'),
+      failed:(error:unknown)=>{
+        const admissionWait=error instanceof ProviderFailure&&error.details.admissionWaiting===true;
+        if(agentStarted&&!modelQueued&&!admissionWait)start();
+        // Preserve issued calls and partial samples, but create no receipt for
+        // a host refusal or queue cancellation before the first actual model
+        // operation. Agents without a host model gate retain fallback accounting.
+        return meter?.finish('failed');
+      },
+    };
+  };
   const indexer=new Indexer(store,config,diagnostics,files,input=>{
     const operationId=input.operationId??modelContext.getStore()?.traceContext?.operationId??'embedding:'+randomUUID(),provider='embedding',model=config.embeddingModel;
     const meter=usageLedger.start(provider,model,'embedding',{agentId:'embedding',moduleId:'retrieval',skillId:null,operationId});
@@ -315,7 +337,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     return (lane==='interactive'?interactiveGate:agentGate).run(async()=>{
       const operationId=input.traceContext?.operationId??(input.traceContext?.jobId?'job:'+input.traceContext.jobId:'query:'+randomUUID());
       const admittedAt=performance.now(),queueWaitMs=admittedAt-queuedAt;let status:'completed'|'failed'|'yielded'='failed';
-      try{evidenceReader.retainMemorySnapshot(input);const result=await modelOperation.run(operationId,()=>providerAdmission.run(settings,()=>{assertModelEvidence(input);return modelContext.run(input,()=>inner.query(input));}));status='completed';return result;}
+      try{evidenceReader.retainMemorySnapshot(input);const result=await modelOperation.run(operationId,()=>providerAdmission.run(settings,()=>{assertModelEvidence(input);queryAccounting.getStore()?.agentStarted();return modelContext.run(input,()=>inner.query(input));}));status='completed';return result;}
       catch(error){if(error instanceof AgentYieldError)status='yielded';throw error;}
       finally{evidenceReader.releaseMemorySnapshot(input);diagnostics.record('agent.fragment_timing',{jobId:input.traceContext?.jobId,batchId:input.traceContext?.batchId,lane,unit:'agent_fragment',queueWaitMs,durationMs:performance.now()-admittedAt,status},'info');}
     },input.signal,input.traceContext?.operationId);
@@ -356,7 +378,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     }
     return structuredClone(selected);
   };
-  const analyzeFile:FileAnalysis=async(records,prompt,settings,signal,host)=>{
+  const analyzeFile:FileAnalysis=async(records,prompt,settings,signal,host,validateOutput)=>{
     const currentRecords=()=>records.map(record=>({...record,...(record.provenance?{attributionContext:materials.contextForEvidence(record as CaptureRecord)}:{})}));
     const scoped:ContextReader={search:async()=>currentRecords(),timeline:async args=>{
       const offset=args.cursor===undefined?0:Number(args.cursor);if(!Number.isSafeInteger(offset)||offset<0||offset>records.length)throw new StoreError('Invalid file analysis cursor');
@@ -364,19 +386,19 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       return {items,nextCursor:offset+items.length<records.length?String(offset+items.length):null};
     },evidence:async args=>currentRecords().filter(r=>args.ids.includes(r.id)),activity:async()=>({}),devices:async()=>[]};
     const selected=settings.modelSnapshot??resolveFileModel(settings);
-    const meter=usageLedger.start(selected.provider,selected.model,'file-analysis',{agentId:'file-analysis',moduleId:'files',skillId:null,...host});
+    const meter=admittedUsage(selected.provider,selected.model,'file-analysis',{agentId:'file-analysis',moduleId:'files',skillId:null,...host});
     let model:QueryAgent|undefined;
-    const request:QueryInput={question:prompt,language:requestLocale.getStore()??'zh-CN',signal,traceContext:host,onUsage:meter.update,
+    const request:QueryInput={question:prompt,language:requestLocale.getStore()??'zh-CN',signal,traceContext:host,onUsage:meter.update,validateOutput,
       onSourceContextDependencies:pins=>{
         const current=combineSourceContextDependencies([request.contextSourceContextDependencies,pins]);
         assertSourceContextDependencies(sourceContexts,current);request.contextSourceContextDependencies=current;
       },
     };
-    try{model=await factory(selected,scoped);const result=await model.query(request);
+    try{model=await factory(selected,scoped);const result=await meter.run(()=>model!.query(request));
       const pins=combineSourceContextDependencies([request.contextSourceContextDependencies,result.sourceContextDependencies]);
       assertSourceContextDependencies(sourceContexts,pins);
-      return {...result,...(pins.length?{sourceContextDependencies:pins}:{}),usage:meter.finish('completed')};}
-    catch(error){meter.finish('failed');throw error;}finally{await model?.close();}
+      return {...result,...(pins.length?{sourceContextDependencies:pins}:{}),usage:meter.completed()};}
+    catch(error){meter.failed(error);throw error;}finally{await model?.close();}
   };
   let queryRuns:DelegatedQueryRuns;
   const insightRuns=new InsightRuns(store,{executor,evidenceReader});
@@ -520,8 +542,10 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
     };
     trace({type:'query.started',stage:'starting',payload:{question:input.question,taskContext:input.taskContext??null,conversation:input.conversation??null,evidenceIds:input.evidenceIds??null,evidenceRanges:input.evidenceRanges??null,evidenceReadRanges:input.evidenceReadRanges??null,scope:{after:input.after??null,before:input.before??null,deviceId:input.deviceId??null,timeZone:input.timeZone??null},skill:input.skill??null,responseMode:input.responseMode??'answer'}});
     const revision=store.deletionRevision();
-    const meter=usageOwner==='query'?usageLedger.start(profile.settings.provider,input.modelOverride??profile.settings.model,input.skill??operation,{agentId:'context-query',moduleId,skillId:input.skill??null,operationId:input.traceContext?.operationId,jobId:input.traceContext?.jobId,requestId:diagnostics.requestId()}):undefined;
-    const deadline=agentDeadline(input.signal,profile.settings.agentTimeoutMs),taskSignal=deadline.signal;
+    const meter=usageOwner==='query'?admittedUsage(profile.settings.provider,input.modelOverride??profile.settings.model,input.skill??operation,{agentId:'context-query',moduleId,skillId:input.skill??null,operationId:input.traceContext?.operationId,jobId:input.traceContext?.jobId,requestId:diagnostics.requestId()}):undefined;
+    // Agent implementations account admitted model/tool/repair work. A second
+    // wall-clock deadline here would charge host resource-gate waiting again.
+    const deadline=agentDeadline(input.signal,null),taskSignal=deadline.signal;
     let disclosedSourcePins=sourceContextDependencies(input);
     const disclosedProcessingIds:string[]=[],processingIds=new Set<string>();
     const observed:QueryInput&{processingDisclosedEvidenceIds?:string[]}={...input,contextSourceContextDependencies:disclosedSourcePins,signal:taskSignal,traceContext,
@@ -537,7 +561,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       },
       onProgress:(event:import('@mote/agent').AgentProgress)=>{trace({type:'progress',stage:event.stage,phase:event.phase,step:event.step,tool:event.tool,payload:event});input.onProgress?.(event);},onTrace:trace,onUsage:(tokens:import('@mote/shared').TokenUsage)=>{meter?.update(tokens);input.onUsage?.(tokens);}};
     const heartbeat=setInterval(()=>diagnostics.record('agent.heartbeat',{jobId:input.traceContext?.jobId,elapsedMs:Date.now()-startedAt,idleMs:Date.now()-lastActivity,activeQueries:agentGate.snapshot().active},'info'),30000);heartbeat.unref();
-    const promise=diagnostics.measure('agent',operation,()=>agent.query(observed).then(result=>{
+    const promise=diagnostics.measure('agent',operation,()=>(meter?meter.run(()=>agent.query(observed)):agent.query(observed)).then(result=>{
       taskSignal?.throwIfAborted();
       assertModelEvidence(observed);
       const evidenceDependencies=resolveDependencies(store,combineDependencies([contextDependencies(input),result.evidenceDependencies]));
@@ -556,8 +580,15 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
         }
       }
       trace({type:'query.completed',stage:'validating',phase:'completed',status:'succeeded',payload:{answer:result.answer,citations:result.citations,trace:result.trace,contextUsage:(result as QueryResult & {contextUsage?:unknown}).contextUsage}});
-      return {...result,...(evidenceDependencies?{evidenceDependencies}:{}),...(sourcePins.length?{sourceContextDependencies:sourcePins}:{}),configuration,...(meter?{usage:meter.finish('completed')}:{})};
-    }).catch(error=>{if(error instanceof AgentYieldError){meter?.finish('completed');trace({type:'query.yielded',status:'waiting'});throw error;}meter?.finish('failed');retainFailureContext(error,{runId:failureRunId,phase:input.traceContext?.phase,jobId:input.traceContext?.jobId,batchId:input.traceContext?.batchId});trace({type:'query.failed',status:'failed',payload:{errorName:error instanceof Error?error.name:'UnknownError',reason:typeof (error as {reason?:unknown})?.reason==='string'?(error as {reason:string}).reason:undefined}});throw error;}),result=>({citations:result.citations.length,toolCalls:result.trace.length,activeQueries:activeQueries.size}));
+      const completedUsage=meter?.completed();
+      return {...result,...(evidenceDependencies?{evidenceDependencies}:{}),...(sourcePins.length?{sourceContextDependencies:sourcePins}:{}),configuration,...(completedUsage?{usage:completedUsage}:{})};
+    }).catch(error=>{
+      if(error instanceof AgentYieldError){meter?.completed();trace({type:'query.yielded',status:'waiting'});throw error;}
+      const wait=error instanceof ProviderFailure&&(error.details.admissionWaiting===true||error.details.category==='transient'&&error.details.code==='rate_limited')?{code:error.details.code,retryAfterMs:error.details.retryAfterMs}:error instanceof ExecutionFailure&&error.category==='waiting'?{code:error.code,retryAfterMs:error.retryAfterMs}:undefined;
+      meter?.failed(error);
+      retainFailureContext(error,{runId:failureRunId,phase:input.traceContext?.phase,jobId:input.traceContext?.jobId,batchId:input.traceContext?.batchId});
+      trace(wait?{type:'query.waiting',status:'waiting',payload:wait}:{type:'query.failed',status:'failed',payload:{errorName:error instanceof Error?error.name:'UnknownError',reason:typeof (error as {reason?:unknown})?.reason==='string'?(error as {reason:string}).reason:undefined}});throw error;
+    }),result=>({citations:result.citations.length,toolCalls:result.trace.length,activeQueries:activeQueries.size}));
     activeQueries.add(promise);void promise.finally(()=>{deadline.dispose();clearInterval(heartbeat);activeQueries.delete(promise);}).catch(()=>{});return promise;
   }
   const memoryReviews=new MemoryReviewCache();
@@ -653,11 +684,11 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
       if(!agent.configured)throw new AgentNotConfiguredError();
       const selected=modelSettings.select('import');if(!agent.configuredFor(selected.id))throw new AgentNotConfiguredError();
       const settings=selected.settings,prepared=await prepareImportInput(input);
-      const meter=usageLedger.start(settings.provider,settings.model,'document-import',{agentId:'document-import',moduleId:'imports',skillId:'document-import',operationId:input.operationId});
+      const meter=admittedUsage(settings.provider,settings.model,'document-import',{agentId:'document-import',moduleId:'imports',skillId:'document-import',operationId:input.operationId});
       const operationId=input.operationId??'import:'+randomUUID();
       let runtime:ReturnType<typeof createImportAgent>|undefined;const abort=()=>{void runtime?.close();};input.signal?.addEventListener('abort',abort,{once:true});
-      try{runtime=createImportAgent({...settings,codex,runModel:runModelFor(settings),authorizeModelRequest:authorizeModelRequest});importAgents.add(runtime);const {signal:_signal,operationId:_operationId,...request}=prepared;const result=await agentGate.run(()=>modelOperation.run(operationId,()=>providerAdmission.run(settings,()=>runtime!.prepare({...request,language:requestLocale.getStore()??'zh-CN'},dependencies?.observeImport?event=>dependencies.observeImport!(input.workspace,event):undefined,usage=>meter.update(usage)))),input.signal,input.operationId);input.signal?.throwIfAborted();meter.finish('completed');return result;}
-      catch(error){meter.finish('failed');throw error;}finally{input.signal?.removeEventListener('abort',abort);try{await runtime?.close();}finally{if(runtime)importAgents.delete(runtime);}}
+      try{runtime=createImportAgent({...settings,codex,runModel:runModelFor(settings),authorizeModelRequest:authorizeModelRequest});importAgents.add(runtime);const {signal:_signal,operationId:_operationId,...request}=prepared;const result=await meter.run(()=>agentGate.run(()=>modelOperation.run(operationId,()=>providerAdmission.run(settings,()=>runtime!.prepare({...request,language:requestLocale.getStore()??'zh-CN'},dependencies?.observeImport?event=>dependencies.observeImport!(input.workspace,event):undefined,usage=>meter.update(usage)))),input.signal,input.operationId));input.signal?.throwIfAborted();meter.completed();return result;}
+      catch(error){meter.failed(error);throw error;}finally{input.signal?.removeEventListener('abort',abort);try{await runtime?.close();}finally{if(runtime)importAgents.delete(runtime);}}
     }),
     // Each original receipt owns its automatic authorization. Ready materials
     // enter the shared rolling queue; import completion must not create a second job.

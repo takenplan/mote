@@ -29,7 +29,6 @@ const validateTimeouts = (value: {protocol: string; reasoningEffort:string; mode
   if (value.protocol === 'codex-app-server' && (value as {serviceTier?:string}).serviceTier===undefined)ctx.addIssue({code:'custom',path:['serviceTier'],message:'Codex service tier is required'});
   if (value.protocol === 'codex-app-server' && value.modelRequestTimeoutMs !== null) ctx.addIssue({ code: 'custom', path: ['modelRequestTimeoutMs'], message: 'Model request timeout is not applicable to Codex App Server' });
   if (value.protocol !== 'codex-app-server' && value.modelRequestTimeoutMs === null) ctx.addIssue({ code: 'custom', path: ['modelRequestTimeoutMs'], message: 'Model request timeout is required for HTTP providers' });
-  if (value.protocol !== 'codex-app-server' && value.agentTimeoutMs === null) ctx.addIssue({ code: 'custom', path: ['agentTimeoutMs'], message: 'Agent timeout is required for HTTP providers' });
   if (value.protocol !== 'codex-app-server' && ['minimal', 'medium', 'xhigh', 'ultra'].includes(value.reasoningEffort)) ctx.addIssue({code:'custom',path:['reasoningEffort'],message:'This reasoning effort requires Codex App Server'});
 };
 const modelSettingsObjectSchema = z.object({ ...parameters, apiKey, headers, extraBody }).strict().superRefine((value,ctx)=>{

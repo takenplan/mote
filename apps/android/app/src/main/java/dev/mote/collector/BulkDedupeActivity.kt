@@ -54,7 +54,7 @@ class BulkDedupeActivity : MoteActivity() {
         modes = Spinner(this).apply {
             adapter = ArrayAdapter(this@BulkDedupeActivity, android.R.layout.simple_spinner_dropdown_item, listOf(MoteI18n.text("精确"), MoteI18n.text("保守"), MoteI18n.text("均衡"), MoteI18n.text("激进")))
             isEnabled = false
-        }; body.addView(modes, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }); controls += modes
+        }; body.addView(modes, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }); controls += modes
         action(body, MoteI18n.text("开始全量扫描"), primary = true) {
             val mode = modeValues[modes.selectedItemPosition]
             submit(workDataOf("action" to "scan", "mode" to mode))

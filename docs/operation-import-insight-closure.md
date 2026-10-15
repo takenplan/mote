@@ -4,7 +4,7 @@ This batch uses generated fixtures and focused regressions. It does not claim a 
 
 ## Execution and attribution
 
-Query and insight work is admitted through the shared execution engine, including synchronous API calls. Domain run records project that engine's state and retain bounded progress/result references. The creation-time deadline covers queue time. Cancellation and engine shutdown revoke commit authority, so a late provider response cannot publish a result.
+Query and insight work is admitted through the shared execution engine, including synchronous API calls. Domain run records project that engine's state and retain bounded progress/result references. There is no creation-time workflow deadline. Explicit internal operation deadlines start after pool admission; configured model budgets are accounted inside actual admitted Agent work and are not copied onto the coordinator. Resource waits retain the workflow. Cancellation and engine shutdown revoke commit authority, so a late provider response cannot publish a result.
 
 Interactive functions cannot be reconstructed after a process restart. Each owner has a renewable database lease and a distinct handler identity. A second connection leaves a live owner alone; an expired owner becomes `interrupted` instead of silently replaying a model call. Historical successful/cancelled/failed receipts retain their timestamps.
 

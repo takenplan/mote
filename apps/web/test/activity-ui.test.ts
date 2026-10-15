@@ -32,3 +32,16 @@ test('open-ended Ask shows public stage and host counts without inventing a perc
  const {root,d}=await fixture(t);await act(async()=>root.render(React.createElement(QueryProgress,{run:{id:'fixture',status:'running',createdAt:'2026-09-20T01:00:00Z',updatedAt:'2026-09-20T01:01:00Z',events:[{stage:'tool',phase:'completed',tool:'evidence',count:3,at:'2026-09-20T01:00:10Z'},{stage:'validating',at:'2026-09-20T01:00:20Z'}]},error:''})));
  assert.match(d.body.textContent!,/交叉核对/);assert.match(d.body.textContent!,/检索已返回 3 项资料/);assert.equal(d.querySelectorAll('progress').length,0);assert.equal(d.querySelector('details')!.open,false);assert.doesNotMatch(d.body.textContent!,/\d+%/);
 });
+
+test('related activity uses exact identities and describes incomplete coverage even when no linked work is found',async t=>{
+ const {root,d}=await fixture(t),reads:string[]=[];
+ const api={request:async(path:string)=>{reads.push(path);if(path.startsWith('/api/operations/changes'))return new Promise(()=>{});return {items:[],nextCursor:path.includes('sourceId=')?8:null,relation:{coverage:'partial',sourceId:'generated/source'}};},setAgentTimeout:()=>{}} as Api;
+ location.hash='#/activity?sourceId=generated%2Fsource';
+ await act(async()=>root.render(React.createElement(Activity,{api,onNavigate:()=>{},onOpen:()=>{}})));
+ assert.ok(reads.some(path=>path.includes('sourceId=generated%2Fsource')));assert.match(d.body.textContent!,/未找到已关联活动/);assert.match(d.body.textContent!,/历史关联可能不完整/);assert.doesNotMatch(d.body.textContent!,/目前没有正在进行的工作/);
+ await act(async()=>button(d,'下一页').click());assert.ok(reads.some(path=>path.includes('cursor=8')));
+ await act(async()=>{location.hash='#/activity?materialId=mat_generated';window.dispatchEvent(new d.defaultView!.Event('hashchange'));});
+ assert.ok(reads.some(path=>path.includes('materialId=mat_generated')&&!path.includes('sourceId=')),'same-page filter changes update the actual read scope');
+ assert.ok(reads.filter(path=>path.includes('materialId=')).every(path=>!path.includes('cursor=')),'a cursor from another relation is never sent to the new scope');assert.match(d.querySelector('.list-pagination')!.textContent!,/第 1 页/);
+ assert.equal(d.querySelector<HTMLAnchorElement>('.related-activity-context a')!.getAttribute('href'),'#/activity');
+});

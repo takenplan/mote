@@ -60,7 +60,7 @@ class AppCaptureSetupInstrumentedTest {
                 button("暂不开始").performClick()
             }
             scenario.recreate(); scenario.awaitMainUi()
-            scenario.onActivity { assertTrue(views(it.window.decorView).single { row -> row.tag == "primary:TODAY" }.isSelected); assertFalse(settings.enabled) }
+            scenario.onActivity { assertTrue(views(it.window.decorView).single { row -> row.tag == "primary:LIBRARY" }.isSelected); assertFalse(settings.enabled) }
         }
     }
     @Test fun saveAndPreviewUsesTwoModesAndNormalizesLegacyOnlyAfterSaving() = fixture { settings ->
@@ -164,7 +164,7 @@ class AppCaptureSetupInstrumentedTest {
                 assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "记录屏幕" })
                 menu(activity, "权限与后台运行"); button("返回首页继续记录").performClick()
                 assertTrue(views(activity.window.decorView).filterIsInstance<TextView>().any { it.isShown && it.text.toString() == "记录屏幕" })
-                assertTrue(views(activity.window.decorView).single { row -> row.tag == "primary:TODAY" }.isSelected)
+                assertTrue(views(activity.window.decorView).single { row -> row.tag == "primary:LIBRARY" }.isSelected)
             }
         }
     }
