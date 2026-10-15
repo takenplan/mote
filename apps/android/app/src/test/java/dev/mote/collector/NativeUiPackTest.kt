@@ -67,6 +67,17 @@ class NativeUiPackTest {
         val id = "14254e08-7dc5-4c6b-a6cb-a5fa9bad807b"
         assertEquals("capture:$id", CentralEvidenceReference.normalize(id))
     }
+    @Test fun relatedWorkMapsLibraryBeforeCheckingNativeDestinations() {
+        val pages = CentralScreens.pages.map { it.first }.toSet()
+        for (kind in listOf("image", "material-index")) {
+            val work = JSONObject().put("kind", kind).put("destination", "library")
+            assertEquals("archive", CentralWorkPresentation.destination(work.getString("destination"), pages))
+        }
+        for (page in pages) assertEquals(page, CentralWorkPresentation.destination(page, pages))
+        for (unknown in listOf("", "unknown", "https://example.invalid", "#/library")) {
+            assertThrows(IllegalArgumentException::class.java) { CentralWorkPresentation.destination(unknown, pages) }
+        }
+    }
     @Test fun workProgressUsesActualProductReceiptsAndNeverInventsAPercentage() {
         assertEquals("已处理 3 / 9 条资料", CentralWorkPresentation.progress(JSONObject().put("mode", "determinate").put("completed", 3).put("total", 9)))
         assertEquals("查找资料", CentralWorkPresentation.progress(JSONObject().put("mode", "semantic").put("stage", "searching")))
