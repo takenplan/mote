@@ -183,8 +183,7 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
     private fun related(work: JSONObject) = button(MoteI18n.text("打开相关资料与操作")) { relatedDestination(work.getString("destination")) }
     private fun relatedDestination(destination: String) {
         // The product DTO is explicit routing metadata. Unknown routes do not become intents or URLs.
-        require(destination in CentralScreens.pages.map { it.first }) { MoteI18n.text("资料不存在或已删除。") }
-        ui.openWorkDestination(destination)
+        ui.openWorkDestination(CentralWorkPresentation.destination(destination, CentralScreens.pages.map { it.first }.toSet()))
     }
     private fun conversation(id: String, workId: String, cursor: String? = null) {
         val api = screens.client
@@ -216,6 +215,11 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
 }
 
 internal object CentralWorkPresentation {
+    fun destination(value: String, pages: Set<String>): String {
+        val page = if (value == "library") "archive" else value
+        require(page in pages) { MoteI18n.text("资料不存在或已删除。") }
+        return page
+    }
     fun state(value: String): String = mapOf("waiting" to "等待开始", "running" to "正在进行", "needs_input" to "需要处理", "completed" to "已完成", "failed" to "未能完成", "cancelled" to "已停止", "stale" to "资料变化，需要重新检查", "excluded" to "按设置跳过")[value] ?: value
     fun event(value: String): String = mapOf("work.started" to "工作已开始", "plan.updated" to "工作计划已更新", "branch.started" to "工作分支已开始", "branch.completed" to "工作分支已完成", "branch.replanned" to "已调整工作分支", "artifact.created" to "已保存工作成果", "work.needs_input" to "工作需要补充", "work.completed" to "工作已完成", "work.failed" to "工作未能完成", "work.cancelled" to "工作已停止")[value] ?: value
     fun progress(value: JSONObject): String = if (value.optString("mode") == "determinate") MoteI18n.text("已处理 {0} / {1} 条资料", value.optInt("completed"), value.optInt("total"))
