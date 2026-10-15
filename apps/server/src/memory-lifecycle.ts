@@ -28,7 +28,7 @@ export function freezeSemanticContextTime(clock:()=>string=()=>new Date().toISOS
 }
 export type LifecycleWindow={manual?:boolean;id:string;version:string;from:number;through:number;ids:string[];startedAt:number;contextTime:string;settings:LifecycleSettings;checkpoint?:string};
 type State={cancelled?:boolean;cancellationCause?:'owner'|'authority';manualRetryRequired?:boolean;stream?:LifecycleExtension['stream'];drainThrough?:number;cursor:number;lastSuccess:number;retryAt?:number;failures:number;active?:LifecycleWindow;lastRun?:{id:string;through:number;completedAt:number};error?:string};
-export type LifecycleExecution={operationId:string;jobId:string;signal:AbortSignal;interrupted:()=>boolean;commit:<T>(write:()=>T)=>T};
+export type LifecycleExecution={operationId:string;jobId:string;signal:AbortSignal;interrupted:()=>boolean;commit:<T>(write:()=>T)=>T;recovery?:'transient'};
 export type LifecycleExtension={id:keyof Pick<LifecycleSettings,'extraction'|'consolidation'|'insights'|'working'>;version:string;stream:'evidence'|'artifact'|'memory'|'conversation';maxAttempts?:number;
   cancel?:(window:LifecycleWindow,cause:'owner'|'authority')=>void;
   run:(window:LifecycleWindow,checkpoint:(id:string)=>void,execution?:LifecycleExecution)=>Promise<void>};
@@ -181,14 +181,17 @@ export class MemoryLifecycle {
           const executor=this.executor,id='lifecycle:'+window.id,operationId='workflow:lifecycle:'+window.id;
           // Only this window's finite, typed recovery decision can reopen a
           // failed invocation. Observing a terminal child is never retry consent.
-          if(state.retryAt&&state.failures>0&&executor.get(id)?.state==='failed'&&executor.failure(id)?.category==='transient')executor.retry(id,false);
+          // The scheduled finite recovery survives a yielded admission slot or
+          // interruption. A child still has to establish its own replay safety.
+          const recovery=state.retryAt!==undefined&&state.failures>0?'transient' as const:undefined;
+          if(recovery&&executor.get(id)?.state==='failed'&&executor.failure(id)?.category==='transient')executor.retry(id,false);
           await executor.runStep({id,operationId,kind:'lifecycle-window',pool:'lifecycle.'+extension.id,input:{windowId:window.id,extensionId:extension.id,version:window.version},signal:this.abort.signal,policy:EXECUTION_POLICIES.orchestration,
             classify:error=>error instanceof AgentTimeoutError?new ExecutionFailure('transient','provider_timeout'):new ExecutionFailure('permanent',error instanceof MemoryProviderError&&error.code==='unsupported_input'?'memory_provider_unsupported_input':error instanceof StoreError?'workflow_'+error.statusCode:'step_failed'),
             validate:()=>!this.closed&&this.state(extension.id).active?.id===window.id,
             execute:async signal=>{
               const fence=this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(id)?.fence;
               const commit=<T>(write:()=>T):T=>{signal.throwIfAborted();const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{if(!fence||!executor.isCurrentGrant(id,String(fence))||this.state(extension.id).active?.id!==window.id)throw new StoreError('Lifecycle execution grant expired',409);const result=write();if(own)db.exec('COMMIT');return result;}catch(error){if(own)db.exec('ROLLBACK');throw error;}};
-              await extension.run(window,value=>commit(()=>checkpoint(value)),{operationId,jobId:window.id,signal,interrupted:()=>this.closed||executor.closed,commit});signal.throwIfAborted();return true;
+              await extension.run(window,value=>commit(()=>checkpoint(value)),{operationId,jobId:window.id,signal,interrupted:()=>this.closed||executor.closed,commit,...(recovery?{recovery}:{})});signal.throwIfAborted();return true;
             },commit:()=>{},read:()=>executor.get(id)?.state==='succeeded'?true:undefined,project:()=>{},
           });
         }else await extension.run(window,checkpoint);

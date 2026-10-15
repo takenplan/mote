@@ -91,6 +91,52 @@ test('a failed insight checkpoint cannot create another model run when a legacy 
  assert.equal(calls,1);assert.equal(insights.list().length,1);assert.equal(lifecycle.view().extensions.find(e=>e.id==='insights')!.active?.checkpoint,failed.active!.checkpoint);
 });
 
+test('automatic insight recovery replaces only its typed transient checkpoint within the finite window budget',async t=>{
+ for(const recover of [true,false])await t.test(recover?'recovers after restart and admits the next window':'stops at the declared failure bound',async sub=>{
+  const {store,engine,closers}=fixture(sub),sources=new SourceStore(store),files=new FileStore(store,sources),memories=new MemoryStore(store),pipeline=fixtureMemoryPipeline({store,memories,executor:engine,configured:()=>true,model:()=> 'generated',query:async()=>{throw Error('Extraction disabled');}}),insights=new InsightRuns(store,{executor:engine});closers.push(()=>pipeline.close(),()=>insights.close());
+  sources.register({id:'generated-insight-recovery',name:'Generated insight recovery',kind:'custom',deviceId:'fixture',platform:'import'});
+  let now=0,calls=0;
+  const add=async(n:number)=>{const record=await sources.upsert('generated-insight-recovery',{externalId:String(n),revision:'1',observedAt:'2026-09-27T00:00:00Z',kind:'message',layer:'original',text:'Generated insight recovery input.'}),id=String(n).repeat(64);store.archive.save(id,id,id,{kind:'semantic',text:'Generated interpretation',metadata:{complete:true}},[{id:record.id,fingerprint:store.archive.fingerprint(record.id)!}],'fixture','1','fixture');};
+  const register=(lifecycle:MemoryLifecycle)=>{
+   lifecycle.automaticAdmission=id=>id!=='extraction';
+   registerMemoryExtensions({store,files,memories,pipeline,insights,lifecycle,working:new WorkingMemory(store,new Conversations(store)),model:()=> 'generated',query:async()=>{calls++;if(!recover||calls===1)throw new ProviderFailure({category:'transient',code:'provider_unavailable',executionStarted:false});return {runId:randomUUID(),answer:JSON.stringify({title:'Generated recovered report',markdown:'Generated recovered report',html:'<p>Generated recovered report</p>'}),citations:[],trace:[]};}});
+   const settings=lifecycle.settings();for(const id of ['consolidation','working'] as const)settings[id].enabled=false;settings.insights.minChanges=1;settings.insights.intervalHours=1;lifecycle.configure(settings);
+  };
+  let lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register(lifecycle);await add(1);now=3600000;await lifecycle.tick();
+  const first=lifecycle.view().extensions.find(e=>e.id==='insights')!,checkpoint=first.active!.checkpoint!,failureReceipt=engine.failure(checkpoint);assert.equal(calls,1);assert.equal(first.status,'retry_wait');assert.equal(first.failures,1);assert.equal(insights.list()[0].status,'failed');assert.ok(failureReceipt);
+  await lifecycle.close();lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);closers.push(()=>lifecycle.close());register(lifecycle);await lifecycle.tick();assert.equal(calls,1,'restart cannot bypass the saved backoff');
+  now=first.retryAt!;
+  if(recover){
+   const entered=deferred(),release=deferred(),unregister=engine.register({kind:'generated-insight-slot',pool:'lifecycle.insights',concurrency:()=>1,timeoutMs:30000,maxAttempts:1,validate:()=>true,execute:async()=>{entered.resolve();await release.promise;},commit:()=>{}});closers.push(unregister);
+   engine.enqueue('generated-slot-holder','generated-insight-slot',{});const occupying=engine.tick();await entered.promise;await lifecycle.tick();assert.equal(calls,1,'recovery yields while another window owns the execution slot');assert.equal(engine.get('lifecycle:'+first.active!.id)!.state,'waiting');
+   await lifecycle.close();release.resolve();await occupying;lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);closers.push(()=>lifecycle.close());register(lifecycle);now=lifecycle.view().extensions.find(e=>e.id==='insights')!.retryAt!;
+  }
+  await lifecycle.tick();
+  if(recover){
+   assert.equal(calls,2);assert.equal(lifecycle.view().extensions.find(e=>e.id==='insights')!.active,undefined);assert.equal(insights.list().length,2);assert.equal(insights.get(checkpoint.slice(8)).status,'failed','the failed observation remains terminal');assert.deepEqual(engine.failure(checkpoint),failureReceipt,'replacement does not rewrite the failed receipt');
+   const children=store.db.prepare('SELECT child_id FROM operation_parents WHERE parent_id=?').all('workflow:lifecycle:'+first.active!.id);assert.equal(children.length,2,'both observations belong to the same authorized window');
+   assert.equal(store.db.prepare('SELECT count(*) n FROM insights').get()!.n,1);await add(2);now+=3600000;await lifecycle.tick();assert.equal(calls,3,'a recovered window no longer blocks later insights');assert.equal(store.db.prepare('SELECT count(*) n FROM insights').get()!.n,2);
+  }else{
+   for(let attempt=3;attempt<=4;attempt++){now=lifecycle.view().extensions.find(e=>e.id==='insights')!.retryAt!;await lifecycle.tick();}
+   const stopped=lifecycle.view().extensions.find(e=>e.id==='insights')!;assert.equal(calls,4);assert.equal(stopped.status,'failed');assert.equal(stopped.failures,4);assert.equal(stopped.manualRetryRequired,true);assert.equal(stopped.retryAt,undefined);assert.equal(stopped.active!.id,first.active!.id);assert.equal(insights.list().length,4);
+   now+=86400000;await lifecycle.tick();assert.equal(calls,4,'a parent tick cannot reset the finite recovery budget');
+  }
+ });
+});
+
+test('automatic insight recovery does not reopen unknown, cancelled or unscheduled historical failures',async t=>{
+ for(const kind of ['unknown','cancelled','legacy-transient'] as const)await t.test(kind,async sub=>{
+  const {store,engine,closers}=fixture(sub),sources=new SourceStore(store),files=new FileStore(store,sources),memories=new MemoryStore(store),pipeline=fixtureMemoryPipeline({store,memories,executor:engine,configured:()=>true,model:()=> 'generated',query:async()=>{throw Error('Extraction disabled');}}),insights=new InsightRuns(store,{executor:engine});closers.push(()=>pipeline.close(),()=>insights.close());
+  sources.register({id:'generated-insight-stop',name:'Generated insight stop',kind:'custom',deviceId:'fixture',platform:'import'});
+  const record=await sources.upsert('generated-insight-stop',{externalId:'one',revision:'1',observedAt:'2026-09-27T00:00:00Z',kind:'message',layer:'original',text:'Generated insight stop input.'}),artifactId='b'.repeat(64);store.archive.save(artifactId,artifactId,artifactId,{kind:'semantic',text:'Generated interpretation',metadata:{complete:true}},[{id:record.id,fingerprint:store.archive.fingerprint(record.id)!}],'fixture','1','fixture');
+  let now=0,calls=0;
+  const register=(lifecycle:MemoryLifecycle)=>{lifecycle.automaticAdmission=id=>id!=='extraction';registerMemoryExtensions({store,files,memories,pipeline,insights,lifecycle,working:new WorkingMemory(store,new Conversations(store)),model:()=> 'generated',query:async()=>{calls++;if(kind==='unknown')throw Error('Generated unknown response outcome');throw new ProviderFailure({category:'transient',code:'provider_unavailable',executionStarted:false});}});const settings=lifecycle.settings();for(const id of ['consolidation','working'] as const)settings[id].enabled=false;settings.insights.minChanges=1;settings.insights.intervalHours=1;lifecycle.configure(settings);};
+  let lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);register(lifecycle);now=3600000;await lifecycle.tick();const first=lifecycle.view().extensions.find(e=>e.id==='insights')!;if(kind==='cancelled')lifecycle.cancel('insights',first.active!.id);
+  await lifecycle.close();if(kind==='legacy-transient')legacyPendingWindow(store,engine,'insights',first.active!.id);lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);closers.push(()=>lifecycle.close());register(lifecycle);for(let index=0;index<3;index++){now+=86400000;await lifecycle.tick();}
+  const stopped=lifecycle.view().extensions.find(e=>e.id==='insights')!;assert.equal(calls,1);assert.equal(insights.list().length,1);assert.equal(stopped.active!.checkpoint,first.active!.checkpoint);assert.equal(stopped.status,kind==='cancelled'?'cancelled':'failed');assert.equal(store.db.prepare('SELECT count(*) n FROM insights').get()!.n,0);
+ });
+});
+
 test('manual lifecycle work has bounded attempts, explicit retry and cancellation without advancing automatic history',async t=>{
  const {store,engine,closers}=fixture(t);let now=0,calls=0,fail=true;const lifecycle=new MemoryLifecycle(store,()=>true,()=>now,engine);closers.push(()=>lifecycle.close());
  lifecycle.register({id:'consolidation',version:'fixture',maxAttempts:3,stream:'memory',async run(window,checkpoint){calls++;assert.equal(window.manual,true);if(fail)throw new ProviderFailure({category:'transient',code:'provider_unavailable'});checkpoint('done');}});
