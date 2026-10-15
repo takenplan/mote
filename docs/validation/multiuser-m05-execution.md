@@ -43,6 +43,14 @@ Independent reviewers found and drove fixes for:
   grant, including synchronous local abort and shutdown, and fails closed before
   binding or on recursive validation. Cached and newly obtained private services
   are both rejected after withdrawal.
+- P1: actual M04 `withModel` sanitizes callback errors; directly passing a typed
+  provider failure through it lost the engine classification and stopped a
+  transient call after one attempt. M05 now carries genuine typed failures through
+  a private callback outcome, rethrows only after M04 post-validation, and retains
+  the complete execution grant check in `finally`. Ordinary errors and structural
+  lookalikes still follow the redacted path. Dedicated production-composition
+  negatives verify finite transient recovery, blocked/waiting handling, unknown
+  effects and safe errors.
 - P2: deletion initially retained private operation/fairness metadata. Cleanup now
   removes the corresponding user/operation records, retaining only the domain
   admission tombstone; unknown external outcomes retain reconciliation evidence.
@@ -68,6 +76,7 @@ HTTP/task scheduler. They do not substitute the quarantined legacy composition:
 | Finite safe failure retry; unknown external outcomes and owner-only confirmation | Structured synthetic failures and persistent external issuance journal |
 | Export/delete/restore, malformed or cross-user graph and unknown reconciliation | `multiuser-execution-lifecycle.test.ts`; B rows remain identical |
 | Genuine model lease binding, fixed user snapshots, withdrawal, retained wrapper and missing restart snapshot | `multiuser-execution-model.test.ts`; actual M04 `Configurations`, durable encrypted snapshots and production HTTP routes |
+| Genuine typed model failures, finite retry/wait budget, unknown external guard and redacted untrusted errors | `multiuser-execution-model-failures.test.ts` with actual M04 |
 | Changed handler feature fails closed; same-feature registration preserves the original model lease | `multiuser-execution-handler-binding.test.ts` |
 | WeakMap context provenance, copied/foreign contexts and task admin denial | `multiuser-task-context.test.ts` |
 | Persistent fairness, operation ancestry, cursor independence, incompatible schema rejection and commit fences | `multiuser-execution-core.test.ts` |

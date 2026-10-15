@@ -122,6 +122,11 @@ admission obtains a genuine lease with
 callback, including errors; `recordUsage` runs within its fenced transaction.
 Cached private service handles inherit the same input/resource grant, including
 shared withdrawal, local abort and shutdown.
+The wrapper carries genuine structured `ProviderFailure`/`ExecutionFailure` control
+facts through a private callback outcome and rethrows after M04 post-validation,
+preserving finite retries and capacity-wait semantics. Other callback exceptions
+remain redacted by M04; an error message or structural lookalike grants no retry
+authority. Withdrawal or cancellation overrides an earlier transport failure.
 
 The credential-free task receipt persists M04's opaque `snapshotId` and fixed
 metadata. M04 owns the encrypted snapshot, original effective configuration,

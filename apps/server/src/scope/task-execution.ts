@@ -1,7 +1,9 @@
 import {createHash} from 'node:crypto';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
+import {ProviderFailure} from '@mote/shared';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep,type ExecutionGrant,type ExecutionFailureReceipt} from '../execution-engine.js';
+import {failureContext,retainFailureContext} from '../execution-failures.js';
 import type {ModelFeature} from '@mote/shared/models';
 import type {TaskModelHost,TaskModelLease,TaskModelConfiguration,TaskModelRun} from './task-model.js';
 import type {ExecutionPolicy} from '../execution-policy.js';
@@ -22,6 +24,19 @@ const submitSchema=z.object({kind:id,operationId:id,input:z.record(z.unknown()),
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const json=(value:unknown)=>{const result=JSON.stringify(value);if(result===undefined||Buffer.byteLength(result)>32768)throw new TaskError('task_metadata_invalid',413);return result;};
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,value])=>[key,canonical(value)])):value;
+/** Only branded host failures cross the M04 callback boundary. Reconstruct
+ * control facts without carrying provider messages, stacks or custom fields. */
+const modelFailure=(error:unknown)=>{
+ if(!(error instanceof ProviderFailure||error instanceof ExecutionFailure))return;
+ const details=error instanceof ProviderFailure?error.details:error;
+ if(!(error instanceof ProviderFailure?['transient','permanent','blocked']:['transient','permanent','blocked','stale','waiting']).includes(details.category))return;
+ if(typeof details.code!=='string'||!/^[a-z][a-z0-9_.:-]{0,99}$/.test(details.code))return;
+ if(details.retryAfterMs!==undefined&&(typeof details.retryAfterMs!=='number'||!Number.isFinite(details.retryAfterMs)||details.retryAfterMs<0))return;
+ if(error instanceof ProviderFailure?(error.details.executionStarted!==undefined&&error.details.executionStarted!==false||error.details.admissionWaiting!==undefined&&error.details.admissionWaiting!==true):(error.facts!==undefined&&error.facts.executionStarted!==false))return;
+ const code=details.code,retryAfterMs=details.retryAfterMs===undefined?undefined:Math.min(7*86400000,Math.ceil(details.retryAfterMs));
+ const safe=error instanceof ProviderFailure?new ProviderFailure({category:error.details.category,code,...(retryAfterMs===undefined?{}:{retryAfterMs}),...(error.details.executionStarted===false?{executionStarted:false as const}:{}),...(error.details.admissionWaiting===true?{admissionWaiting:true as const}:{})}):new ExecutionFailure(error.category,code,retryAfterMs,error.facts?.executionStarted===false?{executionStarted:false}:undefined);
+ return retainFailureContext(safe,failureContext(error));
+};
 type TaskRow={task_id:string;user_id:string;grant_id:string;input:string;progress:string;checkpoints:string;result:string|null;external_state:string;external_key:string|null;model_receipt:string|null;external_issuance:string|null};
 /** These capabilities are constructed by the host after resolving a durable
  * authorization. No request/model payload can supply a context or resource scope. */
@@ -113,7 +128,17 @@ export class TaskExecution {
    execute:async(step,signal,grant)=>{
     const row=this.assertTask(step),context=await this.executionContext(step,handler,grant,row.grant_id);grant.assert();
     const write=(update:()=>void)=>grant.commit(()=>{this.assertTask(step);update();});
-    const lease=this.modelLeases.get(step.id),model=lease&&this.modelHost?{lease,withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1])=>{grant.assert();try{return await this.modelHost!.withModel(lease,work) as T;}finally{grant.assert();}},recordUsage:(result:Parameters<TaskModelHost['recordUsage']>[1])=>grant.commit(()=>this.modelHost!.recordUsage(lease,result))}:undefined;
+    const lease=this.modelLeases.get(step.id),model=lease&&this.modelHost?{lease,withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1])=>{
+     grant.assert();try{
+      // M04 still cleans arbitrary callback exceptions and performs its own
+      // post-callback lease assertion before a safe failure reaches the engine.
+      const outcome=await this.modelHost!.withModel(lease,async(settings,configuration)=>{
+       try{return {ok:true as const,value:await work(settings,configuration)};}
+       catch(error){const failure=modelFailure(error);if(!failure)throw error;return {ok:false as const,failure};}
+      });
+      if(!outcome.ok)throw outcome.failure;return outcome.value as T;
+     }finally{grant.assert();}
+    },recordUsage:(result:Parameters<TaskModelHost['recordUsage']>[1])=>grant.commit(()=>this.modelHost!.recordUsage(lease,result))}:undefined;
     const run:TaskRun={...(model?{model}:{}),context,services:this.services.forUser(context),task:step,signal,grant,
      checkpoint:{read:<T>(key:string)=>{grant.assert();const values=JSON.parse(this.row(step.id)!.checkpoints);return Object.hasOwn(values,key)?values[key] as T:undefined;},write:(key,value)=>{id.parse(key);write(()=>{const checkpoints=JSON.parse(this.row(step.id)!.checkpoints);Object.defineProperty(checkpoints,key,{value,enumerable:true,writable:true,configurable:true});this.db.prepare('UPDATE user_tasks SET checkpoints=? WHERE task_id=?').run(json(checkpoints),step.id);});}},
      progress:value=>write(()=>this.db.prepare('UPDATE user_tasks SET progress=? WHERE task_id=?').run(json(value),step.id)),
