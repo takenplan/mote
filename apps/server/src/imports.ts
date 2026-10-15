@@ -398,7 +398,11 @@ export class ImportStore {
   private async confirmNow(id:string,grant:ExecutionGrant,signal?:AbortSignal):Promise<ImportJob>{
     const job=this.load(id);if(this.running.has(id))throw new StoreError('Import is already processing',409);
     if(job.status==='completed')return this.public(job);
-    if(job.status!=='awaiting_confirmation'&&!(['failed','cancelled'].includes(job.status)&&job.failurePhase==='import')&&!(job.status==='importing'&&job.resourceWait==='commit'))throw new StoreError('Analyze and review a preview before confirming the import',409);
+    // Only the validated canonical commit handler calls this private entry.
+    // Its durable confirmation survives an expired lease; recordsProcessed and
+    // the same manifest retain the exact publication checkpoint. The public
+    // confirm entry still requires a reviewed preview or its existing retry.
+    if(job.status!=='awaiting_confirmation'&&!(['failed','cancelled','importing'].includes(job.status)&&job.failurePhase==='import'))throw new StoreError('Analyze and review a preview before confirming the import',409);
     this.running.add(id);
     const validated=join(job.workspace,'validated-'+randomUUID()+'.jsonl');
     try{
