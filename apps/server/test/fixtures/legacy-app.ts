@@ -218,7 +218,7 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const allEvidence=(ids:string[])=>evidenceReader.evidence(ids.map(id=>formatEvidenceRef('capture',id)));
   const memories=evidenceReader.memories,conversations=new Conversations(store);
   const sourceContexts=new SourceContextStore(store);
-  const pluginCenter=new PluginCenter(store,executor,new GitHubPluginReleases(join(config.dataDir,'plugins','packages')));
+  const pluginCenter=new PluginCenter(store,executor,new GitHubPluginReleases(join(config.dataDir,'plugins','packages')),{ownerId:'legacy-fixture-owner'});
   memoryBindings=new MemoryBindings(store,memories,memoryAutomation,pluginCenter,executor);
   evidenceReader.memoryBindings=memoryBindings;
   const ownerQuestions=new OwnerQuestions(store);

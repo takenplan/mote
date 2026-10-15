@@ -66,6 +66,9 @@ export function checkProductionImports(directory=root){
   allowed.add(sourceRoot+'/execution-failures.ts');
   // M04 uses the original configuration and pure model/usage contracts.
   for(const path of ['config-service.ts','model-settings.ts','usage-metrics.ts','i18n.ts'])allowed.add(sourceRoot+'/'+path);
+  // M09's adapted package catalog and worker/Cordis lifecycle have no private
+  // Store dependency. Only ScopedPluginHost exposes their user capabilities.
+  for(const path of ['plugin-center.ts','plugin-release.ts','plugin-runtime.ts','backend-plugin-scope.ts','execution-policy.ts'])allowed.add(sourceRoot+'/'+path);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){

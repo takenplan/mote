@@ -298,10 +298,21 @@ export class Configurations {
     restoreUser:async(context,archive,operationId)=>this.serializeLifecycle(context.userId,async()=>{
       this.assertSubject(context,'restore');
       if(!validScopeId(operationId)||archive.domain!=='configuration'||archive.version!==1||archive.deploymentId!==context.deploymentId||archive.userId!==context.userId)throw new ConfigServiceError('config_invalid');
-      const payload=z.object({document:z.object({version:z.literal(1),revision:nonnegative,models:this.resources.schema(),modelPrices:priceDomain}).passthrough(),usage:z.array(z.unknown()).max(100000),credentialsIncluded:z.literal(false),omittedDomains:z.array(z.string()).length(0)}).strict().parse(archive.payload);
-      for(const id of this.domains.keys())if(!Object.hasOwn(payload.document,id))throw new ConfigServiceError('config_invalid');
+      const payload=z.object({document:z.object({version:z.literal(1),revision:nonnegative,models:this.resources.schema(),modelPrices:priceDomain}).passthrough(),usage:z.array(z.unknown()).max(100000),credentialsIncluded:z.literal(false),omittedDomains:z.array(z.string())}).strict().parse(archive.payload);
       const restoreDomains:ConfigDomainRegistration[]=[];
-      for(const key of Object.keys(payload.document))if(!['version','revision','models','modelPrices'].includes(key)){
+      const omitted=new Set(payload.omittedDomains);
+      if(omitted.size!==payload.omittedDomains.length||[...omitted].some(id=>!this.domains.has(id)))throw new ConfigServiceError('config_invalid');
+      for(const [id,factory] of this.domains){
+        if(Object.hasOwn(payload.document,id)){if(omitted.has(id))throw new ConfigServiceError('config_invalid');continue;}
+        const domain=factory(context);
+        // The owning extension restores its credential-free definition through
+        // its own lifecycle grant. M04 restores only the registered empty/default
+        // configuration here; omitted YAML never becomes active authorization.
+        if(!omitted.has(id)||domain.id!==id||!domain.resolve||!domain.fields?.some(f=>f.sensitive))throw new ConfigServiceError('config_invalid');
+        domain.schema.parse(domain.resolve(domain.defaultValue,payload.document));
+        payload.document[id]=clone(domain.defaultValue);restoreDomains.push({...domain,prepare:undefined});
+      }
+      for(const key of Object.keys(payload.document))if(!['version','revision','models','modelPrices'].includes(key)&&!omitted.has(key)){
         const factory=this.domains.get(key);if(!factory)throw new ConfigServiceError('config_invalid');
         const domain=factory(context);if(domain.id!==key||!domain.resolve||domain.fields?.some(f=>f.sensitive))throw new ConfigServiceError('config_invalid');
         domain.schema.parse(domain.resolve(payload.document[key],payload.document));restoreDomains.push({...domain,prepare:undefined});

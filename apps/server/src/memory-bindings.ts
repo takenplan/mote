@@ -66,7 +66,7 @@ export class MemoryBindings {
   }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}void this.executor.tick().catch(()=>{});}
   prepare(raw:unknown){const input=preparationSchema.parse(raw);this.command('prepare',input,()=>{const prior=this.preparation();if(prior&&!['applied','cancelled'].includes(prior.view.state))throw new StoreError('Finish or cancel the existing Memory preparation',409);
     const plan=this.plans().find(plan=>plan.id===input.targetPlanId);if(!plan?.available||plan.id===this.binding().planId)throw new StoreError('This Memory plan is unavailable',409);
-    const target:Binding={planId:plan.id,generation:this.binding().generation+1,...(plan.instanceId?{namespace:{ownerId:'mote-owner',instanceId:plan.instanceId,bindingRevision:this.binding().generation+1}}:{})};
+    const target:Binding={planId:plan.id,generation:this.binding().generation+1,...(plan.instanceId?{namespace:this.plugins.namespace(plan.instanceId,this.binding().generation+1)}:{})};
     const preparation:Preparation={source:this.binding(),target,stepId:'memory-prepare:'+input.operationId,view:{operationId:input.operationId,state:'waiting',phase:'copy',kind:'content-migration',targetPlanId:plan.id,scope:input.scope,checks:[],oldAdmissionFrozen:false,tail:this.pendingTail(),usageUnknown:true,allowedActions:['cancel']}};
     this.savePreparation(preparation);this.executor.enqueue(input.operationId,'memory.prepare',{preparationId:input.operationId},{id:preparation.stepId});
   });return this.view();}

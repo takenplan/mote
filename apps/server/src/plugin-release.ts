@@ -5,7 +5,7 @@ import {readFileSync,readdirSync,lstatSync} from 'node:fs';
 import {unzipSync} from 'fflate';
 import {z} from 'zod';
 import type {PluginConfigurationField,PluginReleasePreview} from '@mote/shared';
-import {StoreError} from './store.js';
+import {StoreError} from './execution-storage.js';
 
 const relativePath=z.string().min(1).refine(value=>!value.startsWith('/')&&!value.includes('\\')&&!value.split('/').some(part=>part==='..'||part==='.'||part===''),'Invalid package path');
 const fieldSchema=z.object({id:z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]*$/),label:z.string().min(1),type:z.enum(['text','number','boolean','select','model-profile','secret-reference']),required:z.boolean().optional(),options:z.array(z.object({value:z.string(),label:z.string()}).strict()).optional(),description:z.string().optional()}).strict();
@@ -14,7 +14,8 @@ const fieldSchema=z.object({id:z.string().regex(/^[a-zA-Z][a-zA-Z0-9_]*$/),label
 export const pluginManifestSchema=z.object({
   schemaVersion:z.literal(1),id:z.string().regex(/^[a-z][a-z0-9.-]{2,127}$/),name:z.string().min(1),version:z.string().min(1),
   runtime:z.literal('worker'),entry:relativePath,archive:z.object({asset:z.string().regex(/^[^/\\]+\.zip$/),sha256:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),
-  capabilities:z.array(z.enum(['repository','retrieval','engine'])).nonempty(),configuration:z.array(fieldSchema),dependencies:z.array(z.string()),access:z.array(z.string()),
+  capabilities:z.array(z.enum(['repository','retrieval','engine','source','processor','model','ui'])).nonempty(),configuration:z.array(fieldSchema),dependencies:z.array(z.string()),access:z.array(z.string()),
+  components:z.array(z.object({id:z.string().min(1).max(160),version:z.string().min(1).max(80),surface:z.enum(['ingress','processing','data','agent','card','panel','settings']),capability:z.enum(['source','processor','repository','retrieval','engine','model','ui'])}).strict()).optional(),
 }).strict();
 export type PluginManifest=z.infer<typeof pluginManifestSchema>;
 export type ResolvedPluginRelease={preview:PluginReleasePreview;manifest:PluginManifest;archiveUrl:string;hostAdapter?:'mote.mem0@1'|'mote.hindsight@1'};

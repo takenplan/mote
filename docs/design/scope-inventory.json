@@ -1206,7 +1206,7 @@
     ]
   },
   "apps/server/src/plugin-center.ts": {
-    "scope": "legacy-quarantined",
+    "scope": "mixed",
     "module": "M09",
     "surfaces": [
       "extension:releases.install:value",
@@ -1351,7 +1351,7 @@
   },
   "apps/server/src/scope/app.ts": {
     "scope": "mixed",
-    "module": "M00",
+    "module": "M09",
     "surfaces": [
       "api:get:'/api/health'",
       "extension:registerConfigurationRoutes:runtime",
@@ -1608,7 +1608,7 @@
   },
   "apps/server/test/fixtures/legacy-app.ts": {
     "scope": "legacy-quarantined",
-    "module": "M00",
+    "module": "M09",
     "surfaces": [
       "extension:backendContext.provide:'moteConfig'",
       "extension:backendContext.provide:'moteExecution'",
@@ -1660,6 +1660,45 @@
     "surfaces": [
       "directory:path",
       "table:user_model_snapshots"
+    ]
+  },
+  "apps/server/src/scope/plugin-routes.ts": {
+    "scope": "mixed",
+    "module": "M09",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/plugins'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/:id/uninstall'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/install'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/resolve'",
+      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/plugin-snapshots/:id',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugin-events',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugins',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/'+action,service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/check',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/snapshots',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-snapshots/:id/invoke',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-snapshots/:id/read',service:PLUGINS_DOMAIN",
+      "extension:plugins.forAdministrator(context).install:request.body"
+    ]
+  },
+  "apps/server/src/scope/plugins.ts": {
+    "scope": "mixed",
+    "module": "M09",
+    "surfaces": [
+      "directory:directory",
+      "directory:path",
+      "extension:options.services.registerInstance:'plugin-catalog'",
+      "extension:options.services.registerUser:PLUGINS_DOMAIN",
+      "extension:registry.install:id:pkg.manifest.id",
+      "extension:scope.install:ctx=>{ctx.effect(()=>()=>worker.close());ctx.effect(()=>registry.install({id:pkg.manifest.id,version:fixed.version,components:fixed.components}));for(const component of actual.components)ctx.effect(()=>registry.register(pkg.manifest.id,component,(input,hostCall,signal)=>worker.call('invoke',{componentId:component.id,input},signal,hostCall)));}",
+      "extension:this.catalog.install:input",
+      "table:plugin_user_events",
+      "table:plugin_user_instances",
+      "table:plugin_user_restore",
+      "table:plugin_user_snapshots",
+      "table:plugin_user_state",
+      "task:this.options.execution.register:{kind,pool:'plugin-user',concurrency:()=>4,policy:EXECUTION_POLICIES.control,...(modelFeature?{modelFeature}:{}), parseInput:input=>invokeSchema.parse(input),authorizeInput:(context,input)=>{const value=this.authorized(context,String(input.snapshotId),String(input.componentId));if(this.adapter(value.component.capability).modelFeature!==modelFeature)throw new StoreError('Use the domain model task admission',403);}, validate:task=>{try{const snapshot=this.snapshot(String(task.input.snapshotId));return snapshot.user_id===task.ownership?.userId&&this.currentSnapshot(snapshot);}catch{return false;}}, execute:run=>this.execute(run),commit:(run,value)=>{const invocation=this.invocations.get(run);if(!invocation)throw new ScopeError('invalid_identity',401);invocation.assertCurrent();this.adapter(invocation.component.capability).commit?.(value,invocation);invocation.assertCurrent();}, classify:error=>error instanceof ScopeError?new ExecutionFailure('stale','plugin_authority_revoked'):new ExecutionFailure('blocked','plugin_operation_requires_attention'), }"
     ]
   }
 }
