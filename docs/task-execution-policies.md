@@ -44,6 +44,14 @@ workflow and completed children. Normal shutdown and expired ownership leases
 represent interruption, not a confirmed processing failure. Unknown issued file
 calls still prevent automatic duplicate requests under the existing guard.
 
+That guard is conservative across process loss: a file stage may have entered
+its call-protection region while still waiting in an in-memory model gate. A
+crash loses that queue state, so the saved guard can become `unknown` even if no
+model request was sent. Without durable proof of non-execution it follows the
+existing explicit unknown-outcome recovery path. Live gate waiting and a saved
+explicit not-started busy response retain automatic resource recovery; this does
+not promise transparent restart recovery for every in-memory queue position.
+
 Resource waiting does not expire under a generic six-hour window. Actual typed
 failures have the registered finite attempt bound; explicitly task-specific
 recovery windows remain supported. Unclassified exceptions are not assumed

@@ -158,13 +158,14 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const modelOperation=new AsyncLocalStorage<string>();
   // Accounting observes trusted admission boundaries, independently of model
   // input. A host cooldown or gate cancellation can happen before any call.
-  const queryAccounting=new AsyncLocalStorage<{agentStarted:()=>void;modelStarted:()=>void}>();
+  const queryAccounting=new AsyncLocalStorage<{agentStarted:()=>void;modelQueued:()=>void;modelStarted:()=>void}>();
   const assertModelPurpose=(input:QueryInput|undefined)=>{if(dependencies?.queryQualityExperiment&&!input?.traceContext?.operationId?.startsWith('query:'))throw new StoreError('Isolated Ask experiment does not authorize background model work',409);};
   const authorizeModelRequest=()=>{assertModelPurpose(modelContext.getStore());assertModelEvidence(modelContext.getStore());};
   const runModelFor=(settings:import('@mote/shared/models').ModelSettings):NonNullable<import('@mote/agent').AgentOptions['runModel']>=>(task,signal)=>{
     signal?.throwIfAborted();assertModelPurpose(modelContext.getStore());providerAdmission.check(settings);
     const queuedAt=performance.now(),input=modelContext.getStore(),gate=input?.executionLane==='interactive'?interactiveModelGate:llmGate;input?.onTrace?.({type:'model.queued',stage:'model',payload:{...gate.snapshot(),unit:'harness_session',lane:input?.executionLane??'background'}});
     input?.onProgress?.({stage:'model',message:moteText('等待模型执行名额')});
+    queryAccounting.getStore()?.modelQueued();
     return gate.run(async()=>{providerAdmission.check(settings);assertModelEvidence(input);input?.onProgress?.({stage:'model',message:moteText('模型处理中')});const admittedAt=performance.now(),lane=input?.executionLane??'background',queueWaitMs=admittedAt-queuedAt;input?.onTrace?.({type:'model.admitted',stage:'model',payload:{...gate.snapshot(),unit:'harness_session',lane,queueWaitMs}});let status:'completed'|'failed'|'yielded'='failed';
       try{queryAccounting.getStore()?.modelStarted();const result=await task();status='completed';return result;}
       catch(error){if(error instanceof AgentYieldError)status='yielded';throw error;}
@@ -185,18 +186,19 @@ export async function buildApp(config:Config,dependencies?:{configService?:Confi
   const mediaAssets=new MediaAssets(config.media?.modelDirectory??join(store.directory,'media-models'));
   const usageLedger=new UsageLedger(store);
   const admittedUsage=(...args:Parameters<UsageLedger['start']>)=>{
-    let agentStarted=false,meter:ReturnType<UsageLedger['start']>|undefined;
+    let agentStarted=false,modelQueued=false,meter:ReturnType<UsageLedger['start']>|undefined;
     const start=()=>meter??=usageLedger.start(...args);
-    const accounting={agentStarted:()=>{agentStarted=true;},modelStarted:()=>{agentStarted=true;start();}};
+    const accounting={agentStarted:()=>{agentStarted=true;},modelQueued:()=>{modelQueued=true;},modelStarted:()=>{agentStarted=true;start();}};
     return {
       run:<T>(task:()=>Promise<T>)=>queryAccounting.run(accounting,task),
       update:(tokens:import('@mote/shared').TokenUsage)=>start().update(tokens),
       completed:()=>start().finish('completed'),
       failed:(error:unknown)=>{
         const admissionWait=error instanceof ProviderFailure&&error.details.admissionWaiting===true;
-        if(agentStarted&&!admissionWait)start();
+        if(agentStarted&&!modelQueued&&!admissionWait)start();
         // Preserve issued calls and partial samples, but create no receipt for
-        // a host refusal before the first actual model operation.
+        // a host refusal or queue cancellation before the first actual model
+        // operation. Agents without a host model gate retain fallback accounting.
         return meter?.finish('failed');
       },
     };

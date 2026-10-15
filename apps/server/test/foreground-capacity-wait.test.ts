@@ -57,6 +57,18 @@ test('a cooldown reported while the actual model gate is occupied creates no uni
  await queryAgent({question:'Generated gate-race question after release'});assert.equal(calls,1);assert.equal(node.store.db.prepare("SELECT count(*) n FROM model_usage WHERE json_extract(json,'$.status')='completed'").get()!.n,1);
 });
 
+test('cancelling while the actual model gate is occupied creates no unissued usage receipt',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-cancel-model-queue-')),config=configuration(directory),release=deferred(),controller=new AbortController();let calls=0;
+ const node=await buildApp(config,{backgroundWorker:false,createModelAgent:async(_settings,_reader,host)=>({configured:true,close:async()=>{},query:input=>host.runModel!(async()=>{calls++;return answer(false);},input.signal)})});
+ t.after(async()=>{release.resolve();await node.app.close();await rm(directory,{recursive:true,force:true});});
+ const {llmGate,queryAgent}=node.featureServices;llmGate.configure(1);
+ const occupied=llmGate.run(()=>release.promise),pending=queryAgent({question:'Generated cancelled model queue',signal:controller.signal});
+ const rejection=assert.rejects(pending,(error:unknown)=>error instanceof DOMException&&error.name==='AbortError');
+ await until(()=>llmGate.snapshot().waiting,count=>count===1);controller.abort();await rejection;
+ assert.equal(calls,0);assert.equal(node.store.db.prepare('SELECT count(*) n FROM model_usage').get()!.n,0);
+ release.resolve();await occupied;await delay(20);assert.equal(calls,0);assert.equal(llmGate.snapshot().waiting,0);assert.equal(node.store.db.prepare('SELECT count(*) n FROM model_usage').get()!.n,0);
+});
+
 test('admission waiting preserves already reported partial usage, while a file-analysis cooldown invents none',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'mote-partial-admission-')),config=configuration(directory);let calls=0,partial=true;
  const query:NonNullable<Parameters<typeof buildApp>[1]>['agent']={configured:true,close:async()=>{},query:async input=>{

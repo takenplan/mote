@@ -64,3 +64,10 @@ unpublished multi-round Agent draft is not a durable checkpoint: after a restart
 or a later admission rejection, resuming its containing stage can reconstruct
 that Agent session and repeat earlier internal model rounds. This change does
 not claim exactly-once model execution or persist every intermediate draft.
+
+File call guards also remain conservative after process loss. A file stage can
+enter the guard before an in-memory model slot becomes available; a crash then
+loses proof of whether admission occurred. Such a guard may become `unknown`
+and require its existing explicit recovery, rather than automatic resubmission.
+The generated gate-wait tests prove live waiting and cancellation; persisted
+busy/restart tests prove recovery where explicit non-execution is known.
