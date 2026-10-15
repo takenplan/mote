@@ -30,13 +30,14 @@ export async function requestContext(req:FastifyRequest,authority:UserContextAut
   }else if(accounts?.credentialInfo(context,authority).kind==='web')throw new ScopeError('invalid_identity',401);
   return context;
 }
-type Route={method:'GET'|'POST'|'PUT'|'PATCH'|'DELETE';url:string;administrator?:boolean;revokesSelf?:boolean;discoverSession?:boolean;handle:(context:UserContext,req:FastifyRequest,reply:FastifyReply)=>unknown|Promise<unknown>};
+type Route={method:'GET'|'POST'|'PUT'|'PATCH'|'DELETE';url:string;administrator?:boolean;revokesSelf?:boolean|((context:UserContext,request:FastifyRequest)=>boolean);discoverSession?:boolean;handle:(context:UserContext,req:FastifyRequest,reply:FastifyReply)=>unknown|Promise<unknown>};
 export function registerAuthenticatedRoute(runtime:ScopedRuntime,route:Route){
   runtime.app.route({method:route.method,url:route.url,handler:async(req,reply)=>{
     const context=await requestContext(req,runtime.authority,runtime.accounts,{discoverSession:route.discoverSession});
     if(route.administrator)runtime.authority.assertAdministrator(context);
     const result=await route.handle(context,req,reply);
-    if(!route.revokesSelf)runtime.authority.assert(context);
+    const terminal=typeof route.revokesSelf==='function'?route.revokesSelf(context,req):route.revokesSelf;
+    if(!terminal)runtime.authority.assert(context);
     return result;
   }});
 }

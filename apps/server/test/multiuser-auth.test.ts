@@ -176,3 +176,14 @@ test('disable during password hashing prevents credential issuance and disable d
  assert.throws(()=>f.node.authority.assert(alice));
  assert.equal((await f.request('GET','/api/auth/self',undefined,headers(f.bob.token))).statusCode,200);
 });
+
+test('revoking another credential still fences the response if the caller is disabled before publication',async t=>{
+ const f=await fixture(t),other=await f.login('fixture-a');
+ let entered!:()=>void,release!:()=>void;const started=new Promise<void>(r=>entered=r),wait=new Promise<void>(r=>release=r);
+ const original=f.node.accounts!.revoke.bind(f.node.accounts);
+ t.mock.method(f.node.accounts!,'revoke',(...args:Parameters<Accounts['revoke']>)=>{const result=original(...args);if(args[2]===other.credentialId){entered();return wait.then(()=>result);}return result;});
+ const pending=f.request('DELETE','/api/connections/'+other.credentialId,{},headers(f.alice.token));await started;
+ assert.equal((await f.request('PATCH',`/api/admin/accounts/${f.a.userId}`,{disabled:true},headers(f.owner.token))).statusCode,200);
+ release();assert.equal((await pending).statusCode,401);
+ assert.equal((await f.request('GET','/api/auth/self',undefined,headers(f.bob.token))).statusCode,200);
+});
