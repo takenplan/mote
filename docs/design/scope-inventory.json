@@ -323,8 +323,9 @@
     ]
   },
   "apps/server/src/execution-engine.ts": {
-    "scope": "legacy-quarantined",
+    "scope": "mixed",
     "module": "M05",
+    "status": "implemented",
     "surfaces": [
       "table:execution_cancellation_aliases",
       "table:execution_dependencies",
@@ -333,7 +334,9 @@
       "table:execution_operation_steps",
       "table:execution_resources",
       "table:execution_sequence",
-      "table:execution_steps"
+      "table:execution_steps",
+      "table:execution_user_fairness",
+      "table:execution_user_sequence"
     ]
   },
   "apps/server/src/execution-settings-routes.ts": {
@@ -1160,18 +1163,22 @@
     ]
   },
   "apps/server/src/operation-projection.ts": {
-    "scope": "legacy-quarantined",
+    "scope": "user",
     "module": "M05",
+    "status": "implemented",
     "surfaces": [
+      "table:execution_projection_meta",
       "table:operation_changes",
       "table:operation_generations",
       "table:operation_parents",
-      "table:operation_progress"
+      "table:operation_progress",
+      "table:operation_user_sequences"
     ]
   },
   "apps/server/src/operations.ts": {
-    "scope": "legacy-quarantined",
+    "scope": "user",
     "module": "M05",
+    "status": "implemented",
     "surfaces": [
       "api:get:'/api/operations'",
       "api:get:'/api/operations/:id'",
@@ -1329,11 +1336,57 @@
       "task:this.engine.register:kind:`${kind}.run.${this.ownerId}`"
     ]
   },
+  "apps/server/src/scope/accounts.ts": {
+    "scope": "mixed",
+    "module": "M01",
+    "status": "implemented",
+    "surfaces": [
+      "table:auth_accounts",
+      "table:auth_attempts",
+      "table:auth_credentials"
+    ]
+  },
   "apps/server/src/scope/app.ts": {
     "scope": "mixed",
     "module": "M00",
     "surfaces": [
-      "api:get:'/api/health'"
+      "api:get:'/api/health'",
+      "extension:registerTaskRoutes:runtime"
+    ]
+  },
+  "apps/server/src/scope/auth-routes.ts": {
+    "scope": "mixed",
+    "module": "M01",
+    "status": "implemented",
+    "surfaces": [
+      "api:post:'/api/auth/login'",
+      "api:post:'/api/login/ack'",
+      "api:post:'/api/login/exchange'",
+      "api:post:'/api/login/poll'",
+      "api:post:'/api/login/requests'",
+      "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/connections/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/accounts'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/auth/self'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/connections'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/connections/self'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/login/requests/:id'",
+      "api:registerAuthenticatedRoute:method:'PATCH',url:'/api/admin/accounts/:id'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/accounts'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/accounts/:id/password'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/auth/logout'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/auth/password'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/connections/mcp'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/requests/:id/approve'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/session'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/ticket'"
+    ]
+  },
+  "apps/server/src/scope/http.ts": {
+    "scope": "mixed",
+    "module": "M01",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:{...route,handle:async(context,request)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request});}}"
     ]
   },
   "apps/server/src/scope/private-data-routes.ts": {
@@ -1392,6 +1445,42 @@
       "directory:directory",
       "directory:join(tmpdir(),'mote-scope-preflight-')",
       "table:scope_meta"
+    ]
+  },
+  "apps/server/src/scope/task-authorization.ts": {
+    "scope": "user",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "table:task_authorizations"
+    ]
+  },
+  "apps/server/src/scope/task-execution.ts": {
+    "scope": "user",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "table:task_lifecycle_state",
+      "table:task_restore_journal",
+      "table:user_tasks",
+      "task:this.engine.enqueue:operationId",
+      "task:this.engine.register:kind:handler.kind"
+    ]
+  },
+  "apps/server/src/scope/task-routes.ts": {
+    "scope": "user",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/operations',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/operations/:id',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/operations/changes',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/:id',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks/:id/cancel',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks/:id/retry',service:EXECUTION_DOMAIN",
+      "extension:runtime.services.registerUser:EXECUTION_DOMAIN"
     ]
   },
   "apps/server/src/source-archive.ts": {
@@ -1523,51 +1612,6 @@
       "extension:backendContext.provide:'moteOwnerQuestions'",
       "extension:registerMemoryExtensions:{integrationSettings:memoryIntegrationSettings,semanticArtifacts,providerCooldownCheck:()=>providerAdmission.check(modelSettings.select('memory').settings),insights:insightRuns,insightTimeout:()=>modelSettings.select('insight').settings.agentTimeoutMs,lifecycle,store,files,memories,pipeline:memoryPipeline,working,query:(input,module)=>queryAgent(input,input.skill==='personal-insight'?'insight':'query',module),model:()=>modelSettings.select('memory').settings.model}",
       "extension:registerPluginRoutes:app"
-    ]
-  },
-  "apps/server/src/scope/accounts.ts": {
-    "scope": "mixed",
-    "module": "M01",
-    "status": "implemented",
-    "surfaces": [
-      "table:auth_accounts",
-      "table:auth_attempts",
-      "table:auth_credentials"
-    ]
-  },
-  "apps/server/src/scope/auth-routes.ts": {
-    "scope": "mixed",
-    "module": "M01",
-    "status": "implemented",
-    "surfaces": [
-      "api:post:'/api/auth/login'",
-      "api:post:'/api/login/ack'",
-      "api:post:'/api/login/exchange'",
-      "api:post:'/api/login/poll'",
-      "api:post:'/api/login/requests'",
-      "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/connections/:id'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/accounts'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/auth/self'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/connections'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/connections/self'",
-      "api:registerAuthenticatedRoute:method:'GET',url:'/api/login/requests/:id'",
-      "api:registerAuthenticatedRoute:method:'PATCH',url:'/api/admin/accounts/:id'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/accounts'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/accounts/:id/password'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/auth/logout'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/auth/password'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/connections/mcp'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/requests/:id/approve'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/session'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/ticket'"
-    ]
-  },
-  "apps/server/src/scope/http.ts": {
-    "scope": "mixed",
-    "module": "M01",
-    "status": "implemented",
-    "surfaces": [
-      "api:registerAuthenticatedRoute:{...route,handle:async(context,request)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request});}}"
     ]
   }
 }

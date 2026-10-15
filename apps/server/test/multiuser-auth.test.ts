@@ -40,7 +40,7 @@ test('production authentication creates stable IDs, hashes secrets, separates ad
  assert.equal((await f.request('GET','/api/auth/self?userId='+f.b.userId,undefined,headers(f.alice.token))).statusCode,401);
  assert.equal((await f.request('POST','/api/login/session',{userId:f.b.userId},headers(f.alice.token))).statusCode,401);
  assert.equal((await f.node.app.inject({url:'/api/auth/self',headers:{authorization:'Bearer '+f.alice.token}})).statusCode,426);
- assert.equal((await f.request('GET','/api/materials',undefined,headers(f.owner.token))).statusCode,503);
+ assert.equal((await f.request('GET','/api/materials',undefined,headers(f.owner.token))).statusCode,200);
  assert.equal(readdirSync(f.root).includes('access-token'),false);
  const db=new DatabaseSync(join(f.root,'mote.sqlite'),{readOnly:true});try{for(const table of ['auth_accounts','auth_credentials']){const saved=JSON.stringify(db.prepare('SELECT * FROM '+table).all());assert.ok(!saved.includes(password));for(const token of [f.owner.token,f.alice.token,f.bob.token])assert.ok(!saved.includes(token));}}finally{db.close();}
  await assert.rejects(f.node.accounts.initialize('second-admin',password),{code:'already_initialized'});

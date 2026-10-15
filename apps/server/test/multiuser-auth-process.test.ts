@@ -37,7 +37,7 @@ test('production process bootstraps, authenticates, persists sessions over resta
  const user=await request('POST','/api/admin/accounts',{username:'process-user',password},token);assert.equal(user.status,200);
  const personal=await request('POST','/api/auth/login',{username:'process-user',password,mode:'client'});assert.equal(personal.status,200);
  assert.equal((await request('GET','/api/admin/accounts',undefined,personal.body.token)).status,403);
- assert.equal((await request('GET','/api/materials',undefined,token)).status,503);
+ assert.equal((await request('GET','/api/materials',undefined,token)).status,200);
  active.child.kill('SIGTERM');await active.closed;active=undefined;active=await start();
  const self=await request('GET','/api/auth/self',undefined,token);assert.equal(self.status,200);assert.equal(self.body.userId,userId);
  assert.equal((await request('PATCH',`/api/admin/accounts/${user.body.userId}`,{disabled:true},token)).status,200);

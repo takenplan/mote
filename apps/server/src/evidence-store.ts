@@ -29,7 +29,8 @@ import {mediaActivity,type MediaActivityRange} from './media-activity.js';
 import {ArchivedFileStore} from './archived-files.js';
 import {ContentEncryption,replaceContentFile} from './content-encryption.js';
 
-export class StoreError extends Error { constructor(message:string, public statusCode=400) {super(message);} }
+import {StoreError} from './execution-storage.js';
+export {StoreError} from './execution-storage.js';
 export const sha256 = (v:Buffer|string) => createHash('sha256').update(v).digest('hex');
 export type Range = {sourceId?:string;projectKey?:string;repositoryKey?:string;provider?:string;sessionId?:string;includeTotal?:boolean;after?:string;before?:string;deviceId?:string;appId?:string;source?:CaptureInput['source'];collection?:'content'|'activity';limit?:number;cursor?:string;ocrStatus?:OcrState['status']};
 type Prepared = {input:CaptureInput;bytes?:Buffer;hash:string|null;fingerprint:string;receivedAt?:string};

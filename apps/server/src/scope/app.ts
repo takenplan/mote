@@ -8,6 +8,10 @@ import {Accounts,AuthError} from './accounts.js';
 import {registerAuthentication} from './auth-routes.js';
 import {requestContext} from './http.js';
 import {ConnectionError} from '../connection-error.js';
+import {TaskAuthorization} from './task-authorization.js';
+import {TaskExecution,TaskError} from './task-execution.js';
+import {registerTaskRoutes} from './task-routes.js';
+import {StoreError} from '../execution-storage.js';
 import {registerPrivateData} from './private-data-routes.js';
 import {PrivateDataError} from './private-data-sql.js';
 import type {LifecycleAuthority} from './lifecycle.js';
@@ -20,17 +24,20 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
   try{
     const app=Fastify({logger:false});
     const accounts=new Accounts(storage.db,storage.deploymentId);
-    const authority=new UserContextAuthority(storage.deploymentId,options.verifier??accounts),services=new ScopedServices(authority,options.lifecycleAuthority);
+    const taskAuthorization=!options.verifier?new TaskAuthorization(storage.db,accounts,storage.deploymentId):undefined;
+    const authority=new UserContextAuthority(storage.deploymentId,options.verifier??accounts,taskAuthorization),services=new ScopedServices(authority,options.lifecycleAuthority);
+    const execution=taskAuthorization?new TaskExecution(storage.db,authority,services,taskAuthorization):undefined;
     const runtime={app,authority,services,...(!options.verifier?{accounts}:{})};
     app.setErrorHandler((error,_request,reply)=>{
-      const failure=error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError?error:error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
+      const failure=error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
-    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data']}));
+    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data',...(execution?['execution']:[])]}));
     registerPrivateData(runtime,storage.db);
+    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>execution.close());}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{accounts.close();storage.close();});
-    return {...runtime,deploymentId:storage.deploymentId};
+    return {...runtime,execution,deploymentId:storage.deploymentId};
   }catch(error){storage.close();throw error;}
 }
