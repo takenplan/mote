@@ -114,7 +114,19 @@ test('a long repeated article group keeps newest bounded material text while eve
     const response=await runtime.app.inject({method:'POST',url:'/api/captures',headers,payload:value});
     assert.equal(response.statusCode,201,response.body);
   }
-  await runtime.materialOrganizer.tick(100);
+  const targetCursor=Number(runtime.store.db.prepare('SELECT MAX(seq) seq FROM changes').get()?.seq??0);
+  const deadline=Date.now()+30_000;
+  // Startup and periodic organizer ticks still run with backgroundWorker:false.
+  // A tick while one is running returns immediately; awaiting it does not join
+  // that work. Wait for discovery and the latest publication to both converge.
+  for(;;){
+    await runtime.materialOrganizer.tick(100);
+    const current=runtime.materials.list({kind:'mote.ui-page-object'}).items[0];
+    const status=runtime.materialOrganizer.status();
+    if(status.cursor>=targetCursor&&current&&runtime.materials.members(current.id,{limit:200}).items.some(item=>item.id===originals.at(-1)!.id))break;
+    assert.ok(Date.now()<deadline,`latest article publication did not converge: ${JSON.stringify(status)}`);
+    await new Promise<void>(resolve=>setImmediate(resolve));
+  }
   const material=runtime.materials.list({kind:'mote.ui-page-object'}).items[0]!;
   assert.ok(material);assert.equal(material.coverage.state,'partial');assert.equal(material.coverage.reason,'ui_page_group_limit');
   assert.ok(material.memberCount>0&&material.memberCount<originals.length);

@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi, Status } from './contracts';
 
 const api: DesktopApi = {
+  workActivity: input => ipcRenderer.invoke('mote:work-activity',input),
+  openWorkActivity: workId => ipcRenderer.invoke('mote:central-work',workId),
   syncHistory: input => ipcRenderer.invoke('mote:sync-history',input),
   syncHistoryContents: input => ipcRenderer.invoke('mote:sync-history-contents',input),
   syncHistoryContent: (runId,key,chunkOffset,includeImage) => ipcRenderer.invoke('mote:sync-history-content',runId,key,chunkOffset,includeImage),

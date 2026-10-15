@@ -75,12 +75,12 @@ class CaptureRecordsActivity : MoteActivity() {
         recordHeading = window.decorView.findViewWithTag("detail-title")
         val compactFilters = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
         val filters = LinearLayout(this).apply { orientation = if (compactFilters) LinearLayout.VERTICAL else LinearLayout.HORIZONTAL }
-        body.addView(filters, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) })
+        body.addView(filters, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) })
         val source = Spinner(this).apply {
             adapter = MoteUi.choiceAdapter(this@CaptureRecordsActivity, listOf(MoteI18n.text("本机记录"), MoteI18n.text("中央归档")))
             setSelection(if (central) 1 else 0)
         }; filters.addView(source, (if (compactFilters) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f)).apply {
-            if (compactFilters) bottomMargin = moteDp(DesignTokens.spaceInline) else marginEnd = moteDp(DesignTokens.spaceInline)
+            if (compactFilters) bottomMargin = moteDp(MoteTheme.spaceInline) else marginEnd = moteDp(MoteTheme.spaceInline)
         })
         source.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onNothingSelected(parent: AdapterView<*>?) = Unit
@@ -121,16 +121,16 @@ class CaptureRecordsActivity : MoteActivity() {
         }.apply { setSingleLine() }
         nextDay = button(days, MoteI18n.text("后一天")) { date = date.plusDays(1); reload() }
         if (!compactDates) {
-            (previousDay.layoutParams as LinearLayout.LayoutParams).marginEnd = moteDp(DesignTokens.spaceInline)
-            (dateButton.layoutParams as LinearLayout.LayoutParams).marginEnd = moteDp(DesignTokens.spaceInline)
+            (previousDay.layoutParams as LinearLayout.LayoutParams).marginEnd = moteDp(MoteTheme.spaceInline)
+            (dateButton.layoutParams as LinearLayout.LayoutParams).marginEnd = moteDp(MoteTheme.spaceInline)
         }
         if (compactDates) {
-            previousDay.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(DesignTokens.spaceInline) }
-            body.addView(days, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceInline) })
+            previousDay.layoutParams = LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(MoteTheme.spaceInline) }
+            body.addView(days, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(MoteTheme.spaceInline) })
         }
         val stateAndRefresh = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        body.addView(stateAndRefresh, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceInline); bottomMargin = moteDp(DesignTokens.spaceInline) })
-        status = text(stateAndRefresh, MoteI18n.text("正在读取…"), DesignTokens.fontBody.toFloat()).apply {
+        body.addView(stateAndRefresh, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(MoteTheme.spaceInline); bottomMargin = moteDp(MoteTheme.spaceInline) })
+        status = text(stateAndRefresh, MoteI18n.text("正在读取…"), MoteTheme.fontBody.toFloat()).apply {
             layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
         }
         stateAndRefresh.addView(MoteUi.action(Button(this).apply { text = MoteI18n.text("刷新"); setOnClickListener { reload() } }, MoteUi.ButtonRole.TEXT), LinearLayout.LayoutParams(-2, -2))
@@ -203,11 +203,11 @@ class CaptureRecordsActivity : MoteActivity() {
         }
         if (!backgroundRefresh && selected != null) repeat(3) {
             val placeholders = row(list)
-            repeat(2) { text(placeholders, MoteI18n.text("加载预览…"), DesignTokens.fontSupport.toFloat()).apply {
+            repeat(2) { text(placeholders, MoteI18n.text("加载预览…"), MoteTheme.fontSupport.toFloat()).apply {
                 layoutParams = LinearLayout.LayoutParams(0, moteDp(188), 1f).apply { marginEnd = moteDp(6) }
                 gravity = Gravity.CENTER; setBackgroundColor(0xffeeeeee.toInt())
             } }
-        } else if (!backgroundRefresh) repeat(6) { text(list, MoteI18n.text("正在读取 App 与时间…"), DesignTokens.fontBody.toFloat()).apply {
+        } else if (!backgroundRefresh) repeat(6) { text(list, MoteI18n.text("正在读取 App 与时间…"), MoteTheme.fontBody.toFloat()).apply {
             minHeight = moteDp(88); gravity = Gravity.CENTER_VERTICAL; setBackgroundColor(0xffeeeeee.toInt())
         } }
         executor.queue.clear() // Switching dates/pages keeps only the newest pending query.
@@ -252,8 +252,8 @@ class CaptureRecordsActivity : MoteActivity() {
                     if (source == "screen" && selected == null) {
                         status.text = MoteI18n.text("{0} · 当天 {1} 条 · {2} 个{3} · 第 {4} 页", if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录"), total, page.getInt(if (sessions) "sessionCount" else "albumCount"), if (sessions) "Session" else MoteI18n.text("相册"), pageNumber)
                         progress.visibility = View.GONE
-                        text(list, if (sessions) MoteI18n.text("同应用连续采样归为一段；切换应用或间隔超过 5 分钟分段。仅按本页日期与现存截图分组，起止范围不代表使用时长。") else MoteI18n.text("每 15 分钟按 App 汇集 · 点开查看"), DesignTokens.fontMeta.toFloat())
-                        if (records.isEmpty()) text(list, MoteI18n.text("当天没有截图记录。"), DesignTokens.fontBody.toFloat())
+                        text(list, if (sessions) MoteI18n.text("同应用连续采样归为一段；切换应用或间隔超过 5 分钟分段。仅按本页日期与现存截图分组，起止范围不代表使用时长。") else MoteI18n.text("每 15 分钟按 App 汇集 · 点开查看"), MoteTheme.fontMeta.toFloat())
+                        if (records.isEmpty()) text(list, MoteI18n.text("当天没有截图记录。"), MoteTheme.fontBody.toFloat())
                         for (item in records) albumRow(item, stamp)
                         previousPage.isEnabled = cursors.size > 1; nextPage.isEnabled = nextCursor != null
                         return@runOnUiThread
@@ -372,8 +372,8 @@ class CaptureRecordsActivity : MoteActivity() {
         card.addView(icon, LinearLayout.LayoutParams(moteDp(40), moteDp(40)))
         val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(14), 0, 0, 0) }
         card.addView(labels, LinearLayout.LayoutParams(0, -2, 1f))
-        text(labels, item.optString("appName").ifBlank { item.optString("appId").ifBlank { MoteI18n.text("桌面 / 系统画面") } }, DesignTokens.fontSection.toFloat())
-        text(labels, MoteI18n.text("{0} – {1} · {2} 条 · {3} 张截图", time(item.getString("firstAt")), time(item.getString("capturedAt")), item.getInt("count"), item.getInt("imageCount")), DesignTokens.fontSupport.toFloat())
+        text(labels, item.optString("appName").ifBlank { item.optString("appId").ifBlank { MoteI18n.text("桌面 / 系统画面") } }, MoteTheme.fontSection.toFloat())
+        text(labels, MoteI18n.text("{0} – {1} · {2} 条 · {3} 张截图", time(item.getString("firstAt")), time(item.getString("capturedAt")), item.getInt("count"), item.getInt("imageCount")), MoteTheme.fontSupport.toFloat())
         text(card, "›", 24f)
         val appId = item.optString("appId")
         if (appId.isNotBlank()) imageExecutor.execute {
@@ -396,23 +396,23 @@ class CaptureRecordsActivity : MoteActivity() {
         preview.addView(image, FrameLayout.LayoutParams(-1, -1))
         preview.addView(TextView(this).apply {
             text = if (CapturePreview.hasImage(item)) MoteI18n.text("正在加载…") else MoteI18n.text("无图片")
-            gravity = Gravity.CENTER; MoteUi.type(this, DesignTokens.fontMeta); setTextColor(MoteUi.muted)
+            gravity = Gravity.CENTER; MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED)
         }, FrameLayout.LayoutParams(-1, -1))
         row.addView(preview, LinearLayout.LayoutParams(if (grid) -1 else moteDp(88), moteDp(if (grid) 160 else 88)))
         val labels = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(12), 0, 0, 0) }
         row.addView(labels, if (grid) LinearLayout.LayoutParams(-1, -2) else LinearLayout.LayoutParams(0, -2, 1f))
-        text(labels, "${time(item.getString("capturedAt"))} · ${item.optString("appName").ifBlank { item.optString("appId").ifBlank { if (item.optString("source") == "media") MoteI18n.text("媒体会话状态") else if (item.optString("source") == "device_event") MoteI18n.text("设备状态") else MoteI18n.text("桌面 / 系统画面") } }}", DesignTokens.fontBody.toFloat())
-        if (remote || item.optString("source") != "note") text(labels, if (item.optString("source") in SystemEventRules.sources) SystemEventRules.label(item) else if (item.optString("source") == "media") CapturePreview.mediaLabel(item) else CapturePreview.ocrLabel(item, remote), DesignTokens.fontMeta.toFloat())
-        if (!remote) text(labels, when (item.optString("syncError")) { "archive_missing" -> MoteI18n.text("中央记录不可更新 · 本机图片已保留"); "ocr_conflict" -> MoteI18n.text("OCR 更新冲突 · 本机图片和文字已保留"); "upload_conflict" -> MoteI18n.text("记录内容冲突 · 本机副本已保留"); else -> if (item.optBoolean("uploaded")) if (item.optLong("retainedUntil") > 0) MoteI18n.text("已同步 · 本机保留至 {0}", java.time.Instant.ofEpochMilli(item.getLong("retainedUntil")).atZone(java.time.ZoneId.systemDefault()).toLocalDate()) else MoteI18n.text("已同步 · 本机副本等待保留期清理") else MoteI18n.text("保存在本机 · 待同步") }, DesignTokens.fontMeta.toFloat())
-        if (item.has("sizeBytes")) text(labels, "${String.format(java.util.Locale.ROOT, "%.1f", item.optLong("sizeBytes") / 1024.0)} KiB", DesignTokens.fontMeta.toFloat())
-        item.optString("textPreview").takeIf(String::isNotBlank)?.let { text(labels, it.take(if (grid) 48 else 100), DesignTokens.fontMeta.toFloat()) }
+        text(labels, "${time(item.getString("capturedAt"))} · ${item.optString("appName").ifBlank { item.optString("appId").ifBlank { if (item.optString("source") == "media") MoteI18n.text("媒体会话状态") else if (item.optString("source") == "device_event") MoteI18n.text("设备状态") else MoteI18n.text("桌面 / 系统画面") } }}", MoteTheme.fontBody.toFloat())
+        if (remote || item.optString("source") != "note") text(labels, if (item.optString("source") in SystemEventRules.sources) SystemEventRules.label(item) else if (item.optString("source") == "media") CapturePreview.mediaLabel(item) else CapturePreview.ocrLabel(item, remote), MoteTheme.fontMeta.toFloat())
+        if (!remote) text(labels, when (item.optString("syncError")) { "archive_missing" -> MoteI18n.text("中央记录不可更新 · 本机图片已保留"); "ocr_conflict" -> MoteI18n.text("OCR 更新冲突 · 本机图片和文字已保留"); "upload_conflict" -> MoteI18n.text("记录内容冲突 · 本机副本已保留"); else -> if (item.optBoolean("uploaded")) if (item.optLong("retainedUntil") > 0) MoteI18n.text("已同步 · 本机保留至 {0}", java.time.Instant.ofEpochMilli(item.getLong("retainedUntil")).atZone(java.time.ZoneId.systemDefault()).toLocalDate()) else MoteI18n.text("已同步 · 本机副本等待保留期清理") else MoteI18n.text("保存在本机 · 待同步") }, MoteTheme.fontMeta.toFloat())
+        if (item.has("sizeBytes")) text(labels, "${String.format(java.util.Locale.ROOT, "%.1f", item.optLong("sizeBytes") / 1024.0)} KiB", MoteTheme.fontMeta.toFloat())
+        item.optString("textPreview").takeIf(String::isNotBlank)?.let { text(labels, it.take(if (grid) 48 else 100), MoteTheme.fontMeta.toFloat()) }
         return image
     }
     private fun detail(id: String, remote: Boolean, client: CaptureRecordClient?, stamp: Int) {
         readerDialog?.dismiss()
         openReader = ReaderRequest(id, remote)
         val content = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(18), moteDp(10), moteDp(18), moteDp(16)) }
-        val message = text(content, MoteI18n.text("正在读取详情…"), DesignTokens.fontBody.toFloat())
+        val message = text(content, MoteI18n.text("正在读取详情…"), MoteTheme.fontBody.toFloat())
         val loading = ProgressBar(this); content.addView(loading)
         val dialog = MoteDialogBuilder(this).setTitle(MoteI18n.text("采集记录")).setView(ScrollView(this).apply { addView(content) }).setPositiveButton(MoteI18n.text("关闭详情"), null).create()
         var detailBitmap: Bitmap? = null
@@ -444,37 +444,37 @@ class CaptureRecordsActivity : MoteActivity() {
                     if (isNote) dialog.setTitle(MoteI18n.text("原文"))
                     val capturedAt = record.getString("capturedAt").let { runCatching { DateTimeFormatter.ofLocalizedDateTime(java.time.format.FormatStyle.MEDIUM, java.time.format.FormatStyle.MEDIUM).withLocale(MoteI18n.locale()).withZone(ZoneId.systemDefault()).format(Instant.parse(it)) }.getOrDefault(it) }
                     val origin = record.optString("appName").ifBlank { record.optString("appId").ifBlank { if (isNote) MoteI18n.text("随手记") else if (record.optString("source") == "media") MoteI18n.text("媒体会话状态") else if (record.optString("source") == "device_event") MoteI18n.text("设备状态") else MoteI18n.text("桌面 / 系统画面") } }
-                    text(content, "$capturedAt · ${if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录")}" + if (isNote) " · $origin" else "", DesignTokens.fontMeta.toFloat()).setTextColor(MoteUi.muted)
-                    if (!isNote) text(content, origin, DesignTokens.fontBody.toFloat())
+                    text(content, "$capturedAt · ${if (remote) MoteI18n.text("中央归档") else MoteI18n.text("本机记录")}" + if (isNote) " · $origin" else "", MoteTheme.fontMeta.toFloat()).apply { MoteUi.textColor(this, NativeColorRole.MUTED) }
+                    if (!isNote) text(content, origin, MoteTheme.fontBody.toFloat())
                     if (record.optString("source") in SystemEventRules.sources) {
-                        text(content, SystemEventRules.label(record), DesignTokens.fontBody.toFloat()).setTextIsSelectable(true)
-                        text(content, MoteI18n.text("原始系统事件 · 不代表已阅读通知或实际执行某项任务。熄屏不等于锁定。"), DesignTokens.fontMeta.toFloat())
-                        text(content, record.getJSONObject("metadata").toString(2), DesignTokens.fontMeta.toFloat()).setTextIsSelectable(true)
+                        text(content, SystemEventRules.label(record), MoteTheme.fontBody.toFloat()).setTextIsSelectable(true)
+                        text(content, MoteI18n.text("原始系统事件 · 不代表已阅读通知或实际执行某项任务。熄屏不等于锁定。"), MoteTheme.fontMeta.toFloat())
+                        text(content, record.getJSONObject("metadata").toString(2), MoteTheme.fontMeta.toFloat()).setTextIsSelectable(true)
                         return@runOnUiThread
                     }
                     record.optJSONObject("stateSeries")?.optJSONArray("samples")?.let { samples ->
-                        text(content, MoteI18n.text("相同状态合并为 {0} 次观察，最近一次：{1}。统计逐次使用实测时长，观察间隙不计为连续使用。", samples.length(), time(samples.getJSONObject(samples.length() - 1).getString("at"))), DesignTokens.fontSupport.toFloat())
+                        text(content, MoteI18n.text("相同状态合并为 {0} 次观察，最近一次：{1}。统计逐次使用实测时长，观察间隙不计为连续使用。", samples.length(), time(samples.getJSONObject(samples.length() - 1).getString("at"))), MoteTheme.fontSupport.toFloat())
                     }
                     val media = record.optJSONObject("metadata")?.optJSONObject("media")
                     if (record.optString("source") == "media") {
-                        text(content, CapturePreview.mediaLabel(record), DesignTokens.fontBody.toFloat()).setTextIsSelectable(true)
-                        text(content, MoteI18n.text("此记录的已观察播放时长：{0} 秒（不含观测缺口）", record.optLong("durationMs") / 1000.0), DesignTokens.fontSupport.toFloat())
-                        media?.optString("observedAt")?.takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("媒体观察时间：{0}", it), DesignTokens.fontMeta.toFloat()) }
+                        text(content, CapturePreview.mediaLabel(record), MoteTheme.fontBody.toFloat()).setTextIsSelectable(true)
+                        text(content, MoteI18n.text("此记录的已观察播放时长：{0} 秒（不含观测缺口）", record.optLong("durationMs") / 1000.0), MoteTheme.fontSupport.toFloat())
+                        media?.optString("observedAt")?.takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("媒体观察时间：{0}", it), MoteTheme.fontMeta.toFloat()) }
                         return@runOnUiThread
                     }
-                    if (CapturePreview.showMediaContext(record)) text(content, CapturePreview.mediaLabel(record), DesignTokens.fontSupport.toFloat())
+                    if (CapturePreview.showMediaContext(record)) text(content, CapturePreview.mediaLabel(record), MoteTheme.fontSupport.toFloat())
                     if (record.optString("source") in setOf("note", "activity", "ui_page")) {
-                        record.optJSONObject("metadata")?.optJSONObject("uiPage")?.let { text(content, "${it.optString("adapterId")} @ ${it.optString("adapterVersion")} · ${it.optString("status")}", DesignTokens.fontSupport.toFloat()) }
-                        text(content, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) DesignTokens.fontSection.toFloat() else DesignTokens.fontBody.toFloat()).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(0f, 1.4f) }
-                        record.optString("syncError").takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("同步需要处理：{0}", it), DesignTokens.fontBody.toFloat()) }
+                        record.optJSONObject("metadata")?.optJSONObject("uiPage")?.let { text(content, "${it.optString("adapterId")} @ ${it.optString("adapterVersion")} · ${it.optString("status")}", MoteTheme.fontSupport.toFloat()) }
+                        text(content, record.optString("ocrText").ifBlank { MoteI18n.text("应用活动 · {0} 毫秒", record.optLong("durationMs")) }, if (isNote) MoteTheme.fontSection.toFloat() else MoteTheme.fontBody.toFloat()).apply { setTextIsSelectable(true); if (isNote) setLineSpacing(0f, 1.4f) }
+                        record.optString("syncError").takeIf(String::isNotBlank)?.let { text(content, MoteI18n.text("同步需要处理：{0}", it), MoteTheme.fontBody.toFloat()) }
                         return@runOnUiThread
                     }
-                    text(content, CapturePreview.ocrLabel(record, remote), DesignTokens.fontBody.toFloat())
+                    text(content, CapturePreview.ocrLabel(record, remote), MoteTheme.fontBody.toFloat())
                     if (bitmap != null) content.addView(ImageView(this).apply { setImageBitmap(bitmap); adjustViewBounds = true; scaleType = ImageView.ScaleType.FIT_CENTER; contentDescription = MoteI18n.text("采集图片") }, LinearLayout.LayoutParams(-1, -2))
-                    else text(content, MoteI18n.text("图片暂不可用。"), DesignTokens.fontBody.toFloat())
-                    text(content, MoteI18n.text("识别文字"), DesignTokens.fontSection.toFloat())
-                    if (record.optBoolean("centralPreview")) text(content, MoteI18n.text("中央识别预览；完整内容请切换中央记录查看。"), DesignTokens.fontSupport.toFloat())
-                    text(content, record.optString("ocrText").ifBlank { if (record.optJSONObject("ocr")?.optString("status") == "completed") MoteI18n.text("此图片未识别到文字。") else MoteI18n.text("暂无识别文字。") }, DesignTokens.fontBody.toFloat()).setTextIsSelectable(true)
+                    else text(content, MoteI18n.text("图片暂不可用。"), MoteTheme.fontBody.toFloat())
+                    text(content, MoteI18n.text("识别文字"), MoteTheme.fontSection.toFloat())
+                    if (record.optBoolean("centralPreview")) text(content, MoteI18n.text("中央识别预览；完整内容请切换中央记录查看。"), MoteTheme.fontSupport.toFloat())
+                    text(content, record.optString("ocrText").ifBlank { if (record.optJSONObject("ocr")?.optString("status") == "completed") MoteI18n.text("此图片未识别到文字。") else MoteI18n.text("暂无识别文字。") }, MoteTheme.fontBody.toFloat()).setTextIsSelectable(true)
                 }
             } catch (error: Exception) { runOnUiThread { if (!isDestroyed && dialog.isShowing) { loading.visibility = View.GONE; message.text = errorMessage(error, remote) } } }
         }
@@ -482,7 +482,7 @@ class CaptureRecordsActivity : MoteActivity() {
     private fun errorMessage(error: Exception, remote: Boolean): String = if (error is IllegalStateException || error is IllegalArgumentException) error.message ?: MoteI18n.text("记录读取失败，请刷新重试") else if (remote) MoteI18n.text("中央记录暂不可读取，请检查网络后重试") else MoteI18n.text("本机记录暂不可读取，请刷新重试；文件已保留")
     private fun time(at: String): String = runCatching { DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault()).format(Instant.parse(at)) }.getOrDefault(at)
     private fun row(parent: LinearLayout) = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }.also { parent.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(10) }) }
-    private fun text(parent: LinearLayout, value: String, size: Float) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setTextColor(MoteUi.ink); setPadding(0, moteDp(5), 0, moteDp(5)) }.also(parent::addView)
+    private fun text(parent: LinearLayout, value: String, size: Float) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(5), 0, moteDp(5)) }.also(parent::addView)
     private fun button(parent: LinearLayout, label: String, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { action() } }).also { parent.addView(it, if (parent.orientation == LinearLayout.HORIZONTAL) LinearLayout.LayoutParams(0, -2, 1f) else LinearLayout.LayoutParams(-1, -2)) }
     private fun clearList() { list.removeAllViews() }
     override fun onSaveInstanceState(outState: Bundle) {

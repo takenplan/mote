@@ -1,5 +1,4 @@
 import { ClientLoginApproval } from './ClientLoginApproval';
-import {revealWorkspaceFocus} from './workspace-focus';
 import {consumeLoginTicket,loginRequestId,removeLoginParameter} from './login-handoff';
 import { getLocale,moteText } from '@mote/shared/i18n';
 import {
@@ -28,7 +27,6 @@ useSyncExternalStore,
 } from "react";
 import { createRoot } from "react-dom/client";
 import type { ArchiveTab } from './Archive';
-import { LanguageSelector } from './LanguageSelector';
 import {
 ApiError,
 createApi,
@@ -44,6 +42,8 @@ type Status
 } from "./api";
 import { changeEvidenceRoute,readEvidenceRoute } from './evidence-route';
 import { FeaturePage,featuresReady,webFeatures } from './features/runtime';
+import { PresentationSurface } from './presentation';
+import { WorkspaceSidebar } from './WorkspaceSidebar';
 import { pageLabels,readPage,routes,type Page } from './navigation';
 import { canonicalDestination,readWorkspaceRoute,workspaceHash } from './workspace-route';
 import { isSettingsContext,primaryDestination,WorkspaceNavigation } from './WorkspaceNavigation';
@@ -60,20 +60,13 @@ import './discovery-ui.css';
 import './feature-guide.css';
 import './art-direction.css';
 import './memory-presentation.css';
+import './presentation.css';
 import { confirmNavigation } from './unsaved';
 
 
 declare global {
   interface Window { moteCentralSession?: {close: () => void} }
 }
-const nav = [
-  {id:'overview' as const,label:moteText('今天'),icon:LayoutDashboard},
-  {id:'archive' as const,label:moteText('资料库'),icon:Database},
-  {id:'ask' as const,label:moteText('问一问'),icon:MessageSquare},
-  {id:'activity' as const,label:moteText('活动'),icon:ActivityIcon},
-  {id:'devices' as const,label:moteText('采集与设备'),icon:Monitor},
-];
-
 const periodNames: Record<string, string> = {
   today: moteText("今天"),
   week: moteText("过去 7 天"),
@@ -116,8 +109,9 @@ function App() {
       setPage(next.page); updateArchiveTab(next.collection);
       updateEvidenceId(readEvidenceRoute(location.hash));
     };
-    window.addEventListener('hashchange', navigate);
-    return () => window.removeEventListener('hashchange', navigate);
+    const remember=()=>{currentHash.current=location.hash;};
+    window.addEventListener('hashchange', navigate);window.addEventListener('mote:workspace-state',remember);
+    return () => {window.removeEventListener('hashchange', navigate);window.removeEventListener('mote:workspace-state',remember);};
   }, []);
   const [period, setPeriod] = useState<Period>(()=>readPeriod(connection));
   const [status, setStatus] = useState<Status | null>(null);
@@ -307,58 +301,18 @@ function App() {
     if (connection) setConnection(persistSession(connection, lifetime));
   }
   return (
-    <div className="app-shell">
-      <aside id="primary-navigation" className="sidebar">
-        <button
-          className="brand"
-          onClick={() => onPage("overview")}
-          aria-label={moteText("Mote 总览")}
-        >
-          <span className="mote-symbol">m</span>
-          <span>
-            Mote<span className="brand-dot">.</span>
-          </span>
-        </button>
-        <div className="workspace-label">{moteText("个人资料库")}</div>
-        <nav aria-label={moteText("主导航")}>
-          {nav.map(item => <button key={item.id} className={primaryDestination(page) === item.id ? 'active' : ''} aria-current={primaryDestination(page) === item.id ? 'page' : undefined} onClick={() => onPage(item.id)}><item.icon size={18} strokeWidth={1.7}/><span className="discovery-nav-copy"><span>{item.label}</span>{item.id==='activity'&&<small>{moteText("Mote 后台工作")}</small>}</span></button>)}
-        </nav>
-        <div className="sidebar-bottom"><LanguageSelector/>
-          <button aria-current={primaryDestination(page)==='about'?'page':undefined} className={'settings-nav '+(primaryDestination(page)==='about'?'active':'')} onClick={()=>onPage('about')}><Settings2 size={18}/>{moteText('设置')}</button>
-          <div className="local-note">
-            <span className="orbit-mark">✳</span>
-            <p>
-              {moteText("一点一滴，")}<br />
-              {moteText("慢慢成为你的记忆。")}</p>
-          </div>
-          <button className="node-button" onClick={() => connection ? onPage("about") : setShowConnect(true)}>
-            <span
-              className={`node-state ${verified ? "online" : ""}`}
-            />
-            <div>
-              <strong>
-                {verified ? moteText("已登录 · {0}", status?.profile || moteText("当前节点")) : connection ? moteText("正在验证登录") : moteText("登录 Mote")}
-              </strong>
-              <small>
-                {verified ? moteText("管理当前节点") : moteText("使用管理令牌访问资料")}
-              </small>
-            </div>
-            <Settings2 size={15} />
-          </button>
-          <div className="version">
-            MOTE <span>{moteText("个人上下文")}</span>
-          </div>
-        </div>
-      </aside>
-      <main className="main" onFocusCapture={event=>revealWorkspaceFocus(event.target)}>
+    <>
+    <PresentationSurface
+      navigation={layout => <WorkspaceSidebar layout={layout} page={page} onPage={onPage} connection={connection} verified={verified} profile={status?.profile} onConnect={()=>setShowConnect(true)}/>}
+      toolbar={
         <header className="topbar">
           <div>
             <span className="breadcrumb">
               <span className="breadcrumb-workspace">{moteText("我的空间")} / </span>
-              <strong>{pageLabels[page]}</strong>
+              <strong>{pageLabels[page]??moteText("当前服务未提供此入口")}</strong>
             </span>
           </div>
-          <div className="topbar-actions">{!settingsContext&&page!=='featureGuide'&&page!=='notes'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
+          <div className="topbar-actions"><details className="shell-menu"><summary aria-label={moteText('全部功能')}>{moteText('更多')}</summary><div><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('overview');}}>{moteText('今天')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('featureGuide');}}>{moteText('全部功能')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;onPage('about');}}>{moteText('设置')}</button><button onClick={event=>{event.currentTarget.closest('details')!.open=false;setShowConnect(true);}}>{moteText('登录 Mote')}</button></div></details>{!settingsContext&&page!=='featureGuide'&&page!=='notes'&&<button className="button quick-note" onClick={()=>onPage("notes")}><FileText size={16}/>{moteText("随手记")}</button>}
             <CentralStatusPill
               connection={connection}
               verified={verified}
@@ -387,7 +341,9 @@ function App() {
             >
               {moteText("我")}</button>
           </div>
-        </header>
+        </header>}
+      footer={<footer className="footer"><span>{moteText("Mote · 让上下文，有迹可循。")}</span><span>{connection && status ? moteText("{0} 条记录 · {1}", status.storage.captures.toLocaleString(getLocale()), status.agent.configured ? moteText("Agent 就绪") : moteText("等待模型配置")) : moteText("采集 · 汇聚 · 理解")}</span></footer>}
+    >
         <React.Suspense key={page} fallback={<p role="status" data-page-loading={page}>{moteText("正在读取…")}</p>}><div data-page={page} data-session={!connection?'signed-out':verified?'ready':error?'verification-failed':'verifying'} aria-busy={Boolean(connection&&loading)} className={`content ${settingsContext?'settings-surface':''}`}>
           <div className="workspace-tools">
           {connection&&verified&&<WorkspaceNavigation page={page} onPage={onPage}/> }
@@ -422,7 +378,7 @@ function App() {
               </button>
             </div>
           )}
-          {!connection && settingsContext ? <section className="panel settings-sign-in"><div className="page-heading"><h1>{moteText("登录后查看{0}", pageLabels[page])}</h1><p>{moteText("调整服务与资料管理方式，或管理当前登录。")}</p></div><button className="button" onClick={()=>setShowConnect(true)}><Link2 size={16}/>{moteText("登录 Mote")}<ArrowRight size={16}/></button></section> : !connection ? (
+          {!webFeatures.page(page)?<section className="panel panel-pad"><h1>{moteText('当前服务未提供此入口')}</h1><button className="button" onClick={()=>onPage('archive')}>{moteText('资料库')}</button></section>:!connection && settingsContext ? <section className="panel settings-sign-in"><div className="page-heading"><h1>{moteText("登录后查看{0}", pageLabels[page])}</h1><p>{moteText("调整服务与资料管理方式，或管理当前登录。")}</p></div><button className="button" onClick={()=>setShowConnect(true)}><Link2 size={16}/>{moteText("登录 Mote")}<ArrowRight size={16}/></button></section> : !connection ? (
             <>
               <div className="greeting welcome simple-welcome archive-welcome">
                 <div>
@@ -484,18 +440,11 @@ function App() {
             </>
           )}
         </div>
-        </React.Suspense><footer className="footer">
-          <span>{moteText("Mote · 让上下文，有迹可循。")}</span>
-          <span>
-            {connection && status
-              ? moteText("{0} 条记录 · {1}", status.storage.captures.toLocaleString(getLocale()), status.agent.configured ? moteText("Agent 就绪") : moteText("等待模型配置"))
-              : moteText("采集 · 汇聚 · 理解")}
-          </span>
-        </footer>
-      </main>
+        </React.Suspense>
+    </PresentationSurface>
       {showConnect && (
         <LoginDialog
-          destination={pageLabels[page]}
+          destination={pageLabels[page]??moteText("当前服务未提供此入口")}
           onConnected={connected}
           onClose={() => setShowConnect(false)}
         />
@@ -509,7 +458,7 @@ function App() {
           onDeleted={refresh}
         />
       )}
-    </div>
+    </>
   );
 }
 

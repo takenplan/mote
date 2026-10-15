@@ -1,5 +1,7 @@
 # Feature packs
 
+Global presentation has a separate [theme/layout contract](adr-ui-presentation-packs.md): Web and Mac use `UiPresentationHost` to select exact trusted providers through the shared registry. Android maps the generated theme/layout contract through `NativeUiPackRegistry` and its native renderer. Functional page/card/panel registrations below remain in force. Presentation activation does not change domain work or Agent access; the Memory plugin installer is not a UI-code loader.
+
 The central Web console and server now have independent Cordis hosts. Shared, browser-safe descriptors join transport, read APIs, commands, processing registrations, UI pages/collections/detail panels and read-only Agent capabilities by feature ID. The execution engine, receipt protocol, material publisher, privacy rules and existing feature behavior remain authoritative.
 
 资料库默认正式资料、命名产物消费者、安装实例代际与展示锚点的完整契约见 [资料库与插件扩展契约](library-plugin-contracts.md)。
@@ -19,7 +21,7 @@ The shared registry pins descriptor copies, rejects duplicate component IDs and 
 | Entry | Data authority |
 | --- | --- |
 | Library → Published materials | Bounded material list, immutable revision/body ranges, lineage and named processing outputs |
-| Library → Coding Agent uploads | Received archive event heads/bytes, source pipeline states, published/indexed material counts and actual memory-work states; assembled transcript stays server-owned |
+| Sources → Coding sync status; Activity → advanced receipts | Received archive event heads/bytes, source pipeline states, published/indexed material counts and actual memory-work states; published conversation bodies remain in Library and assembled transcripts stay server-owned |
 | System → Model-visible directory | Query Agent's real catalog, materials, memories, source-item and segment projections; virtual paths, never host directories |
 | Model-visible directory → Recorded inputs and reads | Existing opt-in trace events at context assembly/model/tool boundaries; retention gaps and truncation are explicit; old input is never rebuilt from current memory |
 | Extensions | Runtime capabilities joined across the server and browser hosts |

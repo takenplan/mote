@@ -130,7 +130,7 @@ export class ActivityMemoryIndex {
   for(const members of sets.values()){members.sort();const id=members.length===1?'memory-source:'+members[0]:'memory-sources:'+Buffer.from(JSON.stringify(members)).toString('base64url');sources.set(id,members);for(const sourceId of members)mapping.push({sourceId,groupId:id});}
   return {mapping,sources};
  }
- metadataSql(){
+ metadataSql(relatedJobs?:string){
   const {mapping,sources}=this.groups(),mapped=JSON.stringify(mapping);
   const requests=Boolean(this.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='material_memory_requests'").get()),authorizations=Boolean(this.store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='memory_input_authorizations'").get());
   const pending=authorizations?`SELECT DISTINCT m.group_id FROM memory_input_authorizations a JOIN mapping m ON m.source_id=a.source_id WHERE a.authorized=1 AND a.revoked_at IS NULL AND a.job_id IS NULL ${requests?`AND NOT EXISTS(SELECT 1 FROM material_memory_requests r JOIN material_heads h ON h.id=r.material_id WHERE h.source_id=a.source_id AND r.input_key=a.input_key AND r.scope=a.scope AND r.job_id IS NOT NULL)`:''}`:"SELECT NULL group_id WHERE 0";
@@ -139,7 +139,7 @@ export class ActivityMemoryIndex {
     FROM activity_memory_jobs j LEFT JOIN activity_memory_sources s ON s.job_id=j.id LEFT JOIN mapping m ON m.source_id=s.source_id GROUP BY j.id), pending AS (${pending}), summaries AS (
    SELECT j.group_id id,min(j.created_at) created_at,max(j.updated_at) updated_at,max(max(j.rank,coalesce(b.rank,-2),CASE WHEN EXISTS(SELECT 1 FROM activity_memory_items i WHERE i.job_id=j.id AND NOT EXISTS(SELECT 1 FROM activity_memory_coverage c WHERE c.job_id=i.job_id AND c.ref=i.ref)) THEN 2 ELSE -2 END)) rank
    FROM job_groups j LEFT JOIN activity_memory_batches b ON b.job_id=j.id AND b.leaf=1 GROUP BY j.group_id)
-   SELECT id,created_at,updated_at,max(rank,CASE WHEN id IN (SELECT group_id FROM pending) THEN 2 ELSE -2 END) rank FROM summaries`;
+   SELECT id,created_at,updated_at,max(rank,CASE WHEN id IN (SELECT group_id FROM pending) THEN 2 ELSE -2 END) rank FROM summaries${relatedJobs?' WHERE id IN (SELECT group_id FROM job_groups WHERE id IN ('+relatedJobs+'))':''}`;
   return {sql,parameters:[mapped],sources};
  }
  summary(id:string){const query=this.metadataSql(),row=this.store.db.prepare(`SELECT * FROM (${query.sql}) WHERE id=?`).get(...query.parameters,id);return row?{id:String(row.id),sources:query.sources.get(String(row.id))??[],createdAt:String(row.created_at),updatedAt:String(row.updated_at),rank:Number(row.rank)}:undefined;

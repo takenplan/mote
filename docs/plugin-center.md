@@ -1,5 +1,7 @@
 # 插件中心与 Memory 方案
 
+全局 UI 的主题／布局扩展通过独立的[可信平台展示包合同](adr-ui-presentation-packs.md)实现。默认 Linear 主题和四目的地外壳使用同一边界；它不经过本页 Memory worker 安装器，不新增远程 UI 代码执行或主题偏好跨端同步。
+
 插件中心位于「设置 → 插件」，包含已安装、发现和记忆方案。它管理当前 Central 的包、配置实例、运行能力、自动准入和正文绑定；GitHub 资料连接器仍在来源中管理。Web 与 Android 使用同一声明式状态合同；Android 使用原生页面。实际执行记录见 [一期验证方案](design/plugin-center-phase-one-validation-2026-10-12.md)，架构选择见 [ADR](adr-plugin-center-memory-replacement.md)。
 
 ## 安装、配置、启用和绑定

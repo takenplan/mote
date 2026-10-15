@@ -1,0 +1,66 @@
+require('./fixture-background.cjs');
+require('./fixture-language.cjs');
+/** Real Central entry point and Chromium renderer. Generated files only; no model or personal capture. */
+const { app, BrowserWindow } = require('electron');
+const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join, resolve } = require('node:path');
+const { spawn } = require('node:child_process');
+const { randomBytes, randomUUID } = require('node:crypto');
+const net = require('node:net');
+const assert = require('node:assert/strict');
+const repo=resolve(__dirname,'..'),root=mkdtempSync(join(tmpdir(),'mote-ui-presentation-')),out=join(repo,'.mote/ui-presentation');
+mkdirSync(out,{recursive:true,mode:0o700});app.setPath('userData',join(root,'browser'));app.on('window-all-closed',()=>{});
+let server,window,stderr='';const delay=ms=>new Promise(r=>setTimeout(r,ms));
+async function until(fn,label){const end=Date.now()+30000;while(Date.now()<end){if(server?.exitCode!=null)throw Error('Generated server exited: '+stderr);if(await fn())return;await delay(80);}throw Error('Timed out: '+label);}
+async function run(){
+ await app.whenReady();const port=await new Promise(resolve=>{const socket=net.createServer();socket.listen(0,'127.0.0.1',()=>{const value=socket.address().port;socket.close(()=>resolve(value));});});
+ const base='http://127.0.0.1:'+port,token=randomBytes(32).toString('hex'),configFile=join(root,'mote.yaml');
+ writeFileSync(configFile,JSON.stringify({version:1,revision:0,server:{profile:'test',host:'127.0.0.1',port,token},storage:{dataDir:join(root,'data')}}),{mode:0o600});
+ const env=Object.fromEntries(Object.entries(process.env).filter(([key])=>!key.startsWith('MOTE_')));
+ server=spawn('node',[join(repo,'apps/server/dist/index.js')],{cwd:repo,env:{...env,MOTE_CONFIG_FILE:configFile},stdio:['ignore','ignore','pipe']});server.stderr.on('data',chunk=>{stderr=(stderr+chunk).slice(-12000);});
+ await until(async()=>{try{return(await fetch(base+'/api/health')).ok;}catch{return false;}},'server startup');
+ const request=async(path,body)=>{const response=await fetch(base+path,{method:body?'POST':'GET',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{})});assert.ok(response.ok,path+' '+response.status);return response.json();};
+ window=new BrowserWindow({width:1360,height:1000,show:false,webPreferences:{sandbox:true,contextIsolation:true,nodeIntegration:false}});
+ const wc=window.webContents,js=code=>wc.executeJavaScript(code),errors=[];wc.on('console-message',(_event,level,message)=>{if(level>=3)errors.push(message);});
+ const browser=await request('/api/login/session',{serverUrl:base,deviceId:randomUUID(),deviceName:'Generated UI browser',platform:'other',durationMs:0});
+ await window.loadURL(base);await js(`sessionStorage.setItem('mote.connection',${JSON.stringify(JSON.stringify({token:browser.token,viewScope:randomUUID()}))});location.reload()`);
+ await until(()=>js(`document.querySelector('[data-page="archive"][data-session="ready"]')`),'empty route opens Library');
+ assert.deepEqual(await js(`Array.from(document.querySelectorAll('.sidebar nav button')).map(e=>e.textContent.trim())`),['资料库','问一问','来源','活动']);
+ assert.equal(await js(`getComputedStyle(document.documentElement).getPropertyValue('--mote-background').trim()`),'#1c1b1a');
+ const click=async label=>until(()=>js(`(()=>{const control=[...document.querySelectorAll('button,a[href]')].find(e=>e.getClientRects().length&&e.textContent.trim()===${JSON.stringify(label)});if(!control||control.disabled)return false;control.click();return true;})()`),'control '+label);
+ const route=async(path,selector)=>{await js(`location.hash=${JSON.stringify('#/'+path)}`);await until(()=>js(`!!document.querySelector(${JSON.stringify(selector)})`),path);};
+ const shot=async name=>{await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');assert.ok(await js('document.documentElement.scrollWidth<=innerWidth'),'viewport fits '+name);writeFileSync(join(out,name+'.png'),(await wc.capturePage()).toPNG());};
+ await route('library/import','[aria-label="选择导入文件"]');
+ const body='Generated UI archive fixture.\n'+Array.from({length:220},(_,i)=>'Generated paragraph '+i+': source, evidence and lifecycle state stay explicit.').join('\n');
+ await js(`(()=>{const transfer=new DataTransfer();transfer.items.add(new File([${JSON.stringify(body)}],'generated-ui-note.txt',{type:'text/plain'}));const input=document.querySelector('[aria-label="选择导入文件"]');input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+ await until(()=>js(`document.querySelectorAll('.selected-files .file-row').length===1`),'generated file selected');await click('加入导入队列');
+ let imported;await until(async()=>{imported=(await request('/api/imports')).items.find(item=>item.name==='generated-ui-note.txt');return imported?.status==='completed';},'file imported through actual UI');
+ let material;await until(async()=>{material=(await request('/api/materials?sourceId='+encodeURIComponent(imported.sourceId))).items[0];return Boolean(material);},'formal material publication');
+ await route('library?view=materials&sourceId='+encodeURIComponent(imported.sourceId),'.library-record');await js(`document.querySelector('.library-record').focus();document.querySelector('.library-record').click()`);
+ await until(()=>js(`document.querySelector('.material-detail')?.textContent.includes('Generated UI archive fixture')`),'standard material reader');
+ const origin=await js('location.hash');assert.equal(new URLSearchParams(origin.split('?')[1]).get('selected'),material.ref);
+ await click('来源与处理');await click('查看原始记录');await until(()=>js(`document.querySelector('.evidence-modal')?.textContent.includes('Generated UI archive fixture')`),'original evidence');
+ await js(`document.querySelector('[aria-label="关闭证据详情"]').click()`);await until(()=>js(`!document.querySelector('.evidence-modal')&&location.hash===${JSON.stringify(origin)}`),'evidence returns to exact selected row');
+ await shot('library-desktop');
+ assert.equal(await js(`document.querySelector('.material-detail a[href^="#/connections?"]')?.getAttribute('href')`),'#/connections?sourceId='+encodeURIComponent(imported.sourceId));
+ await click('相关活动');await until(()=>js(`document.querySelector('.related-activity-context')`),'exact material activity');
+ assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('materialId')`),material.id);
+ assert.ok(await js(`document.querySelector('.related-activity-context').textContent.includes('历史关联可能不完整')`));
+ await js('history.back()');await until(()=>js(`document.querySelector('.material-detail')?.textContent.includes('Generated UI archive fixture')`),'history restores selected material');
+ assert.equal(await js('location.hash'),origin);
+ await click('来源与处理');await click('管理来源');await until(()=>js(`document.querySelector('.source-configuration .source-context-editor')`),'exact source management');
+ assert.equal(await js(`new URLSearchParams(location.hash.split('?')[1]).get('sourceId')`),imported.sourceId);
+ await shot('sources-desktop');
+ await route('library?view=sources&sourceId='+encodeURIComponent(imported.sourceId),'.sources-page');assert.equal(await js(`!!document.querySelector('.sources-page textarea,.sources-page .add-source-panel')`),false,'source reading contains no source configuration editor');
+ await route('library?view=work-activity','.activity-centre');assert.ok(await js(`!!document.querySelector('[data-page="activity"]')`),'legacy work link opens Activity');
+ await route('missing-generated-deep-link','[data-page="unavailable"]');assert.ok(await js(`document.querySelector('.content').textContent.includes('当前服务未提供此入口')`),'bad deep link never silently opens another object');
+ const pages=['today','library','library?view=records','library?view=files','library?view=memories','library/notes','library/insights','library/import','ask','connections','connections/devices','connections/access','connections/recordings','connections/lark','activity','actions','preferences','system/models','system/plugins','system/storage','system/usage','system/diagnostics','system/processing','guide','agent','help'];
+ for(const path of pages){await route(path,'.content');await delay(180);assert.ok(await js(`document.documentElement.scrollWidth<=innerWidth`),'desktop width '+path);const light=await js(`Array.from(document.querySelectorAll('.content *')).filter(e=>{const r=e.getBoundingClientRect();if(r.width<120||r.height<35||!r.width||getComputedStyle(e).visibility==='hidden'||e.matches('.button.primary'))return false;const c=getComputedStyle(e).backgroundColor.match(/^rgb\\((\\d+), (\\d+), (\\d+)\\)$/);return c&&c.slice(1).every(v=>Number(v)>220)&&!e.closest('iframe');}).map(e=>e.className).slice(0,5)`);assert.deepEqual(light,[],'dark surfaces '+path);}
+ window.setSize(390,900);await route('library?view=materials&sourceId='+encodeURIComponent(imported.sourceId),'.library-record');await js(`document.querySelector('.library-record').click()`);await until(()=>js(`document.querySelector('.material-detail')?.textContent.includes('Generated UI archive fixture')`),'mobile reader');await shot('library-mobile');
+ await js(`document.querySelector('.shell-menu').open=true`);assert.ok(await js(`Array.from(document.querySelectorAll('.shell-menu button')).filter(e=>e.getClientRects().length).map(e=>e.textContent).includes('今天')`));await click('全部功能');await until(()=>js(`!!document.querySelector('.feature-guide')`),'mobile complete feature directory');await shot('guide-mobile');
+ window.setSize(320,900);await route('preferences','.settings-destinations');await shot('settings-320');
+ assert.deepEqual(errors,[]);writeFileSync(join(out,'result.json'),JSON.stringify({passed:true,generatedOnly:true,liveModel:false,physicalDevice:false,checks:['real file upload and formal publication','four primary destinations','Linear roles','exact selected object and evidence return','exact material/source activity links with partial coverage','source reading has no configuration editor','legacy work link','bad deep link','all default pages dark','desktop and 390/320px width','mobile auxiliary destinations']},null,2));console.log('PASS: generated file to formal material, original evidence, exact related activity/source, browser return and Linear desktop/mobile UI.');
+}
+async function finish(code){window?.destroy();if(server?.exitCode===null){server.kill('SIGTERM');await Promise.race([new Promise(r=>server.once('close',r)),delay(4000)]);}rmSync(root,{recursive:true,force:true});app.exit(code);}
+run().then(()=>finish(0),async error=>{console.error(error);if(window&&!window.isDestroyed()){console.error(await window.webContents.executeJavaScript('JSON.stringify({hash:location.hash,text:document.body.innerText.slice(0,8000)})'));writeFileSync(join(out,'failure.png'),(await window.webContents.capturePage()).toPNG());}await finish(1);});

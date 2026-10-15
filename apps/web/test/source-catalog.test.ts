@@ -16,7 +16,7 @@ import {resources} from '../src/resource-cache.js';
 const activityId='http:GET:/api/work-activity',codingId='http:GET:/api/coding/uploads';
 const capability=(id:string,version='1',state:FeatureCapability['state']='active'):FeatureCapability=>({id,version,state,featureId:id.startsWith('connector:')?'mote.connector.'+id.slice(10):'generated.catalog-server',surface:id.startsWith('connector:')?'ingress':'data'});
 const inventory=(capabilities:FeatureCapability[]):FeatureInventory=>({schemaVersion:1,revision:1,features:[],capabilities});
-const routes={overview:'today',archive:'library',recordings:'generated/recordings',connections:'connections/access',imports:'library/import',lark:'connections/lark',sources:'connections',featureGuide:'guide'};
+const routes={activity:'activity',overview:'today',archive:'library',recordings:'generated/recordings',connections:'connections/access',imports:'library/import',lark:'connections/lark',sources:'connections',featureGuide:'guide'};
 const provider='generated-recorder',recorderKey=provider+'-recordings';
 const providerDetailId='connector:'+recorderKey;
 const recorder:RecordingStatus={provider,category:'recordings',label:'Generated recording provider',connected:false,selection:{enabled:false,start:'2026-01-01T00:00:00Z',autoSync:false,backupAudio:true},steps:[],counts:{transcripts:0,audio:0,pending:0,failed:0}};
@@ -44,7 +44,7 @@ async function fixture(t:import('node:test').TestContext,options:{capabilities:F
   const pageIds=options.pageIds??Object.keys(routes);
   const shell=await webFeatures.install({id:'generated.catalog-shell',version:'1',components:[]},[
     ...pageIds.map(id=>({surface:'page' as const,entry:{id,route:routes[id as keyof typeof routes],featureId:'generated.catalog-shell',render:()=>null}})),
-    {surface:'collection',entry:{id:'work-activity',featureId:'generated.catalog-shell',label:'Generated work',order:1,requires:[activityId],render:()=>null}},
+
   ]);
   disposals.push(()=>shell.dispose());
   if(options.coding){
@@ -65,7 +65,7 @@ async function fixture(t:import('node:test').TestContext,options:{capabilities:F
     currentInventory=inventory(capabilities);
     await act(async()=>resources(api).invalidate(key=>key==='/api/features'));
   };
-  const workAvailable=()=>assert.equal(resolveDiscoveryTarget({pageId:'archive',collectionId:'work-activity',href:'#/library?view=work-activity'},{pages:webFeatures.pages(),collections:webFeatures.collections(),inventory:currentInventory}).state,'available');
+  const workAvailable=()=>assert.equal(resolveDiscoveryTarget({pageId:'activity',href:'#/activity',requires:[activityId]},{pages:webFeatures.pages(),collections:webFeatures.collections(),inventory:currentInventory}).state,'available');
   const refreshSources=async()=>{await act(async()=>resources(api).invalidate(key=>key==='/api/sources'||key==='/api/connectors/status'));};
   return {d:dom.window.document,reads,pageCalls,render,updateInventory,workAvailable,refreshSources,setLocale:(value:'zh-CN'|'en')=>{locale=value;}};
 }
@@ -141,7 +141,7 @@ test('a custom status key that differs from recordingManifest identity is not tr
  assert.equal(f.d.querySelector('a[href*="provider="]'),null);
 });
 
-for(const scenario of ['local Coding missing','remote Coding missing','remote Coding inactive','remote Coding version mismatch'] as const)test('the Coding source card stays disabled when '+scenario+' while work-activity stays available',async t=>{
+for(const scenario of ['local Coding missing','remote Coding missing','remote Coding inactive','remote Coding version mismatch'] as const)test('the Coding source card stays disabled when '+scenario+' while unrelated Activity stays available',async t=>{
   const endpoint=scenario==='remote Coding missing'?[]:[capability(codingId,scenario==='remote Coding version mismatch'?'2':'1',scenario==='remote Coding inactive'?'unavailable':'active')];
   const f=await fixture(t,{capabilities:[capability(activityId),...endpoint],coding:scenario!=='local Coding missing'});
   await f.render();
@@ -150,11 +150,11 @@ for(const scenario of ['local Coding missing','remote Coding missing','remote Co
   f.workAvailable();
 });
 
-test('compatible Coding discovery opens work-activity and every internal link names a registered destination',async t=>{
+test('compatible Coding discovery opens Coding sync status and every internal link names a registered destination',async t=>{
   const f=await fixture(t,{capabilities:[capability(activityId),capability(codingId),capability(providerDetailId)],coding:true});
   await f.render();
   const coding=card(f.d,'Coding Agent 会话') as HTMLAnchorElement;
-  assert.equal(coding.getAttribute('href'),'#/library?view=work-activity');
+  assert.equal(coding.getAttribute('href'),'#/library?view=coding-status');
   for(const link of f.d.querySelectorAll<HTMLAnchorElement>('a[href]')){
     const href=link.getAttribute('href')!;
     assert.match(href,/^#\//);
@@ -163,7 +163,7 @@ test('compatible Coding discovery opens work-activity and every internal link na
     assert.notEqual(href,'#/today');
   }
   await act(async()=>coding.click());
-  assert.equal(location.hash,'#/library?view=work-activity');
+  assert.equal(location.hash,'#/library?view=coding-status');
   assert.deepEqual(f.pageCalls,[]);
 });
 

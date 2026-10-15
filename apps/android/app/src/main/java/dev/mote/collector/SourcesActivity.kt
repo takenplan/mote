@@ -30,7 +30,7 @@ class SourcesActivity : MoteActivity() {
         super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         restoringDraft = lastNonConfigurationInstance as? Draft
         val content = moteDetailPage(title = MoteI18n.text("来源管理"))
-        content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted) })
+        content.addView(TextView(this).apply { text = MoteI18n.text("查看自动同步的范围，逐个暂停或修复来源。"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED) })
         fun action(label: String, primary: Boolean = false, callback: () -> Unit) { content.addView(MoteUi.button(Button(this).apply { text = label; setOnClickListener { callback() } }, primary)) }
         operationStatus = TextView(this); content.addView(operationStatus)
         action(MoteI18n.text("连接本机日历")) {
@@ -93,10 +93,10 @@ class SourcesActivity : MoteActivity() {
                 else {
                     if (rows.getOrThrow().isEmpty()) list.addView(TextView(this).apply { text = MoteI18n.text("尚未连接来源。权限只在点击连接时申请。") })
                     for ((source, summary) in rows.getOrThrow()) {
-                        val group = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@SourcesActivity); setPadding(moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline)) }
-                        list.addView(group, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(DesignTokens.spaceItem) })
-                        group.addView(TextView(this).apply { text = source.name; MoteUi.type(this, DesignTokens.fontSection, medium = true); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)) })
-                        group.addView(TextView(this).apply { text = summary.removePrefix("\n${source.name}\n"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted); setPadding(0, 0, 0, moteDp(DesignTokens.spaceInline)) })
+                        val group = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; background = MoteUi.shape(this@SourcesActivity); setPadding(moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline)) }
+                        list.addView(group, LinearLayout.LayoutParams(-1, -2).apply { topMargin = moteDp(MoteTheme.spaceItem) })
+                        group.addView(TextView(this).apply { text = source.name; MoteUi.type(this, NativeFontRole.SECTION, medium = true); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceInline)) })
+                        group.addView(TextView(this).apply { text = summary.removePrefix("\n${source.name}\n"); MoteUi.type(this, NativeFontRole.SUPPORT); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, 0, 0, moteDp(MoteTheme.spaceInline)) })
                         group.addView(MoteUi.button(Button(this).apply { text = MoteI18n.text(if (source.enabled) "暂停这个来源" else "恢复这个来源"); setOnClickListener {
                             work(MoteI18n.text("正在保存来源设置…")) { localSources().save(source.copy(enabled = !source.enabled)); SourceWork.schedule(applicationContext, true) }
                         } }, primary = !source.enabled))
@@ -150,9 +150,9 @@ class SourcesActivity : MoteActivity() {
             return EditText(this).apply { setText(value); if (numeric) inputType = InputType.TYPE_CLASS_NUMBER; form.addView(this); draftControls[label] = this }
         }
         val name = field(MoteI18n.text("来源名称"), source.name)
-        form.addView(TextView(this).apply { text = MoteI18n.text("读取范围：{0}", source.uri ?: source.name); MoteUi.type(this, DesignTokens.fontSupport) })
+        form.addView(TextView(this).apply { text = MoteI18n.text("读取范围：{0}", source.uri ?: source.name); MoteUi.type(this, NativeFontRole.SUPPORT) })
         val destination = Settings(this).read().server
-        form.addView(TextView(this).apply { text = if (destination.isBlank()) MoteI18n.text("未连接中央：先保存本机任务，连接时确认发送范围。") else MoteI18n.text("完整文件的发送目的地：{0}", destination); MoteUi.type(this, DesignTokens.fontSupport) })
+        form.addView(TextView(this).apply { text = if (destination.isBlank()) MoteI18n.text("未连接中央：先保存本机任务，连接时确认发送范围。") else MoteI18n.text("完整文件的发送目的地：{0}", destination); MoteUi.type(this, NativeFontRole.SUPPORT) })
         val continuous = CheckBox(this).apply { text = MoteI18n.text("以后修改，也自动同步"); isChecked = source.syncContinuously }
         draftControls["continuous"] = continuous
         if (source.kind == "local-files" && !source.tree) form.addView(continuous)

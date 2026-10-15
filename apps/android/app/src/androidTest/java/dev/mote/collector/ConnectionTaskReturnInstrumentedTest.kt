@@ -40,6 +40,7 @@ class ConnectionTaskReturnInstrumentedTest {
         .single { it.tag == MoteI18n.text("设备名称") }
 
     private fun click(activity: Activity, label: String) {
+        if (label == "首页") { activity.openGeneratedHome(); return }
         assertTrue(visible(activity).filterIsInstance<TextView>()
             .single { it.isClickable && it.text.toString() == MoteI18n.text(label) }.performClick())
     }
@@ -225,7 +226,7 @@ class ConnectionTaskReturnInstrumentedTest {
             await(scenario, "Settings system Back must not reuse the old Ask origin", ::settingsShown)
             scenario.onActivity {
                 assertEquals(saved, Settings(it).read())
-                assertTrue(visible(it).single { view -> view.tag == "primary:TODAY" }.isSelected)
+                assertTrue(visible(it).single { view -> view.tag == "primary:LIBRARY" }.isSelected)
                 clickSettingsConnection(it)
             }
             await(scenario, "Settings can reopen connection again", ::connectionShown)

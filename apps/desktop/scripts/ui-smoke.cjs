@@ -106,7 +106,9 @@ app.on('browser-window-created', (_event, window) => {
       ipcMain.removeHandler('mote:start');
       ipcMain.handle('mote:start', () => { startRequested = true; return status; });
       assert.equal(status.sync.state, 'unconfigured');
-      assert.deepEqual(await js(`Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(b => b.textContent.trim())`), ['首页','内容','问一问']);
+      assert.deepEqual(await js(`Array.from(document.querySelectorAll('.main-nav [data-nav]')).map(b => b.textContent.trim())`), ['内容','问一问','来源','活动']);
+      assert(await js(`!document.querySelector('[data-page=records]').hidden`),'A new profile opens Content');
+      await navigate('overview');
       assert.equal(await js(`document.querySelectorAll('.home-add-grid [data-add-choice]').length`), 4, 'All four local actions are equal home entries');
       assert(await js(`(() => {
         const luminance = color => color.match(/\\d+(?:\\.\\d+)?/g).slice(0,3).map(Number).map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((sum,v,index)=>sum+v*[.2126,.7152,.0722][index],0);
@@ -164,9 +166,8 @@ app.on('browser-window-created', (_event, window) => {
       await js(`document.querySelector('#workspace-back').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(await js(`!document.querySelector('[data-page="screen"]').hidden && !document.querySelector('#collection-workbench').hidden`), 'Scope setup returns to screen controls without requiring a node');
       await navigate('sources');
-      assert(await js(`document.querySelector('aside [data-nav="overview"]').getAttribute('aria-current') === 'page'`));
-      await js(`document.querySelector('#workspace-back').click(); new Promise(resolve => setTimeout(resolve, 100))`);
-      assert(await js(`!document.querySelector('[data-page="overview"]').hidden`), 'Contextual source controls return to collection');
+      assert(await js(`document.querySelector('aside [data-nav="sources"]').getAttribute('aria-current') === 'page' && document.querySelector('#workspace-back').hidden`),'Sources is a primary destination');
+      await navigate('overview');
       await navigate('screen');
       await js(`document.querySelector('#start').click(); document.querySelector('#capture-confirm-start').click(); new Promise(resolve => setTimeout(resolve, 100))`);
       assert(startRequested, 'No node URL or token needed to request local capture (IPC stub, no screen read)');
@@ -468,7 +469,7 @@ app.on('browser-window-created', (_event, window) => {
           await new Promise(resolve=>setTimeout(resolve,25));
         }
         assert.equal(await js('document.documentElement.lang'),preference);
-        // Locale reload restores the existing overview entry; its content loads normally.
+        // Locale reload restores the default Content entry; its content loads normally.
         await new Promise(resolve=>setTimeout(resolve,100));
       };
       await changeFixtureLanguage('en');

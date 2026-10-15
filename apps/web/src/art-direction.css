@@ -1,15 +1,15 @@
-/* Shared visual roles. Platform navigation and product state keep their own behavior. */
+/* Linear component roles. Navigation, data and lifecycle belong to their hosts. */
 :root { font-family:var(--mote-font); font-size:var(--mote-font-body); color:var(--mote-ink); background:var(--mote-background); }
 body,button,input,select,textarea { font-family:var(--mote-font); }
-.page-heading h1,.greeting h1,.library-home .greeting h1,.home-archive-intro .greeting h1,.simple-welcome h1 { font:650 var(--mote-font-title)/1.35 var(--mote-font); letter-spacing:0; }
+.page-heading h1,.greeting h1,.library-home .greeting h1,.home-archive-intro .greeting h1,.simple-welcome h1 { font:var(--mote-weight-title) var(--mote-font-title)/1.35 var(--mote-font-heading); letter-spacing:var(--mote-letter-title); }
 h2,.section-heading h2,.discovery-intake-heading h2,.settings-destinations h2,.library-list-heading h2 { font-size:var(--mote-font-section); font-weight:600; letter-spacing:0; }
 h3,.library-record-copy strong,.discovery-intake-card strong,.settings-link-grid strong,.preference-menu-row strong { font-size:var(--mote-font-row); font-weight:600; }
 .page-heading p,.greeting p,.home-archive-intro .greeting p,.discovery-intake-heading p,.discovery-settings-boundary p,.field-note,.fine-print,.muted-copy { font-size:var(--mote-font-support); line-height:1.6; color:var(--mote-muted); }
 .eyebrow,.badge,.capture-bottom,.capture-caption time,.library-record-copy small,.library-list-status,.note-storage-hint,.note-card footer,.workspace-label { font-size:var(--mote-font-meta); letter-spacing:0; }
-.content { padding:var(--mote-space-group); }
+.content { padding:var(--mote-space-page); }
 .page-heading,.library-heading { margin-bottom:var(--mote-space-group); }
 .section-heading { margin-bottom:var(--mote-space-item); }
-.panel,.home-archive-intro,.home-record-list,.library-browser,.library-record-list,.settings-menu,.preference-menu,.discovery-model-start,.conversation-layout,.modal { border:var(--mote-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); background:var(--mote-surface); box-shadow:none; }
+.panel,.home-archive-intro,.home-record-list,.library-browser,.library-record-list,.settings-menu,.preference-menu,.discovery-model-start,.conversation-layout,.modal { border:var(--mote-panel-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); background:var(--mote-panel-background); box-shadow:var(--mote-shadow); }
 .home-archive-intro,.note-composer,.note-pending,.settings-surface .panel,.discovery-settings-boundary,.discovery-model-start { padding:var(--mote-space-panel); }
 .home-archive-intro { gap:var(--mote-space-group); }
 .home-retrieval { padding-left:var(--mote-space-group); }
@@ -23,13 +23,13 @@ h3,.library-record-copy strong,.discovery-intake-card strong,.settings-link-grid
 .evidence-text,.material-detail { padding:var(--mote-space-panel); }
 .evidence-text dl,.evidence-text h4,.library-provenance,.library-record-preview { font-size:var(--mote-font-support); }
 .button,.text-button,.icon-button,.section-tabs button,.segmented-nav button { font-size:var(--mote-font-action); min-height:var(--mote-control-height); border-radius:var(--mote-radius-control); gap:var(--mote-space-inline); }
-.button { color:var(--mote-accent); background:var(--mote-surface); border:var(--mote-border-width) solid var(--mote-control-border); padding:var(--mote-space-inline) var(--mote-space-panel); box-shadow:none; }
-.button.primary { color:var(--mote-surface); background:var(--mote-accent); border-color:var(--mote-accent); }
-.button.primary:hover:not(:disabled) { background:var(--mote-accent-hover); border-color:var(--mote-accent-hover); }
+.button { color:var(--mote-accent); background:var(--mote-surface); border:var(--mote-border-width) solid var(--mote-control-border); padding:4px 12px; box-shadow:var(--mote-shadow-control); }
+.button.primary { color:var(--mote-primary-ink); background:var(--mote-primary-background); border-color:var(--mote-primary-background); }
+.button.primary:hover:not(:disabled) { background:var(--mote-primary-hover); border-color:var(--mote-primary-hover); }
 .button.subtle,.button.secondary { background:var(--mote-surface); color:var(--mote-accent); border-color:var(--mote-control-border); }
 .button:hover:not(:disabled),.text-button:hover:not(:disabled) { color:var(--mote-accent-hover); background:var(--mote-tint); }
-.button.primary:hover:not(:disabled) { color:var(--mote-surface); background:var(--mote-accent-hover); }
-.button.danger { background:var(--mote-danger); border-color:var(--mote-danger); color:var(--mote-surface); }
+.button.primary:hover:not(:disabled) { color:var(--mote-primary-ink); background:var(--mote-primary-hover); }
+.button.danger { background:var(--mote-danger); border-color:var(--mote-danger); color:var(--mote-primary-ink); }
 .text-button { color:var(--mote-accent); padding:var(--mote-space-inline); }
 input,select,textarea,.workspace-tool-select select { border:var(--mote-border-width) solid var(--mote-control-border); border-radius:var(--mote-radius-control); background:var(--mote-surface); color:var(--mote-ink); font-size:var(--mote-font-body); }
 .sidebar nav button,.settings-nav { font-size:var(--mote-font-action); border-radius:var(--mote-radius-control); }
@@ -51,7 +51,7 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
 .ask-form { border-radius:var(--mote-radius-control); border-color:var(--mote-border); background:var(--mote-surface); }
 .ask-form textarea,.note-composer textarea { font-size:var(--mote-font-body); line-height:1.7; }
 .model-selector-selection { display:none; }
-/* R2: objects and fields lead; complete setup help remains one disclosure away. */
+/* Forms and disclosure spacing. */
 .page-heading,.settings-surface .page-heading,.library-heading { margin-bottom:var(--mote-space-panel); }
 .workspace-back { margin-bottom:var(--mote-space-item); }
 .settings-destinations { margin-block:var(--mote-space-panel); }
@@ -101,7 +101,7 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
 .conversation-content .asked-question { background:var(--mote-tint); color:var(--mote-ink); border-color:var(--mote-border); border-radius:var(--mote-radius-container); }
 .chat-image-button,.chat-attachment button { color:var(--mote-accent); }
 .import-detail progress::-webkit-progress-value,.import-upload-progress progress::-webkit-progress-value { background:var(--mote-accent); }
-/* R3: control edges differ from quiet group frames and internal dividers. */
+/* Interactive controls retain visible boundaries. */
 .settings-surface input:not([type=checkbox]):not([type=radio]):not([type=range]),.settings-surface select,.settings-surface textarea,.library-catalog-filters input,.library-catalog-filters select { border-color:var(--mote-control-border); }
 .note-composer textarea { border:var(--mote-border-width) solid var(--mote-control-border); border-radius:var(--mote-radius-control); padding:var(--mote-space-item); margin-block:var(--mote-space-inline); }
 .conversation-content .ask-form { border-color:var(--mote-control-border); }
@@ -125,7 +125,7 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
 .setup-steps>div+div,.guide-section-nav>button,.guide-model-terms { border-color:var(--mote-divider); }
 .setup-steps>div>span { font:600 var(--mote-font-meta)/1.5 var(--mote-font); color:var(--mote-muted); }
 .setup-steps .text-button { font-size:var(--mote-font-action); border:var(--mote-border-width) solid var(--mote-control-border); background:var(--mote-surface); }
-/* R4: source text leads; auxiliary chrome does not compete with the primary action. */
+/* Evidence and conversation reading. */
 .breadcrumb>span,.breadcrumb strong,.private-label,.answer-label>span:last-child,.conversation-content .answer-label>span:last-child,.conversation-content .model-used,.suggestions>span { color:var(--mote-muted); }
 .avatar { background:var(--mote-background); color:var(--mote-muted); font-size:var(--mote-font-meta); }
 .modal-backdrop { background:color-mix(in srgb,var(--mote-ink) 35%,transparent); }
@@ -166,7 +166,7 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
 .report-evidence { background:var(--mote-surface); border-color:var(--mote-divider); }
 .evidence-card:hover { background:var(--mote-tint); border-color:var(--mote-accent); }
 .evidence-number,.citation-number { background:var(--mote-tint); color:var(--mote-accent); border-radius:var(--mote-radius-indicator); font-size:var(--mote-font-meta); }
-/* R5: quiet labels share the same roles; long facts wrap without losing text. */
+/* Status, empty states and long values. */
 .badge.muted,.badge.neutral { background:var(--mote-background); color:var(--mote-muted); border-color:var(--mote-border); border-radius:var(--mote-radius-indicator); }
 .language-selector { color:var(--mote-muted); }
 .language-selector select { color:var(--mote-ink); background:var(--mote-surface); border-color:var(--mote-control-border); }
@@ -178,7 +178,7 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
 .empty-icon { background:var(--mote-background); border-radius:var(--mote-radius-control); }
 .button { text-decoration:none; white-space:normal; overflow-wrap:anywhere; }
 .button.subtle,.button.secondary { color:var(--mote-ink); }
-.evidence-text pre { max-inline-size:68ch; overflow-wrap:anywhere; }
+.evidence-text pre { max-inline-size:var(--mote-reading-width); overflow-wrap:anywhere; }
 .evidence-text dl>div { gap:var(--mote-space-item); align-items:start; }
 .evidence-text dt { color:var(--mote-muted); }
 .evidence-text dd { color:var(--mote-ink); min-width:0; overflow-wrap:anywhere; }
@@ -220,7 +220,7 @@ input,select,textarea,.workspace-tool-select select { border:var(--mote-border-w
  .evidence-text dl>div { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr); }
  .evidence-text dd { text-align:right; }
 }
-/* Selected R5 rollout: every feature consumes the same semantic surface roles. */
+/* Compatibility aliases for existing feature consumers. */
 :root {
  --border:var(--mote-border); --surface:var(--mote-surface); --surface-soft:var(--mote-background);
  --surface-muted:var(--mote-background); --surface-alt:var(--mote-background); --bg:var(--mote-background);

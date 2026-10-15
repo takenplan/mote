@@ -34,6 +34,8 @@ test('source management saves optional exact prose independently, keeps it acros
   throw Error('Unexpected generated request: '+path);
  }} as unknown as Api;
  await act(async()=>root.render(React.createElement(Sources,{api,onOpen:()=>{},onImport:()=>{}})));
+ assert.equal(d.querySelector('textarea'),null,'management opens an exact selected source before editing its context');
+ await act(async()=>d.querySelector<HTMLButtonElement>('.source-select')!.click());
  assert.equal(d.querySelector('textarea')?.maxLength,12000);assert.ok(button(d,'保存说明').classList.contains('primary'));assert.equal(button(d,'保存说明').disabled,true);
  const description='  Generated diary\n作者：Generated owner；引用和导航不属于我。\n  ';
  await edit(d,w,description);assert.equal(button(d,'保存说明').disabled,false);
@@ -43,6 +45,15 @@ test('source management saves optional exact prose independently, keeps it acros
  assert.deepEqual(calls.filter(call=>call.init?.method).map(call=>({path:call.path,body:JSON.parse(String(call.init!.body))})),[{path:'/api/sources/generated-source/context',body:{expectedVersion:0,description}}]);
  await edit(d,w,'');await act(async()=>button(d,'保存说明').click());
  assert.equal(value.description,'');assert.equal(value.version,2);assert.match(d.body.textContent!,/资料说明已获中央确认，版本 2/);assert.equal(button(d,'保存说明').disabled,true);
+});
+
+test('source reading has no source-wide configuration editor and retains an exact management destination',async t=>{
+ const {root,d}=await fixture(t),reads:string[]=[];
+ const api={request:async(path:string)=>{reads.push(path);if(path==='/api/sources')return {items:[{id:'generated-read',name:'Generated read source',kind:'custom',enabled:true}]};if(path.startsWith('/api/source-items?'))return {items:[],nextCursor:null};if(path==='/api/connectors/status')return {};throw Error('Unexpected reader request: '+path);}} as unknown as Api;
+ await act(async()=>root.render(React.createElement(Sources,{api,onOpen:()=>{},onImport:()=>{},mode:'library'})));
+ await act(async()=>d.querySelector<HTMLButtonElement>('.source-select')!.click());
+ assert.equal(d.querySelector('textarea'),null);assert.ok(!Array.from(d.querySelectorAll('button')).some(item=>item.textContent==='保存说明'));assert.equal(d.querySelector<HTMLAnchorElement>('.source-grid aside a')?.getAttribute('href'),'#/connections?sourceId=generated-read');
+ assert.ok(!reads.some(path=>path.endsWith('/context')),'reading does not fetch source configuration');
 });
 
 test('refresh preserves edited prose and CAS version; conflicts retain the draft until explicit reload',async t=>{

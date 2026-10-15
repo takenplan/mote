@@ -10,6 +10,7 @@ import { WorkProgress, WorkStateBadge } from './WorkProgress';
 import type { Page } from './navigation';
 import { FeaturePanels } from './features/runtime';
 import { WorkIssueNotice } from './WorkIssueNotice';
+import { CodingReceiptPanel } from './CodingReceiptPanel';
 const tabs = [['overview', "概览"], ['work', "工作分支"], ['results', "成果"], ['evidence', "证据"], ['technical', "技术详情"]] as const;
 function WorkDetail({ api, id, onBack, onNavigate, onOpen }: {
     api: Api;
@@ -45,18 +46,26 @@ export function Activity({ api, onNavigate, onOpen }: {
     onNavigate: (page: Page) => void;
     onOpen: (ref: string) => void;
 }) {
-    const [state, setState] = useState<'active' | 'attention' | 'completed'>('active'), [selected, setSelected] = useState(() => new URLSearchParams(window.location.hash.split('?')[1]).get('work') ?? ''), [advanced, setAdvanced] = useState(false), paging = useCursorPages();
+    const [state, setState] = useState<'active' | 'attention' | 'completed'>('active'), [selected, setSelected] = useState(() => new URLSearchParams(window.location.hash.split('?')[1]).get('work') ?? ''), [advanced, setAdvanced] = useState(()=>new URLSearchParams(window.location.hash.split('?')[1]).get('coding')==='receipts'), paging = useCursorPages();
     const feed = useMemo(() => operationFeed(api), [api]), feedError = useSyncExternalStore(feed.subscribe, feed.getSnapshot, feed.getSnapshot);
-    const query = new URLSearchParams({ state, limit: '10', ...paging.cursor ? { cursor: String(paging.cursor) } : {} }), { data, error, loading, refresh } = useResource<WorkActivityPage>(api, selected ? null : '/api/work-activity?' + query, 3000);
-    useEffect(() => { const changed = () => setSelected(new URLSearchParams(window.location.hash.split('?')[1]).get('work') ?? ''); window.addEventListener('hashchange', changed); return () => window.removeEventListener('hashchange', changed); }, []);
+    const [related,setRelated] = useState(()=>new URLSearchParams(window.location.hash.split('?')[1] ?? ''));
+    const materialId=related.get('materialId'),sourceId=related.get('sourceId');
+    const identity=JSON.stringify([materialId,materialId?null:sourceId]);
+    const [pagingIdentity,setPagingIdentity]=useState(identity);
+    useEffect(()=>{if(pagingIdentity!==identity){paging.reset();setPagingIdentity(identity);}},[identity,pagingIdentity]);
+    const query = new URLSearchParams({ state, limit: '10', ...pagingIdentity===identity&&paging.cursor ? { cursor: String(paging.cursor) } : {} });
+    if(materialId)query.set('materialId',materialId);else if(sourceId)query.set('sourceId',sourceId);
+    const { data, error, loading, refresh } = useResource<WorkActivityPage>(api, selected ? null : '/api/work-activity?' + query, 3000);
+    useEffect(() => { const changed = () => {const query=new URLSearchParams(window.location.hash.split('?')[1]);setSelected(query.get('work')??'');setRelated(query);if(query.get('coding')==='receipts')setAdvanced(true);}; window.addEventListener('hashchange', changed); return () => window.removeEventListener('hashchange', changed); }, []);
     if (selected)
-        return <WorkDetail key={selected} api={api} id={selected} onBack={() => { setSelected(''); window.location.hash = '#/activity'; }} onNavigate={onNavigate} onOpen={onOpen}/>;
+        return <WorkDetail key={selected} api={api} id={selected} onBack={() => { setSelected(''); const query=new URLSearchParams(window.location.hash.split('?')[1]??''); query.delete('work'); window.location.hash = '#/activity'+(query.size?'?'+query:''); }} onNavigate={onNavigate} onOpen={onOpen}/>;
     return <div className="activity-centre"><div className="page-heading settings-heading"><div><div className="eyebrow">MOTE / <ActivityIcon size={15}/></div><h1>{moteText('活动')}</h1><p>{moteText("这里是 Mote 的后台工作：理解资料、导入、整理记忆与生成洞察。手机和电脑的应用使用情况在「资料库 → 应用活动」。")}</p></div><button className="button subtle" disabled={loading} onClick={refresh}>{moteText('刷新')}</button></div>
+  {(related.has('sourceId')||related.has('materialId'))&&<div className="related-activity-context"><span>{moteText('相关活动')}</span><p>{moteText('这里只列出已有稳定回执关联的活动，历史关联可能不完整。')}</p><a className="text-button" href="#/activity">{moteText('全部活动')}</a></div>}
   <nav className="section-tabs" aria-label={moteText('活动状态')}>{([['active', moteText("进行中")], ['attention', moteText("需要处理")], ['completed', moteText("最近完成")]] as const).map(([key, label]) => <button key={key} aria-current={state === key ? 'page' : undefined} onClick={() => { setState(key); paging.reset(); }}>{moteText(label)}</button>)}</nav>
   {feedError !== undefined && <p role="status">{moteText('进度连接暂时中断，正在自动重连。')}</p>}{error !== undefined && <p className="notice error" role="alert">{errorMessage(error)} <button className="text-button" onClick={refresh}>{moteText('重试')}</button></p>}{loading && !data && <p role="status">{moteText('正在读取…')}</p>}
-  <section className="activity-list" aria-label={moteText('工作列表')} aria-busy={loading}>{data?.items.map(work => <button className="panel activity-card" key={work.id} onClick={() => { setSelected(work.id); window.location.hash = '#/activity?work=' + encodeURIComponent(work.id); }}><span className="activity-card-content"><span className="activity-card-heading"><strong>{work.goal}</strong><WorkStateBadge state={work.state}/></span><WorkProgress progress={work.progress} compact/>{(work.branchCounts?.running ?? 0) > 0 && <small>{moteText('{0} 个工作分支正在进行', work.branchCounts!.running)}</small>}{work.artifacts.length > 0 && <small>{work.artifacts.map(artifact => artifact.title).join(' · ')}</small>}<time dateTime={work.updatedAt}>{new Date(work.updatedAt).toLocaleString()}</time></span><ArrowRight size={19}/></button>)}</section>
-  {data && !data.items.length && <section className="panel empty"><h2>{moteText(state === 'active' ? '目前没有正在进行的工作' : state === 'attention' ? '目前没有需要处理的工作' : '这里会显示已完成的工作')}</h2></section>}
+  <section className="activity-list" aria-label={moteText('工作列表')} aria-busy={loading}>{data?.items.map(work => <button className="panel activity-card" key={work.id} onClick={() => { setSelected(work.id); window.location.hash = '#/activity?' + new URLSearchParams({ ...Object.fromEntries(related), work:work.id }); }}><span className="activity-card-content"><span className="activity-card-heading"><strong>{work.goal}</strong><WorkStateBadge state={work.state}/></span><WorkProgress progress={work.progress} compact/>{(work.branchCounts?.running ?? 0) > 0 && <small>{moteText('{0} 个工作分支正在进行', work.branchCounts!.running)}</small>}{work.artifacts.length > 0 && <small>{work.artifacts.map(artifact => artifact.title).join(' · ')}</small>}<time dateTime={work.updatedAt}>{new Date(work.updatedAt).toLocaleString()}</time></span><ArrowRight size={19}/></button>)}</section>
+  {data && !data.items.length && <section className="panel empty"><h2>{moteText(materialId||sourceId?'未找到已关联活动':state === 'active' ? '目前没有正在进行的工作' : state === 'attention' ? '目前没有需要处理的工作' : '这里会显示已完成的工作')}</h2></section>}
   <ListPagination label={moteText('活动分页')} paging={paging} nextCursor={data?.nextCursor} count={data?.items.length ?? 0} loading={loading}/>
-  <details className="panel activity-advanced" onToggle={event => setAdvanced(event.currentTarget.open)}><summary>{moteText('高级')}</summary>{advanced && <><p>{moteText('查看底层执行记录，排查依赖与失败原因。')}</p><button className="button subtle" onClick={() => onNavigate('processing')}>{moteText('技术执行记录')}</button></>}</details>
+  <details className="panel activity-advanced" open={advanced} onToggle={event => setAdvanced(event.currentTarget.open)}><summary>{moteText('高级')}</summary>{advanced && <><p>{moteText('查看底层执行记录，排查依赖与失败原因。')}</p><button className="button subtle" onClick={() => onNavigate('processing')}>{moteText('技术执行记录')}</button><CodingReceiptPanel api={api}/></>}</details>
  </div>;
 }
