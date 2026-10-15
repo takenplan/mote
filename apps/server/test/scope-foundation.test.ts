@@ -66,7 +66,7 @@ test('production builder defaults closed; old tokens and identity selectors cann
   for(const path of ['/api/login/exchange','/api/file-sync/batches','/api/plugins','/mcp'])assert.notEqual((await node.app.inject({method:'POST',url:path,payload:{}})).statusCode,200);
   assert.equal(readdirSync(directory).includes('access-token'),false);
   const db=new DatabaseSync(join(directory,'mote.sqlite'),{readOnly:true});t.after(()=>db.close());
-  assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r=>r.name),['scope_meta']);
+  assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r=>r.name),['scope_meta','auth_accounts','auth_credentials','auth_attempts']);
 });
 
 test('real scoped HTTP registration binds identities, rejects spoofing and fences a late revoked response',async t=>{
@@ -127,8 +127,8 @@ test('actual production process serves health and rejects private requests witho
     child.once('exit',code=>{clearTimeout(timer);reject(Error('Generated production startup exited '+code));});
     child.stdout.on('data',chunk=>{if(chunk.toString().includes('server.listening')){clearTimeout(timer);resolve();}});
   });
-  const health=await fetch(`http://127.0.0.1:${port}/api/health`);assert.equal(health.status,200);assert.equal((await health.json() as any).mode,'multiuser-foundation');
+  const health=await fetch(`http://127.0.0.1:${port}/api/health`);assert.equal(health.status,200);assert.equal((await health.json() as any).mode,'multiuser-auth');
   const privateResponse=await fetch(`http://127.0.0.1:${port}/api/captures`,{headers:{authorization:'Bearer old-owner-token'}});assert.equal(privateResponse.status,401);
   assert.equal(readdirSync(directory).includes('access-token'),false);
-  const db=new DatabaseSync(join(directory,'mote.sqlite'),{readOnly:true});try{assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row=>row.name),['scope_meta']);}finally{db.close();}
+  const db=new DatabaseSync(join(directory,'mote.sqlite'),{readOnly:true});try{assert.deepEqual(db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(row=>row.name),['scope_meta','auth_accounts','auth_credentials','auth_attempts']);}finally{db.close();}
 });

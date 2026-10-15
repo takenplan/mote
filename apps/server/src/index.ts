@@ -32,7 +32,7 @@ try{
   const address=app.server.address();
   if(!address||typeof address==='string')throw Error('Invalid server listener');
   await writeRuntimeListener(configFile,{version:1,pid:process.pid,port:address.port,address:address.address,instanceId});
-  console.info(JSON.stringify({event:'server.listening',port:address.port,mode:'multiuser-foundation'}));
+  console.info(JSON.stringify({event:'server.listening',port:address.port,mode:'multiuser-auth'}));
 }catch(error){await app.close();throw error;}
 let closing=false;
 for(const signal of ['SIGTERM','SIGINT'] as const)process.on(signal,async()=>{if(closing)return;closing=true;try{await app.close();console.info(JSON.stringify({event:'server.stopped'}));process.exit(0);}catch{console.error(JSON.stringify({event:'server.stop_failed',category:'shutdown'}));process.exit(1);}});

@@ -1475,5 +1475,50 @@
       "extension:registerMemoryExtensions:{integrationSettings:memoryIntegrationSettings,semanticArtifacts,providerCooldownCheck:()=>providerAdmission.check(modelSettings.select('memory').settings),insights:insightRuns,insightTimeout:()=>modelSettings.select('insight').settings.agentTimeoutMs,lifecycle,store,files,memories,pipeline:memoryPipeline,working,query:(input,module)=>queryAgent(input,input.skill==='personal-insight'?'insight':'query',module),model:()=>modelSettings.select('memory').settings.model}",
       "extension:registerPluginRoutes:app"
     ]
+  },
+  "apps/server/src/scope/accounts.ts": {
+    "scope": "mixed",
+    "module": "M01",
+    "status": "implemented",
+    "surfaces": [
+      "table:auth_accounts",
+      "table:auth_attempts",
+      "table:auth_credentials"
+    ]
+  },
+  "apps/server/src/scope/auth-routes.ts": {
+    "scope": "mixed",
+    "module": "M01",
+    "status": "implemented",
+    "surfaces": [
+      "api:post:'/api/auth/login'",
+      "api:post:'/api/login/ack'",
+      "api:post:'/api/login/exchange'",
+      "api:post:'/api/login/poll'",
+      "api:post:'/api/login/requests'",
+      "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/connections/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/accounts'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/auth/self'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/connections'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/connections/self'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/login/requests/:id'",
+      "api:registerAuthenticatedRoute:method:'PATCH',url:'/api/admin/accounts/:id'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/accounts'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/accounts/:id/password'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/auth/logout'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/auth/password'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/connections/mcp'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/requests/:id/approve'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/session'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/ticket'"
+    ]
+  },
+  "apps/server/src/scope/http.ts": {
+    "scope": "mixed",
+    "module": "M01",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:{...route,handle:async(context,request)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request});}}"
+    ]
   }
 }
