@@ -10,6 +10,7 @@ import {fileURLToPath} from 'node:url';
 import {serializeConfigDocument} from '@mote/shared/config-file';
 import {buildApp,registerUserRoute} from '../src/app.js';
 import {SESSION_COOKIE} from '../src/scope/http.js';
+import {Accounts} from '../src/scope/accounts.js';
 
 const password='Synthetic-account-password-01';
 const replacement='Synthetic-replacement-password-02';
@@ -135,7 +136,7 @@ test('password-attempt protection persists and limits authentication without app
  for(let i=0;i<5;i++)assert.equal((await f.request('POST','/api/auth/login',{username:'unknown-fixture',password:'wrong-password',mode:'client'})).statusCode,401);
  assert.equal((await f.request('POST','/api/auth/login',{username:'unknown-fixture',password:'wrong-password',mode:'client'})).statusCode,429);
  for(let i=0;i<30;i++)assert.equal((await f.request('GET','/api/auth/self',undefined,headers(f.bob.token))).statusCode,200);
- const db=new DatabaseSync(join(f.root,'mote.sqlite'));try{assert.ok(Number(db.prepare('SELECT count(*) n FROM auth_attempts').get()!.n)>0);db.exec('UPDATE auth_attempts SET started_at=0');}finally{db.close();}
+ const db=new DatabaseSync(join(f.root,'mote.sqlite'));try{assert.ok(Number(db.prepare('SELECT count(*) n FROM auth_attempts').get()!.n)>0);const restarted=new Accounts(db,f.node.deploymentId);await assert.rejects(restarted.login('unknown-fixture','wrong-password','127.0.0.1','client',0),{code:'login_throttled'});restarted.close();db.exec('UPDATE auth_attempts SET started_at=0');}finally{db.close();}
  assert.equal((await f.request('POST','/api/auth/login',{username:'unknown-fixture',password:'wrong-password',mode:'client'})).statusCode,401);
 });
 
@@ -159,4 +160,19 @@ test('authentication composes with a binary private route while Cookie mutations
  const binary=(extra:any)=>f.node.app.inject({method:'POST',url:'/api/binary-test',headers:{...protocol,...extra,'content-type':'application/octet-stream'},payload:Buffer.from('generated-binary')});
  const native=await binary(headers(f.alice.token));assert.equal(native.statusCode,200);assert.equal(native.json().bytes,16);assert.equal(native.json().userId,f.a.userId);
  const web=await f.login('fixture-b','web'),cookie=f.cookieHeaders(web);assert.equal((await binary({...cookie,'x-mote-csrf':''})).statusCode,403);const current=await binary(cookie);assert.equal(current.statusCode,200);assert.equal(current.json().userId,f.b.userId);
+});
+
+
+test('disable during password hashing prevents credential issuance and disable during current-password verification prevents late password change',async t=>{
+ const f=await fixture(t),admin=await f.node.authority.authenticate(f.owner.token),alice=await f.node.authority.authenticate(f.alice.token);
+ const pendingLogin=f.node.accounts!.login('fixture-a',password,'generated-race-address','client',86400000);
+ f.node.accounts!.disable(admin,f.node.authority,f.a.userId,true);
+ await assert.rejects(pendingLogin,{code:'invalid_login'});
+ f.node.accounts!.disable(admin,f.node.authority,f.a.userId,false);
+ const current=await f.login('fixture-a'),context=await f.node.authority.authenticate(current.token);
+ const pendingChange=f.node.accounts!.changePassword(context,f.node.authority,password,replacement,'generated-race-address');
+ f.node.accounts!.disable(admin,f.node.authority,f.a.userId,true);
+ await assert.rejects(pendingChange,{code:'invalid_identity'});
+ assert.throws(()=>f.node.authority.assert(alice));
+ assert.equal((await f.request('GET','/api/auth/self',undefined,headers(f.bob.token))).statusCode,200);
 });

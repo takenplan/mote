@@ -6,7 +6,7 @@ import {registerAuthenticatedRoute,SESSION_COOKIE,cookieCredential,rejectIdentit
 import {connectionServerUrl} from '@mote/shared';
 
 const id=(request:FastifyRequest)=>(request.params as {id:string}).id;
-const serverUrl=z.string().transform(value=>connectionServerUrl(value));
+const serverUrl=z.string().transform((value,ctx)=>{try{return connectionServerUrl(value);}catch{ctx.addIssue({code:'custom',message:'Invalid server URL'});return z.NEVER;}});
 const device=z.object({serverUrl,deviceId:z.string().regex(/^[A-Za-z0-9_.:-]{1,128}$/),deviceName:z.string().trim().min(1).max(128),platform:z.enum(['android','macos','windows','linux','other']),durationMs:durationSchema.default(2592000000)}).strict();
 function sessionCookie(reply:FastifyReply,token:string,durationMs:number){reply.header('Set-Cookie',`${SESSION_COOKIE}=${token}; Path=/; Secure; HttpOnly; SameSite=Strict${durationMs?`; Max-Age=${Math.floor(durationMs/1000)}`:''}`);}
 const clearCookie=(reply:FastifyReply)=>reply.header('Set-Cookie',`${SESSION_COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Strict; Max-Age=0`);
