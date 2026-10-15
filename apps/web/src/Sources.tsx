@@ -3,10 +3,10 @@ import { useResource } from './useResource';
 import { resources } from './resource-cache';
 import { useOperationUpdates } from './useOperationUpdates';
 import { getLocale, moteText } from '@mote/shared/i18n';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, FolderInput, Layers3, Plus, X } from 'lucide-react';
 import type { SourceConnection, SourceItemRecord } from '@mote/shared';
-import { type Api, errorMessage, dateTime } from './api';
+import { ApiError, type Api, errorMessage, dateTime } from './api';
 import { sourceMetadataSchema } from '@mote/shared';
 import { Gmail } from './Gmail';
 import { AttributionEditor } from './AttributionContext';
@@ -25,7 +25,10 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse 
     onBrowse?: () => void;
 }) {
     const Heading = mode === 'library' ? 'h2' : 'h1';
-    const [selected, setSelected] = useState(''), [mutationError, setError] = useState(''), [busy, setBusy] = useState(false), [historyKey, setHistoryKey] = useState<string | null>(null), [cursor, setCursor] = useState<string | null>(null), [previous, setPrevious] = useState<SourceItemRecord[]>([]);
+    const activeApi=useRef(api);activeApi.current=api;
+    const [selected, setSelected] = useState(''), [mutationError, setError] = useState(''), [busy, setBusy] = useState(false), [historyKey, setHistoryKey] = useState<string | null>(null);
+    const [pages, setPages] = useState<{api:Api;scope:string;cursor:string;previous:SourceItemRecord[]}>();
+    const listScope = JSON.stringify([mode, selected]), currentPages = pages?.api === api && pages.scope === listScope ? pages : undefined, cursor = currentPages?.cursor;
     const [requestedSetup,chooseSetup]=useHashChoice('setup',readSetup);
     const [adding,setAdding]=useState(Boolean(requestedSetup)),[addKind,setAddKind]=useState<'files'|'reference'|'connectors'>(requestedSetup==='reference'?'reference':requestedSetup?'connectors':'files');
     useEffect(()=>{setAdding(Boolean(requestedSetup));if(requestedSetup)setAddKind(requestedSetup==='reference'?'reference':'connectors');},[requestedSetup]);
@@ -41,21 +44,25 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse 
     }>(api, historyKey);
     const connectorStatus = useResource<Record<string, unknown>>(api, '/api/connectors/status');
     useOperationUpdates(api);
+    const withdrawn = page.error instanceof ApiError && [401, 403, 404, 410].includes(page.error.status), previous = withdrawn ? [] : currentPages?.previous ?? [];
+    useEffect(() => { setPages(value => !value ? value : value.api !== api || value.scope !== listScope ? undefined : withdrawn ? {...value, previous:[]} : value); }, [api, listScope, withdrawn]);
+    useEffect(() => { setBusy(false);setError(''); }, [api]);
     const sources = sourceList.data?.items ?? [], items = [...previous, ...(page.data?.items ?? []).filter(item => !previous.some(old => old.captureId === item.captureId))], nextCursor = page.data?.nextCursor, history = versions.data?.items ?? null, catalog = connectorStatus.data ?? null, loading = sourceList.loading || page.loading;
+    const initialLoading = page.loading && page.data === undefined;
     const readError = sourceList.error || page.error || versions.error || connectorStatus.error, error = mutationError || (readError ? errorMessage(readError) : '');
-    async function refresh(source = selected) { setSelected(source); setError(''); setHistoryKey(null); setCursor(null); setPrevious([]); resources(api).invalidate(key => /^\/api\/(sources|source-items|connectors\/status)([/?]|$)/.test(key)); }
+    async function refresh(source = selected) { if(activeApi.current!==api)return;setSelected(source); setError(''); setHistoryKey(null); setPages(undefined); resources(api).invalidate(key => /^\/api\/(sources|source-items|connectors\/status)([/?]|$)/.test(key)); }
     function loadHistory(item: SourceItemRecord) { setHistoryKey('/api/sources/' + encodeURIComponent(item.sourceId) + '/history?externalId=' + encodeURIComponent(item.externalId)); }
     function more() { if (!nextCursor || loading)
-        return; setPrevious(items); setCursor(nextCursor); }
+        return; setPages({api,scope:listScope,previous:items,cursor:nextCursor}); }
     async function run(task: () => Promise<void>) { setBusy(true); setError(''); try {
         await task();
-        await refresh();
+        if(activeApi.current===api)await refresh();
     }
     catch (e) {
-        setError(errorMessage(e));
+        if(activeApi.current===api)setError(errorMessage(e));
     }
     finally {
-        setBusy(false);
+        if(activeApi.current===api)setBusy(false);
     } }
     return <section className="sources-page"><div className="page-heading split-heading"><div><div className="eyebrow">{moteText("只连接你选择的内容")}</div><Heading>{moteText(mode === 'library' ? "来源资料" : "来源")}</Heading><p>{moteText("连接文件与日历，管理保存方式和同步版本。")}</p></div><div className="source-heading-actions">{onBrowse && <button className="button" onClick={onBrowse}>{moteText("浏览来源资料")}</button>}<button className="button subtle" disabled={busy} onClick={() => void refresh()}><RefreshCw size={15}/>{moteText("刷新")}</button><button className="button" onClick={() => {if(adding&&requestedSetup)chooseSetup(null);else setAdding(v=>!v);}}>{adding ? <X size={16}/> : <Plus size={16}/>} {adding ? moteText("收起添加") : moteText("添加来源")}</button></div></div>
  {error && <div className="error-banner" role="alert">{error}</div>}
@@ -65,8 +72,8 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse 
  </div><div hidden={addKind !== 'reference'}><ReferenceEntry api={api} refresh={() => refresh()}/></div>
  <div hidden={addKind !== 'connectors'}><ConnectorPanel api={api} catalog={catalog} refresh={() => refresh()} requested={requestedSetup ?? ""}/></div></section>
  <div className={"source-grid " + (mode === 'connections' ? 'connection-catalog' : '')}><aside aria-label={moteText("筛选来源")}><h2 className="source-list-title">{moteText("已连接来源")}{' '}<span>{sources.length}</span></h2><button className={!selected ? 'button active' : 'button'} onClick={() => { setSelected(''); void refresh(''); }}>{moteText("所有来源")}</button>{sources.map(s => <article key={s.id}><button className={selected === s.id ? "source-select active" : "source-select"} onClick={() => { setSelected(s.id); setHistoryKey(null); void refresh(s.id); }}><strong>{s.name}</strong><small>{kindNames[s.kind]} · {s.enabled ? moteText("已启用") : moteText("已暂停")}</small></button><small>{({ idle: s.capabilities?.lifecycle === 'one-shot' ? moteText("一次导入来源") : s.capabilities?.lifecycle === 'external-push' ? moteText("等待外部写入") : moteText("等待下次同步"), syncing: moteText("同步中"), error: moteText("需要处理"), permission_required: moteText("需要重新授权") } as Record<string, string>)[s.status?.state ?? ''] ?? moteText("等待同步")}{s.status?.lastSyncAt ? ' · ' + dateTime(s.status.lastSyncAt) : ''}</small><button className="button" disabled={busy} onClick={() => void run(async () => { await api.request('/api/sources/' + encodeURIComponent(s.id), { method: 'PATCH', body: JSON.stringify({ enabled: !s.enabled }) }); })}>{s.enabled ? moteText("暂停接入") : moteText("恢复接入")}</button><SourceContextEditor api={api} sourceId={s.id}/><AttributionEditor api={api} source path={'/api/sources/' + encodeURIComponent(s.id)} value={s.ownerRelation} onSaved={() => void refresh()}/></article>)}</aside>
- <div hidden={mode !== 'library'}>{loading ? <p role="status">{moteText("正在读取…")}</p> : items.length === 0 && !error ? <p className="muted">{moteText("还没有资料。连接来源或导入文件后，它们会出现在这里。")}</p> : items.map(item => <article className="source-item" key={item.captureId}><div><strong>{item.title || moteText("未命名记录")}</strong><span className="badge">{layerNames[item.layer]}</span></div><p className="muted">{moteText("采集于")}{' '}{dateTime(item.observedAt)} · {item.current ? moteText("当前版本") : moteText("历史版本")}</p>{item.calendar && <p>{moteText("日历安排：")}{dateTime(item.calendar.start)} — {dateTime(item.calendar.end)}{item.calendar.allDay ? moteText("（全天）") : ''} · {item.calendar.status === 'cancelled' ? moteText("已取消") : moteText("计划")}{moteText("，不代表实际参加。")}</p>}<p>{item.layer === 'reference' ? moteText("原文仍在外部来源，此处没有收集正文。") : item.text.slice(0, 300)}</p>{item.uri && <details><summary>{moteText("原件位置")}</summary><code>{item.uri}</code><p className="muted">{moteText("这里只展示定位信息，不会自动读取远程地址。")}</p></details>}<Metadata source={item.metadata} modifiedAt={item.modifiedAt}/><div className="source-toolbar"><button className="button" onClick={() => onOpen(formatEvidenceRef('capture', item.captureId))}>{moteText("展开证据")}</button><button className="button" onClick={() => void loadHistory(item)}>{moteText("查看版本")}</button></div></article>)}{nextCursor && <button disabled={loading} className="button" onClick={() => void more()}>{moteText("更多资料")}</button>}</div></div>
- {versions.loading && <p role="status">{moteText("正在读取…")}</p>}{history && <div className="source-history"><h3>{moteText("版本记录")}</h3><button className="button" onClick={() => setHistoryKey(null)}>{moteText("关闭详情")}</button>{history.map(h => <p key={h.captureId}><button className="button" onClick={() => onOpen(formatEvidenceRef('capture', h.captureId))}>{dateTime(h.observedAt)} · {h.deleted ? moteText("来源报告已移除") : h.current ? moteText("当前版本") : moteText("历史快照")}</button></p>)}</div>}
+ <div hidden={mode !== 'library'}>{initialLoading ? <p role="status">{moteText("正在读取…")}</p> : items.length === 0 && !error ? <p className="muted">{moteText("还没有资料。连接来源或导入文件后，它们会出现在这里。")}</p> : items.map(item => <article className="source-item" key={item.captureId}><div><strong>{item.title || moteText("未命名记录")}</strong><span className="badge">{layerNames[item.layer]}</span></div><p className="muted">{moteText("采集于")}{' '}{dateTime(item.observedAt)} · {item.current ? moteText("当前版本") : moteText("历史版本")}</p>{item.calendar && <p>{moteText("日历安排：")}{dateTime(item.calendar.start)} — {dateTime(item.calendar.end)}{item.calendar.allDay ? moteText("（全天）") : ''} · {item.calendar.status === 'cancelled' ? moteText("已取消") : moteText("计划")}{moteText("，不代表实际参加。")}</p>}<p>{item.layer === 'reference' ? moteText("原文仍在外部来源，此处没有收集正文。") : item.text.slice(0, 300)}</p>{item.uri && <details><summary>{moteText("原件位置")}</summary><code>{item.uri}</code><p className="muted">{moteText("这里只展示定位信息，不会自动读取远程地址。")}</p></details>}<Metadata source={item.metadata} modifiedAt={item.modifiedAt}/><div className="source-toolbar"><button className="button" onClick={() => onOpen(formatEvidenceRef('capture', item.captureId))}>{moteText("展开证据")}</button><button className="button" onClick={() => void loadHistory(item)}>{moteText("查看版本")}</button></div></article>)}{nextCursor && <button disabled={loading} className="button" onClick={() => void more()}>{moteText("更多资料")}</button>}</div></div>
+ {versions.loading && history === null && <p role="status">{moteText("正在读取…")}</p>}{history && <div className="source-history"><h3>{moteText("版本记录")}</h3><button className="button" onClick={() => setHistoryKey(null)}>{moteText("关闭详情")}</button>{history.map(h => <p key={h.captureId}><button className="button" onClick={() => onOpen(formatEvidenceRef('capture', h.captureId))}>{dateTime(h.observedAt)} · {h.deleted ? moteText("来源报告已移除") : h.current ? moteText("当前版本") : moteText("历史快照")}</button></p>)}</div>}
  </section>;
 }
 function ConnectorPanel({ api, catalog, refresh, requested }: {

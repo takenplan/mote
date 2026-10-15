@@ -14,13 +14,11 @@ export function ModelProfiles({ api, revision, onApplied }: {
     revision: number;
     onApplied: () => void;
 }) {
-    const resource = useResource<ModelSettingsView>(api, '/api/model-settings'), view = resource.data;
+    const resource = useResource<ModelSettingsView>(api, '/api/model-settings', undefined, revision), view = resource.data;
     const [selected, setSelected] = useState(DEPLOYMENT_MODEL_PROFILE_ID);
     const [busy, setBusy] = useState(false), [error, setError] = useState(''), [confirmDelete, setConfirmDelete] = useState(false);
     const [copyName, setCopyName] = useState<string | null>(null), [includeCredentials, setIncludeCredentials] = useState(true), [probe, setProbe] = useState<ModelTestResult>();
     useEffect(() => { setSelected(DEPLOYMENT_MODEL_PROFILE_ID); setProbe(undefined); setError(''); setConfirmDelete(false); setCopyName(null); }, [api]);
-    useEffect(() => { if (revision)
-        resource.refresh(); }, [api, revision]);
     useEffect(() => { if (view)
         setSelected(id => view.profiles.some(p => p.id === id) ? id : DEPLOYMENT_MODEL_PROFILE_ID); }, [view]);
     async function mutate(path: string, method: string, body: unknown, after?: string) {

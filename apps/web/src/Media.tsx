@@ -1,10 +1,10 @@
 import {formatEvidenceRef} from '@mote/shared';
 import { moteText, getLocale } from '@mote/shared/i18n';
-import {useEffect,useState} from 'react';
 import {ArrowRight,Headphones,Info,LoaderCircle,LockKeyhole} from 'lucide-react';
 import type {MediaMetadata,MediaSession} from '@mote/shared';
 import {type Api,type Range,type MediaActivity,queryString,dateTime,errorMessage} from './api';
 import {mediaStatus,playbackLabels,playbackTypeLabels,visibilityLabels,mediaDuration as duration} from './media-presentation';
+import {useResource} from './useResource';
 
 export function MediaSnapshot({media,observedAt,screenLocked,collection,compact=false}: {
   media?:MediaMetadata;observedAt?:string;screenLocked?:boolean;collection?:string;compact?:boolean;
@@ -38,17 +38,13 @@ function MediaSessionDetail({session,compact,collection}:{session:MediaSession;c
   </article>;
 }
 
-export function MediaActivitySummary({api,range,onOpen,compact=false,onExpand}:{api:Api;range:Range;onOpen:(id:string)=>void;compact?:boolean;onExpand?:()=>void}) {
-  const [value,setValue]=useState<MediaActivity|null>(null),[error,setError]=useState(''),[revision,setRevision]=useState(0);
+export function MediaActivitySummary({api,range,onOpen,compact=false,onExpand,revision=0,rangeSelectionKey}:{api:Api;range:Range;onOpen:(id:string)=>void;compact?:boolean;onExpand?:()=>void;revision?:number;rangeSelectionKey?:string}) {
   const path=`/api/media-activity${queryString(range)}`;
-  useEffect(()=>{
-    const controller=new AbortController();setValue(null);setError('');
-    void api.request<MediaActivity>(path,{signal:controller.signal}).then(result=>{if(!controller.signal.aborted)setValue(result);}).catch(reason=>{if(!controller.signal.aborted)setError(errorMessage(reason));});
-    return ()=>controller.abort();
-  },[api,path,revision]);
+  const continuity=rangeSelectionKey===undefined?undefined:JSON.stringify([rangeSelectionKey,range.deviceId]);
+  const {data:value,error,refresh}=useResource<MediaActivity>(api,path,undefined,revision,continuity);
   return <section className={`panel media-activity-panel ${compact?'compact':''}`} aria-label={moteText("媒体播放统计")}>
     <div className="section-heading"><div><h2><Headphones size={19}/>{moteText("媒体播放")}</h2><p>{moteText("锁屏与切换应用后，也可以留下播放线索。")}</p></div>{onExpand&&<button className="text-button" onClick={onExpand}>{moteText("查看分布")}<ArrowRight size={15}/></button>}</div>
-    {error?<div className="notice error" role="alert"><Info size={16}/><span>{error}</span><button className="text-button" onClick={()=>setRevision(v=>v+1)}>{moteText("重试")}</button></div>:!value?<span className="loading"><LoaderCircle size={16} className="spin"/>{moteText("正在读取媒体记录…")}</span>:<MediaActivityContent value={value} onOpen={onOpen} compact={compact}/>}
+    {error?<div className="notice error" role="alert"><Info size={16}/><span>{errorMessage(error)}</span><button className="text-button" onClick={refresh}>{moteText("重试")}</button></div>:!value?<span className="loading"><LoaderCircle size={16} className="spin"/>{moteText("正在读取媒体记录…")}</span>:<MediaActivityContent value={value} onOpen={onOpen} compact={compact}/>}
   </section>;
 }
 export function MediaActivityContent({value,onOpen,compact=false}:{value:MediaActivity;onOpen:(id:string)=>void;compact?:boolean}) {

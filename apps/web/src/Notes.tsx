@@ -20,7 +20,9 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
     const [error, setError] = useState('');
     const [listError, setListError] = useState('');
     const [notice, setNotice] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [loading, setLoading] = useState(true);
+    const [listLoaded, setListLoaded] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [syncing, setSyncing] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [draftSaved, setDraftSaved] = useState(false);
@@ -31,6 +33,7 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
     const load = useCallback(async (next?: string) => {
         const current = ++generation.current;
         setLoading(true);
+        setLoadingMore(Boolean(next));
         setListError('');
         try {
             const response = await api.request<{
@@ -41,14 +44,23 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
                 return;
             setRecords(old => next ? [...old, ...response.items.filter(item => !old.some(p => p.id === item.id))] : response.items);
             setCursor(response.nextCursor);
+            setListLoaded(true);
         }
         catch (e) {
-            if (mounted.current && generation.current === current)
+            if (mounted.current && generation.current === current) {
+                if (e instanceof ApiError && [401, 403, 404, 410].includes(e.status)) {
+                    setRecords([]);
+                    setCursor(null);
+                    setListLoaded(false);
+                }
                 setListError(errorMessage(e));
+            }
         }
         finally {
-            if (mounted.current && generation.current === current)
+            if (mounted.current && generation.current === current) {
                 setLoading(false);
+                setLoadingMore(false);
+            }
         }
     }, [api]);
     const sync = useCallback(async (manual = false) => {
@@ -110,7 +122,8 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
         }
         return () => { mounted.current = false; generation.current++; attachmentRequest.current?.abort(); };
     }, [outbox]);
-    useEffect(() => { void load(); }, [load, revision]);
+    useEffect(() => { setRecords([]); setCursor(null); setListLoaded(false); }, [api, namespace]);
+    useEffect(() => { void load(); }, [load, revision, namespace]);
     useEffect(() => {
         void sync();
         const online = () => void sync();
@@ -172,6 +185,7 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
             setError(errorMessage(e));
         }
     }
+    const foregroundLoading = loading && (!listLoaded || loadingMore);
     return <>
     <div className="page-heading note-heading"><h1>{moteText("想到什么，就记下来。")}</h1><p>{moteText("心情、杂事、一个还没成形的想法，都可以成为上下文。")}</p></div>
     <form className="panel note-composer" onSubmit={save}>
@@ -216,10 +230,10 @@ export function Notes({ api, namespace, revision, onOpen, onSaved }: {
     {queued.length > 0 && <section className="panel note-pending"><div className="section-heading"><div><span className="eyebrow">SAVED ON THIS DEVICE</span><h2>{moteText("待同步 ·")}{' '}{queued.length}{' '}{moteText("条")}</h2></div><button className="button subtle" disabled={syncing} onClick={() => void sync(true)}><RefreshCw size={14} className={syncing ? 'spin' : ''}/>{syncing ? moteText("正在同步") : moteText("重试同步")}</button></div>{queued.map(item => <article className="pending-note" key={item.note.id}><div><time>{dateTime(item.note.capturedAt)}</time><p>{item.note.text}</p><small><WifiOff size={13}/>{item.error || moteText("本机已保存，等待中央节点确认。")}</small></div><button className="icon-button" aria-label={moteText("移除本机待同步副本")} onClick={() => discard(item.note.id)} disabled={syncing}><Trash2 size={15}/></button></article>)}</section>}
     <section className="notes-history" aria-busy={loading}><div className="section-heading"><div><span className="eyebrow">YOUR OWN WORDS</span><h2>{moteText("已经留下的心绪与杂事")}</h2></div><button className="text-button" onClick={() => void load()} disabled={loading}><RefreshCw size={14}/>{moteText("刷新")}</button></div>
       {listError && <div className="notice error" role="alert">{listError}{' '}{moteText("· 本机草稿仍可继续保存。")}</div>}
-      {!records.length && !loading && !listError && <div className="panel empty"><FileText size={26}/><h3>{moteText("给今天留一小段文字")}</h3><p>{moteText("保存后，原文会出现在这里，也可作为问答的证据。")}</p></div>}
+      {!records.length && !foregroundLoading && !listError && <div className="panel empty"><FileText size={26}/><h3>{moteText("给今天留一小段文字")}</h3><p>{moteText("保存后，原文会出现在这里，也可作为问答的证据。")}</p></div>}
       <div className="notes-grid">{records.map(record => <button className="panel note-card" key={record.id} onClick={() => onOpen(formatEvidenceRef('capture', record.id))}><time>{dateTime(record.capturedAt)}</time><p>{record.ocrText}</p>{record.metadata?.attachments?.length && <small>{moteText("附件")}: {record.metadata.attachments.length}</small>}<footer>{record.deviceName}<span>{moteText("查看原文 →")}</span></footer></button>)}</div>
-      {loading && <div className="load-more"><LoaderCircle size={17} className="spin"/>{moteText("正在读取随手记…")}</div>}
-      {cursor && !loading && <div className="load-more"><button className="button subtle" onClick={() => void load(cursor)}>{moteText("加载更早的随手记")}</button></div>}
+      {foregroundLoading && <div className="load-more"><LoaderCircle size={17} className="spin"/>{moteText("正在读取随手记…")}</div>}
+      {cursor && !foregroundLoading && <div className="load-more"><button className="button subtle" disabled={loading} onClick={() => void load(cursor)}>{moteText("加载更早的随手记")}</button></div>}
     </section>
   </>;
 }

@@ -33,6 +33,7 @@ export function Diagnostics({api,profile}:{api:Api;profile?:string}) {
   const statusResource=useResource<Snapshot>(api,'/api/diagnostics',autoRefresh?5000:undefined);
   const logs=useResource<LogPage>(api,`/api/diagnostics/log-pages?file=${logFile}&page=${logPage}&pageSize=${pageSize}&stage=${logStage}`,autoRefresh?5000:undefined);
   const snapshot=statusResource.data,logPageData=logs.data,rawLog=logs.data?.items.length?logs.data.items.join('\n')+'\n':'',busy=statusResource.loading||logs.loading;
+  const logSelectionLoading=logs.loading&&logPageData===undefined;
   const refresh=()=>{statusResource.refresh();logs.refresh();};
   useEffect(()=>{if(logs.data)setLogPage(logs.data.page);setCopyStatus('');},[logs.data]);
   async function download() {
@@ -70,7 +71,7 @@ export function Diagnostics({api,profile}:{api:Api;profile?:string}) {
       <section className="diagnostics-events" aria-labelledby="raw-log-title">
         <div className="section-heading"><div><h3 id="raw-log-title">{moteText("日志中心")}</h3><p>{moteText("原始顺序 · 刷新时更新")}</p></div>
           <div className="diagnostics-actions">
-            <select aria-label={moteText("日志文件")} value={logFile} disabled={busy} onChange={e=>{setLogFile(Number(e.target.value));}}>
+            <select aria-label={moteText("日志文件")} value={logFile} disabled={logSelectionLoading} onChange={e=>{setLogFile(Number(e.target.value));}}>
               {Array.from({length:snapshot.limits.maxFiles},(_,index)=><option key={index} value={index}>central.{index}.ndjson{index===0?moteText(" · 当前"):moteText(" · 历史 ")+index}</option>)}
             </select>
             <button className="button subtle" disabled={!rawLog} onClick={()=>void copyLogs()}>{moteText("复制当前页")}</button>
@@ -87,9 +88,9 @@ export function Diagnostics({api,profile}:{api:Api;profile?:string}) {
             <button className="button subtle" disabled={busy||!logPageData?.hasPrevious} onClick={()=>setLogPage(page=>page+1)}>{moteText("较旧")}</button>
           </div>
           <div className="log-pagination-options">
-            <label>{moteText("阶段")}{' '}<select aria-label={moteText("日志阶段")} value={logStage} disabled={busy} onChange={e=>{setLogPage(1);setLogStage(e.target.value as LogStage);}}>{logStages.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
+            <label>{moteText("阶段")}{' '}<select aria-label={moteText("日志阶段")} value={logStage} disabled={logSelectionLoading} onChange={e=>{setLogPage(1);setLogStage(e.target.value as LogStage);}}>{logStages.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></label>
             <button className="button subtle" onClick={refresh} disabled={busy}><RefreshCw size={14} className={busy?'spin':''}/>{moteText("手动刷新")}</button>
-            <label>{moteText("每页")}{' '}<select aria-label={moteText("每页条数")} value={pageSize} disabled={busy} onChange={e=>{setLogPage(1);setPageSize(Number(e.target.value));}}><option value={50}>50</option><option value={100}>100</option><option value={200}>200</option><option value={500}>500</option></select></label>
+            <label>{moteText("每页")}{' '}<select aria-label={moteText("每页条数")} value={pageSize} disabled={logSelectionLoading} onChange={e=>{setLogPage(1);setPageSize(Number(e.target.value));}}><option value={50}>50</option><option value={100}>100</option><option value={200}>200</option><option value={500}>500</option></select></label>
             <label className="log-auto-refresh"><input type="checkbox" checked={autoRefresh} onChange={e=>setAutoRefresh(e.target.checked)}/>{moteText("自动刷新（5 秒）")}</label>
           </div>
         </div>
