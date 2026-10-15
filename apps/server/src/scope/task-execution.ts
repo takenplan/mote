@@ -51,6 +51,7 @@ export class TaskExecution {
  private readonly storage:ExecutionStorage;
  private modelHost:TaskModelHost|undefined;
  private readonly modelLeases=new Map<string,TaskModelLease>();
+ private readonly modelRecovery=new Map<string,string>();
  private timer:ReturnType<typeof setInterval>|undefined;
  constructor(private readonly db:DatabaseSync,private readonly authority:UserContextAuthority,private readonly services:ScopedServices,private readonly grants:TaskAuthorization){
   db.exec(`CREATE TABLE IF NOT EXISTS user_tasks(task_id TEXT PRIMARY KEY,user_id TEXT NOT NULL,grant_id TEXT NOT NULL UNIQUE,input TEXT NOT NULL,progress TEXT NOT NULL DEFAULT 'null',checkpoints TEXT NOT NULL DEFAULT '{}',result TEXT,external_state TEXT NOT NULL DEFAULT 'none',external_key TEXT,external_issuance TEXT,model_receipt TEXT,user_position INTEGER NOT NULL,UNIQUE(user_id,user_position));
@@ -66,7 +67,7 @@ export class TaskExecution {
  }
  /** The integration composition passes the existing M04 Configurations host. */
  bindConfiguration(host:TaskModelHost){if(this.modelHost&&this.modelHost!==host)throw new TaskError('model_host_conflict',409);this.modelHost=host;}
- private modelCurrent(step:ExecutionStep){const row=this.row(step.id);if(!row?.model_receipt)return true;const lease=this.modelLeases.get(step.id);if(!lease)return false;try{this.modelHost?.assertLease(lease);return Boolean(this.modelHost);}catch{return false;}}
+ private modelCurrent(step:ExecutionStep){const row=this.row(step.id);if(!row?.model_receipt)return true;const lease=this.modelLeases.get(step.id);if(!lease){const fence=this.modelRecovery.get(step.id);return Boolean(fence&&this.engine.isCurrentGrant(step.id,fence));}try{this.modelHost?.assertLease(lease);return Boolean(this.modelHost);}catch{return false;}}
  private transaction<T>(write:()=>T):T{const own=!this.db.isTransaction;if(own)this.db.exec('BEGIN IMMEDIATE');try{const value=write();if(own)this.db.exec('COMMIT');return value;}catch(error){if(own&&this.db.isTransaction)this.db.exec('ROLLBACK');throw error;}}
  private row(taskId:string){return this.db.prepare('SELECT * FROM user_tasks WHERE task_id=?').get(taskId) as TaskRow|undefined;}
  private enabled(userId:string){if(this.db.prepare('SELECT 1 FROM task_lifecycle_state WHERE user_id=? AND deleted=1').get(userId))throw new ScopeError('invalid_identity',401);}
@@ -75,15 +76,42 @@ export class TaskExecution {
   this.enabled(row.user_id);if(this.grants.assert(row.grant_id,row.user_id,step.ownership.authorizationEpoch).task_id!==step.id)throw new ScopeError('invalid_identity',401);return row;
  }
  private valid(step:ExecutionStep){try{this.assertTask(step);return true;}catch{return false;}}
+ private recoveryReceipt(step:ExecutionStep,handler:UserTaskHandler){
+  if(!this.modelHost)throw new TaskError('model_snapshot_unavailable',409);
+  const row=this.row(step.id);if(!row?.model_receipt)throw new TaskError('model_snapshot_unavailable',409);
+  const receipt=z.object({id:z.string().uuid(),snapshotId:z.string().uuid(),deploymentId:id,userId:id,operationId:id,feature:id}).passthrough().parse(JSON.parse(row.model_receipt));
+  if(receipt.id!==receipt.snapshotId||receipt.deploymentId!==this.authority.deploymentId||receipt.userId!==step.ownership!.userId||receipt.operationId!==step.operationId||receipt.feature!==handler.modelFeature)throw new TaskError('model_snapshot_unavailable',409);
+  return receipt;
+ }
+ private async executionContext(step:ExecutionStep,handler:UserTaskHandler,grant:ExecutionGrant,grantId:string){
+  if(!this.row(step.id)?.model_receipt||this.modelLeases.has(step.id)){const context=await this.authority.restoreTask(grantId);grant.assert();return context;}
+  const receipt=this.recoveryReceipt(step,handler),fence=String(this.db.prepare("SELECT fence FROM execution_steps WHERE id=? AND state='running'").get(step.id)?.fence??'');
+  if(!fence)throw new ExecutionFailure('stale','grant_revoked');
+  // This permit is private to the host and one exact running fence. No TaskRun,
+  // private service handle or handler callback is exposed until hydration ends.
+  this.modelRecovery.set(step.id,fence);
+  let context:UserContext;
+  try{
+   context=await this.authority.restoreTask(grantId);grant.assert();
+   let restored:Awaited<ReturnType<TaskModelHost['restoreLease']>>;
+   try{restored=await this.modelHost!.restoreLease(context,receipt.snapshotId,step.operationId);}catch{grant.assert();throw new ExecutionFailure('blocked','model_snapshot_unavailable',undefined,{executionStarted:false});}
+   grant.assert();
+   if(restored.status!=='restored')throw new ExecutionFailure('blocked',restored.reason==='snapshot_unavailable'?'model_snapshot_unavailable':'model_'+restored.reason,undefined,{executionStarted:false});
+   const lease=restored.lease;
+   if(lease.snapshotId!==receipt.snapshotId||lease.id!==receipt.id||lease.userId!==context.userId||lease.deploymentId!==context.deploymentId||lease.operationId!==step.operationId||lease.feature!==handler.modelFeature)throw new ExecutionFailure('blocked','model_snapshot_unavailable',undefined,{executionStarted:false});
+   this.modelHost!.assertLease(lease);grant.assert();this.modelLeases.set(step.id,lease);
+  }finally{if(this.modelRecovery.get(step.id)===fence)this.modelRecovery.delete(step.id);}
+  grant.assert();this.authority.assert(context);return context;
+ }
  register(handler:UserTaskHandler){
   if(this.handlers.has(handler.kind)||!handler.kind||!handler.pool||!handler.policy)throw new TaskError('task_handler_invalid',500);
   this.handlers.set(handler.kind,handler);
   const unregister=this.engine.register({kind:handler.kind,pool:handler.pool,concurrency:handler.concurrency,policy:handler.policy,
    validate:step=>this.valid(step)&&(handler.validate?.(step)??true),validateGrant:step=>this.valid(step)&&this.modelCurrent(step),
    resourceKeys:step=>(handler.resources?.(step.input)??[]).map(resource=>{if(!['user','shared'].includes(resource.scope)||typeof resource.key!=='string'||!resource.key||resource.key.length>256)throw new TaskError('task_resource_invalid');return JSON.stringify(resource.scope==='shared'?['shared',resource.key]:['user',step.ownership!.userId,resource.key]);}),
-   admit:step=>{const row=this.assertTask(step);if(row.model_receipt&&!this.modelCurrent(step))return new ExecutionFailure('blocked',this.modelLeases.has(step.id)?'model_authority_revoked':'model_snapshot_unavailable');return ['issued','unknown'].includes(row.external_state)?new ExecutionFailure('blocked','external_result_unknown'):handler.admit?.(step);},
+   admit:step=>{const row=this.assertTask(step);if(row.model_receipt||handler.modelFeature){try{this.recoveryReceipt(step,handler);}catch{return new ExecutionFailure('blocked','model_snapshot_unavailable');}}if(row.model_receipt&&this.modelLeases.has(step.id)&&!this.modelCurrent(step))return new ExecutionFailure('blocked','model_authority_revoked');return ['issued','unknown'].includes(row.external_state)?new ExecutionFailure('blocked','external_result_unknown'):handler.admit?.(step);},
    execute:async(step,signal,grant)=>{
-    const row=this.assertTask(step),context=await this.authority.restoreTask(row.grant_id);grant.assert();
+    const row=this.assertTask(step),context=await this.executionContext(step,handler,grant,row.grant_id);grant.assert();
     const write=(update:()=>void)=>grant.commit(()=>{this.assertTask(step);update();});
     const lease=this.modelLeases.get(step.id),model=lease&&this.modelHost?{lease,withModel:async<T>(work:Parameters<TaskModelHost['withModel']>[1])=>{grant.assert();try{return await this.modelHost!.withModel(lease,work) as T;}finally{grant.assert();}},recordUsage:(result:Parameters<TaskModelHost['recordUsage']>[1])=>grant.commit(()=>this.modelHost!.recordUsage(lease,result))}:undefined;
     const run:TaskRun={...(model?{model}:{}),context,services:this.services.forUser(context),task:step,signal,grant,
@@ -95,7 +123,7 @@ export class TaskExecution {
    },
    commit:(step,result)=>{this.assertTask(step);const {run,value}=result as {run:TaskRun;value:unknown};this.authority.assert(run.context);handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(value??null),step.id);},
    project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);},
-   classify:error=>error instanceof ExecutionFailure?error:handler.classify?.(error)??new ExecutionFailure('permanent','task_failed'),
+   classify:error=>error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','grant_revoked'):handler.classify?.(error)??new ExecutionFailure('permanent','task_failed'),
   });
   return async()=>{await unregister();this.handlers.delete(handler.kind);};
  }
@@ -111,7 +139,7 @@ export class TaskExecution {
     return this.transaction(()=>{assert();const prior=this.row(taskId);if(prior){this.assertTask(this.engine.get(taskId)!);const dependencies=this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=? ORDER BY dependency_id').all(taskId).map(row=>String(row.dependency_id));if(JSON.stringify(dependencies)!==JSON.stringify([...new Set(request.dependencies)].sort()))throw new TaskError('task_identity_conflict',409);return this.view(prior);}
      for(const dependency of request.dependencies)owned(dependency);
      const grantId=this.grants.issue(context,taskId);
-     this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,model_receipt,user_position) SELECT ?,?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,context.userId,grantId,encoded,modelLease?json({id:modelLease.id,deploymentId:modelLease.deploymentId,userId:modelLease.userId,operationId:modelLease.operationId,feature:modelLease.feature,revision:modelLease.revision,instanceRevision:modelLease.instanceRevision,reference:modelLease.reference,provider:modelLease.provider,model:modelLease.model}):null,context.userId);
+     this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,model_receipt,user_position) SELECT ?,?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,context.userId,grantId,encoded,modelLease?json({id:modelLease.id,snapshotId:modelLease.snapshotId,deploymentId:modelLease.deploymentId,userId:modelLease.userId,operationId:modelLease.operationId,feature:modelLease.feature,revision:modelLease.revision,instanceRevision:modelLease.instanceRevision,reference:modelLease.reference,provider:modelLease.provider,model:modelLease.model}):null,context.userId);
      this.engine.enqueue(operationId,handler.kind,input,{id:taskId,dependencies:request.dependencies,ownership:{userId:context.userId,authorizationEpoch:context.authorizationEpoch,grantId}});
      if(modelLease)this.modelLeases.set(taskId,modelLease);
      return this.view(this.row(taskId)!);
@@ -127,7 +155,7 @@ export class TaskExecution {
  private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id);return {...step,input:undefined,ownership:undefined,progress:JSON.parse(row.progress),checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
  tick(){return this.engine.tick();}
  start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(()=>{});},100);this.timer.unref();void this.tick().catch(()=>{});}
- async close(){if(this.timer)clearInterval(this.timer);this.timer=undefined;await this.engine.close();this.modelLeases.clear();}
+ async close(){if(this.timer)clearInterval(this.timer);this.timer=undefined;await this.engine.close();this.modelLeases.clear();this.modelRecovery.clear();}
  /** M16 observes only purpose-limited journal facts after deletion admission
   * has been fenced. No ordinary context can select or settle external calls. */
  pendingExternalForDeletion(subject:UserDataSubject){

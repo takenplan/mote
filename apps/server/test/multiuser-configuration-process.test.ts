@@ -47,7 +47,7 @@ test('real production process serves scoped configuration/catalog, reloads YAML 
  assert.equal((await request('PATCH','/api/configuration',{revision:1,patches:{models:{selections:{}}}},a.token)).status,409);
  assert.equal((await request('PATCH','/api/configuration',{revision:2,patches:{server:{port:1}}},a.token)).status,400);
  assert.equal((await request('GET','/api/configuration?userId='+b.userId,undefined,admin.token)).status,401);
- assert.equal((await request('GET','/api/materials',undefined,a.token)).status,503);
+ assert.equal((await request('GET','/api/materials',undefined,a.token)).status,200);
  active.child.kill('SIGTERM');await active.closed;active=undefined;active=await start();
  assert.equal((await request('GET','/api/models/selection/chat',undefined,a.token)).body.model,'file-A');assert.equal((await request('GET','/api/models/selection/chat',undefined,b.token)).body.model,'model-B');
  assert.equal((await request('GET','/api/usage',undefined,a.token)).body.total.runs,0);

@@ -3,10 +3,13 @@
 M05 extends the single `ExecutionEngine` under the [multi-user ADR](../adr-multiuser-scope.md)
 and [module plan](multiuser-modules.md). Its branch is
 `codex/mote-multiuser-m05-execution`; its Draft PR targets only
-`codex/mote-multiuser-integration`. M00/M01/M02 remain unmerged prerequisites.
+`codex/mote-multiuser-integration`. M00/M01/M02/M04 remain unmerged prerequisites.
 The module branch starts at M01 `443726d2a95ef55db9466d06aa44ea1061ca56e4`
 and applies M02 through `8ecccb8ecf0093cc655fadd8bbc5e1637220f9fd` locally.
-The integration branch is not advanced by this work.
+M04 PR #129 was independently verified at
+`bc5323e1b5ee337c20dee58d4a8e9c25bc2adbbf` (implementation `e76f1fe6`).
+Its four published commits are applied only to this module branch; the integration
+branch is not advanced by this work.
 
 ## Production boundary
 
@@ -108,27 +111,47 @@ external domain still owns idempotency and reconciliation; a local abort or leas
 expiry never proves that the remote effect did not happen. This module makes no
 external calls itself.
 
-## M04 model contract and explicit limitation
+## M04 production model snapshots
 
-The integration composition calls `execution.bindConfiguration(configuration)`
-with the existing M04 `Configurations` host. A trusted handler declares
-`modelFeature`; admission obtains a genuine lease with
+The production composition opens the real M04 `Configurations`, registers its
+user routes and calls `execution.bindConfiguration(configuration)`. Task model
+types alias the actual M04 types. A trusted handler declares `modelFeature`;
+admission obtains a genuine lease with
 `services.forUser(context).get('configuration').lease(feature,operationId)`.
-`TaskModelHost` is a structural subset of M04's existing
-`assertLease / withModel / recordUsage` signatures, not a second model resolver.
-`TaskRun.model.withModel` checks the execution grant before and after the callback;
-`recordUsage` additionally runs within its fenced transaction. Model selection,
-fixed transport, configuration and price remain owned by the original M04 lease.
+`TaskRun.model.withModel` checks the execution grant before and after every
+callback, including errors; `recordUsage` runs within its fenced transaction.
+Cached private service handles inherit the same input/resource grant, including
+shared withdrawal, local abort and shutdown.
 
-Only its credential-free receipt is persisted, while the real lease remains in
-memory. M04 explicitly provides no durable snapshot ID or recovery API in this
-iteration. After process restart or another host claiming that task, the missing
-live lease produces `blocked/model_snapshot_unavailable`, without selecting a new
-model, refreshing configuration, or deserializing the receipt into authority.
-Explicit retry does not silently obtain a different snapshot; a newly authorized
-business operation may take a fresh lease. Actual M04 composition remains a joint
-integration check because M04 is an independent, unmerged prerequisite. Synthetic
-WeakMap leases test this exact interface without real providers or credentials.
+The credential-free task receipt persists M04's opaque `snapshotId` and fixed
+metadata. M04 owns the encrypted snapshot, original effective configuration,
+model/transport/price, credentials and persistent resource generations. Task
+receipt JSON never regains authority. Ordinary selection, configuration and price
+changes do not select a new snapshot for an existing operation.
+
+After restart, an eligible task is claimed with its original account grant and a
+new running fence. A private host hydration phase permits only that exact task
+and fence to resolve its genuine context while its model object is absent. All
+account, durable-grant, input and lease checks remain active. The host calls the
+real `configuration.restoreLease(context,snapshotId,expectedOperationId)`, verifies
+its deployment/user/operation/feature/snapshot binding, removes the hydration
+permit and rechecks the complete execution grant before exposing any `TaskRun`,
+private service handle or handler callback. An existing but withdrawn live lease
+never enters this recovery exception.
+
+Missing/corrupt snapshot or key, changed account epoch, deleted configuration,
+revoked credentials, withdrawn shared resource, wrong user/operation or changed
+handler feature fail closed with a named blocked/stale result. There is no
+`lease()` fallback to current settings. Host snapshot hydration is a known
+pre-processing stage: a blocked restoration records `executionStarted:false`
+and does not consume the task's finite processing-failure budget. Cancellation
+or a newer fence during the await prevents the restored object from publishing.
+
+Real M04/M05 production tests use synthetic provider settings and `withModel`
+callbacks that return generated values locally. They verify restart recovery of
+original selection, effective settings and price, user-owned accounting, and
+revocation races without contacting any provider. The earlier interface-only
+fixtures are not evidence for this combined runtime.
 
 ## M16 lifecycle contract
 
@@ -169,8 +192,7 @@ operation fairness, lane capacity and transactional commit fences. CHANGE:
 persistent host ownership, per-user fairness and private Operations cursors.
 REMOVE: production owner access, copied task contexts, unscoped task control and
 cross-user dependencies. EXCEPTION: quarantined old algorithm fixtures can omit
-ownership; trusted host code is not an adversarial code sandbox. UNKNOWN: actual
-M04 combined runtime, unfinished business handlers, real external reconciliation,
+ownership; trusted host code is not an adversarial code sandbox. UNKNOWN: unfinished business handlers, real external reconciliation,
 physical clients and deployment behavior await their respective modules.
 
 Executed checks, exact implementation SHA and independent review findings are in

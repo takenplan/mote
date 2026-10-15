@@ -67,7 +67,8 @@ HTTP/task scheduler. They do not substitute the quarantined legacy composition:
 | Durable checkpoint/owner recovery | Actual OS process killed with SIGKILL; replacement host uses the original checkpoint and grant |
 | Finite safe failure retry; unknown external outcomes and owner-only confirmation | Structured synthetic failures and persistent external issuance journal |
 | Export/delete/restore, malformed or cross-user graph and unknown reconciliation | `multiuser-execution-lifecycle.test.ts`; B rows remain identical |
-| Genuine model lease binding, fixed user snapshots, withdrawal, retained wrapper and missing restart snapshot | `multiuser-execution-model.test.ts`; synthetic WeakMap host using M04 signatures |
+| Genuine model lease binding, fixed user snapshots, withdrawal, retained wrapper and missing restart snapshot | `multiuser-execution-model.test.ts`; actual M04 `Configurations`, durable encrypted snapshots and production HTTP routes |
+| Changed handler feature fails closed; same-feature registration preserves the original model lease | `multiuser-execution-handler-binding.test.ts` |
 | WeakMap context provenance, copied/foreign contexts and task admin denial | `multiuser-task-context.test.ts` |
 | Persistent fairness, operation ancestry, cursor independence, incompatible schema rejection and commit fences | `multiuser-execution-core.test.ts` |
 
@@ -76,8 +77,8 @@ An exploratory affected run exposed a legacy recovery fixture assuming one
 The single assertion now uses its existing real-engine `finishPipeline` helper;
 all success, immutable identity and no-replay assertions remain. The isolated six
 recovery-client tests passed before this correction as well; no test is skipped.
-Three earlier affected processes were deliberately stopped before completion because
-subsequent required review fixes invalidated their code snapshots. They are
+Earlier affected candidates were deliberately stopped before completion because
+required review fixes or the actual M04 combination invalidated their code snapshots. They are
 incomplete runs, not passing frozen-code evidence.
 
 The first full production/lifecycle/context group passed **19/19**; the model group
@@ -87,23 +88,33 @@ passed **2/2**, and its independent reviewer also reran the six recovery-client
 regressions (**8/8** combined), with zero skips. Exact frozen-code checks and remote
 PR/CI verification are appended below after completion.
 
-## Explicit integration limits
+## Real M04 combination and remaining limits
 
-M04 confirmed it has no durable model snapshot ID/recovery API in this iteration.
-M05 pins genuine in-memory M04 leases and persists only credential-free receipt
-metadata. Restart without that object produces `blocked/model_snapshot_unavailable`
-and performs no new lease/model call; JSON receipts cannot regain authority.
-The independent M04 branch is not imported here, so actual M04 combined runtime
-verification remains a joint integration check. No real model call is claimed.
+The parent subsequently authorized combining the released M04 implementation.
+Remote verification matched PR #129 and branch head
+`bc5323e1b5ee337c20dee58d4a8e9c25bc2adbbf`, whose application implementation is
+`e76f1fe6`. The M05 branch applies its published commits as `c4e4e8bc`, `d56c7b0b`,
+`463d5299` and `aaf481af`, preserving M01/M02 permissions, error handling and
+pre-listen signal registration. No integration branch or PR merge occurred.
 
-Portable export explicitly covers task metadata/dependencies and handler-declared
+The earlier M04 interface-only mocks and missing-snapshot restriction describe
+an intermediate implementation; they are superseded by actual M04 composition.
+Final model tests use real `Configurations`, encrypted durable snapshots,
+`restoreLease`, account/resource generations and actual usage persistence.
+Provider callbacks remain synthetic and local. The host restores original
+configuration/selection/price, never a fresh current lease; failed recovery stays
+blocked and preserves the processing-failure budget. Exact combined-code results
+are recorded below after final verification.
+
+Portable export covers task metadata/dependencies and handler-declared
 credential-free input. It excludes active authorization, checkpoints, progress,
-results, failure receipts, model snapshots and detailed external journals. Portable history restore revokes
-all grants and blocks unfinished work; it does not promise automatic task resume.
-Whole-instance SQLite recovery retains the full original task/checkpoint state.
-M16 owns final backup/recovery orchestration and coverage reporting.
+results, failure receipts, model snapshots and detailed external journals.
+Portable history restore revokes all grants and blocks unfinished work; it does
+not promise automatic task resume. Whole-instance SQLite recovery retains the
+full original task/checkpoint state; M04 owns its encrypted snapshot files/key,
+and M16 owns the complete backup/recovery orchestration and coverage reporting.
 
 Unimplemented business handlers remain closed. Physical devices, native renderer,
 Android emulator, real providers/external reconciliation and deployment were not
-run; generated engine fixtures do not prove those journeys. Repository workflow
-settings are not changed by this module.
+run; generated fixtures do not prove those journeys. Repository workflow settings
+are not changed by this module.

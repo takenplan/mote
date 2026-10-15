@@ -1354,6 +1354,7 @@
     "module": "M00",
     "surfaces": [
       "api:get:'/api/health'",
+      "extension:registerConfigurationRoutes:runtime",
       "extension:registerTaskRoutes:runtime"
     ]
   },
