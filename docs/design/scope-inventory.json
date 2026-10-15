@@ -1176,9 +1176,9 @@
     ]
   },
   "apps/server/src/operations.ts": {
-    "scope": "user",
+    "scope": "mixed",
     "module": "M05",
-    "status": "implemented",
+    "status": "scoped production reader; legacy route registration remains quarantined",
     "surfaces": [
       "api:get:'/api/operations'",
       "api:get:'/api/operations/:id'",
@@ -1460,6 +1460,8 @@
     "module": "M05",
     "status": "implemented",
     "surfaces": [
+      "table:task_external_calls",
+      "table:task_external_retry_confirmations",
       "table:task_lifecycle_state",
       "table:task_restore_journal",
       "table:user_tasks",

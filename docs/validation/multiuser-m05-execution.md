@@ -42,6 +42,10 @@ Independent reviewers found and drove fixes for:
   admission tombstone; unknown external outcomes retain reconciliation evidence.
 - P2: portable restore now checks input omission, normalized handler input,
   dependency completeness and an iterative acyclic graph before publication.
+- P2: retry confirmation originally erased the preceding unknown issuance. Each
+  external call now retains a fixed issuance ID, immutable owner/epoch/key/time,
+  separately attributed confirmation and scoped settlement. A later successful
+  retry cannot conceal the earlier unresolved effect during deletion.
 - P2: model callback errors now recheck the execution grant in `finally`, so
   shared withdrawal is classified as stale and cannot publish late usage/results.
 
@@ -61,9 +65,20 @@ HTTP/task scheduler. They do not substitute the quarantined legacy composition:
 | WeakMap context provenance, copied/foreign contexts and task admin denial | `multiuser-task-context.test.ts` |
 | Persistent fairness, operation ancestry, cursor independence, incompatible schema rejection and commit fences | `multiuser-execution-core.test.ts` |
 
+An exploratory affected run exposed a legacy recovery fixture assuming one
+`processing.tick()` also awaited a pipeline already claimed by a completion wake.
+The single assertion now uses its existing real-engine `finishPipeline` helper;
+all success, immutable identity and no-replay assertions remain. The isolated six
+recovery-client tests passed before this correction as well; no test is skipped.
+Two earlier affected processes were deliberately stopped with exit 143 because
+subsequent required review fixes invalidated their code snapshots. They are
+incomplete runs, not passing frozen-code evidence.
+
 The first full production/lifecycle/context group passed **19/19**; the model group
 passed **5/5**. Core and extended engine/Operations regression groups passed
-**28/28** and **32/32** during implementation. Exact frozen-code checks and remote
+**28/28** and **32/32** during implementation. The added issuance-journal group
+passed **2/2**, and its independent reviewer also reran the six recovery-client
+regressions (**8/8** combined), with zero skips. Exact frozen-code checks and remote
 PR/CI verification are appended below after completion.
 
 ## Explicit integration limits
@@ -77,7 +92,7 @@ verification remains a joint integration check. No real model call is claimed.
 
 Portable export explicitly covers task metadata/dependencies and handler-declared
 credential-free input. It excludes active authorization, checkpoints, progress,
-results, failure receipts and model snapshots. Portable history restore revokes
+results, failure receipts, model snapshots and detailed external journals. Portable history restore revokes
 all grants and blocks unfinished work; it does not promise automatic task resume.
 Whole-instance SQLite recovery retains the full original task/checkpoint state.
 M16 owns final backup/recovery orchestration and coverage reporting.

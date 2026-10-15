@@ -94,10 +94,14 @@ receipts and checkpoint reuse remain in force; unclassified errors do not imply
 safe replay.
 
 Before an external effect, the handler must durably call `external.begin(key)`;
-`external.complete()` records a confirmed successful outcome. An issued call whose
+`external.complete()` records a confirmed successful outcome. Every call has a
+fixed issuance ID and immutable user/epoch/key/time facts in `task_external_calls`;
+retry confirmations are separately retained with their user/epoch/time. An issued call whose
 response is lost remains durable after cancellation, shutdown or process death.
 Admission blocks it as `external_result_unknown`; ordinary retry cannot clear it.
-Only the same authenticated user can explicitly confirm another attempt. The
+Only the same authenticated user can explicitly confirm another attempt. That
+confirmation leaves the previous issuance unknown, even if the new call succeeds.
+Deletion checks every unresolved issuance, including earlier confirmed retries. The
 external domain still owns idempotency and reconciliation; a local abort or lease
 expiry never proves that the remote effect did not happen. This module makes no
 external calls itself.
@@ -131,7 +135,8 @@ Export is one consistent transaction containing only this user's task metadata,
 original account epochs, states and dependencies. A handler must explicitly
 supply `portableInput` to export credential-free input; other inputs are marked
 omitted. Coverage explicitly excludes credentials, active authorization,
-checkpoints, progress, results, failure receipts and model snapshots. It is a
+checkpoints, progress, results, failure receipts, model snapshots and detailed
+external journals. It is a
 scoped task-history export, not a complete execution checkpoint backup.
 
 Delete first fences the domain and revokes all task grants, then aborts local
@@ -139,8 +144,10 @@ work. Known outcomes permit idempotent removal of task, dependency, resource,
 projection, change, generation and user-fairness records. A minimal domain deletion
 tombstone remains to prevent new admission. Unknown external outcomes return
 `result_unknown` and retain the journal for reconciliation. M16 may use
-`settleExternalForDeletion` with a genuine execution-domain delete grant after
-independently observing the outcome, then repeat deletion. This cannot issue a
+`pendingExternalForDeletion` and `settleExternalForDeletion` with a genuine
+execution-domain delete grant after independently observing each fixed issuance,
+then repeat deletion. Multiple unresolved calls require an explicit issuance ID;
+contradicting a settled outcome is rejected. This cannot issue a
 new external call or retry a task; ordinary user contexts cannot invoke it.
 
 Restore validates envelope, coverage, all IDs/inputs, dependency completeness and
