@@ -91,9 +91,9 @@ export class LarkConnector{
   }
   private code(error:unknown){return error instanceof ConnectorError?error.code:error instanceof z.ZodError?'lark_response_invalid':'lark_operation_failed';}
   private assertIdle(){if(this.closed)throw new ConnectorError('connector_closed',503);if(this.active||this.checking||this.reading||this.disconnecting)throw new ConnectorError('lark_busy',409);}
-  private start(kind:LarkJob['kind'],work:(signal:AbortSignal,job:LarkJob)=>Promise<void>):LarkJob{
+  private start(kind:LarkJob['kind'],work:(signal:AbortSignal,job:LarkJob)=>Promise<void>,documentsOnly=false):LarkJob{
     this.assertIdle();const job:LarkJob={id:randomUUID(),kind,state:'running'};this.job=job;const controller=new AbortController();this.controller=controller;
-    this.active=Promise.resolve().then(()=>work(controller.signal,job)).then(()=>{job.state='completed';delete this.snapshot.error;}).catch(e=>{job.state=controller.signal.aborted?'cancelled':'failed';job.error=this.code(e);this.snapshot.error=job.error;if(kind==='sync')this.reportSources('error',job.error);}).finally(()=>{delete job.authorizationUrl;delete job.expiresAt;this.active=undefined;this.controller=undefined;});
+    this.active=Promise.resolve().then(()=>work(controller.signal,job)).then(()=>{job.state='completed';delete this.snapshot.error;}).catch(e=>{job.state=controller.signal.aborted?'cancelled':'failed';job.error=this.code(e);this.snapshot.error=job.error;if(kind==='sync')this.reportSources('error',job.error,documentsOnly);}).finally(()=>{delete job.authorizationUrl;delete job.expiresAt;this.active=undefined;this.controller=undefined;});
     return {...job};
   }
   private async run(command:LarkCommand,signal:AbortSignal){if(signal.aborted)throw new ConnectorError('lark_operation_cancelled',409);return this.runner(command,{signal});}
@@ -149,7 +149,7 @@ export class LarkConnector{
     if(hasDocumentSelection(this.saved.selection))add(this.sourceId('docs'),'飞书文档','lark-docs');
     for(const id of this.saved.selection.calendarIds)add(this.sourceId('calendar',id),`飞书日历 · ${id.slice(0,80)}`,'lark-calendar');
   }
-  private reportSources(state:'syncing'|'error',code?:string){if(!this.saved.account)return;for(const source of this.ctx.sources.listSources()){if(source.enabled&&(state!=='error'||source.status?.state==='syncing')&&(source.id===this.sourceId('docs')||this.saved.selection.calendarIds.some(id=>source.id===this.sourceId('calendar',id))))this.ctx.sources.reportStatus(source.id,{state,...(code?{code}:{})});}}
+  private reportSources(state:'syncing'|'error',code?:string,documentsOnly=false){if(!this.saved.account)return;for(const source of this.ctx.sources.listSources()){if(source.enabled&&(state!=='error'||source.status?.state==='syncing')&&(source.id===this.sourceId('docs')||!documentsOnly&&this.saved.selection.calendarIds.some(id=>source.id===this.sourceId('calendar',id))))this.ctx.sources.reportStatus(source.id,{state,...(code?{code}:{})});}}
   private documents(signal?:AbortSignal){
     const account=this.saved.account??'',selection=structuredClone(this.saved.selection),scope=documentScope(selection),sourceId=this.sourceId('docs');
     const authorize=()=>{if(signal?.aborted)throw new ConnectorError('lark_operation_cancelled',409);if(!this.saved.enabled||this.saved.account!==account||documentScope(this.saved.selection)!==scope)throw new ConnectorError('lark_document_scope_changed',409);if(!this.ctx.sources.getSource(sourceId).enabled)throw new ConnectorError('lark_source_paused',409);};
@@ -164,7 +164,7 @@ export class LarkConnector{
   });}
   startSync(reference?:string,automatic=false){return this.start('sync',async(signal,job)=>{
     if(automatic&&(!this.selectionAuthorized()||hasDocumentSelection(this.saved.selection)&&!this.documents(signal).confirmed()&&!this.saved.selection.calendarIds.length))return;
-    await this.requireConnected();if(this.snapshot.missingScopes.length)throw new ConnectorError('lark_permission_required',403);this.registerSources();this.reportSources('syncing');const result:NonNullable<LarkJob['result']>={imported:0,duplicates:0};job.result=result;
+    await this.requireConnected();if(this.snapshot.missingScopes.length)throw new ConnectorError('lark_permission_required',403);this.registerSources();this.reportSources('syncing',undefined,Boolean(reference));const result:NonNullable<LarkJob['result']>={imported:0,duplicates:0};job.result=result;
     const write=async(sourceId:string,item:SourceItem,bytes?:Buffer)=>{
       if(signal.aborted)throw new ConnectorError('lark_operation_cancelled',409);
       const authorize=()=>{if(signal.aborted||!this.saved.enabled||!this.ctx.sources.getSource(sourceId).enabled)throw new ConnectorError('lark_operation_cancelled',409);const documentId=item.document?.activity?.documentId??item.externalId;if(this.ctx.store.db.prepare('SELECT 1 FROM file_forgotten WHERE source_id=? AND external_id=?').get(sourceId,documentId))throw new ConnectorError('lark_document_forgotten',410);};
@@ -190,8 +190,9 @@ export class LarkConnector{
         const first=!documents.confirmed(),hasPreview=Boolean(documents.status().previewAt);if(!automatic)documents.confirm();
         try {if(!reference&&!(first&&hasPreview))await documents.discover();}catch(error){if(signal.aborted)throw error;failure=this.code(error);}
         const summary=await documents.archive((item,bytes)=>write(docSource,item,bytes),reference);
-        if(this.saved.selection.documentDiscovery||this.saved.selection.folders||this.saved.selection.wikiRoots)Object.assign(result,summary,{discovered:documents.status().previewTotal??0});
-        if(summary.documentFailures)failure='lark_partial_failure';
+        const documentStatus=documents.status();
+        if(this.saved.selection.documentDiscovery||this.saved.selection.folders||this.saved.selection.wikiRoots)Object.assign(result,summary,{discovered:documentStatus.previewTotal??0});
+        if(documentStatus.failed)failure='lark_partial_failure';
         this.ctx.sources.reportStatus(docSource,{state:failure?'error':'idle',...(failure?{code:failure}:{lastSyncAt:now()})});
       }else this.ctx.sources.reportStatus(docSource,{state:'idle'});
     }
@@ -207,6 +208,6 @@ export class LarkConnector{
     }
     if(failure)throw new ConnectorError(failure,502);
     const next={...this.saved,lastSyncAt:now()};await this.file.write(next);this.saved=next;
-  });}
+  },Boolean(reference));}
   async close(){this.closed=true;clearInterval(this.timer);this.timer=undefined;this.controller?.abort();this.readController?.abort();await this.reading?.catch(()=>{});await this.active;await this.checking;await this.file.flush();}
 }

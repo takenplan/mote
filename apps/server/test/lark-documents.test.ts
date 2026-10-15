@@ -25,6 +25,8 @@ async function fixture(t:any){
    case 'status':return json({appId:'cli_fixture',identities:{user:{available:true,openId:state.account,scope:[...LARK_SCOPES,'drive:drive:readonly','calendar:calendar:readonly'].join(' ')}}});
    case 'login':return json({verification_url:'https://accounts.feishu.cn/authorize?fixture',device_code:'fixture-private-code',expires_in:600});
    case 'complete':return '{}';
+   case 'calendars':return json({data:{calendar_list:[{calendar_id:'GeneratedCalendar123',role:'owner'}],has_more:false}});
+   case 'events':return json({data:{items:[]}});
    case 'documents-search':if(command.pageToken&&state.searchFailureToken===command.pageToken)throw new ConnectorError('lark_command_failed');return json(state.searchPages[command.pageToken?Number(command.pageToken):0]??{results:[],has_more:false});
    case 'document':{const id=command.document.split('/').at(-1)!;if(state.fail.has(id))throw new ConnectorError('lark_permission_required');state.afterFetch?.();return json({data:{document:{document_id:id,revision_id:1,title:id,content:state.content.get(id)??'Generated fixture body'}}});}
    case 'folder-list':return json({data:{files:[{token:'DocumentDiary123',type:'docx',name:'Generated diary'},{token:'OtherSheet123',type:'sheet',name:'Referenced sheet'}],has_more:false}});
@@ -54,6 +56,30 @@ test('scope preview reads metadata only; first confirmation archives generated b
  assert.equal(items.filter(i=>i.kind==='file').length,1);assert.ok(items.filter(i=>i.kind==='event').length===6);
  const opened=items.find(i=>i.document?.activity?.action==='opened')!;assert.equal(opened.document?.activity?.evidenceBasis,'search-predicate');assert.ok(opened.document?.activity?.limitations?.includes('provider-open-may-include-connector-access'));assert.equal(opened.document?.recordedAt,undefined);assert.ok(opened.text.includes('human reading is not established'));assert.equal(items.find(i=>i.kind==='file')?.document?.contentRole,'other');
  f.state.fail.clear();f.c.startSync(url('DocumentMeeting123'));status=await done(f.c);assert.equal(status.job?.state,'completed');assert.equal(status.documentSync?.failed,0);assert.equal(f.sources.listItems({kind:'file'}).items.length,2);
+});
+
+for(const calendarState of ['idle','syncing'] as const)test(`retrying one document preserves source failure with calendar state ${calendarState} until every failed document is recovered`,async t=>{
+ const f=await fixture(t),ids=['DocumentDiary123','DocumentMeeting123'];
+ await f.c.select({...selection,documentDiscovery:undefined,documents:ids.map(url),calendarIds:['GeneratedCalendar123']});
+ f.c.startSync();let status=await done(f.c);assert.equal(status.job?.state,'completed');
+ const source=f.sources.listSources().find(source=>source.kind==='lark-docs')!,lastSyncAt=status.lastSyncAt;assert.ok(lastSyncAt);
+ for(const id of ids)f.state.fail.add(id);
+ f.c.startSync();status=await done(f.c);assert.equal(status.job?.error,'lark_partial_failure');assert.equal(status.documentSync?.failed,2);
+ const calendar=f.sources.listSources().find(source=>source.kind==='lark-calendar')!;
+ if(calendarState==='syncing')f.sources.reportStatus(calendar.id,{state:'syncing'});
+ const calendarStatus=f.sources.getSource(calendar.id).status;
+ f.state.fail.delete(ids[0]);f.c.startSync(url(ids[0]));status=await done(f.c);
+ assert.equal(status.documentSync?.failed,1);assert.equal(status.documentSync?.pending,1);
+ assert.equal(status.job?.state,'failed');assert.equal(status.job?.error,'lark_partial_failure');
+ assert.equal(f.sources.getSource(source.id).status?.state,'error');assert.equal(f.sources.getSource(source.id).status?.code,'lark_partial_failure');
+ assert.equal(f.sources.getSource(source.id).status?.lastSyncAt,undefined,'a successful individual retry is not a successful source sync');
+ assert.equal(status.lastSyncAt,lastSyncAt,'remaining failed documents must not advance connector success time');
+ assert.deepEqual(f.sources.getSource(calendar.id).status,calendarStatus,'a document retry does not sync or fail an unrelated calendar');
+ f.state.fail.delete(ids[1]);f.c.startSync(url(ids[1]));status=await done(f.c);
+ assert.equal(status.job?.state,'completed');assert.equal(status.documentSync?.failed,0);assert.equal(status.documentSync?.pending,0);
+ assert.equal(f.sources.getSource(source.id).status?.state,'idle');assert.ok(f.sources.getSource(source.id).status?.lastSyncAt);assert.ok(status.lastSyncAt);
+ assert.deepEqual(f.sources.getSource(calendar.id).status,calendarStatus,'recovering the last document does not leave an unrelated calendar syncing');
+ for(const id of ids)assert.equal(f.sources.history(source.id,id).length,1,'retries preserve archived document revisions');
 });
 
 test('pagination resumes the exact fixed predicate after restart, including earlier successful discoveries',async t=>{
