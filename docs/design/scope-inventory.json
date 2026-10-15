@@ -119,18 +119,21 @@
     ]
   },
   "apps/server/src/config-service.ts": {
-    "scope": "legacy-quarantined",
+    "scope": "mixed",
     "module": "M04",
     "surfaces": [
       "directory:dirname(this.path)"
-    ]
+    ],
+    "status": "implemented"
   },
   "apps/server/src/config.ts": {
-    "scope": "legacy-quarantined",
+    "scope": "mixed",
     "module": "M04",
     "surfaces": [
       "directory:dataDir"
-    ]
+    ],
+    "status": "partial",
+    "notes": "M04 reuses schemas and instance file startup without owner initialization; legacy credential generation remains quarantined."
   },
   "apps/server/src/connectors/gmail.ts": {
     "scope": "legacy-quarantined",
@@ -1614,6 +1617,35 @@
       "extension:backendContext.provide:'moteOwnerQuestions'",
       "extension:registerMemoryExtensions:{integrationSettings:memoryIntegrationSettings,semanticArtifacts,providerCooldownCheck:()=>providerAdmission.check(modelSettings.select('memory').settings),insights:insightRuns,insightTimeout:()=>modelSettings.select('insight').settings.agentTimeoutMs,lifecycle,store,files,memories,pipeline:memoryPipeline,working,query:(input,module)=>queryAgent(input,input.skill==='personal-insight'?'insight':'query',module),model:()=>modelSettings.select('memory').settings.model}",
       "extension:registerPluginRoutes:app"
+    ]
+  },
+  "apps/server/src/scope/configuration.ts": {
+    "scope": "mixed",
+    "module": "M04",
+    "status": "implemented",
+    "surfaces": [
+      "directory:path",
+      "table:user_configuration_restore_journal",
+      "table:user_configuration_state",
+      "table:user_model_usage"
+    ]
+  },
+  "apps/server/src/scope/configuration-routes.ts": {
+    "scope": "mixed",
+    "module": "M04",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/configuration/models'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/admin/configuration/models'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/configuration',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/models',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/models/selection/:feature',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/usage',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/configuration',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/configuration/reload',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/configuration/:domain',service:'configuration'",
+      "extension:runtime.services.registerInstance:'model-resources'",
+      "extension:runtime.services.registerUser:'configuration'"
     ]
   }
 }

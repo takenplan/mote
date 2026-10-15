@@ -61,6 +61,8 @@ export function checkScopeInventory(current,declared){
 export function checkProductionImports(directory=root){
   const failures=[];
   const allowed=new Set(['apps/server/src/app.ts','apps/server/src/query-agent.ts','apps/server/src/config.ts','apps/server/src/private-storage.ts','apps/server/src/runtime-listener.ts','apps/server/src/login-handoffs.ts','apps/server/src/connection-error.ts','apps/server/src/execution-engine.ts','apps/server/src/execution-storage.ts','apps/server/src/operations.ts','apps/server/src/operation-projection.ts']);
+  // M04 uses the original configuration and pure model/usage contracts.
+  for(const path of ['config-service.ts','model-settings.ts','usage-metrics.ts','i18n.ts'])allowed.add(sourceRoot+'/'+path);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){
