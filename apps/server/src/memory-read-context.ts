@@ -1,6 +1,7 @@
 import type {AgentAnswer} from '@mote/agent';
 import type {QueryResult} from '@mote/shared';
 import {MemoryOutputValidationError} from './memory.js';
+import {hasMemoryImageProof,memoryImageReadReceipts} from './memory-image-proof.js';
 
 export type MemoryReadRange={id:string;offset:number;length:number};
 type ReadResult=QueryResult&Pick<AgentAnswer,'evidenceReadRanges'>;
@@ -32,11 +33,13 @@ export function mergeMemoryReadRanges(ranges:readonly MemoryReadRange[]):MemoryR
 export function assertMemoryTargetSupport(result:QueryResult,targets:readonly MemoryReadRange[],readText:(id:string)=>string|undefined){
  let value:any;try{value=JSON.parse(result.answer);}catch{return;}
  if(!Array.isArray(value.memories))return;
+ let imageReads:ReturnType<typeof memoryImageReadReceipts>;
+ try{imageReads=memoryImageReadReceipts(result);}catch{throw new MemoryOutputValidationError('image_evidence','Invalid original-image delivery receipt');}
  for(const [candidateIndex,candidate] of value.memories.entries()){
   if(!Array.isArray(candidate.evidence))continue; // Ordinary schema validation reports this first.
   const supports=targets.some(target=>{const text=readText(target.id);if(typeof text!=='string')return false;
-   return candidate.evidence.some((span:any)=>span.id===target.id&&typeof span.quote==='string'&&span.quote.length>0&&
-    (Number.isSafeInteger(span.offset)?span.offset>=target.offset&&span.offset+span.quote.length<=target.offset+target.length&&text.slice(span.offset,span.offset+span.quote.length)===span.quote:text.slice(target.offset,target.offset+target.length).includes(span.quote)));
+   return candidate.evidence.some((span:any)=>span.id===target.id&&(hasMemoryImageProof(imageReads,span)||typeof span.quote==='string'&&span.quote.length>0&&
+    (Number.isSafeInteger(span.offset)?span.offset>=target.offset&&span.offset+span.quote.length<=target.offset+target.length&&text.slice(span.offset,span.offset+span.quote.length)===span.quote:text.slice(target.offset,target.offset+target.length).includes(span.quote))));
   });
   if(!supports)throw new MemoryOutputValidationError('scope','Every Memory requires exact supporting evidence in this batch target; context-only originals cannot create an independent candidate',{candidateIndex,problem:'missing_target_support'});
  }
@@ -44,5 +47,6 @@ export function assertMemoryTargetSupport(result:QueryResult,targets:readonly Me
 
 export function retainedMemoryReadReceipt(result:QueryResult){
  const ranges=(result as ReadResult).evidenceReadRanges;
- return ranges?{evidenceReadRanges:ranges.map(range=>({...range}))}:{};
+ const imageReadReceipts=memoryImageReadReceipts(result);
+ return {...(ranges?{evidenceReadRanges:ranges.map(range=>({...range}))}:{}),...(imageReadReceipts.length?{imageReadReceipts:structuredClone(imageReadReceipts)}:{})};
 }

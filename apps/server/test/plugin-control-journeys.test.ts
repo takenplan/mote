@@ -448,9 +448,17 @@ test('real integration retries exact externally staged reviewed output without r
   const publication = new MemoryPublication(f.store, f.memories, f.bindings), lifecycle = new MemoryLifecycle(f.store, () => true, Date.now, f.executor);
   const pipeline = new MemoryPipeline({store: f.store, memories: f.memories, executor: f.executor, publication, assertNewManualWork: () => f.bindings.assertNewManualWork(), model: () => 'generated-model', configured: () => true, requireAdmission: true, async query() {throw Error('Integration must use its independently supplied generated query');}});
   const settings = new MemoryIntegrationSettings(f.store, pipeline.strategies);
-  const originals = f.memories.readEvidence([...new Set([...first.evidenceIds, ...second.evidenceIds])]); let calls = 0;
+  const originalIds = [...new Set([...first.evidenceIds, ...second.evidenceIds])], originals = f.memories.readEvidence(originalIds); let calls = 0;
   const result: QueryResult = {answer: JSON.stringify({memories: [{domain: 'personal', title: 'Generated integrated observatory', statement: 'The generated fixtures describe two telescope observations. ' + originals.map(record => `[${record.id}]`).join(' '), uncertainty: 'Generated transport fixture only', evidenceIds: originals.map(record => record.id), evidence: originals.map(record => ({id: record.id, quote: record.ocrText})), relatedMemoryIds: [first.id, second.id], admission: {layer: 'memory', reason: 'Generated model selects a synthetic integration', scope: 'Generated fixture only', attribution: 'observed'}}]}), citations: originals.map(record => ({id: record.id, capturedAt: record.capturedAt, appName: 'Generated', excerpt: record.ocrText})), trace: [], runId: 'generated-integration'};
-  registerMemoryIntegration({lifecycle, memories: f.memories, pipeline, settings, query: async () => ({...result, runId: 'generated-integration-pass-' + ++calls})});
+  registerMemoryIntegration({lifecycle, memories: f.memories, pipeline, settings, query: async input => {
+    const delivered = f.memories.readEvidence(originalIds);
+    assert.deepEqual(delivered.map(record => record.id).sort(), [...originalIds].sort());
+    assert.ok(delivered.every(record => record.ocrText.length > 0));
+    // This synthetic model adapter consumes the actual stored originals before
+    // returning its generated verdict; citation JSON alone is not a delivery.
+    input.onEvidence?.(delivered);
+    return {...result, runId: 'generated-integration-pass-' + ++calls};
+  }});
   try {
     const recipe = pipeline.strategies.listIntegrations()[0]!;
     const selected = {recipe: {id: recipe.id, version: recipe.version}, inputs: [first, second].map(memory => ({id: memory.id, version: memory.version, fingerprint: memory.fingerprint}))};
@@ -458,8 +466,14 @@ test('real integration retries exact externally staged reviewed output without r
     await lifecycle.tick(); assert.equal(calls, 2, 'generation and independent review ran once');
     assert.equal(f.memories.list().filter(memory => memory.tier === 'consolidated').length, 0);
     assert.equal(f.store.db.prepare("SELECT state FROM memory_publications WHERE id=?").get(request.operationId + ':integration:personal')?.state, 'staged');
+    const deliveryRow = () => f.store.db.prepare('SELECT json FROM memory_integration_deliveries WHERE operation_id=?').get(request.operationId + ':integration:personal') as {json: string} | undefined;
+    const delivered = deliveryRow(); assert.ok(delivered);
+    const receipt = JSON.parse(delivered.json);
+    assert.equal(receipt.version, 1); assert.match(receipt.inputsHash, /^[a-f0-9]{64}$/);
+    assert.deepEqual(receipt.memoryIds, []); assert.deepEqual([...receipt.evidenceIds].sort(), [...originalIds].sort());
     lifecycle.retry('consolidation', request.id); await lifecycle.tick();
     assert.equal(calls, 2, 'provider retry does not create another paid generation or review');
+    assert.equal(deliveryRow()?.json, delivered.json, 'provider retry reuses the original host delivery receipt with its reviewed staged output');
     const integrated = f.memories.list().filter(memory => memory.tier === 'consolidated'); assert.equal(integrated.length, 1);
     assert.deepEqual(await f.bindings.read(integrated[0]!.id), f.memories.get(integrated[0]!.id));
     assert.equal(f.store.db.prepare("SELECT state FROM memory_publications WHERE id=?").get(request.operationId + ':integration:personal')?.state, 'committed');

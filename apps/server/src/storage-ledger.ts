@@ -37,12 +37,14 @@ export class StorageLedger {
     expressions.memory_recipe_default_upgrades='length(CAST(id AS BLOB))+128';
     expressions.memory_recipe_legacy_scopes='length(CAST(setting_id AS BLOB))+length(CAST(scope AS BLOB))+128';
     expressions.memory_recipe_legacy_exclusions='length(CAST(source_id AS BLOB))+128';
+    expressions.memory_integration_deliveries='length(CAST(json AS BLOB))+length(CAST(operation_id AS BLOB))+length(CAST(inputs_hash AS BLOB))+coalesce(length(CAST(step_id AS BLOB)),0)+128';
     expressions.memory_deletion_dependencies='length(CAST(deletion_id AS BLOB))+length(CAST(evidence_id AS BLOB))+length(CAST(origin_keys AS BLOB))+length(CAST(lineage_keys AS BLOB))+128';
     expressions.delegation_artifacts='length(CAST(json AS BLOB))+length(CAST(metadata AS BLOB))+256';
     expressions.delegation_events='coalesce(length(CAST(message AS BLOB)),0)+length(CAST(work_id AS BLOB))+coalesce(length(CAST(unit_id AS BLOB)),0)+128';
     expressions.delegation_dependencies='length(CAST(work_id AS BLOB))+length(CAST(evidence_id AS BLOB))+128';
     expressions.delegation_source_context_dependencies='length(CAST(work_id AS BLOB))+length(CAST(unit_id AS BLOB))+length(CAST(source_id AS BLOB))+256';
     expressions.execution_cancellation_aliases='length(CAST(alias_id AS BLOB))+length(CAST(step_id AS BLOB))+128';
+    expressions.execution_failures='length(CAST(json AS BLOB))+length(CAST(step_id AS BLOB))+128';
     expressions.activity_memory_jobs='length(CAST(id AS BLOB))+coalesce(length(CAST(import_id AS BLOB)),0)+192';
     expressions.activity_memory_continuations='length(CAST(job_id AS BLOB))+length(CAST(parent_id AS BLOB))+length(CAST(root_id AS BLOB))+96';
     expressions.activity_memory_sources='length(CAST(job_id AS BLOB))+length(CAST(source_id AS BLOB))+64';

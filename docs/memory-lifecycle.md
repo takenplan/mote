@@ -1,5 +1,10 @@
 # Memory lifecycle
 
+> 2026-10-15: Integration requires current readable inputs and actual delivered
+> bodies/originals. A no-delivery failure preserves its window and requires
+> explicit retry. Internal planner failures no longer masquerade as owner waits.
+> See the [delivery and failure-state decision](adr-memory-evidence-delivery-and-failure-state.md).
+
 > 2026-10-14 更新：按所有者的MVP简化决定，取消宿主字符/token近似配额、结果缩页和Memory自动二分恢复；真正资源失败留下明确未完成范围，明确临时故障复用共享引擎有界重试。下面较早策略描述中的资源分拆由[当前决定](adr-ask-evidence-quality-and-simple-context.md)取代。
 
 > 2026-09-27 更新：整合采用独立注册的整合/审核配方，固定输入与模型配置，自动选择只处理后续增量；历史工作需显式触发。详见 [策略组合](memory-strategies.md)。新产物的 admission 与审核边界见 [记忆准入设计](memory-admission.md)。
@@ -67,7 +72,7 @@ Original reception, readable Materials, existing Memory and read-only queries re
 ## Layers and trust
 
 - Working memory: model-written, bounded conversation summary plus recent turns. Summary prefix fingerprints prevent saving against a changed conversation. Explicit changes of decision and open questions are preserved by the skill. Dialogue and previous assistant prose are untrusted context, not evidence. Working-memory sessions cannot call context retrieval tools. The settings control the minimum recent turns exempt from compaction, summary length and context budget; until compaction catches up, available uncompressed turns are retained up to the context budget and the 20-turn ceiling; unrepresented turns are counted explicitly.
-- Episode memory: internally reviewed claims from bounded original segments, with exact quotes and UTF-16 ranges; valid commits become active automatically.
+- Episode memory: internally reviewed claims from bounded original segments, with exact quotes and UTF-16 ranges or a host-verified original image view; valid commits become active automatically.
 - Consolidated memory: an installed integration/review recipe uses a neutral skill to compare episode cards, search related text and revisit original evidence. Its output may be episodic, semantic or procedural, with optional explicitly supported validity dates. Conflicts, evolving preferences and attribution are expressed in text and uncertainty. Reviewed supersession is applied atomically against the exact target version and preserves the original historical record. Contradictions retain both claims. No owner confirmation is required.
 - Progressive disclosure: searchable overview cards → full statement, uncertainty and provenance → original evidence. `memories` supports FTS queries, tier/kind filters and cursors. The host applies hard device/time scopes. The `changes` tool pages the host-selected incremental snapshot; it is empty in ordinary queries. Search includes Chinese trigrams and scoped lexical matches without the old global top-500 cutoff. Whitespace-separated literal terms use AND; one- or two-character terms use literal substring matching as well as the word index, so queries such as `林岚 清晨` find unsegmented Chinese text. Original captures and file chunks share this lexical behavior. A memory miss explicitly points the model back to original-record search, since the memory index covers selected summaries only.
 

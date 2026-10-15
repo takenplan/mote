@@ -164,6 +164,10 @@ export class HindsightEngine implements MemoryProvider {
     const {originals,transport:ranges}=hindsightEvidenceRanges(input.evidence);
     if(!ranges.length)throw new MemoryProviderError('invalid_record','Engine preparation requires original evidence');
     const parents=(input.relatedMemories??[]).map(memory=>memorySchema.parse(memory));
+    // Native retain/consolidate accepts exact text only. A saved visual proof
+    // cannot be replaced with its locator text or an interpretation quotation.
+    // Refuse before staging a bank or starting any remote/native operation.
+    if(parents.some(memory=>memory.evidence.some(span=>span.image)))throw new MemoryProviderError('unsupported_input','This native Memory engine requires exact text provenance; visual parent proofs need native image support');
     if(input.phase==='integrate'&&!parents.length)throw new MemoryProviderError('invalid_record','Integration requires frozen canonical parent memories');
     if(parents.some(memory=>memory.evidenceIds.some(id=>!ranges.some(range=>range.record.id===id))))throw new MemoryProviderError('invalid_record','Integration requires every supplied parent original');
     const bank='mote-stage-'+hindsightDigest([input.namespace,input.opId,input.phase,ranges.map(range=>[range.record.id,range.offset,range.text]),parents.map(memory=>memoryProviderKey(memory))]).slice(0,40);

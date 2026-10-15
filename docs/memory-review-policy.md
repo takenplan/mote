@@ -2,6 +2,13 @@
 
 New Memory candidates receive an independent read-only model review. The host always validates schema, exact quotations, citation membership, supplied ranges and current evidence versions. A successful internal review and host validation activate Memory automatically; no owner confirmation step is required.
 
+Visual claims may instead cite a host-verified delivered image view. The reviewer
+must independently read its own current original or a region covering retained
+visual proof; the draft's pixel receipt supplies no reviewer delivery authority.
+Dropping an unsupported claim does not require a redundant pixel request. OCR
+quotes retain the text contract; generated interpretation is not original proof.
+See [image processing](image-processing.md#independent-memory-image-proof).
+
 `bounded-exact-review@1` permits reuse only for a previously reviewed, identical bounded extraction. It does not classify text, topics or intent, and never trusts a candidate's own claim that it is low risk. The key covers the candidate JSON, outer citations, all semantic request fields, the host-owned task time, the admission rules, full original records including source/speaker/time/version metadata, a digest of the selected model configuration, and the current deletion-policy snapshot. Changed credentials, models, scope, source metadata, dates or instructions invalidate reuse. Consolidation, open archive retrieval and requests without a frozen task time always receive a fresh review.
 
 Memory jobs pin the model's current-time context to their persisted creation time, including retries after midnight. Without this snapshot, otherwise identical inputs could have different temporal meaning. Both model runtimes consume the same context contract.

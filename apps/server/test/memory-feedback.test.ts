@@ -4,8 +4,12 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {ContextToolError,type QueryInput} from '@mote/agent';
-import type {QueryResult} from '@mote/shared';
+import {AgentProviderError,ContextToolError,type QueryInput} from '@mote/agent';
+import {ProviderFailure,type QueryResult} from '@mote/shared';
+import {retainFailureContext} from '../src/execution-failures.js';
+import {ActivityProjection} from '../src/activity.js';
+import {Operations} from '../src/operations.js';
+import {OwnerQuestions} from '../src/owner-questions.js';
 import {Store,sha256} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
 import {MaterialStore,materialId} from '../src/materials.js';
@@ -22,7 +26,7 @@ import type {MemoryFeedbackRequest} from '../src/memory-feedback.js';
 
 type ModelWork={members:MemoryWorkMember[];contextMembers?:MemoryWorkMember[]};
 const modelWork=(input:Pick<QueryInput,'taskContext'>)=>input.taskContext!.memoryWork as ModelWork;
-type FixtureMode='resolved'|'unresolved'|'outside'|'context-candidate';
+type FixtureMode='resolved'|'unresolved'|'outside'|'context-candidate'|'planner-transient'|'planner-unknown'|'planner-crash';
 const observedAt='2026-09-01T00:00:00Z';
 
 /** Generated models use the production authority channel, planner and product
@@ -57,6 +61,7 @@ async function fixture(t:TestContext,mode:FixtureMode='resolved',targets=1){
    if(input.traceContext?.phase==='feedback-planning'){
     const request=(input.taskContext!.memoryWork as {feedback:MemoryFeedbackRequest}).feedback;
     feedback.push(structuredClone(request));assert.match(JSON.stringify(capabilities.data),/memory\.feedback-group/);assert.match(JSON.stringify(capabilities.data),/memory\.feedback-stop/);
+    if(mode==='planner-transient'||mode==='planner-unknown'||mode==='planner-crash')throw retainFailureContext(mode==='planner-transient'?new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:0}):mode==='planner-unknown'?new AgentProviderError():new Error('Generated private original and credential must never enter the failure receipt'),{runId:'generated-feedback-failed-'+feedback.length,phase:'feedback-planning'});
     const background=request.authorized.find(member=>member.id===backgroundId);assert.ok(background);
     assert.ok(request.authorized.every(member=>member.id!==outsideId));
     if(mode==='outside'){
@@ -86,7 +91,7 @@ async function fixture(t:TestContext,mode:FixtureMode='resolved',targets=1){
   store.db.exec('BEGIN IMMEDIATE');work.inputs.receive({sourceId:'generated',inputKey:'raw-'+index});store.db.exec('COMMIT');work.observe(material.id,['material'],{inputKey:'raw-'+index,change:'source'});
  }
  t.after(async()=>{await detach();rmSync(directory,{recursive:true,force:true});});
- return {get store(){return store;},get pipeline(){return pipeline;},get runtime(){return runtime;},get memories(){return memories;},extraction,reviews,feedback,get backgroundId(){return backgroundId;},get outsideId(){return outsideId;},counts:()=>({planning,feedback:feedback.length,extraction:extraction.length,reviews:reviews.length,maxActiveModels}),
+ return {get store(){return store;},get engine(){return engine;},get pipeline(){return pipeline;},get runtime(){return runtime;},get memories(){return memories;},extraction,reviews,feedback,get backgroundId(){return backgroundId;},get outsideId(){return outsideId;},counts:()=>({planning,feedback:feedback.length,extraction:extraction.length,reviews:reviews.length,maxActiveModels}),
   async start(){assert.equal(await sourcePipelines.drainMemory(pipeline,true),1);const job=pipeline.list()[0];assert.ok(job);return pipeline.run(job.id);},
   interruptNextApply(){failNextApply=true;},
   async restart(){await detach();await attach();},
@@ -117,6 +122,40 @@ test('two unresolved feedback rounds wait for input and cannot repeat completed 
  assert.equal(f.checkpoints().length,1);assert.equal(f.checkpoints()[0].evidence_id,f.backgroundId);assert.equal(f.extraction.filter(input=>modelWork(input).members.some(member=>member.id===f.backgroundId)).length,1);
  const counts=f.counts(),checkpoints=f.checkpoints();await f.pipeline.run(done.id);await f.pipeline.retry(done.id);assert.deepEqual(f.counts(),counts);assert.deepEqual(f.checkpoints(),checkpoints);
  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_feedback_plans WHERE job_id=?').get(done.id)!.n,2);
+});
+
+for(const [mode,calls,code] of [['planner-transient',4,'provider_network'],['planner-unknown',1,'provider_failed'],['planner-crash',1,'memory_feedback_planner_failed']] as const)test(`${mode} preserves completed siblings and reports internal failure through progress and restart`,{timeout:20000},async t=>{
+ const f=await fixture(t,mode),done=await f.start();await f.settle();
+ assert.equal(done.status,'failed');assert.equal(done.errorCode,'memory_feedback_planning_failed');assert.equal(f.feedback.length,calls);assert.equal(done.completedBatches,1);assert.equal(done.failedBatches,1);assert.equal(done.pendingBatches,0);assert.equal(f.checkpoints().length,1);
+ const planner=f.runtime.list().find(work=>work.profileId==='memory.feedback')!;assert.equal(planner.status,'failed');assert.equal(planner.units.length,0);assert.equal(planner.planningComplete,undefined);assert.equal(planner.failureReceipt?.code,code);assert.equal(planner.failureReceipt?.attempt,calls);assert.equal(planner.failureReceipt?.jobId,done.id);assert.equal(planner.failureReceipt?.phase,'feedback-planning');assert.equal(planner.failureReceipt?.runId,'generated-feedback-failed-'+calls);
+ const receipt=done.failureReceipt!;assert.equal(receipt.causeCode,code);assert.equal(receipt.causeState,'failed');assert.equal(receipt.workId,planner.id);assert.equal(receipt.runId,planner.failureReceipt?.runId);assert.ok(receipt.causeStepId);assert.doesNotMatch(JSON.stringify(receipt),/private original|credential|Generated target|model request failed/);
+ const activity=new ActivityProjection(f.store,new Operations(f.store)),card=activity.detail('memory:'+done.id);assert.equal(card.state,'failed');assert.ok(card.branches.every(branch=>branch.state!=='needs_input'));if(card.progress.mode==='determinate')assert.equal(card.progress.needsInput,0);
+ const checkpoint=f.checkpoints(),counts=f.counts();await f.pipeline.run(done.id);assert.deepEqual(f.counts(),counts);assert.deepEqual(f.checkpoints(),checkpoint);
+ await f.restart();const reopened=f.pipeline.get(done.id);assert.equal(reopened.status,'failed');assert.deepEqual(reopened.failureReceipt,receipt);assert.deepEqual(f.checkpoints(),checkpoint);assert.deepEqual(f.counts(),counts);
+});
+
+test('startup terminalizes only a proven legacy planner failure without replaying its pinned work',{timeout:20000},async t=>{
+ const f=await fixture(t,'planner-transient'),done=await f.start();await f.settle();const leaf=done.batches.find(batch=>batch.status==='failed')!,pins=done.configuration,checkpoints=f.checkpoints(),counts=f.counts();
+ // Recreate exactly the old projection after the native coordinator exhausted
+ // four attempts, with zero proposals and no actual owner question.
+ f.store.db.prepare("UPDATE execution_steps SET state='blocked',error='memory_context_required' WHERE id=?").run(leaf.id);
+ f.store.db.prepare("UPDATE memory_batches SET json=json_set(json,'$.status','failed','$.errorCode','memory_context_required') WHERE id=?").run(leaf.id);
+ f.store.db.prepare("UPDATE memory_jobs SET json=json_set(json,'$.status','waiting_for_input','$.errorCode','memory_context_required') WHERE id=?").run(done.id);
+ await f.restart();const migrated=f.pipeline.get(done.id);assert.equal(migrated.status,'failed');assert.equal(migrated.errorCode,'memory_feedback_planning_failed');assert.equal(migrated.batches.find(batch=>batch.id===leaf.id)?.attempts,leaf.attempts);assert.deepEqual(migrated.configuration,pins);assert.deepEqual(f.counts(),counts);assert.deepEqual(f.checkpoints(),checkpoints);
+ await f.restart();assert.equal(f.pipeline.get(done.id).status,'failed');assert.deepEqual(f.counts(),counts);
+});
+
+test('startup keeps an accepted semantic context stop and never invents a failed planner',{timeout:20000},async t=>{
+ const f=await fixture(t,'outside'),done=await f.start();await f.settle();const counts=f.counts(),checkpoints=f.checkpoints();await f.restart();assert.equal(f.pipeline.get(done.id).status,'waiting_for_input');assert.equal(f.pipeline.get(done.id).errorCode,'memory_context_required');assert.deepEqual(f.counts(),counts);assert.deepEqual(f.checkpoints(),checkpoints);
+});
+
+test('a durable open owner question prevents legacy failure migration',{timeout:20000},async t=>{
+ const f=await fixture(t,'planner-unknown'),done=await f.start();await f.settle();const leaf=done.batches.find(batch=>batch.status==='failed')!,counts=f.counts();new OwnerQuestions(f.store);
+ f.store.db.prepare("INSERT INTO owner_questions VALUES(?,?,?,?,?)").run('generated-question','generated-identity',observedAt,observedAt,JSON.stringify({operationId:'memory:'+done.id,state:'open'}));
+ f.store.db.prepare("UPDATE execution_steps SET state='blocked',error='memory_context_required' WHERE id=?").run(leaf.id);
+ f.store.db.prepare("UPDATE memory_batches SET json=json_set(json,'$.status','failed','$.errorCode','memory_context_required') WHERE id=?").run(leaf.id);
+ f.store.db.prepare("UPDATE memory_jobs SET json=json_set(json,'$.status','waiting_for_input','$.errorCode','memory_context_required') WHERE id=?").run(done.id);
+ await f.restart();assert.equal(f.pipeline.get(done.id).status,'waiting_for_input');assert.equal(f.engine.get(leaf.id)?.state,'blocked');assert.deepEqual(f.counts(),counts);
 });
 
 test('the real control channel rejects outside background and a stop proposal preserves the missing input',{timeout:20000},async t=>{

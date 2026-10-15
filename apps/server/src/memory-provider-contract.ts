@@ -32,7 +32,7 @@ export interface MemoryProvider {
   close():Promise<void>;
 }
 export class MemoryProviderError extends Error {
-  constructor(public readonly code:'conflict'|'unavailable'|'invalid_record'|'unknown_result'|'closed',message:string){super(message);this.name='MemoryProviderError';}
+  constructor(public readonly code:'conflict'|'unavailable'|'invalid_record'|'unsupported_input'|'unknown_result'|'closed',message:string){super(message);this.name='MemoryProviderError';}
 }
 export function memoryProviderKey(memory:Memory):MemoryProviderKey{return memoryProviderKeySchema.parse({memoryId:memory.id,version:memory.version,fingerprint:memory.fingerprint});}
 /** Host validity and its update time can change without advancing a provider

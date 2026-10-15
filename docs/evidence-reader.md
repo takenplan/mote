@@ -14,6 +14,15 @@ Memory lists, details and context catalog/bundles also pass through the shared r
 
 Captured text is untrusted evidence. This service exposes no write tools. Image disclosure remains an explicit host setting and is disabled by default. All Web context routes require owner authorization.
 
+For a current Memory citing Material text, visibility can be proved by that
+exact current Material anchor without disclosing its raw recording ancestors.
+The reader still checks every ancestor's source, privacy, deletion, attribution
+and request scope. A covered Material ancestor does not cover a separate direct
+raw citation or another member. Live and frozen Memory readers share this rule;
+their selected body provider is unchanged. Integration preflights this proof and
+requires an actual body/original delivery receipt before consuming its window.
+See the [delivery and failure-state decision](adr-memory-evidence-delivery-and-failure-state.md).
+
 Derived context artifacts use `artifact:<encoded-id>:<encoded-revision>`. The segment catalog's declared logical-ID filter can select the current output; a public artifact ref pins the revision, and superseded or deleted refs return missing. Web, MCP, the Agent and the context catalog share the same resolver. It checks up to 1000 ancestors and 1000 original dependencies and returns unavailable if that bounded verification cannot finish. Scoped list pages retain their cursor even when every candidate was filtered out.
 
 Artifact scope checks use a small SQLite metadata projection, without loading original text or images. They verify every transitive original, preserve authored/occurred time rather than import time, and disclose only fully contained intervals. List/detail member references are bounded (3/30), with total counts and truncation flags; the full lineage is still checked before any derived text is returned. Original capture IDs remain the evidence for claims.

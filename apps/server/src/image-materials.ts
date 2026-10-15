@@ -1,5 +1,6 @@
 import type {Store} from './store.js';
 export type ImageMaterialProjection={
+ original?:{captureId:string;sha256:string};
  archiveOnly:boolean;products:{name:string;kind:string;revision:string;text?:string;evidence?:Record<string,unknown>;regions?:unknown[]}[];
  jobs:{name:string;state:'ready'|'pending'|'failed'|'unavailable';reason?:string}[];
 };
@@ -7,7 +8,7 @@ export type ImageMaterialProjection={
  * empty OCR is ready; failed VLM never revokes retained OCR evidence. */
 export function imageMaterialProjection(store:Store,id:string):ImageMaterialProjection|undefined {
  if(!store.db.prepare("SELECT 1 FROM sqlite_master WHERE name='image_inputs'").get())return;
- const input=store.db.prepare('SELECT policy_json,understanding_enabled FROM image_inputs WHERE capture_id=?').get(id);if(!input)return;
+ const input=store.db.prepare('SELECT policy_json,understanding_enabled,hash FROM image_inputs WHERE capture_id=?').get(id);if(!input)return;
  const policy=input.policy_json?JSON.parse(String(input.policy_json)):undefined,archiveOnly=policy?.profile?.processorId==='archive';
  const products=store.db.prepare('SELECT id,name,kind,json FROM image_products WHERE capture_id=? AND current=1 ORDER BY rowid').all(id).map(row=>{
   const value=JSON.parse(String(row.json));return {name:String(row.name),kind:String(row.kind),revision:String(row.id),...(row.kind==='ocr'?{}:{text:value.payload.text,regions:value.payload.regions,evidence:value.evidence})};
@@ -16,5 +17,5 @@ export function imageMaterialProjection(store:Store,id:string):ImageMaterialProj
  if(!jobs.length&&!archiveOnly)jobs.push({name:'ocr',state:'pending'});
  const settings=store.db.prepare("SELECT value FROM settings WHERE key='perception-effective'").get();
  if(input.understanding_enabled&&!archiveOnly&&!policy?.profile?.imageRecipe&&(!settings||JSON.parse(String(settings.value)).understandingEnabled!==false)&&!jobs.some(j=>j.name==='understanding'))jobs.push({name:'understanding',state:'pending'});
- return {archiveOnly,products,jobs};
+ return {archiveOnly,...(input.hash?{original:{captureId:id,sha256:String(input.hash)}}:{}),products,jobs};
 }

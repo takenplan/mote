@@ -8,6 +8,14 @@ Admission waits yield an event-loop turn after persisting their decision and rel
 
 Operation membership has an inverse index by step and active state. State/lease projection updates use this path to reach the owning operations without scanning the full membership history on every admission wait or lease renewal.
 
+Each retained step can keep one latest failure receipt with its fixed failure
+category/code, state, attempt, phase and known host work/batch/run/cause IDs.
+Receipts exclude provider prose, prompts, evidence and stderr; they are private
+metadata with quota accounting and cascade when the owning step is deleted. A
+receipt-write failure increments `execution.failureReceipts.writeFailures` in
+diagnostics without replaying the business operation. A missing or unreadable
+retired input cannot suppress the fixed failure fields.
+
 Server shutdown first stops feature admission and recurring scheduling in Fastify's `preClose`, then closes the shared executor while handlers and storage are still available. After execution settles and HTTP requests drain, `onClose` disposes feature/plugin resources and closes storage. Handler removal on a live shared executor similarly stops only that handler's claims and interrupts its local work; it does not cancel the queued backlog. `cancelled` remains terminal for explicit cancellation.
 
 | State at shutdown | Durable state and restart behavior |

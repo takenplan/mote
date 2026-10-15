@@ -8228,5 +8228,14 @@ export const english: Readonly<Record<string, string>> = {
   "{0} 次用量缺失或不完整 ·": "Missing or incomplete usage: {0} ·",
   "{0} 次费用未估算。缓存率按已上报缓存数据的输入 token 加权；未知部分不按零计算。": "Without cost estimates: {0}. Cache rates are input-token weighted for reported cache data. Unknown values are not counted as zero.",
   "符合筛选的 {0} 次运行，显示最近 {1} 次；所有统计覆盖全部符合条件的记录。": "Matching runs: {0}; showing the latest {1}. All statistics cover every matching record.",
-  "{0} 条证据": "Evidence: {0}"
+  "{0} 条证据": "Evidence: {0}",
+  "当前授权资料不能提供所需语境，未完成范围已保留。": "The authorized material cannot provide the required context. Unfinished coverage has been preserved.",
+  "内部规划未完成，已保存的结果和未完成范围均保留。请查看失败原因后决定是否重试。": "Internal planning did not complete. Saved results and unfinished coverage are preserved. Review the failure before deciding whether to retry.",
+  "内部规划执行失败，未自动重放未知错误。": "Internal planning failed. Unknown errors were not automatically replayed.",
+  "内部规划结果未通过校验，未完成范围已保留。": "The internal plan failed validation. Unfinished coverage has been preserved.",
+  "内部规划已停止，未完成范围已保留。": "Internal planning stopped. Unfinished coverage has been preserved.",
+  "内部规划失败，未完成范围已保留": "Internal planning failed; unfinished coverage is preserved",
+  "本次整合的记忆或原始证据当前不可读，未完成窗口已保留。请检查来源与授权后重试。": "The selected memories or original evidence are currently unreadable. The unfinished window is preserved. Check sources and permissions before retrying.",
+  "本次整合未读到记忆正文或原始证据，未完成窗口已保留，未记为成功。": "This integration received no memory bodies or original evidence. The unfinished window is preserved and has not been marked successful.",
+  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again."
 };

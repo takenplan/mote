@@ -9,9 +9,13 @@ import {validateInlineCitations,SOURCE_TIME_INSTRUCTIONS,skillCatalog} from '@mo
 import {fileEvidenceSchema,sourceContentTime,noteCapture,type CaptureRecord,type QueryResult} from '@mote/shared';
 import {Store,StoreError,sha256} from './store.js';
 import {CODING_MEMORY_CONTRACT,codingMemorySchema,memorySchema,memoryAdmissionSchema,memoryRelationSchema,type Memory,type MemoryEvidence,type EvidenceRange,type MemoryReviewReceipt} from './memory-schema.js';
+import {memoryImageReadReceipts,memoryImageSelectorSchema} from './memory-image-proof.js';
+import {memoryImageInterpretation,memoryImageLocator} from './memory-image-grants.js';
 export type {Memory,MemoryEvidence,EvidenceRange} from './memory-schema.js';
 
-const spanSchema=z.object({id:z.string().uuid(),offset:z.number().int().min(0).max(100000).optional(),length:z.number().int().min(1).max(12000).optional(),quote:z.string().min(1).max(12000)}).strict();
+const spanSchema=z.object({id:z.string().uuid(),offset:z.number().int().min(0).max(100000).optional(),length:z.number().int().min(1).max(12000).optional(),quote:z.string().min(1).max(12000).optional(),image:memoryImageSelectorSchema.optional()}).strict().superRefine((value,context)=>{
+  if(value.image?value.quote!==undefined||value.offset!==undefined||value.length!==undefined:!value.quote)context.addIssue({code:'custom',message:'Evidence requires either an exact text quote or a delivered image view'});
+});
 export const claimSchema=z.object({domain:z.enum(['personal','coding']).optional(),relations:z.array(memoryRelationSchema).max(20).optional(),admission:memoryAdmissionSchema.optional(),relatedMemoryIds:z.array(z.string().uuid()).max(50).optional(),coding:codingMemorySchema.optional(),kind:z.enum(['episodic','semantic','procedural']).optional(),validFrom:z.string().datetime({offset:true}).optional(),validUntil:z.string().datetime({offset:true}).optional(),title:z.string().trim().min(1).max(160),statement:z.string().trim().min(1).max(6000),uncertainty:z.string().max(2000),evidenceIds:z.array(z.string().uuid()).min(1).max(30),evidence:z.array(spanSchema).min(1).max(30).optional()}).strict();
 export {type MemoryOutputValidationCode,type MemoryValidationDetails} from './memory-validation.js';
 import {memoryValidationInstruction,validationLocation,validationProblem,type MemoryOutputValidationCode,type MemoryValidationDetails} from './memory-validation.js';
@@ -31,7 +35,7 @@ export function memoryEvidenceFingerprint(record:MemoryRecord):string {
   const file=record.fileEvidence&&typeof record.fileEvidence==='object'?Object.fromEntries(Object.entries(record.fileEvidence).filter(([key])=>key!=='artifactId')):record.fileEvidence;
   return sha256(JSON.stringify([record.id,record.ocrText,record.capturedAt,record.provenance??null,record.metadata??null,...(file?[file]:[]),...(record.attributionContext&&(record.attributionContext.basis!=='default'||record.attributionContext.correction||record.attributionContext.sourceDeclaration||record.attributionContext.materialDeclarations||record.attributionContext.declarations||record.attributionContext.ownerStatements||record.attributionContext.importDeclarations||record.attributionContext.importStatements||record.attributionContext.sourceContextDeclarations?.length||record.attributionContext.sourceContextStatements?.length)?[record.attributionContext]:[])]));
 }
-function reference(record:MemoryRecord,span?:{offset:number;length:number;quote?:string}):MemoryEvidence {
+function reference(record:MemoryRecord,span?:{offset?:number;length?:number;quote?:string;image?:MemoryEvidence['image']}):MemoryEvidence {
   const p=record.provenance,d=p?.document;
   return {id:record.id,deviceId:record.deviceId,sourceId:p?.sourceId,externalId:p?.externalId,revision:p?.revision,capturedAt:record.capturedAt,receivedAt:record.receivedAt,
     recordedAt:d?.recordedAt,occurredAt:d?.occurredAt,fileId:d?.fileId,path:d?.path,uri:p?.uri,timeBasis:d?.timeBasis,contentRole:d?.contentRole,
@@ -181,7 +185,9 @@ export class MemoryStore {
       const evidenceById=new Map(this.readEvidence(evidenceIds).map(record=>[record.id,record]));
       const fingerprints=evidenceIds.map(id=>{const record=evidenceById.get(id);return [id,record?memoryEvidenceFingerprint(record):null,this.isCurrentEvidence(id)];});
       const related=[...new Set([...(options.relatedMemoryIds??[]),...parsed.data.memories.flatMap(m=>(m.relations??[]).map(r=>r.memoryId))])].map(id=>this.get(id));
-      const cacheKey=sha256(JSON.stringify([result.answer,result.citations.map(c=>c.id),options.profile,options.requireAdmission,options.tier,options.relatedMemoryIds,options.evidenceRanges,options.expectedFingerprints,fingerprints,related]));
+      let imageReads:ReturnType<typeof memoryImageReadReceipts>;
+      try{imageReads=memoryImageReadReceipts(result);}catch{throw new MemoryOutputValidationError('image_evidence','Invalid host image read proof');}
+      const cacheKey=sha256(JSON.stringify([result.answer,result.citations.map(c=>c.id),options.profile,options.requireAdmission,options.tier,options.relatedMemoryIds,options.evidenceRanges,options.expectedFingerprints,fingerprints,related,imageReads]));
       // Validate all batch inputs after model completion, including zero-candidate batches.
       for(const [id,expected] of Object.entries(options.expectedFingerprints??{})){
         const record=evidenceById.get(id);
@@ -214,28 +220,36 @@ export class MemoryStore {
         const evidence:MemoryEvidence[]=[];
         if(m.evidence){
           for(const [spanIndex,span] of m.evidence.entries()){
-            const record=records.get(span.id),length=span.length??span.quote.length;
+            const record=records.get(span.id);
+            if(span.image){
+              const selector=span.image,locator=memoryImageLocator(this.store,span.id);
+              const image=imageReads.find(receipt=>receipt.id===span.id&&receipt.imageView.original.sha256===selector.originalSha256&&receipt.imageView.viewId===selector.viewId)?.imageView;
+              if(!record||!locator||locator.sha256!==selector.originalSha256||!image)throw new MemoryOutputValidationError('image_evidence','Visual evidence requires this run\'s delivered current original image',{candidateIndex,spanIndex,evidenceId:span.id});
+              evidence.push(reference(record,{image}));continue;
+            }
+            if(memoryImageLocator(this.store,span.id)||memoryImageInterpretation(this.store,span.id))throw new MemoryOutputValidationError('image_evidence','Image locators and model interpretations are navigation, not verbatim original text',{candidateIndex,spanIndex,evidenceId:span.id});
+            const quote=span.quote!,length=span.length??quote.length;
             let offset=span.offset;
-            const details:MemoryValidationDetails={candidateIndex,spanIndex,evidenceId:span.id,declaredOffset:span.offset,declaredLength:span.length,quoteLength:span.quote.length,sourceLength:record?.ocrText.length};
+            const details:MemoryValidationDetails={candidateIndex,spanIndex,evidenceId:span.id,declaredOffset:span.offset,declaredLength:span.length,quoteLength:quote.length,sourceLength:record?.ocrText.length};
             const reject=(code:MemoryOutputValidationCode,message:string):never=>{throw new MemoryOutputValidationError(code,message,details);};
             if(!record)reject('quote_evidence_undeclared','Memory quote references evidence not declared by this candidate');
-            if(length!==span.quote.length)reject('quote_length_mismatch','Memory quote length differs from its UTF-16 length');
+            if(length!==quote.length)reject('quote_length_mismatch','Memory quote length differs from its UTF-16 length');
             const text=record!.ocrText,ranges=options.evidenceRanges?.filter(r=>r.id===span.id)??[{offset:0,length:text.length}];
             if(offset===undefined){
               // Exact, scope-limited addressing only; never fuzzy matching or semantic repair.
               const positions=new Set<number>();
-              for(const range of ranges){for(let at=text.indexOf(span.quote,range.offset);at>=0&&at+length<=range.offset+range.length;at=text.indexOf(span.quote,at+1)){positions.add(at);if(positions.size>1)break;}if(positions.size>1)break;}
+              for(const range of ranges){for(let at=text.indexOf(quote,range.offset);at>=0&&at+length<=range.offset+range.length;at=text.indexOf(quote,at+1)){positions.add(at);if(positions.size>1)break;}if(positions.size>1)break;}
               details.authorizedMatches=positions.size; // Capped at 2 (multiple).
-              if(!positions.size)reject(text.includes(span.quote)?'quote_range':'quote_not_found','Memory quote has no exact match within the supplied segment');
+              if(!positions.size)reject(text.includes(quote)?'quote_range':'quote_not_found','Memory quote has no exact match within the supplied segment');
               if(positions.size>1)reject('quote_ambiguous','Memory quote matches multiple authorized positions');
               offset=[...positions][0];
             }
-            if(text.slice(offset,offset+length)!==span.quote){
-              if(!text.includes(span.quote))reject('quote_not_found','Memory quote is not an exact substring of original evidence');
+            if(text.slice(offset,offset+length)!==quote){
+              if(!text.includes(quote))reject('quote_not_found','Memory quote is not an exact substring of original evidence');
               reject('quote_offset_mismatch','Memory quote does not match original evidence at the declared offset');
             }
             if(!ranges.some(range=>range.offset<=offset!&&offset!+length<=range.offset+range.length))reject('quote_range','Memory quote is outside the supplied segment');
-            evidence.push(reference(record!,{offset,length,quote:span.quote}));
+            evidence.push(reference(record!,{offset,length,quote}));
           }
           const missingId=ids.find(id=>!evidence.some(e=>e.id===id));
           if(missingId)throw new MemoryOutputValidationError('missing_quote','Every memory evidence ID needs a matching quote',{candidateIndex,evidenceId:missingId});
@@ -266,7 +280,7 @@ export class MemoryStore {
           for(const id of parents){const parent=this.get(id);if(parent.status==='stale'||parent.domain!==m.domain||!parent.evidenceIds.some(e=>m.evidenceIds.includes(e)))throw new MemoryOutputValidationError('scope','Each parent must contribute original evidence');}
           if(parents.some(id=>this.get(id).statement===m.statement))throw new MemoryOutputValidationError('schema','Consolidation must add value, not copy an input');
         }
-        const fingerprint=sha256(JSON.stringify([...(options.integration?[options.integration]:[]),...(options.strategy?[options.strategy]:[]),options.tier??'episode',m.admission??null,m.coding??null,...(m.relations?.length||m.validFrom||m.validUntil?[m.relations??null,m.validFrom??null,m.validUntil??null]:[]),m.statement,[...m.evidenceIds].sort(),m.evidence.map(e=>[e.id,e.contentHash,e.offset,e.length])]));
+        const fingerprint=sha256(JSON.stringify([...(options.integration?[options.integration]:[]),...(options.strategy?[options.strategy]:[]),options.tier??'episode',m.admission??null,m.coding??null,...(m.relations?.length||m.validFrom||m.validUntil?[m.relations??null,m.validFrom??null,m.validUntil??null]:[]),m.statement,[...m.evidenceIds].sort(),m.evidence.map(e=>[e.id,e.contentHash,e.offset,e.length,...(e.image?[e.image]:[])])]));
         const duplicate=this.store.db.prepare("SELECT json FROM memories WHERE json_extract(json,'$.fingerprint')=? AND json_extract(json,'$.status')!='stale'").get(fingerprint) as {json:string}|undefined;
         if(duplicate){const existing=JSON.parse(duplicate.json) as Memory;if(existing.status==='proposed'&&receipt?.reviewRunId&&receipt.resultHash){existing.reviewReceipt=receipt;existing.reviewRunId=receipt.reviewRunId;this.store.db.prepare('UPDATE memories SET json=? WHERE id=?').run(JSON.stringify(existing),existing.id);items.push(this.publish(existing.id,existing.version,now));}else items.push(existing);continue;}
         const value:Memory={...m,integration:options.integration,strategy:options.strategy,version:1,id:options.prepared?.items.find(item=>item.fingerprint===fingerprint)?.id??randomUUID(),tier:options.tier??'episode',kind:m.kind??'episodic',relatedMemoryIds:m.relatedMemoryIds,reviewRunId:options.reviewRunId,reviewReceipt:options.reviewReceipt,createdAt:now,status:'proposed',model:options.reviewReceipt?.model??result.usage?.model??model,runId:result.runId,skillVersion:options.skillVersion??MEMORY_SKILL_VERSION,fingerprint};

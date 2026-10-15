@@ -8,11 +8,17 @@ import {AgentYieldError} from '@mote/agent';
 import {ContentStorageService} from '../src/content-storage.js';
 import {Store} from '../src/store.js';
 import {ExecutionEngine,ExecutionFailure} from '../src/execution-engine.js';
-import {DelegationRuntime,registerQueryDelegation,DELEGATION_CONTROL_DEFINITIONS,type DelegationCoordinatorContext} from '../src/delegation-runtime.js';
+import {DelegationRuntime,DelegationPlanningError,registerQueryDelegation,DELEGATION_CONTROL_DEFINITIONS,type DelegationCoordinatorContext} from '../src/delegation-runtime.js';
 
 function fixture(t:any,concurrency=2,options:ConstructorParameters<typeof Store>[1]={}){const directory=mkdtempSync(join(tmpdir(),'mote-delegation-')),store=new Store(directory,options),engine=new ExecutionEngine(store),runtime=new DelegationRuntime(store,engine,{concurrency:()=>concurrency,autoPump:false});t.after(async()=>{await runtime.close();await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});return {store,engine,runtime};}
 const proposal=(id:string,capabilityId='fixture',extra:Record<string,unknown>={})=>({id,capabilityId,title:'Generated branch '+id,goal:'Inspect generated evidence',input:{id},...extra});
 async function settle(runtime:DelegationRuntime,id:string){for(let i=0;i<50;i++){await runtime.tick();const work=runtime.get(id);if(['succeeded','failed','cancelled','stale'].includes(work.status))return work;await new Promise(resolve=>setImmediate(resolve));}throw Error('Generated work did not settle');}
+
+for(const state of ['failed','cancelled','stale'] as const)test(`an unplanned terminal ${state} remains typed rather than looking like a context question`,async t=>{
+ const {runtime,store}=fixture(t);runtime.registerCoordinator({id:'terminal',execute:async()=>null});runtime.start({id:'generated-terminal',profileId:'terminal',goal:'Generated metadata',input:{},allowedCapabilities:[]});
+ store.db.prepare("UPDATE delegation_works SET json=json_set(json,'$.status',?,'$.error','generated_terminal') WHERE id=?").run(state,'generated-terminal');
+ await assert.rejects(runtime.waitForPlan('generated-terminal'),error=>error instanceof DelegationPlanningError&&error.state===state&&error.code==='generated_terminal'&&error.workId==='generated-terminal');
+});
 
 test('coordinator submits a batch immediately, releases its only slot, and resumes from private artifacts',async t=>{
  const {runtime}=fixture(t,1),order:string[]=[],committed:unknown[]=[];

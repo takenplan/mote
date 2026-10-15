@@ -62,6 +62,76 @@ Memory authority for image evidence. Material rebuilds, plugin installation and
 recomputation cannot mint a second automatic grant. No new memory is a successful
 Memory outcome.
 
+## Independent Memory image proof
+
+New image-bearing Materials can expose an optional `image-original` output. Its
+text is a host locator, not a description of the pixels. It binds a current
+Material anchor to its exact original member and SHA256. Retained original
+readiness is independent of OCR and visual-understanding completion. Available
+OCR remains a separate text output; model interpretation remains navigation.
+Late OCR or understanding cannot replace the frozen selection of already
+admitted Memory work, consume another automatic input grant, or upgrade an old
+interpretation-only task into an image-reading task. No organizer-version
+backfill or historical model replay is added by installing this capability.
+
+A new or explicitly selected task pins its named outputs and may receive an
+exact read-only image grant for those original-image anchors. This permits
+neither raw capture text nor archive discovery. The existing owner image-access
+setting still applies. Metadata exposes the original hash and dimensions without
+pixels; the model can request the original or a needed region using the existing
+encoded-raster coordinate and size contract. Each read rechecks the current
+Material pin, original membership, source permissions and original hash. Model
+requests and publication recheck the same authority after deletion, replacement,
+attribution changes, restart and late delivery.
+
+Sufficient delivered OCR can support exact text quotations without an image
+request. An unread pure-image locator cannot support a successful assessment:
+missing necessary pixels or same-original OCR must remain incomplete. OCR from
+another member in the same Material is not proof of that image. Visual claims
+select a successfully delivered `imageView`; the host saves its original hash,
+coordinates, transform and output identity as `MemoryEvidence.image`. A model's
+JSON, interpretation, metadata response or prepared-but-unconfirmed payload
+cannot supply that delivery receipt. Interpretation JSON and locator JSON cannot
+be quoted as original image contents.
+
+Independent review receives the same frozen read grant, but no inherited pixel
+delivery. A retained visual claim requires the reviewer's own current image or a
+region covering its required original proof. The reviewer can discard an
+image's visual claims without making a needless image request. Bounded deletion
+review and consolidation can reuse the same scoped read contract; consolidation
+derives it only from the exact selected cards' current saved visual proofs.
+
+Coverage identity is the evidence anchor and original hash, independent of
+statement wording, titles or candidate order. While a reviewed result still
+cites that visual group, every draft view actually cited for the group needs a
+covering view cited by the reviewer. Separate reviewer views can cover separate
+draft crops; partial views are not geometrically stitched to cover one larger
+proof. Extra uncited extraction reads add no requirement. Dropping the entire
+group's visual citations removes its coverage requirement. This conservative
+grouping avoids inferring claim identity from prose when candidates are edited,
+split or merged.
+
+The current Hindsight native integration protocol accepts exact text ranges,
+not visual Memory proofs. It rejects a selected visual parent with
+`memory_provider_unsupported_input` before initializing a remote bank or issuing
+retain/consolidate calls. OCR-supported text remains supported. There is no
+automatic retry, silent engine switch or conversion of a locator to a text quotation. Restored
+owner archives retain their existing stale state; importing view metadata does
+not create a new current image grant or a runtime pixel receipt.
+
+Native extraction likewise receives text ranges, including a locator when it is
+selected; Hindsight does not thereby receive pixels. Its empty draft still goes
+through Mote's independent review. That reviewer can inspect the frozen original
+grant, or use sufficient delivered OCR from the same original. Without either,
+the target remains unfinished rather than becoming a successful empty result.
+A successful host review with its own visual proof is not evidence of native
+visual-extraction support in Hindsight.
+
+When this selected visual scope is present, other search results do not acquire
+image access from it. Consolidation without selected visual proofs retains its
+existing open-query image permissions; this capability adds no blanket image
+ban or broader archive grant.
+
 ## Owner controls and history
 
 Settings → Images selects the shared default and processing permissions. Import

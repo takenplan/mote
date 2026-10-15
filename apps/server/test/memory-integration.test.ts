@@ -12,6 +12,7 @@ import type {QueryInput} from '@mote/agent';
 import type {QueryResult} from '@mote/shared';
 import {requestMemoryIntegration} from '../src/memory-integration.js';
 import {MemoryStrategies} from '../src/memory-strategies.js';
+import {MemoryProviderError} from '../src/memory-provider-contract.js';
 
 const ref=(name:string,version='1')=>({id:'fixture.'+name,version});
 const integrate={...ref('integrator'),input:'memory-cards@1',output:'memory-candidates@1',permissions:['memory.read','evidence.read'],prompt:'GENERATED_INTEGRATOR_1'};
@@ -33,6 +34,7 @@ async function fixture(t:any){
   const cards=JSON.parse(input.question.slice(input.question.lastIndexOf('\n')+1)) as string[];
   const parents=cards.map(id=>node.memories.get(id));
   const coding=parents[0].domain==='coding',ids=[...new Set(parents.flatMap(m=>m.evidenceIds))],records=node.memories.readEvidence(ids);
+  input.onEvidence?.(records); // This explicit synthetic adapter delivered these originals to its fixture model.
   const claim={domain:coding?'coding':'personal',title:'Generated integration',statement:`${coding?'Verified retry method':'Prototype experience in context'} from the supplied originals ${ids.map(id=>'['+id+']').join(' ')}`,uncertainty:'Only generated evidence is available.',admission:{layer:'memory',reason:'Generated synthesis',scope:'Generated session',attribution:'user'},relatedMemoryIds:parents.map(m=>m.id),evidenceIds:ids,evidence:records.map(r=>({id:r.id,quote:control.badQuote&&input.traceContext?.phase==='review'?'Never stated in the original':r.ocrText.trim()})),...(coding?{coding:{kind:'pitfall',scope:'session',applicability:'Generated prototype',validation:'tested'}}:{}),...(control.relation?{relations:[{kind:'supersedes',memoryId:parents[0].id,fingerprint:parents[0].fingerprint,version:(parents[0].version??1)+(control.badRelation?1:0)}]}:{})};
   if(input.traceContext?.phase==='review'&&control.failCoding&&coding)throw Error('Generated coding review failure');
   if(input.traceContext?.phase==='review'&&control.failPersonal&&!coding)throw Error('Generated personal review failure');
@@ -169,8 +171,17 @@ for(const phase of ['queued','review'] as const)test(`model configuration change
  await f.node.lifecycle.tick();assert.equal(f.products().length,0);assert.equal(f.calls.length,phase==='queued'?0:2);assert.equal(f.view().error,'workflow_409');
 });
 
-test('empty integration is a completed decision and does not trigger unnecessary review or replay',async t=>{
+test('an integration that actually received originals may complete with no new relation and no replay',async t=>{
  const f=await fixture(t),{products}=await f.add('diary');f.control.reject=true;f.queue(products.map(m=>m.id));await f.node.lifecycle.tick();assert.equal(f.calls.length,1);assert.equal(f.products().length,0);assert.equal(f.view().active,undefined);await f.node.lifecycle.tick();assert.equal(f.calls.length,1);
+});
+
+test('unsupported native input remains an explicit integration failure without automatic model replay after restart',async t=>{
+ const f=await fixture(t),{products}=await f.add('generated-native-unsupported');let preparations=0;
+ f.node.memoryPipeline.engineDraft=async()=>{preparations++;throw new MemoryProviderError('unsupported_input','Generated unsupported native visual parent');};
+ f.queue(products.map(memory=>memory.id));await f.node.lifecycle.tick();
+ assert.equal(preparations,1);assert.equal(f.calls.length,0);assert.equal(f.view().error,'memory_provider_unsupported_input');assert.equal(f.view().manualRetryRequired,true);assert.equal(f.view().retryAt,undefined);assert.equal(f.products().length,0);
+ assert.equal(f.node.executor.get('lifecycle:'+f.view().active!.id)?.error,'memory_provider_unsupported_input','the executor keeps the same typed cause');
+ await f.node.lifecycle.tick();assert.equal(preparations,1);await f.restart();await f.node.lifecycle.tick();assert.equal(f.calls.length,0,'restart preserves the permanent input failure instead of silently switching to the built-in model');assert.equal(f.view().error,'memory_provider_unsupported_input');assert.equal(f.view().manualRetryRequired,true);
 });
 
 test('maximum declared strategy and card inputs fit the Agent question contract for both phases',async t=>{
