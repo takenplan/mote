@@ -68,14 +68,15 @@ returns a user-bound bearer token for native clients. Web use requires HTTPS
 (with browser-specific localhost development exceptions); loopback process/API
 checks are reported separately from browser validation.
 
-Duration 0 sets a session cookie and a one-day server expiry for both modes;
-other durations set an explicit server expiry, and Web cookie Max-Age. These are
-finite server sessions; local/native process lifetime is additionally enforced by
-the client modules. Logout revokes that credential, not other independent logins
-or already authorized Central background tasks.
+Duration 0 sets a one-day server expiry in both modes and a session cookie only
+in Web mode. Other durations set an explicit server expiry and Web cookie
+Max-Age. These are finite server sessions; M14/M15 still need to implement the
+additional native process-lifetime restriction. Logout revokes that credential,
+not other independent logins or already authorized Central background tasks.
 
 `GET /api/auth/self` discovers the current stable identity/session and Web CSRF
-secret after a page reload. All other Cookie-authenticated requests require
+secret after a page reload. `GET /api/connections/self` also permits session
+discovery. All other Cookie-authenticated requests require
 `X-Mote-Session-Id` to match the current credential. Mutations also require
 `X-Mote-CSRF`. An old tab retaining A's binding cannot act using B's replacement
 cookie. Cookie and Authorization supplied together are refused; Web credentials
@@ -114,7 +115,9 @@ legacy adapter, outside production.
 Password verification reserves attempts before asynchronous scrypt, preventing
 parallel attempts from bypassing the count. Each normalized username permits five
 attempts per 15-minute window; each remote address permits twenty. Account
-success clears that username's counter. Attempt state is persisted and expired
+login success clears that username's counter. Successful current-password
+verification during password change does not clear it; address counts are not
+cleared by either success. Attempt state is persisted and expired
 windows are removed on the next attempt. Unknown accounts use the same expensive
 hash operation and generic invalid-login result; disabled accounts do not reveal
 their status at login. At most four concurrent password verifications run per
