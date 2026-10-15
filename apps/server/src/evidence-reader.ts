@@ -21,6 +21,7 @@ import type {SourceItemRecipeCatalog} from './source-item-recipe.js';
 import {createHash} from 'node:crypto';
 import {ArchivedFileStore} from './archived-files.js';
 import {readEvidenceImage} from './evidence-image.js';
+import {memoryImageOriginal,type MemoryImageGrant} from './memory-image-grants.js';
 import {fileAttachmentAvailable,fileAttachmentParent} from './file-attachments.js';
 import {materialSourcePin,materialSourceCurrent,type MaterialSourcePin} from './material-source-pin.js';
 import {authoredRecordProjection} from './material-organizers.js';
@@ -134,19 +135,49 @@ export class EvidenceReader {
   memorySnapshot(context?:object){return context?this.memorySnapshots.get(context):undefined;}
   releaseMemorySnapshot(context:object){const value=this.memorySnapshots.get(context);if(value){this.memorySnapshots.delete(context);value.release();}}
   private memoryToolSnapshot(context?:object){const retained=context&&this.memorySnapshots.get(context),owned=retained?undefined:this.memoryBindings?.retainSnapshot();return {snapshot:retained??owned,release:()=>owned?.release()};}
-  private memoryLineageVisible(lineage:NonNullable<MemoryReadSnapshot['lineage'][string]>,scope:Range,ownerArchive:boolean,exposure:MemoryExposure){
+  /** One visibility rule for live cards, frozen snapshots and integration admission.
+   * An ancestor is a revocation dependency, not a grant to read its raw body.
+   * Only the exact current evidence cited by this card can cover that ancestor. */
+  private memoryLineageVisible(lineage:NonNullable<MemoryReadSnapshot['lineage'][string]>,scope:Range,ownerArchive:boolean,exposure:MemoryExposure,strictProof=true){
     const ids=[...new Set(lineage.dependencyIds)];if(!ids.length)return false;
     for(const key of ['projectKey','repositoryKey','provider','sessionId'] as const)if(scope[key]&&(!lineage.scopeRefs?.length||lineage.scopeRefs.some(ref=>ref[key]!==scope[key])))return false;
-    const records=ownerArchive?this.archivedEvidence(ids.map(id=>formatEvidenceRef('capture',id)),scope):this.evidenceById(ids,scope);
-    if(records.length!==ids.length)return false;if(ownerArchive)return true;
-    // A newer Memory revision may cite entirely different originals. Its live
-    // dependency table cannot authorize the old query's frozen body or title.
+    if(ownerArchive)return this.archivedEvidence(ids.map(id=>formatEvidenceRef('capture',id)),scope).length===ids.length;
     const anchors=this.memories.readEvidence(lineage.evidenceIds);
     if(anchors.length!==lineage.evidenceIds.length||!anchors.length||anchors.some(anchor=>anchor.privacy.excluded||!this.memories.isCurrentEvidence(anchor.id)))return false;
-    if(lineage.evidence.some(proof=>{const anchor=anchors.find(value=>value.id===proof.id);return !anchor||memoryEvidenceFingerprint(anchor)!==proof.contentHash;}))return false;
-    let materialProof:boolean|undefined;const hasMaterialProof=()=>materialProof??=(anchors.every(anchor=>anchor.provenance?.uri?.startsWith('material:')&&this.captureExposure(anchor,exposure.operation,exposure.policy)));
-    return records.every(record=>!record.privacy.excluded&&(this.captureExposure(record,exposure.operation,exposure.policy)||
-      (record.source==='screen'||record.source==='ui_page')&&hasMaterialProof()&&this.captureExposure(record,exposure.operation==='discover'?'expand':exposure.operation,exposure.policy,'capture',true)));
+    if(lineage.evidence.some(proof=>{const anchor=anchors.find(value=>value.id===proof.id);return !anchor||(strictProof||anchor.provenance?.uri?.startsWith('material:'))&&memoryEvidenceFingerprint(anchor)!==proof.contentHash;}))return false;
+    const materialAncestors=new Set<string>();
+    for(const anchor of anchors){
+      if(!this.captureExposure(anchor,exposure.operation,exposure.policy))return false;
+      if(anchor.provenance?.uri?.startsWith('material:'))for(const id of this.memories.dependencyIds(anchor.id))materialAncestors.add(id);
+    }
+    const direct=new Set(lineage.evidenceIds);
+    for(const id of ids){
+      // Raw lineage checks do not load the archived JSON/text/image payload.
+      const record=scopeRecord(this.store,id)??this.evidenceById([id],scope)[0];
+      if(!record||record.privacy.excluded||!withinEvidenceScope(record,scope)||!this.memories.isCurrentEvidence(id)||!fileAttachmentAvailable(this.store,id,true))return false;
+      const p=record.provenance;
+      if(p?.sourceId&&p.externalId&&this.store.db.prepare('SELECT deleted FROM source_heads WHERE source_id=? AND external_id=?').get(p.sourceId,p.externalId)?.deleted)return false;
+      if(direct.has(id)||!materialAncestors.has(id)){
+        if(!this.captureExposure(record,exposure.operation,exposure.policy))return false;
+      }else if(record.source==='screen'||record.source==='ui_page'){
+        // Preserve the existing screen-original policy, without granting a raw tool read.
+        if(!this.captureExposure(record,exposure.operation==='discover'?'expand':exposure.operation,exposure.policy,'capture',true,true))return false;
+      }else{
+        // Source-wide policy still applies to every ancestor; raw-representation
+        // denials do not revoke its separately permitted canonical Material.
+        const sourceKind=p?.document?.coding?'coding-agent':this.sourceKind(p?.sourceId,record.source);
+        if(!exposure.policy.allows({sourceKind,sourceId:p?.sourceId,representation:'material',operation:exposure.operation,phase:'complete'}))return false;
+      }
+    }
+    return true;
+  }
+  /** Host preflight/transport check. Reads only the selected card's exact proof;
+   * no source route is added, no unused raw body is loaded, and no model is run. */
+  assertMemoryReadable(cards:readonly Memory[],policy:EvidenceExposurePolicy=defaultEvidenceExposurePolicy){
+    for(const card of cards){
+      const dependencyIds=this.store.db.prepare('SELECT evidence_id FROM memory_dependencies WHERE memory_id=?').all(card.id).map(row=>String(row.evidence_id));
+      if(!this.memoryLineageVisible({dependencyIds,evidenceIds:card.evidenceIds,evidence:card.evidence.map(value=>({id:value.id,contentHash:value.contentHash})),scopeRefs:card.scopeRefs},{},false,{policy,operation:'memory'}))throw new StoreError('Integration Memory or its exact original proof is not readable',409);
+    }
   }
   async memoryAsync(ref:string,scope:Range={},ownerArchive=false,snapshot?:MemoryReadSnapshot,exposure:MemoryExposure={policy:defaultEvidenceExposurePolicy,operation:'expand'}):Promise<Memory|undefined>{
     const parsed=parseEvidenceRef(ref);if(parsed?.kind!=='memory')return;
@@ -975,19 +1006,8 @@ export class EvidenceReader {
       for(let index=0;index<page.items.length;index++){
         const memory=page.items[index];
         const ids=this.store.db.prepare('SELECT evidence_id FROM memory_dependencies WHERE memory_id=?').all(memory.id).map(row=>String(row.evidence_id));
-        const records=ids.length?this.evidenceById(ids,args):[];
-        // Only current formal material proof can lead to a screenshot-derived
-        // card. Raw screenshot memories remain outside the discovery catalog;
-        // ordinary metadata discovery stays independent of proof expansion.
-        let materialProof:boolean|undefined;
-        const hasMaterialProof=()=>{
-          if(materialProof!==undefined)return materialProof;
-          const evidenceIds=this.memories.get(memory.id).evidenceIds,anchors=this.memories.readEvidence(evidenceIds);
-          return materialProof=anchors.length===evidenceIds.length&&anchors.length>0&&anchors.every(anchor=>
-            anchor.provenance?.uri?.startsWith('material:')&&this.captureExposure(anchor,operation,policy));
-        };
-        if(!ids.length||records.length!==ids.length||!records.every(record=>this.captureExposure(record,operation,policy)||
-          (record.source==='screen'||record.source==='ui_page')&&hasMaterialProof()&&this.captureExposure(record,operation==='discover'?'expand':operation,policy,'capture',true)))continue;
+        const card=this.memories.get(memory.id);
+        if(!this.memoryLineageVisible({dependencyIds:ids,evidenceIds:card.evidenceIds,evidence:card.evidence.map(value=>({id:value.id,contentHash:value.contentHash})),scopeRefs:card.scopeRefs},args,false,{policy,operation},operation==='memory'))continue;
         items.push(memory);
         if(items.length===limit){
           const more=index<page.items.length-1||page.nextCursor!==null;
@@ -1037,11 +1057,13 @@ export class EvidenceReader {
     };
     const boundedEvidenceAllowed=(record:CaptureRecord,batch?:{canonical:Map<string,CaptureRecord>;selections:Map<MaterialInputPin,boolean>;inputs?:readonly MaterialInputPin[]})=>{
       const inputs=batch?batch.inputs:options.currentMaterialInputs?.();
-      if(operation('expand')==='memory'&&inputs?.length&&record.provenance?.uri?.startsWith('material:')){
+      const imageGrant=(options.currentGrantContext?.() as {processingImages?:readonly MemoryImageGrant[]}|undefined)?.processingImages?.find(grant=>grant.id===record.id);
+      if((operation('expand')==='memory'||imageGrant)&&inputs?.length&&record.provenance?.uri?.startsWith('material:')){
         const expected=options.currentProcessingEvidence?.()?.[record.id],canonical=expected&&(batch?batch.canonical.get(record.id):this.memories.readEvidence([record.id])[0]);
         if(!canonical||memoryEvidenceFingerprint(canonical)!==expected)return false;
         return inputs.some(pin=>{
           if(!pin.evidenceIds.includes(record.id))return false;
+          if(imageGrant&&(pin.materialId!==imageGrant.materialId||pin.fingerprint!==imageGrant.fingerprint||JSON.stringify(pin.required)!==JSON.stringify(imageGrant.required)))return false;
           if(batch?.selections.has(pin))return batch.selections.get(pin)!;
           const material=this.materials?.get(pin.materialId),selection=material&&this.materials?.input(material.ref,pin.required);
           const allowed=Boolean(selection?.ready&&selection.fingerprint===pin.fingerprint&&material&&this.materialExposure(material,'memory',policy,pin.required));
@@ -1090,6 +1112,19 @@ export class EvidenceReader {
       readImage:async (input)=>{
         const {id,attachmentId}=input;
         if(!options.allowQueryImages?.())throw new ContextToolError('image_disclosure_disabled','Original-image access for queries is off. The owner must enable on-demand image access in Central Perception settings before a new query. Do not repeat this image request.','stop');
+        const context=options.currentGrantContext?.() as {processingImages?:readonly MemoryImageGrant[]}|undefined;
+        if(context?.processingImages?.length){
+          const grant=context?.processingImages?.find(grant=>grant.id===id);
+          const authorized=()=>{
+            if(!grant||attachmentId!==undefined||!this.materials||!options.allowQueryImages?.())return;
+            const material=this.materials.get(grant.materialId),selection=material&&this.materials.input(material.ref,grant.required);
+            if(!selection?.ready||selection.fingerprint!==grant.fingerprint||!selection.evidenceIds.includes(id)||
+              !this.materialExposure(material!,'memory',policy,grant.required))return;
+            return memoryImageOriginal(store,grant);
+          };
+          const original=authorized();if(!original)throw new StoreError('Image is outside the frozen Memory original scope',404);
+          return readEvidenceImage(store,this.files,this.archivedFiles,{...input,id:original,expectedImageSha256:grant!.originalSha256},()=>authorized()===original);
+        }
         const captureId=z.string().uuid().safeParse(id);if(!captureId.success)throw new StoreError('Invalid capture reference');
         const parent=()=>{
           const original=scopeRecord(store,captureId.data);if(original)return original;

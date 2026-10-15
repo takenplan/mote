@@ -279,13 +279,25 @@ class MaterialBody {
 const codingExternalId=(g:Record<string,string>)=>JSON.stringify([g.provider,g.projectKey,g.sessionId]);
 function imageBlocks(body:MaterialBody,record:CaptureRecord,image:ImageMaterialProjection|undefined,prefix='image'):NonNullable<MaterialDraft['artifacts']>{
   if(!image||image.archiveOnly)return [];
-  return image.jobs.filter(job=>job.name!=='ocr').map(job=>{
+  const originals:NonNullable<MaterialDraft['artifacts']>=[];
+  if(image.original){
+    const start=body.blocks.length;
+    body.text(`${prefix}:original`,JSON.stringify({originalImage:{sha256:image.original.sha256},evidenceKind:'original_image_reference',
+      instruction:'This locator contains no image contents. Use read_image on this evidence ID only when OCR cannot establish the needed visual fact. Interpretation text is navigation, never original proof.'}),record.id,'json',
+      {memoryImageOriginal:image.original},undefined,evidenceContext(record,'reference'));
+    originals.push({key:prefix==='image'?'image-original':`${prefix}/original-image`,state:'ready',revision:image.original.sha256,blockIds:body.blocks.slice(start).map(block=>block.id)});
+  }
+  if(prefix.startsWith('frame/')&&record.ocrText){
+    const start=body.blocks.length;body.text(`${prefix}:ocr`,record.ocrText,record.id,'plain',undefined,undefined,evidenceContext(record,'other'));
+    originals.push({key:`${prefix}/ocr`,state:'ready',blockIds:body.blocks.slice(start).map(block=>block.id)});
+  }
+  return [...originals,...image.jobs.filter(job=>job.name!=='ocr').map(job=>{
     const product=image.products.find(p=>p.name===job.name),start=body.blocks.length;
     if(product?.text)body.text(`${prefix}:${job.name}`,JSON.stringify({imageInterpretation:product.text,regions:product.regions,originalEvidence:product.evidence,productVersion:product.revision,
       evidenceKind:'model_interpretation',attribution:'Preserve the depicted author and uncertainty; this is not a verbatim original or an owner statement.'}),record.id,'json',
       {imageEvidence:product.evidence,productVersion:product.revision},undefined,evidenceContext(record,'summary'));
     return {key:prefix==='image'?`image-${job.name}`:`${prefix}/${job.name}`,state:job.state,blockIds:body.blocks.slice(start).map(b=>b.id),...(product?{revision:product.revision}:{}),...(job.reason?{reason:job.reason}:{})};
-  });
+  })];
 }
 
 /** A source item keeps its own identity; a coding session is assembled separately. */
@@ -506,7 +518,7 @@ const screenGroup:MaterialOrganizer={
       origin:origin(sourceId,externalId,records),blocks:body.blocks,members:body.members,
       coverage:body.coverage(ocrFailed?'partial':ocrPending?'pending':'complete',ocrFailed?'ocr_failed':ocrPending?'ocr_pending':undefined),
       artifacts:[{key:'screen-observations',state:'ready'},{key:'ocr',state:ocrFailed?'failed':ocrPending?'pending':'ready',...(ocrFailed?{reason:'ocr_failed'}:ocrPending?{reason:'ocr_pending'}:{})},...imageArtifacts,
-        ...(imageArtifacts.length?[{key:'image-understanding',state:imageArtifacts.some(a=>a.state==='failed')?'failed' as const:imageArtifacts.every(a=>a.state==='ready')?'ready' as const:'pending' as const,blockIds:imageArtifacts.flatMap(a=>a.blockIds??[])}]:[])],
+        ...(['image-original','image-ocr','image-understanding'] as const).flatMap(key=>{const selected=imageArtifacts.filter(artifact=>key==='image-original'?artifact.key.endsWith('/original-image'):key==='image-ocr'?artifact.key.endsWith('/ocr'):!artifact.key.endsWith('/original-image')&&!artifact.key.endsWith('/ocr'));return selected.length?[{key,state:selected.some(a=>a.state==='failed')?'failed' as const:selected.every(a=>a.state==='ready')?'ready' as const:'pending' as const,blockIds:selected.flatMap(a=>a.blockIds??[])}]:[];})],
       fidelity:body.fidelity('derived',['metadata_projected','screen_samples_compressed']),retention:{original:'retained',policy:'keep'}};
   },
 };
@@ -677,9 +689,11 @@ export class MaterialOrganizerRuntime {
           materials.publish(prepared.draft,{expectedRevision:prior?.revision??null,processingStateTransition:input.organizerId===sourceItem.id});
           materials.setSearchable(input.materialId,true);
           if(input.organizerId===sourceItem.id){
-            const required=prepared.draft.artifacts?.some(item=>item.key==='image-understanding')?'image-understanding':prepared.draft.artifacts?.some(item=>item.key==='original')?'extracted-text':'source-body';
-            const attachments=prepared.draft.artifacts?.filter(item=>item.key.startsWith('attachment/')&&item.key.endsWith('/understanding')).map(item=>item.key)??[];
-            if(prepared.pinnedSourceHead)this.memoryWork?.observe(input.materialId,[required,...attachments],{
+            const artifacts=prepared.draft.artifacts??[],image=artifacts.some(item=>item.key==='image-original');
+            const required=image?['image-original',...artifacts.filter(item=>item.key==='extracted-text'&&item.state==='ready'&&item.blockIds?.length).map(item=>item.key)]:[artifacts.some(item=>item.key==='original')?'extracted-text':'source-body'];
+            const attachments=artifacts.filter(item=>item.key.startsWith('attachment/')&&(item.key.endsWith('/original-image')||item.key.endsWith('/text')&&item.state==='ready'&&item.blockIds?.length)).map(item=>item.key);
+            const selected=prepared.pinnedSourceHead?this.claimedImageRequirements(input.materialId,prepared.pinnedSourceHead,[...required,...attachments]):[...required,...attachments];
+            if(prepared.pinnedSourceHead)this.memoryWork?.observe(input.materialId,selected,{
               inputKey:prepared.pinnedSourceHead,change:input.sourceChanged?'source':'rebuild',
             });
           }else if(input.organizerId===uiPageObject.id){
@@ -687,7 +701,7 @@ export class MaterialOrganizerRuntime {
             if(last)this.memoryWork?.observe(input.materialId,['source-body'],{inputKey:last,change:input.sourceChanged?'source':'rebuild',excludeRecipeIds:[DAILY_EVENT_RECIPE.id]},15000);
           }else if(input.organizerId===screenGroup.id){
             const last=prepared.draft.members.at(-1)?.id;
-            if(last)this.memoryWork?.observe(input.materialId,prepared.draft.artifacts?.some(item=>item.key==='image-understanding')?['image-understanding']:['ocr'],{inputKey:last,change:input.sourceChanged?'source':'rebuild',excludeRecipeIds:[DAILY_EVENT_RECIPE.id]},15000);
+            if(last)this.memoryWork?.observe(input.materialId,this.claimedImageRequirements(input.materialId,last,prepared.draft.artifacts?.some(item=>item.key==='image-original')?['image-original',...(prepared.draft.artifacts?.some(item=>item.key==='image-ocr')?['image-ocr']:[])]:['ocr']),{inputKey:last,change:input.sourceChanged?'source':'rebuild',excludeRecipeIds:[DAILY_EVENT_RECIPE.id]},15000);
           }else if(input.organizerId===captureEvent.id){
             this.memoryWork?.observe(input.materialId,['daily-events'],{inputKey:input.group.captureId,change:input.sourceChanged?'source':'rebuild',recipeIds:[DAILY_EVENT_RECIPE.id]},15000);
           }
@@ -709,6 +723,14 @@ export class MaterialOrganizerRuntime {
     for(const organizer of [sourceItem,codingSession,uiPageObject,screenGroup,captureEvent,stateSeries,authored])this.registry.register(organizer);
     for(const organizer of additionalOrganizers)this.registry.register(organizer);
     this.reconcileOperationGenerations();
+  }
+  /** Optional late OCR/vision cannot replace the frozen targets of already
+   * admitted work or spend a consumed raw-input grant. A new revision or an
+   * explicit manual selection can choose the newly ready image outputs. */
+  private claimedImageRequirements(materialId:string,inputKey:string,proposed:string[]):string[]{
+    if(!this.memoryWork||!proposed.some(key=>key==='image-original'||key.endsWith('/original-image')))return proposed;
+    const prior=this.store.db.prepare('SELECT source_required_json FROM material_memory_requests WHERE material_id=? AND input_key=? AND job_id IS NOT NULL ORDER BY rowid LIMIT 1').get(materialId,inputKey);
+    return prior?JSON.parse(String(prior.source_required_json)):proposed;
   }
   private reconcileOperationGenerations(){
     // Older organizers linked every generation as current. Repair only the

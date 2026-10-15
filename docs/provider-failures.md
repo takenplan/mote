@@ -10,6 +10,15 @@ Memory preserves the provider failure through its extraction/review boundary. Au
 
 Owner API responses use fixed localized explanations and recovery metadata. Provider authentication failures return 502 rather than invalidating the owner's Mote login; explicit retry delays also appear in Retry-After. Diagnostic exports never include provider response text.
 
+Feedback planning retries only typed transient rate-limit, network, unavailable
+or timeout failures, within its existing four-attempt bound. An unknown provider
+or program exception stops after one attempt. Its terminal failure is preserved
+through the coordinator, batch and Activity views; it does not become a request
+for owner context. Recovery corrects the exact historical failed/no-unit/no-real-
+question wait without issuing another model call. True context stops, owner
+questions, cancellation and stale work retain their distinct states. See the
+[decision and compatibility boundary](adr-memory-evidence-delivery-and-failure-state.md).
+
 Validation uses generated content only: real Harness against synthetic local HTTP services checks 401/429/503 under both OpenAI Completions and DeepSeek transports, plus an import failure, with exactly one outbound model request per case. Shared tests validate date/delay bounds; executor tests verify attempts, persistence and independent work; Memory tests verify actionable waits, repaired credentials, zero premature retries/checkpoints and restarted lifecycle deferral. No additional live model or personal data was used.
 
 Reported upstream cooldown is shared across feature queues. `ProviderAdmission` persists only a digest of protocol/provider/endpoint/credentials plus a fixed failure code and expiry. HTTP 429 retains its bounded default cooldown when the provider omits Retry-After. Other recognized transient failures share a cooldown only when the upstream response supplies Retry-After; a single timeout, network failure or unavailable response without that signal stays with the failing task's existing retry policy and does not block other models. Different credentials or endpoints remain independent. Both the Agent queue and the later Harness admission recheck the deadline, preventing requests that were queued before a reported limit from bypassing it. Longer concurrent cooldowns win; a late success cannot clear another request's limit. Expired entries are removed when new shared failures are recorded. The owner execution-settings response reports only the number of cooling services and the earliest retry time.

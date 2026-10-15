@@ -119,6 +119,8 @@ Central（server + web）、macOS、Android 使用各自产品版本；当前版
 | [问答证据与简化上下文决定](adr-ask-evidence-quality-and-simple-context.md) | 模型覆盖、移除近似预算与二分、录音时间/正文、质量实验与实际恢复边界 |
 | [跨来源状态问答回归](ask-quality-validation.md) | 多来源与续问的生成资料场景、固定输入比较方法、证据覆盖和验证边界 |
 | [大范围续问与 Memory 启动回归](validation/query-lease-and-memory-activation-2026-10-14.md) | 完整依赖批量授权、租约续期、删除栅栏与显式启动后的重启恢复；生成 HTTP/provider 回归证据 |
+| [Memory 证据送达与失败状态决定](adr-memory-evidence-delivery-and-failure-state.md) | 整合 A、独立图片证据、真实失败和有界回执；保留历史执行授权边界 |
+| [Memory 证据链路修复回归](validation/memory-evidence-recovery-2026-10-15.md) | 完整入口、状态转换、生成夹具和隔离真实数据验收 |
 | [0.0.13-validation](0.0.13-validation.md) | 0.0.13 验证记录 |
 | [0.0.2-validation](0.0.2-validation.md) | 0.0.2 验收记录 |
 | [0.0.3-validation](0.0.3-validation.md) | 0.0.3 验收记录 |

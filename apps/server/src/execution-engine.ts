@@ -4,6 +4,7 @@ import {randomUUID,createHash} from 'node:crypto';
 import {setImmediate as yieldTurn} from 'node:timers/promises';
 import {StoreError,type Store} from './store.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
+import {failureContext,retainFailureContext,safeFailureContext,type FailureContext} from './execution-failures.js';
 
 export type ExecutionState='waiting'|'running'|'blocked'|'succeeded'|'failed'|'cancelled'|'stale';
 export type ExecutionLane='background'|'interactive';
@@ -11,6 +12,7 @@ export type ExecutionLane='background'|'interactive';
  * never from model-authored input or a new persistent authority field. */
 export type ExecutionPoolAdmission={concurrency:Record<ExecutionLane,()=>number>;lane:(step:ExecutionStep)=>ExecutionLane};
 export type ExecutionStep={id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;state:ExecutionState;attempts:number;availableAt:number;error?:string};
+export type ExecutionFailureReceipt=FailureContext&{stepId:string;operationId:string;kind:string;state:ExecutionState;category:ExecutionFailure['category'];code:string;attempt:number;at:string};
 /** A running handler can publish incremental progress only through its current lease. */
 export interface ExecutionGrant {
  assert():void;
@@ -35,6 +37,8 @@ export interface ExecutionHandler {
  timeoutMs?:number|(()=>number);
  maxAttempts?:number;
  maxRecoveryWindowMs?:number;
+ /** Trusted identities/stage only; the engine never persists arbitrary errors. */
+ failureContext?:(step:ExecutionStep)=>FailureContext;
 }
 type ProgramStep<T>=OperationMembership&{id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;initialAttempts?:number;timeoutMs?:number;classify?:(error:unknown)=>ExecutionFailure};
 type Row={id:string;operation_id:string;kind:string;pool:string;input:string;state:ExecutionState;attempts:number;available_at:number;error:string|null;fence:string|null;lease_until:number;recovery_deadline?:number};
@@ -53,6 +57,7 @@ export class ExecutionEngine {
  private pumping=false;
  private pumpAgain=false;
  private scheduled=false;
+ private failureReceiptWriteFailures=0;
  constructor(readonly store:Store,private now=Date.now){
   store.db.exec(`CREATE TABLE IF NOT EXISTS execution_steps(id TEXT PRIMARY KEY,operation_id TEXT NOT NULL,kind TEXT NOT NULL,pool TEXT NOT NULL,input TEXT NOT NULL,state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,available_at INTEGER NOT NULL DEFAULT 0,lease_until INTEGER NOT NULL DEFAULT 0,fence TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,recovery_deadline INTEGER NOT NULL DEFAULT 0);
    CREATE TABLE IF NOT EXISTS execution_resources(step_id TEXT NOT NULL REFERENCES execution_steps(id) ON DELETE CASCADE,resource_key TEXT NOT NULL,PRIMARY KEY(step_id,resource_key));
@@ -66,6 +71,7 @@ export class ExecutionEngine {
    CREATE INDEX IF NOT EXISTS execution_operations ON execution_steps(operation_id,created_at);
    CREATE TABLE IF NOT EXISTS execution_sequence(pool TEXT PRIMARY KEY,next INTEGER NOT NULL);
    CREATE TABLE IF NOT EXISTS execution_fairness(pool TEXT NOT NULL,operation_id TEXT NOT NULL,last_started INTEGER NOT NULL,PRIMARY KEY(pool,operation_id));`);
+  store.db.exec('CREATE TABLE IF NOT EXISTS execution_failures(step_id TEXT PRIMARY KEY REFERENCES execution_steps(id) ON DELETE CASCADE,json TEXT NOT NULL)');
   store.db.exec('CREATE INDEX IF NOT EXISTS execution_recovery_deadline ON execution_steps(state,recovery_deadline)');
   installOperationProjection(store);
  }
@@ -104,6 +110,14 @@ export class ExecutionEngine {
   }catch(error){if(own)db.exec('ROLLBACK');throw error;}
  }
  get(id:string){const row=this.store.db.prepare('SELECT * FROM execution_steps WHERE id=?').get(id) as Row|undefined;return row?view(row):undefined;}
+ failure(id:string):ExecutionFailureReceipt|undefined {const row=this.store.db.prepare('SELECT json FROM execution_failures WHERE step_id=?').get(id);return row?JSON.parse(String(row.json)):undefined;}
+ failureDiagnostics(){return {writeFailures:this.failureReceiptWriteFailures};}
+ private retainFailure(step:ExecutionStep,state:ExecutionState,failure:ExecutionFailure,error?:unknown){
+  // One bounded receipt per retained step follows that step's existing deletion
+  // lifecycle. A full disk must not turn failure reporting into another run.
+  let hostContext:FailureContext={};try{hostContext=this.handlers.get(step.kind)?.failureContext?.(step)??{};}catch{/* Retired inputs cannot remove the fixed execution receipt. */}
+  try{const context={...hostContext,...failureContext(error)},receipt:ExecutionFailureReceipt={...safeFailureContext(context),stepId:step.id,operationId:step.operationId,kind:step.kind,state,category:failure.category,code:/^[a-z][a-z0-9_.:-]{0,99}$/.test(failure.code)?failure.code:'execution_failed',attempt:step.attempts,at:new Date(this.now()).toISOString()},json=JSON.stringify(receipt),prior=this.store.db.prepare('SELECT length(json) bytes FROM execution_failures WHERE step_id=?').get(step.id);this.store.reserveMetadata(Math.max(0,Buffer.byteLength(json)-Number(prior?.bytes??0))+(!prior?Buffer.byteLength(step.id)+128:0));this.store.db.prepare('INSERT INTO execution_failures VALUES(?,?) ON CONFLICT(step_id) DO UPDATE SET json=excluded.json').run(step.id,json);}catch{this.failureReceiptWriteFailures++;}
+ }
  list(args:{operationId?:string;kind?:string;state?:ExecutionState;cursor?:number;limit?:number}={}){
   const clauses:string[]=[],values:(string|number)[]=[];
   if(args.operationId){clauses.push('EXISTS(SELECT 1 FROM execution_operation_steps o WHERE o.step_id=execution_steps.id AND o.operation_id=?)');values.push(args.operationId);}
@@ -128,10 +142,10 @@ export class ExecutionEngine {
  }
  cancellationAliasRevoked(aliasId:string){return Boolean(this.store.db.prepare('SELECT 1 FROM execution_cancellation_aliases WHERE alias_id=? AND cancelled=1').get(aliasId));}
  /** Revoke an unfinished run after a host deadline without pretending the user cancelled. */
- fail(id:string,code:string){
+ fail(id:string,code:string,context?:FailureContext){
   if(!/^[a-z][a-z0-9_]{0,80}$/.test(code))throw new StoreError('Invalid execution failure code',400);
   const db=this.store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
-  try{db.prepare("UPDATE execution_steps SET state='failed',fence=NULL,error=?,updated_at=? WHERE id=? AND state NOT IN ('succeeded','failed','cancelled','stale')").run(code,this.now(),id);this.project(id);if(own)db.exec('COMMIT');}
+  try{if(db.prepare("UPDATE execution_steps SET state='failed',fence=NULL,error=?,updated_at=? WHERE id=? AND state NOT IN ('succeeded','failed','cancelled','stale')").run(code,this.now(),id).changes){const step=this.get(id)!;this.retainFailure(step,'failed',new ExecutionFailure('permanent',code),context?retainFailureContext(new Error(),context):undefined);}this.project(id);if(own)db.exec('COMMIT');}
   catch(error){if(own)db.exec('ROLLBACK');throw error;}
   this.active.get(id)?.controller.abort();
  }
@@ -259,7 +273,9 @@ export class ExecutionEngine {
    const recoveryDeadline=failure.category==='transient'&&!stopping?(Number(row.recovery_deadline)||at+Math.max(1,Math.min(handler.maxRecoveryWindowMs??6*3600000,30*86400000))):Number(row.recovery_deadline)||0;
    let code=stopping?'interrupted':failure.code;
    if(!stopping&&state==='waiting'&&failure.category==='transient'&&recoveryDeadline&&availableAt>=recoveryDeadline){state='failed';code='recovery_window_exhausted';}
-   if(db.prepare("UPDATE execution_steps SET state=?,error=?,available_at=?,recovery_deadline=?,fence=NULL,updated_at=? WHERE id=? AND fence=? AND state='running' AND lease_until>?").run(state,code,availableAt,recoveryDeadline,at,row.id,fence,at).changes)handler.project?.(this.get(row.id)!);
+   const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');let changed=false;
+   try{changed=Boolean(db.prepare("UPDATE execution_steps SET state=?,error=?,available_at=?,recovery_deadline=?,fence=NULL,updated_at=? WHERE id=? AND fence=? AND state='running' AND lease_until>?").run(state,code,availableAt,recoveryDeadline,at,row.id,fence,at).changes);if(changed)this.retainFailure(step,state,new ExecutionFailure(failure.category,code),error);if(own)db.exec('COMMIT');}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
+   if(changed)handler.project?.(this.get(row.id)!);
   }finally{clearTimeout(deadline);clearInterval(renewal);}
   await yieldTurn();
  }

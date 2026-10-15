@@ -124,6 +124,11 @@ test('failed and unconfigured batches offer a resumable operation',()=>{
     assert.match(html,/重新检查未完成方案/);assert.doesNotMatch(html,/记忆提取完成/);
   }
 });
+test('an internal planner failure is actionable failure rather than a missing-material wait',()=>{
+ const html=renderToStaticMarkup(React.createElement(MemoryProgress,{job:{...job,status:'failed',errorCode:'memory_feedback_planning_failed'},onRetry:()=>{}}));
+ assert.match(html,/内部规划失败，未完成范围已保留/);assert.match(html,/请查看失败原因后决定是否重试/);assert.doesNotMatch(html,/等待资料处理|其余方案等待所需资料/);
+ const stop=renderToStaticMarkup(React.createElement(MemoryProgress,{job:{...job,status:'waiting_for_input',errorCode:'memory_context_required'}}));assert.match(stop,/当前授权资料不能提供所需语境/);assert.doesNotMatch(stop,/内部规划失败/);
+});
 test('document evidence retains original metadata and authenticated download controls without embedding a token',()=>{
   const html=renderToStaticMarkup(React.createElement(SourceDocumentDetails,{api:createApi({token:'fixture-secret-token'}),document:{fileId:'file-1',path:'export/notes.json',recordedAt:'2020-01-02T00:00:00Z',contentRole:'authored',attachments:[{id:'attachment-1',name:'photo.png'}],originalMetadata:{author:'合成人物',text:'<script>fixture</script>'}}}));
   assert.match(html,/原文记录时间/);assert.match(html,/notes.json/);assert.match(html,/关联附件（1）/);

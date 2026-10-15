@@ -16,6 +16,28 @@ const marker='SYNTHETIC_PRIVATE_BODY_TOKEN_URL_QUERY';
 const config=(dataDir:string):Config=>({dataDir,token:'synthetic-observability-token-only',tokenPath:join(dataDir,'synthetic-token-file'),host:'127.0.0.1',port:47832,dataKey:undefined,maxStorageBytes:10_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'synthetic-provider-credential',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsDebug:true});
 const inactive:QueryAgent={configured:false,query:async()=>{throw new Error('fixture must not run');},close:async()=>{}};
 
+test('mixed ordinary and trace eviction reports the actual ring across toggles and restart',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-trace-count-'));
+ let logger=new ServerDiagnostics({directory,traceEnabled:true,maxEntries:2});
+ t.after(async()=>{await logger.close();await rm(directory,{recursive:true,force:true});});
+ const check=()=>{
+  const entries=logger.events(0,10).items,snapshot=logger.snapshot();
+  assert.equal(snapshot.agentTrace.retainedEvents,entries.filter(entry=>entry.event==='agent.trace').length);
+  assert.ok(snapshot.agentTrace.retainedEvents<=snapshot.retainedEvents);
+ };
+ await logger.init();
+ logger.agentTrace({type:'generated.trace'});logger.record('server.started');check();
+ logger.record('server.started');check();assert.equal(logger.snapshot().agentTrace.retainedEvents,0);
+ logger.agentTrace({type:'generated.second'});logger.agentTrace({type:'generated.third'});check();
+ await logger.configure({enabled:true,debug:false,traceEnabled:false,level:'info'});
+ logger.record('server.started');check();logger.record('server.started');check();
+ await logger.close();logger=new ServerDiagnostics({directory,traceEnabled:true,maxEntries:2});await logger.init();check();
+ assert.equal(logger.snapshot().agentTrace.retainedEvents,0);
+ logger.agentTrace({type:'generated.after-restart'});logger.record('server.started');check();
+ await logger.close();logger=new ServerDiagnostics({directory,traceEnabled:true,maxEntries:2});await logger.init();check();
+ assert.equal(logger.snapshot().agentTrace.retainedEvents,1);
+});
+
 test('safe fragment timings preserve measured queue/session units without arbitrary model content',async t=>{
  const directory=await mkdtemp(join(tmpdir(),'mote-safe-fragment-timing-')),d=new ServerDiagnostics({directory,traceEnabled:false});
  t.after(async()=>{await d.close();await rm(directory,{recursive:true,force:true});});await d.init();

@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import {ContextToolError,AgentYieldError,type AgentAnswer,type ContextRecord,type HostControlChannel,type HostControlDefinition,type HostControlResult,type QueryInput} from '@mote/agent';
-import {ExecutionEngine,ExecutionFailure,type ExecutionGrant,type ExecutionLane,type ExecutionState,type ExecutionStep} from './execution-engine.js';
+import {ExecutionEngine,ExecutionFailure,type ExecutionFailureReceipt,type ExecutionGrant,type ExecutionLane,type ExecutionState,type ExecutionStep} from './execution-engine.js';
+import type {FailureContext} from './execution-failures.js';
 import {DelegationStore} from './delegation-store.js';
 import {queryWorkspace,type QueryWorkspace} from './delegation-protocol.js';
 import {StoreError,type Store} from './store.js';
@@ -12,7 +13,11 @@ export {originalEvidenceReceipt} from '@mote/agent';
 export type DelegationScope=Pick<QueryInput,'after'|'before'|'deviceId'|'timeZone'|'contextTime'|'evidenceIds'|'evidenceRanges'|'processingEvidence'>;
 export type DelegationUnit={id:string;workId:string;capabilityId:string;capabilityVersion:string;title:string;goal:string;input:Record<string,unknown>;scope:DelegationScope;dependencies:string[];stepId:string;status:ExecutionState;attempts:number;artifactId?:string;error?:string;external?:boolean};
 export type DelegationEvent={id:number;type:string;message?:string;unitId?:string;at:string};
-export type DelegationWork={id:string;operationId:string;profileId:string;goal:string;status:ExecutionState;createdAt:string;updatedAt:string;revision:number;requestHash:string;scope:DelegationScope;allowedCapabilities:string[];evidenceRevision:number;planningComplete?:boolean;plannedUnitIds?:string[];wait?:{unitIds:string[];mode:'any'|'all'};error?:string;units:DelegationUnit[];events:DelegationEvent[]};
+export type DelegationWork={id:string;operationId:string;profileId:string;goal:string;status:ExecutionState;createdAt:string;updatedAt:string;revision:number;requestHash:string;scope:DelegationScope;allowedCapabilities:string[];evidenceRevision:number;planningComplete?:boolean;plannedUnitIds?:string[];wait?:{unitIds:string[];mode:'any'|'all'};error?:string;failureReceipt?:ExecutionFailureReceipt;units:DelegationUnit[];events:DelegationEvent[]};
+/** A terminal planner is different from an accepted semantic stop proposal. */
+export class DelegationPlanningError extends StoreError {
+ constructor(readonly workId:string,readonly state:ExecutionState,readonly code:string,readonly receipt?:ExecutionFailureReceipt){super('Delegation planning did not complete',409);}
+}
 export type DelegationProduct={value:unknown;summary?:string;coverage?:unknown;evidence?:readonly ContextRecord[];dependencies?:readonly ContextRecord[];dependencyIds?:readonly string[];sourceContextDependencies?:readonly SourceContextDeclaration[]};
 export interface DelegationCapability {
  id:string;version:string;description:string;inputSchema?:Record<string,unknown>;maxInputCharacters?:number;
@@ -34,6 +39,8 @@ export interface DelegationCoordinator {
  /** Pure input authority is checked on every resume and commit. */
  validate?:(work:DelegationWork,input:unknown)=>boolean;
  commit?:(work:DelegationWork,result:unknown)=>void|{acceptedUnitIds:readonly string[]};
+ classify?:(error:unknown)=>ExecutionFailure;
+ failureContext?:(work:DelegationWork,input:unknown)=>FailureContext;
 }
 export type DelegationStart={id:string;operationId?:string;profileId:string;goal:string;input:unknown;scope?:DelegationScope;allowedCapabilities:string[]};
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;
@@ -103,14 +110,14 @@ export class DelegationRuntime {
    validate:step=>this.currentWork(String(step.input.workId),profile),
    execute:async(step,signal,grant)=>{const work=this.get(String(step.input.workId)),controls=this.controlChannel(work.id,grant),input=this.journal.payload(work.id);
     try{const result=await profile.execute({work,input,signal,grant,controls});return {yielded:false,result};}
-    catch(error){if(error instanceof AgentYieldError)return {yielded:true};throw error;}
+    catch(error){if(error instanceof AgentYieldError)return {yielded:true};throw profile.classify?.(error)??error;}
    },
    commit:(step,value)=>{const work=this.raw(String(step.input.workId)),outcome=value as {yielded:boolean;result?:unknown};
     if(outcome.yielded){work.status='waiting';this.save(work);this.wake(work.id);return;}
     if(work.units.some(unit=>!terminal(unit.status)&&!unit.external))throw new ExecutionFailure('permanent','unfinished_delegation');
     const receipt=profile.commit?.(this.get(work.id),outcome.result);
     this.completePlan(work,profile,outcome.result,receipt);
-   },project:step=>this.projectCoordinator(step),
+   },failureContext:step=>{const work=this.get(String(step.input.workId));return {workId:work.id,...profile.failureContext?.(work,this.journal.payload(work.id))};},project:step=>this.projectCoordinator(step),
   }));
   return profile;
  }
@@ -139,7 +146,7 @@ export class DelegationRuntime {
  /** Admission scans durable active identities independently from UI history. */
  private activeIds(){return this.store.db.prepare(`SELECT w.id FROM delegation_works w WHERE json_extract(w.json,'$.status') IN ('waiting','running','blocked') OR EXISTS(SELECT 1 FROM execution_operation_steps o JOIN execution_steps e ON e.id=o.step_id WHERE o.operation_id=json_extract(w.json,'$.operationId') AND e.state IN ('waiting','running','blocked')) OR EXISTS(SELECT 1 FROM delegation_units u JOIN execution_steps e ON e.id=json_extract(u.json,'$.stepId') WHERE u.work_id=w.id AND e.state IN ('waiting','running','blocked')) ORDER BY w.rowid`).all().map(row=>String(row.id));}
  result<T=unknown>(id:string):T|undefined {const work=this.get(id);if(work.status==='stale'||work.status==='cancelled')return;return this.journal.result<T>(id);}
- async waitForPlan(id:string,signal?:AbortSignal){for(;;){signal?.throwIfAborted();if(this.closed||this.engine.closed)throw new StoreError('Delegation execution is stopping',503);const work=this.get(id);if(work.planningComplete)return work;if(terminal(work.status))throw new StoreError(work.error??'Work planning did not complete',409);await new Promise<void>(resolve=>{const timer=setTimeout(resolve,100);timer.unref();});}}
+ async waitForPlan(id:string,signal?:AbortSignal){for(;;){signal?.throwIfAborted();if(this.closed||this.engine.closed)throw new StoreError('Delegation execution is stopping',503);const work=this.get(id);if(work.planningComplete)return work;if(terminal(work.status))throw new DelegationPlanningError(id,work.status,work.error??'planning_failed',work.failureReceipt);await new Promise<void>(resolve=>{const timer=setTimeout(resolve,100);timer.unref();});}}
  async wait(id:string,signal?:AbortSignal){for(;;){signal?.throwIfAborted();if(this.closed||this.engine.closed)throw new StoreError('Delegation execution is stopping',503);const work=this.get(id);if(terminal(work.status))return work;await new Promise<void>(resolve=>{const timer=setTimeout(resolve,100);timer.unref();});}}
  artifactMetadata(workId:string){return this.store.db.prepare('SELECT metadata FROM delegation_artifacts WHERE work_id=? ORDER BY rowid').all(workId).map(row=>(String(row.metadata).startsWith('aes:')||String(row.metadata).startsWith('json:')?this.journal.decodePrivate(String(row.metadata)):JSON.parse(String(row.metadata))) as {id:string;workId:string;unitId:string;summary?:string;coverage?:unknown});}
  start(request:DelegationStart){
@@ -240,7 +247,7 @@ export class DelegationRuntime {
  }
  private projectUnit(step:ExecutionStep){let unit:DelegationUnit;try{unit=this.unit(String(step.input.unitId));}catch{return;}const before=unit.status;unit.status=step.state;unit.attempts=step.attempts;unit.error=step.error;this.saveUnit(unit);if(terminal(step.state)&&before!==step.state){this.event(unit.workId,step.state==='succeeded'?'branch_completed':'branch_attention',undefined,unit.id);this.wake(unit.workId);}}
  private projectCoordinator(step:ExecutionStep){let work:DelegationWork;try{work=this.raw(String(step.input.workId));}catch{return;}if(terminal(work.status)||Number(step.input.revision)!==work.revision)return;
-  if(step.state==='running')work.status='running';else if(step.state==='waiting')work.status='waiting';else if(['failed','blocked','stale','cancelled'].includes(step.state)){work.status=step.state;work.error=step.error;}this.save(work);
+  if(step.state==='running')work.status='running';else if(step.state==='waiting')work.status='waiting';else if(['failed','blocked','stale','cancelled'].includes(step.state)){work.status=step.state;work.error=step.error;}work.failureReceipt=this.engine.failure(step.id);this.save(work);
   if(work.status==='failed'||work.status==='blocked')this.failUnfinishedChildren(work);
  }
  /** A terminal coordinator cannot leave normal worker models holding slots.

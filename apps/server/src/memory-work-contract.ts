@@ -1,4 +1,5 @@
 import {z} from 'zod';
+import {hasMemoryImageProof,memoryImageReadReceipts} from './memory-image-proof.js';
 import {AgentResponseError} from '@mote/agent';
 import type {MemoryWorkContract} from './memory-strategy-contract.js';
 import {MemoryOutputValidationError} from './memory.js';
@@ -37,6 +38,8 @@ Return {memories:[...],coverage:[{key,state:"checked"|"no_candidates"|"needs_con
 export function readMemoryWorkCoverage(result:QueryResult,members:MemoryWorkMember[],limit:number|undefined,readText?:(id:string)=>string|undefined,contract?:MemoryWorkContract){
  assertMemoryWorkAnswerSize(result.answer,contract);
  let value:any;try{value=JSON.parse(result.answer);}catch{throw new MemoryOutputValidationError('json','Invalid Memory work output');}
+ let imageReads:ReturnType<typeof memoryImageReadReceipts>;
+ try{imageReads=memoryImageReadReceipts(result);}catch{throw new MemoryOutputValidationError('image_evidence','Invalid original-image delivery receipt');}
  const parsed=memoryWorkCoverageFor(contract).safeParse(value.coverage),capacity=contract==='range-evaluation@1'?{success:true as const,data:{saturated:false}}:memoryWorkCapacitySchema.safeParse(value.capacity);
  if(!Array.isArray(value.memories)||!parsed.success||!capacity.success){const issue=!parsed.success?parsed.error.issues[0]:!capacity.success?capacity.error.issues[0]:undefined,field=!Array.isArray(value.memories)?'memories':!parsed.success?'coverage':'capacity';throw new MemoryOutputValidationError('coverage','Memory work requires member coverage and capacity',{fieldPath:validationLocation([field,...(issue?.path??[])]),problem:issue?validationProblem(issue):'invalid_type',workContract:contract,maxCandidates:limit});}
  if(contract!=='range-evaluation@1'&&limit!==undefined&&value.memories.length>limit)throw new MemoryOutputValidationError('coverage','Memory work candidate capacity exceeded',{workContract:contract});
@@ -49,7 +52,7 @@ export function readMemoryWorkCoverage(result:QueryResult,members:MemoryWorkMemb
    if(!inRange)throw new MemoryOutputValidationError('quote_not_found','Owner question requires an exact quote within its target range');
   }
   const supportsMember=(index:number)=>{const candidate=value.memories[index];if(index>=value.memories.length||!candidate?.evidenceIds?.includes(member.id))return false;if(!readText)return true;
-   const text=readText(member.id);return typeof text==='string'&&Array.isArray(candidate.evidence)&&candidate.evidence.some((span:any)=>span.id===member.id&&typeof span.quote==='string'&&span.quote.length>0&&(Number.isSafeInteger(span.offset)?span.offset>=member.offset&&span.offset+span.quote.length<=member.offset+member.length&&text.slice(span.offset,span.offset+span.quote.length)===span.quote:text.slice(member.offset,member.offset+member.length).includes(span.quote)));
+   const text=readText(member.id);return typeof text==='string'&&Array.isArray(candidate.evidence)&&candidate.evidence.some((span:any)=>span.id===member.id&&(hasMemoryImageProof(imageReads,span)||typeof span.quote==='string'&&span.quote.length>0&&(Number.isSafeInteger(span.offset)?span.offset>=member.offset&&span.offset+span.quote.length<=member.offset+member.length&&text.slice(span.offset,span.offset+span.quote.length)===span.quote:text.slice(member.offset,member.offset+member.length).includes(span.quote))));
   };
   if(row.candidateIndexes.some(index=>!supportsMember(index))||new Set(row.candidateIndexes).size!==row.candidateIndexes.length||row.state==='checked'&&!row.candidateIndexes.length||row.state==='no_candidates'&&row.candidateIndexes.length||row.state==='needs_context'&&row.candidateIndexes.length)throw new MemoryOutputValidationError('coverage','Memory coverage does not match its candidate evidence',{workContract:contract});
  }
@@ -57,7 +60,7 @@ export function readMemoryWorkCoverage(result:QueryResult,members:MemoryWorkMemb
  // range must declare the candidate, including cross-member conclusions.
  if(readText)for(const [index,candidate] of value.memories.entries())for(const member of members){
   const text=readText(member.id);if(typeof text!=='string'||!Array.isArray(candidate.evidence))continue;
-  const supports=candidate.evidence.some((span:any)=>span.id===member.id&&typeof span.quote==='string'&&span.quote.length>0&&(Number.isSafeInteger(span.offset)?span.offset>=member.offset&&span.offset+span.quote.length<=member.offset+member.length&&text.slice(span.offset,span.offset+span.quote.length)===span.quote:text.slice(member.offset,member.offset+member.length).includes(span.quote)));
+  const supports=candidate.evidence.some((span:any)=>span.id===member.id&&(hasMemoryImageProof(imageReads,span)||typeof span.quote==='string'&&span.quote.length>0&&(Number.isSafeInteger(span.offset)?span.offset>=member.offset&&span.offset+span.quote.length<=member.offset+member.length&&text.slice(span.offset,span.offset+span.quote.length)===span.quote:text.slice(member.offset,member.offset+member.length).includes(span.quote))));
   if(supports&&!parsed.data.find(row=>row.key===member.key)?.candidateIndexes.includes(index))throw new MemoryOutputValidationError('coverage','Every supporting target must declare the candidate context ownership',{workContract:contract});
  }
  const consumed=new Set(parsed.data.flatMap(row=>row.candidateIndexes));if(value.memories.some((_candidate:unknown,index:number)=>!consumed.has(index)))throw new MemoryOutputValidationError('coverage','Every candidate must be supported by a target coverage member',{workContract:contract});

@@ -161,10 +161,10 @@ test('OCR failure still allows pixel understanding and keeps extraction failure 
  assert.equal(material.artifacts!.find(a=>a.key==='image-understanding')!.state,'ready');assert.notEqual(material.artifacts!.find(a=>a.key==='extracted-text')!.state,'ready');
 });
 
-test('screen visual readiness spends one raw Memory grant; rebuild and recompute never mint another',async t=>{
+test('a ready screen original admits one Memory grant while vision is pending; late OCR and recompute never replace that scope',async t=>{
  const f=await fixture(t),id=await f.screen();await f.organize();f.advance(20000);
  let calls=0;const runner={create:()=>({id:'generated-memory-'+(++calls)}),get:()=>({status:'completed'}),run:async()=>{},cancel:()=>{}};
- f.memoryWork.drain(runner,true);assert.equal(calls,0,'Memory waits for visual evidence');
+ f.memoryWork.drain(runner,true);assert.equal(calls,1,'retained originals can be independently inspected before a derived visual product');
  await f.images.tick();await f.organize();f.advance(70000);f.memoryWork.drain(runner,true);assert.equal(calls,1);
  await f.organize();f.advance(70000);f.memoryWork.drain(runner,true);assert.equal(calls,1);
  f.images.retry(id,true);await f.images.tick();await f.organize();f.advance(70000);f.memoryWork.drain(runner,true);assert.equal(calls,1);
@@ -199,7 +199,10 @@ test('production image intake enters the existing automatic Memory pipeline once
  // This regression isolates the existing zero-outcome personal strategy. Daily
  // event behavior has a separate screenshot+field intake journey.
  node.memoryRecipeSettings.configure({scope:'capture',recipes:[{id:'mote.personal-memory',version:'2'}]});
- await node.processing.saveImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async()=>({durationMs:0,segments:[]});
+ // A deliberate zero selection is valid after inspecting sufficient OCR. Pure
+ // image targets without OCR require their own pixel assessment in the visual
+ // Memory journey regression, rather than accepting interpretation text.
+ await node.processing.saveImageDefault({endpoint:'http://127.0.0.1:9011/ocr'});node.processing.runtime.registry.get('image.http').process=async()=>({durationMs:0,segments:[{startMs:0,endMs:0,text:'Generated neutral chart without a personal fact.'}]});
  const settings=node.lifecycle.settings();settings.extraction.enabled=true;await node.lifecycle.save({revision:node.configService.revision,settings});
  const bytes=await sharp({create:{width:16,height:16,channels:3,background:'#ddeeff'}}).png().toBuffer(),id=randomUUID();
  await node.store.ingest({id,deviceId:'generated-screen',deviceName:'Generated screen',platform:'android',source:'screen',capturedAt:'2026-10-01T00:00:00Z',durationMs:0,ocrText:'',ocr:{status:'disabled'},privacy:{excluded:false,redacted:false,mode:'local'},imageMime:'image/png',imageBase64:bytes.toString('base64')});

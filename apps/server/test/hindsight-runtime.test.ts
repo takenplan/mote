@@ -9,6 +9,8 @@ import type {ModelSettings} from '@mote/shared/models';
 import {HindsightModelRelay} from '../src/hindsight-model-relay.js';
 import {HindsightService,ManagedHindsightRuntime,HindsightRuntimeLease,hindsightModelFingerprint} from '../src/hindsight-runtime.js';
 import {HindsightEngine,hindsightEvidenceRanges} from '../src/hindsight-engine.js';
+import {randomUUID} from 'node:crypto';
+import {memorySchema} from '../src/memory-schema.js';
 const profile:ModelSettings={provider:'openai',protocol:'openai-completions',baseUrl:'http://127.0.0.1:1/v1',model:'generated-transport-model',reasoningEffort:'medium',serviceTier:'default',maxTokens:1000,modelRequestTimeoutMs:null,agentTimeoutMs:1000,allowUnauthenticatedLocal:true,apiKey:'generated-fixture',headers:{},extraBody:{}};
 
 test('one live process cannot claim its configuration twice, and an unclaimed close cannot release its owner',async()=>{
@@ -60,6 +62,14 @@ test('an initially aborted capability probe does not initialize a native service
  const directory=await mkdtemp(join(tmpdir(),'mote-hindsight-aborted-'));let starts=0;
  const engine=new HindsightEngine({directory,runtime:{service:async()=>{starts++;throw Error('Unexpected startup');},startWorker:async()=>{},stopWorker:async()=>{},close:async()=>{}}});
  try{const controller=new AbortController();controller.abort(new Error('Generated probe abort'));await assert.rejects(engine.probe(controller.signal),/Generated probe abort/);assert.equal(starts,0);}finally{await engine.close();await rm(directory,{recursive:true,force:true});}
+});
+
+test('native integration rejects visual parent proof before any service, bank or worker starts',async()=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-hindsight-visual-input-'));let remoteCalls=0,workerStarts=0;
+ const engine=new HindsightEngine({directory,runtime:{service:async()=>{remoteCalls++;throw Error('Unexpected native service');},startWorker:async()=>{workerStarts++;},stopWorker:async()=>{},close:async()=>{}}});
+ const id=randomUUID(),now='2026-10-01T00:00:00Z',record={id,ocrText:'Generated original-image host locator',capturedAt:now} as any;
+ const parent=memorySchema.parse({id:randomUUID(),version:1,fingerprint:'a'.repeat(64),domain:'personal',tier:'episode',kind:'episodic',admission:{layer:'memory',reason:'Generated reference',scope:'Generated image only',attribution:'observed'},title:'Generated visual parent',statement:'A red rectangle is visible.',uncertainty:'Creator unknown.',evidenceIds:[id],evidence:[{id,capturedAt:now,receivedAt:now,contentHash:'b'.repeat(64),image:{original:{sha256:'c'.repeat(64),width:2,height:2,mimeType:'image/png',orientation:1,pages:1},coordinateSpace:'encoded-raster-pixels-v1',region:null,transform:'original-bytes@1',viewId:'d'.repeat(64),output:{sha256:'c'.repeat(64),width:2,height:2,mimeType:'image/png',sizeBytes:100}}}],createdAt:now,status:'published',model:'generated',runId:'generated-visual-parent'});
+ try{await assert.rejects(engine.prepare({namespace:{ownerId:'generated-owner',instanceId:'generated-native-engine',bindingRevision:1},opId:randomUUID(),phase:'integrate',evidence:[record],relatedMemories:[parent]}),{code:'unsupported_input'});assert.equal(remoteCalls,0);assert.equal(workerStarts,0);}finally{await engine.close();await rm(directory,{recursive:true,force:true});}
 });
 
 test('queued native inference rechecks revoked evidence authority before reaching the configured endpoint',async()=>{

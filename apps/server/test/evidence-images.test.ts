@@ -17,6 +17,7 @@ import {ServerDiagnostics} from '../src/diagnostics.js';
 import {readEvidenceImage} from '../src/evidence-image.js';
 import {MaterialStore,materialId} from '../src/materials.js';
 import {MaterialOrganizerRuntime} from '../src/material-organizers.js';
+import {memoryImageGrants} from '../src/memory-image-grants.js';
 import {ImportStore} from '../src/imports.js';
 import {PythonSourcePackExecutor,pythonImportOutputSchema,pythonImportPreparation} from '../src/python-source-pack-executor.js';
 
@@ -54,6 +55,17 @@ test('query reads exact uploaded image revisions while disclosure, policy and to
  await f.sources.upsert('generated-images',{externalId:'same',revision:'3',observedAt:'2026-09-27T02:00:00Z',kind:'file',layer:'reference',deleted:true});
  await assert.rejects(f.agent.readImage!({id:two.id}),/Image not found/);
  await assert.rejects(f.agent.readImage!({id:one.id}),/Image not found/);
+});
+
+test('a bounded answer retains its exact Memory image pin without receiving general query Material access',async t=>{
+ const f=await fixture(t),original=await f.upload('generated-bounded-answer');
+ const material=f.materials.publish({id:materialId('generated-images','generated-image-proof'),kind:'mote.file',schemaVersion:2,title:'Generated image proof',origin:{sourceId:'generated-images',externalId:'generated-image-proof'},members:[{id:original.id,kind:'capture',ref:'capture:'+original.id}],blocks:[{id:'original-image',kind:'text',format:'json',text:'Generated host image locator',memberIds:[original.id],locator:{memoryImageOriginal:{captureId:original.id,sha256:sha256(f.bytes)}}}],artifacts:[{key:'image-original',state:'ready',blockIds:['original-image']}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
+ const pin=f.materials.input(material.ref,['image-original'])!,processingImages=memoryImageGrants(f.store,[pin]),id=pin.evidenceIds[0],fingerprints={[id]:memoryEvidenceFingerprint(f.reader.memories.readEvidence([id])[0])};
+ const policy=new EvidenceExposurePolicy([{representation:'material',operation:'expand',allow:false}]);
+ const bounded=f.reader.agent({diagnostics:f.diagnostics,allowQueryImages:()=>true,currentOperation:()=> 'query',currentGrantContext:()=>({processingImages}),currentProcessingEvidence:()=>fingerprints,currentMaterialInputs:()=>[pin],exposurePolicy:policy});
+ assert.equal((await bounded.evidence({ids:[id]})).length,1,'the image pin also authorizes its exact locator during bounded deletion answer review');
+ assert.equal((await bounded.readImage!({id})).data,f.bytes.toString('base64'));
+ const ordinary=f.reader.agent({diagnostics:f.diagnostics,allowQueryImages:()=>true,currentOperation:()=> 'query',exposurePolicy:policy});assert.deepEqual(await ordinary.evidence({ids:[id]}),[],'the pin adds no general query permission');
 });
 
 test('image attachments require the exact parent declaration and archived link, without exposing other originals',async t=>{

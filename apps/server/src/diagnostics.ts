@@ -226,6 +226,11 @@ export class ServerDiagnostics {
   private readFailures=0;
   private nextAttempt=0;
   private traceEvents=0;
+  private retain(entry:DiagnosticEvent) {
+    this.entries.push(entry);
+    if(entry.event==='agent.trace')this.traceEvents++;
+    if(this.entries.length>this.maxEntries){const removed=this.entries.shift();if(removed?.event==='agent.trace')this.traceEvents--;}
+  }
   constructor(private readonly options:ServerDiagnosticsOptions) {
     this.enabled=options.enabled??true;this.level=options.level==='silent'?'silent':options.debug?'debug':levels.includes(options.level as LogLevel)?options.level!:'info';
     this.maxBytes=bounded(options.maxBytes,2*1024*1024,1024,MAX_LOG_FILE_BYTES);
@@ -275,7 +280,7 @@ export class ServerDiagnostics {
               if(!range.length)continue;
               const line=await readLogLine(file,range);
               let parsed:unknown;try{parsed=JSON.parse(line);}catch{this.readFailures++;continue;}
-              try {const event=cleanEvent(parsed);if(event){this.entries.push(event);if(event.event==='agent.trace')this.traceEvents++;this.seq=Math.max(this.seq,event.seq);if(index===0)currentDay=logDay(event.at);if(this.entries.length>this.maxEntries){const removed=this.entries.shift();if(removed?.event==='agent.trace')this.traceEvents--;}}}catch{this.readFailures++;}
+              try {const event=cleanEvent(parsed);if(event){this.retain(event);this.seq=Math.max(this.seq,event.seq);if(index===0)currentDay=logDay(event.at);}}catch{this.readFailures++;}
             }
           }
           finally {await file.close();}
@@ -336,7 +341,7 @@ export class ServerDiagnostics {
     const at=this.now().toISOString();
     const entry:DiagnosticEvent={seq:++this.seq,at,instanceId:this.instanceId,event,level,stage:eventStage(event),...fields({requestId:this.context.getStore(),...value})};
     const line=serializeDiagnosticEvent(entry,Math.min(maxEventBytes,this.maxBytes));
-    this.entries.push(entry);if(this.entries.length>this.maxEntries)this.entries.shift();
+    this.retain(entry);
     if(!this.writable||this.queue.length>=Math.min(this.maxEntries,1024)||Date.now()<this.nextAttempt){this.dropped++;return;}
     this.queue.push({line,day:logDay(at)});this.startWrite();
   }
@@ -373,7 +378,7 @@ export class ServerDiagnostics {
     const traceLimit=Math.min(this.maxBytes,MAX_TRACE_EVENT_BYTES);
     if(Buffer.byteLength(line)>traceLimit){entry.trace={type:trace.type,traceId,runId:trace.runId,truncated:true,payload:'trace payload exceeded the diagnostic event limit'};line=JSON.stringify(entry)+'\n';}
     if(Buffer.byteLength(line)>traceLimit){this.dropped++;return;}
-    this.traceEvents++;this.entries.push(entry);if(this.entries.length>this.maxEntries){const removed=this.entries.shift();if(removed?.event==='agent.trace')this.traceEvents--;}
+    this.retain(entry);
     if(!this.writable||this.queue.length>=Math.min(this.maxEntries,1024)||Date.now()<this.nextAttempt){this.dropped++;return;}
     this.queue.push({line,day:logDay(at)});this.startWrite();
   }

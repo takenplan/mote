@@ -16,7 +16,7 @@ test('owner integration creates a reviewed actionable replacement, applies its r
  const calls:QueryInput[]=[];
  const node=await buildApp(config,{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async input=>{
   calls.push(input);assert.equal(input.skill,'memory-integration');assert.equal(node.memories.get(seed.cards[0].id).supersededBy,undefined,'generation and review cannot publish a relationship');assert.equal(node.memories.list().length,2,'no intermediate new card before atomic commit');
-  const originals=node.memories.readEvidence(seed.ids),old=node.memories.get(seed.cards[0].id);
+  const originals=node.memories.readEvidence(seed.ids),old=node.memories.get(seed.cards[0].id);input.onEvidence?.(originals);
   const claim={domain:'personal',title:'Generated current publishing rule',statement:`For ${seed.oracle.project}, use gate ${seed.oracle.releaseGate} and artifact tag ${seed.oracle.artifactTag}; prior gate ${seed.oracle.priorGate} is retired ${seed.ids.map(id=>'['+id+']').join(' ')}`,uncertainty:'Scoped generated owner decision.',admission:{layer:'memory',reason:'Retrieve the current rule instead of the retired event card',scope:seed.oracle.project,attribution:'user'},relatedMemoryIds:seed.cards.map(card=>card.id),evidenceIds:seed.ids,evidence:originals.map(original=>({id:original.id,quote:original.ocrText})),relations:[{kind:'supersedes',memoryId:old.id,fingerprint:old.fingerprint,version:old.version}]};
   return {answer:JSON.stringify({memories:[claim]}),citations:originals.map(original=>({id:original.id,capturedAt:original.capturedAt,appName:original.appName,excerpt:original.ocrText})),trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:seed.ids}};
  }}});

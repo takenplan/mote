@@ -276,6 +276,10 @@ export async function startBridge(
     for(const id of value.ids as string[])disclosedIds.add(parseEvidenceId(id)!);
   };
   const restricted = bounds.evidenceIds !== undefined;
+  const processingImages=(bounds.processingImages??[]).map(grant=>Object.freeze({...grant,required:Object.freeze([...grant.required])}));
+  if(processingImages.length&&(processingImages.some(grant=>
+    !/^[a-f0-9]{64}$/.test(grant.originalSha256)||restricted&&![...(bounds.evidenceIds??[]),...(bounds.evidenceReadRanges??[]).map(range=>range.id)].includes(grant.id)||
+    !bounds.processingMaterialInputs?.some(pin=>pin.materialId===grant.materialId&&pin.fingerprint===grant.fingerprint&&pin.evidenceIds.includes(grant.id)&&JSON.stringify(pin.required)===JSON.stringify(grant.required)))))throw hostError('Invalid frozen Memory image scope');
   const permitted = new Map<string,ContextRecord>();
   const ranges = bounds.evidenceRanges ?? bounds.evidenceIds?.map(id=>({id,offset:0,length:12000})) ?? [];
   const readRanges=bounds.evidenceReadRanges??[];
@@ -327,12 +331,18 @@ export async function startBridge(
   // or merge the source attribution of two selections containing the same image.
   type ImageDelivery={selection:{id:string;attachmentId?:string};record:ContextRecord;imageView?:ImageViewTrace;token:string;confirmed:boolean;ready:Promise<void>;settle:()=>void;timer:ReturnType<typeof setTimeout>};
   const disclosedImages=new Map<string,ImageDelivery>();
+  const imageReadReceipts=new Map<string,{id:string;imageView:ImageView}>();
+  const rememberImageRead=(id:string,value:ImageViewTrace|undefined)=>{
+    if(!value?.output)return;
+    const {id:_id,attachmentId:_attachment,delivery:_delivery,...imageView}=value;
+    imageReadReceipts.set(JSON.stringify([id,imageView.viewId]),{id,imageView:structuredClone(imageView)});
+  };
   let closing=false;
   const imageDelivery=(token:string,delivered:boolean)=>{
     const entry=[...disclosedImages].find(([,value])=>value.token===token);
     if(!entry){if(delivered)throw hostError('Image delivery receipt expired');return;}
     const [key,value]=entry;clearTimeout(value.timer);
-    if(delivered){value.confirmed=true;if(!records.has(value.selection.id))remember(value.record);disclosedIds.add(value.selection.id);}else disclosedImages.delete(key);
+    if(delivered){value.confirmed=true;if(!records.has(value.selection.id))remember(value.record);disclosedIds.add(value.selection.id);rememberImageRead(value.selection.id,value.imageView);}else disclosedImages.delete(key);
     if(value.imageView)value.imageView.delivery=delivered?'prepared':'failed';
     value.settle();
   };
@@ -613,7 +623,7 @@ export async function startBridge(
           attributionPage:{contextFingerprint,offset:start,total:text.length,requestedLength,returnedLength:end-start}});
         reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:1});res.end(serialized);return;
       }
-      if(restricted){
+      if(restricted&&tool!=='read_image'){
         if(tool==='context_evidence'){
           if(Object.keys(args).some(key=>!['id','offset','length'].includes(key))||typeof args.id!=='string'||!Number.isSafeInteger(args.offset)||Number(args.offset)<0||!Number.isSafeInteger(args.length??4000)||Number(args.length??4000)<1||Number(args.length??4000)>12000)throw new ContextToolError('invalid_evidence_range','Use an original id from authorizedContextRanges, an absolute UTF-16 offset and length from 1–12000.','correct_arguments');
           const id=args.id,start=Number(args.offset),requestedLength=Number(args.length??4000);
@@ -656,7 +666,9 @@ export async function startBridge(
         const parsed=imageReadSchema.safeParse(args);
         if(!parsed.success)throw new ContextToolError('invalid_image_region','Use the declared image arguments. Regions require expectedImageSha256, integer original coordinates and sides of 1–2048.','correct_arguments',{maxRegionSide:IMAGE_REGION_MAX_SIDE});
         const selection=parsed.data;
-        if(typeof args.id!=='string'||!expanded.has(args.id)||!reader.readImage)throw hostError('Expand derived evidence before reading an authorized image');
+        const imageGrant=processingImages.find(grant=>grant.id===selection.id);
+        if((restricted||processingImages.length>0)&&(!imageGrant||selection.attachmentId!==undefined||selection.expectedImageSha256!==undefined&&selection.expectedImageSha256!==imageGrant.originalSha256))throw new ContextToolError('evidence_scope_denied','Use only an exact original-image id and hash listed in authorizedImages. This grant does not permit other captures or attachments.','correct_arguments');
+        if(typeof args.id!=='string'||!expanded.has(args.id)&&!imageGrant||!reader.readImage)throw hostError('Expand derived evidence before reading an authorized image');
         for(;;){
           if(closing||res.destroyed)return;
           const direct=directImages.some(image=>image.id===args.id);
@@ -675,7 +687,8 @@ export async function startBridge(
             if(JSON.stringify(imageView.region)!==JSON.stringify(selection.region??null)||imageView.transform!==expectedTransform||imageView.viewId!==expectedId||
               selection.expectedImageSha256&&imageView.original.sha256!==selection.expectedImageSha256||
               imageView.region&&(imageView.region.x+imageView.region.width>imageView.original.width||imageView.region.y+imageView.region.height>imageView.original.height||imageView.original.pages!==1))throw hostError('Image view does not match the requested original and region');
-          }else if(metadata||selection.region||selection.expectedImageSha256)throw new ContextToolError('image_view_unsupported','This image reader cannot verify metadata or regions. Use existing evidence or a plain original image request.','use_existing_evidence');
+          }else if(restricted||metadata||selection.region||selection.expectedImageSha256)throw new ContextToolError('image_view_unsupported','This image reader cannot verify metadata or regions. Use existing evidence or a plain original image request.','use_existing_evidence');
+          if(imageGrant&&imageView?.original.sha256!==imageGrant.originalSha256)throw new ContextToolError('evidence_changed','The original image changed after the frozen Memory scope was created.','stop');
           const publicView:ImageViewTrace|undefined=imageView?{...imageView,id:selection.id,...(selection.attachmentId?{attachmentId:selection.attachmentId}:{}),delivery:metadata?'metadata' as const:'pending' as const}:undefined;
           const imageBudget=()=>({remainingPayloads:Math.max(0,4-disclosedImages.size),maxRegionSide:IMAGE_REGION_MAX_SIDE,maxOutputBytes:IMAGE_MAX_BYTES});
           const sendImageResult=(result:Record<string,unknown>,entry:ToolTrace)=>{
@@ -706,6 +719,7 @@ export async function startBridge(
           }
           const firstSelection=existing?.selection;
           if(!existing&&disclosedImages.size>=4)throw new ContextToolError('image_budget_exceeded','Image disclosure budget exceeded. Finish with existing evidence and state incomplete visual coverage.','use_existing_evidence',{remainingPayloads:0});
+          if(existing?.confirmed)rememberImageRead(selection.id,publicView);
           // No await between checking and recording: concurrent identical reads
           // append at most one image. Repeats remain observable tool calls.
           let delivery:ImageDelivery|undefined;
@@ -957,6 +971,12 @@ export async function startBridge(
       });
       reportProgress(bounds,{stage:'tool',tool,phase:'completed',count:trace.at(-1)!.count});
       res.end(serialized);
+      if(tool==='memories'&&safeValue&&typeof safeValue==='object'){
+        const delivered=(safeValue as {items?:{id?:unknown;statement?:unknown;version?:unknown;fingerprint?:unknown}[]}).items??[];
+        const cards=delivered.flatMap(item=>typeof item.id==='string'&&typeof item.statement==='string'&&item.statement.length>0&&typeof item.fingerprint==='string'?
+          [{id:item.id,fingerprint:item.fingerprint,...(typeof item.version==='number'?{version:item.version}:{})}]:[]);
+        if(cards.length)try{bounds.onMemoryBodies?.(cards);}catch(error){rejectFailure(error instanceof Error?error:new Error('Memory delivery receipt could not be recorded'));}
+      }
     } catch (error) {
       let issue=error instanceof ContextToolError?error:new ContextToolError('context_tool_failed','The tool could not complete. Check the declared argument schema and permitted scope. Do not repeat the same failed request.','correct_arguments');
       const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([k,v])=>[k,canonical(v)])):value;
@@ -997,6 +1017,7 @@ export async function startBridge(
       return merged;
     },
     get sourceContextDependencies(){return [...sourceContextDependencies.values()];},
+    get imageReadReceipts(){return [...imageReadReceipts.values()].map(value=>structuredClone(value));},
     get evidenceDependencies(){return {version:1 as const,complete:completeLineage&&[...metadataImageIds].every(id=>disclosedIds.has(id)),ids:[...disclosedIds]};},
     get deliveredCharacters(){return deliveredCharacters;},
     get ready() {

@@ -53,7 +53,7 @@ test('five stub calls share frozen generation/review/Ask times and preserve real
   const f=await appFixture(t,async(input,reader)=>{
     calls.push(input);
     if(input.skill==='memory-integration'){
-      const old=node.memories.get(oldId);
+      const old=node.memories.get(oldId);input.onEvidence?.(await reader.evidence({ids:[record.id]}));
       return draft(record,[{title:'Generated beta',statement:'Generated beta replaces alpha ['+record.id+']',relatedMemoryIds:[old.id],relations:[{kind:'supersedes',memoryId:old.id,fingerprint:old.fingerprint,version:old.version}]}]);
     }
     if(input.responseMode==='memory-extraction')return draft(record,[

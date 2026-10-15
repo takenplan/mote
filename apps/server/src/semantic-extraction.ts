@@ -41,7 +41,11 @@ export function parseSemanticProducts(answer:string,records:CaptureRecord[],cita
  const output=semanticProductsSchema.extend({memoryCandidates:workContract==='range-evaluation@1'?z.array(claimSchema):semanticProductsSchema.shape.memoryCandidates.max(candidateLimit)}).parse(JSON.parse(answer));
  if(new Set(output.actionCues.flatMap(c=>c.evidence.map(e=>e.id))).size>30)throw new StoreError('At most 30 distinct originals may support the bounded action cues',502);
  const workClaims=(output.workRecords??[]).flatMap(record=>[...record.requirements,...record.constraints,...record.decisions,...record.results,...record.validation,...record.openItems,...record.artifactRefs]);
- const spans:{id:string;quote:string;offset?:number}[]=[...output.evidence,...output.events.flatMap(e=>e.evidence),...workClaims.flatMap(e=>e.evidence),...output.actionCues.flatMap(e=>e.evidence),...output.memoryCandidates.flatMap(e=>e.evidence??[])];
+ const memorySpans=output.memoryCandidates.flatMap(candidate=>candidate.evidence??[]).map(span=>{
+  if(span.image||typeof span.quote!=='string')throw new StoreError('Text-only semantic extraction cannot authorize image evidence',502);
+  return {...span,quote:span.quote};
+ });
+ const spans:{id:string;quote:string;offset?:number}[]=[...output.evidence,...output.events.flatMap(e=>e.evidence),...workClaims.flatMap(e=>e.evidence),...output.actionCues.flatMap(e=>e.evidence),...memorySpans];
  const ranges=spans.map(span=>{
   const record=records.find(r=>r.id===span.id),text=record?.ocrText??'',scope=authorizedRanges?.filter(range=>range.id===span.id)??[{offset:0,length:text.length}];
   let offset=span.offset;

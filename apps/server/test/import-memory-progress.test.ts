@@ -5,6 +5,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import type {QueryInput} from '@mote/agent';
+import {ProviderFailure} from '@mote/shared';
 import type {Config} from '../src/config.js';
 import {buildApp} from '../src/app.js';
 import {importMemoryProgress} from '../src/import-memory-progress.js';
@@ -12,16 +13,18 @@ import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 
 const config=(dataDir:string):Config=>({dataDir,token:'generated-progress-token',tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:20_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'fixture',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false});
 
-for(const mode of ['failed','waiting'] as const)test(`import receipt progress preserves committed configured batches when another member is ${mode}`,async t=>{
-  const directory=mkdtempSync(join(tmpdir(),'mote-import-memory-progress-'));let badId='';
+for(const mode of ['failed','waiting','planner-failed'] as const)test(`import receipt progress preserves committed configured batches when another member is ${mode}`,async t=>{
+  const directory=mkdtempSync(join(tmpdir(),'mote-import-memory-progress-'));let badId='',contextId='',planningCalls=0;
   const node=await buildApp(config(directory),{backgroundWorker:false,agent:{configured:true,close:async()=>{},query:async(input:QueryInput)=>{
     if((input.taskContext?.memoryWork as {feedback?:unknown})?.feedback){
+      if(mode==='planner-failed'){planningCalls++;input.onTrace?.({type:'run.started',runId:'generated-feedback-'+planningCalls});throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:0});}
       await input.hostControlChannel!.execute('delegation_submit',{units:[{id:'generated-stop',capabilityId:'memory.feedback-stop',title:'Generated missing context',goal:'Wait for authorized context',input:{reason:'Generated missing context is outside the grant'}}]});
       return {runId:'generated-stop',trace:[],citations:[],answer:'Generated context stop submitted'};
     }
     const members=(input.taskContext?.memoryWork as {members:MemoryWorkMember[]}).members;
+    if(members[0].inputKey!==badId)contextId=members[0].id;
     if(members.length===1&&members[0].inputKey===badId&&mode==='failed')throw Error('Generated terminal model failure');
-    return {runId:'generated-'+(input.taskContext?.untrustedMemoryDraft?'review':'draft'),trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:members.length===1&&member.inputKey===badId&&mode==='waiting'?'needs_context':'no_candidates',candidateIndexes:[],...(members.length===1&&member.inputKey===badId&&mode==='waiting'?{reason:'Generated missing context'}:{})}))})};
+    return {runId:'generated-'+(input.taskContext?.untrustedMemoryDraft?'review':'draft'),trace:[],citations:[],answer:JSON.stringify({memories:[],coverage:members.map(member=>({key:member.key,state:members.length===1&&member.inputKey===badId&&mode!=='failed'?'needs_context':'no_candidates',candidateIndexes:[],...(members.length===1&&member.inputKey===badId&&mode!=='failed'?{reason:'Generated missing context',...(mode==='planner-failed'?{contextRefs:[contextId]}:{})}:{})}))})};
   }}});
   await node.app.ready();t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
   await node.lifecycle.save({revision:node.configService.revision,settings:{...node.lifecycle.settings(),batchCharacters:256}});
@@ -31,11 +34,12 @@ for(const mode of ['failed','waiting'] as const)test(`import receipt progress pr
   badId=ids[1];await node.materialOrganizer.tick();await node.sourcePipelines.tick();
   assert.equal(await node.sourcePipelines.drainMemory(node.memoryPipeline,true,10),1);
   const jobId=String(node.store.db.prepare('SELECT job_id FROM memory_input_authorizations WHERE capture_id=?').get(ids[0])!.job_id),job=await node.memoryPipeline.run(jobId);
-  assert.equal(job.status,mode==='failed'?'failed':'waiting_for_input');
+  assert.equal(job.status,mode==='waiting'?'waiting_for_input':'failed');
+  if(mode==='planner-failed'){assert.ok(planningCalls>0&&planningCalls<=4);assert.equal(node.featureServices.delegation.list().find(work=>work.profileId==='memory.feedback')?.failureReceipt?.attempt,4);assert.equal(job.errorCode,'memory_feedback_planning_failed');assert.equal(node.featureServices.ownerQuestions.page({operationId:'memory:'+jobId}).items.length,0);assert.equal(node.featureServices.activity.detail('memory:'+jobId).state,'failed');}
   assert.ok(job.batches.some(batch=>batch.status==='completed'));assert.ok(job.batches.every(batch=>!batch.supersededBy));
   assert.equal(node.store.db.prepare('SELECT count(*) n FROM memory_checkpoints').get()!.n,1);
   assert.equal(importMemoryProgress(node.store,[ids[0]])!.completed,1);
-  assert.equal(importMemoryProgress(node.store,[ids[1]])![mode==='failed'?'failed':'pending'],1,JSON.stringify({progress:importMemoryProgress(node.store,[ids[1]]),batches:job.batches.map(batch=>({status:batch.status,error:batch.errorCode,coverage:batch.coverage}))}));
+  assert.equal(importMemoryProgress(node.store,[ids[1]])![mode==='waiting'?'pending':'failed'],1,JSON.stringify({progress:importMemoryProgress(node.store,[ids[1]]),batches:job.batches.map(batch=>({status:batch.status,error:batch.errorCode,coverage:batch.coverage}))}));
   const progress=importMemoryProgress(node.store,ids)!;assert.equal(progress.completed,1);assert.equal(progress.total,2);assert.equal(progress.receipts,2);assert.deepEqual(progress.jobIds,[jobId]);
   // Completed work remains a fact after cancellation or receipt revocation;
   // neither event can turn its unfinished sibling into completed coverage.

@@ -113,6 +113,11 @@ export interface QueryInput {
   hostRetrieval?:'none';
   /** Host-local receipts of exactly delivered original ranges; never model output. */
   onEvidence?: (records:readonly ContextRecord[])=>void;
+  /** Host-only body disclosure receipt, emitted after actual tool serialization.
+   * Metadata/navigation and saved quote locators do not count as body delivery. */
+  onMemoryBodies?:(cards:readonly {id:string;version?:number;fingerprint:string}[])=>void;
+  /** Revalidate the task's frozen input at each model admission and send. */
+  assertContextAuthority?:()=>void;
   /** Host receipt of source metadata actually disclosed, including fragments that yield. */
   onSourceContextDependencies?:(pins:readonly import('@mote/shared').SourceContextDeclaration[])=>void;
   /** Host-only pinned tool contributions; never accepted from query HTTP input. */
@@ -159,6 +164,9 @@ export interface QueryInput {
   processingEvidence?: Record<string,string>;
   /** Host-only named material outputs for a bounded background read. */
   processingMaterialInputs?: {materialId:string;required:string[];fingerprint:string;evidenceIds:string[]}[];
+  /** Exact original-image grants attached to current named Material outputs.
+   * They authorize no raw capture text or archive discovery. */
+  processingImages?: readonly {id:string;materialId:string;required:string[];fingerprint:string;originalSha256:string}[];
   /** Host snapshot for paginated change disclosure; does not restrict historical retrieval. */
   incrementalEvidenceIds?:string[];
   /** Host-reported archive-wide coverage, not a guarantee for the selected window. */
@@ -246,6 +254,8 @@ export interface ToolTrace {
   count: number;
 }
 export interface AgentAnswer {
+  /** Confirmed pixel deliveries from this session, never parsed from model JSON. */
+  imageReadReceipts?: {id:string;imageView:import('@mote/shared').ImageView}[];
   /** Host-generated receipt of original ranges actually delivered in this run.
    * Populated before host validation, never parsed from model output. */
   evidenceReadRanges?: {id:string;offset:number;length:number}[];
