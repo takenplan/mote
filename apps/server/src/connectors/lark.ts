@@ -8,7 +8,17 @@ import {LarkDocumentSync,documentSelectionSchema,documentScope,hasDocumentSelect
 import {calendarBoundary} from './google.js';
 
 export const LARK_SCOPES=['docx:document:readonly','wiki:wiki:readonly','search:docs:read'];
-function requiredScopes(selection:LarkSelection){return [...new Set(['docx:document:readonly','wiki:wiki:readonly',...(selection.documentDiscovery&&(selection.documentDiscovery.created||selection.documentDiscovery.edited||selection.documentDiscovery.opened)?['search:docs:read']:[]),...(selection.folders?.length?['drive:drive:readonly']:[]),...(selection.calendarIds.length?['calendar:calendar:readonly']:[])])];}
+function requiredScopeGroups(selection:LarkSelection){
+  const groups=[['docx:document:readonly'],['wiki:wiki:readonly']];
+  if(selection.documentDiscovery&&(selection.documentDiscovery.created||selection.documentDiscovery.edited||selection.documentDiscovery.opened))groups.push(['search:docs:read']);
+  // Native folder listing accepts these alternatives. Request only the modern
+  // read-only grant; an existing legacy or broader grant remains sufficient.
+  if(selection.folders?.length)groups.push(['space:document:retrieve','drive:drive:readonly','drive:drive']);
+  if(selection.calendarIds.length)groups.push(['calendar:calendar:readonly']);
+  return groups;
+}
+function requiredScopes(selection:LarkSelection){return requiredScopeGroups(selection).map(group=>group[0]);}
+function missingScopes(selection:LarkSelection,granted:ReadonlySet<string>){return requiredScopeGroups(selection).filter(group=>!group.some(scope=>granted.has(scope))).map(group=>group[0]);}
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 const now=()=>new Date().toISOString();
 export const documentReference=(value:string)=>larkReference(value);
@@ -71,7 +81,7 @@ export class LarkConnector{
       const data=larkJson(await this.runner({kind:'status'})),user=data.identities?.user;
       this.snapshot.configured=typeof data.appId==='string'&&data.appId.length>0;
       const granted=new Set<string>(typeof user?.scope==='string'?user.scope.split(/\s+/):[]);this.grantedScopes=granted;
-      this.snapshot.missingScopes=requiredScopes(this.saved.selection).filter(s=>!granted.has(s));
+      this.snapshot.missingScopes=missingScopes(this.saved.selection,granted);
       this.snapshot.connected=user?.available===true&&typeof user?.openId==='string';
       this.snapshot.accountName=typeof user?.userName==='string'?user.userName.slice(0,200):undefined;
       this.account=this.snapshot.connected?hash(`${data.appId}:${user.openId}`):undefined;
@@ -129,7 +139,7 @@ export class LarkConnector{
     // Lock mutations through the same job gate, including validation reads.
     this.start('selection',async signal=>{
       await this.requireConnected();if(input.calendarIds.length){const allowed=new Set((await this.listCalendars(signal)).map(c=>c.id));if(input.calendarIds.some(id=>!allowed.has(id)))throw new ConnectorError('lark_calendar_not_available',400);}
-      if(signal.aborted)throw new ConnectorError('lark_operation_cancelled',409);const previous=[...(hasDocumentSelection(this.saved.selection)?[this.sourceId('docs')]:[]),...this.saved.selection.calendarIds.map(id=>this.sourceId('calendar',id))];const next={...this.saved,selection:input,selectionAuthorized:true};await this.file.write(next);this.saved=next;this.snapshot.missingScopes=requiredScopes(input).filter(scope=>!this.grantedScopes.has(scope));this.registerSources();const retained=new Set([...(hasDocumentSelection(input)?[this.sourceId('docs')]:[]),...input.calendarIds.map(id=>this.sourceId('calendar',id))]);for(const id of previous)if(!retained.has(id)&&this.ctx.store.db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(id))this.ctx.sources.update(id,{enabled:false});
+      if(signal.aborted)throw new ConnectorError('lark_operation_cancelled',409);const previous=[...(hasDocumentSelection(this.saved.selection)?[this.sourceId('docs')]:[]),...this.saved.selection.calendarIds.map(id=>this.sourceId('calendar',id))];const next={...this.saved,selection:input,selectionAuthorized:true};await this.file.write(next);this.saved=next;this.snapshot.missingScopes=missingScopes(input,this.grantedScopes);this.registerSources();const retained=new Set([...(hasDocumentSelection(input)?[this.sourceId('docs')]:[]),...input.calendarIds.map(id=>this.sourceId('calendar',id))]);for(const id of previous)if(!retained.has(id)&&this.ctx.store.db.prepare('SELECT 1 FROM source_connections WHERE id=?').get(id))this.ctx.sources.update(id,{enabled:false});
     });
     await this.active;if(this.job?.state==='failed'||this.job?.state==='cancelled')throw new ConnectorError(this.job.error??'lark_operation_failed',400);return this.status();
   }
