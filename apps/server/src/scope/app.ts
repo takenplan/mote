@@ -11,6 +11,7 @@ import {ConnectionError} from '../connection-error.js';
 import {TaskAuthorization} from './task-authorization.js';
 import {TaskExecution,TaskError} from './task-execution.js';
 import {registerTaskRoutes} from './task-routes.js';
+import {registerIngress} from './ingress-routes.js';
 import {StoreError} from '../execution-storage.js';
 import {registerPrivateData} from './private-data-routes.js';
 import {PrivateDataError} from './private-data-sql.js';
@@ -41,15 +42,16 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
-    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration',...(execution?['execution','plugins']:[])]}));
+    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins']:[])]}));
     registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority:options.lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
     execution?.bindConfiguration(configuration);
+    const ingress=registerIngress(runtime,storage.db,config.dataDir);
     plugins=execution?registerScopedPlugins(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,releaseTransport:options.pluginReleaseTransport}):undefined;
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await plugins?.close();await configuration?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,plugins,deploymentId:storage.deploymentId};
+    return {...runtime,execution,configuration,plugins,ingress,deploymentId:storage.deploymentId};
   }catch(error){await plugins?.close();await configuration?.close();storage.close();throw error;}
 }
