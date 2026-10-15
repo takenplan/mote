@@ -49,9 +49,14 @@ for(const kind of ['manual','review','speaker'] as const){
     const f=await fixture(t,true),running=f.processing.tick();await f.started;
     const old=f.processing.engine.list({operationId:'file:'+f.id,kind:'files.summary'}).items.find(step=>step.state==='running')!;
     await f.correct(kind);f.release();await running;await f.processing.tick();
+    // Confirming a review yields before enrolling the replacement, so the
+    // shared engine can already own it when tick() discovers no waiting work.
+    // Observe that exact durable replacement through its publication commit.
+    const fingerprint=fileSummaryInputFingerprint(f.files,f.id),replacement=f.processing.engine.list({operationId:'file:'+f.id,kind:'files.summary'}).items.find(step=>step.input.inputFingerprint===fingerprint)!;
+    assert.ok(replacement,'updated evidence enrolls a replacement summary');await f.processing.engine.drain([replacement.id]);assert.equal(f.processing.engine.get(replacement.id)!.state,'succeeded');
     assert.notEqual(f.processing.engine.get(old.id)!.state,'succeeded');
     assert.equal(f.store.db.prepare("SELECT 1 FROM file_artifacts WHERE kind='summary' AND json LIKE '%OBSOLETE_HELD_RESPONSE%'").get(),undefined);
-    const current=f.files.detail(f.id).artifacts.find((a:any)=>a.kind==='summary') as any;assert.equal(current.inputFingerprint,fileSummaryInputFingerprint(f.files,f.id));
+    const current=f.files.detail(f.id).artifacts.find((a:any)=>a.kind==='summary') as any;assert.ok(current);assert.equal(current.inputFingerprint,fingerprint);assert.equal(f.calls(),2,'only the held original and the current replacement call are issued');
     assert.match(current.sections[0].answer,kind==='speaker'?/Generated participant/:/NOT complete/);
   });
 }

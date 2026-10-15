@@ -300,7 +300,7 @@ test('background indexing records timings, queue state and only a fixed failure 
   const failed=diagnostics.events().items.find(e=>e.event==='index.failed');assert.ok(failed);assert.equal(failed.operation,'embedding');assert.equal(typeof failed.durationMs,'number');assert.match(failed.requestId!,/^[a-f0-9-]{36}$/);assert.ok(diagnostics.events().items.some(e=>e.event==='queue.snapshot'&&e.failed===1&&e.requestId===failed.requestId));assert.ok(!JSON.stringify(diagnostics.events()).includes(marker));
 });
 
-test('explicit agent timeout returns correlated 504 diagnostics while invalid answers remain 502',async t=>{
+test('explicit agent timeout returns correlated 504 diagnostics while invalid answers remain 502 and capacity waits stay recoverable',async t=>{
   const directory=await mkdtemp(join(tmpdir(),'mote-diagnostics-timeout-')),cfg=config(directory);
   let failure:Error=new AgentTimeoutError(),modelCalls=0;
   const agent:QueryAgent={configured:true,close:async()=>{},query:async()=>{modelCalls++;throw failure;}};
@@ -314,10 +314,21 @@ test('explicit agent timeout returns correlated 504 diagnostics while invalid an
   failure=new AgentResponseError(marker);const invalid=await app.inject({method:'POST',url:'/api/query',headers,payload:{question:marker}});
   assert.equal(invalid.statusCode,502);assert.equal(invalid.json().error,'agent_response');
   failure=new AgentProviderError({category:'blocked',code:'provider_authentication'});failure.message=marker;const auth=await app.inject({method:'POST',url:'/api/query',headers,payload:{question:marker}});assert.equal(auth.statusCode,502);assert.equal(auth.json().recovery,'needs_action');assert.equal(auth.json().reason,'provider_authentication');assert.ok(!auth.body.includes(marker));
-  failure=new AgentProviderError({category:'transient',code:'rate_limited',retryAfterMs:12000});failure.message=marker;const rate=await app.inject({method:'POST',url:'/api/query',headers,payload:{question:marker}});assert.equal(rate.statusCode,502);assert.equal(rate.json().retryAfterMs,12000);assert.equal(rate.headers['retry-after'],'12');assert.ok(!rate.body.includes(marker));
-  const before=modelCalls;const queued=await app.inject({method:'POST',url:'/api/query',headers,payload:{question:marker}});assert.equal(queued.statusCode,502);assert.equal(queued.json().reason,'rate_limited');assert.equal(modelCalls,before,'shared cooldown must reject before invoking the model');assert.equal((await app.inject({url:'/api/execution-settings',headers})).json().providers.coolingDown,1);
-  const backgroundId=randomUUID();assert.equal((await app.inject({method:'POST',url:'/api/query-runs',headers,payload:{id:backgroundId,input:{question:marker}}})).statusCode,202);let background:any;for(let i=0;i<50;i++){await new Promise(r=>setImmediate(r));background=(await app.inject({url:'/api/query-runs/'+backgroundId,headers})).json();if(background.execution?.failure?.code==='rate_limited')break;}assert.equal(background.status,'running');assert.equal(background.execution.status,'retry_wait');assert.equal(background.execution.failure.code,'rate_limited');assert.equal(background.error,undefined,'a recoverable attempt must not create terminal failure history');assert.equal(background.execution.failure.recovery,'auto_retry');assert.ok(background.execution.failure.retryAfterMs>0);assert.equal(modelCalls,before);
+  failure=new AgentProviderError({category:'transient',code:'rate_limited',retryAfterMs:12000});failure.message=marker;
+  const before=modelCalls,waitingIds=[randomUUID(),randomUUID()];
+  // Synchronous release/publication is covered by foreground-capacity-wait.
+  // Diagnostics observes durable waits here, then explicitly cancels them
+  // instead of waiting for the generated twelve-second cooldown to expire.
+  for(const id of waitingIds){
+    assert.equal((await app.inject({method:'POST',url:'/api/query-runs',headers,payload:{id,input:{question:marker}}})).statusCode,202);
+    let background:any;for(let i=0;i<50;i++){await new Promise(r=>setImmediate(r));background=(await app.inject({url:'/api/query-runs/'+id,headers})).json();if(background.execution?.failure?.code==='rate_limited')break;}
+    assert.equal(background.status,'running');assert.equal(background.execution.status,'retry_wait');assert.equal(background.execution.attempts,0);assert.equal(background.execution.failure.code,'rate_limited');assert.equal(background.error,undefined,'a capacity wait must not create terminal failure history');assert.equal(background.execution.failure.recovery,'auto_retry');assert.ok(background.execution.failure.retryAfterMs>0);assert.ok(background.execution.failure.retryAfterMs<=12000);
+    assert.equal(modelCalls,before+1,'shared cooldown must wait before invoking another model');
+  }
+  assert.equal((await app.inject({url:'/api/execution-settings',headers})).json().providers.coolingDown,1);
   const bundle=await app.inject({url:'/api/support-bundle',headers});for(const privateValue of [marker,cfg.token,cfg.apiKey])assert.ok(!bundle.body.includes(privateValue));
+  for(const id of waitingIds)assert.equal((await app.inject({method:'POST',url:'/api/query-runs/'+id+'/cancel',headers})).json().status,'cancelled');
+  assert.equal(modelCalls,before+1);
 });
 
 test('raw log endpoint returns file text verbatim with owner authentication and no cache', async t=>{
