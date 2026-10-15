@@ -6,6 +6,9 @@ Starting point: M05 PR #130 exact published head
 Branch: `codex/mote-multiuser-m09-plugins`.
 Target: `codex/mote-multiuser-integration`, verified at
 `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
+Published [Draft PR #132](https://github.com/utopiafar/mote/pull/132), open and
+attached to this task. Its description records the exact final published head;
+the implementation freeze above excludes the documentation-only tail.
 M00/M01/M02/M04/M05 PRs #126–130 are published, unmerged prerequisites included
 in this branch. The parent subsequently explicitly requested real M03/M09 joint
 acceptance here. PR #131's full published SHA
@@ -48,7 +51,7 @@ recipe path; it does not claim real multi-user Mem0/Hindsight acceptance.
 | M00/M01/M02/M03/M04/M05/M09 combined production group | **216/216**, no failures/skips. |
 | Required final affected/consumer check | **Passed, exit 0**, at exact combined freeze `cfff1c08`. |
 | Independent module review | M09 `7f00c8b6` and M03 `14858e86` independently reviewed; no unresolved P0/P1/P2. New four-line binder composition is self-reviewed against M03's supplied contract and available to the parent for independent combined review. |
-| Remote Draft PR/head/base/CI | Pending publication and exact-head verification. |
+| Remote Draft PR/head/base/CI | Draft **#132**, correct branch/base and matching remote SHA; no merge. Zero statuses/check runs/workflow runs at publication: **CI not run**. Exact final documentation head and renewed CI readback are recorded in the PR description. |
 
 The focused command was:
 
@@ -221,8 +224,12 @@ no new execution conversation or restarted M03 conversation is used.
 ## Remaining scope and CI
 
 Checks and Component checks were read through the repository workflow API and
-are both `disabled_manually`. Their settings remain unchanged. Zero remote
-statuses/runs will be reported as absent CI, never a CI pass.
+are both `disabled_manually`. Their settings remain unchanged. Publication
+readback at `5a6f494ccdbbcc49bbbcc892dae8f3b3993f6f4a` returned **0** commit
+statuses, **0** check runs and **0** PR workflow runs. This is absent CI, never
+a CI pass. The final documentation-link commit is read back again and its exact
+SHA/CI observation is recorded in the PR description, avoiding a self-referencing
+commit hash inside this file. Runtime/tests are unchanged from `cfff1c08`.
 
 Unperformed: real models, real external accounts/services, real multi-user
 Mem0/Hindsight, native renderer, emulator,
