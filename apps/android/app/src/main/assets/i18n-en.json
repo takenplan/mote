@@ -8231,5 +8231,22 @@
   "内部规划失败，未完成范围已保留": "Internal planning failed; unfinished coverage is preserved",
   "本次整合的记忆或原始证据当前不可读，未完成窗口已保留。请检查来源与授权后重试。": "The selected memories or original evidence are currently unreadable. The unfinished window is preserved. Check sources and permissions before retrying.",
   "本次整合未读到记忆正文或原始证据，未完成窗口已保留，未记为成功。": "This integration received no memory bodies or original evidence. The unfinished window is preserved and has not been marked successful.",
-  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again."
+  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again.",
+  "已完成 {0}/{1} 条": "Completed {0}/{1} records",
+  "未完成 {0} 条": "Unfinished: {0} records",
+  "需要处理 {0} 条": "Needs attention: {0} records",
+  "已完成 {0}/{1} 个工作分支": "Completed {0}/{1} work branches",
+  "连接中央后查看资料整理、问答与记忆工作的进展。": "Connect to central to see progress for material processing, questions and memory work.",
+  "在中央工作台查看": "View in the central workspace",
+  "读取活动失败，请重试。": "Could not load activity. Please retry.",
+  "查看本机发送与中央资料整理、问答和记忆工作的实际进展。": "See actual progress for local sending and central material processing, questions and memory work.",
+  "本机发送": "Local sending",
+  "中央工作": "Central work",
+  "相关活动": "Related activity",
+  "管理来源": "Manage source",
+  "全部活动": "All activity",
+  "未找到已关联活动": "No linked activity found",
+  "这里只列出已有稳定回执关联的活动，历史关联可能不完整。": "Only activity linked by stable receipts is listed here. Historical links may be incomplete.",
+  "采集状态与最近内容": "Capture status and recent content",
+  "界面扩展已移除，已恢复内置方案。": "The interface extension was removed. The built-in presentation has been restored."
 }

@@ -6,6 +6,23 @@ it('opens the requested central page in Chrome without credentials', async () =>
   expect(chrome).toHaveBeenCalledWith('https://central.example/#notes');
   expect(fallback).not.toHaveBeenCalled();
 });
+
+it('hands off an exact work identity as activity query data through both login exchanges',async()=>{
+  const workId='memory-source:generated/identity?query=untrusted&fragment=#one';
+  for(const handoff of ['ticket','request']){
+    const chrome=vi.fn(),fallback=vi.fn();
+    await openCentralBrowser('https://central.example','activity','darwin',chrome,fallback,undefined,handoff==='ticket'?'generated-ticket':undefined,handoff==='request'?'generated-request':undefined,workId);
+    const url=new URL(chrome.mock.calls[0][0]),params=new URLSearchParams(url.hash.split('?')[1]);
+    expect(url.origin).toBe('https://central.example');expect(url.pathname).toBe('/');expect(url.search).toBe('');expect(url.hash.split('?')[0]).toBe('#/activity');expect(params.get('work')).toBe(workId);expect(params.get(handoff==='ticket'?'loginTicket':'loginRequest')).toBe('generated-'+handoff);expect(params.has('token')).toBe(false);expect(params.has('evidence')).toBe(false);
+  }
+});
+it('rejects malformed work identities and mixed destinations before any browser opens',async()=>{
+  const chrome=vi.fn(),fallback=vi.fn();
+  for(const workId of ['', ' ', 'x'.repeat(513), 'bad\nidentity',42,{}])await expect(openCentralBrowser('https://central.example','activity','darwin',chrome,fallback,undefined,undefined,undefined,workId as string)).rejects.toThrow('Invalid work reference');
+  await expect(openCentralBrowser('https://central.example','ask','darwin',chrome,fallback,undefined,undefined,undefined,'generated')).rejects.toThrow('Invalid work destination');
+  await expect(openCentralBrowser('https://central.example','activity','darwin',chrome,fallback,'11111111-2222-4333-8444-555555555555',undefined,undefined,'generated')).rejects.toThrow('Invalid work destination');
+  expect(chrome).not.toHaveBeenCalled();expect(fallback).not.toHaveBeenCalled();
+});
 it('falls back when Chrome is unavailable and rejects unsafe URLs', async () => {
   const chrome = vi.fn().mockRejectedValue(new Error('missing')), fallback = vi.fn();
   await openCentralBrowser('https://central.example', 'unknown', 'darwin', chrome, fallback);
@@ -44,7 +61,7 @@ it('hands off an expiring login code while preserving the requested evidence and
  const url=new URL(chrome.mock.calls[0][0]),params=new URLSearchParams(url.hash.split('?')[1]);
  expect(params.get('loginTicket')).toBe(ticket);expect(params.get('evidence')).toBe('capture:11111111-2222-4333-8444-555555555555');expect(url.search).toBe('');expect(params.has('token')).toBe(false);
 });
-it.each(['overview', 'about', 'guide'])('preserves the %s destination through both login handoffs', async page => {
+it.each(['overview', 'about', 'guide', 'activity'])('preserves the %s destination through both login handoffs', async page => {
   for (const handoff of ['ticket', 'request']) {
     const chrome = vi.fn(), fallback = vi.fn();
     await openCentralBrowser('https://central.example', page, 'darwin', chrome, fallback, undefined, handoff === 'ticket' ? 'generated-ticket' : undefined, handoff === 'request' ? 'generated-request' : undefined);

@@ -85,6 +85,8 @@ export interface Status {
   diagnostics?: import('@mote/diagnostics').DiagnosticsStatus;
 }
 export interface DesktopApi {
+  workActivity(input?:import('./work-activity').WorkActivityQuery):Promise<import('@mote/shared').WorkActivityPage>;
+  openWorkActivity(workId:string):Promise<void>;
   syncHistory(input: import('./sync-history').SyncHistoryQuery): Promise<import('./sync-history').SyncHistoryPage>;
   syncHistoryContents(input: import('./sync-history').SyncHistoryContentQuery): Promise<ReturnType<import('./sync-history').SyncHistory['contents']>>;
   syncHistoryContent(runId: string, key: string, chunkOffset?: number, includeImage?:boolean): Promise<import('./sync-content').SyncContent>;

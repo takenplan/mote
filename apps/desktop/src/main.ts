@@ -20,7 +20,8 @@ import { ConnectionOnboarding, ConnectionError, testConnection, assertConnection
 import { NoteDraftStore, type NoteDraft } from './note-draft';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { openCentralBrowser } from './central-browser';
+import { openCentralBrowser,validateCentralWorkId } from './central-browser';
+import {centralWorkActivity} from './work-activity';
 import { join, resolve } from 'node:path';
 import { mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { resolveProfile, profileDefaults } from './profile';
@@ -107,14 +108,14 @@ function serialize<T>(operation: () => Promise<T>): Promise<T> {
 function encryptedStorageAvailable(): boolean {
   return safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text');
 }
-let browserLogin: ((page?:string,evidenceId?:string,durationMs?:number)=>Promise<void>)|undefined;
+let browserLogin: ((page?:string,evidenceId?:string,durationMs?:number,workId?:string)=>Promise<void>)|undefined;
 let ensureBrowserLogin: (()=>Promise<void>)|undefined;
-async function showCentral(page?: string, evidenceId?: string): Promise<void> {
-  if(!connectionToken(settings)){if(browserLogin)return browserLogin(page,evidenceId);throw Error(moteText('请先登录中央节点，各页面会共用这次登录。'));}
+async function showCentral(page?: string, evidenceId?: string,workId?:string): Promise<void> {
+  if(!connectionToken(settings)){if(browserLogin)return browserLogin(page,evidenceId,undefined,workId);throw Error(moteText('请先登录中央节点，各页面会共用这次登录。'));}
   await ensureBrowserLogin?.();
   const {code}=await loginRequest(settings,'/api/login/ticket',{expiresAt:settings.authExpiresAt},connectionToken(settings));
   await openCentralBrowser(settings.serverUrl, page, process.platform,
-    url => promisify(execFile)('/usr/bin/open', ['-a', 'Google Chrome', url]), url => shell.openExternal(url), evidenceId, code);
+    url => promisify(execFile)('/usr/bin/open', ['-a', 'Google Chrome', url]), url => shell.openExternal(url), evidenceId, code,undefined,workId);
 }
 function showWindow(): void { window?.show(); window?.focus(); }
 function showClientPage(page: 'overview' | 'notes' | 'sources' | 'settings'): void {
@@ -377,6 +378,7 @@ else {
       const requested = settings; const result = await operation(requested);
       if (settings !== requested) throw new Error(moteText("连接已改变，请刷新采集记录")); return result;
     };
+    handle('mote:work-activity',input=>browseWithConnection(config=>centralWorkActivity(config,input as import('./work-activity').WorkActivityQuery|undefined)));
     handle('mote:sync-history', input => syncHistory.page(settings,input as SyncHistoryQuery));
     handle('mote:sync-history-contents', input => syncHistory.contents(settings,input as SyncHistoryContentQuery));
     handle('mote:sync-history-content', (runId,key,offset,includeImage) => browseWithConnection(config => { if(typeof runId!=='string'||typeof key!=='string')throw Error('Invalid sync content reference'); return syncContent(syncHistory,queue,localSources!,config,runId,key,offset as number|undefined,includeImage===undefined?true:includeImage===true); }));
@@ -467,6 +469,7 @@ else {
       if (evidenceId !== undefined && typeof evidenceId !== 'string') throw new Error('Invalid evidence reference');
       await showCentral(typeof page === 'string' ? page : undefined, evidenceId);
     });
+    handle('mote:central-work',async workId=>showCentral('activity',undefined,validateCentralWorkId(workId)));
     handle('mote:note-draft', () => noteDrafts.get());
     handle('mote:note-draft-update', input => trackNote(noteDrafts.update(input as NoteDraft)));
     handle('mote:note', input => trackNote(serialize(async () => {
@@ -541,11 +544,11 @@ else {
       if(requested.token&&requested.token!==credential)await loginRequest(requested,'/api/login/logout',{},requested.token).catch(()=>{});
     };
     ensureBrowserLogin=async()=>{const current=settings;if(connectionToken(current)&&(await testConnection(current)).credential.id==='owner')await installLogin(current.token!,current.authSessionOnly?0:2592000000);};
-    browserLogin=async(page,evidenceId,durationMs=2592000000)=>{
+    browserLogin=async(page,evidenceId,durationMs=2592000000,workId)=>{
       if(![0,86400000,604800000,2592000000].includes(durationMs))throw Error('Invalid lifetime');
       const requested=settings,generation=++loginGeneration,{verifier,challenge}=loginVerifier();
       const {id}=await loginRequest(requested,'/api/login/requests',{serverUrl:requested.serverUrl,deviceId:requested.deviceId,deviceName:requested.deviceName,platform:currentPlatform,challenge,durationMs});
-      await openCentralBrowser(requested.serverUrl,page,process.platform,url=>promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]),url=>shell.openExternal(url),evidenceId,undefined,id);
+      await openCentralBrowser(requested.serverUrl,page,process.platform,url=>promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]),url=>shell.openExternal(url),evidenceId,undefined,id,workId);
       const deadline=Date.now()+10*60000;
       while(Date.now()<deadline&&generation===loginGeneration&&settings===requested&&!quitting){
         const grant=await loginRequest(requested,'/api/login/poll',{id,verifier});

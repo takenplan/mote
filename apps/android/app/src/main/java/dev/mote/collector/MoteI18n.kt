@@ -56,11 +56,39 @@ object MoteI18n {
 /** Recreate stale screens after returning from an app-language change. */
 open class MoteActivity : Activity() {
     private var displayedLanguage = ""
+    private var displayedUiRevision = -1L
+    private var uiResumed = false
+    private var stopUiObservation: (() -> Unit)? = null
+    private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     override fun attachBaseContext(newBase: Context) { super.attachBaseContext(MoteI18n.wrap(newBase)) }
     override fun onCreate(savedInstanceState: Bundle?) {
         displayedLanguage = MoteI18n.language()
+        displayedUiRevision = NativeUiPacks.registry.revision
+        setTheme(if (lightSurface()) R.style.AppThemeLight else R.style.AppTheme)
         super.onCreate(savedInstanceState)
+        stopUiObservation = NativeUiPacks.registry.observe { uiHandler.post { applyUiRevision() } }
         window.decorView.layoutDirection = android.view.View.LAYOUT_DIRECTION_LTR
+        applyWindowPresentation()
+    }
+    private fun lightSurface(): Boolean {
+        val color = MoteTheme.background
+        return (android.graphics.Color.red(color) * 299 + android.graphics.Color.green(color) * 587 + android.graphics.Color.blue(color) * 114) >= 128000
+    }
+    private fun applyWindowPresentation() {
+        val light = lightSurface()
+        setTheme(if (light) R.style.AppThemeLight else R.style.AppTheme)
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(MoteTheme.background))
+        @Suppress("DEPRECATION")
+        window.statusBarColor = MoteTheme.background
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = MoteTheme.background
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            val appearance = android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+            window.insetsController?.setSystemBarsAppearance(if (light) appearance else 0, appearance)
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = if (light) android.view.View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or android.view.View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR else 0
+        }
     }
     override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
         if (event.action == android.view.MotionEvent.ACTION_DOWN) {
@@ -79,6 +107,17 @@ open class MoteActivity : Activity() {
     }
     override fun onResume() {
         super.onResume()
-        if (displayedLanguage != MoteI18n.language()) recreate()
+        uiResumed = true
+        if (displayedLanguage != MoteI18n.language()) recreate() else applyUiRevision()
     }
+    private fun applyUiRevision() {
+        if (uiResumed && !isFinishing && !isDestroyed && displayedUiRevision != NativeUiPacks.registry.revision) {
+            displayedUiRevision = NativeUiPacks.registry.revision
+            applyWindowPresentation()
+            NativePresentationStyles.refresh(window.decorView)
+            MoteDialogBuilder.refreshOwned(this)
+        }
+    }
+    override fun onPause() { uiResumed = false; super.onPause() }
+    override fun onDestroy() { stopUiObservation?.invoke(); uiHandler.removeCallbacksAndMessages(null); super.onDestroy() }
 }

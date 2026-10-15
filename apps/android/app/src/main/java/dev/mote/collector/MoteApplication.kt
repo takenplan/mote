@@ -8,6 +8,7 @@ class MoteApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         MoteI18n.initialize(this)
+        NativeUiPacks.initialize(this)
         if (getProcessName() != packageName) return
         try { LocalDataFormat.requireCurrent(this) } catch (error: Exception) {
             QueueStorage.recoveryFailure = error.message

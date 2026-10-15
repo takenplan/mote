@@ -117,7 +117,7 @@ class UiIterationInstrumentedTest {
         val previous = MoteI18n.preference()
         MoteI18n.select(context, if (variant.contains("english")) "en" else "zh-CN")
         try {
-            ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
+            ActivityScenario.launch<MainActivity>(android.content.Intent(context, MainActivity::class.java).putExtra("page", "OVERVIEW")).awaitMainUi().use { scenario ->
                 fun settle() {
                     val ready = java.util.concurrent.CountDownLatch(1)
                     scenario.onActivity { activity -> activity.window.decorView.postOnAnimation {
@@ -695,7 +695,7 @@ class UiIterationInstrumentedTest {
                         scenario.onActivity { activity ->
                             val shown = views(activity.window.decorView).filter { it.isShown }
                             val recent = shown.singleOrNull { it.tag == "home-recent-content" }
-                            homeRecord = shown.singleOrNull { it.tag == "primary:TODAY" }?.isSelected == true &&
+                            homeRecord = shown.singleOrNull { it.tag == "primary:LIBRARY" }?.isSelected == true &&
                                 recent?.let { views(it).any { row -> row.isShown && row.tag == "library-record:$savedId" } } == true
                         }
                         if (!homeRecord) Thread.sleep(25)

@@ -2,16 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { DesktopNavigation, needsCollectionSetup } from '../src/navigation';
 
 describe('desktop library navigation', () => {
-  it('keeps collection controls under collection and returns through the actual source path', () => {
+  it('starts in Content and keeps source controls under their primary destination', () => {
     const navigation = new DesktopNavigation();
+    expect(navigation.page).toBe('records');
     navigation.navigate('sources');
-    expect(navigation.section).toBe('overview');
-    expect(navigation.backTarget).toBe('overview');
+    expect(navigation.section).toBe('sources');
+    expect(navigation.canGoBack).toBe(false);
     navigation.navigate('permissions');
     expect(navigation.backTarget).toBe('sources');
     navigation.navigate(navigation.backTarget);
     expect(navigation.page).toBe('sources');
-    expect(navigation.backTarget).toBe('overview');
+    expect(navigation.backTarget).toBe('sources');
   });
 
   it('returns a note to its originating page without changing the selected main section', () => {
@@ -45,7 +46,7 @@ describe('desktop library navigation', () => {
     expect(navigation.section).toBe('settings');
     navigation.navigate('ask');
     navigation.navigate('connection');
-    expect(navigation.section).toBe('overview');
+    expect(navigation.section).toBe('ask');
     expect(navigation.backTarget).toBe('ask');
     navigation.navigate(navigation.backTarget);
     expect(navigation.section).toBe('ask');
@@ -60,8 +61,9 @@ it('offers a first collection setup without requiring a central connection, and 
   }
 });
 
-it('keeps delivery details subordinate to the originating home or content and screen recording under home',()=>{
- const navigation=new DesktopNavigation();navigation.navigate('uploads');expect(navigation.section).toBe('overview');expect(navigation.backTarget).toBe('overview');
+it('keeps delivery details subordinate to Content, Sources or Activity and retains the auxiliary Home route',()=>{
+ const navigation=new DesktopNavigation();navigation.navigate('uploads');expect(navigation.section).toBe('records');expect(navigation.backTarget).toBe('records');
  navigation.navigate('records');navigation.navigate('uploads');expect(navigation.section).toBe('records');expect(navigation.backTarget).toBe('records');
+ navigation.navigate('work');navigation.navigate('uploads');expect(navigation.section).toBe('work');expect(navigation.backTarget).toBe('work');
  navigation.navigate('overview');navigation.navigate('screen');expect(navigation.section).toBe('overview');expect(navigation.backTarget).toBe('overview');
 });

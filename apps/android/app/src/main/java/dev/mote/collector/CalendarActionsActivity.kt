@@ -38,8 +38,8 @@ class CalendarActionsActivity : MoteActivity() {
     }
     override fun onResume() { super.onResume(); handler.postDelayed(poll, 20000) }
     override fun onPause() { handler.removeCallbacks(poll); super.onPause() }
-    private fun text(parent: LinearLayout, value: String, size: Float = DesignTokens.fontBody.toFloat()) { parent.addView(TextView(this).apply { text = value; MoteUi.type(this, if (size >= 20f) DesignTokens.fontSection else size.toInt(), medium = size >= 20f); setTextColor(MoteUi.ink); setPadding(0, moteDp(DesignTokens.spaceInline), 0, moteDp(DesignTokens.spaceInline)); setTextIsSelectable(true) }) }
-    private fun button(parent: LinearLayout, title: String, primary: Boolean = false, fn: () -> Unit) { parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener { if (!task.busy) fn() } }, primary), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) }) }
+    private fun text(parent: LinearLayout, value: String, size: Float = MoteTheme.fontBody.toFloat()) { parent.addView(TextView(this).apply { text = value; MoteUi.type(this, if (size >= 20f) MoteTheme.fontSection else size.toInt(), medium = size >= 20f); MoteUi.textColor(this, NativeColorRole.INK); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceInline)); setTextIsSelectable(true) }) }
+    private fun button(parent: LinearLayout, title: String, primary: Boolean = false, fn: () -> Unit) { parent.addView(MoteUi.button(Button(this).apply { text = title; setOnClickListener { if (!task.busy) fn() } }, primary), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) }) }
     private fun calendarPermissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     private fun work(label: String, fn: () -> JSONObject) { task.start(label, { status.text = it }, {
         if (!::client.isInitialized) client = CalendarActions(applicationContext, foreground = true)
@@ -63,7 +63,7 @@ class CalendarActionsActivity : MoteActivity() {
         if (items.length() == 0) text(list, MoteI18n.text("尚未发现日程。上传资料或继续采集后会自动分析。"))
         for (i in 0 until items.length()) {
             val a = items.getJSONObject(i); val e = a.getJSONObject("event"); val state = a.getString("status")
-            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline)); background = MoteUi.shape(this@CalendarActionsActivity) }; list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceItem) })
+            val card = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline)); background = MoteUi.shape(this@CalendarActionsActivity) }; list.addView(card, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceItem) })
             text(card, e.getString("title"), 21f)
             val kind = a.getString("kind")
             text(card, when (kind) { "calendar.update" -> MoteI18n.text("更新日程"); "calendar.cancel" -> MoteI18n.text("取消日程"); "calendar.complete" -> MoteI18n.text("标记安排完成"); else -> MoteI18n.text("添加日程") })
@@ -97,7 +97,7 @@ class CalendarActionsActivity : MoteActivity() {
         for (i in 0 until targets.length()) if (targets.getJSONObject(i).getString("deviceId") == deviceId) choices = targets.getJSONObject(i).getJSONArray("calendars")
         if (!requiresCalendar) choices = org.json.JSONArray().put(JSONObject().put("id", "").put("title", MoteI18n.text("仅更新原建议")))
         if (choices.length() == 0) { status.text = MoteI18n.text("请先连接本机日历，并在系统日历中添加可写账户"); return }
-        val event = action.getJSONObject("event"); val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline), moteDp(DesignTokens.spacePanel), moteDp(DesignTokens.spaceInline)) }
+        val event = action.getJSONObject("event"); val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline), moteDp(MoteTheme.spacePanel), moteDp(MoteTheme.spaceInline)) }
         val allDay = CheckBox(this).apply { text = MoteI18n.text("全天"); isChecked = event.getBoolean("allDay") }; form.addView(allDay)
         text(form, MoteI18n.text("点击日期字段选择时间。全天日程的结束日期不包含当天。时区可修改。"))
         val fields = linkedMapOf<String, EditText>()

@@ -10,6 +10,7 @@ import { LibraryBrowseLayout } from './LibraryBrowse';
 const CaptureSessions = React.lazy(() => import('./CaptureSessions').then(module => ({ default: module.CaptureSessions })));
 import { sourceLabels } from './Metadata';
 import { CaptureCard, Empty, ErrorNotice, Spinner } from './shell-components';
+import { confirmNavigation } from './unsaved';
 export type ArchiveTab = string;
 export function ActivitySummary({ activity }: {
     activity: Activity;
@@ -28,20 +29,25 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
 }) {
     useSyncExternalStore(webFeatures.registry.subscribe, webFeatures.registry.getRevision, webFeatures.registry.getRevision);
     const entries = webFeatures.collections(), entry = entries.find(item => item.id === tab);
+    const [browseOwner,setBrowseOwner]=useState(api);
+    useEffect(()=>{if(browseOwner===api)return;const [route,text]=window.location.hash.split('?'),query=new URLSearchParams(text);for(const key of ['sourceId','deviceId','after','before','cursor','selected'])query.delete(key);window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));setBrowseOwner(api);},[api,browseOwner]);
     const collectionGroups = (['browse', 'records', 'views', 'processing'] as const).map(group => ({group, label:({browse:moteText('资料'), records:moteText('原始记录'), views:moteText('专用视图'), processing:moteText('上传与处理')})[group], items:entries.filter(item => (item.group ?? 'views') === group && item.id !== 'coding-status')})).filter(group => group.items.length);
     const [selection, setSelection] = useState<{
         owner: Api;
         view: string;
         reference: string;
-    }>();
+    }|undefined>(()=>{const reference=new URLSearchParams(window.location.hash.split('?')[1]??'').get('selected');return reference?{owner:api,view:tab,reference}:undefined;});
     const opener = useRef<HTMLElement | null>(null);
     const selected = selection?.owner === api && selection.view === entry?.id ? selection.reference : undefined;
-    useEffect(() => { setSelection(undefined); opener.current = null; }, [api, entry?.id]);
+    useEffect(() => { setSelection(previous=>previous?.owner===api&&previous.view===entry?.id?previous:undefined); opener.current = null; }, [api, entry?.id]);
+    useEffect(()=>{const changed=()=>{const query=new URLSearchParams(window.location.hash.split('?')[1]??'');if(query.get('view')&&query.get('view')!==entry?.id)return;const reference=query.get('selected');setSelection(reference?{owner:api,view:entry?.id??tab,reference}:undefined);};window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api,entry?.id,tab]);
     useLayoutEffect(() => { if (!selected && opener.current?.isConnected)
         opener.current.focus(); }, [selected]);
-    const clearSelection = useCallback(() => { setSelection(undefined); }, []);
-    const select = useCallback((ref: string) => { opener.current = document.activeElement as HTMLElement | null; const parsed = parseEvidenceRef(ref); setSelection({ owner: api, view: entry?.id ?? tab, reference: parsed ? formatEvidenceRef(parsed.kind, parsed.id) : ref }); }, [api, entry?.id, tab]);
+    const rememberSelection = useCallback((reference?:string)=>{const [route,queryText]=window.location.hash.split('?'),query=new URLSearchParams(queryText);if(reference)query.set('selected',reference);else query.delete('selected');window.history.replaceState(null,'',route+(query.size?'?'+query:''));window.dispatchEvent(new window.Event('mote:workspace-state'));},[]);
+    const clearSelection = useCallback(() => { setSelection(undefined); rememberSelection(); }, [rememberSelection]);
+    const select = useCallback((ref: string) => { if(!confirmNavigation())return;opener.current = document.activeElement as HTMLElement | null; const parsed = parseEvidenceRef(ref),reference=parsed ? formatEvidenceRef(parsed.kind, parsed.id) : ref; setSelection({ owner: api, view: entry?.id ?? tab, reference });rememberSelection(reference); }, [api, entry?.id, tab,rememberSelection]);
     const props = { api, devices, range, rangeSelectionKey, activity, revision, onOpen: entry?.layout === 'standalone' ? onOpen : select, onChanged, selectedReference: selected, onBrowseChanged: clearSelection };
+    if(browseOwner!==api)return <Spinner/>;
     const content = <LibraryCollectionBoundary key={entry?.id}>{entry ? <CollectionContent entry={entry} props={props}/> : <p role="status">{moteText('此资料库分类当前不可用。请从资料库分类中选择可用入口。')}</p>}</LibraryCollectionBoundary>;
     return <div className={'archive-page library-archive' + (selected ? ' has-selection' : '')}>
    <div className="page-heading library-heading"><div><div className="eyebrow">{moteText('有来处，也有脉络')}</div><h1>{moteText('资料库')}</h1><p>{moteText('按来源浏览已发布资料，上传与处理状态单独查看。')}</p></div><a className="button" href="#/library/import"><Upload size={16}/>{moteText('导入资料')}</a></div>

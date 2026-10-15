@@ -8,6 +8,7 @@ import {Archive} from '../src/Archive.js';
 import {featuresReady,webFeatures} from '../src/features/runtime.js';
 import {type Api,type Capture,type Activity} from '../src/api.js';
 import {type Material} from '../src/Materials.js';
+import {LibraryMaterials} from '../src/LibraryBrowse.js';
 
 configureLocale(()=> 'zh-CN');
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -32,6 +33,23 @@ function apiWith(read:(path:string,init?:RequestInit)=>unknown):Api{return {requ
 },setAgentTimeout:()=>{}} as Api;}
 function view(api:Api,extras:Partial<React.ComponentProps<typeof Archive>>={}){return React.createElement(Archive,{api,devices:[{deviceId:'fixture-device',deviceName:'Generated device',platform:'macos',status:'capturing',queueDepth:0,lastSeenAt:when}],range:{},activity,revision:0,onOpen:()=>{},tab:'records',setTab:()=>{},...extras});}
 const button=(d:Document,text:string)=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(item=>item.textContent===text)!;
+
+test('an invalid date deep link keeps filters recoverable without widening or crashing the library',async t=>{
+  const {root,d,w}=await fixture(t),reads:string[]=[];
+  const api=apiWith(path=>{reads.push(path);return {items:[],sources:[],nextCursor:null};});
+  for(const value of ['2026-13-01','2026-02-30','not-a-date']){
+    w.location.hash='#/library?view=materials&sourceId=generated-source&after='+value;
+    await act(async()=>{root.render(React.createElement(LibraryMaterials,{key:value,api,revision:0,onSelect:()=>{}}));});
+    assert.match(d.querySelector('[role=alert]')!.textContent!,/请选择有效日期/);
+    assert.equal(reads.filter(path=>path.startsWith('/api/library/catalog?')).length,0,'invalid scope must not silently become an unfiltered request');
+  }
+  await act(async()=>button(d,'清除筛选').click());
+  assert.equal(d.querySelector('[role=alert]'),null);
+  assert.ok(reads.some(path=>path.startsWith('/api/library/catalog?')),'clearing the invalid filter restores a normal catalog read');
+  w.location.hash='#/library?view=materials&after=2028-02-29';
+  await act(async()=>w.dispatchEvent(new w.Event('hashchange')));
+  assert.ok(reads.some(path=>new URL('http://localhost'+path).searchParams.has('after')),'valid leap day remains a usable explicit range');
+});
 
 test('explicit library navigation leads directly into rows and source details without nested record-view tabs',async t=>{
   const {root,d}=await fixture(t),reads:string[]=[],opened:string[]=[];

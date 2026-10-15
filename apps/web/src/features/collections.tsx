@@ -7,10 +7,8 @@ import { ActivitySummary, RecordTimeline } from '../Archive';
 import { Files } from '../Files';
 import { LibraryMaterials } from '../LibraryBrowse';
 import { CodingUploads } from '../CodingUploads';
-import { CodingReceiptPanel } from '../CodingReceiptPanel';
 import { webFeatures } from './registry';
 import { canonicalDestination, workspaceHash } from '../workspace-route';
-const WorkActivity = React.lazy(() => import('../Activity').then(module => ({ default: module.Activity })));
 import { MediaActivitySummary } from '../Media';
 import type { CollectionEntry, CollectionProps } from './types';
 const CaptureSessions = React.lazy(() => import('../CaptureSessions').then(module => ({ default: module.CaptureSessions })));
@@ -26,7 +24,6 @@ function ActivityCollection({ api, range, revision }: CollectionProps) {
     return <ActivitySummary activity={activity.data}/>;
 }
 export const builtinCollections: CollectionEntry[] = [
-    { id: 'work-activity', featureId: 'mote.activity', label: moteText('处理任务'), order: 7.5, group: 'processing', layout: 'standalone', usesTimeRange: false, requires: ['http:GET:/api/work-activity'], render: props => <><WorkActivity api={props.api} onOpen={props.onOpen} onNavigate={page => { const target = canonicalDestination(page, 'materials', webFeatures.collections().map(item => item.id)); location.hash = workspaceHash(webFeatures.page(target.page)?.route ?? target.page, target.page === 'archive' ? target.collection : undefined); }}/><CodingReceiptPanel api={props.api}/></> },
     { id: 'coding-status', featureId: 'mote.coding', get label() { return moteText("Coding 会话同步状态"); }, order: 7, group: 'processing', layout: 'standalone', usesTimeRange: false, requires: ['http:GET:/api/coding/uploads'], render: props => <CodingUploads api={props.api} embedded/> },
     { id: 'records', usesTimeRange: false, featureId: 'mote.capture', label: moteText('原始采集记录'), order: 1, group: 'records', layout: 'browser', requires: ['http:GET:/api/capture-browser'], render: props => <RecordTimeline {...props} library onOpen={props.onOpen} selectedReference={props.selectedReference} onBrowseChanged={props.onBrowseChanged}/> },
     { id: 'materials', usesTimeRange: false, featureId: 'mote.materials', label: moteText('全部资料'), order: 0, group: 'browse', layout: 'browser', requires: ['http:GET:/api/library/catalog'], render: props => <LibraryMaterials {...props} selected={props.selectedReference} onSelect={props.onOpen}/> },

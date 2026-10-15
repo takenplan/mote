@@ -2,6 +2,8 @@
 
 Date: 2026-10-11. Status: accepted by the owner.
 
+Partially superseded on 2026-10-15 by [replaceable presentation and the archive workspace](adr-ui-presentation-packs.md): the primary navigation and first landing now use Library / Ask / Sources / Activity, with Home auxiliary. Domain commands, collection and transport policies, privacy, drafts, return behavior and native lifecycle constraints below remain in force.
+
 The owner requested a complete macOS and Android UI revision using the recommended
 direction in the [shared design review](https://chatgpt.com/share/6acad1ba-aaf8-83ea-b7b4-d188d204cb68).
 The decision is to use A's action-first entry structure, C's source management,

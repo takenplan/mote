@@ -147,7 +147,7 @@ class CaptureReaderLifecycleInstrumentedTest {
                 val record = items.getJSONObject(0)
                 val id = record.getString("id"); generatedId = id
                 val date = Instant.parse(record.getString("capturedAt")).atZone(ZoneId.systemDefault()).toLocalDate()
-                main.onActivity { activity -> assertTrue(visible(activity).single { it.tag == "primary:TODAY" }.performClick()) }
+                main.onActivity { activity -> activity.openGeneratedHome() }
                 waitFor("The actual Home must expose the same saved note in a fully visible row") {
                     var opened = false
                     main.onActivity { activity ->
@@ -200,7 +200,7 @@ class CaptureReaderLifecycleInstrumentedTest {
                 }
                 waitFor("Real header Back must resume the original Home with the same saved record") {
                     var returned = false
-                    main.onActivity { activity -> returned = visible(activity).any { it.tag == "primary:TODAY" && it.isSelected } && visible(activity).any { it.tag == "library-record:$id" } }
+                    main.onActivity { activity -> returned = visible(activity).any { it.tag == "primary:LIBRARY" && it.isSelected } && visible(activity).any { it.tag == "library-record:$id" } }
                     returned
                 }
             }

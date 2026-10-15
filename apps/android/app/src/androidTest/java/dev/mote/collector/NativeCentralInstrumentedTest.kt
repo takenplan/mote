@@ -73,7 +73,7 @@ class NativeCentralInstrumentedTest {
                 }
                 scenario.onActivity { activity ->
                     val tabs = all(activity).filterIsInstance<TextView>().filter { it.tag?.toString()?.startsWith("primary:") == true }
-                    assertEquals(listOf("首页", "内容", "问一问"), tabs.map { it.text.toString() })
+                    assertEquals(listOf("内容", "问一问", "来源", "活动"), tabs.map { it.text.toString() })
                     assertTrue("$page keeps its primary destination", tabs.single { it.tag == "primary:${MoteNavigation.centralTab(page).name}" }.isSelected)
                     assertFalse("$page embeds a WebView", all(activity).any { it is WebView })
                     assertFalse("$page requested another token", contains(activity, "登录并继续"))
@@ -282,7 +282,7 @@ class NativeCentralInstrumentedTest {
                     java.io.File(context.cacheDir, "native-fixture-ask-tab-keyboard.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
                     bitmap.recycle()
                     activity.onBackPressed()
-                    assertTrue(visible(activity).single { it.tag == "primary:TODAY" }.isSelected)
+                    assertTrue(visible(activity).single { it.tag == "primary:LIBRARY" }.isSelected)
                 }
                 assertEquals(0, askMonitor.hits); assertEquals(0, centralMonitor.hits)
             } finally { instrumentation.removeMonitor(askMonitor); instrumentation.removeMonitor(centralMonitor) }

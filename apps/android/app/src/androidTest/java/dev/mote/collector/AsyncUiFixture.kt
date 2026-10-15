@@ -67,7 +67,7 @@ fun <T : Activity> ActivityScenario<T>.resumeGeneratedTask(): ActivityScenario<T
 fun Activity.openGeneratedAdd(action: MoteAddAction) {
     fun views(root: View): List<View> = buildList { add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) } }
     if (views(window.decorView).filterIsInstance<TextView>().none { it.isShown && it.isClickable && it.text.toString() == MoteI18n.text("添加") }) {
-        views(window.decorView).single { it.isShown && it.tag == "primary:TODAY" }.performClick()
+        views(window.decorView).single { it.isShown && it.tag == "primary:LIBRARY" }.performClick()
     }
     views(window.decorView).filterIsInstance<TextView>().single { it.isShown && it.isClickable && it.text.toString() == MoteI18n.text("添加") }.performClick()
     val list = android.view.inspector.WindowInspector.getGlobalWindowViews().flatMap(::views)
@@ -75,4 +75,14 @@ fun Activity.openGeneratedAdd(action: MoteAddAction) {
     val index = (0 until list.adapter.count).single { list.adapter.getItem(it).toString() == MoteI18n.text(action.titleKey) }
     val row = list.getChildAt(index - list.firstVisiblePosition) ?: list.adapter.getView(index, null, list)
     assertTrue("Native Add list must activate the chosen action", list.performItemClick(row, index, list.adapter.getItemId(index)))
+}
+
+/** Home is an auxiliary Settings destination; visual journeys reach its actual menu. */
+fun Activity.openGeneratedHome() {
+    fun views(root: View): List<View> = buildList { add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) } }
+    val label = MoteI18n.text("首页")
+    if (views(window.decorView).none { it.isShown && it.tag == "menu:$label" }) {
+        views(window.decorView).filterIsInstance<TextView>().first { it.isShown && it.isClickable && it.text.toString() == MoteI18n.text("设置") }.performClick()
+    }
+    requireNotNull(views(window.decorView).firstOrNull { it.isShown && it.tag == "menu:$label" }) { "Auxiliary Home menu is unavailable" }.performClick()
 }

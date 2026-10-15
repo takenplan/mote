@@ -153,14 +153,14 @@ class ActivityStatsActivity : MoteActivity() {
             val value = android.text.SpannableString(block)
             value.setSpan(android.text.style.StyleSpan(android.graphics.Typeface.BOLD), 0, block.indexOf('\n').takeIf { it >= 0 } ?: block.length, 0)
             val detail = TextView(this).apply {
-                text = value; textSize = 15f; setLineSpacing(5f, 1f); setPadding(moteDp(16), moteDp(16), moteDp(16), moteDp(16)); setTextColor(MoteUi.ink); background = MoteUi.shape(this@ActivityStatsActivity)
+                text = value; textSize = 15f; setLineSpacing(5f, 1f); setPadding(moteDp(16), moteDp(16), moteDp(16), moteDp(16)); MoteUi.textColor(this, NativeColorRole.INK); background = MoteUi.shape(this@ActivityStatsActivity)
             }
             if (index > 1) {
                 detail.visibility = if (block.substringBefore('\n') in expanded) android.view.View.VISIBLE else android.view.View.GONE
                 summary.addView(MoteUi.button(Button(this).apply {
                     text = block.substringBefore('\n') + MoteI18n.text(" · 展开 / 收起")
                     setOnClickListener { detail.visibility = if (detail.visibility == android.view.View.GONE) android.view.View.VISIBLE else android.view.View.GONE }
-                }), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(DesignTokens.spaceInline) })
+                }), LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(MoteTheme.spaceInline) })
             }
             summary.addView(detail, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = 16 })
         }

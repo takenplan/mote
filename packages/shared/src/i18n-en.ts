@@ -20,22 +20,17 @@ export const english: Readonly<Record<string, string>> = {
   "当天没有随手记。选择其他日期，或添加一条随手记。": "No quick notes for this day. Choose another date or add a note.",
   "文件、屏幕记录与想法，先存本机。连接中央整理后，可搜索和提问。": "Save files, screen records and thoughts locally. Connect to central and process them to search or ask.",
   "已填写的中央地址：{0}；连接并确认后才会发送。": "Configured central address: {0}. Sending starts only after connecting and confirming.",
-
   "暂不可用": "Temporarily unavailable",
   "模型、存储、记忆、洞察等中央功能": "Central features such as models, storage, memories, and insights",
   "此客户端支持的中央功能": "Central features supported by this client",
-
   "连接中央后，查看完整资料库、记忆、洞察与处理进度。": "Connect to central to explore the full library, memories, insights, and processing progress.",
   "全部功能与设置 →": "All features and settings →",
   "模型、存储、记忆、洞察与全部中央功能": "Models, storage, memories, insights, and all central features",
-
   "中央资料库暂不可用。连接中央后，可浏览已归档的资料；文件和随手记仍可在本机保存和查看。": "The central library is unavailable. Connect to central to browse archived materials. You can still save and view files and quick notes on this device.",
   "中央功能需要连接中央；文件和随手记仍可在本机保存和查看。": "Central features require a connection. You can still save and view files and quick notes on this device.",
-
   "文件、屏幕记录和想法先保存在本机；连接中央并完成整理后，可搜索和提问。": "Files, screen records, and thoughts are saved on this device first. Connect to central and complete processing to search and ask questions.",
   "保存之后，回看或提问": "After saving, browse or ask",
   "问一问 →": "Ask →",
-
   "请先在 mote.yaml 配置 connectors.mcpReadToken 并开启 connectors.mcpEnabled，然后重启节点。": "Configure connectors.mcpReadToken and enable connectors.mcpEnabled in mote.yaml, then restart the node.",
   "请先在 mote.yaml 配置 connectors.mcpWriteToken、connectors.mcpWriteSourceIds，并开启 connectors.mcpWriteEnabled 后重启节点。": "Configure connectors.mcpWriteToken and connectors.mcpWriteSourceIds, enable connectors.mcpWriteEnabled in mote.yaml, then restart the node.",
   "来自中央节点的配置文件；页面和手改文件使用同一份设置。": "Uses the central node configuration file. The page and manual file edits share the same settings.",
@@ -8237,5 +8232,22 @@ export const english: Readonly<Record<string, string>> = {
   "内部规划失败，未完成范围已保留": "Internal planning failed; unfinished coverage is preserved",
   "本次整合的记忆或原始证据当前不可读，未完成窗口已保留。请检查来源与授权后重试。": "The selected memories or original evidence are currently unreadable. The unfinished window is preserved. Check sources and permissions before retrying.",
   "本次整合未读到记忆正文或原始证据，未完成窗口已保留，未记为成功。": "This integration received no memory bodies or original evidence. The unfinished window is preserved and has not been marked successful.",
-  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again."
+  "当前记忆引擎不支持这项原始证据，请更换支持的方案后重新发起。": "The current memory engine does not support this original evidence. Select a compatible setup and start again.",
+  "已完成 {0}/{1} 条": "Completed {0}/{1} records",
+  "未完成 {0} 条": "Unfinished: {0} records",
+  "需要处理 {0} 条": "Needs attention: {0} records",
+  "已完成 {0}/{1} 个工作分支": "Completed {0}/{1} work branches",
+  "连接中央后查看资料整理、问答与记忆工作的进展。": "Connect to central to see progress for material processing, questions and memory work.",
+  "在中央工作台查看": "View in the central workspace",
+  "读取活动失败，请重试。": "Could not load activity. Please retry.",
+  "查看本机发送与中央资料整理、问答和记忆工作的实际进展。": "See actual progress for local sending and central material processing, questions and memory work.",
+  "本机发送": "Local sending",
+  "中央工作": "Central work",
+  "相关活动": "Related activity",
+  "管理来源": "Manage source",
+  "全部活动": "All activity",
+  "未找到已关联活动": "No linked activity found",
+  "这里只列出已有稳定回执关联的活动，历史关联可能不完整。": "Only activity linked by stable receipts is listed here. Historical links may be incomplete.",
+  "采集状态与最近内容": "Capture status and recent content",
+  "界面扩展已移除，已恢复内置方案。": "The interface extension was removed. The built-in presentation has been restored."
 };

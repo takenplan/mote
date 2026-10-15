@@ -1,5 +1,7 @@
 # 资料库与插件扩展契约
 
+应用外壳和主题的可信扩展现由 [UI presentation ADR](adr-ui-presentation-packs.md)补充：功能贡献保持以下精确类型／版本合同，主题和布局单独绑定。默认主导航与来源配置／活动归属按新 ADR 执行，不改变 MaterialStore、执行器或权限权威。
+
 本次保留 DeepSeek fork Cordis、领域 registries、ExecutionEngine、MaterialStore 和 Harness bridge。资料库是 MaterialStore 的所有者目录投影；新插件不能另建一套资料、任务或授权权威。
 
 ## 用户流程与归属
