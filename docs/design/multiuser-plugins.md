@@ -6,10 +6,18 @@ M00/M01/M02/M04/M05 prerequisites, PRs #126–130, and targets only
 `codex/mote-multiuser-integration`. It neither advances that branch nor changes
 `main`, deployment state or repository Actions settings.
 
+At the parent's explicit joint-acceptance request it also applies accepted M03
+PR #131, verified remote head `b1f6700a7e68b60318b7b05f631a47d12fd93c24`.
+Its production domain code/tests remain the accepted `14858e86` implementation;
+later M03 changes contain acceptance documentation. M03 is composed only on the
+M09 branch. No prerequisite PR is merged.
+
 ## Production ownership
 
 `buildScopedApp` calls `registerScopedPlugins` after binding the real M04
-Configurations to M05 TaskExecution. This restores the package and instance
+Configurations to M05 TaskExecution and registering real M03 IngressHost. Its
+five-method source binder is installed by that same production composition.
+This restores the package and instance
 control APIs, trusted worker loading, exact runtime registration, scoped task
 dispatch, retained history bindings and user event subscriptions. A verifier-only
 fixture does not install a task/plugin host.
@@ -68,7 +76,7 @@ semantics, fixed model resource matching, record validation and external cleanup
 
 | Consumer | Required interface and responsibility |
 | --- | --- |
-| M03/M10 sources | `plugins.bindSource((context, sourceIds, assertCurrent) => ingress.bindSource(...))`; expose only `receiveCaptures`, `receiveSourceItems`, `readOriginal`, `pageOriginals`, `publishMaterial`. Source IDs come from the fixed user instance grant. Ingress rechecks the host context and supplied fence on every call and synchronous commit. It validates all source/capture/material dependencies. No SQLite, host path, context or user selector crosses RPC. |
+| M03/M10 sources | `plugins.bindSource(bind)` wraps M03's fixed facade; expose only `receiveCaptures`, `receiveSourceItems`, `readOriginal`, `pageOriginals`, `publishMaterial`. Source IDs come from the fixed user instance grant. Ingress rechecks the host context and supplied fence on every call and synchronous commit. It validates all source/capture/material dependencies. No SQLite, host path, context or user selector crosses RPC. |
 | M06 processors | Register `processor`; consume fixed configuration, frozen source IDs, M05 `TaskRun` checkpoints/grant and bounded M03 originals/workspace. Validate outputs and publish through existing M02/M06 domain mechanisms in `commit`. No separate scheduler or global private Store. |
 | M07 Memory | Register `repository`/`retrieval`/`engine`; retain an explicit history snapshot and `bindingRevision`. Provider namespace is host-derived `{ownerId: userId, instanceId, bindingRevision}`. `validateHistory` must verify exact namespace/keys/versions before release. Existing WorkerMemoryProvider/Memory publication validation remains M07's responsibility. Missing external providers never fall back to SQL bodies or a current/default release. |
 | Model extensions | An adapter declares `modelFeature`; the host registers its M05 model task and uses the real durable M04 lease. The generic task route cannot bypass that model admission. Workers call a bounded host method; they receive no provider key or freely editable shared endpoint. |
@@ -87,6 +95,31 @@ worker JSON cannot manufacture typed retries, and plugin code cannot conceal a
 failed host model call as success. Model tasks use the existing finite model-call
 policy and their original M04 snapshot.
 
+The production composition binds M03 after both registrars exist; neither
+domain implementation imports the other or adds a central provider switch:
+
+```ts
+plugins.bindSource((context, sourceIds, assertCurrent) => {
+  const source = ingress.bindSource(context, sourceIds, assertCurrent);
+  return Object.freeze({
+    receiveCaptures: source.receiveCaptures,
+    receiveSourceItems: source.receiveSourceItems,
+    readOriginal: source.readOriginal,
+    pageOriginals: source.pageOriginals,
+    publishMaterial: source.publishMaterial,
+  });
+});
+```
+
+`withWorkspace` stays with trusted host-domain code. The generated M09 source
+fixture uses the actual production M03 binder and its M02 transactions. The worker
+transport is JSON: M03's host-side `Buffer` replies reach workers as
+`{type: 'Buffer', data: number[]}`. Worker consumers decode the bounded byte
+array; the joint source journeys verify this binary round trip, source/capture/
+Material dependencies, owner isolation and late-RPC fences. The emitted two-
+process journey retains A/B original bytes and rejects foreign/source-widening
+reads after actual process restart.
+
 The acceptance fixtures actually generate and install a trusted local ZIP,
 verify its fixed manifest/archive, run its worker callbacks, register Cordis
 components and consume real M02/M04/M05 services. These are not claims that M06,
@@ -96,7 +129,7 @@ unfinished domains remain unavailable in ordinary production composition.
 ## Admission, pause, stop and history
 
 Explicit `check` verifies actual registration for the exact configuration before
-enable. Neither check nor installation scans history or invokes models. Task and
+enable. Check/installation supply no host history or model capability. Task and
 history snapshot admission are separate; history additionally requires the
 instance's explicit `history` grant. Each receipt persists owner, account epoch,
 instance generation, exact package/version/digest, component contracts, original
@@ -159,15 +192,19 @@ configuration before that access; no old YAML or receipt mints new authority.
 Whole-instance offline backup must preserve SQLite, M04's snapshot key/config,
 immutable package cache and plugin instance directories together. Its coordinator
 and archive format belong to M16; this does not promise per-user point-in-time
-recovery.
+recovery. Loading resolves each package from the current catalog root and its
+pinned digest, then reverifies its bytes. A cached absolute directory from a
+previous vault location never selects executable code. An isolated offline-copy
+regression removes the original vault and checks both users' retained histories,
+cross-user rejection and an original task at the new location.
 
 KEEP: Cordis, FeatureRegistry, fixed releases, ConfigService, one executor,
 M04 snapshots, M05 persistent grants and domain publication. CHANGE: private
 instance/configuration/runtime/event ownership. REMOVE: fixed `mote-owner`
 provider selection and install-as-history-authorization. EXCEPTION: legacy
 algorithm fixtures use an explicitly supplied fixture owner and remain
-quarantined. UNKNOWN: real providers/models, clients, physical erasure and whole
-instance recovery await their domain acceptance.
+quarantined. UNKNOWN: real providers/models, clients, external-provider erasure
+and whole-instance recovery await their domain acceptance.
 
 Executed checks and review findings are recorded in
 [M09 validation](../validation/multiuser-m09-plugins.md).
