@@ -134,3 +134,77 @@ only WeakMap host failure-context projection and typed retry classification; it
 opens no private store and installs no legacy runtime. Its exact file was reviewed
 and added to the production import declaration. The boundary checker and its
 negative tests remain enabled; no directory or wildcard exception was added.
+
+## Final frozen-code acceptance
+
+Final implementation/boundary SHA:
+`8c587aa5003d7f2b2c4baa53a19fbfc8c1abf32c`.
+The later acceptance-record commit changes documentation only.
+
+| Check | Final evidence |
+| --- | --- |
+| Actual M00/M01/M02/M04/M05 composition | **166/166 passed**, zero failures/skips; `scope-*`, all `multiuser-*`, and `private-data*` tests. |
+| Independent final M05 review | **57/57 passed**, zero failures/skips, at the exact frozen SHA; no remaining P0/P1/P2. |
+| Independent boundary negatives | **4/4 passed**, including undeclared imports/surfaces and the legacy-composition prohibition. |
+| Second reviewer | Independently selected **15/15** high-risk negatives at runtime-identical `b089f536`, including hydration cancellation/disable, missing key, epoch reset, feature binding, failure classification and unknown outcomes. |
+| Emitted production entry | Auth and configuration process tests **2/2**, using `apps/server/dist/index.js`. |
+| Emitted production task | One host handler executed once, persisted checkpoint/progress/result, committed through private-data, rejected B, scoped Operations and retained success over restart. |
+| Emitted model restart | Two distinct Node processes imported compiled `app.js`; same original snapshot/settings/document/price restored, one owner-attributed usage receipt at cost `0.00024`, no extra snapshot, B/forged/retired leases rejected. No transport was created; unexpected fetch count zero. |
+| Production builds | Server and Web builds passed; existing Vite chunk-size advisory remains. |
+| Required affected check | **exit 0**: full `check:local` and Android `:app:testDebugUnitTest`; Android XML: **329/329**, zero failures/errors/skips, all 25 Gradle tasks executed. |
+| Full consumer totals | Desktop **456**, Server **2099 passed / 1 existing skip**, Web **469**, Agent **316 passed / 1 existing skip**, Diagnostics **5**, Shared **190**, root scripts **81**, CLI **4**; central-runner smoke passed. |
+
+The two existing opt-in/platform skips are the macOS sandbox fixture and the
+installed Codex/local-Responses fixture. This module adds no skips. Existing
+Android Kotlin compiler warnings and the Web bundle advisory do not fail the
+checks; no application or workflow setting was changed to suppress them.
+
+Commands for the focused composition and emitted entry checks:
+
+```sh
+node --import tsx --test apps/server/test/scope-*.test.ts \
+  apps/server/test/multiuser-*.test.ts apps/server/test/private-data*.test.ts
+MOTE_AUTH_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" \
+MOTE_CONFIGURATION_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" \
+  node --import tsx --test apps/server/test/multiuser-auth-process.test.ts \
+  apps/server/test/multiuser-configuration-process.test.ts
+```
+
+The final affected check used the integration remote-tracking ref at
+`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`, with explicit installed JDK 21 and
+Android SDK paths:
+
+```sh
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
+PATH="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin:$PATH" \
+  npm run check:affected -- --base origin/codex/mote-multiuser-integration
+```
+
+The initial M04 prerequisite composition was **108/109** because its process
+fixture still expected M02's `/api/materials` route to return 503. That assertion
+now expects the actual admitted 200 response; the final 166-test composition
+includes the corrected real process journey and zero skips.
+
+Earlier `70bf4288` and `b089f536` complete-check candidates were stopped when a
+subsequent review or boundary declaration made them obsolete; neither is counted
+as a final full-check pass. The confirmed legacy fixture race and undeclared
+helper failure above are preserved as failed intermediate evidence.
+
+Draft PR [#130](https://github.com/utopiafar/mote/pull/130) is open with
+`isDraft:true`, head `codex/mote-multiuser-m05-execution` and base
+`codex/mote-multiuser-integration`. Its code freeze is the exact SHA above;
+subsequent changes to this record are documentation only. Remote verification
+kept integration at `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`. No prerequisite PR,
+integration or main merge was performed.
+
+GitHub **Checks** and **Component checks** remain `disabled_manually`; their
+settings were read without mutation. An empty remote check rollup is reported as
+not run, never as a CI pass. The final PR metadata and remote module SHA are
+verified again after the documentation-only publication update.
+
+Local supporting evidence: `/tmp/mote-m05-8c587aa5-affected.log` and its exit-0
+receipt, `/tmp/mote-m05-final-composition.log`,
+`/tmp/mote-m05-review-8c587aa5.log`, emitted auth/config/task logs, and
+`/tmp/mote-m05-compiled-model-1D6K75/compiled-production-model-restore.log` (including
+compiled-file SHA256 and both process IDs). These logs contain generated data only.
