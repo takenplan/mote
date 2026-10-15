@@ -16,6 +16,7 @@ Central（server + web）、macOS、Android 使用各自产品版本；当前版
 | Agent、记忆和行动 | [Agent](agent.md)、[模型配置](model-providers.md)、[生命周期](memory-lifecycle.md)、[记忆更新](memory-updates.md)、[日程](calendar-actions.md)、[行动更新](action-updates.md) |
 | 结构化页面与自动 Memory | [采集范围和字段](ui-page-capture.md)、[接入 ADR](adr-ui-page-automatic-memory.md)、[验证边界](validation/ui-page-automatic-memory-2026-10-10.md) |
 | 每天看了什么、做了什么 | [日常事件 Memory](adr-daily-event-memory.md)、[日常回顾验证](validation/daily-event-memory-2026-10-10.md) |
+| 飞书文档与个人活动 | [接入](lark-integration.md)、[已确认决定](adr-feishu-document-context.md)、[生成场景验收](testing-feishu-document-context.md) |
 | 当前界面、对话和运行状态 | [Slate 导航](ui-slate.md)、[对话](conversations.md)、[Operations](operations.md)、[执行器](execution-engine.md)、[排错](troubleshooting.md) |
 | 第五轮三端 UI 落地与逐页验收 | [落地方案与验收门槛](design/ui-rollout-2026-10-14.md)、[当前验证记录](validation/ui-rollout-2026-10-14.md) |
 | 2026-10-10 系统改造 | [已确认方案](design/system-refactor-2026-10-10.md)、[当前ADR](adr-system-refactor.md)、[验收结果与边界](validation/system-refactor-2026-10-10.md) |

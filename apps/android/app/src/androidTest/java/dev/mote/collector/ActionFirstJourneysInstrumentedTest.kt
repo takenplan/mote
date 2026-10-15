@@ -142,7 +142,12 @@ class ActionFirstJourneysInstrumentedTest {
             val connected = settings.read().copy(server = "http://127.0.0.1:${server.localPort}", token = "generated-file-cancellation-token-123456", debugHttp = true, wifiOnly = false, syncMode = "manual"); settings.save(connected, confirmCentralEndpoint = true)
             val sending = client.submit<Boolean> { runCatching { FileUpload.sync(context, source, connected) { true } }.isFailure }
             assertTrue(blocked.await(5, TimeUnit.SECONDS)); SendPauseControl.set(context, true)
-            assertTrue("Stalled file write is cancelled promptly", sending.get(5, TimeUnit.SECONDS)); assertEquals(saved.toString(), queue.next(source.id).toString()); assertArrayEquals(bytes, queue.part(source.id, 0))
+            assertTrue("Stalled file write is cancelled promptly", sending.get(5, TimeUnit.SECONDS))
+            val retry = queue.next(source.id)!!
+            // Failure presentation may change; the pending manifest and spooled bytes must not.
+            assertEquals(saved.getJSONObject("pending").toString(), retry.getJSONObject("pending").toString())
+            assertEquals(saved.getJSONObject("candidate").toString(), retry.getJSONObject("candidate").toString())
+            assertArrayEquals(bytes, queue.part(source.id, 0))
             release.countDown(); response.get(5, TimeUnit.SECONDS)
         } finally { release.countDown(); server.close(); service.shutdownNow(); client.shutdownNow(); context.localSources().remove(source.id); queue.remove(source.id) }
     }

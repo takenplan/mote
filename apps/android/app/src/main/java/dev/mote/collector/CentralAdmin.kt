@@ -285,10 +285,10 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("记忆整合")) { recipeSettings(true) }
         read("/api/memory-settings")
     }
-    private fun recipeSettings(integration: Boolean) {
+    private fun recipeSettings(integration: Boolean, scope: String? = null) {
         val api = client; val path = if (integration) "/api/memory-integration-settings" else "/api/memory-recipe-settings"
         ui.work(MoteI18n.text("正在读取…"), {
-            api.get(path) to api.get(if (integration) "/api/memory-integration-recipes" else "/api/memory-recipes")
+            api.get(path + (scope?.let { "?scope=" + enc(it) } ?: "")) to api.get(if (integration) "/api/memory-integration-recipes" else "/api/memory-recipes")
         }) { (selection, catalog) ->
             body.removeAllViews(); screens.setBack { memorySettings() }; if (!integration) ui.text(MoteI18n.text("这些提取门槛与最大等待时间只控制历史资料的窗口处理。已授权且内容就绪的新资料直接进入自动记忆队列，按可用名额持续处理。"))
             val current = if (integration) listOfNotNull(selection.optJSONObject("binding")?.optJSONObject("recipe"))
@@ -309,6 +309,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 if (!integration && selected.isEmpty()) return@button
                 val payload = if (integration) JSONObject().put("recipe", selected.firstOrNull() ?: JSONObject.NULL)
                     else JSONObject().put("recipes", JSONArray(selected))
+                if (scope != null) payload.put("scope", scope)
                 ui.work(MoteI18n.text("正在保存…"), { api.put(path, payload) }) { memorySettings() }
             }
         }
@@ -586,29 +587,135 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun lark() {
-        val target = ui.card(); read("/api/connectors/lark", target)
-        listOf("check" to "检查状态", "install" to "安装 CLI", "setup" to "开始配置", "login" to "登录", "sync" to "立即同步", "cancel" to "取消").forEach { (command, label) ->
-            ui.button(MoteI18n.text(label), command in setOf("install", "setup", "sync")) { action("/api/connectors/lark/$command") { target.removeAllViews(); values(it, target) } }
-        }
-        ui.button(MoteI18n.text("选择日历")) {
-            calendarSelection(true)
-        }
-        ui.button(MoteI18n.text("配置应用凭据")) {
-            edit(MoteI18n.text("配置应用凭据"), "/api/connectors/lark/configure", JSONObject().put("appId", "").put("secret", "").put("brand", "feishu"), "POST")
-        }
-        ui.button(MoteI18n.text("查看授权进度")) {
-            val api = client
-            ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark") }) { value ->
-                target.removeAllViews(); values(value, target)
-                value.optJSONObject("job")?.optString("authorizationUrl")?.takeIf { it.isNotBlank() }?.let { url ->
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark") to api.get("/api/sources") }) { (value, sourceList) ->
+            body.removeAllViews(); screens.setBack { screens.refresh() }
+            ui.button(MoteI18n.text("刷新")) { lark() }
+            ui.text(MoteI18n.text("飞书文档与日历"), DesignTokens.fontTitleMobile.toFloat())
+            ui.text(MoteI18n.text("照常在飞书写日记、会议纪要和方案。中央节点归档文档与活动线索，供回顾、问答和 Memory 使用。"))
+            ui.text(MoteI18n.text("打开、编辑等线索单独保存；打开不代表读完、认同或当时看到的版本。"))
+            val account = ui.card()
+            ui.text(if (value.optBoolean("connected")) MoteI18n.text("已连接") else MoteI18n.text("尚未授权"), DesignTokens.fontSection.toFloat(), account)
+            if (value.optString("accountName").isNotBlank()) ui.text(value.optString("accountName"), parent = account)
+            listOf("check" to "检查状态", "install" to "安装 CLI", "setup" to "开始配置", "login" to "扫码登录并授权只读权限").forEach { (command, label) ->
+                ui.button(MoteI18n.text(label), parent = account) { action("/api/connectors/lark/$command") { lark() } }
+            }
+            ui.button(MoteI18n.text("配置应用凭据"), parent = account) {
+                edit(MoteI18n.text("配置应用凭据"), "/api/connectors/lark/configure", JSONObject().put("appId", "").put("secret", "").put("brand", "feishu"), "POST")
+            }
+            value.optJSONObject("job")?.let { job ->
+                ui.text(if (job.optString("state") == "completed") MoteI18n.text("已完成") else stateLabel(job.optString("state")), parent = account)
+                if (job.optString("error").isNotBlank()) ui.text(CentralLarkSelection.failure(job.getString("error")), parent = account)
+                if (job.optString("state") in listOf("waiting", "running")) ui.button(MoteI18n.text("取消当前操作"), parent = account) { action("/api/connectors/lark/cancel") { lark() } }
+                job.optString("authorizationUrl").takeIf(String::isNotBlank)?.let { url ->
                     val parsed = Uri.parse(url); val host = parsed.host.orEmpty()
                     if (parsed.scheme == "https" && parsed.userInfo == null && parsed.port == -1 &&
                         listOf("feishu.cn", "larksuite.com", "larkoffice.com").any { host == it || host.endsWith(".$it") })
-                        ui.button(MoteI18n.text("打开授权页面"), parent = target) { ui.startActivity(Intent(Intent.ACTION_VIEW, parsed)) }
+                        ui.button(MoteI18n.text("打开授权页面"), parent = account) { ui.startActivity(Intent(Intent.ACTION_VIEW, parsed)) }
                 }
             }
+            ui.button(MoteI18n.text("查看授权进度"), parent = account) { lark() }
+            val selection = value.optJSONObject("selection") ?: JSONObject()
+            val selected = CentralLarkSelection.discovery(selection)
+            val range = ui.card()
+            ui.text(MoteI18n.text("选择同步范围"), DesignTokens.fontSection.toFloat(), range)
+            ui.text(MoteI18n.text("首次回溯 {0} 天；之后随你的新活动归档。指定文档、文件夹和知识库分支持续跟踪。", selected.optInt("firstSyncDays", 30)), parent = range)
+            ui.button(MoteI18n.text("选择文档与活动范围"), parent = range) { larkSelection() }
+            ui.text(MoteI18n.text("需要日历时，先单独授权日历读取，再加载并选择日历。授权本身不会开始收集日程。"), parent = range)
+            ui.button(MoteI18n.text("授权日历读取"), parent = range) { action("/api/connectors/lark/login", JSONObject().put("calendar", true)) { lark() } }
+            ui.button(MoteI18n.text("选择日历"), parent = range) { calendarSelection(true) }
+            ui.button(MoteI18n.text("飞书文档默认组合"), parent = range) { recipeSettings(false, "lark-docs") }
+            ui.text(MoteI18n.text("中央节点每 {0} 分钟检查；关闭页面后继续运行。", value.optInt("syncIntervalSeconds", 900) / 60), parent = range)
+            val sync = value.optJSONObject("documentSync")
+            val sourceId = sync?.optString("sourceId")?.takeIf(String::isNotBlank)
+            val sourceRows = sourceList.optJSONArray("items") ?: JSONArray()
+            val source = (0 until sourceRows.length()).map { sourceRows.getJSONObject(it) }.firstOrNull { it.optString("id") == sourceId }
+            val paused = source?.optBoolean("enabled") == false
+            if (sourceId != null && source != null) {
+                ui.button(MoteI18n.text(if (paused) "恢复接入" else "暂停接入")) {
+                    ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/sources/" + enc(sourceId), JSONObject().put("enabled", paused)) }) { lark() }
+                }
+                ui.button(MoteI18n.text("资料说明（选填）")) { larkSourceDescription(sourceId) }
+            }
+            if (paused) ui.text(MoteI18n.text("此文档来源已暂停；保存范围或重新授权不会恢复接入。"))
+            ui.button(MoteI18n.text("预览文档范围")) { action("/api/connectors/lark/preview") { lark() } }
+            sync?.optJSONArray("preview")?.let { preview ->
+                val card = ui.card(); ui.text(MoteI18n.text("实际发现的文档"), DesignTokens.fontSection.toFloat(), card)
+                ui.text(MoteI18n.text("下列为可用文档标题与引用，尚未因预览读取正文。归档时保存当前版本及可获得的活动线索。"), parent = card)
+                ui.text(MoteI18n.text("发现 {0} 篇文档，以下显示 {1} 篇。", sync.optInt("previewTotal", preview.length()), preview.length()), parent = card)
+                for (i in 0 until preview.length()) { val document = preview.getJSONObject(i); ui.text(document.optString("title", document.optString("reference")), parent = card) }
+                if (preview.length() == 0) ui.text(MoteI18n.text("本次范围内没有发现文档。"), parent = card)
+                ui.text(MoteI18n.text("预览最多显示 50 篇；同步会分页处理全部选定范围。"), parent = card)
+            }
+            if (!paused && (sync?.optBoolean("confirmed") == true || sync?.has("preview") == true || sync == null && (selection.optJSONArray("calendarIds")?.length() ?: 0) > 0))
+                ui.button(if (sync != null && !sync.optBoolean("confirmed")) MoteI18n.text("确认并开始归档") else MoteI18n.text("立即同步"), true) { action("/api/connectors/lark/sync") { lark() } }
+            sync?.let {
+                ui.text(MoteI18n.text("已归档 {0} 篇文档 · {1} 条活动线索 · {2} 项待处理 · {3} 项失败", it.optInt("documents"), it.optInt("activities"), it.optInt("pending"), it.optInt("failed")))
+                val failures = it.optJSONArray("errors") ?: JSONArray()
+                for (i in 0 until failures.length()) {
+                    val failure = failures.getJSONObject(i); val card = ui.card()
+                    ui.text(failure.optString("reference"), parent = card)
+                    val archiveRequired = failure.optString("code") == "lark_document_archive_required"
+                    ui.text(CentralLarkSelection.failure(failure.optString("code")), parent = card)
+                    if (!paused) ui.button(MoteI18n.text(if (archiveRequired) "为此来源保留完整正文并重试" else "重试此文档"), parent = card) {
+                        if (archiveRequired && sourceId != null) ui.work(MoteI18n.text("正在处理…"), {
+                            api.patch("/api/sources/" + enc(sourceId), JSONObject().put("retention", "archive"))
+                            api.post("/api/connectors/lark/sync", JSONObject().put("document", failure.getString("reference")))
+                        }) { lark() }
+                        else action("/api/connectors/lark/sync", JSONObject().put("document", failure.getString("reference"))) { lark() }
+                    }
+                }
+            }
+            ui.text(MoteI18n.text("同步归档完成后，Memory 会按现有设置继续处理；并非每篇文档都会生成精选记忆。"))
+            ui.button(MoteI18n.text("查看来源与归档")) { ui.navigate("sources") }
+            ui.button(MoteI18n.text("断开连接")) { screens.confirm(MoteI18n.text("断开连接"), MoteI18n.text("断开会停止读取并暂停这些来源，保留已归档资料。飞书端授权及 CLI 凭据仍保留，可在飞书中单独撤销。")) {
+                ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/lark") }) { lark() }
+            } }
         }
-        ui.button(MoteI18n.text("断开连接")) { val api = client; ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/lark") }) { screens.refresh() } }
+    }
+    private fun larkSourceDescription(sourceId: String) {
+        val api = client; val path = "/api/sources/" + enc(sourceId) + "/context"
+        ui.work(MoteI18n.text("正在读取资料说明…"), { api.get(path) }) { current ->
+            body.removeAllViews(); screens.setBack { lark() }
+            ui.text(MoteI18n.text("资料说明（选填）"), DesignTokens.fontTitleMobile.toFloat())
+            val description = ui.field(MoteI18n.text("可说明格式、时间、作者，以及哪些内容属于你。"), current.optString("description"), multiline = true)
+            ui.text(MoteI18n.text("用于理解这个来源的背景、作者和内容归属。"))
+            ui.text(MoteI18n.text("修改说明适用于已有和未来资料；不会自动重新转写或重算历史记忆。"))
+            ui.button(MoteI18n.text("保存说明"), true) {
+                val payload = JSONObject().put("expectedVersion", current.getInt("version")).put("description", description.text.toString())
+                ui.work(MoteI18n.text("正在保存…"), { api.patch(path, payload) }) { lark() }
+            }
+        }
+    }
+    private fun larkSelection() {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark").getJSONObject("selection") }) { current ->
+            body.removeAllViews(); screens.setBack { lark() }
+            ui.text(MoteI18n.text("选择文档与活动范围"), DesignTokens.fontTitleMobile.toFloat())
+            val card = ui.card(); val discovery = CentralLarkSelection.discovery(current)
+            ui.text(MoteI18n.text("自动发现我的文档活动"), DesignTokens.fontSection.toFloat(), card)
+            fun choice(label: String, checked: Boolean) = CheckBox(ui).apply { text = MoteI18n.text(label); isChecked = checked }.also { card.addView(it) }
+            val created = choice("我创建的", discovery.optBoolean("created")); val edited = choice("我编辑过的", discovery.optBoolean("edited")); val opened = choice("我打开过的", discovery.optBoolean("opened"))
+            ui.text(MoteI18n.text("活动来自飞书可提供的最近记录，可能只有时间范围；不保证逐次操作日志或阅读时长。"), parent = card)
+            val days = ui.field(MoteI18n.text("首次回溯天数"), discovery.optInt("firstSyncDays", 30).toString(), parent = card).apply { inputType = InputType.TYPE_CLASS_NUMBER }
+            ui.text(MoteI18n.text("明确选定的范围会持续检查当前版本，包括其他协作者的后续修改。每行填写一个链接或 token。"), parent = card)
+            val documents = ui.field(MoteI18n.text("指定文档（每行一个）"), CentralLarkSelection.text(current, "documents"), multiline = true, parent = card)
+            val folders = ui.field(MoteI18n.text("文件夹（每行一个）"), CentralLarkSelection.text(current, "folders"), multiline = true, parent = card)
+            val wikiRoots = ui.field(MoteI18n.text("知识库分支（每行一个）"), CentralLarkSelection.text(current, "wikiRoots"), multiline = true, parent = card)
+            val exclusions = ui.field(MoteI18n.text("不再读取的文档（每行一个）"), CentralLarkSelection.text(current, "excludedDocuments"), multiline = true, parent = card)
+            ui.text(MoteI18n.text("排除优先于自动发现和指定范围；已有归档保留。"), parent = card)
+            val autoSync = choice("在后台定期同步选中内容", current.optBoolean("autoSync"))
+            ui.text(MoteI18n.text("保存范围或重新授权不会恢复已暂停的来源。停止同步和移除范围会保留已有归档。"), parent = card)
+            ui.button(MoteI18n.text("保存同步范围"), true) {
+                val selections = Triple(created.isChecked, edited.isChecked, opened.isChecked)
+                val firstSyncDays = days.text.toString(); val documentText = documents.text.toString(); val folderText = folders.text.toString()
+                val wikiText = wikiRoots.text.toString(); val exclusionText = exclusions.text.toString(); val background = autoSync.isChecked
+                ui.work(MoteI18n.text("正在保存…"), {
+                    api.put("/api/connectors/lark/selection", CentralLarkSelection.payload(current, selections.first, selections.second, selections.third,
+                        firstSyncDays, documentText, folderText, wikiText, exclusionText, background))
+                }) { lark() }
+            }
+        }
     }
     private fun importMcp(target: JSONObject, name: String, request: JSONObject) {
         val api = client; val sourceId = "mcp-" + UUID.randomUUID().toString()
@@ -631,12 +738,14 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             val fields = mutableListOf<Pair<CheckBox, String>>()
             for (i in 0 until calendars.length()) {
                 val item = calendars.getJSONObject(i); val id = item.getString("id")
-                val check = CheckBox(ui).apply { text = item.optString("summary", item.optString("title", id)); isChecked = if (lark) id in ids else item.optBoolean("selected") }
+                val check = CheckBox(ui).apply { text = item.optString("name", item.optString("summary", item.optString("title", id))); isChecked = if (lark) id in ids else item.optBoolean("selected") }
                 fields.add(check to id); body.addView(check)
             }
-            val collect = if (lark) form(pick(current, "documents", "pastDays", "futureDays", "timeZone", "autoSync"), ui.card()) else ({ JSONObject() })
+            val collect = if (lark) form(pick(current, "pastDays", "futureDays", "timeZone"), ui.card()) else ({ JSONObject() })
             ui.button(MoteI18n.text("保存设置"), true) {
-                val payload = collect().put("calendarIds", JSONArray(fields.filter { it.first.isChecked }.map { it.second }))
+                val edited = collect(); val payload = JSONObject(current.toString())
+                edited.keys().forEach { payload.put(it, edited.get(it)) }
+                payload.put("calendarIds", JSONArray(fields.filter { it.first.isChecked }.map { it.second }))
                 ui.work(MoteI18n.text("正在保存…"), { api.put(path + if (lark) "/selection" else "/calendars", payload) }) { screens.refresh() }
             }
         }

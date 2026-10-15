@@ -10,7 +10,7 @@ export function validateCentralWorkId(value:unknown):string{
 export async function openCentralBrowser(serverUrl: string, page: string | undefined, platform: string,
   launchChrome: (url: string) => Promise<unknown>, openDefault: (url: string) => Promise<unknown>, evidenceId?: string, loginTicket?: string, loginRequestId?:string,workId?:string): Promise<void> {
   const origin = validateServerUrl(serverUrl);
-  let hash = ['ask', 'notes', 'vault'].includes(page ?? '') ? '#' + page : ['overview', 'about', 'guide', 'activity'].includes(page ?? '') ? '#/' + page : '';
+  let hash = page === 'lark' ? '#/connections/lark' : ['ask', 'notes', 'vault'].includes(page ?? '') ? '#' + page : ['overview', 'about', 'guide', 'activity'].includes(page ?? '') ? '#/' + page : '';
   if(workId!==undefined){if(page!=='activity'||evidenceId!==undefined)throw Error('Invalid work destination');hash='#/activity?'+new URLSearchParams({work:validateCentralWorkId(workId)});}
   if (evidenceId !== undefined) {
     if (typeof evidenceId !== 'string' || !evidenceId.trim() || evidenceId.length > 4096 || /[\u0000-\u001f\u007f]/.test(evidenceId)) throw new Error('Invalid evidence reference');

@@ -121,10 +121,13 @@ test('v3 upgrade preserves exact source overrides, customized combinations and l
   assert.deepEqual(settings.selection(f.capture),[old,daily,code],'custom capture policy is not a built-in default');
   assert.deepEqual(settings.selection('override'),[old]);
   assert.ok(settings.enabled('ordinary',old));
+  const documentLegacy=f.store.db.prepare("SELECT scope FROM memory_recipe_legacy_scopes WHERE setting_id='lark-docs-default' ORDER BY scope").all();
   settings.configure({recipes:[PERSONAL_MEMORY_RECIPE_V3]});
   settings=new MemoryRecipeSettings(f.store,new MemoryStrategies());
   assert.deepEqual(settings.selection(),[old],'saved v3 remains selectable and is never upgraded again');
-  assert.equal(f.store.db.prepare('SELECT count(*) n FROM memory_recipe_legacy_scopes').get()!.n,0);
+  assert.equal(f.store.db.prepare("SELECT count(*) n FROM memory_recipe_legacy_scopes WHERE setting_id='default'").get()!.n,0,'an explicit ordinary choice ends only its own grandfathering');
+  assert.deepEqual(f.store.db.prepare("SELECT scope FROM memory_recipe_legacy_scopes WHERE setting_id='lark-docs-default' ORDER BY scope").all(),documentLegacy,'independent document defaults retain already accepted legacy scopes');
+  assert.equal(f.store.db.prepare("SELECT count(*) n FROM sqlite_master WHERE name='memory_input_authorizations'").get()!.n,0,'retaining scope eligibility never creates historical model authorization');
 });
 
 test('v4 default upgrade failure rolls back its selections, grandfathering and marker before retry',t=>{

@@ -140,7 +140,12 @@ test('an obsolete extraction artifact after a crash cannot suppress recovery for
  await f.node.processing.tick();assert.equal(f.node.files.detail(ack.id).job?.state,'blocked');assert.equal(f.node.files.detail(ack.id).job?.error,'snapshot_input_expired');
  assert.deepEqual((await f.recovery()).json(),{items:[requestIdentity(ack.id,input)]});
  const response=await f.request('POST',`/api/file-sync/v1/recovery/${ack.id}/uploads`,{});assert.equal(response.statusCode,200,response.body);const session=response.json();await f.sendParts(session.uploadId,bytes);assert.equal((await f.commit(session.uploadId)).statusCode,200);
- await f.node.processing.tick();assert.equal(f.node.files.detail(ack.id).job?.state,'succeeded');assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM file_snapshot_inputs').get()!.n,0);assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM file_versions').get()!.n,1);
+ // The commit wake may already own this pipeline when tick returns. Await the
+ // actual execution lifecycle rather than assuming tick owned the completion.
+ await f.node.processing.tick();
+ const pipelines=f.node.processing.engine.list({operationId:'file:'+ack.id,kind:'files.pipeline',limit:100}).items.map(step=>step.id);
+ await bounded(f.node.processing.engine.drain(pipelines),'upgraded processor recovery completion');
+ assert.equal(f.node.files.detail(ack.id).job?.state,'succeeded');assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM file_snapshot_inputs').get()!.n,0);assert.equal(f.node.store.db.prepare('SELECT COUNT(*) n FROM file_versions').get()!.n,1);
 });
 
 test('opaque recovery sessions use the stored manifest and completed races return a valid existing receipt',async t=>{

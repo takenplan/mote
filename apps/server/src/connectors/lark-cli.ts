@@ -13,6 +13,10 @@ export type LarkCommand =
   | {kind:'calendars';pageToken?:string}
   | {kind:'events';calendarId:string;start:number;end:number}
   | {kind:'document';document:string}
+  | {kind:'documents-search';action:'created'|'edited'|'opened';start:string;end:string;pageToken?:string}
+  | {kind:'folder-list';folder:string;pageToken?:string}
+  | {kind:'wiki-node';node:string}
+  | {kind:'wiki-list';spaceId:string;parent:string;pageToken?:string}
   | {kind:'minutes-search';start:string;end:string;pageToken?:string}
   | {kind:'minutes-metadata';id:string}
   | {kind:'minutes-transcript';id:string;outputDir:string}
@@ -31,6 +35,10 @@ export function larkArguments(command:LarkCommand):string[]{
     case 'calendars':return ['calendar','calendars','list','--as','user','--format','json','--params',JSON.stringify({page_size:100,...(command.pageToken?{page_token:command.pageToken}:{})})];
     case 'events':return ['calendar','events','instance_view','--as','user','--format','json','--params',JSON.stringify({calendar_id:command.calendarId,start_time:String(command.start),end_time:String(command.end)})];
     case 'document':return ['docs','+fetch','--api-version','v2','--as','user','--doc',command.document,'--doc-format','markdown','--format','json'];
+    case 'documents-search':return ['drive','+search','--query','','--doc-types','docx,wiki','--page-size','20',...(command.action==='created'?['--created-by-me']:[]),`--${command.action}-since`,command.start,`--${command.action}-until`,command.end,...(command.pageToken?['--page-token',command.pageToken]:[]),'--as','user','--format','json'];
+    case 'folder-list':return ['drive','files','list','--params',JSON.stringify({folder_token:command.folder,page_size:200,...(command.pageToken?{page_token:command.pageToken}:{})}),'--as','user','--format','json'];
+    case 'wiki-node':return ['wiki','spaces','get_node','--params',JSON.stringify({token:command.node}),'--as','user','--format','json'];
+    case 'wiki-list':return ['wiki','nodes','list','--params',JSON.stringify({space_id:command.spaceId,parent_node_token:command.parent,page_size:50,...(command.pageToken?{page_token:command.pageToken}:{})}),'--as','user','--format','json'];
     case 'minutes-search':return ['minutes','+search','--owner-ids','me','--start',command.start,'--end',command.end,'--page-size','30',...(command.pageToken?['--page-token',command.pageToken]:[]),'--as','user','--format','json'];
     case 'minutes-metadata':return ['minutes','minutes','get','--params',JSON.stringify({minute_token:command.id}),'--as','user','--format','json'];
     case 'minutes-transcript':return ['minutes','+detail','--minute-tokens',command.id,'--transcript','--output-dir',command.outputDir,'--as','user','--format','json'];

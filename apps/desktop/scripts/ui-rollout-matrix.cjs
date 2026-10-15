@@ -260,7 +260,7 @@ module.exports = async function({window,js,navigate,outputDirectory,profile,ipcM
         }
       }
       await navigate('overview');await js('document.querySelector("#note-action").click();true;');
-      assert.equal(await js('document.querySelector("#add-dialog").open&&document.querySelectorAll("#add-dialog [data-add-choice]").length===4'),true,'Shared four-action chooser');
+      assert.equal(await js('document.querySelector("#add-dialog").open&&document.querySelectorAll("#add-dialog [data-add-choice]").length===5'),true,'Shared five-action chooser');
       await capture(['add-chooser',language==='en'?'en':'zh',variant].join('-'),'overview');
       await js('document.querySelector("#add-dialog").scrollTop=document.querySelector("#add-dialog").scrollHeight;true;');await capture(['add-chooser-end',language==='en'?'en':'zh',variant].join('-'),'overview');
       await js('document.querySelector("#add-dialog [data-add-choice=file]").click();true;');await ready('sources');

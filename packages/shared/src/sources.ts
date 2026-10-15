@@ -77,9 +77,30 @@ export function codingConversationEvidence(coding:CodingEvidence,text?:string):b
   return dialogue&&(!text||text.length<=MAX_CODING_DIALOGUE_MESSAGE_CHARACTERS)&&
     !(coding.role==='user'&&text!==undefined&&codingHostEnvelope(coding.provider,text));
 }
+/** Provider activity evidence is a bounded observation, never proof of attention,
+ * reading duration, endorsement, or of the revision a human saw. */
+export const documentActivitySchema=z.object({
+  version:z.literal(1),provider:z.literal('lark'),documentId:z.string().min(1).max(500),
+  actor:z.object({accountId:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),
+  action:z.enum(['created','edited','opened']),
+  evidenceBasis:z.enum(['provider-metadata','search-predicate']),
+  time:z.object({precision:z.enum(['exact','hour','day','range','unknown']),start:timestamp.optional(),end:timestamp.optional()}).strict().superRefine((value,ctx)=>{
+    if(value.precision==='unknown'&&(value.start||value.end)||value.precision!=='unknown'&&!value.start||value.end&&!value.start||value.start&&value.end&&Date.parse(value.end)<Date.parse(value.start))ctx.addIssue({code:'custom',message:'Invalid document activity time bounds'});
+    if(['hour','day','range'].includes(value.precision)&&!value.end)ctx.addIssue({code:'custom',message:'Aggregated document activity requires an end bound'});
+    if(value.precision==='exact'&&value.end&&value.start!==value.end)ctx.addIssue({code:'custom',message:'Exact document activity cannot span a range'});
+  }),
+  observedAt:timestamp,
+  /** Set only when the provider verifies the revision connected to this activity. */
+  exactRevision:z.string().min(1).max(200).optional(),
+  limitations:z.array(z.literal('provider-open-may-include-connector-access')).max(1).optional(),
+}).strict().superRefine((value,ctx)=>{
+  if(value.evidenceBasis==='search-predicate'&&value.exactRevision)ctx.addIssue({code:'custom',message:'A search predicate cannot verify an activity revision'});
+});
+export type DocumentActivity=z.infer<typeof documentActivitySchema>;
 export const documentSchema=z.object({
   fileIndex:fileIndexSchema.optional(),
   coding:codingEvidenceSchema.optional(),
+  activity:documentActivitySchema.optional(),
   fileId:z.string().min(1).max(200).optional(),path:z.string().max(4000).optional(),
   recordedAt:timestamp.describe('Explicit original authored/recording date; never the import or observation time. Omit when unknown.').optional(),occurredAt:timestamp.describe('Explicit time of the described event; omit when unknown.').optional(),
   timeBasis:z.enum(['recorded','occurred','unknown']).optional(),
@@ -124,6 +145,8 @@ export const sourceItemSchema=z.object({
   document:documentSchema.optional(),
 }).strict().superRefine((v,ctx)=>{
   if(v.document?.fileIndex){const i=v.document.fileIndex;if(v.kind!=='file'||i.offset+i.length>i.totalCharacters||(!v.deleted&&i.mode==='index'&&i.length!==v.text.length)||i.coverage==='full'&&(i.offset!==0||i.length!==i.totalCharacters)||i.mode==='catalog'&&(i.allowRead||v.text))ctx.addIssue({code:'custom',message:'Invalid file index coverage'});}
+  if(v.document?.activity&&v.kind!=='event')ctx.addIssue({code:'custom',message:'Document activities require separate event items'});
+  if(v.document?.activity&&v.document.coding)ctx.addIssue({code:'custom',message:'Document activities cannot be Coding evidence'});
   if(v.kind==='calendar'&&!v.calendar&&!v.deleted)ctx.addIssue({code:'custom',message:'Calendar items require event times'});
   if(v.kind!=='calendar'&&v.calendar)ctx.addIssue({code:'custom',message:'Calendar metadata belongs to calendar items'});
   if(v.kind!=='file'&&v.metadata?.file)ctx.addIssue({code:'custom',message:'File metadata belongs to file items'});
