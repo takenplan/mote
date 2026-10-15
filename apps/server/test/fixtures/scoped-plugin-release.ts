@@ -12,7 +12,8 @@ export async function createMotePlugin(configuration){
  return {components:components.map(descriptor=>({...descriptor,async invoke(input,host){
   if(input.gate)await host.call('gate',[]);
   if(input.emit)await host.call('emit',{label:configuration.label});
-  if(input.source)return host.call('receiveSourceItems',[input.source,input.items]);
+  if(input.source)return host.call('receiveSourceItems',[input.source,input.batchId??'generated-batch',input.items]);
+  if(input.method)return host.call(input.method,input.args??[]);
   if(input.model)return host.call('model',[]);
   if(input.put){const records=await read();records.push({key:input.put,label:configuration.label,namespace:await host.call('namespace',[])});await writeFile('records.json',JSON.stringify(records));}
   return {label:configuration.label,input,...(input.pid?{pid:process.pid}:{})};

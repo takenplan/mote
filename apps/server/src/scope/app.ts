@@ -49,6 +49,10 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     execution?.bindConfiguration(configuration);
     const ingress=registerIngress(runtime,storage.db,config.dataDir);
     plugins=execution?registerScopedPlugins(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,releaseTransport:options.pluginReleaseTransport}):undefined;
+    plugins?.bindSource((context,sourceIds,assertCurrent)=>{
+      const {receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial}=ingress.bindSource(context,sourceIds,assertCurrent);
+      return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
+    });
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await plugins?.close();await configuration?.close();accounts.close();storage.close();});

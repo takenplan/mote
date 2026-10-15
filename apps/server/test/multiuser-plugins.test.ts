@@ -19,7 +19,7 @@ import {LifecycleAuthority} from '../src/scope/lifecycle.js';
 import {defaultModelSettings} from '../src/model-settings.js';
 import {generatedScopedPluginRelease as release,generatedScopedPluginSource as plugin} from './fixtures/scoped-plugin-release.js';
 
-const password='Generated-plugin-password-01',protocol={'x-mote-protocol-version':'2'};
+const password='Generated-plugin-password-01',protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
 const deferred=()=>{let resolve!:(value?:any)=>void;const promise=new Promise<any>(r=>resolve=r);return {promise,resolve};};
 async function until(check:()=>boolean,message:string){const end=Date.now()+10000;while(!check()){if(Date.now()>end)assert.fail(message);await delay(5);}}
 async function fixture(t:TestContext,options:{releases?:ReturnType<typeof release>[];lifecycle?:boolean}={}){
@@ -47,7 +47,7 @@ async function fixture(t:TestContext,options:{releases?:ReturnType<typeof releas
 
 test('generated local release registers actual Cordis capabilities through production and isolates A/B with identical instance identities',async t=>{
  const f=await fixture(t),packageId=await f.install();await f.instance(f.alice.token,packageId,'A configuration');await f.instance(f.bob.token,packageId,'B_PRIVATE configuration');
- const a=await f.admit(f.alice.token),b=await f.admit(f.bob.token);const ca=await f.node.authority.authenticate(f.alice.token),inventory=await f.node.plugins!.forUser(ca).inventory(a.id);assert.equal(inventory.capabilities.length,5);assert.equal(inventory.capabilities.find(c=>c.id==='generated.processor')?.state,'active');assert.equal(inventory.capabilities.find(c=>c.id==='generated.source')?.reason,'scoped_domain_unavailable');
+ const a=await f.admit(f.alice.token),b=await f.admit(f.bob.token);const ca=await f.node.authority.authenticate(f.alice.token),inventory=await f.node.plugins!.forUser(ca).inventory(a.id);assert.equal(inventory.capabilities.length,5);assert.equal(inventory.capabilities.find(c=>c.id==='generated.processor')?.state,'active');assert.equal(inventory.capabilities.find(c=>c.id==='generated.source')?.state,'active');assert.equal(inventory.capabilities.find(c=>c.id==='generated.model')?.reason,'scoped_domain_unavailable');
  const ta=await f.invoke(f.alice.token,a.id,{emit:true}),tb=await f.invoke(f.bob.token,b.id,{emit:true});assert.equal((await f.wait(f.alice.token,ta.id)).result.label,'A configuration');assert.equal((await f.wait(f.bob.token,tb.id)).result.label,'B_PRIVATE configuration');
  const view=await f.request(f.alice.token,'/api/plugins');assert.equal(view.body.includes('B_PRIVATE'),false);assert.equal(view.body.includes('personal:generated-secret-reference'),false);
  const events=await f.request(f.alice.token,'/api/plugin-events?since=0');assert.equal(events.json().items.length,1);assert.equal(events.body.includes('B_PRIVATE'),false);
@@ -99,13 +99,9 @@ test('M09 instance export excludes B and opaque credentials; deletion fences ret
  const tb=await f.invoke(f.bob.token,b.id);assert.equal((await f.wait(f.bob.token,tb.id)).result.label,'B_PRIVATE');assert.equal((await service.deleteUser('plugins','generated-delete')).status,'complete');
 });
 
-test('a generated source plugin uses a host-fixed source subset and real M02 repository without a central dispatch branch',async t=>{
+test('a generated source plugin uses the production M03 binder with a host-fixed source subset without a central dispatch branch',async t=>{
  const f=await fixture(t),pkg=await f.install();
- f.node.plugins!.bindSource((context,sourceIds,assertCurrent)=>{
-  const repository=f.node.services.forUser(context).get<PrivateData>('private-data');
-  return Object.freeze({receiveSourceItems:(sourceId:string,items:unknown[])=>{assertCurrent();assert.ok(sourceIds.includes(sourceId));const result=repository.receiveSourceItems(sourceId,items);assertCurrent();return result;}});
- });
- for(const [token,label] of [[f.alice.token,'A'],[f.bob.token,'B_PRIVATE']]){const context=await f.node.authority.authenticate(token),data=f.node.services.forUser(context).get<PrivateData>('private-data');data.registerSource({id:'same-source',name:label,kind:'custom',deviceId:'same-device',platform:'import',enabled:true,retention:'snapshot'});data.registerSource({id:'ungranted-source',name:label,kind:'custom',deviceId:'same-device',platform:'import',enabled:true,retention:'snapshot'});await f.instance(token,pkg,label);}
+ for(const [token,label] of [[f.alice.token,'A'],[f.bob.token,'B_PRIVATE']]){for(const id of ['same-source','ungranted-source']){const registered=await f.request(token,'/api/ingress/sources','POST',{id,name:label,kind:'custom',deviceId:'same-device',platform:'import',retention:'snapshot'});assert.equal(registered.statusCode,200,registered.body);}await f.instance(token,pkg,label);}
  const item=(label:string)=>({externalId:'same-external',revision:'same-revision',kind:'event',title:'Generated',text:label,observedAt:'2026-10-15T00:00:00Z',layer:'snapshot'});
  for(const [token,label] of [[f.alice.token,'A'],[f.bob.token,'B_PRIVATE']]){const snapshot=await f.admit(token),task=await f.invoke(token,snapshot.id,{source:'same-source',items:[item(label)]},'generated.source');await f.wait(token,task.id);const denied=await f.invoke(token,snapshot.id,{source:'ungranted-source',items:[item('forbidden')]},'generated.source');await f.wait(token,denied.id,'blocked');}
  const context=await f.node.authority.authenticate(f.alice.token),data=f.node.services.forUser(context).get<PrivateData>('private-data');assert.equal(data.sourceItem('same-source','same-external')?.text,'A');assert.equal(data.sourceItem('ungranted-source','same-external'),null);assert.equal(JSON.stringify(data.captures()).includes('B_PRIVATE'),false);
