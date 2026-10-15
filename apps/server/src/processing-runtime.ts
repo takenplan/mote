@@ -120,12 +120,13 @@ export class ProcessingRuntime {
     const db=this.store.db,own=!db.isTransaction;db.exec(own?'BEGIN IMMEDIATE':'SAVEPOINT processing_enqueue');try{
       this.store.reserveMetadata(jobs.reduce((n,j)=>n+Buffer.byteLength(JSON.stringify(j))+1024,0));
       for(const job of jobs){db.prepare("INSERT OR IGNORE INTO processing_jobs(id,lane,state,json) VALUES(?,?,'waiting',?)").run(job.id,job.lane,JSON.stringify(job));
-        // Saved products are reusable across recipes. An interrupted child can
-        // only resume under a freshly authorized parent, never its old lease.
+        // Saved products are reusable across recipes. A parent can renew an
+        // interrupted grant, but observing a failed child never authorizes
+        // another processor call; that needs the explicit retry entry point.
         const state=this.engine.get(job.id)?.state;
-        if(parentGrant&&state&&state!=='running'&&state!=='succeeded'){
+        if(parentGrant&&state&&state!=='running'&&state!=='succeeded'&&state!=='failed'){
           db.prepare('UPDATE processing_jobs SET json=? WHERE id=?').run(JSON.stringify(job),job.id);
-          if(['stale','cancelled','blocked','failed'].includes(state))this.engine.retry(job.id);
+          if(['stale','cancelled','blocked'].includes(state))this.engine.retry(job.id);
         }
       }
       const operationId='workflow:'+fingerprint(jobs.map(j=>j.id).sort());

@@ -44,3 +44,16 @@ test('unknown responses and model/input failures do not manufacture a service-wi
  }
  assert.equal(store.db.prepare('SELECT COUNT(*) n FROM processor_cooldowns').get()!.n,0);
 });
+
+test('processor cooldowns obey logical quota and transactional expiry accounting',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'mote-processor-quota-')),options={maxStorageBytes:0},store=new Store(dir,options);let now=10000;
+ t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});
+ const admission=new ProcessorAdmission(store,()=>now),endpoint='http://127.0.0.1:19009',scope=admission.resourceKey(endpoint),baseline=store.logicalBytes(),bytes=Buffer.byteLength(scope)+128;
+ const busy=()=>admission.run(endpoint,async()=>{throw new ProviderFailure({category:'transient',code:'rate_limited',executionStarted:false});});
+ options.maxStorageBytes=baseline+bytes-1;
+ await assert.rejects(busy(),{statusCode:507});assert.equal(store.logicalBytes(),baseline);assert.equal(store.db.prepare('SELECT count(*) n FROM processor_cooldowns').get()!.n,0);
+ options.maxStorageBytes=0;await assert.rejects(busy(),ProviderFailure);assert.equal(store.logicalBytes()-baseline,bytes);
+ const reopened=new Store(dir);assert.equal(reopened.logicalBytes(),store.logicalBytes());reopened.close();
+ store.db.exec('BEGIN IMMEDIATE');store.db.prepare('DELETE FROM processor_cooldowns').run();assert.equal(store.logicalBytes(),baseline);store.db.exec('ROLLBACK');assert.equal(store.logicalBytes(),baseline+bytes);
+ now+=PROCESSOR_BUSY_RECHECK_MS;store.db.prepare('DELETE FROM processor_cooldowns WHERE until<=?').run(now);assert.equal(store.logicalBytes(),baseline);
+});

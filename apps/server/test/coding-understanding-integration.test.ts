@@ -106,6 +106,28 @@ for(const failure of ['provider','post-query-parse'] as const)test(`Coding ${fai
  const fixture=await receive(node),job=await node.memoryPipeline.run(manualJob(node,fixture.ids).id);assert.equal(job.status,'failed');assert.equal(calls,1);const receipts=usage(node);assert.equal(receipts.length,calls,'each actual provider attempt has exactly one producer-owned receipt');assert.ok(receipts.every(receipt=>receipt.operation==='coding-conversation-understanding'&&receipt.status==='failed'&&receipt.tokens?.totalTokens===50&&receipt.tokens.complete===(failure!=='provider')));assert.equal(node.store.archive.page({kind:'semantic'}).items.length,0);assert.equal(node.memories.list().length,0);
 });
 
+test('an explicit Memory HTTP retry reopens its failed Coding preparation while background observation leaves it terminal',async t=>{
+ let understanding=0,review=0,fail=true;
+ const node=await appFixture(t,async(input,reader)=>{
+  const originals=await supplied(input,reader);
+  if(isUnderstanding(input)){understanding++;if(fail)throw Error('Generated unknown preparation failure');return response(originals[0].id,owner,products(originals[0].id,false));}
+  review++;return response(originals[0].id,owner,input.taskContext!.untrustedMemoryDraft);
+ });
+ const fixture=await receive(node),created=manualJob(node,fixture.ids),failed=await node.memoryPipeline.run(created.id);
+ assert.equal(failed.status,'failed');assert.equal(understanding,1);
+ const child=node.store.db.prepare("SELECT id FROM processing_jobs WHERE json_extract(json,'$.processor')='mote.coding-conversation-understanding'").get()!;
+ assert.equal(node.executor.get(String(child.id))?.state,'failed');
+ await node.workflows.tick();await node.lifecycle.tick();await node.memoryPipeline.run(created.id);
+ assert.equal(understanding,1,'background observation does not retry a terminal preparation');assert.equal(node.executor.get(String(child.id))?.state,'failed');
+ fail=false;
+ const accepted=await node.app.inject({method:'POST',url:`/api/memory-jobs/${created.id}/retry`,headers:{authorization:'Bearer '+token}});
+ assert.equal(accepted.statusCode,202,accepted.body);
+ const completed=await node.memoryPipeline.run(created.id);
+ assert.equal(completed.status,'completed');assert.equal(understanding,2);assert.equal(review,1);
+ assert.equal(node.executor.get(String(child.id))?.state,'succeeded');assert.equal(node.store.db.prepare('SELECT count(*) n FROM processing_jobs').get()!.n,1);
+ await node.workflows.tick();assert.equal(understanding,2,'the successful preparation remains reusable');
+});
+
 test('empty Coding candidates publish work/events and receive independent review without a second extraction',{timeout:15000},async t=>{
  let calls=0;const node=await appFixture(t,async(input,reader)=>{calls++;const originals=await supplied(input,reader);if(!isUnderstanding(input)){assert.equal(input.traceContext?.phase,'review');return response(originals[0].id,owner,input.taskContext!.untrustedMemoryDraft);}return response(originals[0].id,owner,products(originals[0].id,false));});
  const fixture=await receive(node),job=await node.memoryPipeline.run(manualJob(node,fixture.ids).id);

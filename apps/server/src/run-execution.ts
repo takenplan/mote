@@ -4,6 +4,9 @@ import {withExecutionCancellation} from './execution-cancellation.js';
 import {executionEnvelope,type ExecutionEnvelope} from '@mote/shared/execution';
 import {randomUUID} from 'node:crypto';
 import {StoreError,type Store} from './store.js';
+import {ProviderFailure} from '@mote/shared';
+
+const capacityWaiting=(error:unknown)=>error instanceof ExecutionFailure&&error.category==='waiting'||error instanceof ProviderFailure&&(error.details.admissionWaiting===true||error.details.category==='transient'&&error.details.code==='rate_limited');
 
 export type RunExecutionOptions={executor?:ExecutionEngine;concurrency?:()=>number};
 export type RunDeadline={timeoutMs?:number|null};
@@ -33,10 +36,10 @@ export class RunExecution {
     const fence=String(store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(step.id)?.fence??'');
     const commit=<T>(write:()=>T):T=>{signal.throwIfAborted();const db=store.db,own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');try{if(!fence||!this.engine.isCurrentGrant(step.id,fence))throw new StoreError('Run execution grant expired',409);const result=write();if(own)db.exec('COMMIT');return result;}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}};
     try{return await withExecutionCancellation(signal,()=>pending.work(signal,{signal,operationId:step.operationId,jobId:id,commit}));}
-    catch(error){if(!signal.aborted){try{commit(()=>this.callbacks.failure(id,error));}catch{/* A revoked/deleted run cannot write failure history. */}}throw error;}
+    catch(error){if(!signal.aborted&&!capacityWaiting(error)){try{commit(()=>this.callbacks.failure(id,error));}catch{/* A revoked/deleted run cannot write failure history. */}}throw error;}
    },
    commit:(step,result)=>this.callbacks.commit(String(step.input.runId),result),
-   classify:error=>new ExecutionFailure('permanent',error instanceof ExecutionFailure?error.code:error instanceof DOMException&&error.name==='TimeoutError'?'timeout':'run_failed'),
+   classify:error=>error instanceof ExecutionFailure&&error.category==='waiting'?error:new ExecutionFailure('permanent',error instanceof ExecutionFailure?error.code:error instanceof DOMException&&error.name==='TimeoutError'?'timeout':'run_failed'),
    project:step=>{const id=String(step.input.runId);if(this.engine.closed&&step.state==='waiting'){this.engine.fail(step.id,'interrupted');return;}this.callbacks.project(id,step);if(!['waiting','running'].includes(step.state))this.finish(id);},
   });
  }
@@ -90,6 +93,6 @@ export class RunExecution {
  dispose(){this.unregister();}
 }
 export function runEnvelope(step:ExecutionStep):ExecutionEnvelope{
- const status=step.state==='waiting'?'queued':step.state==='succeeded'?'completed':step.state==='blocked'||step.state==='stale'?'failed':step.state;
+ const status=step.state==='waiting'?(step.error?'retry_wait':'queued'):step.state==='succeeded'?'completed':step.state==='blocked'||step.state==='stale'?'failed':step.state;
  return executionEnvelope({status,attempts:step.attempts,errorCode:step.error,availableAt:step.availableAt});
 }

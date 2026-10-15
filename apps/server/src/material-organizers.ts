@@ -719,7 +719,8 @@ export class MaterialOrganizerRuntime {
         ON CONFLICT(organizer_id) DO UPDATE SET version=excluded.version,
           cursor_rowid=CASE WHEN version=excluded.version THEN cursor_rowid ELSE 0 END,
           complete=CASE WHEN version=excluded.version THEN complete ELSE excluded.complete END`).run(organizer.id,organizer.version,fresh?1:0);
-      this.retryFailed(organizer.id);
+      // Registration and startup only discover work. Terminal failures require
+      // explicit retry or a new source/component generation.
     });
     for(const organizer of [sourceItem,codingSession,uiPageObject,screenGroup,captureEvent,stateSeries,authored])this.registry.register(organizer);
     for(const organizer of additionalOrganizers)this.registry.register(organizer);
@@ -770,12 +771,6 @@ export class MaterialOrganizerRuntime {
     return snapshot.capture;
   }
 
-  private retryFailed(organizerId:string){
-    for(const row of this.store.db.prepare("SELECT id FROM execution_steps WHERE kind=? AND state='failed'").all(ORGANIZER_STEP) as {id:string}[]){
-      const step=this.executor.get(row.id),input=step?.input as OrganizerJobInput|undefined;
-      if(input?.organizerId===organizerId&&this.valid(step!)){this.failures.delete(row.id);this.executor.retry(row.id);}
-    }
-  }
   private retryReadyRetirements(){
     const ids:string[]=[];
     for(const row of this.store.db.prepare(`SELECT e.id FROM execution_steps e WHERE e.kind=? AND e.state='blocked' AND e.error='dependency_failed'

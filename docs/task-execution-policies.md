@@ -69,4 +69,9 @@ reset on deployment. New file defaults do not revive old failed work. Manual
 retry retains current-input, permission and unknown-outcome checks. Original
 uploads, completed artifacts and retention rules remain intact.
 
+Registration and parent replay do not retry a terminal failed child. Explicit
+manual recovery may retry its failed children without discarding successful
+checkpoints. Unpublished intermediate Agent rounds remain in-memory session
+state; they are not an exactly-once or cross-restart checkpoint guarantee.
+
 See the [generated regression and verification record](validation/task-execution-policies-2026-10-15.md).

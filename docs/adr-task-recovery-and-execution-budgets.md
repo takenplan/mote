@@ -103,7 +103,7 @@ sharing the current SQLite lease mechanism.
 | CHANGE | Each task type explicitly registers its own generous default timeout policy and recovery policy when the workflow is developed. Confirmed resource waiting is separate from failed execution and must propagate through parents without ending the workflow. Call limits are independent from task lifetime and waiting. |
 | REMOVE | A short common deadline as the default task lifetime; queue wait consuming processing time; every busy response consuming a failed-processing attempt; resource waiting ending merely because the common four-attempt or six-hour rule elapsed; unclassified exceptions assumed transient; log-only retry delays differing from scheduling. |
 | EXCEPTION | Specific model/transport/worker limits remain possible with an explicit rationale. Model context overflow is not worker contention. Actual transient failures can retain finite recovery. Issued unknown calls, stale authority and deterministic failures keep their restrictions. User-configured limits require an explicit transition decision. |
-| UNKNOWN | Exact type-specific call limits and repair budgets; scope/order of runtime migration; multi-worker or independent-central requirements; identity and physical release history of the worker involved in the incident. |
+| UNKNOWN | Performance and quality of real long inputs under the declared defaults; multi-worker or independent-central coordination; identity and physical release history of the worker involved in the incident. |
 
 This supersedes conflicting policy in [execution-engine](execution-engine.md),
 [provider-failures](provider-failures.md), [file-processing](file-processing.md)

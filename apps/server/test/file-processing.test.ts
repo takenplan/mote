@@ -57,6 +57,15 @@ async function fixture(t:any,options:any={}){
  return {dir,store,sources,files,processing,createProcessing,diagnostics,id:ack.id,counts:()=>({asrCalls,diaryCalls,summaries,disposed})};
 }
 
+test('summary page checkpoints count toward logical quota and retire transactionally with their file',async t=>{
+ const {store,id}=await fixture(t),fingerprint=sha256('generated summary page'),json=JSON.stringify({answer:'Generated private summary '.repeat(100),citationIds:['generated-fragment']}),baseline=store.logicalBytes();
+ const bytes=Buffer.byteLength(json)+Buffer.byteLength(id)+Buffer.byteLength(fingerprint)+128;
+ store.db.prepare('INSERT INTO file_summary_pages VALUES(?,?,?)').run(id,fingerprint,json);assert.equal(store.logicalBytes()-baseline,bytes);
+ const reopened=new Store(store.directory,{dataKey:'41'.repeat(32),contentEncryptionEnabled:true});assert.equal(reopened.logicalBytes(),store.logicalBytes());reopened.close();
+ store.db.exec('BEGIN IMMEDIATE');store.db.prepare('DELETE FROM file_summary_pages WHERE capture_id=?').run(id);assert.equal(store.logicalBytes(),baseline);store.db.exec('ROLLBACK');assert.equal(store.logicalBytes(),baseline+bytes);
+ store.delete(id);assert.equal(store.db.prepare('SELECT count(*) n FROM file_summary_pages WHERE capture_id=?').get(id)!.n,0);assert.equal(store.db.prepare("SELECT bytes FROM storage_ledger WHERE name='file_summary_pages'").get()!.bytes,0);
+});
+
 test('unverified acoustic labels can outnumber bounded speaker previews without losing the transcript',async t=>{
  const data={...diary,durationMs:9450,expectedSpeakers:null,observedSpeakers:189,segments:Array.from({length:189},(_,i)=>({startMs:i*50,endMs:(i+1)*50,speaker:'SPEAKER_'+i})),samples:[{...diary.samples[0],speaker:'SPEAKER_188',startMs:9400,endMs:9450}],warnings:['Generated labels are not confirmed people.']};
  assert.doesNotThrow(()=>diarizationSchema.parse(data));

@@ -12,6 +12,7 @@ import {ExecutionFailure} from './execution-engine.js';
 type Receipt={conversationId:string;turnId:string};
 type SavedFailure=ReturnType<typeof safeError>&{kind?:'provider'|'response'};
 type SavedInput=QueryInput&{hostRequest:unknown;executionTimeoutMs?:number;lastFailure?:SavedFailure};
+const capacityWaiting=(error:unknown)=>error instanceof ExecutionFailure&&error.category==='waiting'||error instanceof ProviderFailure&&(error.details.admissionWaiting===true||error.details.category==='transient'&&error.details.code==='rate_limited');
 type QueryCallbacks={
   contextTime?:()=>string;
   prepare:(body:unknown,work:DelegationWork,signal:AbortSignal,onProgress:QueryInput['onProgress'])=>Promise<QueryInput>;
@@ -73,6 +74,9 @@ export class DelegatedQueryRuns {
   private raw(id:string):QueryRun{const row=this.store.db.prepare('SELECT json FROM query_runs WHERE id=?').get(id);if(!row)throw new StoreError('Query run not found',404);return JSON.parse(String(row.json));}
   private save(run:QueryRun){this.store.db.prepare('UPDATE query_runs SET json=? WHERE id=?').run(JSON.stringify(run),run.id);}
   private executionFailure(error:unknown,id?:string){
+    // Refused capacity has not failed this synchronous request. Preserve the
+    // host fact so the shared executor can suspend without spending its budget.
+    if(capacityWaiting(error))return error as ProviderFailure|ExecutionFailure;
     // A synchronous query keeps the previous single-attempt HTTP contract;
     // durable background admission can recover structured transient failures.
     if(error instanceof ProviderFailure&&error.details.category==='transient'&&id&&this.foreground.has(id))return new ExecutionFailure('permanent',error.details.code,error.details.retryAfterMs);
@@ -80,6 +84,7 @@ export class DelegatedQueryRuns {
   }
   /** Save only a sanitized attempt receipt. A retry has not failed the conversation. */
   private rememberFailure(id:string,error:unknown){
+    if(capacityWaiting(error))return;
     const work=this.runtime.get('query:'+id),stepId=work.id+':coordinator:'+work.revision,fence=String(this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(stepId)?.fence??'');
     if(work.status!=='running'||!fence)return;
     const own=!this.store.db.isTransaction;if(own)this.store.db.exec('BEGIN IMMEDIATE');

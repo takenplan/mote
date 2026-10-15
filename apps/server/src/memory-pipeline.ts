@@ -791,6 +791,9 @@ export class MemoryPipeline {
       if(this.options.configuration&&this.options.configured(job.modelProfileId)){job.configuration=structuredClone(this.options.configuration(job.modelProfileId,job.modelOverride));this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(job.configuration)));}
       for(const batch of batches)if(batch.status==='failed'&&batch.errorCode!=='memory_context_required'){
         try{this.admitBatch(job,batch);}catch{batch.status='invalidated';batch.errorCode='evidence_changed';this.saveBatch(batch);continue;}
+        // This owner action authorizes another failed preparation call. Parent
+        // re-entry and resource waiting alone must never reopen these children.
+        if(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='processing_jobs'").get())for(const child of db.prepare("SELECT e.id FROM processing_jobs p JOIN execution_steps e ON e.id=p.id WHERE json_extract(p.json,'$.parentGrant.stepId')=? AND e.state='failed'").all(batch.id))this.engine.retry(String(child.id));
         batch.status='pending';delete batch.errorCode;this.saveBatch(batch);
       }
       job.status='queued';delete job.errorCode;this.saveJob(job);
