@@ -26,6 +26,7 @@ durable core and file-intake regressions below cover the repaired lifecycle.
 | Actual Central file semantic grouping and summary wait beyond the file call budget | Real host model gates hold generated file work longer than its explicit 1 s transport setting, then release it; no model is dispatched while waiting, ASR is not repeated, and each semantic stage commits once. |
 | Import prepare and commit wait, shut down and restart | Generated archived inputs retain parsing/publication checkpoints and the next eligible time; original records and completion notification are not duplicated. An unclassified network failure remains terminal. |
 | Actual fake-Codex session waits before a model turn | Generated executable and isolated auth fixture; no turn is sent during resource waiting; admitted turn completes within its own budget. Explicit host cancellation removes the queued call. |
+| Central model gate cancellation and cooldown accounting | A queued operation cancelled or rejected before dispatch creates no unissued usage receipt; partial reported tokens and actual issued failures remain recorded. Query, file analysis and import use the same trusted admission accounting boundary. |
 | Lifecycle prerequisites, safe transient failure and deterministic exception | Waiting does not increment failure count; typed actual failures stop at the extension bound; an unknown/deterministic failure stops once rather than being reopened by an outer loop. |
 | Core waiting across restart, old recovery deadline and revoked input | Repeated busy cannot exhaust attempts or a generic elapsed window; re-admission rechecks authority; terminal children stay terminal. |
 | Lease interruption, unknown issued call and late results | Interruption preserves checkpoints and refunds the unconfirmed attempt; domain unknown guards still prevent unsafe replay; revoked fences reject late publication. |
@@ -34,16 +35,40 @@ durable core and file-intake regressions below cover the repaired lifecycle.
 | Terminal organizer, processing and lifecycle children are observed again | Registering the same organizer version, replaying its parent or restarting a saved lifecycle window cannot revive a failed execution. Existing explicit manual retry entry points still recover their precisely linked children. |
 | Summary checkpoint and cooldown storage | New metadata participates in logical quota accounting; rollback, restart and file deletion retain correct ledger totals. |
 
-Focused generated suites were run during implementation. Intermediate full-server
-exploration included stale build products and concurrent edits and is not final
-acceptance evidence. Final affected checks are recorded below after running the
-isolated PR candidate.
+Focused generated suites were run during implementation. Preliminary exploratory
+runs are not acceptance evidence. The final checks below used a clean, isolated
+checkout of the committed candidate, excluding unrelated pre-existing untracked
+workspace files.
 
 ## Final checks
 
-Pending final candidate validation. The required scope is selected with
-`npm run check:affected -- --dry-run`; shared contracts, Agent and catalog changes
-select all consumers (`check:local` plus Android debug unit tests).
+Code candidate: `2b4e0d80a9193d77b4e6ce231d250abf093bd0ed`, compared with
+`origin/main` at `9798e01cdce3b9ca26b9a86e6071186d8859c402`.
+
+- `npm run build:central`: passed.
+- `npm run check:affected -- --base origin/main --head HEAD`: passed. Shared
+  contracts, Agent and catalog changes selected all consumers: `check:local`
+  followed by Android `:app:testDebugUnitTest`.
+- The complete check included translation/catalog synchronization, all workspace
+  type checks, the workspace suites below, release/security/media-worker tests,
+  generated client journeys and the actual Central runner fixture.
+- Changed Markdown rendered with a CommonMark/table parser; local link targets,
+  policy table structure and `git diff --check` passed. Subsequent changes only
+  record this validation result.
+
+| Suite | Final result |
+| --- | --- |
+| Central | 1,887 passed; 1 environment-gated skip |
+| Web | 388 passed |
+| Agent | 316 passed; 1 environment-gated skip |
+| Desktop | 442 passed in 55 files |
+| Diagnostics | 5 passed |
+| Shared | 184 passed |
+| Android debug unit tests | 319 passed in 68 JUnit suites; no failures/errors/skips |
+
+The skipped scenarios were macOS sandbox confinement and the opt-in installed
+Codex integration. Generated worker and fake-Codex tests ran; those do not prove
+native sandbox availability or compatibility with an installed real Codex.
 
 ## Deliberately unperformed
 
@@ -54,8 +79,7 @@ select all consumers (`check:local` plus Android debug unit tests).
 - A generated model stub/fake Codex process is not a live ASR, speaker model or
   paid model quality evaluation.
 
-This change does not implement the separate Android Memory authorization/derived
-Material continuity issue, or a distributed multi-central worker queue. Worker
+This change does not implement a distributed multi-central worker queue. Worker
 health readiness alone still does not prove that its physical processing slot is
 idle.
 
