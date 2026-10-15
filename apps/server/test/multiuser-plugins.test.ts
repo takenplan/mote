@@ -1,11 +1,16 @@
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtempSync,rmSync,readFileSync,writeFileSync} from 'node:fs';
+import {mkdtempSync,rmSync,readdirSync,existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
 import {z} from 'zod';
+import {ProviderFailure} from '@mote/shared';
+import {DatabaseSync} from 'node:sqlite';
+import {createHash} from 'node:crypto';
+import {ExecutionFailure} from '../src/execution-engine.js';
+import {zipSync,strToU8} from 'fflate';
 import {buildApp} from '../src/app.js';
 import type {PluginReleaseTransport} from '../src/plugin-release.js';
 import type {PrivateData} from '../src/scope/private-data.js';
@@ -35,7 +40,7 @@ async function fixture(t:TestContext,options:{releases?:ReturnType<typeof releas
  const invoke=async(token:string,snapshotId:string,payload:Record<string,unknown>={},componentId='generated.processor',operationId=randomUUID())=>{const r=await request(token,`/api/plugin-snapshots/${snapshotId}/invoke`,'POST',{componentId,payload,operationId});assert.equal(r.statusCode,200,r.body);return r.json();};
  const wait=async(token:string,id:string,state='succeeded')=>{const end=Date.now()+10000;for(;;){const r=await request(token,'/api/tasks/'+id);assert.equal(r.statusCode,200,r.body);const v=r.json();if(v.state===state)return v;if(Date.now()>end)assert.fail(JSON.stringify(v));await delay(5);}};
  const adapters=new Map<string,PluginDomainAdapter>();
- const register=()=>{for(const capability of ['processor','repository','retrieval','ui'] as const){const adapter:PluginDomainAdapter={validateResult:value=>value,validateHistory:(value,{namespace})=>{const result=z.object({namespace:z.object({ownerId:z.string(),instanceId:z.string(),bindingRevision:z.number()}),records:z.array(z.unknown()),label:z.string()}).strict().parse(value);assert.deepEqual(result.namespace,namespace);return result;}};adapters.set(capability,adapter);node.plugins!.registerAdapter(capability,adapter);}};
+ const register=()=>{for(const capability of ['processor','repository','retrieval','ui'] as const){const adapter:PluginDomainAdapter={bind:invocation=>({namespace:()=>invocation.namespace}),validateResult:value=>value,validateHistory:(value,{namespace})=>{const result=z.object({namespace:z.object({ownerId:z.string(),instanceId:z.string(),bindingRevision:z.number()}),records:z.array(z.unknown()),label:z.string()}).strict().parse(value);assert.deepEqual(result.namespace,namespace);for(const record of result.records as any[])assert.deepEqual(record.namespace,namespace);return result;}};adapters.set(capability,adapter);node.plugins!.registerAdapter(capability,adapter);}};
  register();
  return {directory,get node(){return node;},nodes,adapters,admin,a,b,alice,bob,releases,request,view,configure,action,instance,install,admit,invoke,wait,login,async restart(lifecycle?:LifecycleAuthority){await node.app.close();node=await buildApp({dataDir:directory},{pluginReleaseTransport:transport,lifecycleAuthority:lifecycle});nodes.push(node);register();return node;}};
 }
@@ -64,13 +69,13 @@ test('pause drains admitted work, stop fences A callbacks and subscriptions, and
 });
 
 test('fixed release and original configuration survive changes and an actual host restart; history requires its own binding',async t=>{
- const first=release('1'),second=release('2'),f=await fixture(t,{releases:[first,second]}),p1=await f.install(first),p2=await f.install(second);await f.instance(f.alice.token,p1,'old');const task=await f.admit(f.alice.token),history=await f.admit(f.alice.token,'same-instance','history',7);
+ const first=release('1'),second=release('2'),f=await fixture(t,{releases:[first,second]}),p1=await f.install(first),p2=await f.install(second);await f.instance(f.alice.token,p1,'old');assert.notEqual(p1,p2);assert.equal(first.manifest.archive.sha256,second.manifest.archive.sha256);const task=await f.admit(f.alice.token,'same-instance','task',7),history=await f.admit(f.alice.token,'same-instance','history',7),otherBinding=await f.admit(f.alice.token,'same-instance','history',8);
  const write=await f.invoke(f.alice.token,history.id,{put:'same-key'},'generated.memory').catch(()=>undefined);assert.equal(write,undefined,'history receipt cannot admit work');
  const original=await f.invoke(f.alice.token,task.id,{put:'same-key'},'generated.memory');await f.wait(f.alice.token,original.id);
  await f.action(f.alice.token,'same-instance','pause');const current=(await f.view(f.alice.token)).instances[0];delete current.generation;delete current.checked;current.packageId=p2;current.configuration.label='new';await f.configure(f.alice.token,current);await f.action(f.alice.token,'same-instance','check');await f.action(f.alice.token,'same-instance','enable');
  const newSnapshot=await f.admit(f.alice.token),newJob=await f.invoke(f.alice.token,newSnapshot.id);assert.equal((await f.wait(f.alice.token,newJob.id)).result.label,'new');
  await f.restart();const oldJob=await f.invoke(f.alice.token,task.id);assert.equal((await f.wait(f.alice.token,oldJob.id)).result.label,'old');
- const read=await f.request(f.alice.token,`/api/plugin-snapshots/${history.id}/read`,'POST',{method:'read',params:{}});assert.equal(read.statusCode,200,read.body);assert.equal(read.json().label,'old');assert.deepEqual(read.json().records,[{key:'same-key',label:'old'}]);assert.equal(read.json().namespace.ownerId,f.a.userId);assert.equal(read.json().namespace.bindingRevision,7);
+ const read=await f.request(f.alice.token,`/api/plugin-snapshots/${history.id}/read`,'POST',{method:'read',params:{}});assert.equal(read.statusCode,200,read.body);assert.equal(read.json().label,'old');assert.deepEqual(read.json().records,[{key:'same-key',label:'old',namespace:{ownerId:f.a.userId,instanceId:'same-instance',bindingRevision:7}}]);assert.equal(read.json().namespace.ownerId,f.a.userId);assert.equal(read.json().namespace.bindingRevision,7);assert.deepEqual((await f.request(f.alice.token,`/api/plugin-snapshots/${otherBinding.id}/read`,'POST',{method:'read',params:{}})).json().records,[]);
  assert.equal((await f.request(f.bob.token,`/api/plugin-snapshots/${history.id}/read`,'POST',{method:'read',params:{}})).statusCode,404);
  assert.equal((await f.request(f.alice.token,`/api/plugin-snapshots/${history.id}/read`,'POST',{method:'read',params:{namespace:{ownerId:f.b.userId}}})).statusCode,400);
  const catalog=await f.request(f.admin.token,'/api/admin/plugins');assert.equal((await f.request(f.admin.token,'/api/plugins/'+encodeURIComponent(p1)+'/uninstall','POST',{expectedRevision:catalog.json().revision,operationId:randomUUID()})).statusCode,409);
@@ -126,4 +131,74 @@ test('purpose-bound lifecycle restores only disabled credential-free definitions
  await f.node.services.forLifecycle(await grant('restore','generated-configuration-restore','configuration')).run(configurationArchive);
  await f.restart(authority);const view=await f.view(f.alice.token);assert.equal(view.instances.length,1);assert.equal(view.instances[0].desired,false);assert.deepEqual(view.instances[0].grants,{capabilities:[],sourceIds:[],history:false});assert.equal('credential' in view.instances[0].configuration,false);assert.equal((await f.view(f.bob.token)).instances[0].configuration.label,'B_PRIVATE');
  assert.equal((await f.request(f.alice.token,'/api/plugin-instances/same-instance/snapshots','POST',{})).statusCode,409);
+});
+
+test('deletion joins initializing probe workers before erasure and their delayed code cannot recreate the user directory',async t=>{
+ const code=plugin.replace('import {readFile,writeFile}','import {readFile,writeFile,mkdir}').replace(' const read=async'," const cwd=process.cwd(); await writeFile('probe-entered','synthetic'); await new Promise(resolve=>setTimeout(resolve,500)); await mkdir(cwd,{recursive:true}); await writeFile(cwd+'/probe-after-delete','synthetic late probe write');\n const read=async"),generated=release('3',code),f=await fixture(t,{releases:[generated]}),pkg=await f.install();
+ await f.configure(f.alice.token,{id:'same-instance',packageId:pkg,name:'Generated probe',configuration:{label:'synthetic'},desired:false,grants:{capabilities:['processor'],sourceIds:[],history:false}});
+ const userRoot=join(f.directory,'plugins','instances',createHash('sha256').update(JSON.stringify([f.node.deploymentId,f.a.userId])).digest('hex'));
+ const contains=(name:string):boolean=>{const walk=(path:string):boolean=>existsSync(path)&&readdirSync(path,{withFileTypes:true}).some(entry=>entry.name===name||entry.isDirectory()&&walk(join(path,entry.name)));return walk(userRoot);};
+ const checking=f.request(f.alice.token,'/api/plugin-instances/same-instance/check','POST',{});await until(()=>contains('probe-entered'),'probe did not start');
+ const context=await f.node.authority.authenticate(f.alice.token),deleted=await f.node.services.forUser(context).deleteUser('plugins','generated-probe-delete');assert.equal(deleted.status,'complete');assert.notEqual((await checking).statusCode,200);assert.equal(existsSync(userRoot),false);await delay(600);assert.equal(existsSync(userRoot),false);assert.equal(contains('probe-after-delete'),false);
+});
+
+test('real HTTP shutdown retires a stuck configuration probe before waiting for its request socket',async t=>{
+ const generated=release('7',plugin.replace(' const read=async'," await writeFile('probe-entered','synthetic'); await new Promise(()=>{});\n const read=async")),f=await fixture(t,{releases:[generated]}),pkg=await f.install();await f.configure(f.alice.token,{id:'same-instance',packageId:pkg,name:'Generated stuck probe',configuration:{label:'A'},desired:false,grants:{capabilities:['processor'],sourceIds:[],history:false}});
+ const url=await f.node.app.listen({host:'127.0.0.1',port:0}),root=join(f.directory,'plugins','instances'),checking=fetch(url+'/api/plugin-instances/same-instance/check',{method:'POST',headers:{...protocol,authorization:'Bearer '+f.alice.token,'content-type':'application/json'},body:'{}'}).then(async response=>({status:response.status,body:await response.json()}));
+ const entered=(path:string):boolean=>existsSync(path)&&readdirSync(path,{withFileTypes:true}).some(entry=>entry.name==='probe-entered'||entry.isDirectory()&&entered(join(path,entry.name)));await until(()=>entered(root),'HTTP probe did not start');
+ let deadline:ReturnType<typeof setTimeout>|undefined;try{await Promise.race([f.node.app.close(),new Promise((_,reject)=>{deadline=setTimeout(()=>reject(Error('Shutdown waited for an untracked probe socket')),4000);})]);}finally{clearTimeout(deadline);}
+ assert.notEqual((await checking).status,200);
+});
+
+test('registration probes use disposable storage and cannot modify a live fixed configuration',async t=>{
+ const code=plugin.replace(' const read=async'," await writeFile('records.json',JSON.stringify([{key:'initialization',label:configuration.label,namespace:{ownerId:'unscoped',instanceId:'unscoped',bindingRevision:1}}]));\n const read=async"),generated=release('4',code),f=await fixture(t,{releases:[generated]}),pkg=await f.install();await f.instance(f.alice.token,pkg,'A');const snapshot=await f.admit(f.alice.token),job=await f.invoke(f.alice.token,snapshot.id,{put:'retained'},'generated.memory');await f.wait(f.alice.token,job.id);const history=await f.admit(f.alice.token,'same-instance','history',1);
+ await f.action(f.alice.token,'same-instance','check');const read=await f.request(f.alice.token,`/api/plugin-snapshots/${history.id}/read`,'POST',{method:'read',params:{}});assert.equal(read.statusCode,200,read.body);assert.deepEqual(read.json().records.map((v:any)=>v.key),['retained']);
+});
+
+test('stop generations reopen worker handles even when another SQLite connection advances the persistent fence',async t=>{
+ const f=await fixture(t),pkg=await f.install();await f.instance(f.alice.token,pkg,'A');const first=await f.admit(f.alice.token),before=await f.invoke(f.alice.token,first.id,{pid:true}),pid=(await f.wait(f.alice.token,before.id)).result.pid;
+ // Represents a committed stop/resume from another host before this host's
+ // watcher sees the YAML event. The durable fence must win over a cached handle.
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{db.prepare('UPDATE plugin_user_instances SET generation=generation+1 WHERE user_id=? AND id=?').run(f.a.userId,'same-instance');}finally{db.close();}
+ const second=await f.admit(f.alice.token),after=await f.invoke(f.alice.token,second.id,{pid:true});assert.notEqual((await f.wait(f.alice.token,after.id)).result.pid,pid);
+ assert.equal((await f.request(f.alice.token,`/api/plugin-snapshots/${first.id}/invoke`,'POST',{componentId:'generated.processor',payload:{},operationId:'retired'})).statusCode,401);
+});
+
+test('stopped receipts can be released repeatedly by their owner so removed instances no longer pin package uninstall',async t=>{
+ const f=await fixture(t),pkg=await f.install();await f.instance(f.alice.token,pkg,'A');const snapshot=await f.admit(f.alice.token);await f.action(f.alice.token,'same-instance','stop');
+ assert.equal((await f.request(f.bob.token,'/api/plugin-snapshots/'+snapshot.id,'DELETE')).statusCode,404);
+ for(let i=0;i<2;i++)assert.equal((await f.request(f.alice.token,'/api/plugin-snapshots/'+snapshot.id,'DELETE')).statusCode,200);
+ const context=await f.node.authority.authenticate(f.alice.token),configuration=f.node.configuration.forUser(context),view=await configuration.view();await configuration.replace('pluginInstances',{instances:[]},view.revision);
+ const catalog=await f.request(f.admin.token,'/api/admin/plugins'),removed=await f.request(f.admin.token,'/api/plugins/'+encodeURIComponent(pkg)+'/uninstall','POST',{expectedRevision:catalog.json().revision,operationId:randomUUID()});assert.equal(removed.statusCode,200,removed.body);assert.equal(removed.json().packages.length,0);
+});
+
+test('removing and reinstalling a trusted model adapter disposes its M05 registration without widening a task',async t=>{
+ const f=await fixture(t),adapter:PluginDomainAdapter={modelFeature:'chat',validateResult:value=>value};const first=f.node.plugins!.registerAdapter('model',adapter);await first();await first();const second=f.node.plugins!.registerAdapter('model',{...adapter});await second();
+});
+
+test('host model failures retain their private typed retry facts even when generated plugin code tries to conceal them',async t=>{
+ const generated=release('5',plugin.replace("if(input.model)return host.call('model',[]);","if(input.model)return host.call('model',[]).catch(()=>({concealed:true}));")),f=await fixture(t,{releases:[generated]}),pkg=await f.install();let calls=0;const snapshots=new Set<string>();
+ f.node.plugins!.registerAdapter('model',{modelFeature:'chat',bind:invocation=>({model:()=>invocation.run.model!.withModel(async settings=>{calls++;snapshots.add(invocation.run.model!.lease.snapshotId);if(calls<3)throw new ProviderFailure({category:'transient',code:'provider_network',retryAfterMs:0},'GENERATED_PRIVATE_TRANSPORT_DETAIL');return {model:settings.model};})}),validateResult:value=>z.object({model:z.string()}).strict().parse(value)});
+ const context=await f.node.authority.authenticate(f.alice.token),configuration=f.node.configuration.forUser(context),view=await configuration.view();await configuration.replace('models',{profiles:[{id:'same-profile',name:'Generated',settings:{...defaultModelSettings(),provider:'custom',protocol:'openai-completions',baseUrl:'https://generated.invalid/v1',model:'fixed-model',apiKey:'GENERATED_KEY'}}],selections:{chat:{kind:'personal',id:'same-profile'}}},view.revision);await f.instance(f.alice.token,pkg,'A');const snapshot=await f.admit(f.alice.token),task=await f.invoke(f.alice.token,snapshot.id,{model:true},'generated.model'),completed=await f.wait(f.alice.token,task.id);assert.equal(completed.attempts,3);assert.equal(calls,3);assert.equal(snapshots.size,1);assert.deepEqual(completed.result,{model:'fixed-model'});assert.equal(JSON.stringify(completed).includes('GENERATED_PRIVATE_TRANSPORT_DETAIL'),false);
+});
+
+test('a generated fire-and-forget host callback must settle before M05 can publish task success',async t=>{
+ const generated=release('6',plugin.replace("if(input.gate)await host.call('gate',[]);","if(input.gate)void host.call('gate',[]).catch(()=>{});")),f=await fixture(t,{releases:[generated]}),pkg=await f.install(),entered=deferred(),held=deferred();t.after(()=>held.resolve());f.adapters.get('processor')!.bind=invocation=>({gate:async()=>{entered.resolve();await held.promise;invocation.assertCurrent();throw new ExecutionFailure('blocked','generated_host_call_rejected');}});await f.instance(f.alice.token,pkg,'A');const snapshot=await f.admit(f.alice.token),task=await f.invoke(f.alice.token,snapshot.id,{gate:true});await entered.promise;held.resolve();const result=await f.wait(f.alice.token,task.id,'blocked');assert.equal(result.result,undefined);assert.equal(result.error,'generated_host_call_rejected');
+});
+
+test('deletion fences an already running callback and subscription before closing its worker, leaving B data readable',async t=>{
+ const f=await fixture(t),pkg=await f.install(),entered=deferred(),held=deferred();t.after(()=>held.resolve());await f.instance(f.alice.token,pkg,'A');await f.instance(f.bob.token,pkg,'B');const a=await f.admit(f.alice.token),b=await f.admit(f.bob.token),context=await f.node.authority.authenticate(f.alice.token),events:unknown[]=[];f.node.plugins!.forUser(context).subscribe(a.id,event=>events.push(event));f.adapters.get('processor')!.bind=invocation=>({gate:async()=>{entered.resolve();await held.promise;invocation.assertCurrent();return true;}});
+ const task=await f.invoke(f.alice.token,a.id,{gate:true,emit:true});await entered.promise;assert.equal((await f.node.services.forUser(context).deleteUser('plugins','generated-running-delete')).status,'complete');held.resolve();await f.wait(f.alice.token,task.id,'stale');assert.deepEqual(events,[]);const other=await f.invoke(f.bob.token,b.id);assert.equal((await f.wait(f.bob.token,other.id)).result.label,'B');
+});
+
+test('a fixed host recipe uses a registered scoped runtime factory for A/B history without adding a central provider branch',async t=>{
+ const upstream=zipSync({'generated-upstream/README.md':strToU8('Generated pinned host recipe bytes')}),generated=release(),original=generated.transport;
+ generated.transport=async url=>url.endsWith('/releases/tags/ts-v3.3.1')?{bytes:strToU8(JSON.stringify({tag_name:'ts-v3.3.1',draft:false,assets:[]}))}:url.endsWith('/commits/ts-v3.3.1')?{bytes:strToU8(JSON.stringify({sha:'a'.repeat(40)}))}:url.endsWith('/zipball/'+'a'.repeat(40))?{bytes:upstream}:original(url);
+ const f=await fixture(t,{releases:[generated]});f.node.plugins!.registerRuntimeFactory('mote.mem0@1',scope=>({call:async(method,params:any)=>{if(method==='describe')return {components:[]};if(method==='read')return {namespace:params.namespace,label:scope.configuration.embeddingModel,records:[{namespace:params.namespace,owner:scope.userId}]};throw Error('Generated recipe only permits read');},close:async()=>{}}));
+ const preview=await f.request(f.admin.token,'/api/plugins/resolve','POST',{repository:'mem0ai/mem0',tag:'ts-v3.3.1'});assert.equal(preview.statusCode,200,preview.body);const catalog=await f.request(f.admin.token,'/api/admin/plugins'),installed=await f.request(f.admin.token,'/api/plugins/install','POST',{previewId:preview.json().id,expectedRevision:catalog.json().revision,operationId:randomUUID()});assert.equal(installed.statusCode,200);const pkg=installed.json().packages[0].id;await until(()=>f.node.plugins!.catalog.view().packages[0].state==='installed','host recipe install did not settle');
+ for(const [token,label,userId] of [[f.alice.token,'A',f.a.userId],[f.bob.token,'B_PRIVATE',f.b.userId]]){await f.configure(token,{id:'same-instance',packageId:pkg,name:'Generated host recipe',configuration:{embeddingBaseUrl:'http://127.0.0.1:1',embeddingModel:label,embeddingDimension:3},desired:false,grants:{capabilities:['repository'],sourceIds:[],history:true}});await f.action(token,'same-instance','check');await f.action(token,'same-instance','enable');const snapshot=await f.admit(token,'same-instance','history',4),read=await f.request(token,`/api/plugin-snapshots/${snapshot.id}/read`,'POST',{method:'read',params:{}});assert.equal(read.statusCode,200,read.body);assert.equal(read.json().records[0].owner,userId);assert.equal(read.json().label,label);}
+});
+
+test('private plugin deletion does not revoke a still-authorized administrator catalog capability',async t=>{
+ const f=await fixture(t),context=await f.node.authority.authenticate(f.admin.token);assert.equal((await f.node.services.forUser(context).deleteUser('plugins','generated-admin-private-delete')).status,'complete');assert.equal((await f.request(f.admin.token,'/api/admin/plugins')).statusCode,200);assert.equal((await f.request(f.admin.token,'/api/plugins')).statusCode,401);
 });

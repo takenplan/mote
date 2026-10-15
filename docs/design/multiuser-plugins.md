@@ -57,6 +57,14 @@ methods, `validateResult` checks the domain result, and optional synchronous
 asynchronous work must recheck `invocation.assertCurrent()` immediately before
 its own publication. A missing adapter is explicitly unavailable and is reflected
 in inventory; a declared component alone does not prove domain completion.
+For existing bundled host recipes, M07 registers
+`registerRuntimeFactory('mote.mem0@1' | 'mote.hindsight@1', factory)`. This uses the
+same immutable package identity and lifecycle tracking. The synchronous factory
+receives the host-fixed user, instance, generation, private directory and opaque
+configuration references; asynchronous initialization runs inside runtime `call`.
+It supplies `describe` with exact components and the existing provider methods.
+M09 adds no provider-specific business branch. M07 owns actual health/probe
+semantics, fixed model resource matching, record validation and external cleanup.
 
 | Consumer | Required interface and responsibility |
 | --- | --- |
@@ -73,7 +81,11 @@ onto that invocation's registered method. For example, M03's
 remain host-side for M06 and do not cross JSON as code. `emit` is a host-owned,
 fenced progress/event capability. The RPC parent ID binds replies to the exact
 live invocation. Callbacks after completion/close cannot acquire another call's
-authority.
+authority. Accepted host calls must settle before task success, even when the
+plugin does not await its promise. Host failure objects stay private in the parent:
+worker JSON cannot manufacture typed retries, and plugin code cannot conceal a
+failed host model call as success. Model tasks use the existing finite model-call
+policy and their original M04 snapshot.
 
 The acceptance fixtures actually generate and install a trusted local ZIP,
 verify its fixed manifest/archive, run its worker callbacks, register Cordis
@@ -112,6 +124,12 @@ host-generated deployment/user/configuration hashes. They never use user-chosen
 filesystem paths. Closing/releasing one snapshot does not dispose a retained
 sibling scope or another user's instance. Shutdown drains the shared executor,
 then closes plugin workers/Cordis, configuration and SQLite in that order.
+Every worker is tracked from construction through initialization, describe,
+probe, execution and physical exit. Probes use disposable storage separate from
+live configuration data. New runtime generations wait for old handles to exit
+before reopening retained data. A current owner can release stopped receipts;
+repeated release is idempotent. Workers close in Fastify `preClose`, before
+waiting for a stuck check request's socket to drain.
 
 ## M16 lifecycle coverage
 
@@ -120,7 +138,10 @@ runtime handles, instance-local files, event logs and subscriptions. Canonical
 source, processing, Memory and external-provider data remain with their domain
 hooks; deleting a plugin instance does not assert those external bytes were
 erased. M16 must invoke every relevant domain, and must not treat the host receipt
-as a whole-user erasure claim.
+as a whole-user erasure claim. Deletion joins all of the target user's tracked
+workers, including a check still initializing, before removing local files and
+reporting complete. Unconfirmed retirement returns `result_unknown`; a late
+probe cannot recreate an already acknowledged erased directory.
 
 Portable export includes only this user's credential-free instance definitions.
 It clears enablement, all grants and credential references and explicitly

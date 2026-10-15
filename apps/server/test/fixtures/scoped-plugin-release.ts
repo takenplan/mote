@@ -14,15 +14,15 @@ export async function createMotePlugin(configuration){
   if(input.emit)await host.call('emit',{label:configuration.label});
   if(input.source)return host.call('receiveSourceItems',[input.source,input.items]);
   if(input.model)return host.call('model',[]);
-  if(input.put){const records=await read();records.push({key:input.put,label:configuration.label});await writeFile('records.json',JSON.stringify(records));}
-  return {label:configuration.label,input};
- }})),async read(input){return {namespace:input.namespace,records:await read(),label:configuration.label};},
- async export(input){return {namespace:input.namespace,records:await read(),label:configuration.label};},
- async search(input){return {namespace:input.namespace,records:await read(),label:configuration.label};},async close(){}};
+  if(input.put){const records=await read();records.push({key:input.put,label:configuration.label,namespace:await host.call('namespace',[])});await writeFile('records.json',JSON.stringify(records));}
+  return {label:configuration.label,input,...(input.pid?{pid:process.pid}:{})};
+ }})),async read(input){return {namespace:input.namespace,records:(await read()).filter(record=>JSON.stringify(record.namespace)===JSON.stringify(input.namespace)),label:configuration.label};},
+ async export(input){return {namespace:input.namespace,records:(await read()).filter(record=>JSON.stringify(record.namespace)===JSON.stringify(input.namespace)),label:configuration.label};},
+ async search(input){return {namespace:input.namespace,records:(await read()).filter(record=>JSON.stringify(record.namespace)===JSON.stringify(input.namespace)),label:configuration.label};},async close(){}};
 }
 `.replace('COMPONENTS',JSON.stringify(components));
 export function generatedScopedPluginRelease(version='1',code=generatedScopedPluginSource){
- const archive=zipSync({'plugin.mjs':strToU8(code)}),repository='generated-local/mote-plugins',tag='v'+version;
+ const archive=zipSync({'plugin.mjs':[strToU8(code),{mtime:new Date('2026-10-15T00:00:00Z')}]}),repository='generated-local/mote-plugins',tag='v'+version;
  const manifest:PluginManifest={schemaVersion:1,id:'generated.multiuser',name:'Generated local trusted plugin',version,runtime:'worker',entry:'plugin.mjs',archive:{asset:'plugin.zip',sha256:hash(archive)},capabilities:['source','processor','repository','retrieval','model','ui'],configuration:[{id:'label',label:'Label',type:'text',required:true},{id:'credential',label:'Credential reference',type:'secret-reference'}],dependencies:[],access:['Generated isolated fixture storage'],components:components.map(v=>({...v}))};
  const base=`https://github.com/${repository}/releases/download/${tag}/`;let failInstall=false,downloads=0;
  const transport:PluginReleaseTransport=async url=>{if(url===`https://api.github.com/repos/${repository}/releases/tags/${tag}`)return {bytes:strToU8(JSON.stringify({tag_name:tag,draft:false,assets:[{name:'mote-plugin.json',browser_download_url:base+'mote-plugin.json'},{name:'plugin.zip',browser_download_url:base+'plugin.zip'}]}))};if(url===`https://api.github.com/repos/${repository}/commits/${tag}`)return {bytes:strToU8(JSON.stringify({sha:version.padStart(40,'0')}))};if(url===base+'mote-plugin.json')return {bytes:strToU8(JSON.stringify(manifest))};if(url===base+'plugin.zip'){downloads++;if(failInstall)throw Error('Generated install interruption');return {bytes:archive};}throw Error('Network forbidden: '+url);};

@@ -3,6 +3,7 @@ import type {FeatureComponent} from '@mote/shared';
 import type {UserContext} from './context.js';
 import type {TaskRun} from './task-execution.js';
 import type {ModelFeature} from '@mote/shared/models';
+import type {PluginRuntime} from '../plugin-runtime.js';
 
 export const PLUGINS_DOMAIN='plugins';
 export const PLUGIN_CONFIGURATION_DOMAIN='pluginInstances';
@@ -35,3 +36,7 @@ export interface PluginDomainAdapter {
  validateHistory?(value:unknown,input:Readonly<{context:UserContext;sourceIds:readonly string[];assertCurrent:()=>void;namespace:PluginInvocation['namespace'];method:'read'|'search'|'export';params:Record<string,unknown>}>):unknown|Promise<unknown>;
 }
 export type ScopedPluginComponent=FeatureComponent&{capability:PluginCapabilityId};
+/** Trusted host recipe factory. Construction is synchronous, like the existing
+ * worker adapters; asynchronous initialization belongs in call(). Paths and
+ * owner facts stay in this host boundary and are never worker/user arguments. */
+export type PluginRuntimeFactory=(scope:Readonly<{userId:string;instanceId:string;generation:number;directory:string;configuration:Readonly<Record<string,string|number|boolean>>}>)=>PluginRuntime;

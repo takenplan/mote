@@ -47,7 +47,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     registerConfigurationRoutes(runtime,configuration);
     execution?.bindConfiguration(configuration);
     plugins=execution?registerScopedPlugins(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,releaseTransport:options.pluginReleaseTransport}):undefined;
-    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>execution.close());}
+    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await plugins?.close();await configuration?.close();accounts.close();storage.close();});
     return {...runtime,execution,configuration,plugins,deploymentId:storage.deploymentId};
