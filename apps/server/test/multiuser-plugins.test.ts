@@ -1,7 +1,7 @@
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {mkdtempSync,rmSync,readdirSync,existsSync} from 'node:fs';
+import {mkdtempSync,rmSync,readdirSync,existsSync,cpSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -201,4 +201,17 @@ test('a fixed host recipe uses a registered scoped runtime factory for A/B histo
 
 test('private plugin deletion does not revoke a still-authorized administrator catalog capability',async t=>{
  const f=await fixture(t),context=await f.node.authority.authenticate(f.admin.token);assert.equal((await f.node.services.forUser(context).deleteUser('plugins','generated-admin-private-delete')).status,'complete');assert.equal((await f.request(f.admin.token,'/api/admin/plugins')).statusCode,200);assert.equal((await f.request(f.admin.token,'/api/plugins')).statusCode,401);
+});
+
+test('relocating an offline vault uses its own fixed package cache and preserves scoped task and history data after the original is removed',async t=>{
+ const generated=release(),f=await fixture(t,{releases:[generated]}),pkg=await f.install();await f.instance(f.alice.token,pkg,'A');await f.instance(f.bob.token,pkg,'B_PRIVATE');
+ const task=await f.admit(f.alice.token,'same-instance','task',7),history=await f.admit(f.alice.token,'same-instance','history',7),other=await f.admit(f.bob.token,'same-instance','history',7),bTask=await f.admit(f.bob.token,'same-instance','task',7);
+ await f.wait(f.alice.token,(await f.invoke(f.alice.token,task.id,{put:'same-key'},'generated.memory')).id);await f.wait(f.bob.token,(await f.invoke(f.bob.token,bTask.id,{put:'same-key'},'generated.memory')).id);
+ await f.node.app.close();const target=f.directory+'-relocated';let relocated:Awaited<ReturnType<typeof buildApp>>|undefined;t.after(async()=>{await relocated?.app.close();rmSync(target,{recursive:true,force:true});});cpSync(f.directory,target,{recursive:true});rmSync(f.directory,{recursive:true,force:true});assert.equal(existsSync(f.directory),false);
+ const restored=relocated=await buildApp({dataDir:target},{pluginReleaseTransport:generated.transport});for(const capability of ['processor','repository','retrieval','ui'] as const)restored.plugins!.registerAdapter(capability,f.adapters.get(capability)!);
+ const request=(token:string,url:string,method:any='GET',payload?:unknown)=>restored.app.inject({url,method,headers:{...protocol,authorization:'Bearer '+token},...(payload===undefined?{}:{payload})});
+ const view=await request(f.alice.token,'/api/plugins');assert.equal(view.statusCode,200,view.body);assert.equal(view.body.includes('B_PRIVATE'),false);
+ for(const [token,snapshot,userId,label] of [[f.alice.token,history.id,f.a.userId,'A'],[f.bob.token,other.id,f.b.userId,'B_PRIVATE']]){const read=await request(token,`/api/plugin-snapshots/${snapshot}/read`,'POST',{method:'read',params:{}});assert.equal(read.statusCode,200,read.body);assert.deepEqual(read.json().records,[{key:'same-key',label,namespace:{ownerId:userId,instanceId:'same-instance',bindingRevision:7}}]);}
+ assert.equal((await request(f.bob.token,`/api/plugin-snapshots/${history.id}/read`,'POST',{method:'read',params:{}})).statusCode,404);
+ const admitted=await request(f.alice.token,`/api/plugin-snapshots/${task.id}/invoke`,'POST',{componentId:'generated.processor',payload:{},operationId:randomUUID()});assert.equal(admitted.statusCode,200,admitted.body);await until(()=>restored.execution!.engine.get(admitted.json().id)?.state==='succeeded','relocated fixed task did not complete');const completed=await request(f.alice.token,'/api/tasks/'+admitted.json().id);assert.equal(completed.statusCode,200,completed.body);assert.equal(completed.json().result.label,'A');
 });
