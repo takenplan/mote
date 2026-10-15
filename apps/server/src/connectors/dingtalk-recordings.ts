@@ -37,7 +37,7 @@ export function createDwsRunner(root:string):DwsRunner{return async(command,prof
   child.on('close',code=>finish(code?new ConnectorError('dingtalk_command_failed',502):undefined));
  });
 };}
-function data(value:any){if(value?.ok===false||value?.success===false||value?.error)throw new ExecutionFailure('transient','recording_provider_failed');return value?.data??value;}
+function data(value:any){if(value?.ok===false||value?.success===false||value?.error)throw new ExecutionFailure('permanent','recording_provider_failed');return value?.data??value;}
 /** Preserve the vendor JSON as the original; expose its primary paragraph text
  * once. Sentence/word copies are transport detail, not additional speech. */
 export function dingtalkTranscript(raw:unknown,durationMs=0){

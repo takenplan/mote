@@ -12,13 +12,17 @@ import type {Transcript,ArchivedFile} from '@mote/shared';
 import {StoreError} from './store.js';
 export type FormatTask=ManifestTask|{kind:'document';path:string;mimeType:string}|{kind:'text';path:string;maxBytes:number;chunkCharacters:number}|{kind:'zip';path:string;output:string;maxFiles:number;maxBytes:number}|{kind:'plain';inputs:{file:ArchivedFile;path:string}[];createdAt:string;manifest:string};
 type Results={document:Transcript;manifest:ReturnType<typeof import('./import-manifest-worker.js').validateImportManifest>;text:{durationMs:number;segments:{startMs:number;endMs:number;text:string}[]};zip:{files:{name:string;path:string;bytes:number}[];bytes:number};plain:{count:number;warnings:string[];partial:boolean;samples:{title:string;text:string;kind:string;attachmentCount:number}[];hash:string}};
+// A single decoding/manifest subprocess can cover a large configured import.
+const FORMAT_EXECUTION_TIMEOUT_MS=15*60*1000;
 let active=0;const queue:(()=>void)[]=[];
-/** CPU work runs outside the HTTP process. Limits include the admission wait. */
+/** CPU work runs outside the HTTP process. Only execution spends its time budget. */
 export async function formatWork<K extends FormatTask['kind']>(task:Extract<FormatTask,{kind:K}>,signal?:AbortSignal):Promise<Results[K]>{
  const temporary=task.kind==='manifest'?join((task as ManifestTask).workspace,'validated-'+randomUUID()+'.tmp'):undefined;
- const deadline=AbortSignal.any([AbortSignal.timeout(120000),...(signal?[signal]:[])]);deadline.throwIfAborted();
- await new Promise<void>((resolve,reject)=>{const enter=()=>{deadline.removeEventListener('abort',abort);active++;resolve();};const abort=()=>{const index=queue.indexOf(enter);if(index>=0)queue.splice(index,1);reject(deadline.reason);};deadline.addEventListener('abort',abort,{once:true});if(active<2)enter();else queue.push(enter);});
- try{return await new Promise<Results[K]>((resolve,reject)=>{
+ signal?.throwIfAborted();const controller=new AbortController(),deadline=controller.signal,abortParent=()=>controller.abort(signal?.reason);let admitted=false,timeout:ReturnType<typeof setTimeout>|undefined;
+ signal?.addEventListener('abort',abortParent,{once:true});
+ try{await new Promise<void>((resolve,reject)=>{const enter=()=>{deadline.removeEventListener('abort',abort);active++;admitted=true;resolve();};const abort=()=>{const index=queue.indexOf(enter);if(index>=0)queue.splice(index,1);reject(deadline.reason);};deadline.addEventListener('abort',abort,{once:true});if(active<2)enter();else queue.push(enter);});
+ timeout=setTimeout(()=>controller.abort(new DOMException('Format decoding timed out','TimeoutError')),FORMAT_EXECUTION_TIMEOUT_MS);timeout.unref();
+ return await new Promise<Results[K]>((resolve,reject)=>{
   const extension=import.meta.url.endsWith('.ts')?'ts':'js',execArgv=extension==='ts'?['--import',createRequire(import.meta.url).resolve('tsx')]:[];
   const child=fork(new URL(`./format-worker.${extension}`,import.meta.url),[],{stdio:['ignore','ignore','ignore','ipc'],execArgv});let settled=false;
   const done=(error?:unknown,result?:Results[K])=>{if(settled)return;settled=true;deadline.removeEventListener('abort',abort);if(error){if(child.exitCode!==null||child.signalCode!==null||!child.pid){reject(error);}else{child.once('exit',()=>reject(error));child.kill('SIGKILL');}}else resolve(result!);};
@@ -26,7 +30,7 @@ export async function formatWork<K extends FormatTask['kind']>(task:Extract<Form
   child.once('error',error=>done(error));child.once('exit',()=>{if(!settled)done(new StoreError('Format worker interrupted',503));});
   child.once('message',(message:any)=>message.ok?done(undefined,message.result):done(new StoreError(message.code==='manifest_invalid'&&typeof message.message==='string'?message.message.slice(0,2000):'Format decoding failed: '+String(message.code),message.status===409?409:message.status===413?413:422)));
   child.send(temporary?{...task,temporary}:task,error=>{if(error)done(error);});
- });}finally{if(temporary)await rm(temporary,{force:true});active--;queue.shift()?.();}
+ });}finally{clearTimeout(timeout);signal?.removeEventListener('abort',abortParent);if(temporary)await rm(temporary,{force:true});if(admitted){active--;queue.shift()?.();}}
 }
 
 export async function extractUtf8(body:AsyncIterable<Buffer>,sizeBytes:number,signal:AbortSignal){return extractDocument(body,sizeBytes,'text/plain',signal);}

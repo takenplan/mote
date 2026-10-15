@@ -77,13 +77,13 @@ test('exact retransmission does not revoke a running archive worker',async t=>{
   release.resolve();await running;assert.equal(runtime.engine.get(step.id)?.state,'succeeded');assert.equal(materials.list().items[0].sequence,1);
 });
 
-test('an exact retransmission preserves failure backoff while an explicit retry remains available',async t=>{
+test('an unclassified archive failure stops once and exact retransmission preserves it until explicit retry',async t=>{
   const directory=mkdtempSync(join(tmpdir(),'mote-source-duplicate-failed-'));
   const store=new Store(directory),materials=new MaterialStore(store),runtime=new SourcePipelineRuntime(store,materials,[codingSourcePlugin]);await runtime.ready;
   t.after(async()=>{await runtime.close();store.close();rmSync(directory,{recursive:true,force:true});});
   const sources=new SourceStore(store,runtime);sources.register({id:'coding',name:'Generated',kind:'coding-agent',deviceId:'device',platform:'macos'});
-  let calls=0;const snapshot=runtime.recipes.snapshot.bind(runtime.recipes);runtime.recipes.snapshot=(()=>{calls++;throw Error('Generated transient fixture failure');}) as typeof runtime.recipes.snapshot;
-  const original=event('one','Generated failed retransmission fixture');await sources.upsert('coding',original);await runtime.tick();const work=store.db.prepare('SELECT * FROM source_pipeline_work').get()!,step=runtime.engine.get(`source.archive-group:${work.id}:${work.generation}`)!;assert.equal(work.error,'organization_failed');assert.equal(step.state,'waiting');assert.ok(step.availableAt>Date.now());
+  let calls=0;const snapshot=runtime.recipes.snapshot.bind(runtime.recipes);runtime.recipes.snapshot=(()=>{calls++;throw Error('Generated unclassified fixture failure');}) as typeof runtime.recipes.snapshot;
+  const original=event('one','Generated failed retransmission fixture');await sources.upsert('coding',original);await runtime.tick();const work=store.db.prepare('SELECT * FROM source_pipeline_work').get()!,step=runtime.engine.get(`source.archive-group:${work.id}:${work.generation}`)!;assert.equal(work.error,'organization_failed');assert.equal(step.state,'failed');assert.equal(step.attempts,1);
   assert.equal((await sources.upsert('coding',original)).duplicate,true);await runtime.tick();assert.deepEqual(store.db.prepare('SELECT * FROM source_pipeline_work').get(),work);assert.deepEqual(runtime.engine.get(step.id),step);assert.equal(calls,1);
   runtime.recipes.snapshot=snapshot;runtime.engine.retry(step.id);await runtime.tick();assert.equal(runtime.engine.get(step.id)?.state,'succeeded');assert.equal(materials.list().items.length,1);
 });

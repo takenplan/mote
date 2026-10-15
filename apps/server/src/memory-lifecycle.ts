@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {ExecutionEngine,ExecutionFailure} from './execution-engine.js';
 import {AgentTimeoutError} from '@mote/agent';
 import {ProviderFailure} from '@mote/shared';
@@ -178,8 +179,11 @@ export class MemoryLifecycle {
         const window=structuredClone(state.active),checkpoint=(id:string)=>{state.active!.checkpoint=id;this.saveState(extension.id,state);};
         if(this.executor){
           const executor=this.executor,id='lifecycle:'+window.id,operationId='workflow:lifecycle:'+window.id;
-          await executor.runStep({id,operationId,kind:'lifecycle-window',pool:'lifecycle.'+extension.id,input:{windowId:window.id,extensionId:extension.id,version:window.version},signal:this.abort.signal,timeoutMs:2147483647,
-            classify:error=>new ExecutionFailure('permanent',error instanceof MemoryProviderError&&error.code==='unsupported_input'?'memory_provider_unsupported_input':'step_failed'),
+          // Only this window's finite, typed recovery decision can reopen a
+          // failed invocation. Observing a terminal child is never retry consent.
+          if(state.retryAt&&state.failures>0&&executor.get(id)?.state==='failed'&&executor.failure(id)?.category==='transient')executor.retry(id,false);
+          await executor.runStep({id,operationId,kind:'lifecycle-window',pool:'lifecycle.'+extension.id,input:{windowId:window.id,extensionId:extension.id,version:window.version},signal:this.abort.signal,policy:EXECUTION_POLICIES.orchestration,
+            classify:error=>error instanceof AgentTimeoutError?new ExecutionFailure('transient','provider_timeout'):new ExecutionFailure('permanent',error instanceof MemoryProviderError&&error.code==='unsupported_input'?'memory_provider_unsupported_input':error instanceof StoreError?'workflow_'+error.statusCode:'step_failed'),
             validate:()=>!this.closed&&this.state(extension.id).active?.id===window.id,
             execute:async signal=>{
               const fence=this.store.db.prepare('SELECT fence FROM execution_steps WHERE id=?').get(id)?.fence;
@@ -198,15 +202,18 @@ export class MemoryLifecycle {
           if(this.executor?.get('lifecycle:'+state.active.id)?.state==='running')return;
           const latest=this.state(extension.id);if(latest.active?.id!==state.active.id)return;Object.assign(state,latest);
         }
-        const waiting=extension.id==='extraction'&&error instanceof ExecutionFailure&&error.category==='waiting';
+        const waiting=error instanceof ExecutionFailure&&error.category==='waiting'||error instanceof ProviderFailure&&error.details.admissionWaiting===true;
+        const receipt=state.active&&this.executor?.failure('lifecycle:'+state.active.id);
+        const retryable=error instanceof ProviderFailure&&error.details.category==='transient'||error instanceof ExecutionFailure&&error.category==='transient'||error instanceof AgentTimeoutError||receipt?.category==='transient';
+        const maxAttempts=extension.maxAttempts??EXECUTION_POLICIES.modelCall.maxAttempts;
         const unsupportedInput=error instanceof MemoryProviderError&&error.code==='unsupported_input';
         const semanticTerminal=unsupportedInput||error instanceof ExecutionFailure&&error.category==='blocked'&&(extension.id==='extraction'&&['semantic_processing_failed','semantic_processing_blocked'].includes(error.code)||extension.id==='consolidation'&&['memory_integration_unreadable','memory_integration_no_delivery'].includes(error.code));
         if(!waiting&&(!semanticTerminal||error.code==='semantic_processing_failed'))state.failures++;
-        if(semanticTerminal)state.manualRetryRequired=true;
-        state.error=unsupportedInput?'memory_provider_unsupported_input':waiting||semanticTerminal?error.code:error instanceof ProviderFailure?error.details.code:error instanceof AgentTimeoutError?'provider_timeout':error instanceof StoreError?'workflow_'+error.statusCode:'workflow_failed';
-        if(!state.cancelled&&!state.manualRetryRequired&&(waiting||!extension.maxAttempts||state.failures<extension.maxAttempts)){
+        if(semanticTerminal||!waiting&&(!retryable||state.failures>=maxAttempts))state.manualRetryRequired=true;
+        state.error=unsupportedInput?'memory_provider_unsupported_input':error instanceof ExecutionFailure?error.code:error instanceof ProviderFailure?error.details.code:error instanceof AgentTimeoutError?'provider_timeout':error instanceof StoreError?'workflow_'+error.statusCode:'workflow_failed';
+        if(!state.cancelled&&!state.manualRetryRequired&&(waiting||state.failures<maxAttempts)){
           const requestedDelay=error instanceof ExecutionFailure?error.retryAfterMs:error instanceof ProviderFailure?error.details.retryAfterMs:undefined;
-          state.retryAt=this.now()+Math.max(requestedDelay??0,waiting?60000:Math.min(6*3600000,60000*2**Math.min(state.failures,8)));
+          state.retryAt=this.now()+(waiting?Math.max(1,requestedDelay??60000):Math.max(requestedDelay??0,Math.min(6*3600000,60000*2**Math.min(state.failures,8))));
         }else delete state.retryAt;
       }
       this.saveState(extension.id,state);

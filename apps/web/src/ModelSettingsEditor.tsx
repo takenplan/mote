@@ -183,8 +183,6 @@ export function ModelSettingsEditor({ api, revision, onApplied, profileId }: {
                 setState({ api, name: profileName(snapshot), snapshot, latest: snapshot, draft: createModelDraft(snapshot.settings) });
                 setRestoreReview(false);
                 setNotice(kind === 'restore' ? moteText("默认项已恢复部署配置，功能分配保持不变。") : moteText("已保存。选择此配置的新请求将立即使用这些设置。"));
-                const agentTimeoutValues = [snapshot.settings.agentTimeoutMs, ...snapshot.profiles.map(p => p.settings.agentTimeoutMs)], agentTimeouts = agentTimeoutValues.filter((value): value is number => value !== null);
-                api.setAgentTimeout(agentTimeoutValues.some(value => value === null) ? null : agentTimeouts.length ? Math.max(...agentTimeouts) : null);
                 invalidateConfiguration(api);
                 onApplied();
             }
@@ -253,7 +251,7 @@ export function ModelSettingsEditor({ api, revision, onApplied, profileId }: {
               </>}
             </select><small>{draft.protocol === 'codex-app-server' ? (codexChoices.known ? moteText("挡位来自所选模型的 Codex 目录。") : moteText("未取得 Codex 模型挡位，以下选项尚未核实。")) : moteText("选择“由模型决定”兼容更多模型；具体能力取决于所选模型。")}</small></label>
             <label className="preference-field">{moteText("单次模型请求超时（秒）")}<input aria-label={moteText("单次模型请求超时（秒）")} type="number" min={5} max={600} step={1} disabled={draft.protocol === 'codex-app-server'} value={draft.protocol === 'codex-app-server' ? '' : draft.modelRequestTimeoutSeconds} onChange={e => change({ modelRequestTimeoutSeconds: e.target.value })}/><small>{draft.protocol === 'codex-app-server' ? moteText("Codex Server 不暴露内部单次模型生成请求，此项不适用。") : moteText("5–600 秒；只限制一次 Provider API 请求，不包含后续工具循环。")}</small></label>
-            <label className="preference-field">{moteText("Agent 总运行超时（秒）")}<input aria-label={moteText("Agent 总运行超时（秒）")} type="number" min={5} max={3600} step={1} placeholder={draft.protocol === 'codex-app-server' ? moteText("可留空") : undefined} value={draft.agentTimeoutSeconds} onChange={e => change({ agentTimeoutSeconds: e.target.value })}/><small>{draft.protocol === 'codex-app-server' ? moteText("可留空；限制从 Agent 开始到结束的整个运行周期，包含多次模型请求和工具调用。") : moteText("5–3600 秒；限制一次 Agent 从开始到完成的整个运行周期。")}</small></label>
+            <label className="preference-field">{moteText("Agent 总运行超时（秒）")}<input aria-label={moteText("Agent 总运行超时（秒）")} type="number" min={5} max={3600} step={1} placeholder={moteText("可留空")} value={draft.agentTimeoutSeconds} onChange={e => change({ agentTimeoutSeconds: e.target.value })}/><small>{moteText("可留空；累计实际执行的模型、工具与修正时间，不包含等待执行名额。")}</small></label>
           </div>
           {draft.protocol !== 'codex-app-server' && <details className="preference-advanced"><summary>{moteText("高级设置 · 输出预算")}{' '}{Number(draft.maxTokens).toLocaleString(getLocale())} tokens</summary>
             <div className="preference-grid"><label className="preference-field">{moteText("输出预算档位")}<select aria-label={moteText("输出预算档位")} value={!customBudget && MODEL_OUTPUT_BUDGETS.some(n => String(n) === draft.maxTokens) ? draft.maxTokens : 'custom'} onChange={e => { setCustomBudget(e.target.value === 'custom'); if (e.target.value !== 'custom')

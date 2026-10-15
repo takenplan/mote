@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {randomUUID} from 'node:crypto';
 import {join} from 'node:path';
 import {z} from 'zod';
@@ -36,14 +37,14 @@ export class PluginCenter {
       CREATE TABLE IF NOT EXISTS plugin_retired_packages(id TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS plugin_retired_instances(id TEXT PRIMARY KEY,json TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS plugin_commands(id TEXT PRIMARY KEY,fingerprint TEXT NOT NULL);`);
-    this.disposeHandlers.push(executor.register({kind:'plugin.install',pool:'plugin-control',concurrency:()=>1,
+    this.disposeHandlers.push(executor.register({kind:'plugin.install',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,
       validate:step=>Boolean(this.package(String(step.input.packageId))?.view.state==='installing'),
       execute:async(step,signal)=>{const value=this.preview(String(step.input.previewId));const directory=await releases.install(value);if(signal.aborted)throw new ExecutionFailure('stale','plugin_install_cancelled');return directory;},
       commit:(step,result)=>{const pkg=this.package(String(step.input.packageId));pkg.directory=String(result);pkg.view.state='installed';pkg.view.observed='installed';pkg.view.issues=[];this.savePackage(pkg);this.bump();},
       project:step=>{if(['failed','blocked','stale','cancelled'].includes(step.state)){const pkg=this.package(String(step.input.packageId));pkg.view.state='failed';pkg.view.observed=step.state;pkg.view.issues=[step.error??'plugin_install_failed'];this.savePackage(pkg);}},
       classify:()=>new ExecutionFailure('blocked','plugin_install_requires_attention'),
     }));
-    this.disposeHandlers.push(executor.register({kind:'plugin.check',pool:'plugin-control',concurrency:()=>1,timeoutMs:3600000,
+    this.disposeHandlers.push(executor.register({kind:'plugin.check',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,timeoutMs:3600000,
       validate:step=>{const instance=this.instance(String(step.input.instanceId));return instance.view.revision===step.input.revision&&instance.stepId===step.id;},
       execute:async(step,signal)=>healthSchema.parse(this.probe?await this.probe(String(step.input.instanceId),signal):await this.runtime(String(step.input.instanceId)).call('health',{namespace:{ownerId:'mote-owner',instanceId:String(step.input.instanceId),bindingRevision:1}},signal)),
       commit:(step,result)=>{const instance=this.instance(String(step.input.instanceId)),health=healthSchema.parse(result),pkg=this.package(instance.view.packageId);

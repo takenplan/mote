@@ -5,6 +5,7 @@ import {setImmediate as yieldTurn} from 'node:timers/promises';
 import {StoreError,type Store} from './store.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
 import {failureContext,retainFailureContext,safeFailureContext,type FailureContext} from './execution-failures.js';
+import {EXECUTION_POLICIES,type ExecutionPolicy} from './execution-policy.js';
 
 export type ExecutionState='waiting'|'running'|'blocked'|'succeeded'|'failed'|'cancelled'|'stale';
 export type ExecutionLane='background'|'interactive';
@@ -12,7 +13,7 @@ export type ExecutionLane='background'|'interactive';
  * never from model-authored input or a new persistent authority field. */
 export type ExecutionPoolAdmission={concurrency:Record<ExecutionLane,()=>number>;lane:(step:ExecutionStep)=>ExecutionLane};
 export type ExecutionStep={id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;state:ExecutionState;attempts:number;availableAt:number;error?:string};
-export type ExecutionFailureReceipt=FailureContext&{stepId:string;operationId:string;kind:string;state:ExecutionState;category:ExecutionFailure['category'];code:string;attempt:number;at:string};
+export type ExecutionFailureReceipt=FailureContext&{stepId:string;operationId:string;kind:string;state:ExecutionState;category:ExecutionFailure['category'];code:string;attempt:number;at:string;executionStarted?:false;admissionWaiting?:true;availableAt?:number};
 /** A running handler can publish incremental progress only through its current lease. */
 export interface ExecutionGrant {
  assert():void;
@@ -23,6 +24,7 @@ export class ExecutionFailure extends Error {
 }
 export interface ExecutionHandler {
  kind:string;pool:string;concurrency:()=>number;
+ policy?:ExecutionPolicy;
  validate:(step:ExecutionStep)=>boolean;
  /** Extra authority check for a running parent's dependent publication. */
  validateGrant?:(step:ExecutionStep)=>boolean;
@@ -34,13 +36,13 @@ export interface ExecutionHandler {
  /** Compatibility views are projections, never used to claim a running step. */
  project?:(step:ExecutionStep)=>void;
  classify?:(error:unknown)=>ExecutionFailure;
- timeoutMs?:number|(()=>number);
+ timeoutMs?:number|null|((step:ExecutionStep)=>number|null);
  maxAttempts?:number;
- maxRecoveryWindowMs?:number;
+ maxRecoveryWindowMs?:number|null;
  /** Trusted identities/stage only; the engine never persists arbitrary errors. */
  failureContext?:(step:ExecutionStep)=>FailureContext;
 }
-type ProgramStep<T>=OperationMembership&{id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;initialAttempts?:number;timeoutMs?:number;classify?:(error:unknown)=>ExecutionFailure};
+type ProgramStep<T>=OperationMembership&{id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;resourceKeys?:string[];admit?:()=>ExecutionFailure|undefined;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;initialAttempts?:number;policy?:ExecutionPolicy;timeoutMs?:number|null;maxAttempts?:number;maxRecoveryWindowMs?:number|null;classify?:(error:unknown)=>ExecutionFailure};
 type Row={id:string;operation_id:string;kind:string;pool:string;input:string;state:ExecutionState;attempts:number;available_at:number;error:string|null;fence:string|null;lease_until:number;recovery_deadline?:number};
 const view=(row:Row):ExecutionStep=>({id:row.id,operationId:row.operation_id,kind:row.kind,pool:row.pool,input:JSON.parse(row.input),state:row.state,attempts:row.attempts,availableAt:row.available_at,...(row.error?{error:row.error}:{})});
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,v])=>[key,canonical(v)])):value;
@@ -76,6 +78,7 @@ export class ExecutionEngine {
   installOperationProjection(store);
  }
  get closed(){return this.stopping;}
+ private policy(handler:ExecutionHandler,step:ExecutionStep){const base=handler.policy??EXECUTION_POLICIES.orchestration;return {timeoutMs:handler.timeoutMs===undefined?base.timeoutMs:typeof handler.timeoutMs==='function'?handler.timeoutMs(step):handler.timeoutMs,maxAttempts:handler.maxAttempts??base.maxAttempts,maxRecoveryWindowMs:handler.maxRecoveryWindowMs===undefined?base.maxRecoveryWindowMs:handler.maxRecoveryWindowMs};}
  configurePool(pool:string,admission:ExecutionPoolAdmission){this.admissions.set(pool,admission);}
  private lane(step:ExecutionStep):ExecutionLane{return this.admissions.get(step.pool)?.lane(step)==='interactive'?'interactive':'background';}
  private limit(pool:string,lane:ExecutionLane){
@@ -116,7 +119,7 @@ export class ExecutionEngine {
   // One bounded receipt per retained step follows that step's existing deletion
   // lifecycle. A full disk must not turn failure reporting into another run.
   let hostContext:FailureContext={};try{hostContext=this.handlers.get(step.kind)?.failureContext?.(step)??{};}catch{/* Retired inputs cannot remove the fixed execution receipt. */}
-  try{const context={...hostContext,...failureContext(error)},receipt:ExecutionFailureReceipt={...safeFailureContext(context),stepId:step.id,operationId:step.operationId,kind:step.kind,state,category:failure.category,code:/^[a-z][a-z0-9_.:-]{0,99}$/.test(failure.code)?failure.code:'execution_failed',attempt:step.attempts,at:new Date(this.now()).toISOString()},json=JSON.stringify(receipt),prior=this.store.db.prepare('SELECT length(json) bytes FROM execution_failures WHERE step_id=?').get(step.id);this.store.reserveMetadata(Math.max(0,Buffer.byteLength(json)-Number(prior?.bytes??0))+(!prior?Buffer.byteLength(step.id)+128:0));this.store.db.prepare('INSERT INTO execution_failures VALUES(?,?) ON CONFLICT(step_id) DO UPDATE SET json=excluded.json').run(step.id,json);}catch{this.failureReceiptWriteFailures++;}
+  try{const context={...hostContext,...failureContext(error)},receipt:ExecutionFailureReceipt={...safeFailureContext(context),stepId:step.id,operationId:step.operationId,kind:step.kind,state,category:failure.category,code:/^[a-z][a-z0-9_.:-]{0,99}$/.test(failure.code)?failure.code:'execution_failed',attempt:step.attempts,at:new Date(this.now()).toISOString(),...(error instanceof ProviderFailure&&error.details.executionStarted===false?{executionStarted:false as const}:{}),...(error instanceof ProviderFailure&&error.details.admissionWaiting===true?{admissionWaiting:true as const}:{}),...(state==='waiting'&&step.availableAt>0?{availableAt:step.availableAt}:{})},json=JSON.stringify(receipt),prior=this.store.db.prepare('SELECT length(json) bytes FROM execution_failures WHERE step_id=?').get(step.id);this.store.reserveMetadata(Math.max(0,Buffer.byteLength(json)-Number(prior?.bytes??0))+(!prior?Buffer.byteLength(step.id)+128:0));this.store.db.prepare('INSERT INTO execution_failures VALUES(?,?) ON CONFLICT(step_id) DO UPDATE SET json=excluded.json').run(step.id,json);}catch{this.failureReceiptWriteFailures++;}
  }
  list(args:{operationId?:string;kind?:string;state?:ExecutionState;cursor?:number;limit?:number}={}){
   const clauses:string[]=[],values:(string|number)[]=[];
@@ -179,12 +182,17 @@ export class ExecutionEngine {
   const db=this.store.db,now=this.now();
   for(const row of db.prepare("SELECT * FROM execution_steps WHERE state='waiting' AND recovery_deadline>0 AND recovery_deadline<=?").all(now) as Row[]){
    const handler=this.handlers.get(row.kind);
+   // A retired dynamic definition cannot invent a recovery policy. Current
+   // tasks with no elapsed recovery budget also retire old generic deadlines.
+   if(!handler)continue;
+   if(this.policy(handler,view(row)).maxRecoveryWindowMs===null){db.prepare('UPDATE execution_steps SET recovery_deadline=0 WHERE id=?').run(row.id);continue;}
    if(handler&&!handler.validate(view(row))){db.prepare("UPDATE execution_steps SET state='stale',fence=NULL,error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.project(row.id);}
    else this.fail(row.id,'recovery_window_exhausted');
   }
   for(const row of db.prepare("SELECT * FROM execution_steps WHERE state='running' AND lease_until<=?").all(now) as Row[]){
-   const max=this.handlers.get(row.kind)?.maxAttempts??4;
-   db.prepare("UPDATE execution_steps SET state=?,fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND lease_until<=?").run(row.attempts>=max?'failed':'waiting',now,row.id,now);this.project(row.id);
+   // An expired host lease proves interruption, not a completed processing
+   // failure. Issued external calls remain protected by their domain ledger.
+   db.prepare("UPDATE execution_steps SET state='waiting',attempts=max(0,attempts-1),fence=NULL,error='interrupted',available_at=0,updated_at=? WHERE id=? AND state='running' AND lease_until<=?").run(now,row.id,now);this.project(row.id);
   }
  }
  /** Start available slots. Return only work admitted by this call; slow older work is independent. */
@@ -215,7 +223,7 @@ export class ExecutionEngine {
   return Promise.all(started).then(()=>{});
  }
  private async execute(row:Row,handler:ExecutionHandler,controller:AbortController){
-  const db=this.store.db,now=this.now(),fence=randomUUID(),timeout=(typeof handler.timeoutMs==='function'?handler.timeoutMs():handler.timeoutMs)??120000;
+  const db=this.store.db,now=this.now(),fence=randomUUID(),policy=this.policy(handler,view(row)),timeout=policy.timeoutMs;
   db.exec('BEGIN IMMEDIATE');
   try{
    const lane=this.lane(view(row)),limit=this.limit(row.pool,lane);
@@ -225,13 +233,13 @@ export class ExecutionEngine {
    if(!handler.validate(view(row))){db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(now,row.id);this.project(row.id);db.exec('COMMIT');return;}
    const admission=handler.admit?.(view(row));
    if(admission){
-    db.prepare("UPDATE execution_steps SET state=?,available_at=?,error=?,updated_at=? WHERE id=? AND state='waiting'").run(admission.category==='waiting'?'waiting':'blocked',admission.category==='waiting'?this.now()+Math.max(1,admission.retryAfterMs??1000):0,admission.code,now,row.id);this.project(row.id);db.exec('COMMIT');
+    db.prepare("UPDATE execution_steps SET state=?,available_at=?,error=?,recovery_deadline=CASE WHEN ? THEN 0 ELSE recovery_deadline END,updated_at=? WHERE id=? AND state='waiting'").run(admission.category==='waiting'?'waiting':'blocked',admission.category==='waiting'?this.now()+Math.max(1,admission.retryAfterMs??1000):0,admission.code,Number(admission.category==='waiting'),now,row.id);this.project(row.id);db.exec('COMMIT');
     // A short retry can become due again while the backlog is being checked.
     // Yield after the durable decision, with no transaction or running lease,
     // so both background completion wakes and explicit drains allow timers.
     if(admission.category==='waiting')await yieldTurn();return;
    }
-   const claimed=db.prepare("UPDATE execution_steps SET state='running',attempts=attempts+1,fence=?,lease_until=?,error=NULL,updated_at=? WHERE id=? AND state='waiting'").run(fence,now+Math.min(timeout+10000,30000),now,row.id).changes;
+   const claimed=db.prepare("UPDATE execution_steps SET state='running',attempts=attempts+1,fence=?,lease_until=?,error=NULL,updated_at=? WHERE id=? AND state='waiting'").run(fence,now+(timeout===null?30000:Math.min(timeout+10000,30000)),now,row.id).changes;
    if(!claimed){db.exec('COMMIT');return;}
    const sequence=Number(db.prepare('INSERT INTO execution_sequence(pool,next) VALUES(?,1) ON CONFLICT(pool) DO UPDATE SET next=next+1 RETURNING next').get(row.pool)!.next);
    db.prepare('INSERT INTO execution_fairness(pool,operation_id,last_started) VALUES(?,?,?) ON CONFLICT(pool,operation_id) DO UPDATE SET last_started=excluded.last_started').run(row.pool,row.operation_id,sequence);
@@ -240,7 +248,7 @@ export class ExecutionEngine {
   // Dispose deadlines when work settles. Composed AbortSignal.timeout sources
   // can remain strongly retained by Node until a long deadline actually fires.
   const step=this.get(row.id)!,signal=controller.signal;
-  const deadline=setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);deadline.unref();
+  const deadline=timeout===null?undefined:setTimeout(()=>controller.abort(new DOMException('The operation was aborted due to timeout','TimeoutError')),timeout);deadline?.unref();
   const renewal=setInterval(()=>{if(this.stopping)return;try{const at=this.now();if(!db.prepare("UPDATE execution_steps SET lease_until=? WHERE id=? AND state='running' AND fence=? AND lease_until>?").run(at+30000,row.id,fence,at).changes)controller.abort();}catch{controller.abort();}},10000);renewal.unref();
   try{
    const assertGrant=()=>{
@@ -266,15 +274,21 @@ export class ExecutionEngine {
     this.project(row.id);db.exec('COMMIT');
    }catch(error){if(db.isTransaction)db.exec('ROLLBACK');throw error;}
   }catch(error){
-   const failure=error instanceof ExecutionFailure?error:error instanceof ProviderFailure?new ExecutionFailure(error.details.category,error.details.code,error.details.retryAfterMs):handler.classify?.(error)??new ExecutionFailure('transient','processor_failed');
+   const classified=error instanceof ExecutionFailure?error:error instanceof ProviderFailure?new ExecutionFailure(error.details.category,error.details.code,error.details.retryAfterMs):handler.classify?.(error)??new ExecutionFailure('permanent','processor_failed');
+   // A fixed transport/admission fact is a capacity wait, never evidence that
+   // the input failed processing. Domain issued-call guards still decide if a
+   // physical request may be sent; this does not clear an unknown outcome.
+   const admissionWait=error instanceof ProviderFailure&&error.details.admissionWaiting===true;
+   const failure=admissionWait||classified.code==='rate_limited'&&classified.category==='transient'?new ExecutionFailure('waiting',classified.code,classified.retryAfterMs):classified;
    const stopping=this.stopping||signal.reason===interrupted;
-   let state:ExecutionState=stopping?'waiting':failure.category==='blocked'?'blocked':failure.category==='stale'?'stale':failure.category==='waiting'?'waiting':failure.category==='permanent'||step.attempts>=(handler.maxAttempts??4)?'failed':'waiting';
-   const at=this.now(),availableAt=stopping?0:at+(failure.retryAfterMs??Math.min(3600000,1000*2**(step.attempts-1)));
-   const recoveryDeadline=failure.category==='transient'&&!stopping?(Number(row.recovery_deadline)||at+Math.max(1,Math.min(handler.maxRecoveryWindowMs??6*3600000,30*86400000))):Number(row.recovery_deadline)||0;
+   const capacityWait=failure.category==='waiting',attempts=Math.max(0,step.attempts-Number(capacityWait||stopping));
+   let state:ExecutionState=stopping?'waiting':failure.category==='blocked'?'blocked':failure.category==='stale'?'stale':capacityWait?'waiting':failure.category==='permanent'||attempts>=policy.maxAttempts?'failed':'waiting';
+   const at=this.now(),availableAt=stopping?0:at+Math.max(capacityWait?1:0,failure.retryAfterMs??(capacityWait?1000:Math.min(3600000,1000*2**(attempts-1))));
+   const recoveryDeadline=capacityWait||policy.maxRecoveryWindowMs===null?0:failure.category==='transient'&&!stopping?(Number(row.recovery_deadline)||at+Math.max(1,policy.maxRecoveryWindowMs)):Number(row.recovery_deadline)||0;
    let code=stopping?'interrupted':failure.code;
    if(!stopping&&state==='waiting'&&failure.category==='transient'&&recoveryDeadline&&availableAt>=recoveryDeadline){state='failed';code='recovery_window_exhausted';}
    const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');let changed=false;
-   try{changed=Boolean(db.prepare("UPDATE execution_steps SET state=?,error=?,available_at=?,recovery_deadline=?,fence=NULL,updated_at=? WHERE id=? AND fence=? AND state='running' AND lease_until>?").run(state,code,availableAt,recoveryDeadline,at,row.id,fence,at).changes);if(changed)this.retainFailure(step,state,new ExecutionFailure(failure.category,code),error);if(own)db.exec('COMMIT');}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
+   try{changed=Boolean(db.prepare("UPDATE execution_steps SET state=?,attempts=?,error=?,available_at=?,recovery_deadline=?,fence=NULL,updated_at=? WHERE id=? AND fence=? AND state='running' AND lease_until>?").run(state,attempts,code,availableAt,recoveryDeadline,at,row.id,fence,at).changes);if(changed)this.retainFailure(this.get(row.id)!,state,new ExecutionFailure(failure.category,code),error);if(own)db.exec('COMMIT');}catch(error){if(own&&db.isTransaction)db.exec('ROLLBACK');throw error;}
    if(changed)handler.project?.(this.get(row.id)!);
   }finally{clearTimeout(deadline);clearInterval(renewal);}
   await yieldTurn();
@@ -290,25 +304,31 @@ export class ExecutionEngine {
  private async replayStep<T>(options:ProgramStep<T>):Promise<T>{
   options.signal.throwIfAborted();
   const kind=options.kind+'.'+options.id;let failure:unknown;
-  const unregister=this.register({kind,pool:options.pool,concurrency:()=>1,validate:()=>options.validate(),timeoutMs:options.timeoutMs,
+  const unregister=this.register({kind,pool:options.pool,concurrency:()=>1,validate:()=>options.validate(),resourceKeys:()=>options.resourceKeys??[],admit:options.admit,policy:options.policy,timeoutMs:options.timeoutMs,maxAttempts:options.maxAttempts,maxRecoveryWindowMs:options.maxRecoveryWindowMs,
    execute:async(_step,signal)=>{try{return await options.execute(AbortSignal.any([signal,options.signal]));}catch(error){failure=error;throw error;}},
    commit:(_step,result)=>{try{options.commit(result);}catch(error){failure=error;throw error;}},project:options.project,
-   // The program retries the failed step on replay; only it consumes a retry slot.
+   // The child owns retries; a replayed parent only observes durable progress.
    classify:options.classify??(()=>new ExecutionFailure('permanent','step_failed')),
   });
   const abort=()=>{if(this.stopping||options.signal.reason===interrupted)this.active.get(options.id)?.controller.abort(interrupted);else this.cancel(options.id);};options.signal.addEventListener('abort',abort,{once:true});
   try{
    this.enqueue(options.operationId,kind,options.input,{id:options.id,generation:options.generation,optional:options.optional,initial:{state:options.cached?'succeeded':'waiting',attempts:options.initialAttempts??0,availableAt:0}});
    const current=this.get(options.id)!;
-   if(['failed','blocked','cancelled','stale'].includes(current.state)||current.state==='succeeded'&&options.read()===undefined)this.retry(options.id,false);
+   // Reaching a blocked prerequisite again rechecks the current handler's
+   // admission (including an issued-call guard). It never reopens cancelled,
+   // stale or failed work, whose explicit retry belongs to the domain owner.
+   if(current.state==='blocked'||current.state==='succeeded'&&options.read()===undefined)this.retry(options.id,false);
    await this.drain([options.id]);options.signal.throwIfAborted();
    const step=this.get(options.id)!,value=step.state==='succeeded'?options.read():undefined;
    if(value!==undefined)return value;
-   if(failure)throw failure;
+   // The child owns its real retry budget. A replayable parent yields its slot
+   // and budget while that child waits, including across host restarts.
+   if(step.state==='waiting')throw retainFailureContext(new ExecutionFailure('waiting',step.error??'step_pending',Math.max(1,step.availableAt-this.now())),{causeStepId:step.id,causeCode:step.error??'step_pending',causeState:step.state});
    if(step.state==='stale')throw new ExecutionFailure('stale','input_changed');
    if(step.state==='cancelled')throw new ExecutionFailure('permanent','cancelled');
    if(step.state==='blocked')throw new ExecutionFailure('blocked',step.error??'step_blocked');
-   if(step.state==='failed')throw new ExecutionFailure('transient',step.error??'step_failed');
+   if(step.state==='failed')throw retainFailureContext(new ExecutionFailure('permanent',step.error??'step_failed'),{...failureContext(failure),causeStepId:step.id,causeCode:step.error??'step_failed',causeState:step.state});
+   if(failure)throw failure;
    throw new ExecutionFailure('waiting','step_pending',Math.max(1000,step.availableAt-this.now()));
   }finally{options.signal.removeEventListener('abort',abort);await unregister();}
  }

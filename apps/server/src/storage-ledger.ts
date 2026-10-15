@@ -26,6 +26,8 @@ export class StorageLedger {
     expressions.image_inputs='coalesce(length(CAST(policy_json AS BLOB)),0)+512';
     expressions.image_attachment_intents='256';expressions.image_intake_overrides='192';expressions.image_backfills='length(CAST(query AS BLOB))+256';
     expressions.file_semantic_withdrawals='128';expressions.file_semantic_calls='128';
+    expressions.file_summary_pages='length(CAST(json AS BLOB))+length(CAST(capture_id AS BLOB))+length(CAST(fingerprint AS BLOB))+128';
+    expressions.processor_cooldowns='length(CAST(scope AS BLOB))+128';
     expressions.file_snapshot_inputs='256';expressions.file_snapshot_text='192';
     expressions.mcp_import_manifests='length(CAST(source_id AS BLOB))+length(CAST(identity AS BLOB))+length(CAST(members AS BLOB))+128';
     expressions.material_index_requests='length(CAST(material_id AS BLOB))+length(CAST(revision AS BLOB))+length(CAST(state AS BLOB))+coalesce(length(CAST(error AS BLOB)),0)+128';

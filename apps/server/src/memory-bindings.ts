@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import type {MemoryBindingView,MemoryModuleBinding,MemoryPlanView,MemoryPreparationView} from '@mote/shared';
@@ -33,7 +34,7 @@ export class MemoryBindings {
       CREATE TABLE IF NOT EXISTS memory_provider_receipts(id TEXT PRIMARY KEY,json TEXT NOT NULL);`);
     store.db.prepare('INSERT OR IGNORE INTO memory_plan_binding VALUES(1,?)').run(JSON.stringify({planId:builtin.id,generation:1} satisfies Binding));
     plugins.references=id=>{const current=this.binding(),preparation=this.preparation();return [...(current.namespace?.instanceId===id?['Current Memory binding retains this instance for reads']:[]),...(preparation&&!['applied','cancelled'].includes(preparation.view.state)&&(preparation.target.namespace?.instanceId===id||preparation.source.namespace?.instanceId===id)?['A Memory preparation retains this instance']:[]),...((this.readers.get(id)??0)>0?['Existing queries retain a read snapshot']:[])];};
-    this.dispose=executor.register({kind:'memory.prepare',pool:'plugin-control',concurrency:()=>1,timeoutMs:3600000,
+    this.dispose=executor.register({kind:'memory.prepare',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.orchestration,maxAttempts:1,
       validate:step=>this.preparation()?.stepId===step.id&&!['cancelled','applied'].includes(this.preparation()!.view.state),
       execute:(step,signal,grant)=>this.prepareBodies(step,signal,grant),
       commit:(_step,result)=>{const preparation=this.preparation()!;preparation.snapshot=String(result);preparation.view.state='verified';preparation.view.phase='verified';preparation.view.checks=['scope','bodies','corrections','deletions','index','tail','binding'].map(id=>({id,state:'verified'}));preparation.view.tail=0;preparation.view.allowedActions=['activate','cancel'];this.savePreparation(preparation);this.automation.touch();},

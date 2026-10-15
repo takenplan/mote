@@ -57,7 +57,7 @@ test('audio HTTP worker enforces the authenticated request budget, preserves its
   const root=await fixture(t),model=join(root,'model');await mkdir(model);await writeFile(join(model,'model.bin'),'generated fixture');
   await writeFile(join(root,'faster_whisper.py'),'# Generated dependency marker\n');await writeFile(join(root,'sherpa_onnx.py'),'# Generated dependency marker\n');
   const segmentation=join(root,'segmentation.onnx'),embedding=join(root,'speaker.onnx'),optional=join(root,'optional.onnx');await writeFile(segmentation,'generated segmentation');await writeFile(embedding,'generated default embedding');
-  await writeFile(join(root,'mote_audio.py'),`import time\nfrom pathlib import Path\ndef offline_process(): pass\ndef normalize(source, destination, budget, timeout):\n    Path(destination).write_bytes(b'generated')\n    Path(__file__).with_name('seen-timeout').write_text(str(timeout))\ndef transcribe(wav, model, threads):\n    time.sleep(float(Path(__file__).with_name('delay').read_text()))\n    return {'durationMs':1000,'segments':[{'startMs':0,'endMs':1000,'text':'Generated speech'}]}\ndef diarize(wav, segmentation, embedding, count, threads, speaker_range, model): return {'embedding':model,'count':count,'range':speaker_range,'path':embedding}\n`);
+  await writeFile(join(root,'mote_audio.py'),`import time\nfrom pathlib import Path\ndef offline_process(): pass\ndef normalize(source, destination, budget, timeout):\n    Path(destination).write_bytes(b'generated')\n    Path(__file__).with_name('seen-timeout').write_text(str(timeout))\ndef transcribe(wav, model, threads):\n    Path(__file__).with_name('transcribe-started').write_text('generated')\n    time.sleep(float(Path(__file__).with_name('delay').read_text()))\n    return {'durationMs':1000,'segments':[{'startMs':0,'endMs':1000,'text':'Generated speech'}]}\ndef diarize(wav, segmentation, embedding, count, threads, speaker_range, model): return {'embedding':model,'count':count,'range':speaker_range,'path':embedding}\n`);
   await writeFile(join(root,'delay'),'1.35');
   await mkdir(join(root,'bin'));await writeFile(join(root,'bin/ffmpeg'),'#!/bin/sh\nexit 0\n');await chmod(join(root,'bin/ffmpeg'),0o755);
   await writeFile(join(root,'worker.py'),await readFile(new URL('./transcription-server.py',import.meta.url)));
@@ -81,6 +81,11 @@ test('audio HTTP worker enforces the authenticated request budget, preserves its
   await writeFile(join(model,'model.bin'),'generated fixture');await writeFile(join(root,'bin/ffmpeg'),'#!/bin/sh\nexit 0\n');await chmod(join(root,'bin/ffmpeg'),0o755);
   assert.equal(await post(2000,'Bearer invalid-generated-token'),401);
   for(const invalid of [999,3600001,'1000.5','100000000000','bad'])assert.equal(await post(invalid),400);
+  const held=post(2000);
+  for(let i=0;!await readFile(join(root,'transcribe-started'),'utf8').catch(()=>false);i++){assert.ok(i<200,'generated transcription did not start');await new Promise(r=>setTimeout(r,10));}
+  const contention=await diarize({});assert.equal(contention.status,429);assert.equal(contention.headers.get('x-mote-execution-started'),'false');assert.equal(contention.headers.get('retry-after'),'5');assert.equal((await contention.json()).executionStarted,false);
+  assert.equal((await fetch(url+'/health',{headers})).status,200,'health stays available while shared ASR/diarization capacity is occupied');
+  assert.equal(await held,200);
   assert.equal(await post(1000),504,'a shorter configured request must end before the worker host cap');
   await new Promise(r=>setTimeout(r,300));
   assert.equal(await post(2000),200,'the next authorized request can use its larger configured budget');
@@ -99,4 +104,25 @@ test('system command preflight reports missing ffmpeg without claiming model cor
 test('Native worker command lookup preserves configured order and adds standard macOS package-manager locations',()=>{
  const native=mediaEnvironment({PATH:'/generated/bin',MOTE_RUNTIME:'native',MOTE_TOKEN:'private'});assert.equal(native.MOTE_TOKEN,undefined);assert.ok(native.PATH.startsWith('/generated/bin'));if(process.platform==='darwin'){assert.ok(native.PATH.split(':').includes('/opt/homebrew/bin'));assert.ok(native.PATH.split(':').includes('/usr/local/bin'));}
  assert.equal(mediaEnvironment({PATH:'/generated/bin',MOTE_RUNTIME:'docker'}).PATH,'/generated/bin');
+});
+
+test('OCR HTTP worker certifies capacity rejection before execution with the same recheck cadence',async t=>{
+ const {spawn,execFileSync}=await import('node:child_process'),{createServer}=await import('node:net'),{once}=await import('node:events');
+ const root=await fixture(t),models=join(root,'models');
+ for(const name of ['det','rec']){await mkdir(join(models,name),{recursive:true});for(const asset of ['inference.onnx','inference.yml'])await writeFile(join(models,name,asset),'generated model marker');}
+ await writeFile(join(models,'complete.json'),'{}');await mkdir(join(root,'paddlex/inference'),{recursive:true});
+ await writeFile(join(root,'paddlex/__init__.py'),'');await writeFile(join(root,'paddlex/inference/__init__.py'),'');
+ await writeFile(join(root,'paddlex/inference/pipelines.py'),`def load_pipeline_config(name): return {'SubModules':{'TextDetection':{},'TextRecognition':{}}}\nclass Pipeline:\n    def predict(self, image): pass\ndef create_pipeline(**kwargs): return Pipeline()\n`);
+ await writeFile(join(root,'mote_ocr.py'),`from pathlib import Path\nimport time\nclass UnsupportedImage(Exception): pass\ndef recognize_image(image, predict):\n    Path(__file__).with_name('recognition-started').write_text('generated')\n    time.sleep(0.5)\n    return {'durationMs':0,'segments':[{'startMs':0,'endMs':0,'text':'Generated OCR'}]}\n`);
+ await writeFile(join(root,'worker.py'),await readFile(new URL('./ocr-server.py',import.meta.url)));
+ const reservation=createServer();reservation.listen(0,'127.0.0.1');await once(reservation,'listening');const port=reservation.address().port;await new Promise(r=>reservation.close(r));
+ const python=execFileSync('python3',['-c','import sys;print(sys.executable)'],{encoding:'utf8'}).trim();
+ const child=spawn(python,[join(root,'worker.py'),'--model-root',models,'--port',String(port)],{cwd:root,env:{PATH:process.env.PATH,PYTHONPATH:root,MOTE_MEDIA_WORKER_TOKEN:'generated-token'},stdio:'ignore'}),closed=new Promise(resolve=>child.once('close',resolve));
+ t.after(async()=>{child.kill('SIGTERM');await closed;});const endpoint=`http://127.0.0.1:${port}`,headers={Authorization:'Bearer generated-token'};
+ for(let i=0;;i++){try{if((await fetch(endpoint+'/health',{headers,signal:AbortSignal.timeout(500)})).ok)break;}catch{}assert.ok(i<200,'generated OCR worker did not start');await new Promise(r=>setTimeout(r,10));}
+ const call=()=>fetch(endpoint+'/ocr',{method:'POST',headers,body:'generated image'}),held=call();
+ for(let i=0;!await readFile(join(root,'recognition-started'),'utf8').catch(()=>false);i++){assert.ok(i<200);await new Promise(r=>setTimeout(r,10));}
+ const busy=await call();assert.equal(busy.status,429);assert.equal(busy.headers.get('retry-after'),'5');assert.equal(busy.headers.get('x-mote-execution-started'),'false');assert.equal((await busy.json()).executionStarted,false);
+ const result=await held;assert.equal(result.status,200);await result.arrayBuffer();
+ await rm(join(models,'complete.json'));const missing=await call();assert.equal(missing.status,503);assert.equal(missing.headers.get('x-mote-execution-started'),'false');assert.equal((await missing.json()).executionStarted,false);
 });

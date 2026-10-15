@@ -206,6 +206,14 @@ test('strict schemas and runtime validation reject unsafe advanced parameters be
   assert.equal(f.prepared.length, 1); assert.equal(f.probes.length, 0); assert.equal(f.store.view().revision, 0);
 });
 
+test('HTTP model calls retain a transport timeout while the Agent may have no overall deadline',async t=>{
+ const f=await fixture(t);await f.store.initialize();
+ const saved=await f.store.update({revision:0,settings:{...input(),agentTimeoutMs:null}});
+ assert.equal(saved.settings.agentTimeoutMs,null);assert.equal(saved.settings.modelRequestTimeoutMs,environment.modelRequestTimeoutMs);
+ assert.equal((await f.restart()).current().agentTimeoutMs,null);
+ await assert.rejects(f.store.update({revision:1,settings:{...input(),agentTimeoutMs:null,modelRequestTimeoutMs:null}}),errorCode('model_settings_invalid'));
+});
+
 test('Codex settings make the model request timeout inapplicable and allow an unset Agent deadline', async t => {
   const codex: ModelSettings = { ...environment, provider: 'codex', protocol: 'codex-app-server', serviceTier:'default', baseUrl: '', model: 'fixture-codex', apiKey: '', headers: {}, extraBody: {}, modelRequestTimeoutMs: null, agentTimeoutMs: null };
   const f = await fixture(t, { environment: codex });

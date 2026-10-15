@@ -150,19 +150,15 @@ export class ApiError extends Error {
   }
 }
 export function createApi(connection: Connection, onUnauthorized?: () => void, isCurrentConnection: () => boolean = () => true) {
-  let agentTimeoutMs: number | null = 120000;
-  // Keep request budgets isolated between authenticated sessions.
-  function setAgentTimeout(value: number | null | undefined) {
-    agentTimeoutMs = value === null ? null : Number.isSafeInteger(value) && value! >= 5000 && value! <= 3600000 ? value! : 120000;
-  }
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await raw(path, init);
     return response.json() as Promise<T>;
   }
   async function raw(path: string, init: RequestInit = {}) {
     const modelOperation = init.method?.toUpperCase() === 'POST' && ['/api/query', '/api/insights', '/api/memories/extract'].includes(path);
-    const deadline = modelOperation && agentTimeoutMs !== null ? AbortSignal.timeout(agentTimeoutMs + 60000) : undefined;
-    const signal = deadline ? (init.signal ? AbortSignal.any([init.signal, deadline]) : deadline) : modelOperation ? init.signal : init.signal ?? AbortSignal.timeout(180000);
+    // The server accounts admitted execution time. A browser wall-clock timer
+    // cannot know how long this operation waits for resources or durable work.
+    const signal = modelOperation ? init.signal : init.signal ?? AbortSignal.timeout(180000);
     // Management requests always address the service serving this page.
     if (!path.startsWith('/api/') || path.includes('\\') || /[\r\n\t]/.test(path)) {
       throw new Error(moteText("管理请求必须使用当前服务的 API 路径。"));
@@ -209,7 +205,7 @@ export function createApi(connection: Connection, onUnauthorized?: () => void, i
     }
     return response;
   }
-  return { request, raw, setAgentTimeout };
+  return { request, raw };
 }
 export type Api = ReturnType<typeof createApi>;
 export function queryString(

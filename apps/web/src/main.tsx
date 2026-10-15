@@ -238,7 +238,7 @@ function App() {
     };
     // Independent collections must not block navigation when one endpoint fails.
     void Promise.allSettled([
-      load<Status>("/api/status", value => {api.setAgentTimeout(value.agent.agentTimeoutMs);setStatus(value);}),
+      load<Status>("/api/status", value => {setStatus(value);}),
       load<{items: Device[]}>("/api/devices", value => setDevices(value.items)),
       ...(["overview", "activity"].includes(page) ? [load<Activity>(`/api/activity${queryString(range)}`, setActivity)] : []),
       ...(page === "overview" ? [load<{items: Capture[]}>(`/api/captures${queryString(range, {limit: 4})}`, value => setRecent(value.items))] : []),

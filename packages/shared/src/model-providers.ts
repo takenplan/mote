@@ -12,7 +12,9 @@ export function normalizeCodexServiceTier(tier: string): string {
 export const DEFAULT_MODEL_MAX_TOKENS = 65_536;
 export const MODEL_OUTPUT_BUDGETS = [8192, 16384, 32768, DEFAULT_MODEL_MAX_TOKENS, 128000] as const;
 export const DEFAULT_MODEL_REQUEST_TIMEOUT_MS = 300_000;
-export const DEFAULT_AGENT_TIMEOUT_MS = 600_000;
+// A model session can contain tool work and bounded output corrections. Its
+// generous default is separate from each HTTP request and host queue waiting.
+export const DEFAULT_AGENT_TIMEOUT_MS = 3_600_000;
 export const MAX_MODEL_REQUEST_TIMEOUT_MS = 600_000;
 export const MAX_AGENT_TIMEOUT_MS = 3_600_000;
 

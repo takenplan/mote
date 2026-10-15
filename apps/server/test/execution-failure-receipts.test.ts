@@ -6,6 +6,8 @@ import {tmpdir} from 'node:os';
 import {Store} from '../src/store.js';
 import {ExecutionEngine,ExecutionFailure} from '../src/execution-engine.js';
 import {retainFailureContext} from '../src/execution-failures.js';
+import {ProviderFailure} from '@mote/shared';
+import {EXECUTION_POLICIES} from '../src/execution-policy.js';
 
 test('a safe failure receipt survives restart, excludes private prose and follows step deletion',async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-safe-failure-')),store=new Store(directory);let engine=new ExecutionEngine(store);
@@ -24,4 +26,23 @@ test('failure receipt storage errors do not retry or block the failed execution'
 test('retired optional context still leaves the fixed execution failure receipt',async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-safe-failure-retired-')),store=new Store(directory),engine=new ExecutionEngine(store);t.after(async()=>{await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});
  engine.register({kind:'fixture',pool:'fixture',concurrency:()=>1,validate:()=>true,failureContext:()=>{throw Error('Generated retired payload');},execute:async()=>{throw new ExecutionFailure('permanent','provider_failed');},commit:()=>{}});const id=engine.enqueue('generated-operation','fixture',{});await engine.drain([id]);assert.equal(engine.failure(id)?.code,'provider_failed');assert.equal(engine.failure(id)?.operationId,'generated-operation');assert.equal(engine.failureDiagnostics().writeFailures,0);
+});
+
+test('a busy receipt persists only trusted execution facts and its actual durable retry time across restart',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-safe-busy-receipt-')),store=new Store(directory);let engine=new ExecutionEngine(store,()=>10000),now=10000;
+ t.after(async()=>{await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ engine.register({kind:'fixture',pool:'fixture',policy:EXECUTION_POLICIES.localProcessing,concurrency:()=>1,validate:()=>true,execute:async()=>{
+  const failure=new ProviderFailure({category:'transient',code:'rate_limited',retryAfterMs:23000,executionStarted:false,admissionWaiting:true},'Generated private response and credential');
+  Object.assign(failure,{headers:{authorization:'Generated secret bearer'},body:'Generated private original'});throw failure;
+ },commit:()=>{}});
+ const id=engine.enqueue('generated:busy','fixture',{});await engine.drain([id]);const receipt=engine.failure(id)!;
+ assert.equal(receipt.executionStarted,false);assert.equal(receipt.admissionWaiting,true);assert.equal(receipt.availableAt,engine.get(id)!.availableAt);assert.equal(receipt.availableAt,now+23000);assert.equal(receipt.attempt,0);assert.equal(receipt.category,'waiting');
+ assert.doesNotMatch(JSON.stringify(receipt),/response|credential|authorization|secret|body|original/);
+ await engine.close();engine=new ExecutionEngine(store,()=>now);assert.deepEqual(engine.failure(id),receipt);
+});
+
+test('an arbitrary error cannot impersonate the trusted not-started or admission facts',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-safe-false-receipt-')),store=new Store(directory),engine=new ExecutionEngine(store);t.after(async()=>{await engine.close();store.close();rmSync(directory,{recursive:true,force:true});});
+ engine.register({kind:'fixture',pool:'fixture',policy:EXECUTION_POLICIES.localProcessing,concurrency:()=>1,validate:()=>true,execute:async()=>{throw Object.assign(Error('Generated private evidence'),{details:{executionStarted:false,admissionWaiting:true},executionStarted:false,admissionWaiting:true});},commit:()=>{}});
+ const id=engine.enqueue('generated:untrusted','fixture',{});await engine.drain([id]);const receipt=engine.failure(id)!;assert.equal(receipt.executionStarted,undefined);assert.equal(receipt.admissionWaiting,undefined);assert.equal(receipt.availableAt,undefined);assert.equal(receipt.category,'permanent');
 });

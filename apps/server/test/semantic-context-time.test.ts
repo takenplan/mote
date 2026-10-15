@@ -8,7 +8,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import type {ContextReader,QueryInput} from '@mote/agent';
-import type {QueryResult} from '@mote/shared';
+import {ProviderFailure,type QueryResult} from '@mote/shared';
 import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {MemoryLifecycle,freezeSemanticContextTime,type LifecycleWindow} from '../src/memory-lifecycle.js';
@@ -156,7 +156,7 @@ for(const manual of [false,true])test(`${manual?'manual':'automatic'} lifecycle 
   const windows:LifecycleWindow[]=[],clock=()=>{samples++;return semantic;};
   const service=new ConfigService({path:join(directory,'mote.yaml'),watch:false,initialDocument:{version:1,revision:0,memory:structuredClone(defaultLifecycleSettings)}});service.register({id:'memory',schema:lifecycleSettingsSchema,defaultValue:defaultLifecycleSettings});await service.initialize();
   let lifecycle=new MemoryLifecycle(store,()=>true,()=>now,undefined,clock,service);
-  const register=()=>lifecycle.register({id:'consolidation',version:'generated',stream:'evidence',async run(window,checkpoint){calls++;windows.push(window);checkpoint('generated checkpoint');if(fail)throw Error('Generated failure');}});
+  const register=()=>lifecycle.register({id:'consolidation',version:'generated',stream:'evidence',async run(window,checkpoint){calls++;windows.push(window);checkpoint('generated checkpoint');if(fail)throw new ProviderFailure({category:'transient',code:'provider_network'});}});
   register();const settings=lifecycle.settings();await lifecycle.save({revision:service.revision,settings:{...settings,consolidation:{...settings.consolidation,minChanges:1}}});
   t.after(async()=>{await lifecycle.close();await service.close();store.close();rmSync(directory,{recursive:true,force:true});});
   const id=randomUUID();if(manual)lifecycle.request('consolidation',[id],'generated checkpoint');else store.db.prepare("INSERT INTO changes(id,operation,changed_at) VALUES(?,'upsert',?)").run(id,new Date().toISOString());

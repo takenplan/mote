@@ -810,7 +810,7 @@
   "设置已保存。新文件和未完成任务使用新配置；已完成文件保留原结果。": "Settings saved. New and unfinished tasks use the new configuration; completed results are preserved.",
   "处理开关与预算": "Processing and budgets",
   "启用中央文件处理": "Enable central file processing",
-  "单文件超时（秒）": "Per-file timeout (seconds)",
+  "单次文件处理超时（秒）": "File processing call timeout (seconds)",
   "1. 类型策略": "1. Type policies",
   "具体 MIME 类型优先于类型通配符；未配置的格式按“其他”处理。PDF 处理插件可由管理员接入 Cordis，接入后可在此选择。": "Exact MIME types take precedence over wildcards. Unconfigured formats use Other. Administrators can add a PDF plugin through Cordis, then select it here.",
   "文件类型": "File type",
@@ -8248,5 +8248,6 @@
   "未找到已关联活动": "No linked activity found",
   "这里只列出已有稳定回执关联的活动，历史关联可能不完整。": "Only activity linked by stable receipts is listed here. Historical links may be incomplete.",
   "采集状态与最近内容": "Capture status and recent content",
-  "界面扩展已移除，已恢复内置方案。": "The interface extension was removed. The built-in presentation has been restored."
+  "界面扩展已移除，已恢复内置方案。": "The interface extension was removed. The built-in presentation has been restored.",
+  "可留空；累计实际执行的模型、工具与修正时间，不包含等待执行名额。": "May be left blank; counts admitted model, tool and correction time, excluding waits for execution capacity."
 }

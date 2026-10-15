@@ -1,3 +1,4 @@
+import {EXECUTION_POLICIES} from './execution-policy.js';
 import type {QueryResult} from '@mote/shared';
 import type {MemoryStore,MemoryExtractOptions,PreparedMemoryExtraction} from './memory.js';
 import type {MemoryBindings} from './memory-bindings.js';
@@ -45,7 +46,7 @@ export class MemoryPublication {
     for(const row of store.db.prepare('SELECT id,json FROM memory_owner_mutations').all()){const value=JSON.parse(String(row.json));this.register(String(row.id),recordDependencies([...(value.changed??[]),...(value.result?[value.result]:[]),...(value.before??[]).map((prior:any)=>JSON.parse(prior.json))]));}
     const references=bindings.plugins.references;
     bindings.plugins.references=id=>[...references(id),...(['memory_provider_writes','memory_provider_erases'].some(table=>Number(store.db.prepare("SELECT count(*) n FROM "+table+" WHERE state='submitted' AND json_extract(json,'$.namespace.instanceId')=?").get(id)!.n))||this.nativeCleanupPending(id)||this.evidenceRevocationRetains(id)?['Unresolved provider writes or erasures retain this instance']:[])];
-    if(executor){this.dispose=executor.register({kind:'memory.provider-reconcile',pool:'plugin-control',concurrency:()=>1,validate:()=>true,execute:async()=>{await this.reconcile();if(this.pending())throw new ExecutionFailure('waiting','memory_provider_result_unknown',5000);},commit:()=>{}});this.scheduleReconcile();this.poll=setInterval(()=>this.scheduleReconcile(),5000);this.poll.unref();}
+    if(executor){this.dispose=executor.register({kind:'memory.provider-reconcile',pool:'plugin-control',concurrency:()=>1,policy:EXECUTION_POLICIES.control,validate:()=>true,execute:async()=>{await this.reconcile();if(this.pending())throw new ExecutionFailure('waiting','memory_provider_result_unknown',5000);},commit:()=>{}});this.scheduleReconcile();this.poll=setInterval(()=>this.scheduleReconcile(),5000);this.poll.unref();}
   }
   private register(operationId:string,dependencies:MemoryPublicationDependencies){registerMemoryPublicationDependencies(this.store,operationId,dependencies);}
   private assertRetained(operationId:string){if(memoryPublicationRetired(this.store,operationId))throw new StoreError('Memory publication input was deleted or revoked',409);}

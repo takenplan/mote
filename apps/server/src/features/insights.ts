@@ -16,12 +16,12 @@ app.post('/api/insight-runs',async(req,reply)=>{
     const {requestId,...input}=body;
     if(!agent.configuredFor(modelSettings.select('insight',input.modelProfileId).id))throw new AgentNotConfiguredError();
     if(isClosing())throw new StoreError('Central node is shutting down',503);
-    const run=insightRuns.start(requestId,input,(observe,signal,snapshot)=>diagnostics.run(requestId,()=>insight(input,observe,signal,'insight:'+requestId,snapshot)),{timeoutMs:modelSettings.select('insight',input.modelProfileId).settings.agentTimeoutMs});
+    const run=insightRuns.start(requestId,input,(observe,signal,snapshot)=>diagnostics.run(requestId,()=>insight(input,observe,signal,'insight:'+requestId,snapshot)));
     return reply.code(202).send(run);
   });
 app.post('/api/insight-runs/:id/cancel',async req=>{const id=z.string().uuid().parse((req.params as {id:string}).id);insightRuns.cancel(id);return insightRuns.detail(id);});
 app.get('/api/insight-runs',async()=>({items:insightRuns.list()}));
 app.get('/api/insight-runs/:id',async req=>insightRuns.detail(z.string().uuid().parse((req.params as {id:string}).id)));
-app.post('/api/insights',async req=>{const id=randomUUID(),input=insightRequestSchema.parse(req.body??{});return insightRuns.perform(id,input,(observe,signal,snapshot)=>insight(input,observe,signal,'insight:'+id,snapshot),{timeoutMs:modelSettings.select('insight',input.modelProfileId).settings.agentTimeoutMs});});
+app.post('/api/insights',async req=>{const id=randomUUID(),input=insightRequestSchema.parse(req.body??{});return insightRuns.perform(id,input,(observe,signal,snapshot)=>insight(input,observe,signal,'insight:'+id,snapshot));});
 app.get('/api/insights',async()=>({items:store.insights()}));
 }

@@ -1,4 +1,5 @@
 import {observeModelTransport} from './model-transport-observer.js';
+import {ActiveExecutionBudget,DEFAULT_AGENT_EXECUTION_TIMEOUT_MS} from './active-budget.js';
 import {ProviderFailure,type ImportReviewDecision,type TokenUsage} from '@mote/shared';
 import {observeHarness} from './usage.js';
 import {DEFAULT_MODEL_MAX_TOKENS} from '@mote/shared/models';
@@ -32,7 +33,8 @@ export function createImportAgent(options:Omit<AgentOptions,'reader'>,prepareLau
     const modelAdmission=new AbortController();
     const root=await mkdtemp(join(tmpdir(),'mote-import-agent-')),runId=randomUUID();
     let transportObserver:Awaited<ReturnType<typeof observeModelTransport>>|undefined;
-    let harness:DeepSeekHarness|undefined,timeout:ReturnType<typeof setTimeout>|undefined,primaryFailure=false;
+    let harness:DeepSeekHarness|undefined,primaryFailure=false;
+    const budget=new ActiveExecutionBudget(options.agentTimeoutMs===undefined?DEFAULT_AGENT_EXECUTION_TIMEOUT_MS:options.agentTimeoutMs);
     try{
       transportObserver=await observeModelTransport(options.authorizeModelRequest);
       const transportPath=join(root,'transport.mjs');
@@ -61,8 +63,6 @@ export function apply(ctx){
       const launch=await prepareLaunch?.({workspace:input.workspace,runtimeRoot:root});
       if(closed)throw new AgentProviderError();
       const requestTimeoutMs = options.requestTimeoutMs ?? 120000;
-      const configuredAgentTimeoutMs = options.agentTimeoutMs;
-      const agentTimeoutMs = configuredAgentTimeoutMs === null ? null : Math.max(configuredAgentTimeoutMs ?? 300000, 300000);
       harness=new DeepSeekHarness({...launch?{dshBin:launch.dshBin}:{},profile:'sdk-minimal',patches:[patch],dshHome:join(root,'home'),cwd:input.workspace,processCwd:input.workspace,provider:connection.route,model:options.model,maxTokens:options.maxTokens??DEFAULT_MODEL_MAX_TOKENS,initializeTimeoutMs:30000,requestTimeoutMs:Math.max(requestTimeoutMs??120000,300000),
         env:{PATH:process.env.PATH,TMPDIR:tmpdir(),HOME:join(root,'home'),DEEPSEEK_API_KEY:options.apiKey||'mote-local-no-auth',DEEPSEEK_BASE_URL:connection.baseUrl,MOTE_MODEL_API_KEY:options.apiKey||'mote-local-no-auth',
           MOTE_MODEL_OBSERVER:JSON.stringify(transportObserver.configuration),
@@ -85,23 +85,21 @@ export function apply(ctx){
         return value as ImportAgentResult;
       };
       const readAnswer=async()=>{
-        let result=await (options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>harness!.run(JSON.stringify({...input,language:input.language??'zh-CN',languageInstruction:'Use the selected language for summaries, warnings and generated prose; preserve original quotes and field keys.',requiredSkill:'document-import',importedAt:new Date().toISOString(),nodeExecutable:process.execPath}),runOptions),modelAdmission.signal);
+        let result=await (options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>budget.run(()=>harness!.run(JSON.stringify({...input,language:input.language??'zh-CN',languageInstruction:'Use the selected language for summaries, warnings and generated prose; preserve original quotes and field keys.',requiredSkill:'document-import',importedAt:new Date().toISOString(),nodeExecutable:process.execPath}),runOptions)),modelAdmission.signal);
         checkResult(result);
         for(let repair=0;;repair++){
           try{return parseResult(result.finalResponse);}catch(error){
             if(!(error instanceof AgentResponseError)||repair>=MAX_OUTPUT_REPAIRS)throw error;
             // Bounded corrections in the same session, inside the original total deadline.
-            result=await (options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>harness!.run(JSON.stringify({instruction:'Your final import response could not be accepted. Using only the analysis already completed in this session, return ONLY one JSON object with summary (a string in the selected language), optional recordsPath (a string), optional warnings (an array of strings), and optional reviewDecision ({confidence:"high"|"low"|"unknown",ambiguous:boolean,reason:string}). Report high only when the mapping has no unresolved ambiguity. Do not include Markdown fences or any text outside JSON. Do not repeat analysis, run tools, rewrite files, or claim an artifact exists unless it was actually produced. Preserve any reported limitations. The host independently validates the manifest and decides whether review is required.',validationError:error.message}),runOptions),modelAdmission.signal);
+            result=await (options.runModel??(async (task,_signal?:AbortSignal)=>task()))(()=>budget.run(()=>harness!.run(JSON.stringify({instruction:'Your final import response could not be accepted. Using only the analysis already completed in this session, return ONLY one JSON object with summary (a string in the selected language), optional recordsPath (a string), optional warnings (an array of strings), and optional reviewDecision ({confidence:"high"|"low"|"unknown",ambiguous:boolean,reason:string}). Report high only when the mapping has no unresolved ambiguity. Do not include Markdown fences or any text outside JSON. Do not repeat analysis, run tools, rewrite files, or claim an artifact exists unless it was actually produced. Preserve any reported limitations. The host independently validates the manifest and decides whether review is required.',validationError:error.message}),runOptions)),modelAdmission.signal);
             checkResult(result);
           }
         }
       };
-      const deadline = agentTimeoutMs === null ? [] : [new Promise<never>((_,reject)=>{timeout=setTimeout(()=>reject(new AgentTimeoutError()),agentTimeoutMs);})];
-      return await Promise.race([readAnswer(),transportObserver.failure,...deadline]);
+      return await Promise.race([readAnswer(),transportObserver.failure]);
     }catch(error){primaryFailure=true;if(error instanceof RequestTimeoutError)throw new AgentTimeoutError();if(error instanceof AgentNotConfiguredError||error instanceof AgentResponseError||error instanceof AgentTimeoutError||error instanceof ProviderFailure)throw error;throw new AgentProviderError();}
     finally{
       modelAdmission.abort();
-      if(timeout)clearTimeout(timeout);
       const cleanup=await Promise.allSettled([Promise.resolve().then(()=>harness?.close()),Promise.resolve().then(()=>transportObserver?.close())]);
       if(harness)active.delete(harness);
       const removal=await Promise.allSettled([rm(root,{recursive:true,force:true})]);

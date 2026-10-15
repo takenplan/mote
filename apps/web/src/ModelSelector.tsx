@@ -1,5 +1,5 @@
 import { moteText } from '@mote/shared/i18n';
-import { useEffect, useId } from 'react';
+import { useId } from 'react';
 import { useResource } from './useResource';
 import { DEPLOYMENT_MODEL_PROFILE_ID, type ModelFeature, type ModelSettingsView } from '@mote/shared/models';
 import { type Api, errorMessage } from './api';
@@ -13,8 +13,6 @@ export function ModelSelector({ api, feature, value, onChange, disabled, model, 
     onModelChange?: (value: string) => void;
 }) {
     const settings = useResource<ModelSettingsView>(api, '/api/model-settings'), view = settings.data;
-    useEffect(() => { if (!view)
-        return; const values = [view.settings.agentTimeoutMs, ...view.profiles.map(p => p.settings.agentTimeoutMs)], timeouts = values.filter((value): value is number => value !== null); api.setAgentTimeout(values.some(value => value === null) ? null : timeouts.length ? Math.max(...timeouts) : null); }, [api, view]);
     const profiles = view?.profiles ?? [], defaultId = view?.defaults[feature] ?? DEPLOYMENT_MODEL_PROFILE_ID, selected = profiles.find(p => p.id === defaultId), providerId = value || defaultId;
     const catalog = useResource<{
         items: {
