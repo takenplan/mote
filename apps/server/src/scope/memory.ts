@@ -1,0 +1,150 @@
+import type {DatabaseSync} from 'node:sqlite';
+import {z} from 'zod';
+import {createAgent,type ContextReader,type QueryInput} from '@mote/agent';
+import type {QueryResult,TokenUsage} from '@mote/shared';
+import {memorySchema,type Memory} from '../memory-schema.js';
+import {MemoryOutputValidationError} from '../memory-errors.js';
+import {MEMORY_EXTRACTION_PROMPT} from '../memory-contract.js';
+import {reviewMemory,memoryReviewReceipt} from '../memory-review.js';
+import {memoryProviderKey,memoryBodyDigest,withMemoryHostState,type MemoryProvider,type MemoryProviderNamespace} from '../memory-provider-contract.js';
+import {stageVerifiedMemoryWrite} from '../memory-provider-publication.js';
+import {EXECUTION_POLICIES} from '../execution-policy.js';
+import {ExecutionFailure} from '../execution-engine.js';
+import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
+import {PrivateData} from './private-data.js';
+import type {ScopedRuntime} from './http.js';
+import type {UserContext} from './context.js';
+import type {DomainLifecycle,UserDataSubject} from './lifecycle.js';
+import type {Configurations} from './configuration.js';
+import type {TaskExecution,TaskRun} from './task-execution.js';
+import {ScopedMemoryData,memoryHash,type MemoryRow,type MemoryState} from './memory-data.js';
+import {installScopedMemory,MEMORY_DOMAIN,scopedMemoryTaskSchema,memorySettingsSchema,defaultMemorySettings,type ScopedMemoryTask,type ScopedMemoryBinding} from './memory-schema.js';
+
+type Job={input:string;draft:string|null;review:string|null;prepared:string|null;state:string;tasks:string};
+const submitSchema=z.object({operationId:z.string().uuid(),materialIds:z.array(z.string().regex(/^mat_[a-f0-9]{64}$/)).min(1),memoryIds:z.array(z.string().uuid()).default([]),phase:z.enum(['extract','integrate']).default('extract')}).strict();
+const queryResultSchema=z.object({answer:z.string(),runId:z.string().min(1),citations:z.array(z.object({id:z.string().uuid()}).passthrough()),trace:z.array(z.unknown()).default([])}).passthrough();
+const result=(value:string)=>queryResultSchema.parse(JSON.parse(value)) as QueryResult;
+const failure=(error:unknown)=>error instanceof ExecutionFailure?error:error instanceof PrivateDataError?new ExecutionFailure('stale','memory_input_changed'):error instanceof MemoryOutputValidationError?new ExecutionFailure('permanent','memory_output_'+error.code):new ExecutionFailure('blocked','memory_requires_attention');
+
+/** The existing M05 executor is the only scheduler. Extraction, independent
+ * review, integration and publication use durable grants, M04 model snapshots
+ * and the shared exact-evidence/publication validators. */
+export class MemoryHost {
+ private readonly disposers:Array<()=>void|Promise<void>>=[];
+ private closed=false;
+ private readonly admissions=new Map<string,{fingerprint:string;promise:Promise<unknown>}>();
+ /** Registered by the Memory domain's M09 adapter; a worker cannot choose an
+  * owner, binding, model resource or original grant through this interface. */
+ providerFor?:(context:UserContext,binding:Extract<ScopedMemoryBinding,{kind:'plugin'}>,assertCurrent:()=>void)=>Promise<MemoryProvider>;
+ constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly execution:TaskExecution,private readonly cursorKey=installScopedMemory(db)){
+  runtime.services.registerUser(MEMORY_DOMAIN,{scope:'user',create:context=>this.forUser(context),lifecycle:this.lifecycle()});
+  configuration.registerDomain(MEMORY_DOMAIN,subject=>({id:MEMORY_DOMAIN,schema:memorySettingsSchema,defaultValue:defaultMemorySettings(),resolve:raw=>raw,fields:[{path:'',effect:'next-request'}],prepare:next=>{
+   const assert=()=>runtime.services.assertSubject(subject,'configuration',('purpose' in subject?subject.purpose:'restore')),sql=new PrivateSql(db,subject.userId,assert),before=sql.get('SELECT * FROM mm_state WHERE user_id=$user') as MemoryState|undefined,settings=JSON.stringify(memorySettingsSchema.parse(next));let applied=false;
+   return {apply:()=>{},publish:()=>sql.transaction(()=>{if(before?.deleted)throw new PrivateDataError('scope_unavailable',503);if(before)sql.run('UPDATE mm_state SET settings=?,revision=revision+1 WHERE user_id=$user',settings);else sql.run('INSERT INTO mm_state VALUES($user,0,0,1,1,?,?)',settings,JSON.stringify({kind:'builtin',revision:1}));applied=true;}),rollback:()=>{if(applied){if(before)sql.run('UPDATE mm_state SET settings=?,revision=? WHERE user_id=$user',before.settings,before.revision);else sql.run('DELETE FROM mm_state WHERE user_id=$user');}}};
+  }}));
+  for(const stage of ['extract','review','publish'] as const)this.disposers.push(execution.register({kind:'memory.'+stage,pool:stage==='publish'?'memory.publication':'memory.models',concurrency:()=>stage==='publish'?4:2,policy:stage==='publish'?EXECUTION_POLICIES.control:EXECUTION_POLICIES.modelCall,...(stage==='publish'?{}:{modelFeature:'memory' as const}),parseInput:value=>scopedMemoryTaskSchema.parse(value),authorizeInput:(context,value)=>{this.assertJob(context,scopedMemoryTaskSchema.parse(value));},resources:()=>[{scope:'user',key:'memory-publication'}],execute:run=>this.execute(run,stage),commit:(run,value)=>{if(stage==='publish'){const data=this.data(run.context),input=scopedMemoryTaskSchema.parse(run.task.input),job=this.assertJob(run.context,input);if(!job.prepared)throw missing();data.commit(z.array(memorySchema).parse(JSON.parse(job.prepared)),input);}},classify:failure}));
+ }
+ private data(context:UserContext){this.runtime.authority.assert(context);if(this.closed)throw new PrivateDataError('scope_unavailable',503);return new ScopedMemoryData(new PrivateSql(this.db,context.userId,()=>{this.runtime.authority.assert(context);if(this.closed)throw new PrivateDataError('scope_unavailable',503);}),this.runtime.services.forUser(context).get<PrivateData>('private-data'),new PrivateCursor(this.cursorKey,context.deploymentId,context.userId));}
+ private assertJob(context:UserContext,input:ScopedMemoryTask){const data=this.data(context);data.assertInputs(input);const job=data.sql.get('SELECT * FROM mm_jobs WHERE user_id=$user AND id=?',input.jobId) as Job|undefined;if(!job||job.input!==JSON.stringify(input)||['cancelled','deleted'].includes(job.state))throw new PrivateDataError('conflict',409);return job;}
+ private async provider(context:UserContext,binding:ScopedMemoryBinding,assertCurrent:()=>void){assertCurrent();if(binding.kind!=='plugin'||!this.providerFor)throw new PrivateDataError('scope_unavailable',503);const provider=await this.providerFor(context,binding,assertCurrent);assertCurrent();return provider;}
+ private namespace(context:UserContext,binding:Extract<ScopedMemoryBinding,{kind:'plugin'}>):MemoryProviderNamespace{return Object.freeze({ownerId:context.userId,instanceId:binding.instanceId,bindingRevision:binding.revision});}
+ private async read(context:UserContext,id:string){
+  const data=this.data(context),row=data.row(id),host=data.assertCurrentRecord(row),binding=JSON.parse(row.binding) as ScopedMemoryBinding;
+  const assert=()=>{const current=data.row(id);data.assertCurrentRecord(current);if(current.body_digest!==row.body_digest||current.version!==row.version||current.binding!==row.binding)throw new PrivateDataError('conflict',409);};
+  if(binding.kind==='builtin')return host;
+  const provider=await this.provider(context,binding,assert),value=await provider.read({namespace:this.namespace(context,binding),key:memoryProviderKey(host)});assert();
+  if(!value||memoryBodyDigest(value)!==row.body_digest)throw new PrivateDataError('scope_unavailable',503);return withMemoryHostState(value,host);
+ }
+ private async related(context:UserContext,input:ScopedMemoryTask){const values:Memory[]=[];for(const pin of input.related){const value=await this.read(context,pin.id);if(value.version!==pin.version||value.fingerprint!==pin.fingerprint)throw new PrivateDataError('conflict',409);values.push(value);}return values;}
+ private async reader(run:TaskRun,input:ScopedMemoryTask):Promise<ContextReader>{
+  const data=this.data(run.context),related=await this.related(run.context,input),assert=()=>{run.grant.assert();this.assertJob(run.context,input);},evidence=(ids:readonly string[])=>{assert();if(ids.some(id=>!input.inputs.some(pin=>pin.id===id)))throw missing();return data.evidence(ids);};
+  return {search:async args=>evidence(input.inputs.map(pin=>pin.id)).filter(record=>!args.query||record.ocrText.toLowerCase().includes(args.query.toLowerCase())),timeline:async()=>({items:evidence(input.inputs.map(pin=>pin.id)),nextCursor:null}),evidence:async args=>evidence(args.ids),activity:async()=>{assert();return {};},devices:async()=>{assert();return [];},memories:async args=>{assert();const selected=related.filter(memory=>(!args.id||memory.id===args.id)&&(!args.query||memory.statement.toLowerCase().includes(args.query.toLowerCase())));return {items:selected,nextCursor:null,evidence:evidence([...new Set(selected.flatMap(memory=>memory.evidenceIds))])};}};
+ }
+ private async query(run:TaskRun,input:ScopedMemoryTask,args:QueryInput):Promise<QueryResult>{
+  if(!run.model)throw new PrivateDataError('scope_unavailable',503);const reader=await this.reader(run,input),started=Date.now();
+  try{return await run.model.withModel(async settings=>{
+   const agent=createAgent({...settings,reader,authorizeModelRequest:()=>{run.grant.assert();this.assertJob(run.context,input);}});
+   try{let tokens:TokenUsage|undefined;const answer=await agent.query({...args,onUsage:value=>{tokens=value;args.onUsage?.(value);}});run.grant.assert();this.assertJob(run.context,input);run.model!.recordUsage({status:'completed',durationMs:Date.now()-started,tokens});return answer;}finally{await agent.close();}
+  });}catch(error){run.grant.assert();this.assertJob(run.context,input);run.model.recordUsage({status:'failed',durationMs:Date.now()-started});throw error;}
+ }
+ private async execute(run:TaskRun,stage:'extract'|'review'|'publish'){
+  const input=scopedMemoryTaskSchema.parse(run.task.input),data=this.data(run.context),job=this.assertJob(run.context,input),related=await this.related(run.context,input),assert=()=>{run.grant.assert();this.assertJob(run.context,input);};
+  if(job.state==='admitting')throw new ExecutionFailure('waiting','memory_admission_pending',100,{executionStarted:false});
+  const records=data.assertInputs(input),base:QueryInput={question:MEMORY_EXTRACTION_PROMPT+(input.phase==='integrate'?'\nConsolidate only these related memories using their originals; preserve precise relatedMemoryIds.':''),skill:input.phase==='integrate'?'memory-consolidation':'memory-extraction',responseMode:'memory-extraction',timeZone:input.timeZone,signal:run.signal,contextTime:records.map(record=>record.capturedAt).sort().at(-1),evidenceIds:records.map(record=>record.id),evidenceRanges:records.map(record=>({id:record.id,offset:0,length:record.ocrText.length})),validateOutput:value=>{try{data.validate(value,input,related);return undefined;}catch(error){if(error instanceof MemoryOutputValidationError)return {code:error.code,feedback:error.repairInstruction};throw error;}}};
+  if(stage==='extract'){
+   if(job.draft)return {retained:true};const draft=await this.query(run,input,base);assert();data.validate(draft,input,related);run.grant.commit(()=>{assert();data.sql.run('UPDATE mm_jobs SET draft=? WHERE user_id=$user AND id=? AND draft IS NULL',JSON.stringify(draft),input.jobId);});run.checkpoint.write('output',input.jobId);return {retained:true};
+  }
+  if(stage==='review'){
+   if(job.review)return {retained:true};if(!job.draft)throw missing();
+   const reviewed=await reviewMemory(base,result(job.draft),args=>this.query(run,input,args),{deletions:data.deletionReview()});assert();const receipt=memoryReviewReceipt(reviewed);if(receipt)receipt.model=run.model!.lease.model;const prepared=data.prepareExtract(reviewed,input,related,receipt);
+   run.grant.commit(()=>{assert();data.sql.run('UPDATE mm_jobs SET review=?,prepared=? WHERE user_id=$user AND id=? AND review IS NULL',JSON.stringify({result:reviewed,receipt}),JSON.stringify(prepared),input.jobId);});run.checkpoint.write('output',input.jobId);return {retained:true};
+  }
+  if(!job.review||!job.prepared)throw missing();const prepared=z.array(memorySchema).parse(JSON.parse(job.prepared));
+  if(input.binding.kind==='plugin'){
+   const binding=input.binding,namespace=this.namespace(run.context,binding),provider=await this.provider(run.context,binding,assert);
+   for(const memory of prepared){
+    assert();const key=memoryProviderKey(memory),id='memory:'+memoryHash([namespace,key]),write={namespace,key,memory,opId:id},digest=memoryHash({namespace,key,memory}),prior=data.sql.get('SELECT state,payload_digest FROM mm_provider_journal WHERE user_id=$user AND id=?',id);
+    if(prior&&prior.payload_digest!==digest)throw new PrivateDataError('conflict',409);
+    run.grant.commit(()=>data.sql.run("INSERT OR IGNORE INTO mm_provider_journal VALUES($user,?,?,?,?,?,?,'submitted',?)",id,input.jobId,JSON.stringify(namespace),JSON.stringify(key),memoryBodyDigest(memory),digest,JSON.stringify(write)));
+    // Reconciliation reads an exact prior body before replaying an idempotent
+    // literal put. An unknown native inference is never rerun here.
+    const existing=prior?await provider.read({namespace,key}):null;assert();
+    if(!existing||memoryBodyDigest(existing)!==memoryBodyDigest(memory))await stageVerifiedMemoryWrite(provider,write,assert);
+    run.grant.commit(()=>{assert();data.sql.run("UPDATE mm_provider_journal SET state='acknowledged' WHERE user_id=$user AND id=?",id);});
+   }
+  }
+  assert();return {memoryIds:prepared.map(memory=>memory.id)};
+ }
+ private async admit(context:UserContext,raw:unknown,automatic=false){
+  const request=submitSchema.parse(raw),data=this.data(context),state=data.state(),settings=memorySettingsSchema.parse(JSON.parse(state.settings));
+  if(automatic&&(!state.desired||!settings.automatic))throw new PrivateDataError('conflict',409);
+  const evidence=request.materialIds.flatMap(id=>data.materialEvidence(id)),related:Memory[]=[];for(const id of request.memoryIds)related.push(await this.read(context,id));
+  if(request.phase==='integrate'&&!related.length||request.phase==='extract'&&related.length)throw new PrivateDataError('invalid_data');
+  const input=scopedMemoryTaskSchema.parse({jobId:request.operationId,phase:request.phase,inputs:[...new Map(evidence.map(record=>[record.id,{id:record.id,hash:memoryHashEvidence(record)}])).values()],related:related.map(memory=>({id:memory.id,version:memory.version,fingerprint:memory.fingerprint})),binding:data.binding(),generation:state.generation,deletionSnapshot:data.deletionSnapshot(),automatic,profile:settings.profile,timeZone:settings.timeZone});
+  const encoded=JSON.stringify(input),prior=data.sql.get('SELECT input,tasks,state FROM mm_jobs WHERE user_id=$user AND id=?',input.jobId);
+  if(prior){if(prior.input!==encoded)throw new PrivateDataError('conflict',409);if(prior.state!=='admitting')return this.job(context,input.jobId);}
+  data.sql.run('INSERT OR IGNORE INTO mm_jobs(user_id,id,input) VALUES($user,?,?)',input.jobId,encoded);
+  const tasks=prior?JSON.parse(String(prior.tasks)):{} as Record<string,string>;
+  for(const stage of ['extract','review','publish'] as const){const dependencies=stage==='extract'?[]:[tasks[stage==='review'?'extract':'review']];const task=await this.execution.forUser(context).submit({kind:'memory.'+stage,operationId:'memory:'+input.jobId,input,dependencies});tasks[stage]=task.id;data.sql.run('UPDATE mm_jobs SET tasks=? WHERE user_id=$user AND id=?',JSON.stringify(tasks),input.jobId);}
+  data.sql.run("UPDATE mm_jobs SET state='ready' WHERE user_id=$user AND id=?",input.jobId);return this.job(context,input.jobId);
+ }
+ private job(context:UserContext,id:string){const data=this.data(context),row=data.sql.get('SELECT state,tasks FROM mm_jobs WHERE user_id=$user AND id=?',id);if(!row)throw missing();return {id,state:row.state,tasks:Object.fromEntries(Object.entries(JSON.parse(String(row.tasks))).map(([stage,id])=>[stage,this.execution.forUser(context).get(String(id))]))};}
+ forUser(context:UserContext){this.data(context).state();return Object.freeze({
+  view:()=>{const data=this.data(context),state=data.state();return {revision:state.revision,generation:state.generation,desired:Boolean(state.desired),binding:data.binding(),settings:JSON.parse(state.settings),pendingExternal:Number(data.sql.get("SELECT count(*) n FROM mm_provider_journal WHERE user_id=$user AND state='submitted'")!.n)};},
+  submit:(raw:unknown)=>{const request=submitSchema.parse(raw),id=request.operationId,key=context.userId+':'+id,fingerprint=memoryHash(request),pending=this.admissions.get(key);if(pending){if(pending.fingerprint!==fingerprint)throw new PrivateDataError('conflict',409);return pending.promise;}const task=this.admit(context,request),entry={fingerprint,promise:task};this.admissions.set(key,entry);void task.finally(()=>{if(this.admissions.get(key)===entry)this.admissions.delete(key);}).catch(()=>{});return task;},
+  job:(id:string)=>this.job(context,id),
+  read:(id:string)=>this.read(context,id),
+  page:async(raw:unknown)=>{const data=this.data(context),page=data.page(raw),items:Memory[]=[];for(const row of page.rows){try{items.push(await this.read(context,row.id));}catch(error){if(error instanceof PrivateDataError&&error.code==='not_found')continue;throw error;}}return {items,nextCursor:page.nextCursor};},
+  control:(kind:'pause'|'resume'|'stop',raw:unknown)=>{const data=this.data(context),state=data.control(kind,raw);return {revision:state.revision,generation:state.generation,desired:Boolean(state.desired)};},
+  cancel:(id:string)=>{const data=this.data(context);return data.sql.transaction(()=>{const job=this.job(context,id);data.sql.run("UPDATE mm_jobs SET state='cancelled',draft=NULL,review=NULL,prepared=NULL WHERE user_id=$user AND id=?",id);for(const task of Object.values(job.tasks))this.execution.forUser(context).cancel(task.id);return {cancelled:true};});},
+  delete:(id:string)=>this.data(context).delete(id),
+ });}
+ private lifecycle():DomainLifecycle{return {
+  exportUser:async subject=>{this.runtime.services.assertSubject(subject,MEMORY_DOMAIN,'export');const sql=this.lifecycleSql(subject,'export');return {domain:MEMORY_DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-scoped-memory-v1',coverage:{records:true,policy:true,activeAuthority:false,excluded:['model-snapshots','execution-checkpoints','plugin-runtime-files']},state:sql.get('SELECT settings,binding FROM mm_state WHERE user_id=$user'),records:sql.all('SELECT json FROM mm_records WHERE user_id=$user ORDER BY id').map(row=>JSON.parse(String(row.json))),evidence:sql.all('SELECT * FROM mm_evidence WHERE user_id=$user ORDER BY id'),deletions:sql.all('SELECT id,json FROM mm_deletions WHERE user_id=$user ORDER BY id')}};},
+  deleteUser:async(subject,operationId)=>{const sql=this.lifecycleSql(subject,'delete');return sql.transaction(()=>{sql.run('INSERT INTO mm_state VALUES($user,1,1,1,0,?,?) ON CONFLICT(user_id) DO UPDATE SET deleted=1,generation=generation+1,desired=0',JSON.stringify(defaultMemorySettings()),JSON.stringify({kind:'builtin',revision:1}));sql.run("UPDATE mm_jobs SET state='deleted',draft=NULL,review=NULL,prepared=NULL WHERE user_id=$user");sql.run("UPDATE mm_provider_journal SET json=json_remove(json,'$.memory'),state='erase_submitted' WHERE user_id=$user");const pending=Number(sql.get("SELECT count(*) n FROM mm_provider_journal WHERE user_id=$user")!.n);sql.run('DELETE FROM mm_records WHERE user_id=$user');sql.run('DELETE FROM mm_evidence WHERE user_id=$user');sql.run('DELETE FROM mm_deletions WHERE user_id=$user');sql.run('DELETE FROM mm_commands WHERE user_id=$user');sql.run('DELETE FROM mm_restore WHERE user_id=$user');return {status:pending?'pending':'complete',operationId};});},
+  restoreUser:async(subject,archive,operationId)=>{
+   const sql=this.lifecycleSql(subject,'restore');if(archive.domain!==MEMORY_DOMAIN||archive.version!==1||archive.userId!==subject.userId||archive.deploymentId!==subject.deploymentId)throw new PrivateDataError('invalid_data');
+   const payload=z.object({format:z.literal('mote-scoped-memory-v1'),coverage:z.object({records:z.literal(true),policy:z.literal(true),activeAuthority:z.literal(false),excluded:z.tuple([z.literal('model-snapshots'),z.literal('execution-checkpoints'),z.literal('plugin-runtime-files')])}).strict(),state:z.object({settings:z.string(),binding:z.string()}).optional(),records:z.array(memorySchema),evidence:z.array(z.object({user_id:z.string(),id:z.string().uuid(),material_id:z.string(),material_revision:z.string(),block_id:z.string(),hash:z.string(),json:z.string()}).strict()),deletions:z.array(z.object({id:z.string().uuid(),json:z.string()}).strict())}).strict().parse(archive.payload),fingerprint=memoryHash(payload);
+   if(payload.state&&JSON.parse(payload.state.binding).kind!=='builtin')throw new PrivateDataError('scope_unavailable',503);
+   const data=new ScopedMemoryData(sql,new PrivateData(sql,new PrivateCursor(this.cursorKey,subject.deploymentId,subject.userId)),new PrivateCursor(this.cursorKey,subject.deploymentId,subject.userId));
+   sql.transaction(()=>{
+    const prior=sql.get('SELECT fingerprint FROM mm_restore WHERE user_id=$user AND id=?',operationId);if(prior){if(prior.fingerprint!==fingerprint)throw new PrivateDataError('conflict',409);return;}
+    const state=sql.get('SELECT * FROM mm_state WHERE user_id=$user') as MemoryState|undefined;if(state?.deleted)throw new PrivateDataError('scope_unavailable',503);
+    const settings=memorySettingsSchema.parse(JSON.parse(payload.state?.settings??JSON.stringify(defaultMemorySettings())));
+    if(!state)sql.run('INSERT INTO mm_state VALUES($user,0,0,1,0,?,?)',JSON.stringify(settings),JSON.stringify({kind:'builtin',revision:1}));
+    for(const evidence of payload.evidence){if(evidence.user_id!==subject.userId)throw new PrivateDataError('invalid_data');const actual=data.materialEvidence(evidence.material_id,evidence.material_revision).find(record=>record.id===evidence.id);if(!actual||JSON.stringify(actual)!==evidence.json||memoryHashEvidence(actual)!==evidence.hash)throw new PrivateDataError('invalid_data');}
+    for(const memory of payload.records){
+     if(memory.evidenceIds.some(id=>!payload.evidence.some(row=>row.id===id)))throw new PrivateDataError('invalid_data');data.evidence(memory.evidenceIds);
+     const value=memorySchema.parse({...memory,status:'stale',staleReason:'restored_archive'}),existing=sql.get('SELECT json FROM mm_records WHERE user_id=$user AND id=?',memory.id);if(existing&&String(existing.json)!==JSON.stringify(value))throw new PrivateDataError('conflict',409);
+     sql.run('INSERT OR IGNORE INTO mm_records VALUES($user,?,?,?,?,?,?,?)',value.id,value.version,value.fingerprint,memoryBodyDigest(value),JSON.stringify({kind:'builtin',revision:1}),JSON.stringify(value),value.createdAt);
+     sql.run('INSERT OR IGNORE INTO mm_versions VALUES($user,?,?,?,?)',value.id,value.version,value.fingerprint,JSON.stringify(value));for(const id of value.evidenceIds)sql.run('INSERT OR IGNORE INTO mm_dependencies VALUES($user,?,?,?)',value.id,id,memoryHashEvidence(data.evidence([id])[0]));
+    }
+    for(const deletion of payload.deletions){const value=JSON.parse(deletion.json);if(value.memoryId!==deletion.id||!Array.isArray(value.dependencies)||value.dependencies.some((id:string)=>!payload.evidence.some(row=>row.id===id)))throw new PrivateDataError('invalid_data');sql.run('INSERT OR IGNORE INTO mm_deletions VALUES($user,?,?)',deletion.id,deletion.json);}
+    sql.run('INSERT INTO mm_restore VALUES($user,?,?)',operationId,fingerprint);
+   });
+  },
+ };}
+ private lifecycleSql(subject:UserDataSubject,purpose:'export'|'delete'|'restore'){return new PrivateSql(this.db,subject.userId,()=>this.runtime.services.assertSubject(subject,MEMORY_DOMAIN,purpose));}
+ async close(){if(this.closed)return;this.closed=true;for(const dispose of this.disposers.reverse())await dispose();}
+}
+import {memoryEvidenceFingerprint as memoryHashEvidence} from '../memory-contract.js';

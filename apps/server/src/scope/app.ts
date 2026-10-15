@@ -21,6 +21,8 @@ import {ConfigServiceError,type ConfigDocument} from '../config-service.js';
 import type {LifecycleAuthority} from './lifecycle.js';
 import {registerScopedPlugins} from './plugin-routes.js';
 import type {PluginReleaseTransport} from '../plugin-release.js';
+import {registerMemory} from './memory-routes.js';
+import type {MemoryHost} from './memory.js';
 import type {ScopedPluginHost} from './plugins.js';
 export {registerUserRoute,requestContext} from './http.js';
 
@@ -30,6 +32,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
   const storage=openScopeStorage(config.dataDir);
   let configuration:Configurations|undefined;
   let plugins:ScopedPluginHost|undefined;
+  let memory:MemoryHost|undefined;
   try{
     const app=Fastify({logger:false});
     const accounts=new Accounts(storage.db,storage.deploymentId);
@@ -42,7 +45,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
-    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins']:[])]}));
+    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','memory']:[])]}));
     registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority:options.lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
@@ -53,9 +56,10 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       const {receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial}=ingress.bindSource(context,sourceIds,assertCurrent);
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
-    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await plugins?.close();});}
+    if(execution)memory=registerMemory(runtime,storage.db,configuration,execution);
+    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await memory?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await plugins?.close();await configuration?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,plugins,ingress,deploymentId:storage.deploymentId};
-  }catch(error){await plugins?.close();await configuration?.close();storage.close();throw error;}
+    return {...runtime,execution,configuration,plugins,ingress,memory,deploymentId:storage.deploymentId};
+  }catch(error){await memory?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
 }
