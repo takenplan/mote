@@ -22,7 +22,7 @@ async function fixture(t:any){
   calls.push(command);if(options.signal?.aborted)throw new ConnectorError('lark_operation_cancelled');
   switch(command.kind){
    case 'version':return 'lark-cli version 1.0.57';
-   case 'status':return encoded({appId:'cli_fixture',identities:{user:{available:true,openId:state.account,userName:'Fixture person',scope:LARK_SCOPES.join(' ')}}});
+   case 'status':return encoded({appId:'cli_fixture',identities:{user:{available:true,openId:state.account,userName:'Fixture person',scope:[...LARK_SCOPES,'calendar:calendar:readonly','drive:drive:readonly'].join(' ')}}});
    case 'login':return encoded({verification_url:'https://accounts.feishu.cn/authorize?opaque=a%2Bb&state=fixture',device_code:'private-fixture-device-code',expires_in:600});
    case 'complete':if(state.blockLogin){state.loginCompleteEntered();return new Promise((_resolve,reject)=>options.signal?.addEventListener('abort',()=>reject(new Error('private token must not appear')),{once:true}));}return '{}';
    case 'document':if(state.failDocument)throw new Error('secret fixture-token document content');return encoded({ok:true,data:{document:{document_id:'doc-1',revision_id:state.revision,content:state.content}}});
@@ -46,7 +46,7 @@ test('only fixed read operations reach CLI and input references cannot become co
  assert.equal(documentReference(documentUrl+'?share=private#anchor'),documentUrl);
  assert.equal(authorizationUrl('javascript:alert(1)'),undefined);
  assert.equal(authorizationUrl('https://accounts.feishu.cn:444/a'),undefined);
- assert.ok(LARK_SCOPES.every(s=>s.endsWith('readonly')));
+ assert.ok(LARK_SCOPES.every(s=>s.endsWith('readonly')||s==='search:docs:read'));assert.ok(!LARK_SCOPES.includes('calendar:calendar:readonly'));
  for(const c of [{kind:'document',document:documentUrl},{kind:'calendars'},{kind:'events',calendarId:'x; touch x',start:1,end:2}] as LarkCommand[]){assert.ok(larkArguments(c).includes('user'));assert.ok(!larkArguments(c).includes('api'));}
  const configure=larkArguments({kind:'configure',appId:'cli_fixture',secret:'fixture-secret',brand:'feishu'});assert.ok(!configure.includes('fixture-secret'));assert.ok(configure.includes('--app-secret-stdin'));
 });
@@ -76,7 +76,7 @@ test('selected docs and calendar snapshots are idempotent, retain history and ke
 
 test('account switch clears selected scope, partial failures preserve archive and sanitize errors',async t=>{
  const f=await fixture(t);await connected(f);await f.connector.select(selection);f.connector.startSync();await done(f.connector);
- f.state.failDocument=true;f.connector.startSync();const failed=await done(f.connector);assert.equal(failed.job?.state,'failed');assert.equal(failed.job?.error,'lark_operation_failed');assert.ok(!encoded(failed).includes('fixture-token'));assert.equal(f.sources.listItems().items.length,2);
+ f.state.failDocument=true;f.connector.startSync();const failed=await done(f.connector);assert.equal(failed.job?.state,'failed');assert.equal(failed.job?.error,'lark_partial_failure');assert.ok(!encoded(failed).includes('fixture-token'));assert.equal(f.sources.listItems().items.length,2);assert.equal(f.sources.listSources().find(s=>s.kind==='lark-calendar')?.status?.state,'idle');
  f.state.account='other-user';await f.connector.refresh();assert.deepEqual(f.connector.status().selection.documents,[]);assert.equal(f.connector.status().connected,false);assert.ok(f.sources.listSources().every(s=>!s.enabled));
 });
 
@@ -93,9 +93,9 @@ test('all-day raw API end is exclusive and respects DST; cancelled events retain
 
 test('Lark owner routes reject device and MCP credentials before parsing and never expose generic commands',async t=>{
  const f=await fixture(t),app=Fastify();const registered=await registerConnectors(app,f.ctx,{lark:f.runner});t.after(async()=>{await registered.close();await app.close();});
- const routes=[['GET',''],['POST','/check'],['POST','/install'],['POST','/setup'],['POST','/configure'],['POST','/login'],['POST','/cancel'],['GET','/calendars'],['PUT','/selection'],['POST','/sync'],['DELETE','']];
+ const routes=[['GET',''],['POST','/check'],['POST','/install'],['POST','/setup'],['POST','/configure'],['POST','/login'],['POST','/cancel'],['GET','/calendars'],['PUT','/selection'],['POST','/preview'],['POST','/sync'],['DELETE','']];
  for(const [method,suffix] of routes)for(const token of ['', 'fixture-collector-token','fixture-mcp-read']){const r=await app.inject({method:method as any,url:`/api/connectors/lark${suffix}`,headers:{authorization:`Bearer ${token}`,...(method==='POST'?{'content-type':'application/json'}:{})},...(method==='POST'?{payload:'{"'}:{})});assert.equal(r.statusCode,401);}
- const headers={authorization:'Bearer fixture-owner-token-12345678901234567890'};assert.equal((await app.inject({method:'POST',url:'/api/connectors/lark/check',headers})).statusCode,200);assert.equal((await app.inject({url:'/api/connectors/lark',headers})).headers['cache-control'],'no-store');assert.equal((await app.inject({method:'POST',url:'/api/connectors/lark/exec',headers,payload:{command:'im +send'}})).statusCode,404);
+ const headers={authorization:'Bearer fixture-owner-token-12345678901234567890'};assert.equal((await app.inject({method:'POST',url:'/api/connectors/lark/check',headers})).statusCode,200);assert.equal((await app.inject({url:'/api/connectors/lark',headers})).headers['cache-control'],'no-store');assert.equal((await app.inject({method:'POST',url:'/api/connectors/lark/login',headers,payload:{calendar:'yes'}})).statusCode,400);assert.equal((await app.inject({method:'POST',url:'/api/connectors/lark/exec',headers,payload:{command:'im +send'}})).statusCode,404);
 });
 
 test('saved scope survives restart while explicitly paused sources remain paused',async t=>{

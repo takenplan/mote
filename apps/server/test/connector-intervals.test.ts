@@ -11,8 +11,9 @@ import {registerConnectors} from '../src/connectors/index.js';
 import {ConnectorRegistry} from '../src/connectors/registry.js';
 import {GoogleCalendarConnector,type GoogleDependencies} from '../src/connectors/google.js';
 import {GmailConnector,gmailScope} from '../src/connectors/gmail.js';
-import {LarkConnector} from '../src/connectors/lark.js';
+import {LarkConnector,LARK_SCOPES} from '../src/connectors/lark.js';
 import {RecordingConnector,type RecordingProvider} from '../src/connectors/recordings.js';
+import type {LarkRunner} from '../src/connectors/lark-cli.js';
 import type {ConnectorContext} from '../src/connectors/types.js';
 
 async function fixture(t:TestContext){
@@ -27,12 +28,31 @@ function generatedRecording(id='generated'):RecordingProvider{
   return {id,version:'generated@1',account:async()=>({id:'generated-owner'}),discover:async()=>({ids:[]}),
     metadata:async()=>{throw Error('Unexpected fixture metadata read');},transcript:async()=>{throw Error('Unexpected fixture transcript read');},media:async()=>{throw Error('Unexpected fixture media read');}};
 }
+const generatedLark:LarkRunner=async command=>{
+  if(command.kind==='version')return 'lark-cli version 1.0.85';
+  if(command.kind==='status')return JSON.stringify({appId:'cli_generated_interval',identities:{user:{available:true,openId:'generated-interval-owner',scope:LARK_SCOPES.join(' ')}}});
+  if(command.kind==='login')return JSON.stringify({verification_url:'https://accounts.feishu.cn/authorize?generated=interval',device_code:'generated-interval-device-code',expires_in:600});
+  if(command.kind==='complete')return '{}';
+  if(command.kind==='documents-search')return JSON.stringify({results:[],has_more:false});
+  throw Error('Unexpected generated interval CLI operation: '+command.kind);
+};
+async function larkSettled(lark:LarkConnector){
+  for(let index=0;index<1000;index++){
+    const status=lark.status();if(!['running','waiting'].includes(status.job?.state??'')){assert.equal(status.job?.state,'completed',JSON.stringify(status));return;}
+    await new Promise(resolve=>setTimeout(resolve,1));
+  }throw Error('Generated interval authorization did not settle');
+}
+async function authorizeLark(lark:LarkConnector){
+  await lark.refresh();lark.login();await larkSettled(lark);
+  await lark.select({documents:[],calendarIds:[],pastDays:30,futureDays:90,timeZone:'UTC',autoSync:true,documentDiscovery:{created:true,edited:true,opened:true,firstSyncDays:30}});
+  lark.startPreview();await larkSettled(lark);lark.startSync();await larkSettled(lark);assert.equal(lark.status().documentSync?.confirmed,true);
+}
 const googleResult={imported:0,duplicates:0,calendars:1},gmailResult={imported:0,duplicates:0,hasMore:false};
 const larkJob={id:'generated-sync',kind:'sync' as const,state:'completed' as const};
 
 for(const kind of ['google-calendar','gmail','lark','recordings'] as const)test(`${kind} replaces future polls, keeps an unchanged cadence and cannot restart after close`,async t=>{
   const {ctx,save}=await fixture(t);t.mock.timers.enable({apis:['setInterval']});
-  let polls=0;
+  let polls=0,authorize=async()=>{};
   let connector:{init():Promise<void>;configureSyncInterval(intervalMs:number):void;close():Promise<void>};
   if(kind==='google-calendar'){
     await save('google-calendar.json',{version:1,tokens:{},calendars:[{id:'generated-calendar',summary:'Generated calendar'}],checkpoints:{}});
@@ -41,14 +61,13 @@ for(const kind of ['google-calendar','gmail','lark','recordings'] as const)test(
     await save('gmail.json',{version:1,tokens:{},account:'generated@example.invalid'});
     const gmail=new GmailConnector(ctx);t.mock.method(gmail,'sync',async()=>{polls++;return gmailResult;});connector=gmail;
   }else if(kind==='lark'){
-    await save('lark.json',{version:1,enabled:true,selection:{documents:[],calendarIds:[],pastDays:30,futureDays:90,timeZone:'UTC',autoSync:true}});
-    const lark=new LarkConnector(ctx,async()=>{throw Error('Unexpected fixture CLI call');});t.mock.method(lark,'startSync',()=>{polls++;return larkJob;});connector=lark;
+    const lark=new LarkConnector(ctx,generatedLark);authorize=async()=>{await authorizeLark(lark);t.mock.method(lark,'startSync',()=>{polls++;return larkJob;});};connector=lark;
   }else{
     const recordings=new RecordingConnector(ctx,generatedRecording());t.mock.method(recordings,'tick',async()=>{polls++;});connector=recordings;
   }
   t.after(()=>connector.close());
   connector.configureSyncInterval(60000);t.mock.timers.tick(60000);assert.equal(polls,0,'configuration before init does not start collection');
-  await connector.init();t.mock.timers.tick(60000);assert.equal(polls,0);
+  await connector.init();await authorize();t.mock.timers.tick(60000);assert.equal(polls,0);
   connector.configureSyncInterval(180000);
   t.mock.timers.tick(120000);assert.equal(polls,0,'the old timer must not fire after replacement');
   t.mock.timers.tick(60000);assert.equal(polls,1);
@@ -62,7 +81,7 @@ test('registry applies intervals to built-ins and opt-in deployment plugins thro
   const {ctx,save}=await fixture(t);t.mock.timers.enable({apis:['setInterval']});
   await save('google-calendar.json',{version:1,tokens:{},calendars:[{id:'generated-calendar',summary:'Generated calendar'}],checkpoints:{}});
   await save('gmail.json',{version:1,tokens:{},account:'generated@example.invalid'});
-  await save('lark.json',{version:1,enabled:true,selection:{documents:[],calendarIds:[],pastDays:30,futureDays:90,timeZone:'UTC',autoSync:true}});
+  const approvedLark=new LarkConnector(ctx,generatedLark);await approvedLark.init();await authorizeLark(approvedLark);await approvedLark.close();
   const counts={google:0,gmail:0,lark:0,feishu:0,dingtalk:0},intervals:number[]=[];
   t.mock.method(GoogleCalendarConnector.prototype,'sync',async()=>{counts.google++;return googleResult;});
   t.mock.method(GmailConnector.prototype,'sync',async()=>{counts.gmail++;return gmailResult;});

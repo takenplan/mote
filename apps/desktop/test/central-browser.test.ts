@@ -6,6 +6,14 @@ it('opens the requested central page in Chrome without credentials', async () =>
   expect(chrome).toHaveBeenCalledWith('https://central.example/#notes');
   expect(fallback).not.toHaveBeenCalled();
 });
+it('keeps the central Feishu source destination through an owner login handoff',async()=>{
+ const chrome=vi.fn(),fallback=vi.fn();
+ await openCentralBrowser('https://central.example','lark','darwin',chrome,fallback,undefined,undefined,'generated-request');
+ const url=new URL(chrome.mock.calls[0][0]);
+ expect(url.hash.split('?')[0]).toBe('#/connections/lark');
+ expect(new URLSearchParams(url.hash.split('?')[1]).get('loginRequest')).toBe('generated-request');
+ expect(url.search).toBe('');expect(fallback).not.toHaveBeenCalled();
+});
 it('falls back when Chrome is unavailable and rejects unsafe URLs', async () => {
   const chrome = vi.fn().mockRejectedValue(new Error('missing')), fallback = vi.fn();
   await openCentralBrowser('https://central.example', 'unknown', 'darwin', chrome, fallback);

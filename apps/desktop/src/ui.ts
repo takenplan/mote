@@ -97,6 +97,10 @@ for (const button of Array.from(document.querySelectorAll<HTMLElement>('[data-ad
   if(action==='note')showPage('notes');
   else if(action==='screen')showPage('screen');
   else if(action==='folder'||action==='file')void beginSourceSelection(action==='folder'?'directory':'files');
+  else if(action==='lark'){
+    if(!currentStatus?.config.serverUrl){showPage('connection');feedback(moteText('先连接你的中央节点，即可打开中央仓库。'));return;}
+    void perform(()=>desktopApi.openCentral('lark'));
+  }
 });
 function reviewCollectionSetup(): void {
   setupReviewed = true;

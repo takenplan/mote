@@ -29,7 +29,7 @@ async function run(){
  const backCount=()=>js(`[...document.querySelectorAll('.content .back-link')].filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').length`);
  const open=async(route,title)=>{await js(`location.hash=${JSON.stringify('#/'+route)}`);await until(()=>js(`document.querySelector('.content h1')?.textContent===${JSON.stringify(title)}&&!document.querySelector('.content [role="status"]')?.textContent.includes('正在读取')`),'route '+route);};
  await window.loadURL(url);await js(`sessionStorage.setItem('mote.connection',${JSON.stringify(JSON.stringify({token,viewScope:require('node:crypto').randomUUID()}))});location.reload()`);await until(()=>js(`document.body.innerText.includes('已登录 ·')`),'generated login');
- const routes=[['preferences','设置','settings'],['system/models','模型与服务','models'],['system/processing','处理任务','processing'],['system','统计中心','statistics'],['system/usage','用量与费用','usage'],['system/storage','存储与索引','storage'],['system/diagnostics','诊断与更新','diagnostics'],['system/extensions','功能插件','extensions'],['connections/lark','飞书','lark'],['connections/recordings','录音归档','recordings'],['help','帮助与反馈','help']];
+ const routes=[['preferences','设置','settings'],['system/models','模型与服务','models'],['system/processing','处理任务','processing'],['system','统计中心','statistics'],['system/usage','用量与费用','usage'],['system/storage','存储与索引','storage'],['system/diagnostics','诊断与更新','diagnostics'],['system/extensions','功能插件','extensions'],['connections/lark','飞书文档与日历','lark'],['connections/recordings','录音归档','recordings'],['help','帮助与反馈','help']];
  for(const [route,title,name] of routes){
   await open(route,title);await delay(250);
   assert.equal(await backCount(),route==='preferences'?0:1,'one parent control: '+name);

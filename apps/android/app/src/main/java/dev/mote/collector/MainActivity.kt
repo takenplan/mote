@@ -259,7 +259,7 @@ class MainActivity : MoteActivity() {
     private fun buildToday() {
         val local = LocalStateRepository.get(this).state.value
         firstUse = MoteNavigation.isFirstUse(loadedConfig.hasSyncConnection(), settings.enabled, settings.lastCapture(), (local.active?.records ?: 0) > 0 || (local.sourcePending ?: 0) > 0)
-        page(Page.OVERVIEW, MoteI18n.text("先存本机；连接中央整理后，可搜索和提问。"))
+        page(Page.OVERVIEW, MoteI18n.text("本机内容先保存；飞书文档由中央归档。整理后可搜索和提问。"))
         val choices = MoteAddAction.entries
         val collection = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
         content.addView(collection, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(14) })
@@ -368,6 +368,7 @@ class MainActivity : MoteActivity() {
             MoteAddAction.FOLDER, MoteAddAction.FILE -> startActivity(Intent(this, FileTaskActivity::class.java).putExtra("addAction", action.name))
             MoteAddAction.SCREEN -> showPage(Page.PRIVACY)
             MoteAddAction.NOTE -> showPage(Page.NOTES)
+            MoteAddAction.FEISHU -> openCentral("lark")
         }
     }
 

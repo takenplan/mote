@@ -68,7 +68,7 @@ const stopRecipe = ctx.memoryStrategies.registerRecipe({
 
 所有者在「系统管理 → 模型与服务 → 模块与模型 → 自动 Memory 组合」选择非空默认组合，或为某个来源保存非空覆盖组合，也可让来源跟随默认。来源覆盖是所有者的明确选择，不根据来源名称或正文推断语义类别。已授权来源的新资料持续处理，普通用户无需另行开启 Memory；来源暂停接收、模型及隐私授权仍是独立边界。
 
-`GET /api/memory-recipe-settings` 返回普通默认选择，加 `?scope=capture` 返回截图和 v2 页面字段的独立默认选择，加 `?sourceId=...` 返回来源的有效选择及是否继承。`scope` 与 `sourceId` 互斥。每个条目包括固定的组件版本/指纹和当前是否可用。通过 `PUT /api/memory-recipe-settings` 保存：
+`GET /api/memory-recipe-settings` 返回普通默认选择，加 `?scope=capture` 返回截图和 v2 页面字段的独立默认选择，加 `?scope=lark-docs` 返回飞书文档的独立默认选择，加 `?sourceId=...` 返回来源的有效选择及是否继承。`scope` 与 `sourceId` 互斥。每个条目包括固定的组件版本/指纹和当前是否可用。通过 `PUT /api/memory-recipe-settings` 保存：
 
 ```json
 {
@@ -80,7 +80,7 @@ const stopRecipe = ctx.memoryStrategies.registerRecipe({
 }
 ```
 
-省略 `sourceId` 和 `scope` 修改普通默认；传 `scope: "capture"` 修改采集默认；最多选择 9 个组合。新的 `recipes: []` 被拒绝；指定来源并传 `recipes: null` 恢复继承。持久化空选择也被拒绝；继承由缺少来源覆盖记录表示。配置接口只接受所有者凭据，采集端不能修改。首次建立普通默认只选择 `mote.personal-memory@5`；首次建立采集默认复制当时普通组合并追加日常事件 v2，之后两个默认独立持久化。已保存来源覆盖仍优先；用户移除日常事件后，重启不会重新追加。普通来源不自动启用 Coding 或日常事件。
+省略 `sourceId` 和 `scope` 修改普通默认；传 `scope: "capture"` 或 `"lark-docs"` 修改相应类别默认。普通默认最多选择 9 个组合，类别默认与来源覆盖最多 10 个，以完整保留普通组合并追加日常事件。新的 `recipes: []` 被拒绝；指定来源并传 `recipes: null` 恢复继承。持久化空选择也被拒绝；继承由缺少来源覆盖记录表示。配置接口只接受所有者凭据，采集端不能修改。首次建立普通默认只选择 `mote.personal-memory@5`；首次建立采集或飞书文档默认分别复制当时普通组合并追加日常事件 v2，之后各默认独立持久化。已保存来源覆盖仍优先；用户移除日常事件后，重启不会重新追加。其他普通来源不自动启用 Coding 或日常事件。飞书正文进入普通个人策略，只有可信活动投影进入日常事件输入；详见 [飞书文档 ADR](adr-feishu-document-context.md)。
 
 已有配置固定确切定义，不跟随任意安装版本漂移。[v3 内置默认升级](adr-bounded-personal-memory.md#固定版本与升级) 仍显式执行旧 v2→v3 迁移；随后[上下文读取升级](adr-memory-context-reading.md#默认与历史边界)将精确个人 v3 默认改为固定 v4，范围评估升级再将精确个人 v4 普通默认改为个人 v5，将精确个人 v4＋日常事件 v1 采集默认改为个人 v5＋日常事件 v2。完整迁移顺序是 v2→v3→v4→v5；各具名迁移保留固定目标并只执行一次。既有 v2/v3/v4 和日常事件 v1 收据保留原作用域及契约；来源覆盖、自定义组合和已成功产品不动。缺失的已选组件显示为不可用，不偷偷替换为另一策略。用户后来明确选回旧版，重启不会重复迁移。后续显式所有者选择仍按既有规则结束对应旧范围的保留资格。
 

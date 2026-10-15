@@ -37,6 +37,8 @@ class SourcesActivity : MoteActivity() {
             if (checkSelfPermission(Manifest.permission.READ_CALENDAR) == PackageManager.PERMISSION_GRANTED) chooseCalendars()
             else requestPermissions(arrayOf(Manifest.permission.READ_CALENDAR), 301)
         }
+        action(MoteI18n.text("连接飞书文档")) { startActivity(Intent(this, CentralActivity::class.java).putExtra("page", "lark")) }
+        content.addView(TextView(this).apply { text = MoteI18n.text("由中央收集文档与活动线索"); MoteUi.type(this, DesignTokens.fontSupport); setTextColor(MoteUi.muted) })
         action(MoteI18n.text("立即扫描并同步"), primary = true) { work(MoteI18n.text("正在调度扫描与同步…")) { SourceWork.schedule(applicationContext, true, syncExplicit = true) } }
         action(MoteI18n.text("来源限制与同步说明")) { MoteDialogBuilder(this).setTitle(MoteI18n.text("来源说明")).setMessage(MoteI18n.text("文件快照和原件归档都会上传完整文件，由中央解析或转写。快照处理后删除中央临时原件，保留提取正文；原件归档长期保留文件。每文件最多 512 MiB，支持断网续传。仅文件目录不读取正文。超限或扫描不完整不会推断文件已删除。\n系统后台任务约每 15 分钟检查一次。")).setPositiveButton(MoteI18n.text("知道了"), null).show() }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }; content.addView(list)
