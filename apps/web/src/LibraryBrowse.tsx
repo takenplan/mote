@@ -112,8 +112,7 @@ export function LibraryMaterials({ api, revision, selected, onSelect, onBrowseCh
         sourcesTruncated: boolean;
         items: Material[];
         nextCursor: string | null;
-    }>(api, invalidDate?null:'/api/library/catalog?' + query);
-    useEffect(() => { page.refresh(); }, [revision, page.refresh]);
+    }>(api, invalidDate?null:'/api/library/catalog?' + query, undefined, revision);
     const coverage = (state: string) => ({ complete: moteText('完整'), partial: moteText('部分内容'), pending: moteText('仍在整理') }[state] ?? state);
     return <section className="library-materials">
     <div className="library-list-heading"><div><h2>{moteText('全部资料')}</h2><p>{moteText('包括 Coding Agent 会话；可读内容不等待记忆整理。')}</p></div><button className="icon-button" disabled={page.loading} onClick={page.refresh} aria-label={moteText('刷新')}><RefreshCw size={16}/></button></div>

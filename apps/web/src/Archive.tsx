@@ -2,7 +2,7 @@ import { formatEvidenceRef, parseEvidenceRef, type CapturePreview } from '@mote/
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { ArrowLeft, ArrowRight, Clock3, FileText, Monitor, RefreshCw, Upload } from "lucide-react";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, } from "react";
-import { duration, dateTime, errorMessage, queryString, type Activity, type Api, type Device, type Range } from "./api";
+import { ApiError, duration, dateTime, errorMessage, queryString, type Activity, type Api, type Device, type Range } from "./api";
 import { captureDateRange, localDateInput, ocrPresentation } from './capture-presentation';
 import { CollectionContent } from './features/runtime';
 import { webFeatures } from './features/runtime';
@@ -98,12 +98,16 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
     const [refreshVersion, setRefreshVersion] = useState(0);
     const [cursor, setCursor] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
+    const [pageLoading, setPageLoading] = useState(false);
     const [error, setError] = useState("");
     const [page, setPage] = useState(0);
     const [pageCursors, setPageCursors] = useState<(string | undefined)[]>([undefined]);
     const requestVersion = useRef(0);
     const inFlight = useRef(false);
     const request = useRef<AbortController | null>(null);
+    const pendingRefresh = useRef(false);
+    const readScope = useRef<{api:Api;range:Range}|undefined>(undefined);
+    const currentPage = useRef({page,pageCursors});currentPage.current={page,pageCursors};
     const range = useMemo(() => ({
         ...captureDateRange(after, before),
         ...(device ? { deviceId: device } : {}),
@@ -111,7 +115,7 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
         ...(source ? { source } : {}),
         ...(ocrStatus ? { ocrStatus } : {}),
     }), [after, before, device, collection, source, ocrStatus]);
-    const load = useCallback(async (next?: string, version = requestVersion.current, targetPage = 0) => {
+    const load = useCallback(async function readPage(next?: string, version = requestVersion.current, targetPage = 0, background = false):Promise<void> {
         if (inFlight.current && next)
             return;
         request.current?.abort();
@@ -119,6 +123,7 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
         request.current = controller;
         inFlight.current = true;
         setLoading(true);
+        setPageLoading(!background);
         setError("");
         try {
             const result = await api.request<{
@@ -135,30 +140,50 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
             setTotalCount(result.totalCount);
         }
         catch (e) {
-            if (requestVersion.current === version && !controller.signal.aborted)
+            if (requestVersion.current === version && !controller.signal.aborted){
+                if(e instanceof ApiError&&[401,403,404,410].includes(e.status)){
+                    setItems([]);setTotalCount(undefined);setCursor(null);setPage(0);setPageCursors([undefined]);
+                }
                 setError(errorMessage(e));
+            }
         }
         finally {
-            if (requestVersion.current === version) {
+            if (requestVersion.current === version && request.current === controller) {
                 setLoading(false);
+                setPageLoading(false);
                 inFlight.current = false;
+                if(pendingRefresh.current){pendingRefresh.current=false;void readPage(next,version,targetPage,true);}
             }
         }
     }, [api, range]);
     useEffect(() => {
         const version = ++requestVersion.current;
+        pendingRefresh.current=false;
+        readScope.current={api,range};
         setItems([]);
         setPage(0);
         setPageCursors([undefined]);
         setCursor(null);
         setTotalCount(undefined);
         inFlight.current = false;
-        void load(undefined, version);
-        return () => { request.current?.abort(); requestVersion.current++; };
-    }, [load, revision, refreshVersion]);
+        void load(undefined,version);
+        return () => { pendingRefresh.current=false;request.current?.abort(); requestVersion.current++; };
+    }, [load]);
+    const revisions=useRef({load,revision,refreshVersion});
+    useEffect(()=>{
+        const before=revisions.current;revisions.current={load,revision,refreshVersion};
+        if(before.load!==load||before.revision===revision&&before.refreshVersion===refreshVersion)return;
+        if(inFlight.current){pendingRefresh.current=true;return;}
+        const target=currentPage.current;
+        void load(target.pageCursors[target.page],requestVersion.current,target.page,true);
+    },[load,revision,refreshVersion]);
+    const visibleScope=readScope.current?.api===api&&readScope.current?.range===range;
+    const visibleItems=visibleScope?items:[];
+    const visibleTotal=visibleScope?totalCount:undefined;
+    const initialOrPageLoading=loading&&(visibleTotal===undefined||pageLoading);
     const groups = useMemo(() => {
         const result = new Map<string, CapturePreview[]>();
-        for (const item of items) {
+        for (const item of visibleItems) {
             const key = new Date(item.capturedAt).toLocaleDateString(getLocale(), {
                 year: "numeric",
                 month: "long",
@@ -168,7 +193,7 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
             result.set(key, [...(result.get(key) || []), item]);
         }
         return [...result.entries()];
-    }, [items]);
+    }, [visibleItems]);
     useEffect(() => { if (library)
         onBrowseChanged?.(); }, [range, library, onBrowseChanged]);
     if (library)
@@ -176,11 +201,11 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
     <div className="library-capture-tools"><label><span>{moteText('按天查看')}</span><input type="date" aria-label={moteText('查看某天的采集记录')} value={after && after === before ? after : ''} onChange={event => { setAfter(event.target.value); setBefore(event.target.value); }}/></label><label><span>{moteText('设备')}</span><select aria-label={moteText('筛选设备')} value={device} onChange={event => setDevice(event.target.value)}><option value="">{moteText('全部设备')}</option>{devices.map(item => <option key={item.deviceId} value={item.deviceId}>{item.deviceName}</option>)}</select></label><button className="icon-button" aria-label={moteText('刷新记录')} disabled={loading} onClick={() => setRefreshVersion(value => value + 1)}><RefreshCw size={16} className={loading ? 'spin' : ''}/></button></div>
     <details className="library-advanced-filters"><summary>{moteText('更多筛选')}</summary><div className="filter-bar"><label><span>{moteText('从')}</span><input type="date" aria-label={moteText('开始日期')} value={after} onChange={event => setAfter(event.target.value)}/></label><label><span>{moteText('至')}</span><input type="date" aria-label={moteText('结束日期')} value={before} min={after} onChange={event => setBefore(event.target.value)}/></label><label><span>{moteText('来源')}</span><select aria-label={moteText('筛选记录来源')} value={source} onChange={event => { setSource(event.target.value); if (event.target.value && event.target.value !== 'screen')
             setOcrStatus(''); }}><option value="">{moteText('全部来源')}</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label><span>{moteText('采集级别')}</span><select aria-label={moteText('筛选采集级别')} value={collection} onChange={event => setCollection(event.target.value as typeof collection)}><option value="">{moteText('全部记录')}</option><option value="activity">{moteText('仅活动状态')}</option><option value="content">{moteText('允许保留的内容')}</option></select></label><label><span>OCR</span><select aria-label={moteText('筛选 OCR 状态')} value={ocrStatus} onChange={event => setOcrStatus(event.target.value)}><option value="">{moteText('全部状态')}</option><option value="pending">{moteText('待处理')}</option><option value="completed">{moteText('已完成')}</option><option value="failed">{moteText('失败')}</option><option value="disabled">{moteText('已关闭')}</option><option value="unknown">{moteText('状态未知')}</option></select></label></div></details>
-    <div className="library-list-status"><span>{totalCount === undefined ? moteText('已读取') + ' ' + items.length : moteText('共 {0} 条 · 本页 {1} 条', totalCount, items.length)}</span>{(after || before || device || collection || source || ocrStatus) && <button className="text-button" onClick={() => { setAfter(''); setBefore(''); setDevice(''); setCollection(''); setSource(''); setOcrStatus(''); }}>{moteText('清除筛选')}</button>}</div>
+    <div className="library-list-status"><span>{visibleTotal === undefined ? moteText('已读取') + ' ' + visibleItems.length : moteText('共 {0} 条 · 本页 {1} 条', visibleTotal, visibleItems.length)}</span>{(after || before || device || collection || source || ocrStatus) && <button className="text-button" onClick={() => { setAfter(''); setBefore(''); setDevice(''); setCollection(''); setSource(''); setOcrStatus(''); }}>{moteText('清除筛选')}</button>}</div>
     {error && <ErrorNotice text={error} retry={() => void load(pageCursors[page], requestVersion.current, page)}/>}
     {groups.map(([day, records]) => <section className="library-record-group" key={day}><h2>{day}</h2><div className="library-record-list">{records.map(capture => <button className={'library-record' + (selectedReference === 'capture:' + capture.id ? ' selected' : '')} key={capture.id} aria-current={selectedReference === 'capture:' + capture.id ? 'true' : undefined} onClick={() => onOpen('capture:' + capture.id)}><span className="library-record-icon"><FileText size={18}/></span><span className="library-record-copy"><strong>{capture.windowTitle || capture.appName || sourceLabels[capture.source]}</strong><small>{sourceLabels[capture.source] ?? capture.source} · {capture.deviceName} · {dateTime(capture.capturedAt)}</small>{capture.textPreview && <span className="library-record-preview">{capture.textPreview}</span>}{capture.source === 'screen' && <small>{ocrPresentation(capture.ocr, capture.textPreview).label}</small>}</span></button>)}</div></section>)}
-    {loading && <div className="load-more"><Spinner label={moteText('正在找回这些片刻…')}/></div>}
-    {!loading && !items.length && !error && <Empty icon={Clock3} title={moteText('这段时间还没有记录')}><p>{moteText('试试其他时间或设备，或检查采集端是否已开启。')}</p></Empty>}
+    {initialOrPageLoading && <div className="load-more"><Spinner label={moteText('正在找回这些片刻…')}/></div>}
+    {visibleTotal!==undefined && !initialOrPageLoading && !visibleItems.length && !error && <Empty icon={Clock3} title={moteText('这段时间还没有记录')}><p>{moteText('试试其他时间或设备，或检查采集端是否已开启。')}</p></Empty>}
     <nav className="library-pagination" aria-label={moteText('采集记录分页')}><button className="button subtle" disabled={loading || page === 0} onClick={() => { onBrowseChanged?.(); void load(pageCursors[page - 1], requestVersion.current, page - 1); }}>{moteText('上一页')}</button><span>{moteText('第 {0} 页', page + 1)}</span><button className="button subtle" disabled={loading || !cursor} onClick={() => { onBrowseChanged?.(); if (cursor)
             void load(cursor, requestVersion.current, page + 1); }}>{moteText('下一页')}</button></nav><p className="library-time-note">{moteText('日期按当前浏览器时区显示。这里展示已同步到中央节点的记录；可刷新查看文字识别的最新状态与结果。')}</p>
   </section>;
@@ -228,7 +253,7 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
                 setOcrStatus('');
             }}>
             {moteText("清除筛选")}</button>)}
-        <span className="filter-count">{totalCount === undefined ? moteText("已读取") + " " + items.length : moteText("共 {0} 条 · 本页 {1} 条", totalCount, items.length)}</span>
+        <span className="filter-count">{visibleTotal === undefined ? moteText("已读取") + " " + visibleItems.length : moteText("共 {0} 条 · 本页 {1} 条", visibleTotal, visibleItems.length)}</span>
       </div>
       <p className="capture-browse-note">{moteText("日期按当前浏览器时区显示。这里展示已同步到中央节点的记录；可刷新查看文字识别的最新状态与结果。")}</p>
       {error && (<ErrorNotice text={error} retry={() => void load(pageCursors[page], requestVersion.current, page)}/>)}
@@ -242,10 +267,10 @@ export function RecordTimeline({ api, devices, onOpen, revision, library = false
             {records.map((capture) => (<CaptureCard key={capture.id} capture={capture} api={api} onOpen={onOpen}/>))}
           </div>
         </section>))}
-      {loading && (<div className="load-more">
+      {initialOrPageLoading && (<div className="load-more">
           <Spinner label={moteText("正在找回这些片刻…")}/>
         </div>)}
-      {!loading && !items.length && !error && (<div className="panel">
+      {visibleTotal!==undefined && !initialOrPageLoading && !visibleItems.length && !error && (<div className="panel">
           <Empty icon={Clock3} title={moteText("这段时间还没有记录")}>
             <p>{moteText("试试其他时间或设备，或检查采集端是否已开启。")}</p>
           </Empty>

@@ -19,6 +19,55 @@ async function fixture(t:any){const dom=new JSDOM('<!doctype html><div id="root"
 function apiWith(read:(path:string,init?:RequestInit)=>unknown):Api{return {request:async(path:string,init?:RequestInit)=>{if(path.startsWith('/api/operations/changes'))return {ids:[],cursor:0,hasMore:false,reset:false};if(path==='/api/model-settings')return modelView();return read(path,init);},setAgentTimeout:()=>{}} as Api;}
 const when='2026-01-01T00:00:00Z',summary=(id:string)=>({id,title:'Conversation '+id,createdAt:when,updatedAt:when,turnCount:1,scope:{},status:'completed'}),detail=(id:string)=>({...summary(id),turns:[{id:'turn-'+id,question:'Question '+id,status:'completed',createdAt:when,result:{answer:'Answer '+id,citations:[],trace:[],runId:id}}],nextCursor:'older'});
 const button=(d:Document,text:string)=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent===text)!;
+test('background conversation reads keep loaded answers usable without replaying initial loading',async t=>{
+ const {root,d}=await fixture(t),initial=deferred(),historyRefresh=deferred(),detailRefresh=deferred(),next=deferred();let refreshing=false;
+ const api=apiWith(path=>{
+  if(path==='/api/conversations?limit=30')return refreshing?historyRefresh.promise:initial.promise;
+  if(path==='/api/query-runs')return {items:[]};
+  if(path==='/api/conversations/A')return refreshing?detailRefresh.promise:detail('A');
+  if(path==='/api/conversations/B')return next.promise;
+  return {items:[]};
+ });
+ await act(async()=>root.render(React.createElement(Conversations,{api,configured:true,devices:[],renderAnswer:a=>a.answer})));
+ assert.match(d.body.textContent!,/正在读取历史/);
+ await act(async()=>initial.resolve({items:['A','B'].map(summary)}));
+ await act(async()=>d.querySelector<HTMLButtonElement>('.conversation-item')!.click());
+ const input=d.querySelector<HTMLTextAreaElement>('[aria-label="向 Mote 提问"]')!;
+ refreshing=true;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/conversations')));
+ assert.match(d.querySelector('.conversation-messages')!.textContent!,/Answer A/);
+ assert.doesNotMatch(d.body.textContent!,/正在读取历史|正在打开对话/);
+ assert.equal(input.disabled,false);
+ await act(async()=>{historyRefresh.resolve({items:['A','B'].map(summary)});detailRefresh.resolve(detail('A'));});
+ assert.equal(d.querySelector('[aria-label="向 Mote 提问"]'),input);
+ await act(async()=>d.querySelectorAll<HTMLButtonElement>('.conversation-item')[1].click());
+ assert.match(d.body.textContent!,/正在打开对话/);assert.equal(input.disabled,true);
+ await act(async()=>next.resolve(detail('B')));assert.equal(input.disabled,false);assert.match(d.querySelector('.conversation-messages')!.textContent!,/Answer B/);
+});
+test('restoring a completed run refreshes history once without cancelling its replacement read',async t=>{
+ const {root,d}=await fixture(t),restore=deferred(),refresh=deferred(),reads:AbortSignal[]=[];
+ const completed={id:'generated-completed',status:'completed',conversationId:'A',events:[]};
+ const api=apiWith((path,init)=>{
+  if(path==='/api/conversations?limit=30'){reads.push(init!.signal as AbortSignal);return reads.length===1?{items:[summary('A')]}:refresh.promise;}
+  if(path==='/api/query-runs')return restore.promise;
+  if(path==='/api/query-runs/generated-completed')return completed;
+  if(path==='/api/conversations/A')return detail('A');
+  return {items:[]};
+ });
+ await act(async()=>root.render(React.createElement(Conversations,{api,configured:true,devices:[],renderAnswer:a=>a.answer})));
+ await act(async()=>restore.resolve({items:[completed]}));
+ assert.equal(reads.length,2,'one initial read and one terminal-run revalidation');assert.equal(reads[1].aborted,false);
+ assert.doesNotMatch(d.body.textContent!,/正在读取历史/);
+ await act(async()=>refresh.resolve({items:[summary('A')]}));assert.match(d.querySelector('.conversation-messages')!.textContent!,/Answer A/);
+});
+test('an empty conversation history keeps its explanation visible through background refresh',async t=>{
+ const {root,d}=await fixture(t),refresh=deferred();let refreshing=false;
+ const api=apiWith(path=>path==='/api/conversations?limit=30'&&refreshing?refresh.promise:{items:[]});
+ await act(async()=>root.render(React.createElement(Conversations,{api,configured:true,devices:[],renderAnswer:a=>a.answer})));
+ const message=d.querySelector('.conversation-history .fine-print')!;assert.match(message.textContent!,/回答会自动保存在中央节点/);
+ refreshing=true;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/conversations')));
+ assert.equal(d.querySelector('.conversation-history .fine-print'),message);assert.doesNotMatch(d.querySelector('.conversation-history')!.textContent!,/正在读取/);
+ await act(async()=>refresh.resolve({items:[]}));assert.equal(d.querySelector('.conversation-history .fine-print'),message);
+});
 test('conversation restore, detail and older-page replies cannot replace later owner selection',async t=>{
  const {root,d}=await fixture(t),restore=deferred(),a=deferred(),old=deferred();
  const api=apiWith(path=>path==='/api/conversations?limit=30'?{items:['A','B'].map(summary)}:path==='/api/query-runs'?restore.promise:path.includes('?cursor=')?old.promise:path.endsWith('/A')?a.promise:detail('B'));

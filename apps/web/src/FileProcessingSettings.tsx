@@ -1,5 +1,6 @@
 import {invalidateConfiguration} from './configuration-cache';
 import { useResource } from './useResource';
+import { resources } from './resource-cache';
 import { processingState, localModelState } from './processing-state';
 import { useUnsavedChanges } from './unsaved';
 import { moteText } from '@mote/shared/i18n';
@@ -30,11 +31,8 @@ export function FileProcessingSettings({ api }: {
             missingDependencies?: string[];
         };
     }>(api, '/api/media-models'), dialogue = media.data?.dialogue, wespeaker=media.data?.['speaker-wespeaker'];
-    useEffect(() => { if (dialogue && (['downloading', 'verifying', 'installing'].includes(dialogue.state) || dialogue.state === 'ready' && !dialogue.runtimeReady)) {
-        const timer = setInterval(media.refresh, 2000);
-        return () => clearInterval(timer);
-    } }, [dialogue?.state, dialogue?.runtimeReady, media.refresh]);
-    useEffect(()=>{if(wespeaker&&(['downloading','verifying','installing'].includes(wespeaker.state)||wespeaker.state==='ready'&&!wespeaker.runtimeReady)){const timer=setInterval(media.refresh,2000);return()=>clearInterval(timer);}},[wespeaker?.state,wespeaker?.runtimeReady,media.refresh]);
+    const modelsUpdating = [dialogue, wespeaker].some(model => model && (['downloading', 'verifying', 'installing'].includes(model.state) || model.state === 'ready' && !model.runtimeReady));
+    useEffect(() => modelsUpdating ? resources(api).get('/api/media-models').poll(2000) : undefined, [api, modelsUpdating]);
     useUnsavedChanges(dirty);
     useEffect(() => { setSaved(null); setDirty(false); setPreview(null); setMatch(null); setMessage(''); }, [api]);
     useEffect(() => { if (resource.data && !dirty)

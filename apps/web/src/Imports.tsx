@@ -24,6 +24,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   const queueState=useSyncExternalStore(queue.subscribe,queue.getSnapshot,queue.getSnapshot);
   const queueVersion=useRef(queueState.completedVersion);
   const [loadError,setLoadError]=useState('');
+  const loadedApi=useRef<Api|null>(null);
   const [items,setItems]=useState<ImportJob[]>([]),[selected,setSelected]=useState('');
   const [creating,setCreating]=useState(true),[mode,setMode]=useState<'files'|'directory'>('files');
   const [files,setFiles]=useState<File[]>([]),[directory,setDirectory]=useState(''),[name,setName]=useState(''),[instruction,setInstruction]=useState('');
@@ -47,7 +48,7 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   const [revision,setRevision]=useState(0);
   useEffect(()=>{const controller=new AbortController();scope.current=controller;return()=>controller.abort();},[api]);
   useEffect(()=>{confirmGeneration.current++;setConfirmError(null);},[api,selected]);
-  useEffect(()=>{fileRead.current?.abort();fileRead.current=null;setReadingFiles(false);setItems([]);setSelected('');setCreating(true);setLoadError('');setError('');setPending(new Set());setActionErrors({});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');setDirectory('');pendingJobs.current=new Set();queueVersion.current=0;},[api]);
+  useEffect(()=>{fileRead.current?.abort();fileRead.current=null;loadedApi.current=null;setReadingFiles(false);setItems([]);setSelected('');setCreating(true);setLoadError('');setError('');setPending(new Set());setActionErrors({});setFiles([]);setName('');setInstruction('');setSourcePackId('');setImageProfileId('');setDirectory('');pendingJobs.current=new Set();queueVersion.current=0;},[api]);
   useEffect(()=>{
     if(queueVersion.current===queueState.completedVersion)return;
     queueVersion.current=queueState.completedVersion;
@@ -58,16 +59,16 @@ export function Imports({api,onOpen,onMemories,onSettings,onChanged,refreshVersi
   },[queueState,queue]);
   useEffect(()=>{
     const controller=new AbortController();let timer:ReturnType<typeof setTimeout>;
-    setLoading(true);
+    setLoading(loadedApi.current!==api);
     async function load(){
       try{
         const result=await api.request<{items:ImportJob[]}>('/api/imports',{signal:controller.signal});
         if(controller.signal.aborted)return;
         const submitted=queue.getSnapshot().entries.flatMap(entry=>entry.job?[entry.job]:[]);
         const merged=[...submitted.filter(job=>!result.items.some(item=>item.id===job.id)),...result.items];
-        setItems(merged);queue.acknowledge(result.items.map(item=>item.id));setLoadError('');setLoading(false);
+        loadedApi.current=api;setItems(merged);queue.acknowledge(result.items.map(item=>item.id));setLoadError('');setLoading(false);
         if(merged.some(working))timer=setTimeout(()=>void load(),2000);
-      }catch(e){if(!controller.signal.aborted){setLoadError(errorMessage(e));setLoading(false);if(e instanceof ApiError&&[401,403].includes(e.status)){setItems([]);setSelected('');}else timer=setTimeout(()=>void load(),8000);}}
+      }catch(e){if(!controller.signal.aborted){setLoadError(errorMessage(e));setLoading(false);if(e instanceof ApiError&&[401,403].includes(e.status)){loadedApi.current=null;setItems([]);setSelected('');}else timer=setTimeout(()=>void load(),8000);}}
     }
     void load();return()=>{controller.abort();clearTimeout(timer);};
   },[api,queue,revision,refreshVersion]);

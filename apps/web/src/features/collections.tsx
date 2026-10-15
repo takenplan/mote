@@ -1,5 +1,5 @@
 import { moteText } from '@mote/shared/i18n';
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useResource } from '../useResource';
 import { queryString, errorMessage, type Activity } from '../api';
 import { ErrorNotice, Spinner } from '../shell-components';
@@ -14,9 +14,9 @@ import type { CollectionEntry, CollectionProps } from './types';
 const CaptureSessions = React.lazy(() => import('../CaptureSessions').then(module => ({ default: module.CaptureSessions })));
 const Sources = React.lazy(() => import('../Sources').then(module => ({ default: module.Sources })));
 const Memories = React.lazy(() => import('../Memories').then(module => ({ default: module.Memories })));
-function ActivityCollection({ api, range, revision }: CollectionProps) {
-    const activity = useResource<Activity>(api, '/api/activity' + queryString(range));
-    useEffect(() => { activity.refresh(); }, [revision, activity.refresh]);
+function ActivityCollection({ api, range, revision, rangeSelectionKey }: CollectionProps) {
+    const continuity=rangeSelectionKey===undefined?undefined:JSON.stringify([rangeSelectionKey,range.deviceId]);
+    const activity = useResource<Activity>(api, '/api/activity' + queryString(range), undefined, revision, continuity);
     if (activity.error)
         return <ErrorNotice text={errorMessage(activity.error)} retry={activity.refresh}/>;
     if (!activity.data)
@@ -31,6 +31,6 @@ export const builtinCollections: CollectionEntry[] = [
     { id: 'sources', usesTimeRange: false, featureId: 'mote.sources', label: moteText('来源资料'), order: 2, group: 'views', render: props => <Sources {...props} mode="library" onImport={() => { location.hash = '/library/import'; }}/> },
     { id: 'files', usesTimeRange: false, featureId: 'mote.files', label: moteText('文件与录音'), order: 3, group: 'views', render: props => <Files {...props}/> },
     { id: 'activity', featureId: 'mote.capture', label: moteText('应用活动'), order: 4, group: 'views', render: props => <ActivityCollection {...props}/> },
-    { id: 'media', featureId: 'mote.media', label: moteText('媒体播放'), order: 5, group: 'views', render: props => <MediaActivitySummary key={props.revision} {...props}/> },
+    { id: 'media', featureId: 'mote.media', label: moteText('媒体播放'), order: 5, group: 'views', render: props => <MediaActivitySummary {...props}/> },
     { id: 'memories', featureId: 'mote.memory', label: moteText('记忆'), order: 6, group: 'views', render: props => <Memories {...props} embedded refreshVersion={props.revision}/> },
 ];

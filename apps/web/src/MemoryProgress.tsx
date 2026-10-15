@@ -43,8 +43,8 @@ export const memoryJobLabels: Record<MemoryJob['status'], string> = {
 export function memoryJobLabel(job:Pick<MemoryJob,'status'|'errorCode'|'outcome'>){return job.outcome==='input_invalidated'?moteText('资料已更新，本次结果失效'):job.status==='failed'&&job.errorCode==='memory_feedback_planning_failed'?moteText('内部规划失败，未完成范围已保留'):job.status==='waiting_for_input'&&job.errorCode==='memory_owner_material_required'?moteText('需要正式资料确认归属'):memoryJobLabels[job.status];}
 function inputLabel(required:string){return ({'source-body':moteText('正文'),'source-record':moteText('原始记录'),'extracted-text':moteText('提取文字（OCR / 转写）'),material:moteText('完整资料')} as Record<string,string>)[required]??(/^attachment\/[^/]+\/text$/.test(required)?moteText('附件文字'):required);}
 
-export function useMemoryJob(api:Api, id?:string) {
-  const path=id?'/api/memory-jobs/'+encodeURIComponent(id):null,read=useResource<MemoryJob>(api,path),feedError=useOperationUpdates(api);
+export function useMemoryJob(api:Api, id?:string, revision?:unknown) {
+  const path=id?'/api/memory-jobs/'+encodeURIComponent(id):null,read=useResource<MemoryJob>(api,path,undefined,revision),feedError=useOperationUpdates(api);
   const polling=read.error?8000:read.data&&(['queued','running','pausing'].includes(read.data.status)||(read.data.runningBatches??0)>0)?2000:read.data?.status==='waiting_for_input'?5000:undefined;
   useEffect(()=>path&&polling?resources(api).get(path).poll(polling):undefined,[api,path,polling]);
   return {job:read.data??null,error:read.error||feedError?errorMessage(read.error||feedError):'',reload:read.refresh};
