@@ -37,6 +37,12 @@ Independent reviewers found and drove fixes for:
   another attempt. Contexts now bind the exact running lease fence, state and
   expiry, in addition to durable grant and account epoch. Dedicated real-service
   negative tests cover cancellation, new attempts, completion and late writes.
+- P1: shared-model withdrawal initially fenced explicit commits but a retained
+  private service could still write. A real production negative reproduced it.
+  Task-context currentness now delegates to the engine's complete input/resource
+  grant, including synchronous local abort and shutdown, and fails closed before
+  binding or on recursive validation. Cached and newly obtained private services
+  are both rejected after withdrawal.
 - P2: deletion initially retained private operation/fairness metadata. Cleanup now
   removes the corresponding user/operation records, retaining only the domain
   admission tombstone; unknown external outcomes retain reconciliation evidence.
@@ -70,7 +76,7 @@ An exploratory affected run exposed a legacy recovery fixture assuming one
 The single assertion now uses its existing real-engine `finishPipeline` helper;
 all success, immutable identity and no-replay assertions remain. The isolated six
 recovery-client tests passed before this correction as well; no test is skipped.
-Two earlier affected processes were deliberately stopped with exit 143 because
+Three earlier affected processes were deliberately stopped before completion because
 subsequent required review fixes invalidated their code snapshots. They are
 incomplete runs, not passing frozen-code evidence.
 

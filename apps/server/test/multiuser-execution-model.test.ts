@@ -16,6 +16,7 @@ import {ScopeError} from '../src/scope/baseline.js';
 import type {UserContext} from '../src/scope/context.js';
 import type {TaskExecution,TaskRun,UserTaskHandler} from '../src/scope/task-execution.js';
 import type {TaskModelHost,TaskModelLease,TaskModelRun,TaskModelUsage} from '../src/scope/task-model.js';
+import type {PrivateData} from '../src/scope/private-data.js';
 
 const password='Generated-model-execution-password-01';
 const headers=(token?:string)=>({'x-mote-protocol-version':'2',...(token?{authorization:'Bearer '+token}:{})});
@@ -93,12 +94,15 @@ test('production task admission pins genuine per-user M04 leases and fixed confi
 });
 
 test('shared model withdrawal fences in-flight result, usage and all late task publication',async t=>{
- const f=await fixture(t),entered=deferred(),release=deferred();let run:TaskRun|undefined,commits=0;t.after(()=>release.resolve());
+ const f=await fixture(t),entered=deferred(),release=deferred();let run:TaskRun|undefined,privateData:PrivateData|undefined,commits=0;t.after(()=>release.resolve());
+ const source=(id:string)=>({id,name:'Generated model publication',kind:'custom' as const,deviceId:'generated-model-device',platform:'import' as const});
  f.configuration.configure(f.aContext,'generated-shared','shared');
- f.node.execution.register(handler({execute:async current=>{run=current;return current.model!.withModel(async()=>{entered.resolve();await release.promise;return {secret:'generated-late-result'};});},commit:()=>{commits++;}}));
+ f.node.execution.register(handler({execute:async current=>{run=current;privateData=current.services.get<PrivateData>('private-data');current.grant.commit(()=>privateData!.registerSource(source('generated-before-withdrawal')));return current.model!.withModel(async()=>{entered.resolve();await release.promise;return {secret:'generated-late-result'};});},commit:()=>{commits++;}}));
  const job=await f.submit(f.alice.token,'shared-withdrawal');await entered.promise;f.configuration.withdrawShared();
+ assert.throws(()=>privateData!.registerSource(source('generated-after-withdrawal')),{code:'invalid_identity'});assert.throws(()=>run!.services.get('private-data'),{code:'invalid_identity'});
  assert.throws(()=>run!.model!.recordUsage({status:'completed',durationMs:1}));assert.throws(()=>run!.checkpoint.write('late',{}));assert.throws(()=>run!.progress({late:true}));let called=false;await assert.rejects(run!.model!.withModel(async()=>{called=true;return null;}));assert.equal(called,false);
  release.resolve();await f.wait(job.id,'stale');assert.equal(commits,0);assert.equal(f.configuration.usage.size,0);const response=await f.request(f.alice.token,'/api/tasks/'+job.id);assert.equal(response.json().result,undefined);
+ const sources=await f.request(f.alice.token,'/api/sources');assert.deepEqual(sources.json().items.map((value:any)=>value.id),['generated-before-withdrawal']);
  assert.equal((await f.request(f.alice.token,'/api/tasks/'+job.id+'/retry','POST',{})).statusCode,200);await f.wait(job.id,'blocked');assert.equal(f.node.execution.engine.get(job.id)!.error,'model_authority_revoked');assert.equal(f.configuration.issued.length,1);assert.equal(f.configuration.modelCalls,1);
 });
 
@@ -113,6 +117,21 @@ test('retained model wrappers cannot call models or write usage after cancel, le
   if(label==='cancelled'){gates.delete(label);assert.equal((await f.request(f.alice.token,'/api/tasks/'+job.id+'/retry','POST',{})).statusCode,200);await f.wait(job.id,'succeeded');await assertRetired(old);assert.notEqual(runs.get(label)!.model,old);await assertRetired(runs.get(label)!.model!);}
  }
  const done=await f.submit(f.bob.token,'completed');await f.wait(done.id,'succeeded');await assertRetired(runs.get('completed')!.model!);
+});
+
+test('a real task deadline revokes retained private services synchronously before the durable running state settles',async t=>{
+ const f=await fixture(t),aborted=deferred(),release=deferred();let abortError:unknown;t.after(()=>release.resolve());
+ f.node.execution.register(handler({policy:{timeoutMs:30,maxAttempts:1,maxRecoveryWindowMs:null},execute:async run=>{
+  const privateData=run.services.get<PrivateData>('private-data');
+  run.signal.addEventListener('abort',()=>{try{
+   assert.equal(run.signal.aborted,true);assert.equal(f.node.execution.engine.get(run.task.id)!.state,'running','the signal callback must precede durable state settlement');
+   assert.throws(()=>privateData.registerSource({id:'generated-timeout-late-source',name:'Generated timeout publication',kind:'custom',deviceId:'generated-timeout-device',platform:'import'}),{code:'invalid_identity'});
+   assert.throws(()=>run.services.get('private-data'),{code:'invalid_identity'});
+  }catch(error){abortError=error;}finally{aborted.resolve();}},{once:true});
+  await release.promise;return null;
+ }}));
+ const job=await f.submit(f.alice.token,'deadline-service-fence');await aborted.promise;if(abortError)throw abortError;release.resolve();await f.wait(job.id,'failed');
+ const sources=await f.request(f.alice.token,'/api/sources');assert.deepEqual(sources.json().items,[]);
 });
 
 test('process-host reopen blocks model tasks lacking the genuine snapshot and never leases current settings',async t=>{

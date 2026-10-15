@@ -65,7 +65,9 @@ ownership, cross-user operation ancestry, self dependencies and dependency cycle
 record; serialized contexts and JSON lookalikes are invalid. The issued running
 context additionally binds its credential identity to the current lease fence.
 Every private service access therefore checks the account epoch, durable grant,
-current task state, fence and lease expiry. Cancellation, completion, lease loss
+current task state, fence and lease expiry, plus the engine's current input and
+resource grant. Local abort and shutdown revoke that context synchronously, before
+the durable state transition finishes. Cancellation, completion, lease loss
 and a new attempt invalidate retained private-service handles. Durable task
 contexts never gain administrator capability.
 

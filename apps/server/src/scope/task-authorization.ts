@@ -7,6 +7,9 @@ import {ScopeError} from './baseline.js';
 /** Only the trusted task host issues and resolves these records. A grant ID is
  * an internal locator, never a login credential or a client-selectable owner. */
 export class TaskAuthorization implements DurableIdentityVerifier {
+ private executionValidator:((taskId:string,fence:string)=>boolean)|undefined;
+ private readonly validating=new Set<string>();
+ bindExecution(validator:(taskId:string,fence:string)=>boolean){if(this.executionValidator)throw new ScopeError('undeclared_scope',500);this.executionValidator=validator;}
  constructor(private readonly db:DatabaseSync,private readonly accounts:Accounts,readonly deploymentId:string){
   db.exec(`CREATE TABLE IF NOT EXISTS task_authorizations(grant_id TEXT PRIMARY KEY,task_id TEXT NOT NULL UNIQUE,user_id TEXT NOT NULL,authorization_epoch INTEGER NOT NULL,revoked INTEGER NOT NULL DEFAULT 0);
    CREATE INDEX IF NOT EXISTS task_authorizations_user ON task_authorizations(user_id);`);
@@ -24,7 +27,7 @@ export class TaskAuthorization implements DurableIdentityVerifier {
   try{const row=this.assert(grantId),execution=this.db.prepare("SELECT fence FROM execution_steps WHERE id=? AND state='running' AND lease_until>?").get(row.task_id,Date.now());if(!execution?.fence)return undefined;return {deploymentId:this.deploymentId,userId:String(row.user_id),credentialId:grantId+':'+execution.fence,authorizationEpoch:Number(row.authorization_epoch),administrator:false};}catch{return undefined;}
  }
  isCurrent(identity:Readonly<VerifiedIdentity>){
-  try{if(identity.deploymentId!==this.deploymentId||identity.administrator)return false;const [grantId,fence,...extra]=identity.credentialId.split(':');if(!grantId||!fence||extra.length)return false;const row=this.assert(grantId,identity.userId,identity.authorizationEpoch);return Boolean(this.db.prepare("SELECT 1 FROM execution_steps WHERE id=? AND state='running' AND fence=? AND lease_until>?").get(row.task_id,fence,Date.now()));}catch{return false;}
+  try{if(identity.deploymentId!==this.deploymentId||identity.administrator)return false;const [grantId,fence,...extra]=identity.credentialId.split(':');if(!grantId||!fence||extra.length)return false;const row=this.assert(grantId,identity.userId,identity.authorizationEpoch);if(!this.db.prepare("SELECT 1 FROM execution_steps WHERE id=? AND state='running' AND fence=? AND lease_until>?").get(row.task_id,fence,Date.now())||!this.executionValidator||this.validating.has(identity.credentialId))return false;this.validating.add(identity.credentialId);try{return this.executionValidator(String(row.task_id),fence);}finally{this.validating.delete(identity.credentialId);}}catch{return false;}
  }
  revoke(taskId:string){this.db.prepare('UPDATE task_authorizations SET revoked=1 WHERE task_id=?').run(taskId);}
 }

@@ -62,6 +62,7 @@ export class TaskExecution {
    CREATE TABLE IF NOT EXISTS task_restore_journal(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,payload_hash TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));`);
   this.storage={db,reserveMetadata:bytes=>{if(!Number.isSafeInteger(bytes)||bytes<0)throw new TaskError('task_metadata_invalid');}};
   this.engine=new ExecutionEngine(this.storage);
+  this.grants.bindExecution((taskId,fence)=>this.engine.isCurrentInputGrant(taskId,fence));
  }
  /** The integration composition passes the existing M04 Configurations host. */
  bindConfiguration(host:TaskModelHost){if(this.modelHost&&this.modelHost!==host)throw new TaskError('model_host_conflict',409);this.modelHost=host;}
