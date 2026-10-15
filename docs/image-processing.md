@@ -96,10 +96,20 @@ be quoted as original image contents.
 
 Independent review receives the same frozen read grant, but no inherited pixel
 delivery. A retained visual claim requires the reviewer's own current image or a
-region covering its required original proof. The reviewer can remove an
-unsupported claim without making a needless image request. Bounded deletion
+region covering its required original proof. The reviewer can discard an
+image's visual claims without making a needless image request. Bounded deletion
 review and consolidation can reuse the same scoped read contract; consolidation
 derives it only from the exact selected cards' current saved visual proofs.
+
+Coverage identity is the evidence anchor and original hash, independent of
+statement wording, titles or candidate order. While a reviewed result still
+cites that visual group, every draft view actually cited for the group needs a
+covering view cited by the reviewer. Separate reviewer views can cover separate
+draft crops; partial views are not geometrically stitched to cover one larger
+proof. Extra uncited extraction reads add no requirement. Dropping the entire
+group's visual citations removes its coverage requirement. This conservative
+grouping avoids inferring claim identity from prose when candidates are edited,
+split or merged.
 
 The current Hindsight native integration protocol accepts exact text ranges,
 not visual Memory proofs. It rejects a selected visual parent with

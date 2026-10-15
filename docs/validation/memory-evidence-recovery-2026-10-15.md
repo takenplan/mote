@@ -98,6 +98,35 @@ Usage is thread-cumulative; underlying request counts and actual fees remain
 unknown, not zero. No unrelated phone-source records or other archive content
 were exposed.
 
+## PR #121 review correction
+
+The review identified that comparing draft and reviewed statement strings could
+drop the old view-coverage requirement after a paraphrase. Generated regression
+tests reproduced the bypass before the fix: a rewritten claim could cite an
+unrelated smaller crop, and two partial crops could replace a full-image proof.
+
+Matching now uses the evidence anchor and original hash. Every still-cited
+group's draft-cited view needs one covering view actually cited and delivered in
+this review. Multiple crops can cover separate proofs; they cannot be stitched
+to satisfy one larger required view. Uncited extraction reads and entirely
+discarded groups add no coverage requirement. The conservative grouping boundary
+is documented in [image processing](../image-processing.md).
+
+New unit cases cover rewritten statements/titles, reordered candidates,
+same-image multiple crops, smaller/unrelated crops, covering/full views, wrong
+anchor/hash and unused reads. Formal generated file → Material → extraction →
+real Bridge → independent review regressions verify that a paraphrase with an
+uncovered crop never publishes, while a paraphrase with the full image does.
+The focused proof, image-journey and review suites passed 37/37. After the final
+code change, `npm run check:affected -- --base origin/main` exited 0: Server
+1,834 passed/1 skipped, Desktop 442, Web 387, Agent 312 passed/1 skipped,
+Diagnostics 5, Shared 183, script group 80, CLI 4 and central-runner fixtures
+passed. Android's JVM task was successful with all inputs up-to-date, reusing its
+319 existing test results. The server production build and diff/documentation
+checks also passed. The two conditional skips are the same ones identified
+above. This correction uses generated content only; it adds no real-data/model
+run or historical reevaluation.
+
 ## Historical scope and release boundary
 
 Five historical integration windows have demonstrated empty-body delivery,

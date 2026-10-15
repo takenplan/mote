@@ -17,7 +17,7 @@ import {generatedMemoryOutput,planGeneratedMemory} from './fixtures/memory-plann
 import {HindsightEngine} from '../src/hindsight-engine.js';
 import {generatedNativeAdapter} from './fixtures/native-engine-adapter.js';
 
-type Scenario={deletionReview?:boolean;integration?:boolean;pendingUnderstanding?:boolean;ocr:'text'|'empty'|'failed';automatic?:boolean;denied?:boolean;skipReviewPixels?:boolean;deleteDuringReview?:boolean;replaceDuringReview?:boolean;attributionDuringReview?:boolean;metadataOnly?:boolean;unreadEmpty?:boolean;failFirstReview?:boolean};
+type Scenario={rewriteReview?:'uncovered'|'covering';deletionReview?:boolean;integration?:boolean;pendingUnderstanding?:boolean;ocr:'text'|'empty'|'failed';automatic?:boolean;denied?:boolean;skipReviewPixels?:boolean;deleteDuringReview?:boolean;replaceDuringReview?:boolean;attributionDuringReview?:boolean;metadataOnly?:boolean;unreadEmpty?:boolean;failFirstReview?:boolean};
 async function fixture(t:import('node:test').TestContext,scenario:Scenario){
  const directory=mkdtempSync(join(tmpdir(),'mote-memory-image-journey-')),token='generated-memory-image-owner';
  const config:Config={dataDir:directory,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:30_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'generated-vision',modelProvider:'custom',modelProtocol:'openai-completions',modelBaseUrl:'http://127.0.0.1:1234/v1',apiKey:'',allowUnauthenticatedLocal:true,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',diagnosticsEnabled:false,logLevel:'silent'};
@@ -65,11 +65,13 @@ async function fixture(t:import('node:test').TestContext,scenario:Scenario){
      assert.equal(metadata.body.image,undefined);assert.equal(bridge.imageReadReceipts.length,0,'metadata is never pixel proof');
      if(scenario.metadataOnly)incomplete=true;
      else {
-      const pixels=await call('read_image',{id:grant.id,expectedImageSha256:metadata.body.imageView.original.sha256,region:{x:0,y:0,width:8,height:8}});
+      const rewriting=phase==='review'&&scenario.rewriteReview;
+      const pixels=await call('read_image',{id:grant.id,expectedImageSha256:metadata.body.imageView.original.sha256,...(rewriting==='covering'?{}:{region:{x:rewriting==='uncovered'?8:0,y:rewriting==='uncovered'?8:0,width:8,height:8}})});
       assert.equal(pixels.status,200,JSON.stringify(pixels.body));assert.ok(pixels.body.image.data);assert.equal(bridge.imageReadReceipts.length,0,'prepared bytes alone are not a delivery receipt');
       bridge.imageDelivery(pixels.body.imageDelivery,true);
       const view=pixels.body.imageView;
       memories=[{title:'Generated visible shape',statement:`The retained image depicts a red rectangle. [${grant.id}]`,uncertainty:'The creator and event date are unknown; this does not identify an owner preference.',admission:{layer:scenario.integration?'memory':'observation',reason:scenario.integration?'Retain the exact generated reference for the fixture redraw task':'Generated original visual fact',scope:'This generated image only',attribution:'observed'},evidenceIds:[grant.id],evidence:[{id:grant.id,image:{originalSha256:view.original.sha256,viewId:view.viewId}}]}];
+      if(rewriting){memories[0].title='Edited generated shape';memories[0].statement=`A red rectangle is visible in the retained image. [${grant.id}]`;}
       if(phase==='review'&&scenario.deleteDuringReview&&!mutated){mutated=true;node.store.delete(rawId);}
       if(phase==='review'&&scenario.attributionDuringReview&&!mutated){mutated=true;const material=node.materials.get(grant.materialId)!;node.materials.correctContext(material.id,material.revision,'third_party');}
       if(phase==='review'&&scenario.replaceDuringReview&&!mutated){mutated=true;const bytes=await sharp({create:{width:16,height:16,channels:3,background:'#0000ff'}}).png().toBuffer();const upload=node.files.begin({sourceId:'generated-memory-image',previousRevision:'1',item:{externalId:'generated.png',revision:'2',observedAt:'2026-10-02T00:00:00Z',kind:'file',layer:'original',mimeType:'image/png',title:'Generated replacement',text:''},sha256:sha256(bytes),sizeBytes:bytes.length},()=>{});node.files.part(upload.uploadId,0,bytes,()=>{});await node.files.commit(upload.uploadId,()=>{});}
@@ -119,6 +121,18 @@ test('fresh image intake automatically selects original proof rather than interp
 
 for(const variant of ['denied','metadataOnly','skipReviewPixels','deleteDuringReview','replaceDuringReview','attributionDuringReview','unreadEmpty'] as const)test(`generated image ${variant} never publishes an unverified visual Memory or successful empty outcome`,async t=>{
  const f=await fixture(t,{ocr:'empty',[variant]:true}),done=await f.node.memoryPipeline.run(f.jobId);assert.notEqual(done.status,'completed',JSON.stringify(done));assert.equal(done.memoryIds.length,0);assert.equal(f.node.memories.list().length,0);
+});
+
+for(const rewriteReview of ['uncovered','covering'] as const)test(`formal visual review rewrites a statement with ${rewriteReview} original pixels`,async t=>{
+ const f=await fixture(t,{ocr:'empty',rewriteReview}),done=await f.node.memoryPipeline.run(f.jobId);
+ assert.ok(f.receipts.some(receipt=>receipt.phase==='extract'&&receipt.views.length===1));
+ assert.ok(f.receipts.some(receipt=>receipt.phase==='review'&&receipt.views.length===1),'the independent reviewer really receives its own pixels');
+ if(rewriteReview==='uncovered'){
+  assert.notEqual(done.status,'completed',JSON.stringify(done));assert.equal(done.memoryIds.length,0);assert.equal(f.node.memories.list().length,0);
+ }else{
+  assert.equal(done.status,'completed',JSON.stringify(done));assert.equal(done.memoryIds.length,1);
+  const saved=f.node.memories.get(done.memoryIds[0]);assert.match(saved.statement,/A red rectangle is visible/);assert.equal(saved.evidence[0].image!.region,null);
+ }
 });
 
 test('a saved visual extraction resumes only independent review after restart with its exact original grant',async t=>{

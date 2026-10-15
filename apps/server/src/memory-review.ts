@@ -59,14 +59,21 @@ export async function reviewMemory(input:QueryInput&{memoryReviewQuestion?:strin
     if(draftImages.length||input.processingImages?.length||result.imageReadReceipts?.length){
     let reviewedImages:ReturnType<typeof memoryImageReadReceipts>,reviewed:{memories:{evidence?:{id:string;image?:{originalSha256:string;viewId:string}}[]}[]};
     try{reviewedImages=memoryImageReadReceipts(result);reviewed=JSON.parse(result.answer);if(!Array.isArray(reviewed.memories))throw Error();}catch{throw new MemoryOutputValidationError('image_evidence','Invalid review image delivery proof');}
+    const currentViews:typeof reviewedImages=[];
     for(const candidate of reviewed.memories)for(const span of candidate.evidence??[])if(span.image){
       const current=reviewedImages.find(receipt=>receipt.id===span.id&&receipt.imageView.original.sha256===span.image!.originalSha256&&receipt.imageView.viewId===span.image!.viewId);
       if(!current)throw new MemoryOutputValidationError('image_evidence','Independent review did not receive the original-image pixels it cites');
-      const prior=(value.memories as {statement?:string;evidence?:{id:string;image?:{originalSha256:string;viewId:string}}[]}[])
-        .filter(proposal=>proposal.statement===(candidate as {statement?:string}).statement)
-        .flatMap(proposal=>proposal.evidence??[]).filter(proof=>proof.id===span.id&&proof.image?.originalSha256===span.image!.originalSha256);
-      const relied=draftImages.filter(receipt=>prior.some(proof=>proof.id===receipt.id&&proof.image?.viewId===receipt.imageView.viewId));
-      if(relied.some(receipt=>!imageViewCovers(current.imageView,receipt.imageView)))throw new MemoryOutputValidationError('image_evidence','Independent review did not inspect the retained visual proof');
+      currentViews.push(current);
+    }
+    // Wording, order and candidate splits/merges cannot establish proof identity.
+    // Match still-cited original groups; each cited draft view needs one covering
+    // current view, allowing separate crops without stitching partial coverage.
+    const prior=(value.memories as {evidence?:{id:string;image?:{originalSha256:string;viewId:string}}[]}[]).flatMap(proposal=>proposal.evidence??[]);
+    for(const proof of prior)if(proof.image){
+      const current=currentViews.filter(receipt=>receipt.id===proof.id&&receipt.imageView.original.sha256===proof.image!.originalSha256);
+      if(!current.length)continue;
+      const relied=draftImages.find(receipt=>receipt.id===proof.id&&receipt.imageView.original.sha256===proof.image!.originalSha256&&receipt.imageView.viewId===proof.image!.viewId);
+      if(relied&&!current.some(receipt=>imageViewCovers(receipt.imageView,relied.imageView)))throw new MemoryOutputValidationError('image_evidence','Independent review did not inspect the retained visual proof');
     }
     }
     signal?.throwIfAborted();
