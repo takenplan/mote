@@ -33,6 +33,7 @@ durable core and file-intake regressions below cover the repaired lifecycle.
 | Format/asset subprocess queueing | Concrete subprocess protection starts after a worker slot, while queued cancellation remains effective. |
 | Failure receipts, provider/worker cooldown and API projection | Safe execution/admission facts and actual next eligibility survive restart; no provider prose or credentials; longer concurrent cooldown wins and late success cannot clear it. Historical failed tasks remain terminal. |
 | Terminal organizer, processing and lifecycle children are observed again | Registering the same organizer version, replaying its parent or restarting a saved lifecycle window cannot revive a failed execution. Existing explicit manual retry entry points still recover their precisely linked children. |
+| Automatic Insight fails transiently after saving its child checkpoint | A generated real lifecycle/Insight run reproduces the stuck checkpoint before the fix. The same window preserves backoff and yielded admission across restart, replaces only its linked typed-transient failed observation, retains the old receipt, completes and admits the next window. Repeated real failures stop at four; permanent/unclassified failure, cancellation and a legacy parent replay do not reopen the observation. |
 | Summary checkpoint and cooldown storage | New metadata participates in logical quota accounting; rollback, restart and file deletion retain correct ledger totals. |
 
 Focused generated suites were run during implementation. Preliminary exploratory

@@ -82,4 +82,9 @@ manual recovery may retry its failed children without discarding successful
 checkpoints. Unpublished intermediate Agent rounds remain in-memory session
 state; they are not an exactly-once or cross-restart checkpoint guarantee.
 
+An automatic Insight window can replace its precisely linked failed observation
+only during that window's scheduled, finite typed-transient recovery. The old
+observation remains failed. Restart alone, an unclassified outcome, a permanent
+failure or cancellation does not authorize a replacement observation.
+
 See the [generated regression and verification record](validation/task-execution-policies-2026-10-15.md).
