@@ -8,6 +8,8 @@ import {Accounts,AuthError} from './accounts.js';
 import {registerAuthentication} from './auth-routes.js';
 import {requestContext} from './http.js';
 import {ConnectionError} from '../connection-error.js';
+import {registerPrivateData} from './private-data-routes.js';
+import {PrivateDataError} from './private-data-sql.js';
 import type {LifecycleAuthority} from './lifecycle.js';
 export {registerUserRoute,requestContext} from './http.js';
 
@@ -21,11 +23,12 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     const authority=new UserContextAuthority(storage.deploymentId,options.verifier??accounts),services=new ScopedServices(authority,options.lifecycleAuthority);
     const runtime={app,authority,services,...(!options.verifier?{accounts}:{})};
     app.setErrorHandler((error,_request,reply)=>{
-      const failure=error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError?error:error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
+      const failure=error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError?error:error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
-    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:'unavailable'}));
+    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data']}));
+    registerPrivateData(runtime,storage.db);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{accounts.close();storage.close();});
     return {...runtime,deploymentId:storage.deploymentId};
