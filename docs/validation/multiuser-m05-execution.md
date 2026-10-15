@@ -127,3 +127,10 @@ Unimplemented business handlers remain closed. Physical devices, native renderer
 Android emulator, real providers/external reconciliation and deployment were not
 run; generated fixtures do not prove those journeys. Repository workflow settings
 are not changed by this module.
+
+The first post-failure-fix combined architecture run passed 165/166 but rejected
+the newly direct import of `execution-failures.ts`. This existing helper contains
+only WeakMap host failure-context projection and typed retry classification; it
+opens no private store and installs no legacy runtime. Its exact file was reviewed
+and added to the production import declaration. The boundary checker and its
+negative tests remain enabled; no directory or wildcard exception was added.
