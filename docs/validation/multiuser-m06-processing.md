@@ -82,3 +82,13 @@ Full `check:affected` and independent full-module review are still pending; the
 matrix above does not mark them passed. Checks and Component checks were remotely
 confirmed `disabled_manually`; Release workflows were active and untouched. No CI
 execution is inferred from the empty pending status of a disabled workflow.
+
+A later self-audit found the image Agent's first request omitted declared source
+prose after oversized OCR was removed from its question. An external unchanged
+native-Agent probe reproduced that gap. The repair uses the existing bounded
+background task-context envelope for a 12000-unit OCR excerpt, explicit range /
+total length and full source declaration; original rereads remain limited to this
+one image. The native request regression now asserts the exact declaration,
+third-party attribution and OCR are delivered. Unchanged probe1/1 and repaired
+native image test1/1 passed, exit0. The interrupted first affected run ended143
+and is diagnostic only; renewed exact frozen acceptance follows below.
