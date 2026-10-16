@@ -8435,7 +8435,6 @@ export const english: Readonly<Record<string, string>> = {
   "自动同步": "Automatic sync",
   "保存连接": "Save connection",
   "留空保留已保存密钥。": "Leave blank to keep the saved secret.",
-  "清除已保存密钥": "Clear saved secret",
   "连接不存在，请重新读取。": "The connection no longer exists. Reload it.",
   "同步间隔不符合要求。": "The sync interval is invalid.",
   "确认移除": "Confirm removal"
