@@ -23,7 +23,9 @@ export function registerCaptureBrowserReads(runtime:ScopedRuntime,ingress:Ingres
   // checked again, and before any response headers or payload are published.
   const currentRecord=data.captureBrowser().record(captureId,scope),current=source.originalForCapture(captureId);
   if(current.ref!==original.ref||current.hash!==original.hash||currentRecord.blobHash!==original.hash)throw new PrivateDataError('conflict',409);
-  source.readOriginal(current.ref,{length:0});runtime.authority.assert(context);
+  // A metadata-only read permits expired snapshots. One byte reuses M03's
+  // actual availability/pin check before publishing any previously read bytes.
+  source.readOriginal(current.ref,{length:Math.min(1,current.bytes)});runtime.authority.assert(context);
   reply.type(mime).header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');return bytes;
  }});
 }

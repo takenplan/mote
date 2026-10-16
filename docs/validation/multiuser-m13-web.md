@@ -366,3 +366,6 @@ The original Activity component is reused with full Api identity retirement. Onl
 
 
 Raw image follow-up confirmed a new migration race at5abd56ac: with actual sharp output held, deleting A's capture then recreating the same UUID with different M03 original bytes allowed the old thumbnail200. 3f7bb229 retains the actual RED `/tmp/m13-thumbnail-recreate-red.log/.exit` (200 !=409). The response now compares the captured original ref/hash and current raw record binding after the await and before headers; unchanged full suite `/tmp/m13-thumbnail-recreate-green.log/.exit`4/4 EXIT0 includes new A replacement and unchanged B positives. This claim concerns the new scoped adapter only; no old-system bug is asserted.
+
+
+A second new adapter race is retained at ad43f472: releasing the actual M03 snapshot behind sharp's output barrier still returned thumbnail200 because a length0 original read checks metadata, not the bytes grant. `/tmp/m13-thumbnail-release-red.log/.exit` is valid200!=410. The final fence now reads one byte through the existing M03 availability/pin check before headers. `/tmp/m13-thumbnail-release-green.log/.exit`5/5 EXIT0 preserves earlier image/account/replacement positives and returns410 JSON after snapshot release. No change to M03 expiration or pin policy.
