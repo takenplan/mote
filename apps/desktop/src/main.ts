@@ -314,8 +314,10 @@ else {
     const commitConnection = async (requested:Config):Promise<void> => {
       const previous=settings,oldDirectory=accountDirectory;
       const nextDirectory=accounts.directory(requested),switching=nextDirectory!==oldDirectory;
-      // A sign-out or account/credential transition never resumes prior capture intent.
-      collector.stop();await collector.settleCapture();await settleNoteWork();
+      // Account changes retire running intent. Credential rotation within the
+      // same stable account preserves the existing settings suspension policy.
+      if(switching||!sameAccount(previous,requested)||!connectionToken(requested)){collector.stop();await collector.settleCapture();}
+      await settleNoteWork();
       const releaseCollector=await collector.suspendForSettings();
       const oldSources=localSources!;const releaseSources=await oldSources.holdConnection();
       try {
