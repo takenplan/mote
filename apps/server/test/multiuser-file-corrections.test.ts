@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
@@ -9,6 +9,24 @@ import {buildApp} from '../src/app.js';
 import {backupScopedInstance,restoreScopedInstance} from '../../../scripts/scoped-backup.mjs';
 import {scopedFilesFixture} from './fixtures/scoped-files.js';
 import {waitForScopedState} from './fixtures/scoped-process.js';
+import {createServer} from 'node:http';
+import {defaultModelSettings} from '../src/model-settings.js';
+import {defaultProcessingSettings} from '../src/scope/processing-schema.js';
+
+/** Only the external ASR I/O is generated; M03 upload, M04 lease, M05 task,
+ * M06 extraction and publication all run through the real production host. */
+async function generatedRecording(t:TestContext,f:Awaited<ReturnType<typeof scopedFilesFixture>>,text:string){
+  const server=createServer((req,res)=>{void (async()=>{for await(const _ of req){}res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text,speaker:'SPEAKER_0'}],coverage:'full',engine:'generated-files-asr'}));})().catch(()=>res.destroy());});
+  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise<void>(resolve=>server.close(()=>resolve())));const address=server.address();assert.ok(address&&typeof address!=='string');
+  for(const account of [f.a,f.b]){
+    let view=await f.checked(account.token,'/api/configuration');
+    await f.checked(account.token,'/api/configuration/processing','PUT',{revision:view.revision,value:{...defaultProcessingSettings(),automatic:false,summarize:false,semanticTurns:false,audioProcessor:'audio.http'}});
+    view=await f.checked(account.token,'/api/configuration');
+    await f.checked(account.token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[{id:'generated-asr',name:'Generated ASR',settings:{...defaultModelSettings(),provider:'custom',protocol:'mote-media',baseUrl:'http://127.0.0.1:'+address.port+'/transcribe',model:'generated-files-asr',apiKey:'GENERATED_'+account.userId}}],selections:{asr:{kind:'personal',id:'generated-asr'}}}});
+  }
+  const wave=Buffer.alloc(48);wave.write('RIFF');wave.writeUInt32LE(40,4);wave.write('WAVEfmt ',8);wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(1,22);wave.writeUInt32LE(8000,24);wave.writeUInt32LE(16000,28);wave.writeUInt16LE(2,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(4,40);
+  return (account:typeof f.a,id:string)=>f.uploadBytes(account.token,id,wave,'audio/wav');
+}
 
 test('actual owner file corrections pin the exact transcript and chunk, preserve raw evidence and cannot alter equal-ID B', async t => {
   const f = await scopedFilesFixture(t), original = 'Generated original spoken text Ω🙂';
@@ -41,10 +59,9 @@ test('actual owner file corrections pin the exact transcript and chunk, preserve
 });
 
 test('confirmed speaker names belong to the actual exact artifact and retain anonymous labels, text and B', async t => {
-  const f = await scopedFilesFixture(t), receipts = [];
+  const f = await scopedFilesFixture(t), receipts = [],upload=await generatedRecording(t,f,'Generated anonymous statement');
   for (const account of [f.a, f.b]) {
-    const receipt = await f.checked(account.token, '/api/ingress/sources/same-source/items', 'POST', {batchId:'same-speaker-batch', items:[{externalId:'same-recording',revision:'r1',observedAt:'2026-10-16T00:00:00Z',title:'Generated recording',text:'Generated anonymous statement',kind:'file',layer:'original',document:{originalMetadata:{speaker:'SPEAKER_0',startMs:0,endMs:1000}}}]});
-    const original = receipt.captures[0]; receipts.push(original);
+    const original = await upload(account,'same-recording'); receipts.push(original);
     const task = await f.checked(account.token, '/api/processing', 'POST', {originalRef: original.original.ref, operationId:'same-speaker-processing'});
     await waitForScopedState(async () => (await f.checked(account.token, '/api/tasks/' + task.id)).state === 'succeeded', () => 'speaker-labelled original did not process');
   }
@@ -92,8 +109,7 @@ test('confirmed speaker names belong to the actual exact artifact and retain ano
 test('offline instance backup restores corrected evidence and confirmed names but never old login grants',async t=>{
   const f=await scopedFilesFixture(t),snapshot=f.directory+'-backup',target=f.directory+'-restored';
   t.after(()=>{rmSync(snapshot,{recursive:true,force:true});rmSync(target,{recursive:true,force:true});});
-  const received=await f.checked(f.a.token,'/api/ingress/sources/same-source/items','POST',{batchId:'generated-backup-recording',items:[{externalId:'generated-backup-recording',revision:'r1',observedAt:'2026-10-16T00:00:00Z',title:'Generated backup recording',text:'Generated raw recording',kind:'file',layer:'original',document:{originalMetadata:{speaker:'SPEAKER_0',startMs:0,endMs:1000}}}]});
-  const original=received.captures[0],task=await f.checked(f.a.token,'/api/processing','POST',{originalRef:original.original.ref,operationId:'generated-backup-processing'});
+  const upload=await generatedRecording(t,f,'Generated raw recording'),original=await upload(f.a,'generated-backup-recording'),task=await f.checked(f.a.token,'/api/processing','POST',{originalRef:original.original.ref,operationId:'generated-backup-processing'});
   await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/tasks/'+task.id)).state==='succeeded',()=>'backup extraction did not complete');
   const chunk=(await f.checked(f.a.token,'/api/files/'+original.id+'/chunks')).items[0];
   const corrected=await f.checked(f.a.token,'/api/files/'+original.id+'/corrections','POST',{artifactId:chunk.fileEvidence.artifactId,chunkId:chunk.id,originalText:chunk.ocrText,correctedText:'Generated corrected recording'});

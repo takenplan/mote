@@ -27,12 +27,13 @@ export async function scopedFilesFixture(t: TestContext) {
     const view = await checked(account.token, '/api/configuration');
     await checked(account.token, '/api/configuration/processing', 'PUT', {revision: view.revision, value: {...defaultProcessingSettings(), automatic: false, summarize: false, semanticTurns: false}});
   }
-  const upload = async (token: string, externalId: string, text: string) => {
-    const bytes = Buffer.from(text), hash = bytesHash(bytes);
-    const input = await checked(token, '/api/ingress/sources/same-source/uploads', 'POST', {batchId: externalId, revision: {sourceId: 'same-source', previousRevision: null, sizeBytes: bytes.length, sha256: hash, relativePath: externalId + '.txt', item: {externalId, revision: 'same-r1', observedAt: '2026-10-16T00:00:00Z', title: externalId, text: '', kind: 'file', layer: 'original', mimeType: 'text/plain'}}});
+  const uploadBytes = async (token: string, externalId: string, bytes: Buffer, mimeType: string) => {
+    const hash = bytesHash(bytes);
+    const input = await checked(token, '/api/ingress/sources/same-source/uploads', 'POST', {batchId: externalId, revision: {sourceId: 'same-source', previousRevision: null, sizeBytes: bytes.length, sha256: hash, relativePath: externalId + (mimeType.startsWith('audio/') ? '.wav' : '.txt'), item: {externalId, revision: 'same-r1', observedAt: '2026-10-16T00:00:00Z', title: externalId, text: '', kind: 'file', layer: 'original', mimeType}}});
     await checked(token, '/api/ingress/uploads/' + input.id + '/parts/0', 'PUT', {bytes: bytes.toString('base64'), checksum: hash});
     return (await checked(token, '/api/ingress/uploads/' + input.id + '/commit', 'POST', {})).captures[0];
   };
-  return {directory, host, a, b, admin, request, checked, upload};
+  const upload=(token:string,externalId:string,text:string)=>uploadBytes(token,externalId,Buffer.from(text),'text/plain');
+  return {directory, host, a, b, admin, request, checked, upload, uploadBytes};
 }
 
