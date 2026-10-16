@@ -240,11 +240,38 @@ function read(sql:PrivateSql):Payload{
   const payload=payloadSchema.parse({format:'mote-private-data-v1',coverage,...rows});validate(payload);return payload;
 }
 
+/** Merge only this domain's canonical rows. Immutable histories conflict rather
+ * than being overwritten; source and Material heads follow their own monotonic
+ * observation/version identities. Existing hidden heads stay hidden. */
+function mergeCanonical(sql:PrivateSql,archive:UserExport){
+ const value=envelopeSchema.parse(archive);if(value.userId!==sql.userId)invalid();validate(value.payload);
+ const current=read(sql),merged=structuredClone(current),keys:Record<keyof typeof current,string[]>={format:[],coverage:[],sources:['id'],source_contexts:['source_id','version'],captures:['id'],import_declarations:['id','version'],capture_imports:['capture_id'],source_heads:['source_id','external_id'],materials:['id'],material_versions:['material_id','revision'],material_captures:['material_id','revision','member_id'],material_inputs:['material_id','revision','member_id'],material_contexts:['material_id','revision','source_id'],material_sources:['material_id','revision','source_id'],material_declarations:['material_id','id','version']};
+ const conflict=():never=>{throw new PrivateDataError('conflict',409);};
+ for(const table of tables){const identity=(row:Record<string,unknown>)=>canonical(keys[table.key].map(key=>row[key])),rows=new Map((merged[table.key] as Record<string,unknown>[]).map(row=>[identity(row),row]));
+  for(const incoming of value.payload[table.key] as Record<string,unknown>[]){const id=identity(incoming),before=rows.get(id);if(!before){if(table.key==='sources'){const source=sourceJsonSchema.parse(JSON.parse(String(incoming.json)));rows.set(id,{...incoming,json:JSON.stringify({...source,enabled:false})});}else rows.set(id,incoming);continue;}if(canonical(before)===canonical(incoming))continue;
+   if(table.key==='sources'){const old=sourceJsonSchema.parse(JSON.parse(String(before.json))),next=sourceJsonSchema.parse(JSON.parse(String(incoming.json)));if(old.deviceId!==next.deviceId||old.platform!==next.platform||old.kind!==next.kind)conflict();const oldContext=old.sourceContext?.version??0,nextContext=next.sourceContext?.version??0,description=nextContext>oldContext?next.sourceContext:old.sourceContext,declaration=(next.ownerRelationVersion??0)>(old.ownerRelationVersion??0)?next:old,updatedAt=Date.parse(next.updatedAt)>Date.parse(old.updatedAt)?next.updatedAt:old.updatedAt;rows.set(id,{...before,updated_at:updatedAt,json:JSON.stringify({...old,sourceContext:description,ownerRelation:declaration.ownerRelation,ownerRelationVersion:declaration.ownerRelationVersion,updatedAt})});}
+   else if(table.key==='source_heads'){const delta=Date.parse(String(incoming.observed_at))-Date.parse(String(before.observed_at));if(delta===0&&incoming.capture_id!==before.capture_id)conflict();if(delta>0)rows.set(id,incoming);}
+   else if(table.key==='materials'){if(incoming.source_id!==before.source_id||incoming.external_id!==before.external_id||incoming.sequence===before.sequence&&incoming.revision!==before.revision)conflict();if(Number(incoming.sequence)>Number(before.sequence))rows.set(id,incoming);}
+   else if(table.key==='captures'){const {received_at:_old,...a}=before,{received_at:_new,...b}=incoming;if(canonical(a)!==canonical(b))conflict();}
+   else conflict();
+  }
+  (merged[table.key] as unknown[])=Array.from(rows.values());
+ }
+ // Existing published views that no longer name current input heads must be
+ // hidden together with their dependants, as in normal source publication.
+ const captures=new Map(merged.captures.map(row=>[row.id,storedCaptureSchema.parse(JSON.parse(row.json))])),heads=new Map(merged.source_heads.map(row=>[key(row.source_id,row.external_id),row.capture_id])),sources=new Map(merged.sources.map(row=>[row.id,sourceJsonSchema.parse(JSON.parse(row.json))])),materials=new Map(merged.materials.map(row=>[row.id,row]));
+ let changed=true;while(changed){changed=false;for(const material of merged.materials){if(material.sequence<material.min_visible_sequence)continue;const captureChanged=merged.material_captures.filter(row=>row.material_id===material.id&&row.revision===material.revision).some(row=>{const capture=captures.get(row.capture_id);return !capture||capture.provenance&&(capture.provenance.deleted||heads.get(key(capture.provenance.sourceId,capture.provenance.externalId))!==capture.id);}),inputChanged=merged.material_inputs.filter(row=>row.material_id===material.id&&row.revision===material.revision).some(row=>{const input=materials.get(row.input_material_id);return !input||input.revision!==row.input_revision||input.sequence<input.min_visible_sequence;}),contextChanged=merged.material_contexts.filter(row=>row.material_id===material.id&&row.revision===material.revision).some(row=>{const context=sources.get(row.source_id)?.sourceContext;return !context||context.version!==row.version||context.fingerprint!==row.fingerprint;});if(captureChanged||inputChanged||contextChanged){material.min_visible_sequence=material.sequence+1;changed=true;}}}
+ validate(merged);
+ for(const table of tables){const primary=keys[table.key],identity=(row:Record<string,unknown>)=>canonical(primary.map(key=>row[key])),old=new Map((current[table.key] as Record<string,unknown>[]).map(row=>[identity(row),row]));for(const row of merged[table.key] as Record<string,string|number|null>[]){const previous=old.get(identity(row));if(previous){if(canonical(previous)===canonical(row))continue;const changed=table.columns.filter(column=>!primary.includes(column));sql.run(`UPDATE ${table.name} SET ${changed.map(column=>column+'=?').join(',')} WHERE user_id=$user AND ${primary.map(column=>column+'=?').join(' AND ')}`,...changed.map(column=>row[column]),...primary.map(column=>row[column]));}else sql.run(`INSERT INTO ${table.name}(user_id,${table.columns.join(',')}) VALUES($user,${table.columns.map(()=>'?').join(',')})`,...table.columns.map(column=>row[column]));}}
+ read(sql);
+}
+
 /** Canonical domain lifecycle only. M16 supplies durable authorization and
  * operation reconciliation; these hooks neither grant identity nor export
  * originals, credentials or data owned by another domain. */
 export function privateDataLifecycle(sqlFor:(subject:UserDataSubject,purpose:LifecyclePurpose)=>PrivateSql):DomainLifecycle{
   return {
+    importUser:(subject,archive)=>{if(archive.deploymentId!==subject.deploymentId||archive.userId!==subject.userId)invalid();const sql=sqlFor(subject,'restore');sql.transaction(()=>mergeCanonical(sql,archive));},
     exportUser:async subject=>{
       const sql=sqlFor(subject,'export'),payload=sql.transaction(()=>read(sql));
       return {domain:DOMAIN,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload};

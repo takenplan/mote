@@ -292,6 +292,8 @@ export class Configurations {
     try{return await result;}finally{if(this.lifecycleQueue.get(userId)===tail)this.lifecycleQueue.delete(userId);}
   }
   readonly lifecycle:DomainLifecycle={
+  // Personal archive import preserves live settings and operational authority.
+  importUser:false,
     exportUser:async context=>{
       this.assertSubject(context,'export');const entry=await this.entry(context);this.assertSubject(context,'export');
       try{

@@ -85,3 +85,51 @@ routes; management grants never become a `forUser(otherOwner)` capability.
 Original GC stays at M03 `POST /api/ingress/gc {}` for the caller's own domain.
 An administrator cannot supply another user or invoke a global private GC fallback.
 Retention, references, physical holds and snapshot expiry remain M03 responsibilities.
+
+## Personal portable 3 import
+
+The approved identity policy is the **same original deployment and account**.
+The root envelope, every domain envelope and complete registered-domain coverage
+must match before admission. JSON v2 and cross-account/deployment mapping are
+rejected. This preserves the old canonical-data merge/dedup journey; it adds no
+personal point-in-time recovery.
+
+`POST /api/portable/imports {operationId, archive}` admits a generated UUID and
+the parsed portable 3 JSON object. `GET /api/portable/imports/:id` returns its
+persistent owner-qualified receipt. `GET /api/portable/imports?limit&cursor` uses
+owner/deployment/epoch/collection/page-size bound cursors, like export history.
+`POST /api/portable/imports/:id/cancel {}` can retire an uncommitted operation;
+completed imports return 409 `archive_already_committed` because their canonical
+merge has committed. There is no import download artifact.
+
+The existing host lifecycle journal records kind `import`, original owner epoch,
+normalized input bytes/hash and per-domain states, without persisting the input
+JSON or minting task grants. Semantic progress does not assert a record total.
+A failed/interrupted operation is retried by reselecting the exact JSON and
+posting the same operation ID; changed input returns 409. Completed replay is
+idempotent. Startup marks unfinished work failed/interrupted rather than replaying
+its input. Current authority is required for admission, reads, pagination and
+cancellation; another account or administrator cannot inspect its private receipt.
+
+Domain-owned synchronous merge hooks publish private-data, ingress, processing,
+Memory and completed Ask data in one shared SQLite transaction with the completed
+receipt. Actual current provider bodies are checked outside the transaction;
+intervening database changes, domain-policy changes, revocation and shutdown
+prevent publication. Newly created immutable original directories are tracked for
+rollback after a failed later domain. An original I/O failure is a failed import,
+never a successful partial canonical restore.
+
+Immutable histories conflict rather than overwrite. Current source observations
+and Material heads retain their monotonic versions, including retired visibility.
+A missing source is restored disabled, as in the previous import journey. Snapshot
+expiry and current physical holds retain M03 semantics. Memory bodies/history are
+data; missing records restore stale with builtin authority, without reviving an
+old provider grant. Completed conversations restore with newly validated parent
+receipts and no model execution. Current settings, execution journals, plugins,
+connectors, MCP, owner-question continuations and automatic policies are explicitly
+preserved in `coverage.preservedDomains`; their archive sections are not applied.
+The canonical import suppresses only its own new synchronous automation events,
+retaining preexisting events/cursors/policies so restored data cannot replay work.
+Every added domain must declare merge or preserve explicitly; an absent import
+policy blocks admission. The existing purpose-bound `restoreUser` adapters retain
+their independent lifecycle semantics.

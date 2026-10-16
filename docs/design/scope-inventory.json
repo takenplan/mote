@@ -2251,10 +2251,14 @@
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports'",
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id'",
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id/content'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports/:id'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/account-deletions/:id/retry'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/cancel'",
-      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/retry'"
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/retry'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports/:id/cancel'"
     ]
   },
   "apps/server/src/scope/management.ts": {
@@ -2270,6 +2274,13 @@
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/software-update/check'",
       "directory:path",
       "extension:runtime.services.registerInstance:'instance-management'"
+    ]
+  },
+  "apps/server/src/scope/ingress-lifecycle.ts": {
+    "scope": "user",
+    "module": "M16",
+    "surfaces": [
+      "directory:path"
     ]
   }
 }
