@@ -16,6 +16,7 @@ export function scopedLarkApi(api:Api,id:string):Api{
  async function base(signal?:AbortSignal|null){if(!view){const next=await api.request<unknown>(path,{signal});check(signal);if(!status(next))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));view??=next;}return view;}
  async function apply(task:Task,current:NonNullable<typeof pending>,signal?:AbortSignal|null){
   if(pending!==current)return;
+  if(task.id!==current.id)throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
   if(terminal.has(task.state)){
    if(task.state!=='succeeded'){
     // The task retains its failure, while the existing status GET reads the
@@ -52,7 +53,7 @@ export function scopedLarkApi(api:Api,id:string):Api{
   else if(suffix==='/setup'||suffix==='/login'||suffix==='/preview')result=await submit(suffix.slice(1),body,suffix.slice(1) as LarkJob['kind'],init.signal);
   else if(suffix==='/sync'&&body.document)result=await submit('sync-document',body,'sync',init.signal);
   else if(suffix==='/sync'||suffix===''&&init.method==='DELETE'){
-   const action=suffix==='/sync'?'sync':'disconnect',key=action;if(intent?.key!==key)intent={key,body:JSON.stringify({operationId:crypto.randomUUID()})};await base(init.signal);const task=await api.request<Task>(path+'/'+action,{method:'POST',body:intent.body,signal:init.signal});check(init.signal);intent=undefined;const current={id:task.id,kind:'sync' as const};pending=current;await apply(task,current,init.signal);result=await read(init.signal);
+   const action=suffix==='/sync'?'sync':'disconnect',key=action;if(intent?.key!==key)intent={key,body:JSON.stringify({operationId:crypto.randomUUID()})};await base(init.signal);const task=await api.request<Task>(path+'/'+action,{method:'POST',body:intent.body,signal:init.signal});check(init.signal);if(!/^[a-f0-9]{64}$/.test(task.id))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));intent=undefined;const current={id:task.id,kind:'sync' as const};pending=current;await apply(task,current,init.signal);result=await read(init.signal);
   }else if(suffix==='/cancel'&&pending){const current=pending,task=await api.request<Task>('/api/tasks/'+current.id+'/cancel',{method:'POST',body:'{}',signal:init.signal});check(init.signal);await apply(task,current,init.signal);result=await read(init.signal);}
   if(result===undefined)throw Error(moteText('暂不可用'));check(init.signal);return result as T;
  }
