@@ -24,7 +24,11 @@ export class McpQuery{
   this.assertParent();signal.throwIfAborted();if(sourceId!==undefined){sourceIdSchema.parse(sourceId);if(this.sourceIds.length&&!this.sourceIds.includes(sourceId))throw missing();this.data.source(sourceId);}
   const ids=sourceId&&restrictToSource?[sourceId]:this.sourceIds.length?this.sourceIds:undefined,fence=this.sourceFence(ids),assert=()=>{this.assertParent();signal.throwIfAborted();fence();},reader=this.host.bind(this.context,{sourceIds:ids,assertCurrent:assert}).reader({signal});
   return Object.freeze({...reader,history:async(input:{sourceId:string;externalId:string})=>{
-   assert();const head=this.data.sourceItem(input.sourceId,input.externalId);if(!head)return {items:[]};const page=await reader.logicalHistory(input);reader.assertCurrent();return {items:page.items.map(record=>sourceItem(record as CaptureRecord,record.id===head.captureId))};
+   assert();const head=this.data.sourceItem(input.sourceId,input.externalId);if(!head)return {items:[]};const page=await reader.logicalHistory(input);reader.assertCurrent();
+   // The real reader returns either current formal blocks or raw history that
+   // includes its current head. Formal canonical IDs do not equal the raw head.
+   const rawHead=page.items.some(record=>record.id===head.captureId);
+   return {items:page.items.map(record=>sourceItem(record as CaptureRecord,!rawHead||record.id===head.captureId))};
   }});
  }
 }
