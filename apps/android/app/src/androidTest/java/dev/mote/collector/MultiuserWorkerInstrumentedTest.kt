@@ -87,6 +87,53 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun actualNativeCalendarDeliveryReconcilesUncertainInsertWithItsOriginalAccountAndMarker() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        assertNotEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,app.checkSelfPermission(android.Manifest.permission.READ_CALENDAR))
+        assertNotEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,app.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR))
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        check(app.getSharedPreferences("mote",Context.MODE_PRIVATE).edit().putString("deviceId","same-device").commit());login(app,"a")
+        val generated=File(app.cacheDir,"generated-calendar-native-state.json");generated.delete()
+        val native=GeneratedCalendarProvider(generated);val device=GeneratedCalendarContext(app,native)
+        try {
+            val client=CalendarActions(device,foreground=true);client.connect()
+            val items=client.list().getJSONArray("items")
+            val original=(0 until items.length()).map(items::getJSONObject).first {it.getString("status")=="proposed"}
+            val approved=client.confirm(original,original.getJSONObject("event"),"7");val id=approved.getString("id")
+            assertEquals("approved",approved.getString("status"))
+            native.failAfterNextInsert=true
+            assertThrows(IllegalStateException::class.java){client.execute(id)}
+            assertEquals(1,native.inserts)
+            assertEquals("uncertain",CentralAccess.requireClient(app).get("/api/actions/$id").getString("status"))
+            val operation=approved.getString("operationId")
+            val journal=File(app.accountDirectory(),"calendar-actions/"+SourceRules.hash(settings.read().server.trimEnd('/')+settings.deviceId)+"/"+operation)
+            assertEquals("attempting",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
+            val previousCalls=native.calls;device.allowed=false
+            assertThrows(IllegalStateException::class.java){client.execute(id)}
+            assertEquals(previousCalls,native.calls);device.allowed=true
+            login(app,"b")
+            assertThrows(IllegalStateException::class.java){client.execute(id)}
+            assertEquals(previousCalls,native.calls)
+            assertEquals(404,get(app,"b","/api/actions/$id").first)
+            val bClient=CalendarActions(device,foreground=true);bClient.connect()
+            val bOriginal=bClient.list().getJSONArray("items").getJSONObject(0)
+            val bApproved=bClient.confirm(bOriginal,bOriginal.getJSONObject("event"),"7")
+            val bReceipt=bClient.execute(bApproved.getString("id")) as JSONObject
+            assertTrue(bReceipt.getBoolean("acknowledged"));assertTrue(bReceipt.getBoolean("published"));assertEquals(2,native.inserts)
+            login(app,"a")
+            // Reconstruct the native adapter and original client from durable files.
+            // This is reconstruction evidence, not a claimed OS SIGKILL.
+            val recoveredNative=GeneratedCalendarProvider(generated)
+            val recovered=CalendarActions(GeneratedCalendarContext(app,recoveredNative),foreground=true)
+            val receipt=recovered.execute(id) as JSONObject
+            assertTrue(receipt.getBoolean("acknowledged"));assertTrue(receipt.getBoolean("published"));assertEquals(2,recoveredNative.inserts)
+            val completed=CentralAccess.requireClient(app).get("/api/actions/$id")
+            assertEquals("succeeded",completed.getString("status"));assertEquals("101",completed.getString("externalId"))
+            assertEquals("101",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
+            recovered.execute(id);assertEquals(2,recoveredNative.inserts)
+        } finally {cancel(app);generated.delete()}
+    }
+
     @Test fun actualNativeActionsRetiresVisiblePrivateProposalsBeforeAnotherAccountResumes() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
@@ -97,6 +144,34 @@ class MultiuserWorkerInstrumentedTest {
             scenario.onActivity {activity->assertFalse("B must not resume A's already rendered private Actions proposals",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="Generated A"})}
             waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="Generated B"}};shown}
             assertEquals(21,get(app,"a","/api/actions?limit=100").second!!.getJSONArray("items").length())
+        }
+    }
+
+    @Test fun actualNativeActionsClosesOriginalEvidenceOnSwitchAndKeepsSameOwnerRecreation() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        fun dialogs():List<android.app.AlertDialog> {
+            @Suppress("UNCHECKED_CAST")
+            val all=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+            return all.mapNotNull {it.get()}.filter {it.isShowing}
+        }
+        androidx.test.core.app.ActivityScenario.launch<CalendarActionsActivity>(android.content.Intent(app,CalendarActionsActivity::class.java)).use {scenario->
+            fun shown(label:String):Boolean {var value=false;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()==label}};return value}
+            waitFor {shown("Generated A")};scenario.recreate();waitFor {shown("Generated A")}
+            lateinit var evidence:android.app.AlertDialog
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.Button>().first {it.text.toString()=="查看原文依据"}.performClick()
+                evidence=dialogs().single()
+                assertTrue(views(evidence.window!!.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_A_PRIVATE_APPOINTMENT")})
+            }
+            val statuses=get(app,"a","/api/actions?limit=100").second!!.getJSONArray("items").let {rows->(0 until rows.length()).associate {rows.getJSONObject(it).getString("id") to rows.getJSONObject(it).getString("status")}}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity {assertFalse("The original account's evidence dialog must retire with its page",evidence.isShowing)}
+            waitFor {shown("Generated B")}
+            assertFalse(shown("Generated A"))
+            val retained=get(app,"a","/api/actions?limit=100").second!!.getJSONArray("items").let {rows->(0 until rows.length()).associate {rows.getJSONObject(it).getString("id") to rows.getJSONObject(it).getString("status")}}
+            assertEquals(statuses,retained)
         }
     }
 
