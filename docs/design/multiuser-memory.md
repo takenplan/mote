@@ -159,3 +159,17 @@ key, and shared resources retain M04's fixed model restriction. The explicit
 request metadata is retained in the durable job input so a retry of the same
 operation cannot substitute another requested model. Existing automatic jobs
 and requests without those fields retain their original task form and lease.
+
+M13's original explicit-Material selection reads
+`GET /api/memory/materials/:id?revision=<sha256>[&recipes=<JSON refs>]`. It reuses
+canonical M07 materialEvidence normalization and declared recipe requirements,
+returns `{materialId,ref,revision,recipes,status,evidenceIds}`, and admits no task
+or provider/model authority. Exact historical/noncurrent revisions reject;
+canonical dependency pending returns `waiting`. A ready preview remains subject
+to the real admission's provider, model, grant and lifecycle checks.
+
+Manual job input can additionally supply `materialRevisions` mapping every
+selected Material ID to its exact revision. A provided map must cover all and
+only the selected IDs; it cannot fall back to current versions for omitted
+entries. Existing callers without the map retain their original current-input
+semantics. The admitted M07 pins remain the existing durable task source of truth.
