@@ -292,7 +292,7 @@ export class LocalSourceManager {
     if (!this.metadataDirty.has(source.id)) return;
     const registered = await request(request.account?'/api/ingress/sources':'/api/sources', sourceDefinition(source), 'POST', signal) as { id?: string };
     if (registered?.id !== source.id) throw new Error(moteText("中央来源注册确认无效"));
-    const patched = request.account?registered:await request('/api/sources/' + source.id, { retention: source.retention, initialSync: source.initialSync, name: sourceDefinition(source).name }, 'PATCH', signal) as { id?: string };
+    const patched = await request((request.account?'/api/ingress/sources/':'/api/sources/') + source.id, { retention: source.retention, initialSync: source.initialSync, name: sourceDefinition(source).name }, 'PATCH', signal) as { id?: string };
     if (patched?.id !== source.id) throw new Error(moteText("中央来源配置确认无效"));
     this.metadataDirty.delete(source.id); if (!this.metadataDirty.size) this.metadataDirtyAt = undefined; await this.persist();
   }
