@@ -754,6 +754,22 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals(0,control("/generated/pairing-state").getJSONArray("claims").length())
         }} finally {release.countDown();writer.join(10000);instrumentation.removeMonitor(monitor);file.delete();fifo.delete()}
     }
+    @Test fun originalNativeInstanceSettingsExplainOperatorOwnershipWithoutCallingRetiredGlobalWrites() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val notice="实例级执行与诊断设置由部署操作者管理；客户端仍可修改本账号的模型和处理设置。"
+        fun views(root:android.view.View):List<android.view.View> = listOf(root)+if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()};ready()}
+            fun explained(){scenario.onActivity {activity->assertTrue("The original setting entry must explain its actual M04 operator contract",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()==notice})}}
+            ready();press("并发与执行设置");explained();assertEquals(0,control("/generated/pairing-state").getJSONArray("retiredConfigurationRequests").length())
+            // The original per-account editor remains available under the same user.
+            scenario.onActivity {it.navigate("settings")};ready();press("处理设置");scenario.onActivity {activity->assertTrue(views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="保存设置"})}
+            login(app,"admin");scenario.onActivity {it.navigate("developer")};ready();assertEquals(200,HttpJson.get(endpoint()+"/api/diagnostics",token("admin")).first)
+            press("诊断设置");explained();assertEquals(0,control("/generated/pairing-state").getJSONArray("retiredConfigurationRequests").length())
+        }
+    }
     @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
