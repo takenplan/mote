@@ -354,7 +354,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 }
                 if (fileEvidence != null) ui.button(MoteI18n.text("纠正此段"), parent = card) {
                     if (!active()) return@button
-                    val original = if (fileEvidence.optString("speaker").isNotBlank()) chunk.optString("ocrText").removePrefix("[" + fileEvidence.getString("speaker") + "] ") else chunk.optString("ocrText")
+                    val original = chunk.getString("ocrText")
                     val text = ui.field(MoteI18n.text("校正此段文字"), original, multiline = true, parent = card)
                     ui.button(MoteI18n.text("保存校正"), true, parent = card) {
                         if (!active()) return@button
