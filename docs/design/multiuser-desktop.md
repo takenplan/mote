@@ -1,5 +1,32 @@
 # M14 Desktop capability ledger
 
+## Resumed native Actions boundary
+
+The parent supplied the fixed, delivered PR140/PR141 composition
+`10748005a5d007695ecc9401d0d57dc9dea94919` (PR141 docs head `eec967c6`).
+M12/M16 have ended and are not messaged or awakened. An attempted M12 coordination
+message was rejected before sending; that communication is no longer required
+and is not retried or indirectly forwarded. This increment reads the delivered
+fixed code and [Actions contract](multiuser-actions.md), not the earlier refused
+handoff. Web `aed42550` and Android `9e824c00` are tested consumer checkpoints,
+not claims that their remaining original capabilities are complete.
+
+| Disposition | Existing capability | Required current behavior |
+| --- | --- | --- |
+| KEEP | `CalendarActions` serial queue, attempting-before-write ledger, exact operation marker, create/update/cancel and unknown-outcome reconciliation | Preserve the original execution algorithm and confirmed native identity. Characterization: `/tmp/m14-calendar-characterization.log/.exit`, seven tests, exit 0. |
+| CHANGE | `nativeCalendarActions` actual HTTP/storage adapter | Consume M01 Wire2 and fixed M12 claims/receipts with stable account-owned state and current connection fences. Fake CalendarActionIO tests alone do not prove the real factory. |
+| KEEP | Central fixed review, OwnerQuestions, explicit device grants and current target registration | The existing Web Actions page owns proposal/review/approval. Native delivery never invents approval or retargets an old operation to a new account. |
+| CHANGE | Current Mac browser entry versus historical embedded-window bridge | Keep the current Chrome/default-browser account handoff. Restore explicit native target connection and approved delivery in the existing Desktop calendar/source area, with Web review remaining separate; do not introduce a new primary navigation or silently turn read-only source sync into write consent. |
+| KEEP | Native permissions and original externally issued work | Use generated native-I/O substitutes for acceptance; no real permission prompt or calendar write. Logout/switch retires old admission and preserves the original ledger and external fact. |
+
+This follows [multi-user Clients/Ownership](../adr-multiuser-scope.md#decision-and-provenance),
+[native domain commands and progress](../adr-client-action-first.md#content-and-progress),
+[existing calendar journey](../calendar-actions.md) and the documented current
+[Desktop browser entry](../desktop.md). The small native connection/delivery
+controls are a reversible restoration of those commands; they grant no Central
+approval authority and do not alter the existing source permission statement.
+No ordinary user decision or approval is pending in M14.
+
 Discovery and characterization parent: M08 `58944f00837c89bc1d302ecd7be7a568db4abe44`.
 This is the implementation ledger, not a completion claim. Dependency M13 is
 still being developed; M12's paused handoff is not consumed here.

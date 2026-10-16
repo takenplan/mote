@@ -1,0 +1,31 @@
+import {afterEach,expect,it,vi} from 'vitest';
+import {createRequire} from 'node:module';
+import {pathToFileURL,fileURLToPath} from 'node:url';
+import {join,resolve} from 'node:path';
+import {defaultConfig} from '../src/config';
+
+const native=vi.hoisted(()=>({call:vi.fn(async(command:string,_input?:unknown)=>{
+ if(command==='calendar-permission')return {permission:'granted',calendars:[{id:'same-calendar',title:'Generated existing calendar',writable:true}]};
+ throw Error('Unexpected generated calendar mutation');
+})}));
+vi.mock('../src/source-calendar',()=>({calendarHelper:async(_path:string,command:string,input?:unknown)=>native.call(command,input)}));
+import {nativeCalendarActions} from '../src/calendar-actions';
+
+const repository=fileURLToPath(new URL('../../../',import.meta.url));
+const nativeImport=createRequire(import.meta.url)('./native-backend.cjs') as (url:string)=>Promise<any>;
+const cleanup:(()=>Promise<unknown>)[]=[];
+afterEach(async()=>{for(const close of cleanup.splice(0).reverse())await close();vi.unstubAllGlobals();native.call.mockClear();});
+async function fixture(model=false){
+ const module=await nativeImport(pathToFileURL(resolve(repository,'apps/server/test/fixtures/scoped-actions.ts')).href);
+ const f=await (model?module.modelFixture:module.fixture)({after:(close:()=>Promise<unknown>)=>cleanup.push(close)});
+ const calls:{user:string;path:string;body:unknown}[]=[];
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL,init:RequestInit={})=>{const url=new URL(String(input)),headers=new Headers(init.headers),body=init.body?await new Response(init.body).text():undefined;calls.push({user:headers.get('authorization')??'',path:url.pathname,body:body?JSON.parse(body):undefined});const response=await f.node.app.inject({url:url.pathname+url.search,method:init.method??'GET',headers:Object.fromEntries(headers),...(body?{payload:body}:{})});return new Response(response.rawPayload,{status:response.statusCode,headers:response.headers as Record<string,string>});});
+ const config=(user:typeof f.a)=>({...defaultConfig(),deviceId:'same-device',deviceName:'Generated native Desktop',token:user.token,account:{origin:defaultConfig().serverUrl,deploymentId:user.deploymentId,userId:user.userId,username:user.username}});
+ const directory=join(f.directory,'generated-native-ledgers');
+ return {...f,get node(){return f.node;},calls,config,directory,adapter:(user:typeof f.a)=>nativeCalendarActions(config(user),'/generated/no-real-calendar-helper',directory)};
+}
+
+it('connects the real Desktop native calendar factory to current M01/M12 without accessing a real calendar',async()=>{
+ const f=await fixture();await f.adapter(f.a).connect();
+ const view=await f.ok(f.a.token,'/api/actions');expect(view.targets).toHaveLength(1);expect(view.targets[0]).toMatchObject({deviceId:'same-device',calendars:[{id:'same-calendar',title:'Generated existing calendar'}]});expect((await f.ok(f.b.token,'/api/actions')).targets).toEqual([]);expect(native.call).toHaveBeenCalledTimes(1);
+});
