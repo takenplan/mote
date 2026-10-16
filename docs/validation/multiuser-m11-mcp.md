@@ -39,7 +39,9 @@ Two later genuine projection corrections preserve original strict assertions:
   archive and passes1/1exit0,1484.642334ms:
   `/tmp/m11-peer-original-file-limit-fixed.log/.exit`. Durable SDK source/native
   block/file-limit/owner/query/projection/restart cases3/3exit0,4249.456625ms:
-  `/tmp/m11-732-file-limit-fixed.log/.exit`. This includes all blocks exactly
+  `/tmp/m11-732-file-limit-fixed.log/.exit`. M08 independently reran the same original probe on exact96f:1/1exit0,
+  2286.53525ms, `/tmp/m08-review-m11-96f-limit.log/.exit`, closing its P2.
+  This includes all blocks exactly
   once with limit1 and owner-only audit API refusal for MCP credentials.
   Additional exact retired-file-ID scenario passes1/1exit0,1217.643542ms,
   `/tmp/m11-732-retired-file-id.log/.exit`; its old canonical ID cannot return

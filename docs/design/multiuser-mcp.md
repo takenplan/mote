@@ -13,9 +13,9 @@ remotely verified accepted M10 Draft PR134 complete head
 in `/tmp/mote-m11-review-m10.md`; its closed execution conversation is not reused.
 
 **M11 is not fully accepted.** Accepted PR134 is composed. Current M11 core
-`4cb0e9e8502c2b854dde9f6f72fc39415290bfd0` also composes genuine M08 partial
-production freeze `9cbc863bdb7c2bc337ce820f4c566d8f10ce9923` and M07 question/feedback/daily partial freeze
-`6d3661de8a7f2fa4a9633d194632f21ca77c0685`. These are stable
+`96f955a687279b110c17cca20251a00ae996f3b7` also composes genuine M08 partial
+production freeze `73244e11f4625f3c1e0674b1f8629d8295c05b76` and M07 closure freeze
+`443c201a9159d77120d990a1b2d888cb2015d139`. These are stable
 interface/core freezes, not final M07/M08 module acceptance. All 20 original read
 tools now use genuine scoped readers. Logical processed history, UTF16 windows,
 partial ready-only text, navigation, context inclusion/budget/cursors, actual
