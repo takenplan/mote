@@ -412,9 +412,13 @@ export async function backupProfile(p, out, dependencies = {}) {
       await assertStopped();await run('docker',['volume','inspect',p.meta.volume],{capture:true});
       const image=(await run('docker',['image','inspect','--format','{{.Id}}',p.meta.image],{capture:true})).trim();
       if(!/^sha256:[a-f0-9]{64}$/.test(image))throw Error('Backup requires the already installed profile image');
-      stage = join(p.directory, 'backups', `.copy-${randomUUID()}`); await mkdir(stage, { mode: 0o700 });
+      stage = join(await realpath(p.directory), 'backups', `.copy-${randomUUID()}`); await mkdir(stage, { mode: 0o700 });
       if(/[\r\n,]/.test(stage))throw Error('Docker backup bind path must not contain commas or line breaks');
-      await run('docker',['run','--rm','--pull','never','--network','none','--read-only','--security-opt','no-new-privileges:true','--user',user,'--mount',`type=volume,source=${p.meta.volume},target=/source,readonly`,'--mount',`type=bind,source=${stage},target=/backup`,'--entrypoint','node',image,'-e',"require('node:fs').cpSync('/source/.','/backup',{recursive:true,preserveTimestamps:true})"],{capture:true});
+      const copy=`const fs=require('node:fs'),path=require('node:path'),buffer=Buffer.alloc(1024*1024);function copied(source,target,root=false){const s=fs.lstatSync(source);if(s.isSymbolicLink()||!s.isDirectory()&&(!s.isFile()||s.nlink!==1))throw Error('Backup links and special files are not allowed');if(s.isDirectory()){if(!root)fs.mkdirSync(target,{mode:0o700});for(const name of fs.readdirSync(source))copied(path.join(source,name),path.join(target,name));return;}const input=fs.openSync(source,'r'),output=fs.openSync(target,'wx',0o600);try{for(;;){const count=fs.readSync(input,buffer,0,buffer.length,null);if(!count)break;let offset=0;while(offset<count)offset+=fs.writeSync(output,buffer,offset,count-offset);}fs.fsyncSync(output);}finally{fs.closeSync(input);fs.closeSync(output);}}copied('/source','/backup',true);`;
+      // Explicit ordinary-file copying avoids cpSync's native directory-copy
+      // path, which fails on Docker Desktop bind mounts. The verified profile
+      // user writes only its new private stage; the source remains read-only.
+      await run('docker',['run','--rm','--pull','never','--network','none','--read-only','--security-opt','no-new-privileges:true','--user',user,'--mount',`type=volume,source=${p.meta.volume},target=/source,readonly`,'--mount',`type=bind,source=${stage},target=/backup`,'--entrypoint','node',image,'-e',copy],{capture:true});
       await assertStopped();
       // A stopped container's PID namespace is unrelated to host PIDs. Remove only the copied lock.
       await rm(join(stage, 'server.pid'), { force: true }); source = stage;
