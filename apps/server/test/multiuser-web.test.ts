@@ -7,6 +7,7 @@ import {buildApp} from '../src/app.js';
 import {defaultModelSettings,defaultModelDomain} from '../src/model-settings.js';
 import {createApi,type WebConnection} from '../../web/src/api.js';
 import {submitWebNote} from '../../web/src/web-notes.js';
+import {uploadNoteAttachment} from '../../web/src/note-attachments.js';
 
 const password='Generated-M13-HTTP-password-01',protocol={'x-mote-protocol-version':'2'};
 async function fixture(t:TestContext){
@@ -24,7 +25,7 @@ async function fixture(t:TestContext){
  t.mock.method(globalThis,'fetch',async(path:unknown,init?:RequestInit)=>{
   const headers=Object.fromEntries(new Headers(init?.headers));headers.cookie=cookie;
   const r=await host.app.inject({method:(init?.method??'GET') as any,url:String(path),headers,...(init?.body?{payload:JSON.parse(String(init.body))}:{})});
-  return new Response(r.body,{status:r.statusCode,headers:r.headers as Record<string,string>});
+  return new Response(r.rawPayload,{status:r.statusCode,headers:r.headers as Record<string,string>});
  });
  const ai=await info(a),bi=await info(b);
  return {directory,host,admin,a,b,ai,bi,login,api:()=>createApi(ai),cookie:(owner:'a'|'b')=>{cookie=String((owner==='a'?a:b).r.headers['set-cookie']).split(';')[0];}};
@@ -85,4 +86,16 @@ test('Web feature metadata describes real routes and Library keeps owned canonic
  assert.doesNotMatch(JSON.stringify(page),/GENERATED_B_LIBRARY_NOTE/);
  f.cookie('b');assert.doesNotMatch(JSON.stringify(await b.request('/api/library/catalog?limit=1')),/GENERATED_A_LIBRARY_NOTE/);
  await assert.rejects(a.request('/api/library/catalog'),error=>(error as any).code==='session_changed');
+});
+
+test('Web attachment transport commits actual owned bytes and retries the same receipt without borrowing B authority',async t=>{
+ const f=await fixture(t),a=f.api(),file=new File(['GENERATED_AUDIO_BYTES_ONLY'],'generated.wav',{type:'audio/wav',lastModified:0});
+ const id=await uploadNoteAttachment(a,file,'same-device');assert.match(id,/^[a-f0-9-]{36}$/);
+ assert.equal(await uploadNoteAttachment(a,file,'same-device'),id);
+ const originals=await a.request<any>('/api/ingress/sources/notes-same-device/originals');assert.equal(originals.items.length,1);
+ const original=originals.items[0],ticket=await a.request<any>('/api/ingress/originals/'+original.ref.slice(9)+'/tickets',{method:'POST',body:'{}'});
+ assert.equal(await (await a.raw('/api/ingress/originals/'+original.ref.slice(9)+'/content?ticket='+encodeURIComponent(ticket.ticket))).text(),'GENERATED_AUDIO_BYTES_ONLY');
+ f.cookie('b');const b=createApi(f.bi);await assert.rejects(b.request('/api/captures/'+id),error=>(error as any).status===404);
+ await assert.rejects(uploadNoteAttachment(a,file,'same-device'),error=>(error as any).code==='session_changed');
+ assert.equal((await b.request<any>('/api/captures')).items.length,0);
 });
