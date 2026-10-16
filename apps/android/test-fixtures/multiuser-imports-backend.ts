@@ -12,7 +12,7 @@ let actors:{a:{token:string};b:{token:string}};
 const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} as unknown as TestContext,host=>{
  host.app.addHook('onSend',async(request,reply,payload)=>{
   if(request.method==='POST'&&request.url==='/api/imports'&&reply.statusCode===202){
-   const body=request.body as {requestId:string;archivedFileIds:string[]};commands.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':request.headers.authorization==='Bearer '+actors.b.token?'b':'other',path:request.url,requestId:body.requestId,fileId:body.archivedFileIds[0]});
+   const body=request.body as {requestId:string;archivedFileIds?:string[]};commands.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':request.headers.authorization==='Bearer '+actors.b.token?'b':'other',path:request.url,requestId:body.requestId,...(body.archivedFileIds?{fileId:body.archivedFileIds[0]}:{})});
    if(dropping&&request.headers.authorization==='Bearer '+actors.a.token)reply.raw.destroy();
   }
   if(request.method==='PUT'&&/^\/api\/import-uploads\/[^/]+\/parts\/\d+$/.test(request.url)&&reply.statusCode===200)commands.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':'b',path:request.url,uploadId:request.url.split('/')[3]});
