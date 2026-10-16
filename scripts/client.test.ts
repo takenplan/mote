@@ -28,7 +28,7 @@ test('CLI confirms M01 identity before providing an account-bound Ingress 3 requ
   };
   const client=await apiClient({url:connection.serverUrl,token:connection.token});
   assert.equal(client.account.userId,connection.account.userId);
-  assert.deepEqual(await client('/api/ingress/devices'),{generated:true});
+  assert.deepEqual(await client('/api/ingress/devices',undefined,'GET'),{generated:true});
   await assert.rejects(client('/api/captures',{},'POST'),/Ingress 3/);assert.equal(calls,3);
 });
 

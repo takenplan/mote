@@ -246,3 +246,11 @@ commands after adding the new backup helper to the generated release fixture.
 Management adds no private trace or old queue/index statistics impersonation. The
 Web/Android original diagnostic consumers must recognize the declared metadata
 coverage; this checkpoint does not claim their complete UI or final required gate.
+
+First required affected attempt at 1976bcf9 exits **1** during root tools TypeScript
+checking, before the full test workspaces or Android stage:
+`/tmp/m16-required-affected-first.log/.exit`. Missing `scoped-backup.d.mts`
+(TS7016) and a test-only SourceRequest GET call with too few arguments (TS2554)
+are tooling/type integration failures. The explicit public declaration and full
+GET arguments fix them without runtime behavior changes. A root typecheck green
+and later required retry are separate evidence; the failed attempt is retained.
