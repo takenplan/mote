@@ -914,6 +914,42 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalFileStopRequiresExplicitUnknownConsentBeforeFreshRetryAndDeletesOnlyItsOwner() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val id=fixture().getString("captureId");val b=CentralClient(endpoint(),token("b"))
+        val before=api.get("/api/files/"+id);val beforeB=b.get("/api/files/"+id+"/chunks").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        fun dialog():android.app.AlertDialog {
+            @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+            return dialogs.mapNotNull {it.get()}.single {it.isShowing}
+        }
+        control("/generated/hold-next-asr")
+        try {androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun reopen(){scenario.onActivity {it.navigate("files")};ready();press("查看详情");ready()}
+            ready();press("查看详情");ready();press("重试 · 转写");ready();waitFor {control("/generated/file-retries").getBoolean("asrHeld")}
+            val first=control("/generated/file-retries").getJSONArray("retries").getJSONObject(0);assertEquals(200,first.getInt("status"))
+            reopen();press("停止处理");ready();assertEquals("cancelled",api.get("/api/tasks/"+first.getString("taskId")).getString("state"))
+            val stopped=api.get("/api/files/"+id);assertTrue(stopped.getBoolean("hasOriginal"));assertEquals(before.getString("sha256"),stopped.getString("sha256"));assertFalse(stopped.getJSONObject("cancellation").getBoolean("canCancel"))
+            val wait=stopped.getJSONObject("cancellation").optString("wait")
+            if(wait=="unknown") {
+                press("重试 · 转写");scenario.onActivity {assertTrue(dialog().isShowing);dialog().getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick()}
+                assertEquals(1,control("/generated/file-retries").getJSONArray("retries").length())
+            } else assertEquals("running",wait)
+            control("/generated/release-asr");waitFor {!control("/generated/file-retries").getBoolean("asrHeld") && api.get("/api/files/"+id).getJSONObject("cancellation").optString("wait")!="running"}
+            val confirmationRequired=api.get("/api/files/"+id).getJSONObject("cancellation").optString("wait")=="unknown"
+            reopen();press("重试 · 转写")
+            if(confirmationRequired)scenario.onActivity {dialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()}
+            ready();val attempts=control("/generated/file-retries").getJSONArray("retries");assertEquals(2,attempts.length())
+            val fresh=attempts.getJSONObject(1);assertEquals(confirmationRequired,fresh.getJSONObject("body").getBoolean("confirmUnknown"));assertNotEquals(first.getJSONObject("body").getString("operationId"),fresh.getJSONObject("body").getString("operationId"))
+            waitFor {api.get("/api/tasks/"+fresh.getString("taskId")).getString("state")=="succeeded"};assertEquals(beforeB,b.get("/api/files/"+id+"/chunks").toString())
+            reopen();press("删除文件");scenario.onActivity {dialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()};ready()
+            assertEquals(404,HttpJson.get(endpoint()+"/api/files/"+id,token("a")).first);assertEquals(beforeB,b.get("/api/files/"+id+"/chunks").toString())
+        }}finally{control("/generated/release-asr")}
+    }
+
     @Test fun originalNativeRecordingSavesExactAuthenticatedOriginalThroughItsDocumentResult() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")

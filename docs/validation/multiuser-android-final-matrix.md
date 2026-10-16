@@ -178,6 +178,13 @@ cleanup exits are retained; no static review is counted as these executions.
   and bad receipts retain it. Existing stop/unknown consent/stage names remain.
   This source and the new instrumented method still require compilation and
   actual same-case GREEN; no latest357 or older native evidence is reassigned.
+  A second uncompiled native representative now drives original stop, observes
+  the real running/unknown outcome, cancels an unknown-retry confirmation without
+  admission, explicitly reprocesses after the generated ASR barrier releases,
+  and deletes A's file while B's same-ID chunks remain exact. The fixture holds
+  only external generated ASR I/O and releases its owned barrier during cleanup;
+  no task state or SQLite outcome is manually assigned. Neither this case nor
+  the lost-ACK instrumented method has run yet.
 
   New public dependency RED0d60ded2 is separate from the unrun Android test:
   real A forget→allow-again→same bytes/revision re-upload (same capture UUID)
