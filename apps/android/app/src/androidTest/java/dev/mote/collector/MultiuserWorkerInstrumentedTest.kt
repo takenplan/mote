@@ -452,6 +452,28 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalOverviewKeepsRecentOwnedOperationPreviewsAndTheirDetails() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val operations=CentralAccess.requireClient(app).get("/api/operations?limit=5").getJSONArray("items")
+        assertTrue("The actual M12 producer must have admitted M05 operations",operations.length()>0)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","overview")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->
+                val all=views(activity.window.decorView)
+                assertEquals("The original recent-five operation cards must remain beside the full Activity entry",operations.length(),all.filterIsInstance<android.widget.Button>().count {it.text.toString()=="查看详情"})
+                for(index in 0 until operations.length()) {
+                    val row=operations.getJSONObject(index)
+                    assertTrue(all.filterIsInstance<android.widget.TextView>().any {it.text.toString()==row.optString("title",row.optString("kind",row.optString("id")))})
+                }
+                all.filterIsInstance<android.widget.Button>().first {it.text.toString()=="查看详情"}.performClick()
+            }
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->assertTrue(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(operations.getJSONObject(0).getString("id"))})}
+        }
+    }
+
     @Test fun actualNativeActionsSettingsPreserveOwnedRevisionAndRetireTheOriginalSave() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
