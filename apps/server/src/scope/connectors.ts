@@ -4,7 +4,7 @@ import {join} from 'node:path';
 import {rm} from 'node:fs/promises';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
-import {recordingSelectionSchema,type SourceItem,type SourceItemRecord,type SourceConnection} from '@mote/shared';
+import {recordingSelectionSchema,sourceIdSchema,type SourceItem,type SourceItemRecord,type SourceConnection} from '@mote/shared';
 import {GoogleCalendarConnector,selectedCalendarsSchema} from '../connectors/google.js';
 import {GmailAdapter} from '../connectors/gmail-adapter.js';
 import {LarkAdapter,larkConfigureSchema,selectionSchema as larkSelectionSchema} from '../connectors/lark-adapter.js';
@@ -33,6 +33,8 @@ const DOMAIN='connectors',CONFIG='connectorSettings',TASK='connector.run';
 const pluginId=(id:string)=>'connector.'+id;
 const definitions=['gmail','google-calendar','lark','feishu-recordings','dingtalk-recordings'] as const;
 const publicSettings=(s:ConnectionSettings)=>({...s,googleClientSecret:undefined,googleClientId:s.googleClientId?'configured':undefined,googleRedirectUri:s.googleRedirectUri});
+const sourceStatusSchema=z.object({state:z.enum(['idle','syncing','error','permission_required']),code:z.string().max(200).optional(),lastSyncAt:z.string().datetime({offset:true}).optional()}).strict();
+export interface ConnectorSourceStatusReader{sourceStatuses(sourceIds:readonly string[]):ReadonlyMap<string,NonNullable<SourceConnection['status']>>}
 /** One registrar, one shared executor, and M09's existing user instance lifecycle.
  * Provider factories below use actual adapters with transport-only injection. */
 export class ScopedConnectors {
@@ -224,6 +226,13 @@ export class ScopedConnectors {
  forUser(context:UserContext){
   this.assert(context);const settings=async()=>{let view=await this.options.configuration.forUser(context).view();this.assert(context);for(const row of this.options.db.prepare('SELECT operation_id,json FROM connector_restore WHERE user_id=? AND applied=0 ORDER BY rowid').all(context.userId)){const restored=connectorSettings.parse(JSON.parse(String(row.json)));view=await this.options.configuration.forUser(context).replace(CONFIG,restored,view.revision);this.assert(context);this.options.db.prepare('UPDATE connector_restore SET applied=1 WHERE user_id=? AND operation_id=?').run(context.userId,row.operation_id);}return {view,connections:(this.options.db.prepare('SELECT settings FROM connector_connections WHERE user_id=? AND removed=0 ORDER BY id').all(context.userId)).map(row=>connectionSchema.parse(JSON.parse(String(row.settings))))};};
   return Object.freeze({
+   sourceStatuses:(sourceIds:readonly string[])=>{
+    this.assert(context);const requested=new Set(z.array(sourceIdSchema).parse(sourceIds)),data=this.runtime.services.forUser(context).get<PrivateData>('private-data'),owned=data.sources().filter(source=>requested.has(source.id)).map(source=>source.id),result=new Map<string,NonNullable<SourceConnection['status']>>();
+    // Read the real adapter ledger without opening an adapter, vault, activity,
+    // model, network handle or authorization. Actual source IDs stay owner-bound.
+    const rows=this.options.db.prepare("SELECT s.source_id,l.json FROM connector_sources s JOIN connector_connections c ON c.user_id=s.user_id AND c.id=s.instance_id JOIN connector_ledger l ON l.user_id=s.user_id AND l.instance_id=s.instance_id AND l.scope='source-status' AND l.key=s.local_id WHERE s.user_id=? AND c.removed=0 AND s.source_id IN(SELECT value FROM json_each(?)) ORDER BY s.source_id").all(context.userId,JSON.stringify(owned));
+    for(const row of rows){const parsed=sourceStatusSchema.safeParse(JSON.parse(String(row.json)));if(!parsed.success)throw new ConnectorError('connector_status_invalid',502);result.set(String(row.source_id),parsed.data);}this.assert(context);return result;
+   },
    view:async()=>{const {view}=await settings();return {revision:view.revision,providers:this.available(),connections:this.options.db.prepare('SELECT * FROM connector_connections WHERE user_id=? AND removed=0 ORDER BY id').all(context.userId).map(value=>{const row=value as Row;return {...publicSettings(connectionSchema.parse(JSON.parse(row.settings))),generation:row.generation,syncAuthorized:Boolean(row.sync_authorized)};})};},
    configure:async(value:unknown,expectedRevision:number)=>{const input=connectionSchema.parse(value);if(!this.packages.has(input.provider))throw new ConnectorError('connector_provider_unavailable');const {view,connections}=await settings();const existing=connections.find(c=>c.id===input.id);if(existing&&existing.provider!==input.provider)throw new ConnectorError('connector_provider_changed',409);if(view.revision!==expectedRevision)throw new ConnectorError('connector_configuration_changed',409);
     // M09 validates the installed fixed package before any settings enable work.
