@@ -1,6 +1,6 @@
 import type {TestContext} from 'node:test';
 import assert from 'node:assert/strict';
-import {createServer} from 'node:http';
+import {createServer,type ServerResponse} from 'node:http';
 import {randomUUID} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {writeFileSync,existsSync} from 'node:fs';
@@ -15,9 +15,10 @@ import {fixture,item} from './mcp.js';
 
 export const memoryText=(owner:string)=>'GENERATED_MCP_MEMORY_'+owner+': Nora prefers generated tea.';
 export async function memoryFixture(t:TestContext,external=false){
- const release=generatedMemoryRelease(),f=await fixture(t,true,external?{pluginReleaseTransport:release.transport}:{}),requests:{owner:string;raw:string}[]=[];
+ const release=generatedMemoryRelease(),f=await fixture(t,true,external?{pluginReleaseTransport:release.transport}:{}),requests:{owner:string;raw:string}[]=[],modelReplies=new Map<string,(raw:string,res:ServerResponse)=>void>();
  const provider=createServer(async(req,res)=>{
   let raw='';for await(const chunk of req)raw+=chunk;const owner=String(req.headers['x-api-key']).includes('GENERATED_A_KEY')?'A':'B';requests.push({owner,raw});
+  const scripted=modelReplies.get(owner);if(scripted){scripted(raw,res);return;}
   const ids=[...new Set(raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}/g)??[])],id=ids[0],keys=[...new Set([...raw.matchAll(/\\?"key\\?"\s*:\s*\\?"(member_[0-9]+)/g)].map(match=>match[1]))];
   if(raw.includes('Host Memory deletion review.')){writeMessagesResponse(res,{stage:requests.length,text:JSON.stringify({answer:JSON.stringify({sameConclusion:true,newSupportEvidenceIds:[]}),citationIds:[]})});return;}
   const memories=id?[{title:'Generated '+owner,statement:`Nora prefers generated tea. [${id}]`,uncertainty:'Synthetic attributed statement only',admission:{layer:'memory',reason:'Synthetic explicitly expressed preference',scope:'Nora in generated fixture',attribution:'third_party'},evidenceIds:[id],evidence:[{id,quote:memoryText(owner)}]}]:[];
@@ -25,7 +26,8 @@ export async function memoryFixture(t:TestContext,external=false){
  });
  await new Promise<void>(resolve=>provider.listen(0,'127.0.0.1',resolve));t.after(async()=>{provider.closeAllConnections();await new Promise<void>(resolve=>provider.close(()=>resolve()));});
  const replace=async(user:any,domain:string,value:unknown)=>{const view=await f.ok(user.token,'/api/configuration');return f.ok(user.token,'/api/configuration/'+domain,'PUT',{revision:view.revision,value});};
- for(const [user,owner]of [[f.a,'A'],[f.b,'B']] as const){await replace(user,'models',{profiles:[{id:'same-model',name:'Generated Memory model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-memory',baseUrl:'http://127.0.0.1:'+(provider.address() as any).port+'/v1',apiKey:'GENERATED_'+owner+'_KEY'}}],selections:{memory:{kind:'personal',id:'same-model'}}});await replace(user,'processing',{...defaultProcessingSettings(),automatic:false,understandingEnabled:false});await replace(user,'memory',{...defaultMemorySettings(),automatic:false,integration:false});}
+ const models=(owner:string,ask=false)=>({profiles:[{id:'same-model',name:'Generated Memory model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-memory',baseUrl:'http://127.0.0.1:'+(provider.address() as any).port+'/v1',apiKey:'GENERATED_'+owner+'_KEY'}}],selections:{memory:{kind:'personal',id:'same-model'},...(ask?{chat:{kind:'personal',id:'same-model'}}:{})}});
+ for(const [user,owner]of [[f.a,'A'],[f.b,'B']] as const){await replace(user,'models',models(owner));await replace(user,'processing',{...defaultProcessingSettings(),automatic:false,understandingEnabled:false});await replace(user,'memory',{...defaultMemorySettings(),automatic:false,integration:false});}
  const publish=async(user:any,owner:string,sourceId='same-source',externalId='same-external')=>{
   const context=await f.node.authority.authenticate(user.token),bound=f.node.ingress.bindSource(context,[sourceId],()=>{}),receipt=bound.receiveSourceItems(sourceId,'batch:'+externalId,[{...item(memoryText(owner),externalId),kind:'file',layer:'original'}]);
   return bound.publishMaterial({id:materialId(sourceId,externalId),kind:'document',schemaVersion:1,title:'Generated Material',origin:{sourceId,externalId},blocks:[{id:'same-block',kind:'text',format:'plain',text:memoryText(owner),memberIds:['original']}],members:[{id:'original',kind:'capture',ref:'capture:'+receipt.captures[0].id}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
@@ -39,5 +41,5 @@ export async function memoryFixture(t:TestContext,external=false){
   return directories;
  };
  const hold=(directory:string,id:string)=>{const started=join(directory,'read-started-'+id),release=join(directory,'release-read-'+id);writeFileSync(join(directory,'hold-read-'+id),'generated');f.beforeClose(()=>{if(existsSync(directory))writeFileSync(release,'generated');});return {release:()=>writeFileSync(release,'generated'),entered:async()=>{const end=Date.now()+10000;while(!existsSync(started)){assert.ok(Date.now()<end,'actual provider read barrier');await delay(5);}}};};
- return {...f,get node(){return f.node;},replace,publish,extract,wait,externalize,hold,requests};
+ return {...f,get node(){return f.node;},replace,publish,extract,wait,externalize,hold,requests,modelReplies,enableAsk:(user:any,owner:string)=>replace(user,'models',models(owner,true))};
 }
