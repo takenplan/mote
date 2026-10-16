@@ -204,6 +204,14 @@ export class TaskExecution {
  private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id);return {...step,input:undefined,ownership:undefined,progress:JSON.parse(row.progress),checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
  tick(){return this.engine.tick();}
  start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(()=>{});},100);this.timer.unref();void this.tick().catch(()=>{});}
+ /** Host domain's explicit replacement operation may acknowledge old unknown
+  * facts without requeuing an obsolete input or reviving its task grant. No HTTP
+  * or model tool exposes this capability. Facts themselves remain unresolved. */
+ acknowledgeExternalReplay(context:UserContext,taskId:string){
+  return this.transaction(()=>{this.authority.assert(context);this.enabled(context.userId);const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);
+   for(const call of this.db.prepare("SELECT issuance_id FROM task_external_calls c WHERE c.task_id=? AND c.user_id=? AND c.state IN ('issued','unknown') AND NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations a WHERE a.user_id=c.user_id AND a.issuance_id=c.issuance_id)").all(taskId,context.userId))this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),String(call.issuance_id),context.userId,context.authorizationEpoch,Date.now());
+  });
+ }
  /** Trusted transport adapters bind an exact issuance while its owner is
   * authenticated. A late, validated ACK may settle only that external fact;
   * this closure never restores task, account or private publication authority.

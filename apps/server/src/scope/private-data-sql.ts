@@ -3,7 +3,7 @@ import {createHmac,timingSafeEqual} from 'node:crypto';
 import {deflateRawSync,inflateRawSync} from 'node:zlib';
 
 export class PrivateDataError extends Error{
-  constructor(readonly code:'not_found'|'conflict'|'invalid_data'|'invalid_cursor'|'scope_unavailable'|'snapshot_input_expired',readonly statusCode=400){super(code);}
+  constructor(readonly code:'not_found'|'conflict'|'invalid_data'|'invalid_cursor'|'scope_unavailable'|'snapshot_input_expired'|'file_forgotten',readonly statusCode=400){super(code);}
 }
 export const missing=()=>new PrivateDataError('not_found',404);
 /** The sole private SQL gateway. Named owner binding is supplied by the host,

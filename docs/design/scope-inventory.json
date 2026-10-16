@@ -1560,6 +1560,7 @@
       "table:ig_capture_update_sequences",
       "table:ig_capture_updates",
       "table:ig_devices",
+      "table:ig_file_forgets",
       "table:ig_import_parts",
       "table:ig_import_uploads",
       "table:ig_meta",
@@ -1730,6 +1731,13 @@
       "table:mp_artifacts",
       "table:mp_derivations",
       "table:mp_file_annotations",
+      "table:mp_file_calendar",
+      "table:mp_file_controls",
+      "table:mp_file_diarization",
+      "table:mp_file_retries",
+      "table:mp_file_review_inputs",
+      "table:mp_file_reviews",
+      "table:mp_file_steps",
       "table:mp_import_files",
       "table:mp_import_jobs",
       "table:mp_import_records",
@@ -2402,12 +2410,20 @@
     "scope": "user",
     "module": "M06",
     "surfaces": [
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'DELETE',url:'/api/files/:id'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/assets'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/reviews'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/allow-again'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/cancel'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/corrections'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/retry'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/reviews'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/reviews/:reviewId'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/speakers'"
     ]
   },
@@ -2417,6 +2433,14 @@
     "surfaces": [
       "directory:dirname(path)",
       "task:execution.register:{kind,pool:'processing.imports',concurrency:()=>1,policy:model?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.deterministic,...(model?{modelFeature:'import' as const}:{}),parseInput:value=>taskInput.parse(value),authorizeInput:(context,value)=>{const input=taskInput.parse(value);if(input.phase!==phase)throw conflict();const {job}=bound(context,input);if(phase==='prepare'&&model===deterministic(job))throw conflict();},resources:input=>[{scope:'user',key:'import:'+input.jobId}],execute:async run=>{const key=identityHash([run.context.userId,run.task.input.jobId]);active.add(key);try{return await(phase==='prepare'?prepare:commit)(run);}finally{active.delete(key);}},classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure(error instanceof PrivateDataError?'stale':'permanent','import_failed')}"
+    ]
+  },
+  "apps/server/src/scope/processing-reviews.ts": {
+    "scope": "user",
+    "module": "M06",
+    "notes": "Original file review algorithms run through existing M05 file-model leases; retained proposals and exact owner confirmations are private data, with no calendar event writes.",
+    "surfaces": [
+      "task:execution.register:kind:'processing.review'"
     ]
   }
 }

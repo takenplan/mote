@@ -106,3 +106,114 @@ inside the existing issuance hook. The original operation's ACK retry returns
 its existing task. Previously queued parents cannot evade the I/O guard; an
 explicit retry acknowledgement still applies to its existing issuance and never
 changes an old fact to succeeded. No new per-file runtime or outcome store.
+
+## Original per-file cancellation
+
+KEEP the original file cancel journey: revoke unfinished file processing, retain
+completed raw/canonical results and originals, report a running/unknown external
+wait honestly, and allow explicit owner evidence correction. CHANGE the missing
+scoped endpoint to M05 cancellation plus one owner/original cancellation generation
+inside M06. This fences late stage/plugin publication and stops automatic intake
+from reopening that original; unrelated A files and equal-ID B remain independent.
+The small canonical intent table is included in M06 portable merge/deletion and
+the existing stopped-backup catalog. Portable merge does not replace an existing
+local control, and it never restores an M05 task/model authorization. REMOVE the
+scope_unavailable response for this established endpoint, not the old outcome.
+EXCEPTION exact late transport completion may settle its fact; cancellation and
+replay acknowledgement never certify unknown remote execution as stopped.
+UNKNOWN file retry/reprocess, selected diarization/acoustic overrides, reviews,
+image-profile and complete recording parity still require their own implementation
+and acceptance. This candidate does not introduce a second executor or generic
+control framework. Native archives predating this new required table are not
+claimed compatible; older personal payloads default missing controls to empty.
+
+## Original explicit file reprocessing candidate
+
+KEEP explicit owner reprocessing and its unknown-outcome acknowledgement; a
+physically active call still blocks even after another owner task endpoint has
+recorded acknowledgement. Originals, successful artifacts and old outcome facts
+remain retained. CHANGE the replacement admission to a fresh per-original
+nonzero generation and a new M05 task. Zero-generation canonical input stays
+byte-compatible with the historical identity formula. REMOVE replay through an
+obsolete cancelled input/grant. EXCEPTION a host-only M05 acknowledgement records
+consent for exact owned unresolved calls without changing their outcomes or
+requeuing old work. UNKNOWN diarization-only retry/overrides, complete image
+policies/reviews/acoustic assets and full compiled/client gates remain pending.
+
+The narrow retry candidate accepts POST `/api/files/:id/retry` with a stable
+client-generated `operationId` (1–128 characters), `stage: transcribe|summary`
+(default transcribe) and optional `confirmUnknown` (default false). It returns
+`{queued:true,taskId}`; the same exact operation/body returns the original task,
+including after completion, and body conflicts return409. The consumer persists
+this request identity through lost ACK rather than requiring another user step.
+Running work returns409; an unacknowledged unknown also returns409 until explicit
+confirmation. All confirmations/control-generation/admission/receipt writes share
+one transaction. The original owner/source/file checks precede lookup. Summary
+reprocessing keeps raw extraction and uses fresh summary stages; transcribe uses
+fresh extraction fingerprints. Portable archives retain the per-file control
+intent but exclude retry/admission history and execution grants. The native backup
+catalog covers the new owner-keyed `mp_file_retries` journal. This is still WIP,
+not a replacement consumer freeze or complete Files acceptance.
+
+## Exact raw extraction and diarization-only candidate
+
+KEEP accepted raw ASR separately from aligned dialogue and explicit per-file
+speaker options. CHANGE the missing raw locator to M06 canonical stage-output
+references, written under the existing M05 grant after validated stage output.
+`mp_file_steps` stores only owner/original/generation/role/artifact references;
+`mp_file_diarization` stores the original exact-count/range/processor option.
+Neither table schedules work or carries model endpoints/credentials. Diarize
+retry selects the current accepted raw extraction, checks an optional supplied
+artifact ID exactly, then reuses that immutable artifact in the existing audio
+recipe. The new file generation fences all obsolete jobs. The override persists
+for this original only; explicit null removes it and restores inherited settings.
+REMOVE repeated ASR as a side effect of retrying diarization. EXCEPTION a failed
+diarizer leaves validated raw extraction readable but does not claim a complete
+indexed pipeline. UNKNOWN acoustic sample/assets, model reviews, image profiles,
+calendar associations and full native/production acceptance remain open.
+
+The candidate expands retry stage to `transcribe|diarize|summary`. Optional
+`diarization:{artifactId,options}` is valid only for diarize; options use the
+existing FileDiarizationOptions contract or null. Old UUID artifact assumptions
+are replaced by the M06 64-hex identifier; no new user confirmation is added.
+GET Files detail exposes `rawArtifactId` even when later diarization failed.
+Portable export/merge includes canonical stage references and per-file options,
+validates owner/original/artifact/type/generation links before any writes and
+never restores execution rights. Existing destination intent wins on merge.
+Native backup lists both tables. Historical M06 artifacts without a recorded
+stage reference are not guessed into raw ASR based on an engine-name string.
+
+## Acoustic previews and recording-export candidate
+
+KEEP anonymous sample audition, private WAV delivery and the full raw/unaltered/
+corrected recording export distinction. CHANGE the unavailable assets endpoint to
+read only the exact current owner-bound diarization stage, with the original
+WAV header/size checks before that stage can be accepted. Detail exposes sample
+metadata without base64 bytes; file-list rows do not materialize acoustic bodies.
+The existing private assets route delivers validated WAV bytes with no-store.
+Original raw ASR/extraction, aligned/uncorrected/corrected transcript, diarization
+JSON/RTTM/CSV, sample WAVs and confirmed names remain distinct export entries.
+A partial pipeline can export accepted raw evidence without claiming indexing or
+complete processing in its manifest. Stream proof includes source/file, current
+Material revision and metadata-only raw/diarization stage IDs; it is checked at
+consumption and while yielding existing gzip chunks. REMOVE false missing assets
+for an accepted current speaker sample. EXCEPTION replacement/foreign acoustic
+IDs are404; an invalid sample cannot replace the last valid publication. UNKNOWN
+calendar confirmations/model review and the remaining old capability matrix are
+still open. No filesystem asset store, new model call or new executor is added.
+
+## Original file review adaptation decision
+
+KEEP the original model-proposed terms/calendar algorithms, explicit owner choice,
+exact source ranges and immutable originals. The pure prompts/value schemas are
+shared with the quarantined original tests; no keyword matching or guessed event
+association is added. CHANGE only the host: M03/M06 evidence and personal M04 leases
+are admitted through the existing single M05 executor. Private proposal/link history
+is data; personal restore never reconstructs a task/model lease. Calendar links
+confirm a planned event association and never establish attendance or write an event.
+Metadata-only references contribute only retained metadata with an unavailable-body
+marker; they never cause a speculative provider/original fetch. Exact source context,
+artifact revision and calendar hash are rechecked after awaits and on confirmation.
+Current narrow receipts are in the validation ledger. Original profile/rule routing,
+all client consumers, native/container schema combination and final whole acceptance
+remain independently tracked; these new review cases do not supersede those gaps.

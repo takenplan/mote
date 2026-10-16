@@ -140,3 +140,56 @@ backoff/restart and exact unavailable-snapshot recovery have separate receipts i
 the joint validation ledger on unchanged projection source; final composed gates
 remain pending. Files model reviews/calendar matching, acoustic samples/overrides, lifecycle
 controls and complete recording exports remain OPEN.
+
+### New narrow processing freeze (supersedes the earlier PREP source only)
+
+`c45fdb4a2518fef0d5072b02aafbe8f46cb5a90b` is now the explicitly consumable
+thin source checkpoint. It contains43db/fbc and the same Imports wire contract;
+there is no new client payload or independent backend projection. Current Server
+source noEmit is EXIT0. Actual bare503 unknown/new-operation/queued-operation and
+late account-delete ACK cases pass, with scoped B positives; existing ASR stages,
+explicit unknown retry, cancellation, summary, M16 erasure and Imports entry
+adjacencies have their separate narrow receipts. M13's three bounded source
+reviews find no new confirmed P0/P1/P2 and did not execute the tests.
+
+M06 now records its calls in M05 before I/O. A bare503/network/timeout without
+known never-started facts cannot automatically repeat, nor can a fresh operation
+ID evade an unacknowledged call for that original. The same original operation
+still returns its idempotent task. Use the existing owner task retry with
+confirmUnknown when required; acknowledgement leaves old unknown facts intact.
+A valid late reply may settle only the exact old fact, never revive private
+publication authority. The pre-transport rejected queued task spends zero call
+attempts. New file controls, image profiles, model reviews, acoustics and complete
+recording outcomes listed above remain OPEN. This checkpoint has no whole-module,
+compiled-production/client, final affected or joint acceptance claim.
+
+## Original file reviews — current implementation candidate, not consumer freeze
+
+The retained terms/calendar prompts and value validators are extracted to the
+pure `file-review-contract.ts`; quarantined legacy fixtures and scoped M06 use
+the same contract. Scoped `processing-reviews.ts` registers one `processing.review`
+kind in M05, using the admitted personal file-model lease and real read-only Agent.
+It creates no executor, per-user runtime or calendar-write capability.
+
+| Entry | Current candidate contract |
+| --- | --- |
+| POST `/:id/reviews` | `{operationId,kind:'terms'|'calendar',offset?,after?,before?}` proposes against the exact current transcript/Material revision. Stable operation/body returns the same task/review; changed body conflicts. Returns `{queued:true,taskId,reviewId}`. The client retains its existing proposal/owner-confirm flow while awaiting the task. |
+| GET `/:id/reviews` | Owner-only `{items}` retains proposal/decision history. Preparing work exposes its actual task status. Retired source context/calendar inputs hide the proposal payload and report stale. |
+| POST `/:id/reviews/:reviewId` | `{action:'accept'|'reject',selected?:suggestionUUID[],replacements?:{suggestionUUID:text}}`. Terms acceptance validates exact UTF-16 source ranges/current artifact before publishing a corrected transcript and preserving original text/speaker provenance. Calendar acceptance confirms a proposed owned event association only; it never edits a calendar event. |
+| Detail/export | An available confirmed association is `calendarLink` on file detail and `confirmed-calendar.json` in the existing tar export. Original/source and exact calendar proof are checked during streaming. Calendar withdrawal hides the association; deleting its input removes dependent retained proposal bodies. |
+
+Calendar owner/source/current-head/privacy filters run before the existing
+200-candidate bound. A metadata-only reference supplies only its already retained
+title/time/provenance and explicitly marks the body unavailable. It does not fetch
+or invent an original. Archived calendar originals use their exact M03 body.
+Both calendar and file source-context versions and exact calendar hashes are
+revalidated across model awaits and owner confirmation.
+
+Personal/native backup schema includes the three private review/link/dependency
+tables. Personal data export excludes execution input, task IDs, model leases and
+preparing work. Restore validates exact text ranges, owned artifacts/calendar
+parents and accepted confirmation references, keeps existing local rows, and
+cannot resume old model work. This candidate has narrow actual journey evidence
+in the joint validation ledger; source types, independent review, complete affected
+and final composed client/compiled/container gates remain pending. It is not yet
+an explicitly consumable replacement for the previous public thin checkpoint.
