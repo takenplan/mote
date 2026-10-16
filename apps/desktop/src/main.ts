@@ -213,6 +213,8 @@ else {
 
     await configureDiagnostics();
     const pageUrl = pathToFileURL(join(__dirname, 'index.html')).href;
+    let activePageUrl=pageUrl+'?document='+randomUUID();
+    const loadAccountDocument=async()=>{activePageUrl=pageUrl+'?document='+randomUUID();await window!.loadURL(activePageUrl);};
     window = new BrowserWindow({
       width: 1140, height: 840, minWidth: 820, minHeight: 620, title: `Mote [${profileLabel}]`, backgroundColor: '#f7f8f5',
       webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, devTools: !app.isPackaged || developmentBuild },
@@ -224,7 +226,7 @@ else {
     window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     window.on('close', event => { if (!quitting) { event.preventDefault(); window?.hide(); } });
     const trusted = (event: IpcMainInvokeEvent) => {
-      if (!window || event.sender !== window.webContents || event.senderFrame?.url !== pageUrl || event.senderFrame !== window.webContents.mainFrame) throw new Error(moteText("请求来源不受信任"));
+      if (!window || event.sender !== window.webContents || event.senderFrame?.url !== activePageUrl || event.senderFrame !== window.webContents.mainFrame) throw new Error(moteText("请求来源不受信任"));
     };
       ipcMain.handle('mote:language', event => { trusted(event); return languageState(); });
     ipcMain.handle('mote:set-language', async (event, raw: unknown) => {
@@ -349,9 +351,10 @@ else {
         }
         pendingStorageDirectory=undefined;sourceSelections.clear();onboarding.clear();
         accountGeneration++;connectionState={state:'unchecked',message:moteText('连接已保存，可测试权限与节点版本')};
+        // Revoke the old document before sending any new account status. Each
+        // navigation has a fresh unguessable bootstrap URL, including get-status.
+        await loadAccountDocument();
         updateUi(clientStatus());
-        // A new isolated document retires old DOM/private caches and preload authority.
-        window?.webContents.reload();
       }catch(error){
         const persisted=await store.load().catch(()=>undefined);
         if(!persisted||!sameAccount(persisted,previous)||persisted.token!==previous.token||persisted.authSignedOut!==previous.authSignedOut)requireRecovery('Desktop account transition needs restart; all account data was preserved');
@@ -472,10 +475,14 @@ else {
     handle('mote:content-central', cursor => browseWithConnection(config=>centralContentPage(config,cursor as string|undefined)));
     handle('mote:content-central-detail',(id,offset,image)=>browseWithConnection(config=>{if(typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id)||offset!==undefined&&(!Number.isSafeInteger(offset)||Number(offset)<0))throw Error('Invalid content reference');return readCentralContent(config,{key:id,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false},Number(offset??0),image===true);}));
     handle('mote:content-local', offset => localContentPage(queue,localSources!,offset as number|undefined));
-    handle('mote:content-local-detail', (key,image) => browseWithConnection(() => localContentDetail(queue,localSources!,key as string,image as boolean|undefined).catch(async error=>{
-      if(typeof key!=='string')throw error;const parts=key.split(':');const receiptKey=parts[0]==='queue'?parts[1]:parts[0]==='source'?require('node:crypto').createHash('sha256').update(`${parts[1]}\0${parts[2]}`).digest('hex'):undefined;
-      const id=receiptKey?syncHistory.receivedCapture(settings,receiptKey):undefined;if(!id)throw error;return readCentralContent(settings,{key:receiptKey!,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false,...(parts[0]==='source'?{sourceId:parts[1]}:{})},0,image===true);
-    })));
+    handle('mote:content-local-detail', (key,image) => browseWithConnection(config => {
+      const selectedQueue=queue,selectedSources=localSources!,selectedHistory=syncHistory;
+      return localContentDetail(selectedQueue,selectedSources,key as string,image as boolean|undefined).catch(async error=>{
+        if(settings!==config)throw Error('Desktop account changed');
+        if(typeof key!=='string')throw error;const parts=key.split(':');const receiptKey=parts[0]==='queue'?parts[1]:parts[0]==='source'?require('node:crypto').createHash('sha256').update(`${parts[1]}\0${parts[2]}`).digest('hex'):undefined;
+        const id=receiptKey?selectedHistory.receivedCapture(config,receiptKey):undefined;if(!id)throw error;return readCentralContent(config,{key:receiptKey!,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false,...(parts[0]==='source'?{sourceId:parts[1]}:{})},0,image===true);
+      });
+    }));
     handle('mote:source-files', (mode, input) => serialize(async () => {
       requireAccount();const options = normalizeSourceOptions(input);
       if (mode !== 'files' && mode !== 'directory') throw new Error(moteText("文件选择方式无效"));
@@ -490,17 +497,21 @@ else {
     handle('mote:events-raw', async () => events.readRaw());
     handle('mote:events-read', async () => events.read(true));
     handle('mote:diagnostics-export', async () => {
+      const selectedDiagnostics=diagnostics,expected=accountGeneration;
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出本机数值诊断（不含内容与令牌）"), defaultPath: 'mote-diagnostics.json', filters: [{ name: 'JSON diagnostics', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePath) return { canceled: true };
-      await diagnostics.sample(); await diagnostics.exportTo(selected.filePath); return { canceled: false };
+      if(expected!==accountGeneration)throw Error('Desktop account changed');await selectedDiagnostics.sample();if(expected!==accountGeneration)throw Error('Desktop account changed');await selectedDiagnostics.exportTo(selected.filePath); return { canceled: false };
     });
     handle('mote:support-export', async rawHours => {
+      const expected=accountGeneration,selectedDiagnostics=diagnostics;
       const hours=rawHours===undefined?24:Number(rawHours);if(![1,24,168].includes(hours))throw new Error('Invalid log range');
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出支持包（数值与固定事件，不含内容和令牌）"), defaultPath: `mote-support-${profile.name}.json`, filters: [{ name: 'JSON support bundle', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePath) return { canceled: true };
-      await diagnostics.sample();
+      if(expected!==accountGeneration)throw Error('Desktop account changed');await selectedDiagnostics.sample();
+      const selectedStatus=clientStatus();
       const logs=await events.exportRange(Date.now()-hours*3600000);
-      await writeFile(selected.filePath, JSON.stringify({...buildSupportBundle(profile, app.getVersion(), clientStatus(), logs.events),...logs}, null, 2), { mode: 0o600 });
+      if(expected!==accountGeneration)throw Error('Desktop account changed');
+      await writeFile(selected.filePath, JSON.stringify({...buildSupportBundle(profile, app.getVersion(), selectedStatus, logs.events),...logs}, null, 2), { mode: 0o600 });
       return { canceled: false };
     });
     handle('mote:central', async (page, evidenceId) => {
@@ -522,7 +533,7 @@ else {
       return { canceled: false, directory: pendingStorageDirectory };
     }));
     handle('mote:storage-open', async () => {
-      await storage.assertOwned(queue.directory); const error = await shell.openPath(queue.directory); if (error) throw new Error(moteText("无法打开截图目录，请检查磁盘是否已连接"));
+      const selectedStorage=storage,directory=queue.directory,expected=accountGeneration;await selectedStorage.assertOwned(directory);if(expected!==accountGeneration)throw Error('Desktop account changed'); const error = await shell.openPath(directory); if (error) throw new Error(moteText("无法打开截图目录，请检查磁盘是否已连接"));
     });
     handle('mote:configure', input => serialize(async () => {
       let updated = updateConfig(settings, input as ConfigUpdate);
@@ -642,7 +653,7 @@ else {
     tray = new Tray(trayIcon());
     tray.on('click', showWindow);
     updateUi(clientStatus());
-    await window.loadURL(pageUrl);
+    await window.loadURL(activePageUrl);
     await acknowledgeInstalledUpdate({ argv: process.argv, directory: updateDirectory, bundlePath, version: app.getVersion(), profile: profile.name });
     await updater.startupCompleted();
     const receiptTimer = setTimeout(() => { void updater?.startupCompleted(); }, 2500); receiptTimer.unref();

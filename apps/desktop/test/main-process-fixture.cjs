@@ -13,7 +13,7 @@ const app=Object.assign(new EventEmitter(),{
 });
 class Window extends EventEmitter{
  constructor(){super();mainWindow=this;this.webContents=Object.assign(new EventEmitter(),{mainFrame:{url:''},session:{setPermissionRequestHandler:()=>{}},setWindowOpenHandler:()=>{},send:(channel,status)=>{if(channel==='mote:status')process.send?.({type:'status',status});},reload:()=>process.send?.({type:'reload'})});}
- async loadURL(url){this.webContents.mainFrame.url=url;process.send?.({type:'ready'});}
+ async loadURL(url){this.webContents.mainFrame={url};process.send?.({type:'ready'});}
  isDestroyed(){return false;}show(){}focus(){}hide(){}
 }
 class Tray extends EventEmitter{setToolTip(){}setContextMenu(){}}
