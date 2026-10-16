@@ -128,10 +128,9 @@ test('Web source-item consumers reject identity-corrupted actual M03 acknowledge
   external:receipt=>{receipt.captures[0].externalId='other-generated-item';},
   revision:receipt=>{receipt.captures[0].revision='other-generated-revision';},
  };
- for(const [name,mutation]of Object.entries(mutations))await t.test(name,async()=>{
+ for(const [name,mutation]of Object.entries(mutations))for(const consumer of ['attachment','reference'])await t.test(consumer+' '+name,async()=>{
   corrupt=mutation;
-  await assert.rejects(uploadNoteAttachment(a,file,'same-device'),/acknowledgement does not match/);
-  await assert.rejects(saveWebReference(a,'Generated identity',uri),/acknowledgement does not match/);
+  await assert.rejects(consumer==='attachment'?uploadNoteAttachment(a,file,'same-device'):saveWebReference(a,'Generated identity',uri),/acknowledgement does not match/);
  });
  await t.test('original source binding',async()=>{
   corrupt=receipt=>{receipt.captures[0].original.sourceId='other-generated-source';};
