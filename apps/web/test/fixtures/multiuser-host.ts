@@ -32,7 +32,7 @@ for(const owner of ['a','b']){
  const token=users[owner].token;
  await call(token,'/api/ingress/devices','POST',{id:'same-device',name:'Generated device',platform:'import'});
  await call(token,'/api/ingress/sources','POST',{id:'same-source',name:'Generated '+owner+' source',kind:'custom',deviceId:'same-device',platform:'import',retention:'archive'});
- await call(token,'/api/ingress/sources/same-source/captures','POST',{batchId:'same-batch',items:[noteCapture({id:'6d477b3e-fb43-4657-818d-c143ad76430f',deviceId:'same-device',deviceName:'Generated device',platform:'import',client:'web',capturedAt:'2026-10-16T12:00:00Z',text:'GENERATED_PRIVATE_'+owner.toUpperCase()})]});
+ await call(token,'/api/ingress/sources/same-source/captures','POST',{batchId:'same-batch',items:[noteCapture({id:'6d477b3e-fb43-4657-818d-c143ad76430f',deviceId:'same-device',deviceName:'Generated device',platform:'import',client:'web',capturedAt:'2026-10-15T12:00:00Z',text:'GENERATED_PRIVATE_'+owner.toUpperCase()})]});
 }
 await host.app.listen({host:'127.0.0.1',port:0});const port=(host.app.server.address() as {port:number}).port;
 process.send?.({event:'ready',url:'http://localhost:'+port,users:Object.fromEntries(Object.entries(users).map(([id,value])=>[id,{userId:value.userId,username:id==='admin'?'generated-admin':'generated-'+id}])),password});
