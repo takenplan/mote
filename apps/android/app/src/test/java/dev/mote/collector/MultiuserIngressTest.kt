@@ -13,15 +13,12 @@ import java.io.ByteArrayInputStream
 class MultiuserIngressTest {
     private fun root(): File = generateSequence(File(System.getProperty("user.dir")!!)) { it.parentFile }.first { File(it, "package.json").isFile && File(it, "apps/server").isDirectory }
     private fun request(server: String, token: String, method: String, path: String, body: JSONObject?): Pair<Int, JSONObject?> {
-        val connection = URL(server + path).openConnection() as HttpURLConnection
-        try {
-            connection.instanceFollowRedirects = false; connection.requestMethod = method; connection.connectTimeout = 5000; connection.readTimeout = 30000
-            connection.setRequestProperty("X-Mote-Protocol-Version", "2"); connection.setRequestProperty("X-Mote-Ingress-Version", "3")
-            connection.setRequestProperty("Authorization", "Bearer $token")
-            if (body != null) { connection.doOutput = true; connection.setRequestProperty("Content-Type", "application/json"); connection.outputStream.use { it.write(body.toString().toByteArray()) } }
-            val code = connection.responseCode
-            return code to (if (code in 200..299) connection.inputStream else connection.errorStream)?.use { JSONObject(it.bufferedReader().readText()) }
-        } finally { connection.disconnect() }
+        java.net.http.HttpClient.newBuilder().followRedirects(java.net.http.HttpClient.Redirect.NEVER).build().use { http ->
+            val payload = if (body == null) java.net.http.HttpRequest.BodyPublishers.noBody() else java.net.http.HttpRequest.BodyPublishers.ofString(body.toString())
+            val request = java.net.http.HttpRequest.newBuilder(java.net.URI(server + path)).header("X-Mote-Protocol-Version", "2").header("X-Mote-Ingress-Version", "3").header("Content-Type", "application/json").header("Authorization", "Bearer $token").method(method, payload).build()
+            val response = http.send(request,java.net.http.HttpResponse.BodyHandlers.ofString())
+            return response.statusCode() to response.body().takeIf { it.isNotBlank() }?.let(::JSONObject)
+        }
     }
     private fun fixture(test: (JSONObject) -> Unit) {
         val errors = File.createTempFile("m15-backend-", ".log")
