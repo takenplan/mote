@@ -490,3 +490,12 @@ plus the parent). After schema/invariant admission they all reject before target
 creation and the valid round trip remains exact: 7/7, exit 0,
 `/tmp/m16-backup-derived-green.log`. No business or storage I/O was mocked; the
 only replacement was the external generated HTTP OCR service. Scope check exits 0.
+
+The current combined source-host backup/import check passes 37/37, exit 0:
+`node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-instance-backup.test.ts apps/server/test/multiuser-backup-capture-updates.test.ts apps/server/test/multiuser-portable-import.test.ts`,
+`/tmp/m16-import-backup-composed-source.log` (49 seconds). This includes real
+native Mem0 SDK canonical bodies, current saved conversations, original files,
+paused automatic authority, succeeded/unknown external journals, all new device
+cursor corruption cases, and personal-import restart fences. This invocation uses
+the source host; fresh compiled/package-host verification remains a distinct final
+build step. It does not execute Docker daemon/native Hindsight recovery.
