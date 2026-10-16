@@ -4,7 +4,9 @@ import {type Api} from './api';
 
 type Task={id:string;state:string;progress?:{connector?:LarkJob};result?:unknown;failure?:{code:string}};
 const terminal=new Set(['succeeded','failed','cancelled','stale','blocked']);
-const status=(value:unknown):value is LarkStatus=>!!value&&typeof value==='object'&&['installed','configured','connected'].every(key=>typeof (value as any)[key]==='boolean')&&Array.isArray((value as any).missingScopes)&&!!(value as any).selection&&Array.isArray((value as any).selection.documents)&&Array.isArray((value as any).selection.calendarIds);
+const environment=(value:unknown)=>!!value&&typeof value==='object'&&['installed','configured','connected'].every(key=>typeof (value as any)[key]==='boolean')&&Array.isArray((value as any).missingScopes);
+const status=(value:unknown):value is LarkStatus=>environment(value)&&!!(value as any).selection&&Array.isArray((value as any).selection.documents)&&Array.isArray((value as any).selection.calendarIds);
+const summary=(value:unknown):value is Omit<LarkStatus,'selection'|'documentSync'>&{statusInConnection:true}=>environment(value)&&(value as any).statusInConnection===true;
 
 /** Thin presentation adapter for the original Lark panels. All HTTP still uses
  * the captured M01 Api, owned M10 instance and actual M05 task receipts. */
@@ -23,9 +25,13 @@ export function scopedLarkApi(api:Api,id:string):Api{
     if(!status(fresh))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
     view={...view!,selection:fresh.selection,documentSync:fresh.documentSync,lastSyncAt:fresh.lastSyncAt};
    }
-   pending=undefined;
-   if(task.state==='succeeded'){if(status(task.result))view=task.result;else if(current.kind!=='selection')throw Error(moteText('服务返回的操作回执与当前账号不一致。'));else if(view)view={...view,job:undefined};}
+   if(task.state==='succeeded'){if(status(task.result))view=task.result;else if(summary(task.result)){
+    const fresh=await api.request<unknown>(path,{signal});check(signal);if(pending!==current)return;
+    if(!status(fresh))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
+    const {statusInConnection:_,...probe}=task.result;view={...fresh,...probe};
+   }else if(current.kind!=='selection')throw Error(moteText('服务返回的操作回执与当前账号不一致。'));else if(view)view={...view,job:undefined};}
    else if(view)view={...view,job:{id:task.id,kind:current.kind,state:task.state==='cancelled'?'cancelled':'failed',error:task.failure?.code??task.state}};
+   pending=undefined;
   }else if(view)view={...view,job:task.progress?.connector??{id:task.id,kind:current.kind,state:'running'}};
  }
  async function read(signal?:AbortSignal|null){await base(signal);const current=pending;if(current){const task=await api.request<Task>('/api/tasks/'+current.id,{signal});check(signal);await apply(task,current,signal);}return view!;}
