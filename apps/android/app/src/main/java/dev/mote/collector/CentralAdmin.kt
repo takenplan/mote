@@ -204,7 +204,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     private fun settings() {
         ui.button(MoteI18n.text("模型配置")) { models() }
-        ui.button(MoteI18n.text("并发与执行设置")) { configuration(MoteI18n.text("并发与执行设置"), "/api/execution-settings") { pick(it, "interactiveConcurrency", "agentConcurrency", "llmConcurrency", "memoryConcurrency") } }
+        ui.button(MoteI18n.text("并发与执行设置")) { instanceSettingOwnership(MoteI18n.text("并发与执行设置")) { screens.refresh() } }
         ui.button(MoteI18n.text("处理设置")) { fileSettings() }
         ui.button(MoteI18n.text("记忆设置")) { memorySettings() }
         ui.button(MoteI18n.text("来源与外部应用")) { connectors() }
@@ -224,6 +224,10 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 }
             }
         }
+    }
+    private fun instanceSettingOwnership(title: String, back: () -> Unit) {
+        body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
+        ui.text(MoteI18n.text("实例级执行与诊断设置由部署操作者管理；客户端仍可修改本账号的模型和处理设置。"))
     }
     private fun models(): Unit = ownedConfiguration(MoteI18n.text("模型配置"), "models", { screens.refresh() }, { models() })
     fun fileSettings(): Unit = ownedConfiguration(MoteI18n.text("处理设置"), "processing", { screens.refresh() }, { screens.refresh() })
@@ -587,7 +591,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun diagnostics() {
-        ui.button(MoteI18n.text("诊断设置")) { configuration(MoteI18n.text("诊断设置"), "/api/diagnostics-settings") }
+        ui.button(MoteI18n.text("诊断设置")) { instanceSettingOwnership(MoteI18n.text("诊断设置")) { diagnostics() } }
         read("/api/diagnostics")
         ui.button(MoteI18n.text("查看日志")) { read("/api/diagnostics/log-pages?page=1&pageSize=100") }
         ui.button(MoteI18n.text("导出支持包")) { ui.saveCentral("/api/support-bundle", "mote-central-support.json", "application/json") }
