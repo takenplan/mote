@@ -29,3 +29,59 @@ instance recovery. The old v2 shape cannot be silently accepted as portable 3.
 Validation of all sections and cross-domain parents must precede publication or
 use a recoverable staging/transaction boundary; partial restoration must remain
 inaccessible. No personal point-in-time restore feature is added.
+
+## Stopped instance archive checkpoint
+
+`npm run backup -- --data VAULT --out NEW_BACKUP [--config INSTANCE_YAML]`
+keeps the old epoch-4 path and adds epoch-5 `mote-instance-backup` version 2.
+It requires stopped Central/providers, complete canonical SQLite and referenced
+original/native files, an explicit instance configuration, ordinary private
+files and an exclusive destination outside the vault. SQLite backup runs against
+a disposable copy including WAL, leaving the source untouched. The manifest is
+published last; missing/unexpected files, paths, links, checksums, deployment,
+SQL consistency, required epoch-5 tables/columns, installed package integrity and native Mem0 records are verified. A cold account with only usage/state metadata may retain an implicit unchanged default configuration; any durable initialization, credential, receipt or restore provenance requires its canonical YAML.
+Known private SQL owner namespaces must name a safe canonical account before any owner path is resolved. Original completeness includes active physical pins and cannot be weakened by a future manifest timestamp; expired unpinned snapshots retain their original deadlines and unavailable metadata.
+Unknown external Memory providers without a native snapshot protocol fail closed.
+
+`npm run restore:instance -- --from BACKUP --data EMPTY_TARGET
+--deployment-id EXPECTED_ID` verifies before staging and publishes by rename.
+The deployment and user identities, canonical history, configuration and external
+journals survive. Old credentials, task grants, model epochs and plugin snapshots
+are retired. Memory/processing automation, plugin instances, connector sync,
+outbound MCP and Ask automation stay paused until explicitly reauthorized. A
+succeeded or unknown external effect is not replayed. The returned instance YAML
+rebases local storage/log paths; no runtime is started by restoration.
+
+The existing native profile restore keeps its operator-selected profile
+configuration, returns the restored instance YAML path and does not silently
+replace the profile. Use that returned file explicitly when selecting the backed
+up instance configuration. External environment-secret references still require
+the operator's original secret source. Downloaded model weights/logs are excluded.
+This is an operator archive containing private configuration/key material, distinct
+from credential-free portable 3. Epoch-5 Docker profile publication is OPEN and
+rejects before staging; its old copy-into-volume path cannot promise atomic restore.
+Hindsight reuses the existing pinned owned-volume protocol; no daemon/image is
+started or downloaded automatically. This checkpoint does not declare that native
+path or the whole module accepted.
+
+## Instance management boundary
+
+The original `/api/software-update` and `/api/software-update/check` reuse the
+read-only signed-release service and require a current administrator. HTTP cannot
+select a repository, command, key or path; update/rollback remain explicit operator
+CLI actions. The instance YAML's update configuration retains its startup semantics.
+
+`/api/diagnostics`, `/api/diagnostics/events`, `/api/diagnostics/log-pages`,
+`/api/diagnostics/logs` and `/api/support-bundle` require an administrator. They
+reuse bounded ServerDiagnostics storage under `logs/instance`, with private-file
+admission, but only project instance runtime metadata. Snapshot coverage declares
+`privateContents:false, privateTraces:false`; historical raw trace bodies, identity
+fields and arbitrary prose are never passed through. The old raw-log route now
+returns curated metadata JSON lines. Owner Agent traces and old global private
+queue/index/device statistics are not fabricated as zeroes. Their private scoped
+contracts remain separate gaps. Ordinary feature inventory hides these management
+routes; management grants never become a `forUser(otherOwner)` capability.
+
+Original GC stays at M03 `POST /api/ingress/gc {}` for the caller's own domain.
+An administrator cannot supply another user or invoke a global private GC fallback.
+Retention, references, physical holds and snapshot expiry remain M03 responsibilities.
