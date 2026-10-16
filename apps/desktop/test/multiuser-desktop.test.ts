@@ -19,6 +19,7 @@ const repository=fileURLToPath(new URL('../../../',import.meta.url));
 const nativeImport=createRequire(import.meta.url)('./native-backend.cjs') as (url:string)=>Promise<any>;
 import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
+import {createServer} from 'node:http';
 import {defaultConfig} from '../src/config';
 import {testConnection} from '../src/connection';
 import {DurableQueue} from '../src/queue';
@@ -289,6 +290,21 @@ it('shows an actual central OCR failure instead of the immutable received pendin
  const queue=new DurableQueue(join(f.directory,'ocr-browser'),config);await queue.initialize();expect((await captureDetail(queue,config,'central',record.id)).ocr.status).toBe('failed');const content=await readCentralContent(config,{key:record.id,source:'screen',title:'',observedAt:record.capturedAt,outcome:'received',firstReceipt:true,captureId:record.id});expect(content.readiness).toBe('failed');expect(content.processing).toBe(false);
  expect((await f.request(f.b.token,'/api/processing/originals/'+original.ref.slice(9))).statusCode).toBe(404);
 },20000);
+
+it('shows actual M06 OCR in the Desktop archive list and detail while same-ID B retains its own raw status',async()=>{
+ const provider=createServer(async(req,res)=>{for await(const _part of req){}res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:0,segments:[{startMs:0,endMs:0,text:'GENERATED_A_DESKTOP_CENTRAL_OCR'}],coverage:'full',engine:'generated-http-fixture'}));});
+ await new Promise<void>(resolve=>provider.listen(0,'127.0.0.1',resolve));cleanup.push(async()=>{provider.closeAllConnections();await new Promise<void>(resolve=>provider.close(()=>resolve()));});
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);const deviceId=(await app.call('mote:get-status')).config.deviceId;
+ const {defaultModelSettings}=await nativeImport(pathToFileURL(resolve(repository,'apps/server/src/model-settings.ts')).href),configure=async(domain:string,value:unknown)=>{const revision=(await f.request(f.a.token,'/api/configuration')).json().revision,saved=await f.request(f.a.token,'/api/configuration/'+domain,'PUT',{revision,value});expect(saved.statusCode,saved.body).toBe(200);};
+ await configure('processing',{enabled:true,automatic:false,understandingEnabled:false,summarize:false});await configure('models',{profiles:[{id:'generated-desktop-ocr',name:'Generated OCR',settings:{...defaultModelSettings(),provider:'custom',protocol:'mote-media',baseUrl:'http://127.0.0.1:'+provider.address()!.port+'/transcribe',model:'generated-ocr',apiKey:'GENERATED_A_KEY'}}],selections:{ocr:{kind:'personal',id:'generated-desktop-ocr'}}});
+ const png=await sharp({create:{width:24,height:24,channels:3,background:'#234567'}}).png().toBuffer(),record={...event(randomUUID()),deviceId,capturedAt:'2026-09-13T12:00:00Z',imageMime:'image/png' as const,ocrText:'',ocr:{status:'disabled' as const}};
+ for(const owner of [f.a,f.b])await uploadCapture({...f.config(owner),deviceId},record,png);
+ const input={source:'screen',location:'central',day:'2026-09-13'};expect((await app.call('mote:captures-browse',[input])).items[0].ocr.status).toBe('disabled');
+ const sourceId='desktop-'+createHash('sha256').update(JSON.stringify([deviceId,'macos'])).digest('hex').slice(0,40),original=(await f.request(f.a.token,'/api/ingress/sources/'+sourceId+'/originals')).json().items[0],started=await f.request(f.a.token,'/api/processing','POST',{originalRef:original.ref,operationId:'generated-desktop-list-ocr'});expect(started.statusCode,started.body).toBe(200);
+ await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/tasks/'+started.json().id)).json().state).toBe('succeeded'),{timeout:15000});expect((await f.request(f.a.token,'/api/captures/'+record.id)).json().ocrText).toBe('');expect((await f.request(f.a.token,'/api/capture-browser/'+record.id)).json().ocrText).toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
+ const page=await app.call('mote:captures-browse',[input]);expect(page.items[0]).toMatchObject({id:record.id,ocr:{status:'completed'},textPreview:'GENERATED_A_DESKTOP_CENTRAL_OCR'});expect((await app.call('mote:captures-detail',['central',record.id])).ocrText).toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
+ await app.call('mote:ask',['login',{token:f.b.token}]);const b=await app.call('mote:captures-browse',[input]);expect(b.items[0].ocr.status).toBe('disabled');expect(JSON.stringify(b)).not.toContain('GENERATED_A_DESKTOP_CENTRAL_OCR');
+},30000);
 
 it('consumes real portable Activity through emitted main/preload, rejects A late reads after B and hands A work to the same browser account',async()=>{
  const f=await fixture(),receipt=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});expect(receipt.statusCode,receipt.body).toBe(200);const id=receipt.json().id,workId='export:'+id;
