@@ -18,9 +18,9 @@ export function registerAuthentication(runtime:ScopedRuntime&{accounts:Accounts}
   const {app,authority,accounts}=runtime;
   app.addHook('onRequest',async(req,reply)=>{
     reply.header('Cache-Control','no-store');reply.header('Pragma','no-cache');
-    if((req.url.startsWith('/api/auth/')||req.url.startsWith('/api/login/'))&&req.headers['x-mote-protocol-version']!=='2')throw new AuthError('incompatible_protocol',426);
+    if((req.url.startsWith('/api/auth/')||req.url.startsWith('/api/login/')||req.url.split('?')[0]==='/api/connections/redeem')&&req.headers['x-mote-protocol-version']!=='2')throw new AuthError('incompatible_protocol',426);
     if(!['GET','HEAD','OPTIONS'].includes(req.method)&&req.url.startsWith('/api/')){
-      if(['/api/auth/login','/api/login/exchange','/api/login/requests','/api/login/poll','/api/login/ack'].includes(req.url.split('?')[0])&&!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type']??''))throw new AuthError('json_required',415);
+      if(['/api/auth/login','/api/login/exchange','/api/login/requests','/api/login/poll','/api/login/ack','/api/connections/redeem'].includes(req.url.split('?')[0])&&!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type']??''))throw new AuthError('json_required',415);
       const origin=req.headers.origin;
       if(origin){let expected:string;try{expected=new URL(publicUrl||`${req.protocol}://${req.headers.host}`).origin;}catch{throw new AuthError('origin_denied',403);}if(origin!==expected)throw new AuthError('origin_denied',403);}
       if(req.headers['sec-fetch-site']==='cross-site')throw new AuthError('origin_denied',403);
@@ -52,8 +52,14 @@ export function registerAuthentication(runtime:ScopedRuntime&{accounts:Accounts}
     return handoffs.ticket(token,()=>authority.assert(c),deadline);
   }});
   app.post('/api/login/exchange',{bodyLimit:8192},(req,reply)=>{const exchanged=handoffs.exchange(req.body),grant=accounts.exchangeWeb(exchanged.token);sessionCookie(reply,grant.token,0);const {token:_,...result}=grant;return result;});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/invitations',handle:(c,req)=>{
+    const input=z.object({serverUrl,label:z.string().trim().min(1).max(128),deviceId:device.shape.deviceId.optional(),durationMs:durationSchema.default(2592000000)}).strict().parse(req.body);
+    return handoffs.invitation(input,c,()=>authority.assert(c),accounts.pairingConnections(c,authority,input.deviceId,deviceId=>runtime.services.forUser(c).get<{devices:()=>{items:Array<{id:string}>}}>('ingress').devices().items.some(d=>d.id===deviceId)||runtime.services.forUser(c).get<PrivateData>('private-data').sources().some(s=>s.deviceId===deviceId)));
+  }});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/invitations/revoke',handle:(c,req)=>handoffs.revokeInvitation(req.body,c.userId)});
+  app.post('/api/connections/redeem',{bodyLimit:8192},req=>handoffs.redeem(req.body));
   app.post('/api/login/requests',{bodyLimit:8192},req=>handoffs.create(req.body));
-  registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/login/requests/:id',handle:(_c,req)=>handoffs.detail(id(req))});
+  registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/login/requests/:id',handle:(c,req)=>handoffs.detail(id(req),c.userId)});
   registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/login/requests/:id/approve',handle:async(c,req)=>{
     return handoffs.approve(id(req),()=>authority.assert(c),c.userId,accounts.handoffConnections(c,authority));
   }});
