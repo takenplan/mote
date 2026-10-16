@@ -1,5 +1,22 @@
 # M14 Desktop validation checkpoint
 
+## Archive list observes actual central OCR
+
+M13 pure server raw-reader freeze `0172bf14` is composed at `034555f5`, keeping
+the newer M16 import/rollback lifecycle and adding both derived tables to its
+deletion cleanup. RED `2c79cd6d` passes through real emitted main, M03 intake and
+a real M06 OCR task using a generated HTTP worker. M13's exact raw detail already
+shows the extraction, while the actual Desktop archive list still reports
+`disabled` and an empty preview (`/tmp/m14-archive-ocr-valid-red.log/.exit`,
+**0/1, exit 1**). The minimal consumer uses the existing scoped raw-preview
+reader, walks every signed page and retains the original local/session
+presentation. Immutable content intake keeps its existing `/captures` reader.
+The unchanged actual test passes **1/1, exit 0**, 3.10s,
+`/tmp/m14-archive-ocr-green.log/.exit`: list and detail show A's real published
+extraction, intake is unchanged and B's same-ID record retains its own raw state.
+The 33 unselected tests are not counted as acceptance. No raw projection, task
+runtime, classification rule or model service is added by Desktop.
+
 Current consumer composition after the resumed increment includes M13
 `f1e059e4c0bf86b860d8b1c9154b1cb36b0fbd13` plus exact Vault
 `07f54ac3163b2688fbb6a259f164eef1771d23ff`, M15 Android
