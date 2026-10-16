@@ -129,3 +129,10 @@ test('Web outbound MCP preparation uses owned Ingress sources and original user 
  await assert.rejects(prepareWebMcpConnection(a,next,{...input,id:'generated-borrow'}),error=>(error as any).code==='session_changed');
  assert.equal((await b.request<any>('/api/sources')).items.length,0);
 });
+
+test('Web insight skills metadata comes from the actual bundled agent catalog behind the ordinary account boundary',async t=>{
+ const f=await fixture(t),{skillCatalog}=await import('@mote/agent'),a=f.api();
+ assert.deepEqual(await a.request('/api/skills'),{items:skillCatalog()});
+ f.cookie('b');assert.deepEqual(await createApi(f.bi).request('/api/skills'),{items:skillCatalog()});
+ const anonymous=await f.host.app.inject({url:'/api/skills',headers:protocol});assert.equal(anonymous.statusCode,401);
+});
