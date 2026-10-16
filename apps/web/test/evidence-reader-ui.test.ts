@@ -8,15 +8,15 @@ import {dateTime,type Api,type Capture} from '../src/api.js';
 
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const generated:Capture={id,source:'note',platform:'import',capturedAt:'2026-10-13T00:00:00Z',appName:'Generated note app',windowTitle:'Generated first line',deviceId:'generated-device',deviceName:'Generated device',ocrText:'Generated first line\n  Literal screen / media / file words <script>untrusted()</script>\n',durationMs:0,blobHash:null,indexingStatus:'pending',privacy:{redacted:false,mode:'standard'}};
-async function fixture(t:any,capture:Capture){
+async function fixture(t:any,capture:Capture,reference='capture:'+id,web=false){
  const dom=new JSDOM('<!doctype html><main><button id="origin">Open generated original</button></main><div id="root"></div>',{url:'http://localhost/#/library?source=note',pretendToBeVisual:true}),backups=new Map<string,PropertyDescriptor|undefined>();
  for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,localStorage:dom.window.localStorage,IS_REACT_ACT_ENVIRONMENT:true})){backups.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
  dom.window.localStorage.setItem('mote.language','zh-CN');dom.window.HTMLElement.prototype.getClientRects=()=>[{}] as unknown as DOMRectList;
- const root=createRoot(dom.window.document.querySelector('#root')!),writes:string[]=[],opened:string[]=[],origin=dom.window.document.querySelector<HTMLButtonElement>('#origin')!;
- const api={request:async(path:string,init?:RequestInit)=>{if(path.startsWith('/api/operations/changes'))return {ids:[],cursor:0,hasMore:false,reset:false};if(path==='/api/capture-browser/'+id)return capture;if(init?.method==='DELETE'){writes.push(path);return {};}throw Error('Unexpected generated path '+path);},setAgentTimeout:()=>{}} as Api;
- origin.focus();await act(async()=>root.render(React.createElement(EvidenceDialog,{api,id:'capture:'+id,onOpen:ref=>opened.push(ref),onClose:()=>root.render(null),onDeleted:()=>{}})));
+ const root=createRoot(dom.window.document.querySelector('#root')!),writes:string[]=[],opened:string[]=[],reads:{path:string;body?:unknown}[]=[],origin=dom.window.document.querySelector<HTMLButtonElement>('#origin')!;
+ const api={connection:web?{mode:'web',origin:'http://localhost',deploymentId:'generated',userId:'A',credentialId:'A',csrfToken:'generated',username:'A'}:undefined,request:async(path:string,init?:RequestInit)=>{reads.push({path,body:init?.body?JSON.parse(String(init.body)):undefined});if(path==='/api/context/read')return {items:[{id,ref:'capture:'+id,kind:'note',text:capture.ocrText,textRange:{offset:0,total:capture.ocrText.length,nextOffset:null}}],missingRefs:[]};if(path.startsWith('/api/operations/changes'))return {ids:[],cursor:0,hasMore:false,reset:false};if((!init?.method||init.method==='GET')&&(path==='/api/capture-browser/'+id||path==='/api/captures/'+id))return capture;if(init?.method==='DELETE'){writes.push(path);return {};}throw Error('Unexpected generated path '+path);},setAgentTimeout:()=>{}} as Api;
+ origin.focus();await act(async()=>root.render(React.createElement(EvidenceDialog,{api,id:reference,onOpen:ref=>opened.push(ref),onClose:()=>root.render(null),onDeleted:()=>{}})));
  t.after(async()=>{await act(async()=>root.unmount());dom.window.close();for(const [key,descriptor]of backups){if(descriptor)Object.defineProperty(globalThis,key,descriptor);else Reflect.deleteProperty(globalThis,key);}});
- return {document:dom.window.document,origin,writes,opened};
+ return {document:dom.window.document,origin,writes,opened,reads};
 }
 test('note reader leads with the exact original, keeps real source facts and returns focus after Close',async t=>{
  const before=structuredClone(generated),{document:d,origin,writes}=await fixture(t,generated),body=d.querySelector('.evidence-text pre')!,help=d.querySelector<HTMLDetailsElement>('.evidence-processing-help')!;
@@ -40,3 +40,16 @@ test('screen reader keeps authored title, failed OCR/index/privacy facts and the
  await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.evidence-footer button')).find(button=>button.textContent==='取消')!.click());assert.deepEqual(writes,[]);assert.equal(d.querySelector('.evidence-text pre')!.textContent,capture.ocrText);
  await act(async()=>d.querySelector<HTMLButtonElement>('.danger-text')!.click());await act(async()=>d.querySelector<HTMLButtonElement>('.evidence-footer .danger')!.click());assert.deepEqual(writes,['/api/captures/'+id]);assert.equal(d.querySelector('[role=dialog]'),null);assert.deepEqual(capture,before);
 });
+
+ test('query citation detail consumes the existing context reader and cannot expose raw deletion by UUID',async t=>{
+ const {document:d,reads,writes}=await fixture(t,generated,'context:capture:'+id);
+ assert(reads.some(read=>read.path==='/api/context/read'&&JSON.stringify(read.body)===JSON.stringify({refs:['capture:'+id],offset:0,length:4000})));
+ assert(!reads.some(read=>read.path.startsWith('/api/capture-browser/')||read.path.startsWith('/api/captures/')));
+ assert.match(d.querySelector('[role="dialog"]')!.textContent!,/Generated first line/);assert.equal(d.querySelector('.danger-text'),null);assert.deepEqual(writes,[]);
+ });
+
+ test('Web raw capture detail uses the owned M02 capture endpoint without changing query evidence routes',async t=>{
+ const {document:d,reads}=await fixture(t,generated,'capture:'+id,true);
+ assert(reads.some(read=>read.path==='/api/captures/'+id));assert(!reads.some(read=>read.path.startsWith('/api/capture-browser/')));
+ assert.equal(d.querySelector('.evidence-text pre')!.textContent,generated.ocrText);
+ });

@@ -7,7 +7,8 @@ import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, FolderInput, Layers3, Plus, X } from 'lucide-react';
 import type { SourceConnection, SourceItemRecord } from '@mote/shared';
 import { ApiError, type Api, errorMessage, dateTime } from './api';
-import { sourceMetadataSchema } from '@mote/shared';
+import {saveWebReference} from './web-reference';
+import {ScopedMcpImport} from './ScopedMcpImport';
 import { Gmail } from './Gmail';
 import { AttributionEditor } from './AttributionContext';
 import { SourceContextEditor } from './SourceContextEditor';
@@ -45,7 +46,7 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse 
     const versions = useResource<{
         items: SourceItemRecord[];
     }>(api, historyKey);
-    const connectorStatus = useResource<Record<string, unknown>>(api, '/api/connectors/status');
+    const connectorStatus = useResource<Record<string, unknown>>(api, mode==='connections'&&adding&&addKind==='connectors'?'/api/connectors/status':null);
     useOperationUpdates(api);
     const withdrawn = page.error instanceof ApiError && [401, 403, 404, 410].includes(page.error.status), previous = withdrawn ? [] : currentPages?.previous ?? [];
     useEffect(() => { setPages(value => !value ? value : value.api !== api || value.scope !== listScope ? undefined : withdrawn ? {...value, previous:[]} : value); }, [api, listScope, withdrawn]);
@@ -121,7 +122,7 @@ function ConnectorPanel({ api, catalog, refresh, requested }: {
         duplicates: number;
     }>('/api/connectors/google/sync', { method: 'POST', body: '{}' }); setMessage(moteText("已同步 {0} 条新版本，{1} 条已存在。", r.imported, r.duplicates)); await load(); })}>{moteText("立即同步")}</button><button className="button" disabled={busy} onClick={() => void action(async () => { await api.request('/api/connectors/google', { method: 'DELETE' }); await load(); setChosen([]); })}>{moteText("断开账户")}</button></>}</div>{auth && <p><a href={auth} target="_blank" rel="noreferrer noopener">{moteText("在系统浏览器打开 Google 授权页面")}</a>{moteText("，完成后返回此处刷新。")}</p>}{calendars.length > 0 && <fieldset><legend>{moteText("选择允许读取的日历")}</legend>{calendars.map(c => <label key={c.id} className="source-toolbar"><input type="checkbox" checked={chosen.includes(c.id)} onChange={e => setChosen(v => e.target.checked ? [...v, c.id] : v.filter(id => id !== c.id))}/>{c.summary}</label>)}<button className="button primary" disabled={busy} onClick={() => void action(async () => { await api.request('/api/connectors/google/calendars', { method: 'PUT', body: JSON.stringify({ calendarIds: chosen }) }); await load(); })}>{moteText("保存选择")}</button></fieldset>}</>}{message && <p>{message}</p>}
  </RequestedDetails>
- <RequestedDetails className="source-item" requested={requested === 'mcp'}><summary>{moteText("其他 Chatbot 与 MCP")}</summary><p>{moteText("支持自定义 Bearer 令牌的 Chatbot 可连接本节点的")}{' '}<code>/mcp</code> {' '}{moteText("地址。只读连接可检索资料；写回需单独开启写令牌和允许写入的来源。")}</p><p className="muted">{moteText("状态：")}{getLocale()==='en'?' ':''}{status?.mcp?.enabled ? moteText("MCP 已启用") : moteText("MCP 尚未启用")}；{getLocale()==='en'?' ':''}{status?.mcp?.writeEnabled ? moteText("已开放指定来源写回") : moteText("写回已关闭")}{moteText("。配置入口在“设置 → 模型与服务 → 来源与外部应用”。仅支持 OAuth 的 Chatbot 不能直接使用 Bearer 接入。")}</p>
+ {api.connection?.mode==='web'?<ScopedMcpImport api={api} refresh={refresh} requested={requested==='mcp'}/>:<> <RequestedDetails className="source-item" requested={requested === 'mcp'}><summary>{moteText("其他 Chatbot 与 MCP")}</summary><p>{moteText("支持自定义 Bearer 令牌的 Chatbot 可连接本节点的")}{' '}<code>/mcp</code> {' '}{moteText("地址。只读连接可检索资料；写回需单独开启写令牌和允许写入的来源。")}</p><p className="muted">{moteText("状态：")}{getLocale()==='en'?' ':''}{status?.mcp?.enabled ? moteText("MCP 已启用") : moteText("MCP 尚未启用")}；{getLocale()==='en'?' ':''}{status?.mcp?.writeEnabled ? moteText("已开放指定来源写回") : moteText("写回已关闭")}{moteText("。配置入口在“设置 → 模型与服务 → 来源与外部应用”。仅支持 OAuth 的 Chatbot 不能直接使用 Bearer 接入。")}</p>
  <h3>{moteText("从 MCP 服务导入可见资料")}</h3><p className="muted">{moteText("选择资源后执行一次导入；不会迁移其他 Chatbot 的隐藏记忆，不会自动调用外部写入工具。")}</p>
  <label>{moteText("服务地址")}<input aria-label={moteText("MCP 服务地址")} type="url" value={url} placeholder="https://example.com/mcp" onChange={e => { setUrl(e.target.value); setRemote([]); setUris([]); }}/></label><label>{moteText("来源名称")}<input aria-label={moteText("MCP 来源名称")} value={name} onChange={e => setName(e.target.value)}/></label><label>{moteText("远端 Bearer 令牌（如需）")}<input aria-label={moteText("远端 MCP 令牌")} type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)}/></label>
  <button className="button" disabled={busy || !url.trim()} onClick={() => void action(async () => { const r = await api.request<{
@@ -132,7 +133,7 @@ function ConnectorPanel({ api, catalog, refresh, requested }: {
         imported: number;
         duplicates: number;
     }>('/api/connectors/mcp/import', { method: 'POST', body: JSON.stringify({ sourceId, url, token: token || undefined, resourceUris: uris }) }); setToken(''); setMessage(moteText("导入完成：{0} 条新资料，{1} 条已存在。", r.imported, r.duplicates)); })}>{moteText("导入选定资源")}</button>}{error && <p role="alert" className="error-banner">{error}</p>}{message && <p>{message}</p>}
- </RequestedDetails></div>;
+ </RequestedDetails></>}</div>;
 }
 function ReferenceEntry({ api, refresh }: {
     api: Api;
@@ -140,10 +141,7 @@ function ReferenceEntry({ api, refresh }: {
 }) {
     const [title, setTitle] = useState(''), [uri, setUri] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
     return <details open className="source-item"><summary>{moteText("添加 NAS 或外部文件引用")}</summary><p className="muted">{moteText("保存原件位置、标题和观察时间，不读取正文。需要分析内容时，可在能访问原件的客户端选择该文件或目录以保存快照。")}</p><form onSubmit={async (e) => { e.preventDefault(); setBusy(true); setError(''); try {
-        const sourceId = 'manual-references';
-        await api.request('/api/sources', { method: 'POST', body: JSON.stringify({ id: sourceId, name: moteText("外部文件引用"), kind: 'custom', deviceId: 'web-reference', platform: 'import', retention: 'reference', enabled: true }) });
-        const hash = await itemRevision(api, sourceId, uri, { title, text: '', uri, kind: 'file', layer: 'reference', deleted: false });
-        await api.request('/api/sources/' + sourceId + '/items', { method: 'PUT', body: JSON.stringify({ externalId: uri, revision: hash, observedAt: new Date().toISOString(), title, uri, text: '', kind: 'file', layer: 'reference' }) });
+        await saveWebReference(api,title,uri);
         setTitle('');
         setUri('');
         await refresh();
@@ -154,12 +152,4 @@ function ReferenceEntry({ api, refresh }: {
     finally {
         setBusy(false);
     } }}><label>{moteText("文件标题")}<input aria-label={moteText("引用文件标题")} value={title} onChange={e => setTitle(e.target.value)} required maxLength={2000}/></label><label>{moteText("原件位置")}<input aria-label={moteText("原件位置")} value={uri} onChange={e => setUri(e.target.value)} placeholder="nas://home/documents/notes.pdf" required maxLength={1000}/></label><button className="button primary" disabled={busy}>{moteText("保存引用")}</button>{error && <p className="error-banner" role="alert">{error}</p>}</form></details>;
-}
-async function itemRevision(api: Api, sourceId: string, externalId: string, item: Record<string, unknown>) {
-    const { item: prior } = await api.request<{
-        item: SourceItemRecord | null;
-    }>('/api/sources/' + encodeURIComponent(sourceId) + '/item?externalId=' + encodeURIComponent(externalId));
-    const fields = ['title', 'text', 'kind', 'layer', 'mimeType', 'modifiedAt', 'uri', 'deleted'];
-    const sameMetadata = JSON.stringify(sourceMetadataSchema.optional().parse(prior?.metadata)) === JSON.stringify(sourceMetadataSchema.optional().parse(item.metadata));
-    return prior && sameMetadata && fields.every(key => (prior as unknown as Record<string, unknown>)[key] === item[key]) ? prior.revision : crypto.randomUUID();
 }

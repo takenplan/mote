@@ -24,3 +24,10 @@ test('detail focus contains outside keyboard focus, skips hidden controls and re
  origin.focus();d.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Tab',shiftKey:true,cancelable:true}));assert.equal(d.activeElement?.id,'last');
  d.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Tab',cancelable:true}));assert.equal(d.activeElement?.id,'first');close();assert.equal(d.activeElement,origin);dom.window.close();
 });
+
+test('query-visible capture references keep their reader boundary through reload and nested evidence history',()=>{
+ const reference='context:capture:'+id,hash=evidenceRoute('#/ask?conversation=generated',reference);
+ assert.equal(readEvidenceRoute(hash),reference);assert.match(hash,/conversation=generated/);
+ assert.equal(readEvidenceRoute('#/ask?evidence=context%3A'+id),null);
+ assert.equal(readEvidenceRoute('#/ask?evidence=context%3Acontext%3Acapture%3A'+id),null);
+});

@@ -35,7 +35,7 @@ export function registerAuthentication(runtime:ScopedRuntime&{accounts:Accounts}
     const grant=await accounts.login(input.username,input.password,req.ip,input.mode,input.durationMs);
     if(input.mode==='web'){sessionCookie(reply,grant.token,input.durationMs);const {token:_,...result}=grant;return result;}return grant;
   });
-  registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/auth/self',discoverSession:true,handle:(c,req)=>({...accounts.self(c,authority),...(cookieCredential(req)?{csrfToken:digest('csrf:'+cookieCredential(req))}:{})})});
+  registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/auth/self',discoverSession:true,handle:(c,req)=>({...accounts.self(c,authority),expiresAt:accounts.credentialInfo(c,authority).expiresAt,...(cookieCredential(req)?{csrfToken:digest('csrf:'+cookieCredential(req))}:{})})});
   registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/auth/logout',revokesSelf:true,handle:(c,_req,reply)=>{const result=accounts.revoke(c,authority,c.credentialId);clearCookie(reply);return result;}});
   registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/auth/password',revokesSelf:true,handle:async(c,req,reply)=>{const input=z.object({currentPassword:z.string().max(1024),password:passwordSchema}).strict().parse(req.body);const result=await accounts.changePassword(c,authority,input.currentPassword,input.password,req.ip);clearCookie(reply);return result;}});
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/admin/accounts',administrator:true,handle:c=>accounts.listAccounts(c,authority)});
