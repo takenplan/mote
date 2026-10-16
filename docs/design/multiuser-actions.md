@@ -86,7 +86,7 @@ M05 `actions.watch` 是用户开启发现时签发的 durable authorization，�
 
 | 问题 | 决策、依据与影响 | 实际验证 |
 | --- | --- | --- |
-| M16 个人导入要求各域声明策略，缺失 hook 会拒绝整个归档。 | 沿已有 `DomainLifecycle.importUser`：Todos 同步合并数据及 create 收据，相同内容幂等，冲突拒绝并回滚，不覆盖后来的本地修改。Actions 显式 `false`，coverage 声明保留当前审批/操作。旧 `archive-export.ts` 的 jsonTables/derived 包含 Todos、未含 Actions，故没有裁掉旧 Actions 个人导入。依据 [多用户存储与恢复](../adr-multiuser-scope.md#decision-and-provenance) 和 [M16 个人导入合同](multiuser-lifecycle.md)。 | 实际 portable HTTP 2/2，重启、重复、同 ID B、冲突/重复 ID 与事务回滚。独立 domain restore 仍恢复撤权后的 Actions 历史；不恢复旧外部权限。 |
+| M16 个人导入要求各域声明策略，缺失 hook 会拒绝整个归档。 | 沿已有 `DomainLifecycle.importUser`：Todos 同步合并数据及 create 收据，相同内容幂等，冲突拒绝并回滚，不覆盖后来的本地修改。Actions 显式 `false`，coverage 声明保留当前审批/操作。旧 `EvidenceStore.exportArchive/importArchive`（`evidence-store.ts`，JSON v2）包含 Todos、未含 Actions；另 `archive-export.ts` 的 bundle 是 `mote-data-export` v1，也包含 Todos 而未含 Actions，故没有裁掉旧 Actions 个人导入。依据 [多用户存储与恢复](../adr-multiuser-scope.md#decision-and-provenance) 和 [M16 个人导入合同](multiuser-lifecycle.md)。 | 实际 portable HTTP 2/2，重启、重复、同 ID B、冲突/重复 ID 与事务回滚。独立 domain restore 仍恢复撤权后的 Actions 历史；不恢复旧外部权限。 |
 | 非空 uncertain ACK 被误当结清，擦掉标题却保留普通私有元数据。 | 仅精确 succeeded ACK 算 settled。unknown 期间只保留预绑定回调结算所需的 operation/issuance/native identity 与外键 tombstone，擦除源、目标、内容、策略及普通元数据；成功事实后再删除可清空私有行。已删除域的触发器和启动回填不重建来源。依据 [原生 ACK 与内容事实](../adr-client-action-first.md#content-and-progress)、[恢复失败合同](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract) 和 M16 物理完成要求。 | 实际 claim→uncertain→域删除、M16 account delete→迟到成功 ACK→retry 3/3；原 history/todo restore 相邻 3/3。 |
 
 ### 实例备份接缝
