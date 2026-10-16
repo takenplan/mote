@@ -38,3 +38,25 @@ it('does not let B inherit A native calendar consent when the device and ledger 
  // Restarting the original account still retains its explicit connection.
  await f.adapter(f.a).deliver();expect(f.calls.some(call=>call.path==='/api/actions/deliveries')).toBe(true);
 });
+
+it('retires an old account intent while its native permission response is held',async()=>{
+ const f=await fixture();let release!:(value:unknown)=>void,entered!:()=>void;
+ const waiting=new Promise<void>(resolve=>{entered=resolve;}),permission=new Promise(resolve=>{release=resolve;});
+ native.call.mockImplementationOnce(async()=>{entered();return permission;});
+ let current=true;
+ const adapter=nativeCalendarActions(f.config(f.a),'/generated/no-real-calendar-helper',f.directory,()=>{if(!current)throw Error('Account retired');});
+ const connect=adapter.connect();await waiting;current=false;
+ release({permission:'granted',calendars:[{id:'same-calendar',title:'Generated existing calendar',writable:true}]});
+ await expect(connect).rejects.toThrow('Account retired');
+ expect(f.calls.filter(call=>call.path==='/api/actions/targets')).toEqual([]);
+ expect((await f.ok(f.a.token,'/api/actions')).targets).toEqual([]);
+});
+
+it('confirms the current deployment before requesting native permission or sending a private target',async()=>{
+ const old=await fixture(),adapter=old.adapter(old.a);
+ const replacement=await fixture();native.call.mockClear();
+ await expect(adapter.connect()).rejects.toThrow();
+ expect(native.call).not.toHaveBeenCalled();
+ expect(replacement.calls.map(call=>call.path)).toEqual(['/api/connections/self']);
+ expect((await replacement.ok(replacement.a.token,'/api/actions')).targets).toEqual([]);
+});
