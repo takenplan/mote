@@ -534,7 +534,7 @@ class MultiuserWorkerInstrumentedTest {
                 choice!!.setSelection((0 until choice.count).single {choice.getItemAtPosition(it).toString()=="same-lark"})
             };ready();press("检查状态");ready();press("扫码登录并授权只读权限");ready()
             waitFor {button("打开授权页面")!=null};control("/generated/release-lark-login")
-            waitFor {a.get("/api/connectors/same-lark").optBoolean("connected")};press("选择文档与活动范围");ready()
+            waitFor {val tasks=a.get("/api/tasks").getJSONArray("items");(0 until tasks.length()).map(tasks::getJSONObject).any {it.optString("state")=="succeeded"&&it.optJSONObject("result")?.optBoolean("connected")==true}};press("选择文档与活动范围");ready()
             scenario.onActivity {activity->
                 for(choice in views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>())if(choice.text.toString() in listOf("我创建的","我编辑过的","我打开过的","在后台定期同步选中内容"))choice.isChecked=false
                 views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="指定文档（每行一个）"}.setText("DocumentFixture123")
