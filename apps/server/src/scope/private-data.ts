@@ -27,7 +27,7 @@ const conflict=()=>new PrivateDataError('conflict',409);
  * closed until those modules implement credentials, originals and task fences. */
 export class PrivateData{
   constructor(private readonly sql:PrivateSql,private readonly cursor:PrivateCursor){this.withdrawUnfilteredCoding();}
-  captureBrowser(){return new CaptureBrowserData(this.sql,this.cursor,id=>this.capture(id));}
+  captureBrowser(processing=false){return new CaptureBrowserData(this.sql,this.cursor,id=>this.capture(id),processing);}
   sources():SourceConnection[]{return this.sql.all('SELECT json FROM pd_sources WHERE user_id=$user ORDER BY id').map(r=>json<SourceConnection>(r));}
   source(id:string):SourceConnection{return json(this.sql.get('SELECT json FROM pd_sources WHERE user_id=$user AND id=?',id));}
   registerSource(raw:unknown){

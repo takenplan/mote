@@ -369,3 +369,8 @@ Raw image follow-up confirmed a new migration race at5abd56ac: with actual sharp
 
 
 A second new adapter race is retained at ad43f472: releasing the actual M03 snapshot behind sharp's output barrier still returned thumbnail200 because a length0 original read checks metadata, not the bytes grant. `/tmp/m13-thumbnail-release-red.log/.exit` is valid200!=410. The final fence now reads one byte through the existing M03 availability/pin check before headers. `/tmp/m13-thumbnail-release-green.log/.exit`5/5 EXIT0 preserves earlier image/account/replacement positives and returns410 JSON after snapshot release. No change to M03 expiration or pin policy.
+
+
+### Actual central OCR read projection
+
+9cb3899a is the real-M01/M03/M04/M06 RED: generated PNG/worker and a successful actual processing task still leave original browser completed-filter count0 (`/tmp/m13-central-ocr-red.log/.exit`, expected1). No input record is rewritten. The new reader joins only the current visible M06 publication, exact original membership and matching ready extraction artifact; summary/image-understanding cannot substitute the OCR body. `/tmp/m13-central-ocr-green.log/.exit`6/6 EXIT0 and expanded `/tmp/m13-central-ocr-device-restart-green.log/.exit`6/6 EXIT0 include actual M06 binary transport, owner status filter/detail, unchanged raw intake, device-only ingress updates versus denied private route, different-device403, credential revoke401 and actual host restart preserving its numeric device cursor. New per-owner/device journal is a derived notification only, cleared on M03 deletion and excluded by existing portable receipt-history coverage; it never admits work. Rebuild/paging/renderer/final schema acceptance remain pending the next increment.

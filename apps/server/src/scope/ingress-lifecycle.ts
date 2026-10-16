@@ -35,8 +35,8 @@ export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory
   },
   deleteUser:async(subject,operationId)=>{
    const {sql,originals,assert}=bound(subject,'delete');sql.transaction(()=>{
-    sql.run('INSERT INTO ig_state VALUES($user,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1');
-    for(const table of ['ig_originals','ig_capture_scopes','ig_uploads','ig_batches','ig_devices','ig_pins','ig_work'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
+    sql.run('INSERT INTO ig_state(user_id,deleted) VALUES($user,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1');
+    for(const table of ['ig_capture_updates','ig_capture_update_sequences','ig_originals','ig_capture_scopes','ig_uploads','ig_batches','ig_devices','ig_pins','ig_work'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
    });
    // A live or interrupted child can still own filesystem work. A crashed
    // activity requires M16 reconciliation; elapsed time is not erasure proof.
@@ -75,7 +75,7 @@ export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory
     for(const state of snapshots.values())sql.run('INSERT INTO ig_snapshot_inputs VALUES($user,?,?)',state.id,state.expires);
     for(const row of payload.scopes)sql.run('INSERT INTO ig_capture_scopes VALUES($user,?,?)',row.capture_id,row.source_id);
     for(const row of payload.devices)sql.run('INSERT INTO ig_devices VALUES($user,?,?)',row.id,row.json);
-    sql.run('INSERT INTO ig_state VALUES($user,0) ON CONFLICT(user_id) DO UPDATE SET deleted=0');sql.run('INSERT INTO ig_restore VALUES($user,?,?)',operationId,digest);
+    sql.run('INSERT INTO ig_state(user_id,deleted) VALUES($user,0) ON CONFLICT(user_id) DO UPDATE SET deleted=0');sql.run('INSERT INTO ig_restore VALUES($user,?,?)',operationId,digest);
    });
   },
  };
