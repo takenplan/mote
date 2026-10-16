@@ -12,7 +12,7 @@ import {FileReview} from './FileReview';
 import {AnswerMarkdown} from './AnswerMarkdown';
 import {FileProcessingControls} from './FileProcessingControls';
 
-type FileRow={cancellation?:{canCancel:boolean;wait:'running'|'unknown'|null};processingPolicy?:{capabilities?:{dialogue:boolean;summary:boolean};applied:any;current:any};captureId:string;sourceId:string;sizeBytes:number;hasOriginal:boolean;originMissing:boolean;item:{document?:{fileIndex?:import('@mote/shared').FileIndex};text?:string;title:string;layer:string;observedAt:string;mimeType?:string};job:null|import('@mote/shared').FileProcessingJobView;steps?:{step:string;state:string;attempts:number;execution?:import('@mote/shared').ExecutionEnvelope}[];artifacts:{id:string;kind:string;complete?:boolean;sections?:{answer:string;citationIds:string[]}[]}[]};
+type FileRow={cancellation?:{canCancel:boolean;wait:'running'|'unknown'|null};processingPolicy?:{capabilities?:{dialogue:boolean;summary:boolean};applied:any;current:any};captureId:string;sourceId:string;originalRef?:string;sha256?:string;sizeBytes:number;hasOriginal:boolean;originMissing:boolean;item:{document?:{fileIndex?:import('@mote/shared').FileIndex};text?:string;title:string;layer:string;observedAt:string;mimeType?:string};job:null|import('@mote/shared').FileProcessingJobView;steps?:{step:string;state:string;attempts:number;execution?:import('@mote/shared').ExecutionEnvelope}[];artifacts:{id:string;kind:string;complete?:boolean;sections?:{answer:string;citationIds:string[]}[]}[]};
 const errors:Record<string,string>={snapshot_input_expired:moteText("快照的临时输入已清理，请重新同步来源文件后重试。"),archive_only:moteText("仅归档原件"),model_missing:moteText("等待安装本地模型"),processor_not_configured:moteText("处理插件或本地模型尚未配置"),not_configured:moteText("请配置中央处理服务"),unsupported_format:moteText("此格式仅归档原件"),provider_failed:moteText("转写服务未完成，请检查服务后重试"),processing_limit:moteText("超过处理大小或单文件时长限制"),summary_failed:moteText("摘要生成失败，可单独重试")};
 const states:Record<string,string>={skipped:moteText("已跳过"),waiting:moteText("等待处理"),running:moteText("处理中"),succeeded:moteText("已完成"),blocked:moteText("等待配置或格式支持"),failed:moteText("处理失败"),cancelled:moteText("已取消")};
 const filePosition=(startMs:number)=>{const seconds=Math.floor(startMs/1000);return getLocale()==='en'?`${seconds} s`:moteText("{0} 秒",seconds);};
@@ -48,20 +48,36 @@ function SegmentCorrection({api,id,chunk,onSaved}:{api:Api;id:string;chunk:Captu
  return editing?<form onSubmit={event=>{event.preventDefault();void save();}}><label>{moteText("校正此段文字")}<textarea autoFocus value={text} maxLength={8000} onChange={event=>setText(event.target.value)} disabled={busy}/></label><p>{moteText("仅保存人工校正，不调用模型；原件和原始转写保留。")} </p><div className="source-toolbar"><button className="button primary" type="submit" disabled={busy||!text.length}>{moteText("保存校正")}</button><button className="button" type="button" disabled={busy} onClick={()=>setEditing(false)}>{moteText("取消")}</button></div>{error&&<p role="alert">{error}</p>}</form>:<button className="button" onClick={()=>{setText(originalText);setError('');setEditing(true);}}>{moteText("纠正此段")}</button>;
 }
 
-export function FileDetail(props:{api:Api;id:string;startMs?:number;onOpen:(id:string)=>void}){return <FileDetailContents key={props.id} {...props}/>;}
+export function FileDetail(props:{api:Api;id:string;startMs?:number;onOpen:(id:string)=>void}){return <FileDetailContents key={JSON.stringify([props.api.connection,props.id])} {...props}/>;}
 function FileDetailContents({api,id,startMs=0,onOpen}:{api:Api;id:string;startMs?:number;onOpen:(id:string)=>void}){
  const {data:file,error:readError,loading,refresh}=useResource<FileRow>(api,'/api/files/'+encodeURIComponent(id));
  useOperationUpdates(api);
  const [mutationError,setError]=useState(''),[chunks,setChunks]=useState<Capture[]>([]),[offset,setOffset]=useState<number|null>(0),[url,setUrl]=useState('');
  const player=useRef<HTMLAudioElement>(null);
- const originalRequest=useRef<AbortController|null>(null);
+ const originalRequest=useRef<AbortController|null>(null),originalUrls=useRef(new Set<string>()),downloadTimers=useRef(new Set<ReturnType<typeof setTimeout>>()),mediaUrl=useRef('');
  const [originalLoading,setOriginalLoading]=useState(false),[nativeSize,setNativeSize]=useState(false);
- useLayoutEffect(()=>{setUrl('');setNativeSize(false);setOriginalLoading(false);return()=>{originalRequest.current?.abort();originalRequest.current=null;};},[api]);
- async function loadOriginal(){
-  if(originalRequest.current)return;const controller=new AbortController();originalRequest.current=controller;setOriginalLoading(true);setError('');
-  try{const result=await api.request<{url:string}>('/api/files/'+id+'/playback',{method:'POST',body:'{}',signal:controller.signal});if(originalRequest.current===controller&&!controller.signal.aborted)setUrl(result.url);}
-  catch(error){if(originalRequest.current===controller&&!controller.signal.aborted)setError(errorMessage(error));}
-  finally{if(originalRequest.current===controller){originalRequest.current=null;setOriginalLoading(false);}}
+ function revokeOriginal(value:string){if(!value)return;URL.revokeObjectURL(value);originalUrls.current.delete(value);}
+ useLayoutEffect(()=>{setUrl('');setNativeSize(false);setOriginalLoading(false);return()=>{originalRequest.current?.abort();originalRequest.current=null;for(const timer of downloadTimers.current)clearTimeout(timer);downloadTimers.current.clear();for(const value of originalUrls.current)URL.revokeObjectURL(value);originalUrls.current.clear();mediaUrl.current='';};},[api]);
+ async function loadOriginal(download=false){
+  if(originalRequest.current||!file)return;const controller=new AbortController();originalRequest.current=controller;setOriginalLoading(true);setError('');
+  const current=()=>originalRequest.current===controller&&!controller.signal.aborted;
+  try{
+   const result=await api.request<{url:string}>('/api/files/'+id+'/playback',{method:'POST',body:'{}',signal:controller.signal});if(!current())return;
+   if(api.connection?.mode==='web'){
+    const target=new URL(result.url,api.connection.origin);
+    if(!file.originalRef||!/^original:[a-f0-9]{64}$/.test(file.originalRef)||target.origin!==api.connection.origin||target.pathname!=='/api/ingress/originals/'+file.originalRef.slice(9)+'/content'||target.hash||!target.searchParams.get('ticket')||[...target.searchParams.keys()].some(key=>key!=='ticket'))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
+   }
+   const response=await api.raw(result.url,{signal:controller.signal}),blob=await response.blob();if(!current())return;
+   if(api.connection?.mode==='web'){
+    const buffer=await blob.arrayBuffer();if(!current())return;
+    const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer)),value=>value.toString(16).padStart(2,'0')).join('');if(!current())return;
+    if(response.status!==200||response.headers.has('content-range')||!file.sha256||digest!==file.sha256||blob.size!==file.sizeBytes)throw Error(moteText('归档校验失败，请重新读取操作回执。'));
+   }
+   const value=URL.createObjectURL(new Blob([blob],{type:file.item.mimeType??blob.type}));originalUrls.current.add(value);
+   if(download){const link=document.createElement('a');link.href=value;link.download=file.item.title;link.click();const timer=setTimeout(()=>{revokeOriginal(value);downloadTimers.current.delete(timer);},30000);downloadTimers.current.add(timer);}
+   else {revokeOriginal(mediaUrl.current);mediaUrl.current=value;setUrl(value);}
+  }catch(error){if(current())setError(errorMessage(error));}
+  finally{if(current()){originalRequest.current=null;setOriginalLoading(false);}}
  }
  const chunkRequest=useRef<AbortController|null>(null),chunkGeneration=useRef(0);
  const [chunksLoading,setChunksLoading]=useState(false);
@@ -89,12 +105,11 @@ function FileDetailContents({api,id,startMs=0,onOpen}:{api:Api;id:string;startMs
  const error=mutationError||(readError?errorMessage(readError):'');
  async function load(){refresh();}
  useEffect(()=>()=>{const audio=player.current;if(audio){audio.pause();audio.removeAttribute('src');audio.load();}},[]);
- async function action(fn:()=>Promise<void>){try{setError('');await fn();}catch(e){setError(errorMessage(e));}}
  const renderChunk=(c:Capture)=><div key={c.id} className="source-item"><button className="text-button" onClick={()=>{if(player.current&&c.fileEvidence?.startMs!==undefined)player.current.currentTime=c.fileEvidence.startMs/1000;}}>{c.fileEvidence?.startMs!==undefined?filePosition(c.fileEvidence.startMs):moteText("文本片段")}</button>{c.fileEvidence?.speakerAttribution&&<span> · {moteText("已确认说话人：{0}",c.fileEvidence.speakerAttribution.name)}</span>}{(c.fileEvidence?.uncertain||c.fileEvidence?.overlap)&&<span> · {c.fileEvidence.overlap?moteText("重叠说话"):moteText("说话人不确定")}</span>}<p className="file-text">{c.ocrText}</p><SegmentCorrection key={c.fileEvidence?.artifactId+':'+c.id} api={api} id={id} chunk={c} onSaved={()=>{resetChunks();refresh();resources(api).invalidate(key=>/^\/api\/(memories|materials|conversations|capture-browser)([/?]|$)/.test(key));}}/></div>;
  if(!file)return <section className="file-detail">{loading&&<p role="status">{moteText('正在读取…')}</p>}{error&&<p role="alert" className="error-banner">{error}<button className="button" onClick={refresh}>{moteText('重新读取')}</button></p>}</section>;
  return <section className="file-detail"><h3>{file.item.title}</h3><p>{bytes(file.sizeBytes)} · {fileAvailability(file)}{file.originMissing?moteText(" · 来源已不可见，中央归档仍可使用"):''}</p>
- {file.hasOriginal&&<div className="source-toolbar"><button className="button" disabled={originalLoading} onClick={()=>void loadOriginal()}>{originalLoading?moteText('正在读取…'):file.item.mimeType?.startsWith('image/')?moteText('查看原图'):moteText("加载原件 / 回听")}</button><button className="button" onClick={()=>void action(async()=>{await api.request('/api/files/'+id+'/playback',{method:'POST',body:'{}'});const a=document.createElement('a');a.href='/api/files/'+id+'/content?download=1';a.download=file.item.title;a.click();})}>{moteText("下载原件")}</button></div>}
- {url&&!readError&&file.item.mimeType?.startsWith('image/')&&<div className="original-image"><div className="original-image-controls"><button className="button" aria-pressed={!nativeSize} onClick={()=>setNativeSize(false)}>{moteText('适应宽度')}</button><button className="button" aria-pressed={nativeSize} onClick={()=>setNativeSize(true)}>{moteText('原始尺寸')}</button><button className="button" onClick={()=>setUrl('')}>{moteText('收起原图')}</button></div><div className={`original-image-viewport${nativeSize?' native-size':''}`} tabIndex={0} role="region" aria-label={moteText('原图，可滚动查看')}><div className="capture-image"><img src={url} alt={file.item.title} decoding="async" onError={()=>setError(moteText('影像暂不可用'))}/></div></div></div>}
+ {file.hasOriginal&&<div className="source-toolbar"><button className="button" disabled={originalLoading} onClick={()=>void loadOriginal()}>{originalLoading?moteText('正在读取…'):file.item.mimeType?.startsWith('image/')?moteText('查看原图'):moteText("加载原件 / 回听")}</button><button className="button" disabled={originalLoading} onClick={()=>void loadOriginal(true)}>{moteText("下载原件")}</button></div>}
+ {url&&!readError&&file.item.mimeType?.startsWith('image/')&&<div className="original-image"><div className="original-image-controls"><button className="button" aria-pressed={!nativeSize} onClick={()=>setNativeSize(false)}>{moteText('适应宽度')}</button><button className="button" aria-pressed={nativeSize} onClick={()=>setNativeSize(true)}>{moteText('原始尺寸')}</button><button className="button" onClick={()=>{revokeOriginal(mediaUrl.current);mediaUrl.current='';setUrl('');}}>{moteText('收起原图')}</button></div><div className={`original-image-viewport${nativeSize?' native-size':''}`} tabIndex={0} role="region" aria-label={moteText('原图，可滚动查看')}><div className="capture-image"><img src={url} alt={file.item.title} decoding="async" onError={()=>setError(moteText('影像暂不可用'))}/></div></div></div>}
  {url&&file.item.mimeType?.startsWith('audio/')&&<audio onError={()=>setError(moteText("浏览器无法播放此编码，可下载原件使用本机播放器打开。"))} ref={player} controls src={url} preload="metadata" onLoadedMetadata={()=>{if(player.current)player.current.currentTime=startMs/1000;}}/>}
  {file.job?.state==='skipped'&&file.job.error&&<p>{failureMessage(file.job.error)}</p>}
  <p>{moteText("整体处理：")}{getLocale()==='en'?' ':''}{file.job?states[file.job.state]??file.job.state:moteText("不读取内容")}{processingError&&file.job?.error&&`（${rawTranscript&&file.steps?.some(s=>s.step==='diarize'&&s.state==='failed')?moteText("说话人分离未完成，已保留原始转写。"):errors[file.job.error]??moteText("处理未完成")}）`}{moteText("；摘要：")}{getLocale()==='en'?' ':''}{summaryDisabled?moteText("未安排摘要"):file.job?states[file.job.summary_state]??file.job.summary_state:moteText("无")}{summaryError&&`（${typeof summaryError==='string'?(errors[summaryError]??failureMessage(summaryError)):failureMessage(summaryError)}）`}</p>
