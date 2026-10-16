@@ -56,4 +56,17 @@ test('administrator Activity reports durable unknown deletion metadata without e
  assert.equal((await f.request(f.a.token,'/api/work-activity/'+id)).statusCode,401);assert.equal((await f.request(f.b.token,'/api/work-activity/'+id)).statusCode,404);assert.equal((await f.checked(f.b.token,'/api/work-activity?state=attention')).items.length,0);
  unknown=false;await f.checked(f.admin.token,'/api/admin/account-deletions/'+receipt.id+'/retry','POST',{});await waitForScopedState(async()=>(await f.checked(f.admin.token,'/api/admin/account-deletions/'+receipt.id)).state==='completed',()=> 'explicit retry did not complete');
  assert.equal((await f.checked(f.admin.token,'/api/work-activity/'+id)).state,'completed');assert.deepEqual((await f.checked(f.admin.token,'/api/work-activity/'+id)).artifacts,[]);
+ await f.checked(f.admin.token,'/api/admin/accounts','POST',{username:'generated-second-admin',password,administrator:true});const second=await f.login('generated-second-admin');await f.checked(second.token,'/api/admin/accounts/'+f.admin.userId,'PATCH',{disabled:true});
+ assert.equal((await f.request(f.admin.token,'/api/work-activity/'+id)).statusCode,401,'retired administrator authority cannot retain metadata access');assert.equal((await f.checked(second.token,'/api/work-activity/'+id)).state,'completed');
+});
+
+test('Activity follows real failed export and explicit same-operation retry without turning domain steps into records',async t=>{
+ const f=await fixture(t),domain='generated-activity-failure';let fail=true;
+ f.node.services.registerUser(domain,{scope:'user',create:()=>({}),lifecycle:{exportUser:async subject=>{if(fail)throw Error('Generated export provider failure');return {domain,version:1,userId:subject.userId,deploymentId:subject.deploymentId,payload:{}};},deleteUser:async(_subject,operationId)=>({status:'complete',operationId}),restoreUser:async()=>{}}});
+ const receipt=await f.checked(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()}),id='export:'+receipt.id;
+ await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+receipt.id)).state==='failed',()=> 'generated export did not fail');
+ const attention=await f.checked(f.a.token,'/api/work-activity?state=attention&limit=1');assert.equal(attention.items[0].id,id);assert.equal(attention.items[0].state,'failed');assert.equal(attention.items[0].progress.mode,'semantic');assert.deepEqual(attention.items[0].artifacts,[]);
+ const failed=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(failed.branches.length,failed.branchCounts.total);assert.ok(failed.branches.every((branch:any)=>!branch.progress||branch.progress.mode==='semantic'));assert.deepEqual(failed.evidence,{count:0,refs:[]});
+ fail=false;await f.checked(f.a.token,'/api/portable/exports/'+receipt.id+'/retry','POST',{});await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+receipt.id)).state==='completed',()=> 'explicit export retry did not complete');
+ const done=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(done.state,'completed');assert.equal(done.branchCounts.completed,done.branchCounts.total);assert.equal(done.artifacts[0].id,receipt.id);assert.equal((await f.checked(f.a.token,'/api/work-activity?state=attention')).items.length,0);
 });

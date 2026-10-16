@@ -17,7 +17,7 @@ import {createRequire} from 'node:module';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 const repository=fileURLToPath(new URL('../../../',import.meta.url));
 const nativeImport=createRequire(import.meta.url)('./native-backend.cjs') as (url:string)=>Promise<any>;
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {defaultConfig} from '../src/config';
 import {testConnection} from '../src/connection';
@@ -288,3 +288,20 @@ it('shows an actual central OCR failure instead of the immutable received pendin
  const queue=new DurableQueue(join(f.directory,'ocr-browser'),config);await queue.initialize();expect((await captureDetail(queue,config,'central',record.id)).ocr.status).toBe('failed');const content=await readCentralContent(config,{key:record.id,source:'screen',title:'',observedAt:record.capturedAt,outcome:'received',firstReceipt:true,captureId:record.id});expect(content.readiness).toBe('failed');expect(content.processing).toBe(false);
  expect((await f.request(f.b.token,'/api/processing/originals/'+original.ref.slice(9))).statusCode).toBe(404);
 },20000);
+
+it('consumes real portable Activity through emitted main/preload, rejects A late reads after B and hands A work to the same browser account',async()=>{
+ const f=await fixture(),receipt=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});expect(receipt.statusCode,receipt.body).toBe(200);const id=receipt.json().id,workId='export:'+id;
+ await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/exports/'+id)).json().state).toBe('completed'),{timeout:10000});
+ let app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('A');
+ const first=await app.documentCall('A','workActivity',[{state:'completed'}]);expect(first.items.find((work:any)=>work.id===workId)).toMatchObject({kind:'export',state:'completed',progress:{mode:'semantic',stage:'finished'},artifacts:[{id,href:'#/system/storage?export='+id}]});
+ let finish:(()=>Promise<void>)|undefined;app.intercept=async(raw)=>{const url=new URL(raw.url);if(url.pathname==='/api/work-activity'){const response=await f.node.app.inject({url:url.pathname+url.search,headers:raw.headers});expect(response.statusCode,response.body).toBe(200);const child=app.child;finish=async()=>{child.send({type:'fetch-response',id:raw.id,status:response.statusCode,headers:response.headers,body:response.rawPayload.toString('base64')});};return true;}return false;};
+ const late=app.documentCall('A','workActivity',[{state:'completed'}]).then(()=>({error:''}),error=>({error:String(error)}));await vi.waitFor(()=>expect(finish).toBeTypeOf('function'));
+ await app.call('mote:ask',['login',{token:f.b.token}]);app.intercept=undefined;await finish!();expect((await late).error).toContain('changed');
+ await app.document('B');expect((await app.documentCall('B','workActivity',[{state:'completed'}])).items).toHaveLength(0);await expect(app.documentCall('A','workActivity',[{state:'completed'}])).rejects.toThrow();
+ const profile=app.profile;await app.kill();app=await productionDesktop(f,profile);expect((await app.call('mote:get-status')).config.account.userId).toBe(f.b.userId);expect((await app.call('mote:work-activity',[{state:'completed'}])).items).toHaveLength(0);
+ const returned=await f.login('generated-a');await app.call('mote:ask',['login',{token:returned.token}]);await app.document('A-returned');let opened:string|undefined;app.child.on('message',(message:any)=>{if(message.type==='external')opened=message.url;});
+ await app.documentCall('A-returned','openWorkActivity',[workId]);expect(opened).toBeTypeOf('string');const query=new URLSearchParams(new URL(opened!).hash.split('?')[1]);expect(query.get('work')).toBe(workId);expect(opened).not.toContain(f.a.token);expect(opened).not.toContain(f.b.token);
+ const exchanged=await f.node.app.inject({url:'/api/login/exchange',method:'POST',headers:{'content-type':'application/json','x-mote-protocol-version':'2'},payload:{code:query.get('loginTicket')}});expect(exchanged.statusCode,exchanged.body).toBe(200);expect(exchanged.json().userId).toBe(f.a.userId);
+ const web=exchanged.json(),detail=await f.node.app.inject({url:'/api/work-activity/'+workId,headers:{'x-mote-protocol-version':'2',cookie:String(exchanged.headers['set-cookie']).split(';')[0],'x-mote-session-id':web.credentialId}});expect(detail.statusCode,detail.body).toBe(200);expect(detail.json().artifacts[0].id).toBe(id);
+ expect((await f.request(returned.token,'/api/portable/exports/'+id+'/cancel','POST',{})).statusCode).toBe(200);expect((await app.documentCall('A-returned','workActivity',[{state:'completed'}])).items.find((work:any)=>work.id===workId).artifacts).toEqual([]);
+},30000);

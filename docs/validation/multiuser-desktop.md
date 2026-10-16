@@ -26,6 +26,27 @@ Server typecheck, scope inventory and bilingual catalog checks exit 0:
 This checkpoint does not replace the pending Desktop entry-point, independent
 review, final dependency combination and required-affected evidence.
 
+The expanded production lifecycle Activity file now passes **4/4, exit 0** in
+`/tmp/m14-lifecycle-activity-expanded2.log/.exit`, adding actual failed export /
+explicit retry and retirement of an administrator credential. The unchanged
+semantic record accounting never labels domains as records. The M13 stable Web
+consumer `f1e059e4c0bf86b860d8b1c9154b1cb36b0fbd13` is composed at `d7e8ea88`;
+merge conflicts retain the newer ec6 M16 documents and the lifecycle Activity host
+injection. This includes M13's actual M07 model/material adapters and restored
+Activity route, not its later raw archive WIP or final module acceptance.
+
+`/tmp/m14-lifecycle-desktop-entry4.log/.exit`: **1/1 selected, exit 0** through
+the emitted production main and preload, generated native-I/O substitutes and
+actual M01/M16 backend. A's real successful Activity response is held, B activates
+and the old response/document are rejected; restart retains B's empty view.
+Fresh A credentials recover A's original export identity. The actual one-use
+browser handoff is exchanged for A's Cookie session, which reads the exact work;
+cancel removes its artifact. Native browser launch is the simulated external I/O,
+so no browser or Electron is launched by this Node fixture. The other 27 cases
+were not selected, not silently accepted. Earlier attempts 1–3 are fixture errors
+(server authorization delayed past logout, reuse of a logged-out token, and
+missing Wire2 exchange header), preserved in adjacent logs and not product REDs.
+
 This is an in-progress evidence record, not final acceptance or a delivery claim.
 Work is isolated in task-18/mote on `codex/mote-multiuser-m14-desktop`.
 The dirty original checkout was not modified. Initial characterization uses
