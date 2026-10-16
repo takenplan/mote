@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
 import {buildApp} from '../src/app.js';
-import {initialize,profilePaths,loadProfile,restoreProfile} from '../../../scripts/profile-lib.mjs';
+import {initialize,profilePaths,loadProfile,restoreProfile,backupProfile} from '../../../scripts/profile-lib.mjs';
 import {backupScopedInstance} from '../../../scripts/scoped-backup.mjs';
 
 // Only the Docker transport is substituted. The production staging, SQLite,
@@ -21,10 +21,10 @@ async function fixture(t:any){
  const paths=profilePaths('fixture',join(root,'profiles'));await initialize(paths,{runtime:'docker',image:'generated-local-image'});const p=await loadProfile(paths);
  const volumes=new Map<string,{directory:string;labels:Record<string,string>}>(),calls:string[][]=[];
  const originalVolume=p.meta.volume,empty=join(root,'empty');mkdirSync(empty);volumes.set(originalVolume,{directory:empty,labels:{}});
- let failure=false;
+ let failure=false,running=false,afterTransfer=()=>{};
  const execute=async(command:string,args:string[])=>{
   assert.equal(command,'docker');calls.push(args);
-  if(args[0]==='ps')return '';
+  if(args[0]==='ps')return running?'generated-running-container':'';
   if(args[0]==='image')return 'sha256:'+'a'.repeat(64);
   if(args[0]==='volume'){
    if(args[1]==='ls')return volumes.has(originalVolume)?originalVolume:'';
@@ -45,12 +45,13 @@ async function fixture(t:any){
     script=script.replaceAll(fields.target,path);
    }
    execFileSync(process.execPath,['-e',script],{stdio:'pipe'});
+   if(args.some(arg=>arg.includes('target=/target')))afterTransfer();
    if(failure&&args.some(arg=>arg.includes('target=/target')))throw Error('Generated transport loss after copied bytes');
    return '';
   }
   throw Error('Unexpected Docker command '+JSON.stringify(args));
  };
- return {root,source,archive,p,login,deployment,volumes,calls,originalVolume,dependencies:{execute,configurationUser:async()=>`${process.getuid!()}:${process.getgid!()}`},fail:()=>{failure=true;}};
+ return {root,source,archive,p,login,deployment,volumes,calls,originalVolume,dependencies:{execute,configurationUser:async()=>`${process.getuid!()}:${process.getgid!()}`},fail:()=>{failure=true;},running:()=>{running=true;},afterTransfer:(work:()=>void)=>{afterTransfer=work;}};
 }
 
 test('epoch-5 Docker publication stages complete retired authority then atomically selects a fresh volume',async t=>{
@@ -64,6 +65,20 @@ test('epoch-5 Docker publication stages complete retired authority then atomical
  assert.notEqual(readFileSync(f.p.configFile,'utf8'),before);assert.equal(result.configurationFile,'/data/instance.yaml');
  const opened=await buildApp({dataDir:restored.directory});try{assert.equal((await opened.app.inject({url:'/api/auth/self',headers:{authorization:'Bearer '+f.login.token,'x-mote-protocol-version':'2'}})).statusCode,401);assert.equal((await opened.accounts!.login('generated-container-admin','Generated-container-password','generated','client',0)).userId,f.login.userId);}finally{await opened.app.close();}
  assert.ok(f.calls.every(args=>!['start','stop','restart','pull','build','cp'].includes(args[0])));
+ const again=join(f.root,'rebackup');await backupProfile(loaded,again,f.dependencies);
+ const copied=new DatabaseSync(join(again,'mote.sqlite'));try{assert.equal(copied.prepare('SELECT deployment_id FROM scope_meta').get()!.deployment_id,f.deployment);}finally{copied.close();}
+});
+
+for(const timing of ['occupied','running','late-write','yaml-race'])test('Docker restore preserves current state for '+timing,async t=>{
+ const f=await fixture(t),before=readFileSync(f.p.configFile,'utf8'),selected=f.volumes.get(f.originalVolume)!.directory;
+ if(timing==='occupied')writeFileSync(join(selected,'sentinel'),'Generated current valid data');
+ if(timing==='running')f.running();
+ if(timing==='late-write')f.afterTransfer(()=>writeFileSync(join(selected,'sentinel'),'Generated current valid data'));
+ if(timing==='yaml-race')f.afterTransfer(()=>writeFileSync(f.p.configFile,before+'\n# Generated concurrent operator edit\n'));
+ await assert.rejects(restoreProfile(f.p,f.archive,f.dependencies),/empty data volume|Stop every container|Configuration changed/);
+ assert.equal(f.volumes.size,1);assert.equal(f.p.meta.volume,f.originalVolume);
+ assert.equal(readFileSync(f.p.configFile,'utf8'),timing==='yaml-race'?before+'\n# Generated concurrent operator edit\n':before);
+ if(timing==='occupied'||timing==='late-write')assert.equal(readFileSync(join(selected,'sentinel'),'utf8'),'Generated current valid data');
 });
 
 test('Docker restore copy failure leaves selected profile and original volume unchanged',async t=>{

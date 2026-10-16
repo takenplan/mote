@@ -6,7 +6,7 @@ import {createHash} from 'node:crypto';
 import {pipeline} from 'node:stream/promises';
 import {join,resolve,relative,dirname,basename,isAbsolute,sep} from 'node:path';
 import {tmpdir} from 'node:os';
-import {snapshotHindsight,restoreHindsight,discardRestoredHindsight} from './hindsight-backup.mjs';
+import {snapshotHindsight,restoreHindsight,discardRestoredHindsight,verifiedHindsightBackup} from './hindsight-backup.mjs';
 import {parseConfigDocument,serializeConfigDocument} from '../packages/shared/src/config-file.ts';
 
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
@@ -70,8 +70,21 @@ async function packageCompleteness(db,root){
   await ordinary(path);parseConfigDocument(await readFile(path,'utf8'),{});
  }
 }
-async function providerCompleteness(db,root){
+async function providerCompleteness(db,root,archival=false){
  for(const binding of memoryBindings(db)){
+  if(binding.adapter==='mote.hindsight@1'){
+   const archive=join(root,binding.directory,'hindsight-backup');
+   // Live/stopped source inventory is snapshotted later. A published archive
+   // must also bind every canonical native body to this exact account/version.
+   if(archival||await present(archive)){
+    const checked=await verifiedHindsightBackup(archive);
+    for(const row of db.prepare('SELECT id,version,body_digest FROM mm_version_bindings WHERE user_id=? AND binding=?').all(binding.user_id,binding.binding)){
+     const matches=checked.records.filter(record=>identity(record.namespace)===identity(binding.namespace)&&record.key.memoryId===row.id&&record.key.version===row.version);
+     if(matches.length!==1)throw Error('Missing canonical Hindsight native body');
+     const {status,staleReason,updatedAt,...body}=matches[0].memory;if(identity(body)!==row.body_digest)throw Error('Hindsight native body differs from its canonical host identity');
+    }
+   }
+  }
   if(binding.adapter!=='mote.mem0@1')continue;
   const directory=join(root,binding.directory);for(const name of ['operations.db','vectors.db','history.db'])await withDatabase(join(directory,name),native=>{if(native.prepare('PRAGMA quick_check').get().quick_check!=='ok')throw Error('Corrupt native Memory database');});
   const records=db.prepare('SELECT id,version,body_digest FROM mm_version_bindings WHERE user_id=? AND binding=?').all(binding.user_id,binding.binding);
@@ -109,6 +122,7 @@ export async function backupScopedInstance({source:requestedSource,out:requested
   for(const name of before.files){if(name==='instance.yaml'&&configFile)continue;const target=join(out,name);if(/(?:\.db|\.sqlite)$/.test(name)){await withDatabase(join(source,name),db=>backup(db,target));await chmod(target,0o600);}else await copy(join(source,name),target);checksums[name]=await sha(target);}
   if(configFile){await copy(resolve(configFile),join(out,'instance.yaml'));checksums['instance.yaml']=await sha(join(out,'instance.yaml'));}
   for(const name of before.native){const destination=join(out,name,'hindsight-backup');await snapshotHindsight({runtimeDirectory:join(source,name,'runtime'),providerDirectory:join(source,name,'provider'),destination});for(const filename of await readdir(destination)){const entry=name+'/hindsight-backup/'+filename;checksums[entry]=await sha(join(out,entry));}}
+  await withDatabase(join(out,'mote.sqlite'),db=>providerCompleteness(db,out,true));
   await assertScopedStopped(source);if((await inventory(source)).fingerprint!==before.fingerprint||await sha(configurationPath)!==configHash)throw Error('Instance changed while backing up; no complete backup was published');
   const actual=await backupInventory(out),manifest={version:2,kind:'mote-instance-backup',storageEpoch:5,deploymentId:meta.deploymentId,createdAt:new Date(now).toISOString(),directories:actual.directories,checksums,coverage:{canonicalDatabase:true,identities:true,originals:true,configuration:true,plugins:true,providerNative:true,privateKeyMaterial:true,excluded:['server-pid','provider-locks','logs','downloaded-model-weights']},restore:{identity:'preserved',executionAuthority:'revoked',automaticWork:false},native:before.native};
   await writeFile(join(out,'backup-manifest.json'),JSON.stringify(manifest,null,2),{flag:'wx',mode:0o600});const fd=await open(out,'r');try{await fd.sync();}finally{await fd.close();}return {directory:out,manifest};
@@ -122,7 +136,7 @@ export async function verifiedScopedBackup(requested){
  const actual=await backupInventory(directory);if(JSON.stringify(actual.files.sort())!==JSON.stringify(names.sort())||JSON.stringify(actual.directories.sort())!==JSON.stringify([...manifest.directories].sort()))throw Error('Incomplete or unexpected backup entries');
  for(const name of names)if(!/^[a-f0-9]{64}$/.test(manifest.checksums[name])||await sha(join(directory,name))!==manifest.checksums[name])throw Error('Backup checksum mismatch; destination was not changed');
  parseConfigDocument(await readFile(join(directory,'instance.yaml'),'utf8'),{});
- await withDatabase(join(directory,'mote.sqlite'),async db=>{const meta=validateDatabase(db);if(meta.deploymentId!==manifest.deploymentId)throw Error('Backup deployment identity mismatch');await packageCompleteness(db,directory);const native=memoryBindings(db).filter(binding=>binding.adapter==='mote.hindsight@1').map(binding=>binding.directory.split(sep).join('/'));if(JSON.stringify([...new Set(native)].sort())!==JSON.stringify([...manifest.native].sort()))throw Error('Incomplete native Memory snapshot');await providerCompleteness(db,directory);await originalCompleteness(db,directory,meta.deploymentId,Math.min(Date.parse(manifest.createdAt),Date.now()));});
+ await withDatabase(join(directory,'mote.sqlite'),async db=>{const meta=validateDatabase(db);if(meta.deploymentId!==manifest.deploymentId)throw Error('Backup deployment identity mismatch');await packageCompleteness(db,directory);const native=memoryBindings(db).filter(binding=>binding.adapter==='mote.hindsight@1').map(binding=>binding.directory.split(sep).join('/'));if(JSON.stringify([...new Set(native)].sort())!==JSON.stringify([...manifest.native].sort()))throw Error('Incomplete native Memory snapshot');await providerCompleteness(db,directory,true);await originalCompleteness(db,directory,meta.deploymentId,Math.min(Date.parse(manifest.createdAt),Date.now()));});
  return {directory,names,checksums:manifest.checksums,manifest};
 }
 
