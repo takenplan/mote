@@ -1,0 +1,15 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {modelFixture,event} from './fixtures/scoped-actions.js';
+import {item,waitForState} from './fixtures/scoped-query-accounts.js';
+import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider.js';
+
+test('one current formal Material retains a multi-original appointment unit in the real Harness',async t=>{
+ const f=await modelFixture(t),parts=['GENERATED_APPOINTMENT_PARTICIPANT_AND_DATE','GENERATED_APPOINTMENT_TIME_AND_LOCATION'];
+ f.scripts.set('A',(body,_raw,res)=>{const data=JSON.parse(typeof body.messages[0].content==='string'?body.messages[0].content:body.messages[0].content[0].text),records=data.untrustedEvidence??[],matches=parts.map(text=>records.find((record:any)=>record.ocrText.includes(text))),complete=matches.every(Boolean)&&new Set(matches.map(record=>record?.id)).size===2;writeMessagesResponse(res,{stage:1,text:JSON.stringify({answer:JSON.stringify({actions:complete?[{kind:'calendar.create',sameAs:null,event,uncertainty:'Generated multi-original proposal',evidence:matches.map((record:any,i:number)=>({id:record.id,quote:parts[i]}))}]:[]}),citationIds:complete?matches.map((record:any)=>record.id):[]})});});
+ const accepted=await f.ok(f.a.token,'/api/ingress/sources/same-source/items','POST',{batchId:'same-multi-original',items:parts.map((text,i)=>item(text,'part-'+i))}),context=await f.node.authority.authenticate(f.a.token),id='mat_'+createHash('sha256').update(JSON.stringify(['same-source','combined'])).digest('hex');
+ const material=f.node.ingress.bindSource(context,['same-source'],()=>{}).publishMaterial({id,kind:'document',schemaVersion:1,title:'Generated appointment with two originals',origin:{sourceId:'same-source',externalId:'combined',deviceId:'same-device',firstAt:'2026-10-16T00:00:00Z'},blocks:parts.map((text,i)=>({id:'part-'+i,kind:'text',format:'plain',text,memberIds:['original-'+i]})),members:accepted.captures.map((capture:any,i:number)=>({id:'original-'+i,kind:'capture',ref:'capture:'+capture.id})),coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}});
+ await f.enable(f.a);const page=await waitForState(()=>f.ok(f.a.token,'/api/actions'),value=>value.items.some((a:any)=>a.uncertainty==='Generated multi-original proposal'),'actual multi-original calendar proposal');const action=page.items.find((a:any)=>a.uncertainty==='Generated multi-original proposal');assert.deepEqual(action.evidence.map((e:any)=>e.quote),parts);assert.equal(new Set(action.evidence.map((e:any)=>e.id)).size,2);assert.ok(f.requests.every(request=>!request.raw.includes('GENERATED_B_PRIVATE')));assert.equal((await f.ok(f.b.token,'/api/actions')).items.length,0);
+ await f.ok(f.a.token,'/api/sources/same-source','DELETE');assert.deepEqual((await f.ok(f.a.token,'/api/actions')).items[0].evidence,[]);assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM ac_proposals WHERE user_id=? AND json LIKE ?').get(f.a.userId,'%'+parts[0]+'%')!.n)),0);assert.ok(material.revision);
+});
