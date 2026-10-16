@@ -1,6 +1,6 @@
+require('../../../scripts/fixture-background.cjs');
 // Actual Electron Desktop main/preload/renderer; only external native/network I/O
 // uses generated substitutes. This never loads Web or a real personal profile.
-require('../../../scripts/fixture-background.cjs');
 const electron=require('electron'),Module=require('node:module'),{EventEmitter}=require('node:events');
 const {mkdirSync}=require('node:fs'),{join}=require('node:path');
 const profile=process.argv[2];if(!profile)throw Error('Generated profile required');
