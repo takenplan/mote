@@ -17,14 +17,16 @@ export function remoteUrl(raw:string,allowLocal=false):URL {
   return url;
 }
 /** Every connection uses the address actually validated here, preventing DNS rebinding and redirects. */
-export function restrictedFetch(endpoint:URL,allowLocal=false):typeof fetch {
+export function restrictedFetch(endpoint:URL,allowLocal=false,authorize:()=>void=()=>{}):typeof fetch {
   return (async(input:RequestInfo|URL,init?:RequestInit)=>{
+    authorize();
     const url=new URL(input instanceof Request?input.url:input.toString());
     if(url.origin!==endpoint.origin||url.pathname!==endpoint.pathname||url.search||url.hash)throw new ConnectorError('mcp_redirect_rejected',502);
     const host=url.hostname.replace(/^\[|\]$/g,'');
     const records=isIP(host)?[{address:host,family:isIP(host)}]:await lookup(host,{all:true});
     if(!records.length||records.some(r=>!publicAddress(r.address)&&!(allowLocal&&loopback(r.address))))throw new ConnectorError('mcp_address_rejected',502);
     const selected=records[0],headers=new Headers(init?.headers);let length=0;
+    authorize();
     // MCP requests are bounded JSON. Remote servers cannot ask this transport to upload files.
     const body=init?.body;if(body!==undefined&&body!==null&&typeof body!=='string'&&!(body instanceof Uint8Array))throw new ConnectorError('mcp_body_invalid');
     if(body&&Buffer.byteLength(body)>256*1024)throw new ConnectorError('mcp_body_too_large',413);

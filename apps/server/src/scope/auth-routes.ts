@@ -4,6 +4,8 @@ import {LoginHandoffs} from '../login-handoffs.js';
 import {Accounts,AuthError,digest,usernameSchema,passwordSchema,durationSchema} from './accounts.js';
 import {registerAuthenticatedRoute,SESSION_COOKIE,cookieCredential,rejectIdentitySelectors,type ScopedRuntime} from './http.js';
 import {connectionServerUrl} from '@mote/shared';
+import type {PrivateData} from './private-data.js';
+import type {ScopedMcp} from './mcp.js';
 
 const id=(request:FastifyRequest)=>(request.params as {id:string}).id;
 const serverUrl=z.string().transform((value,ctx)=>{try{return connectionServerUrl(value);}catch{ctx.addIssue({code:'custom',message:'Invalid server URL'});return z.NEVER;}});
@@ -43,7 +45,7 @@ export function registerAuthentication(runtime:ScopedRuntime&{accounts:Accounts}
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/connections',handle:c=>accounts.credentials(c,authority)});
   registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/connections/self',discoverSession:true,handle:c=>({account:accounts.self(c,authority),credential:accounts.credentialInfo(c,authority),protocol:{min:2,max:2},capabilities:{authentication:true,ingest:true,ingressVersion:3,archiveRead:false}})});
   registerAuthenticatedRoute(runtime,{method:'DELETE',url:'/api/connections/:id',revokesSelf:(c,req)=>c.credentialId===id(req),handle:(c,req)=>accounts.revoke(c,authority,id(req))});
-  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/mcp',handle:(c,req)=>accounts.mintMcp(c,authority,z.object({access:z.enum(['read','write']),sourceIds:z.array(z.string().min(1).max(160)).max(500).optional(),label:z.string().trim().min(1).max(120),durationMs:durationSchema.default(2592000000)}).strict().parse(req.body))});
+  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/connections/mcp',handle:(c,req)=>{const input=z.object({access:z.enum(['read','write']),sourceIds:z.array(z.string().regex(/^[a-zA-Z0-9_.:-]{1,128}$/)).max(500).optional(),label:z.string().trim().min(1).max(120),durationMs:durationSchema.default(2592000000)}).strict().parse(req.body),sourceIds=[...new Set(input.sourceIds)].sort();for(const id of sourceIds)runtime.services.forUser(c).get<PrivateData>('private-data').source(id);const sourcePins=runtime.services.forUser(c).get<ReturnType<ScopedMcp['forUser']>>('mcp').pinSources(sourceIds);return accounts.mintMcp(c,authority,{...input,sourceIds,sourcePins});}});
   registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/login/session',handle:(c,req)=>{const input=device.parse(req.body);return accounts.issueClient(c,authority,{...input,label:input.deviceName});}});
   registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/login/ticket',handle:(c,req)=>{
     z.object({}).strict().parse(req.body??{});const token=cookieCredential(req)??req.headers.authorization!.slice(7),deadline=accounts.credentialInfo(c,authority).expiresAt;

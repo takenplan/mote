@@ -254,6 +254,24 @@ RED，也未运行其后 745 的暂停来源/lifecycle 加强用例；同伴结�
 
 ## 问题分类与仍需验收的项目
 
+### 恢复执行后的能力账本修正：tombstone characterization
+
+M11 的 `ca87afbe6ecfb208b866e3ae573cdb8feb42f51e` 曾仅依据
+`mote_items.includeDeleted` 参数名，错误期待 source-reported tombstone 出现在模型
+读取结果中。核对发现基线 `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`
+的 `apps/server/test/connectors.test.ts` 已明确要求该调用返回空列表：普通 owner
+来源管理可见删除元数据，不等于 MCP 模型读凭据可扩大 query-visible 范围。
+因此该 0/1、exit 1 是无效测试预期，撤回“生产迁移缺陷”判断；没有为此修改生产代码。
+
+修正后的 `multiuser-mcp-tombstone.test.ts` 保留 owner 当前删除元数据阳性、
+`includeDeleted` 两值均为空及旧正文不披露，1/1、exit 0。其历史错误日志保留并标明
+无效，不计有效 TDD RED 或缺陷关闭。有效的另一个 `kind` 选择器 RED 则使用正式
+producer 完成后的实际返回 kind，与本项分开处理。
+
+后续旧能力对照须先核验精确消费者、凭据能力和原有测试，再判断迁移遗漏；owner
+管理元数据与模型工具披露分别登记。RED 的期望必须来自核验过的旧行为或明确的新
+安全合同，不能从参数名推导新产品能力，也不能在绿色之后倒称原预期有效。
+
 | 分类 | 精确症结 / 状态 |
 | --- | --- |
 | confirmed 新迁移缺陷，鲜输入已修 | M06 `sourceTranscript` 曾无条件使用 SourceItem.text，把 Coding tool_result 发布为同 owner 可搜索 Material；`46a6c993` 复用原 `conversationRecords`，保留原件、合法对话与真实 producer。共享验证提取改变 late ACK 顺序也在该对象修复；本轮原红绿确认。没有据此声称跨用户读取或旧单用户 bug。 |

@@ -27,15 +27,19 @@ test('public and transitive production imports cannot select the legacy fixture'
   assert.ok(failures.some(value=>value.includes('src/helper.mjs')&&value.includes('non-production')));
 });
 
-test('undeclared tables, APIs, tasks, directories, extensions and scoped registrations fail the architecture check',()=>{
+test('undeclared tables, APIs, MCP tools/resources/prompts, tasks, directories, extensions and scoped registrations fail the architecture check',()=>{
   const source=`const server=Fastify();server.get('/api/private',handler);
     db.exec('CREATE TABLE private_new(id TEXT)');
     executor.register({kind:'private.new',pool:'private'});
     privateDirectory(join(root,'private'));
     host.install(manifest,entry);
+    server.registerTool('private_tool',{},handler);
+    server.registerResource('private_resource','mote://private',{},handler);
+    server.registerPrompt('private_prompt',{},handler);
     registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/new',service:'private',handle});`;
   const surfaces=scopeSurfaces(source);
-  for(const kind of ['table','api','task','directory','extension'])assert.ok(surfaces.some(value=>value.startsWith(kind+':')),kind);
+  for(const kind of ['table','api','mcp','task','directory','extension'])assert.ok(surfaces.some(value=>value.startsWith(kind+':')),kind);
+  for(const kind of ['registerTool','registerResource','registerPrompt'])assert.ok(surfaces.some(value=>value.startsWith('mcp:'+kind+':')),kind);
   assert.ok(surfaces.some(value=>value.includes('registerUserRoute:')&&value.includes('/api/new')));
   assert.deepEqual(checkScopeInventory({'new.ts':surfaces},{}),['undeclared scope: new.ts']);
   assert.equal(checkScopeInventory({'new.ts':surfaces},{'new.ts':{scope:'user',module:'M02',surfaces:[]}}).length,surfaces.length);

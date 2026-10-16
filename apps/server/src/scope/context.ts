@@ -29,17 +29,23 @@ export interface DurableIdentityVerifier {
   verify(grantId:string):Promise<VerifiedIdentity|undefined>;
   isCurrent(identity:Readonly<VerifiedIdentity>):boolean;
 }
-type IssuedIdentity={identity:Readonly<VerifiedIdentity>;mode:'session'|'task'};
+type IssuedIdentity={identity:Readonly<VerifiedIdentity>;mode:'session'|'task'|'mcp'};
 
 export class UserContextAuthority {
   private readonly issued=new WeakMap<object,IssuedIdentity>();
-  constructor(readonly deploymentId:string,private readonly verifier:IdentityVerifier,private readonly taskVerifier?:DurableIdentityVerifier){
+  constructor(readonly deploymentId:string,private readonly verifier:IdentityVerifier,private readonly taskVerifier?:DurableIdentityVerifier,private readonly mcpVerifier?:IdentityVerifier){
     if(!validScopeId(deploymentId))throw new ScopeError('invalid_identity',401);
   }
   async authenticate(credential:unknown):Promise<UserContext>{
     if(typeof credential!=='string'||!credential)throw new ScopeError('identity_required',401);
     const identity=await this.verifier.verify(credential);
     return this.issue(identity,'session');
+  }
+  /** Separate host verifier: possession of an MCP token never authenticates an
+   * ordinary HTTP session. Only the MCP host retains the resulting context. */
+  async authenticateMcp(credential:unknown):Promise<UserContext>{
+    if(typeof credential!=='string'||!credential||!this.mcpVerifier)throw new ScopeError('invalid_identity',401);
+    return this.issue(await this.mcpVerifier.verify(credential),'mcp');
   }
   /** Restore only a host-verified durable task grant, never a serialized context.
    * Task identities can use their own private services but cannot administer the
@@ -57,8 +63,8 @@ export class UserContextAuthority {
   }
   assert(context:unknown):asserts context is UserContext {
     const issued=context&&typeof context==='object'?this.issued.get(context):undefined;
-    if(!issued||!(issued.mode==='task'?this.taskVerifier?.isCurrent(issued.identity):this.verifier.isCurrent(issued.identity)))throw new ScopeError('invalid_identity',401);
+    if(!issued||!(issued.mode==='task'?this.taskVerifier?.isCurrent(issued.identity):issued.mode==='mcp'?this.mcpVerifier?.isCurrent(issued.identity):this.verifier.isCurrent(issued.identity)))throw new ScopeError('invalid_identity',401);
   }
-  assertAdministrator(context:unknown){this.assert(context);if(!this.issued.get(context)!.identity.administrator)throw new ScopeError('invalid_identity',403);}
+  assertAdministrator(context:unknown){this.assert(context);const issued=this.issued.get(context)!;if(issued.mode!=='session'||!issued.identity.administrator)throw new ScopeError('invalid_identity',403);}
   isTask(context:UserContext){this.assert(context);return this.issued.get(context)!.mode==='task';}
 }

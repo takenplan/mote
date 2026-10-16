@@ -171,6 +171,28 @@
     "module": "M10",
     "surfaces": [
       "api:all:'/mcp'",
+      "mcp:registerResource:'source-catalog':'mote://sources'",
+      "mcp:registerTool:'mote_activity'",
+      "mcp:registerTool:'mote_browse'",
+      "mcp:registerTool:'mote_context'",
+      "mcp:registerTool:'mote_evidence'",
+      "mcp:registerTool:'mote_file_catalog'",
+      "mcp:registerTool:'mote_file_chunks'",
+      "mcp:registerTool:'mote_history'",
+      "mcp:registerTool:'mote_items'",
+      "mcp:registerTool:'mote_material'",
+      "mcp:registerTool:'mote_material_read'",
+      "mcp:registerTool:'mote_materials'",
+      "mcp:registerTool:'mote_media_activity'",
+      "mcp:registerTool:'mote_memories'",
+      "mcp:registerTool:'mote_put_item'",
+      "mcp:registerTool:'mote_read'",
+      "mcp:registerTool:'mote_retrieve'",
+      "mcp:registerTool:'mote_search'",
+      "mcp:registerTool:'mote_segments'",
+      "mcp:registerTool:'mote_sources'",
+      "mcp:registerTool:'mote_status'",
+      "mcp:registerTool:'mote_timeline'",
       "table:mcp_import_manifests"
     ]
   },
@@ -1481,10 +1503,10 @@
   "apps/server/src/scope/http.ts": {
     "scope": "mixed",
     "module": "M01",
-    "status": "implemented",
     "surfaces": [
       "api:registerAuthenticatedRoute:{...route,handle:async(context,request,reply)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request,reply});}}"
-    ]
+    ],
+    "status": "implemented"
   },
   "apps/server/src/scope/ingress-routes.ts": {
     "scope": "user",
@@ -1871,6 +1893,40 @@
       "extension:registerPluginRoutes:app"
     ]
   },
+  "apps/server/src/scope/mcp-inbound.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-query-core-phase",
+    "surfaces": [
+      "api:all:'/mcp'",
+      "mcp:registerResource:'memory-catalog':'mote://memories'",
+      "mcp:registerResource:'source-catalog':'mote://sources'",
+      "mcp:registerTool:'mote_memories'",
+      "mcp:registerTool:'mote_put_item'",
+      "mcp:registerTool:'mote_sources'"
+    ]
+  },
+  "apps/server/src/scope/mcp-schema.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "table:mc_manifests",
+      "table:mc_source_epochs",
+      "table:mc_source_status",
+      "table:mc_state"
+    ]
+  },
+  "apps/server/src/scope/mcp.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/discover',service:MCP_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/import',service:MCP_DOMAIN",
+      "extension:runtime.services.registerUser:MCP_DOMAIN"
+    ]
+  },
   "apps/server/src/scope/memory-routes.ts": {
     "scope": "user",
     "module": "M07",
@@ -2037,6 +2093,31 @@
       "extension:runtime.services.registerUser:ASK_DOMAIN",
       "task:execution.register:kind:'ask.'+mode",
       "task:execution.register:kind:'ask.coordinate'"
+    ]
+  },
+  "apps/server/src/scope/mcp-query.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-query-core-phase",
+    "surfaces": [
+      "mcp:registerTool:'mote_activity'",
+      "mcp:registerTool:'mote_browse'",
+      "mcp:registerTool:'mote_context'",
+      "mcp:registerTool:'mote_evidence'",
+      "mcp:registerTool:'mote_file_catalog'",
+      "mcp:registerTool:'mote_file_chunks'",
+      "mcp:registerTool:'mote_history'",
+      "mcp:registerTool:'mote_items'",
+      "mcp:registerTool:'mote_material'",
+      "mcp:registerTool:'mote_material_read'",
+      "mcp:registerTool:'mote_materials'",
+      "mcp:registerTool:'mote_media_activity'",
+      "mcp:registerTool:'mote_read'",
+      "mcp:registerTool:'mote_retrieve'",
+      "mcp:registerTool:'mote_search'",
+      "mcp:registerTool:'mote_segments'",
+      "mcp:registerTool:'mote_status'",
+      "mcp:registerTool:'mote_timeline'"
     ]
   },
   "apps/server/src/scope/ask-read-routes.ts": {

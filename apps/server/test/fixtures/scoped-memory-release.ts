@@ -5,7 +5,7 @@ const components=[{id:'generated.memory.repository',version:'4',surface:'data',c
  * external provider fixture. Mote Memory, grants and publication remain real. */
 export function generatedMemoryRelease(externalUrl?:string){
  const code=String.raw`
-import {readFile,writeFile,access} from 'node:fs/promises';
+import {readFile,writeFile,appendFile,access} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const exists=path=>access(path).then(()=>true,()=>false);
@@ -17,7 +17,7 @@ export async function createMotePlugin(configuration){
  const tag=input=>digest([input.namespace,input.key]);
  return {components:COMPONENTS.map(c=>({...c,invoke:async()=>{throw Error('Use the host Memory domain');}})),
   async put(input){const state=await read(),record={namespace:input.namespace,key:input.key,memory:input.memory},key=tag(input),prior=state.records[key];if(prior&&digest(prior)!==digest(record))throw Error('Immutable conflict');state.records[key]=record;const receipt={opId:input.opId,namespace:input.namespace,key:input.key,payloadDigest:digest(record),state:'applied',eraseVerified:false,recordedAt:new Date().toISOString()};state.operations[input.opId]=receipt;if(await exists('hold-before-put')){await writeFile('put-started','yes');while(!await exists('release-put'))await new Promise(r=>setTimeout(r,5));}await save(state);if(await exists('hold-put')){await writeFile('put-started','yes');while(!await exists('release-put'))await new Promise(r=>setTimeout(r,5));}return receipt;},
-  async read(input){await writeFile('read-observation.json',JSON.stringify(input));if(await exists('hold-read-'+input.key.memoryId)){await writeFile('read-started-'+input.key.memoryId,'yes');while(!await exists('release-read-'+input.key.memoryId))await new Promise(r=>setTimeout(r,5));}if(await exists('fail-read'))throw Error('Generated external read failure');return (await read()).records[tag(input)]?.memory??null;},
+  async read(input){await writeFile('read-observation.json',JSON.stringify(input));if(await exists('audit-reads'))await appendFile('read-events.jsonl',JSON.stringify(input)+'\n');if(await exists('hold-read-'+input.key.memoryId)){await writeFile('read-started-'+input.key.memoryId,'yes');while(!await exists('release-read-'+input.key.memoryId))await new Promise(r=>setTimeout(r,5));}if(await exists('fail-read'))throw Error('Generated external read failure');return (await read()).records[tag(input)]?.memory??null;},
   async search(input){await writeFile('search-observation.json',JSON.stringify({keys:input.keys,namespace:input.namespace}));if(await exists('fail-search'))throw Error('Generated external search failure');const records=Object.values((await read()).records).filter(r=>digest(r.namespace)===digest(input.namespace)&&(!input.keys||input.keys.some(key=>digest(key)===digest(r.key))));return records.filter(r=>r.memory.statement.includes(input.query)).map((r,index)=>({...r,score:1-index/100})).slice(0,input.limit??20);},
   async export(input){return Object.values((await read()).records).filter(r=>digest(r.namespace)===digest(input.namespace));},
   async remove(input){const state=await read();delete state.records[tag(input)];await save(state);return {opId:input.opId,namespace:input.namespace,key:input.key,payloadDigest:digest(input),state:'removed',currentRemoved:true,historyRetained:false,eraseVerified:false,recordedAt:new Date().toISOString()};},
