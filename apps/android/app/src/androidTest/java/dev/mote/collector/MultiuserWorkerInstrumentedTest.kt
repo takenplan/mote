@@ -96,7 +96,7 @@ class MultiuserWorkerInstrumentedTest {
                 assertEquals(defaults,api.get("/api/configuration").toString());assertEquals(200,get(app,"a","/api/captures/$note").first)
                 assertEquals(409,assertThrows(CentralFailure::class.java){api.post("/api/portable/imports/"+imported!!.getString("id")+"/cancel")}.status)
                 login(app,"b");scenario.onActivity {it.navigate("imports")};ready()
-                scenario.onActivity {it.activityResult(74,android.app.Activity.RESULT_OK,android.content.Intent().setData(uri))};ready()
+                scenario.onActivity {activity->CentralActivity::class.java.getDeclaredMethod("onActivityResult",Int::class.javaPrimitiveType,Int::class.javaPrimitiveType,android.content.Intent::class.java).apply {isAccessible=true}.invoke(activity,74,android.app.Activity.RESULT_OK,android.content.Intent().setData(uri))};ready()
                 assertEquals(0,CentralAccess.requireClient(app).get("/api/portable/imports?limit=20").getJSONArray("items").length())
                 assertEquals(404,assertThrows(CentralFailure::class.java){CentralAccess.requireClient(app).get("/api/portable/imports/"+imported!!.getString("id"))}.status)
             }
