@@ -216,81 +216,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         }
     }
-    private fun models() {
-        val api = client
-        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/model-settings") }) { value ->
-            body.removeAllViews(); screens.setBack { screens.refresh() }
-            ui.text(MoteI18n.text("模型配置"), NativeFontRole.TITLE_MOBILE)
-            ui.button(MoteI18n.text("功能默认模型")) { modelDefaults(value) }
-            val profiles = value.getJSONArray("profiles")
-            val choice = Spinner(ui).apply {
-                contentDescription = MoteI18n.text("Provider 预设")
-                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item,
-                    (0 until profiles.length()).map { profiles.getJSONObject(it).optString("name") })
-            }
-            body.addView(choice, LinearLayout.LayoutParams(-1, ui.moteDp(52)))
-            val selected = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }
-            body.addView(selected)
-            fun renderProfile(i: Int) {
-                selected.removeAllViews()
-
-                val profile = profiles.getJSONObject(i); val id = profile.getString("id"); val card = ui.card(selected)
-                ui.text(profile.optString("name") + " · " + profile.getJSONObject("settings").optString("model"), NativeFontRole.ROW, card)
-                if (!profile.optBoolean("readOnly")) {
-                    ui.button(MoteI18n.text("编辑"), parent = card) {
-                        val settings = cleanSettings(profile.getJSONObject("settings")).put("apiKey", "").put("headers", JSONObject.NULL).put("extraBody", JSONObject.NULL)
-                        val request = JSONObject().put("revision", value.getLong("revision")).put("settings", settings)
-                        request.put("name", profile.getString("name"))
-                        edit(MoteI18n.text("模型配置"), "/api/model-settings/profiles/" + enc(id), request, back = { models() })
-                    }
-                    ui.button(MoteI18n.text("删除"), parent = card) { screens.confirm(MoteI18n.text("删除"), MoteI18n.text("删除后无法恢复。")) {
-                        ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/model-settings/profiles/" + enc(id), JSONObject().put("revision", value.getLong("revision"))) }) { models() }
-                    } }
-                }
-                ui.button(MoteI18n.text("复制为新预设"), parent = card) {
-                    edit(MoteI18n.text("复制为新预设"), "/api/model-settings/profiles/" + enc(id) + "/copy",
-                        JSONObject().put("revision", value.getLong("revision")).put("id", "preset-" + UUID.randomUUID().toString().take(8)).put("name", profile.optString("name") + " copy").put("includeCredentials", true), "POST", back = { models() })
-                }
-                ui.button(MoteI18n.text("测试连接"), parent = card) {
-                    action("/api/model-settings/profiles/" + enc(id) + "/test", JSONObject().put("revision", value.getLong("revision")).put("settings", cleanSettings(profile.getJSONObject("settings")))) { values(it, card) }
-                }
-                ui.button(MoteI18n.text("可用模型"), parent = card) { read("/api/model-settings/profiles/" + enc(id) + "/models", card) }
-            }
-            choice.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-                override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) { renderProfile(position) }
-            }
-        }
-    }
-    private fun cleanSettings(value: JSONObject) = pick(value, "provider", "protocol", "baseUrl", "model", "reasoningEffort", "serviceTier", "maxTokens", "modelRequestTimeoutMs", "agentTimeoutMs", "allowUnauthenticatedLocal").apply {
-        if (getString("protocol") == "codex-app-server") require(getString("serviceTier") in setOf("default", "fast"))
-    }
-    private fun modelDefaults(value: JSONObject) {
-        body.removeAllViews(); screens.setBack { models() }
-        val profiles = value.getJSONArray("profiles"); val ids = (0 until profiles.length()).map { profiles.getJSONObject(it).getString("id") }
-        val names = (0 until profiles.length()).map { profiles.getJSONObject(it).getString("name") }
-        val defaults = value.getJSONObject("defaults"); val models = value.getJSONObject("defaultModels")
-        val fields = linkedMapOf<String, Pair<Spinner, EditText>>()
-        for (feature in defaults.keys()) {
-            ui.text(label(feature), NativeFontRole.ROW)
-            val choice = Spinner(ui).apply {
-                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, names)
-                setSelection(ids.indexOf(defaults.getString(feature)).coerceAtLeast(0))
-            }; body.addView(choice)
-            fields[feature] = choice to ui.field(MoteI18n.text("模型 ID（可选覆盖）"), models.optString(feature))
-        }
-        ui.button(MoteI18n.text("保存设置"), true) {
-            val selections = JSONObject(); val overrides = JSONObject()
-            fields.forEach { (feature, inputs) ->
-                selections.put(feature, ids[inputs.first.selectedItemPosition])
-                inputs.second.text.toString().trim().takeIf(String::isNotBlank)?.let { overrides.put(feature, it) }
-            }
-            val api = client
-            ui.work(MoteI18n.text("正在保存…"), {
-                api.put("/api/model-settings/defaults", JSONObject().put("revision", value.getLong("revision")).put("defaults", selections).put("defaultModels", overrides))
-            }) { models() }
-        }
-    }
+    private fun models(): Unit = ownedConfiguration(MoteI18n.text("模型配置"), "models", { screens.refresh() }, { models() })
     fun fileSettings() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/file-processing") }) { value ->
@@ -302,16 +228,17 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             edit(MoteI18n.text("处理设置"), "/api/file-processing", payload)
         }
     }
-    private fun ownedConfiguration(title: String, domainId: String) {
+    private fun ownedConfiguration(title: String, domainId: String, back: () -> Unit = { memorySettings() }, done: () -> Unit = back) {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") }) { view ->
             val domains = view.getJSONArray("domains")
             val value = (0 until domains.length()).map { domains.getJSONObject(it) }.single { it.getString("id") == domainId }.getJSONObject("saved")
-            body.removeAllViews(); screens.setBack { memorySettings() }; ui.text(title, NativeFontRole.TITLE_MOBILE)
+            body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
+            if (domainId == "models") ui.text(MoteI18n.text("模型预设和默认选择保存在本人配置；复制带凭据、测试连接和模型目录尚待多用户接口。"))
             val collect = form(value, ui.card(), emptySet())
             ui.button(MoteI18n.text("保存设置"), true) {
                 val payload = JSONObject().put("revision", view.getLong("revision")).put("value", collect()).put("preserveRedactedSecrets", true)
-                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/" + enc(domainId), payload) }) { memorySettings() }
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/" + enc(domainId), payload) }) { done() }
             }
         }
     }
@@ -325,31 +252,32 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         read("/api/memory")
     }
     private fun recipeSettings(integration: Boolean, scope: String? = null) {
-        val api = client; val path = if (integration) "/api/memory-integration-settings" else "/api/memory-recipe-settings"
-        ui.work(MoteI18n.text("正在读取…"), {
-            api.get(path + (scope?.let { "?scope=" + enc(it) } ?: "")) to api.get(if (integration) "/api/memory-integration-recipes" else "/api/memory-recipes")
-        }) { (selection, catalog) ->
-            body.removeAllViews(); screens.setBack { memorySettings() }; if (!integration) ui.text(MoteI18n.text("这些提取门槛与最大等待时间只控制历史资料的窗口处理。已授权且内容就绪的新资料直接进入自动记忆队列，按可用名额持续处理。"))
-            val current = if (integration) listOfNotNull(selection.optJSONObject("binding")?.optJSONObject("recipe"))
-                else selection.getJSONArray("items").let { items -> (0 until items.length()).map { items.getJSONObject(it).getJSONObject("binding").getJSONObject("recipe") } }
-            val choices = catalog.getJSONArray("items"); val selected = mutableListOf<JSONObject>()
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") to api.get("/api/memory/recipes") }) { (view, catalog) ->
+            val domains = view.getJSONArray("domains")
+            val settings = JSONObject((0 until domains.length()).map { domains.getJSONObject(it) }.single { it.getString("id") == "memory" }.getJSONObject("saved").toString())
+            body.removeAllViews(); screens.setBack { memorySettings() }
+            val field = when (scope) { "capture" -> "captureRecipes"; "lark-docs" -> "documentRecipes"; else -> "recipes" }
+            val current = if (integration) { if (settings.getBoolean("integration")) listOf(settings.getJSONObject("integrationRecipe")) else emptyList() }
+                else (settings.optJSONArray(field) ?: JSONArray().put(settings.getJSONObject(if (settings.optString("profile") == "coding") "codingRecipe" else "recipe"))).let { items -> (0 until items.length()).map { items.getJSONObject(it) } }
+            val choices = catalog.getJSONArray(if (integration) "integrations" else "items")
             val fields = mutableListOf<Pair<CheckBox, JSONObject>>()
             for (i in 0 until choices.length()) {
                 val recipe = choices.getJSONObject(i); val ref = pick(recipe, "id", "version")
                 val check = CheckBox(ui).apply {
-                    text = recipe.optString("name", recipe.optString("id")) + " · " + recipe.optString("version")
-                    isChecked = current.any { it.optString("id") == ref.optString("id") && it.optString("version") == ref.optString("version") }
+                    text = recipe.optString("name", recipe.getString("id")) + " · " + recipe.getString("version")
+                    isChecked = current.any { it.getString("id") == ref.getString("id") && it.getString("version") == ref.getString("version") }
+                    isEnabled = recipe.optBoolean("available", true) || isChecked
                 }; fields.add(check to ref); body.addView(check)
                 if (!integration) check.setOnCheckedChangeListener { _, checked -> if (!checked && fields.none { it.first.isChecked }) check.isChecked = true }
-                if (integration) check.setOnCheckedChangeListener { _, checked -> if (checked) fields.filter { it.first !== check }.forEach { it.first.isChecked = false } }
+                else check.setOnCheckedChangeListener { _, checked -> if (checked) fields.filter { it.first !== check }.forEach { it.first.isChecked = false } }
             }
             ui.button(MoteI18n.text("保存设置"), true) {
-                selected.clear(); fields.filter { it.first.isChecked }.forEach { selected.add(it.second) }
-                if (!integration && selected.isEmpty()) return@button
-                val payload = if (integration) JSONObject().put("recipe", selected.firstOrNull() ?: JSONObject.NULL)
-                    else JSONObject().put("recipes", JSONArray(selected))
-                if (scope != null) payload.put("scope", scope)
-                ui.work(MoteI18n.text("正在保存…"), { api.put(path, payload) }) { memorySettings() }
+                val selected = fields.filter { it.first.isChecked }.map { it.second }
+                if (integration) { settings.put("integration", selected.isNotEmpty()); selected.firstOrNull()?.let { settings.put("integrationRecipe", it) } }
+                else { if (selected.isEmpty()) return@button; settings.put(field, JSONArray(selected)) }
+                val payload = JSONObject().put("revision", view.getLong("revision")).put("value", settings).put("preserveRedactedSecrets", true)
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/memory", payload) }) { memorySettings() }
             }
         }
     }

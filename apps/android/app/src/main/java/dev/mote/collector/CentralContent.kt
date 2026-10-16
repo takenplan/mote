@@ -498,7 +498,7 @@ internal class CentralContent(
                 val selected = CentralAccess.resolve(this)
                 check(selected.server == origin && session.generation == generation && accountOwnerKey() == owner) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
                 val api = requireNotNull(selected.client)
-                if (receipt == null) requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { api.download(path, it) }
+                if (receipt == null) api.downloadStaged(path, { requireNotNull(contentResolver.openOutputStream(uri, "wt")) }, File(accountDirectory(), "central-native/downloads"))
                 else CentralPortable(api).save(org.json.JSONObject(receipt), File(accountDirectory(), "central-native/downloads")) {
                     requireNotNull(contentResolver.openOutputStream(uri, "wt"))
                 }

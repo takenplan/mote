@@ -8380,5 +8380,6 @@ export const english: Readonly<Record<string, string>> = {
   "设备授权只允许采集；请使用用户名和密码登录后打开私人资料。": "Device approval permits collection. Sign in with your username and password to open private content.",
   "将本机未绑定资料归入此账号": "Assign unbound local records to this account",
   "整理记忆": "Organize memories",
-  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions have changed; the completed task record remains. Open the Memory to check the currently readable version."
+  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions have changed; the completed task record remains. Open the Memory to check the currently readable version.",
+  "模型预设和默认选择保存在本人配置；复制带凭据、测试连接和模型目录尚待多用户接口。": "Model profiles and default selections are saved in your configuration. Copying credentials, connection tests and model catalogs still need multiuser interfaces."
 };

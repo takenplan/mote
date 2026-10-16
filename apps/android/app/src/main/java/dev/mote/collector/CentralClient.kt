@@ -80,11 +80,14 @@ internal class CentralClient(
             if (expected != null) require(received == expected.bytes && digest.digest().joinToString("") { "%02x".format(it) } == expected.sha256) { "Export bytes do not match their receipt" }
         } finally { connection.disconnect() }
     }
-    fun downloadVerified(path: String, openOutput: () -> java.io.OutputStream, expected: CentralDownload, directory: File) {
+    fun downloadVerified(path: String, openOutput: () -> java.io.OutputStream, expected: CentralDownload, directory: File) = stagedDownload(path, openOutput, directory, expected)
+    /** Generic metadata downloads have no portable integrity receipt. Stage the successful response before opening the selected document. */
+    fun downloadStaged(path: String, openOutput: () -> java.io.OutputStream, directory: File) = stagedDownload(path, openOutput, directory, null)
+    private fun stagedDownload(path: String, openOutput: () -> java.io.OutputStream, directory: File, expected: CentralDownload?) {
         directory.mkdirs()
         val staged = File.createTempFile("portable-", ".part", directory)
         try {
-            staged.outputStream().use { download(path, it, expected.bytes, expected) }
+            staged.outputStream().use { download(path, it, expected?.bytes ?: Long.MAX_VALUE, expected) }
             checkActive(); verify(); checkActive()
             openOutput().use { output ->
                 staged.inputStream().use { input ->
