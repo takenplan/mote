@@ -154,3 +154,7 @@ for(const change of ['restart-required-policy','unrelated-domain'] as const)test
  }else{await instance.update('server',{allowedOrigins:['https://fixture.invalid']},instance.revision);external.gate.released.resolve();const outcome=await pending;assert.ok('value' in outcome);assert.equal((await f.ok(f.a.token,'/api/source-items?sourceId=same-source')).items.length,1);}
  assert.equal((await f.request(f.b.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']})).statusCode,200);
 });
+
+test('M08 independent MCP deletion must not disable ordinary owner Ask metadata or another user',async t=>{
+ const f=await fixture(t);const before=await f.request(f.a.token,'/api/context/status');assert.equal(before.statusCode,200,before.body);const context=await f.node.authority.authenticate(f.a.token);await f.node.services.forUser(context).deleteUser('mcp','generated-m08-status-delete');const b=await f.request(f.b.token,'/api/context/status');assert.equal(b.statusCode,200,b.body);const after=await f.request(f.a.token,'/api/context/status');assert.equal(after.statusCode,200,'ordinary Ask metadata must remain usable after deleting only MCP: '+after.body);
+});
