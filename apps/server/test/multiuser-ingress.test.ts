@@ -90,9 +90,30 @@ test('source/Coding archive originals stay scoped and out of raw data search; re
  assert.equal((await f.request(f.alice.token,'/api/data/search?query=GENERATED_PRIVATE_CODING_TOOL_BODY')).json().items.length,0);
  const other=await f.intake(f.alice.token,[item('other')],'other','other','items');
  const draft={id:'mat_'+identityHash(['coding','derived']),kind:'document',schemaVersion:1,title:'Generated projection',origin:{sourceId:'coding',externalId:'derived',deviceId:'same-device'},blocks:[{id:'text',kind:'text',format:'plain',text:'Generated published projection',memberIds:['capture']}],members:[{id:'capture',kind:'capture',ref:'capture:'+other.captures[0].id}],coverage:{state:'complete'},fidelity:{state:'derived',limitations:[]},retention:{original:'retained',policy:'keep'}};
- assert.throws(()=>bound.publishMaterial(draft));assert.equal((await f.request(f.alice.token,'/api/materials')).json().items.length,0);
+ assert.throws(()=>bound.publishMaterial(draft));assert.equal((await f.request(f.alice.token,'/api/materials/'+draft.id)).statusCode,404);
+ for(let pass=0;pass<5;pass++)await f.node.execution!.tick();
+ assert.equal((await f.request(f.alice.token,'/api/data/search?query=GENERATED_PRIVATE_CODING_TOOL_BODY')).json().items.length,0,'actual M06 and Memory producers cannot publish tool bodies');
  draft.members[0].ref='capture:'+ar.captures[0].id;assert.equal(bound.publishMaterial(draft).title,draft.title);
  generation=false;assert.throws(()=>bound.pageOriginals('coding'));assert.throws(()=>bound.publishMaterial(draft));
+});
+
+
+test('actual M03 Coding archives project only complete declared dialogue through M06 and Memory organizers for equal A/B identities',async t=>{
+ const f=await fixture(t),end=Date.now()+15000,receipts:any[]=[];
+ for(const [token,label] of [[f.alice.token,'A'],[f.bob.token,'B']] as const){
+  await f.register(token,source('coding','archive'));
+  const event=(id:string,text:string,coding:Record<string,unknown>)=>({...item(id,text),kind:'message',document:{coding:{version:1,provider:'codex',sessionId:'same-session',projectKey:'same-project',eventId:id,part:0,parts:1,...coding}}});
+  const user='<environment_context>GENERATED_HOST_ENV_'+label+'</environment_context>\nGENERATED_HUMAN_'+label,split=user.indexOf('</environment_context>')+7;
+  const items=[event('tool','GENERATED_TOOL_'+label,{role:'tool_result'}),event('analysis','GENERATED_ANALYSIS_'+label,{role:'assistant',attribution:'agent',channel:'analysis'}),event('unknown','GENERATED_UNATTRIBUTED_'+label,{role:'user'}),event('part-0',user.slice(0,split),{eventId:'human',role:'user',attribution:'human',part:0,parts:2}),event('part-1',user.slice(split),{eventId:'human',role:'user',attribution:'human',part:1,parts:2}),event('final','GENERATED_FINAL_'+label,{role:'assistant',attribution:'agent',channel:'final'})];
+  receipts.push({token,label,items,receipt:await f.intake(token,items,'same-batch','coding','items')});
+ }
+ for(const {token,label,items,receipt} of receipts){
+  let session:any;for(;;){await f.node.execution!.tick();const page=(await f.request(token,'/api/materials?kind=mote.coding-session')).json();session=page.items[0];const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});let pending;try{pending=Number(db.prepare("SELECT count(*) n FROM execution_steps WHERE state IN ('running','waiting') AND kind IN ('processing.pipeline','processing.extract','memory.materials')").get()!.n);}finally{db.close();}if(session?.memberCount===items.length&&!pending)break;assert.ok(Date.now()<end,JSON.stringify(page));await new Promise(resolve=>setTimeout(resolve,10));}
+  const body=await f.request(token,'/api/materials/'+session.id+'/read');assert.equal(body.statusCode,200,body.body);assert.ok(body.json().text.includes('GENERATED_HUMAN_'+label));assert.ok(body.json().text.includes('GENERATED_FINAL_'+label));
+  const catalog=(await f.request(token,'/api/materials')).json().items;for(const material of catalog){const read=await f.request(token,'/api/materials/'+material.id+'/read');assert.equal(read.statusCode,200,read.body);for(const excluded of ['GENERATED_HOST_ENV_','GENERATED_TOOL_','GENERATED_ANALYSIS_','GENERATED_UNATTRIBUTED_','GENERATED_HUMAN_'+(label==='A'?'B':'A'),'GENERATED_FINAL_'+(label==='A'?'B':'A')])assert.ok(!read.body.includes(excluded),excluded);}
+  const context=await f.node.authority.authenticate(token),bound=f.node.ingress.bindSource(context,['coding'],()=>{});for(const [index,entry] of receipt.captures.entries())assert.equal(JSON.parse(bound.readOriginal(entry.original.ref).bytes.toString()).text,items[index].text,'M03 keeps exact retained bytes independently of projection');
+  assert.equal((await f.request(token,'/api/data/search?query=GENERATED_TOOL_'+label)).json().items.length,0);assert.ok((await f.request(token,'/api/data/search?query=GENERATED_HUMAN_'+label)).json().items.length>0);
+ }
 });
 
 test('device and MCP credentials cannot upgrade source scope through private APIs, tickets or minting',async t=>{
