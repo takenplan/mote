@@ -74,6 +74,25 @@ canonical read after release. Targeted2/2,EXIT0,6177.384791ms,
 code changes. The final focused suite and all later gates must run again on this
 test-only correction; earlier70/72 remains a failure.
 
+## Final affected wait-budget diagnostic
+
+The first required affected run on `690bcbb699a16d01b0fa48972ee9427b325911b3`
+exited1: Server2454 total,2452pass,1fail,1existing opt-in skip;
+`/tmp/m11-final-affected.log/.exit`. The delegated-worker owner/narrow-context
+positive reached both child result reads but its fixture20s polling budget ended
+with the parent still running. Web469,Agent317+1existing opt-in skip,Diagnostics5
+and Shared190 passed; root checks and Android were not reached. This complete
+command remains a failure.
+
+The exact unchanged failed test alone passes1/1,EXIT0,19744.584708ms
+(`/tmp/m11-final-delegated-original-retry.log/.exit`), retaining every owner,
+source/time/device and parent-dialogue/workspace exclusion assertion. The
+multi-stage positive now receives an explicit60s completion budget within the
+existing120s per-test bound; all other fixture waits keep20s. No runtime, model
+script, production retry, assertion or processing producer changes. This is a
+bounded fixture-budget correction, not a claimed production isolation fix. All
+final gates must complete again on the corrected test candidate.
+
 ## Resumed common-contract representative B checkpoint
 
 PR135 documentation094b69d0c4d623a3b478ae4c05ee249b024ba73b is composed.
