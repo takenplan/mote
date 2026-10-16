@@ -62,3 +62,14 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 4. 精确远端 feature head/base/CI 状态，Draft PR 指向独立集成分支；CI Checks/Component checks 禁用，未运行，不启用它们。
 
 所有此前窄检查只覆盖当时树。真实模型、真实日历/外部账号、物理设备、部署和最终跨模块 UI 不计入本模块已验证范围。
+
+## 恢复后的公共合同组合（未最终验收）
+
+- 干净恢复 `35d661b2`。M13 原目标本轮单次交接返回 `isError:false` 与准确 threadId，父已核实成功；后续重复结果澄清被审核拒绝，未发送并停止，不影响原交接成功。M11/M14 未被唤醒，没有创建第五对话。
+- `1f129540` 组合 M16 固定 `589d6ad7` 与 M11 PR138；app 注册/退出清理、scope 清单、纯导入例外精确并集，server types/scope/diff0。本方库 dist 复制同源 M16 缓存用于窄 fixture，不冒充本方 fresh build。
+- 独立静态报告为 `/tmp/mote-m15-review-m12-delivery-35.md`、`/tmp/mote-m16-review-m12-35d.md`。M16 确认 uncertain 非 NULL ACK 误判及物理元数据残留，真实生产 fixture 随后证实。
+- `8c7f839d`：`node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-actions-lifecycle.test.ts`，`m12-lifecycle-physical-red` 0/3 EXIT1，分别为域误报 complete、已结算域残留、实际 M16 总删除 completed 后残留。`bab08a4f` 主修复；`f66aeace` 增补已删除域仍收到来源的有效 RED，`m12-deleted-source-red` 0/1 EXIT1。`5172f099` 后 `m12-lifecycle-physical-green` 3/3 EXIT0，19898ms。
+- `ee3f8ec1`：`node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-actions-portable.test.ts`，`m12-portable-red` 0/2 EXIT1（实际 HTTP archive_import_unavailable）。`bab08a4f` 后 `m12-portable-green` 2/2 EXIT0，2935ms；实际合并、重复、重启、同 ID B、冲突/重复 ID 与回滚，不恢复 grants。
+- `5172f099` 邻接窄回归：`node --import tsx --test --test-concurrency=1 --test-name-pattern='portable action restore|explicit Actions restoration|explicit owned todo restore' apps/server/test/multiuser-actions-fences.test.ts apps/server/test/multiuser-actions.test.ts`，`m12-lifecycle-adjacent` 3/3 EXIT0，16196ms。未选场景不计本次通过。
+- 当前增加到 46 个专项场景，原 41 个全部保留。未在最终同一 SHA 整组跑过。M16 固定 589d 的第五次 required 已结束 EXIT1：Desktop 492/492、Server 2562 pass/0 fail/1 opt-in skip、Web 505/505；最后 CLI 4/5（重复 fresh-self 请求）失败，Android 未运行。M16 已释放，M15 使用两个短槽，本方未 claim heavy。13 表和权限退役接缝给 M16 后，须组合其真实冻结修复再验收。
+- 文档编辑曾在 Python 解析期因输入编码失败，以及 apply_patch 上下文未匹配；均未改文件。列清单脚本误遍历字典后只追加了表头，已按真实 PRAGMA 字典追加全列。这些是编辑命令失败，不计产品或测试失败。
