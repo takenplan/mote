@@ -5,7 +5,7 @@ import {mkdtempSync,readFileSync,rmSync,cpSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
-import {execFileSync} from 'node:child_process';
+import {execFileSync,spawnSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
 import {setTimeout as delay} from 'node:timers/promises';
 import {EXECUTION_POLICIES} from '../../apps/server/src/execution-policy.ts';
@@ -42,7 +42,7 @@ try{
  await assert.rejects(restoreProfile(p,archive,{execute}),/empty data volume/);assert.equal(readFileSync(p.configFile,'utf8'),selectedYaml);
  const targetPaths=profilePaths('empty-target',join(directory,'profiles'));await initialize(targetPaths,{runtime:'docker',image});p=await loadProfile(targetPaths);selected=p.meta.volume;docker(['volume','create','--label','dev.mote.fixture='+runId,selected]);created.add(selected);
 
- const restored=await restoreProfile(p,archive,{execute});created.add(restored.volume);assert.notEqual(restored.volume,selected);assert.equal(restored.deploymentId,deploymentId);
+ const restored=await restoreProfile(p,archive,{execute});created.add(restored.volume);assert.notEqual(restored.volume,selected);assert.equal(restored.deploymentId,deploymentId);p=await loadProfile(profilePaths(p.profile,p.home));assert.equal(p.meta.volume,restored.volume);
  if(production){
   const user=await dockerConfigurationUser(p,execute);
   docker(['run','--pull','never','--detach','--name',container,'--label','dev.mote.fixture='+runId,'--network','none','--security-opt','no-new-privileges:true','--cap-drop','ALL','--user',user,'--mount',`type=volume,source=${restored.volume},target=/data`,'--mount',`type=bind,source=${p.directory},target=/config`,'--env','MOTE_CONFIG_FILE=/config/mote.yaml',image!]);containerCreated=true;
@@ -62,6 +62,9 @@ try{
  for(const user of users){const fresh=await node.accounts.login(user.username,password,'generated','client',0);assert.equal(fresh.userId,user.userId);const context=await node.authority.authenticate(fresh.token);const captures=node.services.forUser(context).get('private-data').captures({}).items;assert.equal(captures.length,1);assert.equal(captures[0].id,captureId);assert.equal(captures[0].ocrText,'Generated '+user.username.slice(-1));}
  assert.equal(readFileSync(occupiedProfile.configFile,'utf8'),selectedYaml);assert.equal(docker(['run','--pull','never','--rm','--name',runId+'-sentinel-read','--label','dev.mote.fixture='+runId,'--network','none','--read-only','--user','0','--mount',`type=volume,source=${occupied},target=/source,readonly`,'--entrypoint','node',image!,'-e',"process.stdout.write(require('node:fs').readFileSync('/source/sentinel','utf8'))"]),sentinel);
  console.log(JSON.stringify({result:'PASS',runId,image,sourceSha,deploymentId,originalSha256:createHash('sha256').update(original).digest('hex'),copiedOriginals:parts.length,oldCredentialsRevived:0,taskAuthorizationsRevived:0,unknownExternalFactPreserved:true,sameCaptureIdOwnerIsolated:true,currentValidVolumePreserved:true,corruptPackageBeforeDocker:true,restoredVolume:restored.volume,previousVolume:selected,actualDockerCommands:true,productionContainerStartup:production,productionRestart:production,cleanShutdownCycles:production?2:0}));
+}catch(error){
+ if(containerCreated){const logs=spawnSync('docker',['logs',container],{encoding:'utf8'});writeFileSync(join(tmpdir(),'mote-container-production-'+runId+'.log'),(logs.stdout??'')+(logs.stderr??''));}
+ throw error;
 }finally{
  await node?.app.close();
  if(containerCreated){const state=JSON.parse(docker(['inspect',container]))[0];assert.equal(state.Config.Labels?.['dev.mote.fixture'],runId);if(state.State.Running)docker(['stop','--time','20',container]);docker(['rm',container]);}
