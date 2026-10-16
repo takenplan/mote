@@ -1,4 +1,9 @@
 {
+  "固定日程审批": "Fixed calendar review",
+  "核对固定内容": "Review fixed details",
+  "仅批准上方固定内容、证据、设备和日历；修改需要返回重新核对。": "Approve only the fixed details, evidence, device and calendar above. Go back to make changes and review again.",
+  "Gmail 连接": "Gmail connection",
+  "选择连接": "Select a connection",
   "取消导入": "Cancel import",
   "请选择原部署和原账号的 Mote portable3 归档。": "Select a Mote portable3 archive from the original deployment and account.",
   "仅合并原部署和原账号的规范资料；当前设置、凭据和执行授权保持不变。": "Merges canonical data from the original deployment and account. Current settings, credentials and execution authority are preserved.",
@@ -8419,5 +8424,16 @@
   "仅处理所选资料的固定版本；未选配方时沿用当前记忆设置。": "Process only the pinned versions of selected materials. Leave recipes unselected to use the current Memory settings.",
   "已选择 {0} 份资料": "{0} materials selected",
   "请选择至少一份资料。": "Select at least one material.",
-  "提交所选资料": "Submit selected materials"
+  "提交所选资料": "Submit selected materials",
+  "新建连接": "New connection",
+  "编辑连接": "Edit connection",
+  "连接 ID": "Connection ID",
+  "Google 客户端 ID": "Google client ID",
+  "Google 客户端密钥": "Google client secret",
+  "自动同步": "Automatic sync",
+  "保存连接": "Save connection",
+  "留空保留已保存密钥。": "Leave blank to keep the saved secret.",
+  "连接不存在，请重新读取。": "The connection no longer exists. Reload it.",
+  "同步间隔不符合要求。": "The sync interval is invalid.",
+  "确认移除": "Confirm removal"
 }
