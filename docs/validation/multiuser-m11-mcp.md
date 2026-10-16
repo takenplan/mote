@@ -6,6 +6,32 @@ Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
 this feature. Final accepted M07/M08 real query tools remain required.
 No mock Memory, Ask, connector or processing service proves them.
 
+## Actual M07 Memory read increment
+
+The reviewed M07 read-contract freeze
+`a6bc94c43e34ce91439cfeff6ad669264610d1d1` is composed on this feature by
+merge `0b0bdfcc98aec66fcebc80cafffe8590252e3bbc`. M10 atomic callback/savepoint
+admission and M07 genuine M04 model forks are both retained. Types and scope
+checks pass. Three real admission/model-fork seam regressions pass3/3,exit0:
+`/tmp/m11-m07-a6-admission-merge.log/.exit`.
+
+The genuine Memory MCP SDK matrix passes **11/11**, no failures/skips,exit0,
+46510ms (`/tmp/m11-memory-sdk-first.log/.exit`). It exercises actual automatic
+MCP write→M03→M06→M07 independent extraction/review→Memory tool/resource for A/B;
+full transitive source restriction before LIMIT; same-user scope and cross-user
+cursor rejection; []/all conversion; restart; actual M09 provider read/search
+failure without cached SQL bodies; held provider revoke/disable/source recreation/
+toggle/Memory deletion/SDK cancellation with B still reading; earlier-page-entry
+deletion; and exact provider-backed historical reads after an owner correction.
+Only external model/provider I/O is synthetic. Memory/Ask/processing services are
+not replaced. Final-code focused receipts follow its next committed freeze.
+
+M08's stable reader core now permits the next actual query composition. Full
+M07/M08 legacy capabilities, final whole-module review, combined/build/emitted/
+required affected gates and the module Draft PR remain outstanding. The following
+full affected receipts belong to the previous protocol/source runtime only;
+they are not claimed for this new Memory increment.
+
 ## Current accepted-M10 protocol/source freeze
 
 Authoritative runtime/test commit:

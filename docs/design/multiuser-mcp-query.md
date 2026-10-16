@@ -5,7 +5,8 @@ Protocol/source runtime freeze
 Accepted source/connector prerequisite [PR #134](https://github.com/utopiafar/mote/pull/134),
 `7572b573b03437ff743652c13181b9fdcf251fda`,
 is composed. M07 `a6bc94c43e34ce91439cfeff6ad669264610d1d1` is an independently
-reviewed interface freeze, NOT final accepted M07. M08 has no accepted freeze.
+reviewed interface freeze now composed on this feature, NOT final accepted M07.
+M08 has supplied a stable core reader freeze; final M08 acceptance is still pending.
 No final M11 acceptance or own Draft PR is claimed yet.
 
 Host adapter must map M01 read credential sourceIds=[] (account-wide) explicitly
@@ -43,10 +44,12 @@ single-user ConnectorContext/Store must never become a production fallback.
 | `mote_file_chunks` | Actual owned file transcript/extracted chunks and paging. Pending. |
 | `mote_activity` | Existing measured content-free capture/activity intervals, not Material metadata or calendar-duration guesses. Pending. |
 | `mote_media_activity` | Existing measured playing intervals and visibility/lock/playback filters, scoped before aggregation. Pending. |
-| `mote_memories` | Actual MemoryHost.bindRead page/read/search/provider body/versions, [] semantics and exact final pins. Pending. |
+| `mote_memories` | Restored genuine MemoryHost.bindRead page/read/search/provider body/versions, [] semantics and exact final pins. Full legacy query filter projection remains part of the M08 composition. |
 | `mote_evidence` | Actual original evidence disclosure and current request grants; no known-UUID shortcut. Pending. |
 
 Resource source-catalog at mote://sources uses the same immutable source facade.
+The new memory-catalog at mote://memories uses the genuine M07 request capability,
+with identical owner/source/pin fences and no cross-tool original-disclosure grant.
 If later query adapters introduce any prompts/templates/subscriptions, explicitly
 inventory and bind each callback to identical host authority. Outbound discovery
 already lists actual resources/templates/tools/prompts with real SDK paging;

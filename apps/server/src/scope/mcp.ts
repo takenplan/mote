@@ -14,6 +14,8 @@ import {identityHash} from './originals.js';
 import {installMcp} from './mcp-schema.js';
 import {McpInbound} from './mcp-inbound.js';
 import {mcpSources} from './mcp-sources.js';
+import {McpMemory} from './mcp-memory.js';
+import type {MemoryHost} from './memory.js';
 import {McpOutbound,outboundSettings,type OutboundConnection} from './mcp-outbound.js';
 
 export const MCP_DOMAIN='mcp';
@@ -22,6 +24,7 @@ export class ScopedMcp{
  readonly inbound:McpInbound;
  private readonly outbound=new McpOutbound();
  private readonly configurations=new Map<string,z.infer<typeof outboundSettings>>();
+ private memory?:MemoryHost;
  private closed=false;
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly ingress:IngressHost){
   installMcp(db);
@@ -33,8 +36,15 @@ export class ScopedMcp{
   this.inbound=new McpInbound(runtime,(context,authorization)=>{
    const sql=this.sql(context),generation=this.state(sql).generation;
    const assert=()=>{runtime.authority.assert(context);authorization.assertCurrent();const state=this.state(sql);if(this.closed||state.deleted||state.generation!==generation)throw new ScopeError('invalid_identity',401);for(const id of authorization.sourceIds)if(authorization.sourcePins[id]!==this.pinSources(context,[id])[id])throw new ScopeError('invalid_identity',401);};
-   const sources=mcpSources(this.data(context),ingress,context,authorization.sourceIds,authorization.write,assert);sources.check();return {sources,assert};
+   const sources=mcpSources(this.data(context),ingress,context,authorization.sourceIds,authorization.write,assert);sources.check();return {sources,assert,...(this.memory?{memory:new McpMemory(this.memory,context,authorization.sourceIds,assert,ids=>this.memorySourceFence(context,ids))}:{})};
   },()=>configuration.instance.current<{allowedOrigins:string[]}>('server').allowedOrigins);
+ }
+ bindMemory(memory:MemoryHost){if(this.memory&&this.memory!==memory)throw new Error('MCP Memory host already bound');this.memory=memory;}
+ private memorySourceFence(context:UserContext,sourceIds?:readonly string[]){
+  const sql=this.sql(context),ids=Object.freeze([...(sourceIds??this.data(context).sources().filter(source=>source.enabled).map(source=>source.id))].sort());
+  const snapshot=()=>sql.all("SELECT e.source_id,e.epoch,e.revision FROM mc_source_epochs e JOIN pd_sources p ON p.user_id=e.user_id AND p.id=e.source_id WHERE e.user_id=$user AND p.user_id=$user AND e.source_id IN (SELECT value FROM json_each(?)) AND json_extract(p.json,'$.enabled')=1 ORDER BY e.source_id",JSON.stringify(ids));
+  const before=snapshot();if(before.length!==ids.length)throw missing();const fingerprint=identityHash(before);
+  return ()=>{if(identityHash(snapshot())!==fingerprint)throw new PrivateDataError('conflict',409);};
  }
  private sql(subject:UserDataSubject,purpose?:'export'|'delete'|'restore'){return new PrivateSql(this.db,subject.userId,()=>{if(this.closed)throw new ScopeError('invalid_identity',401);if('credentialId' in subject)this.runtime.authority.assert(subject);else this.runtime.services.assertSubject(subject,MCP_DOMAIN,purpose!);});}
  private state(sql:PrivateSql):State{let row=sql.get('SELECT * FROM mc_state WHERE user_id=$user') as State|undefined;if(!row){sql.run('INSERT INTO mc_state(user_id) VALUES($user)');row=sql.get('SELECT * FROM mc_state WHERE user_id=$user') as State;}return row;}

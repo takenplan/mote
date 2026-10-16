@@ -1,0 +1,42 @@
+import {z} from 'zod';
+import {evidenceRefId,sourceIdSchema} from '@mote/shared';
+import type {Memory} from '../memory-schema.js';
+import {memoryEvidenceFingerprint} from '../memory-contract.js';
+import {memoryPageSchema} from './memory-data.js';
+import type {MemoryHost} from './memory.js';
+import type {UserContext} from './context.js';
+import {missing} from './private-data-sql.js';
+
+const memoryRef=z.string().max(64).refine(value=>Boolean(evidenceRefId(value,'memory')),'Invalid Memory reference');
+export const mcpMemoryInput={...memoryPageSchema.shape,sourceId:sourceIdSchema.optional(),id:memoryRef.optional(),version:z.number().int().positive().optional()};
+const requestSchema=z.object(mcpMemoryInput).strict();
+
+/** A fresh request capability over the genuine M07 host. Neither a Memory card
+ * nor its citation metadata is an original-disclosure grant for another tool. */
+export class McpMemory{
+ constructor(private readonly host:MemoryHost,private readonly context:UserContext,private readonly sourceIds:readonly string[],private readonly assertParent:()=>void,private readonly sourceFence:(ids?:readonly string[])=>()=>void){}
+ request(sourceId:string|undefined,signal:AbortSignal){
+  this.assertParent();signal.throwIfAborted();
+  if(sourceId!==undefined){sourceIdSchema.parse(sourceId);if(this.sourceIds.length&&!this.sourceIds.includes(sourceId))throw missing();}
+  // M01 [] explicitly means all. M07 [] explicitly means none: do not pass the
+  // credential array through or omit a nonempty allowlist.
+  const sourceIds=sourceId?[sourceId]:this.sourceIds.length?this.sourceIds:undefined;
+  const fence=this.sourceFence(sourceIds),assert=()=>{this.assertParent();signal.throwIfAborted();fence();};
+  const reader=this.host.bindRead(this.context,{sourceIds,assertCurrent:assert});
+  const memories=new Map<string,{id:string;version:number;fingerprint:string}>(),evidence=new Map<string,{id:string;hash:string}>();
+  const remember=(memory:Memory,current=true)=>{
+   assert();if(current){reader.assertMemory(memory);memories.set(memory.id,{id:memory.id,version:memory.version,fingerprint:memory.fingerprint});}
+   for(const record of reader.evidence(memory.evidenceIds))evidence.set(record.id,{id:record.id,hash:memoryEvidenceFingerprint(record)});
+  };
+  const assertCurrent=()=>{assert();for(const pin of memories.values())reader.assertMemory(pin);reader.assertEvidence([...evidence.values()]);assert();};
+  return Object.freeze({assertCurrent,
+   page:async(raw:unknown={})=>{
+    const {id,version,sourceId:_sourceId,...args}=requestSchema.parse(raw);
+    if(_sourceId!==sourceId)throw missing();
+    if(version!==undefined&&!id)throw missing();
+    if(id){const key=evidenceRefId(id,'memory')!,current=await reader.read(key);remember(current);const selected=version!==undefined&&version!==current.version?await reader.read(key,version):current;remember(selected,selected===current);assertCurrent();return {items:[selected],nextCursor:null};}
+    const page=await reader.page(args);for(const memory of page.items)remember(memory);assertCurrent();return page;
+   },
+  });
+ }
+}

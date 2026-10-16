@@ -12,10 +12,14 @@ remotely verified accepted M10 Draft PR134 complete head
 `56bcb1cf6e46304254318fed659efe861113c6ae`. M10 was independently reviewed
 in `/tmp/mote-m11-review-m10.md`; its closed execution conversation is not reused.
 
-**M11 is not fully accepted.** Its actual Memory/Ask/EvidenceReader tools require
-accepted M07/M08. Its accepted M10 connector dependency is composed on this feature.
+**M11 is not fully accepted.** Its accepted M10 connector dependency is composed
+on this feature. The reviewed M07 read-contract freeze
+`a6bc94c43e34ce91439cfeff6ad669264610d1d1` is now also composed by feature-only
+merge `0b0bdfcc98aec66fcebc80cafffe8590252e3bbc`, retaining both M05 model forks
+and M10 atomic onAdmitted/submitSync. This is not final M07 acceptance. Actual
+Ask/EvidenceReader and the full query surface still require the real M08 reader.
 No fake neighboring service supplies those features. The following production
-source capabilities work independently now; the complete legacy query surface
+source and Memory capabilities work now; the complete legacy query surface
 will be restored and validated using the actual scoped query adapters.
 
 ## Host identity and protocol
@@ -69,7 +73,8 @@ inventories all 21 original tools and the source resource individually.
 | `mote_items`, `mote_history` | Actual M02 current immutable source records/history within one explicit source; Coding raw bodies remain reserved for its query projection. |
 | `mote_materials`, `mote_material_read` | Real M06-published/M02 Material, with full transitive source dependency authorization and bounded text windows. |
 | `mote_search` | Literal M02 FTS candidates filtered by owner and selected source in SQL before candidate ordering/limit; no semantic model invocation. |
-| `mote_material`, `mote_file_catalog`, `mote_segments`, `mote_browse`, `mote_retrieve`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_memories`, `mote_evidence` | Await actual accepted M07/M08 query/EvidenceReader/Memory/activity projection. Final M11 acceptance must check each tool and its original/Coding disclosure rules. |
+| `mote_material`, `mote_file_catalog`, `mote_segments`, `mote_browse`, `mote_retrieve`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_evidence` | Await actual accepted M07/M08 query/EvidenceReader/Memory/activity projection. Final M11 acceptance must check each tool and its original/Coding disclosure rules. |
+| `mote_memories`, `mote://memories` resource | Genuine M07 page/read/search/exact historical provider bodies. MCP empty/all scope maps explicitly to undefined; a nonempty allowlist is retained. Every request snapshots source incarnations/revisions and validates all returned current Memory and original evidence pins after later awaits and before SDK publication. Cards remain derived context and do not grant original disclosure to another tool. |
 | inbound resource templates/prompts/subscriptions | No private template/prompt/subscription is registered in this phase. Their absence is explicit, not a simulated successful empty Memory query. |
 
 Write sessions expose only the write tool. They do not gain read or ordinary

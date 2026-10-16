@@ -57,7 +57,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
-    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','connectors','memory']:[]),...(mcp?['mcp-sources']:[])]}));
+    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','connectors','memory']:[]),...(mcp?['mcp-sources']:[]),...(mcp&&memory?['mcp-memory']:[])]}));
     registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority:options.lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
@@ -70,7 +70,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
     if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins);await processing.ready();}
-    if(execution){memory=registerMemory(runtime,storage.db,configuration,execution,plugins!,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);}
+    if(execution){memory=registerMemory(runtime,storage.db,configuration,execution,plugins!,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);mcp?.bindMemory(memory);}
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await mcp?.close();await execution.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});

@@ -15,33 +15,14 @@ import {z} from 'zod';
 import {buildApp} from '../src/app.js';
 import {identityHash} from '../src/scope/originals.js';
 
-const password='Generated-M11-account-password-01',protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'},source=(id='same-source')=>({id,name:'Generated '+id,kind:'mcp',deviceId:'same-device',platform:'import',retention:'snapshot'}),item=(text:string,externalId='same-item',revision='same-revision')=>({externalId,revision,observedAt:'2026-10-16T00:00:00Z',kind:'message',layer:'snapshot',title:'Generated',text});
-const deferred=()=>{let resolve!:()=>void;return {promise:new Promise<void>(r=>resolve=r),resolve};};
-async function fixture(t:TestContext,allowLocal=true){
- const root=mkdtempSync(join(tmpdir(),'mote-m11-')),clients:Client[]=[];let node=await buildApp({dataDir:root,configuration:{document:{version:1,revision:0,connectors:{allowLocalMcp:allowLocal}}}});
- t.after(async()=>{await Promise.allSettled(clients.map(client=>client.close()));await node.app.close();rmSync(root,{recursive:true,force:true});});
- const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown,extra:Record<string,string>={})=>node.app.inject({url,method,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{}),...extra},...(payload===undefined?{}:{payload})});
- const ok=async(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>{const response=await request(token,url,method,payload);assert.equal(response.statusCode,200,response.body);return response.json();};
- await node.accounts.initialize('generated-admin',password);const admin=await ok(undefined,'/api/auth/login','POST',{username:'generated-admin',password,mode:'client'}),users=[];
- for(const label of ['a','b']){const user=await ok(admin.token,'/api/admin/accounts','POST',{username:'generated-'+label,password});const login=await ok(undefined,'/api/auth/login','POST',{username:user.username,password,mode:'client'});users.push({...user,...login});await ok(login.token,'/api/ingress/sources','POST',source());await ok(login.token,'/api/ingress/sources','POST',source('other-source'));}
- const [a,b]=users;
- const mint=(token:string,access:'read'|'write'='read',sourceIds=['same-source'])=>ok(token,'/api/connections/mcp','POST',{access,sourceIds,label:'Generated MCP'});
- const listen=async()=>{if(!node.app.server.listening)await node.app.listen({host:'127.0.0.1',port:0});return new URL('/mcp',node.app.listeningOrigin);};
- const connect=async(grant:any,extra:Record<string,string>={})=>{const endpoint=await listen(),client=new Client({name:'generated-m11-client',version:'1'}),transport=new StreamableHTTPClientTransport(endpoint,{requestInit:{headers:{authorization:'Bearer '+grant.token,...extra}}});clients.push(client);await client.connect(transport);return {client,transport,endpoint};};
- const put=async(token:string,text:string,id='same-item',sourceId='same-source')=>ok(token,'/api/ingress/sources/'+sourceId+'/items','POST',{batchId:'batch-'+id,items:[item(text,id)]});
- const configure=async(token:string,url:string,key:string,ids=['same-source'])=>{const revision=(await ok(token,'/api/configuration')).revision;return ok(token,'/api/configuration/mcpConnections','PUT',{revision,value:{connections:[{id:'same-connection',url,token:key,sourceIds:ids}]}});};
- const restart=async()=>{await Promise.allSettled(clients.map(client=>client.close()));await node.app.close();node=await buildApp({dataDir:root});};
- return {get node(){return node;},root,a,b,admin,request,ok,mint,connect,put,configure,restart};
-}
-const value=(result:any)=>JSON.parse(result.content[0].text);
-async function call(client:Client,name:string,args:Record<string,unknown>={}){return client.callTool({name,arguments:args});}
+import {fixture,password,protocol,source,item,deferred,value,call} from './fixtures/mcp.js';
 
 test('actual HTTP SDK sessions bind identical source/tool/resource IDs to fixed A/B and source-scoped credentials',async t=>{
  const f=await fixture(t);await f.put(f.a.token,'GENERATED_PRIVATE_A');await f.put(f.b.token,'GENERATED_PRIVATE_B');await f.put(f.a.token,'GENERATED_OTHER_A','other-item','other-source');
  const ga=await f.mint(f.a.token),gb=await f.mint(f.b.token),a=await f.connect(ga),b=await f.connect(gb);
  const results=await Promise.all([call(a.client,'mote_items',{sourceId:'same-source'}),call(b.client,'mote_items',{sourceId:'same-source'})]);assert.match(JSON.stringify(results[0]),/GENERATED_PRIVATE_A/);assert.doesNotMatch(JSON.stringify(results[0]),/GENERATED_PRIVATE_B/);assert.match(JSON.stringify(results[1]),/GENERATED_PRIVATE_B/);
  assert.notEqual(a.transport.sessionId,b.transport.sessionId);assert.deepEqual(value(await call(a.client,'mote_sources')).items.map((s:any)=>s.id),['same-source']);assert.equal((await call(a.client,'mote_items',{sourceId:'other-source'})).isError,true);
- const resources=await a.client.readResource({uri:'mote://sources'});assert.doesNotMatch(JSON.stringify(resources),/other-source|GENERATED_PRIVATE_B/);assert.equal((await a.client.listResources()).resources.length,1);
+ const resources=await a.client.readResource({uri:'mote://sources'});assert.doesNotMatch(JSON.stringify(resources),/other-source|GENERATED_PRIVATE_B/);assert.deepEqual((await a.client.listResources()).resources.map(resource=>resource.uri).sort(),['mote://memories','mote://sources']);
  for(const url of ['/api/sources','/api/auth/self','/api/configuration','/api/admin/accounts'])assert.equal((await f.request(ga.token,url)).statusCode,401);
  const stolen=await fetch(a.endpoint,{method:'POST',headers:{Authorization:'Bearer '+gb.token,'Content-Type':'application/json',Accept:'application/json, text/event-stream','Mcp-Session-Id':a.transport.sessionId!},body:JSON.stringify({jsonrpc:'2.0',id:99,method:'tools/list'})});assert.equal(stolen.status,404);assert.doesNotMatch(await stolen.text(),/GENERATED_PRIVATE_A/);
  const scopedOther=await f.connect(await f.mint(f.a.token,'read',['other-source']));assert.match(JSON.stringify(await call(scopedOther.client,'mote_items',{sourceId:'other-source'})),/GENERATED_OTHER_A/);assert.equal((await call(scopedOther.client,'mote_items',{sourceId:'same-source'})).isError,true);
