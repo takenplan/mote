@@ -38,6 +38,10 @@ internal class CentralNoteStore(private val directory: File, private val cipher:
     }
 }
 
+internal object CentralNotes {
+    fun send(client: CentralClient, note: JSONObject): JSONObject = client.post("/api/notes", note)
+}
+
 internal object CentralAttachments {
     const val MAX_BYTES = 50 * 1024 * 1024
     fun upload(client: CentralClient, file: File, name: String, mime: String, deviceId: String,

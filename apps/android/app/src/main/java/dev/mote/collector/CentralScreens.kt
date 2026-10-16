@@ -376,7 +376,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 val items = state.getJSONArray("pending")
                 for (i in 0 until items.length()) {
                     val note = items.getJSONObject(i)
-                    val response = api.post("/api/notes", note)
+                    val response = CentralNotes.send(api, note)
                     CentralDraftWrites.barrier { noteStore.acknowledge(note.getString("id"), response) }
                 }
             }

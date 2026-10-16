@@ -42,6 +42,24 @@ class MultiuserIngressTest {
     private fun client(server: String, token: String, owner: AccountBinding = owner(server, token), current: () -> Boolean = { true }) = Ingress3Client(owner,"same-device","Synthetic Android",{ method,path,body -> request(server,token,method,path,body) },current)
     private fun event(id: String, text: String) = JSONObject().put("id",id).put("deviceId","same-device").put("deviceName","Synthetic Android").put("platform","android").put("capturedAt","2026-01-01T00:00:00Z").put("durationMs",0).put("source","note").put("ocrText",text)
 
+    private fun central(server: String, token: String) = CentralClient(server,token,{ method,url,body,_,_ ->
+        request(server,token,method,url.removePrefix(server),body?.let { JSONObject(String(it,Charsets.UTF_8)) })
+    })
+    @Test fun `actual native note and original attachment use scoped ingress instead of retired routes`() = fixture { f ->
+        val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val api=central(server,token)
+        val note=JSONObject().put("id",UUID.randomUUID().toString()).put("deviceId","native-phone").put("deviceName","Synthetic native")
+            .put("platform","android").put("capturedAt","2026-01-01T00:00:00Z").put("text","Synthetic native note bytes").put("mood","calm")
+        CentralNotes.send(api,note)
+        val saved=request(server,token,"GET","/api/captures/"+note.getString("id"),null)
+        assertEquals(200,saved.first);assertEquals(note.getString("text"),saved.second!!.getString("ocrText"))
+        assertEquals(404,request(server,f.getJSONObject("b").getString("token"),"GET","/api/captures/"+note.getString("id"),null).first)
+        val file=File.createTempFile("m15-native-attachment-",".png").apply { writeBytes(ByteArray(4*1024*1024+7){(it%251).toByte()}) }
+        try {
+            val captured=CentralAttachments.upload(api,file,"Synthetic.png","image/png","native-phone",{1000L})
+            val result=request(server,token,"GET","/api/captures/$captured",null);assertEquals(200,result.first)
+            assertEquals(404,request(server,f.getJSONObject("b").getString("token"),"GET","/api/captures/$captured",null).first)
+        } finally {file.delete()}
+    }
     @Test fun `real Kotlin adapter sends same IDs under A and B and validates complete owner receipts`() = fixture { f ->
         val server=f.getString("address");val a=f.getJSONObject("a");val b=f.getJSONObject("b");val token=a.getString("token");val at=owner(server,token);val bt=owner(server,b.getString("token"));assertNotEquals(at,bt)
         val id=UUID.randomUUID().toString();val record=event(id,"Synthetic shared bytes")
