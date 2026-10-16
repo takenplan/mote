@@ -4,7 +4,7 @@ M08 reuses the existing Agent Harness, transport, evidence disclosure ledger,
 Material original projection, Memory readers, static Insight renderer, delegation
 controls and complete-prefix working-memory planner. The feature composes PR134
 and reviewed real M07 through c5661258cc24628100878b59e96c0cebcb36ee57;
-final module acceptance and PR are pending.
+final command receipts and delivery status are recorded with the module Draft PR.
 
 KEEP: model-led retrieval, fresh original citations, fixed model/price snapshots,
 M05 shared execution, finite typed retry, working lifecycle threshold OR maximum
@@ -13,8 +13,8 @@ CHANGE: all private data, tasks and publications inherit a trusted host user;
 periodic admission retains that user's grant instead of a global owner's authority.
 REMOVE: production global Store access and owner selection by model/tool arguments.
 EXCEPTION: validation uses generated data and loopback scripted external I/O.
-UNKNOWN: final combined/compiled/affected gates and real model quality remain
-separate from the implemented contracts. No old data is cleared or assigned an owner.
+UNKNOWN: fixture execution cannot establish live model quality; final command
+receipts remain separate from the implemented contracts. No old data is cleared or assigned an owner.
 
 ## Host read and execution contracts
 

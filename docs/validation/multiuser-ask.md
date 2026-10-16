@@ -1,6 +1,8 @@
 # M08 multiuser Ask validation
 
-Status: implementation/review in progress. No final M08 acceptance or PR yet.
+The module Draft PR and task delivery record carry final gate outcomes and full
+head/base SHAs. Versioned historical receipts below are not silently promoted to
+final acceptance.
 Production is the scoped app; no legacy Store or fake Memory service is mounted.
 All fixtures are generated and isolated. Models/worker/network I/O use loopback
 scripted substitutes with actual Harness, transport, M04 leases, M05 executor,
@@ -70,16 +72,18 @@ P2s (060/492), and conversation-deleted artifact P1 plus explicit artifact sourc
 filter P2 (9cbc). Reports: /tmp/mote-m11-review-m08.md. These approvals are bounded
 subsets and do not substitute final whole-module review.
 
-## Pending gates and practical limits
+## Final gate contract and practical limits
 
 Real M07 through c5661258cc24628100878b59e96c0cebcb36ee57 is composed,
 including ordinary owner audit/import and retained Coding projection withdrawal.
 The PR135 public contract documents are also composed. Query-visible Memory stays published-only; audit/stale/proposed bodies
-do not become model evidence. Final M07 acceptance and subsequent integration
-fixes remain dependency gates. No SQL body substitute or fake service claims parity. Final focused, all-scope/multiuser actual
-composition, fresh libraries/server build, emitted two-process HTTP and required
-npm run check:affected -- --base origin/codex/mote-multiuser-integration must run
-on the final code. Remote feature head/base and Draft PR must then be verified.
+do not become model evidence. M07 has its own independently versioned
+delivery gate. No SQL body substitute or fake service claims parity. Final focused
+Ask tests and all-scope/multiuser actual composition (including the required server
+suite), fresh libraries/server build, emitted two-process HTTP and required
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration` run on
+the delivered code. The Draft PR/task record carries exact counts, exit codes,
+remote feature head/base and any incomplete gate; an unrun gate cannot pass.
 CI workflows are disabled and unrun, not passed. No deployment, real credentials,
 user data, live external model/provider or physical device check is authorized.
 Synthetic scripted responses establish execution/disclosure contracts, not live
