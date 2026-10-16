@@ -94,6 +94,10 @@ export class IngressHost{
      return {id:captureId,state};
     });assert();return {checkedAt:new Date().toISOString(),items};
    },
+   configureSource:(id:string,value:unknown)=>{source(id);const patch=z.object({name:z.string().trim().min(1).max(200).optional(),retention:z.enum(['snapshot','reference','archive']).optional(),initialSync:z.enum(['all','new_only']).optional()}).strict().parse(value);return sql.transaction(()=>{source(id);return data().updateSource(id,patch);});},
+   sourceContext:(id:string,version?:number)=>{source(id);return data().sourceContext(id,version);},
+   configureSourceContext:(id:string,value:unknown)=>{source(id);return sql.transaction(()=>{source(id);return data().updateSourceContext(id,value);});},
+   sourceHead:(id:string,externalId:unknown)=>{source(id);return {revision:data().sourceItem(id,z.string().min(1).max(1000).parse(externalId))?.revision??null};},
    devices:()=>{if(deviceId||sourceIds)throw new ScopeError('invalid_identity',403);return {items:sql.all('SELECT json FROM ig_devices WHERE user_id=$user ORDER BY id').map(row=>JSON.parse(String(row.json)))};},
    receiveCaptures:(sourceId:string,id:string,values:unknown[],importDeclaration?:unknown)=>{
     const inputs=z.array(captureSchema).min(1).max(500).parse(values);
