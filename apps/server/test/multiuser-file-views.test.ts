@@ -5,6 +5,17 @@ import {fileEvidenceSchema} from '../../../packages/shared/src/files.js';
 import {waitForScopedState} from './fixtures/scoped-process.js';
 import {scopedFilesFixture as fixture} from './fixtures/scoped-files.js';
 
+test('a retained source-item JSON envelope is not an external file original or playback/download authority',async t=>{
+  const f=await fixture(t),file=await f.upload(f.a.token,'real-file','Generated actual file original');
+  const result=await f.checked(f.a.token,'/api/ingress/sources/same-source/items','POST',{batchId:'generated-reference-envelope',items:[{externalId:'reference-only-file',revision:'r1',observedAt:'2026-10-16T00:00:00Z',title:'Generated reference-only file',text:'Generated retained reference text',kind:'file',layer:'original'}]});
+  const reference=result.captures[0];assert.ok(reference.original,'the archive policy retains its JSON envelope');
+  assert.deepEqual((await f.checked(f.a.token,'/api/files')).items.map((item:any)=>item.captureId),[file.id]);
+  for(const path of ['', '/chunks','/export'])assert.equal((await f.request(f.a.token,'/api/files/'+reference.id+path)).statusCode,404,path);
+  assert.equal((await f.request(f.a.token,'/api/files/'+reference.id+'/playback','POST',{})).statusCode,404);
+  assert.equal((await f.request(f.a.token,'/api/captures/'+reference.id)).statusCode,200,'reference capture remains a legitimate owned source record');
+  assert.equal((await f.checked(f.a.token,'/api/files/'+file.id)).hasOriginal,true,'actual M03 external file stays available');
+});
+
 test('actual file views retain originals, current M06 text, owned paging and authenticated ranged playback for equal A/B IDs', async t => {
   const f = await fixture(t), text = 'Generated A original, complete tail Ω🙂';
   const a = await f.upload(f.a.token, 'same-file', text), b = await f.upload(f.b.token, 'same-file', 'Generated B private file');
