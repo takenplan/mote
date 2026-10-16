@@ -6,10 +6,86 @@ Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
 this feature. Final accepted M07/M08 real query tools remain required.
 No mock Memory, Ask, connector or processing service proves them.
 
-## Paused for the shared architecture review
+## Resumed common-contract representative B checkpoint
 
-At the parent's request, M11 stops after its current narrow checks on a clean
-feature commit. It is **not finally accepted and has no final Draft PR**. No new
+PR135 documentation094b69d0c4d623a3b478ae4c05ee249b024ba73b is composed.
+The uniform production runtime now includes M08f10b687e6094f664ad337300e973642c1e28d49a
+(which contains M07f436d7e8e3e78dcda4509731038d64183c5dcee4), M11 status6de,
+and the minimal status correctione857914db9122b096f41964dd35a306bafa39435.
+M07/M08 are still partial module freezes, not final acceptance. The same runtime
+and latest test freeze are recorded in `/tmp/mote-m11-representative-b-handoff.md`.
+
+The agreed minimal extraction is **test-only** `fixtures/scoped-query-accounts.ts`:
+actual Accounts initialization/login, A/B matching source IDs, production HTTP
+request helpers, deferred gate and bounded production-state wait. Both existing
+`fixtures/mcp.ts` and `fixtures/ask-reader-host.ts` consume it. Existing app lifecycle,
+SDK transport, original fixtures, domain data and assertions remain where they were;
+there is no replacement service, test-mode host or generic pin/executor framework.
+Before extraction, the unchanged automatic-Memory SDK positive and earlier-original
+provider-await regression pass2/2,EXIT0,7364.78925ms; after extraction those two plus
+the genuine Ask first-receipt case pass3/3,EXIT0,9434.743ms:
+`/tmp/m11-b-common-fixture-{before,after}.log/.exit`.
+
+New `multiuser-mcp-representative.test.ts` provides reusable B-chain setup over
+actual MCP write→M03→automatic M06→independently reviewed M07→installed external
+provider→actual Ask Harness→HTTP SDK. It waits for real publication and uses matching
+A/B source/external/revision/model/run/conversation/turn IDs with distinct synthetic
+private body markers so disclosure is observable. A/B source/original byte collision
+coverage also remains in the existing ingress matrix; these three tests do not
+claim that every injected field is identical.
+
+- `representative B preserves real automatic Memory to Harness to SDK results for equal A/B IDs across restart`:
+  actual model tool calls read Memory, acquire a Material catalog pin and disclose
+  its original, then SDK reads owned artifact/Memory/formal original; foreign artifacts
+  and ordinary private API access using an MCP credential are denied. Restart keeps
+  exact returned bytes and does not replay successful model work.
+- `representative B narrows genuine provider keys and SDK originals before LIMIT without changing B`:
+  an actual second-source write creates a second reviewed Memory; narrow candidates
+  and the actual provider read/search keys exclude it before LIMIT. Frozen host scope,
+  SDK exact/read/source denial and B's unchanged resource bytes remain asserted.
+- `representative B keeps the first actual Ask artifact private when MCP is revoked during a later provider read`:
+  a real installed provider barrier holds the later Memory read after artifact expansion;
+  credential revocation suppresses the entire result, including the earlier artifact.
+  B bytes remain equal and ordinary A Ask metadata keeps its own valid authority.
+
+Command `node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-mcp-representative.test.ts`:
+**3/3**,0fail/cancel/skip,EXIT0,31709.741917ms,
+`/tmp/m11-representative-b-final.log/.exit`. Servertypes/scope EXIT0:
+`/tmp/m11-b-fixture-{types,scope}.log/.exit`.
+
+Initial new-fixture attempts remain failures in
+`/tmp/m11-representative-b-initial.log/.exit` and
+`/tmp/m11-representative-b-fixed-fixture.log/.exit`. They do not establish a production
+bug or valid production RED: the script first tried a known Material ref without this
+run's catalog pin (actual tool correctly denied it), then expected original bytes in a
+Memory summary. The corrected fixture obtains the actual run pin, reads the formal
+original explicitly and keeps the original full-body/citation/denial goals. No runtime
+was modified for these fixture corrections.
+
+Independent review did find a separate confirmed **new status availability P2**:
+deleting only MCP caused ordinary A `/api/context/status` to fail401 while B stayed200.
+Original probe was persisted at RED6ac0fd44e050fe59b303d3a19dbad64369cc30d1 and
+fails0/1,EXIT1,1283.883041ms, `/tmp/m11-domain-status-delete-red.log/.exit`.
+Minimal fixe857 changes only the already host-authorized operational status reader to
+return an empty map for a deleted MCP domain; direct MCP admission/session rejection
+and arbitrary error propagation remain. Original probe1/1 EXIT0; adjacent status/restart/
+direct-MCP-deletion denial4/4 EXIT0,2858.78ms:
+`/tmp/m11-domain-status-delete-{green,adjacent}.log/.exit`.
+M08 independently reran the byte-identical original probe on literal exacte857,
+1/1 EXIT0,2075.75ms, `/tmp/m08-review-m11-e857-delete-status.log/.exit`, closing
+its P2. This is not classified as cross-user leakage or an old-flow bug.
+
+Fresh `npm run build:libs` on the composed runtime exits0,
+`/tmp/m11-f79-libs-build.log/.exit`. This fixes the stale ignored agent-consumer dist
+before the new real Harness checks. No current whole-scope, full-MCP, server emitted,
+required affected/Android or CI result is claimed by the bounded B checkpoint.
+M07's full retained/history/restore and actual running-I/O SIGKILL A/C work remains
+pending; the public review's old search1→0 sample alone does not close those paths.
+
+## Historical pause for the shared architecture review
+
+At this historical checkpoint the parent requested M11 stop after its current
+narrow checks on a clean feature commit; the resume checkpoint above supersedes it. It is **not finally accepted and has no final Draft PR**. No new
 full affected/Android checks or implementation expansion starts during this pause.
 The exact runtime/HEAD and reusable-boundary inventory are recorded in
 `/tmp/mote-m11-architecture-pause-handoff.md`.

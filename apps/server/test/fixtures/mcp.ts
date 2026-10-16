@@ -1,5 +1,4 @@
 import type {TestContext} from 'node:test';
-import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -8,16 +7,12 @@ import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/st
 import {buildApp} from '../../src/app.js';
 import type {PluginReleaseTransport} from '../../src/plugin-release.js';
 
-export const password='Generated-M11-account-password-01',protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'},source=(id='same-source')=>({id,name:'Generated '+id,kind:'mcp',deviceId:'same-device',platform:'import',retention:'snapshot'}),item=(text:string,externalId='same-item',revision='same-revision')=>({externalId,revision,observedAt:'2026-10-16T00:00:00Z',kind:'message',layer:'snapshot',title:'Generated',text});
-export const deferred=()=>{let resolve!:()=>void;return {promise:new Promise<void>(r=>resolve=r),resolve};};
+import {source,item,queryHttp,queryAccounts} from './scoped-query-accounts.js';
+export {password,protocol,source,item,deferred} from './scoped-query-accounts.js';
 export async function fixture(t:TestContext,allowLocal=true,options:{pluginReleaseTransport?:PluginReleaseTransport}={}){
  const root=mkdtempSync(join(tmpdir(),'mote-m11-')),clients:Client[]=[],cleanup:Array<()=>void>=[];let node=await buildApp({dataDir:root,configuration:{document:{version:1,revision:0,connectors:{allowLocalMcp:allowLocal}}}},options);
  t.after(async()=>{for(const callback of cleanup)callback();await Promise.allSettled(clients.map(client=>client.close()));await node.app.close();rmSync(root,{recursive:true,force:true});});
- const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown,extra:Record<string,string>={})=>node.app.inject({url,method,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{}),...extra},...(payload===undefined?{}:{payload})});
- const ok=async(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>{const response=await request(token,url,method,payload);assert.equal(response.statusCode,200,response.body);return response.json();};
- await node.accounts.initialize('generated-admin',password);const admin=await ok(undefined,'/api/auth/login','POST',{username:'generated-admin',password,mode:'client'}),users=[];
- for(const label of ['a','b']){const user=await ok(admin.token,'/api/admin/accounts','POST',{username:'generated-'+label,password});const login=await ok(undefined,'/api/auth/login','POST',{username:user.username,password,mode:'client'});users.push({...user,...login});await ok(login.token,'/api/ingress/sources','POST',source());await ok(login.token,'/api/ingress/sources','POST',source('other-source'));}
- const [a,b]=users;
+ const {request,ok}=queryHttp(()=>node),{admin,a,b}=await queryAccounts(node,ok);
  const mint=(token:string,access:'read'|'write'='read',sourceIds=['same-source'])=>ok(token,'/api/connections/mcp','POST',{access,sourceIds,label:'Generated MCP'});
  const listen=async()=>{if(!node.app.server.listening)await node.app.listen({host:'127.0.0.1',port:0});return new URL('/mcp',node.app.listeningOrigin);};
  const connect=async(grant:any,extra:Record<string,string>={})=>{const endpoint=await listen(),client=new Client({name:'generated-m11-client',version:'1'}),transport=new StreamableHTTPClientTransport(endpoint,{requestInit:{headers:{authorization:'Bearer '+grant.token,...extra}}});clients.push(client);await client.connect(transport);return {client,transport,endpoint};};
