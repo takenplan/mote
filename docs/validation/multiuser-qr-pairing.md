@@ -151,10 +151,45 @@ with its current M06 physical-call and unknown-result fences, with no newly
 confirmed issue. It did not run tests or modify this workspace. QR authentication
 producer bytes remain at the original `6a84ec6a` freeze.
 
-The repaired full affected gate is **pending**. Narrow GREEN does not supersede
-the completed failing gate or establish central-runner/release-tool acceptance.
-The previous full process group was verified empty and its log had no writers
-before explicit RELEASE; the next full run waits for fresh serial allocation.
+The repaired composition then ran the **complete required command to natural
+EXIT 0**, 983 seconds, at `489943ad790103dfa3ec5f0169753484c8e9db81`:
+shared **192/192**, agent **317 pass + 1 existing opt-in skip**, Server **2677 pass,
+0 fail/cancelled, 2 existing skips (2679 total)**, Web **515/515**, central runner
+passed, release tools **52/52**. All four builds and typechecks passed. The four
+previously failing cases passed in this full run. Evidence is local generated-only
+`/tmp/mote-qr-repaired-affected.log` and `.exit`. The owned process group 22906
+was verified empty and the log had no writers before explicit heavy RELEASE.
+
+During that run, Joint found a further real cleanup defect outside the existing
+assertions: disabling an account made an acquired pin's release reauthorize and
+throw `invalid_identity`. The shared pin's longer held-response lifetime made
+this cleanup boundary relevant to the preceding repair. This is a new confirmed
+regression scenario, not a reason to label the earlier completed suite a failure
+or to claim it covered this case.
+
+The untouched full snapshot continued while an isolated committed-source copy
+ran real service/SQLite regression cases: primitive and held-response **0/2 RED**,
+exit 1. A separate real held-response case also failed with remaining pin count 1.
+The minimal repair is `1d6d933c6eda6b8fb8baa1e01db34024872359b2`:
+`PrivateSql.pinDisposer` authorizes preparation of one fixed owner/UUID DELETE;
+`Originals.pin` prepares it before the still-authorized INSERT and returns it only
+on success. The zero-argument disposer can remove only that pin, returns no data,
+and cannot renew reads, allocate pins or restore grants. Ordinary SQL remains
+authorized. It changes no external-call/unknown-result bookkeeping.
+
+Actual final code in this workspace passes **9/9**, no skips, 11.783 seconds wall
+time: A's two pins and B's equal-byte pin remain distinct; duplicate disposal only
+removes the allocated UUID; retired A reads/new holds stay denied; B remains
+usable; all eight existing held-response retirement cases acquire one pin and
+release it after actual completion. Their original no-publication/A/B assertions
+remain. Evidence: `/tmp/mote-qr-pin-candidate-red.log`,
+`/tmp/mote-qr-held-pin-red.log`, `/tmp/mote-qr-pin-final-own-green.log` and exit
+files. Intermediate candidate runs are not substituted for that final-code result.
+Bounded independent source review accepted the exact cleanup capability and mint
+ordering without running additional tests.
+
+The complete **post-disposer** affected gate is pending fresh serial allocation.
+The completed green `489943ad` check does not cover the new disposer commit.
 
 Still unverified here: Web QR rendering/navigation retirement, Android scanner
 and pending journal/account-switch lifecycle, Desktop v2 import, physical camera,
