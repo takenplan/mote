@@ -6,7 +6,67 @@ Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
 this feature. Final accepted M07/M08 real query tools remain required.
 No mock Memory, Ask, connector or processing service proves them.
 
-## Superseding real composition under validation
+## Current bounded composition receipts
+
+Exact runtime composition `96f955a687279b110c17cca20251a00ae996f3b7` contains
+M07 closure443c201a9159d77120d990a1b2d888cb2015d139 and M08
+73244e11f4625f3c1e0674b1f8629d8295c05b76. Both precise freezes are composed,
+not declared final accepted modules. Types0 and scope0:
+`/tmp/m11-96f-types.log/.exit`, `/tmp/m11-732-composition-scope.log/.exit`.
+Ingress merge retains M10 exact original formats, the same transactional
+onAccepted/savepoint/onAdmitted seams and adds M07 fresh-only import binding.
+App merge keeps MCP bindMemory/bindAsk and shutdown fences plus ownerQuestions.
+
+Prior exactbd23220d0543233dd86ff60d6801c36820fc3f69 complete MCP matrix passes
+**60/60**,0fail/cancel/skip,exit0,135184.817542ms:
+`node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-mcp*.test.ts`,
+`/tmp/m11-bd23220d-focused.log/.exit`. Later runtime fixes below require fresh
+whole-suite/combined/build/emitted/affected checks; this60 is not relabeled as
+an exact96f full receipt.
+
+Two later genuine projection corrections preserve original strict assertions:
+
+- Current formal history was wrongly marked `current:false` because canonical
+  block IDs differ from the raw logical head. Actual SDK0/1exit1 before, then
+  legacy inventory/paging/current-history3/3exit0,7938.169333ms after7c85300e:
+  `/tmp/m11-history-current-{before,fixed}.log/.exit`.
+- Independent M08 review found `mote_file_chunks(limit=1)` returned3 actual
+  canonical blocks. Original probe0/1exit1,2274.468708ms,
+  `/tmp/m08-review-m11-file-limit.log/.exit`. M08 host732 honors its real limit
+  and exact canonical revision; own adapter31e931ca advances by requested page
+  size. The original peer probe is byte-identical (SHA256
+  `bcd9247001c8bc100ea6db762c3eeda874164cb66d6855ae3d1d19db028dbddb`) in a literal96f
+  archive and passes1/1exit0,1484.642334ms:
+  `/tmp/m11-peer-original-file-limit-fixed.log/.exit`. Durable SDK source/native
+  block/file-limit/owner/query/projection/restart cases3/3exit0,4249.456625ms:
+  `/tmp/m11-732-file-limit-fixed.log/.exit`. This includes all blocks exactly
+  once with limit1 and owner-only audit API refusal for MCP credentials.
+  Additional exact retired-file-ID scenario passes1/1exit0,1217.643542ms,
+  `/tmp/m11-732-retired-file-id.log/.exit`; its old canonical ID cannot return
+  newly revised body text.
+
+Own ingress composition at117eaa37a9d0c93d38f7eb5c15856fac413162e4 passes actual
+M10 connector two-process, MCP credential isolation, exact fresh import through
+M06+Memory, automatic M03/M06 pipeline and caught bad-child rollback **5/5**,
+exit0,13357.687334ms, `/tmp/m11-443-production-seams.log/.exit`.
+
+M07 closure443 owner audit/event subset independently passes5/5 plus three added
+real provider-await capture DELETE/plugin-stop/MCP-private-authority barriers3/3,
+all exit0; `/tmp/m11-review-m07-443-owner-audit.log/.exit`,
+`/tmp/m11-review-m07-443-audit-races-final.log/.exit`. Initial2/3 failure was a
+probe omitting the safe provider-revocation401 status; no body leaked, and only
+that expected blocked-status set was corrected before the complete3 rerun.
+M07 feedback1d actual two-process SIGKILL independently1/1exit0,36077.261291ms,
+`/tmp/m11-review-m07-1d-feedback-process.log/.exit`. M08 exact80cf bounded
+pagination/worker/full-longturn/span pause-restart independent4/4exit0,
+`/tmp/m11-review-m08-80cf-{narrow,working}.log/.exit`.
+
+Current whole combination, fresh compiled smoke, required affected, final accepted
+M07/M08 and M11 Draft PR are pending. Historical gates below remain as labeled;
+Checks/Component checks are disabled/unrun, and no integration/main edit or PR
+merge is authorized or performed.
+
+## Historical4cb real composition
 
 Exact runtime/test composition `4cb0e9e8502c2b854dde9f6f72fc39415290bfd0` adds
 M07 partial parity `6d3661de8a7f2fa4a9633d194632f21ca77c0685` and M08 fix

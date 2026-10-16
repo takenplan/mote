@@ -1,12 +1,13 @@
 # M11 real query composition
 
-M11 core runtime `4cb0e9e8502c2b854dde9f6f72fc39415290bfd0` composes accepted
-[PR #134](https://github.com/utopiafar/mote/pull/134) full head
-`7572b573b03437ff743652c13181b9fdcf251fda`, actual M08 partial production freeze
-`9cbc863bdb7c2bc337ce820f4c566d8f10ce9923` and M07 question/feedback/daily partial freeze
-`6d3661de8a7f2fa4a9633d194632f21ca77c0685` (including pin/filter/default-content fixes). M07/M08 are tested interface/core
-freezes, not final accepted modules. No final M11 acceptance or own Draft PR is
-claimed. Integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
+M11 current real composition is `96f955a687279b110c17cca20251a00ae996f3b7`.
+It retains accepted [PR #134](https://github.com/utopiafar/mote/pull/134) complete
+head `7572b573b03437ff743652c13181b9fdcf251fda`, actual M08 production freeze
+`73244e11f4625f3c1e0674b1f8629d8295c05b76` and M07 owner-audit/import freeze
+`443c201a9159d77120d990a1b2d888cb2015d139`. These are precise tested capability
+freezes; their final whole-module acceptance and M11 final gates remain pending.
+No final M11 acceptance or own Draft PR is claimed. Integration remains
+`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 
 The host maps M01 read credential sourceIds=[] (account-wide) explicitly to
 M07/M08 sourceIds=undefined. Their [] grants nothing. Narrow lists remain copied,
@@ -26,11 +27,11 @@ static tokens are quarantined, with no production read fallback.
 | --- | --- |
 | `mote_put_item` | Real M03 immutable intake into an explicitly granted existing source; actual automatic M06 processing for archive input. No external mutation or source creation. |
 | `mote_sources`, `mote://sources` | Enabled owned source metadata and actual M10 connector ledger status; no adapter, model, credential read or external discovery to obtain status. |
-| `mote_items`, `mote_history` | M08 current query-visible views and logical history through actual M06 pd_material_captures mapping, including processed:<captureId> origins. Current formal projection replaces raw archive/Coding/screenshot access. |
+| `mote_items`, `mote_history` | M08 current query-visible views and logical history through actual M06 pd_material_captures mapping, including processed:<captureId> origins. Current formal projection replaces raw archive/Coding/screenshot access; its canonical blocks retain the correct current-history flag. |
 | `mote_materials`, `mote_material`, `mote_material_read` | Current formal Materials; complete transitive sources checked before candidates/LIMIT. Exact revision pins, ready-only partial text and shared UTF16-safe windows. |
 | `mote_browse`, `mote_search`, `mote_retrieve` | Real scoped lexical query candidates and signed owner/scope/filter cursors. One complete expandable Material locator per entity; pending-only text cannot select a candidate before LIMIT. |
 | `mote_file_catalog` | Literal existing URI directory/file paging over genuine M03 uploads and M06 formal replacements. Mixed-source candidates excluded before grouping/counts/LIMIT. Parent/source/scope/owner cursor replay rejected. |
-| `mote_segments`, `mote_file_chunks` | Actual Material projections and original-linked processed blocks, ready-only text, exact source and revision fences. |
+| `mote_segments`, `mote_file_chunks` | Actual Material projections and original-linked processed blocks, ready-only text, exact source and revision fences. File chunk limits and offsets operate on canonical blocks; retired canonical IDs cannot map to a new revision. |
 | `mote_read`, `mote_evidence` | Genuine query-visible original, Material, Memory and owned artifact reads. Existing session/collection navigation intersects trusted scope. Known raw screenshot/Coding/unowned artifact IDs do not grant disclosure. |
 | `mote_context` | Actual Memory and record channels with inclusion flags, minimum1000 character budget, complete expandable Material locators and durable signed channel cursors. |
 | `mote_status` | Actual own archive/index/Memory watermarks and connector ledger state; availability is not fabricated. |
@@ -72,9 +73,13 @@ The [validation record](../validation/multiuser-m11-mcp.md) separates developmen
 receipts, closed independent findings and the older protocol-only full gates.
 Remaining gates are final accepted M07/M08 capability composition, final whole
 M11 independent review, actual combined/build/emitted/affected checks on that final
-code, then a Draft PR with verified remote head/base. M07 daily/feedback/owner-question production code is now composed and independently
-reviewed within explicit bounds; final stale/proposed/import/query/recovery parity
-remains unaccepted. M08 canonical multi-block continuation/read-file evidence and
-final recovery checks are still being restored and verified. Checks/Component checks remain disabled and unrun.
+code, then a Draft PR with verified remote head/base. M07 daily, feedback,
+owner questions, owner-only proposed/stale audit and exact fresh import attribution
+are composed. Audit work is `usableAsMemory:false` and cannot be obtained with
+an MCP credential or through `bindRead`; published query Memory remains the
+read capability. Independent review is bounded, with final M07 gates separate.
+M08 canonical paging, file range bridge and durable compaction are restored;
+periodic working-memory/automatic Insight lifecycle and final M08 acceptance
+remain pending. Checks/Component checks remain disabled and unrun.
 Real credentials, personal data, live external providers/models, deployments and
 physical-device validation are outside this task's authorization.
