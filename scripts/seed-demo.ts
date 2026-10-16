@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { apiClient } from './client.js';
-const request=apiClient();
+import {ingressKey,requireAccountReceipt} from '../apps/desktop/src/ingress-client.js';
+const request=await apiClient();
 const now=Date.now();
 const sources=[
   {app:'合成 · 编辑器',id:'fixture.editor',text:'【合成演示，非真实活动】Mote 设计笔记：端点离线保存脱敏截图，中央节点独立部署。先完成幂等上传和证据检索。',color:'#315e50'},
@@ -11,6 +12,9 @@ const sources=[
 for(let i=0;i<24;i++) {
   const source=sources[Math.floor(i/4)%sources.length];const mobile=i%3===0;
   const image=await sharp(Buffer.from(`<svg width="960" height="600" xmlns="http://www.w3.org/2000/svg"><rect width="960" height="600" fill="#f3f1e9"/><rect x="36" y="36" width="888" height="70" rx="14" fill="${source.color}"/><text x="65" y="82" font-family="sans-serif" font-size="26" fill="white">MOTE / SYNTHETIC FIXTURE</text><text x="65" y="165" font-family="sans-serif" font-size="22" fill="#203a31">Personal context, with evidence.</text><rect x="65" y="205" width="730" height="18" rx="9" fill="#d6dbd2"/><rect x="65" y="245" width="570" height="18" rx="9" fill="#d6dbd2"/><rect x="65" y="285" width="650" height="18" rx="9" fill="#d6dbd2"/><rect x="65" y="360" width="240" height="125" rx="16" fill="${source.color}"/><text x="340" y="420" font-family="sans-serif" font-size="18" fill="#66736a">Generated test data only.</text></svg>`)).webp({quality:72}).toBuffer();
-  await request('/api/captures',{id:randomUUID(),deviceId:mobile?'fixture-android':'fixture-mac',deviceName:mobile?'演示 · Android':'演示 · Mac',platform:mobile?'android':'macos',capturedAt:new Date(now-(24-i)*15000).toISOString(),durationMs:15000,appName:source.app,appId:source.id,windowTitle:'合成演示资料',ocrText:source.text,imageBase64:image.toString('base64'),imageMime:'image/webp',source:'screen',privacy:{excluded:false,redacted:false,mode:'local'}});
+  const capture={id:randomUUID(),deviceId:request.identity.credential.deviceId??(mobile?'fixture-android':'fixture-mac'),deviceName:mobile?'演示 · Android':'演示 · Mac',platform:mobile?'android':'macos',capturedAt:new Date(now-(24-i)*15000).toISOString(),durationMs:15000,appName:source.app,appId:source.id,windowTitle:'合成演示资料',ocrText:source.text,imageBase64:image.toString('base64'),imageMime:'image/webp',source:'screen'},sourceId='cli-demo-'+ingressKey([capture.deviceId,capture.platform]).slice(0,40),batchId='capture-'+ingressKey(capture);
+  await request('/api/ingress/devices',{id:capture.deviceId,name:capture.deviceName,platform:capture.platform},'POST');
+  await request('/api/ingress/sources',{id:sourceId,deviceId:capture.deviceId,name:capture.deviceName,kind:'mote.cli',platform:capture.platform,retention:'archive'},'POST');
+  const receipt=await request(`/api/ingress/sources/${sourceId}/captures`,{batchId,items:[capture]},'POST');requireAccountReceipt(receipt,{account:request.account},sourceId,batchId,[capture]);
 }
 console.info('Imported 24 clearly labeled synthetic observations. No personal screen was captured.');

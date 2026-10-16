@@ -124,3 +124,27 @@ Additional old capability gap reported by M14: `scripts/client.ts` and
 `scripts/import-files.ts` still use the legacy wire/Ingress, token-hash binding
 and old source routes. Their old fake-fetch tests do not prove a scoped CLI
 consumer. Track this explicitly in M16's old-capability closure.
+
+## CLI M01/M03 consumer checkpoint
+
+The existing `scripts/client.ts`, `import-files.ts` and synthetic `seed-demo.ts`
+now reuse Desktop's actual `testConnection`, `ingressRequest`, account key,
+connection binding and SourceSync. Confirmation precedes state/spool open;
+origin/deployment/user partitions replace credential hashes. Existing nonempty
+unmarked state is preserved and rejected, and token rotation cannot change owner.
+Explicit selected YAML/credential file precedence remains authoritative. The
+retired implicit owner access-token file and v2 POST fallback are removed.
+SourceSync's local schema version 4 / ingressVersion 2 checkpoint is unchanged;
+its `request.account` selects the actual wire-2 / Ingress-3 transport.
+
+`/tmp/m16-cli-contract-red.log/.exit`: actual generated account/server/file scan
+against the old CLI fails HTTP 426 (exit 1). Earlier loopback EPERM and missing
+credential in the selected generated YAML were environment/fixture failures,
+not production RED. `/tmp/m16-cli-green2.log/.exit`: actual scan A/B, same-owner
+credential rotation, exact original SQL/FS publication and the second real
+synthetic seed-demo consumer pass 1/1, exit 0. No real files/service were imported.
+`/tmp/m16-cli-unit-final3.log/.exit`: 5/5, exit 0, including unchanged old outbox,
+wrong owner, linked spool and offline dry run. Its one legacy v2 SourceSync test
+is deliberately an algorithm characterization, not scoped protocol acceptance.
+New binding test's first two attempts read the obsolete JSON state path; this
+fixture error was corrected to SourceSync's actual SQLite path.

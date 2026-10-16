@@ -18,7 +18,7 @@ test('actual CLI scan/SourceSync uses M01 identity and M03 original upload for A
  for(const username of ['generated-alice','generated-bob'])await node.accounts!.createAccount(context,node.authority,{username,password,administrator:false});
  const a=await node.accounts!.login('generated-alice',password,'generated','client',0),b=await node.accounts!.login('generated-bob',password,'generated','client',0);
  const url=await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(config,serializeConfigDocument({version:1,revision:0}));writeFileSync(file,'Generated exact CLI original');
- const run=(token:string)=>promisify(execFile)(process.execPath,['--import','tsx',script,'--root',file,'--retention','archive'],{env:{...process.env,MOTE_CONFIG_FILE:config,MOTE_URL:url,MOTE_TOKEN:token},timeout:30000});
+ const run=(token:string)=>{writeFileSync(config,serializeConfigDocument({version:1,revision:0,server:{host:'127.0.0.1',port:Number(new URL(url).port),token}}));return promisify(execFile)(process.execPath,['--import','tsx',script,'--root',file,'--retention','archive'],{env:{...process.env,MOTE_CONFIG_FILE:config},timeout:30000});};
  assert.match((await run(a.token)).stdout,/Received 1 changed files/);
  assert.match((await run(b.token)).stdout,/Received 1 changed files/);
  const db=new DatabaseSync(join(vault,'mote.sqlite'));t.after(()=>db.close());assert.equal(db.prepare('SELECT count(*) n FROM ig_originals WHERE user_id=?').get(a.userId)!.n,1);assert.equal(db.prepare('SELECT count(*) n FROM ig_originals WHERE user_id=?').get(b.userId)!.n,1);
@@ -26,4 +26,7 @@ test('actual CLI scan/SourceSync uses M01 identity and M03 original upload for A
  assert.match((await run(rotated.token)).stdout,/Received 0 changed files/,'credential rotation keeps the same durable owner checkpoint');
  const names=readdirSync(join(directory,'file-sync','accounts'));assert.equal(names.length,2);const markers=names.map(name=>JSON.parse(readFileSync(join(directory,'file-sync','accounts',name,'connection-binding.json'),'utf8')));assert.deepEqual(markers.map(marker=>marker.userId).sort(),[a.userId,b.userId].sort());assert.ok(markers.every(marker=>marker.deploymentId===node.deploymentId&&!('credentialHash' in marker)));
  assert.equal(db.prepare('SELECT count(*) n FROM pd_captures').get()!.n,2,'unchanged same-owner CLI replay does not import twice');
+ const seed=fileURLToPath(new URL('../../../scripts/seed-demo.ts',import.meta.url));writeFileSync(config,serializeConfigDocument({version:1,revision:0,server:{host:'127.0.0.1',port:Number(new URL(url).port),token:rotated.token}}));
+ assert.match((await promisify(execFile)(process.execPath,['--import','tsx',seed],{env:{...process.env,MOTE_CONFIG_FILE:config},timeout:30000})).stdout,/Imported 24/);
+ assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(a.userId)!.n,25);assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(b.userId)!.n,1);
 });
