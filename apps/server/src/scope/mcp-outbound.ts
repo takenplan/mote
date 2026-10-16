@@ -19,11 +19,11 @@ type Binding={context:UserContext;connection:OutboundConnection;sql:PrivateSql;d
 /** SDK clients, headers, sessions and cancellation belong to one invocation of
  * one user connection. No global client/credential/session cache is shared. */
 export class McpOutbound{
- private readonly active=new Set<{user:string;client:Client;abort:AbortController;settled:Promise<unknown>}>();
+ private readonly active=new Set<{user:string;connection:string;fingerprint:string;client:Client;abort:AbortController;settled:Promise<unknown>}>();
  private readonly queues=new Map<string,Promise<unknown>>();
  private closed=false;
  private invoke<T>(binding:Binding,work:(client:Client,signal:AbortSignal)=>Promise<T>,signal?:AbortSignal):Promise<T>{
-  let settle!:()=>void;const settled=new Promise<void>(resolve=>settle=resolve),client=new Client({name:'mote-source-importer',version:'1'},{capabilities:{}}),abort=new AbortController(),entry={user:binding.context.userId,client,abort,settled};
+  let settle!:()=>void;const settled=new Promise<void>(resolve=>settle=resolve),client=new Client({name:'mote-source-importer',version:'1'},{capabilities:{}}),abort=new AbortController(),entry={user:binding.context.userId,connection:binding.connection.id,fingerprint:identityHash(binding.connection),client,abort,settled};
   const run=async()=>{
    const assert=()=>{if(this.closed)throw new ConnectorError('connector_closed',503);binding.assert();abort.signal.throwIfAborted();signal?.throwIfAborted();};
    assert();const endpoint=remoteUrl(binding.connection.url,binding.allowLocal),transport=new StreamableHTTPClientTransport(endpoint,{fetch:restrictedFetch(endpoint,binding.allowLocal,assert),requestInit:{headers:binding.connection.token?{Authorization:'Bearer '+binding.connection.token}:{},signal:AbortSignal.any([abort.signal,...(signal?[signal]:[])])}});
@@ -86,5 +86,6 @@ export class McpOutbound{
   this.queues.set(key,work);void work.finally(()=>{if(this.queues.get(key)===work)this.queues.delete(key);}).catch(()=>{});return work;
  }
  async closeUser(user:string){const entries=[...this.active].filter(entry=>entry.user===user);for(const entry of entries)entry.abort.abort();await Promise.allSettled(entries.map(async entry=>{await entry.client.close();await entry.settled;}));}
+ async retireChanged(user:string,connections:readonly OutboundConnection[]){const entries=[...this.active].filter(entry=>entry.user===user&&entry.fingerprint!==identityHash(connections.find(connection=>connection.id===entry.connection)??null));for(const entry of entries)entry.abort.abort();await Promise.allSettled(entries.map(async entry=>{await entry.client.close();await entry.settled;}));}
  async close(){this.closed=true;for(const entry of this.active)entry.abort.abort();await Promise.allSettled([...this.active].map(async entry=>{await entry.client.close();await entry.settled;}));await Promise.allSettled([...this.queues.values()]);}
 }

@@ -1,9 +1,10 @@
 # M11 protocol/source phase validation
 
 This record covers the protocol/source phase, not complete M11 acceptance.
-The baseline is PR133 `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`.
-Final accepted M07/M08 real query tools and accepted M10 combination remain
-required. No mock Memory, Ask, connector or processing service proves them.
+The initial baseline is PR133 `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`.
+Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
+this feature. Final accepted M07/M08 real query tools remain required.
+No mock Memory, Ask, connector or processing service proves them.
 
 ## Executed development evidence
 
@@ -57,13 +58,38 @@ that set in its signed cursor, eliminating post-page filtering.
 ## Gates still required
 
 The phase needs an independent code review and a committed precise final-code
-receipt. Full M11 additionally requires actual accepted M07/M08/M10 production
+receipt. Full M11 additionally requires actual accepted M07/M08 production
 composition, the entire legacy read/tool/resource/prompt exposure audit, expanded
 Memory/Ask disclosure/model-input/revocation tests, final actual combined suite,
 fresh Server/Web builds, emitted-code smoke and
 `npm run check:affected -- --base origin/codex/mote-multiuser-integration`.
 M10 owns the sole full-affected/Android slot; M11 has not run either concurrently.
 No Draft PR or complete M11 acceptance is claimed by this phase record.
+
+## Accepted M10 composition and connection-instance repair
+
+Own clean feature merge `56bcb1cf6e46304254318fed659efe861113c6ae` includes
+accepted PR134 full `7572b573b03437ff743652c13181b9fdcf251fda`, verified with
+`git ls-remote` and fetched by exact PR ref. It preserves both domain registrars,
+the M06/M10 source formats/processor registry, M05 savepoint/onAdmitted seams,
+and closes MCP before execution before connector/processing/plugin workers.
+No remote or local integration/main branch was moved.
+
+Exact56 all-scope/multiuser combination passed304/304,0fail/cancel/skip,exit0,
+144506ms (`/tmp/m11-56bcb1-combined.log/.exit`). Fresh Server/Web/scope/diff
+all0; fresh emitted M11 index+SDK/SIGKILL and M10 HTTP two-process smoke2/2
+exit0 (`/tmp/m11-56bcb1-compiled-smoke.log/.exit`). These completed before the
+following connection-instance repair and remain historical evidence only.
+
+Self-audit identified whole-user configuration fingerprint invalidation would
+unnecessarily cancel unchanged same-user sibling connections. The repair captures
+and validates each exact connection fingerprint and retires only removed/changed
+handles. Domain generation still fences account-wide deletion. Two held real SDK
+connections now demonstrate refreshing first rejects only its late result while
+second commits both resources. A/B, single-connection refresh and this new case
+3/3 passed,exit0 (`/tmp/m11-connection-isolation-fix.log/.exit`), typecheck0
+(`/tmp/m11-connection-isolation-typecheck.log/.exit`). Final new-code full
+combination/build/smoke receipts follow;304 is not claimed as repaired acceptance.
 
 ## Frozen protocol/source receipts
 

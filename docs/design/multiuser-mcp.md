@@ -5,12 +5,15 @@ feature starts at remotely verified PR #133 head
 `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56` (tested M06 runtime
 `07ad9ddb17a0d2cd0004c50958670145b1457446`), including PR #132 and
 M00/M01/M02/M03/M04/M05/M09. Integration remains
-`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`. M10's newer composed candidate
-is independently reviewed in `/tmp/mote-m11-review-m10.md`; it is not silently
-included or represented as accepted by this feature.
+`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`. The feature now also composes
+remotely verified accepted M10 Draft PR134 complete head
+`7572b573b03437ff743652c13181b9fdcf251fda`, runtime
+`2ae03155ef766655f4996977e4eedcc0a2177e9d`, through feature-only merge
+`56bcb1cf6e46304254318fed659efe861113c6ae`. M10 was independently reviewed
+in `/tmp/mote-m11-review-m10.md`; its closed execution conversation is not reused.
 
 **M11 is not fully accepted.** Its actual Memory/Ask/EvidenceReader tools require
-accepted M07/M08 and its final connector composition requires accepted M10.
+accepted M07/M08. Its accepted M10 connector dependency is composed on this feature.
 No fake neighboring service supplies those features. The following production
 source capabilities work independently now; the complete legacy query surface
 will be restored and validated using the actual scoped query adapters.
@@ -86,8 +89,9 @@ cannot enable it. The existing URL and pinned-address/DNS/redirect transport
 checks are reused. Authorization is checked both before and after DNS lookup.
 
 Every invocation constructs a fresh SDK client/headers/session for its owner and
-connection. Config publication invalidates and retires that user's old handles;
-B continues. Healthy sessions terminate before local close. Revoked/cancelled
+connection. Config publication invalidates and retires only changed connection
+fingerprints. Unchanged connections of the same user and other users continue.
+Healthy sessions terminate before local close. Revoked/cancelled
 handles close locally without renewing authority for external cleanup. Imports
 serialize by owner/connection/source, preserve complete-resource membership
 manifests and retract only that selected resource's old tail. SDK/result/cursor
@@ -118,5 +122,5 @@ single-owner ConnectorContext/Store to host-bound user/source facades and user
 configuration instances. REMOVE production static-token fallbacks and global
 session/client/configuration caches. EXCEPTION trusted host code and deployment
 operators retain server plaintext access; this is not a malicious-code sandbox.
-UNKNOWN final M07/M08/M10 composition, full-module acceptance, physical clients,
+UNKNOWN final M07/M08 composition, full-module acceptance, physical clients,
 real credentials/providers/models and deployment until actually verified.
