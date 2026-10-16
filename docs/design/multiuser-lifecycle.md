@@ -62,8 +62,9 @@ This is an operator archive containing private configuration/key material, disti
 from credential-free portable 3. The [container follow-up](../validation/multiuser-container-backup.md)
 replaces epoch-5 Docker refusal with fresh-volume staging and a single atomic
 YAML storage-pointer publication, retaining old volumes and staying stopped.
-Actual daemon/image/volume acceptance remains OPEN; protocol tests cannot
-establish Docker production startup or native-volume recovery.
+Actual Docker volume, original Mote production startup/restart and native plus
+managed Hindsight history reopening now have separate generated-data evidence.
+Protocol tests alone do not establish those actual runtime results.
 Hindsight reuses the existing pinned owned-volume protocol; no daemon/image is
 started or downloaded automatically. This checkpoint does not declare that native
 path or the whole module accepted.
@@ -179,8 +180,10 @@ no earlier rejected action is delegated or retried by M16.
 
 The last row records the original M16 checkpoint. The
 [container follow-up](../validation/multiuser-container-backup.md) supersedes its
-blanket Docker refusal with staged fresh-volume publication; it retains the
-OPEN actual-daemon/native-volume acceptance boundary.
+blanket Docker refusal with staged fresh-volume publication. The daemon became
+reachable and actual volume/Mote production/native-and-managed Hindsight recovery
+now pass; the linked ledger keeps exact runtime SHAs and the final current gate
+separate from historical checkpoints.
 
 The cited ADRs take precedence over a local shortcut. A conflict with these
 boundaries must be reported to the parent with a recommendation before changing

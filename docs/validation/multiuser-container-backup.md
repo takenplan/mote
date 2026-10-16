@@ -20,7 +20,10 @@ remain authoritative.
 | CHANGE | Docker backup reads the selected named volume through a local-image helper, rather than a stale stopped container. No automatic pull/build. |
 | CHANGE | Hindsight admits exact files/checksums/descriptor/canonical-native coverage before target writes. Whole-instance verification binds native bodies to SQL owner/binding/version/body digest. Read-only tar preflight precedes volume creation. New runtime identity retains original instance/model fingerprints and unknown facts, with no endpoint credentials. |
 | CHANGE | Re-query volume existence for every empty-target check; exclusively create Hindsight provider metadata. Both independently reviewed races have actual protocol RED→GREEN. |
-| UNKNOWN | Actual Docker copy/publication, production startup/restart, pinned Python/tar/PostgreSQL recovery, and Hindsight native startup remain unverified. Transport substitution cannot close these retained-capability gaps. |
+| CHANGE | Copy ordinary Docker backup files through bounded read/write/fsync loops into an exclusive private bind stage. Actual Docker Desktop cpSync directory copying returned EACCES; no user/capability expansion is needed. |
+| VERIFIED | Actual Docker publication/rebackup, native reopening and the original Mote production entry now run against generated data, including two clean stop/start cycles. Offline Hindsight Python/tar/PostgreSQL/API recovery is separately verified. |
+| VERIFIED | Restored Hindsight also reopens through production ManagedHindsightRuntime/HindsightEngine, rejects a wrong model profile and old API token, rotates private endpoint credentials, reads both canonical bodies, shuts down cleanly and rebacks up with zero inference. |
+| UNKNOWN | The later Joint catalog composition remains a separate gate; literal fixture SQL setup does not prove semantic retain or live inference. |
 
 Docker cannot atomically rename a volume root. One private YAML replacement after
 complete staging avoids partial publication and a two-file metadata transaction.
@@ -45,13 +48,47 @@ status` could not retrieve status. After the parent's additional startup
 authorization, standard-reviewed `docker desktop start --detach` exited 0 with
 `Docker Desktop is already running`. The subsequent same-context daemon/inventory
 probe still exited 1 with the same connection error. This contradictory
-application/engine state is unresolved.
+application/engine state was unresolved at that time.
 
 Authorized read-only UI lookup `cua.getApp("Docker")` timed out with
 `-10005: timeoutReached`; no window/startup prompt was observed. No permission or
 agreement was clicked, context/socket/security setting changed, dependency/image
 downloaded, or existing container/volume operated on. The parent asked the user
 to inspect Docker Desktop's startup/error state.
+
+A later fresh standard-reviewed `docker version` succeeded: Desktop 4.94.0
+(241994), Engine 29.8.2, linux/arm64; evidence
+`/tmp/mote-container-final-docker-probe.log/.exit` is **0**. Earlier failures
+remain recorded. Read-only metadata inventory found the pinned Hindsight image
+and six stopped Hindsight containers/volumes; none was started, stopped, mounted,
+modified or removed. No Mote image existed. New tests use unique labels/names,
+generated accounts/content and owned-only cleanup. Helpers and isolated API
+phases use `--pull never` and network none; the managed-runtime phase separately
+uses the product's loopback-published transport and prohibits model inference.
+
+The installed pinned Hindsight image contains Node 24.21.0, Python 3.11.16,
+PostgreSQL and baked BAAI/bge-small-en-v1.5 plus cross-encoder MiniLM caches.
+It can supply the actual volume helpers and offline native API without downloads.
+The separately claimed original Dockerfile build completed **exit 0**, 35/35
+steps, from 18:30:49 to 19:00:17 UTC (29m27.558s). Build-stage npm took 617s;
+runtime npm installed 954 packages in 1285.8s. The silent interval was diagnosed
+through log age, CPU/memory and aggregate network counters, not called healthy
+merely from Running status. See `/tmp/mote-container-build-diagnosis.md`.
+No process was killed, setting changed or dependency source substituted.
+
+The unique image `mote-container-validation:142` has immutable ID
+`sha256:2e0a192ec624a902d9396a1b0308782a0018a6c02e3af70e279e3f526563d48b`,
+3390189543 bytes, own `dev.mote.fixture=container142-production` label, and default
+`node apps/server/dist/index.js`. Its official Node 24 base digest is
+`sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5`.
+The source checkout was 53b with the host profile-copy candidate at build start;
+subsequent differences are profile-lib (not copied into this image), opt-in
+validation entries (not copied), and docs. All Dockerfile-selected application/
+package/runtime sources are unchanged through the later tested candidate.
+This build installs the repository's pinned/locked npm, PyPI and Debian runtime
+dependencies; no host package or model weight is installed by these tests.
+The original production entry was subsequently verified after the agreed slots
+released; the exact command/image/source result is recorded below.
 
 ## Executed regressions
 
@@ -69,11 +106,78 @@ real path substitutes. Native Python extraction/PostgreSQL does not run there.
 | `mote-container-hindsight-exclusive-red` | ca22: 0/1, exit 1, simultaneous restores incorrectly return two successes. |
 | `mote-container-races-green` | 39009c78: 15/15, exit 0, including both review findings, occupied/running/late-written volumes, YAML race, copy failure, corruption, selected-volume rebackup, native reopening/old-login rejection, native-body/descriptor mismatch and fresh Hindsight identity/unknown metadata. |
 
+Actual Docker evidence added after the daemon became reachable:
+
+| Evidence under `/tmp` | Actual outcome |
+| --- | --- |
+| `mote-container-actual-volume-53b.log/.exit` | Exit 1: actual Docker Desktop directory cpSync fails EACCES on nested originals. Diagnostic root/cap attempt also fails (`actual-volume-green1`) and was fully reverted. |
+| `mote-container-actual-volume-green3.log/.exit` | Exit 0: ordinary-user streamed copy closes the same actual volume case. This temporary driver predates the durable fixture and is not attributed to an unchanged 53b commit. |
+| `mote-container-actual-volume-durable.log/.exit` | e5ceb27e: exit 0, actual Docker volume publication/rebackup, two generated originals each 2 MiB + 71 bytes, A/B same source/device IDs, deployment/account identity, old token rejection, a real issued task grant retired, unknown external issuance unchanged, native reopening. No production container startup in this run. |
+| `mote-container-actual-volume-preservation.log/.exit` | 155b9008: exit 0, separate occupied sentinel volume and its selected YAML unchanged after rejection and later successful restore; damaged archive fails before any Docker call. |
+| `mote-container-actual-volume-sameid.log/.exit` | c92d4b9f108245201c368451a27f60fa39dd99af: exit 0, repeats preservation with the same literal capture UUID for both owners, distinct owner text and one row per owner after native reopening. Earlier runs used different capture UUIDs. |
+| `mote-container-production-actual.log/.exit` | 13515436f4306d26913753ad52897c90c01e1340: exit 0 with the immutable Mote image above. Reloads authoritative YAML from disk, then real default production CMD, two start/clean-stop cycles, fresh A/B logins/identity/same capture ID and distinct text, old tokens 401, original-byte rebackup, unknown external issuance unchanged and zero old task grants. |
+| `mote-container-hindsight-actual-red.log/.exit` | Exit 1: fixture used the macOS temporary-directory alias; no product permission workaround. Canonicalizing the fixture parent fixes admission. |
+| `mote-container-hindsight-actual-red2.log/.exit` | e5ceb27e: exit 0, actual offline API start/clean stop/native snapshot/new identity restore/API restart/rebackup, initially empty canonical collection. |
+| `mote-container-hindsight-nonempty.log/.exit` | d65321b5: exit 0, two owner namespaces with same memory ID, real native canonical digest/body snapshot and restored HTTP reads; checksummed unsafe tar rejected by real pinned Python before volume creation. |
+| `mote-container-hindsight-final.log/.exit` | 06fd62eb66254e3c4c7038c9018953f5ec4f657e: exit 0, repeats the nonempty native chain with source private credentials, restored old API token 401, API version 0.10.2, worker false, retained unknown operation, fresh runtime identity and original model/instance fingerprints. |
+
+The added managed phase first failed at13515436: the generated literal SQL
+records had not passed the same schema normalization/order used by production
+`put` before hashing. The unchanged production adapter correctly rejected their
+digest. `/tmp/mote-container-hindsight-managed-actual.log/.exit` remains **1**.
+The fixture alone now uses `memoryProviderRecordSchema.parse` before hashing.
+
+`/tmp/mote-container-hindsight-managed-green.log/.exit` is **0** at
+`258f787d9bb4d2ae0d7f106a65fe33eecc445aa3`. It repeats the native chain, then
+uses the production `ManagedHindsightRuntime.service` and `HindsightEngine.read`
+against the fresh restored identity/volume. The wrong model profile is refused
+before startup; the approved profile creates new private credentials, old API
+tokens receive 401, both owner bodies read correctly, model calls remain zero,
+and managed shutdown/rebackup succeeds. It uses the owned stopped-container
+branch, so no image pull occurs. This managed phase uses the normal
+loopback-published runtime transport, not the direct phase's network-none shell.
+All model requests are denied by the host authority callback; the profile is a
+generated local placeholder. No real provider credential or inference is used.
+
+The real production command (repository root) was:
+
+```sh
+MOTE_CONTAINER_VALIDATE_STARTUP=1 \
+MOTE_CONTAINER_VALIDATION_IMAGE=sha256:2e0a192ec624a902d9396a1b0308782a0018a6c02e3af70e279e3f526563d48b \
+node --import tsx scripts/validation/container-recovery.ts
+```
+
+The container publishes no host port, uses network none and the verified private
+profile user. Health/auth/private data requests execute inside its own network
+namespace. Only the generated test volumes/containers are cleaned up; the unique
+validation image remains available for the later joint composition.
+
+The durable opt-in entries are
+[`container-recovery.ts`](../../scripts/validation/container-recovery.ts) and
+[`hindsight-recovery.ts`](../../scripts/validation/hindsight-recovery.ts).
+The Hindsight fixture creates banks through the real API and inserts generated
+literal canonical rows into its actual migrated PostgreSQL schema. This setup
+bypasses semantic retain and workers. Backup, tar validation/extraction, clone
+PostgreSQL canonical verification, restored native API health/version/body reads,
+clean shutdown and rebackup are real operations. The API runs with network none,
+HF/Transformers offline, baked models and automatic worker false. This direct-API phase does not claim live-model or semantic-extraction behavior.
+The separately described managed-runtime phase verifies history reopening and
+credential/model identity seams without semantic work.
+
+The first durable volume fixture at a5da exited 1 because it treated `waiting`
+as a finished execution state; the same fixture now waits for actual issued
+external work before backup. Its failure is retained separately from the real
+cpSync production failure. All generated resources were cleaned after each run.
+
 Independent source-only review: `/tmp/mote-joint-review-container-ca22.md`.
 The reviewer did not execute tests/Docker. This owner then reproduced and fixed
 both findings. Exact `39009c78` race-fix and `d1810cd0` historical model-volume
 default follow-ups are recorded there with no new confirmed finding in those
-bounded deltas. This is not an actual Docker acceptance review.
+bounded deltas. This review did not execute the actual Docker acceptance. A separate bounded
+source review of the streamed-copy delta is
+`/tmp/mote-joint-review-container-streamed-copy.md`, with no new confirmed finding. The actual fixture source-only review is
+`/tmp/mote-joint-review-container-actual-fixtures.md`; actual execution evidence
+belongs to this owner, not the reviewer.
 
 ## Failed attempts and dependency correction
 
@@ -84,12 +188,13 @@ Node 24.21.0 uses ABI 137. Installed Node 26.11.1/ABI 147 loads that binary.
 `mote-container-native-adjacent-node26` still reached 51/52 because separate
 `apps/server/node_modules/mem0ai` had not yet been copied into this checkout.
 
-Existing root and nested dependencies were independently copied; peer files were
-not changed, and nothing was installed/downloaded. The same failed Mem0 case then
+Existing root and nested host dependencies were independently copied; peer files
+were not changed and no host package was installed/downloaded. The separate
+Dockerfile image dependency installation is recorded above. The same failed Mem0 case then
 passed 1/1, exit 0: `/tmp/mote-container-mem0-deps-restored.log/.exit`. Earlier
 failed runs remain failures. Final checks use installed Node 26 and JDK 21.
 
-## Final local gate and remaining acceptance
+## Local gates and remaining acceptance
 
 Fixed tested candidate: `d1810cd095e8c0075eb1caecdf45395825ec6bbd`.
 
@@ -121,14 +226,15 @@ the missing reference and independently verified both main/integration remained
 `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`. Only then was the unchanged candidate
 run to exit 0 above. The original failed invocation remains recorded.
 
-All heavy work was explicitly released after that exit 0. Final changes after
-`d1810cd0` are documentation only, checked for formatting/links and with
-`git diff --check`; apps/packages/scripts/protocol have zero difference.
+All heavy work was explicitly released after that exit 0. That historical gate
+was valid for d181/53b. The later actual Docker failure led to the streamed-copy
+fix and durable opt-in entries, so a fresh final required gate is pending; the
+earlier result is not relabelled as covering these later changes.
 
-Actual Docker and native Hindsight remain blocked above. No existing
-container/volume was inspected successfully or operated on, and no real Docker
-profile publication, container production startup/restart, native tar/Python/
-PostgreSQL extraction or Hindsight service recovery is counted as passed.
-The source fixes and local gates are reviewable; overall container acceptance
-remains OPEN pending a working existing daemon and a separately coordinated
-generated-data run. Joint's new catalog/Imports composition is a later gate.
+Actual volume publication and native Hindsight recovery now have the evidence
+above, including actual Mote production startup/restart and managed Hindsight
+canonical reads. A fresh final affected gate is the remaining local check before
+publication; it is not replaced by the old d181 gate. Joint's newer
+catalog/Imports composition is a separate later joint gate. No existing user
+service/data/volume was operated on, and no merge, deployment or CI enablement
+was performed.
