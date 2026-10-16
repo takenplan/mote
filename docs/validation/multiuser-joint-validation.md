@@ -468,3 +468,19 @@ second fact never readmits its blocked task or changes B. This new case plus
 the existing unknown-effect restart/owner-confirmation case pass 2/2 in
 /tmp/mote-joint-file-unknown-m05-adjacent2.log/.exit. These are task-authority
 checks, not new client or arbitrary socket-timing coverage.
+
+Additional cross-operation characterization: a fresh operation ID was accepted
+and actually issued a second ASR request while its original remained unknown
+(1/1 RED, /tmp/mote-joint-file-unknown-new-operation-red2.log/.exit). Admission
+and issuance now check the existing owner's unacknowledged M05 calls for that
+original. Same-operation ACK retry remains idempotent. The extended bare503,
+late account-delete ACK and two synchronously queued no-model parents with real
+asynchronous M04 children pass 3/3/no skip in
+/tmp/mote-joint-file-unknown-operation-queue-green2.log/.exit. Initial queued
+fixture wrongly attempted synchronous model admission and was rejected409; it
+was corrected to genuine no-model parents, without changing production rules.
+Existing cached duplicate operation, ASR checkpoint and explicit confirmation
+recovery pass 3/3 in
+/tmp/mote-joint-file-unknown-cross-operation-adjacent.log/.exit. The new admission
+query does not turn a replay confirmation into outcome settlement. Types,
+independent review of this additional delta and final composed gate remain due.

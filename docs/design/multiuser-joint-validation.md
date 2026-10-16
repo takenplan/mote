@@ -97,3 +97,12 @@ retry, and current successful ASR checkpoints still avoid retranscription.
 UNKNOWN network disconnect/timeout variants and every remaining Files control
 are not inferred from the generated bare-503 case. Final candidate types and
 composed acceptance remain separate requirements.
+
+The same guard also applies across operation IDs for one admitted original.
+A generated second operation actually reached the ASR transport while the first
+was unacknowledged unknown (RED). M06 now consults existing owner-bound M05 call
+and retry-confirmation facts both before fresh pipeline admission and atomically
+inside the existing issuance hook. The original operation's ACK retry returns
+its existing task. Previously queued parents cannot evade the I/O guard; an
+explicit retry acknowledgement still applies to its existing issuance and never
+changes an old fact to succeeded. No new per-file runtime or outcome store.

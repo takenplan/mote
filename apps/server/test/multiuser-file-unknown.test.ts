@@ -20,6 +20,8 @@ test('a bare media503 remains unknown and cannot automatically repeat a possibly
  let observed:unknown;await waitForScopedState(async()=>{const a=await f.checked(f.a.token,'/api/tasks/'+at.id),b=await f.checked(f.b.token,'/api/tasks/'+bt.id);observed={calls,a,b,aTasks:await f.checked(f.a.token,'/api/tasks'),bTasks:await f.checked(f.b.token,'/api/tasks')};return ['blocked','failed'].includes(a.state)&&b.state==='succeeded';},()=>JSON.stringify(observed),15000);
  assert.equal((await f.checked(f.b.token,'/api/files/'+b.id)).processing.indexed,true);assert.equal((await f.checked(f.a.token,'/api/files/'+a.id)).processing.indexed,false);assert.equal(calls,1,'a bare503 cannot clear the issued-call guard or authorize automatic provider replay');
  const tasks=await f.checked(f.a.token,'/api/tasks'),child=tasks.items.find((task:any)=>task.kind==='processing.asr');assert.ok(child);assert.equal(child.state,'blocked');assert.ok(child.externalUnresolved>0);
+ assert.equal((await f.checked(f.a.token,'/api/processing','POST',{originalRef:a.original.ref,operationId:'same-unknown-processing'})).id,at.id,'an ACK retry returns the existing pipeline');
+ const replay=await f.request(f.a.token,'/api/processing','POST',{originalRef:a.original.ref,operationId:'new-operation-must-not-bypass-unknown'});if(replay.statusCode===200)await waitForScopedState(()=>calls===2,()=>'fresh operation was admitted but did not reach its actual ASR transport');assert.equal(replay.statusCode,409,'a fresh operation ID cannot bypass an unacknowledged issued call');
 });
 
 async function recordingFixture(t:TestContext,port:number){
@@ -43,4 +45,16 @@ test('a valid late media ACK settles only its issued fact after account deletion
  release.resolve();await waitForScopedState(()=>Number(db.prepare("SELECT count(*) n FROM task_external_calls WHERE user_id=? AND state IN ('issued','unknown')").get(f.a.userId)!.n)===0&&Number(db.prepare('SELECT count(*) n FROM mp_activity WHERE user_id=?').get(f.a.userId)!.n)===0,()=>'late exact completion did not settle the original issuance',15000);
  assert.equal(Number(db.prepare('SELECT count(*) n FROM mp_publications WHERE user_id=?').get(f.a.userId)!.n),0,'a late ACK cannot restore private publication authority');
  await f.checked(f.admin.token,'/api/admin/account-deletions/'+deletion.id+'/retry','POST',{});await waitForScopedState(async()=>(await f.checked(f.admin.token,'/api/admin/account-deletions/'+deletion.id)).state==='completed',()=>'settled media fact did not permit account erasure',15000);assert.equal(existsSync(root),false);assert.equal((await f.checked(f.b.token,'/api/files/'+b.id)).processing.indexed,true);
+});
+
+
+test('already queued M05 processing operations cannot replay an unacknowledged call for the same original',async t=>{
+ let calls=0;const server=createServer((req,res)=>{void(async()=>{for await(const _ of req){}calls++;res.writeHead(503,{'Retry-After':'0'}).end('Generated queued result unknown');})().catch(()=>res.destroy());});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>{server.closeAllConnections();return new Promise<void>(resolve=>server.close(()=>resolve()));});const address=server.address();assert.ok(address&&typeof address!=='string');
+ const {f,wave}=await recordingFixture(t,address.port),a=await f.uploadBytes(f.a.token,'generated-queued-recording',wave,'audio/wav'),context=await f.host.authority.authenticate(f.a.token),db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});t.after(()=>db.close());
+ const saved=db.prepare('SELECT generation,settings FROM mp_state WHERE user_id=?').get(f.a.userId)!,input={originalRef:a.original.ref,generation:Number(saved.generation),settings:JSON.parse(String(saved.settings))},tasks=f.host.execution!.forUser(context);
+ // Both no-model parent admissions are synchronous; their real M04 child
+ // admissions remain asynchronous under the production executor.
+ const first=tasks.submitSync({kind:'processing.pipeline',operationId:'generated-first-queued',input}),second=tasks.submitSync({kind:'processing.pipeline',operationId:'generated-second-queued',input});await f.host.execution!.engine.drain([first.id,second.id]);
+ const child=(id:string)=>tasks.get(String(db.prepare("SELECT task_id FROM user_tasks WHERE user_id=? AND json_extract(input,'$.parentTaskId')=?").get(f.a.userId,id)!.task_id));assert.equal(calls,1);assert.equal(child(first.id).externalUnresolved,1);assert.equal(child(second.id).state,'blocked');assert.equal(child(second.id).failure?.code,'external_result_unknown');assert.equal(child(second.id).externalUnresolved,0,'rejected issuance rolls back the second ledger entry');
+ assert.equal(Number(db.prepare('SELECT count(*) n FROM mp_activity WHERE user_id=?').get(f.a.userId)!.n),1,'only the truly issued call retains an unknown activity');assert.equal((await f.checked(f.a.token,'/api/files/'+a.id)).processing.indexed,false);
 });
