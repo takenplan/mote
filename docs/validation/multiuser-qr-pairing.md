@@ -191,8 +191,59 @@ ordering without running additional tests. Joint separately reviewed exact
 source compatibility; that review did not execute tests. Joint will preserve its
 existing `file_forgotten` error variant when combining the patch.
 
-The complete **post-disposer** affected gate is pending fresh serial allocation.
-The completed green `489943ad` check does not cover the new disposer commit.
+The complete **post-disposer** affected gate ran naturally at `411db33f`:
+**EXIT 1**, 980 seconds. Server: 2680 tests, **2677 pass, 1 fail,
+0 cancelled, 2 existing skips**, 862.644 seconds. Web **515/515**, shared
+**192/192**, agent **317 pass plus its existing opt-in skip**; all four builds
+and typechecks passed. The new disposer primitive and eight held-response pin
+cases passed. Runner/release checks were not reached after the Server failure.
+Evidence: `/tmp/mote-qr-post-disposer-affected.log` and `.exit`. Owned process
+group 38021 and log writers were verified absent before explicit heavy RELEASE.
+The completed green `489943ad` check is not moved onto this later snapshot.
+
+The sole failure was an inherited public retry ordering defect: a pipeline can
+observe its child's ambiguous media failure and become blocked before the owner
+retries the child. The HTTP child retry returned 200, but child validation then
+rejected the blocked parent and made the child stale. The old case sometimes
+retried inside the pipeline's 20 ms observation window. Commit `31637359` makes
+the original HTTP test wait for both actual tasks to be blocked; it is a stable
+**0/1 RED**, exit 1, 13.339 seconds wall time, without changing its recovery or
+ledger expectations. `/tmp/mote-qr-parent-blocked-red.log` records that run.
+
+Production repair `7d696775eda6c64b0d2d858ef83a3577d5bb46b4` adds only a trusted
+synchronous M05 retry-preparation hook and M06 extraction recovery. The existing
+retry transaction verifies the exact owned pipeline checkpoint and complete
+input, current source/configuration/plugin authority and original parent grant;
+only a blocked original parent is rearmed. The ordinary parent guard remains
+waiting/running. No route, request field, grant, lease or scheduler is added.
+Failed checks roll back parent changes and unknown acknowledgement together.
+The same public case passes **1/1**, exit 0, 2.581 seconds wall time, retaining
+four calls, two confirmations, two unresolved old facts, finite attempts and one
+usage record. Evidence: `/tmp/mote-qr-parent-blocked-first-green.log` and `.exit`.
+
+A separate cancelled-parent case on the isolated pre-repair source snapshot is
+also **0/1 RED**: HTTP retry incorrectly returns 200. New negative cases retain
+issued **or** unknown facts; an initial fixture assertion incorrectly expected
+all unsettled rows to already be labelled unknown and was corrected. A later
+source-disable projection assertion was corrected to expect the existing 409
+rather than to read an unavailable processing status. Those intermediate failed
+runs remain local evidence and are not counted as production regressions.
+Final combined narrow command:
+`node --import tsx --test --test-concurrency=1 --test-name-pattern='^(real media transport failures|confirmed extraction retry|real retry rolls back)' apps/server/test/multiuser-processing.test.ts apps/server/test/multiuser-execution-retry-hook.test.ts`.
+It passes **12/12**, exit 0, no skips/cancellations, reported duration 23.372 s.
+It covers parent cancellation/failure, source disable, changed processing
+generation, parent grant retirement, stored checkpoint/input mismatch and
+account epoch change; blocked parents cannot admit fresh children, foreign
+retries remain 404, and B still publishes normally. The three M05 hook cases
+prove throw/thenable/post-hook grant retirement roll back nested parent retry,
+external pointers/facts/confirmations, grant changes and Operations projection.
+Evidence: `/tmp/mote-qr-atomic-retry-final-narrow.log` and `.exit`.
+The same three new hook cases on the isolated pre-hook source snapshot are
+**0/3 RED**, exit 1: retry returns 200 and consumes acknowledgement without
+running the required preparation. Evidence:
+`/tmp/mote-qr-retry-hook-baseline-red.log` and `.exit`.
+Bounded exact-source review and a new complete affected gate remain pending;
+neither is inferred from the earlier green snapshots.
 
 Still unverified here: Web QR rendering/navigation retirement, Android scanner
 and pending journal/account-switch lifecycle, Desktop v2 import, physical camera,
