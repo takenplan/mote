@@ -122,9 +122,9 @@ test('scoped Activity deduplicates original records across real jobs and filters
  gate.release.resolve();f.gates.delete('A');await f.wait(f.a,active.id);
 });
 
-test('scoped Activity retains an admitted empty-body Material as an unfinished original before any batch exists',async t=>{
- const f=await fixture(t),material=await f.publish(f.a,'A','same-source','empty-body',''),job=await f.submit(f.a,[material.id]);assert.deepEqual(job.batches,[]);
- const page=await f.request(f.a.token,'/api/work-activity?sourceId=same-source');assert.equal(page.statusCode,200,page.body);const work=page.json().items.find((item:any)=>item.kind==='memory');assert.ok(work);assert.equal(work.progress.mode,'determinate');assert.equal(work.progress.total,1);assert.equal(work.progress.completed,0);assert.notEqual(work.state,'completed');
+test('empty-body Memory input is rejected before Activity admission without fabricating completed records',async t=>{
+ const f=await fixture(t),material=await f.publish(f.a,'A','same-source','empty-body',''),job=await f.request(f.a.token,'/api/memory/jobs','POST',{materialIds:[material.id],operationId:randomUUID()});assert.equal(job.statusCode,400,job.body);
+ const page=await f.request(f.a.token,'/api/work-activity?sourceId=same-source');assert.equal(page.statusCode,200,page.body);assert.ok(!page.json().items.some((item:any)=>item.kind==='memory'));
 });
 
 test('pause drains admitted extraction and review without revoking its durable authority',async t=>{
@@ -144,7 +144,7 @@ test('job cancellation during an actual model request prevents both review and l
 test('retiring source originals while extraction is held revokes the original Memory pin',async t=>{
  const f=await fixture(t),material=await f.publish(f.a,'A'),gate={entered:deferred(),release:deferred()};f.gates.set('A',gate);const job=await f.submit(f.a,[material.id]);await gate.entered.promise;
  assert.equal((await f.request(f.a.token,'/api/sources/same-source','DELETE')).statusCode,200);gate.release.resolve();assert.equal(await f.terminal(job.tasks.extract.id),'stale');
- assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,0);const data=await f.data(f.a);assert.throws(()=>data.materialEvidence(material.id));
+ assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,0);const data=await f.data(f.a);assert.throws(()=>data.materialEvidence(material.id));const page=await f.request(f.a.token,'/api/work-activity?state=attention');assert.equal(page.statusCode,200,page.body);const work=page.json().items.find((item:any)=>item.kind==='memory');assert.ok(work);assert.equal(work.state,'stale');assert.equal(work.progress.mode,'semantic','retired original mappings cannot invent a record total');assert.deepEqual(work.artifacts,[]);
 });
 
 test('administrator account disable fences held Memory while another account can finish',async t=>{
