@@ -841,3 +841,22 @@ extra-call assertion incorrectly expected zero despite the actual initial decode
 call; its failed receipt is preserved. The final fixture compares the actual
 pre-retry count and keeps the stale-before-execution assertion unchanged. Fix0563
 is submitted for bounded independent review; new noEmit/whole gates remain pending.
+
+M15's earlier36ff source-only acoustic publication concern was actually reproduced:
+real M03/M04/M05/M06 generated ASR/diarization, fixed A response held in Fastify
+onSend, then source disable or exact diarization replacement, still returned the
+captured WAV. Both cases fail in `/tmp/mote-joint-file-sample-publication-red.log/.exit`,
+2/2 EXIT1; durable8393bca1. Minimal679a175c40b9c20c3fb0b6789f089188c8ac0dd7 replaces
+the eager Buffer response with a lazy direct Readable, rechecking owner/source and
+exact current diarization before each64KiB block. Fastify observes the returned
+stream's errors; no intermediate pipe can swallow them. Same two cases and each
+B-positive WAV response pass2/2 EXIT0 in
+`/tmp/mote-joint-file-sample-publication-green.log/.exit`. This is not an execution
+of every backpressure/network/UI mode. New source types/independent delta review
+and final affected/clients remain pending;0095 types do not cover679a.
+
+M15's separate legal-large-artifact/8MiB native JSON concern is still unexecuted;
+raw full diarization arrays in detail were also part of the original legacy shape.
+No new quota, silent array truncation or invented paging framework is added from
+that source-only observation. Preserve it for bounded consumer/old-path comparison
+before deciding whether it is a regression or an existing scaling limit.
