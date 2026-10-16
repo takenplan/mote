@@ -8426,5 +8426,17 @@ export const english: Readonly<Record<string, string>> = {
   "仅处理所选资料的固定版本；未选配方时沿用当前记忆设置。": "Process only the pinned versions of selected materials. Leave recipes unselected to use the current Memory settings.",
   "已选择 {0} 份资料": "{0} materials selected",
   "请选择至少一份资料。": "Select at least one material.",
-  "提交所选资料": "Submit selected materials"
+  "提交所选资料": "Submit selected materials",
+  "新建连接": "New connection",
+  "编辑连接": "Edit connection",
+  "连接 ID": "Connection ID",
+  "Google 客户端 ID": "Google client ID",
+  "Google 客户端密钥": "Google client secret",
+  "自动同步": "Automatic sync",
+  "保存连接": "Save connection",
+  "留空保留已保存密钥。": "Leave blank to keep the saved secret.",
+  "清除已保存密钥": "Clear saved secret",
+  "连接不存在，请重新读取。": "The connection no longer exists. Reload it.",
+  "同步间隔不符合要求。": "The sync interval is invalid.",
+  "确认移除": "Confirm removal"
 };
