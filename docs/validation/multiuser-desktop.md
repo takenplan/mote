@@ -1,4 +1,49 @@
-# M14 Desktop validation checkpoint
+# M14 Desktop validation
+
+## Final resumed candidate and Draft PR139 update
+
+Fixed tested candidate: `45467379c5645dec62cc4b03e891b404b675193b`.
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration`
+actually exits **0**: `/tmp/m14-resumed-required-affected.log/.exit`.
+The command uses JDK21 and the installed Android SDK through standard approval
+for generated loopback fixtures, without real personal data or permissions.
+
+| Required component | Actual result |
+| --- | --- |
+| i18n, fresh libs and all workspace/root TypeScript | exit 0; 8439 synchronized bilingual messages |
+| Desktop | 60 files, **501/501**, exit 0 |
+| Server | **2626 pass / 0 fail / 1 default opt-in skip**, exit 0; 930.6s |
+| Web | **515/515**, no skip, exit 0 |
+| Agent | **317 pass / 0 fail / 1 opt-in skip**, exit 0 |
+| Diagnostics/shared/root/CLI and central runner | all required commands exit 0 |
+| Android JVM | actual Kotlin compile and test, **352/352**, no failure/error/skip; 74 XML files, Gradle 45s exit 0 |
+
+M13 independently reviewed the exact calendar/main/preload increment at
+`c56e4399`: `/tmp/mote-m13-review-m14-calendar-c56.md`, no new confirmed
+P0/P1/P2. The earlier exact `ceae83a5` original-source reader review is retained
+in `/tmp/mote-m16-review-m14-ceae.md`; ended M12/M16 were not awakened.
+M14 separately read the two-line M13 dialog surface fix `10f11f99` before
+composing it; its actual Web build/IAB proof belongs to M13, not an M14 rerun.
+
+After this tested candidate, only documentation is changed: reconcile the
+current source/manual guidance with format4, stable ownership, retained queues
+and the restored native calendar journey, and record these results. Runtime,
+tests, build scripts and protocol have zero diff from the tested candidate.
+The prior fresh Desktop build and generated native run at `0549b3a5` retain
+their exact artifact boundary below; their business logic is unchanged in the
+final candidate. No unnecessary repeat of those native checks is claimed.
+
+The delivery updates the existing Draft PR139 against
+`codex/mote-multiuser-integration`; remote SHA is independently verified and
+recorded in the final handoff after push. Main/integration remain untouched.
+All M14 test/provider/native processes have completed and the heavy window is
+released. There is no outstanding M14 approval or user-input request.
+
+This is M14 acceptance and a fixed consumer composition, not whole M13/M15 or
+joint acceptance. Further shared Files/Imports contracts belong to the joint
+thread; Docker epoch5/Hindsight restore, real system permissions, personal
+capture/calendar writes and real model accuracy are unverified. No deployment,
+merge or disabled CI change occurred.
 
 ## Resumed native calendar consumer (current work)
 
