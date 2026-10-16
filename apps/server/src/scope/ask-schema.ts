@@ -12,7 +12,8 @@ export const insightInputSchema=askInputSchema.innerType().extend({question:z.st
 export type AskInput=z.infer<typeof askInputSchema>;
 export const askTaskSchema=z.object({runId:z.string().uuid(),generation:z.number().int().nonnegative(),fragment:z.number().int().nonnegative().optional(),unitId:z.string().min(1).max(128).optional(),mode:z.enum(['chat','insight','compact'])}).strict();
 export type AskTask=z.infer<typeof askTaskSchema>;
-export type AskScope={sourceIds?:readonly string[];assertCurrent:()=>void};
+export type AskSnapshot={at:string;materials:{id:string;revision:string}[];captures:{id:string;receipt:string}[];memories:{id:string;version:number;fingerprint:string}[]};
+export type AskScope={sourceIds?:readonly string[];snapshot?:AskSnapshot;assertCurrent:()=>void};
 export type EvidencePin={id:string;hash:string;receipt?:string;kind?:'measurement'|'history'|'attachment';headId?:string;source?:{id:string;incarnation:string}};
 export type MaterialPin={id:string;revision:string;sources?:{id:string;incarnation:string}[];sourceContext?:{sourceId:string;version:number;fingerprint:string}};
 export type AskRow={id:string;input:string;fingerprint:string;mode:'chat'|'insight'|'compact';status:string;generation:number;fragment:number;task_id:string|null;model:string;scope:string;context:string;conversation_revision:number;conversation_incarnation:string;pins:string;materials:string;memory_pins:string;events:string;workspace:string|null;request_bound:number;created_at:string;updated_at:string;result:string|null};
@@ -35,9 +36,22 @@ export function installAsk(db:DatabaseSync){db.function('ma_catalog_parent',{det
  CREATE TABLE IF NOT EXISTS ma_units(user_id TEXT NOT NULL,run_id TEXT NOT NULL,id TEXT NOT NULL,fingerprint TEXT NOT NULL,input TEXT NOT NULL,task_id TEXT,PRIMARY KEY(user_id,run_id,id),FOREIGN KEY(user_id,run_id) REFERENCES ma_runs(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ma_artifacts(user_id TEXT NOT NULL,id TEXT NOT NULL,run_id TEXT NOT NULL,fragment_id TEXT NOT NULL,json TEXT NOT NULL,pins TEXT NOT NULL,materials TEXT NOT NULL,PRIMARY KEY(user_id,id),UNIQUE(user_id,run_id,fragment_id),FOREIGN KEY(user_id,run_id) REFERENCES ma_runs(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ma_traces(user_id TEXT NOT NULL,run_id TEXT NOT NULL,sequence INTEGER NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,run_id,sequence),FOREIGN KEY(user_id,run_id) REFERENCES ma_runs(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS ma_auto_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
+ CREATE TABLE IF NOT EXISTS ma_auto_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0);
+ CREATE TABLE IF NOT EXISTS ma_automations(user_id TEXT NOT NULL,id TEXT NOT NULL,generation TEXT NOT NULL,state TEXT NOT NULL,input TEXT NOT NULL,settings TEXT NOT NULL,sources TEXT NOT NULL,task_id TEXT,cursor INTEGER NOT NULL,last_success INTEGER NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(user_id,id));
+ CREATE TABLE IF NOT EXISTS ma_auto_events(user_id TEXT NOT NULL,seq INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,entity TEXT NOT NULL);
+ CREATE INDEX IF NOT EXISTS ma_auto_event_owner ON ma_auto_events(user_id,kind,seq);
+ CREATE TRIGGER IF NOT EXISTS ma_auto_material_insert AFTER INSERT ON pd_materials BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'insights',new.id); END;
+ CREATE TRIGGER IF NOT EXISTS ma_auto_material_update AFTER UPDATE ON pd_materials WHEN new.revision!=old.revision OR new.min_visible_sequence!=old.min_visible_sequence BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'insights',new.id); END;
+ CREATE TRIGGER IF NOT EXISTS ma_auto_turn AFTER INSERT ON ma_turns BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'working',new.conversation_id); END;
+ INSERT INTO ma_auto_events(user_id,kind,entity) SELECT m.user_id,'insights',m.id FROM pd_materials m WHERE NOT EXISTS(SELECT 1 FROM ma_auto_events e WHERE e.user_id=m.user_id AND e.entity=m.id AND e.kind='insights');
+ CREATE TABLE IF NOT EXISTS ma_auto_windows(user_id TEXT NOT NULL,id TEXT NOT NULL,policy_id TEXT NOT NULL,generation TEXT NOT NULL,state TEXT NOT NULL,through INTEGER NOT NULL,plan TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(user_id,id));
+ CREATE TABLE IF NOT EXISTS ma_auto_runs(user_id TEXT NOT NULL,run_id TEXT NOT NULL,window_id TEXT NOT NULL,policy_id TEXT NOT NULL,generation TEXT NOT NULL,PRIMARY KEY(user_id,run_id));
  CREATE TABLE IF NOT EXISTS ma_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
  `);db.prepare('INSERT OR IGNORE INTO ma_meta VALUES(1,?)').run(randomBytes(32).toString('hex'));return String(db.prepare('SELECT cursor_key FROM ma_meta WHERE singleton=1').get()!.cursor_key);}
 
 /** Host-only M05 validation, before a task context exists. Owner comes only from the engine's durable ownership record. */
 export function persistedAskRun(db:DatabaseSync,userId:string,id:string){return db.prepare('SELECT * FROM ma_runs WHERE user_id=? AND id=?').get(userId,id) as AskRow|undefined;}
 export function askUserDeleted(db:DatabaseSync,userId:string){return Boolean(db.prepare('SELECT 1 FROM ma_state WHERE user_id=? AND deleted=1').get(userId));}
+
+export function persistedAutomationCurrent(db:DatabaseSync,userId:string,runId:string){const link=db.prepare('SELECT policy_id,generation FROM ma_auto_runs WHERE user_id=? AND run_id=?').get(userId,runId);return !link||Boolean(db.prepare("SELECT 1 FROM ma_automations a WHERE user_id=? AND id=? AND generation=? AND state='active' AND NOT EXISTS(SELECT 1 FROM ma_auto_state s WHERE s.user_id=a.user_id AND s.deleted=1)").get(userId,link.policy_id,link.generation));}
