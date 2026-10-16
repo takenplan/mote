@@ -1,5 +1,34 @@
 # M14 Desktop validation checkpoint
 
+## Parent-directed pause and resumable boundary
+
+The parent instructed M14 to finish the running named-source repair, save a clean
+checkpoint and release this execution slot for M12. This is not module completion.
+The last tested Desktop runtime is `ceae83a5efbe622c77a768935d426fa18abf0786`;
+subsequent changes in this checkpoint are design/validation documents only.
+Named-source **2/2** and generated native Ask/queue/death acceptance above retain
+their exact candidate boundaries; they do not replace final required affected.
+
+Remote Draft PR139 remains at `7e080c728a6eea91876d32263ef28e45b8676b9b`, targeting
+`codex/mote-multiuser-integration` at unchanged baseline `6272a9b5`. Its earlier
+required-affected success on `a43979dc` remains valid for that earlier runtime.
+No resumed runtime is pushed or relabeled as having passed the final gate.
+
+Before the next PR update, resume this same thread, review the named-source
+delta, compose the now-frozen M13 Web import `23b347c9` + `ee4bb999` and M15
+device-only updates `2ff31228` as appropriate, and use the explicitly authorized
+M12 handoff when the parent supplies it. Those later consumer commits were
+received but not composed before the pause. Then run relevant fresh Desktop
+build/native and full affected checks on the actual final combination, update
+the feature/PR and record the exact remote SHA. Current M13 raw-reader contract
+limitations and any unavailable real permissions/providers remain explicit.
+
+There are no running M14 tests, builds, synthetic providers or native fixture
+processes and no pending M14 user-input/approval request at this pause. All
+temporary native/provider profiles from completed tests are closed by their
+fixture cleanup. The repository and main/integration were not reset, merged,
+deployed or otherwise modified outside the feature.
+
 ## Explicit source identity in original/detail reads
 
 Actual RED `ace31bdf` is now executed, not merely a proposed case:
@@ -21,6 +50,54 @@ unselected cases are not acceptance. The initially announced slot was cancelled
 before execution for Android/Web scheduling; only the later actual log above is
 the RED evidence.
 
+## Archive list observes actual central OCR
+
+M13 pure server raw-reader freeze `0172bf14` is composed at `034555f5`, keeping
+the newer M16 import/rollback lifecycle and adding both derived tables to its
+deletion cleanup. RED `2c79cd6d` passes through real emitted main, M03 intake and
+a real M06 OCR task using a generated HTTP worker. M13's exact raw detail already
+shows the extraction, while the actual Desktop archive list still reports
+`disabled` and an empty preview (`/tmp/m14-archive-ocr-valid-red.log/.exit`,
+**0/1, exit 1**). The minimal consumer uses the existing scoped raw-preview
+reader, walks every signed page and retains the original local/session
+presentation. Immutable content intake keeps its existing `/captures` reader.
+The unchanged actual test passes **1/1, exit 0**, 3.10s,
+`/tmp/m14-archive-ocr-green.log/.exit`: list and detail show A's real published
+extraction, intake is unchanged and B's same-ID record retains its own raw state.
+The 33 unselected tests are not counted as acceptance. No raw projection, task
+runtime, classification rule or model service is added by Desktop.
+
+M13 and M16 bounded independent reviews of exact `d26db7fa` found no new
+confirmed P0/P1/P2; reports `/tmp/mote-m13-review-m14-d26.md` and
+`/tmp/mote-m16-review-m14-d26.md`. M16 separately identified a possible existing
+detail-source assumption, now under a dedicated actual regression; the review
+conclusions are limited to the two thin preview changes.
+
+M13's same-byte original recreation RED `47405f0d` and fix `729cd21e` are
+composed: the original M08 persistent incarnation receipt fences the image await.
+M14's bounded follow-up is `/tmp/mote-m14-review-m13-729.md`; it does not claim
+independent execution of that race. M16 backup RED `b24ec6b8` and fix `63a39c79`
+are composed, preserving and admitting both device notification tables and
+monotonic counters; bounded review `/tmp/mote-m14-review-m16-63a.md` found no new
+issue. During M14's manual inventory conflict resolution, the two already
+declared table entries were accidentally omitted. The scope checker reported
+exactly those two omissions (exit 1); restoring the original declarations in
+`0dd0e08e` gives exit 0. Both logs are retained at
+`/tmp/m14-resumed-composed-scopes{,-green}.log/.exit`; this was an M14 composition
+error, not a missing M13 contract or a scope exception.
+
+Current consumer composition after the resumed increment includes M13
+`f1e059e4c0bf86b860d8b1c9154b1cb36b0fbd13` plus exact Vault
+`07f54ac3163b2688fbb6a259f164eef1771d23ff`, M15 Android
+`c81ca46fac0e6073c7881f842cf0d7dfa62ec770`, M16 portable import
+`89ddc973f0eb68262f047826d2df23c4b41df5ad` and restart fix
+`1fd1189ec760b4eedb784973a96e8eab5c52ee61`. The Android merge at `f4b493ba`
+resolves only catalog prefix insertions with the union of both synchronized
+message sets; bilingual validation exits 0. Its runtime is the exact tested c81
+consumer, not an untested later Android candidate. M13 raw archive and Web import
+consumers still await their frozen owning-module increments. These dependency
+checkpoints do not imply completion of M13/M15/M16 or M12 acceptance.
+
 ## Portable import Activity
 
 M16's exact `89ddc973f0eb68262f047826d2df23c4b41df5ad` is composed. RED
@@ -41,7 +118,8 @@ identity through a real one-use browser login exchange, and expose no artifact.
 After switching to B, B's Activity is empty and A's old document cannot hand off
 the work. The 32 unselected cases are not counted as acceptance. This short
 compiler invocation and M15's short Gradle claim crossed in message delivery;
-no additional build was started during its window.
+M15 subsequently checked its log birthtime (22:22:08.680) against this completed
+run (22:22:04 + 2.75s), confirming no actual build overlap.
 
 M16's bounded independent review of exact `c2c0cbc4` found no new confirmed
 P0/P1/P2 (`/tmp/mote-m16-review-m14-c2c0.md`), without rerunning these tests.
@@ -50,6 +128,15 @@ The separate actual import/restart notification RED `dd284ad0` and fix
 one-time schema backfill/savepoint change, with review limits recorded at
 `/tmp/mote-m14-review-m16-1fd.md`. These checks do not replace final affected
 validation of the combined candidate.
+
+The exact combined portable-import and lifecycle-Activity files pass **20/20,
+exit 0**, 24.11s, in `/tmp/m14-import-activity-composed-approved.log/.exit`.
+The first restricted run exits 1 at the generated provider's loopback listener
+(`listen EPERM`); `/tmp/m14-import-activity-composed.log/.exit` is retained.
+The exact same two files were allowed by standard review. Their actual
+backup/restore/import/restart, legacy first-journal backfill, cancellation,
+revocation, rollback, immutable history and account isolation assertions remain
+unchanged. This is not the final whole affected gate.
 
 ## Refreshed generated Desktop native acceptance
 
