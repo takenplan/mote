@@ -117,3 +117,15 @@ test('Web Ask model availability treats an actual empty account selection as nor
  const selected=await a.request<any>('/api/models'),path=askModelSelectionPath(selected);assert.equal(path,'/api/models/selection/chat');assert.equal((await a.request<any>(path!)).model,'generated-model');
  f.cookie('b');assert.equal(askModelSelectionPath(await createApi(f.bi).request<any>('/api/models')),null);
 });
+
+test('Web outbound MCP preparation uses owned Ingress sources and original user configuration CAS without exposing saved tokens',async t=>{
+ const {prepareWebMcpConnection}=await import('../../web/src/web-mcp.js'),f=await fixture(t),a=f.api(),baseline=await a.request<any>('/api/configuration');
+ const input={id:'generated-mcp',sourceId:'generated-mcp-source',name:'Generated MCP source',url:'https://synthetic.invalid/mcp',token:'GENERATED_A_MCP_SECRET'};
+ const next=await prepareWebMcpConnection(a,baseline,input),connections=next.domains.find((domain:any)=>domain.id==='mcpConnections').saved.connections;
+ assert.equal(connections[0].id,input.id);assert.equal(connections[0].token,true);assert.deepEqual(connections[0].sourceIds,[input.sourceId]);
+ assert.equal((await a.request<any>('/api/sources')).items.find((item:any)=>item.id===input.sourceId).kind,'mcp');
+ await assert.rejects(prepareWebMcpConnection(a,baseline,{...input,id:'generated-stale'}),error=>(error as any).status===409);
+ f.cookie('b');const b=createApi(f.bi);assert.doesNotMatch(JSON.stringify(await b.request('/api/configuration')),/GENERATED_A_MCP_SECRET|generated-mcp/);
+ await assert.rejects(prepareWebMcpConnection(a,next,{...input,id:'generated-borrow'}),error=>(error as any).code==='session_changed');
+ assert.equal((await b.request<any>('/api/sources')).items.length,0);
+});
