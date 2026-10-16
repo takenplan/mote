@@ -590,3 +590,20 @@ generated; M01/M03/M04/M05/M06/M16 and restart/backup/portable entries are real.
 Types, independent bounded review and current affected/compiled/client gates are
 pending for this candidate. c45 remains the previously declared thin consumer
 freeze until a new one is explicitly released; file retry is not implemented here.
+
+The pre-existing multi-page summary recovery fixture assumed automatic replay
+after a bare503. That expectation conflicts with the original issued-call guard:
+the actual old expectation fails in
+/tmp/mote-joint-summary-unknown-original-expectation.log (EXIT1). The fixture now
+uses the existing owner retry confirmation, verifies no unconfirmed replay,
+keeps the successful first-page checkpoint and original model snapshot, and
+checks that acknowledging replay does not settle the old external fact.
+/tmp/mote-joint-summary-unknown-explicit-recovery2.log and .exit pass1/1/EXIT0.
+The first updated driver only polled SQLite after restart and never triggered
+Fastify startup; its EXIT1 is retained separately in the unnumbered recovery log.
+The successful driver uses an actual owner task GET to start the restored host.
+No production behavior was weakened. Exact3dd Server and scripts noEmit are
+also EXIT0 in /tmp/mote-joint-file-cancel-types.log/.exit/.sha. Independent
+exact3dd bounded review reports no new confirmed P0/P1/P2 in
+/tmp/mote-theme-review-joint-file-cancel-3ddfd60d.md; old-input ACK identity remains
+a separate upgrade acceptance gap. Theme has ended and is not being reawakened.
