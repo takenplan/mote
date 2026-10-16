@@ -788,3 +788,46 @@ recovery environment had no existing emulator, so the original readonly5562 was
 restarted after Theme's explicit release; boot completed10608ms. No system
 permission expansion or physical-device access occurred. Independent54ad review
 and complete latest affected/Android/consumer gates remain pending.
+
+### Lark disconnect generation and authenticated native recording playback
+
+A further original Lark lifecycle test330564/a5a62b adds the actual original
+disconnect dialog, waits for its newly admitted successful M05 receipt, then
+uses the existing Check Status control. Valid RED1/1,6.187 seconds, EXIT1 in
+`/tmp/m15-native-lark-disconnect-valid-red.log/.exit`: no new task is admitted
+(20 remains20; the API default page bound is50). The old native adapter still
+required the generation that this same disconnect had retired. This is distinct
+from the earlier expanded6.009s passing Lark checkpoint.
+
+Production95c02560bdfeafc66c967cb4434e7c7ed29968cb retires the old page on
+both acknowledged and uncertain disconnect outcomes. The original M05 task is
+retained in the same encrypted journal at the known own-disconnect generation;
+current inventory must still match exactly. No credential is replaced and no
+new execution authority is inferred from a task. Pending bodies remain stable
+for a user retry. Test-onlyc583 adds a loopback network proxy that only drops
+the real successful HTTP ACK after actual M10 admission; it does not replace
+a route, task or result with a fabricated success.
+
+The same original journey plus actual ACK loss now passes1/1/no skip,6.174
+seconds, `/tmp/m15-native-lark-disconnect-first-green.log/.exit`: preview/archive,
+calendar choice, source pause/resume, document failure retry/cancel, exact
+operation/task replay, next explicit status work, and B retirement remain real.
+App/test APK compilation passed12 seconds,67 tasks9 executed in
+`/tmp/m15-lark-disconnect-green-build.log/.exit`. Independent two-file95c
+review is pending; this is not final Lark/Android/affected acceptance.
+
+The recording journey also reaches the canonical Files source archive and exact
+M03 authenticated play ticket, downloads verified original bytes, prepares the
+real Android MediaPlayer for a generated five-second WAV, and exercises its
+existing play/pause buttons. It then returns to a fresh recording page and
+rejects the old A retry after B resumes.1/1/no skip/EXIT0,3.053 seconds,
+`/tmp/m15-recording-native-play-first.log/.exit`. The normalized seek control is
+enabled; assigning its progress in this fixture is not a physical seek gesture
+claim. The emulator has no audio output and no real recording or runtime audio
+permission is used. Complete physical-device/background/audio-quality checks
+remain separate.
+
+M13's bounded37c/e4f reader/resume reviews are now read from
+`/tmp/mote-m13-review-m15-recordings-{37c8,e4f8}.md`: no new confirmed P0/P1/P2,
+without reviewer execution or native/current build coverage. Separate native
+recording and54ad acknowledgement reviews are still due.
