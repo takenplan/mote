@@ -688,11 +688,12 @@ class MultiuserWorkerInstrumentedTest {
         }
         control("/generated/release-pairing");RuntimeSettings.replaceAccount(app,bindLocal=true){ConnectionClient(app).resume("Ignored changed recovery name",true,bindLocal=true)}
         val original=settings.read();assertEquals(latest!!.userId,original.account()!!.userId);assertEquals("Generated Android",original.deviceName);assertTrue(original.authExpiresAt>System.currentTimeMillis());assertFalse(settings.enabled)
-        val note=QuickNotes.save(app,"GENERATED_SAME_OWNER_REAUTHORIZE","",scheduleUpload={});val owner=original.ownerKey();val directory=app.accountDirectory().canonicalPath
+        assertEquals("GENERATED_UNBOUND_QR_DRAFT",QuickNotes.draft(app).read().text)
+        val note=QuickNotes.save(app,"GENERATED_SAME_OWNER_REAUTHORIZE","",scheduleUpload={});QuickNotes.draft(app).update("GENERATED_A_UNSAVED_REAUTHORIZE_DRAFT","");val owner=original.ownerKey();val directory=app.accountDirectory().canonicalPath
         val replacement=issuer.post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated explicit reauthorization").put("deviceId",settings.deviceId))
         RuntimeSettings.replaceAccount(app){ConnectionClient(app).connect(ConnectionInvitation.parse(replacement.getString("uri"),true,true),"Generated renamed Android",true)}
         assertEquals(owner,settings.read().ownerKey());assertEquals(directory,app.accountDirectory().canonicalPath);assertNotEquals(original.token,settings.read().token)
-        assertEquals(401,HttpJson.get(endpoint()+"/api/connections/self",original.token).first);assertEquals(note,app.queue().peek()!!.getString("id"));assertEquals("GENERATED_UNBOUND_QR_DRAFT",QuickNotes.draft(app).read().text)
+        assertEquals(401,HttpJson.get(endpoint()+"/api/connections/self",original.token).first);assertEquals(note,app.queue().peek()!!.getString("id"));assertEquals("GENERATED_A_UNSAVED_REAUTHORIZE_DRAFT",QuickNotes.draft(app).read().text)
         UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};assertEquals(200,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first)
     }
     @Test fun originalNativeDevicesGeneratesALocallyDecodableAccountBoundQrAndRetiresOldIssuerActions() {
