@@ -11,7 +11,7 @@ import { ArrowRight, LoaderCircle, Plus, Sparkles } from 'lucide-react';
 import { type Answer, type Api, type Range, dateTime, errorMessage } from './api';
 import { InsightReport } from './InsightReport';
 import { answerPreview } from './AnswerMarkdown';
-export function Insights({ api, range, configured, onOpen, onSettings, onChanged, refreshVersion = 0 }: {
+type InsightProps={
     refreshVersion?: number;
     api: Api;
     range: Range;
@@ -19,7 +19,12 @@ export function Insights({ api, range, configured, onOpen, onSettings, onChanged
     onOpen: (id: string) => void;
     onSettings: () => void;
     onChanged: () => void;
-}) {
+};
+export function Insights(props:InsightProps){
+ const connection=props.api.connection;
+ return <InsightSession key={connection?.mode==='web'?JSON.stringify([connection.origin,connection.deploymentId,connection.userId,connection.credentialId,connection.viewScope]):'legacy'} {...props}/>;
+}
+function InsightSession({api,range,configured,onOpen,onSettings,onChanged,refreshVersion=0}:InsightProps){
     const [modelProfileId, setModelProfileId] = useState('');
     const modelReady=configured||api.connection?.mode==='web'&&Boolean(modelProfileId);
     const [selected, setSelected] = useState(''), [creating, setCreating] = useState(true);
@@ -46,7 +51,7 @@ export function Insights({ api, range, configured, onOpen, onSettings, onChanged
     const runs = run ? [run, ...(runHistory.data?.items ?? []).filter(item => item.id !== run.id)] : runHistory.data?.items ?? [];
     const restored = useRef(false), completedRuns = useRef(new Set<string>()), admission = useRef<AbortController | null>(null);
     changed.current = onChanged;
-    useEffect(() => { cancelRequest.current?.abort(); cancelRequest.current = null; setCancelling(false); restored.current = false; completedRuns.current.clear(); setRun(null); setSelected(''); setCreating(true); setError(''); setPollError(''); setLaunching(false); launchGuard.current = false; pendingRequest.current = null; return () => { admission.current?.abort(); cancelRequest.current?.abort(); }; }, [api]);
+    useEffect(() => { setModelProfileId('');cancelRequest.current?.abort(); cancelRequest.current = null; setCancelling(false); restored.current = false; completedRuns.current.clear(); setRun(null); setSelected(''); setCreating(true); setError(''); setPollError(''); setLaunching(false); launchGuard.current = false; pendingRequest.current = null; return () => { admission.current?.abort(); cancelRequest.current?.abort(); }; }, [api]);
     useEffect(() => { if (!restored.current && runHistory.data) {
         restored.current = true;
         setRun(current => current ?? runHistory.data!.items.find(item => item.status === 'running') ?? null);

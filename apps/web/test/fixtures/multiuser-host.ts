@@ -52,6 +52,7 @@ process.on('message',async(message:any)=>{
   }else if(message.command==='hold-provider'){if(!provider)throw Error('Configure generated models first');provider.hold(message.owner.toUpperCase());result=true;}
   else if(message.command==='release-provider'){provider?.release();result=true;}
   else if(message.command==='provider-requests')result=provider?.requests;
+  else if(message.command==='model-selection')result=await call(users[message.owner].token,'/api/models/selection/'+(message.feature??'chat'));
   else if(message.command==='handoff')result=await call(undefined,'/api/login/requests','POST',{serverUrl:'http://localhost:'+port,deviceId:'same-approval-device',deviceName:'Generated approval device',platform:'other',challenge:createHash('sha256').update('x'.repeat(43)).digest('hex')});
   else if(message.command==='poll')result=await call(undefined,'/api/login/poll','POST',{id:message.requestId,verifier:'x'.repeat(43)});
   else if(message.command==='data')result=await call(users[message.owner].token,'/api/captures?limit=200');

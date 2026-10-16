@@ -5,13 +5,13 @@ import {writeMessagesResponse} from '../../../../scripts/fixtures/messages-provi
 /** External model I/O only. The real Ask Harness chooses tools, validates
  * citations, stores conversations/reports and checks every owner boundary. */
 export async function generatedWebProvider(){
- const requests:{owner:string;tools:string[];foreign:boolean}[]=[];
+ const requests:{owner:string;model:string;tools:string[];foreign:boolean}[]=[];
  let held:string|undefined,release:(()=>void)|undefined;
  const server=createServer((req,res)=>{void(async()=>{
   let raw='';for await(const part of req)raw+=part;
   const body=JSON.parse(raw),owner=String(req.headers['x-api-key']).includes('_A_')?'A':'B';
   const uses=body.messages.flatMap((message:any)=>Array.isArray(message.content)?message.content.filter((part:any)=>part.type==='tool_use'):[]),stage=uses.length+1;
-  const foreign=raw.includes('GENERATED_PRIVATE_'+(owner==='A'?'B':'A'));requests.push({owner,tools:uses.map((use:any)=>use.name),foreign});assert.equal(foreign,false,'provider must never receive the other generated account');
+  const foreign=raw.includes('GENERATED_PRIVATE_'+(owner==='A'?'B':'A'));requests.push({owner,model:String(body.model),tools:uses.map((use:any)=>use.name),foreign});assert.equal(foreign,false,'provider must never receive the other generated account');
   if(!uses.some((use:any)=>use.name==='material_catalog')){writeMessagesResponse(res,{stage,tool:{name:'material_catalog',args:{limit:30}}});return;}
   const ref=raw.match(/material:mat_[a-f0-9]{64}@[a-f0-9]{64}/)?.[0];
   if(ref&&!uses.some((use:any)=>use.name==='material_read')){writeMessagesResponse(res,{stage,tool:{name:'material_read',args:{ref,length:12000}}});return;}

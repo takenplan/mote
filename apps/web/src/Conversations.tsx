@@ -37,14 +37,19 @@ interface Conversation extends ConversationSummary {turns: ConversationTurn[];re
 interface OlderTurns {api:Api;id:string;revision?:number;turns:ConversationTurn[];nextCursor:string|null}
 interface HistoryPage {items: ConversationSummary[]; nextCursor?: string | null}
 
-export function Conversations({api, configured, devices, renderAnswer,onOpen=()=>{},onModelSelectionChange}: {
+type ConversationProps={
   api: Api;
   configured: boolean;
   onModelSelectionChange?:(selected:boolean)=>void;
   devices: Pick<Device,'deviceId'|'deviceName'>[];
   renderAnswer: (answer: Answer) => ReactNode;
   onOpen?: (ref:string)=>void;
-}) {
+};
+export function Conversations(props:ConversationProps){
+ const connection=props.api.connection;
+ return <ConversationSession key={connection?.mode==='web'?JSON.stringify([connection.origin,connection.deploymentId,connection.userId,connection.credentialId,connection.viewScope]):'legacy'} {...props}/>;
+}
+function ConversationSession({api,configured,devices,renderAnswer,onOpen=()=>{},onModelSelectionChange}:ConversationProps){
   const [modelProfileId,setModelProfileId]=useState(''),[modelOverride,setModelOverride]=useState('');
   const modelReady=configured||api.connection?.mode==='web'&&Boolean(modelProfileId);
   useEffect(()=>{onModelSelectionChange?.(Boolean(modelProfileId));},[api,modelProfileId,onModelSelectionChange]);
@@ -89,7 +94,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     } catch (e) { if (!controller.signal.aborted) setHistoryError(errorMessage(e)); }
     finally { if (!controller.signal.aborted) setLoadingPage(false); }
   }
-  useEffect(()=>{selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion('');setAttachments([]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
+  useEffect(()=>{setModelProfileId('');setModelOverride('');selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion('');setAttachments([]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
     return()=>{operation.current?.abort();attachmentRequest.current?.abort();historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
   useEffect(()=>{const changed=()=>{const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){selectionMade.current=true;setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
   const detailRevoked=detail.error instanceof ApiError&&[401,403,404,410].includes(detail.error.status);
