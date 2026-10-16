@@ -637,6 +637,23 @@ class MultiuserWorkerInstrumentedTest {
         }} finally {instrumentation.removeMonitor(monitor);file.delete()}
     }
 
+    @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val row=a.get("/api/agent-view/catalog?path=/context/episodes&limit=1").getJSONArray("entries").getJSONObject(0)
+        assertEquals("material_read",row.getString("expand"));assertTrue(a.get("/api/agent-view/material-read?ref="+CentralScreens.encode(row.getString("ref"))).getString("text").contains("GENERATED_AGENT_A_VISIBLE_TEXT"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","agentView")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="/context/episodes"}.performClick()};ready()
+            lateinit var expand:android.widget.Button;scenario.onActivity {activity->expand=views(activity.window.decorView).filterIsInstance<android.widget.Button>().first {it.text.toString()=="展开"};expand.performClick()};ready()
+            scenario.onActivity {activity->val text=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()};assertTrue("Original Agent catalog must follow its declared material_read instead of the retired evidence alias",text.any {it.contains("GENERATED_AGENT_A_VISIBLE_TEXT")});assertFalse(text.any {it.contains("GENERATED_AGENT_B_VISIBLE_TEXT")})}
+            assertThrows(CentralFailure::class.java) {b.get("/api/agent-view/material-read?ref="+CentralScreens.encode(row.getString("ref")))}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {expand.performClick()};ready()
+            scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_AGENT_A_VISIBLE_TEXT")})}
+        }
+    }
+
     @Test fun originalNativeBrowserLoginReturnsACentralSessionWhileDevicePairingRemainsScoped() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")

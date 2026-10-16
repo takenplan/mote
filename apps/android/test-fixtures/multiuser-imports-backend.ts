@@ -3,6 +3,7 @@ import {createServer} from 'node:http';
 import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider.js';
 import {scopedFilesFixture} from '../../server/test/fixtures/scoped-files.js';
 import {defaultModelSettings} from '../../server/src/model-settings.js';
+import {waitForScopedState} from '../../server/test/fixtures/scoped-process.js';
 
 // Actual M01/M03/M04/M05/M06 private preview and confirmation. Only model HTTP
 // responses are generated. No live model, real documents or external account.
@@ -30,6 +31,12 @@ for(const[actor,label]of [[f.a,'A'],[f.b,'B']] as const){
  let view=await f.checked(actor.token,'/api/configuration');const memory=view.domains.find((domain:any)=>domain.id==='memory').effective;
  await f.checked(actor.token,'/api/configuration/memory','PUT',{revision:view.revision,value:{...memory,automatic:false,integration:false,lifecycle:{...memory.lifecycle,insights:{...memory.lifecycle.insights,enabled:false},working:{...memory.lifecycle.working,enabled:false},consolidation:{...memory.lifecycle.consolidation,enabled:false}}}});
  view=await f.checked(actor.token,'/api/configuration');await f.checked(actor.token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[{id:'generated-import',name:'Generated import mapper',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-native-import',baseUrl:'http://127.0.0.1:'+modelAddress.port+'/v1',apiKey:'GENERATED_'+label}}],selections:{import:{kind:'personal',id:'generated-import'}}}});
+}
+if(process.argv.includes('--agent'))for(const[actor,label]of [[f.a,'A'],[f.b,'B']] as const){
+ const created=await f.request(actor.token,'/api/imports','POST',{requestId:'10000000-0000-4000-8000-000000000001',processing:'automatic',files:[{name:'generated-agent.txt',mimeType:'text/plain',dataBase64:Buffer.from('GENERATED_AGENT_'+label+'_VISIBLE_TEXT').toString('base64')}]});
+ if(created.statusCode!==202)throw Error('Generated Agent original admission '+created.statusCode);
+ await waitForScopedState(async()=>(await f.checked(actor.token,'/api/imports/'+created.json().id)).status==='completed',()=>'Generated Agent original did not complete');
+ await waitForScopedState(async()=>(await f.checked(actor.token,'/api/agent-view/catalog?path=/context/episodes&limit=1')).entries.length>0,()=>'Generated Agent canonical Material missing');
 }
 const control=createServer((request,response)=>{
  if(request.method!=='POST'){response.statusCode=404;response.end();return;}
