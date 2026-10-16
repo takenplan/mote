@@ -101,7 +101,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     if(execution&&memory){ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);if(processing)ask.bindProcessing(processing);mcp?.bindAsk(ask);}
     const todos=ask?registerScopedTodos(runtime,storage.db):undefined;
     if(execution&&ask)actions=registerScopedActions(runtime,storage.db,configuration,execution,ownerQuestions,ask,ingress);
-    if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
+    if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,cursorKey:privateCursorKey,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(connectors&&mcp){const host=mcp;connectors.registerSourceStatusReader((context,ids)=>host.forUser(context).sourceStatuses(ids));}
     if(execution){registerTaskRoutes(runtime,execution,privateCursorKey);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await lifecycle?.close();await mcp?.close();await execution.close();await contentStorage?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
     if(lifecycle&&ask)lifecycle.bindImportPublication((context,work)=>ask!.automations.preserveImportEvents(context,work));

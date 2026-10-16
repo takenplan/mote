@@ -331,3 +331,5 @@ reviewer execution or final required acceptance.
 Separately, the two original Web Actions files pass2/2,no skip,101.86s unchanged
 (`/tmp/m15-web-actions-original-two.log/.exit`). The old full-run proposal timeout
 failures remain. No Web observation or approval assertion was changed.
+
+Recording reader37c8ac83 consumed by Web recording feature; owner evidence and exact bounds are in multiuser-connectors.md.
