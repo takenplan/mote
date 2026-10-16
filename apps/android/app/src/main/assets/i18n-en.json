@@ -8366,5 +8366,6 @@
   "登录后访问个人资料": "Sign in to access your personal context",
   "已生成的批次": "Persisted batches",
   "生成 {0} 条记忆": "Created {0} memories",
-  "已删除": "Deleted"
+  "已删除": "Deleted",
+  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions changed. The completion receipt is retained; open the memory to check its currently readable version."
 }

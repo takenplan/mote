@@ -13,7 +13,7 @@ import {Layers3,LoaderCircle,RefreshCw,Sparkles,Trash2} from 'lucide-react';
 import {AnswerMarkdown} from './AnswerMarkdown';
 import {ArchivedFileButton} from './ArchivedFileButton';
 import {MemoryProgress,useMemoryJob,memoryJobLabel,type MemoryJob} from './MemoryProgress';
-import {ScopedMemoryProgress,useScopedMemoryJob,scopedMemoryState,scopedMemoryLabel,type ScopedMemoryJob} from './ScopedMemoryProgress';
+import {ScopedMemoryProgress,useScopedMemoryJob,scopedMemoryState,scopedMemoryLabel,scopedMemoryResults,type ScopedMemoryJob} from './ScopedMemoryProgress';
 import {ManualMemoryRecipes} from './ManualMemoryRecipes';
 import {MemoryIntegration,currentIntegrationCandidate} from './MemoryIntegration';
 import type {Material} from './Materials';
@@ -67,7 +67,8 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
   const [recipes,setRecipes]=useState<MemoryRecipeRef[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(null),[selectedReadScope,setSelectedReadScope]=useState(''),[mutationError,setError]=useState(''),[mutationNotice,setMutationNotice]=useState(''),[busy,setBusy]=useState(false),[filter,setFilter]=useState('all'),[confirmDelete,setConfirmDelete]=useState(false);
   const [search,setSearch]=useState(''),[query,setQuery]=useState(''),[tier,setTier]=useState(''),[layer,setLayer]=useState('memory'),[cursor,setCursor]=useState<string>();
-  const [jobId,setJobId]=useState<string>(),[jobCursor,setJobCursor]=useState<string>();
+  const [jobId,setJobId]=useState<string>(),[jobCursor,setJobCursor]=useState<string>(),[correctionRun,setCorrectionRun]=useState<{id:string;sourceId:string}>();
+  const correctionIntent=useRef<{owner:Api;memoryId:string;body:string;id:string}|undefined>(undefined);
   const [history,setHistory]=useState(false),[asOf,setAsOf]=useState(''),[correcting,setCorrecting]=useState(false),[correction,setCorrection]=useState({title:'',statement:'',uncertainty:'',validFrom:'',validUntil:''});
   const {job,error:jobError,reload:reloadJob}=useMemoryJob(api,scoped?undefined:jobId,refreshVersion);
   const scopedRead=useScopedMemoryJob(api,jobId,refreshVersion),scopedJob=scopedRead.data;
@@ -86,10 +87,15 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
   function refresh(){resources(api).invalidate(key=>/^\/api\/(memories|memory-jobs|memory\/jobs)([/?]|$)/.test(key));}
   useEffect(()=>{setJobId(current=>current??jobs.find(item=>['queued','running','pausing','paused','failed','waiting_for_model','waiting_for_input'].includes(item.status))?.id);},[jobList.data]);
   useEffect(()=>{if(scoped)setJobId(current=>current??scopedJobs.data?.items.find(item=>['waiting','running','paused','failed','blocked','needs_input'].includes(scopedMemoryState(item)))?.id);},[scoped,scopedJobs.data]);
-  useEffect(()=>{const sameSession=selectionApi.current===api;selectionApi.current=api;setCursor(undefined);if(!sameSession){setJobId(undefined);setJobCursor(undefined);}if(!(sameSession&&preserveSelection.current)){setSelectedId(null);setSelectedReadScope('');setCreatedMemoryId(undefined);}preserveSelection.current=false;},[api,selectionScope,query,tier,layer,filter,history,asOf]);
+  useEffect(()=>{const sameSession=selectionApi.current===api;selectionApi.current=api;setCursor(undefined);if(!sameSession){setJobId(undefined);setJobCursor(undefined);setCorrectionRun(undefined);correctionIntent.current=undefined;}if(!(sameSession&&preserveSelection.current)){setSelectedId(null);setSelectedReadScope('');setCreatedMemoryId(undefined);}preserveSelection.current=false;},[api,selectionScope,query,tier,layer,filter,history,asOf]);
   useEffect(()=>setMutationNotice(''),[api]);
   useEffect(()=>{if(job?.status==='completed'||job?.status==='failed')refresh();},[job?.id,job?.status]);
   useEffect(()=>{if(scopedJob&&['succeeded','failed'].includes(scopedMemoryState(scopedJob)))refresh();},[scopedJob?.id,scopedJob&&scopedMemoryState(scopedJob)]);
+  useEffect(()=>{
+    if(!correctionRun||scopedJob?.id!==correctionRun.id||scopedMemoryState(scopedJob)!=='succeeded')return;
+    const id=scopedMemoryResults(scopedJob)[0];setCorrectionRun(undefined);
+    if(id&&selectedId===correctionRun.sourceId){setCreatedMemoryId(id);setSelectedId(id);if(onChanged){preserveSelection.current=rangeSelectionKey===undefined;onChanged();}}
+  },[correctionRun,scopedJob,selectedId]);
   async function extract(){
     if(explicitSource&&!selectionReady)return;
     setBusy(true);setError('');
@@ -102,7 +108,24 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
     // time filter. Read its exact result ID while keeping the device filter.
     if(job?.memoryIds[0])open(job.memoryIds[0],range.deviceId?{deviceId:range.deviceId}:{});
   }
-  async function saveCorrection(){if(!detail)return;setBusy(true);setError('');try{const result=await api.request<Memory>('/api/memories/'+encodeURIComponent(detail.id)+'/correct',{method:'POST',body:JSON.stringify({...correction,version:detail.version??1,validFrom:correction.validFrom?new Date(correction.validFrom).toISOString():undefined,validUntil:correction.validUntil?new Date(correction.validUntil).toISOString():undefined})});setCorrecting(false);setCreatedMemoryId(result.id);setSelectedId(result.id);if(onChanged){preserveSelection.current=rangeSelectionKey===undefined;onChanged();}refresh();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
+  async function saveCorrection(){
+    if(!detail)return;const owner=api;setBusy(true);setError('');
+    const value={...correction,version:detail.version??1,validFrom:correction.validFrom?new Date(correction.validFrom).toISOString():undefined,validUntil:correction.validUntil?new Date(correction.validUntil).toISOString():undefined};
+    try{
+      if(scoped){
+        const body=JSON.stringify(value),previous=correctionIntent.current;
+        const intent=previous?.owner===owner&&previous.memoryId===detail.id&&previous.body===body?previous:{owner,memoryId:detail.id,body,id:crypto.randomUUID()};correctionIntent.current=intent;
+        const result=await owner.request<ScopedMemoryJob>('/api/memories/'+encodeURIComponent(detail.id)+'/correct',{method:'POST',body:JSON.stringify({operationId:intent.id,correction:value})});
+        if(selectionApi.current!==owner)return;setCorrecting(false);setJobId(result.id);setCorrectionRun({id:result.id,sourceId:detail.id});correctionIntent.current=undefined;
+      }else{
+        const result=await owner.request<Memory>('/api/memories/'+encodeURIComponent(detail.id)+'/correct',{method:'POST',body:JSON.stringify(value)});
+        if(selectionApi.current!==owner)return;setCorrecting(false);setCreatedMemoryId(result.id);setSelectedId(result.id);
+        if(onChanged){preserveSelection.current=rangeSelectionKey===undefined;onChanged();}
+      }
+      refresh();
+    }catch(e){if(selectionApi.current===owner)setError(errorMessage(e));}finally{if(selectionApi.current===owner)setBusy(false);}
+  }
+
   async function remove(){if(!detail)return;const owner=api;setBusy(true);setError('');setMutationNotice('');try{const receipt=await owner.request<MemoryDeleteReceipt>('/api/memories/'+encodeURIComponent(detail.id),{method:'DELETE'});if(selectionApi.current!==owner)return;setMutationNotice(deletionNotice(receipt));setSelectedId(current=>current===detail.id?null:current);setConfirmDelete(false);refresh();}catch(e){if(selectionApi.current===owner)setError(errorMessage(e));}finally{if(selectionApi.current===owner)setBusy(false);}}
   async function download(){if(!detail)return;try{const blob=new Blob([moteText("# {0}\n\n{1}\n\n## 判断边界\n\n{2}\n\n## 原始证据\n\n{3}\n", detail.title, detail.statement??'', detail.uncertainty??'', JSON.stringify(detail.evidence??[],null,2))],{type:'text/markdown'});const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='memory.md';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){setError(errorMessage(e));}}
   async function scopedControl(action:'pause'|'resume'|'cancel'|'retry'){if(!scopedJob)return;const owner=api;setBusy(true);setError('');try{await owner.request('/api/memory/jobs/'+encodeURIComponent(scopedJob.id)+'/'+action,{method:'POST',body:'{}'});if(selectionApi.current!==owner)return;scopedRead.refresh();refresh();}catch(e){if(selectionApi.current===owner)setError(errorMessage(e));}finally{if(selectionApi.current===owner)setBusy(false);}}

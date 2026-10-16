@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions changed. The completion receipt is retained; open the memory to check its currently readable version.",
   "已删除": "Deleted",
   "生成 {0} 条记忆": "Created {0} memories",
   "已生成的批次": "Persisted batches",

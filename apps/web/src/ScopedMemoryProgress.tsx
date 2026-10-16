@@ -10,10 +10,10 @@ export type ScopedMemoryJob={id:string;state:string;current:boolean;batches:{id:
 export function scopedMemoryState(job:ScopedMemoryJob){
  if(['cancelled','deleted','paused'].includes(job.state))return job.state;
  if(job.state==='awaiting_context')return 'needs_input';
- if(!job.current)return 'stale';
  const states=Object.values(job.tasks).map(task=>task.state);
  if(states.includes('failed'))return 'failed';if(states.includes('blocked'))return 'blocked';if(states.includes('stale'))return 'stale';
  if(states.length&&states.every(state=>state==='succeeded')&&job.state==='committed')return 'succeeded';
+ if(!job.current)return 'stale';
  if(states.includes('running'))return 'running';return 'waiting';
 }
 export const scopedMemoryLabel=(job:ScopedMemoryJob)=>({waiting:moteText('等待提取记忆'),running:moteText('正在分批提取记忆'),succeeded:moteText('记忆提取完成'),failed:moteText('部分记忆提取需要重试'),blocked:moteText('需要处理'),needs_input:moteText('需要处理'),stale:moteText('资料已更新，本次结果失效'),cancelled:moteText('记忆提取已停止'),deleted:moteText('已删除'),paused:moteText('已暂停')} as Record<string,string>)[scopedMemoryState(job)];
@@ -28,6 +28,7 @@ export function useScopedMemoryJob(api:Api,id?:string,revision?:unknown){
 export function ScopedMemoryProgress({job,busy=false,onAction,onView}:{job:ScopedMemoryJob;busy?:boolean;onAction:(action:'pause'|'resume'|'cancel'|'retry')=>void;onView?:(id:string)=>void}){
  const state=scopedMemoryState(job),results=scopedMemoryResults(job),failed=Object.values(job.tasks).filter(task=>['failed','blocked','stale'].includes(task.state));
  return <section className="memory-progress" aria-label={moteText('记忆处理进度')} aria-live="polite"><div className="workflow-line"><div><strong>{scopedMemoryLabel(job)}</strong><p>{job.batches.filter(batch=>batch.state==='committed').length} / {job.batches.length} · {moteText('已生成的批次')}</p></div></div>
+ {!job.current&&<p className="notice">{moteText('输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。')}</p>}
  {state==='succeeded'&&<p>{moteText('生成 {0} 条记忆',results.length)}</p>}
  {failed.map(task=><p key={task.id} role="status">{failureMessage(task.failure??task.error??task.state)}</p>)}
  <details className="run-details"><summary>{moteText('处理详情')}</summary>{Object.entries(job.tasks).map(([stage,task])=><p key={task.id}><code>{stage}</code> · {task.state}{task.error?' · '+task.error:''}</p>)}<code>{job.id}</code></details>
