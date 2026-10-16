@@ -153,6 +153,15 @@ cleanup exits are retained; no static review is counted as these executions.
   records only actor labels/request metadata. These new tests are not compiled,
   executed or called RED yet; QR owns the heavy window. The prior357 tests and
   eight native passes remain evidence for their exact pre-composition SHA.
+
+  New public dependency RED0d60ded2 is separate from the unrun Android test:
+  real A forget→allow-again→same bytes/revision re-upload (same capture UUID)
+  →second forget→repeat first allow-again body still returns200. The intended
+  current-decision rejection assertion fails200!=409 in1.68s,0/1,no skip,
+  `/tmp/m15-forget-same-incarnation-red.log/.exit`. B uses the same capture ID;
+  no cross-account disclosure is asserted. The durable source test is
+  `apps/server/test/multiuser-file-forget-incarnation.test.ts`. Joint owns the
+  producer fix; no duplicate backend or accepted final combination is claimed.
 - **Already visible pairing capability on resume:** a test-only characterization
   is saved in4ec729a6. Original A invitation input/dialog is visible; hold only the
   Activity's existing background resolver, switch through actual B login and
