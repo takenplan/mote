@@ -94,6 +94,7 @@ function trackNote<T>(task: Promise<T>): Promise<T> {
 async function settleNoteWork(): Promise<void> { while (noteWork.size) await Promise.allSettled([...noteWork]); }
 let settings: Config;
 let accountGeneration=0;
+let accountTransition=false;
 let recoveryRequired: string | undefined;
 const events = new EventJournal(join(profile.dataDirectory, 'diagnostics'), () => Boolean(settings?.diagnosticsEnabled));
 let pendingNoteStatus = () => ({ count: 0, unbound: true, baseRecords: undefined as number | undefined });
@@ -136,6 +137,7 @@ function trayIcon(): Electron.NativeImage {
   return icon;
 }
 function updateUi(status: Status): void {
+  if(accountTransition)return;
   status = { ...includePreparedNote(status), authorizationGeneration:accountGeneration, operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } };
   if (window && !window.isDestroyed()) window.webContents.send('mote:status', status);
   tray?.setToolTip(moteText("Mote [{0}] · {1} · 待上传 {2}", profile.name, status.running ? moteText("采集中") : moteText("已停止"), status.queueDepth));
@@ -322,6 +324,10 @@ else {
       await settleNoteWork();
       const releaseCollector=await collector.suspendForSettings();
       const oldSources=localSources!;const releaseSources=await oldSources.holdConnection();
+      // Revoke every old document entry, including bootstrap, before replacing
+      // any private reference. Retired and initializing collectors may publish
+      // internally, but their intermediate state cannot reach a renderer.
+      accountTransition=true;accountGeneration++;activePageUrl=pageUrl+'?document='+randomUUID();
       try {
         await calendarDelivery;
         await accounts.remember(previous);
@@ -350,14 +356,15 @@ else {
           holdNext();collector.initialize();
         }
         pendingStorageDirectory=undefined;sourceSelections.clear();onboarding.clear();
-        accountGeneration++;connectionState={state:'unchecked',message:moteText('连接已保存，可测试权限与节点版本')};
+        connectionState={state:'unchecked',message:moteText('连接已保存，可测试权限与节点版本')};
         // Revoke the old document before sending any new account status. Each
         // navigation has a fresh unguessable bootstrap URL, including get-status.
-        await loadAccountDocument();
+        await loadAccountDocument();accountTransition=false;
         updateUi(clientStatus());
       }catch(error){
         const persisted=await store.load().catch(()=>undefined);
         if(!persisted||!sameAccount(persisted,previous)||persisted.token!==previous.token||persisted.authSignedOut!==previous.authSignedOut)requireRecovery('Desktop account transition needs restart; all account data was preserved');
+        else {await loadAccountDocument();accountTransition=false;updateUi(clientStatus());}
         throw error;
       }finally{releaseSources();await releaseCollector();}
     };
