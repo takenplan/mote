@@ -14,7 +14,7 @@ export class DeletedCaptureFailure extends TransportFailure {}
 
 
 export async function uploadCapture(config: Config, event: CaptureEvent, image?: Buffer, signal?: AbortSignal, onBytes?: (bytes: number) => void): Promise<void> {
-  if(config.account){await uploadAccountCaptures(config,[{event,image}],signal,onBytes);return;}
+  if(config.account){const receipts=await uploadAccountCaptures(config,[{event,image}],signal,onBytes),status=receipts.get(event.id);if(status!==200)throw new TransportFailure('Account capture was not acknowledged',httpFailure(status??500),status);return;}
   const origin = validateServerUrl(config.serverUrl);
   if (!connectionToken(config)) throw new TransportFailure(moteText("请配置中央节点访问令牌"), 'CONFIG_INVALID');
   let response: Response;

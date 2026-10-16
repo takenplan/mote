@@ -35,13 +35,20 @@ export async function uploadAccountCaptures(config:Config,entries:readonly {even
   const first=group[0].event,sourceId='desktop-'+ingressKey([first.deviceId,first.platform]).slice(0,40);
   await ingressRequest(config,'/api/ingress/devices',{id:first.deviceId,name:first.deviceName,platform:first.platform},'POST',signal);
   await ingressRequest(config,'/api/ingress/sources',{id:sourceId,name:first.deviceName,kind:'mote.desktop',deviceId:first.deviceId,platform:first.platform,retention:'archive'},'POST',signal);
-  // One immutable event per receipt: partial failures and state-series extensions
-  // never reuse a batch key for different bytes. Existing fair queue slices remain.
-  for(const entry of group){
-   signal?.throwIfAborted();const item={...entry.event,...(entry.image?{imageBase64:entry.image.toString('base64')}:{})},batchId='capture-'+ingressKey(item);
-   const receipt=await ingressRequest(config,`/api/ingress/sources/${sourceId}/captures`,{batchId,items:[item]},'POST',signal,onBytes);
-   requireAccountReceipt(receipt,config,sourceId,batchId,[{id:entry.event.id}]);result.set(entry.event.id,200);
-  }
+  // Batch identity includes the complete immutable payload. Prefix extensions
+  // and split retries therefore cannot reuse a key for different bytes.
+  const send=async(batch:typeof group):Promise<void>=>{
+   signal?.throwIfAborted();const items=batch.map(entry=>({...entry.event,...(entry.image?{imageBase64:entry.image.toString('base64')}:{})})),batchId='capture-'+ingressKey(items);
+   try{
+    const receipt=await ingressRequest(config,`/api/ingress/sources/${sourceId}/captures`,{batchId,items},'POST',signal,onBytes);
+    requireAccountReceipt(receipt,config,sourceId,batchId,batch.map(entry=>({id:entry.event.id})));for(const entry of batch)result.set(entry.event.id,200);
+   }catch(error){
+    if(error instanceof TransportFailure&&[409,410,413].includes(error.httpStatus??0)&&batch.length>1){const middle=Math.ceil(batch.length/2);await send(batch.slice(0,middle));await send(batch.slice(middle));}
+    else if(error instanceof TransportFailure&&[409,410].includes(error.httpStatus??0))result.set(batch[0].event.id,error.httpStatus!);
+    else throw error;
+   }
+  };
+  if(config.packedUpload)await send(group);else for(const entry of group)await send([entry]);
  }
  return result;
 }

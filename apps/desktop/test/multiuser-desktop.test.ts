@@ -193,7 +193,7 @@ it('retires the actual preload document including status bootstrap after account
  await expect(app.documentCall('A','noteDraft')).rejects.toThrow();await app.document('B');expect((await app.documentCall('B','status')).config.account.userId).toBe(f.b.userId);
 });
 
-it('preserves packed production uploads and rejects a foreign batch ACK before queue deletion',async()=>{
+it('preserves packed production uploads and exact item ACKs',async()=>{
  const f=await fixture(),config={...f.config(f.a),packedUpload:true},queue=new DurableQueue(join(f.directory,'packed'),config);await queue.initialize();
  for(const id of ['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002'])await queue.enqueue({...event(id),deviceId:config.deviceId},image);
  const collector=new Collector(config,queue,'/generated/no-helper',()=>true,()=>{});cleanup.push(async()=>{collector.shutdown();const release=await collector.holdConnection();release();});await collector.upload(true);
