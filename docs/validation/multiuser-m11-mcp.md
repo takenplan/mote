@@ -63,6 +63,14 @@ M07 feedback1d actual two-process SIGKILL independently1/1exit0,36077.261291ms,
 pagination/worker/full-longturn/span pause-restart independent4/4exit0,
 `/tmp/m11-review-m08-80cf-{narrow,working}.log/.exit`.
 
+The actual SDK `mote://memories` resource now has its own held-provider
+credential-revocation regression, in addition to the read-tool matrix. A revoked
+A resource read returns a fixed error without body or credentials while the same
+URI on B returns identical private bytes. With the existing actual provider
+failure/no-SQL-fallback scenario, **2/2**,exit0,10938.556917ms:
+`/tmp/m11-resource-real-provider-revoke.log/.exit`. This is a real resource
+callback over M07/M09; no neighboring service substitute is used.
+
 Two additional real outbound instance-lifecycle cases retain the existing
 restart-required policy contract: a saved local-access candidate leaves the
 current effective value unchanged, real host restart closes a held old SDK
