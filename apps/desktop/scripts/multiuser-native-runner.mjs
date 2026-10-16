@@ -36,4 +36,4 @@ try{
  const a=await login('generated-a'),b=await login('generated-b');assert.equal((await request(a.token,'/api/captures/'+aNote)).statusCode,200);assert.equal((await request(b.token,'/api/captures/'+aNote)).statusCode,404);assert.equal((await request(b.token,'/api/captures/'+bNote)).statusCode,200);assert.equal((await request(a.token,'/api/captures/'+bNote)).statusCode,404);
  console.log(JSON.stringify({ok:true,actualElectronMainPreloadRenderer:true,generatedExternalIOOnly:true,offlineA:true,bStartsStopped:true,sigkillRestartB:true,aDraftAndQueueResume:true,backendAccountIsolation:true}));
  desktop.running.send({type:'quit'});await new Promise(resolve=>desktop.running.once('exit',resolve));
-}finally{if(child&&child.exitCode===null){child.kill('SIGKILL');await new Promise(resolve=>child.once('exit',resolve));}await node?.app.close();await rm(directory,{recursive:true,force:true});}
+}finally{if(child&&child.exitCode===null&&child.signalCode===null){child.kill('SIGKILL');await new Promise(resolve=>child.once('exit',resolve));}await node?.app.close();await rm(directory,{recursive:true,force:true});}

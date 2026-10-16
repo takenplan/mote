@@ -136,7 +136,7 @@ export class PrivateData{
     const head=this.sourceItem(sourceId,externalId);
     return this.sql.all('SELECT id FROM pd_captures WHERE user_id=$user AND source_id=? AND external_id=? ORDER BY received_at DESC,id DESC LIMIT 100',sourceId,externalId).map(r=>this.item(String(r.id),r.id===head?.captureId));
   }
-  private filter(raw:ListInput,collection:'captures'|'source-items'|'materials',sourceIds?:readonly string[]){
+  private filter(raw:ListInput,collection:'captures'|'capture-previews'|'source-items'|'materials',sourceIds?:readonly string[]){
     const args=privateListSchema.parse(raw),{cursor,limit,...filters}=args;
     if(filters.sourceId)this.source(filters.sourceId);
     const query={collection,...filters,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}:{})},position=cursor?this.cursor.decode(cursor,query):undefined;
