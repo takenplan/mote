@@ -25,7 +25,7 @@ internal class Ingress3Client(
         verify() // No private bytes leave before this exact credential is verified.
         check(current())
         val (status, value) = request(method, path, body)
-        if (status !in 200..299 || value == null) throw FileTransportFailure(status, "Ingress3 request failed")
+        if (status !in 200..299 || value == null) throw FileTransportFailure(status, "Ingress3 request failed", value?.optString("error").orEmpty())
         check(current()) { "Account changed" }
         return value
     }
