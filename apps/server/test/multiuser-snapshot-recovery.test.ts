@@ -4,6 +4,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
+import {DatabaseSync} from 'node:sqlite';
 import {buildApp} from '../src/app.js';
 import {bytesHash} from '../src/scope/originals.js';
 import {defaultProcessingSettings} from '../src/scope/processing-schema.js';
@@ -21,7 +22,8 @@ async function fixture(t:TestContext){
  const send=async(token:string,upload:any)=>{if(!upload.receipt){await checked(token,'/api/ingress/uploads/'+upload.id+'/parts/0','PUT',{bytes:bytes.toString('base64'),checksum:bytesHash(bytes)});return checked(token,'/api/ingress/uploads/'+upload.id+'/commit','POST',{});}return upload.receipt;};
  const upload=async(token:string)=>send(token,await checked(token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'first',revision}));
  const wait=async(token:string,id:string)=>{for(let count=0;count<1000;count++){const task=await checked(token,'/api/tasks/'+id);if(['succeeded','blocked','failed','stale','cancelled'].includes(task.state))return task;await delay(10);}assert.fail('Generated task did not settle');};
- return {node,a,b,admin,bytes,revision,request,checked,send,upload,wait};
+ const expire=()=>{const db=new DatabaseSync(join(directory,'mote.sqlite'));try{const inputs=db.prepare('SELECT expires FROM ig_snapshot_inputs').all();assert.ok(inputs.length);assert.ok(inputs.every(row=>Number(row.expires)>Date.now()&&Number(row.expires)<=Date.now()+86400000));db.prepare('UPDATE ig_snapshot_inputs SET expires=?').run(Date.now()-1);}finally{db.close();}};
+ return {node,a,b,admin,bytes,revision,request,checked,send,upload,wait,expire};
 }
 
 test('snapshot byte release preserves authorization metadata and published M06 extraction reads',async t=>{
@@ -31,6 +33,8 @@ test('snapshot byte release preserves authorization metadata and published M06 e
  const status=await f.checked(f.a.token,'/api/processing/originals/'+original.ref.slice(9));assert.equal(status.processed,true);assert.equal(status.indexed,true);assert.equal(status.original.available,false);
  assert.equal((await f.checked(f.a.token,'/api/processing/artifacts/'+result.result.artifactId)).originalRef,original.ref);
  assert.equal((await f.checked(f.a.token,'/api/materials/'+status.materialId+'/read')).text,f.bytes.toString());
+ await f.checked(f.a.token,'/api/ingress/gc','POST',{});assert.equal((await f.checked(f.a.token,'/api/processing/artifacts/'+result.result.artifactId)).originalRef,original.ref);
+ const archive=await f.node.services.forUser(context).exportUser('ingress'),payload=archive.payload as any;assert.equal(payload.originals.length,1);assert.equal(payload.objects.length,0);assert.deepEqual(payload.snapshots,[{id:original.ref.slice(9),expires:0,bytes:f.bytes.length}]);
  assert.equal((await f.request(f.a.token,'/api/ingress/originals/'+original.ref.slice(9)+'/tickets','POST',{mode:'download'})).statusCode,410);
  assert.deepEqual((await f.checked(f.a.token,'/api/ingress/sources/same-source/recovery')).items,[]);
  assert.equal((await f.request(f.b.token,'/api/processing/originals/'+original.ref.slice(9))).statusCode,404);
@@ -38,15 +42,27 @@ test('snapshot byte release preserves authorization metadata and published M06 e
 
 test('expired unprocessed current snapshot recovers exact bytes through existing upload worker without adopting B',async t=>{
  const f=await fixture(t),ar=await f.upload(f.a.token),br=await f.upload(f.b.token),original=ar.captures[0].original;
- const now=Date.now();t.mock.method(Date,'now',()=>now+86400001);
+ f.expire();
  assert.equal((await f.request(f.a.token,'/api/ingress/originals/'+original.ref.slice(9)+'/tickets','POST',{mode:'download'})).statusCode,410);
  const task=await f.checked(f.a.token,'/api/processing','POST',{originalRef:original.ref,operationId:'generated-expired'}),blocked=await f.wait(f.a.token,task.id);assert.equal(blocked.state,'blocked',JSON.stringify(blocked));assert.equal(blocked.failure.code,'snapshot_input_expired');
- const needed=await f.checked(f.a.token,'/api/ingress/sources/same-source/recovery');assert.deepEqual(needed.items,[{captureId:ar.captures[0].id,externalId:'same-file',revision:'r1',sha256:f.revision.sha256,sizeBytes:f.bytes.length,observedAt:f.revision.item.observedAt}]);
- const path='/api/ingress/sources/same-source/recovery/'+ar.captures[0].id+'/uploads',value={batchId:'recover-exact',revision:{...f.revision,previousRevision:'r1'}};
- for(const revision of [{...value.revision,sha256:'0'.repeat(64)},{...value.revision,sizeBytes:1},{...value.revision,item:{...value.revision.item,observedAt:'2026-10-14T00:00:00Z'}}])assert.equal((await f.request(f.a.token,path,'POST',{...value,revision})).statusCode,409);
+ await f.checked(f.a.token,'/api/ingress/gc','POST',{});
+ const needed=await f.checked(f.a.token,'/api/ingress/sources/same-source/recovery');assert.equal(needed.items.length,1);assert.match(needed.items[0].recoveryId,/^[a-f0-9]{64}$/);assert.deepEqual(needed.items,[{captureId:ar.captures[0].id,externalId:'same-file',revision:'r1',sha256:f.revision.sha256,sizeBytes:f.bytes.length,observedAt:new Date(f.revision.item.observedAt).toISOString(),recoveryId:needed.items[0].recoveryId}]);
+ const path='/api/ingress/sources/same-source/recovery/'+ar.captures[0].id+'/uploads',value={batchId:'recover-exact',revision:{...f.revision,previousRevision:'r1'},recoveryId:needed.items[0].recoveryId};
+ for(const revision of [{...value.revision,sha256:'0'.repeat(64),item:{...value.revision.item,document:{fileIndex:{...value.revision.item.document.fileIndex,contentVersion:'0'.repeat(64)}}}},{...value.revision,sizeBytes:1},{...value.revision,item:{...value.revision.item,observedAt:'2026-10-14T00:00:00Z'}}])assert.equal((await f.request(f.a.token,path,'POST',{...value,revision})).statusCode,409);
  const upload=await f.checked(f.a.token,path,'POST',value);assert.equal((await f.request(f.b.token,'/api/ingress/uploads/'+upload.id)).statusCode,404);
  const recovered=await f.send(f.a.token,upload);assert.equal(recovered.captures[0].original.ref,original.ref);assert.equal(recovered.captures[0].original.available,true);
+ assert.equal((await f.checked(f.a.token,path,'POST',value)).id,upload.id,'lost recovery ACK reuses the exact session');assert.equal((await f.request(f.a.token,path,'POST',{...value,recoveryId:'0'.repeat(64)})).statusCode,409);
  assert.equal((await f.checked(f.b.token,'/api/ingress/sources/same-source/originals')).items[0].ref,br.captures[0].original.ref);
  assert.equal((await f.checked(f.b.token,'/api/ingress/sources/same-source/originals')).items[0].available,false);
- await f.checked(f.a.token,'/api/tasks/'+task.id+'/retry','POST',{});const complete=await f.wait(f.a.token,task.id);assert.equal(complete.state,'succeeded',JSON.stringify(complete));assert.deepEqual((await f.checked(f.a.token,'/api/ingress/sources/same-source/recovery')).items,[]);
+ const complete=await f.wait(f.a.token,task.id);assert.equal(complete.state,'succeeded',JSON.stringify(complete));assert.deepEqual((await f.checked(f.a.token,'/api/ingress/sources/same-source/recovery')).items,[]);
+});
+
+test('an exact original pin protects expired processing bytes without granting a download or changing ordinary capture retention',async t=>{
+ const f=await fixture(t),receipt=await f.upload(f.a.token),original=receipt.captures[0].original,context=await f.node.authority.authenticate(f.a.token),service=f.node.ingress.forUser(context),release=service.holdOriginal(original.ref);
+ const id='00000000-0000-4000-8000-000000000014',capture=await f.checked(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId:'ordinary-capture',items:[{id,deviceId:'same-device',deviceName:'Generated',platform:'import',capturedAt:'2026-10-15T00:00:00Z',durationMs:0,source:'screen',ocrText:'',imageMime:'image/png',imageBase64:Buffer.from('Generated ordinary capture').toString('base64')}]});
+ f.expire();await f.checked(f.a.token,'/api/ingress/gc','POST',{});assert.deepEqual(service.readOriginal(original.ref).bytes,f.bytes);assert.equal(service.readOriginal(original.ref,{length:0}).available,false);
+ assert.equal((await f.request(f.a.token,'/api/ingress/originals/'+original.ref.slice(9)+'/tickets','POST',{mode:'download'})).statusCode,410);
+ release();await f.checked(f.a.token,'/api/ingress/gc','POST',{});assert.throws(()=>service.readOriginal(original.ref),{code:'snapshot_input_expired'});assert.equal(service.readOriginal(original.ref,{length:0}).totalBytes,f.bytes.length);
+ assert.equal(service.readOriginal(capture.captures[0].original.ref,{length:0}).available,true);
+ assert.deepEqual((await f.checked(f.a.token,'/api/ingress/sources/same-source/recovery')).items,[],'without a waiting extraction there is no automatic recovery request');
 });
