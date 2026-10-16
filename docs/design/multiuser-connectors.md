@@ -200,3 +200,21 @@ new model/provider job or permission.
 This increment does not add ordinary CLI installation, new vendor aliases,
 oversized-calendar result storage or a second connector runtime. Broader
 recording/Lark capabilities and current final validation remain open.
+
+### Lark calendar inventory beyond task metadata
+
+An explicit Lark `calendars` operation whose full UTF-8 result exceeds the
+existing task metadata budget retains the complete inventory in the existing
+connector encrypted vault, under its deployment/user/connection/storage and
+authorization epoch. The stored proof also pins the connection generation and
+actual admitted task ID. Its small successful task result is
+`{calendarInventory:taskId,count}`. The existing owned `GET /api/connectors/:id`
+exposes `calendarInventory:{taskId,items}` only for that same current generation.
+The original Lark consumer requires the exact task ID, count, unique IDs and
+calendar field types before replacing its choices; an intervening discovery or
+configuration change rejects rather than adopting a different result. No title
+or list is truncated. Small inventory results keep their original shape. This
+adds no route, table, scheduler, provider call or new execution authority.
+Disconnect uses the existing vault retirement; lifecycle export/deletion and
+instance backup already cover the same encrypted state. The inventory is a
+read-only discovery receipt and never grants calendar write or source admission.

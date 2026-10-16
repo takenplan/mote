@@ -39,7 +39,19 @@ export function scopedLarkApi(api:Api,id:string):Api{
  async function submit(operation:string,payload:unknown,kind:LarkJob['kind'],signal?:AbortSignal|null,wait=false){
   await base(signal);check(signal);const key=JSON.stringify([operation,payload]);if(intent?.key!==key)intent={key,body:JSON.stringify({operation,payload,operationId:crypto.randomUUID()})};
   const task=await api.request<Task>(path+'/operations',{method:'POST',body:intent.body,signal});check(signal);if(!/^[a-f0-9]{64}$/.test(task.id))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));intent=undefined;const current={id:task.id,kind};pending=current;await apply(task,current,signal);
-  if(wait){let value=task;while(!terminal.has(value.state)){await new Promise<void>((resolve,reject)=>{const timer=setTimeout(done,100);function done(){signal?.removeEventListener('abort',abort);resolve();}function abort(){clearTimeout(timer);reject(signal?.reason);}signal?.addEventListener('abort',abort,{once:true});});check(signal);value=await api.request<Task>('/api/tasks/'+task.id,{signal});check(signal);await apply(value,current,signal);}if(value.state!=='succeeded')throw Error(value.failure?.code??value.state);return value.result;}
+  if(wait){let value=task;while(!terminal.has(value.state)){await new Promise<void>((resolve,reject)=>{const timer=setTimeout(done,100);function done(){signal?.removeEventListener('abort',abort);resolve();}function abort(){clearTimeout(timer);reject(signal?.reason);}signal?.addEventListener('abort',abort,{once:true});});check(signal);value=await api.request<Task>('/api/tasks/'+task.id,{signal});check(signal);await apply(value,current,signal);}if(value.state!=='succeeded')throw Error(value.failure?.code??value.state);
+   if(operation==='calendars'){
+    let result=value.result as {calendars?:unknown;calendarInventory?:unknown;count?:unknown}|undefined;
+    if(result?.calendarInventory!==undefined){
+     if(result.calendarInventory!==task.id||!Number.isSafeInteger(result.count)||Number(result.count)<0)throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
+     const fresh=await api.request<{calendarInventory?:{taskId:string;items:unknown[]}}>(path,{signal});check(signal);
+     if(fresh.calendarInventory?.taskId!==task.id||!Array.isArray(fresh.calendarInventory.items)||fresh.calendarInventory.items.length!==result.count)throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
+     result={calendars:fresh.calendarInventory.items};
+    }
+    const items=result?.calendars;if(!Array.isArray(items)||items.some(item=>!item||typeof item.id!=='string'||!item.id||typeof item.name!=='string'||typeof item.primary!=='boolean')||new Set(items.map(item=>item.id)).size!==items.length)throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
+    return {calendars:items};
+   }
+   return value.result;}
   return read(signal);
  }
  async function request<T>(url:string,init:RequestInit={}):Promise<T>{
