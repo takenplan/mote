@@ -18,6 +18,9 @@ export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configurati
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs',handle:({context,request})=>service(context).jobs(request.query)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes',handle:({context})=>service(context).recipes()});
  for(const kind of ['pause','resume','retry'] as const)registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind,handle:({context,request})=>service(context).jobControl((request.params as {id:string}).id,kind)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit',handle:({context,request})=>service(context).audit(request.query)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id/review',handle:({context,request})=>service(context).review((request.params as {id:string}).id)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit/:id',handle:({context,request})=>service(context).auditMemory((request.params as {id:string}).id,z.object({version:z.coerce.number().int().positive().optional()}).strict().parse(request.query).version)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs',handle:({context,request})=>service(context).submit(request.body)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id',handle:({context,request})=>service(context).job((request.params as {id:string}).id)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel',handle:({context,request})=>service(context).cancel((request.params as {id:string}).id)});

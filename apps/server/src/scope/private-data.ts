@@ -1,3 +1,4 @@
+import {ScopedImportAttribution} from './import-attribution.js';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {sourceConnectionSchema,sourceItemSchema,sourceContentTime,captureSchema,ownerRelationSchema,sourceContextUpdateSchema,type AttributionContext,type SourceConnection,type CaptureInput,type CaptureRecord,type SourceItemRecord} from '@mote/shared';
@@ -179,7 +180,7 @@ export class PrivateData{
         if(!value)return;
         // Those control-plane domains are deliberately unavailable until their
         // owner modules supply a scoped resolver. Never retain dangling IDs.
-        if(value.importDeclarations?.length||value.importStatements?.length||value.materialDeclarations)throw new PrivateDataError('scope_unavailable',503);
+        if(value.materialDeclarations)throw new PrivateDataError('scope_unavailable',503);
         if(value.declarations?.some(pin=>!declared.some(value=>hash(value)===hash(pin)))||value.ownerStatements?.some(statement=>!statements.some(value=>hash(value)===hash(statement))))throw conflict();
         if(value.sourceDeclaration){const pin=value.sourceDeclaration,source=this.source(pin.sourceId);if(source.ownerRelationVersion!==pin.version||(source.ownerRelation??null)!==pin.ownerRelation)throw conflict();sources.add(pin.sourceId);}
         for(const pin of value.sourceContextDeclarations??[]){
@@ -215,6 +216,9 @@ export class PrivateData{
         }else throw new PrivateDataError('scope_unavailable',503);
       }
       for(const block of draft.blocks)if(block.evidenceIds?.some(id=>!captureInputs.has(id)))throw new PrivateDataError('invalid_data');
+      const originals=(members:typeof draft.members)=>[...new Set(members.flatMap(member=>member.kind==='capture'?[member.ref.slice(8)]:member.kind==='material'?this.sql.all(`WITH RECURSIVE inputs(id,revision) AS(SELECT ?,? UNION SELECT p.input_material_id,p.input_revision FROM pd_material_inputs p JOIN inputs i ON p.material_id=i.id AND p.revision=i.revision WHERE p.user_id=$user) SELECT DISTINCT c.capture_id FROM pd_material_captures c JOIN inputs i ON c.material_id=i.id AND c.revision=i.revision WHERE c.user_id=$user`,ref(member.ref).id,ref(member.ref).revision!).map(row=>String(row.capture_id)):[]))];
+      const imports=new ScopedImportAttribution(this.sql),installImport=(value:AttributionContext|undefined,members:typeof draft.members)=>{const canonical=imports.open(originals(members)),context=value??{version:1 as const,ownerRelation:'unknown' as const,basis:'default' as const};for(const field of ['importDeclarations','importStatements'] as const)if(context[field]?.some(entry=>!canonical[field]?.some(expected=>hash(entry)===hash(expected))))throw conflict();return canonical.importDeclarations?.length?{...context,...canonical}:context;};
+      draft.attributionContext=installImport(draft.attributionContext,draft.members);for(const block of draft.blocks)if(block.kind==='text'){const selected=draft.members.filter(member=>block.memberIds.includes(member.id));if(!draft.attributionContext.importDeclarations?.length){if(block.evidenceContext?.attributionContext?.importDeclarations?.length||block.evidenceContext?.attributionContext?.importStatements?.length)throw conflict();continue;}block.evidenceContext={observedAt:block.evidenceContext?.observedAt??draft.origin.firstAt??originals(selected).map(id=>this.capture(id).capturedAt).sort()[0]!,document:block.evidenceContext?.document??{},attributionContext:{...installImport(block.evidenceContext?.attributionContext,selected),...(draft.attributionContext.importDeclarations?.length?imports.open(originals(selected)):{})}};}
       for(const sourceId of sources){
         const current=this.sourceContext(sourceId),pin=pins.get(sourceId);
         if(pin&&(pin.version!==current.version||pin.fingerprint!==current.fingerprint))throw conflict();
