@@ -195,9 +195,41 @@ Dockerfile image dependency installation is recorded above. The same failed Mem0
 passed 1/1, exit 0: `/tmp/mote-container-mem0-deps-restored.log/.exit`. Earlier
 failed runs remain failures. Final checks use installed Node 26 and JDK 21.
 
-## Local gates and remaining acceptance
+## Local gates and joint boundary
 
-Fixed tested candidate: `d1810cd095e8c0075eb1caecdf45395825ec6bbd`.
+### Final current gate
+
+Frozen tested candidate: `ab7069aa2a1c59eda1a0775ae8d52c0632a70c89`.
+Base main/integration refs were independently refreshed at
+`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
+
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration`
+actually ended **exit 0**. Evidence:
+`/tmp/mote-container-required-final3.log/.exit/.sha` and
+`/tmp/mote-container-required-final3-evidence.json`. Total 972.579 seconds;
+Server 794438.224 ms.
+
+| Component | Final actual result |
+| --- | --- |
+| Libraries/types | All exit 0, including the opt-in script types. |
+| Desktop | 492/492, 59 files. |
+| Server | 2641 pass, 0 fail, one existing default macOS-sandbox opt-in skip. Includes all 15 container/Hindsight protocol regressions and the repaired SDK UTF-16 case. |
+| Web | 505/505. |
+| Agent | 317 pass, one existing installed-Codex opt-in skip. |
+| Shared / Diagnostics | 192/192 and 5/5. |
+| Root / client / Central runner | 81/81, 5/5 and exit 0. |
+| Android | 352/352, 74 new XML files, 0 failure/error/skip; actual unit-test task executed. Gradle 32 seconds, 1 executed and 24 up-to-date tasks. |
+
+Only this checkout's generated Android unit-report directories were cleared
+before the run, forcing the unit task to execute. All XML modification times
+are after this run's SHA checkpoint. Compiled inputs were reused; this is not
+claimed as fresh Kotlin/Java compilation or native UI validation. Main and
+integration were not modified. After this actual terminal result, all heavy
+resources were explicitly released; final publication changes only this ledger.
+
+### Historical gate
+
+Fixed historical tested candidate: `d1810cd095e8c0075eb1caecdf45395825ec6bbd`.
 
 ```sh
 export PATH=/opt/homebrew/opt/openjdk@21/bin:/opt/homebrew/bin:$PATH
@@ -229,8 +261,8 @@ run to exit 0 above. The original failed invocation remains recorded.
 
 All heavy work was explicitly released after that exit 0. That historical gate
 was valid for d181/53b. The later actual Docker failure led to the streamed-copy
-fix and durable opt-in entries, so a fresh final required gate is pending; the
-earlier result is not relabelled as covering these later changes.
+fix and durable opt-in entries required a fresh final gate. The exit-0 final3
+above covers the later source; this earlier result is not relabelled.
 
 The first final invocation on `271779bdc21b5205530947153ade28919eea5721`
 ended **exit 2** during script type checking, before the suites:
@@ -243,7 +275,7 @@ No production recovery logic changed. Narrow script type checking and actual
 tsx resolution of all six imported runtime modules both exit 0:
 `/tmp/mote-container-validation-types.log/.exit` and
 `/tmp/mote-container-validation-imports.log/.exit`. The failed full invocation is
-retained; these narrow checks do not replace its pending full retry.
+retained; those narrow checks did not replace the subsequent full attempts.
 
 The second final invocation on `b722de7453aa85f39e0468392754fc3428df6d5a`
 ended **exit 1**, preserved in `/tmp/mote-container-required-final2.log/.exit/.sha`.
@@ -262,13 +294,16 @@ raw UTF-16 read before explicit formal Material publication. Exact character,
 offset/total/nextOffset, spans and retired-raw rejection assertions remain.
 Same-case exit 0: `/tmp/mote-container-mcp-unicode-race-green.log/.exit/.sha`;
 the corresponding `-red` files retain the deterministic failure. Production
-reader/privacy and container recovery code are unchanged. A fresh full retry is
-still required after this test repair.
+reader/privacy and container recovery code are unchanged. The fresh full retry
+at ab706 above now passes; this second failed invocation remains recorded as a
+failure. Independent exact fixture-delta review is in
+`/tmp/mote-joint-review-container-mcp-0efc.md`, with no new confirmed finding and
+no reviewer execution.
 
 Actual volume publication and native Hindsight recovery now have the evidence
 above, including actual Mote production startup/restart and managed Hindsight
-canonical reads. A fresh final affected gate is the remaining local check before
-publication; it is not replaced by the old d181 gate. Joint's newer
-catalog/Imports composition is a separate later joint gate. No existing user
+canonical reads. Final3 closes the local required gate; the old d181 result
+remains historical. Joint's newer catalog/Imports composition is a separate
+later joint gate. No existing user
 service/data/volume was operated on, and no merge, deployment or CI enablement
 was performed.
