@@ -6,6 +6,7 @@ import {JSDOM} from 'jsdom';
 import {setTimeout as delay} from 'node:timers/promises';
 import {configureLocale} from '@mote/shared/i18n';
 import {scopedMemoryFixture} from '../../server/test/fixtures/scoped-memory-host.js';
+import {ReferenceDetail} from '../src/ReferenceDetail.js';
 import {Memories} from '../src/Memories.js';
 import type {Api} from '../src/api.js';
 configureLocale(()=> 'zh-CN');
@@ -25,6 +26,10 @@ test('original Memories reads real M07 publication and opens its evidence throug
  await act(async()=>{card.click();await delay(30);});assert.match(d.querySelector('.memory-detail')!.textContent!,/Nora prefers generated tea/);
  const evidence=d.querySelector<HTMLButtonElement>('.memory-evidence .evidence-card');assert.ok(evidence);await act(async()=>evidence.click());
  assert.match(opened[0],/^context:capture:/,'M07 normalized evidence belongs to the context reader, not raw captures');
+ const memoryRef='memory:'+(await f.request(f.a.token,'/api/memories')).json().items[0].id;
+ await act(async()=>{root.render(React.createElement(ReferenceDetail,{api:api(f.a,'A'),reference:memoryRef,onOpen:(ref:string)=>opened.push(ref)}));await delay(30);});
+ for(let n=0;n<20&&!d.querySelector('.reference-detail .button');n++)await act(async()=>delay(10));
+ const nested=Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent?.startsWith('查看原始记录'));assert.ok(nested,d.body.textContent!);await act(async()=>nested.click());assert.match(opened[1],/^context:capture:/,'expanded Memory retains the declared reader for nested evidence');
  const read=await f.request(f.a.token,'/api/context/read','POST',{refs:[opened[0].slice(8)]});assert.equal(read.statusCode,200,read.body);assert.match(read.body,/GENERATED_MEMORY_A/);assert.doesNotMatch(read.body,/GENERATED_MEMORY_B/);
  await render(api(f.b,'B'));assert.match(d.body.textContent!,/Generated B/);assert.doesNotMatch(d.body.textContent!,/Generated A/);assert.equal(d.querySelector('.memory-detail'),null);
  assert.equal(calls.filter(call=>call.path.startsWith('/api/memories?')&&call.status!==200).length,0);
