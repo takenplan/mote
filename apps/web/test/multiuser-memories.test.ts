@@ -5,6 +5,7 @@ import {JSDOM} from 'jsdom';
 import {setTimeout as delay} from 'node:timers/promises';
 import {configureLocale} from '@mote/shared/i18n';
 import {scopedMemoryFixture} from '../../server/test/fixtures/scoped-memory-host.js';
+import {defaultModelSettings} from '../../server/src/model-settings.js';
 import {ReferenceDetail} from '../src/ReferenceDetail.js';
 import {Memories} from '../src/Memories.js';
 import {MaterialDetail} from '../src/Materials.js';
@@ -50,11 +51,13 @@ test('original Memories reads real M07 publication and opens its evidence throug
 
 test('original Material detail and manual Memory selection retain canonical revision and the chosen account model through publication',async t=>{
  const f=await scopedMemoryFixture(t),am=await f.publish(f.a,'A'),bm=await f.publish(f.b,'B');assert.equal(am.id,bm.id);
+ const profile={id:'same-model',name:'Generated default',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-memory',baseUrl:f.modelUrl,apiKey:'GENERATED_A_KEY',headers:{},extraBody:{}}};await f.replace(f.a.token,'models',{profiles:[profile,{...profile,id:'only-a',name:'Generated temporary choice',settings:{...profile.settings,model:'generated-memory-web-choice'}}],selections:{memory:{kind:'personal',id:'same-model'}}});
+ const defaultBefore=(await f.request(f.a.token,'/api/models/selection/memory')).json();let dropAdmission=true;
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/#/library',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>();
  for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
  const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!),calls:{path:string;body:any;status:number}[]=[];
  t.after(async()=>{await act(async()=>root.unmount());for(const [key,value]of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
- const api={connection:{mode:'web',origin:'http://localhost',deploymentId:'generated',userId:'A',credentialId:'A',csrfToken:'generated',username:'A',administrator:false},request:async(path:string,init?:RequestInit)=>{const body=init?.body?JSON.parse(String(init.body)):undefined,r=await f.request(f.a.token,path,init?.method,body);calls.push({path,body,status:r.statusCode});if(r.statusCode!==200)throw Error(r.statusCode+' '+r.body);return r.json();}} as Api;
+ const api={connection:{mode:'web',origin:'http://localhost',deploymentId:'generated',userId:'A',credentialId:'A',csrfToken:'generated',username:'A',administrator:false},request:async(path:string,init?:RequestInit)=>{const body=init?.body?JSON.parse(String(init.body)):undefined,r=await f.request(f.a.token,path,init?.method,body);calls.push({path,body,status:r.statusCode});if(path==='/api/memory/jobs'&&body&&r.statusCode===200&&dropAdmission){dropAdmission=false;throw Error('Generated lost admission acknowledgement');}if(r.statusCode!==200)throw Error(r.statusCode+' '+r.body);return r.json();}} as Api;
  const d=dom.window.document;
  await act(async()=>{root.render(React.createElement(MaterialDetail,{api,material:am,onOpen:()=>{}}));await delay(30);});
  for(let n=0;n<30&&!d.querySelector('a[href*="memoryMaterial"]');n++)await act(async()=>delay(10));
@@ -63,10 +66,11 @@ test('original Material detail and manual Memory selection retain canonical revi
  await act(async()=>{root.render(React.createElement(Memories,{api,range:{},onOpen:()=>{}}));await delay(30);});
  for(let n=0;n<30&&d.querySelector<HTMLButtonElement>('.memory-actions button')?.disabled;n++)await act(async()=>delay(10));
  const extract=d.querySelector<HTMLButtonElement>('.memory-actions button');assert.ok(extract&&!extract.disabled,'canonical Material preflight makes the existing single-source form ready: '+d.body.textContent);
- await act(async()=>{const select=d.querySelector<HTMLSelectElement>('select[aria-label="本次模型"]')!;select.value='personal:same-model';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+ await act(async()=>{const select=d.querySelector<HTMLSelectElement>('select[aria-label="本次模型"]')!;select.value='personal:only-a';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
  await act(async()=>{extract.click();await delay(30);});
- const admission=calls.find(call=>call.body&&call.path.includes('memory')&&call.body.materialIds);assert.ok(admission,'original form sends canonical IDs, not normalized evidence UUIDs: '+JSON.stringify(calls));assert.equal(admission.path,'/api/memory/jobs');assert.equal(admission.status,200,JSON.stringify(admission));assert.deepEqual(admission.body.materialRevisions,{[am.id]:am.revision});assert.deepEqual(admission.body.modelReference,{kind:'personal',id:'same-model'});
+ const admission=calls.find(call=>call.body&&call.path.includes('memory')&&call.body.materialIds);assert.ok(admission,'original form sends canonical IDs, not normalized evidence UUIDs: '+JSON.stringify(calls));assert.equal(admission.path,'/api/memory/jobs');assert.equal(admission.status,200,JSON.stringify(admission));assert.deepEqual(admission.body.materialRevisions,{[am.id]:am.revision});assert.deepEqual(admission.body.modelReference,{kind:'personal',id:'only-a'});
+ assert.match(d.body.textContent!,/Generated lost admission acknowledgement/);await act(async()=>{d.querySelector<HTMLButtonElement>('.memory-actions button')!.click();await delay(30);});const attempts=calls.filter(call=>call.path==='/api/memory/jobs'&&call.body);assert.equal(attempts.length,2);assert.deepEqual(attempts[1].body,admission.body,'uncertain retry retains exactly the admitted operation and pinned input');
  const done=await f.wait(f.a,admission.body.operationId);assert.equal(done.state,'committed');
  for(let n=0;n<150&&!d.querySelector('.memory-progress')?.textContent?.includes('记忆提取完成');n++)await act(async()=>delay(20));assert.match(d.querySelector('.memory-progress')!.textContent!,/记忆提取完成/);
- assert.ok(f.requests.length>=2);assert.ok(f.requests.every(r=>r.key==='GENERATED_A_KEY'&&!r.raw.includes('GENERATED_MEMORY_B')));assert.equal((await f.request(f.b.token,'/api/memories')).json().items.length,0);
+ assert.ok(f.requests.length>=2);assert.ok(f.requests.every(r=>r.body.model==='generated-memory-web-choice'&&r.key==='GENERATED_A_KEY'&&!r.raw.includes('GENERATED_MEMORY_B')));assert.deepEqual((await f.request(f.a.token,'/api/models/selection/memory')).json(),defaultBefore);assert.equal((await f.request(f.b.token,'/api/memories')).json().items.length,0);
 });

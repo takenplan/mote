@@ -1,5 +1,7 @@
 import {formatEvidenceRef} from '@mote/shared';
 import {currentMemoryMaterial,currentMemorySource,memoryMaterialId,memorySourceId,subscribeMemorySource} from './memory-source-route';
+import {memoryMaterialSelectionPath,type MemoryMaterialSelection} from './memory-material-selection';
+import {requestModelSelection} from './ask-model-selection';
 import {useSyncExternalStore} from 'react';
 import {FeaturePanels} from './features/runtime';
 import {useResource} from './useResource';
@@ -52,9 +54,12 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
   const requestedMaterial=useSyncExternalStore(subscribeMemorySource,currentMemoryMaterial,()=>null),materialId=memoryMaterialId(requestedMaterial);
   const source=useResource<import('./api').Capture>(api,sourceId?'/api/capture-browser/'+encodeURIComponent(sourceId):null);
   const material=useResource<Material>(api,materialId?'/api/materials/'+encodeURIComponent(materialId):null);
+  const [recipes,setRecipes]=useState<MemoryRecipeRef[]>([]);
+  const materialSelection=useResource<MemoryMaterialSelection>(api,scoped?memoryMaterialSelectionPath(requestedMaterial,recipes):null,5000);
   const explicitMaterial=requestedMaterial!==null,explicitSource=requestedSource!==null||explicitMaterial;
-  const materialReadable=!!materialId&&!!material.data&&material.data.ref===requestedMaterial&&material.data.memorySource?.status==='ready'&&!!material.data.memorySource.evidenceIds.length&&!material.error;
-  const materialReady=materialReadable&&!material.loading;
+  const memorySource=scoped?materialSelection.error===undefined&&materialSelection.data?.ref===requestedMaterial?materialSelection.data:undefined:material.data?.memorySource;
+  const materialReadable=!!materialId&&!!material.data&&material.data.ref===requestedMaterial&&memorySource?.status==='ready'&&!!memorySource.evidenceIds.length&&material.error===undefined;
+  const materialReady=materialReadable&&!material.loading&&!materialSelection.loading;
   const sourceReady=!explicitMaterial&&!!sourceId&&!!source.data&&!source.error&&!source.loading;
   const selectionReady=explicitMaterial?materialReady:sourceReady;
   const Heading=embedded?'h2':'h1';
@@ -64,11 +69,11 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
   // selection. Exact callers still fence changes to either range endpoint.
   const selectionScope=JSON.stringify([rangeSelectionKey??[range.after,range.before],range.deviceId]);
   const [modelProfileId,setModelProfileId]=useState('');
-  const [recipes,setRecipes]=useState<MemoryRecipeRef[]>([]);
   const [selectedId,setSelectedId]=useState<string|null>(null),[selectedReadScope,setSelectedReadScope]=useState(''),[mutationError,setError]=useState(''),[mutationNotice,setMutationNotice]=useState(''),[busy,setBusy]=useState(false),[filter,setFilter]=useState('all'),[confirmDelete,setConfirmDelete]=useState(false);
   const [search,setSearch]=useState(''),[query,setQuery]=useState(''),[tier,setTier]=useState(''),[layer,setLayer]=useState('memory'),[cursor,setCursor]=useState<string>();
   const [jobId,setJobId]=useState<string>(),[jobCursor,setJobCursor]=useState<string>(),[correctionRun,setCorrectionRun]=useState<{id:string;sourceId:string}>();
   const correctionIntent=useRef<{owner:Api;memoryId:string;body:string;id:string}|undefined>(undefined);
+  const extractionIntent=useRef<{owner:Api;body:string;id:string}|undefined>(undefined);
   const [history,setHistory]=useState(false),[asOf,setAsOf]=useState(''),[correcting,setCorrecting]=useState(false),[correction,setCorrection]=useState({title:'',statement:'',uncertainty:'',validFrom:'',validUntil:''});
   const {job,error:jobError,reload:reloadJob}=useMemoryJob(api,scoped?undefined:jobId,refreshVersion);
   const scopedRead=useScopedMemoryJob(api,jobId,refreshVersion),scopedJob=scopedRead.data;
@@ -87,7 +92,7 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
   function refresh(){resources(api).invalidate(key=>/^\/api\/(memories|memory-jobs|memory\/jobs)([/?]|$)/.test(key));}
   useEffect(()=>{setJobId(current=>current??jobs.find(item=>['queued','running','pausing','paused','failed','waiting_for_model','waiting_for_input'].includes(item.status))?.id);},[jobList.data]);
   useEffect(()=>{if(scoped)setJobId(current=>current??scopedJobs.data?.items.find(item=>['waiting','running','paused','failed','blocked','needs_input'].includes(scopedMemoryState(item)))?.id);},[scoped,scopedJobs.data]);
-  useEffect(()=>{const sameSession=selectionApi.current===api;selectionApi.current=api;setCursor(undefined);if(!sameSession){setJobId(undefined);setJobCursor(undefined);setCorrectionRun(undefined);correctionIntent.current=undefined;}if(!(sameSession&&preserveSelection.current)){setSelectedId(null);setSelectedReadScope('');setCreatedMemoryId(undefined);}preserveSelection.current=false;},[api,selectionScope,query,tier,layer,filter,history,asOf]);
+  useEffect(()=>{const sameSession=selectionApi.current===api;selectionApi.current=api;setCursor(undefined);if(!sameSession){setJobId(undefined);setJobCursor(undefined);setCorrectionRun(undefined);correctionIntent.current=undefined;extractionIntent.current=undefined;}if(!(sameSession&&preserveSelection.current)){setSelectedId(null);setSelectedReadScope('');setCreatedMemoryId(undefined);}preserveSelection.current=false;},[api,selectionScope,query,tier,layer,filter,history,asOf]);
   useEffect(()=>setMutationNotice(''),[api]);
   useEffect(()=>{if(job?.status==='completed'||job?.status==='failed')refresh();},[job?.id,job?.status]);
   useEffect(()=>{if(scopedJob&&['succeeded','failed'].includes(scopedMemoryState(scopedJob)))refresh();},[scopedJob?.id,scopedJob&&scopedMemoryState(scopedJob)]);
@@ -98,9 +103,20 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
   },[correctionRun,scopedJob,selectedId]);
   async function extract(){
     if(explicitSource&&!selectionReady)return;
+    const owner=api;
     setBusy(true);setError('');
-    try{const result=await api.request<MemoryJob>('/api/memory-jobs',{method:'POST',body:JSON.stringify({... (explicitMaterial?{evidenceIds:material.data!.memorySource!.evidenceIds}:explicitSource?{evidenceIds:[sourceId]}:range),...(recipes.length?{recipes}:{}),modelProfileId:modelProfileId||undefined,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone})});setJobId(result.id);reloadJob();refresh();}
-    catch(e){setError(errorMessage(e));}finally{setBusy(false);}
+    try{
+      if(scoped&&explicitMaterial){
+        const selection=materialSelection.data!,value={materialIds:[selection.materialId],materialRevisions:{[selection.materialId]:selection.revision},...(recipes.length?{recipes}:{}),...requestModelSelection(true,modelProfileId)},body=JSON.stringify(value),previous=extractionIntent.current;
+        const intent=previous?.owner===owner&&previous.body===body?previous:{owner,body,id:crypto.randomUUID()};extractionIntent.current=intent;
+        const result=await owner.request<ScopedMemoryJob>('/api/memory/jobs',{method:'POST',body:JSON.stringify({operationId:intent.id,...value})});
+        if(selectionApi.current!==owner)return;setJobId(result.id);extractionIntent.current=undefined;
+      }else{
+        const result=await owner.request<MemoryJob>('/api/memory-jobs',{method:'POST',body:JSON.stringify({... (explicitMaterial?{evidenceIds:memorySource!.evidenceIds}:explicitSource?{evidenceIds:[sourceId]}:range),...(recipes.length?{recipes}:{}),modelProfileId:modelProfileId||undefined,timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone})});
+        if(selectionApi.current!==owner)return;setJobId(result.id);reloadJob();
+      }
+      refresh();
+    }catch(e){if(selectionApi.current===owner)setError(errorMessage(e));}finally{if(selectionApi.current===owner)setBusy(false);}
   }
   function open(id:string,readScope:Range=range){setCreatedMemoryId(undefined);setCorrecting(false);setError('');setConfirmDelete(false);setSelectedReadScope(new URLSearchParams({...readScope}).toString());setSelectedId(id);}
   function openJobResult(){
@@ -135,7 +151,7 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
   const evidence:MemoryEvidence[]=detail?.evidence?.length?detail.evidence:(detail?.evidenceIds??[]).map(id=>({id,capturedAt:detail!.createdAt,receivedAt:detail!.createdAt,contentHash:''}));
   const citations=evidence.map(item=>({id:item.id,capturedAt:item.capturedAt,appName:item.path||moteText("原始证据"),excerpt:item.quote??''}));
   return <section className="memories-page" aria-busy={loading||(jobList.loading&&jobList.data===undefined)||(selected.loading&&selected.data===undefined)||(source.loading&&source.data===undefined)||(material.loading&&material.data===undefined)}><div className="page-heading split-heading"><div><div className="eyebrow">{moteText("有依据，才值得记住")}</div><Heading>{moteText("记忆")}</Heading><p>{moteText("记忆通过自动审核和证据校验后直接生效，辅助问答。你可以随时查看来源、纠正或删除。")}</p></div></div>
-    {explicitSource&&<section className="panel panel-pad memory-source-selection"><h2>{explicitMaterial?moteText('仅这份正式资料'):moteText("仅这条资料")}</h2><p>{moteText("本次提取只使用下方资料，不使用顶部的时间范围。")} </p>{explicitMaterial?<>{materialReadable&&<><strong>{material.data!.title}</strong><p>{moteText('当前正式资料 · {0} 个证据片段',material.data!.memorySource!.evidenceIds.length)}</p><button className="button" onClick={()=>onOpen(material.data!.ref)}>{moteText('查看正式资料')}</button></>}{material.loading&&material.data===undefined&&<p role="status">{moteText("正在读取…")}</p>}{(material.error||!materialId||material.data&&!materialReadable)&&<p role="alert">{material.error?errorMessage(material.error):moteText('所选正式资料已变化或暂不可提取，请重新打开当前版本。')}</p>}</>:<>{source.data&&!source.error&&<><strong>{source.data.windowTitle||source.data.appName||moteText("原始记录")}</strong><p>{dateTime(source.data.capturedAt)}</p><p className="file-text">{source.data.ocrText?.slice(0,300)}</p><button className="button" onClick={()=>onOpen(formatEvidenceRef('capture',sourceId!))}>{moteText("查看原始记录")}</button></>}{source.loading&&source.data===undefined&&<p role="status">{moteText("正在读取…")}</p>}{(source.error||!sourceId)&&<p role="alert">{source.error?errorMessage(source.error):moteText("所选资料无效，请重新打开原始记录。")}</p>}</>}<button className="button subtle" onClick={()=>{window.location.hash='#/library?view=memories';}}>{moteText("清除资料选择，恢复时间范围")}</button></section>}
+    {explicitSource&&<section className="panel panel-pad memory-source-selection"><h2>{explicitMaterial?moteText('仅这份正式资料'):moteText("仅这条资料")}</h2><p>{moteText("本次提取只使用下方资料，不使用顶部的时间范围。")} </p>{explicitMaterial?<>{materialReadable&&<><strong>{material.data!.title}</strong><p>{moteText('当前正式资料 · {0} 个证据片段',memorySource!.evidenceIds.length)}</p><button className="button" onClick={()=>onOpen(material.data!.ref)}>{moteText('查看正式资料')}</button></>}{material.loading&&material.data===undefined&&<p role="status">{moteText("正在读取…")}</p>}{(material.error!==undefined||materialSelection.error!==undefined||!materialId||material.data&&!materialReadable&&!materialSelection.loading)&&<p role="alert">{material.error!==undefined?errorMessage(material.error):materialSelection.error!==undefined?errorMessage(materialSelection.error):moteText('所选正式资料已变化或暂不可提取，请重新打开当前版本。')}</p>}</>:<>{source.data&&!source.error&&<><strong>{source.data.windowTitle||source.data.appName||moteText("原始记录")}</strong><p>{dateTime(source.data.capturedAt)}</p><p className="file-text">{source.data.ocrText?.slice(0,300)}</p><button className="button" onClick={()=>onOpen(formatEvidenceRef('capture',sourceId!))}>{moteText("查看原始记录")}</button></>}{source.loading&&source.data===undefined&&<p role="status">{moteText("正在读取…")}</p>}{(source.error||!sourceId)&&<p role="alert">{source.error?errorMessage(source.error):moteText("所选资料无效，请重新打开原始记录。")}</p>}</>}<button className="button subtle" onClick={()=>{window.location.hash='#/library?view=memories';}}>{moteText("清除资料选择，恢复时间范围")}</button></section>}
     <ModelSelector api={api} feature="memory" value={modelProfileId} onChange={setModelProfileId} disabled={busy||job?.status==='running'||job?.status==='queued'}/>
     <ManualMemoryRecipes api={api} value={recipes} onChange={setRecipes} disabled={busy}/>
     <div className="memory-actions"><button className="button primary" disabled={busy||(explicitSource&&!selectionReady)||job?.status==='running'||job?.status==='queued'} onClick={()=>void extract()}>{busy?<LoaderCircle size={16} className="spin"/>:<Sparkles size={16}/>}{explicitSource?moteText("提取所选资料的记忆"):moteText("提取当前范围的记忆")}</button></div>
