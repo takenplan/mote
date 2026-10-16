@@ -93,7 +93,9 @@ final peer review and the final combined/build/emitted/affected gates.
   than replacing them with blocked routes or neighborhood mock services.
 - Obsolete test assumptions: extra genuine memory.materials tasks/Materials;
   paging raw rows before the producer replaces them; full prompt length includes
-  system instructions; omitted summary is undefined. Positive assertions retain
+  system instructions; omitted summary is undefined; the final fresh raw-UUID
+  positive was replaced by a genuine canonical Material positive after the
+  producer completed, retaining the delete/recreation receipt rejection. Positive assertions retain
   actual producer completion and exact limits/owner/receipt checks.
 - Environment/fixture failures: native ABI24 mismatch versus Node26; SQLite
   observer omitted busy timeout; a mocked global Date advanced authorization and

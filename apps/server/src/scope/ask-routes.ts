@@ -20,7 +20,7 @@ export function registerAsk(runtime:ScopedRuntime,db:DatabaseSync,configuration:
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs',handle:({context,request})=>{const body=z.object({id:z.string().uuid(),input:askInputSchema}).strict().parse(request.body);return service(context).start(body.id,body.input);}});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs',handle:({context,request})=>service(context).list(request.query,'chat')});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id',handle:({context,request})=>service(context).get(id(request))});
- for(const action of ['cancel','pause','resume','retry'] as const)registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action,handle:({context,request})=>service(context)[action](id(request))});
+ for(const action of ['cancel','pause','resume'] as const)registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action,handle:({context,request})=>service(context)[action](id(request))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces',handle:({context,request})=>service(context).traces(id(request))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations',handle:({context,request})=>service(context).createConversation(request.body??{})});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations',handle:({context,request})=>service(context).conversations(request.query)});
