@@ -545,6 +545,16 @@ class MultiuserWorkerInstrumentedTest {
             press("资料说明（选填）");ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="可说明格式、时间、作者，以及哪些内容属于你。"}.setText("Generated native Lark source context")};press("保存说明");ready()
             val sourceRows=a.get("/api/sources").getJSONArray("items");val source=(0 until sourceRows.length()).map(sourceRows::getJSONObject).single {it.optString("kind")=="lark-docs"}
             assertEquals("Generated native Lark source context",a.get("/api/sources/"+source.getString("id")+"/context").getString("description"))
+            press("选择日历");ready();waitFor {var visible=false;scenario.onActivity {activity->visible=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().any {it.text.toString().startsWith("GENERATED_CALENDAR_")}};visible}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString().startsWith("GENERATED_CALENDAR_")}.isChecked=true};press("保存设置");ready()
+            waitFor {a.get("/api/connectors/same-lark").getJSONObject("selection").getJSONArray("calendarIds").let {it.length()==1&&it.getString(0)=="same-calendar"}}
+            control("/generated/fail-document");press("立即同步");ready();waitFor {button("重试此文档")!=null}
+            scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_PROVIDER_PRIVATE_FAILURE")})}
+            control("/generated/retry-document");press("重试此文档");ready();waitFor {button("重试此文档")==null&&button("立即同步")!=null}
+            assertEquals(1,a.get("/api/ingress/sources/"+source.getString("id")+"/originals").getJSONArray("items").length())
+            press("暂停接入");ready();assertFalse(a.get("/api/sources/"+source.getString("id")).getBoolean("enabled"));assertNull(button("立即同步"));press("恢复接入");ready();assertTrue(a.get("/api/sources/"+source.getString("id")).getBoolean("enabled"))
+            control("/generated/hold-document");press("立即同步");ready();waitFor {control("/generated/document-state").getBoolean("documentEntered")&&button("取消当前操作")!=null};press("取消当前操作");control("/generated/release-document");ready();waitFor {button("取消当前操作")==null}
+            assertEquals(1,a.get("/api/ingress/sources/"+source.getString("id")+"/originals").getJSONArray("items").length())
             val oldSync=button("立即同步");assertNotNull(oldSync)
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldSync!!.performClick()};ready();assertEquals(beforeB,b.get("/api/source-items").toString())
         }
