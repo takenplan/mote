@@ -24,8 +24,8 @@ class CentralPortableDownloadTest {
             val output=java.io.File(directory,"selected.json").apply {writeText("Generated existing document sentinel")};var opened=0
             val api=CentralClient("http://127.0.0.1:${listener.localPort}","synthetic-support-token")
             try {
-                assertThrows(Exception::class.java) {api.downloadStaged("/api/support-bundle",{opened++;output.outputStream()},directory)}
-                assertEquals(0,opened);assertEquals("Generated existing document sentinel",output.readText());assertEquals(listOf("selected.json"),directory.listFiles()!!.map {it.name});response.get(5,TimeUnit.SECONDS)
+                val failure=runCatching {api.downloadStaged("/api/support-bundle",{opened++;output.outputStream()},directory)}.exceptionOrNull()
+                assertEquals("Generated existing document sentinel",output.readText());assertEquals(0,opened);assertNotNull(failure);assertEquals(listOf("selected.json"),directory.listFiles()!!.map {it.name});response.get(5,TimeUnit.SECONDS)
             } finally {executor.shutdownNow();directory.deleteRecursively()}
         }
     }
