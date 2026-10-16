@@ -35,8 +35,38 @@ authority or record counts. Import has no artifact, evidence or technical task
 IDs, and a committed import cannot be cancelled. B and an unrelated administrator
 cannot inspect A's import. No second import runtime is introduced.
 
-This is backend/consumer projection evidence, not yet the final affected check or
-acceptance of M16's separately discovered restart notification regression.
+`/tmp/m14-import-desktop-entry.log/.exit`: **1/1 selected, exit 0**, 2.75s.
+Production main/preload read the actual committed import, preserve its operation
+identity through a real one-use browser login exchange, and expose no artifact.
+After switching to B, B's Activity is empty and A's old document cannot hand off
+the work. The 32 unselected cases are not counted as acceptance. This short
+compiler invocation and M15's short Gradle claim crossed in message delivery;
+no additional build was started during its window.
+
+M16's bounded independent review of exact `c2c0cbc4` found no new confirmed
+P0/P1/P2 (`/tmp/mote-m16-review-m14-c2c0.md`), without rerunning these tests.
+The separate actual import/restart notification RED `dd284ad0` and fix
+`1fd1189e` are composed. M14's bounded static review found no new issue in the
+one-time schema backfill/savepoint change, with review limits recorded at
+`/tmp/mote-m14-review-m16-1fd.md`. These checks do not replace final affected
+validation of the combined candidate.
+
+## Refreshed generated Desktop native acceptance
+
+At `e070c4da`, the fresh Desktop build first exits 1 at restricted `iconutil`
+(`/tmp/m14-resumed-desktop-build.log/.exit`); the same command passes after
+standard review (`/tmp/m14-resumed-desktop-build-approved.log/.exit`). The real
+generated Desktop main/preload/renderer runner then exits 0 in
+`/tmp/m14-resumed-native-ask.log/.exit`. Ask uses the real Harness and a scripted
+loopback provider (three requests), renders a canonical citation, and its actual
+button click hands off the explicit context reader. M08 returns A's body and
+rejects B; the raw capture route is absent. The same run also verifies offline
+A queue/draft, B stopped until explicit collection, B queue completion,
+SIGKILL/restart B and recovery/upload of A's original queue and editable draft.
+The browser opener, capture, calendar and credential store are external-I/O
+substitutes. This is the separately authorized Desktop fixture, not the denied
+M13 Web Electron action; no personal data, live model or system permission was
+accessed or changed.
 
 ## Resumed M16 Activity consumption
 
@@ -445,4 +475,3 @@ The unchanged actual test passes **1/1, exit 0**, 3.10s,
 extraction, intake is unchanged and B's same-ID record retains its own raw state.
 The 33 unselected tests are not counted as acceptance. No raw projection, task
 runtime, classification rule or model service is added by Desktop.
-

@@ -160,8 +160,9 @@ The original multi-user recommendation is linked there as thread
 approvals for its individual implementation details. The parent additionally
 confirmed original-deployment/original-account personal import and delegated
 ordinary technical decisions. There is currently no M16 question or approval
-waiting on the user. M12's later parent-authorized resumption is recorded below;
-no earlier rejected action is delegated or retried by M16.
+waiting on the user. The historical M12 handoff denial was honored; the parent has since explicitly
+confirmed that handoff succeeded. M12 final lifecycle/backup composition remains
+a separate gate.
 
 | Problem | Decision and existing authority | Reason / impact | Executed verification / remaining limit |
 | --- | --- | --- | --- |
