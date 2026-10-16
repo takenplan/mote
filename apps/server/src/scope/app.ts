@@ -43,6 +43,7 @@ import {registerScopedMcp,type ScopedMcp} from './mcp.js';
 import {LifecycleOperations} from './lifecycle-operations.js';
 import {registerManagement,type ManagementConfig} from './management.js';
 import {registerLifecycleRoutes} from './lifecycle-routes.js';
+import {registerCaptureBrowserReads} from './capture-browser-routes.js';
 export {registerUserRoute,requestContext} from './http.js';
 
 /** Production composition. Domains register only after their isolation adapter
@@ -88,6 +89,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
     if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins);await processing.ready();}
+    registerCaptureBrowserReads(runtime,ingress,processing);
     if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory},ownerQuestions);memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);mcp?.bindMemory(memory);}
     if(execution&&memory){ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);if(processing)ask.bindProcessing(processing);mcp?.bindAsk(ask);}
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});

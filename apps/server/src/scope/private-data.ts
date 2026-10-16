@@ -8,6 +8,7 @@ import {sourceConnectionSchema,sourceItemSchema,sourceContentTime,captureSchema,
 import {materialDraftSchema,materialOwnerDeclarationBodyHash,materialOwnerStatementSchema,type MaterialDraft} from './material-model.js';
 import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
 import {storeCapture,type StoredCapture} from './capture-original.js';
+import {CaptureBrowserData} from './capture-browser-data.js';
 
 export const PRIVATE_DATA_DOMAIN='private-data';
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -26,6 +27,7 @@ const conflict=()=>new PrivateDataError('conflict',409);
  * closed until those modules implement credentials, originals and task fences. */
 export class PrivateData{
   constructor(private readonly sql:PrivateSql,private readonly cursor:PrivateCursor){this.withdrawUnfilteredCoding();}
+  captureBrowser(processing=false){return new CaptureBrowserData(this.sql,this.cursor,id=>this.capture(id),processing);}
   sources():SourceConnection[]{return this.sql.all('SELECT json FROM pd_sources WHERE user_id=$user ORDER BY id').map(r=>json<SourceConnection>(r));}
   source(id:string):SourceConnection{return json(this.sql.get('SELECT json FROM pd_sources WHERE user_id=$user AND id=?',id));}
   registerSource(raw:unknown){
