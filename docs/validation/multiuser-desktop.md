@@ -20,7 +20,8 @@ identity through a real one-use browser login exchange, and expose no artifact.
 After switching to B, B's Activity is empty and A's old document cannot hand off
 the work. The 32 unselected cases are not counted as acceptance. This short
 compiler invocation and M15's short Gradle claim crossed in message delivery;
-no additional build was started during its window.
+M15 subsequently checked its log birthtime (22:22:08.680) against this completed
+run (22:22:04 + 2.75s), confirming no actual build overlap.
 
 M16's bounded independent review of exact `c2c0cbc4` found no new confirmed
 P0/P1/P2 (`/tmp/mote-m16-review-m14-c2c0.md`), without rerunning these tests.
@@ -29,6 +30,15 @@ The separate actual import/restart notification RED `dd284ad0` and fix
 one-time schema backfill/savepoint change, with review limits recorded at
 `/tmp/mote-m14-review-m16-1fd.md`. These checks do not replace final affected
 validation of the combined candidate.
+
+The exact combined portable-import and lifecycle-Activity files pass **20/20,
+exit 0**, 24.11s, in `/tmp/m14-import-activity-composed-approved.log/.exit`.
+The first restricted run exits 1 at the generated provider's loopback listener
+(`listen EPERM`); `/tmp/m14-import-activity-composed.log/.exit` is retained.
+The exact same two files were allowed by standard review. Their actual
+backup/restore/import/restart, legacy first-journal backfill, cancellation,
+revocation, rollback, immutable history and account isolation assertions remain
+unchanged. This is not the final whole affected gate.
 
 ## Refreshed generated Desktop native acceptance
 
