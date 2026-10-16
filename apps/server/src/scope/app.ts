@@ -1,3 +1,5 @@
+import {registerWebAssets} from '../web-assets.js';
+import {registerWebInventory} from './web-routes.js';
 import {registerOwnerQuestions} from './owner-question-routes.js';
 import {registerScopedConnectors} from './connector-routes.js';
 import type {ScopedConnectors} from './connectors.js';
@@ -57,6 +59,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     const authority=new UserContextAuthority(storage.deploymentId,options.verifier??accounts,taskAuthorization,!options.verifier?accounts.mcpVerifier:undefined),services=new ScopedServices(authority,options.lifecycleAuthority);
     const execution=taskAuthorization?new TaskExecution(storage.db,authority,services,taskAuthorization):undefined;
     const runtime={app,authority,services,...(!options.verifier?{accounts}:{})};
+    registerWebInventory(runtime);
     app.setErrorHandler((error,_request,reply)=>{
       const failure=error instanceof AskError||error instanceof ConnectorError||error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError||error instanceof ScopedMemoryError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
       return reply.code(failure.statusCode).send({error:failure.code});
@@ -81,7 +84,8 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(connectors&&mcp){const host=mcp;connectors.registerSourceStatusReader((context,ids)=>host.forUser(context).sourceStatuses(ids));}
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await mcp?.close();await execution.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
-    app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
+    await registerWebAssets(app);
+    app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await mcp?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await configuration?.close();accounts.close();storage.close();});
     return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,deploymentId:storage.deploymentId};
   }catch(error){await mcp?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
