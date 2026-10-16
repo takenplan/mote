@@ -43,20 +43,26 @@ class MultiuserWorkerInstrumentedTest {
         try {
             androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","vault")).use { scenario ->
                 fun button(label:String):android.widget.Button? {var result:android.widget.Button?=null;scenario.onActivity {activity->result=views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}};return result}
-                fun click(label:String) {waitFor {button(label)!=null};scenario.onActivity {button(label)!!.performClick()}}
+                fun click(label:String) {waitFor {button(label)!=null};val target=button(label)!!;instrumentation.runOnMainSync {target.performClick()}}
                 waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
                 click("中央资料与附件导出")
                 waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
-                waitFor {if(button("下载")!=null)true else {scenario.onActivity {button("刷新")?.performClick()};false}}
+                waitFor {if(button("下载")!=null)true else {val refresh=button("刷新");if(refresh!=null)instrumentation.runOnMainSync {refresh.performClick()};false}}
                 val oldDownload=button("下载")!!;click("下载")
                 waitFor {output.isFile&&output.length()>0};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
                 val bytes=output.readBytes();val archive=JSONObject(String(bytes,Charsets.UTF_8));assertEquals(settings.read().account()!!.userId,archive.getString("userId"));assertEquals(3,archive.getInt("version"))
                 assertEquals(1,monitor.hits);assertFalse(String(bytes,Charsets.UTF_8).contains(token("a")))
                 val page=CentralPortable(CentralAccess.requireClient(app)).list();val id=page.getJSONArray("items").getJSONObject(0).getString("id")
                 assertEquals(Ingress3Client.hash(bytes),CentralPortable(CentralAccess.requireClient(app)).read(id).getString("sha256"))
+                val sentinel="Generated existing document must survive a retired export"
+                output.writeText(sentinel)
+                CentralPortable(CentralAccess.requireClient(app)).control(id,"cancel")
+                click("下载")
+                waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()}};ready}
+                assertEquals(2,monitor.hits);assertEquals(sentinel,output.readText())
                 login(app,"b");scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
                 scenario.onActivity {activity->oldDownload.performClick();assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(id)})}
-                assertEquals(1,monitor.hits);assertArrayEquals(bytes,output.readBytes());assertEquals(0,CentralPortable(CentralAccess.requireClient(app)).list().getJSONArray("items").length())
+                assertEquals(2,monitor.hits);assertEquals(sentinel,output.readText());assertEquals(0,CentralPortable(CentralAccess.requireClient(app)).list().getJSONArray("items").length())
             }
         } finally {instrumentation.removeMonitor(monitor);output.delete()}
     }
