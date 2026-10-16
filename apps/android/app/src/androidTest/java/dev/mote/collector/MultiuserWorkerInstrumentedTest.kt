@@ -591,6 +591,10 @@ class MultiuserWorkerInstrumentedTest {
             scenario.onActivity {it.navigate("settings")};recordings()
             control("/generated/recover-recording-audio");press("重试失败步骤");ready();waitFor {a.get("/api/connectors/same-recordings/recordings?limit=1").getJSONArray("items").getJSONObject(0).getJSONObject("audio").getBoolean("archived")}
             assertEquals(transcript,a.get("/api/connectors/same-recordings/recordings?limit=1").getJSONArray("items").getJSONObject(0).getString("transcriptCaptureId"))
+            press("最近归档的录音");ready();press("播放录音");ready()
+            waitFor {var prepared=false;scenario.onActivity {activity->prepared=views(activity.window.decorView).filterIsInstance<android.widget.SeekBar>().any {it.isEnabled&&it.max==5000}};prepared}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.SeekBar>().single {it.isEnabled&&it.max==5000}.progress=2000}
+            scenario.onActivity {it.navigate("settings")};recordings()
             lateinit var oldRetry:android.widget.Button;scenario.onActivity {activity->oldRetry=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="重试失败步骤"};assertTrue(oldRetry.isEnabled)}
             val commands=control("/generated/recording-commands").getJSONArray("commands").length()
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldRetry.performClick()};ready();assertEquals(beforeB,b.get("/api/connectors/same-recordings/recordings?limit=1").toString())
