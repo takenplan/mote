@@ -1,4 +1,4 @@
-import {useState} from 'react';
+import {useRef,useState} from 'react';
 import {moteText} from '@mote/shared/i18n';
 import {errorMessage,dateTime,type Api} from './api';
 import {useResource} from './useResource';
@@ -8,8 +8,8 @@ type Credential={id:string;kind:'web'|'client'|'mcp-read'|'mcp-write';label?:str
 export function PersonalConnections({api}:{api:Api}){
  const inventory=useResource<{items:Credential[]}>(api,'/api/connections'),sources=useResource<{items:{id:string;name:string}[]}>(api,'/api/sources');
  const [label,setLabel]=useState(''),[access,setAccess]=useState<'read'|'write'>('read'),[sourceIds,setSourceIds]=useState<string[]>([]),[secret,setSecret]=useState<{id:string;config:unknown}>(),[revoking,setRevoking]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
- const refresh=()=>resources(api).invalidate(key=>key==='/api/connections');
- async function run(action:()=>Promise<void>){if(busy)return;setBusy(true);setError('');try{await action();refresh();}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
+ const running=useRef(false),refresh=()=>resources(api).invalidate(key=>key==='/api/connections');
+ async function run(action:()=>Promise<void>){if(running.current)return;running.current=true;setBusy(true);setError('');try{await action();refresh();}catch(e){setError(errorMessage(e));}finally{running.current=false;setBusy(false);}}
  return <section className="panel panel-pad connections-panel"><div className="section-heading"><div><h1>{moteText('对外授权')}</h1><p>{moteText('专用凭据仅在此次生成时显示。离开页面后仍有效；丢失时可以撤销并重新生成。')}</p></div><button className="button subtle" onClick={refresh}>{moteText('刷新连接')}</button></div>
   {(error||inventory.error!==undefined)&&<p role="alert">{error||errorMessage(inventory.error)}</p>}
   <form onSubmit={e=>{e.preventDefault();void run(async()=>{const grant=await api.request<{token:string;credentialId:string}>('/api/connections/mcp',{method:'POST',body:JSON.stringify({label,access,sourceIds,durationMs:2592000000})});setSecret({id:grant.credentialId,config:{mcpServers:{mote:{type:'http',url:location.origin+'/mcp',headers:{Authorization:'Bearer '+grant.token}}}}});});}}>
