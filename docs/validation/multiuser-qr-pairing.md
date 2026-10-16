@@ -242,8 +242,10 @@ The same three new hook cases on the isolated pre-hook source snapshot are
 **0/3 RED**, exit 1: retry returns 200 and consumes acknowledgement without
 running the required preparation. Evidence:
 `/tmp/mote-qr-retry-hook-baseline-red.log` and `.exit`.
-Bounded exact-source review and a new complete affected gate remain pending;
-neither is inferred from the earlier green snapshots.
+Independent bounded review accepted exact production `7d696775`, read the new
+tests and actual RED/GREEN receipts, and found no new confirmed issue; it ran no
+tests. Joint's cross-module source review and a new complete affected gate remain
+pending; neither is inferred from the earlier green snapshots.
 
 Still unverified here: Web QR rendering/navigation retirement, Android scanner
 and pending journal/account-switch lifecycle, Desktop v2 import, physical camera,
