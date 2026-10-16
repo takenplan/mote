@@ -72,6 +72,23 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun actualNativeArchiveRetiresVisiblePrivateRowsBeforeResumingAnotherAccount() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val privateText="Generated private A visible archive "+java.util.UUID.randomUUID()
+        QuickNotes.save(app,privateText,"");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CaptureRecordsActivity>(android.content.Intent(app,CaptureRecordsActivity::class.java).putExtra("recordSource","note")).use {scenario->
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {it.adapter.getItem(0).toString()=="本机记录"}.setSelection(1)}
+            waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(privateText)}};shown}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            login(app,"b")
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            // Inspect before any touch, explicit navigation or refresh could retire the old page.
+            scenario.onActivity {activity->assertFalse("Returning under B must not display A's already rendered private archive",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(privateText)})}
+        }
+    }
+
     @Test fun deviceBoundPerceptionPullCachesItsOwnActualCentralOcrAndResetsFutureCursor() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
