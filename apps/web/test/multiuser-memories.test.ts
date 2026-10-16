@@ -9,6 +9,9 @@ import {defaultModelSettings} from '../../server/src/model-settings.js';
 import {ReferenceDetail} from '../src/ReferenceDetail.js';
 import {Memories} from '../src/Memories.js';
 import {MaterialDetail} from '../src/Materials.js';
+import '../src/features/runtime.js';
+import {pages as processingPages} from '../src/features/processing.js';
+import type {PageProps} from '../src/features/types.js';
 import {memoryMaterialRoute} from '../src/memory-source-route.js';
 import type {Api} from '../src/api.js';
 configureLocale(()=> 'zh-CN');
@@ -76,4 +79,6 @@ test('original Material detail and manual Memory selection retain canonical revi
  const done=await f.wait(f.a,admission.body.operationId);assert.equal(done.state,'committed');
  for(let n=0;n<150&&!d.querySelector('.memory-progress')?.textContent?.includes('记忆提取完成');n++)await act(async()=>delay(20));assert.match(d.querySelector('.memory-progress')!.textContent!,/记忆提取完成/);
  assert.ok(f.requests.length>=2);assert.ok(f.requests.every(r=>r.body.model==='generated-memory-web-choice'&&r.key==='GENERATED_A_KEY'&&!r.raw.includes('GENERATED_MEMORY_B')));assert.deepEqual((await f.request(f.a.token,'/api/models/selection/memory')).json(),defaultBefore);assert.equal((await f.request(f.b.token,'/api/memories')).json().items.length,0);
+ const actualActivity=await f.request(f.a.token,'/api/work-activity?state=completed&limit=10');assert.equal(actualActivity.statusCode,200,actualActivity.body);assert.ok(actualActivity.json().items.some((work:any)=>work.kind==='memory'),'the composed M14 host already publishes the real Memory activity');dom.window.location.hash='#/activity';const activityOpened:string[]=[];await act(async()=>{root.render(processingPages[0].render({api,onPage:()=>{},onOpen:(ref:string)=>activityOpened.push(ref)} as unknown as PageProps));await delay(30);});
+ for(let n=0;n<40&&!Array.from(d.querySelectorAll('button')).some(b=>b.textContent==='最近完成');n++)await act(async()=>delay(10));const completed=Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent==='最近完成');assert.ok(completed,'the original Activity entry must use its real composed goal/card reader: '+d.body.textContent);await act(async()=>{completed.click();await delay(30);});for(let n=0;n<40&&!d.querySelector('.activity-card');n++)await act(async()=>delay(10));assert.ok(d.querySelector('.activity-card'),d.body.textContent!);await act(async()=>{d.querySelector<HTMLButtonElement>('.activity-card')!.click();await delay(30);});for(let n=0;n<40&&!d.querySelector('.activity-detail');n++)await act(async()=>delay(10));await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('.activity-detail .section-tabs button')).find(b=>b.textContent==='证据')!.click());const evidence=d.querySelector<HTMLButtonElement>('.work-evidence button');assert.ok(evidence);await act(async()=>evidence.click());assert.match(activityOpened[0],/^context:capture:/,'Memory activity evidence retains the actual context reader');const read=await f.request(f.a.token,'/api/context/read','POST',{refs:[activityOpened[0].slice(8)]});assert.equal(read.statusCode,200,read.body);assert.match(read.body,/GENERATED_MEMORY_A/);assert.doesNotMatch(read.body,/GENERATED_MEMORY_B/);
 });
