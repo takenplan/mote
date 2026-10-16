@@ -68,3 +68,21 @@ test('a held successful production response cannot publish after Web account ret
  const api=createApi(f.ai,undefined,()=>current),pending=api.request('/api/configuration'),rejected=assert.rejects(pending,/登录会话/);await seen;current=false;release();await rejected;
  f.cookie('b');const b=createApi(f.bi);assert.ok(await b.request('/api/configuration'));
 });
+
+test('Web feature metadata describes real routes and Library keeps owned canonical material/source paging',async t=>{
+ const f=await fixture(t),a=f.api();
+ const inventory=await a.request<any>('/api/features');
+ assert.equal(inventory.schemaVersion,1);const ids=inventory.capabilities.map((item:any)=>item.id);
+ for(const id of ['http:GET:/api/materials','http:GET:/api/library/catalog','http:GET:/api/features'])assert.ok(ids.includes(id),id);
+ assert.ok(!ids.includes('http:GET:/api/imports'),'do not advertise absent legacy runtime');
+ const note={id:'6d477b3e-fb43-4657-818d-c143ad76430f',deviceId:'same-device',deviceName:'Generated web',platform:'import' as const,client:'web' as const,capturedAt:'2026-10-16T12:00:00Z',text:'GENERATED_A_LIBRARY_NOTE'};
+ await submitWebNote(a,note);f.cookie('b');const b=createApi(f.bi);await submitWebNote(b,{...note,text:'GENERATED_B_LIBRARY_NOTE'});f.cookie('a');
+ const end=Date.now()+20000;let page:any;
+ do{page=await a.request('/api/library/catalog?limit=1');if(page.items.length)break;await new Promise(done=>setTimeout(done,25));}while(Date.now()<end);
+ assert.equal(page.items.length,1,'actual formal note producer reached canonical Material');
+ const selected=page.items[0];assert.match(selected.ref,/^material:mat_/);assert.ok(page.sources.some((source:any)=>source.count>0));
+ assert.match(JSON.stringify(await a.request('/api/materials/'+selected.id+'/read?revision='+selected.revision)),/GENERATED_A_LIBRARY_NOTE/);
+ assert.doesNotMatch(JSON.stringify(page),/GENERATED_B_LIBRARY_NOTE/);
+ f.cookie('b');assert.doesNotMatch(JSON.stringify(await b.request('/api/library/catalog?limit=1')),/GENERATED_A_LIBRARY_NOTE/);
+ await assert.rejects(a.request('/api/library/catalog'),error=>(error as any).code==='session_changed');
+});
