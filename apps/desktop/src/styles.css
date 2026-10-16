@@ -859,5 +859,5 @@ body[data-detail=stack] .records-browser { display: block; }
 input,select,textarea { accent-color:var(--mote-accent); }
 
 @media (prefers-contrast: more) {
-  :root { --mote-muted:var(--mote-ink) !important; --mote-control-border:var(--mote-ink) !important; --mote-border:var(--mote-ink) !important; }
+  :root, body { --mote-muted:var(--mote-ink) !important; --mote-control-border:var(--mote-ink) !important; --mote-border:var(--mote-ink) !important; }
 }

@@ -43,6 +43,11 @@ app.on('browser-window-created',(_event,window)=>{
   await until(()=>js(`document.querySelector('#appearance').getClientRects().length>0`),'actual appearance settings');
   await js('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
   writeFileSync(join(out,`${preference}-os-${systemScheme}-settings.png`),(await wc.capturePage()).toPNG());
+  wc.debugger.attach('1.3');
+  await wc.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[{name:'prefers-contrast',value:'more'}]});
+  const contrast=await js(`(()=>{const s=getComputedStyle(document.body);return ['ink','muted','control-border','border'].map(role=>s.getPropertyValue('--mote-'+role).trim());})()`);
+  assert.ok(contrast[0]);assert.deepEqual(contrast,[contrast[0],contrast[0],contrast[0],contrast[0]],'increased contrast reaches the actual presentation root');
+  await wc.debugger.sendCommand('Emulation.setEmulatedMedia',{features:[]});wc.debugger.detach();
   await js(`document.querySelector('[data-nav=records]').click();document.querySelector('#note-action').click();document.querySelector('#add-dialog [data-add-choice=note]').click()`);
   await until(()=>js(`document.querySelector('#note-text').getClientRects().length>0&&!document.querySelector('#note-text').disabled`),'actual note');
   await js(`window.fixtureDraft=document.querySelector('#note-text');fixtureDraft.value='Generated unsaved theme note';fixtureDraft.dispatchEvent(new Event('input',{bubbles:true}));fixtureDraft.focus();fixtureDraft.setSelectionRange(4,12);window.fixturePage=document.querySelector('.page:not([hidden])');`);
@@ -72,7 +77,7 @@ app.on('browser-window-created',(_event,window)=>{
   const reloaded=new Promise(resolve=>wc.once('did-finish-load',resolve));wc.reload();await reloaded;await until(()=>js(`Boolean(document.querySelector('#appearance'))&&document.documentElement.dataset.colorScheme==='dark'`),'reload persisted explicit choice');
   assert.equal(loads,1);assert.deepEqual(errors.filter(message=>!message.includes('EISDIR')),[]);
   rmSync(join(profile,'appearance.json.tmp'),{recursive:true,force:true});
-  console.log(JSON.stringify({ok:true,preference,simulatedOS:process.env.MOTE_THEME_FIXTURE_OS,coldPreload:true,nativeChrome:true,actualDraftAndModal:true,saveFailure:true,reload:true,globalOSUnchanged:true,fixtureOnly:true}));
+  console.log(JSON.stringify({ok:true,preference,simulatedOS:process.env.MOTE_THEME_FIXTURE_OS,coldPreload:true,nativeChrome:true,increasedContrast:true,actualDraftAndModal:true,saveFailure:true,reload:true,globalOSUnchanged:true,fixtureOnly:true}));
   clearTimeout(timeout);app.exit(0);
  })().catch(error=>{console.error(error.stack||error);app.exit(1);}));
 });
