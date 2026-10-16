@@ -30,6 +30,32 @@ class MultiuserWorkerInstrumentedTest {
     private fun login(context: Context, name: String) { RuntimeSettings.replaceAccount(context) { Settings(context).signIn(endpoint(),token(name),2592000000) } }
     private fun get(context: Context, name: String, path: String) = HttpJson.get(endpoint()+path,token(name))
 
+    private fun control(path: String): JSONObject {
+        val (code,value)=HttpJson.post(fixture().getString("androidControlAddress")+path,JSONObject());check(code==200);return value!!
+    }
+    @Test fun lateActualAckAndNetworkRecoveryNeverAdoptAnotherAccountsCredentials() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        login(app,"a");val aowner=settings.read().ownerKey();val path=QueueStorage(app).current().path
+        val aid=QuickNotes.save(app,"Synthetic A held actual server ACK","")
+        control("/hold-next");UploadWorker.schedule(app,settings.read(),true)
+        waitFor { control("/state").optBoolean("held") }
+        login(app,"b");control("/release")
+        assertEquals(404,get(app,"b","/api/captures/$aid").first)
+        val aqueue=DurableQueue(File(path),app.localContentCipher()).apply {archiveOrigin=aowner};assertEquals(1,aqueue.pendingSync().count)
+        val bid=QuickNotes.save(app,"Synthetic B after old A ACK","");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        assertEquals(200,get(app,"b","/api/captures/$bid").first)
+        login(app,"a");assertEquals(aid,app.queue().peek()!!.getString("id"));UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        assertEquals(200,get(app,"a","/api/captures/$aid").first)
+        control("/network/off")
+        try {
+            QuickNotes.save(app,"Synthetic A offline actual worker","");UploadWorker.schedule(app,settings.read(),true)
+            waitFor {settings.syncState()=="error"};assertEquals(1,app.queue().pendingSync().count)
+        } finally {control("/network/on")}
+        UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        assertEquals(404,get(app,"b","/api/captures/$aid").first)
+    }
+
     @Test fun plainAnonymousDraftRequiresConfirmationAndExplicitlyAdoptsWithoutChangingBytes() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
