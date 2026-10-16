@@ -889,3 +889,34 @@ already-running finite regression finishes, then QR owns its full gate. Further
 M15 build/full Android/affected slots await the parent's fresh allocation. Current
 native deltas have been requested for bounded independent review; no final M15
 remote head or Draft PR exists yet.
+
+### QR recovery after the transient handoff disappears — confirmed P2, GREEN pending
+
+The QR review identified a candidate: after a lost successful ACK, server restart
+or handoff expiry removes the transient M01 request even if the independent device
+credential remains valid. This was reproduced through the same already compiled
+native journey and a real source-host restart over the same SQLite and loopback
+port. Test-only638d/e26 closes and reopens the production host; it does not forge
+410 or a credential. `/tmp/m15-native-qr-restart-proof-red.log/.exit` is1/1 EXIT1,
+2.109s: the original recovery remains pending. Safe observation metadata records
+`restarted:true`, actual ACK statuses`[200,410]` and3 successful device self reads
+(`/tmp/m15-native-qr-restart-proof-state.json`). An earlier2.121s identical failure
+is preserved separately. This is now a confirmed recovery P2.
+
+Minimal c0c7df37 handles only the explicit M01 `410 login_expired` response by
+freshly verifying the same persisted credential's exact deployment/user,
+account.credentialId, device and required capability/protocol. Only then can the
+local recovery intent retire. It records `pairingAcknowledged:false`, rather than
+claiming an ACK that was never received. Authentication/revocation, wrong subject,
+wrong purpose/kind, malformed acknowledgement and network failures retain recovery.
+No new credential, approval or read permission is introduced. Tests226/518 add
+actual restart proof and a real post-restart credential revocation negative.
+The exact declared M01 client kind is enforced by d3a; its corruption test is
+separate from a retired owner grant.
+
+These new runtime changes and corrected79ca/new picker12083 tests have NOT been
+compiled or run GREEN. Parent22:08 keeps M15 heavy work released until the parent's
+next explicit allocation after the QR producer's full gate. The last native-tested
+806 checkpoint is therefore not final accepted: it contains this confirmed P2.
+Pending future tests will not be reported as executed; the current source HEAD
+must not be substituted for a tested frozen consumer.
