@@ -56,12 +56,16 @@ class MultiuserWorkerInstrumentedTest {
                 assertEquals(1,monitor!!.hits);assertFalse(String(bytes,Charsets.UTF_8).contains(token("a")))
                 val page=CentralPortable(CentralAccess.requireClient(app)).list();val id=page.getJSONArray("items").getJSONObject(0).getString("id")
                 assertEquals(Ingress3Client.hash(bytes),CentralPortable(CentralAccess.requireClient(app)).read(id).getString("sha256"))
+                // Reopen through normal native navigation before the independent cancellation case.
+                scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready};click("查看详情")
+                waitFor {button("下载")!=null}
                 val sentinel="Generated existing document must survive a retired export"
                 output.writeText(sentinel)
                 CentralPortable(CentralAccess.requireClient(app)).control(id,"cancel")
                 click("下载")
-                waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()}};ready}
-                assertEquals(2,monitor!!.hits);assertEquals(sentinel,output.readText())
+                waitFor {monitor!!.hits==2}
+                waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()&&it.text.toString()!="资料已导出"}};ready}
+                assertEquals(sentinel,output.readText())
                 login(app,"b");scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
                 scenario.onActivity {activity->oldDownload.performClick();assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(id)})}
                 assertEquals(2,monitor!!.hits);assertEquals(sentinel,output.readText());assertEquals(0,CentralPortable(CentralAccess.requireClient(app)).list().getJSONArray("items").length())
@@ -82,6 +86,24 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals("B must not read A's retained native draft","",draft());edit(bDraft)
             scenario.onActivity {original=it.client};login(app,"a");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready();assertEquals(aDraft,draft())
             scenario.onActivity {original=it.client};login(app,"b");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready();assertEquals(bDraft,draft())
+        }
+    }
+
+    @Test fun sameIdentityResumeKeepsTheNativeSaveActionUsable() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val text="Generated note after a same-account native Activity resume"
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","notes")).use { scenario ->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="此刻想留下什么？"}.setText(text);views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存并同步"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val rows=CentralAccess.requireClient(app).get("/api/captures?kind=note&limit=30").getJSONArray("items")
+            val saved=(0 until rows.length()).map {rows.getJSONObject(it)}.firstOrNull {it.optString("ocrText")==text}
+            assertNotNull("Same-identity resume must not retire every existing native action",saved)
+            assertEquals(404,get(app,"b","/api/captures/"+saved!!.getString("id")).first)
         }
     }
 
