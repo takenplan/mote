@@ -54,6 +54,26 @@ not a production fix. Parent scheduling explicitly pauses M11 after this complet
 narrow operation, so the next module can use its slot while M07/M08 finish heavy
 checks. No final M11 gate or PR is claimed during that pause.
 
+After resumption, both final dependency heads are composed: M07 PR136
+`cd7a306cce0f6cd5fec3c9e91e6dee0761352115` and M08 PR137
+`58944f00837c89bc1d302ecd7be7a568db4abe44`. The first final MCP command on
+`881fb863565a9704fdcab13019441e02b83553ee` is retained as70/72,EXIT1,
+`/tmp/m11-final-focused.log/.exit`. Two old original-receipt tests never reached
+their real provider barrier. An instrumented temporary copy records both SDK calls
+returning `not_found` before I/O while real `mote.note` Materials already exist:
+`/tmp/m11-query-failure-diagnostic.log/.exit`. They incorrectly treated a replaced
+raw UUID as a lasting query-positive reference; this is fixture supersession,
+not a new production isolation defect or valid production RED.
+
+The two tests now wait for the actual canonical note projection, verify its legal
+body and raw-UUID rejection, then hold the genuine provider read. They retain
+DELETE/404, changed body or identical body with changed original app identity,
+same logical canonical ID, whole old/new-body/Memory suppression, and a fresh legal
+canonical read after release. Targeted2/2,EXIT0,6177.384791ms,
+`/tmp/m11-formal-receipt-fixture.log/.exit`. No producer is disabled and no runtime
+code changes. The final focused suite and all later gates must run again on this
+test-only correction; earlier70/72 remains a failure.
+
 ## Resumed common-contract representative B checkpoint
 
 PR135 documentation094b69d0c4d623a3b478ae4c05ee249b024ba73b is composed.
