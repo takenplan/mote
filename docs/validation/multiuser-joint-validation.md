@@ -375,3 +375,23 @@ it does not substitute for physical clients, provider accuracy, partial-commit
 recovery, pin-held deferred GC characterization, or the final affected gate.
 Scope inventory passes; no new types/build/fullsuite was run during theme's
 soleheavy window.
+
+
+The 1a9d deletion checkpoint received a bounded source review from the container
+owner (/tmp/mote-container-review-joint-import-gc-1a9d.md). Its late-GC concern
+was reproduced with two generated originals and a fault after actual object GC:
+HTTP503 rolled job/archive SQL back while its original bytes stayed absent
+(/tmp/mote-joint-import-delete-gc-red2.log/.exit). Physical GC now runs after the
+outer deletion metadata commit; failure leaves deleted metadata committed and
+garbagePending=true for the existing GC retry. A surrounding host transaction
+also defers physical GC. Actual real M03 pin retention initially returned a false
+settled flag (pin RED); removed-hash pins now explicitly defer reclamation.
+
+Four selected cases pass4/4/no skip/EXIT0, 7.04s in
+/tmp/mote-joint-import-fault-pin-resume-green.log/.exit: successful last-delete
+with sibling/B preservation; first record durable + injected second publication
+failure -> host restart -> exact checkpoint resume (no first-record replay); late
+GC failure -> committed deletion/pending GC -> retry; actual Originals.pin ->
+metadata deletion/physical retention -> release -> physical GC. This closes these
+concrete branches, not partial instance-restore or every ambiguity/external-I/O
+path. No final types/affected/compiled/client acceptance is inferred.

@@ -177,13 +177,13 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
    job.status=phase==='commit'?'importing':'queued';job.processingStatus=phase==='commit'?'saving':'archived';delete job.error;save(sql,job);
    if(taskId)execution.forUser(context).retry(taskId);else if(phase==='commit')submit(context,job,phase);return job;
   });if(!job.prepareTask&&job.status==='queued')await submitPrepare(context,job);return get(job.id);},
-  delete:(id:string)=>sql.transaction(()=>{
+  delete:(id:string)=>{const deleted=sql.transaction(()=>{
    owner(context);const job=load(sql,id);if(active.has(identityHash([context.userId,id])))throw conflict();
    for(const taskId of [job.prepareTask,job.commitTask])if(taskId&&['waiting','running'].includes(execution.forUser(context).get(taskId).state))throw conflict();
    const retainedSharedSource=!!sql.get("SELECT id FROM mp_import_jobs WHERE user_id=$user AND id<>? AND json_extract(json,'$.sourceId')=? LIMIT 1",id,job.sourceId),captures=sql.all('SELECT id FROM pd_captures WHERE user_id=$user AND source_id=?',job.sourceId).length;
    if(!retainedSharedSource&&sql.get('SELECT id FROM pd_sources WHERE user_id=$user AND id=?',job.sourceId))runtime.services.forUser(context).get<PrivateData>('private-data').deleteSource(job.sourceId);
    sql.run('DELETE FROM mp_import_jobs WHERE user_id=$user AND id=?',id);const removed=ingress.forUser(context).removeArchivedFiles(job.files.map(file=>file.id));return {deleted:true,captures:retainedSharedSource?0:captures,retainedSharedSource,...removed};
-  }),
+  });if(db.isTransaction||deleted.garbagePending)return {...deleted,garbagePending:true};try{ingress.forUser(context).gc();return deleted;}catch{return {...deleted,garbagePending:true};}},
   cancel:(id:string)=>sql.transaction(()=>{owner(context);const job=load(sql,id);if(['completed','cancelled'].includes(job.status))return publicJob(job);for(const taskId of [job.prepareTask,job.commitTask])if(taskId){const task=execution.forUser(context).get(taskId);if(['waiting','running','blocked'].includes(task.state))execution.forUser(context).cancel(taskId);}job.status='cancelled';save(sql,job);return publicJob(job);}),
  });};
  return {forUser,close:async()=>{closed=true;for(const stop of unregister.reverse())await stop();}};
