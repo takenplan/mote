@@ -22,6 +22,7 @@ test('original Memories reads real M07 publication and opens its evidence throug
  const d=dom.window.document,render=(value:Api)=>act(async()=>{root.render(React.createElement(Memories,{key:value.connection!.userId,api:value,range:{},onOpen:(ref:string)=>opened.push(ref)}));await delay(30);});
  await render(api(f.a,'A'));
  const card=d.querySelector<HTMLButtonElement>('.workspace-select');assert.ok(card,'actual M07 published memory is visible through the original page: '+d.body.textContent);
+ assert.ok(calls.some(call=>call.path==='/api/memory/jobs'&&call.status===200),'existing job history consumes actual M07 jobs');
  assert.match(card.textContent!,/Generated A/);assert.doesNotMatch(d.body.textContent!,/Generated B/);
  await act(async()=>{card.click();await delay(30);});assert.match(d.querySelector('.memory-detail')!.textContent!,/Nora prefers generated tea/);
  const evidence=d.querySelector<HTMLButtonElement>('.memory-evidence .evidence-card');assert.ok(evidence);await act(async()=>evidence.click());
