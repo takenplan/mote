@@ -7,7 +7,16 @@ import {promisify} from 'node:util';
 import {DesktopAccountStorage} from '../src/account-storage';
 import {LocalSourceManager} from '../src/source-manager';
 import {DEFAULT_SOURCE_OPTIONS} from '../src/source-types';
-import {tsImport} from 'tsx/esm/api';
+import {browseCaptures,captureDetail,captureImage} from '../src/capture-browser';
+import {centralContentPage} from '../src/content-library';
+import {readCentralContent} from '../src/sync-content';
+import {uploadCapture} from '../src/transport';
+import {ensureStorageFormat} from '../src/storage-format';
+import sharp from 'sharp';
+import {createRequire} from 'node:module';
+import {pathToFileURL,fileURLToPath} from 'node:url';
+const repository=fileURLToPath(new URL('../../../',import.meta.url));
+const nativeImport=createRequire(import.meta.url)('./native-backend.cjs') as (url:string)=>Promise<any>;
 import {defaultConfig} from '../src/config';
 import {testConnection} from '../src/connection';
 import {DurableQueue} from '../src/queue';
@@ -21,10 +30,10 @@ vi.mock('electron',async()=>{
 import {Collector} from '../src/collector';
 
 const cleanup:(()=>Promise<unknown>)[]=[];
-beforeAll(async()=>{await promisify(execFile)(process.execPath,[resolve('node_modules/typescript/bin/tsc'),'-p',resolve('apps/desktop/tsconfig.json')]);},60000);
+beforeAll(async()=>{await promisify(execFile)(process.execPath,[resolve(repository,'node_modules/typescript/bin/tsc'),'-p',resolve(repository,'apps/desktop/tsconfig.json')]);},60000);
 afterEach(async()=>{for(const close of cleanup.splice(0).reverse())await close();vi.unstubAllGlobals();});
 async function fixture(){
- const {buildApp}=await tsImport('../../server/src/app.ts',import.meta.url) as typeof import('../../server/src/app');
+ const {buildApp}=await nativeImport(pathToFileURL(resolve(repository,'apps/server/src/app.ts')).href) as typeof import('../../server/src/app');
  const directory=await mkdtemp(join(tmpdir(),'mote-m14-generated-'));cleanup.push(()=>rm(directory,{recursive:true,force:true}));
  const node=await buildApp({dataDir:join(directory,'central')});cleanup.push(()=>node.app.close());
  const password='Generated-desktop-only-01';await node.accounts!.initialize('generated-admin',password);
@@ -61,7 +70,7 @@ it('keeps real original spools, source cursors and drafts separated while A and 
 });
 
 async function productionDesktop(f:Awaited<ReturnType<typeof fixture>>,profile=join(f.directory,'profile')){
- const child=fork(resolve('apps/desktop/test/main-process-fixture.cjs'),[profile],{env:{...process.env,MOTE_PROFILE:'default',MOTE_URL:'',MOTE_TOKEN:''},stdio:['ignore','pipe','pipe','ipc']});
+ const child=fork(resolve(repository,'apps/desktop/test/main-process-fixture.cjs'),[profile],{cwd:repository,env:{...process.env,MOTE_PROFILE:'default',MOTE_URL:'',MOTE_TOKEN:''},stdio:['ignore','pipe','pipe','ipc']});
  let nextId=0,generation=0,ready=false,exited=false,error='',latest:any;const results=new Map<number,{resolve:(v:any)=>void;reject:(e:Error)=>void}>();
  child.stderr!.on('data',chunk=>{error+=chunk.toString();});child.on('exit',()=>{exited=true;});
  let intercept:((message:any,reply:()=>Promise<void>)=>Promise<boolean>)|undefined;
@@ -114,4 +123,46 @@ it('uploads through the real Collector and M03 production application and only r
  expect(queue.stats().depth).toBe(0);
  expect((await f.request(f.a.token,'/api/captures/'+event().id)).statusCode).toBe(200);expect((await f.request(f.b.token,'/api/captures/'+event().id)).statusCode).toBe(404);
  expect(f.calls.filter(v=>v.url.includes('/captures')).every(v=>v.url.startsWith('/api/ingress/'))).toBe(true);
+});
+it('reads the original capture/content/session capabilities from actual scoped APIs for equal A/B IDs',async()=>{
+ const f=await fixture(),pixels=await sharp({create:{width:8,height:8,channels:3,background:'#428758'}}).jpeg().toBuffer();
+ for(const [grant,body] of [[f.a,'Generated A private'],[f.b,'Generated B private']] as const){const config=f.config(grant),input={...event(),deviceId:config.deviceId,ocrText:body};await uploadCapture(config,input,pixels);}
+ const config=f.config(f.a),queue=new DurableQueue(join(f.directory,'reader-queue'),config);await queue.initialize();
+ const page=await browseCaptures(queue,config,{location:'central',day:'2026-09-13',grouping:'records'});expect(page.totalCount).toBe(1);expect(page.items[0].textPreview).toBe('Generated A private');
+ const sessions=await browseCaptures(queue,config,{location:'central',day:'2026-09-13',grouping:'sessions'});expect(sessions.sessions).toHaveLength(1);expect(sessions.sessions![0].count).toBe(1);
+ expect((await captureDetail(queue,config,'central',event().id)).ocrText).toBe('Generated A private');expect(await captureImage(queue,config,'central',event().id,false)).toMatch(/^data:image\/jpeg;base64,/);
+ expect((await centralContentPage(config)).items[0].preview).toBe('Generated A private');
+ expect((await readCentralContent(config,{key:event().id,source:'screen',title:'',observedAt:event().capturedAt,outcome:'received',firstReceipt:true,captureId:event().id})).text).toBe('Generated A private');
+ expect((await captureDetail(queue,f.config(f.b),'central',event().id)).ocrText).toBe('Generated B private');
+});
+it('checks actual server identity before any personal upload bytes after token/account or deployment mismatch',async()=>{
+ const f=await fixture(),a=f.config(f.a);for(const config of [{...a,token:f.b.token},{...a,account:{...a.account,deploymentId:'changed-deployment'}}]){
+  const before=f.calls.length;await expect(uploadCapture(config,{...event(),deviceId:a.deviceId},image)).rejects.toThrow('changed');expect(f.calls.slice(before).every(call=>call.url==='/api/connections/self'&&call.body===undefined)).toBe(true);
+ }
+});
+it('settles a real late A ACK into A before activating B and never sends queued A bytes with B credentials',async()=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);let status=await app.call('mote:get-status');await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false}]);
+ const draft=await app.call('mote:note-draft');await app.call('mote:note',[{...draft,text:'Generated late A ACK',revision:1}]);
+ let entered=false,release!:()=>void;app.intercept=async(message)=>{
+  if(!message.url.includes('/captures')||message.method!=='POST')return false;
+  const response=await f.node.app.inject({url:new URL(message.url).pathname,method:'POST',headers:message.headers,payload:Buffer.from(message.body,'base64')});expect(response.statusCode).toBe(200);entered=true;
+  release=()=>app.child.send({type:'fetch-response',id:message.id,status:response.statusCode,headers:response.headers,body:response.rawPayload.toString('base64')});return true;
+ };
+ const retry=app.call('mote:retry');await vi.waitFor(()=>expect(entered).toBe(true));
+ const switching=app.call('mote:ask',['login',{token:f.b.token}]);await vi.waitFor(()=>expect(app.latest.running).toBe(false));expect(app.latest.config.account.userId).toBe(f.a.userId);
+ release();await retry.catch(()=>{});await switching;status=await app.call('mote:get-status');expect(status.config.account.userId).toBe(f.b.userId);expect(status.queueDepth).toBe(0);expect(status.running).toBe(false);
+ const a=await f.login('generated-a');app.intercept=undefined;await app.call('mote:ask',['login',{token:a.token}]);expect((await app.call('mote:get-status')).queueDepth).toBe(0);
+ expect((await f.request((await f.login('generated-b')).token,'/api/captures/'+draft.id)).statusCode).toBe(404);
+});
+it('logout during an actual capture retires its input and does not resume collection or expose its draft',async()=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);const status=await app.call('mote:get-status');await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false,defaultCollection:'activity'}]);
+ let entered=false;app.child.on('message',(message:any)=>{if(message.type==='capture-entered')entered=true;});app.child.send({type:'hold-capture'});await app.call('mote:start');await vi.waitFor(()=>expect(entered).toBe(true));
+ const logout=app.call('mote:ask',['logout']);await vi.waitFor(()=>expect(app.latest.running).toBe(false));app.child.send({type:'release-capture'});await logout;
+ expect((await app.call('mote:get-status')).queueDepth).toBe(0);expect((await app.call('mote:note-draft')).text).toBe('');await expect(app.call('mote:start')).rejects.toThrow('Sign in');
+});
+it('rejects old unbound storage before mutation and refuses to import another account archive with equal IDs',async()=>{
+ const f=await fixture(),directory=join(f.directory,'old');await import('node:fs/promises').then(fs=>fs.mkdir(directory));const marker=JSON.stringify({version:3});await writeFile(join(directory,'storage-format.json'),marker);await writeFile(join(directory,'config.json'),'generated old unbound bytes');
+ await expect(ensureStorageFormat(directory,['config.json'])).rejects.toThrow('Unsupported');expect(await readFile(join(directory,'storage-format.json'),'utf8')).toBe(marker);expect(await readdir(directory)).toEqual(['config.json','storage-format.json']);
+ const a=new DurableQueue(join(f.directory,'a'),f.config(f.a)),b=new DurableQueue(join(f.directory,'b'),f.config(f.b));await a.initialize();await b.initialize();await a.enqueue(event(),image);await b.enqueue(event(),image);
+ await expect(b.importArchive(await a.exportArchive())).rejects.toThrow('another account');expect((await b.next())!.image).toEqual(image);expect(a.stats().depth).toBe(1);expect(b.stats().depth).toBe(1);
 });

@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "账号用户名": "Account username",
+  "账号密码": "Account password",
+  "个人登录凭据": "Personal sign-in credential",
+  "请输入有效的个人登录凭据": "Enter a valid personal sign-in credential",
+  "使用账号登录全部功能，或在浏览器中批准采集设备。": "Sign in with your account for all features, or approve a collection device in your browser.",
+  "设备授权只允许采集；请使用用户名和密码登录后打开私人资料。": "Device approval permits collection. Sign in with your username and password to open private content.",
   "屏幕录制": "Screen Recording",
   "辅助功能": "Accessibility",
   "内容记录：优先提取文章或商品字段，未取得结构化内容时截图。": "Content: extract article or product fields first, falling back to screenshots when structured content is unavailable.",

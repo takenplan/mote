@@ -180,7 +180,7 @@ else {
     void events.record('APP', 'STARTED');
     const accounts=new DesktopAccountStorage(dataDirectory,secrets);
     let accountDirectory=await accounts.open(settings);
-    let noteDrafts = new NoteDraftStore(join(accountDirectory, 'notes')); await noteDrafts.initialize();
+    let noteDrafts = new NoteDraftStore(join(accountDirectory, 'notes'),connectionToken(settings)?accountKey(settings):undefined); await noteDrafts.initialize();
     let storage = new QueueStorage(accountDirectory, profile.name, settings.deviceId, [dataDirectory, ...await Promise.all([defaultDataDirectory, `${defaultDataDirectory}-profiles`].map(path => realpath(path).catch(() => resolve(path))))]);
     let queue = new DurableQueue(await storage.open(connectionToken(settings)?settings.captureStorageDirectory:''), connectionToken(settings)?settings:{...settings,account:undefined});
     queue.setStorageGuard(async () => { if (recoveryRequired) throw new Error(recoveryRequired); await storage.assertOwned(queue.directory); });
@@ -329,7 +329,7 @@ else {
           settings=updated;collector.updateConfig(updated);
           await queue.resetRetries();
         }else{
-          const directory=await accounts.open(updated),nextNotes=new NoteDraftStore(join(directory,'notes'));await nextNotes.initialize();
+          const directory=await accounts.open(updated),nextNotes=new NoteDraftStore(join(directory,'notes'),connectionToken(updated)?accountKey(updated):undefined);await nextNotes.initialize();
           const nextStorage=new QueueStorage(directory,profile.name,updated.deviceId,[dataDirectory,defaultDataDirectory,`${defaultDataDirectory}-profiles`]);
           const nextQueue=new DurableQueue(await nextStorage.open(connectionToken(updated)?updated.captureStorageDirectory:''),connectionToken(updated)?updated:{...updated,account:undefined});
           nextQueue.setStorageGuard(async()=>{if(recoveryRequired)throw Error(recoveryRequired);await nextStorage.assertOwned(nextQueue.directory);});
@@ -376,14 +376,17 @@ else {
         return { canceled: false, preview: onboarding.preview(input) };
       } catch { throw new Error(moteText("无法读取有效邀请，请检查 JSON/二维码格式、有效期和文件大小；原连接未变动")); }
     }));
-    handle('mote:connection-confirm', (id, origin, deviceName) => serialize(async () => {
-      if(!encryptedStorageAvailable())throw Error(moteText('系统加密存储不可用，不能交换并保存凭据'));
-      if(typeof deviceName!=='string')throw Error('Invalid device name');
-      const named=updateConfig(settings,{...settings,deviceName}),result=await onboarding.redeem(id,origin,named,currentPlatform);
-      const identity=await testConnection({...named,...result});
-      if(identity.credential.id!==result.credentialId)throw Error('Connection identity mismatch');
-      await commitConnection({...named,...result,account:identity.account,credentialScope:'client',authSignedOut:false,authExpiresAt:identity.credential.expiresAt});return clientStatus();
-    }));
+    handle('mote:connection-confirm', async (id, origin, deviceName) => {
+      await serialize(async()=>{
+        if(!encryptedStorageAvailable())throw Error(moteText('系统加密存储不可用，不能交换并保存凭据'));
+        if(typeof deviceName!=='string')throw Error('Invalid device name');
+        const serverUrl=onboarding.confirmNode(id,origin),named=updateConfig(settings,{...settings,deviceName,serverUrl,token:''});
+        await commitConnection({...named,account:undefined,authSignedOut:true,token:undefined});
+      });
+      // Old owner invitation secrets cannot establish a personal owner. The
+      // confirmed origin now starts the existing account/device approval flow.
+      await browserLogin!();return clientStatus();
+    });
     handle('mote:connection-test', async () => {
       if (connectionState.state === 'checking') return connectionState;
       const requested = settings; connectionState = { state: 'checking', message: moteText("正在验证已保存连接与权限…") };
@@ -569,7 +572,7 @@ else {
       loginGeneration++;updateUi(clientStatus());
       if(requested.token&&requested.token!==credential)await loginRequest(requested,'/api/auth/logout',{},requested.token).catch(()=>{});
     };
-    ensureBrowserLogin=async()=>{const current=settings;if(connectionToken(current)){const identity=await testConnection(current);if(settings!==current||!sameAccount(current,{...current,account:identity.account}))throw Error('Desktop account changed');}};
+    ensureBrowserLogin=async()=>{const current=settings;if(connectionToken(current)){const identity=await testConnection(current);if(settings!==current||!sameAccount(current,{...current,account:identity.account}))throw Error('Desktop account changed');if(identity.credential.deviceId)throw Error(moteText('设备授权只允许采集；请使用用户名和密码登录后打开私人资料。'));}};
     browserLogin=async(page,evidenceId,durationMs=2592000000,workId)=>{
       if(![0,86400000,604800000,2592000000].includes(durationMs))throw Error('Invalid lifetime');
       const requested=settings,generation=++loginGeneration,{verifier,challenge}=loginVerifier();
@@ -589,7 +592,7 @@ else {
       if(settings.token&&!settings.authSignedOut&&settings.authExpiresAt&&settings.authExpiresAt<=Date.now())void endLogin().catch(()=>{});
     },1000);authTimer.unref();app.once('before-quit',()=>clearInterval(authTimer));
     handle('mote:ask', async (command,input) => {
-      if(command==='login'){const value=input as {token?:string;username?:string;password?:string;durationMs?:number};if(value?.username!==undefined){const requested=settings;const grant=await loginRequest(requested,'/api/auth/login',{username:value.username,password:value.password,mode:'client',durationMs:value.durationMs??0});if(settings!==requested)throw Error('Desktop account changed');await installLogin(grant.token,value.durationMs);return {};} if(typeof value?.token!=='string'||value.token.length<32||value.token.length>8192||/[\r\n]/.test(value.token))throw Error(moteText('请输入有效的中央所有者令牌'));await installLogin(value.token.trim(),value.durationMs);return {};}
+      if(command==='login'){const value=input as {token?:string;username?:string;password?:string;durationMs?:number};if(value?.username!==undefined){const requested=settings;const grant=await loginRequest(requested,'/api/auth/login',{username:value.username,password:value.password,mode:'client',durationMs:value.durationMs??0});if(settings!==requested)throw Error('Desktop account changed');await installLogin(grant.token,value.durationMs);return {};} if(typeof value?.token!=='string'||value.token.length<32||value.token.length>8192||/[\r\n]/.test(value.token))throw Error(moteText('请输入有效的个人登录凭据'));await installLogin(value.token.trim(),value.durationMs);return {};}
       if(command==='logout'){await endLogin();return {};}
       if(command==='login-browser'){await browserLogin!(undefined,undefined,(input as {durationMs?:number})?.durationMs);return {};}
       try{return await askClient.request(settings,command as import('./ask').AskCommand,input as Parameters<AskClient['request']>[2]);}

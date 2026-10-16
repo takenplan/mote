@@ -7,6 +7,9 @@ import type { DurableQueue, QueueRecord } from './queue';
 import { MAX_IMAGE_BYTES, validateServerUrl } from './config';
 import { readResponseText } from './response-body';
 import { captureOcrState } from '@mote/shared/metadata';
+import {accountCaptures,accountJson,accountOriginal} from './account-reader';
+import {DESKTOP_PROTOCOL_HEADERS,accountKey} from './account';
+import {ingressKey} from './ingress-client';
 
 export type CaptureLocation = 'local' | 'central';
 export interface BrowseRequest { source?: 'screen'|'ui_page'; location: CaptureLocation; day: string; cursor?: string; grouping?: 'sessions' | 'records'; sessionId?: string }
@@ -41,7 +44,7 @@ function preview(event: Partial<CaptureEvent> & { hasImage?: boolean; textPrevie
 }
 async function request(config: Config, path: string): Promise<Response> {
   if (!connectionToken(config) || !config.serverUrl) throw new Error(moteText("请先连接中央节点；本机记录仍可查看"));
-  const response = await fetch(`${validateServerUrl(config.serverUrl)}${path}`, { headers: { 'Accept-Language': getLocale(), Authorization: `Bearer ${requireConnectionToken(config)}` }, redirect: 'error', signal: AbortSignal.timeout(20000) });
+  const response = await fetch(`${validateServerUrl(config.serverUrl)}${path}`, { headers: { ...DESKTOP_PROTOCOL_HEADERS,'Accept-Language': getLocale(), Authorization: `Bearer ${requireConnectionToken(config)}` }, redirect: 'error', signal: AbortSignal.timeout(20000) });
   if (!response.ok) {
     await response.body?.cancel().catch(() => undefined);
     if (response.status === 404) throw new Error(moteText("记录不存在，或中央节点需要升级才能浏览采集记录"));
@@ -51,7 +54,7 @@ async function request(config: Config, path: string): Promise<Response> {
   return response;
 }
 async function remoteDetail(config: Config, id: string): Promise<Partial<CaptureEvent>> {
-  const value = JSON.parse(await readResponseText(await request(config, `/api/capture-browser/${id}`), 1024 * 1024)) as Partial<CaptureEvent>;
+  const value = config.account?await accountJson(config,`/api/captures/${id}`):JSON.parse(await readResponseText(await request(config, `/api/capture-browser/${id}`), 1024 * 1024)) as Partial<CaptureEvent>;
   if (value.id !== id || value.deviceId !== config.deviceId || !['screen','ui_page'].includes(value.source??'')) throw new Error(moteText("记录不属于当前设备的截图"));
   return value;
 }
@@ -64,13 +67,23 @@ async function imageBytes(response: Response, maximum: number): Promise<Buffer> 
     return Buffer.concat(chunks);
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
 }
-export async function browseCaptures(queue: DurableQueue, config: Config, input: BrowseRequest): Promise<BrowserPage> {
+export async function browseCaptures(queue: Pick<DurableQueue,'sessionSamples'|'recordForBrowser'|'pageForBrowser'>, config: Config, input: BrowseRequest): Promise<BrowserPage> {
   if(input.source!==undefined&&!['screen','ui_page'].includes(input.source))throw Error('Invalid capture source');
   const source=input.source??'screen';
   location(input?.location); const range = captureDayRange(input.day);
   if (input.cursor !== undefined && (typeof input.cursor !== 'string' || input.cursor.length > 2048)) throw new Error(moteText("分页参数无效"));
   if (input.grouping !== undefined && !['sessions','records'].includes(input.grouping)) throw new Error(moteText("分组方式无效"));
   if (input.sessionId) validId(input.sessionId);
+  if(config.account&&input.location==='central'){
+    const query=ingressKey({range,source,grouping:input.grouping,sessionId:input.sessionId});let cursor:string|undefined;
+    if(input.cursor){let value:any;try{value=JSON.parse(Buffer.from(input.cursor,'base64url').toString());}catch{throw Error('Invalid account page cursor');}if(value.account!==accountKey(config)||value.query!==query||typeof value.cursor!=='string')throw Error('Invalid account page cursor');cursor=value.cursor;}
+    const rows=await accountCaptures(config,{...range,kind:source}),records=new Map(rows.map(row=>[row.id,{event:row,blobHash:row.blobHash??undefined,blobBytes:0,attempts:0,nextAttemptAt:0} as QueueRecord]));
+    // Reuse the original local/session presentation algorithms with a read-only
+    // projection of actual authorized server pages; no second queue is created.
+    const projection={sessionSamples:async()=>rows.map(row=>({id:row.id,deviceId:row.deviceId,appId:row.appId,appName:row.appName,capturedAt:row.capturedAt,hasImage:Boolean(row.imageMime)})),recordForBrowser:(id:string)=>records.get(id),pageForBrowser:async(_after:string,_before:string,offset:number,limit:number)=>({records:[...records.values()].slice(offset,offset+limit),total:records.size})};
+    const page=await browseCaptures(projection,config,{...input,location:'local',cursor});
+    return {...page,...(page.nextCursor?{nextCursor:Buffer.from(JSON.stringify({account:accountKey(config),query,cursor:page.nextCursor})).toString('base64url')}:{})};
+  }
   if (input.grouping === 'sessions' && source === 'screen') {
     if (input.location === 'central') {
       const params = new URLSearchParams({...range,deviceId:config.deviceId,limit:String(PAGE_SIZE),...(input.cursor?{cursor:input.cursor}:{}),...(input.sessionId?{sessionId:input.sessionId}:{})});
@@ -118,7 +131,7 @@ export async function captureImage(queue: DurableQueue, config: Config, source: 
   location(source); validId(id); if (typeof thumbnail !== 'boolean') throw new Error(moteText("图片参数无效"));
   let bytes: Buffer | undefined;
   if (source === 'local') bytes = await queue.imageForBrowser(id);
-  else { await remoteDetail(config, id); bytes = await imageBytes(await request(config, `/api/capture-browser/${id}/image${thumbnail ? '?thumbnail=1' : ''}`), thumbnail ? 1024 * 1024 : MAX_IMAGE_BYTES); }
+  else { const record=await remoteDetail(config, id);if(config.account){const original=await accountOriginal(config,record);if(original)bytes=await imageBytes(original.response,MAX_IMAGE_BYTES);}else bytes = await imageBytes(await request(config, `/api/capture-browser/${id}/image${thumbnail ? '?thumbnail=1' : ''}`), thumbnail ? 1024 * 1024 : MAX_IMAGE_BYTES); }
   if (!bytes) throw new Error(moteText("图片已同步，请切换到中央已归档查看"));
   return previewWork.run<string>({ kind: 'preview', bytes, thumbnail });
 }

@@ -1,4 +1,4 @@
-import {mkdir,readFile} from 'node:fs/promises';
+import {mkdir,readFile,readdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {accountKey,sameAccount} from './account';
 import {ConfigStore,defaultConfig,type SecretStorage} from './config';
@@ -16,7 +16,7 @@ export class DesktopAccountStorage {
   if(connectionToken(config)&&key){
    const path=join(directory,'account-binding.json'),binding={version:1,origin:config.serverUrl,deploymentId:config.account!.deploymentId,userId:config.account!.userId};
    try{if(JSON.stringify(JSON.parse(await readFile(path,'utf8')))!==JSON.stringify(binding))throw Error('Desktop account directory binding mismatch');}
-   catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;await atomicSourceJson(path,binding);}
+   catch(error){if((error as NodeJS.ErrnoException).code!=='ENOENT')throw error;if((await readdir(directory)).length)throw Error('Account data has no ownership marker; existing files were preserved');await atomicSourceJson(path,binding);}
   }
   return directory;
  }

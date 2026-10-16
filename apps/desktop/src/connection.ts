@@ -66,6 +66,11 @@ export class ConnectionOnboarding {
     this.pending = { preview, invitation }; return { ...preview };
   }
   clear(): void { this.pending = undefined; }
+  confirmNode(id:unknown,origin:unknown):string{
+    const pending=this.pending;
+    if(!pending||pending.preview.id!==id||pending.preview.serverUrl!==origin)throw new ConnectionError('CONFIRMATION',moteText('请先预览邀请并确认显示的中央地址'));
+    parseConnectionInvitation(JSON.stringify(pending.invitation),this.now());this.clear();return pending.preview.serverUrl;
+  }
   async redeem(id: unknown, confirmedOrigin: unknown, config: Pick<Config, 'deviceId' | 'deviceName'>, platform: Platform): Promise<{ serverUrl: string; token: string; credentialId: string; scope: 'owner' }> {
     const pending = this.pending;
     if (!pending || pending.preview.id !== id || pending.preview.serverUrl !== confirmedOrigin) throw new ConnectionError('CONFIRMATION', moteText("请先预览邀请并确认显示的中央地址"));

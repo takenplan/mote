@@ -5,6 +5,7 @@ const Module=require('node:module');
 const pending=new Map(),handlers=new Map();let sequence=0,mainWindow;
 const root=process.argv[2];if(!root)throw Error('Generated profile required');
 let dialogPaths=[];
+let holdCapture=false,releaseCapture;
 const app=Object.assign(new EventEmitter(),{
  isPackaged:false,getPath:()=>root,setPath:()=>{},getPreferredSystemLanguages:()=>['en'],requestSingleInstanceLock:()=>true,whenReady:()=>Promise.resolve(),getVersion:()=> '0.0.87',getSystemVersion:()=> 'generated',getLoginItemSettings:()=>({wasOpenedAtLogin:false,openAtLogin:false}),setLoginItemSettings:()=>{},relaunch:()=>{},
  quit(){const event={prevented:false,preventDefault(){this.prevented=true;}};app.emit('before-quit',event);if(!event.prevented)process.exit(0);}
@@ -16,7 +17,7 @@ class Window extends EventEmitter{
 }
 class Tray extends EventEmitter{setToolTip(){}setContextMenu(){}}
 const electron={app,BrowserWindow:Window,Tray,Menu:{setApplicationMenu:()=>{},buildFromTemplate:value=>value},nativeImage:{createFromBitmap:()=>({setTemplateImage:()=>{}})},ipcMain:{handle:(name,fn)=>handlers.set(name,fn)},safeStorage:{isEncryptionAvailable:()=>true,encryptString:value=>Buffer.from(value).map(v=>v^90),decryptString:value=>Buffer.from(value.map(v=>v^90)).toString()},session:{fromPartition:()=>({})},net:{request:()=>{throw Error('Unexpected public network');}},shell:{openExternal:async url=>{process.send?.({type:'external',url});},openPath:async()=>'',showItemInFolder:()=>{}},systemPreferences:{getMediaAccessStatus:()=> 'granted'},powerMonitor:Object.assign(new EventEmitter(),{getSystemIdleTime:()=>0,getSystemIdleState:()=> 'active'}),desktopCapturer:{getSources:async()=>{throw Error('No real screenshots allowed');}},screen:{}};
-const native={readPowerState:async()=>({charging:true,onBattery:false}),foregroundApplication:async()=>({appId:'generated.application',appName:'Generated application',pid:1}),activeApplication:async()=>({appId:'generated.application',appName:'Generated application',pid:1,visibleAppIds:['generated.application'],unknownVisibleWindows:false}),readVisibleNotifications:async()=>[],runHelper:async()=> '{}',readInstalledApplications:async()=>[],recognizeInvitationQr:async()=>{throw Error('No QR native I/O');}};
+const native={readPowerState:async()=>({charging:true,onBattery:false}),foregroundApplication:async()=>{if(holdCapture){process.send?.({type:'capture-entered'});await new Promise(resolve=>{releaseCapture=resolve;});holdCapture=false;}return {appId:'generated.application',appName:'Generated application',pid:1};},activeApplication:async()=>({appId:'generated.application',appName:'Generated application',pid:1,visibleAppIds:['generated.application'],unknownVisibleWindows:false}),readVisibleNotifications:async()=>[],runHelper:async()=> '{}',readInstalledApplications:async()=>[],recognizeInvitationQr:async()=>{throw Error('No QR native I/O');}};
 const originalLoad=Module._load;
 Module._load=function(request,parent,...rest){if(request==='electron')return electron;if(request==='./native'&&parent?.filename.includes('/desktop/dist/'))return native;return originalLoad.call(this,request,parent,...rest);};
 electron.dialog={showOpenDialog:async()=>({canceled:false,filePaths:dialogPaths}),showSaveDialog:async()=>({canceled:true}),showMessageBox:async options=>{process.send?.({type:'startup-error',error:options.detail});return {response:1};},showErrorBox:(_title,error)=>process.send?.({type:'startup-error',error})};
@@ -29,6 +30,8 @@ global.fetch=async(input,init={})=>{
  return response;
 };
 process.on('message',async message=>{
+ if(message.type==='hold-capture'){holdCapture=true;return;}
+ if(message.type==='release-capture'){releaseCapture?.();return;}
  if(message.type==='fetch-response'){const request=pending.get(message.id);if(!request)return;pending.delete(message.id);if(message.error)request.reject(Error(message.error));else request.resolve(new Response(Buffer.from(message.body,'base64'),{status:message.status,headers:message.headers}));return;}
  if(message.type==='invoke'){try{dialogPaths=message.paths??dialogPaths;const fn=handlers.get(message.channel);if(!fn)throw Error('Unknown production IPC '+message.channel);const value=await fn({sender:mainWindow.webContents,senderFrame:mainWindow.webContents.mainFrame},{accountGeneration:message.generation},...(message.args??[]));process.send?.({type:'result',id:message.id,value});}catch(error){process.send?.({type:'result',id:message.id,error:error.message});}}
  if(message.type==='quit')app.quit();
