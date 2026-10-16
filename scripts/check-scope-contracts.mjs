@@ -75,6 +75,9 @@ export function checkProductionImports(directory=root){
   // recipes, decoder subprocess, transport and fingerprint algorithms. No
   // legacy private Store is constructed; scoped Original/TaskRun provide I/O.
   for(const path of ['file-processors.ts','file-recipes.ts','file-dialogue.ts','format-work.ts','file-configuration.ts','local-http.ts','image-understanding.ts','evidence-image.ts'])allowed.add(sourceRoot+'/'+path);
+  // M11 uses only the existing pinned-address HTTP transport and fixed error
+  // type. Neither constructs a legacy Store or connector service.
+  for(const path of ['connectors/network.ts','connectors/types.ts'])allowed.add(sourceRoot+'/'+path);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){
@@ -111,7 +114,7 @@ export function checkScopes(directory=root){
  * installation is the explicit, inventoried exception; it is never a user API.
  * This detects new bypasses, and complements real A/B and composite-FK tests. */
 export function privateSqlViolations(source,path){
-  if(path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/processing-schema.ts')return [];
+  if(path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/processing-schema.ts'||path==='apps/server/src/scope/mcp-schema.ts')return [];
   const failures=[],tree=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);
   function visit(node){
     if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){

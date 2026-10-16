@@ -1,0 +1,122 @@
+# M11: user-bound MCP protocol and source capabilities
+
+This is the independently implementable protocol/source phase of M11. The
+feature starts at remotely verified PR #133 head
+`470516b7ed4ab7ee8b0fba344883c6b42bb7ce56` (tested M06 runtime
+`07ad9ddb17a0d2cd0004c50958670145b1457446`), including PR #132 and
+M00/M01/M02/M03/M04/M05/M09. Integration remains
+`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`. M10's newer composed candidate
+is independently reviewed in `/tmp/mote-m11-review-m10.md`; it is not silently
+included or represented as accepted by this feature.
+
+**M11 is not fully accepted.** Its actual Memory/Ask/EvidenceReader tools require
+accepted M07/M08 and its final connector composition requires accepted M10.
+No fake neighboring service supplies those features. The following production
+source capabilities work independently now; the complete legacy query surface
+will be restored and validated using the actual scoped query adapters.
+
+## Host identity and protocol
+
+`buildScopedApp` registers `ScopedMcp` on the shared admitted SQLite connection,
+M01 Accounts, M02 PrivateData, M03 IngressHost and M04 Configurations. There is no
+second Store, database, executor, owner directory or default-user adapter.
+The existing pinned MCP SDK implements Streamable HTTP on `/mcp` and the actual
+SDK client implements outbound requests.
+
+Only M01 `mcp-read` and `mcp-write` Bearer credentials authenticate `/mcp`.
+The host has a separate verifier/issuance method for restricted UserContext;
+`authenticate()` still excludes MCP credentials. Restricted contexts never
+administer the instance. Browser cookies cannot select or replace a session's
+owner. Each session captures its immutable credential, account epoch, source
+scopes and host context. Every HTTP request requires the same credential as its
+session; a foreign or missing session receives the same404. Account/credential
+state and domain generation are revalidated on each request, tool/resource read
+and before response publication. SDK cancellation participates in tool fences.
+
+M01's mint route resolves requested source IDs through the owner's actual
+repository. Private source-incarnation pins are stored in credential metadata.
+`mc_source_epochs` persists source insertion/deletion incarnations and separate
+in-flight change revisions through SQLite triggers, including another connection.
+Renaming source metadata preserves token ownership; delete/recreate cannot revive
+its old scoped token. Tokens issued before M11 with selected scopes but no pins
+must be reissued; no missing pin expands permissions. Empty read scopes retain
+M01's explicit account-wide read meaning. Write credentials require exact sources.
+
+POST initializes/dispatches, GET/DELETE use the SDK session transport. Sessions
+are process-local; after crash/restart an old session ID is404 and an unchanged
+valid credential can explicitly initialize again. Global/static owner and legacy
+MCP configuration tokens are never fallback credentials. Origin and forged host
+identity selectors are rejected before dispatch; responses disable caching.
+
+## Actual source surfaces and remaining query surfaces
+
+| Surface | Protocol/source phase |
+| --- | --- |
+| `mote_put_item` | Real immutable M03 source intake; existing explicit source only; no source creation or external mutation. Archive input enters real automatic M06 processing. |
+| `mote_sources`, `mote://sources` resource | Authorized enabled source metadata only; independent A/B same IDs. |
+| `mote_items`, `mote_history` | Actual M02 current immutable source records/history within one explicit source; Coding raw bodies remain reserved for its query projection. |
+| `mote_materials`, `mote_material_read` | Real M06-published/M02 Material, with full transitive source dependency authorization and bounded text windows. |
+| `mote_search` | Literal M02 FTS candidates filtered by owner and selected source in SQL before candidate ordering/limit; no semantic model invocation. |
+| `mote_material`, `mote_file_catalog`, `mote_segments`, `mote_browse`, `mote_retrieve`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_memories`, `mote_evidence` | Await actual accepted M07/M08 query/EvidenceReader/Memory/activity projection. Final M11 acceptance must check each tool and its original/Coding disclosure rules. |
+| inbound resource templates/prompts/subscriptions | No private template/prompt/subscription is registered in this phase. Their absence is explicit, not a simulated successful empty Memory query. |
+
+Write sessions expose only the write tool. They do not gain read or ordinary
+private HTTP API rights. Signed paging cursors remain M02's durable
+deployment/user/collection/filter-bound cursors. Source scopes are checked before
+reading pages, history or Material dependencies. Original filesystem paths and
+raw Original read capabilities are never granted to MCP SDK clients.
+
+## Outbound user instances
+
+M04's `mcpConnections` user domain owns `{connections:[{id,enabled,url,token,
+sourceIds}]}`. Its strict schema, revision/CAS, file watching, private files,
+prepare/publish/rollback and declared-sensitive token projection are the actual
+configuration framework. Credentials are omitted from views and portable
+configuration exports. Invocation HTTP bodies select only an owned connection
+ID and bounded resources or one explicitly confirmed read-only tool; they do not
+carry raw bearer secrets or choose an owner.
+
+`POST /api/connectors/mcp/discover` discovers resources, templates, tool metadata
+and prompt metadata with SDK paging. `POST /api/connectors/mcp/import` uses the
+existing resource/text or explicitly confirmed read-only tool import contract.
+No arbitrary prompt execution, unsolicited external tool, local shell or stdio
+command is introduced. The existing administrator-owned instance
+`connectors.allowLocalMcp` boundary governs local HTTP targets; ordinary users
+cannot enable it. The existing URL and pinned-address/DNS/redirect transport
+checks are reused. Authorization is checked both before and after DNS lookup.
+
+Every invocation constructs a fresh SDK client/headers/session for its owner and
+connection. Config publication invalidates and retires that user's old handles;
+B continues. Healthy sessions terminate before local close. Revoked/cancelled
+handles close locally without renewing authority for external cleanup. Imports
+serialize by owner/connection/source, preserve complete-resource membership
+manifests and retract only that selected resource's old tail. SDK/result/cursor
+errors become fixed codes with no provider exception prose or credential values.
+
+Source existence, settings, persistent revision, account epoch, credential,
+configuration fingerprint, signal and exact selected existing item heads are
+bound before remote reads. All selected resource results and manifest changes
+publish together through real M03/M02 nested transactions. Revocation, source
+delete/recreate/toggle, capture deletion, cancellation or config refresh during
+I/O cannot reintroduce a deleted record or publish late results. Retry rereads
+the external resource and reuses only identical owned immutable revisions.
+
+## Lifecycle and supersession
+
+MCP lifecycle exports membership manifests only; it excludes credentials,
+configuration connections, SDK sessions and handles. Delete sets a durable domain
+tombstone/generation, revokes that user's M01 MCP credentials, removes manifests
+and joins local handles/sessions. Restore validates its envelope and duplicate
+identities, restores metadata only and never renews old credentials/sessions.
+Source epoch tombstones retain only owner/source IDs and counters needed to
+prevent old authority revival. M16 still owns the complete user deletion ordering,
+including M04 credential/configuration cleanup and M02/M03 data lifecycle.
+
+KEEP the SDK, network constraints, strict source schemas, immutable intake,
+membership snapshots, shared services and M01 credential registry. CHANGE
+single-owner ConnectorContext/Store to host-bound user/source facades and user
+configuration instances. REMOVE production static-token fallbacks and global
+session/client/configuration caches. EXCEPTION trusted host code and deployment
+operators retain server plaintext access; this is not a malicious-code sandbox.
+UNKNOWN final M07/M08/M10 composition, full-module acceptance, physical clients,
+real credentials/providers/models and deployment until actually verified.

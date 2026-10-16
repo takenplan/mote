@@ -1,0 +1,144 @@
+import test,{type TestContext} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {DatabaseSync} from 'node:sqlite';
+import Fastify from 'fastify';
+import {McpServer} from '@modelcontextprotocol/sdk/server/mcp.js';
+import {StreamableHTTPServerTransport} from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import {Client} from '@modelcontextprotocol/sdk/client/index.js';
+import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
+import {randomUUID} from 'node:crypto';
+import {ListResourcesRequestSchema} from '@modelcontextprotocol/sdk/types.js';
+import {z} from 'zod';
+import {buildApp} from '../src/app.js';
+import {identityHash} from '../src/scope/originals.js';
+
+const password='Generated-M11-account-password-01',protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'},source=(id='same-source')=>({id,name:'Generated '+id,kind:'mcp',deviceId:'same-device',platform:'import',retention:'snapshot'}),item=(text:string,externalId='same-item',revision='same-revision')=>({externalId,revision,observedAt:'2026-10-16T00:00:00Z',kind:'message',layer:'snapshot',title:'Generated',text});
+const deferred=()=>{let resolve!:()=>void;return {promise:new Promise<void>(r=>resolve=r),resolve};};
+async function fixture(t:TestContext,allowLocal=true){
+ const root=mkdtempSync(join(tmpdir(),'mote-m11-')),clients:Client[]=[];let node=await buildApp({dataDir:root,configuration:{document:{version:1,revision:0,connectors:{allowLocalMcp:allowLocal}}}});
+ t.after(async()=>{await Promise.allSettled(clients.map(client=>client.close()));await node.app.close();rmSync(root,{recursive:true,force:true});});
+ const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown,extra:Record<string,string>={})=>node.app.inject({url,method,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{}),...extra},...(payload===undefined?{}:{payload})});
+ const ok=async(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>{const response=await request(token,url,method,payload);assert.equal(response.statusCode,200,response.body);return response.json();};
+ await node.accounts.initialize('generated-admin',password);const admin=await ok(undefined,'/api/auth/login','POST',{username:'generated-admin',password,mode:'client'}),users=[];
+ for(const label of ['a','b']){const user=await ok(admin.token,'/api/admin/accounts','POST',{username:'generated-'+label,password});const login=await ok(undefined,'/api/auth/login','POST',{username:user.username,password,mode:'client'});users.push({...user,...login});await ok(login.token,'/api/ingress/sources','POST',source());await ok(login.token,'/api/ingress/sources','POST',source('other-source'));}
+ const [a,b]=users;
+ const mint=(token:string,access:'read'|'write'='read',sourceIds=['same-source'])=>ok(token,'/api/connections/mcp','POST',{access,sourceIds,label:'Generated MCP'});
+ const listen=async()=>{if(!node.app.server.listening)await node.app.listen({host:'127.0.0.1',port:0});return new URL('/mcp',node.app.listeningOrigin);};
+ const connect=async(grant:any,extra:Record<string,string>={})=>{const endpoint=await listen(),client=new Client({name:'generated-m11-client',version:'1'}),transport=new StreamableHTTPClientTransport(endpoint,{requestInit:{headers:{authorization:'Bearer '+grant.token,...extra}}});clients.push(client);await client.connect(transport);return {client,transport,endpoint};};
+ const put=async(token:string,text:string,id='same-item',sourceId='same-source')=>ok(token,'/api/ingress/sources/'+sourceId+'/items','POST',{batchId:'batch-'+id,items:[item(text,id)]});
+ const configure=async(token:string,url:string,key:string,ids=['same-source'])=>{const revision=(await ok(token,'/api/configuration')).revision;return ok(token,'/api/configuration/mcpConnections','PUT',{revision,value:{connections:[{id:'same-connection',url,token:key,sourceIds:ids}]}});};
+ const restart=async()=>{await Promise.allSettled(clients.map(client=>client.close()));await node.app.close();node=await buildApp({dataDir:root});};
+ return {get node(){return node;},root,a,b,admin,request,ok,mint,connect,put,configure,restart};
+}
+const value=(result:any)=>JSON.parse(result.content[0].text);
+async function call(client:Client,name:string,args:Record<string,unknown>={}){return client.callTool({name,arguments:args});}
+
+test('actual HTTP SDK sessions bind identical source/tool/resource IDs to fixed A/B and source-scoped credentials',async t=>{
+ const f=await fixture(t);await f.put(f.a.token,'GENERATED_PRIVATE_A');await f.put(f.b.token,'GENERATED_PRIVATE_B');await f.put(f.a.token,'GENERATED_OTHER_A','other-item','other-source');
+ const ga=await f.mint(f.a.token),gb=await f.mint(f.b.token),a=await f.connect(ga),b=await f.connect(gb);
+ const results=await Promise.all([call(a.client,'mote_items',{sourceId:'same-source'}),call(b.client,'mote_items',{sourceId:'same-source'})]);assert.match(JSON.stringify(results[0]),/GENERATED_PRIVATE_A/);assert.doesNotMatch(JSON.stringify(results[0]),/GENERATED_PRIVATE_B/);assert.match(JSON.stringify(results[1]),/GENERATED_PRIVATE_B/);
+ assert.notEqual(a.transport.sessionId,b.transport.sessionId);assert.deepEqual(value(await call(a.client,'mote_sources')).items.map((s:any)=>s.id),['same-source']);assert.equal((await call(a.client,'mote_items',{sourceId:'other-source'})).isError,true);
+ const resources=await a.client.readResource({uri:'mote://sources'});assert.doesNotMatch(JSON.stringify(resources),/other-source|GENERATED_PRIVATE_B/);assert.equal((await a.client.listResources()).resources.length,1);
+ for(const url of ['/api/sources','/api/auth/self','/api/configuration','/api/admin/accounts'])assert.equal((await f.request(ga.token,url)).statusCode,401);
+ const stolen=await fetch(a.endpoint,{method:'POST',headers:{Authorization:'Bearer '+gb.token,'Content-Type':'application/json',Accept:'application/json, text/event-stream','Mcp-Session-Id':a.transport.sessionId!},body:JSON.stringify({jsonrpc:'2.0',id:99,method:'tools/list'})});assert.equal(stolen.status,404);assert.doesNotMatch(await stolen.text(),/GENERATED_PRIVATE_A/);
+ const scopedOther=await f.connect(await f.mint(f.a.token,'read',['other-source']));assert.match(JSON.stringify(await call(scopedOther.client,'mote_items',{sourceId:'other-source'})),/GENERATED_OTHER_A/);assert.equal((await call(scopedOther.client,'mote_items',{sourceId:'same-source'})).isError,true);
+});
+
+test('MCP source writes use actual M03 intake and cannot create sources, select users or exceed read/write grants',async t=>{
+ const f=await fixture(t),a=await f.connect(await f.mint(f.a.token,'write')),b=await f.connect(await f.mint(f.b.token,'write')),read=await f.connect(await f.mint(f.a.token));
+ assert.deepEqual((await a.client.listTools()).tools.map(t=>t.name),['mote_put_item']);await assert.rejects(a.client.listResources());
+ await call(a.client,'mote_put_item',{sourceId:'same-source',item:item('PRIVATE_A')});await call(b.client,'mote_put_item',{sourceId:'same-source',item:item('PRIVATE_B')});assert.match(JSON.stringify(await f.ok(f.a.token,'/api/sources/same-source/item?externalId=same-item')),/PRIVATE_A/);assert.doesNotMatch(JSON.stringify(await f.ok(f.a.token,'/api/sources/same-source/item?externalId=same-item')),/PRIVATE_B/);
+ assert.equal((await call(a.client,'mote_put_item',{sourceId:'other-source',item:item('DENIED')})).isError,true);assert.equal((await call(read.client,'mote_put_item',{sourceId:'same-source',item:item('DENIED')})).isError,true);
+ await assert.rejects(call(a.client,'mote_put_item',{sourceId:'same-source',userId:f.b.userId,item:item('SPOOFED')}));
+ assert.equal((await f.request(f.a.token,'/api/connections/mcp','POST',{access:'write',sourceIds:['absent'],label:'Wrong scope'})).statusCode,404);
+ const db=new DatabaseSync(join(f.root,'mote.sqlite'),{readOnly:true});try{assert.equal(Number(db.prepare('SELECT count(*) n FROM ig_batches WHERE user_id=?').get(f.a.userId)!.n),1);}finally{db.close();}
+});
+
+test('browser login, account switch and logout do not change MCP owner; revocation and account epoch fence existing sessions',async t=>{
+ const f=await fixture(t);await f.put(f.a.token,'PRIVATE_A');await f.put(f.b.token,'PRIVATE_B');const grant=await f.mint(f.a.token),session=await f.connect(grant);
+ const web=await f.request(undefined,'/api/auth/login','POST',{username:'generated-b',password,mode:'web'});assert.equal(web.statusCode,200);const cookie=String(web.headers['set-cookie']).split(';')[0];
+ const other=await f.connect(grant,{cookie});assert.match(JSON.stringify(await call(other.client,'mote_items',{sourceId:'same-source'})),/PRIVATE_A/);assert.doesNotMatch(JSON.stringify(await call(other.client,'mote_items',{sourceId:'same-source'})),/PRIVATE_B/);
+ await f.ok(f.a.token,'/api/auth/logout','POST',{});assert.match(JSON.stringify(await call(session.client,'mote_items',{sourceId:'same-source'})),/PRIVATE_A/);
+ const login=await f.ok(undefined,'/api/auth/login','POST',{username:'generated-a',password,mode:'client'});await f.ok(login.token,'/api/connections/'+grant.credentialId,'DELETE',{});await assert.rejects(call(session.client,'mote_sources'));
+ const next=await f.connect(await f.mint(login.token));await f.ok(f.admin.token,'/api/admin/accounts/'+f.a.userId,'PATCH',{disabled:true});await assert.rejects(call(next.client,'mote_sources'));await f.ok(f.admin.token,'/api/admin/accounts/'+f.a.userId,'PATCH',{disabled:false});await assert.rejects(call(next.client,'mote_sources'));
+});
+
+test('source paging cursors, lexical candidates and history cannot escape account or source grants and survive restart',async t=>{
+ const f=await fixture(t);for(const [token,owner] of [[f.a.token,'A'],[f.b.token,'B']])for(let i=0;i<3;i++)await f.put(token,'common PRIVATE_'+owner,'item-'+i);
+ const grant=await f.mint(f.a.token),a=await f.connect(grant),b=await f.connect(await f.mint(f.b.token)),first=value(await call(a.client,'mote_items',{sourceId:'same-source',limit:1}));assert.ok(first.nextCursor);assert.equal((await call(b.client,'mote_items',{sourceId:'same-source',limit:1,cursor:first.nextCursor})).isError,true);
+ const other=await f.connect(await f.mint(f.a.token,'read',['other-source']));assert.equal((await call(other.client,'mote_items',{sourceId:'other-source',limit:1,cursor:first.nextCursor})).isError,true);assert.doesNotMatch(JSON.stringify(await call(a.client,'mote_search',{sourceId:'same-source',query:'common'})),/PRIVATE_B/);
+ await f.restart();const resumed=await f.connect(grant),second=value(await call(resumed.client,'mote_items',{sourceId:'same-source',limit:1,cursor:first.nextCursor}));assert.equal(second.items.length,1);assert.notEqual(second.items[0].captureId,first.items[0].captureId);
+});
+
+async function remote(t:TestContext){
+ const app=Fastify({logger:false}),sessions=new Map<string,{server:McpServer;transport:StreamableHTTPServerTransport;key:string}>(),calls:{key:string;session:string;operation:string}[]=[],gate={entered:deferred(),released:deferred(),hold:false,fail:false,parts:2,pageMode:'normal'};
+ t.after(async()=>{gate.released.resolve();await Promise.allSettled([...sessions.values()].map(s=>s.server.close()));await app.close();});
+ app.all('/mcp',async(req,reply)=>{const key=String(req.headers.authorization??''),id=req.headers['mcp-session-id'];let session=typeof id==='string'?sessions.get(id):undefined;if(!session){const server=new McpServer({name:'generated-external-io',version:'1'}),transport=new StreamableHTTPServerTransport({sessionIdGenerator:randomUUID,enableJsonResponse:true});session={server,transport,key};server.registerResource('same-resource','fixture://same',{mimeType:'text/plain'},async uri=>{calls.push({key,session:transport.sessionId!,operation:'read'});gate.entered.resolve();if(gate.hold)await gate.released.promise;if(gate.fail)throw Error('GENERATED_PROVIDER_SECRET '+key);return {contents:Array.from({length:gate.parts},(_,i)=>({uri:uri.href,mimeType:'text/plain',text:'RESOURCE_'+key+'_'+i}))};});server.registerTool('same-tool',{inputSchema:{userId:z.string().optional()},annotations:{readOnlyHint:true}},async()=>({content:[{type:'text',text:'TOOL_'+key}]}));server.registerTool('unsafe-tool',{inputSchema:{},annotations:{readOnlyHint:false}},async()=>{throw Error('Must never run');});server.registerPrompt('same-prompt',{argsSchema:{}},async()=>({messages:[{role:'user',content:{type:'text',text:'untrusted '+key}}]}));await server.connect(transport);}
+ if(gate.pageMode!=='normal')session.server.server.setRequestHandler(ListResourcesRequestSchema,async request=>({resources:[{uri:'fixture://'+(request.params?.cursor?'second':'same'),name:'Generated'}],...(gate.pageMode==='loop'||!request.params?.cursor?{nextCursor:'same-cursor'}:{})}));
+ if(session.key!==key)return reply.code(401).send({error:'invalid'});const current=session;session.transport.onclose=()=>{if(current.transport.sessionId)sessions.delete(current.transport.sessionId);};reply.hijack();await session.transport.handleRequest(req.raw,reply.raw,req.body);if(session.transport.sessionId&&req.method!=='DELETE')sessions.set(session.transport.sessionId,session);
+ });await app.listen({host:'127.0.0.1',port:0});return {url:app.listeningOrigin+'/mcp',calls,gate};
+}
+
+test('outbound actual SDK credentials, sessions, resource/tool/prompt catalogs and imports are per-user with identical IDs',async t=>{
+ const external=await remote(t),f=await fixture(t);await f.configure(f.a.token,external.url,'GENERATED_A');await f.configure(f.b.token,external.url,'GENERATED_B');
+ const discovery=await Promise.all([f.ok(f.a.token,'/api/connectors/mcp/discover','POST',{connectionId:'same-connection'}),f.ok(f.b.token,'/api/connectors/mcp/discover','POST',{connectionId:'same-connection'})]);for(const value of discovery){assert.equal(value.resources.length,1);assert.equal(value.tools.length,2);assert.equal(value.prompts.length,1);assert.equal(value.templates.length,0);}
+ const imports=await Promise.all([f.ok(f.a.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']}),f.ok(f.b.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']})]);assert.deepEqual(imports,[{imported:2,duplicates:0},{imported:2,duplicates:0}]);assert.notEqual(external.calls[0].session,external.calls[1].session);
+ for(const [token,owner,other] of [[f.a.token,'GENERATED_A','GENERATED_B'],[f.b.token,'GENERATED_B','GENERATED_A']]){const items=await f.ok(token,'/api/source-items?sourceId=same-source');assert.match(JSON.stringify(items),new RegExp(owner));assert.doesNotMatch(JSON.stringify(items),new RegExp(other));}
+ const view=await f.ok(f.a.token,'/api/configuration');assert.doesNotMatch(JSON.stringify(view),/GENERATED_A|GENERATED_B/);const context=await f.node.authority.authenticate(f.a.token);assert.doesNotMatch(JSON.stringify(await f.node.services.forUser(context).exportUser('configuration')),/GENERATED_A|GENERATED_B/);
+ await f.restart();const duplicate=await f.ok(f.a.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']});assert.deepEqual(duplicate,{imported:0,duplicates:2});external.gate.parts=1;const shortened=await f.ok(f.a.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']});assert.equal(shortened.imported,1);assert.equal((await f.ok(f.a.token,'/api/source-items?sourceId=same-source')).items.length,1);assert.equal((await f.ok(f.b.token,'/api/source-items?sourceId=same-source')).items.length,2);
+ const unsafe=await f.request(f.a.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',tool:{name:'unsafe-tool',confirmedReadOnly:true}});assert.equal(unsafe.statusCode,403);
+});
+
+for(const action of ['revoke','disable','source-delete','source-recreate','source-toggle','configuration-refresh','cancel','domain-delete'] as const)test('outbound held resource cannot commit after '+action+' while B remains usable',async t=>{
+ const external=await remote(t),f=await fixture(t);await f.configure(f.a.token,external.url,'GENERATED_A');await f.configure(f.b.token,external.url,'GENERATED_B');external.gate.hold=true;const context=await f.node.authority.authenticate(f.a.token),abort=new AbortController(),pending=f.node.mcp!.forUser(context).import('same-connection',{sourceId:'same-source',resourceUris:['fixture://same']},abort.signal);const outcome=pending.then(value=>({value}),error=>({error}));await external.gate.entered.promise;
+ if(action==='revoke')await f.ok(f.a.token,'/api/auth/logout','POST',{});
+ if(action==='disable')await f.ok(f.admin.token,'/api/admin/accounts/'+f.a.userId,'PATCH',{disabled:true});
+ if(action==='source-delete')await f.ok(f.a.token,'/api/sources/same-source','DELETE',{});
+ if(action==='source-recreate'){await f.ok(f.a.token,'/api/sources/same-source','DELETE',{});await f.ok(f.a.token,'/api/ingress/sources','POST',source());}
+ if(action==='source-toggle'){await f.ok(f.a.token,'/api/sources/same-source','PATCH',{enabled:false});await f.ok(f.a.token,'/api/sources/same-source','PATCH',{enabled:true});}
+ if(action==='configuration-refresh')await f.configure(f.a.token,external.url,'GENERATED_REPLACEMENT');
+ if(action==='cancel')abort.abort();
+ if(action==='domain-delete'){const deleting=f.node.services.forUser(context).deleteUser('mcp','generated-delete');external.gate.released.resolve();assert.equal((await deleting).status,'complete');}
+ external.gate.released.resolve();assert.ok('error' in await outcome);const db=new DatabaseSync(join(f.root,'mote.sqlite'),{readOnly:true});try{assert.equal(Number(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.a.userId)!.n),0);assert.equal(Number(db.prepare('SELECT count(*) n FROM mc_manifests WHERE user_id=?').get(f.a.userId)!.n),0);}finally{db.close();}
+ external.gate.hold=false;assert.equal((await f.ok(f.b.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']})).imported,2);
+});
+
+test('administrator local-network boundary and fixed provider errors do not disclose external credentials or data',async t=>{
+ const external=await remote(t),f=await fixture(t,false);await f.configure(f.a.token,external.url,'GENERATED_PRIVATE_KEY');const response=await f.request(f.a.token,'/api/connectors/mcp/discover','POST',{connectionId:'same-connection'});assert.equal(response.statusCode,400);assert.doesNotMatch(response.body,/GENERATED_PRIVATE_KEY/);assert.equal(external.calls.length,0);
+});
+
+test('source incarnation pins survive restart, permit metadata edits and reject old sessions/tokens after deletion and same-ID recreation',async t=>{
+ const f=await fixture(t),grant=await f.mint(f.a.token),a=await f.connect(grant);await f.ok(f.a.token,'/api/sources/same-source','PATCH',{name:'Renamed'});assert.deepEqual(value(await call(a.client,'mote_sources')).items.map((s:any)=>s.name),['Renamed']);await f.ok(f.a.token,'/api/sources/same-source','DELETE',{});await f.ok(f.a.token,'/api/ingress/sources','POST',source());await assert.rejects(call(a.client,'mote_sources'));await f.restart();await assert.rejects(f.connect(grant));const fresh=await f.connect(await f.mint(f.a.token));assert.equal(value(await call(fresh.client,'mote_sources')).items.length,1);
+});
+
+test('deleting a capture while a remote re-read is in flight rejects the old response instead of resurrecting the deleted evidence',async t=>{
+ const external=await remote(t),f=await fixture(t);await f.configure(f.a.token,external.url,'GENERATED_A');await f.ok(f.a.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']});const capture=(await f.ok(f.a.token,'/api/source-items?sourceId=same-source')).items[0].captureId;external.gate.hold=true;external.gate.entered=deferred();const context=await f.node.authority.authenticate(f.a.token),work=f.node.mcp!.forUser(context).import('same-connection',{sourceId:'same-source',resourceUris:['fixture://same']}).then(value=>({value}),error=>({error}));await external.gate.entered.promise;await f.ok(f.a.token,'/api/captures/'+capture,'DELETE',{});external.gate.released.resolve();assert.ok('error' in await work);assert.equal((await f.ok(f.a.token,'/api/source-items?sourceId=same-source')).items.length,1);
+});
+
+test('outbound pagination and provider failure use real SDK errors, preserve atomic intake, and allow an explicit successful retry',async t=>{
+ const external=await remote(t),f=await fixture(t);await f.configure(f.a.token,external.url,'GENERATED_PRIVATE_KEY');external.gate.pageMode='pages';const catalog=await f.ok(f.a.token,'/api/connectors/mcp/discover','POST',{connectionId:'same-connection'});assert.equal(catalog.resources.length,2);external.gate.pageMode='loop';let failure=await f.request(f.a.token,'/api/connectors/mcp/discover','POST',{connectionId:'same-connection'});assert.equal(failure.statusCode,502);assert.doesNotMatch(failure.body,/PRIVATE_KEY|same-cursor/);external.gate.pageMode='normal';external.gate.fail=true;failure=await f.request(f.a.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']});assert.equal(failure.statusCode,502);assert.doesNotMatch(failure.body,/PROVIDER_SECRET|PRIVATE_KEY/);assert.equal((await f.ok(f.a.token,'/api/source-items?sourceId=same-source')).items.length,0);external.gate.fail=false;assert.equal((await f.ok(f.a.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']})).imported,2);assert.equal((await f.ok(f.a.token,'/api/connectors/mcp/import','POST',{connectionId:'same-connection',sourceId:'same-source',tool:{name:'same-tool',arguments:{userId:f.b.userId},confirmedReadOnly:true}})).imported,1);assert.doesNotMatch(JSON.stringify(await f.ok(f.b.token,'/api/source-items')),/GENERATED_PRIVATE_KEY/);
+});
+
+test('MCP domain deletion closes A sessions and revokes credentials permanently across restore without touching B',async t=>{
+ const f=await fixture(t),grant=await f.mint(f.a.token),a=await f.connect(grant),b=await f.connect(await f.mint(f.b.token)),context=await f.node.authority.authenticate(f.a.token),service=f.node.services.forUser(context),archive=await service.exportUser('mcp');assert.equal((await service.deleteUser('mcp','generated-delete')).status,'complete');await assert.rejects(call(a.client,'mote_sources'));await service.restoreUser('mcp',archive,'generated-restore');await assert.rejects(f.connect(grant));assert.equal(value(await call(b.client,'mote_sources')).items.length,1);const fresh=await f.connect(await f.mint(f.a.token));assert.equal(value(await call(fresh.client,'mote_sources')).items.length,1);
+});
+
+test('MCP archive writes enter the actual automatic M06 processor and read only their own real Material through SDK',async t=>{
+ const f=await fixture(t),sessions=[];for(const [token,owner]of [[f.a.token,'A'],[f.b.token,'B']]){await f.ok(token,'/api/sources/same-source','PATCH',{retention:'archive'});const view=await f.ok(token,'/api/configuration'),processing=await f.ok(token,'/api/processing');await f.ok(token,'/api/configuration/processing','PUT',{revision:view.revision,value:{...processing.settings,automatic:true,understandingEnabled:false,summarize:false,semanticTurns:false}});const writer=await f.connect(await f.mint(token,'write'));assert.equal((await call(writer.client,'mote_put_item',{sourceId:'same-source',item:item('MCP_MATERIAL_PRIVATE_'+owner)})).isError,undefined);sessions.push(await f.connect(await f.mint(token)));}
+ for(const [index,token,owner,other]of [[0,f.a.token,'A','B'],[1,f.b.token,'B','A']] as const){let page:any;const deadline=Date.now()+8000;for(;;){page=value(await call(sessions[index].client,'mote_materials',{sourceId:'same-source'}));if(page.items.length)break;assert.ok(Date.now()<deadline);await new Promise(resolve=>setTimeout(resolve,10));}const read=value(await call(sessions[index].client,'mote_material_read',{ref:page.items[0].ref}));assert.equal(read.text,'MCP_MATERIAL_PRIVATE_'+owner);assert.doesNotMatch(JSON.stringify(read),new RegExp('MCP_MATERIAL_PRIVATE_'+other));assert.equal((await f.ok(token,'/api/materials')).items.length,1);}
+});
+
+test('Material listing, reading and FTS enforce transitive source scopes before exposing mixed-source evidence',async t=>{
+ const f=await fixture(t);await f.put(f.a.token,'BASE_SOURCE_EVIDENCE');await f.put(f.a.token,'RESTRICTED_OTHER_SOURCE','other-item','other-source');const context=await f.node.authority.authenticate(f.a.token),head=(await f.ok(f.a.token,'/api/sources/other-source/item?externalId=other-item')).item;
+ const material=f.node.ingress.bindSource(context,['same-source','other-source'],()=>{}).publishMaterial({id:'mat_'+identityHash(['same-source','mixed']),kind:'document',schemaVersion:1,title:'Generated mixed-source',origin:{sourceId:'same-source',externalId:'mixed'},members:[{id:'other',kind:'capture',ref:'capture:'+head.captureId}],blocks:[{id:'text',kind:'text',format:'plain',text:'RESTRICTED_OTHER_SOURCE',memberIds:['other']}],coverage:{state:'complete'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}});
+ const limited=await f.connect(await f.mint(f.a.token)),broad=await f.connect(await f.mint(f.a.token,'read',['same-source','other-source']));assert.equal(value(await call(limited.client,'mote_materials',{sourceId:'same-source'})).items.length,0);assert.equal((await call(limited.client,'mote_material_read',{ref:material.ref})).isError,true);assert.equal(value(await call(limited.client,'mote_search',{sourceId:'same-source',query:'RESTRICTED_OTHER_SOURCE'})).items.length,0);assert.equal(value(await call(broad.client,'mote_material_read',{ref:material.ref})).text,'RESTRICTED_OTHER_SOURCE');
+ const base=f.node.services.forUser(context).get<any>('private-data'),first=(await f.ok(f.a.token,'/api/sources/same-source/item?externalId=same-item')).item;for(const [externalId,captureId,text]of [['mixed-two',head.captureId,'RESTRICTED_OTHER_SOURCE'],['allowed',first.captureId,'ALLOWED_SOURCE_TEXT']])base.publishMaterial({id:'mat_'+identityHash(['same-source',externalId]),kind:'document',schemaVersion:1,title:'Generated scope pagination',origin:{sourceId:'same-source',externalId},members:[{id:'input',kind:'capture',ref:'capture:'+captureId}],blocks:[{id:'text',kind:'text',format:'plain',text,memberIds:['input']}],coverage:{state:'complete'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}});
+ const narrow=value(await call(limited.client,'mote_materials',{sourceId:'same-source',limit:1}));assert.equal(narrow.items.length,1);assert.equal(narrow.items[0].origin.externalId,'allowed');assert.equal(narrow.nextCursor,null);const wide=value(await call(broad.client,'mote_materials',{sourceId:'same-source',limit:1}));assert.ok(wide.nextCursor);assert.equal((await call(limited.client,'mote_materials',{sourceId:'same-source',limit:1,cursor:wide.nextCursor})).isError,true);
+});
+
+test('aborting an actual outbound import HTTP connection cancels SDK work and fences its held remote result',async t=>{
+ const external=await remote(t),f=await fixture(t);await f.configure(f.a.token,external.url,'GENERATED_A');await f.node.app.listen({host:'127.0.0.1',port:0});external.gate.hold=true;const abort=new AbortController(),pending=fetch(f.node.app.listeningOrigin+'/api/connectors/mcp/import',{method:'POST',headers:{...protocol,authorization:'Bearer '+f.a.token,'content-type':'application/json'},body:JSON.stringify({connectionId:'same-connection',sourceId:'same-source',resourceUris:['fixture://same']}),signal:abort.signal});const rejected=assert.rejects(pending);await external.gate.entered.promise;abort.abort();await rejected;await new Promise(resolve=>setTimeout(resolve,30));external.gate.released.resolve();await new Promise(resolve=>setTimeout(resolve,30));assert.equal((await f.ok(f.a.token,'/api/source-items?sourceId=same-source')).items.length,0);
+});

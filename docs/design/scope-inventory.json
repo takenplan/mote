@@ -1423,10 +1423,10 @@
   "apps/server/src/scope/http.ts": {
     "scope": "mixed",
     "module": "M01",
-    "status": "implemented",
     "surfaces": [
-      "api:registerAuthenticatedRoute:{...route,handle:async(context,request)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request});}}"
-    ]
+      "api:registerAuthenticatedRoute:{...route,handle:async(context,request,reply)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request,reply});}}"
+    ],
+    "status": "implemented"
   },
   "apps/server/src/scope/ingress-routes.ts": {
     "scope": "user",
@@ -1805,6 +1805,34 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/processing/originals/:id',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing/derivations',service:PROCESSING_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/mcp-inbound.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "api:all:'/mcp'"
+    ]
+  },
+  "apps/server/src/scope/mcp-schema.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "table:mc_manifests",
+      "table:mc_source_epochs",
+      "table:mc_state"
+    ]
+  },
+  "apps/server/src/scope/mcp.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/discover',service:MCP_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/import',service:MCP_DOMAIN",
+      "extension:runtime.services.registerUser:MCP_DOMAIN"
     ]
   }
 }
