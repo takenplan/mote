@@ -12,19 +12,16 @@ remotely verified accepted M10 Draft PR134 complete head
 `56bcb1cf6e46304254318fed659efe861113c6ae`. M10 was independently reviewed
 in `/tmp/mote-m11-review-m10.md`; its closed execution conversation is not reused.
 
-**M11 is not fully accepted.** Its accepted M10 connector dependency is composed
-on this feature. The reviewed M07 read-contract freeze
-`a6bc94c43e34ce91439cfeff6ad669264610d1d1` is now also composed by feature-only
-merge `0b0bdfcc98aec66fcebc80cafffe8590252e3bbc`, retaining both M05 model forks
-and M10 atomic onAdmitted/submitSync. This is not final M07 acceptance. Actual
-M08 interface freeze `e7ebbf4414d9ed6ccf2c5f660f371c0a320bbf78` (including M07
-runtime `1536d4850626cc55c9d1639de88f9462717af72e`), followed by CAS repair
-`c66feee724c477e785af544bc4e4675c33cf4970`, is now composed. This is an
-interface/core composition, not final M07/M08 acceptance. All 20 original read
-tool names now bind genuine scoped readers. Legacy parity gaps remain in logical
-processed-source history, navigation, context options/status, UTF16 windows,
-Memory filters and partial Material segment projection; persistent SDK
-regressions identify these gaps. No mock neighboring service supplies them.
+**M11 is not fully accepted.** Accepted PR134 is composed. Current M11 core
+`d884b4c7250136dbc2687fcdd02f0753c0ab80dd` also composes genuine M08 partial
+production freeze `8819cdde6cc426b81990c0b49a0854dd0b4432f7` and M07 read/pin/
+filter fixes through `dbc5ae46b69e010d1610c0b8414fd755e348be0e`. These are stable
+interface/core freezes, not final M07/M08 module acceptance. All 20 original read
+tools now use genuine scoped readers. Logical processed history, UTF16 windows,
+partial ready-only text, navigation, context inclusion/budget/cursors, actual
+source status, file directories and exact Memory filter/pin consumption have
+real SDK coverage. Final dependency alignment and whole-module gates remain;
+no mock neighboring service supplies capabilities.
 
 ## Host identity and protocol
 
@@ -76,12 +73,12 @@ and remaining legacy parity gates individually.
 | Surface | Current production composition |
 | --- | --- |
 | `mote_put_item` | Real immutable M03 source intake; existing explicit source only; no source creation or external mutation. Archive input enters real automatic M06 processing. |
-| `mote_sources`, `mote://sources` resource | Authorized enabled source metadata only; independent A/B same IDs. |
-| `mote_items`, `mote_history` | Genuine query-visible source views; raw screenshot/Coding/archive UUID bypasses denied. M06 processed-original logical history remains a failing parity regression awaiting the M08 logical-history contract. |
-| `mote_materials`, `mote_material`, `mote_material_read` | Real current M06/M02 Materials through M08, transitive source SQL before LIMIT, exact revision pins and ready-only text. UTF16-safe window restoration remains pending. |
+| `mote_sources`, `mote://sources` resource | Authorized enabled source metadata and actual owned connector ledger status; independent A/B same IDs and no external I/O for status. |
+| `mote_items`, `mote_history` | Genuine query-visible source views; raw screenshot/Coding/archive UUID bypasses denied. Logical history follows actual M06 current formal mapping, including processed:<captureId>. |
+| `mote_materials`, `mote_material`, `mote_material_read` | Real current M06/M02 Materials through M08, transitive source SQL before LIMIT, exact revision pins and ready-only text. Shared UTF16-safe windows preserve complete characters and exact coordinates. |
 | `mote_search`, `mote_browse`, `mote_retrieve` | Actual query-visible scoped FTS candidates and authenticated user/scope/filter cursors, before ranking/LIMIT; no global single-owner embeddings fallback. |
-| `mote_file_catalog`, `mote_segments`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_evidence` | Real M08 reader handlers. SDK verifies all names, owner/source isolation and measured interval unions. Pending-block segment disclosure and ignored context inclusion options are explicit failing regressions; navigation and full status/option parity are not accepted yet. |
-| `mote_memories`, `mote://memories` resource | Genuine M07 page/read/search/exact historical provider bodies. MCP empty/all scope maps explicitly to undefined; a nonempty allowlist is retained. Every request snapshots source incarnations/revisions and validates all returned current Memory and original evidence pins after later awaits and before SDK publication. Cards remain derived context and do not grant original disclosure to another tool. |
+| `mote_file_catalog`, `mote_segments`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_evidence` | Real M08 reader handlers. SDK verifies all names, owner/source isolation and measured interval unions. Ready-only segments, actual directory/file paging, typed navigation, context flags/budget/durable cursors and real status are covered by SDK regressions. Full M08 acceptance remains separate. |
+| `mote_memories`, `mote://memories` resource | Genuine M07 page/read/search/exact historical provider bodies. MCP empty/all scope maps explicitly to undefined; a nonempty allowlist is retained. Every request snapshots source incarnations/revisions. Full query filters precede provider keys; exact reads use M07 opaque selected-version pins with no current-body prefetch. All observed Memory/original pins are rechecked before SDK publication. Cards remain derived context and do not grant original disclosure to another tool. |
 | inbound resource templates/prompts/subscriptions | No private template/prompt/subscription is registered in this phase. Their absence is explicit, not a simulated successful empty Memory query. |
 
 Write sessions expose only the write tool. They do not gain read or ordinary

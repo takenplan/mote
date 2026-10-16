@@ -8,43 +8,70 @@ No mock Memory, Ask, connector or processing service proves them.
 
 ## Genuine query reader core composition (not final acceptance)
 
-M08 exact `c66feee724c477e785af544bc4e4675c33cf4970` is composed, including
-M07 runtime1536 and PR134. The core restores real handlers for all 20 original
-read tool names, keeps the explicit write-only credential alternative and removes
-the former direct M02 read fallback. Strict SDK schemas, request-bound original/
-Material/Memory pin fences and fixed errors are used throughout.
+Current runtime/test freeze `d884b4c7250136dbc2687fcdd02f0753c0ab80dd` composes
+accepted PR134 plus M08 partial8819cdde6cc426b81990c0b49a0854dd0b4432f7 and
+M07 exact pin/default-content fixes through dbc5ae46b69e010d1610c0b8414fd755e348be0e.
+All20 existing read tools use real scoped readers, with no direct M02 read fallback.
+The separate write credential retains only real M03 intake.
 
-Development source+Memory+query matrix passed **44/44**,0fail/cancel/skip,exit0,
-94237.2045ms: `/tmp/m11-query-composed-focused.log/.exit`. Command:
-`node --import tsx --test --test-concurrency=1 --test-timeout=60000 apps/server/test/multiuser-mcp.test.ts apps/server/test/multiuser-mcp-process.test.ts apps/server/test/multiuser-mcp-memory.test.ts apps/server/test/multiuser-mcp-query.test.ts`.
-This is a development receipt before the additional parity regressions below,
-not a final-code receipt. M08 CAS P1 was independently reproduced on exact e7
-and closed on literal c66: original host probe1/1,exit0,3584.606792ms,
-`/tmp/m11-review-m08-c66-pins.log/.exit`; unchanged actual SDK probe1/1,exit0,
-2720.412ms,`/tmp/m11-query-sdk-c66-pins.log/.exit`.
+| Current core check | Actual result |
+| --- | --- |
+| `node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-mcp.test.ts apps/server/test/multiuser-mcp-process.test.ts apps/server/test/multiuser-mcp-memory.test.ts apps/server/test/multiuser-mcp-query.test.ts` | **57/57**,0fail/cancel/skip,exit0,122773.377209ms; `/tmp/m11-881-dbc-focused.log/.exit`. |
+| `npm run typecheck -w @mote/server` | exit0; `/tmp/m11-881-pin-types.log/.exit`. |
+| `node scripts/check-scope-contracts.mjs` | exit0; `/tmp/m11-881-dbc-scope.log/.exit`. |
+| Actual Gmail ledger→Ask+MCP SDK tool/resource status and restart | **1/1**,exit0,1390.457ms; `/tmp/m11-727-real-status-sdk.log/.exit`. No additional adapter/network calls, credentials or provider error prose. |
+| New SDK page/exact/history filter and selected-provider-key regressions | **2/2**,exit0,8212.660875ms; `/tmp/m11-memory-exact-filters-sdk-fixed.log/.exit`. Also included in57 above. |
+| Real M03 upload→M06→SDK directory/file pages, mixed-source filtering before GROUP/LIMIT, owner/scope/parent cursors and restart | **1/1**,exit0,2773.064083ms; `/tmp/m11-query-881-catalog-sdk.log/.exit`. Included in57. |
+| Complete multi-block Material locators, pending-only text excluded before query candidates, minimum-budget cursor restart | **1/1**,exit0,2268.408041ms; `/tmp/m11-query-881-multiblock-sdk.log/.exit`. Included in57. |
+| Independent literal M08 exact881 core/children/restart/conversation/image checks | **4/4**,exit0,40757.024083ms; `/tmp/m11-review-m08-881-core.log/.exit`. Applies to reviewed scope, not full module acceptance. |
+| Independent literal M07 exact067 builtin/external page/exact/history/pin checks | **4/4**,exit0,12628.766083ms; `/tmp/m11-review-m07-067-exact.log/.exit`. Positive default-content issue was found separately and fixed atdbc5. |
 
-Additional account-wide enabled-source-set await fences pass2/2,exit0,
-5142.642875ms,`/tmp/m11-query-all-source-fence.log/.exit`. Narrow credentials
-and next requests remain valid. MCP callback architecture inventory regression
-passes4/4,exit0,1513.157375ms,`/tmp/m11-query-scope-architecture.log/.exit`.
-Types and scope checks exit0. No heavy affected/Android rerun was started.
+The57 scenarios exercise actual shared SQLite/app/M01/M03/M04/M05/M06/M07/M08,
+HTTP listener and MCP SDK. Only external model/provider/remote I/O is synthetic.
+They cover automatic intake→independent Memory extraction/review, all20 read tool
+names, A/B equal IDs, write-only and ordinary-API denial, source narrowing before
+LIMIT/provider keys, malicious selectors, cursors/restart, config refresh, outbound
+handle retirement, cancellation/revocation/deletion/recreation across real awaits,
+original identity receipts, measured activity/media, ready-only partial text,
+UTF16 coordinates, navigation and context budget/inclusion/durable channels.
 
-Unresolved production parity has durable actual SDK failure evidence:
+Original failed probes are retained with explicit later closures:
 
-- Partial Material `mote_segments` discloses pending block text:0/1,exit1,
-  `/tmp/m11-query-partial-before.log/.exit`. Other query exits are asserted in
-  the same nine-surface scenario; segments is the first failure.
-- UTF16 window splits an emoji; context(includeMemories:false) still calls the
-  real provider:0/2,exit1,`/tmp/m11-query-legacy-options-before.log/.exit`.
-- Automatic MCP→M03→M06 creates a processed:<captureId> Material, but logical
-  source history still returns not_found:0/1,exit1,
-  `/tmp/m11-query-processed-history-before.log/.exit`.
-- Navigation refs, full status/context option parity and legacy Memory filters
-  await the next real M07/M08 contract. They are not simulated by empty services.
+- First observed original overwritten after later provider await: literal e7
+  host0/1,exit1, `/tmp/m11-review-m08-e7-pins.log/.exit`; unchanged literal c66
+  host1/1,exit0 and SDK1/1,exit0, `/tmp/m11-review-m08-c66-pins.log/.exit` and
+  `/tmp/m11-query-sdk-c66-pins.log/.exit`. P1 closed independently.
+- Pending partial block exposure, UTF16 split, ignored includeMemories=false and
+  missing actual M06 processed-history mapping failed original probes atc66.
+  Exact060 closes partial/Unicode2/2 and real history/default-budget flags2/2;
+  failure logs remain `/tmp/m11-query-partial-before.log/.exit`,
+  `/tmp/m11-query-legacy-options-before.log/.exit`,
+  `/tmp/m11-query-processed-history-before.log/.exit`. Retests are
+  `/tmp/m11-query-060-parity-retest.log/.exit` (2/4 whole command; separate new
+  budget defect and adapter return-shape typo) and
+  `/tmp/m11-query-060-history-flags.log/.exit` (2/2,exit0).
+- Exact060 minimum-budget/raw source navigation/same-body recreation defects:
+  unchanged SDK four-scenario set passes4/4,exit0,9606.266708ms at492;
+  `/tmp/m11-query-492-original-probes.log/.exit`. These findings are closed.
+- Default implicit content collection was rejected at067: original SDK set1/2,
+  exit1, `/tmp/m11-memory-exact-filters-sdk.log/.exit`. Same set unchanged2/2,
+  exit0 afterdbc5, as above; P2 closed independently.
 
-All failures above are tracked with M08. Final accepted dependency heads, final
-focused/actual combined/build/emitted/affected checks, independent M11 final
-review and its Draft PR remain pending. CI remains disabled and unrun.
+Prior development44/44,exit0,94237.2045ms remains in
+`/tmp/m11-query-composed-focused.log/.exit`; it is not a final-code receipt.
+Earlier account-wide source-set barrier2/2 and callback architecture4/4 passed,
+`/tmp/m11-query-all-source-fence.log/.exit` and
+`/tmp/m11-query-scope-architecture.log/.exit`. Core d884 bounded independent M11 adapter review passed2/2,exit0,8524.511208ms,
+`/tmp/m07-review-m11-d884-sdk.log/.exit`, report
+`/tmp/mote-m07-review-m11-query-core.md`, with no confirmed actionable P0/P1/P2
+in that reviewed scope. Additional actual SDK artifact probes independently
+reproduce a deleted-conversation late-publication P1 and ignored source-filter P2:
+0/2,exit1,9761.928375ms,
+`/tmp/m11-review-m08-881-artifact-sdk-valid.log/.exit`. M08 has the exact
+reproduction and final artifact acceptance is paused pending its production fix. Final accepted M07/M08
+capability heads, all-scope/composed build/emitted/affected on final code and the
+M11 Draft PR are still required. Historical417 full gates below do not satisfy
+those new final-code requirements. CI remains disabled and unrun.
 
 ## Actual M07 Memory read increment
 
