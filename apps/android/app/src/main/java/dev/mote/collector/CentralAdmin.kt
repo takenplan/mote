@@ -643,37 +643,9 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("选择 Google 日历")) { calendarSelection(false) }
         ui.button(MoteI18n.text("录音归档")) { recordings() }
-        read("/api/connectors/status")
+        read("/api/connectors")
         ui.button(MoteI18n.text("飞书")) { ui.navigate("lark") }
-        val endpoint = ui.field(MoteI18n.text("MCP 地址"))
-        val token = ui.field(MoteI18n.text("访问令牌（可选）"), password = true)
-        ui.button(MoteI18n.text("发现 MCP 资源")) {
-            val payload = JSONObject().put("url", endpoint.text.toString())
-            token.text.toString().takeIf { it.isNotBlank() }?.let { payload.put("token", it) }
-            action("/api/connectors/mcp/discover", payload) { value ->
-                val resources = value.optJSONArray("resources") ?: JSONArray(); val selected = mutableListOf<String>()
-                for (i in 0 until resources.length()) {
-                    val resource = resources.getJSONObject(i); val choice = CheckBox(ui).apply { text = resource.optString("name"); setOnCheckedChangeListener { _, checked -> if (checked) selected.add(resource.getString("uri")) else selected.remove(resource.getString("uri")) } }; body.addView(choice)
-                }
-                val name = ui.field(MoteI18n.text("来源名称"), "MCP")
-                ui.button(MoteI18n.text("导入所选资源"), true) {
-                    require(selected.isNotEmpty()) { MoteI18n.text("请选择资源") }
-                    importMcp(payload, name.text.toString(), JSONObject().put("resourceUris", JSONArray(selected)))
-                }
-                val tools = value.optJSONArray("tools") ?: JSONArray()
-                for (i in 0 until tools.length()) {
-                    val tool = tools.getJSONObject(i); val card = ui.card()
-                    ui.text(tool.getString("name"), NativeFontRole.ROW, card); ui.text(tool.optString("description"), parent = card)
-                    val args = ui.field(MoteI18n.text("工具参数 JSON"), "{}", multiline = true, parent = card)
-                    val approved = CheckBox(ui).apply { text = MoteI18n.text("我确认此工具只读") }; card.addView(approved)
-                    ui.button(MoteI18n.text("导入工具结果"), true, parent = card) {
-                        require(approved.isChecked) { MoteI18n.text("请确认工具只读后再执行") }
-                        importMcp(payload, name.text.toString(), JSONObject().put("tool", JSONObject().put("name", tool.getString("name"))
-                            .put("arguments", JSONObject(args.text.toString())).put("confirmedReadOnly", true)))
-                    }
-                }
-            }
-        }
+        CentralMcp(screens).show()
     }
     private fun lark() {
         val api = client
@@ -805,16 +777,6 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 }) { lark() }
             }
         }
-    }
-    private fun importMcp(target: JSONObject, name: String, request: JSONObject) {
-        val api = client; val sourceId = "mcp-" + UUID.randomUUID().toString()
-        ui.work(MoteI18n.text("正在导入…"), {
-            api.post("/api/sources", JSONObject().put("id", sourceId).put("name", name).put("kind", "mcp")
-                .put("deviceId", "mcp").put("platform", "import").put("retention", "snapshot").put("enabled", true))
-            val payload = JSONObject(target.toString()).put("sourceId", sourceId)
-            request.keys().forEach { payload.put(it, request.get(it)) }
-            api.post("/api/connectors/mcp/import", payload)
-        }) { values(it, ui.card()) }
     }
     private fun calendarSelection(lark: Boolean) {
         val api = client; val path = if (lark) "/api/connectors/lark" else "/api/connectors/google"
