@@ -1,7 +1,7 @@
 # QR pairing producer acceptance
 
 All data is generated in fresh temporary SQLite databases. No running Central
-instance, personal data, real credentials, screenshots, model, external provider,
+instance, personal data, real credentials, screenshots, live model, external provider,
 Android build or deployment was used. This report covers the producer and its
 real production entry point, not Web/Android/physical-camera delivery.
 
@@ -78,49 +78,77 @@ may add tests or evidence without changing these producer bytes.
 ## Broader checks and limits
 
 `npm run check:affected -- --base f08edd47 --dry-run` selected i18n and
-`check:central`. After the fresh M15 RELEASE, QR took the sole heavy CLAIM and
-actually ran that required command.
+`check:central`. All full runs used the serial heavy slot; no Gradle, Docker or
+live-model opt-in ran.
 
-The first sandboxed run failed to bind fixture loopback servers. A selected actual
-Codex fixture reproduced `listen EPERM: operation not permitted 127.0.0.1`; this
-was an environment failure, not a QR RED. Only that run's own process tree was
-terminated (exit 143). The rerun outside the sandbox used generated fixtures and
-a 600-second total boundary, with no live-model opt-in:
+The first sandboxed run reproduced loopback `listen EPERM`; it was terminated
+with exit 143. The first unsandboxed run had an inappropriate 600-second total
+boundary and exited 124. That incomplete run is not acceptance evidence. A
+subsequent run was stopped after 59 seconds solely to resolve a delayed resource
+claim collision; it is void. Only the owned process groups were stopped.
 
-- Central shared/agent/server/Web builds: pass. All four typechecks: pass.
-- Shared full suite: **192/192**, no failures/skips.
-- Agent full suite: **317 pass, 0 fail, 1 existing optional installed-Codex skip**,
-  318 total, 30.998 s. The sandbox failures did not recur.
-- Server full suite: **incomplete**. The wrapper reached 600 seconds and exited
-  **124**, preserving `/tmp/mote-qr-affected-unsandboxed.log` and `.exit`. Server
-  records include unfinished Ask/connectors/import files and cancellation of
-  later files, including QR files not reached in that full run. These are not
-  relabeled as new QR product defects or a green complete suite. They have not
-  received a separate baseline run in this task.
-- Two confirmed existing fixture incompatibilities are independently located:
-  `file-export-stream.test.ts` uses repository-root-relative import under the npm
-  server workspace cwd (`apps/server/apps/server/src/file-export-tar.ts` missing);
-  `multiuser-auth.test.ts` adds the already registered octet-stream parser before
-  its assertions. Both tests and implicated production files are byte-identical
-  to `f08edd47`. The export case passes **1/1** from repo root (0.185 s) and fails
-  **0/1** from workspace cwd (0.178 s), `/tmp/mote-qr-export-root.log` and
-  `/tmp/mote-qr-export-workspace.log`. The earlier adjacent M01/narrow composition
-  was 22/23 with that same duplicate parser failure.
-- Web tests started around termination, but no completed Web suite result is
-  claimed. Central runner and release-tool checks were not completed. No Gradle
-  or Docker ran.
+The next required command ran to its **natural terminal**, with no total cutoff,
+at `340fca21baf6bf3602f04fff2b23072d3ae7329b`:
 
-The bounded wrapper's termination allowed remaining npm children to continue
-briefly. Only writers of this exact generated check log were identified and
-stopped as the same owned process group. `lsof` confirmed zero remaining log
-writers. QR then explicitly RELEASED the heavy slot in commentary for M15/Joint.
-The independent final QR/legacy/scope narrow run remains **20/20**, as recorded
-above; full-run canceled file records do not supersede that completed run.
+- **EXIT 1**, 963 seconds overall. Server: 2679 tests, **2673 pass, 4 fail,
+  0 cancelled, 2 existing skips**, 847.469 seconds.
+- Central shared/agent/server/Web builds and all four typechecks: pass.
+- Shared: **192/192**; Agent: **317 pass, 1 existing installed-Codex opt-in
+  skip**; Web: **515/515**, no skips, 62.894 seconds.
+- Server failure prevented central-runner and release-tool stages from running.
+- Generated-only local evidence: `/tmp/mote-qr-complete-affected.log` and `.exit`.
+  No log or generated database is committed or attached to the PR.
 
-The full affected gate is therefore **not green**. Its remaining Server/Web/
-runner/release coverage must not be inferred from successful builds, narrow QR
-checks or a later docs-only selector check. The complete local log contains only
-generated test data and is not committed or attached externally.
+The natural terminal disproved the suspected Ask hang: its 47 cases completed,
+including the real 71-second automatic Insight case. Earlier cancellations were
+caused by the total cutoff, not accepted evidence of a product hang. Existing
+per-case timeouts and suite concurrency remain unchanged.
+
+The two earlier failures were reproduced against unchanged `f08edd47` and repaired
+without weakening assertions in `340fca21`:
+
+- Export child import now resolves from `import.meta.url`, independent of npm's
+  workspace cwd. Its settle/child timeout/error/exit assertions remain. Baseline
+  workspace RED 0/1; repaired root GREEN 1/1 and workspace composition GREEN 13/13.
+- The binary auth/CSRF fixture replaces the inherited octet-stream parser before
+  registering its synthetic parser. Baseline RED 0/1; the same workspace
+  composition is GREEN 13/13. All byte and authorization assertions remain.
+- Both cases also passed in the natural complete full run above.
+
+The four failures found by the complete run received named-case reproduction:
+
+| Case | Unchanged prerequisite baseline | Current RED | Repair and actual narrow GREEN |
+| --- | --- | --- | --- |
+| MCP UTF-16 read | Isolated 1/1; implicated test/production paths unchanged | 0/1 `not_found`, before range assertions | Wait for actual formal publication and use its canonical original reference; retain emoji/range/spans/raw-UUID rejection assertions. 1/1, 2.293 s. |
+| Summary pages across restart | 0/1 `provider_unavailable` | Same 0/1 | Use explicit 429 capacity rejection rather than ambiguous 503, wait for real persisted `rate_limited` state. Retain completed-page, restart, old model snapshot, usage and final output assertions. Bare 503 acknowledgement remains covered by its dedicated case. 1/1, 5.319 s. |
+| Exact snapshot recovery | 0/1 upload commit 409 `external_result_unknown` | Same 0/1 | Production local-byte admission now precedes external issuance on cache miss, sharing one exact-original pin through extraction. Retain all recovery/retry/B assertions and add zero-issued-call assertion before recovery. 1/1, 2.815 s. |
+| Web feature metadata | 0/1 obsolete absent-import assertion | Same 0/1 | Assert the actually registered scoped imports route, real empty response and anonymous 401; keep all Library assertions. 1/1, final 2.033 s. |
+
+Snapshot recovery is an inherited **production seam regression**, not a test
+expectation to relax: recording an external call before a local expired-byte
+check left an unknown result, so the existing no-blind-replay guard correctly
+blocked recovery. The separate minimal repair keeps that guard and all external
+activity tracking. Pin acquisition is lazy inside actual uncached work, so cached
+stages and artifact-only transforms do not acquire a new byte requirement.
+Related real single cases remain GREEN: pin/retention 1.164 s, snapshot release
+2.421 s, unknown external transport 2.621 s, ASR checkpoint restart 2.563 s.
+
+Named-case local evidence uses `/tmp/mote-qr-*-baseline-repro.log`,
+`/tmp/mote-qr-*-current-red.log`, `/tmp/mote-qr-*-fixture-green.log` and
+`/tmp/mote-qr-*-pin-green.log`, each with its actual exit file. No new skip or timeout increase was introduced. The obsolete Web absent-import
+assertion was explicitly superseded by registered-route, real-response and
+authentication assertions; Library, range, checkpoint and recovery outcome
+assertions remain.
+
+Fixture repair commit: `79d94dfd77077d44337102e8553ca92f4135b0f6`. Separate
+production seam repair: `87ba2f2c4d2738d32673a1a9d586a7af5810d33c`. Both
+received bounded independent source review; reviewers ran no additional heavy
+checks. QR authentication producer bytes remain at the original `6a84ec6a` freeze.
+
+The repaired full affected gate is **pending**. Narrow GREEN does not supersede
+the completed failing gate or establish central-runner/release-tool acceptance.
+The previous full process group was verified empty and its log had no writers
+before explicit RELEASE; the next full run waits for fresh serial allocation.
 
 Still unverified here: Web QR rendering/navigation retirement, Android scanner
 and pending journal/account-switch lifecycle, Desktop v2 import, physical camera,
