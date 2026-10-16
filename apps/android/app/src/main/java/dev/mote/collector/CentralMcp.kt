@@ -50,7 +50,7 @@ internal class CentralMcp(private val screens: CentralScreens) {
                 fun active() = current() && stamp == revision
                 fun import(request: JSONObject) {
                     if (!active()) return
-                    val destination = eligible.getOrNull(source.selectedItemPosition) ?: error(MoteI18n.text("请选择来源"))
+                    val destination = eligible.getOrNull(source.selectedItemPosition) ?: error(MoteI18n.text("请选择"))
                     val payload = JSONObject(request.toString()).put("connectionId", connection.getString("id")).put("sourceId", destination.getString("id"))
                     ui.work(MoteI18n.text("正在导入…"), { api.post("/api/connectors/mcp/import", payload) }) { result ->
                         if (active()) ui.notice(MoteI18n.text("导入完成：{0} 条新资料，{1} 条已存在。", result.getInt("imported"), result.getInt("duplicates")))
