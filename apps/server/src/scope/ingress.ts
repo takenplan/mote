@@ -8,7 +8,7 @@ import {ScopeError} from './baseline.js';
 import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
 import {PrivateData} from './private-data.js';
 import {materialDraftSchema} from './material-model.js';
-import {Originals,identityHash,bytesHash,type Original} from './originals.js';
+import {Originals,identityHash,bytesHash,type Original,type OriginalWorkspace} from './originals.js';
 import {installIngress,ingressActivity} from './ingress-schema.js';
 import {ingressLifecycle} from './ingress-lifecycle.js';
 import type {UserDataSubject} from './lifecycle.js';
@@ -25,7 +25,7 @@ export interface SourceCapability {
  readOriginal(ref:string,range?:{offset?:number;length?:number}):ReturnType<Originals['read']>;
  pageOriginals(sourceId:string,after?:string,limit?:number):{items:Original[];nextCursor:string|null};
  publishMaterial(draft:unknown,expectedRevision?:string):ReturnType<PrivateData['publishMaterial']>;
- withWorkspace<T>(work:(workspace:{write(name:string,bytes:Buffer):void;read(name:string):Buffer})=>Promise<T>):Promise<T>;
+ withWorkspace<T>(work:(workspace:OriginalWorkspace)=>Promise<T>):Promise<T>;
 }
 
 /** Only the host retains this registrar. Plugins receive bindSource's frozen
@@ -33,6 +33,8 @@ export interface SourceCapability {
 export class IngressHost{
  readonly key:string;
  private readonly active=new Set<string>();
+ private readonly accepted=new Set<(context:UserContext,receipt:IngressReceipt,format:'capture'|'source-item'|'file')=>void>();
+ onAccepted(receive:(context:UserContext,receipt:IngressReceipt,format:'capture'|'source-item'|'file')=>void){this.accepted.add(receive);return ()=>{this.accepted.delete(receive);};}
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly directory:string){
   this.key=installIngress(db);
   runtime.services.registerUser(INGRESS_DOMAIN,{scope:'user',create:context=>this.forUser(context),lifecycle:ingressLifecycle(runtime,db,directory)});
@@ -67,10 +69,10 @@ export class IngressHost{
   const during=async<T>(work:()=>Promise<T>)=>{assert();const activity=ingressActivity(this.db,context.userId),key=identityHash([context.userId,activity.id]);this.active.add(key);try{return await work();}finally{this.active.delete(key);activity.finish();}};
   const receipt=(sourceId:string,id:string,captures:IngressReceipt['captures']):IngressReceipt=>({version:3,id:identityHash([context.deploymentId,context.userId,sourceId,id]),deploymentId:context.deploymentId,userId:context.userId,sourceId,batchId:id,state:'received',captures});
   const checkReceipt=(value:IngressReceipt)=>{source(value.sourceId);for(const item of value.captures){data().capture(item.id);if(item.original)original(item.original.ref);}return value;};
-  const batch=(sourceId:string,id:string,payload:unknown,write:()=>IngressReceipt)=>sql.transaction(()=>{
+  const batch=(sourceId:string,id:string,payload:unknown,format:'capture'|'source-item',write:()=>IngressReceipt)=>sql.transaction(()=>{
    source(sourceId);batchId.parse(id);const digest=identityHash(payload),previous=sql.get('SELECT digest,receipt FROM ig_batches WHERE user_id=$user AND source_id=? AND batch_id=?',sourceId,id);
    if(previous){if(previous.digest!==digest)throw conflict();return checkReceipt(JSON.parse(String(previous.receipt)));}
-   const result=write();sql.run('INSERT INTO ig_batches VALUES($user,?,?,?,?)',sourceId,id,digest,JSON.stringify(result));assert();return result;
+   const result=write();sql.run('INSERT INTO ig_batches VALUES($user,?,?,?,?)',sourceId,id,digest,JSON.stringify(result));assert();for(const receive of this.accepted)receive(context,result,format);assert();return result;
   });
   const service={
    registerSource:(value:unknown)=>{assert();const input=sourceConnectionSchema.parse(value);if(sourceIds&&!sourceIds.includes(input.id)||deviceId&&input.deviceId!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>data().registerSource(input));},
@@ -78,7 +80,7 @@ export class IngressHost{
    devices:()=>{if(deviceId||sourceIds)throw new ScopeError('invalid_identity',403);return {items:sql.all('SELECT json FROM ig_devices WHERE user_id=$user ORDER BY id').map(row=>JSON.parse(String(row.json)))};},
    receiveCaptures:(sourceId:string,id:string,values:unknown[])=>{
     const inputs=z.array(captureSchema).min(1).max(500).parse(values);
-    return batch(sourceId,id,inputs,()=>{
+    return batch(sourceId,id,inputs,'capture',()=>{
      const binding=source(sourceId),images=new Map<string,string>();
      if(binding.retention==='reference')throw conflict();
      for(const input of inputs){
@@ -95,7 +97,7 @@ export class IngressHost{
    },
    receiveSourceItems:(sourceId:string,id:string,values:unknown[])=>{
     const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
-    return batch(sourceId,id,items,()=>{
+    return batch(sourceId,id,items,'source-item',()=>{
      const binding=source(sourceId),archived=new Map<string,string>();
      if(binding.retention==='archive')for(const item of items)archived.set(captureId(sourceId,item),originals.put(Buffer.from(JSON.stringify(item))).hash);
      const acks=data().receiveSourceItems(sourceId,items,binding.retention==='archive'?{verify:item=>{if(archived.get(captureId(sourceId,item))!==identityHash(item))throw conflict();}}:undefined).receipts;
@@ -124,7 +126,7 @@ export class IngressHost{
     checkAttribution(draft.attributionContext);for(const block of draft.blocks)if(block.kind==='text')checkAttribution(block.evidenceContext?.attributionContext);
     const result=data().publishMaterial(draft,expectedRevision);assert();return result;
    }),
-   withWorkspace:<T>(work:(workspace:{write(name:string,bytes:Buffer):void;read(name:string):Buffer})=>Promise<T>)=>during(()=>originals.workspace(work)),
+   withWorkspace:<T>(work:(workspace:OriginalWorkspace)=>Promise<T>)=>during(()=>originals.workspace(work)),
    beginUpload:(sourceId:string,value:unknown)=>sql.transaction(()=>{
     const input=z.object({batchId,revision:fileRevisionSchema}).strict().parse(value),binding=source(sourceId),manifest=input.revision;
     if(/^[\\/]|^[a-zA-Z]:/.test(manifest.relativePath)||manifest.relativePath.split(/[\\/]/).some(part=>part==='..'||part.includes('\0')))throw new PrivateDataError('invalid_data');
@@ -150,7 +152,7 @@ export class IngressHost{
      if((head?.revision??null)!==manifest.previousRevision&&head?.revision!==manifest.item.revision)throw conflict();
      const ack=data().receiveSourceItems(binding.id,[manifest.item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
      const reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot'):undefined;
-     const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();return result;
+     const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();for(const receive of this.accepted)receive(context,result,'file');assert();return result;
     });received=true;return result;}finally{try{prepared?.release();}catch{/* Revoked pins expire or are removed by lifecycle. */}if(received)originals.cleanUpload(id);}
    }),
    uploadReceipt:(id:string)=>{const row=upload(id);return row.receipt?checkReceipt(JSON.parse(String(row.receipt))):{state:'pending',id,deploymentId:context.deploymentId,userId:context.userId};},

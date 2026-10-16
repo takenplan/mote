@@ -70,7 +70,7 @@ const updateSchema = z.object({
 const resetSchema = z.object({ revision: revisionSchema }).strict();
 export const modelProfileIdSchema = z.union([z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,79}$/),z.literal(DEPLOYMENT_MODEL_PROFILE_ID)]);
 const profileSchema = z.object({id:modelProfileIdSchema.refine(id=>!['default',DEPLOYMENT_MODEL_PROFILE_ID].includes(id)),name:line(100,1),settings:settingsSchema}).strict();
-const defaultsSchema = z.object(Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,modelProfileIdSchema])) as Record<ModelFeature, typeof modelProfileIdSchema>).strict();
+const defaultsSchema = z.object(Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,feature==='ocr'||feature==='asr'?modelProfileIdSchema.default(DEPLOYMENT_MODEL_PROFILE_ID):modelProfileIdSchema])) as Record<ModelFeature, typeof modelProfileIdSchema>).strict();
 const defaultModelsSchema = z.object(Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,line(512,1)])) as Record<ModelFeature, ReturnType<typeof line>>).partial().strict();
 export const defaultModelAssignments=():ModelFeatureDefaults=>Object.fromEntries(MODEL_FEATURES.map(feature=>[feature,DEPLOYMENT_MODEL_PROFILE_ID])) as ModelFeatureDefaults;
 export function defaultModelSettings():ModelSettings {

@@ -1,0 +1,25 @@
+import type {DatabaseSync} from 'node:sqlite';
+import {z} from 'zod';
+import {fileProcessingSchema} from '@mote/shared';
+
+/** Endpoints and credentials belong exclusively to M04 model references. */
+export const processingSettingsSchema=fileProcessingSchema.innerType().pick({enabled:true,summarize:true,semanticTurns:true,audioProcessor:true,diarizationProcessor:true,speakerCount:true,speakerMin:true,speakerMax:true,maxAudioMinutes:true,timeoutMs:true}).extend({automatic:z.boolean().default(true),understandingEnabled:z.boolean().default(true)}).strict().superRefine((v,c)=>{
+ if((v.speakerMin===null)!==(v.speakerMax===null)||v.speakerMin!==null&&(v.speakerCount!==null||v.speakerMax!<v.speakerMin))c.addIssue({code:'custom',message:'Invalid speaker range'});
+});
+export type ProcessingSettings=z.infer<typeof processingSettingsSchema>;
+export const defaultProcessingSettings=()=>processingSettingsSchema.parse({});
+const plugin=z.object({snapshotId:z.string().uuid(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
+export const processingInputSchema=z.object({originalRef:z.string().regex(/^original:[a-f0-9]{64}$/),generation:z.number().int().nonnegative(),settings:processingSettingsSchema,plugin:plugin.optional(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
+export type ProcessingInput=z.infer<typeof processingInputSchema>;
+
+export function installProcessing(db:DatabaseSync){db.exec(`
+ CREATE TABLE IF NOT EXISTS mp_original_formats(user_id TEXT NOT NULL,original_id TEXT NOT NULL,format TEXT NOT NULL,PRIMARY KEY(user_id,original_id),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS mp_admissions(user_id TEXT NOT NULL,original_id TEXT NOT NULL,request_key TEXT NOT NULL,task_id TEXT,state TEXT NOT NULL,PRIMARY KEY(user_id,original_id,request_key),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS mp_activity(user_id TEXT NOT NULL,id TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(user_id,id));
+ CREATE TABLE IF NOT EXISTS mp_artifact_usage(user_id TEXT NOT NULL,artifact_id TEXT NOT NULL,task_id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,artifact_id,task_id),FOREIGN KEY(user_id,artifact_id) REFERENCES mp_artifacts(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS mp_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0,generation INTEGER NOT NULL DEFAULT 0,settings TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS mp_artifacts(user_id TEXT NOT NULL,id TEXT NOT NULL,original_id TEXT NOT NULL,fingerprint TEXT NOT NULL,json TEXT NOT NULL,complete INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,id),UNIQUE(user_id,original_id,fingerprint),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS mp_publications(user_id TEXT NOT NULL,original_id TEXT NOT NULL,generation INTEGER NOT NULL,artifact_id TEXT NOT NULL,material_id TEXT NOT NULL,revision TEXT NOT NULL,PRIMARY KEY(user_id,original_id),FOREIGN KEY(user_id,artifact_id) REFERENCES mp_artifacts(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,material_id,revision) REFERENCES pd_material_versions(user_id,material_id,revision) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS mp_derivations(user_id TEXT NOT NULL,original_id TEXT NOT NULL,kind TEXT NOT NULL,artifact_id TEXT NOT NULL,material_id TEXT NOT NULL,revision TEXT NOT NULL,PRIMARY KEY(user_id,original_id,kind),FOREIGN KEY(user_id,artifact_id) REFERENCES mp_artifacts(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,material_id,revision) REFERENCES pd_material_versions(user_id,material_id,revision) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS mp_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
+`);}
