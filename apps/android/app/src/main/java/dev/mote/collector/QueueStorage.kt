@@ -22,7 +22,7 @@ class QueueStorage(private val context: Context) {
     fun choices(): List<QueueStorageChoice> = buildList {
         add(QueueStorageChoice("internal", MoteI18n.text("内部应用空间"), context.accountDirectory(), context.accountDirectory().usableSpace))
         context.getExternalFilesDirs(null).filterNotNull().forEachIndexed { index, storage ->
-            val base = File(storage, "accounts/${Settings(context).read().ownerKey()}").apply { mkdirs() }
+            val base = File(storage, "accounts/${context.accountOwnerKey()}").apply { mkdirs() }
             if (Environment.getExternalStorageState(base) == Environment.MEDIA_MOUNTED) {
                 val id = "external:${SourceRules.hash(base.absolutePath)}"
                 add(QueueStorageChoice(id, if (Environment.isExternalStorageRemovable(base)) MoteI18n.text("存储卡应用空间 {0}", index + 1) else MoteI18n.text("本机存储应用空间"), base, base.usableSpace))

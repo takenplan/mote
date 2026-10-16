@@ -33,7 +33,9 @@ if(releaseFixture){
  const end=Date.now()+10000;while(node.plugins!.catalog.view().packages[0]?.state==='installing'){if(Date.now()>end)throw new Error('Generated native plugin install timeout');await new Promise(resolve=>setTimeout(resolve,5));}
  pluginPackageId=node.plugins!.catalog.view().packages[0].id;
 }
-const address=await node.app.listen({host:'127.0.0.1',port:0});
+const selectedPort=Number(process.argv.find(value=>value.startsWith('--port='))?.slice(7)??0);
+if(!Number.isInteger(selectedPort)||selectedPort<0||selectedPort>65535)throw new Error('Invalid generated fixture port');
+const address=await node.app.listen({host:'127.0.0.1',port:selectedPort});
 const port=Number(new URL(address).port);
 const control=createServer((request,response)=>{void(async()=>{
  if(request.url==='/hold-next'){entered=false;holdNext=true;}

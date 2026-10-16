@@ -14,8 +14,6 @@ internal data class PluginField(val id: String, val label: String, val type: Str
 internal data class PluginInstance(val id: String, val packageId: String, val name: String, val revision: Long, val scope: String, val configuration: JSONObject, val fields: List<PluginField>, val capabilities: List<PluginCapability>, val desired: Boolean, val observed: String, val issues: List<String>, val allowedActions: Set<String>, val secretStatus: JSONObject, val definition: JSONObject? = null, val checked: Boolean = false)
 internal data class PluginPackage(val id: String, val name: String, val version: String, val source: JSONObject, val runtime: String, val state: String, val observed: String, val issues: List<String>, val allowedActions: Set<String>, val fields: List<PluginField> = emptyList())
 internal data class PluginInventory(val revision: Long, val installation: JSONObject, val packages: List<PluginPackage>, val instances: List<PluginInstance>, val catalog: List<JSONObject>, val adminRevision: Long? = null, val declarations: JSONObject? = null)
-internal data class MemoryPlan(val id: String, val name: String, val mode: String, val available: Boolean, val reason: String, val modules: List<JSONObject>, val capabilities: List<PluginCapability>, val allowedActions: Set<String>)
-internal data class MemoryBinding(val revision: Long, val generation: Long, val mode: String, val activePlan: MemoryPlan, val plans: List<MemoryPlan>, val modules: List<JSONObject>, val admission: JSONObject, val preparation: JSONObject?, val allowedActions: Set<String>)
 
 internal object PluginControlProjection {
     fun objects(value: JSONArray?) = value?.let { array -> (0 until array.length()).map { array.getJSONObject(it) } }.orEmpty()
@@ -27,8 +25,6 @@ internal object PluginControlProjection {
     }
     fun instance(value: JSONObject) = PluginInstance(value.getString("id"), value.getString("packageId"), value.getString("name"), value.getLong("revision"), value.getString("scope"), value.getJSONObject("configuration"), fields(value.getJSONArray("configurationSchema")), capabilities(value.getJSONArray("capabilities")), value.getBoolean("desired"), value.getString("observed"), strings(value.getJSONArray("issues")), actions(value), value.getJSONObject("secretStatus"))
     fun inventory(value: JSONObject) = PluginInventory(value.getLong("revision"), value.getJSONObject("installation"), objects(value.getJSONArray("packages")).map { PluginPackage(it.getString("id"), it.getString("name"), it.getString("version"), it.getJSONObject("source"), it.getString("runtime"), it.getString("state"), it.getString("observed"), strings(it.getJSONArray("issues")), actions(it), fields(it.optJSONArray("configurationSchema"))) }, objects(value.getJSONArray("instances")).map(::instance), objects(value.getJSONArray("catalog")))
-    fun plan(value: JSONObject) = MemoryPlan(value.getString("id"), value.getString("name"), value.getString("mode"), value.getBoolean("available"), value.optString("reason"), objects(value.getJSONArray("modules")), capabilities(value.getJSONArray("capabilities")), actions(value))
-    fun binding(value: JSONObject) = MemoryBinding(value.getLong("revision"), value.getLong("generation"), value.getString("mode"), plan(value.getJSONObject("activePlan")), objects(value.getJSONArray("plans")).map(::plan), objects(value.getJSONArray("modules")), value.getJSONObject("admission"), value.optJSONObject("preparation"), actions(value))
     fun configured(fields: List<PluginField>, configuration: JSONObject, secretStatus: JSONObject? = null): Boolean = fields.all { field ->
         val value = configuration.opt(field.id)
         val absent = value == null || value == JSONObject.NULL || value == ""
@@ -65,7 +61,6 @@ internal class PluginControlClient(private val client: CentralClient) {
     }
     fun memory() = client.get("/api/memory")
     fun preparation(id: String) = client.get("/api/memory/bindings/" + CentralScreens.encode(id))
-    fun binding() = PluginControlProjection.binding(client.get(BINDING))
     fun resolve(repository: String, tag: String = "") = client.post("/api/plugins/resolve", JSONObject().put("repository", repository).apply { if (tag.isNotBlank()) put("tag", tag) })
     fun execute(intent: PluginCommandIntent): JSONObject = when (intent.method) {
         "POST" -> client.post(intent.path, intent.payload())
@@ -91,25 +86,9 @@ internal class PluginControlClient(private val client: CentralClient) {
             require(action in setOf("activate", "cancel"))
             return PluginCommandIntent("/api/memory/bindings/" + CentralScreens.encode(id) + "/" + action, "POST", (if (action == "activate") JSONObject().put("expectedRevision", revision) else JSONObject()).toString())
         }
-        const val BINDING = "/api/memory-spaces/default/binding"
         fun intent(path: String, revision: Long, payload: JSONObject = JSONObject(), method: String = "POST", operationId: String = UUID.randomUUID().toString()) =
             PluginCommandIntent(path, method, JSONObject(payload.toString()).put("expectedRevision", revision).put("operationId", operationId).toString())
         fun install(preview: JSONObject, revision: Long) = intent("/api/plugins/install", revision, JSONObject().put("previewId", preview.getString("id")))
-        fun configure(packageId: String, instanceId: String?, revision: Long, name: String, scope: String, configuration: JSONObject) = intent(
-            if (instanceId == null) "/api/plugin-instances" else "/api/plugin-instances/" + CentralScreens.encode(instanceId), revision,
-            JSONObject().put("name", name).put("scope", scope).put("configuration", configuration).apply { if (instanceId == null) put("packageId", packageId) }, if (instanceId == null) "POST" else "PATCH")
-        fun instanceAction(id: String, action: String, revision: Long): PluginCommandIntent {
-            require(action in setOf("check", "enable", "disable"))
-            return intent("/api/plugin-instances/" + CentralScreens.encode(id) + "/" + action, revision)
-        }
-        fun memoryAction(action: String, revision: Long, preparationId: String? = null): PluginCommandIntent {
-            require(action in setOf("pause", "resume", "stop", "activate", "retry", "cancel"))
-            return intent(BINDING + "/" + action, revision, JSONObject().apply { preparationId?.let { put("preparationId", it) } })
-        }
-        fun prepare(planId: String, scope: String, revision: Long, feeAcknowledged: Boolean): PluginCommandIntent {
-            require(feeAcknowledged && scope.isNotBlank())
-            return intent(BINDING + "/prepare", revision, JSONObject().put("targetPlanId", planId).put("scope", scope).put("feeAcknowledged", true))
-        }
         fun uninstall(id: String, revision: Long) = intent("/api/plugins/" + CentralScreens.encode(id) + "/uninstall", revision)
     }
 }

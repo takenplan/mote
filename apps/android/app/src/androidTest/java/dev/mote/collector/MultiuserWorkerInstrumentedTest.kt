@@ -102,6 +102,29 @@ class MultiuserWorkerInstrumentedTest {
         assertEquals(404,get(app,"b","/api/captures/$aid").first)
     }
 
+    @Test fun actualNativePluginEditorUsesOwnedGrantSelectionAndPreservesMaskedReferenceOnEdit() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        check(fixture().has("pluginPackageId"));val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val sourceId="plugin-source-"+java.util.UUID.randomUUID();val sourceName="Synthetic owned plugin source"
+        app.ingress3(settings.read()).register(JSONObject().put("id",sourceId).put("name",sourceName).put("kind","custom").put("retention","archive").put("deviceId",settings.deviceId).put("platform","android"))
+        val pkg=api.get("/api/plugins").getJSONArray("packages").getJSONObject(0);val fields=pkg.getJSONArray("configurationSchema");val labels=(0 until fields.length()).associate {fields.getJSONObject(it).getString("id") to fields.getJSONObject(it).getString("label")}
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","plugins")).use { scenario ->
+            fun click(label:String) {waitFor {var clicked=false;scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled};if(button!=null&&!activity.isWorking){button.performClick();clicked=true}};clicked}}
+            click("新增实例");waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.contentDescription=="实例名称"}&&!activity.isWorking};ready}
+            scenario.onActivity {activity->val all=views(activity.window.decorView);val inputs=all.filterIsInstance<android.widget.EditText>();inputs.single {it.contentDescription=="实例名称"}.setText("Synthetic native A plugin");inputs.single {it.contentDescription==labels["label"]}.setText("Synthetic native A label");inputs.single {it.contentDescription==labels["credential"]}.setText("personal:A");all.filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="processor"}.isChecked=true;all.filterIsInstance<android.widget.CheckBox>().single {it.text.toString()==sourceName}.isChecked=true}
+            click("创建实例");waitFor {api.get("/api/plugins").getJSONArray("instances").length()==1}
+            val instance=api.get("/api/plugins").getJSONArray("instances").getJSONObject(0);val id=instance.getString("id")
+            assertEquals(listOf(sourceId),PluginControlProjection.strings(instance.getJSONObject("grants").getJSONArray("sourceIds")));assertFalse(instance.getJSONObject("grants").getBoolean("history"))
+            click("配置");waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.contentDescription=="实例名称"}&&!activity.isWorking};ready}
+            scenario.onActivity {activity->val inputs=views(activity.window.decorView).filterIsInstance<android.widget.EditText>();assertEquals("",inputs.single {it.contentDescription==labels["credential"]}.text.toString());inputs.single {it.contentDescription=="实例名称"}.setText("Synthetic native A edited")}
+            click("保存配置");waitFor {api.get("/api/plugins").getJSONArray("instances").getJSONObject(0).getString("name")=="Synthetic native A edited"}
+            val edited=api.get("/api/plugins").getJSONArray("instances").getJSONObject(0);assertEquals(id,edited.getString("id"));assertTrue(edited.getJSONObject("secretStatus").getBoolean("credential"));assertFalse(edited.getJSONObject("configuration").has("credential"))
+            login(app,"b");scenario.onActivity {it.navigate("plugins")};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking&&it.client!=null};ready};assertEquals(0,get(app,"b","/api/plugins").second!!.getJSONArray("instances").length())
+            scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("Synthetic native A edited")})}
+        }
+    }
+
     @Test fun openMemoryStopDialogRetiresOnAccountSwitchBeforeAnyBCommand() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
@@ -169,10 +192,22 @@ class MultiuserWorkerInstrumentedTest {
         assertEquals("Synthetic provider snapshot exact bytes",file.readText())
     }
 
+    @Test fun actualQueueValidationDoesNotWaitForTheCredentialSettingsMonitor() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val queue=app.queue();val completed=java.util.concurrent.CountDownLatch(1);val entered=java.util.concurrent.CountDownLatch(1);val failure=java.util.concurrent.atomic.AtomicReference<Throwable>()
+        val reader=Thread {entered.countDown();try {queue.depth()} catch(error:Throwable){failure.set(error)} finally {completed.countDown()}}
+        try {
+            synchronized(Settings::class.java) {reader.start();assertTrue(entered.await(2,TimeUnit.SECONDS));assertTrue("Existing queue identity validation must not invert queue and credential-settings locks",completed.await(2,TimeUnit.SECONDS))}
+        } finally {reader.join(10000)}
+        failure.get()?.let {throw it}
+    }
+
     @Test fun actualSourceWorkerKeepsEqualIdsSpoolsContextAndRevokedAccessUnderTheirOriginalOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val watchdog=Thread { try { Thread.sleep(10000);File(app.cacheDir,"m15-source-stall.txt").writeText(Thread.getAllStackTraces().entries.joinToString("\n\n") { (thread,stack)->thread.name+" "+thread.state+"\n"+stack.joinToString("\n") }) } catch (_:InterruptedException) {} }.apply {isDaemon=true;start()}
+        try {
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
-        login(app,"a");val a=settings.read();val source=LocalSource(id="same-native-file-source",name="Synthetic source",kind="local-files",uri="content://dev.synthetic.generated/document",retention="archive",syncContinuously=false,description="Synthetic A source context",contextDirty=true)
+        login(app,"a");val a=settings.read();val source=LocalSource(id="native-source-"+java.util.UUID.randomUUID(),name="Synthetic source",kind="local-files",uri="content://dev.synthetic.generated/document",retention="archive",syncContinuously=false,description="Synthetic A source context",contextDirty=true)
         val bytes="Synthetic preserved source original bytes".toByteArray()
         fun prepare(selected:LocalSource):JSONObject {
             app.localSources().save(selected);val q=app.fileArchives();val generation=q.configure(selected).getString("generation")
@@ -199,6 +234,7 @@ class MultiuserWorkerInstrumentedTest {
         val scan=OneTimeWorkRequestBuilder<SourceScanWorker>().setInputData(workDataOf("manual" to true,"owner" to settings.read().ownerKey(),"sourceId" to source.id)).build()
         WorkManager.getInstance(app).enqueue(scan).result.get();waitFor {WorkManager.getInstance(app).getWorkInfoById(scan.id).get()!!.state.isFinished}
         assertEquals("permission",app.localSources().state(source.id).optString("status"));assertEquals(0,app.fileArchives().pendingCount(source.id))
+        } finally {watchdog.interrupt()}
     }
 
     @Test fun anonymousFileTaskDraftRequiresExplicitBindingWithAnEmptyQueue() {
