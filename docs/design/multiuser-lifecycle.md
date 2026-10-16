@@ -133,3 +133,9 @@ retaining preexisting events/cursors/policies so restored data cannot replay wor
 Every added domain must declare merge or preserve explicitly; an absent import
 policy blocks admission. The existing purpose-bound `restoreUser` adapters retain
 their independent lifecycle semantics.
+
+Ask's initial event-journal backfill is an atomic first-install migration. It is
+not rerun at every startup: otherwise a later personal archive merged into an
+earlier recovered instance could become new automatic input on restart despite
+the import publication fence. Normal producer triggers retain their existing
+notification behavior after initialization.
