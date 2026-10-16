@@ -16,7 +16,7 @@ const scope=z.object({capture_id:z.string().uuid(),source_id:id}).strict();
 const object=z.object({hash,bytes:z.string().max(Math.ceil(FILE_MAX_BYTES/3)*4)}).strict();
 const coverage={originals:true,captureScopes:true,devices:true,excluded:['upload-staging','active-authorizations','pins','tickets','workspaces','receipt-history']} as const;
 const snapshot=z.object({id:hash,expires:z.number().int().nonnegative(),bytes:z.number().int().min(0).max(FILE_MAX_BYTES)}).strict();
-const payloadSchema=z.object({format:z.literal('mote-ingress-v1'),coverage:z.unknown().refine(value=>JSON.stringify(value)===JSON.stringify(coverage)),originals:z.array(original),scopes:z.array(scope),objects:z.array(object),archivedFiles:z.array(z.object({id:z.string().uuid(),hash,json:z.string().max(8192)}).strict()).optional(),snapshots:z.array(snapshot).optional(),devices:z.array(z.object({id,json:z.string()}).strict())}).strict();
+const payloadSchema=z.object({format:z.literal('mote-ingress-v1'),coverage:z.unknown().refine(value=>JSON.stringify(value)===JSON.stringify(coverage)),originals:z.array(original),scopes:z.array(scope),objects:z.array(object),archiveLinks:z.array(z.object({capture_id:z.string().uuid(),file_id:z.string().uuid()}).strict()).optional(),archivedFiles:z.array(z.object({id:z.string().uuid(),hash,json:z.string().max(8192)}).strict()).optional(),snapshots:z.array(snapshot).optional(),devices:z.array(z.object({id,json:z.string()}).strict())}).strict();
 const invalid=()=>new PrivateDataError('invalid_data');
 
 /** M16 composes this with private-data and execution. Physical failure is
@@ -36,6 +36,7 @@ export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory
    if(objects.size!==payload.objects.length||new Set(payload.originals.map(row=>row.id)).size!==payload.originals.length||new Set(payload.originals.map(row=>JSON.stringify([row.source_id,row.capture_id]))).size!==payload.originals.length||new Set(payload.scopes.map(row=>row.capture_id)).size!==payload.scopes.length||new Set(payload.devices.map(row=>row.id)).size!==payload.devices.length)throw invalid();
    if(new Set(files.map(file=>file.id)).size!==files.length)throw invalid();
    for(const row of files){const file=archivedImportFileSchema.parse(JSON.parse(row.json));if(row.id!==file.id||row.hash!==file.hash||!objects.has(row.hash)||objects.get(row.hash)!.length!==file.sizeBytes||archiveRelativePath(file.relativePath)!==file.relativePath||file.name!==file.relativePath.split('/').at(-1)||/[\r\n\u0000]/.test(file.mimeType))throw invalid();}
+   for(const link of payload.archiveLinks??[]){if(!files.some(file=>file.id===link.file_id)||!sql.get('SELECT id FROM pd_captures WHERE user_id=$user AND id=?',link.capture_id))throw invalid();}
    const scopes=new Map(payload.scopes.map(row=>[row.capture_id,row.source_id]));
    for(const row of [...payload.scopes,...payload.originals]){
     const parent=sql.get('SELECT json FROM pd_captures WHERE user_id=$user AND id=?',row.capture_id);
@@ -60,6 +61,7 @@ export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory
     for(const [hash,size] of metadata){const old=sql.get('SELECT bytes FROM ig_objects WHERE user_id=$user AND hash=?',hash);if(old&&old.bytes!==size)throw invalid();}
     for(const [hash,size] of metadata)if(!objects.has(hash))sql.run('INSERT INTO ig_objects VALUES($user,?,?,?) ON CONFLICT(user_id,hash) DO NOTHING',hash,size,Math.ceil(size/(4*1024*1024)));
     for(const row of files){const prior=sql.get('SELECT hash,json FROM ig_archive_files WHERE user_id=$user AND id=?',row.id);if(prior&&(prior.hash!==row.hash||prior.json!==row.json))throw new PrivateDataError('conflict',409);sql.run('INSERT INTO ig_archive_files VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',row.id,row.hash,row.json);}
+    for(const row of payload.archiveLinks??[])sql.run('INSERT OR IGNORE INTO ig_archive_links VALUES($user,?,?)',row.capture_id,row.file_id);
     for(const row of payload.originals)sql.run('INSERT INTO ig_originals VALUES($user,?,?,?,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',row.id,row.source_id,row.capture_id,row.hash,row.mime,row.retention);
     for(const state of snapshots.values())sql.run('INSERT INTO ig_snapshot_inputs VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO NOTHING',state.id,state.expires);
     for(const row of payload.scopes){const old=sql.get('SELECT source_id FROM ig_capture_scopes WHERE user_id=$user AND capture_id=?',row.capture_id);if(old&&old.source_id!==row.source_id)throw invalid();sql.run('INSERT INTO ig_capture_scopes VALUES($user,?,?) ON CONFLICT(user_id,capture_id) DO NOTHING',row.capture_id,row.source_id);}
@@ -75,13 +77,13 @@ export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory
     const rows=sql.all('SELECT id,source_id,capture_id,hash,mime,retention FROM ig_originals WHERE user_id=$user ORDER BY id');
     const snapshots=sql.all('SELECT s.original_id id,s.expires,o.bytes FROM ig_snapshot_inputs s JOIN ig_originals r ON r.user_id=s.user_id AND r.id=s.original_id JOIN ig_objects o ON o.user_id=r.user_id AND o.hash=r.hash WHERE s.user_id=$user ORDER BY s.original_id').map(row=>({id:String(row.id),expires:Number(row.expires),bytes:Number(row.bytes)})),states=new Map(snapshots.map(row=>[row.id,row]));
     const archivedFiles=sql.all('SELECT id,hash,json FROM ig_archive_files WHERE user_id=$user ORDER BY id'),hashes=[...new Set([...rows.filter(row=>!states.has(String(row.id))||states.get(String(row.id))!.expires>Date.now()),...archivedFiles].map(row=>String(row.hash)))];
-    return {domain,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-ingress-v1',coverage,originals:rows,...(archivedFiles.length?{archivedFiles}:{}),...(snapshots.length?{snapshots}:{}),scopes:sql.all('SELECT capture_id,source_id FROM ig_capture_scopes WHERE user_id=$user ORDER BY capture_id'),objects:hashes.map(hash=>({hash,bytes:originals.readObject(hash).toString('base64')})),devices:sql.all('SELECT id,json FROM ig_devices WHERE user_id=$user ORDER BY id')}};
+    return {domain,version:1,deploymentId:subject.deploymentId,userId:subject.userId,payload:{format:'mote-ingress-v1',coverage,originals:rows,...(archivedFiles.length?{archivedFiles,archiveLinks:sql.all('SELECT capture_id,file_id FROM ig_archive_links WHERE user_id=$user ORDER BY capture_id,file_id')}:{}),...(snapshots.length?{snapshots}:{}),scopes:sql.all('SELECT capture_id,source_id FROM ig_capture_scopes WHERE user_id=$user ORDER BY capture_id'),objects:hashes.map(hash=>({hash,bytes:originals.readObject(hash).toString('base64')})),devices:sql.all('SELECT id,json FROM ig_devices WHERE user_id=$user ORDER BY id')}};
    });
   },
   deleteUser:async(subject,operationId)=>{
    const {sql,originals,assert}=bound(subject,'delete');sql.transaction(()=>{
     sql.run('INSERT INTO ig_state(user_id,deleted) VALUES($user,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1');
-    for(const table of ['ig_capture_updates','ig_capture_update_sequences','ig_import_uploads','ig_archive_files','ig_originals','ig_capture_scopes','ig_uploads','ig_batches','ig_devices','ig_pins','ig_work'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
+    for(const table of ['ig_capture_updates','ig_capture_update_sequences','ig_import_uploads','ig_archive_links','ig_archive_files','ig_originals','ig_capture_scopes','ig_uploads','ig_batches','ig_devices','ig_pins','ig_work'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
    });
    // A live or interrupted child can still own filesystem work. A crashed
    // activity requires M16 reconciliation; elapsed time is not erasure proof.

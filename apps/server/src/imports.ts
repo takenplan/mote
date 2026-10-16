@@ -1,3 +1,4 @@
+import {importReviewGate as reviewGate} from './import-review.js';
 import {EXECUTION_POLICIES} from './execution-policy.js';
 import { moteText } from './i18n.js';
 import {randomUUID} from 'node:crypto';
@@ -39,16 +40,7 @@ type InternalJob=ImportJob&{resourceWait?:'prepare'|'commit';excludedFiles?:{fil
 const responseSchema=z.object({summary:z.string().max(20000),recordsPath:z.string().max(4000).optional(),warnings:z.array(z.string().max(2000)).max(200).optional(),reviewDecision:importReviewDecisionSchema.optional()}).strict();
 const message=(error:unknown)=>error instanceof Error?error.message.slice(0,2000):'Import failed';
 const inside=(root:string,path:string)=>{const rel=relative(root,path);return rel===''||(!rel.startsWith(`..${sep}`)&&rel!=='..'&&!isAbsolute(rel));};
-function reviewGate(job:InternalJob,decision:ImportReviewDecision|undefined,informationalWarnings=false):ImportReviewGate {
-  if(job.processing!=='automatic')return {decision:'confirmation',reason:'This import was requested for manual preview.'};
-  if(!decision)return {decision:'confirmation',reason:'The parser did not provide a confidence and ambiguity assessment.'};
-  if(decision.confidence!=='high'||decision.ambiguous)return {decision:'confirmation',reason:decision.reason??'The parser reported low confidence or ambiguity.'};
-  if(!decision.reason)return {decision:'confirmation',reason:'The parser did not explain its high-confidence assessment.'};
-  if(job.warnings.length&&!informationalWarnings)return {decision:'confirmation',reason:'Processing reported warnings; review the preview before publishing.'};
-  if(!job.dispositions||job.dispositions.items.length!==job.files.length)return {decision:'confirmation',reason:'The parser did not account for every original file.'};
-  if(job.dispositions.counts.unsupported||job.dispositions.counts.excluded||(!job.dispositions.counts.parsed&&!job.dispositions.counts.processing))return {decision:'confirmation',reason:'Some originals were not parsed as evidence.'};
-  return {decision:'automatic',reason:'The parsed records passed host validation with high confidence and no ambiguity.'};
-}
+
 
 /** Deterministic formats decode locally; models map unfamiliar structures into reviewed records. */
 export class ImportStore {

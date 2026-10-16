@@ -1517,6 +1517,7 @@
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/ingress/host-import'",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/archived-files/:id',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/archived-files/:id/content',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/captures/:id/archived-files',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/devices',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/head',service:INGRESS_DOMAIN",
@@ -1549,6 +1550,7 @@
     "surfaces": [
       "table:ig_activity",
       "table:ig_archive_files",
+      "table:ig_archive_links",
       "table:ig_batches",
       "table:ig_capture_scopes",
       "table:ig_capture_update_sequences",
@@ -1702,7 +1704,14 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/processing/artifacts/:id',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/processing/originals/:id',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing',service:PROCESSING_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing/derivations',service:PROCESSING_DOMAIN"
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing/derivations',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'DELETE',url:'/api/imports/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/import-capabilities'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/import-source-packs'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/imports'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/imports/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports/:id/'+action"
     ]
   },
   "apps/server/src/scope/processing-schema.ts": {
@@ -1717,6 +1726,9 @@
       "table:mp_artifacts",
       "table:mp_derivations",
       "table:mp_file_annotations",
+      "table:mp_import_files",
+      "table:mp_import_jobs",
+      "table:mp_import_records",
       "table:mp_original_formats",
       "table:mp_publications",
       "table:mp_restore",
@@ -2393,6 +2405,14 @@
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/corrections'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/speakers'"
+    ]
+  },
+  "apps/server/src/scope/processing-imports.ts": {
+    "scope": "user",
+    "module": "M06",
+    "surfaces": [
+      "directory:dirname(path)",
+      "task:execution.register:{kind,pool:'processing.imports',concurrency:()=>1,policy:model?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.deterministic,...(model?{modelFeature:'import' as const}:{}),parseInput:value=>taskInput.parse(value),authorizeInput:(context,value)=>{const input=taskInput.parse(value);if(input.phase!==phase)throw conflict();const {job}=bound(context,input);if(phase==='prepare'&&model===deterministic(job))throw conflict();},resources:input=>[{scope:'user',key:'import:'+input.jobId}],execute:async run=>{const key=identityHash([run.context.userId,run.task.input.jobId]);active.add(key);try{return await(phase==='prepare'?prepare:commit)(run);}finally{active.delete(key);}},classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure(error instanceof PrivateDataError?'stale':'permanent','import_failed')}"
     ]
   }
 }

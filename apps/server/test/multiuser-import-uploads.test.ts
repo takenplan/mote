@@ -81,3 +81,21 @@ test('generic staging keeps the prior one-day cleanup and handles an explicitly 
  await f.checked(f.a.token,'/api/import-uploads','POST',{...manifest,id:randomUUID(),name:'next.txt'});
  assert.equal((await f.request(f.a.token,'/api/archived-files/'+file.id)).statusCode,404);
 });
+
+test('overlapping commit requests retain the same successful original when a second actual worker starts after the first ACK',async t=>{
+ const {Originals}=await import('../src/scope/originals.js'),original=Originals.prototype.prepareArchive;
+ const gate=()=>{let resolve!:()=>void;const promise=new Promise<void>(done=>resolve=done);return {promise,resolve};},firstEntered=gate(),secondEntered=gate(),releaseFirst=gate(),releaseSecond=gate();let calls=0;
+ // Fault-schedule only: both production commit routes have read pending state;
+ // the actual M03 worker/file/SQL transport is preserved after each barrier.
+ Originals.prototype.prepareArchive=async function(...args:Parameters<typeof original>){const index=++calls;if(index===1){firstEntered.resolve();await releaseFirst.promise;}if(index===2){secondEntered.resolve();await releaseSecond.promise;}return original.apply(this,args);};
+ t.after(()=>{Originals.prototype.prepareArchive=original;releaseFirst.resolve();releaseSecond.resolve();});
+ const f=await scopedFilesFixture(t),id=randomUUID(),bytes=Buffer.from('Generated concurrent original');
+ await f.checked(f.a.token,'/api/import-uploads','POST',{id,name:'concurrent.txt',sizeBytes:bytes.length,mimeType:'text/plain'});
+ assert.equal((await f.request(f.a.token,'/api/import-uploads/'+id+'/parts/0','PUT',bytes,{'content-type':'application/octet-stream'})).statusCode,200);
+ const first=f.request(f.a.token,'/api/import-uploads/'+id+'/commit','POST',{}).then(value=>value);await firstEntered.promise;
+ const second=f.request(f.a.token,'/api/import-uploads/'+id+'/commit','POST',{}).then(value=>value);
+ // A serialized implementation intentionally never admits the second worker.
+ await Promise.race([secondEntered.promise,new Promise(resolve=>setTimeout(resolve,40))]);releaseFirst.resolve();const a=await first;releaseSecond.resolve();const b=await second;
+ assert.equal(a.statusCode,200,a.body);assert.equal(b.statusCode,200,b.body);assert.deepEqual(a.json(),b.json());
+ assert.deepEqual((await f.request(f.a.token,'/api/archived-files/'+a.json().id+'/content')).rawPayload,bytes);
+});

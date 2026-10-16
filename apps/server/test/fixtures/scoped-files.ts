@@ -7,9 +7,10 @@ import {buildApp} from '../../src/app.js';
 import {bytesHash} from '../../src/scope/originals.js';
 import {defaultProcessingSettings} from '../../src/scope/processing-schema.js';
 
-export async function scopedFilesFixture(t: TestContext) {
+export async function scopedFilesFixture(t: TestContext,options:Pick<Parameters<typeof buildApp>[0],'importPythonPacks'>|((host:Awaited<ReturnType<typeof buildApp>>)=>void)={}) {
   const directory = mkdtempSync(join(tmpdir(), 'mote-joint-files-'));
-  const host = await buildApp({dataDir: directory});
+  const host = await buildApp({dataDir: directory,...(typeof options==='function'?{}:options)});
+  if(typeof options==='function')options(host);
   t.after(async () => { await host.app.close(); rmSync(directory, {recursive: true, force: true}); });
   const password = 'Generated-joint-files-password';
   const headers = {'x-mote-protocol-version': '2', 'x-mote-ingress-version': '3'};

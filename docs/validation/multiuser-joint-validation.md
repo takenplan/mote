@@ -24,8 +24,9 @@ Actual host: `guangmodeMac-Studio`; the handoff's Bogon label is not machine pro
 The user's main working directory is not used for writes. Main and integration
 were independently read from GitHub at `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 Only this feature may compose dependencies. No merge/push to main or integration,
-deployment, CI enablement, real data migration/deletion, real model/calendar/mail
-operation or system permission change is authorized by these tests.
+deployment, CI enablement, real data migration/deletion, real calendar/mail operations or system permission changes are authorized by these tests.
+The later user instruction permits a separately reported real-model regression
+through the locally signed-in Codex GPT-6.1 sol entry only; see J14.
 
 Use generated A/B accounts with equal source/device/external/revision/batch IDs,
 operation keys and original bytes. Keep actual Accounts, production app/listener,
@@ -95,9 +96,9 @@ review and exact remote Draft PR head. Later WIP is never imported as a freeze.
 
 | Owner | Explicitly reported composable checkpoint | Remaining gate / original capability |
 | --- | --- | --- |
-| M13 Web | `c21184829f03669229770de3d62bddfb63e29d33`; tested code/test `aed42550`, later docs only | FullWeb515/515 and fresh Central passed in owner environment. No push/PR/final affected. Still open: Calendar/Lark/recordings UI; generic Imports preview/ambiguity/confirm/resume; Files/audio/review/speaker/export; raw pending/failed controls; Memory raw/range/integration/full settings/audit; Agent startup trace/advanced models; storage/encryption/index/runtime config; native Actions bridge. |
+| M13 Web | **PAUSED checkpoint** `72ee3d9d126f49aafd15309f1056487a711c62c7`; do not awaken | Later narrow Google, original-byte/full Files entry and Lark consumers have owner evidence; earlier fullWeb515/515 belongs to its earlier candidate. No final affected/push/PR. Shared Imports and remaining Files/other original capabilities retain their exact owner ledger gaps. Later checkpoints are not final. |
 | M14 Desktop | **FINAL module delivery** remote `cd46f25a030bdbe593bc138adc375577b4d032ae`; tested `45467379c5645dec62cc4b03e891b404b675193b`, later only two docs | Own independent GitHub readback confirms PR139 OPEN/Draft/base integration/exact final head (`/tmp/mote-joint-pr139-final-readback.json`). Owner required actual EXIT0: Desktop501/501, Server2626 pass/0 fail/1 existing OS opt-in skip, Web515/515, Android352/352/no failure/error/skip, types/root/shared/CLI0, Agent317+1 opt-in skip. Real generated Desktop native-calendar→M12 fixed review→M05 plus Ask/offline A/B/SIGKILL/restart passed; M13 bounded review no new confirmed finding. Handoff `/tmp/mote-m14-final-delivery-resumed.md`. No joint Files writes were in454; this is not whole joint proof. M14 ended, do not awaken. |
-| M15 Android | Tested main `220c175ea9900c39477df0cf2da4aaecba9ca26a`; new composable narrow runtime `7eca52d9783f875aa38860ae1ca0a78c467cbd52` | Android352/352 and production assembleDebug EXIT0 apply to220c. New7eca has recent-five-work preview actual RED→GREEN and MCP actual SDK/native three controls GREEN; review received. New processing/devices/statistics consumer107f has APK build0, native GREEN still in progress. Full affected/current production/final review/push/PR pending. Generic Imports/remaining Files stay OPEN. Do not move220c full evidence to newer runtime. |
+| M15 Android | Tested main `48a797854e96eedf57c4edbd451fa2e5c5132a73`; checkpoint68096eee, later Lark test/code remains WIP | Owner full Android353/353 and production APK41s EXIT0 apply to48a; real native Files speaker/correction/original/literal prefix, processing/devices/statistics/MCP, Google Calendar and Gmail lost-ACK/recreate/switch pass in its recorded scope. Generated local Codex Native Ask1/1 is separately reported in J14. Lark baseline RED is confirmed; its fix is not frozen. Final affected/review/push/PR, shared Imports/remaining Files/recording/QR outcomes remain OPEN. |
 
 Shared-page ownership remains in the owners' existing ledger
 `/tmp/mote-m13-shared-page-contract-map.md`,
@@ -204,20 +205,24 @@ The current seven Files cases' log SHA256 is
 These are independent source-entry receipts, no compiled/server-wide gate claim.
 All Joint processes completed and the heavy slot is explicitly RELEASED.
 
-The parent assigned the former M14 slot to container validation
-`01a145c1-31b7-75e9-b834-56885c972010`, based on M16eec. That owner handles Docker
-profile/backup/restore and Hindsight logic/tests/docs; Joint owns only the new
-annotation table's backup-schema declaration. Container owner reports a later
-explicit parent authorization to start the official Docker app: start returned0
-with already-running, but version/info/image/ps/volume remained daemon-connect
-EXIT1. No context/permission/install/restart workaround was performed. This is
-owner-reported environment evidence, not a Joint rerun or actual recovery pass.
-Protocol mocks/native checks are in progress and do not close actual Docker or
-Hindsight volume recovery.
+The parent assigned a released slot to container validation
+`01a145c1-31b7-75e9-b834-56885c972010`, based on M16eec. Its new runtime/scripts
+remain separate until the final freeze. The original daemon failures are
+historical: Docker became accessible, the standard repository image actually
+built EXIT0 (immutable2e0a192e...), and owner13515436 actual production restore
+ran two clean start/stop cycles and rebackup with equal capture IDs, distinct
+A/B text, original bytes, old-token401, no active old task grants and preserved
+unknown issuance. Direct offline Hindsight recovery06fd also passed with two
+canonical bodies and old-token401/workerfalse. The later production Managed
+Runtime/Engine.read seam reached health/new credentials but failed generated
+fixture digest normalization;258f787d corrects only fixture schema normalization
+and awaits same-case execution. No new whole-container gate or combined Joint
+backup-schema acceptance is inferred. Source reviews are in
+`/tmp/mote-joint-review-container-actual-fixtures.md`; owner logs are separate.
 
 ## Finite final acceptance matrix
 
-The following 13 rows are the final scope. Reuse the named tests/fixtures and add
+The following 14 rows are the final scope. Reuse the named tests/fixtures and add
 only a missing concrete regression when evidence requires it. Paths below are
 relative to the repository; most server suites are in `apps/server/test/`.
 Every row is **FINAL PENDING**. Owning-module history is supporting evidence only.
@@ -236,7 +241,8 @@ Every row is **FINAL PENDING**. Owning-module history is supporting evidence onl
 | J10 account deletion | A has issued unknown external fact/held late result and shared bytes; revoke admission/publication first→durable result_unknown→exact late ACK settles only old fact→retry physically erases private metadata. A stays unreadable; B hashes/rows/credentials unchanged; missing/late hook blocks false success. | `multiuser-lifecycle.test.ts`, `multiuser-actions-lifecycle.test.ts` (actual M16 waits for calendar fact), provider deletion cases. Unknown cannot be marked physically complete or resubmitted. |
 | J11 native instance/production package | Stopped backup CLI→empty isolated target→fresh emitted server twice; preserve deployment/account IDs, originals/hash, canonical Memory/history, conversations/config/plugins/Todos and succeeded/unknown facts; all authority retired. Old epoch/corrupt/missing domain/schema/native content rejects before target writes. | `multiuser-instance-backup.test.ts`, `multiuser-backup-{capture-updates,actions}.test.ts`; use `MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1` after own fresh build. Copy-only dist is not fresh-build proof. |
 | J12 shared config/plugins/connectors/old UI | Shared model key/reference and weight/code reuse with independent personal config/usage; M04 CAS/pinned snapshot/restart/explicit failures. Generated package formal install and actual worker; A stop leaves B active. Gmail/Calendar/Lark/document/recordings native formats and long text; OAuth reversed/replayed callback and account switch; no credential/cursor sharing. | Existing config/plugin/connector process tests, original algorithms and final owned client UI. Preserve Memory binding prepare/drain/migrate/activate/cancel and source import/Files/review/export/advanced settings capabilities in the owner ledger. Missing projections/UI block this row. |
-| J13 Docker retained recovery | Disposable epoch5 Docker profile publication and stopped target recovery through production CLI; actual owned Hindsight Docker volume snapshot/restore and canonical/history re-open, without old execution authority. No deployment or existing-volume access. | **OPEN implementation + environment**: `restoreProfile` explicitly rejects epoch5 non-native targets before staging. Existing Docker scripts still use old single-owner API assumptions. Docker daemon unavailable on fresh read-only query. Packaged-file projection/native Mem0 tests do not close either Docker requirement. |
+| J13 Docker retained recovery | Disposable epoch5 Docker profile publication and stopped target recovery through production CLI; actual owned Hindsight Docker volume snapshot/restore and canonical/history re-open, without old execution authority. No deployment or existing-volume access. | **OPEN final container freeze/gate and Joint schema combination**. Owner13515436 actual generated production image restore/start/stop/restart/rebackup passes; direct offline Hindsight06fd canonical/API recovery passes. New Managed Runtime/Engine.read seam is pending fixture normalization258f787d after a preserved actual failure. Immutable image built EXIT0; old daemon/build-pending states are historical. Do not move the earlier d181 required gate to newer runtime or Joint Imports tables. |
+| J14 real-model regression and private-data boundary | User amendment `Sentinel_90402956f4b881918763a8a61d350969`: retain deterministic mocks for isolation/retry assertions. When a real-model regression is needed, first verify the exact locally available Codex model/interface for the user’s “GPE 6.1 sol” (parent interpretation: GPT-6.1 sol), then use that signed-in local entry. Do not silently substitute another model/provider or create credentials. Prefer generated data. Optional local Central reads must be copied read-only to an isolated directory outside the repository before testing. | **PARTIAL: owner M15 actual generated Native Ask1/1,11.281s EXIT0** on retained48a baseline, using the existing M01/M04/M08 plus locally signed-in Codex `gpt-6.1-sol`. CLI0.162.1 catalog and ephemeral no-turn handshake selected the exact same model; no fallback/new provider credential. This is owner execution, not Joint rerun or an Imports semantic-model claim. Final composed model entry and privacy audit remain pending. Record only identifier/interface/SHA/result, no private content. Central originals and every derivative—prompts/responses, summaries, embeddings, screenshots, exports, logs, fixtures—must stay outside Git, including add/commit/stash/branches/remotes, PR text/comments and shared attachments/logs. Audit staged diff and new files individually; gitignore alone is insufficient. If private material has entered Git, stop push and report to parent; do not rewrite history or permanently delete it. Joint has used generated data only so far. |
 
 ## Historical receipts, deliberately not independent reruns
 
@@ -268,7 +274,7 @@ source inspection also confirms `restoreProfile`'s explicit epoch5 Docker refusa
 3. Agree one final runtime/test combination and exclusive heavy window with the
    active owners. The parent's four current slots are M13/M15/Joint/container
    recovery; M14 has ended. No fifth thread and no awakening M12/M14/M16.
-   Build shared libraries/Central/Desktop/current APK as relevant; run J01–J13's
+   Build shared libraries/Central/Desktop/current APK as relevant; run J01–J14's
    existing representative cases and actual client entry journeys on that tree.
 4. Execute the repository-required
    `npm run check:affected -- --base origin/codex/mote-multiuser-integration`
@@ -287,3 +293,63 @@ Waiting conditions are substantive: three final client deliveries, closure of
 missing original capabilities, an exclusive heavy window, and a decision/closure
 for epoch5 Docker publication plus available Docker/Hindsight validation. Waiting
 does not remove these rows. Current preparation has no final gate/PR receipt.
+
+
+## Current shared Imports candidate — source-only checkpoint, not final parity
+
+The original generic wire contract now uses M03 private staging and the existing
+M06 host / M05 executor. It preserves raw four-MiB parts, stable upload/request
+IDs, inline originals, one-day staging cleanup, host restart, deterministic text,
+pinned bounded ZIP expansion, configured hash-pinned Python Source Packs, private
+model-assisted previews, explicit review/confirmation, exact deduplication,
+original archive links, cancel/retry and actual same-account portable merge.
+No legacy Store, per-account runtime/executor or uploaded script capability is
+constructed. Model mapping uses the existing read-only context reader; a separate
+bounded host-control preview fragment may preserve original indexes or append
+validated records only to the private preview. It grants no path, capture,
+Material, Memory, provider or task authority. The original10000-record/32MiB
+manifest bound and existing format-worker limits are retained; long text is not
+truncated to fit one model answer.
+
+The current15 cases in multiuser-import-jobs.test.ts and
+multiuser-import-uploads.test.ts actually pass15/15, no skip,28.23s, EXIT0:
+`/tmp/mote-joint-import-entry-composed.log/.exit`, Node24.21.0 with the existing
+macOS Python OS-sandbox opt-in. This includes M03 real worker, M04 frozen import
+lease, M05 task fence, immutable preview, a forged known-digest task refusal,
+A/B equal business IDs, exact old inline wire, real ZIP worker, real Python
+sandbox, long original + repeated fragment ACK, held model response through A
+retirement/re-enable, completed import export/erase/B unchanged, and restored
+unconfirmed preview requiring new preparation/confirmation. Model/ASR transport
+uses generated loopback substitutes; Python/container decoding remains real.
+First sandbox loopback EPERM was environmental and is retained separately; the
+same authorized localhost command passed. The first inline/ZIP probe expected
+raw archive text in public capture metadata; it correctly found empty text under
+M03's contract. Corrected assertions read exact bytes through current M03 tickets
+and explicitly require public capture text to stay empty; no production guard
+was weakened.
+
+Import media/read-only progress separately passes the same actual WAV chain1/1,
+including explicit confirmation, exactly one ASR call per owner, exact ticket
+bytes, live processing task/searchability, Memory disabled rather than falsely
+completed, source-retired A unavailable and equal-ID B still current. Progress
+projects existing M06/M08 receipt/material/task data only; it admits no work.
+Non-disabled Memory recipe/batch progress is still awaiting its full user-journey
+characterization. Server types passed after the sole new parts-array annotation
+repair (`/tmp/mote-joint-import-expanded-types2.log/.exit`); subsequent projection
+classification-only deltas need their final affected gate.
+
+The M15 post-handler/onSend export observation was independently reproduced here
+in multiuser-files-stream.test.ts (EXIT1). The producer now starts lazily on the
+consumer read and checks exact current file/source/artifact proof before each
+returned compressed chunk. Same held-source retirement + equal-ID B positive
+and original source-error child process pass2/2/no skip/EXIT0:
+`/tmp/mote-joint-files-stream-composed.log/.exit`. This closes that concrete
+pre-consumer boundary; it is not a cross-account leak claim or all socket timing.
+
+Still OPEN before whole Imports/Files acceptance: image profile/attachment image
+pipeline equivalence (explicit image profile currently blocks rather than being
+silently ignored); partial-commit recovery/ambiguity/fault branches; import deletion
+original reclamation parity; full Memory per-recipe/batch progress; Files review
+proposals/acoustic samples/per-file overrides/reprocess/cancel/retry/forget and
+complete recording export. Current source checkpoint is not a compiled/final
+candidate, client consumer acceptance, required affected gate, or joint PR.
