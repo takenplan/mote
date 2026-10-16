@@ -12,6 +12,24 @@ import java.util.UUID
 internal class CentralImports(private val directory: File, private val cipher: ByteCipher) {
     private val state = CentralStateFile(directory, "import", cipher)
     fun pending(): JSONObject = state.read()
+    fun stagePortable(context: Context, uri: Uri, operationId: String? = null): JSONObject {
+        operationId?.let(UUID::fromString)
+        return stage(context, uri, "").apply { operationId?.let { put("requestId", it) }; put("kind", "portable") }.also(state::write)
+    }
+    fun sendPortable(client: CentralClient): JSONObject {
+        val saved = pending(); require(saved.getString("kind") == "portable")
+        val size = saved.getJSONObject("manifest").getLong("sizeBytes"); require(size in 1..MAX)
+        val bytes = java.io.ByteArrayOutputStream()
+        val total = ((size + PART - 1) / PART).toInt()
+        repeat(total) { part ->
+            val chunk = cipher.open(File(directory, "part-$part.enc").readBytes())
+            require(chunk.size.toLong() == minOf(PART.toLong(), size - bytes.size())); bytes.write(chunk)
+        }
+        require(bytes.size().toLong() == size)
+        val receipt = CentralPortable(client).importArchive(saved.getString("requestId"), JSONObject(bytes.toString(Charsets.UTF_8.name())))
+        if (receipt.getString("state") == "completed") discard()
+        return receipt
+    }
     fun stage(context: Context, uri: Uri, instruction: String): JSONObject {
         check(!pending().has("manifest")) { MoteI18n.text("请先重试或放弃待导入文件。") }
         directory.mkdirs(); directory.listFiles()?.filter { it.name.startsWith("part-") }?.forEach { it.delete() }
