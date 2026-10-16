@@ -618,13 +618,17 @@ else {
     handle('mote:permissions', async () => { if (process.platform === 'darwin') { await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); } });
     handle('mote:data-folder', async () => { await shell.openPath(dataDirectory); });
     handle('mote:export-metadata', async () => {
+      const selectedQueue=queue,expected=accountGeneration;
       const selected=await dialog.showSaveDialog(window!,{defaultPath:'mote-local-metadata.json'});
-      if(!selected.canceled&&selected.filePath)await writeFile(selected.filePath,JSON.stringify(queue.exportMetadata()),{mode:0o600});
+      if(expected!==accountGeneration)throw Error('Desktop account changed; export selection expired');
+      if(!selected.canceled&&selected.filePath)await writeFile(selected.filePath,JSON.stringify(selectedQueue.exportMetadata()),{mode:0o600});
     });
     handle('mote:export-queue', async () => {
+      const selectedQueue=queue,expected=accountGeneration;
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出已脱敏待上传队列（包含个人资料）"), defaultPath: `mote-queue-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'Mote queue archive', extensions: ['json'] }] });
+      if(expected!==accountGeneration)throw Error('Desktop account changed; export selection expired');
       if (selected.canceled || !selected.filePath) return { canceled: true };
-      await queue.exportArchiveFile(selected.filePath, value => backgroundJobs.progress('mote:export-queue', value));
+      await selectedQueue.exportArchiveFile(selected.filePath, value => backgroundJobs.progress('mote:export-queue', value));
       return { canceled: false, path: selected.filePath };
     });
     handle('mote:import-queue', () => serialize(async () => {

@@ -1,9 +1,9 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi, Status } from './contracts';
 
-let documentAccountGeneration:number|undefined;
+const documentBinding=ipcRenderer.invoke('mote:get-status',{}).then((status:Status)=>status.authorizationGeneration);
 async function invoke(channel:string,...args:unknown[]):Promise<any>{
-  if(documentAccountGeneration===undefined){const status=await ipcRenderer.invoke('mote:get-status',{});documentAccountGeneration=status.authorizationGeneration;}
+  const documentAccountGeneration=await documentBinding;
   return ipcRenderer.invoke(channel,{accountGeneration:documentAccountGeneration},...args);
 }
 const api: DesktopApi = {
