@@ -12,6 +12,7 @@ internal class CentralMcp(private val screens: CentralScreens) {
     private val api = screens.client
     private val target = ui.card()
     private var revision = 0L
+    private var renderRevision = 0L
     private fun current() = screens.ownsSelectedAccount() && ui.client === api
     private fun objects(values: JSONArray) = (0 until values.length()).map(values::getJSONObject)
     private fun connections(view: JSONObject): List<JSONObject> = objects(view.getJSONArray("domains"))
@@ -23,7 +24,7 @@ internal class CentralMcp(private val screens: CentralScreens) {
         }
     }
     private fun render(view: JSONObject, sources: JSONObject, selectedId: String = "") {
-        revision++; target.removeAllViews()
+        revision++; val rendered = ++renderRevision; target.removeAllViews()
         ui.text(MoteI18n.text("外部 MCP 连接"), NativeFontRole.SECTION, target)
         val configured = connections(view)
         val selector = Spinner(ui).apply {
@@ -96,9 +97,8 @@ internal class CentralMcp(private val screens: CentralScreens) {
         val name = ui.field(MoteI18n.text("来源名称"), MoteI18n.text("MCP 导入资料"), parent = create)
         val token = ui.field(MoteI18n.text("访问令牌（可选）"), password = true, parent = create)
         val id = "mcp-" + UUID.randomUUID().toString()
-        val preparedAt = revision
         ui.button(MoteI18n.text("保存并应用"), true, create) {
-            if (!current() || preparedAt != revision) return@button
+            if (!current() || rendered != renderRevision) return@button
             val url = endpoint.text.toString(); val label = name.text.toString(); val secret = token.text.toString()
             val value = JSONObject().put("connections", JSONArray(configured + JSONObject().put("id", id).put("url", url).put("token", secret).put("sourceIds", JSONArray().put(id))))
             ui.work(MoteI18n.text("正在保存…"), {

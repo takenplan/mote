@@ -431,6 +431,37 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun nativeMcpPreparationExplicitlySavesOwnedConfigurationAndPreservesExistingMaskedSecrets() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app)
+        fun configured():org.json.JSONArray {val domains=api.get("/api/configuration").getJSONArray("domains");return (0 until domains.length()).map(domains::getJSONObject).single {it.getString("id")=="mcpConnections"}.getJSONObject("saved").getJSONArray("connections")}
+        val before=configured();assertEquals(1,before.length());assertTrue(before.getJSONObject(0).getBoolean("token"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="来源与外部应用"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            lateinit var originalSave:android.widget.Button
+            scenario.onActivity {activity->
+                val inputs=views(activity.window.decorView).filterIsInstance<android.widget.EditText>()
+                inputs.single {it.hint.toString()=="MCP 地址"}.setText(fixture().getString("mcpUrl"))
+                inputs.single {it.hint.toString()=="来源名称"}.setText("Generated explicit native MCP source")
+                inputs.single {it.hint.toString()=="访问令牌（可选）"}.setText("GENERATED_A_EXTRA")
+                originalSave=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存并应用"};originalSave.performClick()
+            }
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val after=configured();assertEquals(2,after.length());val old=(0 until after.length()).map(after::getJSONObject).single {it.getString("id")=="same-connection"};assertTrue(old.getBoolean("token"))
+            val created=(0 until after.length()).map(after::getJSONObject).single {it.getString("id")!="same-connection"};assertTrue(created.getBoolean("token"))
+            val sourceId=created.getJSONArray("sourceIds").getString(0);assertEquals(sourceId,created.getString("id"))
+            val sources=api.get("/api/sources").getJSONArray("items");assertTrue((0 until sources.length()).map(sources::getJSONObject).any {it.getString("id")==sourceId&&it.getString("name")=="Generated explicit native MCP source"})
+            assertTrue(api.post("/api/connectors/mcp/discover",JSONObject().put("connectionId","same-connection")).getJSONArray("resources").getJSONObject(0).getString("name").contains("GENERATED_A"))
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity {originalSave.performClick()}
+            val bDomains=CentralAccess.requireClient(app).get("/api/configuration").getJSONArray("domains");assertEquals(1,(0 until bDomains.length()).map(bDomains::getJSONObject).single {it.getString("id")=="mcpConnections"}.getJSONObject("saved").getJSONArray("connections").length())
+        }
+    }
+
     @Test fun actualNativeOverviewReadsOwnedStatisticsAndCanonicalDeviceMetadata() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
