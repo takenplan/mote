@@ -4,18 +4,15 @@
     "error": "invalid_protocol_range"
   },
   {
-    "name": "same wire version",
+    "name": "retired Wire1 is rejected",
     "protocol": {
       "min": 1,
       "max": 1
     },
-    "expected": {
-      "min": 1,
-      "max": 1
-    }
+    "error": "incompatible_protocol"
   },
   {
-    "name": "new server retains v1",
+    "name": "server range includes current Wire2",
     "protocol": {
       "min": 1,
       "max": 2
@@ -26,12 +23,15 @@
     }
   },
   {
-    "name": "new server drops v1",
+    "name": "same current Wire2",
     "protocol": {
       "min": 2,
       "max": 2
     },
-    "error": "incompatible_protocol"
+    "expected": {
+      "min": 2,
+      "max": 2
+    }
   },
   {
     "name": "reversed range",
@@ -98,5 +98,13 @@
     "name": "array metadata",
     "protocol": [],
     "error": "invalid_protocol_range"
+  },
+  {
+    "name": "future server drops Wire2",
+    "protocol": {
+      "min": 3,
+      "max": 3
+    },
+    "error": "incompatible_protocol"
   }
 ]
