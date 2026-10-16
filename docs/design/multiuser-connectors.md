@@ -186,8 +186,9 @@ public M03 source resolved through `(user_id, instance_id, local_id)` in
 `connector_sources`. Consumers must not use adapter-local `lark-docs-*` IDs as
 public source identities. No source is created by this projection.
 
-For a Lark status-shaped task result exceeding the existing task-result budget,
-M10 retains the actual CLI probe/job fields and returns `statusInConnection:true`
+The Lark task-result budget uses actual UTF-8 bytes, including a check on the
+compact metadata. For an oversized Lark status-shaped result, M10 retains the
+actual CLI probe/job fields and returns `statusInConnection:true`
 in place of `selection` and `documentSync`. The same credential-bound
 `GET /api/connectors/:id` provides those complete durable fields. Its newly opened
 adapter has not probed CLI environment: consumers preserve the task's actual

@@ -204,10 +204,11 @@ export class ScopedConnectors {
   const encoded=JSON.stringify(canonical(input));this.options.db.prepare('UPDATE user_tasks SET input=? WHERE user_id=? AND task_id=?').run(encoded,task.user_id,task.task_id);this.options.db.prepare('UPDATE execution_steps SET input=? WHERE user_id=? AND id=?').run(encoded,task.user_id,task.task_id);
  }});}
  private safeResult(value:unknown,lark=false){
-  const json=JSON.stringify(value);if(json&&json.length<=24000)return value;
+  const json=JSON.stringify(value),status=lark&&value&&typeof value==='object'&&'selection' in value;
+  if(json&&(status?Buffer.byteLength(json):json.length)<=24000)return value;
   // The owned status reader already exposes the complete durable Lark scope
   // and document journal. Keep the actual CLI probe/job in the task budget.
-  if(lark&&value&&typeof value==='object'&&'selection' in value){const {selection:_,documentSync:__,...summary}=value as import('@mote/shared').LarkStatus;return {...summary,statusInConnection:true};}
+  if(status){const {selection:_,documentSync:__,...probe}=value as import('@mote/shared').LarkStatus,summary={...probe,statusInConnection:true};if(Buffer.byteLength(JSON.stringify(summary))>24000)throw new ConnectorError('connector_result_too_large',413);return summary;}
   return {completed:true};
  }
  private publicLarkStatus(context:UserContext,id:string,value:unknown){
