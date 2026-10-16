@@ -45,6 +45,15 @@ M07 runtime/C review found no additional confirmed P0/P1/P2. Final focused suite
 whole combination, fresh build/emitted process, required affected/Android and
 final remote head/base checks are still pending. CI remains disabled/unrun.
 
+The existing real MCP two-process test now chooses initialize-admin from the same
+source/emitted entry directory, matching the existing Ask process convention.
+Its unchanged source journey passes1/1,EXIT0,8955.905583ms,
+`/tmp/m11-bootstrap-source-process.log/.exit`; emitted initialization and listener
+must still be rerun after the final fresh build. This is test coverage preparation,
+not a production fix. Parent scheduling explicitly pauses M11 after this completed
+narrow operation, so the next module can use its slot while M07/M08 finish heavy
+checks. No final M11 gate or PR is claimed during that pause.
+
 ## Resumed common-contract representative B checkpoint
 
 PR135 documentation094b69d0c4d623a3b478ae4c05ee249b024ba73b is composed.
