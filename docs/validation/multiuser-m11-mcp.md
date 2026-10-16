@@ -6,23 +6,63 @@ Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
 this feature. Final accepted M07/M08 real query tools remain required.
 No mock Memory, Ask, connector or processing service proves them.
 
-## Executed development evidence
+## Current accepted-M10 protocol/source freeze
 
-| Command/evidence | Actual result |
+Authoritative runtime/test commit:
+`4175d4e9b9231d0741b14af4b4b8ebc6f099ded5`.
+It contains the accepted M10/M06 stack and the per-connection handle retirement
+repair. Subsequent documentation-only commits do not change tested inputs.
+
+| Exact final-code gate | Actual result |
 | --- | --- |
-| `npm ci --offline --ignore-scripts` | exit0; dependencies from existing local cache, no installation outside this checkout. |
-| `npm run build:libs` | exit0, `/tmp/m11-build-libs.log/.exit`. |
-| `npm run typecheck -w @mote/server` | exit0 after source epoch/identity implementation, `/tmp/m11-phase-typecheck.log/.exit`; final exact phase checks below supersede development receipts. |
-| `node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-mcp.test.ts apps/server/test/multiuser-auth.test.ts` | 29/29,0fail/cancel/skip,exit0; `/tmp/m11-expanded-first.log/.exit`; earlier phase before final domain/Material cases. |
-| `node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-mcp.test.ts apps/server/test/multiuser-mcp-process.test.ts` | 20/20,0fail/cancel/skip,exit0; `/tmp/m11-source-process-first.log/.exit`,20137ms. Actual index listener, SIGKILL/restart, real SDK and actual M06 source→Material. |
+| `node --import tsx --test --test-concurrency=2 --test-timeout=120000 apps/server/test/scope*.test.ts apps/server/test/multiuser*.test.ts` | **305/305**,0fail/cancel/skip,exit 0,138659ms; `/tmp/m11-4175-combined.log/.exit`. Includes all 23 current M11 tests (22 domain cases and one actual production index process). |
+| `npm run build -w @mote/server` | exit 0; `/tmp/m11-4175-server-build.log/.exit`. |
+| `npm run build -w @mote/web` | exit 0; `/tmp/m11-4175-web-build.log/.exit`, existing bundle-size warning. |
+| `MOTE_MCP_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" MOTE_CONNECTORS_PROCESS_ENTRY="$PWD/apps/server/dist/app.js" node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-mcp-process.test.ts apps/server/test/multiuser-connectors-process.test.ts` | Fresh emitted actual M11 index/SDK/SIGKILL and M10 HTTP two-process smokes **2/2**,exit 0; `/tmp/m11-4175-compiled-smoke.log/.exit`. |
+| `node scripts/check-scope-contracts.mjs` and `git diff --check` | both exit 0; `/tmp/m11-4175-scope.log/.exit`, `/tmp/m11-4175-diff.log/.exit`. |
+| Independent M07 review of exact 417 | **4/4**,0fail/cancel/skip,exit 0; `/tmp/mote-m07-review-m11-protocol.md`, `/tmp/m07-independent-m11-4175.log/.exit`. No actionable P1/P2 in the reviewed protocol/source scope. |
+| `npm run check:affected -- --base origin/codex/mote-multiuser-integration` | **exit 0** on the actual full retry; `/tmp/m11-4175-affected-retry.log/.exit`. Desktop 456/456; Server 2261 passed and one existing opt-in skip; Web 469/469; Agent 317 passed and one existing opt-in skip; Diagnostics 5/5; Shared 190/190; root 81/81; client 4/4; central runner passed. Android **329/329**, 70 suites, no failures/errors/skips, 25 tasks actually executed, 38s; `/tmp/m11-4175-android-junit.json`. |
 
-Initial typecheck caught optional session narrowing and unknown configuration
-types; repaired without assertions that weaken identity. Initial test clients
-omitted Ingress3 and queried Fastify listeningOrigin before binding; those
-invocations failed and are not acceptance. No production protocol check was
-relaxed. Expanded source revision/head and lifecycle fences were added before
-their new regressions passed. Loopback tests require sandbox-authorized listener
-access, use synthetic credentials and temporary isolated SQLite/files only.
+The first actual full affected run exited 1: the checkout had used offline
+`npm ci --ignore-scripts`, leaving Electron's binary absent. Its desktop hidden
+window fixture could not start (455 passed, one failed). Server 2261 passed with one existing opt-in
+skip, Web 469 passed, Agent 317 passed with one existing opt-in skip, Shared 190 passed with no
+failures, but the complete command failed and Android was not reached. Logs
+`/tmp/m11-4175-affected.log/.exit` preserve that failure. No production source or
+check was changed/skipped. The existing local cached Electron 41.10.7 zip was
+verified against the installed package's checksum
+`7497a1f398c7bcac208fce96c73d297b1d63924624361a1a21930cd666cc4bbc` and extracted
+only into this checkout's ignored node_modules. The actual hidden Electron
+fixture then passed **2/2**,exit 0 (`/tmp/m11-electron-cache-repair.log/.exit`),
+reporting zero shown windows/focuses. The exact required command was rerun on
+unchanged clean 417, using existing JDK21/Android SDK, in its sole heavy slot.
+
+M07's exact `a6bc94c43e34ce91439cfeff6ad669264610d1d1` bindRead contract has
+also been independently reviewed, without composing an unaccepted module into
+this runtime. Original transitive-source migration probe passed 1/1,exit 0.
+A new genuine provider-backed page/delete probe initially exposed a P1 at
+c0aedbbf: an earlier deleted Memory was returned after a later provider await.
+At exact a6, the same semantic probe passes 1/1,exit 0,leaked=false/outcome=blocked;
+only its temporary cleanup guard changed. Three further default-policy/history
+export/concurrent-export regressions pass 3/3,exit 0. Full review and evidence:
+`/tmp/mote-m11-review-m07.md`, `/tmp/m11-review-m07-migration.log/.exit`,
+`/tmp/m11-review-m07-page-delete.log/.exit` (preserved failure),
+`/tmp/m11-review-m07-page-delete-fixed.log/.exit`,
+`/tmp/m11-review-m07-a6-delta.log/.exit`.
+These are scoped interface/delta reviews, not final M07 or M11 module acceptance.
+
+Remaining: accepted actual M07/M08 composition, all 21 legacy MCP tools' real
+query/disclosure/activity behavior, final expanded SDK matrix, final independent
+whole-module review and final-code full gates. See the
+[detailed query composition plan](../design/multiuser-mcp-query.md). No own
+feature push/Draft PR is claimed before the requested module gates.
+Remote integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`,
+PR133 `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`, PR134
+`7572b573b03437ff743652c13181b9fdcf251fda`; own remote branch remains absent.
+Checks and Component checks remain `disabled_manually`; CI is unrun. Existing
+release workflows were only read and left unchanged. No protected branch,
+sibling source/existing DB, live credentials/data/provider/model or deployment
+was changed.
 
 ## Executable journey matrix
 
@@ -44,91 +84,28 @@ access, use synthetic credentials and temporary isolated SQLite/files only.
 | Material dependency pagination | Mixed-source Materials are removed in SQL before ordering/limit/cursor publication; narrower same-user source scopes reject a broader Material cursor. |
 | HTTP disconnect | Actual outbound import HTTP client abort reaches SDK cancellation; held result leaves no capture. |
 
-Additional narrow defense runs:5/5 exit0
-`/tmp/m11-defense-delta.log/.exit`; real HTTP cancel/dependency cases3/3 exit0
-`/tmp/m11-http-cancel-delta.log/.exit`; exact source-scope Material pagination
-regression1/1 exit0 `/tmp/m11-material-scope-cursor.log/.exit`.
-The first64-case adjacent combination had63 passes and one architecture-inventory
-failure after adding the reply handle to `registerUserRoute`; the exact existing
-surface declaration was updated while preserving M01 mixed ownership/status.
-That failed invocation is not counted as passed. The Material page query was
-also tightened to apply the complete allowed source set before LIMIT and bind
-that set in its signed cursor, eliminating post-page filtering.
+## Historical development receipts
 
-## Gates still required
+Initial 634 protocol/source freeze passed 64/64 adjacent auth/ingress/MCP/scope
+and actual index tests,exit 0 (`/tmp/m11-frozen-adjacent.log/.exit`), plus fresh
+Server/Web builds and emitted process 1/1,all 0. Accepted-M10 merge56 passed 304/304
+and emitted 2/2,all 0. These precede the per-connection repair and are historical;
+current 417 combination of 305/305 and full affected above supersede them.
 
-The phase needs an independent code review and a committed precise final-code
-receipt. Full M11 additionally requires actual accepted M07/M08 production
-composition, the entire legacy read/tool/resource/prompt exposure audit, expanded
-Memory/Ask disclosure/model-input/revocation tests, final actual combined suite,
-fresh Server/Web builds, emitted-code smoke and
-`npm run check:affected -- --base origin/codex/mote-multiuser-integration`.
-M10 owns the sole full-affected/Android slot; M11 has not run either concurrently.
-No Draft PR or complete M11 acceptance is claimed by this phase record.
-
-## Accepted M10 composition and connection-instance repair
-
-Own clean feature merge `56bcb1cf6e46304254318fed659efe861113c6ae` includes
-accepted PR134 full `7572b573b03437ff743652c13181b9fdcf251fda`, verified with
-`git ls-remote` and fetched by exact PR ref. It preserves both domain registrars,
-the M06/M10 source formats/processor registry, M05 savepoint/onAdmitted seams,
-and closes MCP before execution before connector/processing/plugin workers.
-No remote or local integration/main branch was moved.
-
-Exact56 all-scope/multiuser combination passed304/304,0fail/cancel/skip,exit0,
-144506ms (`/tmp/m11-56bcb1-combined.log/.exit`). Fresh Server/Web/scope/diff
-all0; fresh emitted M11 index+SDK/SIGKILL and M10 HTTP two-process smoke2/2
-exit0 (`/tmp/m11-56bcb1-compiled-smoke.log/.exit`). These completed before the
-following connection-instance repair and remain historical evidence only.
-
-Self-audit identified whole-user configuration fingerprint invalidation would
-unnecessarily cancel unchanged same-user sibling connections. The repair captures
-and validates each exact connection fingerprint and retires only removed/changed
-handles. Domain generation still fences account-wide deletion. Two held real SDK
-connections now demonstrate refreshing first rejects only its late result while
-second commits both resources. A/B, single-connection refresh and this new case
-3/3 passed,exit0 (`/tmp/m11-connection-isolation-fix.log/.exit`), typecheck0
-(`/tmp/m11-connection-isolation-typecheck.log/.exit`). Final new-code full
-combination/build/smoke receipts follow;304 is not claimed as repaired acceptance.
-
-## Frozen protocol/source receipts
-
-Exact runtime/test/design freeze:
-`63427a7798680bc60bf12cb135527bd27dd2648f`, clean independent checkout
-`task-13/mote`, feature `codex/mote-multiuser-m11-mcp`.
-Subsequent evidence-only Markdown does not change runtime/test inputs.
-
-| Exact frozen command | Result and evidence |
-| --- | --- |
-| `node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-auth.test.ts apps/server/test/multiuser-ingress.test.ts apps/server/test/multiuser-mcp.test.ts apps/server/test/multiuser-mcp-process.test.ts apps/server/test/scope*.test.ts` | **64/64**,0fail/cancel/skip,exit0,28757ms; `/tmp/m11-frozen-adjacent.log/.exit`. Includes all22 M11 cases (21 domain scenarios plus actual production process). This is the actual M01/M02/M03/M06 source composition, not the still-missing full M07/M08/M10 combination. |
-| `npm run typecheck -w @mote/server` | exit0, `/tmp/m11-frozen-typecheck.log/.exit`. |
-| `npm run build -w @mote/server` | exit0, `/tmp/m11-frozen-server-build.log/.exit`. |
-| `npm run build -w @mote/web` | exit0, `/tmp/m11-frozen-web-build.log/.exit`; existing bundle-size warning. |
-| `MOTE_MCP_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-mcp-process.test.ts` | Fresh emitted production index/real SDK/SIGKILL smoke **1/1**,0fail/cancel/skip,exit0,1349ms; `/tmp/m11-frozen-compiled-smoke.log/.exit`. |
-| `node --import tsx --test --test-concurrency=1 --test-name-pattern='remote fetch denies\|malformed remote HTTP status' apps/server/test/connectors.test.ts` | Existing reused transport compatibility **2/2**,0fail/cancel/skip,exit0; `/tmp/m11-frozen-network-compat.log/.exit`. |
-| `node scripts/check-scope-contracts.mjs` | exit0, `/tmp/m11-frozen-scope.log/.exit`; exact existing http surface preserved as M01 mixed. |
-| `git diff --check` | exit0, `/tmp/m11-frozen-diff.log/.exit`. |
-| `npm run check:affected -- --base origin/codex/mote-multiuser-integration --dry-run` | exit0, `/tmp/m11-phase-affected-dry2.log/.exit`; selects check:local and Android. **Dry run only**, not executed checks. First dry run failed because this fresh clone lacked the remote-tracking base; fetching exact remote refs fixed that, without moving any protected branch. |
-
-Final read-only remote check: integration
-`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`, PR133
-`470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`; own remote branch absent, no PR
-created/pushed. Workflow API confirms Checks/Component checks
-`disabled_manually`, existing three release workflows active/untouched. No CI
-was run, enabled or claimed passed. M11 has not run full affected or Android;
-the peer's heavy slot and final actual downstream module dependencies are
-respected. Independent M11 review remains pending parent scheduling.
-
-CI Checks/Component checks remain disabled and have not run. No workflow setting
-was changed. Real accounts/data/credentials, external services/models, physical
-devices, deployment and M16 complete export/delete/restore are unrun. No main or
-integration change, PR merge, sibling worktree change or new execution chat.
+Initial test clients omitted Ingress3 and requested Fastify listeningOrigin before
+binding; they failed and were corrected without relaxing production checks.
+One adjacent run had 63 passes and one scope-inventory failure after adding reply to
+registerUserRoute; the exact mixed-ownership declaration was corrected, not
+skipped. The first affected dry run lacked the freshly cloned base ref; fetching
+its exact remote-tracking ref corrected that. Dry runs were never counted as
+actual checks. Per-connection configuration self-audit then replaced whole-user
+handle invalidation, with a durable two-held-connection regression before 417.
 
 ## Independent peer review performed by M11
 
-M10 exact41d2775307db5afecbb5b40b81b5fd8c8a0b9b9b real M06 composition:
-7/7 actual joint/upgrade/reference tests,6/6 secrets/admission regressions,exit0.
-Final delta2ae03155ef766655f4996977e4eedcc0a2177e9d subjectless Gmail:
-real HTTP two-process smoke1/1,exit0. No confirmed remaining P0/P1/P2 in reviewed
+M10 exact 41d2775307db5afecbb5b40b81b5fd8c8a0b9b9b real M06 composition:
+7/7 actual joint/upgrade/reference tests, 6/6 secrets/admission regressions,exit 0.
+Final delta 2ae03155ef766655f4996977e4eedcc0a2177e9d subjectless Gmail:
+real HTTP two-process smoke 1/1,exit 0. No confirmed remaining P0/P1/P2 in reviewed
 scope. Full report `/tmp/mote-m11-review-m10.md`; no sibling source/existing DB
 writes. This is M10 review evidence, not an independent review of M11 itself.

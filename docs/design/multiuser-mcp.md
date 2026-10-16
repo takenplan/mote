@@ -53,6 +53,15 @@ identity selectors are rejected before dispatch; responses disable caching.
 
 ## Actual source surfaces and remaining query surfaces
 
+The protocol/source phase proves host user/source isolation. Final MCP query
+acceptance also requires the actual M08 query-visible projection, including
+Material replacement of assembled raw source records and the existing archive,
+screenshot and Coding disclosure rules. In particular, source-domain
+`mote_items`, `mote_history` and literal `mote_search` must be rebound to that
+production projection before full M11 is shipped. Their phase receipts do not
+prove the complete query behavior. The [remaining query composition plan](multiuser-mcp-query.md)
+inventories all 21 original tools and the source resource individually.
+
 | Surface | Protocol/source phase |
 | --- | --- |
 | `mote_put_item` | Real immutable M03 source intake; existing explicit source only; no source creation or external mutation. Archive input enters real automatic M06 processing. |
