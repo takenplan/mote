@@ -332,3 +332,16 @@ GREEN: 5/5, exit 0, 6766.278291ms, full-owner scans 2, measured page 7.069ms
 (`/tmp/m07-public-A-restore-perf-fixed.log`). This bounds repeated scan count,
 not a claim about production-scale throughput. Server typecheck exits 0.
 Final same-SHA A/B/C, full affected/Android and PR gates remain pending.
+
+The exact-read optimization's first version missed a held-reader direct derived
+Material read before any global refresh. Peer M11 identified this boundary;
+independent RED `90b7a4c9e4ba0de9b41d610eacd464a7fbf52cff` records 1/2 passed,
+exit 1 (`/tmp/m07-public-A-direct-dependent-red.log`). This is a new optimization
+regression, not a legacy-flow bug. The minimal correction follows the target's
+exact revision input ancestors in the existing SQL graph before selecting unsafe
+current roots; existing withdrawal cascades remain authoritative. Same reader
+before first search and after real restore now refuses the known dependent.
+Fresh Coding positives, both retained/history/restore cases and ordinary page
+cost: 5/5, exit 0, 6647.40075ms; full-owner scans remain 2
+(`/tmp/m07-public-A-ancestor-fixed.log`). Scan instrumentation distinguishes an
+owner-wide query from a parameter-bound target query without replacing SQL.
