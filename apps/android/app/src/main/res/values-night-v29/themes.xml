@@ -1,0 +1,3 @@
+<resources>
+    <style name="AppTheme" parent="AppThemeDark"><item name="android:windowDisablePreview">true</item></style>
+</resources>

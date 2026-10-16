@@ -116,7 +116,7 @@ internal class CentralContent(
         fun headerAction(label: String, description: String = label, tonal: Boolean = false, action: () -> Unit): TextView {
             val item = TextView(this).apply {
                 text = MoteI18n.text(label); contentDescription = MoteI18n.text(description); MoteUi.type(this, NativeFontRole.ACTION, medium = true); gravity = Gravity.CENTER
-                setTextColor(if (tonal) MoteUi.accent else MoteUi.muted)
+                MoteUi.textColor(this, if (tonal) NativeColorRole.ACCENT else NativeColorRole.MUTED)
                 isFocusable = true; minHeight = moteDp(MoteTheme.controlHeight); background = MoteUi.clickable(this@CentralContent, if (tonal) MoteTheme.surface else Color.TRANSPARENT, MoteUi.actionRadius, outline = tonal, strokeColor = MoteUi.controlBorder)
                 setOnClickListener { action() }
             }

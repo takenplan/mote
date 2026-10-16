@@ -33,6 +33,7 @@ class NativeUiPackInstrumentedTest {
     private val context get() = instrumentation.targetContext
     private lateinit var original: CollectorConfig
     private lateinit var originalBinding: NativeUiBinding
+    private var appearance = AppearancePreference.AUTO
     private var language = "system"
     private val themes = mutableListOf<NativeUiIdentity>()
     private val layouts = mutableListOf<NativeUiIdentity>()
@@ -43,6 +44,7 @@ class NativeUiPackInstrumentedTest {
         require(!settings.enabled && context.queue().depth() == 0 && QuickNotes.draft(context).read() == NoteDraft() && context.localSources().sources().isEmpty())
         original = settings.read(); originalBinding = NativeUiPacks.registry.activeBinding(); language = MoteI18n.preference()
         require(original.token.isBlank())
+        appearance = MoteAppearance.preference(); instrumentation.runOnMainSync { MoteAppearance.select(context,AppearancePreference.DARK) }
         MoteI18n.select(context, "zh-CN")
         settings.save(original.copy(server = "", token = "", syncMode = "manual"), confirmCentralEndpoint = true)
         CentralSession.get(context).select("")
@@ -53,6 +55,7 @@ class NativeUiPackInstrumentedTest {
         themes.forEach(NativeUiPacks.registry::removeTheme); layouts.forEach(NativeUiPacks.registry::removeLayout)
         Settings(context).save(original, confirmCentralEndpoint = true)
         MoteI18n.select(context, language)
+        instrumentation.runOnMainSync { MoteAppearance.select(context,appearance) }
     }
     private fun views(root: View): List<View> = buildList { add(root); if (root is ViewGroup) repeat(root.childCount) { addAll(views(root.getChildAt(it))) } }
     private fun visible(activity: Activity) = views(activity.window.decorView).filter { it.isShown }

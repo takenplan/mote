@@ -88,9 +88,9 @@ internal object MoteUi {
 
     fun field(field: EditText): EditText = field.apply {
         NativePresentationStyles.remember(this, "field") { value -> (value as EditText).apply {
-            MoteUi.textColor(this, NativeColorRole.INK); setHintTextColor(MoteTheme.muted); minHeight = context.moteDp(MoteTheme.controlHeight); minimumHeight = minHeight
+            MoteUi.textColor(this, NativeColorRole.INK); highlightColor = MoteTheme.tint; setHintTextColor(MoteTheme.muted); minHeight = context.moteDp(MoteTheme.controlHeight); minimumHeight = minHeight
         } }
-        textColor(this, NativeColorRole.INK); setHintTextColor(muted); type(this, NativeFontRole.BODY)
+        textColor(this, NativeColorRole.INK); highlightColor = MoteTheme.tint; setHintTextColor(muted); type(this, NativeFontRole.BODY)
         backgroundTintList = null
         background = shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.CONTROL_BORDER)
         setPadding(context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem), context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem))
@@ -173,6 +173,10 @@ internal object MoteUi {
             }
             is EditText -> field(view)
             is ProgressBar -> progress(view)
+            is CheckedTextView -> {
+                type(view, NativeFontRole.BODY); textColor(view, NativeColorRole.INK)
+                NativePresentationStyles.bind(view, "checkmark") { (it as CheckedTextView).checkMarkTintList = ColorStateList.valueOf(MoteTheme.accent) }
+            }
             is TextView -> if (view.getTag(R.id.mote_type) == null) {
                 val dialogTitle = view.resources.getIdentifier("alertTitle", "id", "android")
                 type(view, if (view.id == dialogTitle) NativeFontRole.TITLE_MOBILE else NativeFontRole.BODY, view.id == dialogTitle)

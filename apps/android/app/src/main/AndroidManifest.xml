@@ -19,30 +19,30 @@
         android:theme="@style/AppTheme" android:allowBackup="false" android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules" android:usesCleartextTraffic="${cleartextAllowed}" android:networkSecurityConfig="@xml/network_security_config"
         android:supportsRtl="false">
-        <activity android:name=".StorageStatisticsActivity" android:exported="false"/>
-        <activity android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
+        <activity android:configChanges="uiMode" android:name=".StorageStatisticsActivity" android:exported="false"/>
+        <activity android:configChanges="uiMode" android:name=".MainActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.MAIN" /><category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
-        <activity android:name=".CentralActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".CalendarActionsActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".FileContentActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".SourcesActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".FileTaskActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
-        <activity android:name=".AppUpdatesActivity" android:exported="false" />
-        <activity android:name=".ConnectionActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
+        <activity android:configChanges="uiMode" android:name=".CentralActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:configChanges="uiMode" android:name=".CalendarActionsActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:configChanges="uiMode" android:name=".FileContentActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:configChanges="uiMode" android:name=".SourcesActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:configChanges="uiMode" android:name=".FileTaskActivity" android:exported="false" android:windowSoftInputMode="adjustResize" />
+        <activity android:configChanges="uiMode" android:name=".AppUpdatesActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".ConnectionActivity" android:exported="true" android:windowSoftInputMode="adjustResize">
             <intent-filter><action android:name="android.intent.action.VIEW" /><category android:name="android.intent.category.DEFAULT" /><category android:name="android.intent.category.BROWSABLE" /><data android:scheme="mote" android:host="connect" /></intent-filter>
         </activity>
-        <activity android:name=".ConnectionScanActivity" android:exported="false" />
-        <activity android:name=".StorageActivity" android:exported="false" />
-        <activity android:name=".ActivityStatsActivity" android:exported="false" />
-        <activity android:name=".BackupActivity" android:exported="false" />
-        <activity android:name=".SyncQueueActivity" android:exported="false" />
-        <activity android:name=".SyncRecoveryActivity" android:exported="false" />
-        <activity android:name=".CompressionPreviewActivity" android:exported="false" />
-        <activity android:name=".CaptureRecordsActivity" android:exported="false" />
-        <activity android:name=".LogViewerActivity" android:exported="false" />
-        <activity android:name=".BulkDedupeActivity" android:exported="false" />
-        <activity android:name=".ImageDedupeDiagnosticsActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".ConnectionScanActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".StorageActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".ActivityStatsActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".BackupActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".SyncQueueActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".SyncRecoveryActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".CompressionPreviewActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".CaptureRecordsActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".LogViewerActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".BulkDedupeActivity" android:exported="false" />
+        <activity android:configChanges="uiMode" android:name=".ImageDedupeDiagnosticsActivity" android:exported="false" />
         <service android:name=".ProjectionService" android:exported="false" android:foregroundServiceType="mediaProjection" />
         <service android:name=".MediaCollectionService" android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" android:exported="true" android:label="Mote 通知、媒体与设备事件">
             <intent-filter><action android:name="android.service.notification.NotificationListenerService" /></intent-filter>
