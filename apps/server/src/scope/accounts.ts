@@ -38,9 +38,10 @@ export class Accounts implements IdentityVerifier {
       account_epoch INTEGER NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires_at INTEGER NOT NULL,revoked_at INTEGER,
       csrf_hash TEXT,metadata TEXT NOT NULL,created_at INTEGER NOT NULL,parent_id TEXT REFERENCES auth_credentials(id));
       CREATE INDEX IF NOT EXISTS auth_credentials_user ON auth_credentials(user_id);
+      CREATE TABLE IF NOT EXISTS auth_account_deletions(user_id TEXT PRIMARY KEY REFERENCES auth_accounts(user_id),operation_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS auth_attempts(attempt_key TEXT PRIMARY KEY,started_at INTEGER NOT NULL,attempts INTEGER NOT NULL);`);
   }
-  private transaction<T>(run:()=>T):T{this.db.exec('BEGIN IMMEDIATE');try{const result=run();this.db.exec('COMMIT');return result;}catch(e){this.db.exec('ROLLBACK');throw e;}}
+  private transaction<T>(run:()=>T):T{const nested=this.db.isTransaction,name='account_'+randomUUID().replaceAll('-','');this.db.exec(nested?'SAVEPOINT '+name:'BEGIN IMMEDIATE');try{const result=run();this.db.exec(nested?'RELEASE '+name:'COMMIT');return result;}catch(e){if(nested){this.db.exec('ROLLBACK TO '+name);this.db.exec('RELEASE '+name);}else this.db.exec('ROLLBACK');throw e;}}
   private account(userId:string){return this.db.prepare('SELECT * FROM auth_accounts WHERE user_id=?').get(userId) as Account|undefined;}
   private accountNamed(username:string){return this.db.prepare('SELECT * FROM auth_accounts WHERE username=?').get(username) as Account|undefined;}
   private credential(id:string){return this.db.prepare('SELECT * FROM auth_credentials WHERE id=?').get(id) as Credential|undefined;}
@@ -69,8 +70,17 @@ export class Accounts implements IdentityVerifier {
   listAccounts(context:UserContext,authority:UserContextAuthority){authority.assertAdministrator(context);return {items:(this.db.prepare('SELECT * FROM auth_accounts ORDER BY created_at,user_id').all() as Account[]).map(summary)};}
   private bump(a:Account){this.db.prepare('UPDATE auth_accounts SET authorization_epoch=authorization_epoch+1 WHERE user_id=?').run(a.user_id);this.db.prepare('UPDATE auth_credentials SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(this.clock(),a.user_id);}
   disable(context:UserContext,authority:UserContextAuthority,userId:string,disabled:boolean){return this.transaction(()=>{authority.assertAdministrator(context);const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);if(a.disabled===Number(disabled))return summary(a);
+    if(!disabled&&this.db.prepare('SELECT 1 FROM auth_account_deletions WHERE user_id=?').get(userId))throw new AuthError('account_deleted',409);
     if(disabled&&a.administrator&&Number(this.db.prepare('SELECT count(*) n FROM auth_accounts WHERE administrator=1 AND disabled=0').get()!.n)<=1)throw new AuthError('last_administrator',409);
     this.bump(a);this.db.prepare('UPDATE auth_accounts SET disabled=? WHERE user_id=?').run(Number(disabled),userId);return summary(this.account(userId)!);
+  });}
+  /** Explicit administrator deletion is the durable control-plane approval.
+   * Keep only an inaccessible identity tombstone; never reuse an old user ID. */
+  beginDeletion(context:UserContext,authority:UserContextAuthority,userId:string,operationId:string){return this.transaction(()=>{
+    authority.assertAdministrator(context);const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);
+    const prior=this.db.prepare('SELECT operation_id FROM auth_account_deletions WHERE user_id=?').get(userId);if(prior){if(prior.operation_id!==operationId)throw new AuthError('deletion_conflict',409);return;}
+    this.disable(context,authority,userId,true);this.db.prepare('INSERT INTO auth_account_deletions VALUES(?,?,?)').run(userId,operationId,this.clock());
+    this.db.prepare("UPDATE auth_accounts SET password_salt='',password_hash='' WHERE user_id=?").run(userId);
   });}
   async resetPassword(context:UserContext,authority:UserContextAuthority,userId:string,password:string){authority.assertAdministrator(context);const record=await passwordRecord(password);return this.transaction(()=>{authority.assertAdministrator(context);const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);this.bump(a);this.db.prepare('UPDATE auth_accounts SET password_salt=?,password_hash=? WHERE user_id=?').run(record.salt,record.hash,userId);return {reset:true};});}
   private reserveAttempt(username:string,ip:string){
@@ -85,7 +95,7 @@ export class Accounts implements IdentityVerifier {
     if(this.activeHashes>=4)throw new AuthError('login_busy',429);
     this.reserveAttempt(username,ip);this.activeHashes++;
     const a=this.accountNamed(username);
-    try{const result=await derive(password,a?.password_salt??'generated-unknown-account-salt');if(!a||!timingSafeEqual(result,Buffer.from(a.password_hash,'hex'))||a.disabled)throw new AuthError('invalid_login',401);return a;}
+    try{const result=await derive(password,a?.password_salt??'generated-unknown-account-salt');if(!a||a.disabled||a.password_hash.length!==128||!timingSafeEqual(result,Buffer.from(a.password_hash,'hex')))throw new AuthError('invalid_login',401);return a;}
     finally{this.activeHashes--;}
   }
   async login(username:string,password:string,ip:string,kind:'web'|'client',durationMs:number){
