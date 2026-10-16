@@ -429,3 +429,14 @@ M04/M05/M06/SQL/FS/backup entry points with a synthetic model transport. No
 production change was needed for this scenario. Unknown external results, image
 profile parity, remaining Memory states and the previously listed Files gaps
 remain OPEN; this case does not replace a final candidate gate.
+
+
+Generic upload erasure seam: a real M03 original worker is held before its actual
+prepareArchive transport while account A is deleted. M16 returns result_unknown
+and retains A physical root until settlement. Equal upload-ID B commits and its
+bytes remain readable. Release makes retired A commit401; explicit existing
+admin erasure retry completes and A physical root is absent, B bytes unchanged.
+1/1/no skip/EXIT0, 1.03s in /tmp/mote-joint-import-upload-erasure.log/.exit.
+This proves the local live-activity erasure barrier for the new generic-upload
+path; it is not an external provider unknown-result settlement assertion. No
+production change was needed, and final affected checks remain pending.
