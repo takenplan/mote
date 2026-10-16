@@ -195,3 +195,72 @@ then own push/Draft PR/attachment/remote head-base verification. No final gate o
 whole-module completion is claimed. Finite coordination details are preserved
 in `/tmp/mote-m13-finite-closeout.md`; primary capability ledger above remains
 authoritative for OPEN rows.
+
+## Request-model and plugin/control increment (not final gates)
+
+- M15 db88 composed as7f2fe173. Original control SSR RED41337d12 →cde70676
+  GREEN3/3; same-ID model ownership REDa39db8c0 →705d0207 combined5/5 EXIT0,
+  `/tmp/m13-model-owner-{red,green}.log/.exit`. M14 bounded readonly review
+  `/tmp/mote-m14-review-m13-705d.md` has no confirmed P0/P1/P2; no rerun claimed.
+- Actual hidden IAB alternate-model query at705d completed and archived. The
+  later read-only provider/default queries lost their transport. After parent
+  steering, readonly git/artifact/browser checks succeeded, original archived
+  query remained visible and the old fixture HTTP listener was gone. No replay.
+  Provider model/default post-state remains unverified; this is environment
+  evidence, not a model-isolation failure or a passed provider assertion.
+- Public c6 standalone omitted the full branch's exact pure `web-assets.ts`
+  scanner allowance. Independent16cdf1619c89340b75c5c91de2e5c722773a1e09 adds
+  only that single file; exact tracked tree scanner[] EXIT0 in
+  `/tmp/m13-public-scope-16-complete.log/.exit`. First archive lacked
+  fixtures/legacy-app.ts and exited1, retained separately; no broad allowance.
+- Actual M09 metadata/masked-reference edit contract RED8cc78a64 0/2 EXIT1
+  `/tmp/m13-plugin-metadata-valid-red.log/.exit` →ff91b6f8 GREEN2/2 EXIT0
+  `/tmp/m13-plugin-metadata-green.log/.exit`. Same-ID A/B plus stale CAS,
+  no hidden references in HTTP view, checked versus unsupported capabilities.
+- Original PluginCenter + production Fastify/Accounts/M09/SQLite RED54238eb9
+  crashed on the old view shape;71a2230c GREEN1/1 in
+  `/tmp/m13-plugin-page-green.log/.exit`. This is a scoped-host migration gap,
+  not an old single-owner production defect.
+- Missing original M07 control REDf4ed4df1 and missing durable owner preparation
+  REDd1e16e92 retained in `/tmp/m13-memory-control-red.log/.exit` and
+  `/tmp/m13-memory-reload-red.log/.exit`. Actual backend + original renderer
+  control GREEN4/4 `/tmp/m13-plugin-memory-green.log/.exit`; expanded actual
+  reload→verification→activation and open-stop A/B switch GREEN1/1
+  `/tmp/m13-plugin-memory-lifecycle.log/.exit`. Generated empty binding tests
+  do not prove nonempty external-provider body migration.
+- Reused the original modal and retained legacy PluginCenter characterization:
+  `/tmp/m13-plugin-memory-modal.log/.exit`11/11 EXIT0. First new i18n check
+  failed on a missing key; exact English/Android catalog sync then
+  `/tmp/m13-plugin-i18n-green.log/.exit` EXIT0 (8365 messages).
+
+Final affected, all builds at the final composition, real browser plugin/admin
+journeys and all OPEN original-capability rows remain outstanding. No PR or
+remote final head has been created. M12 handoff is still denied pending explicit
+user authorization; M16 lifecycle is an explicit owned dependency.
+
+### Memory reader characterization (after 9f305c81)
+
+The canonical-Material-ref expectation in the first added test was invalid. Both `/tmp/m13-memory-anchor-red.log` and `/tmp/m13-memory-anchor-valid-red.log` failed only that expectation; following the actual returned `capture:<M07 evidence UUID>` through `/context/read` already succeeded with A's text. The uncommitted exploration that changed backend output was withdrawn; no `memory.ts`/`ask.ts` production change was shipped. `/tmp/m13-memory-anchor-green.log` therefore is not a delivered-fix result.
+
+Corrected characterization runs the real M07 publication chain, follows the declared context reader, verifies raw `/captures/<same evidence UUID>` is 404 and B cannot read A's Memory/Material. Exact command `node --import tsx --test --test-name-pattern='Memory evidence navigation retains' apps/server/test/multiuser-memory.test.ts`, Node24 with synthetic local HTTP model fixture, standard approval: 1/1 EXIT0, `/tmp/m13-memory-reader-characterization.log` and `.exit`. This proves the reader boundary, not original Memories page closure.
+
+### Original Memories consumer increment
+
+Existing M07 real fixture was extracted unchanged into `test/fixtures/scoped-memory-host.ts` for reuse by the original React page test; normalized pre-extraction function SHA256 `dc71c512f6c2c92065d299e6162c6bb132f05bdf26a0a8e6d2fca7b782dfa063`, no fixture body/semantic assertion change. Generated A/B use equal Material IDs, real Ingress publication, local model HTTP, independent review and Memory commit.
+
+- c191368c renderer RED: actual published memory absent because ordinary read sent `includeStale=true` (400), old job/recipe/queue endpoints also observed. `/tmp/m13-memory-page-red.log` EXIT1. bdba5655 published query + direct evidence/context reader GREEN1/1 `/tmp/m13-memory-page-reader-green.log` EXIT0.
+- Expanded Memory nested evidence valid RED e22c55f8: actual callback emitted raw `capture:<M07 evidence UUID>` instead of keeping context reader; `/tmp/m13-memory-nested-reader-valid-red.log` EXIT1. First `/tmp/m13-memory-nested-reader-red.log` only observed pending renderer initialization, not a product RED. c6ee7453 nested reader GREEN1/1 `/tmp/m13-memory-nested-reader-green.log` EXIT0.
+- fc82f5d0 job-history RED: original page requested legacy `/memory-jobs`; `/tmp/m13-memory-job-consumer-red.log` EXIT1. Scoped job history now reads actual M07 signed pages, and progress shows persisted batches/tasks/publication IDs without inventing legacy input-plan counts. Actual renderer opens completed receipt, direct/nested evidence, then B with A detail retired: `/tmp/m13-memory-jobs-renderer-green.log` 1/1 EXIT0. This is a bounded read/history increment; stale audit, manual selection, correction/integration and queue settings remain separate open mappings.
+- i18n including synchronized Android catalog: `/tmp/m13-memory-i18n.log` EXIT0, 8368 messages. No full affected/build claim for this increment yet.
+
+### 0cc composed build and actual IAB increment
+
+Shared build, Web tsc/Vite, server tsc and scope all EXIT0 at runtime `0cc7311af17463f17ba3b8664741bb9ac8f6b1ef`: `/tmp/m13-plugins-shared-build.log`, `/tmp/m13-plugins-web-build.log`, `/tmp/m13-plugins-server-typecheck.log`, `/tmp/m13-plugin-composed-scope.log` with corresponding `.exit`. M09/plugin-ingress/Web-plugin/Android transport four-file run: 35 total, 34 pass, one `listen EPERM` before assertions, EXIT1 `/tmp/m13-plugin-ingress-regressions.log`. Exact failed real-HTTP shutdown characterization under standard approval: 1/1 EXIT0 `/tmp/m13-plugin-loopback-characterization.log`. The first command remains failed, not relabeled.
+
+Fresh distinct IAB run used existing available in-app browser3, generated accounts/temp SQLite/local SSE and generated package transport; Web bundle 0cc, runtime e295e02b fixture-only addition. Receipt `/tmp/m13-iab-plugins-model-0cc.md` and `/tmp/m13-iab-plugins-model-receipt.json`: original Ask personal temporary model ID reaches all three A-only provider requests, Memory/chat default unchanged; administrator package preview/install/uninstall/reinstall; A nonempty masked reference edit/check/enable/disable; old open A editor retires on B switch in another tab, reload discovers B empty; B Memory pause persists; generated B MCP read credential issue/hide/revoke. Trace binds all mutations to original account credentials, not B-adopted A operations. Runner close acknowledged and exited0, generated resources removed. This is separate from the interrupted prior IAB query receipt and does not fill its missing provider observation retroactively. No Web Electron action was executed.
+
+M14 bounded static independent review exact705d..72c3 `/tmp/mote-m14-review-m13-72c3.md`: no confirmed P0/P1/P2; not a substitute for final renderer/integration gates. Public plugin/control freeze65a contract and scope check recorded in `/tmp/mote-m13-public-plugin-contract.md` and `/tmp/m13-public-plugin-scope.log` EXIT0.
+
+Memory increment original characterization `manual-memory.test.ts` + `memory-recipes.test.ts`: 5/5 EXIT0 `/tmp/m13-memory-original-characterization.log`. First Web typecheck found a JSX `unknown` condition (implementation type defect, no runtime test failure); fixed with explicit error presence check. Rerun `/tmp/m13-memory-web-typecheck-green.log` EXIT0. Neither is final affected acceptance.
+
+Delayed login-ticket versus a second tab's B login was characterized through actual M01/browser Web Locks and onSend gates: `/tmp/m13-iab-ticket-cross-tab.md`. At observed gates old A remained signed-out and absent after release; B positive reached ready with only its private note. The static suspicion did not reproduce, so authentication runtime was not changed. Initial non-PTY host stdin issue, exact fixture PID stop and cleanup are recorded separately. Final fixture close acknowledged/EXIT0; temporary second tab closed.

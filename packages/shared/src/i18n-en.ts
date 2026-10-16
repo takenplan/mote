@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "已删除": "Deleted",
+  "生成 {0} 条记忆": "Created {0} memories",
+  "已生成的批次": "Persisted batches",
   "当前准入代次 {0}": "Current admission generation {0}",
   "内置记忆方案": "Built-in memory plan",
   "外部结果待确认 {0}": "External results awaiting confirmation {0}",

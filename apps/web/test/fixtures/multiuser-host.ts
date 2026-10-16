@@ -7,9 +7,11 @@ import {noteCapture} from '@mote/shared';
 import assert from 'node:assert/strict';
 import {generatedWebProvider} from './multiuser-provider.js';
 import {defaultModelSettings} from '../../../server/src/model-settings.js';
+import {generatedScopedPluginRelease} from '../../../server/test/fixtures/scoped-plugin-release.js';
 
 const root=mkdtempSync(join(tmpdir(),'mote-m13-renderer-host-')),password='Generated-M13-account-password-01';
-const host=await buildApp({dataDir:root});
+const pluginRelease=generatedScopedPluginRelease();
+const host=await buildApp({dataDir:root},{pluginReleaseTransport:pluginRelease.transport});
 let provider:Awaited<ReturnType<typeof generatedWebProvider>>|undefined;
 const gates=new Map<string,{entered:boolean;release:()=>void;promise:Promise<void>}>();
 const requests:{method:string;url:string;credentialId?:string;body?:unknown}[]=[];
@@ -53,6 +55,7 @@ process.on('message',async(message:any)=>{
   else if(message.command==='release-provider'){provider?.release();result=true;}
   else if(message.command==='provider-requests')result=provider?.requests;
   else if(message.command==='model-selection')result=await call(users[message.owner].token,'/api/models/selection/'+(message.feature??'chat'));
+  else if(message.command==='ticket')result=await call(users[message.owner].token,'/api/login/ticket','POST',{});
   else if(message.command==='handoff')result=await call(undefined,'/api/login/requests','POST',{serverUrl:'http://localhost:'+port,deviceId:'same-approval-device',deviceName:'Generated approval device',platform:'other',challenge:createHash('sha256').update('x'.repeat(43)).digest('hex')});
   else if(message.command==='poll')result=await call(undefined,'/api/login/poll','POST',{id:message.requestId,verifier:'x'.repeat(43)});
   else if(message.command==='data')result=await call(users[message.owner].token,'/api/captures?limit=200');

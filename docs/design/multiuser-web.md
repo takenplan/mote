@@ -61,14 +61,14 @@ scoped host has no legacy runtime/store mounted. Audit is against the actual M08
 | Imports / confirmation / local upload queue | `/imports*`, `/import-uploads*`, `/import-source-packs` | M03 ingress upload + M06 `/processing`, originals/artifacts/derivations, M05 operations | OPEN. Old ImportJob/instruction/confirmation/resume response shape is absent. Need M06 read/command contract mapping before thin adapter; do not invent confirmation policy or mount old ImportManager. |
 | Files / audio / review / speakers / export | `/files*`, `/archived-files*` | M03 original content + M06 typed processing artifacts | OPEN genuine missing read/review/export projections (M06). No fake empty file list or dropped review actions. |
 | Processing/activity | `/processing` workflow list, `/work-activity`, `/operations` | M05 actual `/operations`; M06 processing configuration/submission | Operation component reused; old workflow WorkActivity aggregate and processing-list shape remain OPEN, not interchangeable contracts. |
-| Ask/conversations/query progress | `/conversations*`, `/query-runs*`, `/query`, work activity | M08 same conversation/run routes with strict Ask input; canonical evidence reader | Existing consumer largely same; removed per-request global model override per M04. Actual IAB+real M08/Harness+generated SSE I/O/material tools/conversation/citation/refresh passed. A held provider→B positive→releaseA passed. Per-request model controls and WorkActivity projection remain OPEN. |
-| Insights/history/report | `/insights`, `/insight-runs`, `/skills`, artifacts | M08 actual insight routes/artifacts; fixed shared skill engine | Actual `/skills` uses bundled catalog; actual missing run scope RED06564f97→3529e18b. IAB report iframe/text/citation/history refresh passed. Per-request model controls remain OPEN. |
+| Ask/conversations/query progress | `/conversations*`, `/query-runs*`, `/query`, work activity | M08 same conversation/run routes with strict Ask input; canonical evidence reader | Existing consumer largely same; per-request selection uses M15 db88 owned modelReference and personal model ID override through M04. Actual IAB+real M08/Harness+generated SSE I/O/material tools/conversation/citation/refresh passed. A held provider→B positive→releaseA passed. Original model controls restored cde70676/705d with same-ID account retirement RED/GREEN; provider-model post-read during one IAB run remains unverified. WorkActivity projection remains OPEN. |
+| Insights/history/report | `/insights`, `/insight-runs`, `/skills`, artifacts | M08 actual insight routes/artifacts; fixed shared skill engine | Actual `/skills` uses bundled catalog; actual missing run scope RED06564f97→3529e18b. IAB report iframe/text/citation/history refresh passed. Original preset control restored through the same owned-reference seam; bounded M14 review9659..705d found no confirmed P0/P1/P2. |
 | Memory list/correction/delete | `/memories*`, `/memory-jobs*` | M07 memories same; `/memory/jobs*`, `/memory/recipes`, `/memory` view | OPEN M13 rename/shape adaptation with M07 schema; use real provider facade, no raw store body. |
-| Memory settings/recipes/bindings/integration | `/memory-settings`, `/memory-recipe-settings`, `/memory-spaces*`, `/memory-recipes` | M04 memory domain, M07 `/memory` control, binding prepare/activate/cancel, M09 plugin snapshots | OPEN older per-source recipe/budget/settings response shapes need M07 mapping; never restore active authority from local cached draft. |
-| Plugins / personal instances / admin package install | `/plugins`, instances, resolve/install/uninstall | M09 same package and instance endpoints but strict expectedRevision/user snapshots; administrator package mutation | OPEN response/CAS and admin entry compatibility; current personal model editor must not hand global profile IDs to user instances. |
+| Memory settings/recipes/bindings/integration | `/memory-settings`, `/memory-recipe-settings`, `/memory-spaces*`, `/memory-recipes` | M04 memory domain, M07 `/memory` control, binding prepare/activate/cancel, M09 plugin snapshots | Original plugin-page M07 pause/resume/stop and prepare/read/activate/cancel mapped to actual receipts; durable preparation discovery is read-only and owner-bound. Recipes, manual selections, settings and complete progress mapping remain OPEN; never restore authority from a local draft. |
+| Plugins / personal instances / admin package install | `/plugins`, instances, resolve/install/uninstall | M09 same package and instance endpoints but strict expectedRevision/user snapshots; administrator package mutation | Owned M09 editor metadata, explicit masked-reference preservation under CAS, personal/shared reference choices, explicit capability/source/history grants and separate administrator catalog revision implemented ff91/71a2. Actual original React page + actual M09/M07 isolation/edit/reload/activation chain passes; administrator install/uninstall renderer and nonempty provider migration remain OPEN. |
 | Agent inspector / startup/context trace | `/agent-view/*`, `/context/*` | M08 scoped catalog/read/search/retrieve/bundle/status; startup/runs/events availability must be checked | OPEN actual consumer audit; missing trace/startup projections need M08 contract, not synthetic runs. |
 | Todos / calendar action approvals | `/todos*`, `/actions*`, `/devices`, native calendar bridge | M12 final scoped Todos/Actions + M03 device metadata | OPEN M12 implementation and final exact SHA. Must test an already-open review through A->B/revoke/disable and original target/hash/epoch fences. |
-| Storage/encryption/backup/index | `/content-storage*`, `/vault*`, `/storage-statistics`, backup/restore | No equivalent scoped management surface in589 | OPEN genuine backend capability gap, owner M02/M03 + final integration scope. Admin identity does not grant private backup access. |
+| Storage/encryption/backup/index | `/content-storage*`, `/vault*`, `/storage-statistics`, backup/restore | No equivalent scoped management surface in589 | OPEN genuine backend capability gap, owner M16 for personal export/instance backup/restore/delete; encryption/index and instance diagnostics still need explicit scoped contracts. Admin identity does not grant private backup access. |
 | Diagnostics/runtime/update/deployment settings | `/diagnostics*`, `/runtime*`, `/updates*`, global status | Explicit instance management needed; not in589 scoped routes | OPEN backend capability gap, final integration/instance administration; never relabel as personal or expose paths/secrets. |
 
 No OPEN row is counted as M13 complete or silently deleted. Thin adapters must
@@ -95,3 +95,20 @@ confirmed P0/P1/P2 in that bounded increment; no independent test rerun is claim
 Public reader-only freeze c6b092eda5404dde2f99ea601e2f3ef13c55d386 sits above
 final M11 plus M14 source CAS; M14/M15 can compose it without Web/native/M12 code.
 It is not whole-module acceptance.
+
+## Increment after9659
+
+M15 db88 per-request model lease seam is composed as7f2fe173. Original Ask and
+Insight controls were restored; same-ID A→B component selection REDa39db8c0
+→705d0207 GREEN5/5. M14 bounded review9659..705d has no confirmed P0/P1/P2.
+One actual IAB alternate-model query completed and archived, but transport loss
+prevented provider model/default post-state reads. A readonly recovery confirmed
+the rendered archived answer and clean705d; HTTP host was no longer listening.
+No query was blindly replayed and the missing post-state proof is not counted.
+
+M16 owns personal export/instance backup/restore/delete lifecycle. Existing
+`features/storage.tsx` still selects `ContentStorage` and `Vault`. Entries are
+GET `/export`, GET `/export-bundle?mode=metadata|data`, POST `/import`,
+POST `/index/retry`, GET/PUT `/content-storage`, POST `/content-storage/decrypt`
+and its `/cancel`. They remain explicit dependencies; M13 creates no second
+backup implementation. M14 collector snapshot recovery is a separate capability.

@@ -8371,5 +8371,8 @@
   "使用账号登录全部功能，或在浏览器中批准采集设备。": "Sign in with your account for all features, or approve a collection device in your browser.",
   "设备授权只允许采集；请使用用户名和密码登录后打开私人资料。": "Device approval permits collection. Sign in with your username and password to open private content.",
   "将本机未绑定资料归入此账号": "Assign unbound local records to this account",
-  "整理记忆": "Organize memories"
+  "整理记忆": "Organize memories",
+  "已生成的批次": "Persisted batches",
+  "生成 {0} 条记忆": "Created {0} memories",
+  "已删除": "Deleted"
 }
