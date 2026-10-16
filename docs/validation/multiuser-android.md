@@ -752,3 +752,39 @@ daemon was observed; parent-prioritized Theme's new explicit short Android
 window remains separate from M15. M15 kept all heavy work released. A fresh
 generated source-host for native Imports now listens on loopback only. No real
 Central data, model output or credentials were read or copied into Git.
+
+### Generic Imports actual native acceptance and acknowledgement repair
+
+Test-only6f618976 records two valid JVM REDs: a changed retained original
+descriptor and a wrong admission ID were both accepted and consumed local
+parts/intent. Three tests total,1 pass/2 fail, EXIT1,
+`/tmp/m15-imports-resumed-testapk-ack-red.log/.exit`; raw XML is retained at
+`/tmp/m15-imports-ack-valid-red.xml`. Production54ad0039177f17355c157f529b5598b69901ffa5
+reuses the existing encrypted parts/journal and fixed original client. It checks
+local part lengths/digest, actual received/PUT part acknowledgements, exact
+archived file ID/hash/length/path/MIME and the original admission ID/files before
+clearing staging. A wrong or missing acknowledgement preserves the original
+request and bytes. Same3/3/no skip GREEN; fixture app/test APK BUILD SUCCESSFUL
+8 seconds/91 tasks11 executed, `/tmp/m15-imports-ack-first-green-build.log/.exit`.
+
+Actual original native choose-file→private staging→preview→confirmation→saved
+workflow is now1/1/no skip/EXIT0,13.234 seconds,
+`/tmp/m15-native-imports-second.log/.exit`. The generated original exceeds4MiB,
+produces exactly two uploaded parts, and a real accepted202 response is dropped.
+Recreation retains encrypted pending bytes; B's equal-ID completed job and
+view receive no A retry. Explicit A return retries identical original/file/request
+IDs without repeating parts. No Capture is query-visible before confirmation.
+The original confirmation dialog then publishes actual canonical receipts and
+preserves the archived file's exact bytes/hash. M01/M03/M04/M05/M06 are real;
+only model HTTP returns fixed generated answers. Memory processing is explicitly
+disabled in this fixture, never counted as completed by import success.
+
+First native attempt reached A's real private preview but its B inline comparison
+failed503 because the test-only request observer assumed archivedFileIds on every
+request. `/tmp/m15-native-imports-resumed-first.log/.exit` is retained as fixture
+failure. Fixture-only909dd250 accepts inline comparison bodies; the identical
+compiled app/test APK then passed. No production code changed to hide it. The
+recovery environment had no existing emulator, so the original readonly5562 was
+restarted after Theme's explicit release; boot completed10608ms. No system
+permission expansion or physical-device access occurred. Independent54ad review
+and complete latest affected/Android/consumer gates remain pending.
