@@ -296,7 +296,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                     for (j in 0 until citations.length()) {
                         val citation = citations.getJSONObject(j)
                         ui.text(citation.optString("excerpt"), parent = target)
-                        ui.button(MoteI18n.text("查看原文依据") + " · " + citation.optString("appName"), parent = target) { library.captureEvidence(citation.getString("id")) }
+                        ui.button(MoteI18n.text("查看原文依据") + " · " + citation.optString("appName"), parent = target) { library.queryEvidence(citation.getString("id")) }
                     }
                 }
                 turn.optJSONObject("error")?.let { ui.text(it.optString("message"), parent = target) }

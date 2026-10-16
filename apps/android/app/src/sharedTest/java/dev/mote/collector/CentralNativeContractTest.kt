@@ -116,7 +116,7 @@ class CentralNativeContractTest {
                 else -> if (attempt == 1) throw java.io.IOException("Generated lost response") else 200 to JSONObject()
                     .put("version",3).put("state","received").put("deploymentId",owner.deploymentId).put("userId",owner.userId).put("sourceId",sourceId).put("batchId",batchId)
                     .put("id",SourceRules.hash(JSONArray().put(owner.deploymentId).put(owner.userId).put(sourceId).put(batchId).toString()))
-                    .put("captures",JSONArray().put(JSONObject().put("id",captureId).put("duplicate",false).put("original",JSONObject().put("ref","original:"+"a".repeat(64)).put("sourceId",sourceId).put("captureId",captureId).put("hash",manifest.getString("sha256")).put("bytes",file.length()))))
+                    .put("captures",JSONArray().put(JSONObject().put("id",captureId).put("duplicate",false).put("original",JSONObject().put("ref","original:"+SourceRules.hash(JSONArray().put(owner.userId).put(sourceId).put(captureId).put(manifest.getString("sha256")).put("image/png").put("archive").toString())).put("mime","image/png").put("retention","archive").put("sourceId",sourceId).put("captureId",captureId).put("hash",manifest.getString("sha256")).put("bytes",file.length()))))
             }
         })
         assertThrows(java.io.IOException::class.java) { CentralAttachments.upload(client, file, "fixture.png", "image/png", "fixture-phone", { 1000L }) }

@@ -53,7 +53,7 @@ internal class Ingress3Client(
             if (status !in 200..299 || value == null) throw FileTransportFailure(status, "Ingress3 compressed request failed")
             check(current()); value
         } else send("POST", path, JSONObject().put("batchId", batch).put("items", JSONArray(events)))
-        Ingress3Receipt.require(binding, sourceId, batch, events.map { it.getString("id") }, receipt)
+        Ingress3Receipt.captures(binding, sourceId, batch, events, receipt)
         return receipt
     }
     fun item(source: LocalSource, body: JSONObject): JSONObject {
@@ -101,12 +101,28 @@ internal object Ingress3Receipt {
         check(captures.length() == ids.size && ids.toSet().size == ids.size)
         for (index in ids.indices) { val ack = captures.getJSONObject(index); check(ack.optString("id") == ids[index] && ack.opt("duplicate") is Boolean) }
     }
+    private fun original(owner: AccountBinding, source: String, capture: String, hash: String, bytes: Long, mime: String, retention: String, value: JSONObject) {
+        val ref = "original:" + SourceRules.hash(JSONArray().put(owner.userId).put(source).put(capture).put(hash).put(mime).put(retention).toString())
+        check(value.optString("ref") == ref && value.optString("sourceId") == source && value.optString("captureId") == capture &&
+            value.optString("hash") == hash && value.optLong("bytes", -1) == bytes && value.optString("mime") == mime && value.optString("retention") == retention)
+    }
+    fun captures(owner: AccountBinding, source: String, batch: String, events: List<JSONObject>, receipt: JSONObject) {
+        require(owner, source, batch, events.map { it.getString("id") }, receipt)
+        for ((index, event) in events.withIndex()) {
+            val ack = receipt.getJSONArray("captures").getJSONObject(index)
+            if (event.has("imageBase64")) {
+                val bytes = Base64.getDecoder().decode(event.getString("imageBase64"))
+                original(owner, source, event.getString("id"), Ingress3Client.hash(bytes), bytes.size.toLong(), event.getString("imageMime"), "snapshot", ack.getJSONObject("original"))
+            } else check(!ack.has("original"))
+        }
+    }
     fun file(owner: AccountBinding, source: String, manifest: JSONObject, receipt: JSONObject) {
         val id = captureId(source, manifest.getJSONObject("item"))
         require(owner, source, Ingress3Client.fileBatch(manifest), listOf(id), receipt)
         if (manifest.has("sha256") && !manifest.getJSONObject("item").optBoolean("deleted")) {
-            val original = receipt.getJSONArray("captures").getJSONObject(0).getJSONObject("original")
-            check(original.optString("hash") == manifest.getString("sha256") && original.optLong("bytes", -1) == manifest.getLong("sizeBytes") && original.optString("sourceId") == source && original.optString("captureId") == id && original.optString("ref").matches(Regex("original:[a-f0-9]{64}")))
+            val descriptor = receipt.getJSONArray("captures").getJSONObject(0).getJSONObject("original")
+            val item = manifest.getJSONObject("item")
+            original(owner, source, id, manifest.getString("sha256"), manifest.getLong("sizeBytes"), item.optString("mimeType", "application/octet-stream"), if (item.getString("layer") == "snapshot") "snapshot" else "archive", descriptor)
         }
     }
 }

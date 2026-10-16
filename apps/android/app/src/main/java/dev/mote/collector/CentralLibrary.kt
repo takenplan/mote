@@ -161,29 +161,30 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
     }
     fun captureEvidence(id: String) = evidence(CentralEvidenceReference.capture(id))
-    fun evidence(reference: String, offset: Int = 0) {
+    fun queryEvidence(reference: String, offset: Int = 0) = evidence(CentralEvidenceReference.normalize(reference), offset, queryVisible = true)
+    fun evidence(reference: String, offset: Int = 0, queryVisible: Boolean = false) {
         require(reference.isNotBlank() && reference.length <= 4096)
         val materialRef = Regex("^material:(mat_[a-f0-9]{64})(?:@([a-f0-9]{64}))?$").matchEntire(reference)
-        if (materialRef != null) { material(materialRef.groupValues[1], materialRef.groupValues[2].takeIf { it.isNotBlank() }); return }
+        if (!queryVisible && materialRef != null) { material(materialRef.groupValues[1], materialRef.groupValues[2].takeIf { it.isNotBlank() }); return }
         val captureId = CentralEvidenceReference.captureId(reference)
-        if (captureId != null) { capture(captureId); return }
+        if (!queryVisible && captureId != null) { capture(captureId); return }
         val api = client
         ui.work(MoteI18n.text("正在读取原文…"), {
-            api.post("/api/context/read", JSONObject().put("refs", JSONArray().put(reference)).put("offset", offset).put("length", 4000))
+            CentralEvidenceReference.readQuery(api, reference, offset)
         }) { result ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val item = result.optJSONArray("items")?.optJSONObject(0)
             if (item == null) { ui.text(MoteI18n.text("资料不存在或已删除。")); return@work }
             ui.text(item.optString("title"), NativeFontRole.TITLE_MOBILE); ui.text(item.optString("text"))
             val range = item.optJSONObject("textRange")
-            if (range != null && !range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { evidence(reference, range.getInt("nextOffset")) }
+            if (range != null && !range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { evidence(reference, range.getInt("nextOffset"), queryVisible) }
             val refs = item.optJSONArray("evidenceRefs") ?: JSONArray()
-            for (i in 0 until refs.length()) ui.button(MoteI18n.text("查看原始记录") + " · " + refs.getString(i).takeLast(8)) { evidence(refs.getString(i)) }
+            for (i in 0 until refs.length()) ui.button(MoteI18n.text("查看原始记录") + " · " + refs.getString(i).takeLast(8)) { evidence(refs.getString(i), queryVisible = queryVisible) }
         }
     }
     private fun capture(id: String) {
         val api = client
-        ui.work(MoteI18n.text("正在读取原文…"), { api.get("/api/capture-browser/" + enc(id)) }) { row ->
+        ui.work(MoteI18n.text("正在读取原文…"), { api.get("/api/captures/" + enc(id)) }) { row ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt")); ui.text(row.optString("ocrText"))
             val metadata = row.optJSONObject("metadata")
@@ -456,7 +457,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         paged("/api/insights", ui.card()) { row, card ->
             ui.text(row.optString("answer"), parent = card)
             val citations = row.optJSONArray("citations") ?: JSONArray()
-            for (i in 0 until citations.length()) ui.button(MoteI18n.text("查看原文依据"), parent = card) { captureEvidence(citations.getJSONObject(i).getString("id")) }
+            for (i in 0 until citations.length()) ui.button(MoteI18n.text("查看原文依据"), parent = card) { queryEvidence(citations.getJSONObject(i).getString("id")) }
         }
     }
     private fun image(path: String, parent: LinearLayout) {

@@ -47,7 +47,7 @@ internal object CentralNotes {
     fun acknowledge(store: CentralNoteStore, client: CentralClient, note: JSONObject, receipt: JSONObject) {
         val ingress = client.ingress(note.getString("deviceId"), note.getString("deviceName"))
         val source = "android-capture-${SourceRules.hash(note.getString("deviceId")).take(32)}"
-        Ingress3Receipt.require(ingress.binding, source, Ingress3Client.batchId(JSONArray().put(capture(note))), listOf(note.getString("id")), receipt)
+        Ingress3Receipt.captures(ingress.binding, source, Ingress3Client.batchId(JSONArray().put(capture(note))), listOf(capture(note)), receipt)
         store.acknowledge(note.getString("id"), JSONObject().put("id", note.getString("id")))
     }
 }
