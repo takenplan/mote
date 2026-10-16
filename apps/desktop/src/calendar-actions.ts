@@ -7,6 +7,7 @@ import {moteActionMarker,calendarEventSchema,calendarDescription,type ActionProp
 import {calendarHelper} from './source-calendar';
 import {validateServerUrl} from './config';
 import type {Config} from './contracts';
+import {DESKTOP_PROTOCOL_HEADERS} from './account';
 export interface CalendarActionIO {request:(path:string,body?:unknown)=>Promise<any>;native:(command:'calendar-permission'|'calendar-create'|'calendar-change',input?:unknown)=>Promise<any>;read:(key:string)=>Promise<string|undefined>;write:(key:string,value:string)=>Promise<void>}
 /** Native ledger is written before creation; a crash can only reconcile, never blindly insert again. */
 const executionQueues=new Map<unknown,Promise<unknown>>();
@@ -33,7 +34,7 @@ export class CalendarActions {
 export function nativeCalendarActions(config:Config,helper:string,directory:string){
  const origin=validateServerUrl(config.serverUrl),root=join(directory,'calendar-actions',createHash('sha256').update(origin+config.deviceId).digest('hex'));
  return new CalendarActions(config,{
-  async request(path,body){const r=await fetch(origin+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(30000),headers:{Authorization:`Bearer ${requireConnectionToken(config)}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!r.ok)throw Error(moteText("中央日程操作失败，请刷新或重新授权"));return r.json();},
+  async request(path,body){const r=await fetch(origin+path,{method:body?'POST':'GET',redirect:'error',signal:AbortSignal.timeout(30000),headers:{...DESKTOP_PROTOCOL_HEADERS,'X-Mote-Ingress-Version':'3',Authorization:`Bearer ${requireConnectionToken(config)}`,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined});if(!r.ok)throw Error(moteText("中央日程操作失败，请刷新或重新授权"));return r.json();},
   native:(command,input)=>calendarHelper(helper,command,input),
   async read(key){try{return await readFile(join(root,key),'utf8');}catch(e){if((e as NodeJS.ErrnoException).code==='ENOENT')return;throw e;}},
   async write(key,value){await mkdir(root,{recursive:true,mode:0o700});const path=join(root,key);await writeFile(path+'.tmp',value,{mode:0o600,flush:true});await rename(path+'.tmp',path);},
