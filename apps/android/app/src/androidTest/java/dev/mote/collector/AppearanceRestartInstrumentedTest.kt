@@ -16,7 +16,8 @@ class AppearanceRestartInstrumentedTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val arguments = InstrumentationRegistry.getArguments()
         val context = instrumentation.targetContext
-        require(arguments.getString("appearanceFixture") == "true")
+        org.junit.Assume.assumeTrue(arguments.getString("appearanceFixture") == "true" &&
+            arguments.getString("appearanceRestartExpected") != null && arguments.getString("appearanceRestartSelect") != null)
         require(context.packageName == "dev.mote.collector.dev" && Build.FINGERPRINT.contains("emu64a"))
         require(!Settings(context).enabled && Settings(context).read().token.isBlank() && context.queue().depth() == 0 && context.localSources().sources().isEmpty() && QuickNotes.draft(context).read() == NoteDraft())
         val expected = AppearancePreference.valueOf(requireNotNull(arguments.getString("appearanceRestartExpected")).uppercase())
