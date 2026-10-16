@@ -6,8 +6,10 @@ provider publication contracts. The production builder installs MemoryHost
 before starting execution. It consumes real M06 Material publication inside the
 M05 transaction; no legacy private Store or additional scheduler is constructed.
 
-This is an implementation freeze awaiting final independent delta review,
-combined checks and Draft PR. It is not completed module acceptance.
+Feature readiness, independent review, final source/emitted/affected receipts and
+remaining external limits are recorded in
+[the validation ledger](../validation/multiuser-m07-memory.md#final-feature-receipts).
+Integration/main merges remain a separately authorized action.
 
 ## Identity, evidence and read capabilities
 
