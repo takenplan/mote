@@ -65,8 +65,9 @@ export function checkProductionImports(directory=root){
   // M05 reuses the pure WeakMap failure-context projection. It opens no store,
   // installs no legacy service and accepts no provider prose.
   allowed.add(sourceRoot+'/execution-failures.ts');
-  // M03 reuses immutable chunk preparation/durable replacement without a Store.
-  for(const path of ['content-encryption.ts','asset-work.ts'])allowed.add(sourceRoot+'/'+path);
+  // M03 reuses immutable chunk preparation/durable replacement and the original
+  // pure capture byte/count constants; none imports or opens a legacy Store.
+  for(const path of ['content-encryption.ts','asset-work.ts','capture-limits.ts'])allowed.add(sourceRoot+'/'+path);
   // M04 uses the original configuration and pure model/usage contracts.
   for(const path of ['config-service.ts','model-settings.ts','usage-metrics.ts','i18n.ts'])allowed.add(sourceRoot+'/'+path);
   // M09's adapted package catalog and worker/Cordis lifecycle have no private

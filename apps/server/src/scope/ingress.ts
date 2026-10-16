@@ -2,7 +2,7 @@ import {ScopedImportAttribution,importDeclarationSchema} from './import-attribut
 import {createHmac,timingSafeEqual,randomUUID} from 'node:crypto';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
-import {captureSchema,sourceItemSchema,sourceIdSchema,sourceConnectionSchema,fileRevisionSchema,FILE_PART_BYTES,type CaptureInput,type SourceItem} from '@mote/shared';
+import {heartbeatSchema,captureSchema,sourceItemSchema,sourceIdSchema,sourceConnectionSchema,fileRevisionSchema,FILE_PART_BYTES,type CaptureInput,type SourceItem} from '@mote/shared';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {ScopedRuntime} from './http.js';
 import {ScopeError} from './baseline.js';
@@ -84,7 +84,20 @@ export class IngressHost{
    sourceContext:(id:string,version?:number)=>{source(id);return data().sourceContext(id,version);},
    configureSourceContext:(id:string,value:unknown)=>{source(id);return sql.transaction(()=>{source(id);return data().updateSourceContext(id,value);});},
    sourceHead:(id:string,externalId:unknown)=>{source(id);return {revision:data().sourceItem(id,z.string().min(1).max(1000).parse(externalId))?.revision??null};},
-   registerDevice:(value:unknown)=>{const input=z.object({id:sourceIdSchema,name:z.string().min(1).max(200),platform:z.enum(['android','macos','windows','linux','import'])}).strict().parse(value);if(sourceIds||deviceId&&input.id!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>{sql.run('INSERT INTO ig_devices VALUES($user,?,?) ON CONFLICT(user_id,id) DO UPDATE SET json=excluded.json',input.id,JSON.stringify(input));return input;});},
+   registerDevice:(value:unknown)=>{const input=z.object({id:sourceIdSchema,name:z.string().min(1).max(200),platform:z.enum(['android','macos','windows','linux','import'])}).strict().parse(value);if(sourceIds||deviceId&&input.id!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>{const prior=sql.get('SELECT json FROM ig_devices WHERE user_id=$user AND id=?',input.id),record={...(prior?JSON.parse(String(prior.json)):{}),...input};sql.run('INSERT INTO ig_devices VALUES($user,?,?) ON CONFLICT(user_id,id) DO UPDATE SET json=excluded.json',input.id,JSON.stringify(record));return input;});},
+   heartbeat:(value:unknown)=>{
+    const input=heartbeatSchema.parse(value);if(sourceIds||deviceId&&input.deviceId!==deviceId)throw new ScopeError('invalid_identity',403);
+    return sql.transaction(()=>{const heartbeat={...input,lastSeenAt:new Date().toISOString()};sql.run('INSERT INTO ig_devices VALUES($user,?,?) ON CONFLICT(user_id,id) DO UPDATE SET json=excluded.json',input.deviceId,JSON.stringify(heartbeat));return {ok:true};});
+   },
+   reconcile:(id:string,value:unknown)=>{
+    const input=z.object({ids:z.array(z.string().uuid()).max(100)}).strict().parse(value);sourceIdSchema.parse(id);if(sourceIds||deviceId&&id!==deviceId)throw new ScopeError('invalid_identity',403);
+    const items=input.ids.map(captureId=>{
+     const row=sql.get('SELECT source_id FROM ig_capture_scopes WHERE user_id=$user AND capture_id=?',captureId);
+     let state:'present'|'unavailable'='unavailable';
+     if(row){try{const binding=source(String(row.source_id)),capture=data().capture(captureId);if(binding.deviceId===id&&capture.deviceId===id)state='present';}catch(error){if(!(error instanceof PrivateDataError)&&!(error instanceof ScopeError))throw error;}}
+     return {id:captureId,state};
+    });assert();return {checkedAt:new Date().toISOString(),items};
+   },
    devices:()=>{if(deviceId||sourceIds)throw new ScopeError('invalid_identity',403);return {items:sql.all('SELECT json FROM ig_devices WHERE user_id=$user ORDER BY id').map(row=>JSON.parse(String(row.json)))};},
    receiveCaptures:(sourceId:string,id:string,values:unknown[],importDeclaration?:unknown)=>{
     const inputs=z.array(captureSchema).min(1).max(500).parse(values);
