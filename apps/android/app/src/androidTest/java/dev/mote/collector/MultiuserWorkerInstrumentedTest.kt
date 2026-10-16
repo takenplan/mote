@@ -195,11 +195,12 @@ class MultiuserWorkerInstrumentedTest {
             fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
             ready();click("提取记忆");ready();click("开始提取");ready()
             scenario.onActivity {activity->val fields=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>();val selected=fields.firstOrNull {it.tag=="material:"+material.getString("materialId")+"@"+material.getString("revision")};assertNotNull("Manual extraction must offer the selected canonical Material revision instead of the old global start route",selected);selected!!.isChecked=true}
-            click("提交所选资料");ready()
+            api.post("/api/test/m15/memory-admissions")
+            click("提交所选资料");ready();click("重试同一请求");ready()
+            val sent=api.get("/api/test/m15/memory-admissions").getJSONArray("items");assertEquals(2,sent.length());assertEquals(sent.getJSONObject(0).toString(),sent.getJSONObject(1).toString())
+            val request=sent.getJSONObject(0);assertEquals(1,request.getJSONArray("materialIds").length());assertEquals(material.getString("materialId"),request.getJSONArray("materialIds").getString(0));assertEquals(material.getString("revision"),request.getJSONObject("materialRevisions").getString(material.getString("materialId")))
             val page=api.get("/api/memory/jobs").getJSONArray("items");val admitted=(0 until page.length()).map {page.getJSONObject(it)}.single {it.getString("id") !in oldIds}
-            val tasks=admitted.getJSONObject("tasks");val task=tasks.keys().asSequence().map {tasks.getJSONObject(it)}.first {it.getJSONObject("input").has("materialPins")}
-            val pins=task.getJSONObject("input").getJSONArray("materialPins");assertTrue(pins.length()>0)
-            for(i in 0 until pins.length()){val pin=pins.getJSONObject(i);assertEquals(material.getString("materialId"),pin.getString("id"));assertEquals(material.getString("revision"),pin.getString("revision"))}
+            assertEquals(request.getString("operationId"),admitted.getString("id"));assertTrue(admitted.getJSONObject("tasks").length()>0)
             assertEquals(bBefore,bApi.get("/api/memory/jobs").getJSONArray("items").length());assertEquals(defaults,api.get("/api/configuration").toString())
             assertEquals(404,assertThrows(CentralFailure::class.java){bApi.get("/api/memory/jobs/"+admitted.getString("id"))}.status)
         }
