@@ -194,6 +194,8 @@ class MultiuserWorkerInstrumentedTest {
 
     @Test fun actualSourceWorkerKeepsEqualIdsSpoolsContextAndRevokedAccessUnderTheirOriginalOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val watchdog=Thread { try { Thread.sleep(10000);File(app.cacheDir,"m15-source-stall.txt").writeText(Thread.getAllStackTraces().entries.joinToString("\n\n") { (thread,stack)->thread.name+" "+thread.state+"\n"+stack.joinToString("\n") }) } catch (_:InterruptedException) {} }.apply {isDaemon=true;start()}
+        try {
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
         login(app,"a");val a=settings.read();val source=LocalSource(id="same-native-file-source",name="Synthetic source",kind="local-files",uri="content://dev.synthetic.generated/document",retention="archive",syncContinuously=false,description="Synthetic A source context",contextDirty=true)
         val bytes="Synthetic preserved source original bytes".toByteArray()
@@ -222,6 +224,7 @@ class MultiuserWorkerInstrumentedTest {
         val scan=OneTimeWorkRequestBuilder<SourceScanWorker>().setInputData(workDataOf("manual" to true,"owner" to settings.read().ownerKey(),"sourceId" to source.id)).build()
         WorkManager.getInstance(app).enqueue(scan).result.get();waitFor {WorkManager.getInstance(app).getWorkInfoById(scan.id).get()!!.state.isFinished}
         assertEquals("permission",app.localSources().state(source.id).optString("status"));assertEquals(0,app.fileArchives().pendingCount(source.id))
+        } finally {watchdog.interrupt()}
     }
 
     @Test fun anonymousFileTaskDraftRequiresExplicitBindingWithAnEmptyQueue() {
