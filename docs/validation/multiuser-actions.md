@@ -1,15 +1,59 @@
 # M12 Actions 验证账本
 
-当前为实现/窄 TDD 记录，**不是最终交付或重型验收通过声明**。真实账户、生产 HTTP/服务/SQLite、
+M12 本域实现与联合运行门禁已通过；精确运行候选为 `10748005a5d007695ecc9401d0d57dc9dea94919`。
+以下同时保留历史 RED、夹具/环境失败及最终结果，历史检查点的待办不代表当前阻塞。真实账户、生产 HTTP/服务/SQLite、
 M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合成 A/B 数据；
 只替换外部模型/原生 transport。未写真实日历、邮件、支付或外部账户，未建真实凭据、权限、部署。
 不修改 `main` 或远端集成分支，不启用禁用的 CI。
 
+## 最终验收证据
+
+M12 与既有活跃 M16 对话固定在同一 literal SHA `10748005a5d007695ecc9401d0d57dc9dea94919`；
+M12 明确委托 M16 串行执行共同门禁，本方核对原日志、退出码及 Android XML。
+这是一次共享执行，不计作两次独立通过。最终文档提交只修改设计和验证记录，不改变该运行候选。
+已含真实 M07 PR136 `cd7a306cce0f6cd5fec3c9e91e6dee0761352115`、M08 PR137
+`58944f00837c89bc1d302ecd7be7a568db4abe44`、M11 PR138
+`98d76945e091d7234217ebcf532ebeff3350937c` 及下文 M16/M15 必要冻结；不代表其余客户端模块均已最终验收。
+
+| 精确运行候选与命令 | 实际结果及原始证据 |
+| --- | --- |
+| `10748005`：`npm run build -w @mote/server` | EXIT0；`/tmp/m16-sixth-server-build.log/.exit`。 |
+| `10748005`：`node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-actions-catalog.test.ts apps/server/test/multiuser-actions-catalog-revocation.test.ts` | 4/4、无 skip、EXIT0，86590ms；`/tmp/m16-sixth-catalog-four.log/.exit`。包含新增目录来源撤销回归。 |
+| `10748005`：下列完整 `check:affected` 命令 | EXIT0；`/tmp/m16-required-affected-sixth-resumed.log/.exit`。全部 47 项 M12 场景在真实 Server 全组通过，14 个专项文件全部保留。 |
+| `10748005`：`MOTE_ACTIONS_PROCESS_ENTRY=<fresh apps/server/dist/index.js> node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-actions-process.test.ts` | fresh 编译生产入口与实际 Desktop adapter 的 SIGKILL 恢复 1/1、无 skip、EXIT0，12431ms；`/tmp/m16-sixth-actions-emitted.log/.exit`。 |
+| `6f5bdeb6`：fresh central、46 项原专项、A/C、B、legacy tools、shared seams、旧 server 与 native 算法、编译 SIGKILL | 依次 46/46、7/7、5/5、3/3、5/5、18/18、7/7、1/1，均 EXIT0、无 skip；`/tmp/m12-uniform-6f5bdeb6-*.log/.exit`。该 SHA 尚不含后来确认的目录围栏修复，不能独自作为最终验收。 |
+| `6f5bdeb6`：compiled/packaged backup 与 fresh Desktop build | 40/40、无 skip、EXIT0（34686ms）；Desktop build EXIT0。其后运行时仅增加本域目录 proof 围栏；最终 `10748005` 的完整 affected 另覆盖源测试。 |
+
+```sh
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
+ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk \
+npm run check:affected -- --base origin/codex/mote-multiuser-integration
+```
+
+最终 required 的实际结果：Desktop 492/492；Server 2627 total、2626 pass、0 fail、1 既有 opt-in skip；
+Web 505/505；Agent 318 total、317 pass、1 既有 Codex opt-in skip；Shared 192、Diagnostics 5、root 81、client 5 全通过。
+Android 实际执行 `compileDebugKotlin`、`compileDebugUnitTestKotlin`、`testDebugUnitTest`，45 秒 BUILD SUCCESSFUL；
+74 份实际 XML 合计 352 tests、0 failures、0 errors、0 skipped。
+Server 默认跳过项为 `macOS sandbox permits staged input but denies files and network outside it`；
+Agent 默认跳过项为 `installed Codex speaks to a synthetic local Responses fixture with Mote evidence tools and ephemeral planning only`。
+这两项未运行，未追认为通过。Kotlin 编译现有 warning 未导致失败。
+
+首次同 SHA required 在客户端重启时中断：`/tmp/m16-required-affected-sixth.log` 停于 16:02:11 UTC，
+无 exit 文件，Desktop 已完成、Server 未完成、后续阶段未到。准确核实原进程不存在后，仅恢复 required 阶段到新的 resumed 日志；
+没有把中断算产品失败或通过，没有重启健康进程，也未重跑已经通过的 build/catalog/backup。
+后续 resumed 的 EXIT0 与同 SHA 编译 SIGKILL 均为真实完成结果。
+
+独立有界复审与实际回归闭合了 uncertain ACK 误判、物理元数据擦除及目录跨 await 再披露问题；
+报告为 `/tmp/mote-m16-review-m12-uniform-6f5.md`、`/tmp/mote-m16-review-m12-catalog-dcad.md`，
+另有 native delivery 复审 `/tmp/mote-m15-review-m12-delivery-35.md`。这些静态审查不代替上述运行门禁。
+CI Checks/Component checks 按要求禁用、未运行。真实模型、真实外部写入、物理设备、部署及 M13/M15 后续 UI 旅程不在本次已验证范围内。
+
 ## RED 与修复证据
 
-命令均在本模块 checkout 执行：`node --import tsx --test --test-concurrency=1 <file>`；
+下表历史窄命令在本模块 checkout 执行：`node --import tsx --test --test-concurrency=1 <file>`；
 表中 `/tmp/<name>` 表示原始 `<name>.log` 和 `<name>.exit`，测试名称筛选保留在命令/日志。
-每个测试组的最终精确候选 SHA 与最终复跑命令将追加到本文件；尚未进行的检查不能用此前快照代替。
+最终联合执行的精确 SHA、命令和结果见上节；尚未进行的检查不能用此前快照代替。
 
 | 旧能力/隔离义务 | 真正 RED 与归因 | 修复及窄 GREEN |
 | --- | --- | --- |
@@ -54,7 +98,7 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 - `m12-legacy-contracts` 把原有 Vitest Desktop 文件误交给 node:test，runner 不匹配，18pass/1filefail EXIT1；按两个包各自既有 runner 重跑得到上述 18/18 与 7/7，没有改测试或生产代码。
 - 初次类型检查缺工作区依赖 `mem0ai/oss` 属环境准备问题；依赖复制到本模块本地后 server typecheck EXIT0。无同伴 node_modules 写入或软链到同伴工作树。
 
-## 最终门禁（待重型窗口）
+## 历史门禁计划（运行结果见上方，远端交付另记）
 
 1. 对齐真实 M07/M08/M11 最终提交，当前活跃对话独立复审最终 runtime，修 confirmed 问题。
 2. 同 SHA 的 M12 专项、实际 scoped/legacy consumer 组合、fresh libs/server build、生产 emitted 双进程恢复。
@@ -63,7 +107,7 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 
 所有此前窄检查只覆盖当时树。真实模型、真实日历/外部账号、物理设备、部署和最终跨模块 UI 不计入本模块已验证范围。
 
-## 恢复后的公共合同组合（未最终验收）
+## 恢复后的公共合同组合（当时尚未最终验收）
 
 - 干净恢复 `35d661b2`。M13 原目标本轮单次交接返回 `isError:false` 与准确 threadId，父已核实成功；后续重复结果澄清被审核拒绝，未发送并停止，不影响原交接成功。M11/M14 未被唤醒，没有创建第五对话。
 - `1f129540` 组合 M16 固定 `589d6ad7` 与 M11 PR138；app 注册/退出清理、scope 清单、纯导入例外精确并集，server types/scope/diff0。本方库 dist 复制同源 M16 缓存用于窄 fixture，不冒充本方 fresh build。
@@ -90,4 +134,4 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 
 `fd0b7d75` 在本域保留首次目录 ActionRecord 的 proof 与版本/状态，每个模型/reader await fence 和最终同步发布复查，后续页不替换首次凭证。原场景 `m12-catalog-await-green.log/.exit` 1/1 EXIT0、7357ms；`dcad6088` 对齐 internal commit value 的类型。现在为 47 个场景/14 文件。M16 对这三个提交的有界独审没有新增 confirmed P0/P1/P2：`/tmp/mote-m16-review-m12-catalog-dcad.md`。
 
-因此 M16 在 required 前主动停止协调流水线；最后 Desktop 子进程正常结束为 0。其 docs checkpoint `6ede7514` 使 exact-SHA guard 停止并返回 1，属于主动守卫停止，不是产品测试失败。第六 required 尚未启动，无日志；上述 6f5 成功证据不覆盖新增目录围栏。新冻结须 fresh affected build、必要窄回归及实际 required，再作最终验收。
+因此 M16 当时在 required 前主动停止协调流水线；最后 Desktop 子进程正常结束为 0。其 docs checkpoint `6ede7514` 使 exact-SHA guard 停止并返回 1，属于主动守卫停止，不是产品测试失败。当时第六 required 尚未启动，无日志；上述 6f5 成功证据不覆盖新增目录围栏。随后新冻结 `10748005` 已实际完成 fresh affected build、目录四项、完整 required 与编译恢复，结果见上方最终证据。
