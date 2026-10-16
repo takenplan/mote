@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from 'react';
 import { RefreshCw, FolderInput, Layers3, Plus, X } from 'lucide-react';
 import type { SourceConnection, SourceItemRecord } from '@mote/shared';
 import { ApiError, type Api, errorMessage, dateTime } from './api';
-import { sourceMetadataSchema } from '@mote/shared';
+import {saveWebReference} from './web-reference';
 import { Gmail } from './Gmail';
 import { AttributionEditor } from './AttributionContext';
 import { SourceContextEditor } from './SourceContextEditor';
@@ -140,10 +140,7 @@ function ReferenceEntry({ api, refresh }: {
 }) {
     const [title, setTitle] = useState(''), [uri, setUri] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
     return <details open className="source-item"><summary>{moteText("添加 NAS 或外部文件引用")}</summary><p className="muted">{moteText("保存原件位置、标题和观察时间，不读取正文。需要分析内容时，可在能访问原件的客户端选择该文件或目录以保存快照。")}</p><form onSubmit={async (e) => { e.preventDefault(); setBusy(true); setError(''); try {
-        const sourceId = 'manual-references';
-        await api.request('/api/sources', { method: 'POST', body: JSON.stringify({ id: sourceId, name: moteText("外部文件引用"), kind: 'custom', deviceId: 'web-reference', platform: 'import', retention: 'reference', enabled: true }) });
-        const hash = await itemRevision(api, sourceId, uri, { title, text: '', uri, kind: 'file', layer: 'reference', deleted: false });
-        await api.request('/api/sources/' + sourceId + '/items', { method: 'PUT', body: JSON.stringify({ externalId: uri, revision: hash, observedAt: new Date().toISOString(), title, uri, text: '', kind: 'file', layer: 'reference' }) });
+        await saveWebReference(api,title,uri);
         setTitle('');
         setUri('');
         await refresh();
@@ -154,12 +151,4 @@ function ReferenceEntry({ api, refresh }: {
     finally {
         setBusy(false);
     } }}><label>{moteText("文件标题")}<input aria-label={moteText("引用文件标题")} value={title} onChange={e => setTitle(e.target.value)} required maxLength={2000}/></label><label>{moteText("原件位置")}<input aria-label={moteText("原件位置")} value={uri} onChange={e => setUri(e.target.value)} placeholder="nas://home/documents/notes.pdf" required maxLength={1000}/></label><button className="button primary" disabled={busy}>{moteText("保存引用")}</button>{error && <p className="error-banner" role="alert">{error}</p>}</form></details>;
-}
-async function itemRevision(api: Api, sourceId: string, externalId: string, item: Record<string, unknown>) {
-    const { item: prior } = await api.request<{
-        item: SourceItemRecord | null;
-    }>('/api/sources/' + encodeURIComponent(sourceId) + '/item?externalId=' + encodeURIComponent(externalId));
-    const fields = ['title', 'text', 'kind', 'layer', 'mimeType', 'modifiedAt', 'uri', 'deleted'];
-    const sameMetadata = JSON.stringify(sourceMetadataSchema.optional().parse(prior?.metadata)) === JSON.stringify(sourceMetadataSchema.optional().parse(item.metadata));
-    return prior && sameMetadata && fields.every(key => (prior as unknown as Record<string, unknown>)[key] === item[key]) ? prior.revision : crypto.randomUUID();
 }

@@ -99,3 +99,12 @@ test('Web attachment transport commits actual owned bytes and retries the same r
  await assert.rejects(uploadNoteAttachment(a,file,'same-device'),error=>(error as any).code==='session_changed');
  assert.equal((await b.request<any>('/api/captures')).items.length,0);
 });
+
+test('Web reference form transport retains metadata and retries one owned Ingress batch without fetching its URI',async t=>{
+ const {saveWebReference}=await import('../../web/src/web-reference.js'),f=await fixture(t),a=f.api(),uri='nas://generated/reference-only.txt';
+ await saveWebReference(a,'GENERATED_A_REFERENCE',uri);await saveWebReference(a,'GENERATED_A_REFERENCE',uri);
+ const history=await a.request<any>('/api/sources/manual-references/history?externalId='+encodeURIComponent(uri));assert.equal(history.items.length,1);assert.equal(history.items[0].layer,'reference');assert.equal(history.items[0].uri,uri);assert.equal(history.items[0].text,'');
+ f.cookie('b');const b=createApi(f.bi);await saveWebReference(b,'GENERATED_B_REFERENCE',uri);
+ assert.doesNotMatch(JSON.stringify(await b.request('/api/source-items')),/GENERATED_A_REFERENCE/);
+ await assert.rejects(saveWebReference(a,'STALE_A_REFERENCE',uri),error=>(error as any).code==='session_changed');
+});
