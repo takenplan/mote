@@ -37,4 +37,6 @@ test('original plugin page consumes actual M09 owned instances, preserves hidden
  await click('配置');assert.ok(d.querySelector('[role=dialog]'));await click('保存配置');
  assert.equal(calls.length,1);assert.equal(calls[0].path,'/api/plugin-instances');assert.equal(calls[0].body.preserveRedactedSecrets,true);assert.deepEqual(calls[0].body.instance.grants,{capabilities:['processor'],sourceIds:[],history:false});assert.equal(calls[0].body.instance.configuration.credential,undefined);
  await click('配置');await render(api(b,'B'));assert.equal(d.querySelector('[role=dialog]'),null);assert.match(d.body.textContent!,/B_PRIVATE/);assert.doesNotMatch(d.body.textContent!,/A_PRIVATE/);assert.equal(calls.length,1);
+ await click('记忆方案');const automatic=d.querySelector<HTMLButtonElement>('[role=switch][aria-label="自动记忆"]');assert.ok(automatic,'the existing memory control remains available through actual M07');
+ await act(async()=>{automatic.click();await delay(20);});assert.equal((await request(b.token,'/api/memory')).json().desired,false);assert.equal((await request(a.token,'/api/memory')).json().desired,true);
 });
