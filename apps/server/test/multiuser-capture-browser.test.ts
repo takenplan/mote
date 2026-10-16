@@ -74,3 +74,10 @@ test('an awaited old thumbnail cannot survive delete and same-ID recreation with
  const deleted=await f.request(f.a.token,'/api/captures/'+input.id,'DELETE');assert.equal(deleted.statusCode,200,deleted.body);await f.receive(f.a,[{...input,imageBase64:replacement.toString('base64')}]);release();const retired=await pending;assert.equal(retired.statusCode,409,retired.body);assert.match(retired.headers['content-type']??'',/application\/json/);
  assert.deepEqual((await f.request(f.a.token,path)).rawPayload,replacement);assert.deepEqual((await f.request(f.b.token,path)).rawPayload,image);
 });
+
+test('an awaited thumbnail loses its snapshot bytes grant when M03 releases that original',async t=>{
+ const f=await fixture(t),image=await sharp({create:{width:24,height:24,channels:3,background:'#234567'}}).png().toBuffer(),input=record(1000,'same-app',{imageBase64:image.toString('base64'),imageMime:'image/png'}),receipt=await f.receive(f.a,[input]);
+ let entered!:()=>void,release!:()=>void;const arrived=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r),original=sharp.prototype.toBuffer;
+ t.mock.method(sharp.prototype,'toBuffer',async function(this:sharp.Sharp,...args:any[]){const bytes=await original.apply(this,args as any);entered();await gate;return bytes;});t.after(()=>release());
+ const path='/api/capture-browser/'+input.id+'/image',pending=f.request(f.a.token,path+'?thumbnail=1');await arrived;f.host.ingress.forUser(await f.host.authority.authenticate(f.a.token)).releaseSnapshot(receipt.captures[0].original.ref);release();const retired=await pending;assert.equal(retired.statusCode,410,retired.body);assert.match(retired.headers['content-type']??'',/application\/json/);assert.equal((await f.request(f.a.token,path)).statusCode,410);
+});
