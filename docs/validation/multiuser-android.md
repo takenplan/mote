@@ -22,3 +22,10 @@ No M12 handoff is consumed. M13/M14 work in progress is not accepted dependency 
 ## Evidence
 
 Initial RED tests and subsequent actual worker/backend acceptance are recorded with exact SHA, command, exit and logs as they run. Dependency M11's Android329 is not M15 acceptance.
+
+Initial boundary: production parent `98d76945`; RED test commit `2f1e91f`.
+`gradlew -p apps/android --no-daemon --offline :app:testDebugUnitTest --tests dev.mote.collector.MultiuserBoundaryTest`:
+first environment-only EXIT1 (wrapper cache lock denied, `/tmp/m15-initial-red.log`);
+standard-review authorized exact rerun 2 tests/2 assertion failures EXIT1 (`/tmp/m15-initial-red-authorized.log`).
+Same exact tests after minimal Wire2/local4 change: 2/2 EXIT0, `/tmp/m15-initial-green.log`.
+This is boundary evidence, not actual upload/worker/whole-module acceptance.
