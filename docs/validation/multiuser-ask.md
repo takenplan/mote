@@ -72,7 +72,7 @@ subsets and do not substitute final whole-module review.
 
 ## Pending gates and practical limits
 
-Real M07 through f436d7e8e3e78dcda4509731038d64183c5dcee4 is composed,
+Real M07 through c5661258cc24628100878b59e96c0cebcb36ee57 is composed,
 including ordinary owner audit/import and retained Coding projection withdrawal.
 The PR135 public contract documents are also composed. Query-visible Memory stays published-only; audit/stale/proposed bodies
 do not become model evidence. Final M07 acceptance and subsequent integration
@@ -204,3 +204,24 @@ an incorrect test expectation, not production RED or a delivered fix. Production
 tombstone logic was never changed. The durable characterization keeps the owner
 metadata head positive while both query includeDeleted values return no items
 and direct prior/current tombstoned original expansion is refused for A and B.
+
+Public representative consumer candidate
+`f0729a6459bae010b904d4edc70b7086319a6968` contains M08 kind fix3bda,
+M07 c566 and M11 e857 plus PR135. The unchanged independent literal archive
+`/tmp/m08-review-unified-f072` passed B3 + effective kind + corrected legacy
+tombstone characterization, 5/5 EXIT0,36121.87975ms
+(`/tmp/m08-unified-f072-B.log/.exit`). Actual SDK legacy all-tool, partial-ready
+projection and canonical paging cases passed 3/3 EXIT0,8322.500583ms
+(`/tmp/m08-unified-f072-legacy.log/.exit`). Only scripted external model/provider
+transport is substituted; actual Accounts, M03/M06, independently reviewed Memory,
+installed provider, Harness and SDK are exercised. This is the same-SHA B receipt;
+A/C receipt owners and final per-module gates remain separate.
+
+M07 c566 bounded independent review: original A restore/held-reader/performance
+5/5 EXIT0,7226.625875ms, long Coding A1/1 EXIT0,6775.05825ms
+(`/tmp/m08-review-m07-c566-{A,long}.log/.exit`). Full small runtime delta and exact
+ancestor/historical-target guards were read without a confirmed new finding.
+Own composition `20506aefe8f269a6c80656e2e5a74ed5d8ba9fae` retains both appended
+policy lifecycle and long Coding tests, 2/2 EXIT0,7062.811125ms
+(`/tmp/m08-20506-composition-append.log/.exit`), server typecheck0. No production
+conflict was resolved in this merge; final whole-code checks remain pending.

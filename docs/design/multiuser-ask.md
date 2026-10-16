@@ -3,7 +3,8 @@
 M08 reuses the existing Agent Harness, transport, evidence disclosure ledger,
 Material original projection, Memory readers, static Insight renderer, delegation
 controls and complete-prefix working-memory planner. The feature composes PR134
-and reviewed real M07 through443c201a; final module acceptance and PR are pending.
+and reviewed real M07 through c5661258cc24628100878b59e96c0cebcb36ee57;
+final module acceptance and PR are pending.
 
 KEEP: model-led retrieval, fresh original citations, fixed model/price snapshots,
 M05 shared execution, finite typed retry, working lifecycle threshold OR maximum
@@ -41,7 +42,10 @@ LIMIT and provider keys. Ready blocks of partial Materials use the exact M07
 projection; pending bodies stay undisclosed. Formal originals replace raw entries.
 Knowing a raw screenshot/Coding/archive UUID does not grant original access.
 File pagination counts canonical blocks, preserves exact revisions, and respects
-explicit limits. Text windows preserve Unicode scalar boundaries and exact ranges.
+explicit limits. Native source-item kind matches its canonical record source;
+entity and Material catalog kind retain the Material type. Tombstones remain
+owner metadata and are excluded from model queries, including includeDeleted.
+Text windows preserve Unicode scalar boundaries and exact ranges.
 Query-visible history maps genuine M06 processed originals through Material links.
 
 Every asynchronous return rechecks the complete observed original receipt,
