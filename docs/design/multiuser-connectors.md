@@ -110,7 +110,10 @@ work drains. Resume schedules one future poll; stop/removal/account/lease fences
 reject old callbacks. Recording ledgers preserve exact bounded scan windows,
 pagination tokens and separate transcript/media checkpoints. Audio failure does
 not discard collected transcripts. Repeated discovery rereads transcript revisions
-and retains an already confirmed audio backup.
+and retains an already confirmed audio backup. Failed transcript/media work keeps
+its finite five-attempt transient budget and backoff across polls and restarts;
+blocked or exhausted work requires the owner's explicit `retry` operation.
+Reference-retention sources reject supplied original bytes before any write.
 
 OAuth exchanges and CLI authorization have M05 external issuance journals. A lost
 outcome is not replayed automatically. Connector deletion returns `result_unknown`

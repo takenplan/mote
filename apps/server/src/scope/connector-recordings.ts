@@ -7,13 +7,14 @@ import {createDingtalkRecordings,createDwsRunner} from '../connectors/dingtalk-r
 import {createLarkRunner,larkJson,authorizationUrl} from '../connectors/lark-cli.js';
 import type {RecordingAccount,RecordingProvider,RecordingMetadata} from '../connectors/recordings.js';
 import type {LarkContext,ConnectorState} from '../connectors/ports.js';
+import {ExecutionFailure} from '../execution-engine.js';
 import {ConnectorError} from '../connectors/types.js';
 import type {ConnectorTransports} from './connector-contract.js';
 import {connectorHash as hash} from './connector-vault.js';
 
 type Saved={version:1;epoch:string;account?:RecordingAccount;selection:RecordingSelection};
 type Ledger={get<T>(scope:string,key:string):T|undefined;set(scope:string,key:string,value:unknown):void;drop(scope:string,key:string):void;rows<T>(scope:string,prefix:string,limit?:number,errorOnly?:boolean):{key:string;value:T}[]};
-type Work={id:string;metadata?:RecordingMetadata;transcript?:boolean;media?:boolean;error?:string};
+type Work={id:string;metadata?:RecordingMetadata;transcript?:boolean;media?:boolean;error?:string;transcriptAttempts?:number;transcriptBlocked?:boolean;transcriptNextAt?:number;mediaAttempts?:number;mediaBlocked?:boolean;mediaNextAt?:number};
 /** Reuses real fixed-command providers and decoding; M05 owns the sole executor.
  * The per-instance ledger retains discovery pages and independent transcript /
  * media checkpoints, so a failed audio fetch never discards collected text. */
@@ -55,15 +56,15 @@ export class ScopedRecordingAdapter {
    for(let page=0;page<10000;page++){
     await this.fence();const result=await this.provider.discover(this.saved.account!,{start:new Date(from).toISOString(),end:new Date(to).toISOString(),...(cursor?{cursor}:{})},this.signal);await this.fence();
     if(result.ids.length>100||result.next&&(result.next===cursor||seen.has(result.next)))throw new ConnectorError('recording_pagination_invalid',502);
-    for(const id of result.ids){const work=this.ledger.get<Work>(epoch,'work:'+id);this.ledger.set(epoch,'work:'+id,work?{...work,transcript:false,metadata:undefined}:{id});}
+    for(const id of result.ids){const work=this.ledger.get<Work>(epoch,'work:'+id);this.ledger.set(epoch,'work:'+id,work?.transcript?{...work,transcript:false,metadata:undefined,transcriptAttempts:0,transcriptBlocked:false,transcriptNextAt:0}:work??{id});}
     if(!result.next){this.ledger.drop(epoch,'cursor:'+window);this.ledger.drop(epoch,'seen:'+window);scan.from=to;this.ledger.set(epoch,'scan-active',scan);break;}seen.add(result.next);this.ledger.set(epoch,'seen:'+window,[...seen]);cursor=result.next;this.ledger.set(epoch,'cursor:'+window,cursor);if(page===9999)throw new ConnectorError('recording_pagination_limit',413);
    }
   }
   this.ledger.set(epoch,'scan-complete',{until:end,fullAt:scan.full?at:previous?.fullAt??0});this.ledger.drop(epoch,'scan-active');
   for(const row of this.ledger.rows<Work>(epoch,'work:')){
    const work=row.value;
-   try{
-    await this.fence();work.metadata??=await this.provider.metadata(this.saved.account!,work.id,this.signal);await this.fence();if(work.metadata.id!==work.id)throw new ConnectorError('recording_identity_invalid',502);this.ledger.set(epoch,row.key,work);
+   if(!work.transcript&&!work.transcriptBlocked&&(work.transcriptNextAt??0)<=Date.now())try{
+    work.transcriptAttempts=(work.transcriptAttempts??0)+1;this.ledger.set(epoch,row.key,work);await this.fence();work.metadata??=await this.provider.metadata(this.saved.account!,work.id,this.signal);await this.fence();if(work.metadata.id!==work.id)throw new ConnectorError('recording_identity_invalid',502);this.ledger.set(epoch,row.key,work);
     const metadata=work.metadata;
     if(!work.transcript){
      const value=await this.provider.transcript(this.saved.account!,metadata,this.signal);await this.fence();
@@ -74,15 +75,18 @@ export class ScopedRecordingAdapter {
       const item:SourceItem={externalId:work.id+':segment:'+index,revision:hash([segment,metadata]),observedAt:new Date().toISOString(),title:metadata.title.slice(0,2000),text:segment.text,kind:'file',layer:'snapshot',mimeType:'text/plain',deleted:false,document:{contentRole:'other',timeBasis:metadata.recordedAt||metadata.createdAt?'recorded':'unknown',...(metadata.recordedAt||metadata.createdAt?{recordedAt:metadata.recordedAt??metadata.createdAt}:{}),originalMetadata:{provider:this.provider.id,recordingId:work.id,segment:index,speaker:segment.speaker??'',startMs:segment.startMs,endMs:segment.endMs,untimed:segment.untimed??false,uncertain:segment.uncertain??false}}};
       const prior=this.ctx.sources.getItem(source,item.externalId);item.revision=prior?.text===item.text&&JSON.stringify(prior.document)===JSON.stringify(item.document)?prior.revision:hash([item.revision,prior?.revision??'']);await this.ctx.sources.upsert(source,item,()=>this.assert());
      }
-     work.transcript=true;delete work.error;this.ledger.set(epoch,row.key,work);
+     work.transcript=true;work.transcriptAttempts=0;work.transcriptNextAt=0;delete work.error;this.ledger.set(epoch,row.key,work);
     }
-   }catch(error){this.assert();if(this.signal.aborted)throw error;work.error=error instanceof ConnectorError?error.code:'recording_transcript_failed';failed++;this.ledger.set(epoch,row.key,work);}
-   if(selection.backupAudio&&!work.media&&work.metadata)try{
-    await this.fence();const media=await this.provider.media(this.saved.account!,work.metadata,this.signal);await this.fence();
-    await publish({externalId:work.id+':audio',revision:createHash('sha256').update(media.bytes).digest('hex'),observedAt:new Date().toISOString(),title:work.metadata.title.slice(0,2000),text:'',kind:'file',layer:'original',mimeType:media.mimeType,deleted:false,document:{contentRole:'other',timeBasis:'unknown',originalMetadata:{provider:this.provider.id,recordingId:work.id,role:'original-audio'}}},media.bytes,media.mimeType);work.media=true;if(work.transcript)delete work.error;this.ledger.set(epoch,row.key,work);
-   }catch(error){this.assert();if(this.signal.aborted)throw error;work.error=error instanceof ConnectorError?error.code:'recording_media_failed';failed++;this.ledger.set(epoch,row.key,work);}
+   }catch(error){this.assert();if(this.signal.aborted)throw error;work.error=this.failure(error,'recording_transcript_failed');const transient=this.transient(error);work.transcriptBlocked=!transient||(work.transcriptAttempts??0)>=5;work.transcriptNextAt=Date.now()+Math.min(3600000,1000*2**((work.transcriptAttempts??1)-1));failed++;this.ledger.set(epoch,row.key,work);}
+   if(selection.backupAudio&&!work.media&&!work.mediaBlocked&&(work.mediaNextAt??0)<=Date.now()&&work.metadata)try{
+    work.mediaAttempts=(work.mediaAttempts??0)+1;this.ledger.set(epoch,row.key,work);await this.fence();const media=await this.provider.media(this.saved.account!,work.metadata,this.signal);await this.fence();
+    await publish({externalId:work.id+':audio',revision:createHash('sha256').update(media.bytes).digest('hex'),observedAt:new Date().toISOString(),title:work.metadata.title.slice(0,2000),text:'',kind:'file',layer:'original',mimeType:media.mimeType,deleted:false,document:{contentRole:'other',timeBasis:'unknown',originalMetadata:{provider:this.provider.id,recordingId:work.id,role:'original-audio'}}},media.bytes,media.mimeType);work.media=true;work.mediaAttempts=0;work.mediaNextAt=0;if(work.transcript)delete work.error;this.ledger.set(epoch,row.key,work);
+   }catch(error){this.assert();if(this.signal.aborted)throw error;work.error=this.failure(error,'recording_media_failed');const transient=this.transient(error);work.mediaBlocked=!transient||(work.mediaAttempts??0)>=5;work.mediaNextAt=Date.now()+Math.min(3600000,1000*2**((work.mediaAttempts??1)-1));failed++;this.ledger.set(epoch,row.key,work);}
   }
-  this.assert();return {imported,duplicates,failed};
+  this.assert();failed=Math.max(failed,this.ledger.rows<Work>(epoch,'work:').filter(row=>row.value.error).length);return {imported,duplicates,failed};
  }
+ private failure(error:unknown,fallback:string){return error instanceof ConnectorError||error instanceof ExecutionFailure?error.code:fallback;}
+ private transient(error:unknown){return error instanceof ExecutionFailure&&error.category==='transient'||error instanceof ConnectorError&&['lark_operation_timeout','dingtalk_operation_timeout','recording_transcript_not_ready'].includes(error.code);}
+ async retry(){await this.init();for(const row of this.ledger.rows<Work>(this.saved.epoch,'work:')){const work=row.value;if(!work.transcript){work.transcriptAttempts=0;work.transcriptBlocked=false;work.transcriptNextAt=0;}if(!work.media){work.mediaAttempts=0;work.mediaBlocked=false;work.mediaNextAt=0;}delete work.error;this.ledger.set(this.saved.epoch,row.key,work);}return this.status();}
  async close(){await this.provider.close?.();await this.file.flush();}
 }

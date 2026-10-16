@@ -165,7 +165,7 @@ export class IngressHost{
    const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
    if(inputs&&(inputs.length!==items.length||inputs.some(v=>v&&(!Buffer.isBuffer(v.bytes)||v.bytes.length>512*1024*1024||!v.mime||v.mime.length>200))))throw new PrivateDataError('invalid_data');
    return batch(sourceId,id,inputs?{items,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime}:null)}:items,()=>{
-    const binding=source(sourceId),archive=binding.retention==='archive';
+    const binding=source(sourceId),archive=binding.retention==='archive';if(binding.retention==='reference'&&inputs?.some(Boolean))throw conflict();
     const descriptors=items.map((item,index)=>{
      const capture=captureId(sourceId,item),prior=sql.get('SELECT id,hash,mime,retention FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,capture),input=inputs?.[index];
      if(prior){if(input&&(prior.hash!==bytesHash(input.bytes)||prior.mime!==input.mime))throw conflict();return originals.original('original:'+prior.id);}

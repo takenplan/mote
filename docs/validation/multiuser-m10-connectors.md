@@ -39,6 +39,10 @@ HTTP/CLI I/O is substituted; source/archive/task services are real.
 | Portable restore, own envelope, changed replay, restart, no authorization | `portable restore applies credential-free settings through M04 once, survives restart, and rejects wrong owner or changed replay` |
 | Host registration, no central provider branch | `a trusted registered connector definition uses real M09/M04/M05/M03 seams without adding a provider dispatch branch` |
 | Actual subprocess env/config/temp isolation; inherited credential override removal | `multiuser-connectors-cli.test.ts`: `actual CLI child processes receive isolated HOME, config, data, cache, temp and no inherited provider identity` |
+| Recording finite transient budget and explicit retry across restart | `recording transient failures retain the five-attempt budget across polls and restart until explicit scoped retry` |
+| Interrupted authorization, no replay and result_unknown deletion | `an interrupted OAuth issuance survives restart as unknown and connector deletion cannot claim remote erasure` |
+| Identical A/B raw bytes, capture IDs, owner-specific refs and erasure isolation | `identical Gmail original bytes and capture IDs keep different owner references and deleting A ingress preserves B bytes` |
+| Per-user OAuth client changes revoke only A credentials | `changing A OAuth client settings revokes A credential namespace without changing B settings or in-flight identity` |
 | Distinct process HTTP listener, pending OAuth recovery, A/B source/original reads, replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals through the production composition` |
 
 ## Intermediate receipts and final gates
