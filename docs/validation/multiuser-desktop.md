@@ -1,5 +1,22 @@
 # M14 Desktop validation checkpoint
 
+## Portable import Activity
+
+M16's exact `89ddc973f0eb68262f047826d2df23c4b41df5ad` is composed. RED
+`690b85e7` exercises actual export, source deletion, same-account import and its
+real preflight barrier: both Activity cases fail because no card exists
+(`/tmp/m14-import-activity-red.log`, **0/2, exit 1**). The unchanged tests and
+the original export/delete cases pass **6/6, exit 0** in
+`/tmp/m14-import-activity-green.log` after adding the existing import receipt to
+the metadata projection. Running, completed, cancelled and restart states stay
+owner/current-epoch bound. Preserved domains are excluded branches, not restored
+authority or record counts. Import has no artifact, evidence or technical task
+IDs, and a committed import cannot be cancelled. B and an unrelated administrator
+cannot inspect A's import. No second import runtime is introduced.
+
+This is backend/consumer projection evidence, not yet the final affected check or
+acceptance of M16's separately discovered restart notification regression.
+
 ## Resumed M16 Activity consumption
 
 Composed the exact clean M16 dependency `ec6d12c6601109f7527b012fb28915dc76d6e598`

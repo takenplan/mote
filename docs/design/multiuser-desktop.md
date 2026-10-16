@@ -45,6 +45,6 @@ checks are dependency evidence, not acceptance of the new M14 consumption.
 | CHANGE | Personal portable export progress and saved result | Project the real M16 owner/current-epoch journal with semantic progress. Only the live owner receipt can advertise a completed archive; download still revalidates the exact bytes through M16. |
 | CHANGE | Account deletion status | Current administrators may see the existing deletion receipt's metadata and incomplete/unknown state. This never grants private account data or an export download. |
 | KEEP | Local queue/support archives and stopped instance backup | Preserve these separate existing workflows. A stopped CLI backup is not an online Activity task. |
-| OPEN | Personal portable import | M16 owns the newly approved original-deployment/original-account merge and deduplication engine. No import progress or success is fabricated before its frozen contract. |
+| CHANGE | Personal portable import | Consume M16's original-deployment/original-account merge and deduplication receipt in Activity. Preserve semantic progress, cancellation before commit, and preserved-domain exclusions; completion has no download artifact. The engine and Vault controls remain owned by M16 and the shared central page. |
 | OPEN | Raw archive album, sessions, image/thumbnail/OCR filtering | M13 owns the shared original-page projection. Native consumers wait for its actual stable contract. |
 | EXCEPTION | M12 consumption | The denied cross-thread handoff remains unconsumed pending explicit authorization. |
