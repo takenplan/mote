@@ -63,16 +63,18 @@ export class ScopedRecordingAdapter {
  async connect(){await this.init();const account=await this.provider.account(this.signal);this.assert();if(this.saved.account?.id!==account.id){if(this.saved.account)this.ctx.sources.update(this.sourceId(),{enabled:false});this.saved={...this.saved,account,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};}await this.file.write(this.saved);this.ctx.sources.register({id:this.sourceId(),name:this.provider.id+' recordings',kind:this.provider.id+'.recordings',deviceId:this.sourceId(),platform:'import',retention:'archive',enabled:false});return this.status();}
  async select(value:unknown){await this.init();const selection=recordingSelectionSchema.parse(value);await this.fence();if(JSON.stringify(selection)!==JSON.stringify(this.saved.selection))this.saved={...this.saved,epoch:randomUUID(),selection};await this.file.write(this.saved);this.ctx.sources.update(this.sourceId(),{enabled:selection.enabled});return this.status();}
  async disconnect(){await this.init();if(this.saved.account)this.ctx.sources.update(this.sourceId(),{enabled:false});this.saved={...this.saved,account:undefined,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};await this.file.write(this.saved);return this.status();}
- async sync(automatic=false){
+ async sync(automatic=false,retryOnly=false){
   await this.init();await this.fence();if(!this.saved.selection.enabled)throw new ConnectorError('recording_selection_required',409);
   const source=this.sourceId(),selection=this.saved.selection,epoch=this.saved.epoch;
+  let imported=0,duplicates=0,failed=0;
+  const publish=async(item:SourceItem,bytes:Buffer,mime:string,format?:`processor:${string}`)=>{await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex'),prior=this.ctx.sources.getItem(source,item.externalId);item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};item.revision=prior?.document?.originalMetadata?.bodyHash===contentHash&&prior.mimeType===item.mimeType?prior.revision:hash([contentHash,item.mimeType,prior?.revision??'']);const receipt=await this.ctx.publishFile(source,item,bytes,()=>{this.assert();if(!this.ctx.sources.getSource(source).enabled)throw new ConnectorError('recording_paused',409);},this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
+  // A retry resumes existing failed checkpoints. Normal Sync still discovers
+  // the selected range, advancing scan receipts only after durable work.
+  if(!retryOnly){
   const previous=this.ledger.get<{until:number;fullAt:number}>(epoch,'scan-complete'),at=Date.now(),full=!automatic||!previous||at-previous.fullAt>86400000;
   let scan=this.ledger.get<{start:number;end:number;from:number;full:boolean}>(epoch,'scan-active');
   if(!scan){const end=Date.parse(selection.end??new Date(at).toISOString()),start=full?Date.parse(selection.start):Math.max(Date.parse(selection.start),previous!.until-7*86400000);scan={start,end,from:start,full};this.ledger.set(epoch,'scan-active',scan);}
   const lower=scan.start,end=scan.end,windows=Math.ceil((end-lower)/(27*86400000));if(windows>240)throw new ConnectorError('recording_range_too_large',413);
-  let imported=0,duplicates=0,failed=0;
-  const publish=async(item:SourceItem,bytes:Buffer,mime:string,format?:`processor:${string}`)=>{await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex'),prior=this.ctx.sources.getItem(source,item.externalId);item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};item.revision=prior?.document?.originalMetadata?.bodyHash===contentHash&&prior.mimeType===item.mimeType?prior.revision:hash([contentHash,item.mimeType,prior?.revision??'']);const receipt=await this.ctx.publishFile(source,item,bytes,()=>{this.assert();if(!this.ctx.sources.getSource(source).enabled)throw new ConnectorError('recording_paused',409);},this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
-  // Window and page receipts advance only after all discovered work is durable.
   for(let from=scan.from;from<end;from+=27*86400000){const to=Math.min(end,from+27*86400000),window=hash([from,to]);let cursor=this.ledger.get<string>(epoch,'cursor:'+window),seen=new Set(this.ledger.get<string[]>(epoch,'seen:'+window)??[]);
    for(let page=0;page<10000;page++){
     await this.fence();const result=await this.provider.discover(this.saved.account!,{start:new Date(from).toISOString(),end:new Date(to).toISOString(),...(cursor?{cursor}:{})},this.signal);await this.fence();
@@ -82,6 +84,7 @@ export class ScopedRecordingAdapter {
    }
   }
   this.ledger.set(epoch,'scan-complete',{until:end,fullAt:scan.full?at:previous?.fullAt??0});this.ledger.drop(epoch,'scan-active');
+  }
   for(const row of this.ledger.rows<Work>(epoch,'work:')){
    const work=row.value;
    if(!work.transcript&&!work.transcriptBlocked&&(work.transcriptNextAt??0)<=Date.now())try{
