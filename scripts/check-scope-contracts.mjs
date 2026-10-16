@@ -61,7 +61,7 @@ export function checkScopeInventory(current,declared){
  * Any exception needs an explicit reviewed addition, not a broad directory allow. */
 export function checkProductionImports(directory=root){
   const failures=[];
-  const allowed=new Set(['apps/server/src/app.ts','apps/server/src/query-agent.ts','apps/server/src/config.ts','apps/server/src/private-storage.ts','apps/server/src/runtime-listener.ts','apps/server/src/login-handoffs.ts','apps/server/src/connection-error.ts','apps/server/src/execution-engine.ts','apps/server/src/execution-storage.ts','apps/server/src/operations.ts','apps/server/src/operation-projection.ts']);
+  const allowed=new Set(['apps/server/src/app.ts','apps/server/src/query-agent.ts','apps/server/src/config.ts','apps/server/src/private-storage.ts','apps/server/src/runtime-listener.ts','apps/server/src/login-handoffs.ts','apps/server/src/connection-error.ts','apps/server/src/execution-engine.ts','apps/server/src/execution-storage.ts','apps/server/src/operations.ts','apps/server/src/operation-projection.ts','apps/server/src/web-assets.ts']);
   // M05 reuses the pure WeakMap failure-context projection. It opens no store,
   // installs no legacy service and accepts no provider prose.
   allowed.add(sourceRoot+'/execution-failures.ts');

@@ -66,7 +66,7 @@ class LocalContentCipherTest {
         val database = File(current, "androidx.work.workdb").apply { writeText("generated framework fixture") }
         LocalDataFormat.requireCurrent(current, ignoredFiles = LocalDataFormat.FRAMEWORK_FILES)
         assertEquals("generated framework fixture", database.readText())
-        assertEquals("3", File(current, ".mote-local-format").readText())
+        assertEquals("4", File(current, ".mote-local-format").readText())
         val retired = folder.newFolder("framework-with-mote")
         File(retired, "androidx.work.workdb").writeText("generated framework fixture")
         File(retired, "draft.enc").writeText("generated retired fixture")

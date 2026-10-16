@@ -83,7 +83,7 @@ class CalendarActions(private val context: Context, private val foreground: Bool
         val availableCalendars = calendars()
         check((0 until availableCalendars.length()).any { availableCalendars.getJSONObject(it).getString("id") == calendarId.toString() }) { MoteI18n.text("目标日历已不可写") }
         val origin = settings.read().server.trimEnd('/')
-        val root = File(context.noBackupFilesDir, "calendar-actions/${SourceRules.hash(origin + settings.deviceId)}").apply { mkdirs() }
+        val root = File(context.accountDirectory(), "calendar-actions/${SourceRules.hash(origin + settings.deviceId)}").apply { mkdirs() }
         val ledger = File(root, operation)
         fun save(value: String) { val temp = File(root, "$operation.tmp"); FileOutputStream(temp).use { it.write(SecretBox().seal(value.toByteArray(Charsets.UTF_8))); it.fd.sync() }; check(temp.renameTo(ledger)) }
         val previous = if (ledger.exists()) String(SecretBox().open(ledger.readBytes()), Charsets.UTF_8) else null

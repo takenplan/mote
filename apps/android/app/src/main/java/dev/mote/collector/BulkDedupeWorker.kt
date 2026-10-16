@@ -13,7 +13,7 @@ import java.time.Instant
 /** Only local metadata is persisted; pixels live in bounded worker-local buffers. */
 class BulkDedupeStore(context: Context) {
     companion object { private val fileLock = Any() }
-    private val dir = requireStorageDirectory(File(context.noBackupFilesDir, "bulk-dedupe"))
+    private val dir = requireStorageDirectory(File(context.accountDirectory(), "bulk-dedupe"))
     private val cipher = context.localContentCipher()
     fun quarantine() = DurableQueue(File(dir, "pending"), cipher, role = DurableQueue.Role.QUARANTINE).apply { onMutation = { LocalStateChanges.changed(records = it, storage = true) } }
     fun read(name: String): JSONObject = synchronized(fileLock) {
@@ -62,7 +62,9 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
             setProgressAsync(workDataOf("stage" to stage, "done" to done, "total" to total, "found" to found, "errors" to errors))
         }
     }
-    override fun doWork(): Result {
+    override fun doWork(): Result = ConnectionGuard.sync { work() } ?: Result.retry()
+    private fun work(): Result {
+        if (inputData.getString("owner") != Settings(applicationContext).read().ownerKey()) return Result.success()
         val started = android.os.SystemClock.elapsedRealtime()
         SupportEvents.record(applicationContext, EventStage.DEDUPE, EventCode.STARTED)
         return try {

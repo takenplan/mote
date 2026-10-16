@@ -196,13 +196,18 @@ export class Configurations {
   /** Trusted domain recipes may pin an installed scoped model reference without
    * changing the user's feature selection. Resolve the whole fixed connection;
    * a reference never combines its key with a caller endpoint or settings. */
-  async leaseReference(context:UserContext,feature:ModelFeature,operationId:string,selected?:UserModelReference):Promise<ModelLease>{
+  async leaseReference(context:UserContext,feature:ModelFeature,operationId:string,selected?:UserModelReference,modelOverride?:string):Promise<ModelLease>{
     this.options.authority.assert(context);if(!MODEL_FEATURES.includes(feature)||!validScopeId(operationId))throw new ConfigServiceError('config_invalid');
     const entry=await this.entry(context);this.options.authority.assert(context);
     this.assertResources();if(this.credentialsUnavailable.has(context.userId))throw new ConfigServiceError('config_unavailable');
     const models=entry.service.current<UserModelConfiguration>('models');
     const explicit=selected?z.object({kind:z.enum(['personal','shared']),id:z.string().min(1).max(256)}).strict().parse(selected):undefined;
-    const {settings,reference}=this.resources.resolve(explicit?{...models,selections:{...models.selections,[feature]:explicit}}:models,feature);
+    const resolved=this.resources.resolve(explicit?{...models,selections:{...models.selections,[feature]:explicit}}:models,feature),reference=resolved.reference;
+    // A personal connection may select a model ID for this request. A shared
+    // resource remains the administrator's complete fixed connection.
+    const override=modelOverride===undefined?undefined:z.string().trim().min(1).max(512).refine(value=>!/[\u0000-\u001f\u007f]/.test(value)).parse(modelOverride);
+    if(reference.kind==='shared'&&override!==undefined&&override!==resolved.settings.model)throw new ConfigServiceError('config_invalid');
+    const settings=override===undefined?resolved.settings:modelSettingsSchema.parse({...resolved.settings,model:override});
     const prices=entry.service.current<z.infer<typeof priceDomain>>('modelPrices').items;
     const credential=reference.kind==='personal'?this.credentialState(context.userId,reference.id):undefined;
     const snapshot:DurableSnapshot={version:1,deploymentId:context.deploymentId,userId:context.userId,authorizationEpoch:context.authorizationEpoch,operationId,feature,revision:entry.service.revision,instanceRevision:this.instance.revision,reference,generation:entry.generation,...(reference.kind==='shared'?{sharedGeneration:this.resources.generation(reference.id)}:{credentialGeneration:credential?.generation,credentialRecoveryGeneration:credential?.recovery_generation,credentialFingerprint:credentialsHash(settings)}),settings:clone(settings),price:clone(prices.find(p=>p.provider===settings.provider&&p.model===settings.model)),configuration:entry.service.effectiveDocument()};

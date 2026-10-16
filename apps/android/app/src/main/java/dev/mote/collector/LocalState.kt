@@ -33,7 +33,8 @@ data class LocalStateSnapshot(
     val captureMessage: String = MoteI18n.text("尚未开始采集"),
     val syncMessage: String = MoteI18n.text("尚未上传"),
     val error: String? = null,
-    val checkedAt: Long = 0
+    val checkedAt: Long = 0,
+    val ownerKey: String = ""
 ) {
     val captureLabel: String get() = if (captureState == "capturing") MoteI18n.text("正在采集") else captureMessage
     val totalImages: Int? get() = active?.let { a -> quarantine?.let { a.images + it.images } }
@@ -55,7 +56,11 @@ class LocalStateRepository private constructor(context: Context) {
     private val mutable = MutableStateFlow(LocalStateSnapshot())
     val state: StateFlow<LocalStateSnapshot> = mutable.asStateFlow()
     private val preferences = app.getSharedPreferences("mote", Context.MODE_PRIVATE)
-    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ -> LocalStateChanges.changed() }
+    private val preferenceListener = SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+        val owner = Settings(app).read().ownerKey()
+        if (mutable.value.ownerKey != owner) mutable.value = LocalStateSnapshot(ownerKey = owner)
+        LocalStateChanges.changed()
+    }
     init {
         preferences.registerOnSharedPreferenceChangeListener(preferenceListener)
         scope.launch {
@@ -63,8 +68,10 @@ class LocalStateRepository private constructor(context: Context) {
                 // StateFlow conflates bursts. A fixed delay (not debounce) guarantees progress
                 // during continuous writes and permits only one storage read at a time.
                 if (!request.immediate) delay(300)
-                val previous = mutable.value
-                val next = try {
+                val next = ConnectionGuard.sync {
+                  val owner = Settings(app).read().ownerKey()
+                  val previous = mutable.value.takeIf { it.ownerKey == owner } ?: LocalStateSnapshot(ownerKey = owner)
+                  val next = try {
                     check(!QueueStorage.recovering) { MoteI18n.text("正在恢复本机存储") }
                     // Settings.save may hold Settings.class while checking queued work.
                     // Resolve handles before taking the queue lock to keep that lock order.
@@ -84,13 +91,18 @@ class LocalStateRepository private constructor(context: Context) {
                     }
                     val settings = Settings(app)
                     LocalStateSnapshot(revision, active, pending, app.localSources().pendingSync().count,
-                        settings.state(), settings.message(), settings.uploadStatus(), checkedAt = System.currentTimeMillis())
+                        settings.state(), settings.message(), settings.uploadStatus(), checkedAt = System.currentTimeMillis(), ownerKey = owner)
                 } catch (error: Exception) {
                     previous.copy(revision = LocalStateChanges.revisions.value, error = error.message ?: MoteI18n.text("本机状态暂不可读取"))
                 }
-                mutable.value = next
-                // Notifications are a consumer even when no Activity is visible.
-                withContext(Dispatchers.Main) { runCatching { Notifications.showLocalState(app, next) } }
+                  mutable.value = next
+                  next
+                } ?: return@collect
+                // Account replacement may finish while dispatching to the main thread.
+                withContext(Dispatchers.Main) {
+                    if (Settings(app).read().ownerKey() == next.ownerKey)
+                        runCatching { Notifications.showLocalState(app, next) }
+                }
             }
         }
     }
@@ -108,6 +120,6 @@ fun Activity.observeLocalState(onState: (LocalStateSnapshot) -> Unit): Job {
     val repository = LocalStateRepository.get(this)
     repository.refresh() // Calibrate against storage after backgrounding or a missed process event.
     return CoroutineScope(Dispatchers.Main.immediate).launch {
-        repository.state.collect { if (!isDestroyed && !isFinishing) onState(it) }
+        repository.state.collect { if (!isDestroyed && !isFinishing && it.ownerKey == Settings(this@observeLocalState).read().ownerKey()) onState(it) }
     }
 }

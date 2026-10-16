@@ -9,7 +9,7 @@ data class CollectorConfig(
     val uiPageMode: String = "ui_preferred", val uiPageRules: String = "[]",
     val uploadGate: UploadGateConfig = UploadGateConfig(),
     val authSignedOut: Boolean = false, val authExpiresAt: Long = 0, val authProcess: String = "",
-    val server: String = "", val token: String = "", val deviceName: String = Build.MODEL,
+    val accountBinding: String = "", val deviceBoundCredential: Boolean = false, val server: String = "", val token: String = "", val deviceName: String = Build.MODEL,
     val intervalSeconds: Int = 30, val maxQueueMiB: Int = 256, val wifiOnly: Boolean = true,
     val excludedPackages: String = "", val masks: String = "",
     val debugHttp: Boolean = false, val mode: String = "accessibility",
@@ -31,7 +31,9 @@ data class CollectorConfig(
     val collectionRules by lazy { AppCollectionRules.parse(appCollectionRules) }
     fun effectiveMode() = if (collectionRules.mayCollectContent()) mode else "accessibility"
     fun connectionToken(): String = if (!authSignedOut && (authExpiresAt == 0L || authExpiresAt > System.currentTimeMillis()) && (authProcess.isBlank() || authProcess == LoginProcess.id)) token else ""
-    fun hasSyncConnection() = server.isNotBlank() && connectionToken().length >= 32
+    fun account(): AccountBinding? = accountBinding.takeIf { it.isNotBlank() }?.let(AccountBinding::parse)
+    fun ownerKey() = account()?.key ?: "local"
+    fun hasSyncConnection() = server.isNotBlank() && connectionToken().length >= 32 && account()?.origin == runCatching { AccountBinding.normalize(server) }.getOrNull()
     fun syncPolicy() = SyncPolicy(syncMode, syncIntervalMinutes, syncBatchSize)
     fun validateConnection() {
         PrivacyRules.validateEndpoint(server, debugHttp, BuildConfig.DEBUG)
@@ -89,7 +91,7 @@ class Settings(private val context: Context) {
         uiPageMode = prefs.getString("uiPageMode", "ui_preferred")!!, uiPageRules = prefs.getString("uiPageRules", "[]")!!,
         uploadGate = UploadGateConfig(prefs.getBoolean("uploadGateEnabled", true), prefs.getString("uploadGateText", "")!!, prefs.getString("uploadGateFailure", "hold")!!),
         authSignedOut = prefs.getBoolean("authSignedOut", false), authExpiresAt = prefs.getLong("authExpiresAt", 0), authProcess = prefs.getString("authProcess", "")!!,
-        server = prefs.getString("server", BuildConfig.DEFAULT_SERVER)!!,
+        server = prefs.getString("server", BuildConfig.DEFAULT_SERVER)!!, accountBinding = prefs.getString("accountBinding", "")!!, deviceBoundCredential = prefs.getBoolean("deviceBoundCredential", false),
         token = credentials(prefs.getString("token", null)),
         deviceName = prefs.getString("deviceName", Build.MODEL)!!,
         intervalSeconds = prefs.getInt("interval", 30), maxQueueMiB = prefs.getInt("maxQueue", 256),
@@ -131,7 +133,7 @@ class Settings(private val context: Context) {
         return cachedToken
     }
     private fun configurationValues(c: CollectorConfig, origin: String): Map<String, Any> = mapOf(
-            "configurationFormat" to LocalDataFormat.VERSION, "authSignedOut" to c.authSignedOut, "authExpiresAt" to c.authExpiresAt, "authProcess" to c.authProcess,
+            "accountBinding" to c.accountBinding, "deviceBoundCredential" to c.deviceBoundCredential, "configurationFormat" to LocalDataFormat.VERSION, "authSignedOut" to c.authSignedOut, "authExpiresAt" to c.authExpiresAt, "authProcess" to c.authProcess,
             "uiPageMode" to c.uiPageMode, "uiPageRules" to c.uiPageRules,
             "uploadGateEnabled" to c.uploadGate.enabled, "uploadGateText" to c.uploadGate.blockedText, "uploadGateFailure" to c.uploadGate.failureAction,
             "uploadedRetentionDays" to c.uploadedRetentionDays,
@@ -152,9 +154,21 @@ class Settings(private val context: Context) {
     fun save(c: CollectorConfig, expected: CollectorConfig? = null, confirmCentralEndpoint: Boolean = false) = synchronized(Settings::class.java) {
         if (expected != null && read() != expected) throw SettingsChangedFailure()
         c.validate()
-        val origin = originAfterChange(c)
-        val values = configurationValues(c, origin)
-        val committedValues = if (confirmCentralEndpoint) values + ("centralEndpoint" to c.server.trim().trimEnd('/')) else values
+        val previousConfig = read()
+        val verified = if (c.token.isNotBlank() && !c.authSignedOut &&
+            (c.token != previousConfig.token || c.server != previousConfig.server || c.account() == null)) {
+            val (binding, deviceBound) = verifyConnection(c.server, c.token)
+            c.copy(server = binding.origin, accountBinding = binding.json().toString(), deviceBoundCredential = deviceBound)
+        } else c
+        if (verified.token.isNotBlank() && !verified.authSignedOut) require(verified.account()?.origin == AccountBinding.normalize(verified.server))
+
+        val origin = originAfterChange(verified)
+        val adopting = previousConfig.account() == null && verified.account() != null && hasPendingData()
+        if (adopting && !ConnectionGuard.permitsLocalBinding()) throw ConnectionFailure("local_confirmation")
+        val values = configurationValues(verified, origin) + if (adopting) mapOf("localOwnerKey" to verified.ownerKey()) else emptyMap()
+
+        val selected = if (read().ownerKey() != verified.ownerKey()) values + ("enabled" to false) else values
+        val committedValues = if (confirmCentralEndpoint) selected + ("centralEndpoint" to verified.server.trim().trimEnd('/')) else selected
         val previous = committedValues.keys.associateWith { prefs.all[it] }
         fun write(items: Map<String, Any?>): Boolean {
             val edit = prefs.edit()
@@ -176,44 +190,44 @@ class Settings(private val context: Context) {
         if (token == current.connectionToken() && url.startsWith(current.server.trimEnd('/') + "/api/")) signOut()
     }
     fun signOut() = synchronized(Settings::class.java) {
+        enabled = false
+        HttpJson.cancelActive()
         if (!prefs.edit().putBoolean("authSignedOut", true).commit()) throw SettingsWriteFailure()
     }
+    fun verifyAccount(server: String, token: String): AccountBinding = verifyConnection(server, token).first
+    private fun verifyConnection(server: String, token: String): Pair<AccountBinding, Boolean> {
+        val (code, response) = HttpJson.get("${AccountBinding.normalize(server)}/api/connections/self", token, ProtocolCompatibility.headers)
+        if (code !in 200..299 || response == null) throw ConnectionFailure(if (code in setOf(401, 403)) "authentication" else "network")
+        return AccountBinding.self(server, response) to response.getJSONObject("credential").has("deviceId")
+    }
     fun centralEndpoint(): String = prefs.getString("centralEndpoint", "")!!
-    fun saveConnection(server: String, token: String, deviceName: String, debugHttp: Boolean) = synchronized(Settings::class.java) {
-        val next = read().copy(server = server, token = token, deviceName = deviceName, debugHttp = debugHttp, authSignedOut = false, authExpiresAt = 0, authProcess = "")
+    fun saveConnection(server: String, token: String, deviceName: String, debugHttp: Boolean, binding: AccountBinding = verifyAccount(server, token)) = synchronized(Settings::class.java) {
+        val next = read().copy(accountBinding = binding.json().toString(), server = binding.origin, token = token, deviceName = deviceName, debugHttp = debugHttp, authSignedOut = false, authExpiresAt = 0, authProcess = "")
         next.validateConnection(); save(next, confirmCentralEndpoint = true)
     }
     fun signIn(server: String, token: String, durationMs: Long) = synchronized(Settings::class.java) {
         require(durationMs in setOf(0L, 86400000L, 604800000L, 2592000000L))
-        val next = read().copy(server = server, token = token, authSignedOut = false,
+        val binding = verifyAccount(server, token)
+        val next = read().copy(accountBinding = binding.json().toString(), server = binding.origin, token = token, authSignedOut = false,
             authExpiresAt = if (durationMs == 0L) 0 else System.currentTimeMillis() + durationMs,
             authProcess = if (durationMs == 0L) LoginProcess.id else "")
         next.validateConnection(); save(next, confirmCentralEndpoint = true)
     }
     /** Sticky while records or prepared submissions exist, including after disconnecting. */
     fun dataOrigin(): String = requireNotNull(prefs.getString("dataOrigin", null)) { MoteI18n.text(LocalDataFormat.RESET_MESSAGE) }
-    fun hasPendingData(): Boolean = context.fileArchives().pendingSync().count > 0 || context.queue().hasPendingConnectionWork() || BulkDedupeStore(context).quarantine().hasUnboundRecords() || QuickNotes.draft(context).read().prepared != null ||
-        context.localSources().sources().any { (context.localSources().state(it.id).optJSONArray("pending")?.length() ?: 0) > 0 }
-    private fun originAfterChange(next: CollectorConfig): String {
-        val previous = dataOrigin()
-        val current = read()
-        if (current.server == next.server && current.token == next.token) return previous
-        if (!hasPendingData()) {
-            if (previous.isNotBlank() && previous != (if (next.hasSyncConnection()) next.server.trim().trimEnd('/') else "")) context.queue().pinRetainedOrigin(previous)
-            return if (next.hasSyncConnection()) next.server.trimEnd('/') else ""
-        }
-        require(previous.isBlank() || next.server.isBlank() || previous == next.server.trimEnd('/')) { MoteI18n.text("待同步资料属于原节点，请先同步到原节点；清空连接不会解除资料绑定") }
-        return previous.ifBlank { if (next.hasSyncConnection()) next.server.trimEnd('/') else "" }
-    }
-    fun lastSyncDispatch(): Long = prefs.getLong("lastSyncDispatch", 0)
-    fun syncDispatched(at: Long) { prefs.edit().putLong("lastSyncDispatch", at).apply() }
-    fun lastAcknowledgedAt(): String? = prefs.getString("lastUploadAt", null)?.takeIf { prefs.getString("lastUploadOrigin", null) == read().server }
-    fun lastUploadAt(): String? = prefs.getString("lastUploadAt", null)
-    fun syncState(): String = prefs.getString("syncState", "idle")!!
+    fun hasPendingData(): Boolean = context.fileArchives().pendingSync().count > 0 || context.queue().hasPendingConnectionWork() || BulkDedupeStore(context).quarantine().hasUnboundRecords() || QuickNotes.draft(context).read().let { it.prepared != null || it.text.isNotEmpty() || it.mood.isNotEmpty() } ||
+        context.localSources().sources().isNotEmpty() || context.accountDirectory().listFiles()?.any { it.isFile && it.name.matches(Regex("file-task-[a-f0-9]{64}\\.enc")) } == true
+    private fun originAfterChange(next: CollectorConfig): String = next.account()?.key ?: ""
+    private fun accountState() = context.accountPreferences("account-state")
+    fun lastSyncDispatch(): Long = accountState().getLong("lastSyncDispatch", 0)
+    fun syncDispatched(at: Long) { accountState().edit().putLong("lastSyncDispatch", at).apply() }
+    fun lastAcknowledgedAt(): String? = accountState().getString("lastUploadAt", null)?.takeIf { accountState().getString("lastUploadOrigin", null) == read().ownerKey() }
+    fun lastUploadAt(): String? = accountState().getString("lastUploadAt", null)
+    fun syncState(): String = accountState().getString("syncState", "idle")!!
     fun syncStatus(state: String, message: String, uploaded: Boolean = false) {
         if (!uploaded && syncState() == state && uploadStatus() == message) return
-        val edit = prefs.edit().putString("syncState", state).putString("uploadStatus", message)
-        if (uploaded) edit.putString("lastUploadAt", java.time.Instant.now().toString()).putString("lastUploadOrigin", read().server)
+        val edit = accountState().edit().putString("syncState", state).putString("uploadStatus", message)
+        if (uploaded) edit.putString("lastUploadAt", java.time.Instant.now().toString()).putString("lastUploadOrigin", read().ownerKey())
         edit.apply()
     }
     companion object {
@@ -222,7 +236,7 @@ class Settings(private val context: Context) {
         private var cachedConfig: CollectorConfig? = null
         private var cachedCiphertext: String? = null
         private var cachedToken = ""
-        private val configurationKeys = setOf("configurationFormat", "dataOrigin", "authSignedOut", "authExpiresAt", "authProcess", "uiPageMode", "uiPageRules", "packedUpload", "uploadGateEnabled", "uploadGateText", "uploadGateFailure", "uploadedRetentionDays", "appCollectionRules", "batteryPauseBelowPct", "captureMaxSide", "chargingOnly", "debugHttp", "deviceEventCollectionEnabled", "deviceName", "diagnosticsEnabled", "diagnosticsIntervalSeconds", "enabled", "excluded", "imageDedupeDiagnosticsEnabled", "imageDedupeMode", "interval", "jpegQuality", "jsonlWindowMinutes", "masks", "maxQueue", "mediaCollectionEnabled", "metadataEnabled", "mode", "notificationCollectionEnabled", "ocrAppModes", "ocrMode", "screenCollectionEnabled", "server", "syncBatchSize", "syncBatteryNotLow", "syncChargingOnly", "syncIntervalMinutes", "syncMode", "token", "wifiOnly")
+        private val configurationKeys = setOf("deviceBoundCredential", "accountBinding", "configurationFormat", "dataOrigin", "authSignedOut", "authExpiresAt", "authProcess", "uiPageMode", "uiPageRules", "packedUpload", "uploadGateEnabled", "uploadGateText", "uploadGateFailure", "uploadedRetentionDays", "appCollectionRules", "batteryPauseBelowPct", "captureMaxSide", "chargingOnly", "debugHttp", "deviceEventCollectionEnabled", "deviceName", "diagnosticsEnabled", "diagnosticsIntervalSeconds", "enabled", "excluded", "imageDedupeDiagnosticsEnabled", "imageDedupeMode", "interval", "jpegQuality", "jsonlWindowMinutes", "masks", "maxQueue", "mediaCollectionEnabled", "metadataEnabled", "mode", "notificationCollectionEnabled", "ocrAppModes", "ocrMode", "screenCollectionEnabled", "server", "syncBatchSize", "syncBatteryNotLow", "syncChargingOnly", "syncIntervalMinutes", "syncMode", "token", "wifiOnly")
 
     }
     fun status(state: String, message: String) {
@@ -234,14 +248,14 @@ class Settings(private val context: Context) {
     fun state(): String = prefs.getString("state", "paused")!!
     fun message(): String = prefs.getString("message", MoteI18n.text("尚未开始采集"))!!
     fun statusAt(): Long = prefs.getLong("statusAt", 0)
-    fun captured(at: String) { prefs.edit().putString("lastCapture", at).apply() }
-    fun lastCapture(): String? = prefs.getString("lastCapture", null)
+    fun captured(at: String) { accountState().edit().putString("lastCapture", at).apply() }
+    fun lastCapture(): String? = accountState().getString("lastCapture", null)
     fun capturePreviewSeen(): Boolean = prefs.getBoolean("capturePreviewSeen", false)
     fun capturePreviewAccepted() { if (!prefs.edit().putBoolean("capturePreviewSeen", true).commit()) throw SettingsWriteFailure() }
-    fun screenStatus(message: String) { if (prefs.getString("screenMessage", null) != message) prefs.edit().putString("screenMessage", message).apply() }
-    fun screenStatus(): String = prefs.getString("screenMessage", MoteI18n.text("尚未开始采集"))!!
-    fun uploadStatus(message: String) { prefs.edit().putString("uploadStatus", message).apply() }
-    fun uploadStatus(): String = prefs.getString("uploadStatus", MoteI18n.text("尚未上传"))!!
+    fun screenStatus(message: String) { if (accountState().getString("screenMessage", null) != message) accountState().edit().putString("screenMessage", message).apply() }
+    fun screenStatus(): String = accountState().getString("screenMessage", MoteI18n.text("尚未开始采集"))!!
+    fun uploadStatus(message: String) { accountState().edit().putString("uploadStatus", message).apply() }
+    fun uploadStatus(): String = accountState().getString("uploadStatus", MoteI18n.text("尚未上传"))!!
 }
 
 fun Context.queue() = QueueStorage(this).openQueue().apply { archiveOrigin = Settings(this@queue).dataOrigin() }
