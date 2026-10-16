@@ -129,8 +129,8 @@ export class ScopedMemoryData {
   const batch=input.batchId?this.sql.get('SELECT review FROM mm_job_batches WHERE user_id=$user AND job_id=? AND id=?',input.jobId,input.batchId):undefined,state=batch?.review&&JSON.parse(String(batch.review)).coverage?.incomplete?'awaiting_context':'committed';
   if(input.batchId)this.sql.run("UPDATE mm_job_batches SET state=? WHERE user_id=$user AND job_id=? AND id=?",state,input.jobId,input.batchId);if(!this.sql.get("SELECT 1 FROM mm_job_batches WHERE user_id=$user AND job_id=? AND state!='committed'",input.jobId))this.sql.run("UPDATE mm_jobs SET state='committed' WHERE user_id=$user AND id=?",input.jobId);else if(!this.sql.get("SELECT id FROM mm_job_batches WHERE user_id=$user AND job_id=? AND state NOT IN ('committed','awaiting_context')",input.jobId))this.sql.run("UPDATE mm_jobs SET state='awaiting_context' WHERE user_id=$user AND id=?",input.jobId);return prepared.items;
  });}
- private filters(raw:unknown,sourceIds:readonly string[]|undefined,paginate:boolean){
-  this.state();const {cursor,...query}=memoryPageSchema.parse(raw),identity={collection:'memory',...query,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {})},position=cursor?this.cursor.decode(cursor,identity):undefined,conditions=["json_extract(r.json,'$.status')='published'"],args:(string|number)[]=[];
+ private filters(raw:unknown,sourceIds:readonly string[]|undefined,paginate:boolean,recordPins?:readonly {id:string;version:number;fingerprint:string}[]){
+  this.state();const {cursor,...query}=memoryPageSchema.parse(raw),identity={collection:'memory',...query,...(recordPins?{recordPins:memoryHash(recordPins)}:{}),...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {})},position=cursor?this.cursor.decode(cursor,identity):undefined,conditions=["json_extract(r.json,'$.status')='published'"],args:(string|number)[]=[];
   conditions.push("json_array_length(r.json,'$.evidenceIds')>0 AND NOT EXISTS(SELECT 1 FROM json_each(r.json,'$.evidenceIds') proof WHERE NOT EXISTS(SELECT 1 FROM mm_evidence e WHERE e.user_id=$user AND e.id=proof.value))");
   // The complete transitive source set is restricted before FTS, ordering and
   // LIMIT. An empty host allowlist grants no records. It never means all sources.
@@ -156,8 +156,8 @@ export class ScopedMemoryData {
   if(paginate&&position){conditions.push('(r.created_at<? OR (r.created_at=? AND r.id<?))');args.push(position.at,position.at,position.id);}
   return {query,identity,conditions,args};
  }
- page(raw:unknown={},sourceIds?:readonly string[]){
-  const {query,identity,conditions,args}=this.filters(raw,sourceIds,true);
+ page(raw:unknown={},sourceIds?:readonly string[],recordPins?:readonly {id:string;version:number;fingerprint:string}[]){
+  const {query,identity,conditions,args}=this.filters(raw,sourceIds,true,recordPins);if(recordPins){conditions.push("EXISTS(SELECT 1 FROM json_each(?) frozen WHERE json_extract(frozen.value,'$.id')=r.id AND json_extract(frozen.value,'$.version')=r.version AND json_extract(frozen.value,'$.fingerprint')=json_extract(r.json,'$.fingerprint'))");args.push(JSON.stringify(recordPins));}
   const rows=this.sql.all(`SELECT r.* FROM mm_records r WHERE r.user_id=$user AND ${conditions.join(' AND ')} ORDER BY r.created_at DESC,r.id DESC LIMIT ?`,...args,query.limit+1) as MemoryRow[],last=rows.slice(0,query.limit).at(-1);
   return {rows:rows.slice(0,query.limit),nextCursor:rows.length>query.limit&&last?this.cursor.encode(identity,{at:last.created_at,id:last.id}):null};
  }
@@ -167,8 +167,8 @@ export class ScopedMemoryData {
   const filters=memoryReadFiltersSchema.parse(raw),{conditions,args}=this.filters(filters,sourceIds,false);
   return Boolean(this.sql.get(`SELECT r.id FROM (SELECT $user user_id,? id,? json,? created_at) r WHERE r.user_id=$user AND ${conditions.join(' AND ')}`,memory.id,JSON.stringify(memory),memory.createdAt,...args));
  }
- rankedPage(raw:unknown,ids:readonly string[],sourceIds?:readonly string[]){
-  const {cursor,...query}=memoryPageSchema.parse(raw),identity={collection:'memory-provider',...query,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {}),binding:this.binding(),ranked:memoryHash(ids)},position=cursor?this.cursor.decode(cursor,identity):undefined,start=position?Number(position.at):0;
+ rankedPage(raw:unknown,ids:readonly string[],sourceIds?:readonly string[],recordPins?:readonly {id:string;version:number;fingerprint:string}[]){
+  const {cursor,...query}=memoryPageSchema.parse(raw),identity={collection:'memory-provider',...query,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {}),...(recordPins?{recordPins:memoryHash(recordPins)}:{}),binding:this.binding(),ranked:memoryHash(ids)},position=cursor?this.cursor.decode(cursor,identity):undefined,start=position?Number(position.at):0;
   if(!Number.isSafeInteger(start)||start<0||start>ids.length||position&&ids[start-1]!==position.id)throw new PrivateDataError('invalid_cursor');
   const end=Math.min(start+query.limit,ids.length),items=ids.slice(start,end);return {ids:items,nextCursor:end<ids.length?this.cursor.encode(identity,{at:String(end),id:ids[end-1]}):null};
  }
