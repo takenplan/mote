@@ -99,12 +99,32 @@ test('actual SDK canonical block pages obey limit, survive restart and reject ch
 });
 
 test('actual SDK read must reject a deleted earlier original when a later same-ID read follows a real Memory provider await',async t=>{
- const f=await memoryFixture(t,true),material=await f.publish(f.a,'A');await f.extract(f.a,material.id);const directories=await f.externalize([f.a]),memory=(await f.ok(f.a.token,'/api/memories')).items[0],gate=f.hold(directories.get(f.a.userId)!,memory.id),id=randomUUID();
- const send=(text:string,batchId:string)=>f.ok(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId,items:[note(id,text)]});await send('GENERATED_ORIGINAL_BEFORE_DELETE','first');const a=await f.connect(await f.mint(f.a.token)),pending=call(a.client,'mote_read',{refs:['capture:'+id,'memory:'+memory.id,'capture:'+id]});await gate.entered();await f.ok(f.a.token,'/api/captures/'+id,'DELETE');assert.equal((await f.request(f.a.token,'/api/captures/'+id)).statusCode,404);await send('GENERATED_REPLACEMENT_AFTER_DELETE','replacement');gate.release();const result=await pending;assert.equal(result.isError,true,JSON.stringify(result));assert.doesNotMatch(JSON.stringify(result),/GENERATED_ORIGINAL_BEFORE_DELETE|GENERATED_REPLACEMENT_AFTER_DELETE|Nora prefers/);
+ const f=await memoryFixture(t,true),material=await f.publish(f.a,'A');await f.extract(f.a,material.id);
+ const directories=await f.externalize([f.a]),memory=(await f.ok(f.a.token,'/api/memories')).items[0],id=randomUUID();
+ const send=(text:string,batchId:string)=>f.ok(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId,items:[note(id,text)]});
+ await send('GENERATED_ORIGINAL_BEFORE_DELETE','first');const formal=await captureMaterial(f,f.a,id),ref='material:'+formal.id,a=await f.connect(await f.mint(f.a.token));
+ assert.match(JSON.stringify(await okCall(a.client,'mote_read',{refs:[ref]})),/GENERATED_ORIGINAL_BEFORE_DELETE/);
+ assert.equal((await call(a.client,'mote_read',{refs:['capture:'+id]})).isError,true,'formal projection replaces the raw UUID');
+ const gate=f.hold(directories.get(f.a.userId)!,memory.id),pending=call(a.client,'mote_read',{refs:[ref,'memory:'+memory.id,ref]});
+ await gate.entered();await f.ok(f.a.token,'/api/captures/'+id,'DELETE');assert.equal((await f.request(f.a.token,'/api/captures/'+id)).statusCode,404);
+ await send('GENERATED_REPLACEMENT_AFTER_DELETE','replacement');assert.equal((await captureMaterial(f,f.a,id)).id,formal.id,'the rebuilt canonical entity keeps the same logical ID');
+ gate.release();const result=await pending;assert.equal(result.isError,true,JSON.stringify(result));assert.doesNotMatch(JSON.stringify(result),/GENERATED_ORIGINAL_BEFORE_DELETE|GENERATED_REPLACEMENT_AFTER_DELETE|Nora prefers/);
+ assert.match(JSON.stringify(await okCall(a.client,'mote_read',{refs:[ref]})),/GENERATED_REPLACEMENT_AFTER_DELETE/);
 });
 
 test('actual SDK original fence rejects delete/recreation with identical text and changed original app identity',async t=>{
- const f=await memoryFixture(t,true),material=await f.publish(f.a,'A');await f.extract(f.a,material.id);const directories=await f.externalize([f.a]),memory=(await f.ok(f.a.token,'/api/memories')).items[0],gate=f.hold(directories.get(f.a.userId)!,memory.id),id=randomUUID(),text='GENERATED_SAME_TEXT_NEW_ORIGINAL';await f.ok(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId:'same-body-first',items:[note(id,text)]});const a=await f.connect(await f.mint(f.a.token)),pending=call(a.client,'mote_read',{refs:['capture:'+id,'memory:'+memory.id]});await gate.entered();await f.ok(f.a.token,'/api/captures/'+id,'DELETE');assert.equal((await f.request(f.a.token,'/api/captures/'+id)).statusCode,404);await f.ok(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId:'same-body-replacement',items:[noteCapture({id,client:'web',deviceId:'same-device',deviceName:'Generated device',platform:'import',capturedAt:'2026-10-16T12:00:00Z',text})]});assert.equal((await f.ok(f.a.token,'/api/captures/'+id)).appId,'dev.mote.web.notes');gate.release();const result=await pending;assert.equal(result.isError,true,JSON.stringify(result));assert.doesNotMatch(JSON.stringify(result),/GENERATED_SAME_TEXT_NEW_ORIGINAL|Nora prefers/);await okCall(a.client,'mote_read',{refs:['capture:'+id]});
+ const f=await memoryFixture(t,true),material=await f.publish(f.a,'A');await f.extract(f.a,material.id);
+ const directories=await f.externalize([f.a]),memory=(await f.ok(f.a.token,'/api/memories')).items[0],id=randomUUID(),text='GENERATED_SAME_TEXT_NEW_ORIGINAL';
+ await f.ok(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId:'same-body-first',items:[note(id,text)]});
+ const formal=await captureMaterial(f,f.a,id),ref='material:'+formal.id,a=await f.connect(await f.mint(f.a.token));
+ assert.match(JSON.stringify(await okCall(a.client,'mote_read',{refs:[ref]})),/GENERATED_SAME_TEXT_NEW_ORIGINAL/);
+ assert.equal((await call(a.client,'mote_read',{refs:['capture:'+id]})).isError,true,'formal projection replaces the raw UUID');
+ const gate=f.hold(directories.get(f.a.userId)!,memory.id),pending=call(a.client,'mote_read',{refs:[ref,'memory:'+memory.id]});
+ await gate.entered();await f.ok(f.a.token,'/api/captures/'+id,'DELETE');assert.equal((await f.request(f.a.token,'/api/captures/'+id)).statusCode,404);
+ await f.ok(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId:'same-body-replacement',items:[noteCapture({id,client:'web',deviceId:'same-device',deviceName:'Generated device',platform:'import',capturedAt:'2026-10-16T12:00:00Z',text})]});
+ assert.equal((await f.ok(f.a.token,'/api/captures/'+id)).appId,'dev.mote.web.notes');assert.equal((await captureMaterial(f,f.a,id)).id,formal.id);
+ gate.release();const result=await pending;assert.equal(result.isError,true,JSON.stringify(result));assert.doesNotMatch(JSON.stringify(result),/GENERATED_SAME_TEXT_NEW_ORIGINAL|Nora prefers/);
+ assert.match(JSON.stringify(await okCall(a.client,'mote_read',{refs:[ref]})),/GENERATED_SAME_TEXT_NEW_ORIGINAL/);assert.equal((await call(a.client,'mote_read',{refs:['capture:'+id]})).isError,true);
 });
 
 for(const action of ['revoke','disable','source-recreate','source-toggle','delete-memory','cancel'] as const)test('actual SDK query reader carries '+action+' through a genuine provider await and keeps B available',async t=>{
