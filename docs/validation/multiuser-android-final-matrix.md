@@ -102,3 +102,46 @@ API request, account processing editor present and admin diagnostics200. Origina
 issuer QR remains1.376s0. All tests use generated data and no system permission.
 Per-case exact `/tmp/m15-native-qr-*` and `m15-native-instance-policy-*` logs and
 cleanup exits are retained; no static review is counted as these executions.
+
+## Remaining bounded test designs (not executed acceptance)
+
+- **Original model copy/probe/directory:** create A and B equal personal profile
+  IDs with different generated credentials through M04. Drive the original native
+  editor controls, preserve A's copied connection only under A and retain the
+  original explicit credential-copy choice. A stale revision conflicts. A held
+  response/old A control cannot fill or mutate B. Shared deployment secrets must
+  remain opaque according to M04's existing removal of credential inheritance;
+  do not infer them from masked views. Probe/directory use the established
+  transport validation, original selected reference/revision and configured
+  synthetic provider, then recheck credential/resource authority after await.
+  Neither operation changes defaults or creates another runtime. The common
+  owner must freeze the exact API before the thin consumer is implemented.
+- **Original Agent new-conversation preview:** generated published A Memory and
+  source content, equal IDs under B; use the original preview entry with question,
+  time zone/window and the same envelope/tool builders. Assert actual A content,
+  no B content, zero model calls, no conversation compaction or historical prompt
+  reconstruction. Hold a real reader await, retire its source/credential, and
+  require failure before private publication. Catalog/read passing alone is
+  insufficient.
+- **Original Agent recorded events:** originate an actual owned query and read
+  only its retained trace representation. Another account and instance
+  administration cannot inspect A's traces. Do not fabricate payloads that M08
+  did not retain; document coverage explicitly and never reconstruct a previous
+  prompt from current Memory. The common producer must define exact first-page
+  compatibility and continued pagination before native adaptation.
+- **Original file stop/stage retry/delete:** real generated M03 audio with a
+  held external M06 stage; stop and preserve unknown/physical occupancy, then
+  release the call. Explicit retry retains an account-owned operation/body before
+  I/O; a dropped real admission ACK followed by recreation retries the same
+  operation/task without repeating successful ASR. Existing diarize retry keeps
+  raw ASR, summary retry keeps transcript, and deletion/old artifact handles
+  cannot cross owner. The fresh B positive remains independent. Reuse existing
+  journals, single M05 executor and exact frozen shared route, not a second file
+  pipeline.
+- **Already visible pairing capability on resume:** a test-only characterization
+  is saved in4ec729a6. Original A invitation input/dialog is visible; hold only the
+  Activity's existing background resolver, switch through actual B login and
+  resume. Assert synchronous retirement before that resolver runs and no old
+  incoming intent repopulation after recreation. No new production fix, build or
+  runtime failure is claimed for this unexecuted candidate. Preserve the exact
+  current APK at `/tmp/m15-before-invitation-resume-app.apk` for its future RED.
