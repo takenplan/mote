@@ -20,16 +20,17 @@ const {apiClient}=await import('./client.js');
 
 test('CLI confirms M01 identity before providing an account-bound Ingress 3 request',async t=>{
   const original=globalThis.fetch;t.after(()=>{globalThis.fetch=original;});
-  let calls=0;
+  let calls=0;const paths:string[]=[];
   globalThis.fetch=async(url,init)=>{
-    calls++;assert.equal(new Headers(init?.headers).get('X-Mote-Protocol-Version'),'2');
+    calls++;paths.push(new URL(String(url)).pathname);assert.equal(new Headers(init?.headers).get('X-Mote-Protocol-Version'),'2');
     if(new URL(String(url)).pathname==='/api/connections/self')return Response.json({account:{...connection.account,origin:undefined,credentialId:'generated-credential',administrator:false,disabled:false,authorizationEpoch:0,createdAt:1},credential:{kind:'client',expiresAt:Date.now()+60000},protocol:{min:2,max:2},capabilities:{authentication:true,ingest:true,ingressVersion:3,archiveRead:true}});
     assert.equal(new Headers(init?.headers).get('X-Mote-Ingress-Version'),'3');return Response.json({generated:true});
   };
   const client=await apiClient({url:connection.serverUrl,token:connection.token});
   assert.equal(client.account.userId,connection.account.userId);
   assert.deepEqual(await client('/api/ingress/devices',undefined,'GET'),{generated:true});
-  await assert.rejects(client('/api/captures',{},'POST'),/Ingress 3/);assert.equal(calls,3);
+  await assert.rejects(client('/api/captures',{},'POST'),/Ingress 3/);
+  assert.deepEqual(paths,['/api/connections/self','/api/connections/self','/api/ingress/devices']);assert.equal(calls,3);
 });
 
 test('legacy SourceSync algorithm fixture keeps a file revision pending until its v2 receipt validates',async t=>{
