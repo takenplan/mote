@@ -156,3 +156,16 @@ Real M06/ranges/owner correction/read/operation idempotency6/6 exit0,
 /tmp/m07-admission-cancel-types.log/.exit; scope/import/SQL0.
 Final independent coordinator delta, actual whole combination, rebuilt emitted
 processes and required affected checks remain pending.
+
+Final whole-scope first combination at1536:298 tests,296pass/2fail,exit1,
+/tmp/m07-1536-combined.log/.exit. Both failures were M06 tests assuming the whole
+instance had exactly two tasks, before real Memory intake was composed. The
+assertions now require the exact three kinds memory.intake/processing.extract/
+processing.pipeline, three authorizations and sequence3; forbidden nested child,
+orphan resource/operation/fairness and zero-model checks remain intact.
+The two actual composed regressions pass2/2 exit0 at
+/tmp/m07-composed-processing-counts.log/.exit. No subscriber was disabled or mocked.
+Fresh1536 Server/Web builds pass0. Rebuilt actual HTTP child processes pass2/2
+exit0, /tmp/m07-1536-compiled-process.log/.exit,36838ms, covering review and manual
+admission SIGKILL. Check:affected dry-run selects full check:local plus Android;
+it is planning evidence only. Required actual affected remains pending.
