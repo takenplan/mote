@@ -81,3 +81,13 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 - `725f8b97f349f29ddd9f0e8c78b59cbbdcb1d446` 仅修正该合成 responder，检查全部已提供原文。相同真实 M03/M06/Harness、尾段内容、UTC 和 surrogate 断言原样通过 1/1、32943ms，`m12-long-tail-grouped-fixture-green.log/.exit`。没有放宽时限或修改生产实现，不追认为新的运行时缺陷 TDD。
 - M16 `2affb338` / `9fa19e2b` 已分别 pick 为本方 `9ac5d2e0` / `52aa25b9`，13 表与恢复撤权接缝由对方实际 17/17 验证。本方只读两 helper、真实调用者和新增测试后没有新增 confirmed P0/P1/P2，报告 `/tmp/mote-m12-review-m16-backup-9fa.md`；静态清单 173，13 表全部列与真实 PRAGMA 一致。本方 compiled/required 仍须执行，不能把对方结果当独立运行。
 - M15 已冻结的延迟读取/完整 import 回执小增量按其测试前置顺序组合到 `e9f284af`；对方实际 JVM 4/4 与原生 3 个单例 GREEN 的来源见其 validation，不冒充本方原生执行。新增 opaque Actions 页面检查仍由 M15 进行。
+
+## 同 SHA 联合门禁与新目录等待围栏
+
+本方与 M16 均固定 `6f5bdeb6a656b696699e26a6a09571543cd5d4e4`，本方显式委托当前活跃 M16 对话执行联合门禁，没有新增执行对话，也没有把共享执行记成独立多次通过。实际 fresh central、M12 专项 46/46、A/C 7/7、B 5/5、旧工具 3/3、shared seams 5/5、旧 server 算法 18/18、Desktop 原生算法 7/7、fresh emitted SIGKILL 1/1 均 EXIT0，无 skip；M12 日志为 `/tmp/m12-uniform-6f5bdeb6-*.log/.exit`。随后 compiled/packaged backup 40/40 EXIT0 和 fresh Desktop build EXIT0。M16 读全 M12 本域剩余生产路径，没有新增 confirmed 问题，先前生命周期缺口闭合：`/tmp/mote-m16-review-m12-uniform-6f5.md`。
+
+在昂贵 required 前新增有实际依据的等待场景：旧来源的目录建议已经交给模型，本次任务原文来自独立来源；provider 第一轮等待期间删除旧目录来源，下一轮不能再次发送已经失效的目录正文。`d9c02bde748921e98a23fbdadd9355e695c301f2` 原生产实现实际 0/1 EXIT1、11528ms，`m12-catalog-await-red.log/.exit`，下一模型请求仍包含旧 sentinel（1 而非 0），属于新实现 confirmed P2，不是前述长文件夹具假设。
+
+`fd0b7d75` 在本域保留首次目录 ActionRecord 的 proof 与版本/状态，每个模型/reader await fence 和最终同步发布复查，后续页不替换首次凭证。原场景 `m12-catalog-await-green.log/.exit` 1/1 EXIT0、7357ms；`dcad6088` 对齐 internal commit value 的类型。现在为 47 个场景/14 文件。M16 对这三个提交的有界独审没有新增 confirmed P0/P1/P2：`/tmp/mote-m16-review-m12-catalog-dcad.md`。
+
+因此 M16 在 required 前主动停止协调流水线；最后 Desktop 子进程正常结束为 0。其 docs checkpoint `6ede7514` 使 exact-SHA guard 停止并返回 1，属于主动守卫停止，不是产品测试失败。第六 required 尚未启动，无日志；上述 6f5 成功证据不覆盖新增目录围栏。新冻结须 fresh affected build、必要窄回归及实际 required，再作最终验收。

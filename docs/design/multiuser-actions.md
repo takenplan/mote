@@ -83,6 +83,7 @@ M05 `actions.watch` 是用户开启发现时签发的 durable authorization，�
 `actions.delivery` 固定批准操作、设备目标和外部 issuance。父任务停止后其子任务不能发布。
 任务输入只保留有界 locator，不保留原文、凭据或 provider 正文。
 所有模块依赖会在最终组合候选上重新验证；CI Checks/Component checks 保持禁用并记为未运行。
+目录中的旧建议也属于模型已经观察到的来源依赖。首次交付目录项时保留其完整 proof 和建议版本/状态；后续目录页不替换这些凭证。每次模型 transport、reader fence 及最终同步发布复查整个已交付集合，不能只检查本次新输入的来源。
 
 ## 恢复本轮的决策与公共接缝
 
