@@ -95,6 +95,8 @@ export function checkProductionImports(directory=root){
   // projection, and the read-only signed-release checker. Neither opens a
   // private Store or executes updater commands; owner route registration is unused.
   for(const path of ['diagnostics.ts','updates.ts'])allowed.add(sourceRoot+'/'+path);
+  // M12 moves existing pure field/output contracts out of the retired Store hosts.
+  for(const path of ['action-contract.ts','todo-contract.ts','actions-configuration.ts'])allowed.add(sourceRoot+'/'+path);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){
@@ -131,7 +133,7 @@ export function checkScopes(directory=root){
  * installation is the explicit, inventoried exception; it is never a user API.
  * This detects new bypasses, and complements real A/B and composite-FK tests. */
 export function privateSqlViolations(source,path){
-  if(path==='apps/server/src/scope/owner-question-schema.ts'||path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/processing-schema.ts'||path==='apps/server/src/scope/mcp-schema.ts'||path==='apps/server/src/scope/ask-schema.ts'||path==='apps/server/src/scope/memory-schema.ts')return [];
+  if(path==='apps/server/src/scope/actions-schema.ts'||path==='apps/server/src/scope/todo-schema.ts'||path==='apps/server/src/scope/owner-question-schema.ts'||path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/processing-schema.ts'||path==='apps/server/src/scope/mcp-schema.ts'||path==='apps/server/src/scope/ask-schema.ts'||path==='apps/server/src/scope/memory-schema.ts')return [];
   const failures=[],tree=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);
   function visit(node){
     if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){
