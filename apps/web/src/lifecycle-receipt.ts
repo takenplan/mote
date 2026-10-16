@@ -12,9 +12,12 @@ export function lifecycleReceipt(api:Api,value:unknown,kind:'export'|'delete'|'i
   if(r.state==='completed'&&(!Number.isSafeInteger(r.bytes)||r.bytes!<=0||!/^[a-f0-9]{64}$/.test(r.sha256??'')||r.filename!==`mote-portable-${r.id}.json`||r.contentType!=='application/json; charset=utf-8'))invalid();
  }
  if(kind==='import'){
-  const expected=['private-data','ingress','processing','memory','ask'];
-  if(r.format!=='mote-portable'||r.version!==3||!['working','failed','completed','cancelled'].includes(r.state)||!Array.isArray(r.coverage?.importedDomains)||r.coverage.importedDomains.length!==expected.length||expected.some(domain=>!r.coverage!.importedDomains!.includes(domain))||!Array.isArray(r.coverage.preservedDomains)||r.coverage.preservedDomains.some(domain=>typeof domain!=='string')||r.coverage.credentials!==false||r.coverage.activeAuthorization!==false||r.coverage.instanceBackup!==false)invalid();
+  const imported=r.coverage?.importedDomains,preserved=r.coverage?.preservedDomains,required=['private-data','ingress','processing','memory','ask'];
+  if(r.format!=='mote-portable'||r.version!==3||!['working','failed','completed','cancelled'].includes(r.state)||r.phase!==(r.state==='working'?'validating':r.state)||!Array.isArray(imported)||!Array.isArray(preserved)||[...imported,...preserved].some(domain=>typeof domain!=='string'||!domain)||required.some(domain=>!imported.includes(domain))||r.coverage?.credentials!==false||r.coverage.activeAuthorization!==false||r.coverage.instanceBackup!==false)invalid();
+  const declared=[...imported!,...preserved!],domains=new Set(declared),kept=new Set(preserved),names=new Set(r.domains.map(row=>row.domain));
+  if(domains.size!==declared.length||r.domains.length!==declared.length||names.size!==declared.length||r.domains.some(row=>!domains.has(row.domain)||(kept.has(row.domain)?row.state!=='preserved':!(r.state==='completed'?['complete']:['waiting','complete']).includes(row.state)))||['artifact','filename','contentType','bytes','sha256'].some(field=>Object.hasOwn(r,field)))invalid();
  }
+
  return r;
 }
 export function lifecycleLabel(state:string){return ({working:moteText('正在处理'),completed:moteText('已完成'),cancelled:moteText('已取消'),failed:moteText('失败'),pending:moteText('等待清除确认'),result_unknown:moteText('外部结果待确认'),blocked:moteText('需要处理')} as Record<string,string>)[state]??state;}
