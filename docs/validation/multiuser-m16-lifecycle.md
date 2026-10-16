@@ -499,3 +499,81 @@ paused automatic authority, succeeded/unknown external journals, all new device
 cursor corruption cases, and personal-import restart fences. This invocation uses
 the source host; fresh compiled/package-host verification remains a distinct final
 build step. It does not execute Docker daemon/native Hindsight recovery.
+
+
+## Final consumer candidate and compiled checkpoint
+
+Candidate `589d6ad7c4a36de21cb105a7be41a599d0fae1df` adds only the frozen
+consumer increments after the earlier source-host 37/37 checkpoint:
+
+- M13 original Web picker `23b347c9`/`ee4bb999` plus actual malformed import
+  receipt RED `e674a68f` and fix `5df66796`. The bounded M16 review initially
+  reported the completed-domain closure P2; unique complete declared coverage,
+  per-domain states, exact phase and no-artifact validation now close it. Root
+  picks are `21c834bc`, `b1f2fa33`, `1809c5d1`, `822eda00`.
+- M14 actual named-source reader RED `ace31bdf` and fix `ceae83a5`: actual
+  owned source inventory and exact original binding replace a guessed source.
+  Root picks `c5d55633`/`6c186a64`; static review found no additional confirmed
+  P0/P1/P2. M14's same actual two cases pass, including image and raw detail.
+- M15 device-only OCR RED `d83705d1` and fix `2ff31228`, plus visible archive
+  account-resume RED `ac16d97e` and fix `10a1de3d`; root picks
+  `0cef4324`/`b2adce9c` and `2108df2f`/`589d6ad7`. Bounded M16 reviews found
+  no additional confirmed issue. Native original-entry positives remain M15's
+  executed evidence; this review did not rerun an emulator or physical device.
+
+Only the incoming commits' new validation sections were appended when peer
+history differed; the existing root history and runtime adapters were retained.
+Shared/Android bilingual catalogs agree at 8421 keys, and the scope checker exits
+0. An initial manually typed nonexistent `check-scope-inventory.mjs` command
+failed MODULE_NOT_FOUND without running a checker; the actual
+`node scripts/check-scope-contracts.mjs` then passed. This is a verification-command
+correction, not a product failure or a skipped check.
+
+Fresh `npm run build:central` at this candidate exits 0,
+`/tmp/m16-final-central-build.log/.exit`. The existing Vite large-chunk advisory
+is nonfatal. Then:
+
+```
+MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1 node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-instance-backup.test.ts apps/server/test/multiuser-backup-capture-updates.test.ts
+```
+
+passes **23/23, exit 0, no skips** in 24 seconds,
+`/tmp/m16-final-compiled-backup.log/.exit`. The primary instance suite uses the
+fresh compiled production process and package CLI projection, including process
+restart, actual native Mem0 SDK canonical data, conversations, original files,
+execution retirement and successful/unknown external journals. The appended
+capture-journal suite exercises the actual source host and stopped archive helper;
+it is not mislabeled as a second compiled-host test. No real Docker daemon/volume
+or native Hindsight recovery was exercised. Required affected is a separate
+ongoing command recorded after completion.
+
+
+### Fifth required failure: duplicate CLI admission after composition
+
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration`
+with the documented installed JDK21/SDK exits **1** at runtime candidate
+`589d6ad7`; `/tmp/m16-required-affected-fifth.log/.exit`.
+Desktop 492/492, Server 2562 pass/0 fail plus the existing default macOS sandbox
+opt-in skip (2563 total), Web 505/505 and the other workspaces/root 81-case
+suite passed before the final root client suite failed 1/5. Android JVM and the
+later Central runner were not reached. This command is not a passed required
+gate. Documentation-only commit `af7d0fb8` does not alter that runtime evidence.
+
+The real composition combines M16's older outer fresh-self call with M14 c18's
+new per-request shared-transport admission. One private read therefore performs
+two identical fresh checks rather than the expected one. This is a composition
+responsibility defect, not an environmental permission failure. The production
+regression already failed `4 !== 3`; durable `8fd349ac` strengthens it to the
+exact path sequence and reproduces the extra self request in
+`/tmp/m16-cli-shared-admission-red.log`, exit 1. The fix removes only the CLI
+wrapper's duplicated handshake/import. Shared `ingressRequest` retains stable
+account validation, fresh self and pre/post-await abort checks for every actual
+private HTTP request. No startup-only authorization or weaker replay boundary is
+introduced. The unchanged sequence then passes the complete root client suite
+5/5, exit 0, `/tmp/m16-cli-shared-admission-green.log`. Actual M01/M03 CLI
+replacement-deployment/original-ACK cases and the new required run are recorded
+separately after completion.
+
+Heavy work was explicitly released when the failed command ended, before the
+queued Android narrow checks; the planned Desktop build was postponed. No
+healthy test was restarted due to the platform disconnection notification.
