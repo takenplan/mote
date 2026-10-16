@@ -9,7 +9,9 @@ export const processingSettingsSchema=fileProcessingSchema.innerType().pick({ena
 export type ProcessingSettings=z.infer<typeof processingSettingsSchema>;
 export const defaultProcessingSettings=()=>processingSettingsSchema.parse({});
 const plugin=z.object({snapshotId:z.string().uuid(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
-export const processingInputSchema=z.object({originalRef:z.string().regex(/^original:[a-f0-9]{64}$/),generation:z.number().int().nonnegative(),fileGeneration:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0),settings:processingSettingsSchema,plugin:plugin.optional(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
+// Zero predates per-file cancellation and must keep the original serialized
+// M05 identity. A nonzero generation is still an immutable admitted fence.
+export const processingInputSchema=z.object({originalRef:z.string().regex(/^original:[a-f0-9]{64}$/),generation:z.number().int().nonnegative(),fileGeneration:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).transform(value=>value===0?undefined:value),settings:processingSettingsSchema,plugin:plugin.optional(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
 export type ProcessingInput=z.infer<typeof processingInputSchema>;
 
 export function installProcessing(db:DatabaseSync){db.exec(`

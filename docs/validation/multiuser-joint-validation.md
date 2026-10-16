@@ -607,3 +607,13 @@ also EXIT0 in /tmp/mote-joint-file-cancel-types.log/.exit/.sha. Independent
 exact3dd bounded review reports no new confirmed P0/P1/P2 in
 /tmp/mote-theme-review-joint-file-cancel-3ddfd60d.md; old-input ACK identity remains
 a separate upgrade acceptance gap. Theme has ended and is not being reawakened.
+
+The generation-zero identity caveat has now produced a durable actual RED in
+a0afd5d9: real owner admission differs from the historical M05 identity formula
+when the default zero field is serialized. The narrow fix normalizes only zero
+to the historical absent field; nonzero cancellation generations remain admitted
+inputs. /tmp/mote-joint-file-generation-identity-green.log/.exit pass2/2/EXIT0:
+the independently evaluated old identity, persisted zero-format parent/child
+inputs, restart/lost-ACK lookup with no extra tasks, and the real held-summary
+cancellation fence. This is not an execution of an old production binary or a
+general historical archive migration claim. The original RED remains preserved.
