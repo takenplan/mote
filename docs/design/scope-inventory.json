@@ -150,7 +150,7 @@
     ]
   },
   "apps/server/src/connectors/lark-cli.ts": {
-    "scope": "mixed",
+    "scope": "legacy-quarantined",
     "module": "M10",
     "surfaces": [
       "directory:configDir",

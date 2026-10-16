@@ -33,3 +33,28 @@ combined module tests, two-process recovery, compiled production smoke and the
 required affected check at the final commit. CI remains disabled and unrun.
 All fixtures are synthetic. Live credentials, external model production calls,
 real user data and deployment remain outside authorization.
+
+### Retained Coding projection compatibility correction
+
+The scoped migration introduced an unfiltered `source.original-v1` projection;
+this is a new implementation defect. A real pre-fix host followed by the corrected
+host reproduced one retained tool-body search hit after restart. Cache key v2
+prevents reuse during extraction but does not retire a previously published head.
+The failing probe and a durable retained-shape regression are preserved before
+this compatibility correction (`55fd7b332b999042aaf359bc31084cef94d38830`).
+
+The correction uses the existing PrivateData visibility watermark and dependent
+Material traversal. Coding session and canonical processed-Coding heads require
+the host's versioned `coding-dialogue` artifact marker. Older unfiltered heads
+are withdrawn before candidate selection/body reads, including their dependent
+heads. Retained original bytes, artifact payloads and immutable versions remain
+stored; query, stale audit and decoded-artifact reads cannot reactivate them.
+This changes no ownership and mints no execution context or task. A new explicit
+admission/current intake can construct the supported projection through the
+existing producer; a read or restore cannot authorize rebuilding it. An old
+completed v1 extraction cannot resume by publishing its obsolete body. This is
+within the current scoped epoch, not an ownership backfill of old vaults.
+
+No new generic isolation framework is introduced. The public-contract and
+repetition audit is handed off separately before final acceptance. The old
+visibility watermark/traversal remains the sole retirement mechanism.

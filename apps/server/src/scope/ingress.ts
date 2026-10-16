@@ -100,7 +100,8 @@ export class IngressHost{
     });
    },
    receiveSourceItems:(sourceId:string,id:string,values:unknown[],importDeclaration?:unknown)=>intakeSourceItems(sourceId,id,values,undefined,undefined,importDeclaration),
-   /** Host adapter seam: exact original format stays frozen before publication. */
+   /** Host adapter seam: the original is selected before publication, so one
+    * capture has one immutable descriptor. Worker RPCs never expose this seam. */
    receiveSourceItemsWithOriginals:(sourceId:string,id:string,values:unknown[],inputs:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[])=>intakeSourceItems(sourceId,id,values,inputs,formats),
    readOriginal:(ref:string,range?:{offset?:number;length?:number})=>{original(ref);const result=originals.read(ref,range);assert();return result;},
    holdOriginal:(ref:string)=>{const value=original(ref);return originals.pin(value.hash);},
@@ -171,7 +172,7 @@ export class IngressHost{
    const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
    if(inputs&&(inputs.length!==items.length||inputs.some(v=>v&&(!Buffer.isBuffer(v.bytes)||v.bytes.length>512*1024*1024||!v.mime||v.mime.length>200||v.format!==undefined&&!['source-item','file'].includes(v.format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(v.format)))))throw new PrivateDataError('invalid_data');
    if(formats&&(formats.length!==items.length||formats.some(format=>format!==undefined&&!['capture','source-item','file'].includes(format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(format))))throw new PrivateDataError('invalid_data');
-   return batch(sourceId,id,importDeclaration===undefined?(inputs?{items,formats,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime,format:v.format??'file'}:null)}:items):{items,importDeclaration},'source-item',()=>{
+   const payload=inputs?{items,formats,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime,format:v.format??'file'}:null)}:items;return batch(sourceId,id,importDeclaration===undefined?payload:{payload,importDeclaration},'source-item',()=>{
     const pin=declaration(sourceId,importDeclaration),binding=source(sourceId),archive=binding.retention==='archive';if(binding.retention==='reference'&&inputs?.some(Boolean))throw conflict();
     const descriptors=items.map((item,index)=>{
      const capture=captureId(sourceId,item),prior=sql.get('SELECT id,hash,mime,retention FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,capture),input=inputs?.[index];
@@ -180,7 +181,7 @@ export class IngressHost{
      const object=originals.put(input?.bytes??Buffer.from(JSON.stringify(item)));return {hash:object.hash,mime:input?.mime??'application/json'};
     });
     const acks=data().receiveSourceItems(sourceId,items,archive?{verify:item=>{if(!descriptors[items.findIndex(value=>value.externalId===item.externalId&&value.revision===item.revision)])throw conflict();}}:undefined).receipts;
-    return receipt(sourceId,id,acks.map((ack,index)=>{if(!ack.duplicate)imports.bind(ack.id,pin);const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));
+    for(const ack of acks)if(!ack.duplicate)imports.bind(ack.id,pin);return receipt(sourceId,id,acks.map((ack,index)=>{const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));
    },result=>Object.fromEntries(result.captures.flatMap((ack,index)=>ack.original&&(formats?.[index]||inputs?.[index])?[[ack.original.ref,formats?.[index]??inputs![index]!.format??'file']]:[])));
   }
   function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));if(row.authorization_epoch!==context.authorizationEpoch||Number(row.expires)<=Date.now())throw conflict();return row;}
