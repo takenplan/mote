@@ -1,0 +1,42 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import React,{act} from 'react';
+import {JSDOM} from 'jsdom';
+import {createServer} from 'node:http';
+import {setTimeout as delay} from 'node:timers/promises';
+import {configureLocale} from '@mote/shared/i18n';
+import {scopedFilesFixture} from '../../server/test/fixtures/scoped-files.js';
+import {waitForScopedState} from '../../server/test/fixtures/scoped-process.js';
+import {defaultModelSettings} from '../../server/src/model-settings.js';
+import {defaultProcessingSettings} from '../../server/src/scope/processing-schema.js';
+import {createApi,type Api} from '../src/api.js';
+import {FileDetail} from '../src/Files.js';
+configureLocale(()=> 'zh-CN');
+
+test('original FileDetail corrects the exact M06 transcript and confirms its anonymous speaker without borrowing B',async t=>{
+ const f=await scopedFilesFixture(t),original='GENERATED_SPOKEN_ORIGINAL';
+ const asr=createServer((req,res)=>{void(async()=>{for await(const _ of req){}res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text:original,speaker:'SPEAKER_0'}],coverage:'full',engine:'generated-web-asr'}));})().catch(()=>res.destroy());});
+ await new Promise<void>(resolve=>asr.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise<void>(resolve=>asr.close(()=>resolve())));const address=asr.address();assert.ok(address&&typeof address!=='string');
+ const wave=Buffer.alloc(48);wave.write('RIFF');wave.writeUInt32LE(40,4);wave.write('WAVEfmt ',8);wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(1,22);wave.writeUInt32LE(8000,24);wave.writeUInt32LE(16000,28);wave.writeUInt16LE(2,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(4,40);
+ const receipts=[];
+ for(const account of [f.a,f.b]){
+  let view=await f.checked(account.token,'/api/configuration');await f.checked(account.token,'/api/configuration/processing','PUT',{revision:view.revision,value:{...defaultProcessingSettings(),automatic:false,summarize:false,semanticTurns:false,audioProcessor:'audio.http'}});
+  view=await f.checked(account.token,'/api/configuration');await f.checked(account.token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[{id:'generated-asr',name:'Generated ASR',settings:{...defaultModelSettings(),provider:'custom',protocol:'mote-media',baseUrl:'http://127.0.0.1:'+address.port+'/transcribe',model:'generated-web-asr',apiKey:'GENERATED_'+account.userId}}],selections:{asr:{kind:'personal',id:'generated-asr'}}}});
+  const receipt=await f.uploadBytes(account.token,'same-recording',wave,'audio/wav');receipts.push(receipt);const task=await f.checked(account.token,'/api/processing','POST',{originalRef:receipt.original.ref,operationId:'same-web-asr'});await waitForScopedState(async()=>(await f.checked(account.token,'/api/tasks/'+task.id)).state==='succeeded',()=>'actual ASR not completed');
+ }
+ const id=receipts[0].id;assert.equal(receipts[1].id,id);const beforeB=await f.checked(f.b.token,'/api/files/'+id+'/chunks');
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/#/library?view=files',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>();let cookie='',current:Api|undefined;const calls:{path:string;method:string;session:string}[]=[];
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Event:dom.window.Event,IS_REACT_ACT_ENVIRONMENT:true,fetch:async(path:string,init:RequestInit={})=>{const headers=new Headers(init.headers);headers.set('cookie',cookie);calls.push({path,method:init.method??'GET',session:headers.get('x-mote-session-id')??''});const r=await f.host.app.inject({url:path,method:init.method as any??'GET',headers:Object.fromEntries(headers),...(init.body?{payload:String(init.body)}:{})});return new Response(r.rawPayload,{status:r.statusCode,headers:r.headers as Record<string,string>});}})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
+ const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!),d=dom.window.document;
+ t.after(async()=>{current?.close?.();await act(async()=>root.unmount());for(const [key,value]of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
+ const login=async(username:string)=>{const r=await f.request(undefined,'/api/auth/login','POST',{username,password:'Generated-joint-files-password',mode:'web'});assert.equal(r.statusCode,200,r.body);cookie=String(r.headers['set-cookie']).split(';')[0];const api=createApi({mode:'web',origin:'http://localhost',...r.json()},undefined,()=>current===api);current?.close?.();current=api;return api;};
+ const wait=async(predicate:()=>boolean,label:string)=>{for(let n=0;n<300&&!predicate();n++)await act(async()=>delay(10));assert.ok(predicate(),label+' '+d.body.textContent);},button=(label:string)=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(value=>value.textContent===label),press=async(label:string)=>act(async()=>{const value=button(label);assert.ok(value,label+' '+d.body.textContent);value.click();await delay(20);});
+ const render=async(api:Api)=>act(async()=>{root.render(React.createElement(React.StrictMode,null,React.createElement(FileDetail,{api,id,onOpen:()=>{}})));await delay(20);});
+ await render(await login('generated-a'));await wait(()=>!!button('展开原始转写（未校正）'),'actual original transcript');await press('展开原始转写（未校正）');await wait(()=>!!button('纠正此段'),'actual canonical segment');assert.match(d.body.textContent!,new RegExp(original));
+ await wait(()=>!!button('确认说话人名称'),'M06 transcript anonymous labels must retain the original owner naming control');
+ const fill=async(selector:string,value:string)=>act(async()=>{const input=d.querySelector<HTMLInputElement|HTMLTextAreaElement>(selector);assert.ok(input,selector);const prototype=input instanceof dom.window.HTMLTextAreaElement?dom.window.HTMLTextAreaElement.prototype:dom.window.HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(prototype,'value')!.set!.call(input,value);input.dispatchEvent(new dom.window.Event('input',{bubbles:true}));await delay(10);});
+ await fill('input[aria-label="SPEAKER_0 名称"]','GENERATED_CONFIRMED_A');await press('确认说话人名称');await wait(()=>d.body.textContent!.includes('说话人名称已保存。'),'owner confirmation');assert.equal((await f.checked(f.a.token,'/api/files/'+id+'/chunks')).items[0].fileEvidence.speakerAttribution.name,'GENERATED_CONFIRMED_A');assert.deepEqual(await f.checked(f.b.token,'/api/files/'+id+'/chunks'),beforeB);
+ await press('展开原始转写（未校正）');await wait(()=>!!button('纠正此段'),'refreshed exact segment');await press('纠正此段');await fill('textarea','GENERATED_CORRECTED_A');await press('保存校正');await wait(()=>!d.querySelector('textarea'),'actual correction acknowledgement');const corrected=await f.checked(f.a.token,'/api/files/'+id+'/chunks');assert.equal(corrected.items[0].ocrText,'GENERATED_CORRECTED_A');assert.equal(corrected.items[0].fileEvidence.speakerAttribution.name,'GENERATED_CONFIRMED_A');
+ await press('展开原始转写（未校正）');await wait(()=>!!button('确认说话人名称'),'current confirmed speaker');const oldSave=button('确认说话人名称')!,writes=calls.filter(c=>c.method==='POST').length;
+ await render(await login('generated-b'));await act(async()=>{oldSave.click();await delay(20);});assert.equal(calls.filter(c=>c.method==='POST').length,writes,'old A name button must not submit with B');assert.doesNotMatch(d.body.textContent!,/GENERATED_CONFIRMED_A|GENERATED_CORRECTED_A/);assert.deepEqual(await f.checked(f.b.token,'/api/files/'+id+'/chunks'),beforeB);
+});
