@@ -31,8 +31,9 @@ test('real Harness proposes only owner evidence and interleaved OwnerQuestions a
  assert.equal(a.status,'proposed');assert.equal(b.status,'proposed');assert.ok(a.evidence[0].quote.includes('_A_'));assert.ok(b.evidence[0].quote.includes('_B_'));
  const target={deviceId:'same-device',calendarId:'same-calendar'},review=await f.ok(f.a.token,'/api/actions/'+a.id+'/review','POST',{version:a.version,event:a.event,target});
  assert.equal((await f.request(f.b.token,'/api/owner-questions/'+review.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:review.revision,action:'answer',choiceId:'approve'})).statusCode,404);
- await f.ok(f.b.token,'/api/actions/'+b.id+'/confirm','POST',{version:b.version,event:b.event,target});
- const reply={requestId:randomUUID(),expectedRevision:review.revision,action:'answer',choiceId:'approve'};
+ const bReview=await f.ok(f.b.token,'/api/actions/'+b.id+'/review','POST',{version:b.version,event:b.event,target}),requestId=randomUUID();
+ await f.ok(f.b.token,'/api/owner-questions/'+bReview.id+'/reply','POST',{requestId,expectedRevision:bReview.revision,action:'answer',choiceId:'approve'});
+ const reply={requestId,expectedRevision:review.revision,action:'answer',choiceId:'approve'};
  const approved=await f.ok(f.a.token,'/api/owner-questions/'+review.id+'/reply','POST',reply);assert.equal(approved.state,'closed');
  assert.deepEqual(await f.ok(f.a.token,'/api/owner-questions/'+review.id+'/reply','POST',reply),approved);
  assert.equal((await f.ok(f.a.token,'/api/actions')).items[0].status,'approved');

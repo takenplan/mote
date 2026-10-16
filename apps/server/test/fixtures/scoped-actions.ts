@@ -35,6 +35,6 @@ export function respond(body:any,raw:string,res:ServerResponse,owner:string){
  const uses=body.messages.flatMap((message:any)=>Array.isArray(message.content)?message.content.filter((part:any)=>part.type==='tool_use'):[]),ids=[...new Set(raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g)??[])];
  if(!uses.some((use:any)=>use.name==='evidence'))return writeMessagesResponse(res,{stage:uses.length+1,tool:{name:'evidence',args:{ids:[envelope.untrustedEvidence[0].id]}}});
  const id=envelope.untrustedEvidence[0].id;
- writeMessagesResponse(res,{stage:uses.length+1,text:JSON.stringify({answer:JSON.stringify({actions:[{kind:'calendar.create',event:{...event,title:'Generated '+owner},uncertainty:'Generated proposal',sameAs:null,evidence:[{id,quote:'GENERATED_'+owner+'_PRIVATE_APPOINTMENT'}]}]}),citationIds:[id]})});
+ writeMessagesResponse(res,{stage:uses.length+1,text:JSON.stringify({answer:JSON.stringify({actions:envelope.untrustedEvidence[0].ocrText.includes('GENERATED_'+owner+'_PRIVATE_APPOINTMENT')?[{kind:'calendar.create',event:{...event,title:'Generated '+owner},uncertainty:'Generated proposal',sameAs:null,evidence:[{id,quote:'GENERATED_'+owner+'_PRIVATE_APPOINTMENT'}]}]:[]}),citationIds:[id]})});
 }
 
