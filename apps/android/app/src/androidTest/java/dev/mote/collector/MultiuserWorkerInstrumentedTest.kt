@@ -107,6 +107,26 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun actualNativeMemorySettingsUseTheOwnedConfigurationCAS() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val before=api.get("/api/configuration")
+        val bBefore=CentralClient(endpoint(),token("b")).get("/api/configuration")
+        fun domain(view:JSONObject)=view.getJSONArray("domains").let {items->(0 until items.length()).map {items.getJSONObject(it)}.single {it.getString("id")=="memory"}.getJSONObject("saved")
+        val zone=if(domain(before).getString("timeZone")=="Asia/Tokyo")"UTC" else "Asia/Tokyo"
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("记忆设置");ready();click("记忆自动处理");ready()
+            scenario.onActivity {activity->val field=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().firstOrNull {it.hint.toString()=="timeZone"};assertNotNull("Native Memory settings must open the actual owned M04 domain",field);field!!.setText(zone)}
+            click("保存设置");ready()
+            val after=api.get("/api/configuration");assertEquals(zone,domain(after).getString("timeZone"))
+            assertEquals(domain(bBefore).toString(),domain(CentralClient(endpoint(),token("b")).get("/api/configuration")).toString())
+            assertEquals(409,assertThrows(CentralFailure::class.java){api.put("/api/configuration/memory",JSONObject().put("revision",before.getLong("revision")).put("value",domain(before)).put("preserveRedactedSecrets",true))}.status)
+        }
+    }
+
     @Test fun actualPublishedMemoryEvidenceUsesTheCanonicalReaderUnderItsOwner() {
         val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
