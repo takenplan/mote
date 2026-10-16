@@ -87,7 +87,7 @@ export class LifecycleOperations {
    try{const grant=await this.authority.authorize(String(row.grant_id));if(this.closed)return;const receipt=await runtime.services.forLifecycle(grant).run() as DeletionReceipt;this.authority.assert(grant);if(receipt.operationId!==id||!['complete','pending','result_unknown'].includes(receipt.status))throw new AuthError('invalid_deletion_receipt',503);this.db.prepare('UPDATE lifecycle_domains SET state=? WHERE operation_id=? AND domain=?').run(receipt.status,id,domain);if(receipt.status!=='complete'){this.update(id,receipt.status);return;}}
    catch{if(!this.closed)this.update(id,'failed','domain_delete_failed');return;}
   }
-  if(!this.closed)this.update(id,'completed');
+  if(!this.closed)this.transaction(()=>{runtime.accounts!.finishDeletion(this.row(id)!.user_id,id);this.update(id,'completed');});
  }
  /** A crashed export has no live owner capability to resume. Delete operations
   * retain their explicit approval, but retry is an administrator action. */
