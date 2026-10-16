@@ -133,7 +133,14 @@ function App({initialConnection}:{initialConnection:Connection|null}) {
   const [timelineRevision, setTimelineRevision] = useState(0);
   const clearConnection = useCallback(() => {
     connectionGeneration.current++;
-    activeApi.current?.close?.();
+    const retired=activeApi.current;
+    activeApi.current=null;
+    retired?.close?.();
+    if(retired?.connection){
+      setClientLogin(undefined);
+      removeLoginParameter('loginRequest');
+      currentHash.current=location.hash;
+    }
     clearSession();
     updateEvidenceId(null);
     setPeriod("week");
