@@ -70,8 +70,8 @@ it('keeps real original spools, source cursors and drafts separated while A and 
  expect(f.calls.filter(v=>v.url.includes('file-sync'))).toHaveLength(0);
 });
 
-async function productionDesktop(f:Awaited<ReturnType<typeof fixture>>,profile=join(f.directory,'profile')){
- const child=fork(resolve(repository,'apps/desktop/test/main-process-fixture.cjs'),[profile],{cwd:repository,env:{...process.env,MOTE_PROFILE:'default',MOTE_URL:'',MOTE_TOKEN:''},stdio:['ignore','pipe','pipe','ipc']});
+async function productionDesktop(f:Awaited<ReturnType<typeof fixture>>,profile=join(f.directory,'profile'),bootstrap?:{url:string;token:string}){
+ const child=fork(resolve(repository,'apps/desktop/test/main-process-fixture.cjs'),[profile],{cwd:repository,env:{...process.env,MOTE_PROFILE:'default',MOTE_URL:bootstrap?.url??'',MOTE_TOKEN:bootstrap?.token??''},stdio:['ignore','pipe','pipe','ipc']});
  let nextId=0,generation=0,ready=false,exited=false,error='',latest:any;const results=new Map<number,{resolve:(v:any)=>void;reject:(e:Error)=>void}>();
  child.stderr!.on('data',chunk=>{error+=chunk.toString();});child.on('exit',()=>{exited=true;});
  let intercept:((message:any,reply:()=>Promise<void>)=>Promise<boolean>)|undefined;
@@ -243,4 +243,9 @@ it.each(['id','original'])('retains real durable bytes when the actual M03 ACK h
  const f=await fixture(),config=f.config(f.a),queue=new DurableQueue(join(f.directory,'bad-receipt'),config);await queue.initialize();await queue.enqueue({...event(),deviceId:config.deviceId},image);const original=f.fetcher.getMockImplementation()!;let corrupt=true;
  f.fetcher.mockImplementation(async(input,init)=>{const response=await original(input,init);if(corrupt&&String(input).endsWith('/captures')&&init?.method==='POST'&&response.ok){const body=await response.json();if(field==='id')body.id='wrong-receipt-id';else body.captures[0].original.sourceId='other-source';return new Response(JSON.stringify(body),{status:200,headers:{'content-type':'application/json'}});}return response;});
  const collector=new Collector(config,queue,'/generated/no-helper',()=>true,()=>{});cleanup.push(async()=>{collector.shutdown();const release=await collector.holdConnection();release();});await collector.upload(true);expect(queue.stats().depth).toBe(1);expect((await queue.exportArchive()).blobs).toEqual({[createHash('sha256').update(image).digest('hex')]:image.toString('base64')});corrupt=false;await collector.retry();expect(queue.stats().depth).toBe(0);expect((await f.request(f.b.token,'/api/captures/'+event().id)).statusCode).toBe(404);
+});
+
+it('binds an environment credential to the actual M01 account before opening the first production Desktop store',async()=>{
+ const f=await fixture(),config=f.config(f.a),app=await productionDesktop(f,join(f.directory,'bootstrap'),{url:config.serverUrl,token:config.token!});const status=await app.call('mote:get-status');expect(status.config.account).toMatchObject({origin:config.serverUrl,deploymentId:f.a.deploymentId,userId:f.a.userId});expect(status.storage.directory).not.toContain('signed-out');await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false}]);const note=await app.call('mote:note-draft');await app.call('mote:note',[{...note,text:'Generated bootstrap account note',revision:1}]);await app.call('mote:retry');expect((await f.request(f.a.token,'/api/captures/'+note.id)).statusCode).toBe(200);expect((await f.request(f.b.token,'/api/captures/'+note.id)).statusCode).toBe(404);
+ const rejected=await productionDesktop(f,join(f.directory,'bootstrap-rejected'),{url:config.serverUrl,token:'generated-unrecognized-credential-00000000'});expect((await rejected.call('mote:get-status')).config.tokenConfigured).toBe(false);await expect(rejected.call('mote:start')).rejects.toThrow('Sign in');
 });
