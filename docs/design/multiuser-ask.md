@@ -188,3 +188,37 @@ Failed branches can retry their own fixed model lease while successful children
 remain committed once. Optional child time/device ranges intersect the parent
 range; model owner/source authority selectors remain invalid. Concurrent answers
 against one conversation revision still admit only one appended turn.
+
+## Complete original pages and bounded dialogue
+
+Native ContextReader timeline/sourceItems now page canonical originals inside a
+multi-block Material, retaining the exact Material revision and block offset.
+Entity-card context pages have a distinct signed cursor projection. A later block
+matching literal search is returned without preceding unrelated blocks; literal
+space-separated terms remain AND candidates before LIMIT, as in the existing
+query contract. `read_file_evidence` reads retained canonical file originals,
+passes its explicit source offset through the real Harness bridge and retains the
+same current original identity/fingerprint for citations. It creates no SQL-body
+provider fallback or fabricated excerpt identity.
+
+The shared pure WorkingMemory prefix/span planner is extracted from the existing
+implementation and reused. Scoped conversations compact complete old prefixes
+before exceeding the configured dialogue budget, including every ordered span of
+a very long answer. Each model call receives an M04 fork of the admitted root
+snapshot; successful spans are grant-committed as owner/run artifacts and M05
+checkpoints, so pause/restart never repeats a committed span. The exact prior
+summary is included in later compaction. Conversation publication retains the
+existing 200-turn/4-MiB policy and exact conversation CAS. All source pins and the
+request or durable grant are checked before every model request and publication.
+Workers inherit host owner/source scope and intersect their declared time/device
+scope, without the parent dialogue or saved query workspace. Models cannot add an
+owner or source allowlist through delegation arguments.
+
+Narrow WIP validation: compiled real Harness file range + explicit/automatic long
+compaction + worker boundary4/4 EXIT0,32734ms; successful compaction span pause /
+actual host restart / changed-current-settings + narrower worker time/device scope
++ canonical block paging + file range4/4 EXIT0,34419ms. Original shared long-turn,
+failed-prefix and cross-turn compaction regressions4/4 passed separately. Earlier
+whole-prompt-size and incomplete-time-interval fixture assumptions were corrected;
+they are diagnostics, not passing receipts. These are partial checks before the
+next clean freeze, full actual composition, independent review and affected gates.
