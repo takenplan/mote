@@ -680,3 +680,15 @@ occupancy fix51d same case is1/1/EXIT0 in
 /tmp/mote-joint-processing-physical-ack-green.log/.exit. Current types and bounded
 review remain pending, and these outcomes do not close model reviews/calendar
 associations, image-policy/attachment parity, forget/allowagain or final gates.
+
+Exact36ffde5c Server source and scripts noEmit ACTUAL EXIT0:
+/tmp/mote-joint-file-current-types.log/.exit/.sha. Source stayed fixed throughout;
+parent fresh QR EXIT124/RELEASE followed by M15 short Gradle terminal/RELEASE
+preceded the claim. Joint released all heavy work immediately afterward. The
+subsequent stronger partial-export test adds no production change and passes2/2
+with the zero-identity case in
+/tmp/mote-joint-file-current-partial-export-green.log/.exit: partial manifest
+explicitly processed=false/indexed=false/current raw artifact, exact bad-WAV
+failure code, retained previous publication and B-positive. Types and these narrow
+runs do not replace an independent bounded review or own final affected/compiled/
+client acceptance. QR's full affected timeout124 is not a passing gate here.
