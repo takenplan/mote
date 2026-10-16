@@ -68,6 +68,7 @@ test('production account deletion revokes before erasure, is durable and cannot 
  let receipt=started.json();for(let tries=0;['working','pending'].includes(receipt.state)&&tries<100;tries++){await new Promise(r=>setTimeout(r,10));receipt=(await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+receipt.id)).json();}
  assert.equal(receipt.state,'completed',JSON.stringify(receipt));
  assert.equal(credentials.prepare('SELECT count(*) n FROM auth_credentials WHERE user_id=?').get(f.a.userId)!.n,0,'completed deletion must physically remove token hashes, CSRF hashes, device metadata and parent credentials');
+ assert.equal((await f.request(f.admin.token,'GET','/api/admin/accounts')).json().items.find((account:any)=>account.userId===f.a.userId).deletionId,receipt.id,'administrator can rediscover the durable receipt after refresh');
  assert.deepEqual(credentials.prepare('SELECT * FROM auth_credentials WHERE user_id=? ORDER BY id').all(f.b.userId),bCredentials);
  assert.deepEqual((await f.request(f.b.token,'GET','/api/captures')).json(),before.json());
  assert.equal((await f.request(f.admin.token,'PATCH','/api/admin/accounts/'+f.a.userId,{disabled:false})).statusCode,409);
