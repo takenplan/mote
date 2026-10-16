@@ -1384,59 +1384,6 @@
       "table:auth_credentials"
     ]
   },
-  "apps/server/src/scope/action-delivery.ts": {
-    "scope": "user",
-    "module": "M12",
-    "surfaces": [
-      "task:host.execution.register:kind:'actions.delivery'"
-    ]
-  },
-  "apps/server/src/scope/action-discovery.ts": {
-    "scope": "user",
-    "module": "M12",
-    "surfaces": [
-      "task:host.execution.register:kind:'actions.extract'",
-      "task:host.execution.register:kind:'actions.watch'"
-    ]
-  },
-  "apps/server/src/scope/action-routes.ts": {
-    "scope": "user",
-    "module": "M12",
-    "surfaces": [
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions'",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions/deliveries'",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/'+method",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/cancel'",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/claim'",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/dismiss'",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/receipt'",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/retry'",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/targets'",
-      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'PUT',url:'/api/actions/settings'"
-    ]
-  },
-  "apps/server/src/scope/actions-schema.ts": {
-    "scope": "user",
-    "module": "M12",
-    "surfaces": [
-      "table:ac_dependencies",
-      "table:ac_jobs",
-      "table:ac_meta",
-      "table:ac_operations",
-      "table:ac_proposals",
-      "table:ac_restore",
-      "table:ac_sources",
-      "table:ac_state",
-      "table:ac_targets"
-    ]
-  },
-  "apps/server/src/scope/actions.ts": {
-    "scope": "user",
-    "module": "M12",
-    "surfaces": [
-      "extension:runtime.services.registerUser:ACTIONS_DOMAIN"
-    ]
-  },
   "apps/server/src/scope/app.ts": {
     "scope": "mixed",
     "module": "M09",
@@ -1445,110 +1392,6 @@
       "extension:registerConfigurationRoutes:runtime",
       "extension:registerScopedConnectors:runtime",
       "extension:registerTaskRoutes:runtime"
-    ]
-  },
-  "apps/server/src/scope/ask-automation.ts": {
-    "scope": "user",
-    "module": "M08",
-    "status": "implemented",
-    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
-    "surfaces": [
-      "extension:runtime.services.registerUser:'ask-automation'",
-      "task:execution.register:kind:'ask.automation'"
-    ]
-  },
-  "apps/server/src/scope/ask-read-routes.ts": {
-    "scope": "user",
-    "module": "M08",
-    "status": "implemented",
-    "notes": "Shared host-bound query facade; final acceptance tracked separately.",
-    "surfaces": [
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/activity'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/catalog'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/file-chunks'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/material-read'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/materials'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/memories'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/segments'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-history'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-items'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/browse'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/bundle'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/retrieve'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/search'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/status'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/media-activity'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/context/read'"
-    ]
-  },
-  "apps/server/src/scope/ask-routes.ts": {
-    "scope": "user",
-    "module": "M08",
-    "status": "implemented",
-    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
-    "surfaces": [
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'DELETE',url:'/api/conversations/:id'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-artifacts/:id'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations/:id'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs/:id'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insights'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations/:id/'+action",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations/:id/compact'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs/:id/cancel'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insights'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action",
-      "extension:registerAskReadRoutes:runtime"
-    ]
-  },
-  "apps/server/src/scope/ask-schema.ts": {
-    "scope": "user",
-    "module": "M08",
-    "status": "implemented",
-    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
-    "surfaces": [
-      "table:ma_artifacts",
-      "table:ma_auto_events",
-      "table:ma_auto_restore",
-      "table:ma_auto_runs",
-      "table:ma_auto_state",
-      "table:ma_auto_windows",
-      "table:ma_automations",
-      "table:ma_conversations",
-      "table:ma_fragments",
-      "table:ma_insight_snapshots",
-      "table:ma_meta",
-      "table:ma_originals",
-      "table:ma_read_cursors",
-      "table:ma_restore",
-      "table:ma_runs",
-      "table:ma_sources",
-      "table:ma_state",
-      "table:ma_traces",
-      "table:ma_turns",
-      "table:ma_units"
-    ]
-  },
-  "apps/server/src/scope/ask.ts": {
-    "scope": "user",
-    "module": "M08",
-    "status": "implemented",
-    "notes": "Host context, source scope, evidence and request/task publication fences; acceptance tracked separately.",
-    "surfaces": [
-      "extension:runtime.services.registerUser:ASK_DOMAIN",
-      "task:execution.register:kind:'ask.'+mode",
-      "task:execution.register:kind:'ask.coordinate'"
     ]
   },
   "apps/server/src/scope/auth-routes.ts": {
@@ -1714,185 +1557,6 @@
       "extension:runtime.services.registerUser:INGRESS_DOMAIN"
     ]
   },
-  "apps/server/src/scope/mcp-inbound.ts": {
-    "scope": "user",
-    "module": "M11",
-    "status": "implemented-query-core-phase",
-    "surfaces": [
-      "api:all:'/mcp'",
-      "mcp:registerResource:'memory-catalog':'mote://memories'",
-      "mcp:registerResource:'source-catalog':'mote://sources'",
-      "mcp:registerTool:'mote_memories'",
-      "mcp:registerTool:'mote_put_item'",
-      "mcp:registerTool:'mote_sources'"
-    ]
-  },
-  "apps/server/src/scope/mcp-query.ts": {
-    "scope": "user",
-    "module": "M11",
-    "status": "implemented-query-core-phase",
-    "surfaces": [
-      "mcp:registerTool:'mote_activity'",
-      "mcp:registerTool:'mote_browse'",
-      "mcp:registerTool:'mote_context'",
-      "mcp:registerTool:'mote_evidence'",
-      "mcp:registerTool:'mote_file_catalog'",
-      "mcp:registerTool:'mote_file_chunks'",
-      "mcp:registerTool:'mote_history'",
-      "mcp:registerTool:'mote_items'",
-      "mcp:registerTool:'mote_material'",
-      "mcp:registerTool:'mote_material_read'",
-      "mcp:registerTool:'mote_materials'",
-      "mcp:registerTool:'mote_media_activity'",
-      "mcp:registerTool:'mote_read'",
-      "mcp:registerTool:'mote_retrieve'",
-      "mcp:registerTool:'mote_search'",
-      "mcp:registerTool:'mote_segments'",
-      "mcp:registerTool:'mote_status'",
-      "mcp:registerTool:'mote_timeline'"
-    ]
-  },
-  "apps/server/src/scope/mcp-schema.ts": {
-    "scope": "user",
-    "module": "M11",
-    "status": "implemented-protocol-source-phase",
-    "surfaces": [
-      "table:mc_manifests",
-      "table:mc_source_epochs",
-      "table:mc_source_status",
-      "table:mc_state"
-    ]
-  },
-  "apps/server/src/scope/mcp.ts": {
-    "scope": "user",
-    "module": "M11",
-    "status": "implemented-protocol-source-phase",
-    "surfaces": [
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/discover',service:MCP_DOMAIN",
-      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/import',service:MCP_DOMAIN",
-      "extension:runtime.services.registerUser:MCP_DOMAIN"
-    ]
-  },
-  "apps/server/src/scope/memory-bindings.ts": {
-    "scope": "user",
-    "module": "M07",
-    "status": "implemented",
-    "surfaces": [
-      "task:execution.register:kind:'memory.binding'"
-    ]
-  },
-  "apps/server/src/scope/memory-capture-materials.ts": {
-    "scope": "user",
-    "module": "M07",
-    "surfaces": [
-      "task:execution.register:kind:'memory.materials'"
-    ]
-  },
-  "apps/server/src/scope/memory-feedback.ts": {
-    "scope": "user",
-    "module": "M07",
-    "surfaces": [
-      "task:execution.register:kind:'memory.feedback'",
-      "task:this.execution.register:kind:'memory.feedback-admit'"
-    ]
-  },
-  "apps/server/src/scope/memory-intake.ts": {
-    "scope": "user",
-    "module": "M07",
-    "status": "implemented",
-    "surfaces": [
-      "task:execution.register:kind:'memory.intake'"
-    ]
-  },
-  "apps/server/src/scope/memory-integration.ts": {
-    "scope": "user",
-    "module": "M07",
-    "status": "implemented",
-    "surfaces": [
-      "task:execution.register:kind:'memory.integration-window'"
-    ]
-  },
-  "apps/server/src/scope/memory-owner-questions.ts": {
-    "scope": "user",
-    "module": "M07",
-    "surfaces": [
-      "task:execution.register:kind:'memory.owner-reply'"
-    ]
-  },
-  "apps/server/src/scope/memory-routes.ts": {
-    "scope": "user",
-    "module": "M07",
-    "status": "implemented",
-    "surfaces": [
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'DELETE',url:'/api/memories/:id'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id/versions/:version'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit/:id'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/bindings/:id'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id/review'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/activate'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/cancel'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile'"
-    ]
-  },
-  "apps/server/src/scope/memory-schema.ts": {
-    "scope": "user",
-    "module": "M07",
-    "status": "implemented",
-    "surfaces": [
-      "table:mm_binding_locks",
-      "table:mm_binding_preparations",
-      "table:mm_capture_intakes",
-      "table:mm_commands",
-      "table:mm_deletions",
-      "table:mm_dependencies",
-      "table:mm_evidence",
-      "table:mm_feedback",
-      "table:mm_fts",
-      "table:mm_images",
-      "table:mm_intakes",
-      "table:mm_integrated_versions",
-      "table:mm_integration_windows",
-      "table:mm_job_batches",
-      "table:mm_job_controls",
-      "table:mm_jobs",
-      "table:mm_meta",
-      "table:mm_native_cleanup",
-      "table:mm_owner_cancellations",
-      "table:mm_provider_config",
-      "table:mm_provider_descriptors",
-      "table:mm_provider_journal",
-      "table:mm_records",
-      "table:mm_restore",
-      "table:mm_state",
-      "table:mm_version_bindings",
-      "table:mm_versions"
-    ]
-  },
-  "apps/server/src/scope/memory.ts": {
-    "scope": "user",
-    "module": "M07",
-    "status": "implemented",
-    "surfaces": [
-      "extension:runtime.services.registerUser:MEMORY_DOMAIN",
-      "task:execution.register:kind:'memory.'+stage",
-      "task:execution.register:kind:'memory.admit'",
-      "task:execution.register:kind:'memory.correct'",
-      "task:execution.register:kind:'memory.reconcile'"
-    ]
-  },
   "apps/server/src/scope/model-snapshots.ts": {
     "scope": "user",
     "module": "M04",
@@ -1912,34 +1576,6 @@
       "directory:this.area('work')",
       "directory:this.directory",
       "directory:user"
-    ]
-  },
-  "apps/server/src/scope/owner-question-routes.ts": {
-    "scope": "user",
-    "module": "M07",
-    "surfaces": [
-      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions'",
-      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions/:id'",
-      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'POST',url:'/api/owner-questions/:id/reply'"
-    ]
-  },
-  "apps/server/src/scope/owner-question-schema.ts": {
-    "scope": "user",
-    "module": "M07",
-    "surfaces": [
-      "table:oq_dependencies",
-      "table:oq_meta",
-      "table:oq_questions",
-      "table:oq_replies",
-      "table:oq_restore",
-      "table:oq_state"
-    ]
-  },
-  "apps/server/src/scope/owner-questions.ts": {
-    "scope": "user",
-    "module": "M07",
-    "surfaces": [
-      "extension:runtime.services.registerUser:OWNER_QUESTIONS_DOMAIN"
     ]
   },
   "apps/server/src/scope/plugin-routes.ts": {
@@ -2124,26 +1760,6 @@
       "extension:runtime.services.registerUser:EXECUTION_DOMAIN"
     ]
   },
-  "apps/server/src/scope/todo-schema.ts": {
-    "scope": "user",
-    "module": "M12",
-    "surfaces": [
-      "table:td_meta",
-      "table:td_restore",
-      "table:td_state",
-      "table:td_todos"
-    ]
-  },
-  "apps/server/src/scope/todos.ts": {
-    "scope": "user",
-    "module": "M12",
-    "surfaces": [
-      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'GET',url:'/api/todos'",
-      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'PATCH',url:'/api/todos/:id'",
-      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'POST',url:'/api/todos'",
-      "extension:runtime.services.registerUser:TODOS_DOMAIN"
-    ]
-  },
   "apps/server/src/source-archive.ts": {
     "scope": "legacy-quarantined",
     "module": "M02",
@@ -2273,6 +1889,390 @@
       "extension:backendContext.provide:'moteOwnerQuestions'",
       "extension:registerMemoryExtensions:{integrationSettings:memoryIntegrationSettings,semanticArtifacts,providerCooldownCheck:()=>providerAdmission.check(modelSettings.select('memory').settings),insights:insightRuns,insightTimeout:()=>modelSettings.select('insight').settings.agentTimeoutMs,lifecycle,store,files,memories,pipeline:memoryPipeline,working,query:(input,module)=>queryAgent(input,input.skill==='personal-insight'?'insight':'query',module),model:()=>modelSettings.select('memory').settings.model}",
       "extension:registerPluginRoutes:app"
+    ]
+  },
+  "apps/server/src/scope/mcp-inbound.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-query-core-phase",
+    "surfaces": [
+      "api:all:'/mcp'",
+      "mcp:registerResource:'memory-catalog':'mote://memories'",
+      "mcp:registerResource:'source-catalog':'mote://sources'",
+      "mcp:registerTool:'mote_memories'",
+      "mcp:registerTool:'mote_put_item'",
+      "mcp:registerTool:'mote_sources'"
+    ]
+  },
+  "apps/server/src/scope/mcp-schema.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "table:mc_manifests",
+      "table:mc_source_epochs",
+      "table:mc_source_status",
+      "table:mc_state"
+    ]
+  },
+  "apps/server/src/scope/mcp.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/discover',service:MCP_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/import',service:MCP_DOMAIN",
+      "extension:runtime.services.registerUser:MCP_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/memory-routes.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'DELETE',url:'/api/memories/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id/versions/:version'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/bindings/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id/review'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/activate'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile'"
+    ]
+  },
+  "apps/server/src/scope/memory-schema.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "table:mm_binding_locks",
+      "table:mm_binding_preparations",
+      "table:mm_capture_intakes",
+      "table:mm_commands",
+      "table:mm_deletions",
+      "table:mm_dependencies",
+      "table:mm_evidence",
+      "table:mm_feedback",
+      "table:mm_fts",
+      "table:mm_images",
+      "table:mm_intakes",
+      "table:mm_integrated_versions",
+      "table:mm_integration_windows",
+      "table:mm_job_batches",
+      "table:mm_job_controls",
+      "table:mm_jobs",
+      "table:mm_meta",
+      "table:mm_native_cleanup",
+      "table:mm_owner_cancellations",
+      "table:mm_provider_config",
+      "table:mm_provider_descriptors",
+      "table:mm_provider_journal",
+      "table:mm_records",
+      "table:mm_restore",
+      "table:mm_state",
+      "table:mm_version_bindings",
+      "table:mm_versions"
+    ]
+  },
+  "apps/server/src/scope/memory.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "extension:runtime.services.registerUser:MEMORY_DOMAIN",
+      "task:execution.register:kind:'memory.'+stage",
+      "task:execution.register:kind:'memory.admit'",
+      "task:execution.register:kind:'memory.correct'",
+      "task:execution.register:kind:'memory.reconcile'"
+    ]
+  },
+  "apps/server/src/scope/memory-bindings.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "task:execution.register:kind:'memory.binding'"
+    ]
+  },
+  "apps/server/src/scope/memory-intake.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "task:execution.register:kind:'memory.intake'"
+    ]
+  },
+  "apps/server/src/scope/memory-integration.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "task:execution.register:kind:'memory.integration-window'"
+    ]
+  },
+  "apps/server/src/scope/ask-routes.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'DELETE',url:'/api/conversations/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-artifacts/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insights'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations/:id/'+action",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations/:id/compact'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insights'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action",
+      "extension:registerAskReadRoutes:runtime"
+    ]
+  },
+  "apps/server/src/scope/ask-schema.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
+    "surfaces": [
+      "table:ma_artifacts",
+      "table:ma_auto_events",
+      "table:ma_auto_restore",
+      "table:ma_auto_runs",
+      "table:ma_auto_state",
+      "table:ma_auto_windows",
+      "table:ma_automations",
+      "table:ma_conversations",
+      "table:ma_fragments",
+      "table:ma_insight_snapshots",
+      "table:ma_meta",
+      "table:ma_originals",
+      "table:ma_read_cursors",
+      "table:ma_restore",
+      "table:ma_runs",
+      "table:ma_sources",
+      "table:ma_state",
+      "table:ma_traces",
+      "table:ma_turns",
+      "table:ma_units"
+    ]
+  },
+  "apps/server/src/scope/ask.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host context, source scope, evidence and request/task publication fences; acceptance tracked separately.",
+    "surfaces": [
+      "extension:runtime.services.registerUser:ASK_DOMAIN",
+      "task:execution.register:kind:'ask.'+mode",
+      "task:execution.register:kind:'ask.coordinate'"
+    ]
+  },
+  "apps/server/src/scope/mcp-query.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-query-core-phase",
+    "surfaces": [
+      "mcp:registerTool:'mote_activity'",
+      "mcp:registerTool:'mote_browse'",
+      "mcp:registerTool:'mote_context'",
+      "mcp:registerTool:'mote_evidence'",
+      "mcp:registerTool:'mote_file_catalog'",
+      "mcp:registerTool:'mote_file_chunks'",
+      "mcp:registerTool:'mote_history'",
+      "mcp:registerTool:'mote_items'",
+      "mcp:registerTool:'mote_material'",
+      "mcp:registerTool:'mote_material_read'",
+      "mcp:registerTool:'mote_materials'",
+      "mcp:registerTool:'mote_media_activity'",
+      "mcp:registerTool:'mote_read'",
+      "mcp:registerTool:'mote_retrieve'",
+      "mcp:registerTool:'mote_search'",
+      "mcp:registerTool:'mote_segments'",
+      "mcp:registerTool:'mote_status'",
+      "mcp:registerTool:'mote_timeline'"
+    ]
+  },
+  "apps/server/src/scope/ask-read-routes.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Shared host-bound query facade; final acceptance tracked separately.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/activity'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/catalog'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/file-chunks'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/material-read'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/materials'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/memories'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/segments'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-history'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-items'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/browse'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/bundle'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/retrieve'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/search'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/status'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/media-activity'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/context/read'"
+    ]
+  },
+  "apps/server/src/scope/memory-capture-materials.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.materials'"
+    ]
+  },
+  "apps/server/src/scope/memory-feedback.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.feedback'",
+      "task:this.execution.register:kind:'memory.feedback-admit'"
+    ]
+  },
+  "apps/server/src/scope/memory-owner-questions.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.owner-reply'"
+    ]
+  },
+  "apps/server/src/scope/owner-question-routes.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions'",
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions/:id'",
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'POST',url:'/api/owner-questions/:id/reply'"
+    ]
+  },
+  "apps/server/src/scope/owner-question-schema.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "table:oq_dependencies",
+      "table:oq_meta",
+      "table:oq_questions",
+      "table:oq_replies",
+      "table:oq_restore",
+      "table:oq_state"
+    ]
+  },
+  "apps/server/src/scope/owner-questions.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "extension:runtime.services.registerUser:OWNER_QUESTIONS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/ask-automation.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
+    "surfaces": [
+      "extension:runtime.services.registerUser:'ask-automation'",
+      "task:execution.register:kind:'ask.automation'"
+    ]
+  },
+  "apps/server/src/scope/action-delivery.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "task:host.execution.register:kind:'actions.delivery'"
+    ]
+  },
+  "apps/server/src/scope/action-discovery.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "task:host.execution.register:kind:'actions.extract'",
+      "task:host.execution.register:kind:'actions.watch'"
+    ]
+  },
+  "apps/server/src/scope/action-routes.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions/deliveries'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/'+method",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/claim'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/dismiss'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/receipt'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/retry'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/targets'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'PUT',url:'/api/actions/settings'"
+    ]
+  },
+  "apps/server/src/scope/actions-schema.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "table:ac_dependencies",
+      "table:ac_jobs",
+      "table:ac_meta",
+      "table:ac_operations",
+      "table:ac_proposals",
+      "table:ac_restore",
+      "table:ac_sources",
+      "table:ac_state",
+      "table:ac_targets"
+    ]
+  },
+  "apps/server/src/scope/actions.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "extension:runtime.services.registerUser:ACTIONS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/todo-schema.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "table:td_meta",
+      "table:td_restore",
+      "table:td_state",
+      "table:td_todos"
+    ]
+  },
+  "apps/server/src/scope/todos.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'GET',url:'/api/todos'",
+      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'PATCH',url:'/api/todos/:id'",
+      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'POST',url:'/api/todos'",
+      "extension:runtime.services.registerUser:TODOS_DOMAIN"
     ]
   }
 }
