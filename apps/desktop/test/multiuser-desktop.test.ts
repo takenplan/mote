@@ -10,7 +10,7 @@ import {DEFAULT_SOURCE_OPTIONS} from '../src/source-types';
 import {browseCaptures,captureDetail,captureImage} from '../src/capture-browser';
 import {centralContentPage} from '../src/content-library';
 import {readCentralContent} from '../src/sync-content';
-import {uploadCapture,uploadCaptureBatch} from '../src/transport';
+import {uploadCapture,uploadCaptureBatch,heartbeat} from '../src/transport';
 import {ensureStorageFormat} from '../src/storage-format';
 import sharp from 'sharp';
 import {createRequire} from 'node:module';
@@ -233,3 +233,14 @@ it('preserves capture browsing for a legitimate page whose full OCR body exceeds
  const queue=new DurableQueue(join(f.directory,'large-reader'),config);await queue.initialize();const page=await browseCaptures(queue,config,{location:'central',day:'2026-09-13',grouping:'records'});expect(page.totalCount).toBe(61);expect(page.items).toHaveLength(30);expect(page.items.every(v=>v.textPreview===items[0].ocrText.slice(0,160))).toBe(true);
  expect((await captureDetail(queue,config,'central',items[0].id)).ocrText).toBe(items[0].ocrText);expect((await f.request(f.b.token,'/api/captures')).json().items).toHaveLength(0);
 },60000);
+
+it('preserves the actual Collector heartbeat observation through the scoped device service',async()=>{
+ const f=await fixture(),config={...f.config(f.a),metadataEnabled:false},queue=new DurableQueue(join(f.directory,'heartbeat'),config);await queue.initialize();const collector=new Collector(config,queue,'/generated/no-helper',()=>true,()=>{});cleanup.push(async()=>{collector.shutdown();const release=await collector.holdConnection();release();});await collector.retry();
+ const a=(await f.request(f.a.token,'/api/ingress/devices')).json().items.find((v:any)=>v.deviceId===config.deviceId);expect(a).toMatchObject({deviceId:config.deviceId,status:'paused',queueDepth:0,sync:{mode:'manual',state:'idle',pendingRecords:0}});expect(a.lastSeenAt).toMatch(/^20/);expect((await f.request(f.b.token,'/api/ingress/devices')).json().items).toHaveLength(0);
+ const before=f.calls.length;await heartbeat({...config,token:f.b.token},{deviceId:config.deviceId,deviceName:'Generated A private metadata',platform:'macos',status:'paused',queueDepth:0});expect(f.calls.slice(before).every(call=>call.url==='/api/connections/self'&&call.body===undefined)).toBe(true);
+});
+it.each(['id','original'])('retains real durable bytes when the actual M03 ACK has a corrupted %s binding',async field=>{
+ const f=await fixture(),config=f.config(f.a),queue=new DurableQueue(join(f.directory,'bad-receipt'),config);await queue.initialize();await queue.enqueue({...event(),deviceId:config.deviceId},image);const original=f.fetcher.getMockImplementation()!;let corrupt=true;
+ f.fetcher.mockImplementation(async(input,init)=>{const response=await original(input,init);if(corrupt&&String(input).endsWith('/captures')&&init?.method==='POST'&&response.ok){const body=await response.json();if(field==='id')body.id='wrong-receipt-id';else body.captures[0].original.sourceId='other-source';return new Response(JSON.stringify(body),{status:200,headers:{'content-type':'application/json'}});}return response;});
+ const collector=new Collector(config,queue,'/generated/no-helper',()=>true,()=>{});cleanup.push(async()=>{collector.shutdown();const release=await collector.holdConnection();release();});await collector.upload(true);expect(queue.stats().depth).toBe(1);expect((await queue.exportArchive()).blobs).toEqual({[createHash('sha256').update(image).digest('hex')]:image.toString('base64')});corrupt=false;await collector.retry();expect(queue.stats().depth).toBe(0);expect((await f.request(f.b.token,'/api/captures/'+event().id)).statusCode).toBe(404);
+});
