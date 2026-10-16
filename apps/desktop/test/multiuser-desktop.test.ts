@@ -37,7 +37,7 @@ afterEach(async()=>{for(const close of cleanup.splice(0).reverse())await close()
 async function fixture(){
  const {buildApp}=await nativeImport(pathToFileURL(resolve(repository,'apps/server/src/app.ts')).href) as typeof import('../../server/src/app');
  const directory=await mkdtemp(join(tmpdir(),'mote-m14-generated-'));cleanup.push(()=>rm(directory,{recursive:true,force:true}));
- const node=await buildApp({dataDir:join(directory,'central')});cleanup.push(()=>node.app.close());
+ let node=await buildApp({dataDir:join(directory,'central')});cleanup.push(()=>node.app.close());
  const password='Generated-desktop-only-01';await node.accounts!.initialize('generated-admin',password);
  const headers={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
  const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>node.app.inject({url,method,headers:{...headers,...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
@@ -49,7 +49,8 @@ async function fixture(){
  const calls:{url:string;authorization:string|null;body:any}[]=[];
  const fetcher=vi.fn(async(input:RequestInfo|URL,init:RequestInit={})=>{const url=new URL(String(input)),body=init.body?await new Response(init.body).text():undefined;const h=new Headers(init.headers);calls.push({url:url.pathname,authorization:h.get('authorization'),body:body?JSON.parse(body):undefined});const response=await node.app.inject({url:url.pathname+url.search,method:(init.method??'GET') as any,headers:Object.fromEntries(h),...(body?{payload:body}:{})});return new Response(response.rawPayload,{status:response.statusCode,headers:response.headers as Record<string,string>});});
  vi.stubGlobal('fetch',fetcher);
- return {directory,node,a,b,config,request,login,fetcher,calls};
+ const replaceDeployment=async()=>{await node.app.close();const db=new DatabaseSync(join(directory,'central','mote.sqlite'));try{db.prepare('UPDATE scope_meta SET deployment_id=?').run('generated-replacement-deployment');}finally{db.close();}node=await buildApp({dataDir:join(directory,'central')});};
+ return {directory,get node(){return node;},a,b,config,request,login,fetcher,calls,replaceDeployment};
 }
 it('characterizes the actual durable input/blob journal and same-owner retry before transport changes',async()=>{
  const f=await fixture(),config=f.config(f.a),path=join(f.directory,'queue');
@@ -305,3 +306,24 @@ it('consumes real portable Activity through emitted main/preload, rejects A late
  const web=exchanged.json(),detail=await f.node.app.inject({url:'/api/work-activity/'+workId,headers:{'x-mote-protocol-version':'2',cookie:String(exchanged.headers['set-cookie']).split(';')[0],'x-mote-session-id':web.credentialId}});expect(detail.statusCode,detail.body).toBe(200);expect(detail.json().artifacts[0].id).toBe(id);
  expect((await f.request(returned.token,'/api/portable/exports/'+id+'/cancel','POST',{})).statusCode).toBe(200);expect((await app.documentCall('A-returned','workActivity',[{state:'completed'}])).items.find((work:any)=>work.id===workId).artifacts).toEqual([]);
 },30000);
+
+it('blocks actual main Ask private body when the same URL becomes a different deployment with still-valid credentials',async()=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await f.replaceDeployment();
+ const received:string[]=[];app.intercept=async raw=>{received.push(new URL(raw.url).pathname);return false;};
+ await expect(app.call('mote:ask',['start',{id:randomUUID(),question:'Generated A private question must remain in its original deployment'}])).rejects.toThrow();
+ expect(received).not.toContain('/api/query-runs');expect(received).toContain('/api/connections/self');
+});
+
+it('blocks later actual source parts when deployment changes after the old manifest ACK and preserves the original spool',async()=>{
+ const f=await fixture(),config=f.config(f.a),sources=new LocalSourceManager(join(f.directory,'deployment-source'),config,'/generated/no-helper',true);cleanup.push(()=>sources.close());
+ const input=join(f.directory,'generated-deployment-source.txt');await writeFile(input,'Generated private source bytes retained for the original deployment');await sources.initialize();await sources.addFiles(input,{...DEFAULT_SOURCE_OPTIONS,retention:'archive',syncContinuously:false});await sources.sync(true);
+ expect(sources.pendingContent()).toHaveLength(1);const pending=sources.pendingContent()[0],replacementRequests:string[]=[];let swapped=false;
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL,init:RequestInit={})=>{const path=new URL(String(input)).pathname;if(swapped)replacementRequests.push(path);const response=await f.fetcher(input,init);if(!swapped&&init.method==='POST'&&/^\/api\/ingress\/sources\/[^/]+\/uploads$/.test(path)){expect(response.status).toBe(200);await f.replaceDeployment();swapped=true;}return response;});
+ await sources.flushPending(new AbortController().signal).catch(()=>{});expect(swapped).toBe(true);expect(replacementRequests.some(path=>path.includes('/parts/')||path.endsWith('/commit'))).toBe(false);expect(replacementRequests).toContain('/api/connections/self');expect(sources.pendingContent()).toHaveLength(1);expect(sources.pendingContent()[0]).toEqual(pending);
+});
+
+it('blocks actual capture bytes when deployment changes between source registration and capture admission',async()=>{
+ const f=await fixture(),config=f.config(f.a),replacementRequests:string[]=[];let swapped=false;
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL,init:RequestInit={})=>{const path=new URL(String(input)).pathname;if(swapped)replacementRequests.push(path);const response=await f.fetcher(input,init);if(!swapped&&init.method==='POST'&&path==='/api/ingress/sources'){expect(response.status).toBe(200);await f.replaceDeployment();swapped=true;}return response;});
+ await uploadCapture(config,event(),image).catch(()=>{});expect(swapped).toBe(true);expect(replacementRequests.some(path=>path.endsWith('/captures'))).toBe(false);expect(replacementRequests).toContain('/api/connections/self');expect((await f.request(f.a.token,'/api/captures')).json().items).toHaveLength(0);
+});
