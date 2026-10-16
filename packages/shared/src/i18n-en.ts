@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "清除本机待确认请求": "Clear the pending request on this device",
+  "这只清除本机待确认请求，已在中央接收的任务仍会继续。": "This only clears the pending request on this device. Tasks already accepted by the central node will continue.",
+  "仅处理所选资料的固定版本；未选配方时沿用当前记忆设置。": "Process only the pinned versions of selected materials. Leave recipes unselected to use the current Memory settings.",
+  "已选择 {0} 份资料": "{0} materials selected",
+  "请选择至少一份资料。": "Select at least one material.",
+  "提交所选资料": "Submit selected materials",
   "元数据单独导出的接口尚待接入；当前归档包含本账号的资料与可用原件。": "Separate metadata export is awaiting integration; the current archive includes this account’s data and available originals.",
   "个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。": "Personal exports contain this account’s data and registered domains, excluding login credentials, execution authority, and instance backups.",
   "取消后将不能下载这份导出文件。": "Cancelling makes this export unavailable for download.",

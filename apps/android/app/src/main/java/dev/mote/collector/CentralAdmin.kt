@@ -283,10 +283,81 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     fun memoryJobs() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        ui.button(MoteI18n.text("开始提取"), true) { action("/api/memory-jobs") { run("/api/memory-jobs", it.getString("id")) } }
+        val api = client
+        ui.button(MoteI18n.text("开始提取"), true) { memorySelection() }
+        val pending = ui.card()
+        ui.work(MoteI18n.text("正在读取…"), { screens.pendingMemoryAdmission() }) { intent ->
+            if (intent != null) memoryAdmissionRetry(api, pending)
+        }
         library.paged("/api/memory/jobs", ui.card()) { row, card ->
             ui.text(CentralMemoryJobPresentation.status(row), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { run("/api/memory/jobs", row.getString("id")) }
+        }
+    }
+    private fun memoryAdmissionRetry(api: CentralClient, target: LinearLayout) {
+        ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"), parent = target)
+        ui.button(MoteI18n.text("重试同一请求"), parent = target) {
+            ui.work(MoteI18n.text("正在保存…"), { screens.retryMemoryAdmission(api) }) { run("/api/memory/jobs", it.getString("id")) }
+        }
+        ui.button(MoteI18n.text("清除本机待确认请求"), parent = target) {
+            screens.confirm(MoteI18n.text("清除本机待确认请求"), MoteI18n.text("这只清除本机待确认请求，已在中央接收的任务仍会继续。")) {
+                ui.work(MoteI18n.text("正在保存…"), { screens.discardMemoryAdmission() }) { memoryJobs() }
+            }
+        }
+    }
+    private fun memorySelection() {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { Triple(api.get("/api/memory/recipes"), CentralModels.inventory(api), screens.pendingMemoryAdmission()) }) { (catalog, models, pending) ->
+            body.removeAllViews(); screens.setBack { memoryJobs() }
+            if (pending != null) { memoryAdmissionRetry(api, ui.card()); return@work }
+            ui.text(MoteI18n.text("仅处理所选资料的固定版本；未选配方时沿用当前记忆设置。"))
+            val recipes = mutableListOf<Pair<CheckBox, JSONObject>>()
+            val recipeItems = catalog.getJSONArray("items")
+            for (index in 0 until recipeItems.length()) {
+                val recipe = recipeItems.getJSONObject(index)
+                val choice = CheckBox(ui).apply { text = recipe.optString("name", recipe.getString("id")) + " · " + recipe.getString("version"); isEnabled = recipe.optBoolean("available", true) }
+                body.addView(choice); recipes.add(choice to JSONObject().put("id", recipe.getString("id")).put("version", recipe.getString("version")))
+            }
+            val profiles = models.getJSONArray("profiles")
+            val ids = listOf("") + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("id") }
+            val selector = Spinner(ui).apply { adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item,
+                listOf(MoteI18n.text("跟随功能默认")) + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("name") }) }
+            body.addView(selector)
+            val modelId = ui.field(MoteI18n.text("模型 ID（留空跟随预设）"))
+            selector.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                    modelId.isEnabled = CentralModels.reference(ids[position])?.optString("kind") != "shared"
+                    if (!modelId.isEnabled) modelId.setText("")
+                }
+            }
+            val selected = linkedMapOf<String, String>()
+            val count = ui.text(MoteI18n.text("已选择 {0} 份资料", 0))
+            val retry = ui.card()
+            var retryShown = false
+            ui.button(MoteI18n.text("提交所选资料"), true) {
+                require(selected.isNotEmpty()) { MoteI18n.text("请选择至少一份资料。") }
+                val chosen = selected.toSortedMap(); val pins = JSONObject(); chosen.forEach { (id, revision) -> pins.put(id, revision) }
+                val request = JSONObject().put("materialIds", JSONArray(chosen.keys.toList())).put("materialRevisions", pins)
+                val refs = JSONArray(recipes.filter { it.first.isChecked }.map { it.second }); if (refs.length() > 0) request.put("recipes", refs)
+                CentralModels.reference(ids[selector.selectedItemPosition])?.let { request.put("modelReference", it) }
+                modelId.text.toString().trim().takeIf { it.isNotBlank() }?.let { request.put("modelOverride", it) }
+                if (!retryShown) { memoryAdmissionRetry(api, retry); retryShown = true }
+                ui.work(MoteI18n.text("正在保存…"), {
+                    for ((id, revision) in chosen) {
+                        val preview = api.get("/api/memory/materials/" + enc(id) + "?revision=" + enc(revision) + if (refs.length() == 0) "" else "&recipes=" + enc(refs.toString()))
+                        require(preview.getString("materialId") == id && preview.getString("revision") == revision && preview.getString("status") == "ready")
+                    }
+                    screens.submitMemory(api, request)
+                }) { run("/api/memory/jobs", it.getString("id")) }
+            }
+            library.paged("/api/materials?limit=20", ui.card()) { row, card ->
+                val id = row.getString("id"); val revision = row.getString("revision")
+                val choice = CheckBox(ui).apply {
+                    text = row.getString("title"); tag = "material:$id@$revision"; isChecked = selected[id] == revision
+                    setOnCheckedChangeListener { _, checked -> if (checked) selected[id] = revision else selected.remove(id); count.text = MoteI18n.text("已选择 {0} 份资料", selected.size) }
+                }; card.addView(choice); ui.text(revision, NativeFontRole.SUPPORT, card)
+            }
         }
     }
     fun run(path: String, id: String) {
