@@ -1973,7 +1973,8 @@
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insights'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs'",
-      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action"
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action",
+      "extension:registerAskReadRoutes:runtime"
     ]
   },
   "apps/server/src/scope/ask-schema.ts": {
@@ -2004,6 +2005,30 @@
       "extension:runtime.services.registerUser:ASK_DOMAIN",
       "task:execution.register:kind:'ask.'+mode",
       "task:execution.register:kind:'ask.coordinate'"
+    ]
+  },
+  "apps/server/src/scope/ask-read-routes.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Shared host-bound query facade; final acceptance tracked separately.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/activity'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/catalog'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/file-chunks'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/material-read'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/materials'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/memories'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/segments'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-history'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-items'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/browse'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/bundle'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/retrieve'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/search'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/status'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/media-activity'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/context/read'"
     ]
   }
 }
