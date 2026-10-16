@@ -17,3 +17,9 @@ test('existing Ask page renders for a scoped Web session without retired global 
  const html=await new Promise<string>((resolve,reject)=>{const output=new PassThrough();let text='';output.on('data',value=>text+=String(value));output.on('end',()=>resolve(text));const stream=renderToPipeableStream(React.createElement(Suspense,{fallback:'loading'},pages[0].render(props)),{onAllReady:()=>stream.pipe(output),onError:reject});});
  assert.match(html,/你只管问/);assert.match(html,/打开模型设置/);
 });
+
+test('Web insight composer uses the personal functional selection instead of legacy per-request model overrides',async t=>{
+ const {renderToStaticMarkup}=await import('react-dom/server'),{Insights}=await import('../src/Insights.js'),locale=getLocale();configureLocale(()=> 'zh-CN');t.after(()=>configureLocale(()=>locale));
+ const html=renderToStaticMarkup(React.createElement(Insights,{api:createApi(connection),range:{},configured:true,onOpen:()=>{},onSettings:()=>{},onChanged:()=>{}}));
+ assert.match(html,/生成个人回顾/);assert.doesNotMatch(html,/本次模型/);
+});
