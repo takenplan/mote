@@ -1,3 +1,4 @@
+import type {SourceItem} from '@mote/shared';
 import {InstallationEpochs} from './installation-epochs.js';
 import {ProviderFailure,providerHttpFailure} from '@mote/shared';
 import {DOCUMENT_MIME_TYPES} from '@mote/shared/document-decoder';
@@ -45,6 +46,8 @@ export interface ProcessorInput {
   /** Scoped hosts provide their grant-owned decoder workspace. */
   decodeOriginal?(mimeType:string):Promise<Transcript>;
   requestScope?:string;
+  /** Exact original-bound canonical identity; never a newly selected head. */
+  sourceItem?:Readonly<SourceItem>;
 }
 export interface FileProcessor {
   id:string;version:string;name:string;stage:'extract'|'diarize';mediaTypes:string[];localOnly?:boolean;serviceKind?:'asr'|'image'|'file';parameters?:ProcessorParameter[];

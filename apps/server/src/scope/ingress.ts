@@ -19,6 +19,8 @@ const batchId=z.string().min(1).max(256);
 const conflict=()=>new PrivateDataError('conflict',409);
 export const strictBase64=(value:string)=>{if(value.length%4!==0||!/^[A-Za-z0-9+/]*={0,2}$/.test(value))throw new PrivateDataError('invalid_data');const bytes=Buffer.from(value,'base64');if(bytes.toString('base64')!==value)throw new PrivateDataError('invalid_data');return bytes;};
 const captureId=(sourceId:string,item:SourceItem)=>{const digest=identityHash([sourceId,item.externalId,item.revision]);return `${digest.slice(0,8)}-${digest.slice(8,12)}-5${digest.slice(13,16)}-a${digest.slice(17,20)}-${digest.slice(20,32)}`;};
+export type IngressOriginalFormat='capture'|'source-item'|'file'|`processor:${string}`;
+type SuppliedOriginal={bytes:Buffer;mime:string;format?:'source-item'|'file'|`processor:${string}`};
 export type IngressReceipt={version:3;id:string;deploymentId:string;userId:string;sourceId:string;batchId:string;state:'received';captures:{id:string;duplicate:boolean;original?:Original}[]};
 export interface SourceCapability {
  receiveCaptures(sourceId:string,batchId:string,values:unknown[]):IngressReceipt;
@@ -34,8 +36,8 @@ export interface SourceCapability {
 export class IngressHost{
  readonly key:string;
  private readonly active=new Set<string>();
- private readonly accepted=new Set<(context:UserContext,receipt:IngressReceipt,format:'capture'|'source-item'|'file')=>void>();
- onAccepted(receive:(context:UserContext,receipt:IngressReceipt,format:'capture'|'source-item'|'file')=>void){this.accepted.add(receive);return ()=>{this.accepted.delete(receive);};}
+ private readonly accepted=new Set<(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void>();
+ onAccepted(receive:(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void){this.accepted.add(receive);return ()=>{this.accepted.delete(receive);};}
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly directory:string){
   this.key=installIngress(db);
   runtime.services.registerUser(INGRESS_DOMAIN,{scope:'user',create:context=>this.forUser(context),lifecycle:ingressLifecycle(runtime,db,directory)});
@@ -71,10 +73,10 @@ export class IngressHost{
   const during=async<T>(work:()=>Promise<T>)=>{assert();const activity=ingressActivity(this.db,context.userId),key=identityHash([context.userId,activity.id]);this.active.add(key);try{return await work();}finally{this.active.delete(key);activity.finish();}};
   const receipt=(sourceId:string,id:string,captures:IngressReceipt['captures']):IngressReceipt=>({version:3,id:identityHash([context.deploymentId,context.userId,sourceId,id]),deploymentId:context.deploymentId,userId:context.userId,sourceId,batchId:id,state:'received',captures});
   const checkReceipt=(value:IngressReceipt)=>{source(value.sourceId);for(const item of value.captures){data().capture(item.id);if(item.original)original(item.original.ref);}return value;};
-  const batch=(sourceId:string,id:string,payload:unknown,format:'capture'|'source-item',write:()=>IngressReceipt)=>sql.transaction(()=>{
+  const batch=(sourceId:string,id:string,payload:unknown,format:IngressOriginalFormat,write:()=>IngressReceipt,formats:(receipt:IngressReceipt)=>Readonly<Record<string,IngressOriginalFormat>>=()=>({}))=>sql.transaction(()=>{
    source(sourceId);batchId.parse(id);const digest=identityHash(payload),previous=sql.get('SELECT digest,receipt FROM ig_batches WHERE user_id=$user AND source_id=? AND batch_id=?',sourceId,id);
    if(previous){if(previous.digest!==digest)throw conflict();return checkReceipt(JSON.parse(String(previous.receipt)));}
-   const result=write();sql.run('INSERT INTO ig_batches VALUES($user,?,?,?,?)',sourceId,id,digest,JSON.stringify(result));assert();for(const receive of this.accepted)receive(context,result,format);assert();return result;
+   const result=write();sql.run('INSERT INTO ig_batches VALUES($user,?,?,?,?)',sourceId,id,digest,JSON.stringify(result));assert();for(const receive of this.accepted)receive(context,result,format,Object.freeze(formats(result)));assert();return result;
   });
   const service={
    registerSource:(value:unknown)=>{assert();const input=sourceConnectionSchema.parse(value);if(sourceIds&&!sourceIds.includes(input.id)||deviceId&&input.deviceId!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>data().registerSource(input));},
@@ -97,15 +99,10 @@ export class IngressHost{
      });return receipt(sourceId,id,captures);
     });
    },
-   receiveSourceItems:(sourceId:string,id:string,values:unknown[],importDeclaration?:unknown)=>{
-    const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
-    return batch(sourceId,id,importDeclaration===undefined?items:{items,importDeclaration},'source-item',()=>{
-     const pin=declaration(sourceId,importDeclaration),binding=source(sourceId),archived=new Map<string,string>();
-     if(binding.retention==='archive')for(const item of items)archived.set(captureId(sourceId,item),originals.put(Buffer.from(JSON.stringify(item))).hash);
-     const acks=data().receiveSourceItems(sourceId,items,binding.retention==='archive'?{verify:item=>{if(archived.get(captureId(sourceId,item))!==identityHash(item))throw conflict();}}:undefined).receipts;
-     for(const ack of acks)if(!ack.duplicate)imports.bind(ack.id,pin);return receipt(sourceId,id,acks.map(ack=>({...ack,...(archived.has(ack.id)?{original:originals.attach(sourceId,ack.id,archived.get(ack.id)!,'application/json','archive')}:{})})));
-    });
-   },
+   receiveSourceItems:(sourceId:string,id:string,values:unknown[],importDeclaration?:unknown)=>intakeSourceItems(sourceId,id,values,undefined,undefined,importDeclaration),
+   /** Host adapter seam: the original is selected before publication, so one
+    * capture has one immutable descriptor. Worker RPCs never expose this seam. */
+   receiveSourceItemsWithOriginals:(sourceId:string,id:string,values:unknown[],inputs:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[])=>intakeSourceItems(sourceId,id,values,inputs,formats),
    readOriginal:(ref:string,range?:{offset?:number;length?:number})=>{original(ref);const result=originals.read(ref,range);assert();return result;},
    holdOriginal:(ref:string)=>{const value=original(ref);return originals.pin(value.hash);},
    releaseSnapshot:(ref:string)=>sql.transaction(()=>{const value=original(ref);if(value.retention!=='snapshot')throw new ScopeError('invalid_identity',403);sql.run('DELETE FROM ig_originals WHERE user_id=$user AND id=?',ref.slice(9));}),
@@ -155,7 +152,7 @@ export class IngressHost{
      const ack=data().receiveSourceItems(binding.id,[manifest.item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
      const importRow=sql.get('SELECT json FROM ig_upload_imports WHERE user_id=$user AND upload_id=?',id);if(importRow&&!ack.duplicate)imports.bind(ack.id,declaration(binding.id,JSON.parse(String(importRow.json))));
      const reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot'):undefined;
-     const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();for(const receive of this.accepted)receive(context,result,'file');assert();return result;
+     const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();for(const receive of this.accepted)receive(context,result,'file',Object.freeze({}));assert();return result;
     });received=true;return result;}finally{try{prepared?.release();}catch{/* Revoked pins expire or are removed by lifecycle. */}if(received)originals.cleanUpload(id);}
    }),
    uploadReceipt:(id:string)=>{const row=upload(id);return row.receipt?checkReceipt(JSON.parse(String(row.receipt))):{state:'pending',id,deploymentId:context.deploymentId,userId:context.userId};},
@@ -171,6 +168,22 @@ export class IngressHost{
     return originals.gc();
    });},
   };
+  function intakeSourceItems(sourceId:string,id:string,values:unknown[],inputs?:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[],importDeclaration?:unknown){
+   const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
+   if(inputs&&(inputs.length!==items.length||inputs.some(v=>v&&(!Buffer.isBuffer(v.bytes)||v.bytes.length>512*1024*1024||!v.mime||v.mime.length>200||v.format!==undefined&&!['source-item','file'].includes(v.format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(v.format)))))throw new PrivateDataError('invalid_data');
+   if(formats&&(formats.length!==items.length||formats.some(format=>format!==undefined&&!['capture','source-item','file'].includes(format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(format))))throw new PrivateDataError('invalid_data');
+   const payload=inputs?{items,formats,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime,format:v.format??'file'}:null)}:items;return batch(sourceId,id,importDeclaration===undefined?payload:{payload,importDeclaration},'source-item',()=>{
+    const pin=declaration(sourceId,importDeclaration),binding=source(sourceId),archive=binding.retention==='archive';if(binding.retention==='reference'&&inputs?.some(Boolean))throw conflict();
+    const descriptors=items.map((item,index)=>{
+     const capture=captureId(sourceId,item),prior=sql.get('SELECT id,hash,mime,retention FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,capture),input=inputs?.[index];
+     if(prior){if(input&&(prior.hash!==bytesHash(input.bytes)||prior.mime!==input.mime))throw conflict();return originals.original('original:'+prior.id);}
+     if(!archive&&!input)return;
+     const object=originals.put(input?.bytes??Buffer.from(JSON.stringify(item)));return {hash:object.hash,mime:input?.mime??'application/json'};
+    });
+    const acks=data().receiveSourceItems(sourceId,items,archive?{verify:item=>{if(!descriptors[items.findIndex(value=>value.externalId===item.externalId&&value.revision===item.revision)])throw conflict();}}:undefined).receipts;
+    for(const ack of acks)if(!ack.duplicate)imports.bind(ack.id,pin);return receipt(sourceId,id,acks.map((ack,index)=>{const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));
+   },result=>Object.fromEntries(result.captures.flatMap((ack,index)=>ack.original&&(formats?.[index]||inputs?.[index])?[[ack.original.ref,formats?.[index]??inputs![index]!.format??'file']]:[])));
+  }
   function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));if(row.authorization_epoch!==context.authorizationEpoch||Number(row.expires)<=Date.now())throw conflict();return row;}
   return Object.freeze(service);
  }

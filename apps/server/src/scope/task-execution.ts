@@ -170,15 +170,15 @@ export class TaskExecution {
     handler.authorizeInput?.(context,input);
     return {request,handler,input,encoded,operationId,taskId};
   };
-  const admit=(prepared:ReturnType<typeof prepare>,modelLease?:TaskModelLease)=>{
+  const admit=(prepared:ReturnType<typeof prepare>,modelLease?:TaskModelLease,onAdmitted?:(task:{id:string})=>void)=>{
     const {request,handler,input,encoded,operationId,taskId}=prepared;
-    return this.transaction(()=>{assert();handler.authorizeInput?.(context,input);const prior=this.row(taskId);if(prior){this.assertTask(this.engine.get(taskId)!);const dependencies=this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=? ORDER BY dependency_id').all(taskId).map(row=>String(row.dependency_id));if(JSON.stringify(dependencies)!==JSON.stringify([...new Set(request.dependencies)].sort()))throw new TaskError('task_identity_conflict',409);return this.view(prior);}
+    return this.transaction(()=>{assert();handler.authorizeInput?.(context,input);const prior=this.row(taskId);if(prior){this.assertTask(this.engine.get(taskId)!);const dependencies=this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=? ORDER BY dependency_id').all(taskId).map(row=>String(row.dependency_id));if(JSON.stringify(dependencies)!==JSON.stringify([...new Set(request.dependencies)].sort()))throw new TaskError('task_identity_conflict',409);const view=this.view(prior);onAdmitted?.(view);return view;}
      for(const dependency of request.dependencies)owned(dependency);
      const grantId=this.grants.issue(context,taskId);
      this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,model_receipt,user_position) SELECT ?,?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,context.userId,grantId,encoded,modelLease?json({id:modelLease.id,snapshotId:modelLease.snapshotId,deploymentId:modelLease.deploymentId,userId:modelLease.userId,operationId:modelLease.operationId,feature:modelLease.feature,revision:modelLease.revision,instanceRevision:modelLease.instanceRevision,reference:modelLease.reference,provider:modelLease.provider,model:modelLease.model}):null,context.userId);
      this.engine.enqueue(operationId,handler.kind,input,{id:taskId,dependencies:request.dependencies,ownership:{userId:context.userId,authorizationEpoch:context.authorizationEpoch,grantId}});
      if(modelLease)this.modelLeases.set(taskId,modelLease);
-     return this.view(this.row(taskId)!);
+     const view=this.view(this.row(taskId)!);onAdmitted?.(view);return view;
     });
   };
   return Object.freeze({
@@ -186,10 +186,10 @@ export class TaskExecution {
     * transaction. All normal authorization/dependency/idempotency checks apply.
     * Async model lease acquisition is deliberately rejected before any writes. */
    submitSync:(value:unknown)=>{const prepared=prepare(value,false);return admit(prepared);},
-   submit:async(value:unknown)=>{
+   submit:async(value:unknown,onAdmitted?:(task:{id:string})=>void)=>{
     const prepared=prepare(value),{handler,operationId,taskId}=prepared;let modelLease:TaskModelLease|undefined;
     if(handler.modelFeature&&!this.row(taskId)){if(!this.modelHost)throw new TaskError('model_configuration_unavailable',503);modelLease=handler.leaseModel?await handler.leaseModel(context,prepared.input,operationId):await this.services.forUser(context).get<TaskModelConfiguration>('configuration').lease(handler.modelFeature,operationId);assert();if(modelLease.userId!==context.userId||modelLease.deploymentId!==context.deploymentId||modelLease.operationId!==operationId||modelLease.feature!==handler.modelFeature)throw new ScopeError('invalid_identity',401);this.modelHost.assertLease(modelLease);}
-    return admit(prepared,modelLease);
+    return admit(prepared,modelLease,onAdmitted);
    },
    get:(taskId:string)=>this.view(owned(taskId)),
    list:(args:{cursor?:number;limit?:number}={})=>{assert();const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.db.prepare('SELECT user_position,* FROM user_tasks WHERE user_id=? AND user_position>? ORDER BY user_position LIMIT ?').all(context.userId,args.cursor??0,limit+1) as (TaskRow&{user_position:number})[];return {items:rows.slice(0,limit).map(row=>this.view(row)),nextCursor:rows.length>limit?rows[limit-1].user_position:null};},

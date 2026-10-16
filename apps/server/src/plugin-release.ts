@@ -18,7 +18,7 @@ export const pluginManifestSchema=z.object({
   components:z.array(z.object({id:z.string().min(1).max(160),version:z.string().min(1).max(80),surface:z.enum(['ingress','processing','data','agent','card','panel','settings']),capability:z.enum(['source','processor','repository','retrieval','engine','model','ui'])}).strict()).optional(),
 }).strict();
 export type PluginManifest=z.infer<typeof pluginManifestSchema>;
-export type ResolvedPluginRelease={preview:PluginReleasePreview;manifest:PluginManifest;archiveUrl:string;hostAdapter?:'mote.mem0@1'|'mote.hindsight@1'};
+export type ResolvedPluginRelease={preview:PluginReleasePreview;manifest:PluginManifest;archiveUrl:string;hostAdapter?:string};
 export type PluginReleaseTransport=(url:string)=>Promise<{bytes:Uint8Array}>;
 const hash=(bytes:Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
 const repositorySchema=z.string().regex(/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/);

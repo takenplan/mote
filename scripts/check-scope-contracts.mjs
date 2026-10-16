@@ -74,6 +74,9 @@ export function checkProductionImports(directory=root){
   // M07 reuses these pure Memory contracts and exact-output/review/publication
   // validators; none constructs a legacy Store, scheduler or provider runtime.
   for(const path of ['observation-key.ts','memory-feedback.ts','owner-question-contract.ts','owner-question-replies.ts','material-organizer-contract.ts','memory-image-proof.ts','memory-owner-correction.ts','capture-memory-source.ts','memory-range-chunks.ts','material-readiness.ts','hindsight-runtime.ts','memory-schema.ts','memory-errors.ts','memory-contract.ts','memory-review.ts','memory-provider-contract.ts','memory-provider-publication.ts','memory-deletion-review.ts','memory-strategies.ts','memory-work-contract.ts','memory-strategy-contract.ts','memory-range-selection-policy.ts','memory-integration-policy.ts','memory-configuration.ts','mem0-memory-provider.ts','hindsight-engine.ts','worker-memory-provider.ts'])allowed.add(sourceRoot+'/'+path);
+  // M10 real provider adapters accept bounded ports only; legacy Store shims
+  // remain in gmail.ts/lark.ts/lark-documents.ts and never enter production.
+  for(const path of ['connectors/types.ts','connectors/original-processors.ts','connectors/google.ts','connectors/gmail-adapter.ts','connectors/lark-adapter.ts','connectors/lark-cli.ts','connectors/lark-recordings.ts','connectors/dingtalk-recordings.ts'])allowed.add(sourceRoot+'/'+path);
   // M06 constructs only the existing shared processor registry and uses pure
   // recipes, decoder subprocess, transport and fingerprint algorithms. No
   // legacy private Store is constructed; scoped Original/TaskRun provide I/O.
