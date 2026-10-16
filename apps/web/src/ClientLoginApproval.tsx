@@ -1,9 +1,10 @@
-import {useEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {moteText} from '@mote/shared/i18n';
 import type {createApi} from './api';
 import {errorMessage} from './api';
 export function ClientLoginApproval({id,api,done}:{id:string;api:ReturnType<typeof createApi>;done:()=>void}){
-  const binding=useMemo(()=>({api,id}),[api,id]),current=useRef(binding);current.current=binding;
+  const binding=useMemo(()=>({api,id}),[api,id]),current=useRef<typeof binding|undefined>(binding);current.current=binding;
+  useLayoutEffect(()=>{current.current=binding;return()=>{if(current.current===binding)current.current=undefined;};},[binding]);
   const [detail,setDetail]=useState<{binding:typeof binding;name:string;purpose:'central'|'device'}>(),[failure,setFailure]=useState<{binding:typeof binding;message:string}>(),[pending,setPending]=useState<typeof binding>();
   const ready=detail?.binding===binding?detail:undefined,error=failure?.binding===binding?failure.message:'',busy=pending===binding;
   useEffect(()=>{let active=true;const controller=new AbortController();void api.request<{deviceName:string;purpose?:'central'|'device'}>(`/api/login/requests/${id}`,{signal:controller.signal}).then(value=>{

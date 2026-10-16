@@ -329,3 +329,12 @@ unchanged native case and current types/build/review run. i18n8456 EXIT0. This
 restores the existing full-client browser login promise under the accepted M01
 boundary; it does not choose the pending QR pairing product flow or expose private
 APIs to device-bound credentials.
+
+Additional actual retirement case23e19b95 holds the successful real approval
+response, unmounts the original component, then releases it: the existing grant
+fact is retained, but old code called the retired UI's navigation callback1≠0
+(`/tmp/m15-browser-retired-approval-red.log/.exit`1). A synchronous component
+retirement fence fixes only that publication boundary; all three original
+browser approval renderer cases now pass3/3, no skip
+(`/tmp/m15-browser-approval-final-narrow.log/.exit`0). Native entry/types/build and
+independent review are still pending, so this is not a final shared freeze.
