@@ -72,6 +72,28 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun deviceBoundPerceptionPullCachesItsOwnActualCentralOcrAndResetsFutureCursor() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val bitmap=android.graphics.Bitmap.createBitmap(24,24,android.graphics.Bitmap.Config.ARGB_8888).apply {eraseColor(android.graphics.Color.BLUE)}
+        val bytes=java.io.ByteArrayOutputStream().also {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}.toByteArray();bitmap.recycle()
+        val at=java.time.Instant.now().toString();val id=java.util.UUID.randomUUID().toString()
+        val event=JSONObject().put("id",id).put("deviceId",settings.deviceId).put("deviceName","Generated native OCR").put("platform","android").put("source","screen").put("capturedAt",at).put("durationMs",0).put("appId","generated.raw").put("appName","Generated raw").put("imageMime","image/png").put("ocrText","").put("ocr",JSONObject().put("status","disabled")).put("privacy",JSONObject().put("excluded",false).put("redacted",false).put("mode","local").put("collection","content"))
+        app.queue().enqueue(event,bytes,settings.read().maxQueueMiB*1024L*1024L);UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        val range=java.time.Instant.parse(at);val browser=CaptureRecordClient(settings.read(),settings.deviceId,api)
+        assertTrue(browser.albums(range.minusSeconds(60).toString(),range.plusSeconds(60).toString(),null).getJSONArray("items").length()>0)
+        assertArrayEquals(bytes,browser.image(id,false));assertNotNull(CapturePreview.decode(browser.image(id,true),480))
+        control("/ocr/a/$id");assertEquals("",api.get("/api/captures/$id").getString("ocrText"));assertEquals("GENERATED_A_NATIVE_CENTRAL_OCR",browser.detail(id).getString("ocrText"))
+        val invitation=api.post("/api/login/session",JSONObject().put("serverUrl",endpoint()).put("deviceId",settings.deviceId).put("deviceName","Generated native OCR").put("platform","android"))
+        RuntimeSettings.replaceAccount(app){settings.signIn(endpoint(),invitation.getString("token"),2592000000)};val bound=settings.read();assertTrue(bound.deviceBoundCredential)
+        val prefs=app.accountPreferences("central-perception");val key=SourceRules.hash(bound.ownerKey()+"\n"+settings.deviceId);check(prefs.edit().putLong(key,9007199254740991L).commit())
+        val queue=app.queue();PerceptionSync.pull(app,settings,bound,queue)
+        assertEquals("Device-bound sync must use its narrow ingress reader and repair a verified future cursor", "GENERATED_A_NATIVE_CENTRAL_OCR",queue.capture(id)!!.getString("ocrText"))
+        assertTrue(prefs.getLong(key,0) in 1 until 9007199254740991L)
+        login(app,"b");assertThrows(IllegalStateException::class.java){PerceptionSync.pull(app,settings,bound,queue)};assertEquals(0,app.queue().depth())
+        login(app,"a");assertEquals("GENERATED_A_NATIVE_CENTRAL_OCR",app.queue().capture(id)!!.getString("ocrText"))
+    }
+
     @Test fun actualNativePortableImportUsesTheChosenArchiveAndOriginalOwnerReceipt() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
