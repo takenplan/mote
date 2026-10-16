@@ -695,6 +695,26 @@ class MultiuserWorkerInstrumentedTest {
         assertEquals(401,HttpJson.get(endpoint()+"/api/connections/self",original.token).first);assertEquals(note,app.queue().peek()!!.getString("id"));assertEquals("GENERATED_UNBOUND_QR_DRAFT",QuickNotes.draft(app).read().text)
         UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};assertEquals(200,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first)
     }
+    @Test fun originalNativeDevicesGeneratesALocallyDecodableAccountBoundQrAndRetiresOldIssuerActions() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);api.post("/api/ingress/devices",JSONObject().put("id",settings.deviceId).put("name","Generated original Android").put("platform","android"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root)+if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","devices")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun button(label:String):android.widget.Button {var value:android.widget.Button?=null;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}};return value!!}
+            ready();scenario.onActivity {button("为此设备重新生成邀请").performClick()};val oldSave=button("保存设置");scenario.onActivity {oldSave.performClick()};ready()
+            lateinit var bitmap:android.graphics.Bitmap
+            scenario.onActivity {activity->val image=views(activity.window.decorView).filterIsInstance<android.widget.ImageView>().single {it.contentDescription?.toString()=="设备连接邀请二维码"};bitmap=(image.drawable as android.graphics.drawable.BitmapDrawable).bitmap}
+            val pixels=IntArray(bitmap.width*bitmap.height);bitmap.getPixels(pixels,0,bitmap.width,0,0,bitmap.width,bitmap.height)
+            val decoded=com.google.zxing.qrcode.QRCodeReader().decode(com.google.zxing.BinaryBitmap(com.google.zxing.common.HybridBinarizer(com.google.zxing.RGBLuminanceSource(bitmap.width,bitmap.height,pixels)))).text
+            val invitation=ConnectionInvitation.parse(decoded,true,true);assertEquals(settings.read().account()!!.userId,invitation.userId);assertEquals(settings.deviceId,invitation.deviceId);assertEquals(endpoint(),invitation.serverUrl)
+            val count=control("/generated/pairing-state").getJSONArray("invitations").length()
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);ready();scenario.onActivity {oldSave.performClick()};ready()
+            assertEquals(count,control("/generated/pairing-state").getJSONArray("invitations").length())
+            scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.ImageView>().any {it.contentDescription?.toString()=="设备连接邀请二维码"})}
+        }
+    }
     @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
