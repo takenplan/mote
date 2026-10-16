@@ -51,6 +51,11 @@ long evidence is not silently truncated. Policy changes revoke incompatible
 pending automatic receipts. Pausing drains admitted work, and stopping fences
 only that owner's automatic receipts/windows; admitted manual work remains valid.
 
+A job and its complete child plan atomically register a no-model M05 admission
+coordinator before asynchronous child leases. Restart resumes that exact plan,
+including a manual job with no automatic intake to recover it. Cancellation
+fences admission, and binding migration drains pending admissions.
+
 Each job pins one genuine M04 immutable root model configuration. Extraction and
 independent review fork separate M04/M05 usage leases from that root. Changing
 current selection does not change an admitted job's model. Generation, binding,
