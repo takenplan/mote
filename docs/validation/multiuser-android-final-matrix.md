@@ -153,6 +153,12 @@ cleanup exits are retained; no static review is counted as these executions.
   records only actor labels/request metadata. These new tests are not compiled,
   executed or called RED yet; QR owns the heavy window. The prior357 tests and
   eight native passes remain evidence for their exact pre-composition SHA.
+  Source fixture startup was checked separately: restricted attempt exits1 at
+  loopback listen EPERM before business assertions; the same bounded generated
+  loopback action then passed normal approval, emitted its ready metadata and
+  terminated normally with cleanup0. Logs are
+  `/tmp/m15-files-retry-fixture-startup{,-approved}.log/.exit`. This only checks
+  fixture startup/cleanup, not Android compilation, RED or consumer behavior.
 
   New public dependency RED0d60ded2 is separate from the unrun Android test:
   real A forget→allow-again→same bytes/revision re-upload (same capture UUID)
@@ -162,6 +168,10 @@ cleanup exits are retained; no static review is counted as these executions.
   no cross-account disclosure is asserted. The durable source test is
   `apps/server/test/multiuser-file-forget-incarnation.test.ts`. Joint owns the
   producer fix; no duplicate backend or accepted final combination is claimed.
+  Stronger test2cc60c20 also attempts real manifest admission after the stale
+  decision and checks B first: actual `{decision:200,upload:200}` instead of
+  `{decision:409,upload:410}`, B200,0/1 EXIT1 in1.87s, retained in
+  `/tmp/m15-forget-same-incarnation-red2.log/.exit`.
 - **Already visible pairing capability on resume:** a test-only characterization
   is saved in4ec729a6. Original A invitation input/dialog is visible; hold only the
   Activity's existing background resolver, switch through actual B login and
