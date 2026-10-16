@@ -560,6 +560,36 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeRecordingConnectionRetainsScopeVendorTextAndFailedAudioRetryUnderItsOwner() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val beforeB=b.get("/api/connectors/same-recordings/recordings?limit=1").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label};assertNotNull("Missing original recording control: "+label,button);button!!.performClick()}}
+            fun recordings(){ready();press("来源与外部应用");ready();press("录音归档");ready()}
+            recordings();press("连接已授权账号");ready();waitFor {a.get("/api/connectors/same-recordings").getBoolean("connected")};press("同步范围");ready()
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="启用"}.isChecked=true
+                views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="自动同步"}.isChecked=false
+                views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="开始时间"}.setText("2026-10-16T00:00:00.000Z")
+                views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="结束时间"}.setText("2026-10-17T00:00:00.000Z")
+            };press("保存设置");ready();waitFor {a.get("/api/connectors/same-recordings").getJSONObject("selection").getBoolean("enabled")};press("立即同步");ready()
+            var record:JSONObject?=null;waitFor {val rows=a.get("/api/connectors/same-recordings/recordings?limit=1").getJSONArray("items");if(rows.length()==0)false else {record=rows.getJSONObject(0);record!!.getJSONObject("transcript").getBoolean("archived")&&record!!.getJSONObject("audio").getBoolean("blocked")}}
+            val transcript=record!!.getString("transcriptCaptureId");waitFor {a.get("/api/files/"+transcript+"/chunks").getJSONArray("items").length()>0}
+            val chunks=a.get("/api/files/"+transcript+"/chunks").getJSONArray("items");assertTrue(chunks.getJSONObject(0).getString("ocrText").contains("GENERATED_VENDOR_TEXT_"+fixture().getJSONObject("a").getString("userId")));assertFalse(chunks.toString().contains(fixture().getJSONObject("b").getString("userId")))
+            press("同步步骤与状态");ready();scenario.onActivity {activity->assertTrue(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("recording_media_failed")})}
+            scenario.onActivity {it.navigate("settings")};recordings()
+            control("/generated/recover-recording-audio");press("重试失败步骤");ready();waitFor {a.get("/api/connectors/same-recordings/recordings?limit=1").getJSONArray("items").getJSONObject(0).getJSONObject("audio").getBoolean("archived")}
+            assertEquals(transcript,a.get("/api/connectors/same-recordings/recordings?limit=1").getJSONArray("items").getJSONObject(0).getString("transcriptCaptureId"))
+            lateinit var oldRetry:android.widget.Button;scenario.onActivity {activity->oldRetry=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="重试失败步骤"};assertTrue(oldRetry.isEnabled)}
+            val commands=control("/generated/recording-commands").getJSONArray("commands").length()
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldRetry.performClick()};ready();assertEquals(beforeB,b.get("/api/connectors/same-recordings/recordings?limit=1").toString())
+            assertEquals(commands,control("/generated/recording-commands").getJSONArray("commands").length())
+        }
+    }
+
     @Test fun originalNativeBrowserLoginReturnsACentralSessionWhileDevicePairingRemainsScoped() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
