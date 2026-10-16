@@ -73,3 +73,21 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 - `5172f099` 邻接窄回归：`node --import tsx --test --test-concurrency=1 --test-name-pattern='portable action restore|explicit Actions restoration|explicit owned todo restore' apps/server/test/multiuser-actions-fences.test.ts apps/server/test/multiuser-actions.test.ts`，`m12-lifecycle-adjacent` 3/3 EXIT0，16196ms。未选场景不计本次通过。
 - 当前增加到 46 个专项场景，原 41 个全部保留。未在最终同一 SHA 整组跑过。M16 固定 589d 的第五次 required 已结束 EXIT1：Desktop 492/492、Server 2562 pass/0 fail/1 opt-in skip、Web 505/505；最后 CLI 4/5（重复 fresh-self 请求）失败，Android 未运行。M16 已释放，M15 使用两个短槽，本方未 claim heavy。13 表和权限退役接缝给 M16 后，须组合其真实冻结修复再验收。
 - 文档编辑曾在 Python 解析期因输入编码失败，以及 apply_patch 上下文未匹配；均未改文件。列清单脚本误遍历字典后只追加了表头，已按真实 PRAGMA 字典追加全列。这些是编辑命令失败，不计产品或测试失败。
+
+## 首次 fresh 组合与长文件夹具修正
+
+- `59a2966e903cc1d51912d6e491badd4f1ad07a1c` 在真实最终 M11/M16 589d 和 CLI 7fb 基础上 fresh `npm run build:libs`、`npm run build -w @mote/server` 均 EXIT0，日志 `m12-final-build-{libs,server}`。随后原 13 文件 46 项串行专项为 45 pass/1 fail，341583ms，`m12-59a-focus.log/.exit`；唯一长 Unicode 场景在 90 秒等待后看到 4 completed、无 pending/failed、无建议。该阶段已释放，后续 A/B/C、emitted、required 没有继续执行。
+- `6fd208ff` 的诊断增加完成状态等待后又重复等待输出，累计触发 120 秒测试总时限，`m12-long-tail-valid-red` 为 1 cancelled/EXIT1，不计生产 RED。`59db9aec` 改为在真实 watch waiting、全部模型单元 completed 后立即检查输出，`m12-long-tail-completed-red` 0/1 EXIT1、34352ms；诊断证明 4 批各含 3 条 M06 记录，最后一批第 3 条的 54 个字符含完整尾段。生产没有截尾；旧假模型只检查每批 `[0]` 的假设不再适用于先前已保留的 Material 分组能力。
+- `725f8b97f349f29ddd9f0e8c78b59cbbdcb1d446` 仅修正该合成 responder，检查全部已提供原文。相同真实 M03/M06/Harness、尾段内容、UTC 和 surrogate 断言原样通过 1/1、32943ms，`m12-long-tail-grouped-fixture-green.log/.exit`。没有放宽时限或修改生产实现，不追认为新的运行时缺陷 TDD。
+- M16 `2affb338` / `9fa19e2b` 已分别 pick 为本方 `9ac5d2e0` / `52aa25b9`，13 表与恢复撤权接缝由对方实际 17/17 验证。本方只读两 helper、真实调用者和新增测试后没有新增 confirmed P0/P1/P2，报告 `/tmp/mote-m12-review-m16-backup-9fa.md`；静态清单 173，13 表全部列与真实 PRAGMA 一致。本方 compiled/required 仍须执行，不能把对方结果当独立运行。
+- M15 已冻结的延迟读取/完整 import 回执小增量按其测试前置顺序组合到 `e9f284af`；对方实际 JVM 4/4 与原生 3 个单例 GREEN 的来源见其 validation，不冒充本方原生执行。新增 opaque Actions 页面检查仍由 M15 进行。
+
+## 同 SHA 联合门禁与新目录等待围栏
+
+本方与 M16 均固定 `6f5bdeb6a656b696699e26a6a09571543cd5d4e4`，本方显式委托当前活跃 M16 对话执行联合门禁，没有新增执行对话，也没有把共享执行记成独立多次通过。实际 fresh central、M12 专项 46/46、A/C 7/7、B 5/5、旧工具 3/3、shared seams 5/5、旧 server 算法 18/18、Desktop 原生算法 7/7、fresh emitted SIGKILL 1/1 均 EXIT0，无 skip；M12 日志为 `/tmp/m12-uniform-6f5bdeb6-*.log/.exit`。随后 compiled/packaged backup 40/40 EXIT0 和 fresh Desktop build EXIT0。M16 读全 M12 本域剩余生产路径，没有新增 confirmed 问题，先前生命周期缺口闭合：`/tmp/mote-m16-review-m12-uniform-6f5.md`。
+
+在昂贵 required 前新增有实际依据的等待场景：旧来源的目录建议已经交给模型，本次任务原文来自独立来源；provider 第一轮等待期间删除旧目录来源，下一轮不能再次发送已经失效的目录正文。`d9c02bde748921e98a23fbdadd9355e695c301f2` 原生产实现实际 0/1 EXIT1、11528ms，`m12-catalog-await-red.log/.exit`，下一模型请求仍包含旧 sentinel（1 而非 0），属于新实现 confirmed P2，不是前述长文件夹具假设。
+
+`fd0b7d75` 在本域保留首次目录 ActionRecord 的 proof 与版本/状态，每个模型/reader await fence 和最终同步发布复查，后续页不替换首次凭证。原场景 `m12-catalog-await-green.log/.exit` 1/1 EXIT0、7357ms；`dcad6088` 对齐 internal commit value 的类型。现在为 47 个场景/14 文件。M16 对这三个提交的有界独审没有新增 confirmed P0/P1/P2：`/tmp/mote-m16-review-m12-catalog-dcad.md`。
+
+因此 M16 在 required 前主动停止协调流水线；最后 Desktop 子进程正常结束为 0。其 docs checkpoint `6ede7514` 使 exact-SHA guard 停止并返回 1，属于主动守卫停止，不是产品测试失败。第六 required 尚未启动，无日志；上述 6f5 成功证据不覆盖新增目录围栏。新冻结须 fresh affected build、必要窄回归及实际 required，再作最终验收。

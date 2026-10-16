@@ -614,3 +614,60 @@ CLI plus root-client combination **9/9, exit 0**, including same-URL replacement
 with only self/zero private body and missing/wrong original ACK rejection;
 `/tmp/m16-cli-shared-admission-composed.log/.exit`. Independent M13 bounded review
 finds no new confirmed issue in that two-line transport delegation.
+
+## Final candidate preparation after M12 composition
+
+The actual portable import, Actions lifecycle and Actions portable suites pass
+**19/19, exit 0, no skips**, `/tmp/m16-import-actions-composed.log/.exit` (43 seconds).
+This exercises the sixth canonical Todos merge, same-input idempotency/current
+conflict/full-transaction rollback and unknown native receipt followed by physical
+A deletion while B remains unchanged. It also retains all fourteen M16 import
+cases, including the restart backfill regression.
+
+M15's four-file `8812c137` correction and its durable tests are composed as
+`7c2d3364`: queued archive reads retain the original owner before resolving a
+client, retained Actions clients cannot borrow the replacement account, the
+original central reader consumes published OCR, and import acknowledgements
+require all five original canonical domains while permitting explicitly declared
+additional domains. M15's unchanged native regressions pass individually and its
+four JVM receipt cases pass; these are peer execution evidence, not independent
+M16 native reruns. Bounded M16 and M13 reviews found no additional confirmed issue.
+
+M12's earlier 45/46 focus result remains a historical failure. Actual completed
+range diagnostics show four model batches of three records, with the complete
+54-character final Unicode record present as the third record of the last batch.
+The fake model inspected only record zero. Test-only commits `6fd208ff`,
+`59db9aec`, `725f8b97` preserve delivery/completion/Unicode/timezone assertions and
+make the responder inspect every supplied original. M12's unchanged single case
+then passes, exit 0, 32.943 seconds,
+`/tmp/m12-long-tail-grouped-fixture-green.log/.exit`. No production change or
+expanded deadline is attributed to this fixture correction. The test-only delta
+is composed as `793bdc86`, `8b022d3e`, `871c44f9` before the final required run.
+
+## Uniform 6f5 checkpoint and new catalog revocation defect
+
+At literal `6f5bdeb6a656b696699e26a6a09571543cd5d4e4`, fresh Central build
+passes and M12 joint gates pass: 46 focus, A/C 7, B 5, legacy SDK tools 3,
+shared transaction/process seams 5, old server algorithms 18, Desktop calendar
+characterization 7 and compiled host/native SIGKILL 1. These are M16 executions
+on the shared candidate; M12 does not claim independent reruns.
+`/tmp/m16-uniform-actions-gates.log/.exit` and the individual
+`/tmp/m12-uniform-6f5bdeb6-*.log/.exit` retain exact commands and summaries.
+
+Fresh compiled-host/packaged-CLI instance recovery plus device-journal and new
+Actions/Todos recovery passes **40/40, exit 0, no skips**, 34.686 seconds,
+`/tmp/m16-uniform-compiled-backup.log/.exit`. It includes actual process restarts,
+identity/original/canonical data preservation, retired authority, successful and
+unknown external facts, and required-schema/corrupt archive prepublication refusal.
+
+Before required, M12 confirms a new distinct production defect with durable
+`d9c02bde748921e98a23fbdadd9355e695c301f2`: an independently sourced cached
+catalog proposal is sent again in a later model request after that proposal's
+source was deleted during a provider await. `/tmp/m12-catalog-await-red.log/.exit`
+is actual 0/1, exit 1, with one retired-body transmission where zero is required.
+This does not retract prior executed results or classify the new defect as a
+fixture problem. The coordinator is held before starting required, allowing the
+already-started Desktop build to finish. The new documentation checkpoint changes
+HEAD so the coordinator's exact-SHA guard stops before any subsequent phase.
+No sixth required result is claimed. M12 owns the minimal proof/version fence;
+its new freeze and affected verification remain necessary.

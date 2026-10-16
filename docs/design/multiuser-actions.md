@@ -5,6 +5,7 @@ M12 在独立 feature branch 实现，未改 `main` 或远端集成分支。已�
 `58944f00837c89bc1d302ecd7be7a568db4abe44`；M11 PR138 最终
 `98d76945e091d7234217ebcf532ebeff3350937c` 已组合。本轮又组合 M16 稳定候选
 `589d6ad7c4a36de21cb105a7be41a599d0fae1df`，不将它称为 M16 最终验收。最终组合门禁仍待运行。
+随后组合 M16 备份测试/修复 `2affb338` / `9fa19e2b`、CLI `7fb3d4be`，及 M15 已冻结的 `8812c137` 对应的延迟读取/回执消费者增量；其原生页面后续改造和整个 M16 最终门禁仍独立进行。
 逐项证据见 [验证账本](../validation/multiuser-actions.md)。
 
 ## 有限旧能力账本与责任替换
@@ -77,10 +78,12 @@ OwnerQuestions 的选择回复用现有 `{requestId,expectedRevision,action:'ans
 ## 任务、恢复与公开范围
 
 M05 `actions.watch` 是用户开启发现时签发的 durable authorization，沿原 15 秒发现周期等待；
+关闭发现只停止长期发现任务；既有一次批准继续受内容、来源、目标、设备 review grant、账号状态及确切取消约束。这保留旧 `Actions.claim` 与 `tick` 分开的语义，不把发现开关提升成另一种批准。
 `actions.extract` 固定 generation、时区、sourceIds、原文范围与模型费用快照；
 `actions.delivery` 固定批准操作、设备目标和外部 issuance。父任务停止后其子任务不能发布。
 任务输入只保留有界 locator，不保留原文、凭据或 provider 正文。
 所有模块依赖会在最终组合候选上重新验证；CI Checks/Component checks 保持禁用并记为未运行。
+目录中的旧建议也属于模型已经观察到的来源依赖。首次交付目录项时保留其完整 proof 和建议版本/状态；后续目录页不替换这些凭证。每次模型 transport、reader fence 及最终同步发布复查整个已交付集合，不能只检查本次新输入的来源。
 
 ## 恢复本轮的决策与公共接缝
 

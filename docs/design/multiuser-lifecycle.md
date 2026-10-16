@@ -2,7 +2,8 @@
 
 This work starts at the clean M14 composition `9bc65b53d5823443ad1ecffb49d2c6eecc687927`.
 All runtime validation uses generated accounts and disposable directories. The
-M12 handoff is not authorized; its interface and final composition are pending.
+M12 handoff was unauthorized at the initial checkpoint; its later authorized
+resumption is recorded below. Its final composition is still pending.
 
 | Disposition | Original capability | M16 responsibility |
 | --- | --- | --- |
@@ -159,8 +160,8 @@ The original multi-user recommendation is linked there as thread
 approvals for its individual implementation details. The parent additionally
 confirmed original-deployment/original-account personal import and delegated
 ordinary technical decisions. There is currently no M16 question or approval
-waiting on the user. M12's rejected cross-thread handoff remains outside this
-work and is not a request being retried here.
+waiting on the user. M12's later parent-authorized resumption is recorded below;
+no earlier rejected action is delegated or retried by M16.
 
 | Problem | Decision and existing authority | Reason / impact | Executed verification / remaining limit |
 | --- | --- | --- | --- |
