@@ -13,7 +13,7 @@ export const derivationMode=z.enum(['summary','turns','image']);
 export const analysisInputSchema=processingInputSchema.extend({artifactId:z.string().regex(/^[a-f0-9]{64}$/),mode:derivationMode,materialId:z.string().regex(/^mat_[a-f0-9]{64}$/),materialRevision:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 export const derivativeInputSchema=analysisInputSchema.omit({mode:true}).extend({modes:z.array(derivationMode).min(1).max(3)}).strict();
 export type AnalysisInput=z.infer<typeof analysisInputSchema>;
-const evidenceId=(userId:string,artifactId:string,index:number)=>{const h=identityHash([userId,artifactId,index]);return h.slice(0,8)+'-'+h.slice(8,12)+'-5'+h.slice(13,16)+'-a'+h.slice(17,20)+'-'+h.slice(20,32);};
+export const evidenceId=(userId:string,artifactId:string,index:number)=>{const h=identityHash([userId,artifactId,index]);return h.slice(0,8)+'-'+h.slice(8,12)+'-5'+h.slice(13,16)+'-a'+h.slice(17,20)+'-'+h.slice(20,32);};
 export type AnalysisContext={original:Original;record:any;transcript:Transcript;assert:()=>void;
  failure:(error:unknown)=>ExecutionFailure;
  workspace:<T>(work:(workspace:OriginalWorkspace)=>Promise<T>)=>Promise<T>;

@@ -116,6 +116,7 @@ export const scopedBackupSchema = Object.freeze({
  "mp_activity":["user_id","id","state"],
  "mp_admissions":["user_id","original_id","request_key","task_id","state"],
  "mp_artifact_usage":["user_id","artifact_id","task_id","json"],
+ "mp_file_annotations":["user_id","original_id","artifact_id","raw_artifact_id","json"],
  "mp_artifacts":["user_id","id","original_id","fingerprint","json","complete"],
  "mp_derivations":["user_id","original_id","kind","artifact_id","material_id","revision"],
  "mp_original_formats":["user_id","original_id","format"],

@@ -1708,6 +1708,7 @@
       "table:mp_artifact_usage",
       "table:mp_artifacts",
       "table:mp_derivations",
+      "table:mp_file_annotations",
       "table:mp_original_formats",
       "table:mp_publications",
       "table:mp_restore",
@@ -2381,7 +2382,9 @@
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export'",
-      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback'"
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/corrections'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/speakers'"
     ]
   }
 }

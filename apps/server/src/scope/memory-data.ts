@@ -38,13 +38,19 @@ export class ScopedMemoryData {
  binding():ScopedMemoryBinding{return memoryBindingSchema.parse(JSON.parse(this.state().binding));}
  deletionSnapshot(){return memoryHash(this.sql.all('SELECT id,json FROM mm_deletions WHERE user_id=$user ORDER BY id'));}
  materialEvidence(materialId:string,revision?:string,sourceIds?:readonly string[],required:readonly string[]=['material']):MemoryRecord[]{
+  return this.projectMaterialEvidence(materialId,revision,sourceIds,required,false);
+ }
+ /** Portable recovery validates canonical retained versions without admitting
+  * them as current execution input. Ordinary evidence() stays current-only. */
+ restoreMaterialEvidence(materialId:string,revision:string):MemoryRecord[]{return this.projectMaterialEvidence(materialId,revision,undefined,['material'],true);}
+ private projectMaterialEvidence(materialId:string,revision:string|undefined,sourceIds:readonly string[]|undefined,required:readonly string[],retained:boolean):MemoryRecord[]{
   this.state();const material=this.privateData.material(materialId,revision),current=this.privateData.material(materialId);
-  if(material.revision!==current.revision)throw new PrivateDataError('conflict',409);
+  if(!retained&&material.revision!==current.revision)throw new PrivateDataError('conflict',409);
   if(sourceIds){const sources=this.sql.all('SELECT source_id FROM pd_material_sources WHERE user_id=$user AND material_id=? AND revision=?',material.id,material.revision);if(!sources.length||sources.some(row=>!sourceIds.includes(String(row.source_id))))throw missing();}
   const row=this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',material.id,material.revision)!;
   const draft=materialDraftSchema.parse(JSON.parse(String(row.json)));
   if(!materialDependencyStatus(draft,required).ready)throw new PrivateDataError('conflict',409);
-  if(['summary','image-interpretation'].includes(draft.kind)||draft.fidelity.state==='summary-only'){const parents=draft.members.filter(member=>member.kind==='material');if(!parents.length)throw new PrivateDataError('scope_unavailable',503);return parents.flatMap(parent=>{const at=parent.ref.lastIndexOf('@');return this.materialEvidence(parent.ref.slice(0,at),parent.ref.slice(at+1),sourceIds);});}
+  if(['summary','image-interpretation'].includes(draft.kind)||draft.fidelity.state==='summary-only'){const parents=draft.members.filter(member=>member.kind==='material');if(!parents.length)throw new PrivateDataError('scope_unavailable',503);return parents.flatMap(parent=>{const at=parent.ref.lastIndexOf('@');return this.projectMaterialEvidence(parent.ref.slice(0,at),parent.ref.slice(at+1),sourceIds,['material'],retained);});}
   const artifacts=required.map(key=>draft.artifacts?.find(artifact=>artifact.key===key)),mapped=required.every((key,index)=>key!=='material'&&artifacts[index]?.blockIds!==undefined),selectedIds=mapped?new Set(artifacts.flatMap(artifact=>artifact!.blockIds!)):undefined,blocks=draft.blocks.filter(block=>!selectedIds||selectedIds.has(block.id)),memberIds=new Set(blocks.flatMap(block=>block.memberIds));
   return this.sql.transaction(()=>{const records=blocks.flatMap(block=>{
    if(block.kind!=='text'||!block.text)return [];

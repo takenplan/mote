@@ -1,6 +1,6 @@
 # Final multi-user joint acceptance: fixed scope and preparation ledger
 
-Status: **PREPARATION; NOT final acceptance**, 2026-10-17 UTC. All final-gate
+Status: **PREPARATION; NOT final acceptance**, updated 2026-10-16 17:22 UTC. All final-gate
 rows below are pending unless an actual execution receipt explicitly says otherwise.
 The 14 delivered modules and architecture review are dependencies, not proof that
 all 17 modules work together. M13/M14/M15 remain checkpoints with known capability
@@ -94,8 +94,8 @@ review and exact remote Draft PR head. Later WIP is never imported as a freeze.
 | Owner | Explicitly reported composable checkpoint | Remaining gate / original capability |
 | --- | --- | --- |
 | M13 Web | `c21184829f03669229770de3d62bddfb63e29d33`; tested code/test `aed42550`, later docs only | FullWeb515/515 and fresh Central passed in owner environment. No push/PR/final affected. Still open: Calendar/Lark/recordings UI; generic Imports preview/ambiguity/confirm/resume; Files/audio/review/speaker/export; raw pending/failed controls; Memory raw/range/integration/full settings/audit; Agent startup trace/advanced models; storage/encryption/index/runtime config; native Actions bridge. |
-| M14 Desktop | `79ea50dfb7a7cc07119c9f2cf19e8e6ee612f55c`; tested runtime `ceae83a5efbe622c77a768935d426fa18abf0786` | Actions/real Desktop calendar consumer and latest Web/Android combination; final affected/review and PR139 update. Remote PR139 remains `7e080c728a6eea91876d32263ef28e45b8676b9b`; remote checkpoint is not the local freeze. |
-| M15 Android | Main source freeze `9e824c00a60549a049f48cc1eccb69070cf9d84e`; clean checkpoint `edb4388e87f62d5c5ba8819bc7734ff49182f8e3` includes107, Android main byte-identical to9e | New candidate tests/fixtures in edb are not accepted as final. Full affected/Android/current production APK/worker and final review/push/PR pending. Old generic Imports/import-uploads, Files/audio/speaker/review/export lack frozen shared equivalents; Central overview/MCP/connector consumers need closure. Notes resume/Actions revision/old CalendarWorker switch cases are investigation until actual RED exists. |
+| M14 Desktop | New runtime `c56e4399da9b1fc3b1e20185affbc950f9664379`, narrow checkpoint `eb9d3d1bcfe6f66aa25993cd7d73d85fa8d2819b`; final-required candidate `45467379c5645dec62cc4b03e891b404b675193b` | Owner reports real main/preload/renderer native-calendar→M12 fixed review→M05 receipt plus Ask/offline A/B/SIGKILL/restart GREEN, bounded M13 review no new confirmed finding. At latest report required still running: all types0, Desktop501/501, server2626 pass/0 fail/1 existing default OS opt-in skip. Root/Web/Android final exit and PR139 update pending; do not infer whole-gate exit. The previously observed remote PR139 checkpoint was7e080. No Files write WIP is in454. |
+| M15 Android | New tested runtime `220c175ea9900c39477df0cf2da4aaecba9ca26a` includes107/9e/881 | Owner reports four actual native RED→same GREEN and synthetic Calendar journal positive; Android352/352/no fail/error/skip plus production assembleDebug EXIT0. Full affected/final review/push/PR pending. M13 bounded review found recent-five-work preview dropped at220c: actual RED then df917 fix, GREEN pending the heavy slot. MCP consumer also actual RED/WIP. Generic Imports/remaining Files lack frozen shared equivalents.220c is not whole-module final. |
 
 Shared-page ownership remains in the owners' existing ledger
 `/tmp/mote-m13-shared-page-contract-map.md`,
@@ -105,6 +105,60 @@ Shared-page ownership remains in the owners' existing ledger
 Missing original capabilities are blockers; a new route or generic Material list
 does not substitute for their intended user outcomes. Route changes allowed by
 the MVP do not authorize capability removal.
+
+Later bounded client deltas are not yet imported into this workspace: M13
+CSS10f11, Google0384 and original-byte reader17fd; M14c56; M15 220c and its newer
+preview/MCP work. The exact17fd original-byte delta was independently source
+reviewed here with no new confirmed P0/P1/P2; report
+`/tmp/mote-joint-review-m13-file-original-17fd.md`, no test/build rerun. Its3/3
+runtime result belongs to M13. Original invitation/QR pairing remains a shared
+UNKNOWN: M01 PKCE approve/poll/ACK is implemented; no frozen canonical equivalent
+for old invitation redemption/scan was delivered. Username login and MCP QR do
+not close that retained outcome.
+
+## Independent preparation probes: narrow scope only
+
+Own read adapter `e27444881c63b0841be6098f6e55023f12ba18ae` restores actual
+owner-filtered Files list/detail/chunks, authenticated M03 original playback and
+existing tar formatting from M06 publications. Node24.21.0, source entry;
+`multiuser-file-views.test.ts` plus the existing tar algorithm case3/3, no skip,
+EXIT0. `/tmp/mote-joint-files-read-freeze.log`, SHA256
+`0976d5c33199eca9e9bf0a67eb9f45f38ec161396987340dd758343d975fa322`.
+Fresh shared build, server types and scope boundary passed separately. This is
+partial Files, not whole recording/Imports parity or final compiled proof.
+
+M13's exact-e274 independent review found export source errors were not forwarded
+through `.pipe(gzip)`. Own durable actual-helper child process atbf00 reproduced
+uncaught source error/EXIT1. Minimal07c0adf switches to `pipeline`; same source
+failure plus existing tar positive2/2/no skip/EXIT0, source Node24.21.0.
+`/tmp/mote-joint-export-stream-green.log`, SHA256
+`5b647d9a8a8c0cc5df3e517a5d17171b2eb7845bfd7a9b4a05a1f9c93cf90b09`.
+M13 reviewed exact07c and closed the code path with no new confirmed finding in
+`/tmp/mote-m13-review-joint-files-e274.md`. This is not a full HTTP timing proof.
+
+The owner correction/speaker candidate has actual2/2 missing-route RED at7faf;
+`/tmp/mote-joint-files-corrections-red.log` SHA256
+`15ec6b293b6186ab9cbda3c036194a73b83dcd551229e4f7a8eb4c883090aaae`.
+Its later older-portable merge probe validly failed `archive_conflict` at Memory's
+current-only evidence reader after a legitimate Material revision; diagnostic
+instrumentation was test-only and removed. `/tmp/mote-joint-files-corrections-merge.log`
+SHA256 `e8ddbe34e8286244d6f754bdca047867f0e95644d0d571c8b21f399b9ed00c53`.
+After minimal retained-recovery adaptation, source candidate3/3/no skip/EXIT0,
+4.39s: exact A/B correction, preserved raw/corrected tar, confirmed names,
+older-name merge/current-name preservation, replay/corrupt-link rollback, physical
+A deletion with B unchanged, offline backup/restore and old token401.
+`/tmp/mote-joint-files-corrections-merge-green.log` SHA256
+`0db603788a0fea4d7ee2b2016ac3be7e21bf9b0d3eafc551b86797ac2889f8c1`.
+
+One additional actual production Memory/portable test using generated loopback
+model I/O passes1/1/no skip/EXIT0,11.82s: retain old evidence/history, preserve
+grants/call count on import, reject old pinned execution409, and execute a new
+current owner request positively. Sandbox listener EPERM was environmental;
+the same command passed under normal authorized review, no real model contacted.
+`/tmp/mote-joint-memory-retained-import.log` SHA256
+`76eb490621a4a704e850cc83f1c30dd4524f18c37c57d646252eb7f99be2c153`.
+These write/recovery changes remain a candidate until types, adjacent checks and
+bounded review complete; no final affected or module claim is inferred.
 
 ## Finite final acceptance matrix
 

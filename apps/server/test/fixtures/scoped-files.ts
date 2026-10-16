@@ -33,6 +33,6 @@ export async function scopedFilesFixture(t: TestContext) {
     await checked(token, '/api/ingress/uploads/' + input.id + '/parts/0', 'PUT', {bytes: bytes.toString('base64'), checksum: hash});
     return (await checked(token, '/api/ingress/uploads/' + input.id + '/commit', 'POST', {})).captures[0];
   };
-  return {host, a, b, admin, request, checked, upload};
+  return {directory, host, a, b, admin, request, checked, upload};
 }
 

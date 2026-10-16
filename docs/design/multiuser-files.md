@@ -23,11 +23,50 @@ cursor key is passed only through trusted composition to PrivateCursor.
 | `POST /api/files/:captureId/playback {}` | Delegates to M03's account/credential/epoch-bound play ticket. Returned URL is the authenticated Ingress3 original reader, preserving byte Range. Fetch with the original Api/native credential and required protocol headers; renderer audio/image uses the authenticated bytes/Blob. The URL alone does not remove M03 auth. |
 | `GET /api/files/:captureId/export` | Current transcript JSON/Markdown/CSV, current available derivations and exact original/artifact manifest in the existing USTAR+gzip format. Pure existing formatting/tar code is extracted once for legacy and scoped consumers, with an authority check at stream boundaries. Existing64MiB export bound remains. No raw original, credential or other account's content is included. |
 
-This checkpoint does **not** close reference-only catalog files, proposed review,
-manual correction, speaker-name confirmation, acoustic override/sample assets,
+This read checkpoint does **not** close reference-only catalog files, proposed review,
+acoustic override/sample assets,
 cancel/retry/forget or complete original legacy recording export outcomes. Those
 remain explicit shared Files work; neither the current transcript export nor a
 generic Material list substitutes for them.
+
+## Owner corrections and speaker confirmation: candidate under validation
+
+The existing M06 service accepts the original exact `artifactId`, `chunkId`,
+`originalText` and `correctedText` correction contract. It reuses the production
+evidence-ID function, retains the uncorrected immutable extraction, creates a new
+owner-bound artifact, and republishes through M06's existing Material algorithm.
+A stale artifact/text/chunk or another owner's artifact rejects. Identical text
+is unchanged. No model or new task is admitted by an owner edit.
+
+The original speaker-name contract keeps anonymous labels, timing and text;
+only the owner confirms an existing label's name. Confirmations include the
+existing owner/UUID/time provenance and survive later text corrections. Their
+small per-owner annotation journal references both the current and original raw
+M06 artifact. Existing Material revisions retire dependent views. Old artifacts
+remain retained evidence rather than new execution input.
+
+The existing tar export includes current and uncorrected JSON/Markdown/CSV in
+separate entries, raw artifact identity in the manifest, and a separate confirmed
+speaker attribution entry. M16 portable export, semantic merge, physical account
+deletion, and offline instance backup/restore include this canonical journal.
+Older imported names cannot overwrite an existing newer confirmation. Corrupt
+raw-artifact links reject atomically. Recovery does not renew login or execution
+grants. Newly produced instance backups require the complete annotation table;
+pre-candidate backups have not been accepted as compatible by this checkpoint.
+
+An actual older-archive merge after a speaker/Material update exposed an existing
+Memory restore conflict: it validated historical archive evidence through the
+current execution reader. Recovery now uses a narrowly named retained projection
+of the same canonical algorithm. Live `materialEvidence`/`evidence`, admission
+and revision checks stay current-only. A generated real-host/model regression
+retains old history, rejects old-revision execution and permits a fresh current
+owner request. No retired evidence is promoted to current authority.
+
+These are narrowly exercised candidate paths, not final Files, Imports or joint
+acceptance. Type/build/affected and independent review receipts must be recorded
+before a shared write freeze is offered to consumers. Proposed model-assisted
+reviews/calendar matching, acoustic per-file overrides, sample assets and all
+remaining lifecycle controls are still OPEN.
 
 ## Remaining shared Imports contract
 
