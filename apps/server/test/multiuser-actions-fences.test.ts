@@ -69,3 +69,12 @@ test('the immutable review exposes the exact edited content and native account w
  await f.ok(f.a.token,'/api/owner-questions/'+q.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:q.revision,action:'answer',choiceId:'dismiss'});
  assert.equal((await f.ok(f.a.token,'/api/actions')).items[0].status,'dismissed');
 });
+
+test('explicit Actions restoration after domain deletion restores history while the old issued operation stays revoked',async t=>{
+ const f=await proposed(t),approved=await f.ok(f.a.token,'/api/actions/'+f.aProposal.id+'/confirm','POST',f.input),context=await f.node.authority.authenticate(f.a.token),services=f.node.services.forUser(context),archive=await services.exportUser('actions');
+ await f.ok(f.a.token,'/api/actions/'+approved.id+'/claim','POST',{deviceId:'same-device'});const receive=f.node.actions!.delivery.bindReceipt(context,approved.id,'same-device',approved.operationId);
+ await services.deleteUser('actions','generated-delete');await services.restoreUser('actions',archive,'generated-history-restore');await services.restoreUser('actions',archive,'generated-history-restore');
+ const restored=(await f.ok(f.a.token,'/api/actions')).items[0];assert.equal(restored.id,approved.id);assert.equal(restored.status,'stale');assert.equal(restored.operationId,undefined);assert.equal(restored.event.title,approved.event.title);
+ assert.deepEqual(await receive({operationId:approved.operationId,status:'succeeded',externalId:'generated-after-delete'}),{acknowledged:true,published:false});assert.equal((await f.request(f.a.token,'/api/actions/'+approved.id+'/claim','POST',{deviceId:'same-device'})).statusCode,403);
+ assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),1);
+});
