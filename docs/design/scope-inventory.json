@@ -2222,6 +2222,7 @@
     "module": "M12",
     "surfaces": [
       "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions/:id/reviews/:questionId'",
       "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions/deliveries'",
       "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/'+method",
       "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/cancel'",
