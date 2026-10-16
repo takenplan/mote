@@ -135,6 +135,8 @@ compiled/client/affected gate. Consumers must preserve their original navigation
 and label unfinished processing honestly. Explicit image profiles currently
 block image media rather than being ignored; full image-profile/attachment parity
 remains OPEN. Missing-model admission's actual stale/grant_revoked receipt is
-failed, not invented model-wait. Additional Memory wait/paused/backoff variants,
-Files model reviews/calendar matching, acoustic samples/overrides, lifecycle
+failed, not invented model-wait. Later generated actual paused/resume, capacity
+backoff/restart and exact unavailable-snapshot recovery have separate receipts in
+the joint validation ledger on unchanged projection source; final composed gates
+remain pending. Files model reviews/calendar matching, acoustic samples/overrides, lifecycle
 controls and complete recording exports remain OPEN.

@@ -517,3 +517,11 @@ and owner retry completes through the original snapshot.1/1/no skip/EXIT0,
 keys stay in the generated temporary fixture/in-process memory, never in Git or
 logs. This is a snapshot fault/recovery assertion, not permission to substitute
 a fresh model for a withdrawn snapshot or a real-model semantic validation.
+
+M13 bounded read-only reviews of exact1a3bf5d9 and exactce3572ce report no new
+confirmed P0/P1/P2 in /tmp/mote-m13-review-joint-unknown-{1a3b,ce357}.md. The
+reviewer did not execute the tests or compose the candidate. Existing generic
+private-preview/confirmation plus equal-ID WAV Imports→real M03/M04/M05/M06
+adjacent cases pass2/2 in
+/tmp/mote-joint-unknown-import-entry-adjacent.log/.exit on the new runtime. This
+supports the narrow candidate; fresh source types and final gates remain due.
