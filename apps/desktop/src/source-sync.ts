@@ -334,7 +334,9 @@ export class SourceSync {
 
   private async sendAccountFile(source:SourceDefinition,item:SourceItem,request:SourceRequest,signal?:AbortSignal):Promise<Record<string,unknown>>{
     const {localOriginal,localOriginalBase64,snapshotRecovery:_,...wire}=item,original=localOriginalBase64?Buffer.from(localOriginalBase64,'base64'):undefined;
-    const previousRevision=this.data.delivered?.[sourceHash(item.externalId)]??null;
+    let previousRevision=Object.hasOwn(this.data.predecessors??{},item.revision)?this.data.predecessors![item.revision]??null:this.data.delivered?.[sourceHash(item.externalId)];
+    if(previousRevision===undefined){const head=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/head?externalId=${encodeURIComponent(item.externalId)}`,undefined,'GET',signal) as {revision:unknown};if(head.revision!==null&&typeof head.revision!=='string')throw Error('Invalid account source head');previousRevision=head.revision;}
+    await this.mutate(async()=>{if(!Object.hasOwn(this.data.predecessors??{},item.revision))await this.commit({...this.data,predecessors:{...this.data.predecessors,[item.revision]:previousRevision??null}});});
     const revision={sourceId:source.id,item:wire,previousRevision,sizeBytes:localOriginal?.sizeBytes??original?.length??item.metadata?.file?.sizeBytes??0,...(localOriginal?{sha256:localOriginal.sha256}:original?{sha256:sourceHash(original)}:{})};
     const batchId='file-'+ingressKey(revision),upload=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/uploads`,{batchId,revision},'POST',signal) as any;
     if(!upload||upload.deploymentId!==request.account!.deploymentId||upload.userId!==request.account!.userId||upload.sourceId!==source.id||typeof upload.id!=='string'||!/^[a-f0-9-]{36}$/i.test(upload.id)||upload.partBytes!==4194304||!Array.isArray(upload.parts))throw Error('Account upload session mismatch');
