@@ -253,9 +253,15 @@ export class ProcessingHost {
  settleErasure(subject:UserDataSubject,id:string,outcome:'stopped'){const sql=this.deletionSql(subject);if(outcome!=='stopped'||this.active.has(identityHash([subject.userId,id])))throw new PrivateDataError('conflict',409);sql.run('DELETE FROM mp_activity WHERE user_id=$user AND id=?',id);}
  private deletionSql(subject:UserDataSubject){const assert=()=>{this.runtime.services.assertSubject(subject,PROCESSING_DOMAIN,'delete');if('credentialId' in subject)throw new ScopeError('invalid_identity',403);};const sql=new PrivateSql(this.db,subject.userId,assert);if(!sql.get('SELECT deleted FROM mp_state WHERE user_id=$user')?.deleted)throw new PrivateDataError('conflict',409);return sql;}
  private async io<T>(run:TaskRun,input:ProcessingInput,work:()=>Promise<T>){
-  const id=randomUUID(),key=identityHash([run.context.userId,id]),cleanup=new PrivateSql(this.db,run.context.userId,()=>{});run.grant.commit(()=>this.input(run.context,input).sql.run("INSERT INTO mp_activity VALUES($user,?,'active')",id));this.active.add(key);let settled=false;
-  try{const value=await work();settled=true;return value;}catch(error){settled=error instanceof ProviderFailure||error instanceof StoreError||error instanceof z.ZodError||error instanceof SyntaxError;throw error;}
-  finally{this.active.delete(key);if(settled)cleanup.run('DELETE FROM mp_activity WHERE user_id=$user AND id=?',id);else cleanup.run("UPDATE mp_activity SET state='unknown' WHERE user_id=$user AND id=?",id);}
+  const id=randomUUID(),key=identityHash([run.context.userId,id]),cleanup=new PrivateSql(this.db,run.context.userId,()=>{});let complete!:()=>unknown;
+  run.external.begin('processing:'+run.task.id+':'+id,issuance=>{this.input(run.context,input).sql.run("INSERT INTO mp_activity VALUES($user,?,'active')",id);complete=this.execution.bindExternalCompletion(run.context,run.task.id,issuance);});this.active.add(key);let settled=false;
+  // The exact transport completion may settle its issued fact after revoke;
+  // it cannot restore the task grant or publish a private artifact.
+  const finish=()=>{complete();settled=true;};
+  try{const value=await work();finish();return value;}catch(error){
+   const known=error instanceof ProviderFailure?(error.details.executionStarted===false||!['provider_timeout','provider_unavailable','provider_network'].includes(error.details.code)):error instanceof StoreError||error instanceof z.ZodError||error instanceof SyntaxError;
+   if(known)finish();throw error;
+  }finally{this.active.delete(key);if(settled)cleanup.run('DELETE FROM mp_activity WHERE user_id=$user AND id=?',id);else cleanup.run("UPDATE mp_activity SET state='unknown' WHERE user_id=$user AND id=?",id);}
  }
  private restore(subject:UserDataSubject,archive:Parameters<DomainLifecycle['restoreUser']>[1],operationId:string,merge=false){
   const sql=new PrivateSql(this.db,subject.userId,()=>this.runtime.services.assertSubject(subject,PROCESSING_DOMAIN,'restore'));

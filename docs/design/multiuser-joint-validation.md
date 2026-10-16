@@ -80,3 +80,20 @@ success or model waiting unless the actual task code says so. UNKNOWN model-wait
 backoff/paused/partial-instance-restore variants still need execution. Basis:
 generated missing-model actual Import404 RED -> exact case plus selected-recipe
 batch/cancel/B-positive GREEN; no additional engine, grant, model or store.
+
+## Issued processing calls and late settlement
+
+KEEP the accepted recording-outcomes ADR: a bare 503, timeout or disconnect does
+not prove a configured worker never executed. Explicit owner replay acknowledges
+the ambiguity; it does not settle earlier external facts. CHANGE M06 transport
+admission to the existing M05 issuance ledger, using its synchronous issuance
+hook for the M06 activity row and its exact trusted completion capability for a
+validated late response. No new scheduler, grant or user settlement endpoint is
+introduced. Completed stages may admit a subsequent issuance; an old completion
+can update only its original issuance and cannot settle a newer stage. REMOVE
+the old M06 test assumption that every ProviderFailure permits automatic replay.
+EXCEPTION existing structured local never-started facts still permit bounded
+retry, and current successful ASR checkpoints still avoid retranscription.
+UNKNOWN network disconnect/timeout variants and every remaining Files control
+are not inferred from the generated bare-503 case. Final candidate types and
+composed acceptance remain separate requirements.

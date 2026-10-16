@@ -440,3 +440,31 @@ admin erasure retry completes and A physical root is absent, B bytes unchanged.
 This proves the local live-activity erasure barrier for the new generic-upload
 path; it is not an external provider unknown-result settlement assertion. No
 production change was needed, and final affected checks remain pending.
+
+M06 unknown-result repair candidate: original bare-503 fixture actually issued
+four calls rather than one (RED /tmp/mote-joint-file-unknown-red.log/.exit).
+The existing M05 issuance ledger now guards each real M06 I/O stage. Two new
+production HTTP cases pass 2/2 in
+/tmp/mote-joint-file-unknown-late-green2.log/.exit: bare503 retains unknown with
+one A call and B success; a held valid ASR ACK after account deletion settles
+only the exact old external fact, publishes no A artifact, and permits the
+existing erasure retry to remove A physical originals while B stays indexed.
+The earlier misleadingly named late-green log ran only the first case after a
+fixture rewrite failed; it is not evidence for the second case.
+
+Adjacent actual cases: ASR+diarization checkpoint restart and explicit unknown
+retry 2/2 in /tmp/mote-joint-file-unknown-explicit-adjacent2.log/.exit; media
+cancel, original M16 processing deletion, scoped summary and cancelled summary
+4/4 in /tmp/mote-joint-file-unknown-fences-adjacent.log/.exit. Explicit retries
+start a fresh attempt budget; two confirmations and four actual calls leave two
+old unknown external facts unresolved. Initial candidate nested-admission and
+fixture budget assertions failed and remain in their own logs; these are not
+baseline behavior failures. No full affected/type/compiled acceptance is inferred
+from these narrow generated transport cases, and no real provider was called.
+
+M05 adjacent issuance capability: a completed first stage permits the second
+issuance, replaying the first ACK leaves the second issued, and settling A's
+second fact never readmits its blocked task or changes B. This new case plus
+the existing unknown-effect restart/owner-confirmation case pass 2/2 in
+/tmp/mote-joint-file-unknown-m05-adjacent2.log/.exit. These are task-authority
+checks, not new client or arbitrary socket-timing coverage.
