@@ -307,6 +307,23 @@ it('consumes real portable Activity through emitted main/preload, rejects A late
  expect((await f.request(returned.token,'/api/portable/exports/'+id+'/cancel','POST',{})).statusCode).toBe(200);expect((await app.documentCall('A-returned','workActivity',[{state:'completed'}])).items.find((work:any)=>work.id===workId).artifacts).toEqual([]);
 },30000);
 
+it('consumes committed same-account import through actual main/preload and keeps its browser work handoff bound to A',async()=>{
+ const f=await fixture(),sourceId='generated-desktop-import',source={id:sourceId,name:'Generated import',kind:'local-files',deviceId:'generated-import-device',platform:'import',retention:'archive'};
+ expect((await f.request(f.a.token,'/api/ingress/sources','POST',source)).statusCode).toBe(200);
+ const exported=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});expect(exported.statusCode,exported.body).toBe(200);const exportId=exported.json().id;
+ await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/exports/'+exportId)).json().state).toBe('completed'),{timeout:10000});
+ const archive=await f.request(f.a.token,'/api/portable/exports/'+exportId+'/content');expect(archive.statusCode,archive.body).toBe(200);expect((await f.request(f.a.token,'/api/sources/'+sourceId,'DELETE')).statusCode).toBe(200);
+ const app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('import-A');
+ const imported=await f.request(f.a.token,'/api/portable/imports','POST',{operationId:randomUUID(),archive:archive.json()});expect(imported.statusCode,imported.body).toBe(200);const id=imported.json().id,workId='import:'+id;
+ await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/imports/'+id)).json().state).toBe('completed'),{timeout:10000});
+ const page=await app.documentCall('import-A','workActivity',[{state:'completed'}]);expect(page.items.find((work:any)=>work.id===workId)).toMatchObject({kind:'import',state:'completed',progress:{mode:'semantic',stage:'finished'},artifacts:[],destination:'vault'});expect((await f.request(f.a.token,'/api/sources/'+sourceId)).json().enabled).toBe(false);
+ let opened:string|undefined;app.child.on('message',(message:any)=>{if(message.type==='external')opened=message.url;});await app.documentCall('import-A','openWorkActivity',[workId]);
+ const query=new URLSearchParams(new URL(opened!).hash.split('?')[1]);expect(query.get('work')).toBe(workId);
+ const exchange=await f.node.app.inject({url:'/api/login/exchange',method:'POST',headers:{'x-mote-protocol-version':'2'},payload:{code:query.get('loginTicket')}});expect(exchange.statusCode,exchange.body).toBe(200);expect(exchange.json().userId).toBe(f.a.userId);
+ const detail=await f.node.app.inject({url:'/api/work-activity/'+workId,headers:{'x-mote-protocol-version':'2',cookie:String(exchange.headers['set-cookie']).split(';')[0],'x-mote-session-id':exchange.json().credentialId}});expect(detail.statusCode,detail.body).toBe(200);expect(detail.json().artifacts).toEqual([]);
+ await app.call('mote:ask',['login',{token:f.b.token}]);await app.document('import-B');expect((await app.documentCall('import-B','workActivity',[{state:'completed'}])).items).toHaveLength(0);await expect(app.documentCall('import-A','openWorkActivity',[workId])).rejects.toThrow();
+},30000);
+
 it('blocks actual main Ask private body when the same URL becomes a different deployment with still-valid credentials',async()=>{
  const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await f.replaceDeployment();
  const received:string[]=[];app.intercept=async raw=>{received.push(new URL(raw.url).pathname);return false;};
