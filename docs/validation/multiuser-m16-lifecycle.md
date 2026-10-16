@@ -457,6 +457,13 @@ exit 0 in `/tmp/m16-personal-import-fourteen.log`; no skip. Scope inventory and
 production boundary check also exit 0. This remains narrow evidence awaiting the
 new combined required/build and current UI consumer acceptance.
 
+Current composed automatic-policy adjacent checks pass 12/12, exit 0:
+`node --import tsx --test --test-concurrency=1 --test-name-pattern='policy|automatic|automations|owner policy' apps/server/test/multiuser-memory.test.ts apps/server/test/multiuser-ask.test.ts`,
+`/tmp/m16-import-automation-adjacent.log` (112 seconds, including the original
+61-second actual Insight interval). Existing normal automatic M06/Memory/Ask
+publication, pause/stop, owner questions and successful-window restart behavior
+remain exercised. No live model/provider was called; the generated HTTP provider
+is the external service replacement.
 
 ## M13 device notification journal composition
 

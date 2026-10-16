@@ -7,7 +7,7 @@ import type { DurableQueue, QueueRecord } from './queue';
 import { MAX_IMAGE_BYTES, validateServerUrl } from './config';
 import { readResponseText } from './response-body';
 import { captureOcrState } from '@mote/shared/metadata';
-import {accountCaptures,accountJson,accountOriginal,accountCaptureMaterial,accountCaptureProcessing} from './account-reader';
+import {accountCapturePreviews,accountJson,accountOriginal,accountCaptureMaterial,accountCaptureProcessing} from './account-reader';
 import {DESKTOP_PROTOCOL_HEADERS,accountKey} from './account';
 import {ingressKey} from './ingress-client';
 
@@ -77,7 +77,7 @@ export async function browseCaptures(queue: Pick<DurableQueue,'sessionSamples'|'
   if(config.account&&input.location==='central'){
     const query=ingressKey({range,source,grouping:input.grouping,sessionId:input.sessionId});let cursor:string|undefined;
     if(input.cursor){let value:any;try{value=JSON.parse(Buffer.from(input.cursor,'base64url').toString());}catch{throw Error('Invalid account page cursor');}if(value.account!==accountKey(config)||value.query!==query||typeof value.cursor!=='string')throw Error('Invalid account page cursor');cursor=value.cursor;}
-    const rows=await accountCaptures(config,{...range,kind:source}),records=new Map(rows.map(row=>[row.id,{event:row,blobHash:row.hasImage?row.id:undefined,blobBytes:0,attempts:0,nextAttemptAt:0} as QueueRecord]));
+    const rows=await accountCapturePreviews(config,{...range,source}),records=new Map(rows.map(row=>[row.id,{event:row,blobHash:row.hasImage?row.id:undefined,blobBytes:0,attempts:0,nextAttemptAt:0} as QueueRecord]));
     // Reuse the original local/session presentation algorithms with a read-only
     // projection of actual authorized server pages; no second queue is created.
     const projection={sessionSamples:async()=>rows.map(row=>({id:row.id,deviceId:row.deviceId,appId:row.appId,appName:row.appName,capturedAt:row.capturedAt,hasImage:Boolean(row.hasImage)})),recordForBrowser:(id:string)=>records.get(id),pageForBrowser:async(_after:string,_before:string,offset:number,limit:number)=>({records:[...records.values()].slice(offset,offset+limit),total:records.size})};

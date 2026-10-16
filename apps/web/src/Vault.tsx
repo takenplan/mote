@@ -3,7 +3,10 @@ import { ArrowDownToLine, ArrowUpFromLine, CheckCircle2, Database, Info, Layers3
 import { useRef, useState } from "react";
 import { bytes, dateTime, errorMessage, type Api, type Status } from "./api";
 import { ErrorNotice } from './shell-components';
-export function Vault({ api, status, refresh, disconnect, embedded = false, }: {
+import {ScopedVault} from './ScopedVault';
+type VaultProps={api:Api;status:Status|null;refresh:()=>void;disconnect:()=>void;embedded?:boolean};
+export function Vault(props:VaultProps){return props.api.connection?.mode==='web'?<ScopedVault key={JSON.stringify(props.api.connection)} api={props.api} embedded={props.embedded} disconnect={props.disconnect}/>:props.status?<LegacyVault {...props} status={props.status}/>:null;}
+function LegacyVault({ api, status, refresh, disconnect, embedded = false, }: {
     embedded?: boolean;
     api: Api;
     status: Status;
