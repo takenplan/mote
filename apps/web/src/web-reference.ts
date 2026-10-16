@@ -1,6 +1,7 @@
 import {sourceMetadataSchema,type SourceItemRecord} from '@mote/shared';
 import {moteText} from '@mote/shared/i18n';
 import {isWebConnection,type Api} from './api';
+import {sourceItemCaptureId,requireWebSourceItemReceipt,type WebSourceItemReceipt} from './web-source-receipt';
 /** The existing reference flow keeps metadata only; no URI is fetched. */
 export async function saveWebReference(api:Api,title:string,uri:string){
  const sourceId='manual-references',deviceId='web-reference',name=moteText('外部文件引用');
@@ -14,7 +15,8 @@ export async function saveWebReference(api:Api,title:string,uri:string){
  const revision=same?prior.revision:crypto.randomUUID(),observedAt=web&&same?prior.observedAt:new Date().toISOString(),item={...value,externalId:uri,revision,observedAt};
  if(!web)return api.request('/api/sources/'+sourceId+'/items',{method:'PUT',body:JSON.stringify(item)});
  const batchId='reference:'+revision;
- const receipt=await api.request<{version:number;state:string;userId:string;deploymentId:string;sourceId:string;batchId:string;captures:{id:string}[]}>('/api/ingress/sources/'+sourceId+'/items',{method:'POST',body:JSON.stringify({batchId,items:[item]})});
- if(receipt.version!==3||receipt.state!=='received'||receipt.userId!==web.userId||receipt.deploymentId!==web.deploymentId||receipt.sourceId!==sourceId||receipt.batchId!==batchId||receipt.captures.length!==1||!receipt.captures[0].id)throw Error('Reference acknowledgement does not match');
+ const captureId=await sourceItemCaptureId(sourceId,item.externalId,revision);
+ const receipt=await api.request<WebSourceItemReceipt>('/api/ingress/sources/'+sourceId+'/items',{method:'POST',body:JSON.stringify({batchId,items:[item]})});
+ requireWebSourceItemReceipt(receipt,{...web,sourceId,batchId,captureId,externalId:item.externalId,revision},'Reference');
  return receipt;
 }

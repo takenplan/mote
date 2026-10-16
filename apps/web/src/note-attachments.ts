@@ -4,6 +4,7 @@ import {uploadFilePart,uploadHash,type PartReceipt} from './upload-part';
 import type {Api} from './api';
 import {isWebConnection} from './api';
 import type {FileRevision} from '@mote/shared';
+import {sourceItemCaptureId,requireWebSourceItemReceipt,type WebSourceItemReceipt} from './web-source-receipt';
 /** Version-3 transport preserves the existing upload/chunk algorithm, while
  * checking every acknowledgement against the immutable Web account. */
 async function uploadWebAttachment(api:Api,file:File,deviceId:string,sourcePrefix:string,sourceName:string,signal?:AbortSignal):Promise<string>{
@@ -15,9 +16,11 @@ async function uploadWebAttachment(api:Api,file:File,deviceId:string,sourcePrefi
  const sha256=await uploadHash(await file.arrayBuffer());signal?.throwIfAborted();
  const batchId=await uploadHash(new TextEncoder().encode(JSON.stringify([sha256,file.name,file.lastModified])).buffer as ArrayBuffer);
  const revision:FileRevision={sourceId,previousRevision:null,relativePath:'',item:{externalId:'attachment:'+batchId,revision:sha256,observedAt:new Date(file.lastModified).toISOString(),title:file.name,kind:'file',layer:'original',text:'',mimeType:file.type,deleted:false},sha256,sizeBytes:file.size};
- type Receipt={version:number;state:string;deploymentId:string;userId:string;sourceId:string;batchId:string;captures:{id:string;original?:{hash:string;bytes:number;captureId:string}}[]};
+ type Receipt=WebSourceItemReceipt;
+ const captureId=await sourceItemCaptureId(sourceId,revision.item.externalId,revision.item.revision);
+ const originalRef='original:'+await uploadHash(new TextEncoder().encode(JSON.stringify([owner.userId,sourceId,captureId,sha256,file.type,'archive'])).buffer as ArrayBuffer);
  const owned=(value:{deploymentId:string;userId:string;sourceId:string})=>{if(value.deploymentId!==owner.deploymentId||value.userId!==owner.userId||value.sourceId!==sourceId)throw Error('Attachment owner acknowledgement does not match');};
- const validate=(value:Receipt)=>{owned(value);const item=value.captures?.[0];if(value.version!==3||value.state!=='received'||value.batchId!==batchId||value.captures?.length!==1||!item?.id||item.original?.captureId!==item.id||item.original.hash!==sha256||item.original.bytes!==file.size)throw Error('Attachment archive acknowledgement does not match');return item.id;};
+ const validate=(value:Receipt)=>{const item=requireWebSourceItemReceipt(value,{...owner,sourceId,batchId,captureId,externalId:revision.item.externalId,revision:revision.item.revision},'Attachment archive'),original=item.original;if(!original||original.ref!==originalRef||original.sourceId!==sourceId||original.captureId!==captureId||original.hash!==sha256||original.bytes!==file.size||original.mime!==file.type||original.retention!=='archive')throw Error('Attachment archive acknowledgement does not match');return item.id;};
  const upload=await request<{id:string;deploymentId:string;userId:string;sourceId:string;partBytes:number;parts:{part:number;checksum:string;bytes:number}[];receipt?:Receipt}>('/api/ingress/sources/'+encodeURIComponent(sourceId)+'/uploads',{method:'POST',body:JSON.stringify({batchId,revision})});
  owned(upload);if(upload.receipt)return validate(upload.receipt);
  if(!upload.id||upload.partBytes!==FILE_PART_BYTES||!Array.isArray(upload.parts))throw Error('Invalid attachment upload acknowledgement');
