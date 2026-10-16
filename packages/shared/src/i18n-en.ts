@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "当前准入代次 {0}": "Current admission generation: {0}",
+  "内置记忆方案": "Built-in memory plan",
+  "外部结果待确认 {0}": "External results awaiting confirmation: {0}",
   "能力授权": "Capability grants",
   "允许历史读取": "Allow history reads",
   "仅管理员可安装或卸载插件。": "Only administrators can install or uninstall plugins.",

@@ -39,4 +39,9 @@ test('original plugin page consumes actual M09 owned instances, preserves hidden
  await click('配置');await render(api(b,'B'));assert.equal(d.querySelector('[role=dialog]'),null);assert.match(d.body.textContent!,/B_PRIVATE/);assert.doesNotMatch(d.body.textContent!,/A_PRIVATE/);assert.equal(calls.length,1);
  await click('记忆方案');const automatic=d.querySelector<HTMLButtonElement>('[role=switch][aria-label="自动记忆"]');assert.ok(automatic,'the existing memory control remains available through actual M07');
  await act(async()=>{automatic.click();await delay(20);});assert.equal((await request(b.token,'/api/memory')).json().desired,false);assert.equal((await request(a.token,'/api/memory')).json().desired,true);
+ const prepared=await request(b.token,'/api/memory/bindings','POST',{operationId:randomUUID()});assert.equal(prepared.statusCode,200,prepared.body);
+ await act(async()=>root.render(null));await render(api(b,'B'));await click('记忆方案');
+ const deadline=Date.now()+10000;while(!Array.from(d.querySelectorAll('button')).some(button=>button.textContent==='设为当前方案')){assert.ok(Date.now()<deadline,d.body.textContent!);await act(async()=>delay(100));}
+ assert.match(d.body.textContent!,/核验通过 · 尚未生效/);await click('设为当前方案');assert.equal((await request(b.token,'/api/memory')).json().binding.revision,2);assert.equal((await request(a.token,'/api/memory')).json().binding.revision,1);
+ await click('立即停止自动记忆');assert.ok(d.querySelector('[role=dialog]'));await render(api(a,'A'));assert.equal(d.querySelector('[role=dialog]'),null);assert.equal(calls.filter(call=>call.path==='/api/memory/stop').length,0);
 });

@@ -1,12 +1,13 @@
-import {useEffect,useRef,useState,type ReactNode} from 'react';
-import {Check,ChevronRight,Download,Package,RefreshCw,Settings2,ShieldCheck,X} from 'lucide-react';
+import {useEffect,useRef,useState} from 'react';
+import {Check,ChevronRight,Download,Package,RefreshCw,Settings2,ShieldCheck} from 'lucide-react';
 import {moteText} from '@mote/shared/i18n';
 import type {MemoryBindingView,MemoryPlanView,PluginCenterView,PluginConfigurationField,PluginInstanceView,PluginPackageView,PluginReleasePreview,ScopedPluginCenterView,ScopedPluginInstance} from '@mote/shared';
 import type {ModelSettingsView} from '@mote/shared/models';
 import {ApiError,errorMessage,isWebConnection,type Api} from './api';
 import {scopedPluginCenter,scopedPluginConfiguration} from './scoped-plugin-center';
+import {ScopedMemoryControl} from './ScopedMemoryControl';
 import {FeatureInventory} from './FeatureInventory';
-import {containDialogFocus} from './dialog-focus';
+import {PluginModal as Modal} from './PluginModal';
 import {resources} from './resource-cache';
 import {confirmNavigation,useUnsavedChanges} from './unsaved';
 import {useResource} from './useResource';
@@ -19,16 +20,6 @@ const pluginsPath='/api/plugins',bindingPath='/api/memory-spaces/default/binding
 type Intent={path:string;method:string;body:Record<string,unknown>;after?:(value:unknown)=>void};
 type Dialog={kind:'install';preview:PluginReleasePreview}|{kind:'configure';package:PluginPackageView;instance?:PluginInstanceView}|{kind:'prepare';plan:MemoryPlanView}|{kind:'stop'}|{kind:'uninstall';package:PluginPackageView};
 
-function Modal({title,close,opener,children,busy}:{title:string;close:()=>void;opener:HTMLElement|null;children:ReactNode;busy:boolean}){
- const ref=useRef<HTMLElement>(null);
- useEffect(()=>ref.current?containDialogFocus(ref.current,opener):undefined,[opener]);
- return <div className="modal-backdrop plugin-modal-backdrop" onMouseDown={event=>{if(event.target===event.currentTarget&&!busy)close();}} onKeyDown={event=>{if(event.key==='Escape'&&!busy){event.stopPropagation();close();}}}>
-  <section className="modal plugin-modal" role="dialog" aria-modal="true" aria-label={title} ref={ref}>
-   <div className="section-heading"><h2>{title}</h2><button className="icon-button" aria-label={moteText('关闭详情')} disabled={busy} onClick={close}><X size={20}/></button></div>
-   {children}
-  </section>
- </div>;
-}
 
 function Capabilities({items}:{items:PluginReleasePreview['capabilities']}){
  return <ul className="plugin-capabilities">{items.map(item=><li key={item.id}><span>{item.id}</span><span className={'badge '+(item.state==='verified'?'green':'muted')}>{capabilityLabel(item.state)}</span>{item.reason&&<small>{item.reason}</small>}</li>)}</ul>;
@@ -50,7 +41,7 @@ function Configuration({api,item,instance,busy,onSave,scopedInstance,declaredCap
   if(field.type==='boolean')return <input type="checkbox" checked={value===true} onChange={event=>update(event.target.checked)} disabled={busy}/>;
   if(field.type==='select'||field.type==='model-profile'||web&&field.type==='secret-reference'){
    const options=web&&field.type!=='select'?['personal','shared'].flatMap(kind=>(scopedModels.data?.[kind as 'personal'|'shared']??[]).map(profile=>({value:kind+':'+profile.id,label:profile.name}))):field.type==='model-profile'?(models.data?.profiles.map(profile=>({value:profile.id,label:profile.name}))??[]):field.options??[];
-   return <select value={typeof value==='string'?value:''} required={field.required} disabled={busy||Boolean(field.type==='model-profile'&&models.loading)} onChange={event=>update(event.target.value)}><option value="">{moteText('请选择')}</option>{options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>;
+   return <select value={typeof value==='string'?value:''} required={field.required&&!(web&&field.type==='secret-reference'&&instance?.secretStatus[field.id]&&!Object.hasOwn(values,field.id))} disabled={busy||Boolean(field.type==='model-profile'&&(web?scopedModels.loading:models.loading))} onChange={event=>update(event.target.value)}><option value="">{moteText('请选择')}</option>{options.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select>;
   }
   return <input type={field.type==='number'?'number':'text'} value={typeof value==='boolean'?'':value??''} required={field.required} disabled={busy} autoComplete="off" onChange={event=>update(field.type==='number'&&event.target.value!==''?Number(event.target.value):event.target.value)}/>;
  }
@@ -61,7 +52,7 @@ function Configuration({api,item,instance,busy,onSave,scopedInstance,declaredCap
    {fields.map(field=><label className="preference-field" key={field.id}>{field.label}{fieldControl(field)}{field.description&&<small>{field.description}</small>}{field.type==='secret-reference'&&<small>{moteText('仅填写服务器保存的凭据引用，不填写凭据本身。')}{instance?.secretStatus[field.id]?' '+moteText('服务器已配置凭据。'):''}</small>}</label>)}
   </div>
   {!instance&&!item.configurationSchema&&<p className="notice">{moteText('先创建实例，中央节点返回此插件的配置字段。')}</p>}
-  {models.error!==undefined&&<p className="notice error" role="alert">{errorMessage(models.error)}</p>}
+  {[models.error,scopedModels.error,sources.error].filter(cause=>cause!==undefined).map((cause,index)=><p className="notice error" role="alert" key={index}>{errorMessage(cause)}</p>)}
   <div className="plugin-footer"><button className="button primary" disabled={busy||!name.trim()||!web&&!scope.trim()||!valid}>{busy?moteText('正在保存…'):instance?moteText('保存配置'):moteText('创建实例')}</button></div>
  </form>;
 }
@@ -143,6 +134,7 @@ function PluginCenterSession({api,onPage,web,administrator}:{api:Api;onPage:(pag
    {Boolean(view?.catalog.length)&&<div className="plugin-catalog">{view?.catalog.map(item=><article key={item.repository}><h3>{item.name}</h3><p>{item.description}</p><small>{item.repository}</small><button className="text-button" onClick={()=>{setRepository(item.repository);setTag('');}}>{moteText('选择仓库')}</button></article>)}</div>}
   </section>}
   {tab==='memory'&&<>
+   {web&&<ScopedMemoryControl api={api} plugins={raw}/>}
    <div className="discovery-inline-guidance"><p>{moteText('这里管理自动记忆的暂停 / 恢复及当前方案。模型分配、自动配方和历史资料处理节奏，请到「模型与服务 → 模块与模型」。独立洞察按自己的设置运行。')}</p><a className="text-button" href="#/system/models?category=model">{moteText('设置模型、配方与处理节奏 →')}</a></div>
    {bindingResource.error!==undefined&&<p className="notice error" role="alert">{errorMessage(bindingResource.error)}<button className="text-button" onClick={bindingResource.refresh}>{moteText('重试')}</button></p>}
    {bindingResource.loading&&!binding&&<p role="status">{moteText('正在读取…')}</p>}
