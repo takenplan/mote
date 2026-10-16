@@ -135,3 +135,24 @@ release marker after fixture directory removal; cleanup now releases barriers
 before closing the fixture. Server typecheck0 at
 /tmp/m07-page-history-types.log/.exit. Final whole combination and required
 affected checks remain pending, as does independent exact final-delta approval.
+
+
+## Durable child admission recovery
+
+Self-audit extended recovery beyond retained completed model outputs. A manual
+job could otherwise remain admitting after a crash between asynchronous M04
+child leases. The job, ordered batch plans and a no-model memory.admit M05
+coordinator now commit together, before model admission. Recovery preserves the
+original root model snapshot. It does not borrow the current model selection.
+Cancellation cannot resurrect the parent after a late lease, and provider binding
+drains these accepted admissions before migration.
+
+Actual manual two-process crash during admission:1/1 exit0,
+/tmp/m07-manual-admission-process.log/.exit,7017ms. Automatic admission recovery
+also passed1/1 in the earlier /tmp/m07-admission-process-first.log/.exit.
+Real M06/ranges/owner correction/read/operation idempotency6/6 exit0,
+/tmp/m07-admission-first.log/.exit. Cancellation/binding-drain2/2 exit0,
+/tmp/m07-admission-binding.log/.exit. Server types0 at
+/tmp/m07-admission-cancel-types.log/.exit; scope/import/SQL0.
+Final independent coordinator delta, actual whole combination, rebuilt emitted
+processes and required affected checks remain pending.
