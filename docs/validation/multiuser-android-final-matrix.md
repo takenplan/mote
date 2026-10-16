@@ -3,9 +3,11 @@
 This is a current checklist, not a passing gate. Historical RED/fixture errors,
 exact SHAs and logs remain in [the chronological ledger](multiuser-android.md).
 Workspace is task-19/mote, feature codex/mote-multiuser-m15-android. No M15 Draft
-PR or final required check has yet been delivered. Parent22:08 reserves the
-current full gate for QR and will allocate M15's next window explicitly; stale
-resource files do not authorize another build.
+PR or final required check has yet been delivered. Parent23:30 explicitly
+allocates the next order: Joint's latest short types and fresh RELEASE, then
+M15's necessary short APK/JVM GREEN and corresponding native cases, then M15
+RELEASE before QR's final gate. No further parent approval is needed after that
+fresh Joint terminal; the older23:06 resource file does not satisfy it.
 
 | Original capability | Current evidence / contract | Remaining final action |
 | --- | --- | --- |
