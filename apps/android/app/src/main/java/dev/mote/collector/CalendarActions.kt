@@ -43,7 +43,9 @@ class CalendarActions(private val context: Context, private val foreground: Bool
         // The same stable owner must be verified before each device/private request.
         return context.ingress3(c).send(if (body == null) "GET" else "POST", path, body)
     }
-    fun list(cursor: Long = 0): JSONObject = ConnectionGuard.sync { request("/api/actions?cursor=$cursor") } ?: error(MoteI18n.text("连接正在切换"))
+    fun list(cursor: String? = null): JSONObject = ConnectionGuard.sync {
+        request("/api/actions" + (cursor?.let { "?cursor=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""))
+    } ?: error(MoteI18n.text("连接正在切换"))
     fun calendars(): JSONArray {
         currentAccount()
         check(permissions()) { MoteI18n.text("请先连接日历并允许权限") }

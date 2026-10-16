@@ -155,6 +155,9 @@ substitutes. This is the separately authorized Desktop fixture, not the denied
 M13 Web Electron action; no personal data, live model or system permission was
 accessed or changed.
 
+This is backend/consumer projection evidence, not yet the final affected check or
+acceptance of M16's separately discovered restart notification regression.
+
 ## Resumed M16 Activity consumption
 
 Composed the exact clean M16 dependency `ec6d12c6601109f7527b012fb28915dc76d6e598`

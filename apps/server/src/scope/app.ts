@@ -1,10 +1,10 @@
-import {registerScopedTodos} from './todos.js';
-import {registerScopedActions} from './action-routes.js';
-import type {ScopedActions} from './actions.js';
 import {registerWebAssets} from '../web-assets.js';
 import {registerWebInventory} from './web-routes.js';
 import {registerScopedActivity} from './activity.js';
 import {registerOwnerQuestions} from './owner-question-routes.js';
+import {registerScopedTodos} from './todos.js';
+import {registerScopedActions} from './action-routes.js';
+import type {ScopedActions} from './actions.js';
 import {registerScopedConnectors} from './connector-routes.js';
 import type {ScopedConnectors} from './connectors.js';
 import type {ConnectorTransports,ConnectorDefinition} from './connector-contract.js';
@@ -60,9 +60,9 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
   let ask:AskHost|undefined;
   let processing:ProcessingHost|undefined;
   let mcp:ScopedMcp|undefined;
-  let actions:ScopedActions|undefined;
   let lifecycle:LifecycleOperations|undefined;
   let management:Awaited<ReturnType<typeof registerManagement>>|undefined;
+  let actions:ScopedActions|undefined;
   try{
     const app=Fastify({logger:false});
     const accounts=new Accounts(storage.db,storage.deploymentId);
@@ -107,6 +107,6 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     await registerWebAssets(app);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,deploymentId:storage.deploymentId};
+    return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,lifecycle,todos,actions,deploymentId:storage.deploymentId};
   }catch(error){await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();await management?.close();storage.close();throw error;}
 }
