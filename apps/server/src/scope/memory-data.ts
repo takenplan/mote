@@ -138,7 +138,7 @@ export class ScopedMemoryData {
   if(query.sourceId){conditions.push("NOT EXISTS(SELECT 1 FROM mm_evidence e JOIN json_each(r.json,'$.evidenceIds') proof ON proof.value=e.id WHERE e.user_id=$user AND (NOT EXISTS(SELECT 1 FROM pd_material_sources s WHERE s.user_id=$user AND s.material_id=e.material_id AND s.revision=e.material_revision) OR EXISTS(SELECT 1 FROM pd_material_sources s WHERE s.user_id=$user AND s.material_id=e.material_id AND s.revision=e.material_revision AND s.source_id!=?)))");args.push(query.sourceId);}
   if(query.deviceId||query.appId||query.source||query.collection||query.after||query.before){
    const mismatch:string[]=[],times:string[]=[];
-   for(const [key,path] of [['appId','$.appId'],['source','$.source'],['collection','$.privacy.collection']] as const)if(query[key]){mismatch.push("coalesce(json_extract(c.json,?),'')!=?");args.push(path,query[key]!);}
+   for(const [key,path] of [['appId','$.appId'],['source','$.source'],['collection','$.privacy.collection']] as const)if(query[key]){mismatch.push("coalesce(json_extract(c.json,?),?)!=?");args.push(path,key==='collection'?'content':'',query[key]!);}
    if(query.deviceId){mismatch.push("coalesce(json_extract(c.json,'$.deviceId'),'')!=?");args.push(query.deviceId);}
    if(query.after){mismatch.push('julianday(c.context_at)<julianday(?)');args.push(query.after);times.push("julianday(json_extract(e.json,'$.capturedAt'))<julianday(?)");}
    if(query.before){mismatch.push('julianday(c.context_at)>=julianday(?)');args.push(query.before);times.push("julianday(json_extract(e.json,'$.capturedAt'))>=julianday(?)");}
