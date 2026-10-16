@@ -82,6 +82,14 @@ export class Accounts implements IdentityVerifier {
     this.disable(context,authority,userId,true);this.db.prepare('INSERT INTO auth_account_deletions VALUES(?,?,?)').run(userId,operationId,this.clock());
     this.db.prepare("UPDATE auth_accounts SET password_salt='',password_hash='' WHERE user_id=?").run(userId);
   });}
+  /** Only the approved host erasure can retire credential rows after all
+   * provider cleanup. Revocation alone is not physical credential cleanup. */
+  finishDeletion(userId:string,operationId:string){return this.transaction(()=>{
+    const deletion=this.db.prepare('SELECT operation_id FROM auth_account_deletions WHERE user_id=?').get(userId),account=this.account(userId);
+    if(!account?.disabled||deletion?.operation_id!==operationId)throw new AuthError('deletion_conflict',409);
+    this.db.prepare('DELETE FROM auth_credentials WHERE user_id=?').run(userId);
+    this.db.prepare('DELETE FROM auth_attempts WHERE attempt_key=?').run(digest('account:'+account.username));
+  });}
   async resetPassword(context:UserContext,authority:UserContextAuthority,userId:string,password:string){authority.assertAdministrator(context);const record=await passwordRecord(password);return this.transaction(()=>{authority.assertAdministrator(context);const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);this.bump(a);this.db.prepare('UPDATE auth_accounts SET password_salt=?,password_hash=? WHERE user_id=?').run(record.salt,record.hash,userId);return {reset:true};});}
   private reserveAttempt(username:string,ip:string){
     const keys=[{key:digest('account:'+username),limit:5},{key:digest('address:'+ip),limit:20}];
