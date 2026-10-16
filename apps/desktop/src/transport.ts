@@ -6,7 +6,7 @@ import { validateServerUrl } from './config';
 import { TransportFailure, failureCode, httpFailure, type EventJournal } from './support';
 import { readResponseText } from './response-body';
 import {INGRESS_VERSION_HEADERS,requireIngressReceipt} from './ingress-protocol';
-import {uploadAccountCaptures,ingressRequest,assertAccountConnection} from './ingress-client';
+import {uploadAccountCaptures,ingressRequest} from './ingress-client';
 
 // Authentication is the explicit Bearer header. Omit ambient HTTP credentials so
 // fetch does not attempt to replay a streaming upload after a 401 response.
@@ -38,7 +38,7 @@ export async function uploadCapture(config: Config, event: CaptureEvent, image?:
 
 export async function heartbeat(config: Config, body: object, events?: EventJournal, signal?: AbortSignal): Promise<void> {
   if (!connectionToken(config)) return;
-  if(config.account){try{await assertAccountConnection(config);const receipt=await ingressRequest(config,'/api/ingress/devices/heartbeat',body,'POST',signal);if(receipt?.ok!==true)throw new TransportFailure('Device heartbeat was not acknowledged','RESPONSE');}catch(error){void events?.record('HEARTBEAT',failureCode(error,'HEARTBEAT'));}return;}
+  if(config.account){try{const receipt=await ingressRequest(config,'/api/ingress/devices/heartbeat',body,'POST',signal);if(receipt?.ok!==true)throw new TransportFailure('Device heartbeat was not acknowledged','RESPONSE');}catch(error){void events?.record('HEARTBEAT',failureCode(error,'HEARTBEAT'));}return;}
   try {
     const response = await fetch(`${validateServerUrl(config.serverUrl)}/api/devices/heartbeat`, {
       method: 'POST', headers: { 'Accept-Language': getLocale(), 'Authorization': `Bearer ${requireConnectionToken(config)}`, 'Content-Type': 'application/json' },

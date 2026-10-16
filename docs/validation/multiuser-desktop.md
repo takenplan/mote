@@ -47,6 +47,28 @@ were not selected, not silently accepted. Earlier attempts 1–3 are fixture err
 (server authorization delayed past logout, reuse of a logged-out token, and
 missing Wire2 exchange header), preserved in adjacent logs and not product REDs.
 
+### Same-URL deployment replacement between requests
+
+Actual RED `f6db6226`: **0/3, exit 1** in
+`/tmp/m14-request-deployment-red.log/.exit`. The generated real app is stopped,
+its deployment identity is replaced while its credential rows remain valid, and
+the same URL resolves to the rebuilt real app. Production main Ask sends its
+question to `/query-runs`; SourceManager sends original parts after an old
+manifest ACK; capture upload sends bytes after old source registration. The old
+single batch/factory identity check is insufficient even though the late receipt
+is rejected. This is a confirmed production regression, not a provider fixture.
+
+The unchanged three tests pass **3/3, exit 0** in
+`/tmp/m14-request-deployment-green.log/.exit`: every ingress request reuses the
+existing actual self confirmation and checks cancellation after that await; Ask
+rechecks the same identity and its captured main connection before transport.
+The source factory cache and redundant outer batch/heartbeat checks are removed.
+The replacement receives only identity admission, no question/capture/parts;
+source pending input and original spool remain intact. An already issued network
+request cannot be retracted across a server replacement during that flight; this
+guard admits the next request only under its confirmed stable owner. No protocol,
+runtime, owner key, retry algorithm or system network setting is introduced.
+
 This is an in-progress evidence record, not final acceptance or a delivery claim.
 Work is isolated in task-18/mote on `codex/mote-multiuser-m14-desktop`.
 The dirty original checkout was not modified. Initial characterization uses

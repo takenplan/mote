@@ -17,6 +17,7 @@ export async function assertAccountConnection(config:Config):Promise<void>{
 }
 export async function ingressRequest(config:Config,path:string,body:unknown,method='POST',signal?:AbortSignal,onBytes?:(bytes:number)=>void):Promise<any>{
  if(!accountKey(config))throw Error('Account confirmation required');
+ signal?.throwIfAborted();await assertAccountConnection(config);signal?.throwIfAborted();
  const response=await fetch(validateServerUrl(config.serverUrl)+path,{method,headers:{...ACCOUNT_INGRESS_HEADERS,Authorization:'Bearer '+requireConnectionToken(config),'Content-Type':'application/json'},credentials:'omit',redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000),...(method==='GET'?{}:{body:meteredBody(JSON.stringify(body),onBytes),duplex:'half'} as object)});
  if(!response.ok){await response.body?.cancel();throw new TransportFailure('Account ingress request failed',httpFailure(response.status),response.status);}
  return JSON.parse(await readResponseText(response,2*1024*1024));
@@ -31,7 +32,7 @@ export function requireAccountReceipt(value:any,config:Pick<Config,'account'>,so
  return value.captures;
 }
 export async function uploadAccountCaptures(config:Config,entries:readonly {event:CaptureEvent;image?:Buffer}[],signal?:AbortSignal,onBytes?:(bytes:number)=>void):Promise<Map<string,number>>{
- await assertAccountConnection(config);signal?.throwIfAborted();
+ signal?.throwIfAborted();
  const groups=new Map<string,typeof entries[number][]>();
  for(const entry of entries){const key=entry.event.deviceId+':'+entry.event.platform;groups.set(key,[...(groups.get(key)??[]),entry]);}
  const result=new Map<string,number>();

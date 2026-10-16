@@ -17,7 +17,7 @@ import { builtInSourceAdapters, type SourceAdapterRegistry } from './source-adap
 import type { Config } from './contracts';
 import { readResponseText } from './response-body';
 import { ConnectionBindingStore } from './connection-binding';
-import {ingressRequest,assertAccountConnection} from './ingress-client';
+import {ingressRequest} from './ingress-client';
 import { decideSync } from './sync-policy';
 import { FileWatcher, type FileWatchEvent } from './file-watcher';
 import {INGRESS_VERSION_HEADERS} from './ingress-protocol';
@@ -267,10 +267,9 @@ export class LocalSourceManager {
   }
   private request(signal: AbortSignal, onBytes?: (bytes: number) => void): SourceRequest {
     const connection=this.connection;
-    let confirmation:Promise<void>|undefined;
     const request:SourceRequest=async (path, body, method, requestSignal) => {
       if (!this.connection.serverUrl || !connectionToken(this.connection) || !this.nodeBinding.matches(this.connection)) throw new Error(moteText("本地来源没有匹配的中央连接"));
-      if(connection.account){await (confirmation??=assertAccountConnection(connection as Config));if(this.connection!==connection||this.stopped)throw Error('Source account changed');(requestSignal??signal).throwIfAborted();return ingressRequest(connection as Config,path,body,method,requestSignal??signal,onBytes);}
+      if(connection.account){if(this.connection!==connection||this.stopped)throw Error('Source account changed');(requestSignal??signal).throwIfAborted();return ingressRequest(connection as Config,path,body,method,requestSignal??signal,onBytes);}
       const response = await fetch(this.connection.serverUrl + path, { method, headers: { ...INGRESS_VERSION_HEADERS,Authorization: 'Bearer ' + requireConnectionToken(this.connection), 'Content-Type': body instanceof Uint8Array?'application/octet-stream':'application/json' }, body: method==='GET'?undefined:meteredBody(body instanceof Uint8Array?body:JSON.stringify(body),onBytes), ...({duplex:'half'} as object), signal: AbortSignal.any([requestSignal || signal, AbortSignal.timeout(20000)]), redirect: 'error' });
       if (!response.ok) { await response.body?.cancel().catch(() => undefined); throw new TransportFailure(response.status === 401 ? moteText("中央认证失败，请检查令牌") : response.status === 409 ? moteText("中央来源已暂停，请在中央来源页恢复") : moteText("中央同步失败，已保留本地版本，稍后重试"), httpFailure(response.status), response.status); }
       return JSON.parse(await readResponseText(response, 1024 * 1024));
