@@ -30,9 +30,9 @@ class MultiuserIngressTest {
         }
     }
 
-    private fun fixture(test: (JSONObject) -> Unit) {
+    private fun fixture(plugins: Boolean = false, test: (JSONObject) -> Unit) {
         val errors = File.createTempFile("m15-backend-", ".log")
-        val process = ProcessBuilder("node", "--import", "tsx", "apps/android/test-fixtures/multiuser-backend.ts").directory(root()).redirectError(errors).start()
+        val process = ProcessBuilder(listOf("node", "--import", "tsx", "apps/android/test-fixtures/multiuser-backend.ts") + if (plugins) listOf("--plugins") else emptyList()).directory(root()).redirectError(errors).start()
         try {
             val line = process.inputStream.bufferedReader().readLine() ?: error(errors.readText())
             test(JSONObject(line))
@@ -50,6 +50,26 @@ class MultiuserIngressTest {
         val inventory=control.inventory()
         assertTrue(inventory.packages.isEmpty());assertTrue(inventory.instances.isEmpty());assertTrue(inventory.catalog.isEmpty())
         assertFalse(inventory.installation.getBoolean("supported"))
+    }
+    @Test fun `actual native owned plugin edit check CAS and memory preparation use original public commands`() = fixture(true) { f ->
+        val server=f.getString("address");val a=PluginControlClient(central(server,f.getJSONObject("a").getString("token")));val b=PluginControlClient(central(server,f.getJSONObject("b").getString("token")))
+        val grants=JSONObject().put("capabilities",JSONArray().put("processor")).put("sourceIds",JSONArray()).put("history",false)
+        for ((control,label) in listOf(a to "A",b to "B")) {
+            val before=control.inventory();val pkg=before.packages.single();assertTrue(pkg.fields.any {it.id=="credential"})
+            val create=PluginControlClient.configureOwned(pkg.id,null,before.revision,label,JSONObject().put("label",label).put("credential","personal:$label"),grants)
+            val body=create.payload();body.getJSONObject("instance").put("id","same-native-instance");control.execute(create.copy(body=body.toString()))
+        }
+        val original=a.inventory();val instance=original.instances.single();assertTrue(instance.secretStatus.getBoolean("credential"));assertFalse(instance.configuration.has("credential"))
+        val edit=PluginControlClient.configureOwned(instance.packageId,instance.definition,original.revision,"A edited",JSONObject().put("label","A edited"),grants)
+        a.execute(edit);assertTrue(a.inventory().instances.single().secretStatus.getBoolean("credential"));assertEquals("B",b.inventory().instances.single().name)
+        assertEquals(409,assertThrows(CentralFailure::class.java){a.execute(edit)}.status)
+        a.execute(PluginControlClient.ownedInstanceAction(instance.id,"check",a.inventory().revision));assertTrue(a.inventory().instances.single().checked);assertFalse(b.inventory().instances.single().checked)
+        a.execute(PluginControlClient.ownedInstanceAction(instance.id,"enable",a.inventory().revision));assertTrue(a.inventory().instances.single().desired)
+        a.execute(PluginControlClient.ownedInstanceAction(instance.id,"disable",a.inventory().revision));assertFalse(a.inventory().instances.single().desired)
+        val memory=a.memory();a.execute(PluginControlClient.memoryControl("pause",memory.getLong("revision")));assertFalse(a.memory().getBoolean("desired"))
+        val preparation=a.execute(PluginControlClient.prepareBinding(null));val id=preparation.getString("id");assertEquals(id,a.memory().getString("bindingPreparation"));assertFalse(b.memory().has("bindingPreparation"))
+        a.preparation(id);assertEquals(404,assertThrows(CentralFailure::class.java){b.preparation(id)}.status)
+        a.execute(PluginControlClient.bindingControl(id,"cancel",a.memory().getLong("revision")));assertFalse(a.memory().has("bindingPreparation"))
     }
     @Test fun `actual native note and original attachment use scoped ingress instead of retired routes`() = fixture { f ->
         val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val api=central(server,token)

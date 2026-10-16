@@ -105,7 +105,8 @@ class MultiuserWorkerInstrumentedTest {
     @Test fun openMemoryStopDialogRetiresOnAccountSwitchBeforeAnyBCommand() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
-        val before=get(app,"b","/api/memory").second!!.getLong("revision")
+        assertEquals(200,get(app,"a","/api/configuration").first);assertEquals(200,get(app,"b","/api/configuration").first)
+        val before=get(app,"b","/api/memory").second!!.getLong("revision");assertEquals(before,get(app,"a","/api/memory").second!!.getLong("revision"))
         fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
         androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","plugins")).use { scenario ->
             waitFor {var ready=false;scenario.onActivity {activity->val select=views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().firstOrNull {it.contentDescription=="插件页面"};if(select!=null&&!activity.isWorking){select.setSelection(2);ready=true}};ready}
@@ -119,7 +120,10 @@ class MultiuserWorkerInstrumentedTest {
             confirmNode()?.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
             InstrumentationRegistry.getInstrumentation().waitForIdleSync()
             waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
-            assertEquals(before,get(app,"b","/api/memory").second!!.getLong("revision"))
+            assertEquals(before,get(app,"b","/api/memory").second!!.getLong("revision"));assertEquals(before,get(app,"a","/api/memory").second!!.getLong("revision"))
+            waitFor {var clicked=false;scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()=="立即停止自动记忆"};if(button!=null&&!activity.isWorking){button.performClick();clicked=true}};clicked}
+            waitFor {confirmNode()!=null};assertTrue(confirmNode()!!.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK));InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            waitFor {get(app,"b","/api/memory").second!!.getLong("revision")==before+1};assertEquals(before,get(app,"a","/api/memory").second!!.getLong("revision"))
         }
     }
 
