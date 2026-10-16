@@ -1,5 +1,31 @@
 # M14 Desktop validation checkpoint
 
+## Resumed M16 Activity consumption
+
+Composed the exact clean M16 dependency `ec6d12c6601109f7527b012fb28915dc76d6e598`
+into the M14 feature. The earlier a439 required-affected success remains evidence
+for that earlier composition, not for the new runtime. M16's later negative-byte
+backup regression and newly approved personal import are not claimed covered by
+ec6. No M12 handoff was read or relayed.
+
+Actual production M01/M16 routes at RED `60a0fa00` omit all lifecycle Activity
+cards: `/tmp/m14-lifecycle-activity-valid-red.log/.exit`, **0/3, exit 1**.
+The unchanged tests pass **3/3, exit 0** after the narrow read projection:
+`/tmp/m14-lifecycle-activity-green.log/.exit`. They cover a real held export,
+completion/current owner artifact, cancel and restart, owner/epoch and state
+filtering before pagination, and an actual administrator deletion that stops at
+`result_unknown` and completes only after explicit retry. Administrator metadata
+does not expose target data or export downloads. The first test attempt hung in
+fixture cleanup before reporting assertions; its generated runner was identified
+and stopped through standard review, and cleanup now releases its provider
+barrier before closing the actual host. That first attempt is not a valid RED.
+
+Server typecheck, scope inventory and bilingual catalog checks exit 0:
+`/tmp/m14-lifecycle-server-typecheck.log/.exit`,
+`/tmp/m14-lifecycle-scope.log/.exit`, `/tmp/m14-lifecycle-i18n.log`.
+This checkpoint does not replace the pending Desktop entry-point, independent
+review, final dependency combination and required-affected evidence.
+
 This is an in-progress evidence record, not final acceptance or a delivery claim.
 Work is isolated in task-18/mote on `codex/mote-multiuser-m14-desktop`.
 The dirty original checkout was not modified. Initial characterization uses

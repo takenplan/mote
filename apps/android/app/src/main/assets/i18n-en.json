@@ -2025,6 +2025,7 @@
   "导入与导出": "Import and export",
   "可移植归档，保留完整上下文。": "Portable archives preserving full context.",
   "导出资料": "Export data",
+  "删除账号资料": "Delete account data",
   "记录、原始影像和校验信息。访问令牌不会包含在内。": "Records, original images, and checksums. Access tokens are excluded.",
   "导出": "Export",
   "导入归档": "Import archive",
