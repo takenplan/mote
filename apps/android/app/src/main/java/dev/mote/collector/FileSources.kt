@@ -173,7 +173,9 @@ object FileUpload {
             checkSelection()
             val manifest = row.getJSONObject("pending").getJSONObject("manifest")
             client.register(source.registration(Settings(context).deviceId))
-            val (_, begun) = client.begin(source.id, manifest)
+            val pending = row.getJSONObject("pending")
+            val recoveryId = if (pending.has("recoveryCaptureId")) pending.getString("recoveryId") else null
+            val (_, begun) = if (recoveryId == null) client.begin(source.id, manifest) else client.beginRecovery(source.id, pending.getString("recoveryCaptureId"), manifest, recoveryId)
             val uploadId = begun.getString("id")
             begun.optJSONObject("receipt")?.let { ack ->
                 checkSelection(); queue.acknowledge(source.id, row, ack, client.binding); return queue.pendingCount(source.id) == 0
@@ -189,7 +191,7 @@ object FileUpload {
                 checkSelection(); client.part(uploadId, part, bytes)
             }
             checkSelection()
-            val ack = client.commit(source.id, uploadId, manifest)
+            val ack = client.commit(source.id, uploadId, manifest, recoveryId)
             checkSelection(); queue.acknowledge(source.id, row, ack, client.binding)
             return queue.pendingCount(source.id) == 0
         } catch (error: Exception) {

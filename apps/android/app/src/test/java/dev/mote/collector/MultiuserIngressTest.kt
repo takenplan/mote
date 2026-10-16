@@ -122,7 +122,7 @@ class MultiuserIngressTest {
         try {
             val bytes="Generated preserved original\n尾部".toByteArray();val source=LocalSource(id="same-source",name="Synthetic file",kind="local-files",uri="content://generated/file",retention="archive",syncContinuously=false)
             val queue=FileArchiveQueue(directory,LocalContentCipher());queue.configure(source)
-            val candidate=JSONObject().put("externalId","same-external").put("observedAt","2026-01-01T00:00:00Z").put("title","fixture.txt").put("kind","file").put("layer","original").put("text","").put("mimeType","text/plain")
+            val candidate=JSONObject().put("externalId","content://generated/原件.txt").put("observedAt","2026-01-01T00:00:00Z").put("title","fixture.txt").put("kind","file").put("layer","original").put("text","").put("mimeType","text/plain")
             val generation=queue.configure(source).getString("generation");queue.observe(source,candidate,generation);queue.finish(source,generation){false}
             val row=queue.prepare(source,{ByteArrayInputStream(bytes)},{true},captureImmediately=true)!!;val manifest=row.getJSONObject("pending").getJSONObject("manifest")
             client.register(source.registration("same-device"));val (_,begun)=client.begin(source.id,manifest);client.part(begun.getString("id"),0,queue.part(source.id,0))

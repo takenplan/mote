@@ -94,6 +94,19 @@ class SourceUploadWorker(context: Context, params: WorkerParameters) : Worker(co
                     }
                     source = confirmed
                     if (SourceAdapters.default.forKind(source.kind).queueKind == SourceQueueKind.FILE_ARCHIVE) {
+                        if (source.retention == "snapshot") {
+                            val queue = applicationContext.fileArchives()
+                            val afterRecovery = queue.state(source.id).optString("recoveryAfter")
+                            slice.record(0)
+                            val page = applicationContext.ingress3(config, ::stillSelected).recoveryPage(source.id, afterRecovery)
+                            check(stillSelected())
+                            queue.requestSnapshotRecovery(source, page.getJSONArray("items"))
+                            val state = queue.state(source.id)
+                            if (page.isNull("nextCursor")) state.remove("recoveryAfter") else {
+                                state.put("recoveryAfter", page.getString("nextCursor")); more = true; readyMore = true
+                            }
+                            queue.saveState(source.id, state)
+                        }
                         var finished = false
                         while (submitted < 20 && !slice.exhausted) {
                             finished = FileUpload.sync(applicationContext, source, config, slice, ::stillSelected); submitted++

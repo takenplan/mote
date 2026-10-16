@@ -259,7 +259,10 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
             val matchesRecovery = recovery != null && recovery.optString("candidateSignature") == signature(candidate) && row.optString("contentPolicy") == state(source.id).optString("policy") && source.retention == "snapshot" && !item.optBoolean("deleted") && hash == recovery.getString("sha256") && size == recovery.getLong("sizeBytes") && row.optString("revision") == recovery.getString("revision")
             item.put("revision", if (matchesRecovery) recovery!!.getString("revision") else SourceRules.hash(SourceRules.canonical(manifest)))
             if (matchesRecovery) item.put("observedAt", recovery!!.getString("observedAt"))
-            row.put("pending", JSONObject().put("manifest", manifest).put("signature", signature(candidate)).apply { if (matchesRecovery) put("recoveryCaptureId", recovery!!.getString("captureId")) })
+            row.put("pending", JSONObject().put("manifest", manifest).put("signature", signature(candidate)).apply { if (matchesRecovery) {
+                put("recoveryCaptureId", recovery!!.getString("captureId"))
+                if (recovery.has("recoveryId")) { require(recovery.getString("recoveryId").matches(Regex("[a-f0-9]{64}"))); put("recoveryId", recovery.getString("recoveryId")) }
+            } })
             row.remove("nextPrepareAt"); row.remove("syncFailure"); row.remove("snapshotRecovery"); row.put("contentPolicy", state(source.id).getString("policy"))
             saveRow(source.id, row)
             if (!source.syncContinuously && !source.tree) saveState(source.id, state(source.id).put("importCaptured", true))
@@ -270,7 +273,7 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
     fun part(id: String, part: Int): ByteArray = synchronized(lock) { require(part >= 0); cipher.open(File(File(root(id), "spool"), part.toString()).readBytes()) }
     fun acknowledge(id: String, row: JSONObject, ack: JSONObject, binding: AccountBinding? = null) = synchronized(lock) {
         val pending = row.getJSONObject("pending"); val manifest = pending.getJSONObject("manifest"); val item = manifest.getJSONObject("item")
-        if (binding != null) Ingress3Receipt.file(binding, id, manifest, ack)
+        if (binding != null) Ingress3Receipt.file(binding, id, manifest, ack, pending.optString("recoveryId").takeIf { it.isNotEmpty() })
         else check(IngressV2Protocol.validFile(id, item, ack)) { MoteI18n.text("中央归档确认不匹配") }
         if (binding == null && manifest.has("sha256")) check(ack.optString("sha256") == manifest.getString("sha256") && ack.optLong("sizeBytes", -1) == manifest.getLong("sizeBytes")) { MoteI18n.text("中央原件校验确认不匹配") }
         val current = read(itemFile(id, item.getString("externalId")))

@@ -64,9 +64,25 @@ internal class Ingress3Client(
         return receipt
     }
     fun head(sourceId: String, externalId: String): String? = send("GET", "/api/ingress/sources/$sourceId/head?externalId=${java.net.URLEncoder.encode(externalId, "UTF-8")}").let { if (it.isNull("revision")) null else it.getString("revision") }
-    fun begin(sourceId: String, manifest: JSONObject): Pair<String, JSONObject> {
-        val batch = fileBatch(manifest)
-        val result = send("POST", "/api/ingress/sources/$sourceId/uploads", JSONObject().put("batchId", batch).put("revision", manifest))
+    fun recoveryPage(sourceId: String, after: String = ""): JSONObject {
+        require(after.isEmpty() || after.matches(Regex("[a-f0-9]{64}")))
+        return send("GET", "/api/ingress/sources/$sourceId/recovery" + if (after.isEmpty()) "" else "?after=$after").also { page ->
+            val items = page.getJSONArray("items"); require(items.length() <= 200)
+            for (index in 0 until items.length()) require(items.getJSONObject(index).getString("recoveryId").matches(Regex("[a-f0-9]{64}")))
+            if (!page.isNull("nextCursor")) require(page.getString("nextCursor").let { it.matches(Regex("[a-f0-9]{64}")) && it > after })
+        }
+    }
+    fun begin(sourceId: String, manifest: JSONObject): Pair<String, JSONObject> = beginFile(sourceId, manifest, null, null)
+    fun beginRecovery(sourceId: String, captureId: String, manifest: JSONObject, recoveryId: String): Pair<String, JSONObject> {
+        require(captureId == Ingress3Receipt.captureId(sourceId, manifest.getJSONObject("item")) && recoveryId.matches(Regex("[a-f0-9]{64}")))
+        return beginFile(sourceId, manifest, captureId, recoveryId)
+    }
+    private fun beginFile(sourceId: String, manifest: JSONObject, captureId: String?, recoveryId: String?): Pair<String, JSONObject> {
+        val batch = fileBatch(manifest, recoveryId)
+        val path = "/api/ingress/sources/$sourceId/" + if (captureId == null) "uploads" else "recovery/$captureId/uploads"
+        val body = JSONObject().put("batchId", batch).put("revision", manifest)
+        recoveryId?.let { body.put("recoveryId", it) }
+        val result = send("POST", path, body)
         check(result.optString("deploymentId") == binding.deploymentId && result.optString("userId") == binding.userId && result.optString("sourceId") == sourceId)
         check(result.getInt("partBytes") == FileArchiveQueue.PART_BYTES)
         return batch to result
@@ -76,15 +92,15 @@ internal class Ingress3Client(
         val result = send("PUT", "/api/ingress/uploads/$uploadId/parts/$index", JSONObject().put("bytes", Base64.getEncoder().encodeToString(bytes)).put("checksum", checksum))
         check(result.optInt("part", -1) == index && result.optInt("bytes", -1) == bytes.size && result.optString("checksum") == checksum)
     }
-    fun commit(sourceId: String, uploadId: String, manifest: JSONObject): JSONObject {
+    fun commit(sourceId: String, uploadId: String, manifest: JSONObject, recoveryId: String? = null): JSONObject {
         val result = send("POST", "/api/ingress/uploads/$uploadId/commit", JSONObject())
-        Ingress3Receipt.file(binding, sourceId, manifest, result)
+        Ingress3Receipt.file(binding, sourceId, manifest, result, recoveryId)
         return result
     }
     companion object {
         fun hash(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
         fun batchId(items: JSONArray) = "android-" + SourceRules.hash(SourceRules.canonical(items))
-        fun fileBatch(manifest: JSONObject) = "android-file-" + SourceRules.hash(SourceRules.canonical(manifest))
+        fun fileBatch(manifest: JSONObject, recoveryId: String? = null) = "android-file-" + SourceRules.hash(SourceRules.canonical(manifest)) + (recoveryId?.let { "-$it" } ?: "")
     }
 }
 
@@ -134,9 +150,9 @@ internal object Ingress3Receipt {
             } else check(!ack.has("original"))
         }
     }
-    fun file(owner: AccountBinding, source: String, manifest: JSONObject, receipt: JSONObject) {
+    fun file(owner: AccountBinding, source: String, manifest: JSONObject, receipt: JSONObject, recoveryId: String? = null) {
         val id = captureId(source, manifest.getJSONObject("item"))
-        require(owner, source, Ingress3Client.fileBatch(manifest), listOf(id), receipt)
+        require(owner, source, Ingress3Client.fileBatch(manifest, recoveryId), listOf(id), receipt)
         if (manifest.has("sha256") && !manifest.getJSONObject("item").optBoolean("deleted")) {
             val descriptor = receipt.getJSONArray("captures").getJSONObject(0).getJSONObject("original")
             val item = manifest.getJSONObject("item")
