@@ -100,6 +100,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     }
     fun retryConnector(api: CentralClient, id: String) = sendConnector(api, id, requireNotNull(connectorWork().optJSONObject(id)?.optJSONObject("pending")))
     private fun sendConnector(api: CentralClient, id: String, request: JSONObject): JSONObject {
+        require(request.getString("path") in setOf("sync", "disconnect", "operations").map { "/api/connectors/" + encode(id) + "/" + it })
         val operationId = request.getJSONObject("body").getString("operationId"); UUID.fromString(operationId)
         val task = api.post(request.getString("path"), request.getJSONObject("body"))
         require(Regex("[a-f0-9]{64}").matches(task.getString("id")))
