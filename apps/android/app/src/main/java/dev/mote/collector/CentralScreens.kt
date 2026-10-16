@@ -155,7 +155,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val target = ui.card()
         val api = client
         ui.work(MoteI18n.text("正在连接中央节点…"), {
-            listOf(api.get("/api/data/statistics"), api.get("/api/ingress/devices"), CentralModels.inventory(api))
+            listOf(api.get("/api/data/statistics"), api.get("/api/ingress/devices"), CentralModels.inventory(api), api.get("/api/operations?limit=5"))
         }) { data ->
             val statistics = data[0]
             ui.text(MoteI18n.text("中央工作台"), NativeFontRole.TITLE_MOBILE, target)
@@ -173,6 +173,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 ui.text(device.getString("name") + " · " + device.getString("platform"), parent = target)
             }
             ui.text(MoteI18n.text("处理任务"), NativeFontRole.SECTION, target)
+            admin.items(data[3], target) { row -> admin.operation(row.getString("id")) }
             ui.button(MoteI18n.text("处理任务"), parent = target) { ui.navigate("activity") }
         }
         ui.button(MoteI18n.text("中央资料库")) { ui.navigate("archive") }
