@@ -45,6 +45,9 @@ HTTP/CLI I/O is substituted; source/archive/task services are real.
 | Per-user OAuth client changes revoke only A credentials | `changing A OAuth client settings revokes A credential namespace without changing B settings or in-flight identity` |
 | Real child retirement and output-callback revocation | `multiuser-connectors-cli.test.ts`: `real lark runner joins physical child exit after cancellation and contains output-callback revocation`; same for `dingtalk` |
 | Concurrent command idempotency and immutable payload conflict | `concurrent duplicate sync commands return one durable task and preserve immutable input identity across restart` |
+| Controlled shutdown during a blocked Gmail read, original task resumes after restart | `controlled shutdown interrupts active Gmail work into waiting and restart resumes its admitted task and original cursor` |
+| Seeded durable crash activity, purpose-bound erasure reconciliation and B denial | `durable crashed-activity fixture requires a purpose-bound stopped observation before connector erasure and never settles B` |
+| Archive-retention Gmail incremental replay and immutable raw original | `archive-retention Gmail delta replay retains canonical normalized head and the same immutable provider original` |
 | Distinct process HTTP listener, pending OAuth recovery, A/B source/original reads, replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals through the production composition` |
 
 ## Intermediate receipts and final gates

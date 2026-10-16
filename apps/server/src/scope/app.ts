@@ -59,7 +59,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,transports:options.connectorTransports,definitions:options.connectorDefinitions});
-    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await connectors?.close();await execution.close();await plugins?.close();});}
+    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await connectors?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await connectors?.close();await plugins?.close();await configuration?.close();accounts.close();storage.close();});
     return {...runtime,execution,configuration,plugins,ingress,connectors,deploymentId:storage.deploymentId};

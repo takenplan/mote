@@ -22,6 +22,7 @@ export class ScopedRecordingAdapter {
  private saved:Saved={version:1,epoch:randomUUID(),selection:{enabled:false,start:new Date(Date.now()-30*86400000).toISOString(),autoSync:true,backupAudio:true}};
  private file:ConnectorState<Saved>;
  private provider:RecordingProvider;
+ private readonly pending=new Set<Promise<unknown>>();
  private initialized?:Promise<void>;
  private authorize?:(progress:(value:unknown)=>void)=>Promise<void>;
  constructor(private ctx:LarkContext,provider:'feishu-recordings'|'dingtalk-recordings',scope:{userId:string;instanceId:string;directory:string},transports:ConnectorTransports|undefined,private assert:()=>void,private signal:AbortSignal,private ledger:Ledger){
@@ -33,6 +34,8 @@ export class ScopedRecordingAdapter {
    const runner=transports?.dingtalk?.(scope)??createDwsRunner(join(scope.directory,'dws-runtime'),{isolatedHome:true});this.provider=createDingtalkRecordings(scope.directory,runner);
    this.authorize=async progress=>{let buffer='';await runner({kind:'login'},undefined,signal,chunk=>{this.assert();buffer=(buffer+chunk).slice(-16000);for(const line of buffer.split(/\r?\n/).slice(0,-1))try{const url=new URL(line.trim());if(url.protocol==='https:'&&!url.username&&!url.password&&!url.port&&['dingtalk.com','dingtalk.cn','dingtalk.io'].some(domain=>url.hostname===domain||url.hostname.endsWith('.'+domain)))progress({authorizationUrl:url.toString()});}catch{}});this.assert();};
   }
+  const providerInstance=this.provider,track=<T>(work:()=>Promise<T>)=>{const promise=Promise.resolve().then(work);this.pending.add(promise);void promise.then(()=>this.pending.delete(promise),()=>this.pending.delete(promise));return promise;};
+  this.provider={...providerInstance,account:signal=>track(()=>providerInstance.account(signal)),discover:(account,range,signal)=>track(()=>providerInstance.discover(account,range,signal)),metadata:(account,id,signal)=>track(()=>providerInstance.metadata(account,id,signal)),transcript:(account,metadata,signal)=>track(()=>providerInstance.transcript(account,metadata,signal)),media:(account,metadata,signal)=>track(()=>providerInstance.media(account,metadata,signal))};
  }
  private async init(){await(this.initialized??=this.file.read().then(saved=>{if(saved){if(saved.version!==1||!z.string().uuid().safeParse(saved.epoch).success)throw new ConnectorError('recording_state_invalid',503);recordingSelectionSchema.parse(saved.selection);this.saved=saved;}}));this.assert();}
  private sourceId(){if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);return this.provider.id+'-recordings-'+hash(this.saved.account.id).slice(0,24);}
@@ -88,5 +91,5 @@ export class ScopedRecordingAdapter {
  private failure(error:unknown,fallback:string){return error instanceof ConnectorError||error instanceof ExecutionFailure?error.code:fallback;}
  private transient(error:unknown){return error instanceof ExecutionFailure&&error.category==='transient'||error instanceof ConnectorError&&['lark_operation_timeout','dingtalk_operation_timeout','recording_transcript_not_ready'].includes(error.code);}
  async retry(){await this.init();for(const row of this.ledger.rows<Work>(this.saved.epoch,'work:')){const work=row.value;if(!work.transcript){work.transcriptAttempts=0;work.transcriptBlocked=false;work.transcriptNextAt=0;}if(!work.media){work.mediaAttempts=0;work.mediaBlocked=false;work.mediaNextAt=0;}delete work.error;this.ledger.set(this.saved.epoch,row.key,work);}return this.status();}
- async close(){await this.provider.close?.();await this.file.flush();}
+ async close(){await this.provider.close?.();await Promise.allSettled([...this.pending]);await this.file.flush();}
 }

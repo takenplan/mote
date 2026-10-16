@@ -119,6 +119,12 @@ OAuth exchanges and CLI authorization have M05 external issuance journals. A los
 outcome is not replayed automatically. Connector deletion returns `result_unknown`
 while a linked authorization issuance is unresolved; M16 must reconcile it through
 M05 before local erasure can be acknowledged. Active local work returns `pending`.
+Every adapter operation also has a durable owner-bound activity record. Successful
+retirement removes it only after adapter and physical provider work have joined.
+An interrupted host leaves `result_unknown`; only a genuine delete-purpose
+lifecycle subject can inspect it and record an observed `stopped` outcome, and
+cannot settle work still alive in this host. Controlled shutdown interrupts M05
+before closing connectors so admitted polling can resume through M05 after restart.
 M16 must invoke `configuration`, `plugins`, `execution`, `ingress`, and
 `private-data` hooks as well: this domain does not claim their settings YAML,
 task history, source evidence or originals were erased by deleting connector state.
