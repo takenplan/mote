@@ -4,13 +4,13 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current acceptance boundary: runtime652475c9 includes the tested220c account/worker fixes,
+Current acceptance boundary: tested runtime48a797854e96eedf57c4edbd451fa2e5c5132a73 includes the tested220c account/worker fixes,
 7eca native MCP and recent-five Overview,107f owned processing/devices/statistics,
 3a2 native Google connection configuration, Joint Filesa10 and M14 finalcd46.
-New original native recording speaker/correction and M03 ticket download journeys
-pass narrowly; detailed exact-SHA evidence follows below. Own current-composition
-full Android/required affected, independent final review, push and Draft PR remain
-pending. Shared arbitrary-file Imports/preview/review and remaining Files acoustic/
+New original native recording speaker/correction, M03 ticket download and Google/Gmail
+journeys pass narrowly; detailed exact-SHA evidence follows below. Own full Android
+353/353 and production build pass on48a. Final required affected, independent final
+review, push and Draft PR remain pending. Shared arbitrary-file Imports/preview/review and remaining Files acoustic/
 controls are still explicit KEEP gaps awaiting the Joint backend owner. QR pairing
 has no tested replacement for the old invitation exchange. Physical-device and
 live-provider checks are separate. No total test count closes these gaps.
@@ -459,3 +459,75 @@ app/testAPK compiled9s EXIT0 (`/tmp/m15-native-google-calendar-green-build.log/.
 i18n/scope0. No live Google, calendar access or browser was used. The subsequent
 8f617 test-only lost-ACK/recreation/switch scenario and retained-route validation
 need their own execution; this normal positive does not prove those cases.
+
+
+### Current native checkpoint:353 JVM tests and retained M10 admission
+
+Current production main48a797854e96eedf57c4edbd451fa2e5c5132a73 (
+normal Google flow is bde55de1bae491fea966b0693c210d732ba5befa) was actually rebuilt
+and tested with `:app:testDebugUnitTest :app:assembleDebug
+:app:assembleMultiuserFixtureAndroidTest`. Log
+`/tmp/m15-native-composed-48a-full-android.log/.exit`:41s EXIT0,92tasks with14
+executed. Fresh XML74suites/353tests/0failures/0errors/0skips. This is M15's own
+new run, not peer352 evidence, and it is not the final required affected command.
+
+The first Gmail lost-ACK native case traversed durable pending intent, Activity
+recreation, B isolation and A exact retry, then its last assertion incorrectly
+used the retired original A client after switching back. It is retained EXIT1 in
+`/tmp/m15-native-gmail-lostack-first.log/.exit`; no production fence was relaxed.
+Test-only00200153 uses the fresh selected A client and explicitly asserts the
+original client rejects. Same original scenario on a new generated real M10 host
+passes1/1,2.079s EXIT0 (`/tmp/m15-native-gmail-lostack-corrected.log/.exit`): dropped
+actual200 command responses, stable operationId/body/taskId, original account's
+encrypted intent after recreation, no pending A command or mutation in same-ID B,
+and original A retry without a second admission or duplicate SourceItem. This is
+Activity recreation, not a new claim of SIGKILL coverage for this command journal.
+
+M13 authored bounded readonly reports are available locally for exact107f,3a2,
+652 andbde, each with no new confirmed P0/P1/P2 in its recorded scope:
+`/tmp/mote-m13-review-m15-admin-107f.md`,
+`/tmp/mote-m13-review-m15-connectors-3a2.md`,
+`/tmp/mote-m13-review-m15-files-652.md`,
+`/tmp/mote-m13-review-m15-google-bde.md`. They are static evidence only and do not
+claim independent execution, later48 guard/lost-ACK coverage or whole acceptance.
+Their message delivery was not retried or forwarded; local reports were read as
+artifacts. M13 is now paused and is not being woken for additional review.
+
+### Live-model and private-data regression constraint
+
+The owner's later Sentinel_90402956f4b881918763a8a61d350969 instruction applies to
+real-model regression: use the existing logged-in local Codex entry and verify
+exact `gpt-6.1-sol`; never silently substitute a model/provider or create provider
+credentials. Deterministic generated I/O remains the authority for isolation,
+retry and ordering assertions. No actual local central private data has been
+read in these M15 tests. Every stored record, original byte, fixture account and
+prompt is authored/generated. Raw private content and all its derivatives must
+stay outside Git, PR bodies, shared logs and attachments; staged/new files are
+reviewed before commits rather than relying only on ignore rules.
+
+Local `codex-cli0.162.1` model/list was actually read using the existing Mote
+catalog adapter, EXIT0: exact `gpt-6.1-sol`/GPT-6.1-Sol is listed, with low as the
+default effort. Metadata stays in `/tmp/m15-local-codex-models.json`; no thread or
+inference was started by that lookup. Opt-in6809824b prepares a generated-only
+M01/M04/M08 host plus an original Native Ask test. It uses a fixed shared Codex
+profile, existing local authentication, no API key/HTTP endpoint, and disables
+automatic processing/Memory jobs. The real native inference test is still
+UNCOMPILED/UNRUN pending the current Container Docker build's explicit RELEASE.
+No live output or private-data fixture is included in Git.
+
+
+The existing Mote CodexSession provider handshake also completed EXIT0
+(`/tmp/m15-local-codex-preflight.log/.exit`): account/read succeeded and the
+read-only ephemeral thread resolved both model fields to exact `gpt-6.1-sol`.
+It submitted no inference turn, used no tools and created no execution dialog or
+provider credential. The declared fast tier was advertised by the local catalog;
+no silent model/tier fallback is implemented. This is interface preflight, not
+real-model answer validation. The prepared synthetic host is ready; Native Ask
+execution still waits for its test APK compilation after the resource window.
+
+QR pairing remains an explicit product-flow decision: the owner was asked whether
+to reuse M01 device PKCE/browser approval after scanning server metadata, or to
+retain a one-step exchange by adding a new account-bound invitation contract.
+Neither option is implemented or presumed selected without the actual response.
+The extra step is a user-facing behavior choice under AGENTS.md and the existing
+multiuser/client ADRs; it is distinct from a request to expand device permissions.

@@ -8,7 +8,7 @@ import {DEPLOYMENT_MODEL_PROFILE_ID} from '@mote/shared/models';
 import {queryHttp,queryAccounts,password} from '../../server/test/fixtures/scoped-query-accounts.js';
 
 // Explicit opt-in live regression. Existing local Codex login only; no model
-// replacement or credentials are created. The host, accounts and question are
+// replacement or provider credentials are created. The host, Mote accounts and question are
 // generated. Never point this fixture at a real central data directory.
 if(process.env.MOTE_M15_CODEX_REGRESSION!=='1')throw Error('Explicit generated-data Codex regression opt-in required');
 const model='gpt-6.1-sol',catalog=await codexModels(undefined,{executable:'/opt/homebrew/bin/codex'});
