@@ -107,6 +107,17 @@ test('concurrent duplicate admission is idempotent and a second own operation re
  const [a,b]=await Promise.all([f.submit(f.alice.token,ref),f.submit(f.alice.token,ref)]);assert.equal(a.id,b.id);await until(()=>calls===1,'OCR did not enter');gate.resolve();const result=await f.wait(f.alice.token,a.id);const second=await f.submit(f.alice.token,ref,'second-operation'),next=await f.wait(f.alice.token,second.id);assert.equal(calls,1);assert.equal(result.result.artifactId,next.result.artifactId);assert.equal((await f.checked(f.alice.token,'/api/usage')).items.length,1);
 });
 
+test('generation-zero admission retains the historical task identity and lost-ACK lookup across restart',async t=>{
+ const f=await fixture(t),ref=(await f.upload(f.alice.token,Buffer.from('Generated old-format journal identity'))).captures[0].original.ref,operationId='historical-zero-generation',task=await f.submit(f.alice.token,ref,operationId);
+ const input=f.read(db=>JSON.parse(String(db.prepare('SELECT input FROM user_tasks WHERE task_id=? AND user_id=?').get(task.id,f.a.userId)!.input)));delete input.fileGeneration;
+ const canonical=(value:any):any=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,item])=>[key,canonical(item)])):value;
+ // This is the pre-file-control M05 identity formula, evaluated independently
+ // against the real admitted input rather than a second production admission.
+ assert.equal(task.id,bytesHash(Buffer.from(JSON.stringify([f.a.userId,operationId,'processing.pipeline',canonical(input)]))));
+ await f.wait(f.alice.token,task.id);const before=f.read(db=>Number(db.prepare('SELECT count(*) n FROM user_tasks WHERE user_id=?').get(f.a.userId)!.n));await f.restart();const retry=await f.submit(f.alice.token,ref,operationId);assert.equal(retry.id,task.id);assert.equal(retry.state,'succeeded');assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM user_tasks WHERE user_id=?').get(f.a.userId)!.n)),before);
+ assert.equal(f.read(db=>Number(db.prepare("SELECT count(*) n FROM user_tasks WHERE user_id=? AND json_type(input,'$.fileGeneration') IS NOT NULL").get(f.a.userId)!.n)),0);
+});
+
 for(const mode of ['cancel','configuration','credential-revoke','account-disable','processing-delete','ingress-delete','source-disable','capture-delete'] as const)test('a held actual media result is fenced after '+mode+' while B remains operational',async t=>{
  const gate=deferred(),entered=deferred();let aCalls=0;t.after(()=>gate.resolve());const url=await media(t,async(req,res)=>{if(req.headers.authorization==='Bearer GENERATED_A'){aCalls++;entered.resolve();await gate.promise;}respond(res,req.headers.authorization==='Bearer GENERATED_A'?'A_LATE_RESULT':'B_ALLOWED_RESULT');}),f=await fixture(t);await f.models(f.alice.token,url,'GENERATED_A');await f.models(f.bob.token,url,'GENERATED_B');
  const bytes=Buffer.from('same generated image'),aRef=(await f.upload(f.alice.token,bytes,'image/png')).captures[0].original.ref,bRef=(await f.upload(f.bob.token,bytes,'image/png')).captures[0].original.ref,job=await f.submit(f.alice.token,aRef);await entered.promise;
