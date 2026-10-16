@@ -8,6 +8,7 @@ import java.util.UUID
 
 class CentralPortableImportTest {
     private val operation = UUID.randomUUID().toString()
+    private val imported = listOf("private-data", "ingress", "processing", "memory", "ask")
     private fun self() = JSONObject().put("protocol", JSONObject().put("min", 2).put("max", 2))
         .put("capabilities", JSONObject().put("ingest", true).put("ingressVersion", 3))
         .put("credential", JSONObject().put("kind", "client"))
@@ -17,12 +18,14 @@ class CentralPortableImportTest {
     private fun receipt() = JSONObject().put("kind", "import").put("id", operation).put("format", "mote-portable").put("version", 3)
         .put("userId", "generated-A").put("deploymentId", "generated-deployment").put("state", "completed").put("phase", "completed")
         .put("scope", JSONObject().put("kind", "account")).put("progress", JSONObject().put("mode", "semantic"))
-        .put("coverage", JSONObject().put("importedDomains", JSONArray().put("private-data")).put("preservedDomains", JSONArray().put("configuration"))
+        .put("coverage", JSONObject().put("importedDomains", JSONArray(imported)).put("preservedDomains", JSONArray().put("configuration"))
             .put("credentials", false).put("activeAuthorization", false).put("instanceBackup", false))
-        .put("domains", JSONArray().put(JSONObject().put("domain", "private-data").put("state", "complete")).put(JSONObject().put("domain", "configuration").put("state", "preserved")))
+        .put("domains", JSONArray(imported.map {JSONObject().put("domain",it).put("state","complete")}).put(JSONObject().put("domain", "configuration").put("state", "preserved")))
 
     @Test fun `completed receipt cannot drop a required canonical domain and acknowledge only its declared subset`() {
         val response=receipt()
+        response.getJSONObject("coverage").put("importedDomains",JSONArray().put("private-data"))
+        response.put("domains",JSONArray().put(JSONObject().put("domain","private-data").put("state","complete")).put(JSONObject().put("domain","configuration").put("state","preserved")))
         val api=CentralClient("https://generated.invalid","generated-token",{method,_,_,_,_->200 to if(method=="GET")self() else response})
         assertThrows(Exception::class.java) {CentralPortable(api).importArchive(operation,archive())}
     }
