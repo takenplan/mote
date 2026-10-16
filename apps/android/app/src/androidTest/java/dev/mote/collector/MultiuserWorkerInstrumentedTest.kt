@@ -770,6 +770,34 @@ class MultiuserWorkerInstrumentedTest {
             press("诊断设置");explained();assertEquals(0,control("/generated/pairing-state").getJSONArray("retiredConfigurationRequests").length())
         }
     }
+    @Test fun originalInvitationReviewRetiresAnAlreadyVisibleCapabilityBeforeAChangedAccountResumes() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val invite=CentralAccess.requireClient(app).post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated visible invitation"))
+        val code=invite.getJSONObject("invitation").getString("code")
+        val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root)+if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
+        try {androidx.test.core.app.ActivityScenario.launch<ConnectionActivity>(android.content.Intent(app,ConnectionActivity::class.java).setData(android.net.Uri.parse(invite.getString("uri")))).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}};ready}
+            lateinit var dialog:android.app.AlertDialog
+            scenario.onActivity {activity->
+                assertTrue((ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString().contains(code))
+                views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="确认连接此节点"}.performClick()
+                @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+                dialog=dialogs.mapNotNull {it.get()}.single {it.isShowing}
+                val executor=ConnectionActivity::class.java.getDeclaredField("executor").apply {isAccessible=true}.get(activity) as java.util.concurrent.ExecutorService
+                executor.execute {entered.countDown();check(release.await(20,TimeUnit.SECONDS))}
+            }
+            assertTrue(entered.await(10,TimeUnit.SECONDS));scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity {activity->
+                assertFalse("Old invitation dialog must retire synchronously with its page owner",dialog.isShowing)
+                assertFalse("The already visible A capability cannot await an asynchronous B resolver",(ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString().contains(code))
+            }
+            release.countDown();scenario.recreate();waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}};ready}
+            scenario.onActivity {activity->assertFalse("Retired incoming intent must not repopulate A's capability after recreation",(ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString().contains(code))}
+            assertEquals(0,control("/generated/pairing-state").getJSONArray("claims").length())
+        }} finally {release.countDown()}
+    }
     @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
