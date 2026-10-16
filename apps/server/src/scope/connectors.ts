@@ -274,6 +274,7 @@ export class ScopedConnectors {
     activity.assert();return result;
    },
    recordings:async(id:string,query:{limit:number;cursor?:string})=>{
+    this.assert(context);
     const row=this.row(context.userId,id),activity=this.activity(context,row),codec=new PrivateCursor(this.options.cursorKey,context.deploymentId,context.userId);
     let result:{sourceId?:string;items:Awaited<ReturnType<ScopedRecordingAdapter['recordingPage']>>['items'];nextCursor:string|null};
     try{
