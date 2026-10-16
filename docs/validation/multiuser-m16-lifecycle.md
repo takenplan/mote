@@ -207,3 +207,17 @@ changed or existing volume inspected. Epoch-5 Docker profile restore remains an
 explicit pre-write rejection; portable import, M12 and final M15 composition,
 management boundaries, independent backup review and final required checks remain
 OPEN. This green checkpoint closes the inherited epoch-5 backup RED, not M16.
+
+## Registry change during physical erasure
+
+A real registered extension adding a private domain while deletion was running
+could leave A's rows and still produce `completed`. The generated actual DELETE
+regression fails 0/1 in `/tmp/m16-delete-registry-red.log/.exit` (exit 1).
+Completion now rechecks the registered domain set. A changed registry yields
+`blocked/domain_registry_changed`; explicit administrator retry adds durable
+per-domain grants under the existing approved account operation, retaining prior
+completed domains and missing-domain blockers. `/tmp/m16-delete-registry-green.log/.exit`:
+lifecycle + authentication **18/18 exit 0**, A late-domain rows erased once, B
+unchanged, no grant or private-query delegation to the administrator. No export
+receipt or content protocol changed. Backup checkpoint f33 remains separately
+reviewable; this later server delta requires its own final composition checks.
