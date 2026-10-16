@@ -91,6 +91,17 @@ class MultiuserIngressTest {
         assertNotEquals(original.key,original.copy(userId=b.getString("userId")).key)
     }
 
+    @Test fun `native query citations use actual scoped read and cannot fall back to raw owner history`() = fixture { f ->
+        val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val id=UUID.randomUUID().toString()
+        val receipt=client(server,token).captures(listOf(event(id,"Synthetic native query original")))
+        val api=central(server,token);val response=CentralEvidenceReference.readQuery(api,"capture:$id",0)
+        assertEquals("Synthetic native query original",response.getJSONArray("items").getJSONObject(0).getString("text"))
+        assertEquals(200,request(server,token,"PATCH","/api/sources/"+receipt.getString("sourceId"),JSONObject().put("enabled",false)).first)
+        assertEquals(200,request(server,token,"GET","/api/captures/$id",null).first)
+        assertEquals(404,assertThrows(CentralFailure::class.java) {CentralEvidenceReference.readQuery(api,"capture:$id",0)}.status)
+        assertEquals(404,assertThrows(CentralFailure::class.java) {CentralEvidenceReference.readQuery(central(server,f.getJSONObject("b").getString("token")),"capture:$id",0)}.status)
+    }
+
     @Test fun `actual image capture rejects corrupt original reference mime and retention despite a complete owner receipt`() = fixture { f ->
         val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val binding=owner(server,token)
         val image=event(UUID.randomUUID().toString(),"Synthetic image fixture").put("imageMime","image/png").put("imageBase64","iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII=")
