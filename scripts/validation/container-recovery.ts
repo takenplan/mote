@@ -1,7 +1,7 @@
 // Generated-data opt-in Docker acceptance. Run with node --import tsx.
 // Only this run's uniquely labelled containers/volumes are removed in finally.
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,rmSync} from 'node:fs';
+import {mkdtempSync,readFileSync,rmSync,cpSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID,createHash} from 'node:crypto';
@@ -33,8 +33,14 @@ try{
  const deploymentId=node.deploymentId;await node.app.close();
  const originalDb=new DatabaseSync(join(source,'mote.sqlite'));let unknown:any;try{assert.ok(Number(originalDb.prepare('SELECT count(*) n FROM task_authorizations WHERE revoked=0').get()!.n)>0);unknown=originalDb.prepare('SELECT task_id,external_state,external_key,external_issuance FROM user_tasks WHERE task_id=?').get(taskId);assert.ok(['issued','unknown'].includes(unknown.external_state));}finally{originalDb.close();}
  node=undefined;await backupScopedInstance({source,out:archive});
- const paths=profilePaths('actual',join(directory,'profiles'));await initialize(paths,{runtime:'docker',image});p=await loadProfile(paths);const selected=p.meta.volume;
+ const paths=profilePaths('actual',join(directory,'profiles'));await initialize(paths,{runtime:'docker',image});p=await loadProfile(paths);let selected=p.meta.volume;
  docker(['volume','create','--label','dev.mote.fixture='+runId,selected]);created.add(selected);
+ const occupied=selected,occupiedProfile=p,selectedYaml=readFileSync(p.configFile,'utf8'),corrupt=join(directory,'corrupt');cpSync(archive,corrupt,{recursive:true});writeFileSync(join(corrupt,'instance.yaml'),'Generated damaged configuration');let admitted=0;
+ await assert.rejects(restoreProfile(p,corrupt,{execute:async(command:string,args:string[])=>{admitted++;return execute(command,args);}}),/checksum/);assert.equal(admitted,0);assert.equal(readFileSync(p.configFile,'utf8'),selectedYaml);
+ const sentinel='Generated current valid data must remain unchanged';docker(['run','--pull','never','--rm','--name',runId+'-sentinel-write','--label','dev.mote.fixture='+runId,'--network','none','--user','0','--mount',`type=volume,source=${occupied},target=/target`,'--entrypoint','node',image!,'-e',`require('node:fs').writeFileSync('/target/sentinel',${JSON.stringify(sentinel)},{mode:0o600,flag:'wx'});`]);
+ await assert.rejects(restoreProfile(p,archive,{execute}),/empty data volume/);assert.equal(readFileSync(p.configFile,'utf8'),selectedYaml);
+ const targetPaths=profilePaths('empty-target',join(directory,'profiles'));await initialize(targetPaths,{runtime:'docker',image});p=await loadProfile(targetPaths);selected=p.meta.volume;docker(['volume','create','--label','dev.mote.fixture='+runId,selected]);created.add(selected);
+
  const restored=await restoreProfile(p,archive,{execute});created.add(restored.volume);assert.notEqual(restored.volume,selected);assert.equal(restored.deploymentId,deploymentId);
  if(production){
   const user=await dockerConfigurationUser(p,execute);
@@ -53,7 +59,8 @@ try{
  const manifest=JSON.parse(readFileSync(join(readback,'backup-manifest.json'),'utf8')),parts=Object.keys(manifest.checksums).filter(name=>name.startsWith('originals/')&&name.endsWith('.plain'));assert.equal(parts.length,2);for(const part of parts)assert.deepEqual(readFileSync(join(readback,part)),original);
  node=await buildApp({dataDir:readback});assert.equal(node.deploymentId,deploymentId);assert.equal((await node.app.inject({url:'/api/auth/self',headers:{authorization:'Bearer '+admin.token,'x-mote-protocol-version':'2'}})).statusCode,401);
  for(const user of users){const fresh=await node.accounts.login(user.username,password,'generated','client',0);assert.equal(fresh.userId,user.userId);const context=await node.authority.authenticate(fresh.token);assert.equal(node.services.forUser(context).get('private-data').captures({}).items.length,1);}
- console.log(JSON.stringify({result:'PASS',runId,image,sourceSha,deploymentId,originalSha256:createHash('sha256').update(original).digest('hex'),copiedOriginals:parts.length,oldCredentialsRevived:0,taskAuthorizationsRevived:0,unknownExternalFactPreserved:true,restoredVolume:restored.volume,previousVolume:selected,actualDockerCommands:true,productionContainerStartup:production,productionRestart:production,cleanShutdownCycles:production?2:0}));
+ assert.equal(readFileSync(occupiedProfile.configFile,'utf8'),selectedYaml);assert.equal(docker(['run','--pull','never','--rm','--name',runId+'-sentinel-read','--label','dev.mote.fixture='+runId,'--network','none','--read-only','--user','0','--mount',`type=volume,source=${occupied},target=/source,readonly`,'--entrypoint','node',image!,'-e',"process.stdout.write(require('node:fs').readFileSync('/source/sentinel','utf8'))"]),sentinel);
+ console.log(JSON.stringify({result:'PASS',runId,image,sourceSha,deploymentId,originalSha256:createHash('sha256').update(original).digest('hex'),copiedOriginals:parts.length,oldCredentialsRevived:0,taskAuthorizationsRevived:0,unknownExternalFactPreserved:true,currentValidVolumePreserved:true,corruptPackageBeforeDocker:true,restoredVolume:restored.volume,previousVolume:selected,actualDockerCommands:true,productionContainerStartup:production,productionRestart:production,cleanShutdownCycles:production?2:0}));
 }finally{
  await node?.app.close();
  if(containerCreated){const state=JSON.parse(docker(['inspect',container]))[0];assert.equal(state.Config.Labels?.['dev.mote.fixture'],runId);if(state.State.Running)docker(['stop','--time','20',container]);docker(['rm',container]);}
