@@ -2208,6 +2208,7 @@
     "module": "M13",
     "surfaces": [
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/features'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/skills'",
       "extension:registry.install:id:'mote.scoped-http'"
     ]
   }

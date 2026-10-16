@@ -1,4 +1,5 @@
 import {FeatureRegistry} from '@mote/shared';
+import {skillCatalog} from '@mote/agent';
 import {registerAuthenticatedRoute,type ScopedRuntime} from './http.js';
 
 /** The existing Web dependency protocol observes actual Fastify registrations.
@@ -13,6 +14,7 @@ export function registerWebInventory(runtime:ScopedRuntime){
    registry.register('mote.scoped-http',{id,version:'1',surface:method==='GET'||method==='HEAD'?'data':'command'},{method,path:route.url});
   }
  });
+ registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/skills',handle:()=>({items:skillCatalog()})});
  registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/features',handle:context=>{
   const inventory=registry.inventory();let administrator=false;
   try{runtime.authority.assertAdministrator(context);administrator=true;}catch{}
