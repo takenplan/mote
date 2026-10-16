@@ -61,11 +61,14 @@ test('portable 3 actual production entry exports only its owner, exact resumable
 
 test('production account deletion revokes before erasure, is durable and cannot delete B or reenable a deleted account',async t=>{
  const f=await fixture(t),before=await f.request(f.b.token,'GET','/api/captures'),operationId=randomUUID();
+ const credentials=new DatabaseSync(join(f.directory,'mote.sqlite'));t.after(()=>credentials.close());const bCredentials=credentials.prepare('SELECT * FROM auth_credentials WHERE user_id=? ORDER BY id').all(f.b.userId);
  const ordinary=await f.request(f.a.token,'DELETE','/api/admin/accounts/'+f.b.userId,{operationId});assert.equal(ordinary.statusCode,403);
  const started=await f.request(f.admin.token,'DELETE','/api/admin/accounts/'+f.a.userId,{operationId});assert.equal(started.statusCode,200,started.body);
  assert.equal((await f.request(f.a.token,'GET','/api/captures')).statusCode,401);
  let receipt=started.json();for(let tries=0;['working','pending'].includes(receipt.state)&&tries<100;tries++){await new Promise(r=>setTimeout(r,10));receipt=(await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+receipt.id)).json();}
  assert.equal(receipt.state,'completed',JSON.stringify(receipt));
+ assert.equal(credentials.prepare('SELECT count(*) n FROM auth_credentials WHERE user_id=?').get(f.a.userId)!.n,0,'completed deletion must physically remove token hashes, CSRF hashes, device metadata and parent credentials');
+ assert.deepEqual(credentials.prepare('SELECT * FROM auth_credentials WHERE user_id=? ORDER BY id').all(f.b.userId),bCredentials);
  assert.deepEqual((await f.request(f.b.token,'GET','/api/captures')).json(),before.json());
  assert.equal((await f.request(f.admin.token,'PATCH','/api/admin/accounts/'+f.a.userId,{disabled:false})).statusCode,409);
  await f.restart();assert.deepEqual((await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+receipt.id)).json(),receipt);
