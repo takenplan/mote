@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {sourceConnectionSchema,sourceContentTime,sourceContextUpdateSchema,sourceItemSchema,type AttributionContext} from '@mote/shared';
-import {materialDraftSchema} from './material-model.js';
+import {materialDraftSchema,materialOwnerDeclarationBodyHash,materialOwnerStatementSchema} from './material-model.js';
 import {storedCaptureSchema} from './capture-original.js';
 import {PrivateDataError,type PrivateSql} from './private-data-sql.js';
 import type {DomainLifecycle,LifecyclePurpose,UserDataSubject,UserExport} from './lifecycle.js';
@@ -23,12 +23,13 @@ const captureLinkRow=z.object({material_id:materialId,revision:digest,member_id:
 const inputRow=z.object({material_id:materialId,revision:digest,member_id:identifier,input_material_id:materialId,input_revision:digest}).strict();
 const contextLinkRow=z.object({material_id:materialId,revision:digest,source_id:identifier,version:sequence,fingerprint:digest}).strict();
 const sourceLinkRow=z.object({material_id:materialId,revision:digest,source_id:identifier}).strict();
-const canonicalTables=['sources','source_contexts','captures','source_heads','materials','material_versions','material_captures','material_inputs','material_contexts','material_sources'] as const;
+const declarationRow=z.object({material_id:materialId,id:z.string().uuid(),version:sequence,base_hash:digest,fingerprint:digest,json:z.string()}).strict();
+const canonicalTables=['material_declarations','sources','source_contexts','captures','source_heads','materials','material_versions','material_captures','material_inputs','material_contexts','material_sources'] as const;
 const coverage={canonicalTables:[...canonicalTables],excluded:['assets','credentials','other-domains'],indexes:'rebuilt-from-canonical-rows'} as const;
 const coverageSchema=z.object({canonicalTables:z.array(z.enum(canonicalTables)),excluded:z.array(z.string()),indexes:z.literal(coverage.indexes)}).strict().refine(value=>JSON.stringify(value)===JSON.stringify(coverage));
 const payloadSchema=z.object({
   format:z.literal('mote-private-data-v1'),coverage:coverageSchema,
-  sources:z.array(sourceRow),source_contexts:z.array(contextRow),captures:z.array(captureRow),source_heads:z.array(headRow),
+  material_declarations:z.array(declarationRow),sources:z.array(sourceRow),source_contexts:z.array(contextRow),captures:z.array(captureRow),source_heads:z.array(headRow),
   materials:z.array(materialRow),material_versions:z.array(versionRow),material_captures:z.array(captureLinkRow),
   material_inputs:z.array(inputRow),material_contexts:z.array(contextLinkRow),material_sources:z.array(sourceLinkRow),
 }).strict();
@@ -74,6 +75,10 @@ function validate(payload:Payload){
   const contextLinks=unique(payload.material_contexts,row=>key(row.material_id,row.revision,row.source_id));
   const sourceLinks=unique(payload.material_sources,row=>key(row.material_id,row.revision,row.source_id));
   const contextHistory=grouped(payload.source_contexts,row=>row.source_id),versionHistory=grouped(payload.material_versions,row=>row.material_id);
+  const declarations=unique(payload.material_declarations,row=>key(row.material_id,row.id,row.version)),declarationHistory=grouped(payload.material_declarations,row=>key(row.material_id,row.id));
+  for(const row of declarations.values()){const statement=decode(materialOwnerStatementSchema,row.json);if(!materials.has(row.material_id)||statement.id!==row.id||hash(statement)!==row.fingerprint)invalid();}
+  for(const rows of declarationHistory.values())if(rows.sort((a,b)=>a.version-b.version).some((row,index)=>row.version!==index+1))invalid();
+  const usedDeclarations=new Set<string>();
   const parsedSources=new Map(payload.sources.map(row=>{
     const source=decode(sourceJsonSchema,row.json);
     if(source.id!==row.id||source.createdAt!==row.created_at||source.updatedAt!==row.updated_at)invalid();
@@ -152,7 +157,11 @@ function validate(payload:Payload){
     // and historical revisions retain their original exact provenance.
     const checkAttribution=(value:AttributionContext|undefined)=>{
       if(!value)return;
-      if(value.declarations?.length||value.ownerStatements?.length||value.importDeclarations?.length||value.importStatements?.length||value.materialDeclarations)invalid();
+      if(value.importDeclarations?.length||value.importStatements?.length||value.materialDeclarations)invalid();
+      const declared=unique(value.declarations??[],pin=>pin.id),statements=unique(value.ownerStatements??[],statement=>statement.id);
+      if(declared.size!==statements.size)invalid();
+      for(const pin of declared.values()){const id=key(row.material_id,pin.id,pin.version),declaration=declarations.get(id),statement=statements.get(pin.id);if(!declaration||declaration.fingerprint!==pin.fingerprint||declaration.base_hash!==materialOwnerDeclarationBodyHash(draft)||!statement||canonical(statement)!==canonical(JSON.parse(declaration.json)))invalid();usedDeclarations.add(id);}
+
       if(value.sourceDeclaration){
         const pin=value.sourceDeclaration,source=parsedSources.get(pin.sourceId);
         if(!source||pin.version>(source.ownerRelationVersion??0)||visible&&(source.ownerRelationVersion!==pin.version||(source.ownerRelation??null)!==pin.ownerRelation))invalid();
@@ -170,6 +179,7 @@ function validate(payload:Payload){
     for(const block of draft.blocks)if(block.kind==='text')checkAttribution(block.evidenceContext?.attributionContext);
     expectedSources.set(key(row.material_id,row.revision),sourcesForVersion);inputVersions.set(key(row.material_id,row.revision),dependencies);
   }
+  if(usedDeclarations.size!==declarations.size)invalid();
   if(seenCaptureLinks.size!==captureLinks.size||seenInputs.size!==inputs.size)invalid();
   for(const row of materials.values()){
     const history=(versionHistory.get(row.id)??[]).sort((a,b)=>a.sequence-b.sequence),latest=history.at(-1);
@@ -213,6 +223,7 @@ const tables=[
   {key:'material_inputs',name:'pd_material_inputs',columns:['material_id','revision','member_id','input_material_id','input_revision']},
   {key:'material_contexts',name:'pd_material_contexts',columns:['material_id','revision','source_id','version','fingerprint']},
   {key:'material_sources',name:'pd_material_sources',columns:['material_id','revision','source_id']},
+  {key:'material_declarations',name:'pd_material_declarations',columns:['material_id','id','version','base_hash','fingerprint','json']},
 ] as const;
 function read(sql:PrivateSql):Payload{
   const rows=Object.fromEntries(tables.map(table=>[table.key,sql.all(`SELECT ${table.columns.join(',')} FROM ${table.name} WHERE user_id=$user ORDER BY ${table.columns.join(',')}`)]));
@@ -231,7 +242,7 @@ export function privateDataLifecycle(sqlFor:(subject:UserDataSubject,purpose:Lif
     deleteUser:async(subject,operationId)=>{
       const sql=sqlFor(subject,'delete');
       sql.transaction(()=>{
-        for(const table of ['pd_material_inputs','pd_material_captures','pd_material_contexts','pd_material_sources','pd_material_versions','pd_materials','pd_source_heads','pd_captures','pd_source_contexts','pd_sources','pd_fts'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
+        for(const table of ['pd_material_declarations','pd_material_inputs','pd_material_captures','pd_material_contexts','pd_material_sources','pd_material_versions','pd_materials','pd_source_heads','pd_captures','pd_source_contexts','pd_sources','pd_fts'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
       });
       return {status:'complete',operationId};
     },

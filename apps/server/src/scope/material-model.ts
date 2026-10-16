@@ -1,5 +1,6 @@
 /** Shared Material value contract; no storage or single-owner runtime. */
 import {z} from 'zod';
+import {createHash} from 'node:crypto';
 import {documentSchema,attributionContextSchema} from '@mote/shared';
 
 export const MATERIAL_PREFIX='mat_';
@@ -45,3 +46,8 @@ export const materialDraftSchema=z.object({
 
 export const materialManifestSchema=materialDraftSchema.omit({blocks:true,members:true}).extend({members:z.array(memberSchema).optional()});
 export type MaterialDraft=z.infer<typeof materialDraftSchema>;
+
+/** An explicit reply applies to this original body only, independently of
+ * versioned attribution annotations. This identity is also validated on restore. */
+export function materialOwnerDeclarationBodyHash(draft:MaterialDraft){const {attributionContext:_,...body}=draft;return createHash('sha256').update(JSON.stringify({...body,blocks:body.blocks.map(block=>{if(block.kind!=='text'||!block.evidenceContext)return block;const {attributionContext:_,...context}=block.evidenceContext;return {...block,evidenceContext:context};})})).digest('hex');}
+export const materialOwnerStatementSchema=z.object({id:z.string().uuid(),question:z.string().min(1).max(2000),answer:z.string().min(1).max(8000).refine(value=>Boolean(value.trim()))}).strict();

@@ -37,6 +37,7 @@ export function installPrivateData(db:DatabaseSync){
       json TEXT NOT NULL,text TEXT NOT NULL,created_at TEXT NOT NULL,
       PRIMARY KEY(user_id,material_id,revision),UNIQUE(user_id,material_id,sequence),
       FOREIGN KEY(user_id,material_id) REFERENCES pd_materials(user_id,id) ON DELETE CASCADE);
+    CREATE TABLE IF NOT EXISTS pd_material_declarations(user_id TEXT NOT NULL,material_id TEXT NOT NULL,id TEXT NOT NULL,version INTEGER NOT NULL,base_hash TEXT NOT NULL,fingerprint TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,material_id,id,version),FOREIGN KEY(user_id,material_id) REFERENCES pd_materials(user_id,id) ON DELETE CASCADE);
     CREATE TABLE IF NOT EXISTS pd_material_captures(
       user_id TEXT NOT NULL,material_id TEXT NOT NULL,revision TEXT NOT NULL,member_id TEXT NOT NULL,capture_id TEXT NOT NULL,
       PRIMARY KEY(user_id,material_id,revision,member_id),

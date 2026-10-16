@@ -1,3 +1,4 @@
+import {OwnerQuestionReplyProtocol} from './owner-question-replies.js';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {ownerQuestionProviderRefSchema,ownerQuestionReplySchema,ownerQuestionSchema,ownerQuestionStateSchema,type OwnerQuestion,type OwnerQuestionPage,type OwnerQuestionProviderRef,type OwnerQuestionReply} from '@mote/shared';
@@ -106,46 +107,11 @@ export class OwnerQuestions {
  /** Retire private prose in the same transaction as a dependency/work withdrawal. */
  obsolete(id:string){return this.transaction(()=>{const value=this.decode(this.row(id));if(value.record.question.state==='obsolete')return;value.record.question.state='obsolete';value.record.question.revision++;value.record.question.updatedAt=this.now();delete value.record.question.continuationId;this.save(value.record,value.stored.installationEpoch);});}
  private receipt(id:string,reply:OwnerQuestionReply,hash:string){const prior=this.store.db.prepare('SELECT request_hash FROM owner_question_replies WHERE question_id=? AND request_id=?').get(id,reply.requestId);if(prior&&prior.request_hash!==hash)throw new StoreError('Owner reply request ID was reused with different content',409);return Boolean(prior);}
+ private replyProtocol?:OwnerQuestionReplyProtocol;
  reply(id:string,raw:OwnerQuestionReply):Promise<OwnerQuestion>{
-  const reply=ownerQuestionReplySchema.parse(raw),hash=sha256(JSON.stringify(reply)),key=JSON.stringify([id,reply.requestId]);
-  const active=this.pending.get(key);if(active){if(active.hash!==hash)return Promise.reject(new StoreError('Owner reply request ID was reused with different content',409));return active.work;}
-  const work=this.performReply(id,reply,hash);this.pending.set(key,{hash,work});void work.finally(()=>this.pending.delete(key)).catch(()=>{});return work;
+  this.replyProtocol??=new OwnerQuestionReplyProtocol({conflict:message=>new StoreError(message,409),receipt:(...args)=>this.receipt(...args),get:id=>this.get(id),current:id=>this.current(id),transaction:work=>this.transaction(work),afterEffect:id=>this.decode(this.row(id)),now:()=>this.now(),save:(record,epoch)=>this.save(record,epoch),remember:(id,reply,hash)=>{this.store.reserveMetadata(Buffer.byteLength(id)+Buffer.byteLength(reply.requestId)+hash.length+128);this.store.db.prepare('INSERT INTO owner_question_replies VALUES(?,?,?)').run(id,reply.requestId,hash);}});
+  return this.replyProtocol.reply(id,raw);
  }
- private async performReply(id:string,reply:OwnerQuestionReply,hash:string):Promise<OwnerQuestion>{
-  if(this.receipt(id,reply,hash))return this.get(id);
-  const initial=this.current(id),record=structuredClone(initial.record),provider=initial.provider;
-  if(record.question.state==='obsolete')throw new StoreError('Owner question is obsolete',409);
-  if(!provider)throw new StoreError('Owner question provider unavailable',409);
-  if(record.question.state==='answered'||record.question.revision!==reply.expectedRevision)throw new StoreError('Owner question changed; reload before answering',409);
-  const resolved:ResolvedOwnerQuestionReply={...reply};
-  if(reply.choiceId){const choice=record.question.choices.find(choice=>choice.id===reply.choiceId);if(!choice)throw new StoreError('Owner question choice is no longer available',409);resolved.answer=choice.answer;}
-  const prepared:OwnerQuestionAnswer|undefined=reply.action==='defer'?undefined:ownerQuestionAnswerSchema.parse(await provider.answer(record,resolved));
-  // Preparation may await a model; recheck before entering the transaction and again before writes.
-  this.current(id);
-  return this.transaction(()=>{
-   if(this.receipt(id,reply,hash))return this.get(id);
-   const current=this.current(id);
-   if(current.record.question.state==='obsolete'||current.record.question.revision!==reply.expectedRevision||current.provider!==provider||current.stored.installationEpoch!==provider.installationEpoch)throw new StoreError('Owner question changed while interpreting the answer',409);
-   const value=structuredClone(current.record),question=value.question,at=this.now();
-   let outcome=prepared;
-   if(prepared){const committed=provider.commit?.(value,resolved,prepared);if(committed!==undefined)outcome=ownerQuestionAnswerSchema.parse(committed);}
-   question.updatedAt=at;question.revision++;
-   if(reply.action==='defer'){question.state='deferred';question.messages.push({role:'user',text:moteText('稍后再说'),createdAt:at});}
-   else {
-    if(resolved.answer!==undefined)question.messages.push({role:'user',text:resolved.answer,createdAt:at});
-    else if(reply.action==='unknown')question.messages.push({role:'user',text:moteText('我也不知道，结束这次追问'),createdAt:at});
-    if(outcome!.kind==='followup'){question.state='open';question.prompt=outcome!.prompt;if(outcome!.choices!==undefined)question.choices=outcome!.choices;question.messages.push({role:'assistant',text:outcome!.prompt,createdAt:at});delete question.outcome;delete question.continuationId;}
-    else if(outcome!.kind==='continued'){question.state='answered';question.continuationId=outcome!.continuationId;question.outcome=outcome!.outcome;}
-    else {question.state='closed';question.outcome=outcome!.outcome;delete question.continuationId;}
-   }
-   const afterEffect=this.decode(this.row(id));
-   if(afterEffect.record.question.state==='obsolete'||afterEffect.record.question.revision!==reply.expectedRevision)throw new StoreError('Owner question evidence changed during continuation',409);
-   if(!provider.validate(value))throw new StoreError('Owner question continuation failed current validation',409);
-   this.save(value,current.stored.installationEpoch);
-   this.store.reserveMetadata(Buffer.byteLength(id)+Buffer.byteLength(reply.requestId)+hash.length+128);
-   this.store.db.prepare('INSERT INTO owner_question_replies VALUES(?,?,?)').run(id,reply.requestId,hash);
-   return structuredClone(question);
-  });
- }
+
 }
 declare module '@deepseek-ai/cordis' {interface Context {moteOwnerQuestions:OwnerQuestions;}}
