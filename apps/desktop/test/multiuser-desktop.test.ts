@@ -18,6 +18,7 @@ import {pathToFileURL,fileURLToPath} from 'node:url';
 const repository=fileURLToPath(new URL('../../../',import.meta.url));
 const nativeImport=createRequire(import.meta.url)('./native-backend.cjs') as (url:string)=>Promise<any>;
 import {createHash} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
 import {defaultConfig} from '../src/config';
 import {testConnection} from '../src/connection';
 import {DurableQueue} from '../src/queue';
@@ -265,4 +266,15 @@ it('reads canonical central extraction for raw screen captures without provenanc
  const item={key:event().id,source:'screen' as const,title:'',observedAt:event().capturedAt,outcome:'received' as const,firstReceipt:true,captureId:event().id};
  const first=await readCentralContent(config,item);expect(first.text).toBe(body.slice(0,12000));expect(first.nextChunkOffset).toBe(12000);expect(first.readiness).toBe('ready');expect(first.retainsOriginal).toBe(true);expect(first.processing).toBe(false);
  expect((await readCentralContent(config,item,12000)).text).toBe(body.slice(12000));expect((await captureDetail(queue,f.config(f.b),'central',event().id)).ocrText).toBe('Generated B central OCR');
+});
+
+it('recovers an expired exact file snapshot through the production source scanner, durable spool and actual M03/M06',async()=>{
+ const f=await fixture(),config=f.config(f.a),view=(await f.request(f.a.token,'/api/configuration')).json();expect((await f.request(f.a.token,'/api/configuration/processing','PUT',{revision:view.revision,value:{enabled:true,automatic:false,understandingEnabled:false,summarize:false}})).statusCode).toBe(200);
+ const path=join(f.directory,'generated-recovery.txt'),body='Generated exact Desktop snapshot bytes';await writeFile(path,body);
+ const sources=new LocalSourceManager(join(f.directory,'snapshot-sources'),config,'/generated/no-helper',true);cleanup.push(()=>sources.close());await sources.initialize();await sources.addFiles(path,{...DEFAULT_SOURCE_OPTIONS,retention:'snapshot',allowRead:true});await sources.sync(true);expect(sources.pendingContent()).toHaveLength(1);await sources.flushPending(new AbortController().signal);expect(sources.pendingContent()).toHaveLength(0);
+ const sourceId=sources.status()[0].source.id,original=(await f.request(f.a.token,`/api/ingress/sources/${sourceId}/originals`)).json().items[0],db=new DatabaseSync(join(f.directory,'central','mote.sqlite'));try{db.prepare('UPDATE ig_snapshot_inputs SET expires=? WHERE user_id=? AND original_id=?').run(Date.now()-1,f.a.userId,original.ref.slice(9));}finally{db.close();}
+ const started=await f.request(f.a.token,'/api/processing','POST',{originalRef:original.ref,operationId:'generated-desktop-recover'});expect(started.statusCode,started.body).toBe(200);await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/tasks/'+started.json().id)).json().failure?.code).toBe('snapshot_input_expired'));
+ await sources.sync(true);expect(sources.pendingContent()).toHaveLength(1);await sources.flushPending(new AbortController().signal);expect(sources.pendingContent()).toHaveLength(0);
+ await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/processing/originals/'+original.ref.slice(9))).json().indexed).toBe(true));
+ const state=(await f.request(f.a.token,'/api/processing/originals/'+original.ref.slice(9))).json();expect((await f.request(f.a.token,'/api/materials/'+state.materialId+'/read')).json().text).toBe(body);expect((await f.request(f.b.token,'/api/captures/'+original.captureId)).statusCode).toBe(404);
 });
