@@ -129,3 +129,11 @@ Pinned backend review: [DWS v1.0.62 source](https://github.com/DingTalk-Real-AI/
 and [Lark v1.0.85 source](https://github.com/larksuite/cli/tree/v1.0.85/internal/keychain).
 The read-only scopes come from the pinned Lark recording commands. Native account
 authorization, live refresh, physical devices and real provider data remain unrun.
+
+The timer slot and command receipt are committed inside M05 admission through a
+trusted synchronous `onAdmitted` callback. Competing hosts cannot commit orphan
+polling chains, and repeated immutable operation IDs return the original task.
+A changed command payload or account epoch conflicts. The callback is not a wire
+field or worker capability. M09 snapshot validity is also part of M10 task
+validation through final result publication. Native CLI cancellation waits for
+physical child close; a revoked output callback cannot escape the event handler.

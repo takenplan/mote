@@ -43,6 +43,8 @@ HTTP/CLI I/O is substituted; source/archive/task services are real.
 | Interrupted authorization, no replay and result_unknown deletion | `an interrupted OAuth issuance survives restart as unknown and connector deletion cannot claim remote erasure` |
 | Identical A/B raw bytes, capture IDs, owner-specific refs and erasure isolation | `identical Gmail original bytes and capture IDs keep different owner references and deleting A ingress preserves B bytes` |
 | Per-user OAuth client changes revoke only A credentials | `changing A OAuth client settings revokes A credential namespace without changing B settings or in-flight identity` |
+| Real child retirement and output-callback revocation | `multiuser-connectors-cli.test.ts`: `real lark runner joins physical child exit after cancellation and contains output-callback revocation`; same for `dingtalk` |
+| Concurrent command idempotency and immutable payload conflict | `concurrent duplicate sync commands return one durable task and preserve immutable input identity across restart` |
 | Distinct process HTTP listener, pending OAuth recovery, A/B source/original reads, replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals through the production composition` |
 
 ## Intermediate receipts and final gates

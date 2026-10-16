@@ -70,19 +70,20 @@ export function createLarkRunner(directory:string,optionsConfig:{localProfile?:b
     const args=installing?['install','--prefix',runtime,`@larksuite/cli@${LARK_VERSION}`,'--registry=https://registry.npmjs.org','--no-audit','--no-fund']:existsSync(local)?[local,...larkArguments(command)]:larkArguments(command);
     const timeout=['setup','complete'].includes(command.kind)?610000:installing||command.kind==='minutes-media'?300000:60000;
     return new Promise<string>((ok,fail)=>{
-      let stdout='',stderr='',size=0,settled=false;
+      let stdout='',stderr='',size=0,settled=false,terminal:ConnectorError|undefined;
       const child=spawn(executable,args,{cwd:root,env,shell:false,stdio:['pipe','pipe','pipe'],detached:process.platform!=='win32',windowsHide:true});
       const stop=()=>{try{if(process.platform!=='win32'&&child.pid)process.kill(-child.pid,'SIGKILL');else child.kill('SIGKILL');}catch{}};
       const finish=(error?:ConnectorError)=>{if(settled)return;settled=true;clearTimeout(timer);options.signal?.removeEventListener('abort',abort);error?fail(error):ok(stdout);};
-      const abort=()=>{stop();finish(new ConnectorError('lark_operation_cancelled',409));};
-      const timer=setTimeout(()=>{stop();finish(new ConnectorError('lark_operation_timeout',504));},timeout);
+      const abort=()=>{terminal??=new ConnectorError('lark_operation_cancelled',409);stop();};
+      const timer=setTimeout(()=>{terminal??=new ConnectorError('lark_operation_timeout',504);stop();},timeout);
       options.signal?.addEventListener('abort',abort,{once:true});
       if(options.signal?.aborted)abort();
       child.stdout.setEncoding('utf8');child.stderr.setEncoding('utf8');
-      const read=(chunk:string,isError:boolean)=>{size+=Buffer.byteLength(chunk);if(size>8*1024*1024){stop();finish(new ConnectorError('lark_output_too_large',413));return;}const text=chunk;if(isError)stderr+=text;else stdout+=text;options.onOutput?.(text);};
+      const read=(chunk:string,isError:boolean)=>{if(terminal)return;size+=Buffer.byteLength(chunk);if(size>8*1024*1024){terminal=new ConnectorError('lark_output_too_large',413);stop();return;}const text=chunk;if(isError)stderr+=text;else stdout+=text;try{options.onOutput?.(text);}catch{terminal=new ConnectorError('lark_operation_cancelled',409);stop();}};
       child.stdout.on('data',chunk=>read(chunk,false));child.stderr.on('data',chunk=>read(chunk,true));
       child.on('error',error=>finish(new ConnectorError((error as NodeJS.ErrnoException).code==='ENOENT'?'lark_cli_missing':'lark_process_failed',503)));
       child.on('close',code=>{
+        if(terminal)return finish(terminal);
         if(code===0)return finish();
         // Error text may contain credentials or personal content. Return fixed codes only.
         let problem:{type?:string;subtype?:string;code?:number}={};for(const text of [stderr,stdout])try{problem=JSON.parse(text).error??{};break;}catch{}

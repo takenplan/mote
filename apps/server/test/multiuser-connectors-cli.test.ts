@@ -18,3 +18,14 @@ test('actual CLI child processes receive isolated HOME, config, data, cache, tem
  for(const platform of ['lark','ding'] as const){assert.notEqual(a[platform].env.HOME,b[platform].env.HOME);for(const result of [a[platform],b[platform]]){assert.equal(result.env.LARK_ACCESS_TOKEN,undefined);assert.equal(result.env.DWS_ACCESS_TOKEN,undefined);assert.equal(Object.values(result.env).includes('HOST_SYNTHETIC_IDENTITY'),false);for(const key of ['HOME','USERPROFILE','XDG_CONFIG_HOME','XDG_DATA_HOME','XDG_CACHE_HOME','APPDATA','LOCALAPPDATA','TMPDIR'])assert.ok(result.env[key].replace(root,realpathSync(root)).startsWith(result.cwd),key);}}
  assert.ok(a.lark.env.LARKSUITE_CLI_CONFIG_DIR.replace(root,realpathSync(root)).startsWith(a.lark.cwd));assert.ok(a.ding.env.DWS_CONFIG_DIR.replace(root,realpathSync(root)).startsWith(a.ding.cwd));assert.deepEqual(a.ding.argv.slice(0,2),['--profile','same-org:same-user']);
 });
+
+for(const kind of ['lark','dingtalk'] as const)test('real '+kind+' runner joins physical child exit after cancellation and contains output-callback revocation',async t=>{
+ const root=mkdtempSync(join(tmpdir(),'mote-m10-cli-stop-')),bin=join(root,'bin');mkdirSync(bin);const previous=process.env.PATH;process.env.PATH=bin+':'+previous;t.after(()=>{process.env.PATH=previous;rmSync(root,{recursive:true,force:true});});
+ const script=`#!${process.execPath}\nif(process.argv.includes('--version'))process.stdout.write('lark-cli 1.0.85');else if(process.argv[2]==='version')process.stdout.write(JSON.stringify({version:'1.0.62'}));else {process.stdout.write('PID:'+process.pid+'\\n');setInterval(()=>process.stdout.write('generated heartbeat\\n'),10);}\n`;
+ for(const name of ['lark-cli','dws']){writeFileSync(join(bin,name),script);chmodSync(join(bin,name),0o700);}
+ for(const revoke of ['abort','callback'] as const){
+  const directory=join(root,revoke);mkdirSync(directory);let resolve!:()=>void,pid=0;const entered=new Promise<void>(done=>resolve=done),controller=new AbortController(),onOutput=(value:string)=>{const match=value.match(/PID:(\d+)/);if(match){pid=Number(match[1]);resolve();if(revoke==='callback')throw Error('synthetic revoked callback');}};
+  const promise=(kind==='lark'?createLarkRunner(directory,{isolatedHome:true})({kind:'status'},{signal:controller.signal,onOutput}):createDwsRunner(directory,{isolatedHome:true})({kind:'login'},undefined,controller.signal,onOutput)).then(()=>undefined,error=>error);
+  await entered;if(revoke==='abort')controller.abort();const error=await promise;assert.equal(error.code,kind==='lark'?'lark_operation_cancelled':'dingtalk_operation_cancelled');assert.throws(()=>process.kill(pid,0),{code:'ESRCH'});
+ }
+});
