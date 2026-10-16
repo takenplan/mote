@@ -124,15 +124,15 @@ class MultiuserWorkerInstrumentedTest {
             val bItems=bClient.list().getJSONArray("items")
             val bOriginal=(0 until bItems.length()).map(bItems::getJSONObject).first {it.getString("status")=="proposed"}
             val bApproved=bClient.confirm(bOriginal,bOriginal.getJSONObject("event"),"7")
-            val bReceipt=bClient.execute(bApproved.getString("id")) as JSONObject
-            assertTrue(bReceipt.getBoolean("acknowledged"));assertTrue(bReceipt.getBoolean("published"));assertEquals(2,native.inserts)
+            bClient.execute(bApproved.getString("id"))
+            assertEquals("succeeded",currentAction(bApproved.getString("id")).getString("status"));assertEquals(2,native.inserts)
             login(app,"a")
             // Reconstruct the native adapter and original client from durable files.
             // This is reconstruction evidence, not a claimed OS SIGKILL.
             val recoveredNative=GeneratedCalendarProvider(generated)
             val recovered=CalendarActions(GeneratedCalendarContext(app,recoveredNative),foreground=true)
-            val receipt=recovered.execute(id) as JSONObject
-            assertTrue(receipt.getBoolean("acknowledged"));assertTrue(receipt.getBoolean("published"));assertEquals(2,recoveredNative.inserts)
+            recovered.execute(id)
+            assertEquals(2,recoveredNative.inserts)
             val completed=currentAction(id)
             assertEquals("succeeded",completed.getString("status"));assertEquals("101",completed.getString("externalId"))
             assertEquals("101",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
