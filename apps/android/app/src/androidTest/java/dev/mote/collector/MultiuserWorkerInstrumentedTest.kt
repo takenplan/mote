@@ -557,11 +557,14 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals(1,a.get("/api/ingress/sources/"+source.getString("id")+"/originals").getJSONArray("items").length())
             val oldSync=button("立即同步");assertNotNull(oldSync)
             val beforeDisconnect=a.get("/api/tasks").getJSONArray("items").let {rows->(0 until rows.length()).map {rows.getJSONObject(it).getString("id")}.toSet()}
+            control("/generated/drop-disconnect-ack")
             press("断开连接");scenario.onActivity {
                 @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
                 dialogs.mapNotNull {it.get()}.single {it.isShowing}.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
             };ready()
             waitFor {a.get("/api/tasks").getJSONArray("items").let {rows->(0 until rows.length()).map(rows::getJSONObject).any {it.getString("id") !in beforeDisconnect&&it.optString("state")=="succeeded"&&it.optJSONObject("result")?.optBoolean("connected",true)==false}}}
+            assertNotNull("The original disconnect intent remains retryable after its real acknowledgement is lost",button("重试"));control("/generated/release-disconnect-ack");press("重试");ready()
+            val disconnects=control("/generated/document-state").getJSONArray("disconnectCommands");assertTrue(disconnects.length()>=2);assertEquals(1,(0 until disconnects.length()).map {disconnects.getJSONObject(it).getString("operationId")}.toSet().size);assertEquals(1,(0 until disconnects.length()).map {disconnects.getJSONObject(it).getString("taskId")}.toSet().size)
             val taskCount=a.get("/api/tasks").getJSONArray("items").length();press("检查状态");ready()
             assertEquals("An acknowledged disconnect must retire its old generation and leave the original connection controls usable",taskCount+1,a.get("/api/tasks").getJSONArray("items").length())
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldSync!!.performClick()};ready();assertEquals(beforeB,b.get("/api/source-items").toString())

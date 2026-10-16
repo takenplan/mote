@@ -1,6 +1,6 @@
 import type {TestContext} from 'node:test';
 import {randomUUID} from 'node:crypto';
-import {createServer} from 'node:http';
+import {createServer,request as forward} from 'node:http';
 import {scopedCaptureFixture} from '../../server/test/fixtures/scoped-capture-host.js';
 
 // Actual M01/M04/M09/M10/M05/M03; only the external Lark CLI returns generated
@@ -10,6 +10,8 @@ const logged=new Set<string>();
 let complete!:()=>void;
 const heldLogin=new Promise<void>(resolve=>complete=resolve);
 let failDocument=false,holdDocument=false,documentEntered=false,releaseDocument:(()=>void)|undefined;
+let dropDisconnect=false;
+const disconnectCommands:Array<{operationId:string;taskId:string}>=[];
 const f=await scopedCaptureFixture({after:(work:()=>unknown)=>cleanup.push(work)} as unknown as TestContext,{
  connectorTransports:{lark:scope=>async(command,options)=>{
   switch(command.kind){
@@ -48,12 +50,26 @@ const control=createServer((request,response)=>{
  else if(request.url==='/generated/retry-document')failDocument=false;
  else if(request.url==='/generated/hold-document'){holdDocument=true;documentEntered=false;}
  else if(request.url==='/generated/release-document'){holdDocument=false;releaseDocument?.();}
+ else if(request.url==='/generated/drop-disconnect-ack')dropDisconnect=true;
+ else if(request.url==='/generated/release-disconnect-ack')dropDisconnect=false;
  else if(request.url!=='/generated/document-state'){response.statusCode=404;response.end();return;}
- response.setHeader('content-type','application/json');response.end(JSON.stringify({released:true,documentEntered,failDocument,holdDocument}));
+ response.setHeader('content-type','application/json');response.end(JSON.stringify({released:true,documentEntered,failDocument,holdDocument,disconnectCommands}));
 });
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlPort=control.address();if(!controlPort||typeof controlPort==='string')throw Error('Missing generated control listener');
-const address=await f.host.app.listen({host:'127.0.0.1',port:0});
-process.stdout.write(JSON.stringify({address,controlAddress:'http://127.0.0.1:'+controlPort.port,a:f.a,b:f.b,admin:f.admin,password:'Generated-M13-archive-only-01',pid:process.pid})+'\n');
-let closing=false;async function close(){if(closing)return;closing=true;complete();releaseDocument?.();control.closeAllConnections();await new Promise<void>(resolve=>control.close(()=>resolve()));for(const work of cleanup.reverse())await work();process.exit(0);}
+const backend=await f.host.app.listen({host:'127.0.0.1',port:0});
+// Network-only fault injection after the real M10 admission. Never replace a
+// route, response body, executor or receipt with a hand-authored success.
+const proxy=createServer((request,response)=>{
+ const chunks:Buffer[]=[];const disconnect=request.method==='POST'&&request.url==='/api/connectors/same-lark/disconnect';
+ if(disconnect)request.on('data',chunk=>chunks.push(Buffer.from(chunk)));
+ const upstream=forward(new URL(request.url!,backend),{method:request.method,headers:{...request.headers,host:new URL(backend).host}},reply=>{
+  if(disconnect&&reply.statusCode===200){const result:Buffer[]=[];reply.on('data',chunk=>result.push(Buffer.from(chunk)));reply.on('end',()=>{
+   disconnectCommands.push({operationId:JSON.parse(Buffer.concat(chunks).toString()).operationId,taskId:JSON.parse(Buffer.concat(result).toString()).id});
+   if(dropDisconnect)response.destroy();else {response.writeHead(reply.statusCode!,reply.headers);response.end(Buffer.concat(result));}
+  });}else {response.writeHead(reply.statusCode!,reply.headers);reply.pipe(response);}
+ });upstream.on('error',()=>response.destroy());request.pipe(upstream);
+});await new Promise<void>(resolve=>proxy.listen(0,'127.0.0.1',resolve));const proxyAddress=proxy.address();if(!proxyAddress||typeof proxyAddress==='string')throw Error('Missing generated Lark fault listener');
+process.stdout.write(JSON.stringify({address:'http://127.0.0.1:'+proxyAddress.port,controlAddress:'http://127.0.0.1:'+controlPort.port,a:f.a,b:f.b,admin:f.admin,password:'Generated-M13-archive-only-01',pid:process.pid})+'\n');
+let closing=false;async function close(){if(closing)return;closing=true;complete();releaseDocument?.();control.closeAllConnections();proxy.closeAllConnections();await Promise.all([new Promise<void>(resolve=>control.close(()=>resolve())),new Promise<void>(resolve=>proxy.close(()=>resolve()))]);for(const work of cleanup.reverse())await work();process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());
