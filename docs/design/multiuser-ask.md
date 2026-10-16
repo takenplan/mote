@@ -96,3 +96,33 @@ apps/server/test/multiuser-ask.test.ts apps/server/test/multiuser-ask-read-races
 (`/tmp/m08-core-delta-22.log/.exit`). Types and scope/import/SQL exit0.
 Final SIGKILL/compiled/combined/affected gates and remaining legacy query option
 parity are still pending. This remains an implementation review freeze.
+
+## Legacy query projection and real HTTP delta
+
+Logical `reader.logicalHistory({sourceId,externalId,...range})` resolves the actual
+current `pd_material_captures`/Material relation, including M06's distinct
+`processed:<captureId>` origin. It does not guess that processed external IDs equal
+the logical source-item key. Canonical formal originals replace raw history; raw
+history is used only when no formal replacement permits it. New segment locators
+are the existing immutable Material refs; old unowned artifact UUIDs do not name
+new epoch data. Typed session/collection navigation reuses the existing parser,
+intersected scope and owned query-visible anchor expansion.
+
+The original MCP safe UTF16 window is extracted to one shared pure function;
+Material, original and Memory text windows retain correct offsets and never split
+surrogates. M11 found a P2 in segments exposing pending Material text; segments now
+uses the same ready-block projection as materialRead, as do catalog/search. This
+is a same-owner output-readiness finding, separate from the closed cross-await P1.
+Context honors includeMemories/includeRecentSessions, bounded characters and signed
+separate channel cursors. Status reports measured archive and real Memory watermarks.
+Actual `/api/context/*` and `/api/agent-view/*` routes use this same scoped facade.
+Memory's additional legacy filters await the real M07 scoped query extension.
+
+Validation: targeted production HTTP/processed-original history/ready projections/
+Unicode/context/stream cancellation6/6 exit0,7583ms
+(`/tmp/m08-reader-parity-six.log/.exit`); admitted price snapshots/error redaction2/2
+exit0 (`/tmp/m08-prices-errors.log/.exit`); actual two HTTP host processes SIGKILL/
+restart1/1 exit0,41742ms (`/tmp/m08-ask-process-first.log/.exit`), with no replay of
+successful child model transports. The process fixture supports emitted entry via
+MOTE_ASK_PROCESS_ENTRY; compiled execution is still pending. M11's unchanged host
+and SDK P1 probes both independently pass exactc66, as recorded in its review report.

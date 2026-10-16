@@ -3,6 +3,7 @@ import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import {registerUserRoute,type ScopedRuntime} from './http.js';
 import {AskHost} from './ask.js';
+import {registerAskReadRoutes} from './ask-read-routes.js';
 import {ASK_DOMAIN,askInputSchema,insightInputSchema} from './ask-schema.js';
 import type {Configurations} from './configuration.js';
 import type {TaskExecution} from './task-execution.js';
@@ -33,5 +34,6 @@ export function registerAsk(runtime:ScopedRuntime,db:DatabaseSync,configuration:
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs/:id/cancel',handle:({context,request})=>service(context).cancel(id(request))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insights',handle:({context,request})=>{const page=service(context).list(request.query,'insight',true);return {...page,items:page.items.map(item=>({id:item.id,...item.result as object}))};}});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-artifacts/:id',handle:({context,request})=>service(context).artifact(z.object({id:z.string().regex(/^[a-f0-9]{64}$/)}).parse(request.params).id)});
+ registerAskReadRoutes(runtime,host);
  return host;
 }
