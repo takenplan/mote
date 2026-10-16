@@ -13,7 +13,6 @@ for(const [name,label,user] of [['a','A',fixture.a],['b','B',fixture.b]] as cons
  published[name]={memoryId:page.items[0].id,materialId:material.id,revision:material.revision};
 }
 const address=await fixture.node.app.listen({host:'127.0.0.1',port:0});
-fixture.node.app.addHook('onSend',async(request,reply,payload)=>{if(reply.statusCode>=400)process.stderr.write(JSON.stringify({method:request.method,path:request.url,status:reply.statusCode,response:payload})+'\n');return payload;});
 process.stdout.write(JSON.stringify({address,controlAddress:address,a:fixture.a,b:fixture.b,admin:fixture.admin,password:'Generated-memory-password-only-01',published,pid:process.pid})+'\n');
 let closing=false;async function close(){if(closing)return;closing=true;for(const cleanup of cleanups.reverse())await cleanup();process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());

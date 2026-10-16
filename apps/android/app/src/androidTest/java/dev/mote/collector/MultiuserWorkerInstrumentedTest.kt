@@ -68,6 +68,23 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun actualNativeCentralDraftStoresRetireWhenTheSameOriginChangesAccount() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server=endpoint(),token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false),confirmCentralEndpoint=true);login(app,"a");MoteI18n.select(app,"zh-CN")
+        val aDraft="Synthetic A unsaved private central draft";val bDraft="Synthetic B explicitly created central draft"
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","notes")).use { scenario ->
+            fun ready() {waitFor {var value=false;scenario.onActivity {activity->value=activity.client!=null&&!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.hint.toString()=="此刻想留下什么？"}};value}}
+            fun draft():String {var value="";scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="此刻想留下什么？"}.text.toString()};return value}
+            fun edit(text:String) {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="此刻想留下什么？"}.setText(text)};CentralDraftWrites.barrier {Unit}}
+            ready();edit(aDraft);var original:CentralClient?=null;scenario.onActivity {original=it.client}
+            login(app,"b");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready()
+            assertEquals("B must not read A's retained native draft","",draft());edit(bDraft)
+            scenario.onActivity {original=it.client};login(app,"a");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready();assertEquals(aDraft,draft())
+            scenario.onActivity {original=it.client};login(app,"b");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready();assertEquals(bDraft,draft())
+        }
+    }
+
     @Test fun actualPublishedMemoryEvidenceUsesTheCanonicalReaderUnderItsOwner() {
         val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
