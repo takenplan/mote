@@ -68,6 +68,41 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun actualPublishedMemoryEvidenceUsesTheCanonicalReaderUnderItsOwner() {
+        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready};click("查看详情")
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready};click("查看原文依据 1")
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->assertTrue("Canonical M07 evidence text must remain readable",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_MEMORY_A")})}
+            login(app,"b");scenario.onActivity {it.navigate("memories")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_MEMORY_A")})}
+        }
+    }
+
+    @Test fun actualPublishedMemoryCorrectionFollowsItsCommittedNewVersion() {
+        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val corrected="Generated explicit owner correction from the native Memory editor"
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready};click("查看详情")
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="陈述"}.setText(corrected)}
+            click("保存校正");waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val deadline=android.os.SystemClock.elapsedRealtime()+10000
+            var saved:JSONObject?=null
+            do {val page=CentralAccess.requireClient(app).get("/api/memories?limit=30").getJSONArray("items");saved=(0 until page.length()).map {page.getJSONObject(it)}.firstOrNull {it.optString("statement")==corrected};if(saved!=null)break;Thread.sleep(30)} while(android.os.SystemClock.elapsedRealtime()<deadline)
+            assertNotNull("Owner correction must publish a new current Memory",saved)
+            assertNotEquals(fixture().getJSONObject("published").getJSONObject("a").getString("memoryId"),saved!!.getString("id"))
+            assertFalse(CentralClient(endpoint(),token("b")).get("/api/memories?limit=30").toString().contains(corrected))
+        }
+    }
+
     @Test fun generatedScreenshotDuringAccountDrainCannotEnterBAndExplicitBStillCaptures() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,
