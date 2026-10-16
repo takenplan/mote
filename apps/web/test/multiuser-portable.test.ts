@@ -11,6 +11,7 @@ import {buildApp} from '../../server/src/app.js';
 import {createApi,type Api} from '../src/api.js';
 import '../src/features/runtime.js';
 import {pages} from '../src/features/storage.js';
+import {AccountAdministration} from '../src/AccountSettings.js';
 import type {PageProps} from '../src/features/types.js';
 configureLocale(()=> 'zh-CN');
 
@@ -34,5 +35,14 @@ test('original storage page uses actual owner portable receipts without global s
  await press('下载归档');assert.equal(downloads.length,1);const archive=JSON.parse(await downloads[0].text());assert.equal(archive.version,3);assert.equal(archive.userId,a.connection!.userId);assert.equal(archive.coverage.credentials,false);
  held=true;const pending=press('下载归档');await arrived;const b=await login('generated-b');await render(b);release();await pending;assert.equal(downloads.length,1,'held A bytes cannot create a B-session download');assert.doesNotMatch(d.body.textContent!,new RegExp(a.connection!.userId));assert.ok(!button('下载归档'),'B does not inherit A receipt');
  await press('导出');for(let n=0;n<100&&!button('下载归档');n++)await act(async()=>delay(20));assert.ok(button('下载归档'));await press('下载归档');assert.equal(downloads.length,2);assert.equal(JSON.parse(await downloads[1].text()).userId,b.connection!.userId);
+ const administrator=await login('generated-admin');await act(async()=>{root.render(React.createElement(AccountAdministration,{api:administrator}));await delay(30);});
+ const target=Array.from(d.querySelectorAll<HTMLLIElement>('.connection-list li')).find(li=>li.textContent?.includes('generated-a'));assert.ok(target);
+ const remove=Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent==='删除账号');assert.ok(remove,'administrator can start the durable account-deletion receipt from the existing account list');await act(async()=>{remove.click();await delay(10);});
+ const oldConfirm=Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent==='确认删除账号');assert.ok(oldConfirm);
+ const switched=await login('generated-b');await act(async()=>{root.render(React.createElement(AccountAdministration,{api:switched}));await delay(20);});await act(async()=>{oldConfirm.click();await delay(20);});assert.equal(requests.filter(r=>r.method==='DELETE').length,0,'detached A-admin confirmation cannot execute under B');
+ const adminAgain=await login('generated-admin');await act(async()=>{root.render(React.createElement(AccountAdministration,{api:adminAgain}));await delay(20);});const again=Array.from(d.querySelectorAll<HTMLLIElement>('.connection-list li')).find(li=>li.textContent?.includes('generated-a'))!;await act(async()=>{Array.from(again.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent==='删除账号')!.click();await delay(10);});await press('确认删除账号');
+ for(let n=0;n<100&&!d.querySelector('.account-deletion-receipt')?.textContent?.includes('已完成');n++)await act(async()=>delay(20));assert.match(d.querySelector('.account-deletion-receipt')!.textContent!,/已完成/);
+ await act(async()=>{root.render(null);await delay(10);});await act(async()=>{root.render(React.createElement(AccountAdministration,{api:adminAgain}));await delay(30);});const tombstone=Array.from(d.querySelectorAll<HTMLLIElement>('.connection-list li')).find(li=>li.textContent?.includes('generated-a'))!;assert.ok(!Array.from(tombstone.querySelectorAll('button')).some(button=>['启用账号','重置密码','删除账号'].includes(button.textContent??'')),'refreshed tombstone exposes only its original receipt');assert.equal((await request(undefined,'/api/auth/login','POST',{username:'generated-a',password,mode:'client'})).statusCode,401);assert.equal((await node.app.inject({url:'/api/captures',headers:{'x-mote-protocol-version':'2',cookie,'x-mote-session-id':adminAgain.connection!.credentialId}})).statusCode,200);
+ const deletion=requests.find(r=>r.method==='DELETE');assert.equal(deletion?.session,adminAgain.connection!.credentialId);
  const mutations=requests.filter(r=>r.method==='POST'&&r.path==='/api/portable/exports');assert.deepEqual(mutations.map(r=>r.session),[a.connection!.credentialId,b.connection!.credentialId]);
 });
