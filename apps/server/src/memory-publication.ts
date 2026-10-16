@@ -2,13 +2,15 @@ import {EXECUTION_POLICIES} from './execution-policy.js';
 import type {QueryResult} from '@mote/shared';
 import type {MemoryStore,MemoryExtractOptions,PreparedMemoryExtraction} from './memory.js';
 import type {MemoryBindings} from './memory-bindings.js';
-import {memoryProviderKey,memoryBodyDigest,withMemoryHostState,type MemoryProviderNamespace,type MemoryProviderReceipt} from './memory-provider-contract.js';
+import {memoryProviderKey,memoryBodyDigest,withMemoryHostState,type MemoryProviderNamespace,type MemoryProviderReceipt,type MemoryProviderWrite,type MemoryProvider} from './memory-provider-contract.js';
 import {ExecutionEngine,ExecutionFailure} from './execution-engine.js';
 import {sha256,StoreError,type Store} from './store.js';
 import {memorySchema,type Memory} from './memory-schema.js';
 import {randomUUID} from 'node:crypto';
 import {installMemoryPublicationRetirement,registerMemoryPublicationDependencies,memoryPublicationRetired,type MemoryPublicationDependencies} from './memory-private-storage.js';
 
+import {stageVerifiedMemoryWrite} from './memory-provider-publication.js';
+export {stageVerifiedMemoryWrite} from './memory-provider-publication.js';
 export type MemoryPublicationReceipt={operationId:string;binding:ReturnType<MemoryBindings['binding']>;prepared:PreparedMemoryExtraction;payloadHash:string};
 function recordDependencies(records:Memory[]):MemoryPublicationDependencies{return {memoryIds:records.map(memory=>memory.id),evidenceIds:records.flatMap(memory=>memory.evidenceIds)};}
 function outputDependencies(output:any):MemoryPublicationDependencies{
@@ -70,7 +72,7 @@ export class MemoryPublication {
     // Submission is not completion. An interrupted transport keeps this intent
     // observable until a read/recovery proves the immutable body or its removal.
     let receipt:MemoryProviderReceipt;
-    try{receipt=await provider.put(write);const exact=await provider.read({namespace,key});if(!exact||memoryBodyDigest(exact)!==memoryBodyDigest(memory))throw new StoreError('The provider did not preserve a reviewed Memory body',502);}catch(error){this.scheduleReconcile();throw error;}
+    try{receipt=await stageVerifiedMemoryWrite(provider,write,assertAuthority);}catch(error){this.scheduleReconcile();throw error;}
     this.store.db.prepare("UPDATE memory_provider_writes SET state='acknowledged' WHERE id=?").run(opId);assertAuthority();this.assertRetained(operationId);
     return receipt;
   }
