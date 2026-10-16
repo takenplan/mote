@@ -646,7 +646,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 larkChoices = (0 until rows.length()).map(rows::getJSONObject).filter { it.getString("provider") == "lark" }
                 body.removeAllViews()
                 if (larkChoices.isEmpty()) {
-                    ui.text(MoteI18n.text("暂无记录")); ui.button(MoteI18n.text("来源与外部应用")) { connections() }
+                    ui.text(MoteI18n.text("暂无记录")); ui.button(MoteI18n.text("来源与外部应用")) { connectors() }
                 } else { selectLark(larkChoices.first()); lark() }
             }
             return
