@@ -26,6 +26,7 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 | 真正 provider 401 的安全进度、retry、成功单元不重跑；删除失败来源不保留错误 | `37a91174`，修正夹具后的 `m12-progress-valid-red` EXIT1，缺 provider_authentication | `09d3a32c`，`m12-recovery-green3` 3/3 EXIT0。 |
 | GET/catalog 不暗写、来源擦除后迟到回执仍固定原事件 | `10a2c68d`，`m12-readonly-red` 0/2 EXIT1，GET 改库、错误 native ID 返回 200 | `0bc5cf08`，`m12-readonly-green` 2/2 EXIT0。 |
 | 纯本地完成不能产生外部 issuance | `03943c97`，`m12-local-only-red` 200 而非 409 EXIT1 | `0bc5cf08`，`m12-local-only-green` 原生变更 3/3 EXIT0。 |
+| 旧 Web/Android 首屏 cursor=0 与其余签名页隔离 | `753fda50`，`m12-cursor-red` 首屏 400 EXIT1 | `ce52c47e`，`m12-cursor-green` 1/1 EXIT0，非零数字仍拒绝。 |
 | 同一 formal Material 的跨原文约定 | `ffa55e81`，`m12-material-red` 6 completed 但无跨原文建议 EXIT1 | `c7aaebb6`，`m12-material-green` 1/1 EXIT0，真实 Material、Harness 与删除 scrub。 |
 
 ## 额外生产链覆盖

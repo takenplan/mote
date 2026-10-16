@@ -50,6 +50,8 @@ OwnerQuestions 的选择回复用现有 `{requestId,expectedRevision,action:'ans
 注册目标只能登记本人设备；设置/长期授权/发现重试只接受 owner 上下文。
 `GET /api/actions` 与模型 catalog 只返回受围栏约束的视图，不持久化状态变更；
 来源删除的擦除由同步删除 trigger 执行，不依赖 UI 再读取。
+分页 `nextCursor` 为绑定账号和筛选条件的不透明字符串；URL 必须编码并原样传回。
+初次请求可省略 cursor，兼容旧 Web/Android 的 `cursor=0` 首屏标记；非零数字不是合法游标。
 
 原生客户端 `/claim` 在 M05 issuance 与领域 intent 原子提交后首次返回 `mutationAllowed:true`；
 重复、断线、失去本地账本、重启只返回 false 并对账。`uncertain` 不等于可重发。
