@@ -1,3 +1,4 @@
+import {memoryRangeChunks} from './memory-range-chunks.js';
 import {EXECUTION_POLICIES} from './execution-policy.js';
 import {MEMORY_VISUAL_EVIDENCE_CONTRACT} from './memory-image-proof.js';
 import {memoryImageGrants,assertMemoryImageGrants,uninspectedMemoryImageTargets} from './memory-image-grants.js';
@@ -501,9 +502,7 @@ export class MemoryPipeline {
       const ranges=[...selected.map(range=>({range,target:true})),...(contextEvidenceRanges??[]).filter(range=>range.id===id).map(range=>({range,target:false}))];
       for(const {range,target} of ranges){if(range.offset+range.length>record.ocrText.length)throw new StoreError('Semantic evidence range changed',409);
         if([range.offset,range.offset+range.length].some(at=>at>0&&at<record.ocrText.length&&/[\uD800-\uDBFF]/.test(record.ocrText[at-1])&&/[\uDC00-\uDFFF]/.test(record.ocrText[at])))throw new StoreError('Memory evidence range splits a UTF-16 pair');
-        for(let offset=range.offset;offset<range.offset+range.length;){let end=Math.min(offset+budget,range.offset+range.length);
-          if((plan.strategy?plan.strategy.workContract:job.workContract)&&end<range.offset+range.length){const boundary=record.ocrText.lastIndexOf('\n',end-1);if(boundary>=offset)end=boundary+1;}
-          if(end<record.ocrText.length&&/[\uD800-\uDBFF]/.test(record.ocrText[end-1])&&/[\uDC00-\uDFFF]/.test(record.ocrText[end]))end--;
+        for(const {offset,length} of memoryRangeChunks(record.ocrText,range,budget,Boolean(plan.strategy?plan.strategy.workContract:job.workContract))){const end=offset+length;
           const reviewFingerprint=this.options.review?memoryStrategyPin(defaultMemoryReviewStrategy).fingerprint:undefined,strategy=plan.strategy;
           const materialInputFingerprints=plan.inputs.filter(pin=>pin.evidenceIds.includes(id)).map(pin=>pin.fingerprint);
           const chunk:Chunk={...(materialInputFingerprints.length?{materialInputFingerprints}:{}),id,profile:profile.id,profileVersion:profile.version,strategy,reviewFingerprint:strategy?undefined:reviewFingerprint,group:JSON.stringify([strategy??null,profile.group]),offset,length:end-offset,fingerprint,key:sha256(JSON.stringify([id,fingerprint,offset,end-offset,strategy??(profile.id==='coding'?profile.version:job.skillVersion),strategy?[job.contextTime,job.timeZone??'UTC',job.language??'zh-CN']:reviewFingerprint]))};
@@ -512,7 +511,7 @@ export class MemoryPipeline {
           if(job.artifactRefs?.length)chunk.key=sha256(JSON.stringify([chunk.key,refsByEvidence.get(id)??[]]));
           if(!authorizedKeys.has(chunk.key)){authorizedKeys.add(chunk.key);authorizedChunks.push({...chunk});}
           if(target){if(this.checkpoint(chunk))skippedChunks++;else all.push(chunk);}
-          if(all.length>10000)throw new StoreError('Memory input exceeds 10000 chunks; use smaller jobs',413);offset=end;
+          if(all.length>10000)throw new StoreError('Memory input exceeds 10000 chunks; use smaller jobs',413);
         }
       }
     }

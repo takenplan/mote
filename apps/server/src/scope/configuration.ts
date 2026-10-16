@@ -13,7 +13,7 @@ import {ScopeError,validScopeId} from './baseline.js';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {Accounts} from './accounts.js';
 import type {DomainLifecycle,LifecycleAuthority,UserDataSubject,UserExport} from './lifecycle.js';
-import {ModelResources,userModelFields,removeCredentials,type UserModelConfiguration} from './model-resources.js';
+import {ModelResources,userModelFields,removeCredentials,type UserModelConfiguration,type UserModelReference} from './model-resources.js';
 import {ModelSnapshots} from './model-snapshots.js';
 import {modelSettingsSchema} from '../model-settings.js';
 
@@ -192,11 +192,17 @@ export class Configurations {
     const items=(this.options.db.prepare('SELECT json FROM user_model_usage WHERE user_id=? ORDER BY id').all(userId) as {json:string}[]).map(r=>JSON.parse(r.json) as UsageReceipt);
     return {items,total:usageTotals(items)};
   }
-  async lease(context:UserContext,feature:ModelFeature,operationId:string):Promise<ModelLease>{
+  async lease(context:UserContext,feature:ModelFeature,operationId:string):Promise<ModelLease>{return this.leaseReference(context,feature,operationId);}
+  /** Trusted domain recipes may pin an installed scoped model reference without
+   * changing the user's feature selection. Resolve the whole fixed connection;
+   * a reference never combines its key with a caller endpoint or settings. */
+  async leaseReference(context:UserContext,feature:ModelFeature,operationId:string,selected?:UserModelReference):Promise<ModelLease>{
     this.options.authority.assert(context);if(!MODEL_FEATURES.includes(feature)||!validScopeId(operationId))throw new ConfigServiceError('config_invalid');
     const entry=await this.entry(context);this.options.authority.assert(context);
     this.assertResources();if(this.credentialsUnavailable.has(context.userId))throw new ConfigServiceError('config_unavailable');
-    const {settings,reference}=this.resources.resolve(entry.service.current('models'),feature);
+    const models=entry.service.current<UserModelConfiguration>('models');
+    const explicit=selected?z.object({kind:z.enum(['personal','shared']),id:z.string().min(1).max(256)}).strict().parse(selected):undefined;
+    const {settings,reference}=this.resources.resolve(explicit?{...models,selections:{...models.selections,[feature]:explicit}}:models,feature);
     const prices=entry.service.current<z.infer<typeof priceDomain>>('modelPrices').items;
     const credential=reference.kind==='personal'?this.credentialState(context.userId,reference.id):undefined;
     const snapshot:DurableSnapshot={version:1,deploymentId:context.deploymentId,userId:context.userId,authorizationEpoch:context.authorizationEpoch,operationId,feature,revision:entry.service.revision,instanceRevision:this.instance.revision,reference,generation:entry.generation,...(reference.kind==='shared'?{sharedGeneration:this.resources.generation(reference.id)}:{credentialGeneration:credential?.generation,credentialRecoveryGeneration:credential?.recovery_generation,credentialFingerprint:credentialsHash(settings)}),settings:clone(settings),price:clone(prices.find(p=>p.provider===settings.provider&&p.model===settings.model)),configuration:entry.service.effectiveDocument()};
@@ -231,6 +237,18 @@ export class Configurations {
     const id=snapshotId,lease=Object.freeze({id,snapshotId:id,deploymentId:context.deploymentId,userId:context.userId,operationId:snapshot.operationId,feature:snapshot.feature,revision:snapshot.revision,instanceRevision:snapshot.instanceRevision,reference:Object.freeze(snapshot.reference),provider:snapshot.settings.provider,model:snapshot.settings.model});
     this.leases.set(lease,{context,generation:snapshot.generation,sharedGeneration:snapshot.sharedGeneration,credentialGeneration:snapshot.credentialGeneration,settings:clone(snapshot.settings),price:clone(snapshot.price),configuration:clone(snapshot.configuration) as ConfigDocument});
     this.assertLease(lease);return {status:'restored',lease};
+  }
+  /** A domain operation inherits a retained immutable model connection and
+   * configuration while receiving its own durable usage identity. No current
+   * selection or caller-supplied endpoint/key is consulted as a replacement. */
+  async forkLease(context:UserContext,snapshotId:string,expectedOperationId:string,operationId:string):Promise<ModelLease>{
+    this.options.authority.assert(context);if(!validScopeId(operationId))throw new ConfigServiceError('config_invalid');
+    const restored=await this.restoreLease(context,snapshotId,expectedOperationId);this.options.authority.assert(context);
+    if(restored.status!=='restored')throw new ConfigServiceError('config_unavailable');
+    const value=this.assertLease(restored.lease),source=this.snapshots.read(context.userId,snapshotId) as DurableSnapshot;
+    if(!source||source.operationId!==expectedOperationId)throw new ConfigServiceError('config_unavailable');
+    const id=this.snapshots.save(context.userId,{...source,operationId}),lease=Object.freeze({...restored.lease,id,snapshotId:id,operationId});
+    this.leases.set(lease,{...value,context});this.assertLease(lease);return lease;
   }
   /** M05/M06/M07 hold a genuine lease, not a deserialized receipt. Logout does
    * not cancel admitted work; disable/reset/delete fences all late publications.
