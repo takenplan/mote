@@ -29,3 +29,12 @@ it('connects the real Desktop native calendar factory to current M01/M12 without
  const f=await fixture();await f.adapter(f.a).connect();
  const view=await f.ok(f.a.token,'/api/actions');expect(view.targets).toHaveLength(1);expect(view.targets[0]).toMatchObject({deviceId:'same-device',calendars:[{id:'same-calendar',title:'Generated existing calendar'}]});expect((await f.ok(f.b.token,'/api/actions')).targets).toEqual([]);expect(native.call).toHaveBeenCalledTimes(1);
 });
+
+it('does not let B inherit A native calendar consent when the device and ledger directory are reused',async()=>{
+ const f=await fixture();await f.adapter(f.a).connect();
+ f.calls.length=0;native.call.mockClear();
+ await f.adapter(f.b).deliver();
+ expect(f.calls).toEqual([]);expect(native.call).not.toHaveBeenCalled();
+ // Restarting the original account still retains its explicit connection.
+ await f.adapter(f.a).deliver();expect(f.calls.some(call=>call.path==='/api/actions/deliveries')).toBe(true);
+});
