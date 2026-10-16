@@ -481,12 +481,44 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("查询")) { load() }; load()
     }
-    private fun vault() {
-        read("/api/status")
-        ui.button(MoteI18n.text("重新建立索引"), true) { action("/api/index/retry") }
-        ui.button(MoteI18n.text("中央元数据导出")) { ui.saveCentral("/api/export-bundle?mode=metadata", "mote-central-metadata.tar.gz", "application/gzip") }
-        ui.button(MoteI18n.text("中央资料与附件导出")) { ui.saveCentral("/api/export-bundle?mode=data", "mote-central-data.tar.gz", "application/gzip") }
+    private fun vault(cursor: String? = null, previous: List<String?> = emptyList()) {
+        val api = client; val exports = CentralPortable(api)
+        val pending = ui.accountPreferences("central-portable")
+        ui.text(MoteI18n.text("个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。"))
+        ui.button(MoteI18n.text("中央资料与附件导出"), true) {
+            val id = pending.getString("operationId", null) ?: UUID.randomUUID().toString().also { check(pending.edit().putString("operationId", it).commit()) }
+            ui.work(MoteI18n.text("正在导出中央资料…"), { try { exports.start(id).also { check(pending.edit().remove("operationId").commit()) } }
+                catch (failure: CentralFailure) { if (failure.code == "archive_authorization_changed") check(pending.edit().remove("operationId").commit()); throw failure } }) { portableExport(it.getString("id")) }
+        }
         ui.button(MoteI18n.text("导入")) { ui.navigate("imports") }
+        val target = ui.card()
+        ui.work(MoteI18n.text("正在读取…"), { exports.list(cursor) }) { result ->
+            val rows = result.getJSONArray("items")
+            if (rows.length() == 0) ui.text(MoteI18n.text("暂无记录"), parent = target)
+            for (i in 0 until rows.length()) {
+                val row = rows.getJSONObject(i); val card = ui.card(target)
+                ui.text(row.getString("createdAt") + " · " + stateLabel(row.getString("state")), parent = card)
+                ui.button(MoteI18n.text("查看详情"), parent = card) { portableExport(row.getString("id")) }
+            }
+            if (previous.isNotEmpty()) ui.button(MoteI18n.text("上一页"), parent = target) { body.removeAllViews(); vault(previous.last(), previous.dropLast(1)) }
+            if (!result.isNull("nextCursor")) ui.button(MoteI18n.text("下一页"), parent = target) { body.removeAllViews(); vault(result.getString("nextCursor"), previous + cursor) }
+        }
+    }
+    private fun portableExport(id: String) {
+        body.removeAllViews(); screens.setBack { screens.refresh() }
+        val exports = CentralPortable(client)
+        ui.button(MoteI18n.text("刷新")) { portableExport(id) }
+        ui.work(MoteI18n.text("正在读取…"), { exports.read(id) }) { receipt ->
+            ui.text(stateLabel(receipt.getString("state")), NativeFontRole.SECTION)
+            val target = ui.card(); values(receipt, target)
+            if (receipt.getString("state") == "completed") ui.button(MoteI18n.text("下载"), true) { ui.savePortable(receipt) }
+            if (receipt.getString("state") == "failed") ui.button(MoteI18n.text("重试")) {
+                ui.work(MoteI18n.text("正在处理…"), { exports.control(id, "retry") }) { portableExport(id) }
+            }
+            if (receipt.getString("state") != "cancelled") ui.button(MoteI18n.text("取消")) {
+                screens.confirm(MoteI18n.text("取消"), MoteI18n.text("取消后将不能下载这份导出文件。")) { ui.work(MoteI18n.text("正在处理…"), { exports.control(id, "cancel") }) { portableExport(id) } }
+            }
+        }
     }
     private fun diagnostics() {
         ui.button(MoteI18n.text("诊断设置")) { configuration(MoteI18n.text("诊断设置"), "/api/diagnostics-settings") }

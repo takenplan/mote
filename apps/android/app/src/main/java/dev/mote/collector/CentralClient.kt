@@ -7,6 +7,8 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 
+internal data class CentralDownload(val bytes: Long, val sha256: String, val contentType: String)
+
 internal class CentralFailure(val status: Int, val code: String = "", val detail: String = "") : IllegalStateException(when {
     status == 401 && code in setOf("", "unauthorized") -> MoteI18n.text("令牌无效或已失效，请检查后重新登录。")
     status == 403 && code in setOf("", "connection_scope_denied") -> MoteI18n.text("此凭据不具备客户端权限，请升级中央节点或重新登录。")
@@ -53,7 +55,7 @@ internal class CentralClient(
             !uri.path.contains("/./") && path.none { it.code < 32 })
         return server.trimEnd('/') + path
     }
-    fun download(path: String, output: java.io.OutputStream, maxBytes: Long = Long.MAX_VALUE) {
+    fun download(path: String, output: java.io.OutputStream, maxBytes: Long = Long.MAX_VALUE, expected: CentralDownload? = null) {
         checkActive(); verify(); checkActive()
         val connection = URL(destination(path)).openConnection() as HttpURLConnection
         try {
@@ -62,15 +64,37 @@ internal class CentralClient(
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
+            if (expected != null) {
+                require(status == 200 && connection.contentType == expected.contentType && connection.getHeaderField("ETag") == "\"${expected.sha256}\"") { "Export response does not match its receipt" }
+                require(connection.getHeaderField("Content-Length")?.toLongOrNull() == expected.bytes)
+            }
+            val digest = java.security.MessageDigest.getInstance("SHA-256"); var received = 0L
             connection.inputStream.use { input ->
                 val buffer = ByteArray(65536); var total = 0L
                 while (true) {
                     checkActive(); val count = input.read(buffer); if (count < 0) break
-                    total += count; require(total <= maxBytes) { MoteI18n.text("响应超过大小限制") }; output.write(buffer, 0, count)
+                    total += count; require(total <= maxBytes) { MoteI18n.text("响应超过大小限制") }; digest.update(buffer, 0, count); received += count; output.write(buffer, 0, count)
                 }
             }
             checkActive()
+            if (expected != null) require(received == expected.bytes && digest.digest().joinToString("") { "%02x".format(it) } == expected.sha256) { "Export bytes do not match their receipt" }
         } finally { connection.disconnect() }
+    }
+    fun downloadVerified(path: String, output: java.io.OutputStream, expected: CentralDownload, directory: File) {
+        directory.mkdirs()
+        val staged = File.createTempFile("portable-", ".part", directory)
+        try {
+            staged.outputStream().use { download(path, it, expected.bytes, expected) }
+            checkActive(); verify(); checkActive()
+            staged.inputStream().use { input ->
+                val buffer = ByteArray(65536)
+                while (true) {
+                    checkActive(); val count = input.read(buffer); if (count < 0) break
+                    output.write(buffer, 0, count)
+                }
+            }
+            checkActive()
+        } finally { staged.delete() }
     }
     fun image(path: String): ByteArray {
         checkActive(); verify(); checkActive()

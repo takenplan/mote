@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。": "Personal exports contain this account’s data and registered domains, excluding login credentials, execution authority, and instance backups.",
+  "取消后将不能下载这份导出文件。": "Cancelling makes this export unavailable for download.",
+  "下载": "Download",
   "已删除": "Deleted",
   "生成 {0} 条记忆": "Created {0} memories",
   "已生成的批次": "Persisted batches",

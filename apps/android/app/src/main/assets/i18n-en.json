@@ -1,4 +1,7 @@
 {
+  "个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。": "Personal exports contain this account’s data and registered domains, excluding login credentials, execution authority, and instance backups.",
+  "取消后将不能下载这份导出文件。": "Cancelling makes this export unavailable for download.",
+  "下载": "Download",
   "当前准入代次 {0}": "Current admission generation {0}",
   "内置记忆方案": "Built-in memory plan",
   "外部结果待确认 {0}": "External results awaiting confirmation {0}",

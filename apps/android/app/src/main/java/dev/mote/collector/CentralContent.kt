@@ -64,6 +64,8 @@ internal class CentralContent(
     private var downloadPath: String? = null
     private var downloadOrigin: String? = null
     private var downloadGeneration = -1L
+    private var downloadOwner: String? = null
+    private var downloadReceipt: String? = null
     private val refreshRun = Runnable { if (resumed) when (page) { "ask" -> screens?.pollAsk(); "activity" -> screens?.pollWorkActivity() } }
 
     private val refreshLogin = object : Runnable {
@@ -97,6 +99,7 @@ internal class CentralContent(
         pickerInstruction = state?.getString("pickerInstruction").orEmpty()
         downloadPath = state?.getString("downloadPath"); downloadOrigin = state?.getString("downloadOrigin")
         downloadGeneration = state?.getLong("downloadGeneration") ?: -1L
+        downloadOwner = state?.getString("downloadOwner"); downloadReceipt = state?.getString("downloadReceipt")
         val shell = NativeAppShell(activity)
         root = shell
         val compactHeader = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
@@ -200,6 +203,7 @@ internal class CentralContent(
         state.putLong("pickerGeneration", pickerGeneration); state.putString("downloadPath", downloadPath)
         state.putString("pickerInstruction", pickerInstruction)
         state.putString("downloadOrigin", downloadOrigin); state.putLong("downloadGeneration", downloadGeneration)
+        state.putString("downloadOwner", downloadOwner); state.putString("downloadReceipt", downloadReceipt)
         state.putString("workActivityOrigin", server)
         state.putBundle("workActivity", Bundle().also { screens?.saveWorkState(it) })
     }
@@ -457,8 +461,13 @@ internal class CentralContent(
     }
     internal fun saveCentral(path: String, name: String, mime: String) {
         downloadPath = path; downloadOrigin = server; downloadGeneration = accessGeneration
+        downloadOwner = accountOwnerKey(); downloadReceipt = null
         @Suppress("DEPRECATION") activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
             .setType(mime).putExtra(Intent.EXTRA_TITLE, name), 72)
+    }
+    internal fun savePortable(receipt: org.json.JSONObject) {
+        saveCentral(CentralPortable.PATH + "/" + receipt.getString("id") + "/content", receipt.getString("filename"), "application/json")
+        downloadReceipt = receipt.toString()
     }
     internal fun pickImport() {
         pickerOrigin = server; pickerGeneration = accessGeneration
@@ -471,12 +480,16 @@ internal class CentralContent(
         if (!accessReady) { pendingResult = Triple(request, result, data); if (!resumed) resume(); return }
         if (request == 72) {
             val uri = data.data ?: return; val path = downloadPath ?: return
-            val origin = downloadOrigin; val generation = downloadGeneration; downloadPath = null
+            val origin = downloadOrigin; val generation = downloadGeneration; val owner = downloadOwner
+            val receipt = downloadReceipt; downloadPath = null; downloadReceipt = null; downloadOwner = null
             work(MoteI18n.text("正在导出中央资料…"), {
                 val selected = CentralAccess.resolve(this)
-                check(selected.server == origin && session.generation == generation) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
+                check(selected.server == origin && session.generation == generation && accountOwnerKey() == owner) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
                 val api = requireNotNull(selected.client)
-                requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { api.download(path, it) }
+                requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { output ->
+                    if (receipt == null) api.download(path, output)
+                    else CentralPortable(api).save(org.json.JSONObject(receipt), File(accountDirectory(), "central-native/downloads"), output)
+                }
             }) { notice(MoteI18n.text("资料已导出")) }; return
         }
         if (request !in setOf(71, 73)) return
