@@ -73,6 +73,21 @@ test('real Harness proposes only owner evidence and interleaved OwnerQuestions a
  for(const request of f.requests){assert.ok(!request.raw.includes(request.owner==='A'?'GENERATED_B_PRIVATE':'GENERATED_A_PRIVATE'));assert.ok(!JSON.stringify(request.body.tools).includes('calendar_create'));}
 });
 
+test('actual calendar production adapter reconciles a lost local ledger and duplicate receipt without another mutation',async t=>{
+ const f=await modelFixture(t);await f.ingest(f.a,'A');await f.enable(f.a);
+ const {CalendarActions}=await import('../../desktop/src/calendar-actions.js'),ledger=new Map<string,string>(),external=new Map<string,string>();let mutations=0;
+ const adapter=()=>new CalendarActions({deviceId:'same-device',deviceName:'Generated A'},{request:(path,body)=>f.ok(f.a.token,path,body?'POST':'GET',body),read:async key=>ledger.get(key),write:async(key,value)=>{ledger.set(key,value);},native:async(command,input:any)=>{if(command==='calendar-permission')return {permission:'granted',calendars:[{id:'same-calendar',title:'Generated A',writable:true}]};assert.equal(command,'calendar-create');if(external.has(input.id))return {externalId:external.get(input.id)};if(!input.createAllowed)throw Error('Unknown outcome: reconcile only');mutations++;const id='generated-native-event';external.set(input.id,id);return {externalId:id};}});
+ await adapter().connect();const proposal=(await f.proposal(f.a)).items[0],target={deviceId:'same-device',calendarId:'same-calendar'},approved=await f.ok(f.a.token,'/api/actions/'+proposal.id+'/confirm','POST',{version:proposal.version,event:proposal.event,target});
+ assert.equal((await f.request(f.b.token,'/api/actions/'+proposal.id+'/claim','POST',{deviceId:'same-device'})).statusCode,404);
+ const claim=await f.request(f.a.token,'/api/actions/'+proposal.id+'/claim','POST',{deviceId:'same-device'});assert.equal(claim.statusCode,200,claim.body);assert.equal(claim.json().mutationAllowed,true);
+ external.set(proposal.id,'generated-native-event');mutations++;ledger.clear();
+ const repeated=await f.ok(f.a.token,'/api/actions/'+proposal.id+'/claim','POST',{deviceId:'same-device'});assert.equal(repeated.mutationAllowed,false);
+ assert.equal((await f.request(f.a.token,'/api/actions/'+proposal.id+'/receipt','POST',{deviceId:'same-device',operationId:randomUUID(),status:'succeeded',externalId:'generated-native-event'})).statusCode,403);
+ await adapter().execute(proposal.id);assert.equal(mutations,1);
+ const completed=(await f.ok(f.a.token,'/api/actions')).items[0];assert.equal(completed.status,'succeeded');assert.equal(completed.operationId,approved.operationId);
+ await f.restart();await adapter().execute(proposal.id);assert.equal(mutations,1);
+});
+
 test('actual Actions settings and equal device/calendar targets are owner bound and grants stay separate',async t=>{
  const f=await fixture(t);
  const before=await f.request(f.a.token,'/api/actions');assert.equal(before.statusCode,200,before.body);
