@@ -166,7 +166,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun back(): Boolean = detailBack?.let { detailBack = null; it(); true } ?: false
     fun setBack(action: () -> Unit) { ui.enterDetail(); detailBack = action; question = null; messages = null; close() }
     fun clearBack() { detailBack = null }
-    fun resume() { if (currentPage in setOf("plugins", "extensions", "lark")) admin.resume(); if (currentPage == "activity") ui.scheduleActivityPoll() }
+    fun resume() { if (currentPage in setOf("plugins", "extensions", "lark")) admin.resume() else admin.resumeConnections(); if (currentPage == "activity") ui.scheduleActivityPoll() }
     fun pollWorkActivity() { if (currentPage == "activity") activity.poll() }
     fun saveWorkState(out: android.os.Bundle) = activity.saveState(out)
     fun restoreWorkState(value: android.os.Bundle) = activity.restoreState(value)

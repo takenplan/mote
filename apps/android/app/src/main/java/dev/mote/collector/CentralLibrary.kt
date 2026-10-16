@@ -263,7 +263,19 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("处理设置")) { CentralAdmin(screens).fileSettings() }
     }
-    private fun file(id: String, offset: Int = 0) {
+    fun playFile(id: String, target: LinearLayout) {
+        val api = client; val navigation = ui.navigationRevision
+        fun active() = screens.ownsSelectedAccount() && ui.client === api && navigation == ui.navigationRevision
+        ui.work(MoteI18n.text("正在读取文件…"), {
+            val row = api.get("/api/files/" + enc(id)); check(row.getBoolean("hasOriginal"))
+            val mime = row.getJSONObject("item").getString("mimeType"); require(mime.startsWith("audio/"))
+            val original = row.getString("originalRef"); require(Regex("original:[a-f0-9]{64}").matches(original))
+            val path = "/api/ingress/originals/" + original.removePrefix("original:")
+            val ticket = api.post(path + "/tickets", JSONObject().put("mode", "play"))
+            (path + "/content?ticket=" + enc(ticket.getString("ticket"))) to CentralDownload(row.getLong("sizeBytes"), row.getString("sha256"), mime, false)
+        }) { (path, expected) -> if (active()) screens.playAudio(path, target, expected) }
+    }
+    fun file(id: String, offset: Int = 0) {
         val api = client
         ui.work(MoteI18n.text("正在读取文件…"), { api.get("/api/files/" + enc(id)) to api.get("/api/files/" + enc(id) + "/chunks?offset=$offset") }) { (row, chunks) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }

@@ -54,14 +54,16 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private val library = CentralLibrary(screens)
     private val plugins = CentralPlugins(screens) { extensions() }
     private var connectorPage: CentralConnectors? = null
+    private var recordingPage: CentralRecordings? = null
     private var larkConnection: CentralLarkConnection? = null
     private var larkChoices = emptyList<JSONObject>()
     private var larkCalendarMode = false
     private val larkHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val larkPoll = Runnable { lark() }
-    fun close() { plugins.close(); connectorPage?.close(); larkHandler.removeCallbacks(larkPoll) }
-    fun clearPrivateState() { plugins.clearPrivateState(); connectorPage?.close(); connectorPage = null; larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
-    fun resume() { plugins.resume(); connectorPage?.resume(); if (larkConnection != null) lark() }
+    fun close() { plugins.close(); connectorPage?.close(); recordingPage?.close(); larkHandler.removeCallbacks(larkPoll) }
+    fun clearPrivateState() { plugins.clearPrivateState(); connectorPage?.close(); connectorPage = null; recordingPage?.close(); recordingPage = null; larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
+    fun resume() { plugins.resume(); connectorPage?.resume(); recordingPage?.resume(); if (larkConnection != null) lark() }
+    fun resumeConnections() { connectorPage?.resume(); recordingPage?.resume() }
 
     fun show(page: String) {
         if (page != "lark") { larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
@@ -628,7 +630,8 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     fun connectors() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        connectorPage?.close(); connectorPage = CentralConnectors(screens) { value, target -> values(value, target) }.also { it.show() }
+        connectorPage?.close(); recordingPage?.close(); recordingPage = null
+        connectorPage = CentralConnectors(screens, { value, target -> values(value, target) }) { provider -> if (provider == "lark") ui.navigate("lark") else recordings() }.also { it.show() }
         ui.button(MoteI18n.text("录音归档")) { recordings() }
         read("/api/connectors")
         ui.button(MoteI18n.text("飞书")) { ui.navigate("lark") }
@@ -878,40 +881,9 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun recordings() {
-        val api = client
-        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/status") }) { registry ->
-            body.removeAllViews(); screens.setBack { screens.refresh() }
-            for (key in registry.keys()) {
-                val value = registry.optJSONObject(key) ?: continue
-                if (value.optString("category") != "recordings") continue
-                val provider = value.getString("provider"); require(Regex("^[a-z][a-z0-9-]{0,79}$").matches(provider))
-                val path = "/api/connectors/$provider-recordings"; val card = ui.card()
-                ui.text(value.optString("label", provider), NativeFontRole.SECTION, card); values(value, card)
-                val empty = value.optJSONObject("counts")?.optInt("empty") ?: 0
-                if (empty > 0) ui.text(MoteI18n.text("采集完成，暂无文字：{0} 条", empty), parent = card)
-                ui.button(MoteI18n.text("同步步骤与状态"), parent = card) { recordingSteps(path) }
-                ui.button(MoteI18n.text("连接已授权账号"), true, parent = card) { action(path + "/connect") { recordings() } }
-                ui.button(MoteI18n.text("同步范围"), parent = card) {
-                    val selection = JSONObject(value.getJSONObject("selection").toString()).put("backupAudio", true)
-                    edit(MoteI18n.text("同步范围"), path + "/selection", selection)
-                }
-                ui.button(MoteI18n.text("立即同步"), true, parent = card) { action(path + "/sync") { recordings() } }
-                ui.button(MoteI18n.text("重试失败步骤"), parent = card) { action(path + "/retry") { recordings() } }
-                ui.button(MoteI18n.text("断开连接"), parent = card) { ui.work(MoteI18n.text("正在处理…"), { api.delete(path) }) { recordings() } }
-                ui.button(MoteI18n.text("最近归档的录音"), parent = card) {
-                    library.paged(path + "/items?includeExports=true", card) { item, child ->
-                        val captureId = item.optString("captureId").takeIf { it.isNotEmpty() && it != "null" }
-                        if (captureId != null) ui.button(item.optString("title"), parent = child) { library.captureEvidence(captureId) }
-                        else ui.text(item.optString("title"), parent = child)
-                        if (item.optBoolean("empty")) ui.text(MoteI18n.text("采集完成，暂无文字"), parent = child)
-                        if (item.optBoolean("unsupported")) ui.text(MoteI18n.text("厂商转写格式尚不支持"), parent = child)
-                        item.optJSONObject("audio")?.let { audio -> ui.button(MoteI18n.text("播放录音"), parent = child) {
-                            screens.playAudio("/api/archived-files/" + enc(audio.getString("id")) + "/content", child)
-                        } }
-                    }
-                }
-            }
-        }
+        body.removeAllViews(); screens.setBack { screens.refresh() }
+        connectorPage?.close(); connectorPage = null
+        recordingPage?.close(); recordingPage = CentralRecordings(screens).also { it.show() }
     }
     private fun imports() {
         val api = client

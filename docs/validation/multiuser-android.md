@@ -695,3 +695,36 @@ and transcript/search call counts do not change, audio saves successfully,
 default empty retry still resets without provider I/O, and the earlier owner/
 cursor/range/revocation controls remain. No native or broad-gate acceptance is
 inferred from this additional producer test.
+
+### Native browser purpose and recording entry: actual RED checkpoint
+
+Test-only `512883a0` was compiled with offline fixture AndroidTest assembly:
+`/tmp/m15-browser-recording-testapk-build.log/.exit`, EXIT0, 6 seconds,
+49 tasks with 6 executed. The earlier existing-APK inventory action was rejected
+before CreateProcess because the recorded Container heavy window was active;
+no workaround was attempted. Container then explicitly released after its
+actual successful required gate. The same original action was reviewed once
+under that new resource fact and executed successfully: native inventory 1/1,
+0.5 seconds, `/tmp/m15-recording-original-device-precondition.log/.exit`.
+Only `emulator-5562` and the generated M15 fixture package were used.
+
+With the preserved pre-browser production fixture APK, the exact new browser
+journey reached real M01 approval/poll/ACK but returned a device grant and a null
+native private client: valid RED 1/1, 0.964 seconds, EXIT1,
+`/tmp/m15-browser-original-native-valid-red.log/.exit`. The generated browser URL
+was intercepted by instrumentation; no real browser account was used. This is
+independent native evidence for the already narrow-green server/Web purpose
+repair, not yet native GREEN.
+
+The original native recording navigation reached its existing settings card
+but could not render “connect authorized account” because it still read the
+retired global connector status. Valid RED 1/1, 0.721 seconds, EXIT1,
+`/tmp/m15-recording-native-valid-red.log/.exit`. The new regression retains
+connection, explicit range, vendor text, audio-failure status, failed-stage
+background retry without repeated text, and detached old-A command rejection
+after B resumes. Its native production adapter is currently uncompiled WIP.
+The current-selection checkpoint reader does not replace archive history:
+the native archive list must use current canonical Files by exact mapped source,
+and all playback uses authenticated original tickets and exact descriptor checks.
+Full latest Android, native GREEN, server/Web types, review and affected gates
+remain pending. Earlier 353/353 at runtime48a is retained only at that SHA.

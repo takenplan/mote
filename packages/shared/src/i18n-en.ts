@@ -8455,5 +8455,6 @@ export const english: Readonly<Record<string, string>> = {
   "正文已索引": "Content indexed",
   "定位信息": "Evidence location",
   "日历选择已保存。": "Calendar selection saved.",
-  "读取日历列表": "Read calendar list"
+  "读取日历列表": "Read calendar list",
+  "以下检查点属于当前同步范围；历史原件仍可在资料库查看。": "These checkpoints belong to the current sync range. Historical originals remain available in the library."
 };
