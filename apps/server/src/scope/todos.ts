@@ -1,7 +1,8 @@
-import {randomBytes,randomUUID} from 'node:crypto';
+import {randomUUID} from 'node:crypto';
 import type {DatabaseSync} from 'node:sqlite';
+import {installTodos,todosDeleted} from './todo-schema.js';
 import {z} from 'zod';
-import {todoInput,todoFields,archivedTodoSchema,type Todo} from '../todos.js';
+import {todoInput,todoFields,archivedTodoSchema,type Todo} from '../todo-contract.js';
 import {askHash} from './ask-schema.js';
 import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
 import {AskEvidence} from './ask-evidence.js';
@@ -17,15 +18,10 @@ const updateSchema=z.object({version:z.number().int().positive(),title:todoField
 export class ScopedTodos{
  private readonly cursorKey:string;
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync){
-  db.exec(`CREATE TABLE IF NOT EXISTS td_meta(id INTEGER PRIMARY KEY CHECK(id=1),cursor_key TEXT NOT NULL);
-   CREATE TABLE IF NOT EXISTS td_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0);
-   CREATE TABLE IF NOT EXISTS td_todos(user_id TEXT NOT NULL,id TEXT NOT NULL,created_at TEXT NOT NULL,status TEXT NOT NULL,version INTEGER NOT NULL,request_hash TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,id));
-   CREATE INDEX IF NOT EXISTS td_page ON td_todos(user_id,status,created_at DESC,id DESC);
-   CREATE TABLE IF NOT EXISTS td_restore(user_id TEXT NOT NULL,id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,id));`);
-  db.prepare('INSERT OR IGNORE INTO td_meta VALUES(1,?)').run(randomBytes(32).toString('hex'));this.cursorKey=String(db.prepare('SELECT cursor_key FROM td_meta').get()!.cursor_key);
+  this.cursorKey=installTodos(db);
   runtime.services.registerUser(TODOS_DOMAIN,{scope:'user',create:context=>this.forUser(context),lifecycle:this.lifecycle()});
  }
- private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>{this.runtime.authority.assert(context);if(this.db.prepare('SELECT deleted FROM td_state WHERE user_id=?').get(context.userId)?.deleted)throw new PrivateDataError('scope_unavailable',503);});}
+ private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>{this.runtime.authority.assert(context);if(todosDeleted(this.db,context.userId))throw new PrivateDataError('scope_unavailable',503);});}
  forUser(context:UserContext){const sql=this.sql(context),codec=new PrivateCursor(this.cursorKey,context.deploymentId,context.userId),get=(id:string):Todo=>{const row=sql.get('SELECT json FROM td_todos WHERE user_id=$user AND id=?',id);if(!row)throw missing();return JSON.parse(String(row.json));},evidence=(ids:string[])=>{if(new Set(ids).size!==ids.length)throw new PrivateDataError('invalid_data');const reader=new AskEvidence(sql,this.runtime.services.forUser(context).get<PrivateData>('private-data'),codec,{assertCurrent:()=>this.runtime.authority.assert(context)});reader.evidence(ids);};
   return Object.freeze({get,create:(raw:unknown)=>sql.transaction(()=>{const input=todoInput.parse(raw),id=input.id??randomUUID(),hash=askHash(input),old=sql.get('SELECT request_hash FROM td_todos WHERE user_id=$user AND id=?',id);if(old){if(old.request_hash!==hash)throw new PrivateDataError('conflict',409);return get(id);}evidence(input.evidenceIds);const at=new Date().toISOString(),task:Todo={...input,id,status:'open',version:1,createdAt:at,updatedAt:at};sql.run('INSERT INTO td_todos VALUES($user,?,?,?,?,?,?)',id,at,task.status,1,hash,JSON.stringify(task));return task;}),
    update:(id:string,raw:unknown)=>sql.transaction(()=>{const input=updateSchema.parse(raw),prior=get(id);if(prior.version!==input.version)throw new PrivateDataError('conflict',409);if(input.evidenceIds)evidence(input.evidenceIds);const task={...prior,...input,version:prior.version+1,updatedAt:new Date().toISOString()};if(!sql.run('UPDATE td_todos SET json=?,version=?,status=? WHERE user_id=$user AND id=? AND version=?',JSON.stringify(task),task.version,task.status,id,input.version).changes)throw new PrivateDataError('conflict',409);return task;}),
