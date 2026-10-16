@@ -64,6 +64,10 @@ internal class CentralClient(
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
+            require(status == 200) { "Whole download requires a complete response" }
+            val declaredBytes = connection.getHeaderField("Content-Length")?.let { value ->
+                requireNotNull(value.toLongOrNull()).also { require(it >= 0 && it <= maxBytes) }
+            }
             if (expected != null) {
                 require(status == 200 && connection.contentType == expected.contentType && connection.getHeaderField("ETag") == "\"${expected.sha256}\"") { "Export response does not match its receipt" }
                 require(connection.getHeaderField("Content-Length")?.toLongOrNull() == expected.bytes)
@@ -77,6 +81,7 @@ internal class CentralClient(
                 }
             }
             checkActive()
+            if (declaredBytes != null) require(received == declaredBytes) { "Incomplete download response" }
             if (expected != null) require(received == expected.bytes && digest.digest().joinToString("") { "%02x".format(it) } == expected.sha256) { "Export bytes do not match their receipt" }
         } finally { connection.disconnect() }
     }

@@ -72,6 +72,37 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun actualNativePortableImportUsesTheChosenArchiveAndOriginalOwnerReceipt() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val defaults=api.get("/api/configuration").toString();val note=QuickNotes.save(app,"Generated portable import original "+java.util.UUID.randomUUID(),"");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        val portable=CentralPortable(api);val export=portable.start(java.util.UUID.randomUUID().toString());var receipt=export
+        waitFor {receipt=portable.read(export.getString("id"));receipt.getString("state")=="completed"}
+        val file=File(app.filesDir,"generated-file-sync/native-portable.json").apply {parentFile!!.mkdirs()};portable.save(receipt,app.cacheDir) {file.outputStream()}
+        val uri=android.provider.DocumentsContract.buildDocumentUri(app.packageName+".file-fixtures","native-portable.json")
+        val instrumentation=InstrumentationRegistry.getInstrumentation();var monitor:android.app.Instrumentation.ActivityMonitor?=null
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try {
+            androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","imports")).use {scenario->
+                fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+                fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+                ready()
+                scenario.onActivity {activity->assertTrue("The native import page must offer the frozen same-account portable import",views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="导入个人归档"&&it.isEnabled})}
+                monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("application/json")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(uri)),true)
+                click("导入个人归档");ready();assertEquals(1,monitor!!.hits)
+                var imported:JSONObject?=null;waitFor {val items=api.get("/api/portable/imports?limit=20").getJSONArray("items");imported=(0 until items.length()).map {items.getJSONObject(it)}.firstOrNull {it.getString("state")=="completed"};imported!=null}
+                click("刷新");ready()
+                scenario.onActivity {activity->assertTrue(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="已完成"})}
+                assertEquals(defaults,api.get("/api/configuration").toString());assertEquals(200,get(app,"a","/api/captures/$note").first)
+                assertEquals(409,assertThrows(CentralFailure::class.java){api.post("/api/portable/imports/"+imported!!.getString("id")+"/cancel")}.status)
+                login(app,"b");scenario.onActivity {it.navigate("imports")};ready()
+                scenario.onActivity {activity->CentralActivity::class.java.getDeclaredMethod("onActivityResult",Int::class.javaPrimitiveType,Int::class.javaPrimitiveType,android.content.Intent::class.java).apply {isAccessible=true}.invoke(activity,74,android.app.Activity.RESULT_OK,android.content.Intent().setData(uri))};ready()
+                assertEquals(0,CentralAccess.requireClient(app).get("/api/portable/imports?limit=20").getJSONArray("items").length())
+                assertEquals(404,assertThrows(CentralFailure::class.java){CentralAccess.requireClient(app).get("/api/portable/imports/"+imported!!.getString("id"))}.status)
+            }
+        } finally {monitor?.let(instrumentation::removeMonitor);file.delete()}
+    }
+
     @Test fun failedGenericSupportDownloadPreservesTheSelectedExistingDocument() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
@@ -180,6 +211,29 @@ class MultiuserWorkerInstrumentedTest {
             fun memory(view:JSONObject):JSONObject {val values=view.getJSONArray("domains");return (0 until values.length()).map {values.getJSONObject(it)}.single {it.getString("id")=="memory"}.getJSONObject("saved")}
             val refs=memory(api.get("/api/configuration")).getJSONArray("recipes");assertEquals(1,refs.length());assertEquals(recipe.getString("id"),refs.getJSONObject(0).getString("id"));assertEquals(recipe.getString("version"),refs.getJSONObject(0).getString("version"))
             assertEquals(memory(bBefore).toString(),memory(bApi.get("/api/configuration")).toString())
+        }
+    }
+
+    @Test fun actualNativeMemoryExtractionSelectsPinnedCanonicalMaterialsUnderItsOwner() {
+        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val bApi=CentralClient(endpoint(),token("b"));val before=api.get("/api/memory/jobs").getJSONArray("items");val oldIds=(0 until before.length()).map {before.getJSONObject(it).getString("id")}.toSet()
+        val bBefore=bApi.get("/api/memory/jobs").getJSONArray("items").length();val material=fixture().getJSONObject("published").getJSONObject("a")
+        val defaults=api.get("/api/configuration").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use {scenario->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("提取记忆");ready();click("开始提取");ready()
+            scenario.onActivity {activity->val fields=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>();val selected=fields.firstOrNull {it.tag=="material:"+material.getString("materialId")+"@"+material.getString("revision")};assertNotNull("Manual extraction must offer the selected canonical Material revision instead of the old global start route",selected);selected!!.isChecked=true}
+            api.post("/api/test/m15/memory-admissions")
+            click("提交所选资料");ready();scenario.recreate();ready();click("提取记忆");ready();click("重试同一请求");ready()
+            val sent=api.get("/api/test/m15/memory-admissions").getJSONArray("items");assertEquals(2,sent.length());assertEquals(sent.getJSONObject(0).toString(),sent.getJSONObject(1).toString())
+            val request=sent.getJSONObject(0);assertEquals(1,request.getJSONArray("materialIds").length());assertEquals(material.getString("materialId"),request.getJSONArray("materialIds").getString(0));assertEquals(material.getString("revision"),request.getJSONObject("materialRevisions").getString(material.getString("materialId")))
+            val page=api.get("/api/memory/jobs").getJSONArray("items");val admitted=(0 until page.length()).map {page.getJSONObject(it)}.single {it.getString("id") !in oldIds}
+            assertEquals(request.getString("operationId"),admitted.getString("id"));assertTrue(admitted.getJSONObject("tasks").length()>0)
+            assertEquals(bBefore,bApi.get("/api/memory/jobs").getJSONArray("items").length());assertEquals(defaults,api.get("/api/configuration").toString())
+            assertEquals(404,assertThrows(CentralFailure::class.java){bApi.get("/api/memory/jobs/"+admitted.getString("id"))}.status)
         }
     }
 

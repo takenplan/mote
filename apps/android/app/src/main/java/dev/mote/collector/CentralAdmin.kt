@@ -283,10 +283,81 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     fun memoryJobs() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        ui.button(MoteI18n.text("开始提取"), true) { action("/api/memory-jobs") { run("/api/memory-jobs", it.getString("id")) } }
+        val api = client
+        ui.button(MoteI18n.text("开始提取"), true) { memorySelection() }
+        val pending = ui.card()
+        ui.work(MoteI18n.text("正在读取…"), { screens.pendingMemoryAdmission() }) { intent ->
+            if (intent != null) memoryAdmissionRetry(api, pending)
+        }
         library.paged("/api/memory/jobs", ui.card()) { row, card ->
             ui.text(CentralMemoryJobPresentation.status(row), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { run("/api/memory/jobs", row.getString("id")) }
+        }
+    }
+    private fun memoryAdmissionRetry(api: CentralClient, target: LinearLayout) {
+        ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"), parent = target)
+        ui.button(MoteI18n.text("重试同一请求"), parent = target) {
+            ui.work(MoteI18n.text("正在保存…"), { screens.retryMemoryAdmission(api) }) { run("/api/memory/jobs", it.getString("id")) }
+        }
+        ui.button(MoteI18n.text("清除本机待确认请求"), parent = target) {
+            screens.confirm(MoteI18n.text("清除本机待确认请求"), MoteI18n.text("这只清除本机待确认请求，已在中央接收的任务仍会继续。")) {
+                ui.work(MoteI18n.text("正在保存…"), { screens.discardMemoryAdmission() }) { memoryJobs() }
+            }
+        }
+    }
+    private fun memorySelection() {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { Triple(api.get("/api/memory/recipes"), CentralModels.inventory(api), screens.pendingMemoryAdmission()) }) { (catalog, models, pending) ->
+            body.removeAllViews(); screens.setBack { memoryJobs() }
+            if (pending != null) { memoryAdmissionRetry(api, ui.card()); return@work }
+            ui.text(MoteI18n.text("仅处理所选资料的固定版本；未选配方时沿用当前记忆设置。"))
+            val recipes = mutableListOf<Pair<CheckBox, JSONObject>>()
+            val recipeItems = catalog.getJSONArray("items")
+            for (index in 0 until recipeItems.length()) {
+                val recipe = recipeItems.getJSONObject(index)
+                val choice = CheckBox(ui).apply { text = recipe.optString("name", recipe.getString("id")) + " · " + recipe.getString("version"); isEnabled = recipe.optBoolean("available", true) }
+                body.addView(choice); recipes.add(choice to JSONObject().put("id", recipe.getString("id")).put("version", recipe.getString("version")))
+            }
+            val profiles = models.getJSONArray("profiles")
+            val ids = listOf("") + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("id") }
+            val selector = Spinner(ui).apply { adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item,
+                listOf(MoteI18n.text("跟随功能默认")) + (0 until profiles.length()).map { profiles.getJSONObject(it).getString("name") }) }
+            body.addView(selector)
+            val modelId = ui.field(MoteI18n.text("模型 ID（留空跟随预设）"))
+            selector.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                    modelId.isEnabled = CentralModels.reference(ids[position])?.optString("kind") != "shared"
+                    if (!modelId.isEnabled) modelId.setText("")
+                }
+            }
+            val selected = linkedMapOf<String, String>()
+            val count = ui.text(MoteI18n.text("已选择 {0} 份资料", 0))
+            val retry = ui.card()
+            var retryShown = false
+            ui.button(MoteI18n.text("提交所选资料"), true) {
+                require(selected.isNotEmpty()) { MoteI18n.text("请选择至少一份资料。") }
+                val chosen = selected.toSortedMap(); val pins = JSONObject(); chosen.forEach { (id, revision) -> pins.put(id, revision) }
+                val request = JSONObject().put("materialIds", JSONArray(chosen.keys.toList())).put("materialRevisions", pins)
+                val refs = JSONArray(recipes.filter { it.first.isChecked }.map { it.second }); if (refs.length() > 0) request.put("recipes", refs)
+                CentralModels.reference(ids[selector.selectedItemPosition])?.let { request.put("modelReference", it) }
+                modelId.text.toString().trim().takeIf { it.isNotBlank() }?.let { request.put("modelOverride", it) }
+                if (!retryShown) { memoryAdmissionRetry(api, retry); retryShown = true }
+                ui.work(MoteI18n.text("正在保存…"), {
+                    for ((id, revision) in chosen) {
+                        val preview = api.get("/api/memory/materials/" + enc(id) + "?revision=" + enc(revision) + if (refs.length() == 0) "" else "&recipes=" + enc(refs.toString()))
+                        require(preview.getString("materialId") == id && preview.getString("revision") == revision && preview.getString("status") == "ready")
+                    }
+                    screens.submitMemory(api, request)
+                }) { run("/api/memory/jobs", it.getString("id")) }
+            }
+            library.paged("/api/materials?limit=20", ui.card()) { row, card ->
+                val id = row.getString("id"); val revision = row.getString("revision")
+                val choice = CheckBox(ui).apply {
+                    text = row.getString("title"); tag = "material:$id@$revision"; isChecked = selected[id] == revision
+                    setOnCheckedChangeListener { _, checked -> if (checked) selected[id] = revision else selected.remove(id); count.text = MoteI18n.text("已选择 {0} 份资料", selected.size) }
+                }; card.addView(choice); ui.text(revision, NativeFontRole.SUPPORT, card)
+            }
         }
     }
     fun run(path: String, id: String) {
@@ -810,6 +881,20 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun imports() {
+        val api = client
+        ui.text(MoteI18n.text("个人归档只能合并回原实例的原账号，不恢复登录授权或后台任务。"))
+        ui.button(MoteI18n.text("导入个人归档"), true) { ui.pickPortableImport() }
+        val pending = ui.card()
+        ui.work(MoteI18n.text("正在读取…"), { screens.pendingPortableImport() }) { saved ->
+            if (saved.has("manifest")) {
+                ui.text(saved.getJSONObject("manifest").getString("name"), parent = pending)
+                ui.button(MoteI18n.text("重试同一请求"), parent = pending) { ui.work(MoteI18n.text("正在导入文件…"), { screens.retryPortableImport(api) }) { portableImportDetail(it.getString("id")) } }
+                ui.button(MoteI18n.text("放弃待导入文件"), parent = pending) { screens.confirm(MoteI18n.text("放弃待导入文件"), MoteI18n.text("这只清除本机待确认请求，已在中央接收的任务仍会继续。")) {
+                    ui.work(MoteI18n.text("正在处理…"), { screens.discardPortableImport() }) { screens.refresh() }
+                } }
+            }
+        }
+        portableImportHistory(ui.card())
         val instruction = ui.field(MoteI18n.text("导入要求（可选）"), screens.importInstruction, multiline = true)
         ui.button(MoteI18n.text("选择文件导入")) { screens.importInstruction = instruction.text.toString(); ui.pickImport() }
         screens.importPending(ui.card())
@@ -818,6 +903,40 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             ui.button(MoteI18n.text("查看预览"), parent = card) { importDetail(row.getString("id")) }
         }
         read("/api/import-capabilities")
+    }
+    private fun portableImportHistory(target: LinearLayout, cursor: String? = null, previous: List<String?> = emptyList()) {
+        val portable = CentralPortable(client)
+        ui.work(MoteI18n.text("正在读取…"), { portable.listImports(cursor) }) { result ->
+            target.removeAllViews(); val items = result.getJSONArray("items")
+            for (index in 0 until items.length()) {
+                val row = items.getJSONObject(index); val card = ui.card(target)
+                ui.text(row.getString("createdAt") + " · " + portableState(row.getString("state")), parent = card)
+                ui.button(MoteI18n.text("查看详情"), parent = card) { portableImportDetail(row.getString("id")) }
+            }
+            if (previous.isNotEmpty()) ui.button(MoteI18n.text("上一页"), parent = target) { portableImportHistory(target, previous.last(), previous.dropLast(1)) }
+            if (!result.isNull("nextCursor")) ui.button(MoteI18n.text("下一页"), parent = target) { portableImportHistory(target, result.getString("nextCursor"), previous + cursor) }
+        }
+    }
+    fun portableImportDetail(id: String) {
+        body.removeAllViews(); screens.setBack { screens.refresh() }
+        val api = client; val portable = CentralPortable(api)
+        ui.button(MoteI18n.text("刷新")) { portableImportDetail(id) }
+        ui.work(MoteI18n.text("正在读取…"), {
+            val receipt = portable.readImport(id); val pending = screens.pendingPortableImport()
+            if (receipt.getString("state") == "completed" && pending.optString("requestId") == id) screens.discardPortableImport()
+            receipt to pending
+        }) { (receipt, pending) ->
+            ui.text(portableState(receipt.getString("state")), NativeFontRole.SECTION)
+            ui.disclosure(MoteI18n.text("元数据")) { values(receipt, it) }
+            if (receipt.getString("state") == "failed") {
+                if (pending.optString("requestId") == id) ui.button(MoteI18n.text("重试同一请求")) {
+                    ui.work(MoteI18n.text("正在导入文件…"), { screens.retryPortableImport(api) }) { portableImportDetail(id) }
+                } else ui.button(MoteI18n.text("重新选择同一归档重试")) { ui.pickPortableImport(id) }
+            }
+            if (receipt.getString("state") in setOf("working", "failed")) ui.button(MoteI18n.text("取消")) {
+                ui.work(MoteI18n.text("正在处理…"), { portable.cancelImport(id) }) { portableImportDetail(id) }
+            }
+        }
     }
     fun importDetail(id: String) {
         body.removeAllViews(); screens.setBack { screens.refresh() }

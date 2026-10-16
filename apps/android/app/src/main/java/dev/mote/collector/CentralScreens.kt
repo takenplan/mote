@@ -37,9 +37,32 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private val askStore = CentralStateFile(directory, "ask", cipher)
     private val noteStore = CentralNoteStore(directory, cipher)
     private val importStore = CentralImports(File(directory, "import-pending"), cipher)
+    private val portableImportStore = CentralImports(File(directory, "portable-import-pending"), cipher)
     private val attachmentStore = CentralStateFile(directory, "attachment-times", cipher)
     private val insightStore = CentralStateFile(directory, "insight-request", cipher)
     private val memoryCorrectionStore = CentralStateFile(directory, "memory-correction", cipher)
+    private val memoryAdmissionStore = CentralStateFile(directory, "memory-admission", cipher)
+    fun pendingMemoryAdmission(): JSONObject? = CentralDraftWrites.barrier { memoryAdmissionStore.read().takeIf { it.has("operationId") } }
+    fun discardMemoryAdmission() = CentralDraftWrites.barrier { memoryAdmissionStore.write(JSONObject()) }
+    fun submitMemory(api: CentralClient, request: JSONObject): JSONObject {
+        val intent = CentralDraftWrites.barrier {
+            val saved = memoryAdmissionStore.read()
+            if (saved.has("operationId")) {
+                val prior = JSONObject(saved.toString()).apply { remove("operationId") }
+                check(SourceRules.canonical(prior) == SourceRules.canonical(request)) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                saved
+            } else JSONObject(request.toString()).put("operationId", UUID.randomUUID().toString()).also(memoryAdmissionStore::write)
+        }
+        return sendMemoryAdmission(api, intent)
+    }
+    fun retryMemoryAdmission(api: CentralClient) = sendMemoryAdmission(api, requireNotNull(pendingMemoryAdmission()))
+    private fun sendMemoryAdmission(api: CentralClient, intent: JSONObject): JSONObject {
+        val id = intent.getString("operationId"); UUID.fromString(id)
+        val job = api.post("/api/memory/jobs", intent)
+        require(job.getString("id") == id); job.getJSONObject("tasks"); job.getBoolean("current")
+        CentralDraftWrites.barrier { if (memoryAdmissionStore.read().optString("operationId") == id) memoryAdmissionStore.write(JSONObject()) }
+        return job
+    }
     fun pendingMemoryCorrection(): JSONObject? = CentralDraftWrites.barrier { memoryCorrectionStore.read().takeIf { it.has("operationId") } }
     fun correctMemory(api: CentralClient, id: String, correction: JSONObject): JSONObject {
         val fields = JSONArray().apply { listOf("title", "statement", "uncertainty", "version", "validFrom", "validUntil").forEach { put(JSONArray().put(it).put(correction.opt(it))) } }
@@ -468,6 +491,16 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             importStore.send(api) { done, total -> progress.message = MoteI18n.text("正在上传附件 {0}/{1}", done, total) }
         }) { admin.importDetail(it.getString("id")) }
     }
+    fun importPortableFile(uri: Uri, operationId: String? = null) {
+        val api = client
+        ui.work(MoteI18n.text("正在导入文件…"), {
+            portableImportStore.stagePortable(ui, uri, operationId)
+            portableImportStore.sendPortable(api)
+        }) { admin.portableImportDetail(it.getString("id")) }
+    }
+    fun pendingPortableImport() = portableImportStore.pending()
+    fun retryPortableImport(api: CentralClient) = portableImportStore.sendPortable(api)
+    fun discardPortableImport() = portableImportStore.discard()
     fun importPending(target: LinearLayout) {
         ui.work(MoteI18n.text("正在读取…"), { importStore.pending() }) { saved ->
             if (saved.has("manifest")) {
