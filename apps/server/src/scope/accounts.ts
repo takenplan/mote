@@ -18,7 +18,7 @@ const SESSION=86400000; // A session cookie still has a server-side maximum life
 type Kind='web'|'client'|'mcp-read'|'mcp-write';
 type Account={user_id:string;username:string;password_salt:string;password_hash:string;administrator:number;disabled:number;authorization_epoch:number;created_at:number};
 type Credential={id:string;user_id:string;kind:Kind;account_epoch:number;expires_at:number;revoked_at:number|null;csrf_hash:string|null;metadata:string;created_at:number;parent_id:string|null};
-export type AccountSummary={userId:string;username:string;administrator:boolean;disabled:boolean;authorizationEpoch:number;createdAt:number};
+export type AccountSummary={userId:string;username:string;administrator:boolean;disabled:boolean;authorizationEpoch:number;createdAt:number;deletionId?:string};
 const summary=(a:Account):AccountSummary=>({userId:a.user_id,username:a.username,administrator:Boolean(a.administrator),disabled:Boolean(a.disabled),authorizationEpoch:a.authorization_epoch,createdAt:a.created_at});
 function derive(password:string,salt:string){return new Promise<Buffer>((resolve,reject)=>scrypt(password,salt,64,{N:32768,r:8,p:1,maxmem:64*1024*1024},(e,result)=>e?reject(e):resolve(result)));}
 async function passwordRecord(password:string){passwordSchema.parse(password);const salt=randomBytes(16).toString('hex');return {salt,hash:(await derive(password,salt)).toString('hex')};}
@@ -67,7 +67,7 @@ export class Accounts implements IdentityVerifier {
     const userId=randomUUID();this.db.prepare('INSERT INTO auth_accounts(user_id,username,password_salt,password_hash,administrator,created_at) VALUES(?,?,?,?,?,?)').run(userId,username,record.salt,record.hash,Number(administrator),this.clock());return summary(this.account(userId)!);
   }
   async createAccount(context:UserContext,authority:UserContextAuthority,input:{username:string;password:string;administrator:boolean}){authority.assertAdministrator(context);const username=usernameSchema.parse(input.username),record=await passwordRecord(input.password);return this.transaction(()=>{authority.assertAdministrator(context);return this.insertAccount(username,record,input.administrator);});}
-  listAccounts(context:UserContext,authority:UserContextAuthority){authority.assertAdministrator(context);return {items:(this.db.prepare('SELECT * FROM auth_accounts ORDER BY created_at,user_id').all() as Account[]).map(summary)};}
+  listAccounts(context:UserContext,authority:UserContextAuthority){authority.assertAdministrator(context);return {items:(this.db.prepare('SELECT * FROM auth_accounts ORDER BY created_at,user_id').all() as Account[]).map(account=>{const deletion=this.db.prepare('SELECT operation_id FROM auth_account_deletions WHERE user_id=?').get(account.user_id);return {...summary(account),...(deletion?{deletionId:String(deletion.operation_id)}:{})};})};}
   private bump(a:Account){this.db.prepare('UPDATE auth_accounts SET authorization_epoch=authorization_epoch+1 WHERE user_id=?').run(a.user_id);this.db.prepare('UPDATE auth_credentials SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(this.clock(),a.user_id);}
   disable(context:UserContext,authority:UserContextAuthority,userId:string,disabled:boolean){return this.transaction(()=>{authority.assertAdministrator(context);const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);if(a.disabled===Number(disabled))return summary(a);
     if(!disabled&&this.db.prepare('SELECT 1 FROM auth_account_deletions WHERE user_id=?').get(userId))throw new AuthError('account_deleted',409);
