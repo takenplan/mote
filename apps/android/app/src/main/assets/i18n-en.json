@@ -1,4 +1,8 @@
 {
+  "Google Calendar 连接": "Google Calendar connection",
+  "读取日历列表": "Read calendar list",
+  "日历选择已保存。": "Calendar selection saved.",
+  "请配置此连接的 Google OAuth 客户端与回调地址。": "Configure the Google OAuth client and callback URL for this connection.",
   "固定日程审批": "Fixed calendar review",
   "核对固定内容": "Review fixed details",
   "仅批准上方固定内容、证据、设备和日历；修改需要返回重新核对。": "Approve only the fixed details, evidence, device and calendar above. Go back to make changes and review again.",
