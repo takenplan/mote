@@ -208,3 +208,10 @@ it('retains state-series observations appended during a real ACK and extends onl
  await collector.upload(true);expect(queue.stats().depth).toBe(0);expect((await f.request(f.a.token,'/api/captures/'+first.id)).json().stateSeries.samples).toHaveLength(2);expect((await f.request(f.b.token,'/api/captures/'+first.id)).statusCode).toBe(404);
  await uploadCapture(f.config(f.b),{...first,stateSeries:{version:1,samples:[{at:first.capturedAt,durationMs:0}]}});expect((await f.request(f.b.token,'/api/captures/'+first.id)).json().stateSeries.samples).toHaveLength(1);
 });
+
+it('revokes the old actual document before replacing private stores or publishing the new collector',async()=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('A');let entered=false;const statuses:any[]=[];app.child.on('message',(message:any)=>{if(message.type==='diagnostics-entered')entered=true;if(message.type==='document-status'&&message.document==='A')statuses.push(message.status);});app.child.send({type:'hold-diagnostics'});
+ const switching=app.call('mote:ask',['login',{token:f.b.token}]);await vi.waitFor(()=>expect(entered).toBe(true));
+ const oldStatus=await app.documentCall('A','status').catch(error=>error),oldDraft=await app.documentCall('A','noteDraft').catch(error=>error);app.child.send({type:'release-diagnostics'});await switching;
+ expect(oldStatus).toBeInstanceOf(Error);expect(oldDraft).toBeInstanceOf(Error);expect(statuses.some(status=>status.config.account?.userId===f.b.userId)).toBe(false);await app.document('B');expect((await app.documentCall('B','status')).config.account.userId).toBe(f.b.userId);
+});
