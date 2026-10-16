@@ -17,7 +17,7 @@ import {createRequire} from 'node:module';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 const repository=fileURLToPath(new URL('../../../',import.meta.url));
 const nativeImport=createRequire(import.meta.url)('./native-backend.cjs') as (url:string)=>Promise<any>;
-import {createHash} from 'node:crypto';
+import {createHash,randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {defaultConfig} from '../src/config';
 import {testConnection} from '../src/connection';
@@ -37,7 +37,7 @@ afterEach(async()=>{for(const close of cleanup.splice(0).reverse())await close()
 async function fixture(){
  const {buildApp}=await nativeImport(pathToFileURL(resolve(repository,'apps/server/src/app.ts')).href) as typeof import('../../server/src/app');
  const directory=await mkdtemp(join(tmpdir(),'mote-m14-generated-'));cleanup.push(()=>rm(directory,{recursive:true,force:true}));
- const node=await buildApp({dataDir:join(directory,'central')});cleanup.push(()=>node.app.close());
+ let node=await buildApp({dataDir:join(directory,'central')});cleanup.push(()=>node.app.close());
  const password='Generated-desktop-only-01';await node.accounts!.initialize('generated-admin',password);
  const headers={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
  const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>node.app.inject({url,method,headers:{...headers,...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
@@ -49,7 +49,8 @@ async function fixture(){
  const calls:{url:string;authorization:string|null;body:any}[]=[];
  const fetcher=vi.fn(async(input:RequestInfo|URL,init:RequestInit={})=>{const url=new URL(String(input)),body=init.body?await new Response(init.body).text():undefined;const h=new Headers(init.headers);calls.push({url:url.pathname,authorization:h.get('authorization'),body:body?JSON.parse(body):undefined});const response=await node.app.inject({url:url.pathname+url.search,method:(init.method??'GET') as any,headers:Object.fromEntries(h),...(body?{payload:body}:{})});return new Response(response.rawPayload,{status:response.statusCode,headers:response.headers as Record<string,string>});});
  vi.stubGlobal('fetch',fetcher);
- return {directory,node,a,b,config,request,login,fetcher,calls};
+ const replaceDeployment=async()=>{await node.app.close();const db=new DatabaseSync(join(directory,'central','mote.sqlite'));try{db.prepare('UPDATE scope_meta SET deployment_id=?').run('generated-replacement-deployment');}finally{db.close();}node=await buildApp({dataDir:join(directory,'central')});};
+ return {directory,get node(){return node;},a,b,config,request,login,fetcher,calls,replaceDeployment};
 }
 it('characterizes the actual durable input/blob journal and same-owner retry before transport changes',async()=>{
  const f=await fixture(),config=f.config(f.a),path=join(f.directory,'queue');
@@ -287,4 +288,56 @@ it('shows an actual central OCR failure instead of the immutable received pendin
  await vi.waitFor(async()=>expect(['blocked','failed','stale']).toContain((await f.request(f.a.token,'/api/tasks/'+task.json().id)).json().state),{timeout:10000});
  const queue=new DurableQueue(join(f.directory,'ocr-browser'),config);await queue.initialize();expect((await captureDetail(queue,config,'central',record.id)).ocr.status).toBe('failed');const content=await readCentralContent(config,{key:record.id,source:'screen',title:'',observedAt:record.capturedAt,outcome:'received',firstReceipt:true,captureId:record.id});expect(content.readiness).toBe('failed');expect(content.processing).toBe(false);
  expect((await f.request(f.b.token,'/api/processing/originals/'+original.ref.slice(9))).statusCode).toBe(404);
+},20000);
+
+it('consumes real portable Activity through emitted main/preload, rejects A late reads after B and hands A work to the same browser account',async()=>{
+ const f=await fixture(),receipt=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});expect(receipt.statusCode,receipt.body).toBe(200);const id=receipt.json().id,workId='export:'+id;
+ await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/portable/exports/'+id)).json().state).toBe('completed'),{timeout:10000});
+ let app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('A');
+ const first=await app.documentCall('A','workActivity',[{state:'completed'}]);expect(first.items.find((work:any)=>work.id===workId)).toMatchObject({kind:'export',state:'completed',progress:{mode:'semantic',stage:'finished'},artifacts:[{id,href:'#/system/storage?export='+id}]});
+ let finish:(()=>Promise<void>)|undefined;app.intercept=async(raw)=>{const url=new URL(raw.url);if(url.pathname==='/api/work-activity'){const response=await f.node.app.inject({url:url.pathname+url.search,headers:raw.headers});expect(response.statusCode,response.body).toBe(200);const child=app.child;finish=async()=>{child.send({type:'fetch-response',id:raw.id,status:response.statusCode,headers:response.headers,body:response.rawPayload.toString('base64')});};return true;}return false;};
+ const late=app.documentCall('A','workActivity',[{state:'completed'}]).then(()=>({error:''}),error=>({error:String(error)}));await vi.waitFor(()=>expect(finish).toBeTypeOf('function'));
+ await app.call('mote:ask',['login',{token:f.b.token}]);app.intercept=undefined;await finish!();expect((await late).error).toContain('changed');
+ await app.document('B');expect((await app.documentCall('B','workActivity',[{state:'completed'}])).items).toHaveLength(0);await expect(app.documentCall('A','workActivity',[{state:'completed'}])).rejects.toThrow();
+ const profile=app.profile;await app.kill();app=await productionDesktop(f,profile);expect((await app.call('mote:get-status')).config.account.userId).toBe(f.b.userId);expect((await app.call('mote:work-activity',[{state:'completed'}])).items).toHaveLength(0);
+ const returned=await f.login('generated-a');await app.call('mote:ask',['login',{token:returned.token}]);await app.document('A-returned');let opened:string|undefined;app.child.on('message',(message:any)=>{if(message.type==='external')opened=message.url;});
+ await app.documentCall('A-returned','openWorkActivity',[workId]);expect(opened).toBeTypeOf('string');const query=new URLSearchParams(new URL(opened!).hash.split('?')[1]);expect(query.get('work')).toBe(workId);expect(opened).not.toContain(f.a.token);expect(opened).not.toContain(f.b.token);
+ const exchanged=await f.node.app.inject({url:'/api/login/exchange',method:'POST',headers:{'content-type':'application/json','x-mote-protocol-version':'2'},payload:{code:query.get('loginTicket')}});expect(exchanged.statusCode,exchanged.body).toBe(200);expect(exchanged.json().userId).toBe(f.a.userId);
+ const web=exchanged.json(),detail=await f.node.app.inject({url:'/api/work-activity/'+workId,headers:{'x-mote-protocol-version':'2',cookie:String(exchanged.headers['set-cookie']).split(';')[0],'x-mote-session-id':web.credentialId}});expect(detail.statusCode,detail.body).toBe(200);expect(detail.json().artifacts[0].id).toBe(id);
+ expect((await f.request(returned.token,'/api/portable/exports/'+id+'/cancel','POST',{})).statusCode).toBe(200);expect((await app.documentCall('A-returned','workActivity',[{state:'completed'}])).items.find((work:any)=>work.id===workId).artifacts).toEqual([]);
+},30000);
+
+it('blocks actual main Ask private body when the same URL becomes a different deployment with still-valid credentials',async()=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await f.replaceDeployment();
+ const received:string[]=[];app.intercept=async raw=>{received.push(new URL(raw.url).pathname);return false;};
+ await expect(app.call('mote:ask',['start',{id:randomUUID(),question:'Generated A private question must remain in its original deployment'}])).rejects.toThrow();
+ expect(received).not.toContain('/api/query-runs');expect(received).toContain('/api/connections/self');
+});
+
+it('blocks later actual source parts when deployment changes after the old manifest ACK and preserves the original spool',async()=>{
+ const f=await fixture(),config=f.config(f.a),sources=new LocalSourceManager(join(f.directory,'deployment-source'),config,'/generated/no-helper',true);cleanup.push(()=>sources.close());
+ const input=join(f.directory,'generated-deployment-source.txt');await writeFile(input,'Generated private source bytes retained for the original deployment');await sources.initialize();await sources.addFiles(input,{...DEFAULT_SOURCE_OPTIONS,retention:'archive',syncContinuously:false});await sources.sync(true);
+ expect(sources.pendingContent()).toHaveLength(1);const pending=sources.pendingContent()[0],replacementRequests:string[]=[];let swapped=false;
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL,init:RequestInit={})=>{const path=new URL(String(input)).pathname;if(swapped)replacementRequests.push(path);const response=await f.fetcher(input,init);if(!swapped&&init.method==='POST'&&/^\/api\/ingress\/sources\/[^/]+\/uploads$/.test(path)){expect(response.status).toBe(200);await f.replaceDeployment();swapped=true;}return response;});
+ await sources.flushPending(new AbortController().signal).catch(()=>{});expect(swapped).toBe(true);expect(replacementRequests.some(path=>path.includes('/parts/')||path.endsWith('/commit'))).toBe(false);expect(replacementRequests).toContain('/api/connections/self');expect(sources.pendingContent()).toHaveLength(1);expect(sources.pendingContent()[0]).toEqual(pending);
+});
+
+it('blocks actual capture bytes when deployment changes between source registration and capture admission',async()=>{
+ const f=await fixture(),config=f.config(f.a),replacementRequests:string[]=[];let swapped=false;
+ vi.stubGlobal('fetch',async(input:RequestInfo|URL,init:RequestInit={})=>{const path=new URL(String(input)).pathname;if(swapped)replacementRequests.push(path);const response=await f.fetcher(input,init);if(!swapped&&init.method==='POST'&&path==='/api/ingress/sources'){expect(response.status).toBe(200);await f.replaceDeployment();swapped=true;}return response;});
+ await uploadCapture(config,event(),image).catch(()=>{});expect(swapped).toBe(true);expect(replacementRequests.some(path=>path.endsWith('/captures'))).toBe(false);expect(replacementRequests).toContain('/api/connections/self');expect((await f.request(f.a.token,'/api/captures')).json().items).toHaveLength(0);
+});
+
+it('preserves the declared context reader through actual main/preload handoff for canonical M07/M08 evidence absent from raw captures',async()=>{
+ const f=await fixture(),sourceId='generated-ask-context',externalId='same-original';let ref='';
+ for(const [owner,body] of [[f.a,'Generated A canonical context body'],[f.b,'Generated B canonical context body']] as const){
+  expect((await f.request(owner.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated',kind:'local-files',deviceId:'same-device',platform:'import',retention:'archive'})).statusCode).toBe(200);
+  const raw=await f.request(owner.token,'/api/ingress/sources/'+sourceId+'/items','POST',{batchId:'same-batch',items:[{externalId,revision:'same-revision',observedAt:'2026-01-01T00:00:00Z',title:'Generated',text:body,kind:'file',layer:'snapshot'}]});expect(raw.statusCode,raw.body).toBe(200);
+  const producer=f.node.ingress.bindSource(await f.node.authority.authenticate(owner.token),[sourceId],()=>{}),material=producer.publishMaterial({id:'mat_'+createHash('sha256').update(JSON.stringify([sourceId,externalId])).digest('hex'),kind:'document',schemaVersion:1,title:'Generated canonical evidence',origin:{sourceId,externalId},members:[{id:'source',kind:'capture',ref:'capture:'+raw.json().captures[0].id}],blocks:[{id:'body',kind:'text',format:'plain',text:body,memberIds:['source']}],coverage:{state:'complete'},artifacts:[{key:'extraction',state:'ready'}],fidelity:{state:'lossless',limitations:[]},retention:{original:'retained',policy:'keep'}});
+  const preview=await f.request(owner.token,'/api/memory/materials/'+material.id+'?revision='+material.revision);expect(preview.statusCode,preview.body).toBe(200);expect(preview.json().status).toBe('ready');if(owner===f.a)ref='capture:'+preview.json().evidenceIds[0];
+ }
+ expect((await f.request(f.a.token,'/api/captures/'+ref.slice(8))).statusCode).toBe(404);const read=await f.request(f.a.token,'/api/context/read','POST',{refs:[ref]});expect(read.statusCode,read.body).toBe(200);expect(read.body).toContain('Generated A canonical context body');expect(read.body).not.toContain('Generated B canonical context body');expect((await f.request(f.b.token,'/api/context/read','POST',{refs:[ref]})).statusCode).toBe(404);
+ const app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('context-A');let opened:string|undefined;app.child.on('message',(message:any)=>{if(message.type==='external')opened=message.url;});
+ await app.documentCall('context-A','openCentral',['ask','context:'+ref]);expect(new URLSearchParams(new URL(opened!).hash.split('?')[1]).get('evidence')).toBe('context:'+ref);
+ const {readEvidenceRoute}=await nativeImport(pathToFileURL(resolve(repository,'apps/web/src/evidence-route.ts')).href);expect(readEvidenceRoute(new URL(opened!).hash)).toBe('context:'+ref);
 },20000);

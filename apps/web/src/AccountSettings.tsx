@@ -5,8 +5,9 @@ import {isWebConnection,type Api,errorMessage,dateTime} from './api';
 import {useResource} from './useResource';
 import {resources} from './resource-cache';
 import {changeWebAuthentication} from './web-auth';
+import {AccountDeletion} from './AccountDeletion';
 
-type Account={userId:string;username:string;administrator:boolean;disabled:boolean;createdAt:number};
+type Account={userId:string;username:string;administrator:boolean;disabled:boolean;createdAt:number;deletionId?:string};
 export function AccountSettings({api,disconnect,onLogin}:{api:Api;disconnect:()=>void;onLogin:()=>void}){
  const connection=api.connection;
  const [currentPassword,setCurrentPassword]=useState(''),[password,setPassword]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false);
@@ -22,7 +23,8 @@ export function AccountSettings({api,disconnect,onLogin}:{api:Api;disconnect:()=
   </form></details>
  </section>{connection.administrator&&<><AccountAdministration api={api}/><details className="panel panel-pad"><summary>{moteText('共享模型资源')}</summary><ScopedConfiguration api={api} administrator/></details></>}</>;
 }
-export function AccountAdministration({api}:{api:Api}){
+export function AccountAdministration({api}:{api:Api}){return <OwnedAccountAdministration key={JSON.stringify(api.connection)} api={api}/>;}
+function OwnedAccountAdministration({api}:{api:Api}){
  const accounts=useResource<{items:Account[]}>(api,'/api/admin/accounts');
  const [username,setUsername]=useState(''),[password,setPassword]=useState(''),[administrator,setAdministrator]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState(''),[target,setTarget]=useState<Account>();
  const [replacement,setReplacement]=useState('');
@@ -34,7 +36,7 @@ export function AccountAdministration({api}:{api:Api}){
    <label>{moteText('初始密码')}<input type="password" autoComplete="new-password" minLength={12} value={password} onChange={e=>setPassword(e.target.value)} required/></label>
    <label><input type="checkbox" checked={administrator} onChange={e=>setAdministrator(e.target.checked)}/>{moteText('管理员')}</label><button className="button" disabled={busy}>{moteText('创建账号')}</button>
   </form>
-  <ul className="connection-list">{accounts.data?.items.map(account=><li key={account.userId}><div><strong>{account.username}</strong> · {account.administrator?moteText('管理员'):moteText('普通用户')} · {account.disabled?moteText('已禁用'):moteText('已启用')}</div><button className="button subtle" disabled={busy} onClick={()=>void mutate('/api/admin/accounts/'+encodeURIComponent(account.userId),'PATCH',{disabled:!account.disabled})}>{account.disabled?moteText('启用账号'):moteText('禁用账号')}</button><button className="button subtle" disabled={busy} onClick={()=>setTarget(account)}>{moteText('重置密码')}</button></li>)}</ul>
+  <ul className="connection-list">{accounts.data?.items.map(account=><li key={account.userId}><div><strong>{account.username}</strong> · {account.administrator?moteText('管理员'):moteText('普通用户')} · {account.disabled?moteText('已禁用'):moteText('已启用')}</div>{!account.deletionId&&<><button className="button subtle" disabled={busy} onClick={()=>void mutate('/api/admin/accounts/'+encodeURIComponent(account.userId),'PATCH',{disabled:!account.disabled})}>{account.disabled?moteText('启用账号'):moteText('禁用账号')}</button><button className="button subtle" disabled={busy} onClick={()=>setTarget(account)}>{moteText('重置密码')}</button></>}<AccountDeletion api={api} account={account}/></li>)}</ul>
   {target&&<form role="region" aria-label={moteText('重置密码')} onSubmit={e=>{e.preventDefault();void mutate('/api/admin/accounts/'+encodeURIComponent(target.userId)+'/password','POST',{password:replacement});}}><strong>{target.username}</strong><label>{moteText('新密码')}<input type="password" minLength={12} autoComplete="new-password" value={replacement} onChange={e=>setReplacement(e.target.value)} required/></label><button className="button" disabled={busy}>{moteText('确认重置')}</button><button type="button" className="button" onClick={()=>setTarget(undefined)}>{moteText('取消')}</button></form>}
  </section>;
 }

@@ -45,6 +45,36 @@ class MultiuserIngressTest {
     private fun central(server: String, token: String) = CentralClient(server,token,{ method,url,body,_,_ ->
         request(server,token,method,url.removePrefix(server),body?.let { JSONObject(String(it,Charsets.UTF_8)) })
     })
+    @Test fun `native Vault export starts a real owner portable task instead of the retired global bundle`() = fixture { f ->
+        val server=f.getString("address");val token=f.getJSONObject("a").getString("token")
+        val id=UUID.randomUUID().toString();val receipt=CentralPortable(central(server,token)).start(id)
+        assertEquals(id,receipt.getString("id"));assertEquals("export",receipt.getString("kind"))
+        assertEquals(owner(server,token).userId,receipt.getString("userId"));assertEquals(3,receipt.getInt("version"))
+    }
+    @Test fun `native portable recovery list exact artifact and cancellation remain bound to the original owner`() = fixture { f ->
+        val server=f.getString("address");val a=CentralPortable(central(server,f.getJSONObject("a").getString("token")))
+        val b=CentralPortable(central(server,f.getJSONObject("b").getString("token")));val id=UUID.randomUUID().toString()
+        a.start(id);var receipt=a.read(id);val deadline=System.currentTimeMillis()+10000
+        while(receipt.getString("state")=="working") { check(System.currentTimeMillis()<deadline);Thread.sleep(10);receipt=a.read(id) }
+        assertEquals("completed",receipt.getString("state"));assertEquals(id,a.start(id).getString("id"))
+        assertEquals(id,a.list().getJSONArray("items").getJSONObject(0).getString("id"));assertEquals(0,b.list().getJSONArray("items").length())
+        assertEquals(404,assertThrows(CentralFailure::class.java){b.read(id)}.status)
+        val directory=java.nio.file.Files.createTempDirectory("m15-portable-native-").toFile()
+        try {
+            val output=java.io.ByteArrayOutputStream();a.save(receipt,directory) {output}
+            val bytes=output.toByteArray();assertEquals(receipt.getLong("bytes"),bytes.size.toLong())
+            assertEquals(receipt.getString("sha256"),Ingress3Client.hash(bytes))
+            val archive=JSONObject(String(bytes,Charsets.UTF_8));assertEquals(receipt.getString("userId"),archive.getString("userId"))
+            for(name in listOf("a","b","admin"))assertFalse(String(bytes,Charsets.UTF_8).contains(f.getJSONObject(name).getString("token")))
+            assertEquals(0,directory.listFiles()!!.size)
+            for((field,value) in listOf("userId" to f.getJSONObject("b").getString("userId"),"deploymentId" to "other-deployment","filename" to "wrong.json","sha256" to "wrong")) {
+                val corrupt=JSONObject(receipt.toString()).put(field,value);val untouched=java.io.ByteArrayOutputStream()
+                assertThrows(IllegalArgumentException::class.java){a.save(corrupt,directory) {untouched}};assertEquals(0,untouched.size())
+            }
+            assertEquals("cancelled",a.control(id,"cancel").getString("state"));val untouched=java.io.ByteArrayOutputStream()
+            assertThrows(IllegalArgumentException::class.java){a.save(receipt,directory) {untouched}};assertEquals(0,untouched.size())
+        } finally { directory.deleteRecursively() }
+    }
     @Test fun `actual native plugin inventory consumes owned M09 rather than legacy host aggregate`() = fixture { f ->
         val token=f.getJSONObject("a").getString("token");val control=PluginControlClient(central(f.getString("address"),token))
         val inventory=control.inventory()
