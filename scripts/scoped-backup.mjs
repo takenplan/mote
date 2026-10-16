@@ -1,4 +1,5 @@
 import {DatabaseSync,backup} from 'node:sqlite';
+import {scopedBackupSchema} from './scoped-backup-schema.mjs';
 import {constants,createWriteStream} from 'node:fs';
 import {open,lstat,realpath,mkdir,mkdtemp,readdir,readFile,writeFile,copyFile,chmod,rm,rename,rmdir} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
@@ -36,7 +37,7 @@ function metadata(db){
  if(!row||row.epoch!==5||row.format!=='mote-private-users-v1'||!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,159}$/.test(row.deployment_id)||db.prepare('PRAGMA user_version').get().user_version!==5)throw Error('Unsupported backup storage epoch');
  return {deploymentId:row.deployment_id};
 }
-function validateDatabase(db){const meta=metadata(db);if(!meta)throw Error('Unsupported backup storage epoch');if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Incomplete or corrupt instance database');for(const name of ['auth_accounts','auth_credentials','pd_sources','ig_objects','user_tasks','task_authorizations','user_configuration_state','plugin_user_instances','mm_state','ma_conversations'])if(!has(db,name))throw Error('Incomplete instance domain database');return meta;}
+function validateDatabase(db){const meta=metadata(db);if(!meta)throw Error('Unsupported backup storage epoch');if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Incomplete or corrupt instance database');for(const [name,required] of Object.entries(scopedBackupSchema)){if(!has(db,name))throw Error('Incomplete instance domain database');const columns=new Set(db.prepare('PRAGMA table_info('+JSON.stringify(name)+')').all().map(column=>column.name));if(required.some(column=>!columns.has(column)))throw Error('Incomplete instance domain database');}return meta;}
 function memoryBindings(db){
  const values=[],bindings=[];if(has(db,'mm_state'))values.push(...db.prepare('SELECT user_id,binding FROM mm_state').all());if(has(db,'mm_version_bindings'))values.push(...db.prepare('SELECT user_id,binding FROM mm_version_bindings').all());
  for(const row of values){const binding=JSON.parse(row.binding);if(binding.kind==='builtin')continue;if(binding.kind!=='plugin')throw Error('Invalid Memory binding');const snapshot=db.prepare('SELECT user_id,json FROM plugin_user_snapshots WHERE id=?').get(binding.snapshotId);if(!snapshot||snapshot.user_id!==row.user_id)throw Error('Missing fixed Memory provider snapshot');const fixed=JSON.parse(snapshot.json),pkg=db.prepare('SELECT json FROM plugin_packages WHERE id=?').get(fixed.packageId);if(!pkg)throw Error('Missing fixed Memory provider package');const adapter=JSON.parse(pkg.json).hostAdapter;if(!['mote.mem0@1','mote.hindsight@1'].includes(adapter))throw Error('External Memory provider requires a verified native snapshot protocol');
@@ -45,8 +46,15 @@ function memoryBindings(db){
 }
 async function packageCompleteness(db,root){
  const values=[];for(const table of ['plugin_packages','plugin_retired_packages'])if(has(db,table))for(const row of db.prepare('SELECT json FROM '+table).all())values.push(JSON.parse(row.json));
- if(values.some(pkg=>pkg.view.state==='installed')){const {tsImport}=await import('tsx/esm/api'),{GitHubPluginReleases}=await tsImport('../apps/server/src/plugin-release.ts',import.meta.url),releases=new GitHubPluginReleases(join(root,'plugins','packages'));for(const pkg of values)if(pkg.view.state==='installed'&&!pkg.previewId?.startsWith('bundled'))releases.verifyInstalled(join(releases.directory,pkg.view.source.digest),pkg.view.source.digest,pkg.manifest,Boolean(pkg.hostAdapter));}
- for(const row of db.prepare('SELECT user_id FROM user_configuration_state WHERE deleted=0').all()){const path=join(root,'configuration','users',row.user_id,'mote.yaml');await ordinary(path);parseConfigDocument(await readFile(path,'utf8'),{});}
+ if(values.some(pkg=>pkg.view.state==='installed')){const source=new URL('../apps/server/src/plugin-release.ts',import.meta.url),{GitHubPluginReleases}=await present(source)?await (await import('tsx/esm/api')).tsImport(source.href,import.meta.url):await import('../apps/server/dist/plugin-release.js'),releases=new GitHubPluginReleases(join(root,'plugins','packages'));for(const pkg of values)if(pkg.view.state==='installed'&&!pkg.previewId?.startsWith('bundled'))releases.verifyInstalled(join(releases.directory,pkg.view.source.digest),pkg.view.source.digest,pkg.manifest,Boolean(pkg.hostAdapter));}
+ for(const row of db.prepare('SELECT user_id,generation,restore_operation FROM user_configuration_state WHERE deleted=0').all()){
+  const path=join(root,'configuration','users',row.user_id,'mote.yaml');
+  // Reading /usage may create an account state before any ConfigService opens.
+  // Its unchanged default is implicit; durable initialization/revision, receipts,
+  // credentials or restore provenance require the real canonical YAML file.
+  if(!await present(path)&&row.generation===0&&row.restore_operation===null&&['user_model_snapshot_revision','user_model_credential_generations','user_model_snapshots','user_model_usage','user_configuration_restore_journal'].every(table=>!db.prepare('SELECT 1 FROM '+table+' WHERE user_id=? LIMIT 1').get(row.user_id)))continue;
+  await ordinary(path);parseConfigDocument(await readFile(path,'utf8'),{});
+ }
 }
 async function providerCompleteness(db,root){
  for(const binding of memoryBindings(db)){

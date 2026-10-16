@@ -1,4 +1,4 @@
-import test from 'node:test';
+import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {mkdtempSync,rmSync,readFileSync,writeFileSync,existsSync,cpSync,mkdirSync,symlinkSync,linkSync,unlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -16,6 +16,12 @@ import {setTimeout as delay} from 'node:timers/promises';
 import {parseConfigDocument,serializeConfigDocument} from '@mote/shared/config-file';
 const backupScript=fileURLToPath(new URL('../../../scripts/backup.ts',import.meta.url));
 const password='Generated-M16-instance-password';
+function runtimeProjection(t:TestContext,compiled=false){
+ const repository=fileURLToPath(new URL('../../../',import.meta.url)),directory=mkdtempSync(join(tmpdir(),'mote-m16-runtime-copy-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));writeFileSync(join(directory,'package.json'),'{"type":"module"}');symlinkSync(join(repository,'node_modules'),join(directory,'node_modules'),'dir');
+ for(const line of readFileSync(join(repository,'Dockerfile'),'utf8').split('\n'))if(line.startsWith('COPY scripts/backup.ts ')||line.startsWith('COPY packages/shared/src/config-file.ts ')){const[, ...parts]=line.split(/\s+/),destination=parts.pop()!;for(const source of parts){const target=join(directory,parts.length===1&&!destination.endsWith('/')?destination:join(destination,source.split('/').at(-1)!));mkdirSync(dirname(target),{recursive:true});cpSync(join(repository,source),target);}}
+ if(compiled){const source=join(repository,'apps/server/dist');assert.equal(existsSync(join(source,'plugin-release.js')),true,'Fresh compiled server is required');cpSync(source,join(directory,'apps/server/dist'),{recursive:true});}
+ return directory;
+}
 test('existing offline backup and profile restore entry round-trip epoch 5 identities, original bytes and task history without old execution grants',async t=>{
  const directory=mkdtempSync(join(tmpdir(),'mote-m16-backup-')),source=join(directory,'source'),snapshot=join(directory,'snapshot'),target=join(directory,'restored');let node=await buildApp({dataDir:source});
  t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
@@ -83,7 +89,9 @@ test('native Mem0 instance backup verifies actual SDK canonical bodies and resto
  const embedding=createServer(async(req,res)=>{let raw='';for await(const part of req)raw+=part;const body=JSON.parse(raw),items=Array.isArray(body.input)?body.input:[body.input];res.setHeader('content-type','application/json');res.end(JSON.stringify({object:'list',data:items.map((_:unknown,index:number)=>({object:'embedding',index,embedding:[1,0,0]}))}));});await new Promise<void>(resolve=>embedding.listen(0,'127.0.0.1',resolve));t.after(async()=>{embedding.closeAllConnections();await new Promise<void>(resolve=>embedding.close(()=>resolve()));});
  const f=await scopedMemoryFixture(t,generatedMem0Release()),packageId=await f.install(),embeddingBaseUrl='http://127.0.0.1:'+(embedding.address() as any).port+'/v1',snapshot=join(f.directory,'..','m16-native-'+randomUUID()),target=snapshot+'-target';t.after(()=>{rmSync(snapshot,{recursive:true,force:true});rmSync(target,{recursive:true,force:true});});
  const expected:any[]=[];for(const [user,label] of [[f.a,'A'],[f.b,'B']] as const){await f.replace(user.token,'models',{profiles:[{id:'same-model',name:'Generated language model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-memory',baseUrl:f.modelUrl,apiKey:'GENERATED_'+label+'_KEY',headers:{},extraBody:{}}},{id:'same-embedding',name:'Generated embedding',settings:{...defaultModelSettings(),provider:'custom',protocol:'openai-completions',model:'generated-embedding',baseUrl:embeddingBaseUrl,apiKey:'GENERATED_EMBEDDING_'+label+'_KEY',headers:{},extraBody:{}}}],selections:{memory:{kind:'personal',id:'same-model'}}});await f.plugin(user,packageId,['same-source'],{embeddingBaseUrl,embeddingModel:'generated-embedding',embeddingDimension:3,embeddingSecretReference:'personal:same-embedding'});const material=await f.publish(user,label);await f.wait(user,(await f.submit(user,[material.id])).id);await f.bind(user,'same-instance');expected.push((await f.request(user.token,'/api/memories')).json().items);}
- await f.node.app.close();await backupScopedInstance({source:f.directory,out:snapshot});const checked=await verifiedBackup(snapshot);assert.equal(checked.names.filter((name:string)=>name.endsWith('/vectors.db')).length,2);await restoreScopedInstance({from:snapshot,target,deploymentId:f.node.deploymentId});
+ await f.node.app.close();await backupScopedInstance({source:f.directory,out:snapshot});const checked=await verifiedBackup(snapshot);assert.equal(checked.names.filter((name:string)=>name.endsWith('/vectors.db')).length,2);
+ if(process.env.MOTE_M16_PACKAGED_BACKUP==='1'){const runtime=runtimeProjection(t,true),packagedArchive=snapshot+'-packaged',packagedTarget=target+'-packaged';t.after(()=>{rmSync(packagedArchive,{recursive:true,force:true});rmSync(packagedTarget,{recursive:true,force:true});});execFileSync(process.execPath,[join(runtime,'scripts/backup.ts'),'--data',f.directory,'--out',packagedArchive],{stdio:'pipe',timeout:30000});execFileSync(process.execPath,[join(runtime,'scripts/restore-instance.mjs'),'--from',packagedArchive,'--data',packagedTarget,'--deployment-id',f.node.deploymentId],{stdio:'pipe',timeout:30000});const db=new DatabaseSync(join(packagedTarget,'mote.sqlite'));try{assert.equal(db.prepare('SELECT count(*) n FROM mm_records').get()!.n,2);assert.equal(db.prepare('SELECT count(*) n FROM plugin_user_snapshots WHERE released=0').get()!.n,0);}finally{db.close();}}
+await restoreScopedInstance({from:snapshot,target,deploymentId:f.node.deploymentId});
  const restored=await buildApp({dataDir:target});t.after(()=>restored.app.close());for(const [index,user] of [f.a,f.b].entries()){
   const login=await restored.accounts!.login(user.username,'Generated-memory-password-only-01','generated','client',0),headers={authorization:'Bearer '+login.token,'x-mote-protocol-version':'2'},context=await restored.authority.authenticate(login.token),scope=restored.services.forUser(context);
   const archive=await scope.exportUser('memory');assert.deepEqual((archive.payload as any).records,expected[index]);const view=await restored.app.inject({url:'/api/plugins',headers});assert.equal(view.statusCode,200,view.body);assert.equal(view.json().instances[0].desired,false);assert.equal(view.json().instances[0].checked,false);assert.deepEqual(view.json().instances[0].grants.capabilities,[]);
@@ -120,8 +128,7 @@ test('a completed real conversation survives instance recovery and missing canon
 });
 
 test('the Docker runtime file projection preserves the stopped backup and restore CLI entry points',t=>{
- const repository=fileURLToPath(new URL('../../../',import.meta.url)),directory=mkdtempSync(join(tmpdir(),'mote-m16-runtime-copy-'));t.after(()=>rmSync(directory,{recursive:true,force:true}));writeFileSync(join(directory,'package.json'),'{"type":"module"}');symlinkSync(join(repository,'node_modules'),join(directory,'node_modules'),'dir');
- for(const line of readFileSync(join(repository,'Dockerfile'),'utf8').split('\n'))if(line.startsWith('COPY scripts/backup.ts ')||line.startsWith('COPY packages/shared/src/config-file.ts ')){const[, ...parts]=line.split(/\s+/),destination=parts.pop()!;for(const source of parts){const target=join(directory,destination,source.split('/').at(-1)!);mkdirSync(dirname(target),{recursive:true});cpSync(join(repository,source),target);}}
+ const directory=runtimeProjection(t);
  for(const entry of ['backup.ts','restore-instance.mjs'])assert.match(execFileSync(process.execPath,[join(directory,'scripts',entry),'--help'],{encoding:'utf8',timeout:10000}),/Stop (?:the central node|Central) first/);
 });
 

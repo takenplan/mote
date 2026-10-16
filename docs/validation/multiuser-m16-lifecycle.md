@@ -254,3 +254,70 @@ checking, before the full test workspaces or Android stage:
 are tooling/type integration failures. The explicit public declaration and full
 GET arguments fix them without runtime behavior changes. A root typecheck green
 and later required retry are separate evidence; the failed attempt is retained.
+
+## Required retry and backup completeness corrections
+
+Second required at `8eb07ad281f919717f978e68c9d921f3d58d281a` completed
+**exit 1**, `/tmp/m16-required-affected-second.log/.exit`. Desktop: 476/484,
+seven old v2 fake-HTTP CLI fixtures and one absent local Electron binary; Server:
+2511 pass, one backup/cold-user configuration failure, one existing opt-in OS
+sandbox skip (2513 total); Web: 490/490; Agent: 317 pass/1 existing skip, Diagnostics: 5/5 and
+Shared: 192/192. Root test commands after the failed workspaces and actual Android
+were not reached. These failures are retained, not replaced by narrow green claims.
+
+The cold-user failure is a production backup admission defect: `GET /api/usage`
+may create `user_configuration_state` before ConfigService initializes a YAML file.
+Only unchanged, never-initialized defaults without durable model/configuration
+provenance may omit that file. A materialized configuration remains mandatory.
+
+Additional actual regressions, committed in `39c203a2`, produced **0/3 exit 1** in
+`/tmp/m16-backup-completeness-red.log/.exit`: an actual completed Ask turn was
+backed up, then dropping `ma_turns` and regenerating the outer SQLite checksum was
+incorrectly accepted; Docker's real runtime COPY projection omitted the new
+helper, preventing even backup `--help`; and a cold account's usage metadata
+incorrectly prevented backup. The first temporary schema attempt failed module
+loading and is not product RED. The valid temporary schema RED is
+`/tmp/m16-backup-schema-red2.log/.exit`.
+
+Stopped backup admission now requires the current production epoch-5 table and
+column contract in `scoped-backup-schema.mjs`, while preserving additional
+extension tables/columns. Missing turns, a renamed result column and an omitted
+unused domain table all fail before target publication. A real restored
+conversation returns its saved answer through the authenticated conversation HTTP
+entry, beyond the earlier metadata-only conversation check. Docker copies the
+backup/restore helpers and schema; fixed package verification consumes the shipped
+compiled release verifier when TypeScript source is absent. Docker runtime file
+projection is not a Docker daemon/image/volume run.
+
+`node --import tsx --test apps/server/test/multiuser-instance-backup.test.ts`:
+**8/8 exit 0**, `/tmp/m16-backup-completeness-green2.log/.exit`. Its prior green1
+was 7/8: a new test interpreted a single-file Docker COPY destination as a directory;
+that test projection bug was corrected. The product missing-helper RED remains
+valid. Compiled package projection and fresh compiled production restart are
+separate checks, still pending at this writing. Server/tools typechecks exit 0 in
+`/tmp/m16-backup-{server,tools}-types.log/.exit`; update/profile adjacent tests:
+12/12 exit 0, `/tmp/m16-backup-update-adjacent.log/.exit`.
+
+The seven original CLI scenarios now use actual generated M01/M03 hosts, SQLite,
+files and child CLI processes: account-isolated profiles; lost real commit ACK
+with no duplicate canonical capture; explicit deletion/restoration; dead-process
+lock recovery in the stable account partition; A pending original/B new scan;
+reference with zero originals; dry-run/consent; and multipart directory paging.
+Only the real HTTP response is dropped after publication for the ACK fault.
+`/tmp/m16-cli-desktop-real3.log/.exit`: **7/7 exit 0**. The first migrated run was
+6/7: the old fake accepted a 17 MiB snapshot despite the existing shared 16 MiB
+snapshot contract. The paging case now explicitly requests archive (five full/
+partial original parts plus the next file), without changing runtime limits or
+adding an automatic retention fallback. An intervening command used the wrong
+working-directory path for this test edit, so real2 repeated that same failure;
+it is not a second product defect.
+
+The omitted npm-install Electron distribution was restored only inside this
+clone's ignored dependencies from the already-installed same version 41.10.7.
+Executable SHA-256 on both copies:
+`0c23b9764481d57cd769318ec81b42e8337ed7d1cad241b82592d88a80ef8a64`.
+The original hidden Electron tests pass 2/2 in
+`/tmp/m16-cli-desktop-real2.log` (that command still failed its old paging case).
+No window was shown or system permission changed. Full required retry remains
+mandatory after these runtime and test corrections. Personal import, M12,
+Docker native-volume evidence and independent backup/management review remain OPEN.

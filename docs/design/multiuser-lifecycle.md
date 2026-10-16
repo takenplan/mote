@@ -39,7 +39,7 @@ original/native files, an explicit instance configuration, ordinary private
 files and an exclusive destination outside the vault. SQLite backup runs against
 a disposable copy including WAL, leaving the source untouched. The manifest is
 published last; missing/unexpected files, paths, links, checksums, deployment,
-SQL consistency, installed package integrity and native Mem0 records are verified.
+SQL consistency, required epoch-5 tables/columns, installed package integrity and native Mem0 records are verified. A cold account with only usage/state metadata may retain an implicit unchanged default configuration; any durable initialization, credential, receipt or restore provenance requires its canonical YAML.
 Unknown external Memory providers without a native snapshot protocol fail closed.
 
 `npm run restore:instance -- --from BACKUP --data EMPTY_TARGET
