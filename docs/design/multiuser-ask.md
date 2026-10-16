@@ -222,3 +222,35 @@ failed-prefix and cross-turn compaction regressions4/4 passed separately. Earlie
 whole-prompt-size and incomplete-time-interval fixture assumptions were corrected;
 they are diagnostics, not passing receipts. These are partial checks before the
 next clean freeze, full actual composition, independent review and affected gates.
+
+## Reviewed real Memory and production listener composition
+
+The feature composes independently reviewed real M07 through1d92401d, preserving
+PR134/M10 processing readiness/connectors, Ask registration and the new generic
+owner-question registration/pass/close. Original reader Unicode/navigation and
+external-provider lifecycle races8/8 EXIT0; exact four real processing/Memory task,
+grant and sequence inventory (including memory.materials), failed-child rollback
+and no orphan checks2/2 EXIT0. No producer is disabled to preserve an old fixture.
+
+Clean80cf83fa before this combination passed all50 focused Ask/read-race tests,
+0skip/fail/cancel, EXIT0,209577ms. M11 independently passed literal paging/worker
+and complete/durable compaction2+2, and the actual SDK complete3-block continuation
+matrix plus original strict limit1 source case2/2 EXIT0. Its first restart fixture
+had paged raw rows before the genuine producer then replaced them with formal
+Materials; the stable positive now waits for real producer completion and retains
+all limit/owner/source/restart assertions. Old failed diagnostics are retained.
+
+The process fixture now boots actual production index and formal initialize-admin
+CLI twice, uses real HTTP for all user actions, SIGKILLs between actual completed
+and in-flight child tasks, then proves successful child transports are not replayed,
+A/B snapshots remain fixed, only one owned turn publishes and B cannot read A's
+artifact. Source1/1 EXIT0,44777ms. MOTE_ASK_PROCESS_ENTRY now names index.js for the
+compiled check. The first diagnostic omitted the read observer connection's
+ordinary SQLite busy timeout; this fixture setup is corrected without changing
+production SQL or skipping any outcome assertion.
+
+Final parity gate still open: the old lifecycle periodic working and automatic
+Insight windows must reconnect to real scoped retained authorization; manual and
+pressure-triggered compaction do not establish those scheduling capabilities.
+Final combined/build/emitted/affected, whole-module review and Draft PR remain
+pending. No CI workflow is enabled or reported as passed.

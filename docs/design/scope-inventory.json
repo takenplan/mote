@@ -805,14 +805,16 @@
     "module": "M02",
     "surfaces": [
       "directory:this.options.directory"
-    ]
+    ],
+    "status": "implemented"
   },
   "apps/server/src/hindsight-runtime.ts": {
     "scope": "legacy-quarantined",
     "module": "M02",
     "surfaces": [
       "directory:this.options.directory"
-    ]
+    ],
+    "status": "implemented"
   },
   "apps/server/src/image-inputs.ts": {
     "scope": "legacy-quarantined",
@@ -983,7 +985,8 @@
       "directory:this.config.directory",
       "table:provider_operations",
       "table:provider_records"
-    ]
+    ],
+    "status": "implemented"
   },
   "apps/server/src/memory-adapters.ts": {
     "scope": "legacy-quarantined",
