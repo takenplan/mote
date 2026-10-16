@@ -195,3 +195,51 @@ then own push/Draft PR/attachment/remote head-base verification. No final gate o
 whole-module completion is claimed. Finite coordination details are preserved
 in `/tmp/mote-m13-finite-closeout.md`; primary capability ledger above remains
 authoritative for OPEN rows.
+
+## Request-model and plugin/control increment (not final gates)
+
+- M15 db88 composed as7f2fe173. Original control SSR RED41337d12 →cde70676
+  GREEN3/3; same-ID model ownership REDa39db8c0 →705d0207 combined5/5 EXIT0,
+  `/tmp/m13-model-owner-{red,green}.log/.exit`. M14 bounded readonly review
+  `/tmp/mote-m14-review-m13-705d.md` has no confirmed P0/P1/P2; no rerun claimed.
+- Actual hidden IAB alternate-model query at705d completed and archived. The
+  later read-only provider/default queries lost their transport. After parent
+  steering, readonly git/artifact/browser checks succeeded, original archived
+  query remained visible and the old fixture HTTP listener was gone. No replay.
+  Provider model/default post-state remains unverified; this is environment
+  evidence, not a model-isolation failure or a passed provider assertion.
+- Public c6 standalone omitted the full branch's exact pure `web-assets.ts`
+  scanner allowance. Independent16cdf1619c89340b75c5c91de2e5c722773a1e09 adds
+  only that single file; exact tracked tree scanner[] EXIT0 in
+  `/tmp/m13-public-scope-16-complete.log/.exit`. First archive lacked
+  fixtures/legacy-app.ts and exited1, retained separately; no broad allowance.
+- Actual M09 metadata/masked-reference edit contract RED8cc78a64 0/2 EXIT1
+  `/tmp/m13-plugin-metadata-valid-red.log/.exit` →ff91b6f8 GREEN2/2 EXIT0
+  `/tmp/m13-plugin-metadata-green.log/.exit`. Same-ID A/B plus stale CAS,
+  no hidden references in HTTP view, checked versus unsupported capabilities.
+- Original PluginCenter + production Fastify/Accounts/M09/SQLite RED54238eb9
+  crashed on the old view shape;71a2230c GREEN1/1 in
+  `/tmp/m13-plugin-page-green.log/.exit`. This is a scoped-host migration gap,
+  not an old single-owner production defect.
+- Missing original M07 control REDf4ed4df1 and missing durable owner preparation
+  REDd1e16e92 retained in `/tmp/m13-memory-control-red.log/.exit` and
+  `/tmp/m13-memory-reload-red.log/.exit`. Actual backend + original renderer
+  control GREEN4/4 `/tmp/m13-plugin-memory-green.log/.exit`; expanded actual
+  reload→verification→activation and open-stop A/B switch GREEN1/1
+  `/tmp/m13-plugin-memory-lifecycle.log/.exit`. Generated empty binding tests
+  do not prove nonempty external-provider body migration.
+- Reused the original modal and retained legacy PluginCenter characterization:
+  `/tmp/m13-plugin-memory-modal.log/.exit`11/11 EXIT0. First new i18n check
+  failed on a missing key; exact English/Android catalog sync then
+  `/tmp/m13-plugin-i18n-green.log/.exit` EXIT0 (8365 messages).
+
+Final affected, all builds at the final composition, real browser plugin/admin
+journeys and all OPEN original-capability rows remain outstanding. No PR or
+remote final head has been created. M12 handoff is still denied pending explicit
+user authorization; M16 lifecycle is an explicit owned dependency.
+
+### Memory reader characterization (after 9f305c81)
+
+The canonical-Material-ref expectation in the first added test was invalid. Both `/tmp/m13-memory-anchor-red.log` and `/tmp/m13-memory-anchor-valid-red.log` failed only that expectation; following the actual returned `capture:<M07 evidence UUID>` through `/context/read` already succeeded with A's text. The uncommitted exploration that changed backend output was withdrawn; no `memory.ts`/`ask.ts` production change was shipped. `/tmp/m13-memory-anchor-green.log` therefore is not a delivered-fix result.
+
+Corrected characterization runs the real M07 publication chain, follows the declared context reader, verifies raw `/captures/<same evidence UUID>` is 404 and B cannot read A's Memory/Material. Exact command `node --import tsx --test --test-name-pattern='Memory evidence navigation retains' apps/server/test/multiuser-memory.test.ts`, Node24 with synthetic local HTTP model fixture, standard approval: 1/1 EXIT0, `/tmp/m13-memory-reader-characterization.log` and `.exit`. This proves the reader boundary, not original Memories page closure.
