@@ -103,6 +103,9 @@ original bytes for the same revision still conflicts. Normalized adapter heads
 are encrypted, fixed to the same scope and checked against the canonical capture
 ID; they are not indexed as evidence. Canonical source records and full originals
 are the actual M03 production data, available to M06/M07's domain consumers.
+Gmail envelope-only changes such as `historyId` retain the canonical original of
+an unchanged semantic revision. New semantic revisions supply new provider bytes;
+the generic M03 conflicting-original check remains strict.
 
 One M05 task records the durable next polling instant; repeated manual sync does
 not multiply polling chains. Pause closes future timer admission while admitted

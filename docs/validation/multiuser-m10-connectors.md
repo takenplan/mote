@@ -1,6 +1,7 @@
 # M10 connector validation
 
-Status: implementation candidate, independent review and final affected checks pending.
+Status: final Gmail envelope-only replay fix committed after the earlier freeze;
+renewed final checks and independent review pending.
 Baseline: PR #132 `cdc5c34c36fc5743049007ee2c76d705fde3dd7f`.
 Integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 All data, OAuth codes, provider responses and credentials below are isolated synthetic fixtures.
@@ -47,10 +48,30 @@ HTTP/CLI I/O is substituted; source/archive/task services are real.
 | Concurrent command idempotency and immutable payload conflict | `concurrent duplicate sync commands return one durable task and preserve immutable input identity across restart` |
 | Controlled shutdown during a blocked Gmail read, original task resumes after restart | `controlled shutdown interrupts active Gmail work into waiting and restart resumes its admitted task and original cursor` |
 | Seeded durable crash activity, purpose-bound erasure reconciliation and B denial | `durable crashed-activity fixture requires a purpose-bound stopped observation before connector erasure and never settles B` |
-| Archive-retention Gmail incremental replay and immutable raw original | `archive-retention Gmail delta replay retains canonical normalized head and the same immutable provider original` |
+| Archive-retention Gmail incremental replay and immutable raw original | `snapshot-retention Gmail delta replay retains canonical normalized head and the same immutable provider original when only its provider envelope changes`; same for `archive-retention` |
 | Distinct process HTTP listener, pending OAuth recovery, A/B source/original reads, replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals through the production composition` |
 
 ## Intermediate receipts and final gates
+
+Earlier freeze `716b332245f4192e2f1f814dbd48f3a1d7ce278d` evidence (all exit 0):
+
+| Command | Result | Receipt |
+| --- | --- | --- |
+| `node --import tsx --test --test-concurrency=2 --test-timeout=120000 apps/server/test/multiuser-connectors.test.ts apps/server/test/multiuser-connectors-cli.test.ts apps/server/test/multiuser-connectors-process.test.ts` | 36/36, zero failures/skips | `/tmp/m10-716b-focused.log`, `.exit` |
+| `node --import tsx --test --test-concurrency=2 --test-timeout=120000 apps/server/test/scope*.test.ts apps/server/test/multiuser*.test.ts` | 229/229, zero failures/skips | `/tmp/m10-716b-combined.log`, `.exit` |
+| `npm run build -w @mote/server` | passed | `/tmp/m10-716b-server-build.log`, `.exit` |
+| `npm run build -w @mote/web` | passed | `/tmp/m10-716b-web-build.log`, `.exit` |
+| `MOTE_CONNECTORS_PROCESS_ENTRY="$PWD/apps/server/dist/app.js" node --import tsx --test apps/server/test/multiuser-connectors-process.test.ts` | 1/1, two sequential real HTTP processes, zero failures/skips | `/tmp/m10-716b-emitted.log`, `.exit` |
+
+The durable crashed-activity scenario seeds a persisted synthetic activity record;
+it verifies purpose-bound reconciliation, not a forcibly killed native process.
+The separate emitted smoke exercises actual process restart with pending OAuth.
+A subsequent independent synthetic probe changed only Gmail's raw `historyId`
+and reproduced a blocked duplicate import. The adapter now preserves the first
+original of an unchanged semantic revision; both snapshot/archive regressions
+pass 2/2, exit 0 (`/tmp/m10-envelope-fixed.log`, `.exit`). Generic M03 supplied-byte
+conflicts remain rejected. The earlier affected run is diagnostic because source
+changed while it was running; it cannot serve as final-SHA evidence.
 
 Intermediate 25/25 M10 source/CLI tests passed, no failures/skips:
 `/tmp/m10-prefreeze2-tests.log` (before the final device-login test expansion).
