@@ -188,9 +188,10 @@ class ConnectionActivity : MoteActivity() {
                 if (bytes.size > ConnectionInvitation.MAX_BYTES) throw ConnectionFailure("invitation")
                 val raw = AppReleaseVerifier.utf8(bytes)
                 val invite = ConnectionInvitation.parse(raw, debugHttp, BuildConfig.DEBUG)
+                if (Settings(applicationContext).read() != expected) throw SettingsChangedFailure()
                 raw to invite
             }) { (raw, invite) ->
-                if (currentConfig != expected) return@run MoteI18n.text("连接已变化，请重新核对邀请。")
+                if (currentConfig != expected || applicationContext.accountOwnerKey() != expected.ownerKey()) return@run MoteI18n.text("连接已变化，请重新核对邀请。")
                 input.setText(raw); parsed = invite; preview.text = MoteI18n.text("将连接：{0}\n有效至：{1}\n请确认后连接。", invitationLabel(invite), invite.expiresAt)
                 MoteI18n.text("连接文件已解析，尚未联网。")
             }
