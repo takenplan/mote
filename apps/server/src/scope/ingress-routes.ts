@@ -1,3 +1,4 @@
+import {decodeIngressBundle} from './ingress-bundle.js';
 import {importDeclarationSchema} from './import-attribution.js';
 import type {FastifyRequest} from 'fastify';
 import {Readable} from 'node:stream';
@@ -18,9 +19,15 @@ const batch=z.object({batchId:z.string().min(1).max(256),items:z.array(z.unknown
 /** Restores only the version-3, account-bound ingress. Old owner transports,
  * shell execution, processor algorithms and external connectors remain closed. */
 export function registerIngress(runtime:ScopedRuntime,db:DatabaseSync,directory:string){
+ runtime.app.addContentTypeParser('application/x-ndjson+gzip',{parseAs:'buffer',bodyLimit:16*1024*1024},(request,body,done)=>{
+  try{if(request.method!=='POST'||!/^\/api\/ingress\/sources\/[A-Za-z0-9_.:-]+\/captures$/.test(request.url))throw new PrivateDataError('invalid_data');done(null,decodeIngressBundle(body as Buffer,request.headers['x-mote-batch-id']));}
+  catch(error){done(error as Error);}
+ });
  const host=new IngressHost(runtime,db,directory);
  const service=(services:ReturnType<ScopedRuntime['services']['forUser']>)=>services.get<UserIngress>(INGRESS_DOMAIN);
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/devices',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).registerDevice(request.body);}});
+ registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/devices/heartbeat',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).heartbeat(request.body);}});
+ registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/devices/:id/reconcile',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).reconcile(id(request),request.body);}});
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/ingress/devices',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).devices();}});
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/sources',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).registerSource(request.body);}});
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/sources/:id/captures',bodyLimit:16*1024*1024,service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);const input=batch.parse(request.body);return service(services).receiveCaptures(id(request),input.batchId,input.items,input.importDeclaration);}});

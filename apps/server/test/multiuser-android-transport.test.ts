@@ -39,6 +39,8 @@ test('actual device heartbeat and reconciliation remain account/device scoped an
  const body={deviceId:'same-device',deviceName:'Generated A Android',platform:'android',status:'paused',queueDepth:7,sync:{mode:'manual',state:'idle',intervalMinutes:1,batchSize:100,pendingRecords:1}};
  const heartbeat=await f.request(a,'/api/ingress/devices/heartbeat','POST',body);assert.equal(heartbeat.statusCode,200,heartbeat.body);assert.equal(heartbeat.json().ok,true);
  assert.equal((await f.request(a,'/api/ingress/devices/heartbeat','POST',{...body,deviceId:'other-device'})).statusCode,403);
+ assert.equal((await f.request(a,'/api/ingress/devices','POST',{id:'same-device',name:'Generated renamed',platform:'android'})).statusCode,200);
+ const own=await f.request(f.users[0].token,'/api/ingress/devices');assert.equal(own.json().items[0].queueDepth,7);assert.equal(own.json().items[0].name,'Generated renamed');
  const reconcile=(token:string,device='same-device')=>f.request(token,`/api/ingress/devices/${device}/reconcile`,'POST',{ids:[input.id,randomUUID()]});
  const ar=await reconcile(a);assert.equal(ar.statusCode,200,ar.body);assert.equal(ar.json().items[0].state,'present');assert.equal(ar.json().items[1].state,'unavailable');assert.ok(!ar.body.includes('receipt'));
  const br=await reconcile(b);assert.equal(br.statusCode,200,br.body);assert.ok(br.json().items.every((v:any)=>v.state==='unavailable'));
