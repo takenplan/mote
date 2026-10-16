@@ -8,11 +8,11 @@ export function removeLoginParameter(key:string){const [route,query='']=location
 export async function consumeLoginTicket(active:()=>boolean=()=>true):Promise<Connection|undefined>{
   const value=new URLSearchParams(location.hash.split('?')[1]??'').get('loginTicket');if(value===null)return;
   removeLoginParameter('loginTicket');clearSession();if(!valid(value))throw Error('Invalid login link');
-  return changeWebAuthentication(async()=>{
+  return changeWebAuthentication(async isCurrent=>{
     const grant=await publicAuth<{credentialId:string}>('/api/login/exchange',{code:value});
-    if(!active())throw Error('Login changed');
+    if(!active()||!isCurrent())throw Error('Login changed');
     const session=await discoverWebSession();
-    if(!active()||!session||session.credentialId!==grant.credentialId)throw Error('Login changed');
+    if(!active()||!isCurrent()||!session||session.credentialId!==grant.credentialId)throw Error('Login changed');
     return session;
   });
 }

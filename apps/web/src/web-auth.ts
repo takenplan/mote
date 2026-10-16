@@ -5,6 +5,7 @@ export const authChangeKey='mote.web-auth-change';
 export const authChangeEvent='mote:auth-changing';
 export const durationForLifetime={session:0,'1d':86400000,'7d':604800000,'30d':2592000000};
 let sequence:Promise<unknown>=Promise.resolve();
+let authenticationIntent=0;
 function announce(){
   const change=JSON.stringify({id:crypto.randomUUID()});
   try{globalThis.localStorage?.setItem(authChangeKey,change);}catch{/* Cookie/session fences work with blocked storage. */}
@@ -12,9 +13,10 @@ function announce(){
 }
 /** Serialize Cookie-changing responses, including a dialog closed while login is pending.
  * Web Locks additionally serialize tabs; every private request still pins its session ID. */
-export function changeWebAuthentication<T>(action:()=>Promise<T>,retire=true):Promise<T>{
+export function changeWebAuthentication<T>(action:(isCurrent:()=>boolean)=>Promise<T>,retire=true):Promise<T>{
+  const intent=++authenticationIntent;
   const run=async()=>{
-    const mutation=async()=>{if(retire){announce();clearSession();}try{const result=await action();if(!retire){announce();clearSession();}return result;}finally{if(retire)announce();}};
+    const mutation=async()=>{if(retire){announce();clearSession();}try{const result=await action(()=>intent===authenticationIntent);if(!retire){announce();clearSession();}return result;}finally{if(retire)announce();}};
     return globalThis.navigator?.locks ? navigator.locks.request('mote.web-auth',mutation) : mutation();
   };
   const result=sequence.then(run,run);sequence=result.catch(()=>{});return result;
@@ -32,10 +34,11 @@ export async function discoverWebSession():Promise<WebConnection|null>{
   }catch(error){if(error instanceof ApiError&&error.status===401)return null;throw error;}
 }
 export function loginWeb(username:string,password:string,durationMs:number):Promise<WebConnection>{
-  return changeWebAuthentication(async()=>{
+  return changeWebAuthentication(async isCurrent=>{
     const grant=await publicAuth<{deploymentId:string;userId:string;credentialId:string}>('/api/auth/login',{username,password,durationMs,mode:'web'});
+    if(!isCurrent())throw Error('Login changed');
     const session=await discoverWebSession();
-    if(!session||session.deploymentId!==grant.deploymentId||session.userId!==grant.userId||session.credentialId!==grant.credentialId)throw Error('Login changed');
+    if(!isCurrent()||!session||session.deploymentId!==grant.deploymentId||session.userId!==grant.userId||session.credentialId!==grant.credentialId)throw Error('Login changed');
     return session;
   });
 }
