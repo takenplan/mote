@@ -183,6 +183,28 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun actualNativeMemoryExtractionSelectsPinnedCanonicalMaterialsUnderItsOwner() {
+        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val bApi=CentralClient(endpoint(),token("b"));val before=api.get("/api/memory/jobs").getJSONArray("items");val oldIds=(0 until before.length()).map {before.getJSONObject(it).getString("id")}.toSet()
+        val bBefore=bApi.get("/api/memory/jobs").getJSONArray("items").length();val material=fixture().getJSONObject("published").getJSONObject("a")
+        val defaults=api.get("/api/configuration").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use {scenario->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("提取记忆");ready();click("开始提取");ready()
+            scenario.onActivity {activity->val fields=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>();val selected=fields.firstOrNull {it.tag=="material:"+material.getString("materialId")+"@"+material.getString("revision")};assertNotNull("Manual extraction must offer the selected canonical Material revision instead of the old global start route",selected);selected!!.isChecked=true}
+            click("提交所选资料");ready()
+            val page=api.get("/api/memory/jobs").getJSONArray("items");val admitted=(0 until page.length()).map {page.getJSONObject(it)}.single {it.getString("id") !in oldIds}
+            val tasks=admitted.getJSONObject("tasks");val task=tasks.keys().asSequence().map {tasks.getJSONObject(it)}.first {it.getJSONObject("input").has("materialPins")}
+            val pins=task.getJSONObject("input").getJSONArray("materialPins");assertTrue(pins.length()>0)
+            for(i in 0 until pins.length()){val pin=pins.getJSONObject(i);assertEquals(material.getString("materialId"),pin.getString("id"));assertEquals(material.getString("revision"),pin.getString("revision"))}
+            assertEquals(bBefore,bApi.get("/api/memory/jobs").getJSONArray("items").length());assertEquals(defaults,api.get("/api/configuration").toString())
+            assertEquals(404,assertThrows(CentralFailure::class.java){bApi.get("/api/memory/jobs/"+admitted.getString("id"))}.status)
+        }
+    }
+
     @Test fun actualPublishedMemoryEvidenceUsesTheCanonicalReaderUnderItsOwner() {
         val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
