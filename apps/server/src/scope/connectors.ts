@@ -192,7 +192,7 @@ export class ScopedConnectors {
   if(operation==='disconnect')schema=empty;
   else if(provider==='lark')schema=({configure:larkConfigureSchema,select:larkSelectionSchema,login:z.object({calendar:z.boolean().optional()}).strict(),'sync-document':z.object({document:z.string().min(1).max(4000)}).strict(),setup:empty,check:empty,calendars:empty,preview:empty} as Record<string,z.ZodType<Record<string,unknown>>>)[operation];
   else if(provider==='google-calendar')schema=operation==='select'?selectedCalendarsSchema:operation==='calendars'?empty:undefined;
-  else if(['feishu-recordings','dingtalk-recordings'].includes(provider))schema=operation==='select'?recordingSelectionSchema:['login','connect','retry'].includes(operation)?empty:undefined;
+  else if(['feishu-recordings','dingtalk-recordings'].includes(provider))schema=operation==='select'?recordingSelectionSchema:operation==='retry'?z.object({resume:z.boolean().optional()}).strict():['login','connect'].includes(operation)?empty:undefined;
   else schema=this.extensions.get(provider)?.operations?.[operation];
   try{if(!schema)throw Error();return schema.parse(payload);}catch{throw new ConnectorError('connector_operation_invalid',400);}
  }
@@ -233,7 +233,7 @@ export class ScopedConnectors {
   if(adapter instanceof LarkAdapter){
    if(operation==='setup'){adapter.startSetup();return adapter.wait();}if(operation==='check')return adapter.refresh();if(operation==='calendars')return adapter.calendars();if(operation==='select')return adapter.select(payload);if(operation==='configure'){adapter.configure(payload);return adapter.wait();}if(operation==='login'){adapter.login(z.object({calendar:z.boolean().optional()}).strict().parse(payload).calendar);return adapter.wait();}if(operation==='preview'){adapter.startPreview();return adapter.wait();}if(operation==='sync-document'){adapter.startSync(z.object({document:z.string().min(1).max(4000)}).strict().parse(payload).document);return adapter.wait();}
   }
-  if(adapter instanceof ScopedRecordingAdapter){if(operation==='retry')return adapter.retry();if(operation==='login')return adapter.login(progress);if(operation==='connect')return adapter.connect();if(operation==='select')return adapter.select(payload);}
+  if(adapter instanceof ScopedRecordingAdapter){if(operation==='retry'){const status=await adapter.retry();return payload.resume===true?adapter.sync(false,true):status;}if(operation==='login')return adapter.login(progress);if(operation==='connect')return adapter.connect();if(operation==='select')return adapter.select(payload);}
   throw new ConnectorError('connector_operation_invalid',400);
  }
  private async submit(context:UserContext,id:string,value:Partial<ConnectorTask>&{payload?:Record<string,unknown>},operationId:string,onAdmitted?:(task:{id:string})=>void){

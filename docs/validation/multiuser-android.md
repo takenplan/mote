@@ -333,3 +333,5 @@ Separately, the two original Web Actions files pass2/2,no skip,101.86s unchanged
 failures remain. No Web observation or approval assertion was changed.
 
 Recording reader37c8ac83 consumed by Web recording feature; owner evidence and exact bounds are in multiuser-connectors.md.
+
+Explicit recording retry resume79ffb50e consumed alongside reader37c8ac83; only failed phases resume, default retry remains reset-only.
