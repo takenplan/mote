@@ -692,3 +692,12 @@ explicitly processed=false/indexed=false/current raw artifact, exact bad-WAV
 failure code, retained previous publication and B-positive. Types and these narrow
 runs do not replace an independent bounded review or own final affected/compiled/
 client acceptance. QR's full affected timeout124 is not a passing gate here.
+
+The existing export child-process fixture was root-CWD dependent: the actual npm
+Server workspace entry fails ERR_MODULE_NOT_FOUND in
+/tmp/mote-joint-export-workspace-entry-red.log/.exit. Its test-only fix resolves
+the module relative to import.meta.url. Same fixture now passes1/1 both in the
+Server workspace and repository root, respectively
+/tmp/mote-joint-export-workspace-entry-green.log/.exit and
+/tmp/mote-joint-export-root-entry-green.log/.exit. No runtime source changed;
+QR's parallel prerequisite-fixture repair remains its own work/evidence.
