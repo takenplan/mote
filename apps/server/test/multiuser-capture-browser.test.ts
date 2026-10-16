@@ -5,6 +5,7 @@ import {mkdtempSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {captureSessions} from '@mote/shared';
+import sharp from 'sharp';
 import {buildApp} from '../src/app.js';
 
 const password='Generated-M13-archive-only-01';
@@ -50,4 +51,17 @@ test('original album and Session grouping preserve app returns, five-minute gaps
  const albums=await f.request(f.a.token,'/api/capture-browser/albums?'+range+'&limit=1');assert.equal(albums.statusCode,200,albums.body);assert.equal(albums.json().totalCount,6);assert.equal(albums.json().albumCount,3);
  const album=albums.json().items[0],images=await f.request(f.a.token,'/api/capture-browser/album-images?'+new URLSearchParams({deviceId:album.deviceId,appId:album.appId,after:album.after,before:album.before}));assert.equal(images.statusCode,200,images.body);assert.equal(images.json().totalCount,album.count);assert.doesNotMatch(images.body,/ocrText|textPreview/);
  assert.equal((await f.request(f.a.token,'/api/capture-browser/album-images?'+range)).statusCode,400);
+});
+
+test('original image and thumbnail read M03 bytes for the captured account and recheck authority after image work',async t=>{
+ const f=await fixture(t),image=await sharp({create:{width:800,height:600,channels:3,background:'#234567'}}).png().toBuffer(),bimage=await sharp({create:{width:800,height:600,channels:3,background:'#ab2310'}}).png().toBuffer(),input=record(1000,'same-app',{imageBase64:image.toString('base64'),imageMime:'image/png'});
+ await f.receive(f.a,[input]);await f.receive(f.b,[{...input,ocrText:'GENERATED_B_ARCHIVE',imageBase64:bimage.toString('base64')}]);
+ const detail=await f.request(f.a.token,'/api/capture-browser/'+input.id);assert.equal(detail.statusCode,200,detail.body);assert.equal(detail.json().ocrText,'GENERATED_A_ARCHIVE');
+ const path='/api/capture-browser/'+input.id+'/image',full=await f.request(f.a.token,path);assert.equal(full.statusCode,200,full.body);assert.deepEqual(full.rawPayload,image);assert.equal(full.headers['content-type'],'image/png');assert.equal(full.headers['cache-control'],'no-store');assert.deepEqual((await f.request(f.b.token,path)).rawPayload,bimage);assert.equal((await f.request(f.admin.token,path)).statusCode,404);
+ const thumbnail=await f.request(f.a.token,path+'?thumbnail=1');assert.equal(thumbnail.statusCode,200,thumbnail.body);const meta=await sharp(thumbnail.rawPayload).metadata();assert.equal(meta.format,'jpeg');assert.ok(meta.width!<=480&&meta.height!<=480);
+ assert.equal((await f.request(f.a.token,path+'?deviceId=another-device')).statusCode,404);assert.equal((await f.request(f.a.token,path+'?source=note')).statusCode,404);
+ let entered!:()=>void,release!:()=>void;const arrived=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r),original=sharp.prototype.toBuffer;
+ t.mock.method(sharp.prototype,'toBuffer',async function(this:sharp.Sharp,...args:any[]){const bytes=await original.apply(this,args as any);entered();await gate;return bytes;});t.after(()=>release());
+ const pending=f.request(f.a.token,path+'?thumbnail=1');await arrived;const disabled=await f.request(f.admin.token,'/api/admin/accounts/'+f.a.userId,'PATCH',{enabled:false});assert.equal(disabled.statusCode,200,disabled.body);release();const retired=await pending;assert.equal(retired.statusCode,401,retired.body);assert.match(retired.headers['content-type']??'',/application\/json/);assert.doesNotMatch(retired.body,/GENERATED_A_ARCHIVE/);
+ assert.equal((await f.request(f.a.token,path)).statusCode,401);assert.deepEqual((await f.request(f.b.token,path)).rawPayload,bimage);
 });
