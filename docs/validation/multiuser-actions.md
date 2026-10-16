@@ -73,3 +73,11 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 - `5172f099` 邻接窄回归：`node --import tsx --test --test-concurrency=1 --test-name-pattern='portable action restore|explicit Actions restoration|explicit owned todo restore' apps/server/test/multiuser-actions-fences.test.ts apps/server/test/multiuser-actions.test.ts`，`m12-lifecycle-adjacent` 3/3 EXIT0，16196ms。未选场景不计本次通过。
 - 当前增加到 46 个专项场景，原 41 个全部保留。未在最终同一 SHA 整组跑过。M16 固定 589d 的第五次 required 已结束 EXIT1：Desktop 492/492、Server 2562 pass/0 fail/1 opt-in skip、Web 505/505；最后 CLI 4/5（重复 fresh-self 请求）失败，Android 未运行。M16 已释放，M15 使用两个短槽，本方未 claim heavy。13 表和权限退役接缝给 M16 后，须组合其真实冻结修复再验收。
 - 文档编辑曾在 Python 解析期因输入编码失败，以及 apply_patch 上下文未匹配；均未改文件。列清单脚本误遍历字典后只追加了表头，已按真实 PRAGMA 字典追加全列。这些是编辑命令失败，不计产品或测试失败。
+
+## 首次 fresh 组合与长文件夹具修正
+
+- `59a2966e903cc1d51912d6e491badd4f1ad07a1c` 在真实最终 M11/M16 589d 和 CLI 7fb 基础上 fresh `npm run build:libs`、`npm run build -w @mote/server` 均 EXIT0，日志 `m12-final-build-{libs,server}`。随后原 13 文件 46 项串行专项为 45 pass/1 fail，341583ms，`m12-59a-focus.log/.exit`；唯一长 Unicode 场景在 90 秒等待后看到 4 completed、无 pending/failed、无建议。该阶段已释放，后续 A/B/C、emitted、required 没有继续执行。
+- `6fd208ff` 的诊断增加完成状态等待后又重复等待输出，累计触发 120 秒测试总时限，`m12-long-tail-valid-red` 为 1 cancelled/EXIT1，不计生产 RED。`59db9aec` 改为在真实 watch waiting、全部模型单元 completed 后立即检查输出，`m12-long-tail-completed-red` 0/1 EXIT1、34352ms；诊断证明 4 批各含 3 条 M06 记录，最后一批第 3 条的 54 个字符含完整尾段。生产没有截尾；旧假模型只检查每批 `[0]` 的假设不再适用于先前已保留的 Material 分组能力。
+- `725f8b97f349f29ddd9f0e8c78b59cbbdcb1d446` 仅修正该合成 responder，检查全部已提供原文。相同真实 M03/M06/Harness、尾段内容、UTC 和 surrogate 断言原样通过 1/1、32943ms，`m12-long-tail-grouped-fixture-green.log/.exit`。没有放宽时限或修改生产实现，不追认为新的运行时缺陷 TDD。
+- M16 `2affb338` / `9fa19e2b` 已分别 pick 为本方 `9ac5d2e0` / `52aa25b9`，13 表与恢复撤权接缝由对方实际 17/17 验证。本方只读两 helper、真实调用者和新增测试后没有新增 confirmed P0/P1/P2，报告 `/tmp/mote-m12-review-m16-backup-9fa.md`；静态清单 173，13 表全部列与真实 PRAGMA 一致。本方 compiled/required 仍须执行，不能把对方结果当独立运行。
+- M15 已冻结的延迟读取/完整 import 回执小增量按其测试前置顺序组合到 `e9f284af`；对方实际 JVM 4/4 与原生 3 个单例 GREEN 的来源见其 validation，不冒充本方原生执行。新增 opaque Actions 页面检查仍由 M15 进行。
