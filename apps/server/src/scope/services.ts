@@ -29,6 +29,7 @@ export class ScopedServices {
   /** Host inventory only: callers receive no private service or lifecycle grant.
    * Operations persist this set so a missing adapter cannot become success. */
   lifecycleDomains(){return Object.freeze([...this.users.keys()].sort());}
+  personalImportDomains(){return Object.freeze([...this.users.entries()].map(([id,entry])=>({id,mode:entry.lifecycle.importUser===false?'preserve':typeof entry.lifecycle.importUser==='function'?'merge':'unavailable'} as const)).sort((a,b)=>a.id.localeCompare(b.id)));}
   forUser(context:UserContext){
     this.authority.assert(context);
     const domain=(id:string)=>{this.authority.assert(context);const entry=this.users.get(id);if(!entry)throw new ScopeError('scope_unavailable',503);return entry;};
@@ -38,6 +39,7 @@ export class ScopedServices {
       exportUser:async(id:string)=>{const result=await domain(id).lifecycle.exportUser(context);this.authority.assert(context);if(result.domain!==id||result.userId!==context.userId||result.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);return result;},
       deleteUser:(id:string,operationId:string)=>domain(id).lifecycle.deleteUser(context,operationId),
       restoreUser:(id:string,archive:UserExport,operationId:string)=>{const entry=domain(id);if(archive.domain!==id||archive.userId!==context.userId||archive.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);return entry.lifecycle.restoreUser(context,archive,operationId);},
+      importUser:(id:string,archive:UserExport,operationId:string)=>{const entry=domain(id);if(archive.domain!==id||archive.userId!==context.userId||archive.deploymentId!==context.deploymentId)throw new ScopeError('invalid_identity',403);if(typeof entry.lifecycle.importUser!=='function')throw new ScopeError('scope_unavailable',503);const result=entry.lifecycle.importUser(context,archive,operationId);this.authority.assert(context);return result;},
     });
   }
   forInstance(context:UserContext){

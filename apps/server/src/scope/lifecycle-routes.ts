@@ -4,6 +4,10 @@ import type {LifecycleOperations} from './lifecycle-operations.js';
 const id=(value:unknown)=>z.object({id:z.string().uuid()}).parse(value).id;
 const empty=z.object({}).strict();
 export function registerLifecycleRoutes(runtime:ScopedRuntime,operations:LifecycleOperations){
+ registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/portable/imports',handle:(context,request)=>operations.listImports(context,request.query)});
+ registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/portable/imports',bodyLimit:operations.maxExportBytes+4096,handle:(context,request)=>{const body=z.object({operationId:z.string().uuid(),archive:z.unknown()}).strict().parse(request.body);return operations.importArchive(context,body.operationId,body.archive);}});
+ registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/portable/imports/:id',handle:(context,request)=>operations.importReceipt(context,id(request.params))});
+ registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/portable/imports/:id/cancel',handle:(context,request)=>{empty.parse(request.body??{});return operations.cancelImport(context,id(request.params));}});
  registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/portable/exports',handle:(context,request)=>operations.listExports(context,request.query)});
  registerAuthenticatedRoute(runtime,{method:'POST',url:'/api/portable/exports',handle:(context,request)=>operations.export(context,z.object({operationId:z.string().uuid()}).strict().parse(request.body).operationId)});
  registerAuthenticatedRoute(runtime,{method:'GET',url:'/api/portable/exports/:id',handle:(context,request)=>operations.exportReceipt(context,id(request.params))});

@@ -388,3 +388,45 @@ personal import merged/deduplicated data. Host identity mapping and per-domain
 merge contracts must be defined before those hooks can safely expose that
 capability. The M12 handoff remains unauthorized. No missing domain is treated as
 successful, and neither this gate nor a draft PR means M16/project acceptance.
+
+## Personal import implementation checkpoint (not final acceptance)
+
+This supersedes the earlier OPEN identity decision: the user approved only the
+original deployment/account and canonical merge/dedup. The actual public endpoint
+was first RED 3/3 at `0499fe5c`, `/tmp/m16-personal-import-first-red.log` (exit 1,
+missing production import entry), before its implementation.
+
+The current narrow actual-host suite is 12/12, exit 0:
+`node --import tsx --test apps/server/test/multiuser-portable-import.test.ts`,
+`/tmp/m16-personal-import-twelve.log`. It exercises original bytes and missing
+sources, B unchanged, duplicate/restart receipts, actual Memory/model completion
+and saved conversations, deletion then reimport, current grant/policy/model-call
+preservation, real-domain-read barriers for cancel/disable/logout/restart,
+wrong owner/deployment/version/coverage rejection, later-domain SQL/FS rollback,
+newer source-head/retired Material preservation, valid source identity conflict,
+corrupt original bytes, changed retry input, empty owner and cursor-bound pages.
+A conflict fixture initially changed deviceId while leaving its captures tied to
+the previous device; it was correctly invalid_data rather than a valid immutable
+conflict. That assertion failure is retained in the boundaries-first log; the
+corrected source-kind conflict reaches archive_conflict and passes. It is not a
+production RED. Barrier cleanup is registered before host close to avoid a failed
+assertion stranding the generated provider.
+
+Server typecheck exits 0 (`/tmp/m16-personal-import-types2.log`); scope inventory
+and production import boundary exit 0. The new import list/receipt/control routes
+and private original rollback directory admission are explicitly inventoried.
+`ig_state` restore/delete now names its existing columns for compatibility with
+M13's proposed derived notification column; no unreviewed journal is assumed.
+
+This public checkpoint still needs independent review, adjacent adapter checks,
+real original UI consumers and a new combined required/build window. The ec6
+required result does not cover this runtime. M12 remains unavailable by the
+explicit handoff restriction; Docker publication/native-volume limitations and
+final all-module joint validation remain separate OPEN items.
+
+Existing domain adapter adjacent journeys also pass 11/11, exit 0:
+`node --import tsx --test --test-concurrency=1 --test-name-pattern='restore|portable|lifecycle' apps/server/test/multiuser-ask.test.ts apps/server/test/multiuser-memory.test.ts apps/server/test/multiuser-ingress.test.ts apps/server/test/multiuser-processing.test.ts`,
+`/tmp/m16-personal-import-adapter-adjacent.log`. These include real external Memory
+historical-body export/stale builtin restore, held provider deletion, original
+identity stitching rejection and processing publication/hash parents. They are
+adjacent adapter evidence, not a full server or all-module acceptance run.
