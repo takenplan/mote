@@ -126,3 +126,31 @@ image-profile and complete recording parity still require their own implementati
 and acceptance. This candidate does not introduce a second executor or generic
 control framework. Native archives predating this new required table are not
 claimed compatible; older personal payloads default missing controls to empty.
+
+## Original explicit file reprocessing candidate
+
+KEEP explicit owner reprocessing and its unknown-outcome acknowledgement; a
+physically active call still blocks even after another owner task endpoint has
+recorded acknowledgement. Originals, successful artifacts and old outcome facts
+remain retained. CHANGE the replacement admission to a fresh per-original
+nonzero generation and a new M05 task. Zero-generation canonical input stays
+byte-compatible with the historical identity formula. REMOVE replay through an
+obsolete cancelled input/grant. EXCEPTION a host-only M05 acknowledgement records
+consent for exact owned unresolved calls without changing their outcomes or
+requeuing old work. UNKNOWN diarization-only retry/overrides, complete image
+policies/reviews/acoustic assets and full compiled/client gates remain pending.
+
+The narrow retry candidate accepts POST `/api/files/:id/retry` with a stable
+client-generated `operationId` (1–128 characters), `stage: transcribe|summary`
+(default transcribe) and optional `confirmUnknown` (default false). It returns
+`{queued:true,taskId}`; the same exact operation/body returns the original task,
+including after completion, and body conflicts return409. The consumer persists
+this request identity through lost ACK rather than requiring another user step.
+Running work returns409; an unacknowledged unknown also returns409 until explicit
+confirmation. All confirmations/control-generation/admission/receipt writes share
+one transaction. The original owner/source/file checks precede lookup. Summary
+reprocessing keeps raw extraction and uses fresh summary stages; transcribe uses
+fresh extraction fingerprints. Portable archives retain the per-file control
+intent but exclude retry/admission history and execution grants. The native backup
+catalog covers the new owner-keyed `mp_file_retries` journal. This is still WIP,
+not a replacement consumer freeze or complete Files acceptance.

@@ -142,9 +142,9 @@ export class ProcessingHost {
  private cancellation(context:UserContext,ref:string){
   const sql=this.sql(context),control=this.fileControl(context,ref);this.input(context,{originalRef:ref,...this.snapshot(context,ref)},true);
   const work=sql.all("SELECT e.state FROM user_tasks u JOIN execution_steps e ON e.user_id=u.user_id AND e.id=u.task_id WHERE u.user_id=$user AND e.user_id=$user AND e.kind LIKE 'processing.%' AND json_extract(u.input,'$.originalRef')=?",ref);
-  const calls=sql.all("SELECT a.id FROM task_external_calls c JOIN user_tasks u ON u.task_id=c.task_id AND u.user_id=c.user_id LEFT JOIN mp_activity a ON a.user_id=c.user_id AND c.request_key='processing:'||c.task_id||':'||a.id WHERE c.user_id=$user AND u.user_id=$user AND json_extract(u.input,'$.originalRef')=? AND c.state IN ('issued','unknown') AND NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations r WHERE r.user_id=c.user_id AND r.issuance_id=c.issuance_id)",ref);
+  const calls=sql.all("SELECT a.id,NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations r WHERE r.user_id=c.user_id AND r.issuance_id=c.issuance_id) unacknowledged FROM task_external_calls c JOIN user_tasks u ON u.task_id=c.task_id AND u.user_id=c.user_id LEFT JOIN mp_activity a ON a.user_id=c.user_id AND c.request_key='processing:'||c.task_id||':'||a.id WHERE c.user_id=$user AND u.user_id=$user AND json_extract(u.input,'$.originalRef')=? AND c.state IN ('issued','unknown')",ref);
   const live=calls.some(row=>row.id&&this.active.has(identityHash([context.userId,row.id])));
-  return {canCancel:!control.cancelled&&work.some(row=>['waiting','running','blocked','failed'].includes(String(row.state))),wait:live?'running' as const:calls.length?'unknown' as const:null};
+  return {canCancel:!control.cancelled&&work.some(row=>['waiting','running','blocked','failed'].includes(String(row.state))),wait:live?'running' as const:calls.some(row=>row.unacknowledged)?'unknown' as const:null};
  }
  private cancelFile(context:UserContext,ref:string){
   const sql=this.sql(context);return sql.transaction(()=>{const before=this.cancellation(context,ref);if(!before.canCancel)return {state:this.fileControl(context,ref).cancelled?'cancelled':'completed',...before};

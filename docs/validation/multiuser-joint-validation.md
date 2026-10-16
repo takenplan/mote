@@ -617,3 +617,19 @@ the independently evaluated old identity, persisted zero-format parent/child
 inputs, restart/lost-ACK lookup with no extra tasks, and the real held-summary
 cancellation fence. This is not an execution of an old production binary or a
 general historical archive migration claim. The original RED remains preserved.
+
+Files explicit reprocessing candidate (not a consumer freeze): the original
+POST retry route first returns503, /tmp/mote-joint-file-retry-entry-red.log/.exit.
+Fresh owner transcribe after cancellation/stopped restore succeeds and same
+operation returns its one durable task. The additional actual owner-task
+confirmUnknown-before-transport-return case reveals200 instead of409 in
+/tmp/mote-joint-file-retry-physical-ack-red.log/.exit. The fix checks physical
+activity independently from replay acknowledgements. The same case plus bare503
+unknown/required confirmation/foreign owner rejection/new task/old fact intact/B
+positive pass2/2/EXIT0 in /tmp/mote-joint-file-retry-physical-ack-green.log/.exit.
+Summary explicit reprocess preserves raw/current evidence and old summaries,
+reruns both requested pages under the current selected model, and repeats ACK
+without extra calls;1/1/EXIT0 in
+/tmp/mote-joint-file-summary-reprocess-green.log/.exit. All inputs/transports are
+generated; no Central original or derivative was read or staged. Diarization-only
+retry/overrides, acoustic assets/reviews and broader Files outcomes remain OPEN.
