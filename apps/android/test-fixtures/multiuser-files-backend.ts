@@ -7,9 +7,10 @@ import {defaultProcessingSettings} from '../../server/src/scope/processing-schem
 
 // The production M03/M04/M05/M06 host processes an actual generated WAV. Only
 // ASR transport is substituted; no real recording, model or account is accessed.
+const literalSpeakerPrefix=process.argv.includes('--literal-speaker-prefix');
 const cleanup:Array<()=>unknown>=[];
 const f=await scopedFilesFixture({after:(callback:()=>unknown)=>cleanup.push(callback)} as unknown as TestContext);
-const asr=createServer((req,res)=>{void(async()=>{for await(const _ of req){}const text=String(req.headers.authorization).includes('GENERATED_B')?'Generated B raw recording':'Generated A raw recording';res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text,speaker:'SPEAKER_0',uncertain:true,overlap:false}],coverage:'full',engine:'generated-native-files'}));})().catch(()=>res.destroy());});
+const asr=createServer((req,res)=>{void(async()=>{for await(const _ of req){}const text=(literalSpeakerPrefix?'[SPEAKER_0] ':'')+(String(req.headers.authorization).includes('GENERATED_B')?'Generated B raw recording':'Generated A raw recording');res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text,speaker:'SPEAKER_0',uncertain:true,overlap:false}],coverage:'full',engine:'generated-native-files'}));})().catch(()=>res.destroy());});
 await new Promise<void>(resolve=>asr.listen(0,'127.0.0.1',resolve));
 const address=asr.address();if(!address||typeof address==='string')throw Error('Missing generated ASR address');
 const wave=Buffer.alloc(48);wave.write('RIFF');wave.writeUInt32LE(40,4);wave.write('WAVEfmt ',8);wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(1,22);wave.writeUInt32LE(8000,24);wave.writeUInt32LE(16000,28);wave.writeUInt16LE(2,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(4,40);
