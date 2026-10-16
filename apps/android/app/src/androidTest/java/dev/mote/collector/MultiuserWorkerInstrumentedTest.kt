@@ -102,6 +102,38 @@ class MultiuserWorkerInstrumentedTest {
         assertEquals(404,get(app,"b","/api/captures/$aid").first)
     }
 
+    @Test fun actualSourceWorkerKeepsEqualIdsSpoolsContextAndRevokedAccessUnderTheirOriginalOwner() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        login(app,"a");val a=settings.read();val source=LocalSource(id="same-native-file-source",name="Synthetic source",kind="local-files",uri="content://dev.synthetic.generated/document",retention="archive",syncContinuously=false,description="Synthetic A source context",contextDirty=true)
+        val bytes="Synthetic preserved source original bytes".toByteArray()
+        fun prepare(selected:LocalSource):JSONObject {
+            app.localSources().save(selected);val q=app.fileArchives();val generation=q.configure(selected).getString("generation")
+            val item=JSONObject().put("externalId","same-file-external").put("observedAt","2026-01-01T00:00:00Z").put("title","generated.txt").put("kind","file").put("layer","original").put("text","").put("mimeType","text/plain")
+            q.observe(selected,item,generation);q.finish(selected,generation){false}
+            return q.prepare(selected,{java.io.ByteArrayInputStream(bytes)},{true},captureImmediately=true)!!.getJSONObject("pending").getJSONObject("manifest")
+        }
+        val manifest=prepare(source);val aDirectory=app.accountDirectory().absolutePath
+        login(app,"b");val bsource=source.copy(description="Synthetic B source context");val bmanifest=prepare(bsource)
+        assertEquals(Ingress3Receipt.captureId(source.id,manifest.getJSONObject("item")),Ingress3Receipt.captureId(source.id,bmanifest.getJSONObject("item")))
+        fun runUpload(config:CollectorConfig) {
+            val request=OneTimeWorkRequestBuilder<SourceUploadWorker>().setInputData(workDataOf("manual" to true,"syncStamp" to SyncSchedule.stamp(config))).build()
+            WorkManager.getInstance(app).enqueue(request).result.get();waitFor {WorkManager.getInstance(app).getWorkInfoById(request.id).get()!!.state.isFinished}
+            assertEquals(WorkInfo.State.SUCCEEDED,WorkManager.getInstance(app).getWorkInfoById(request.id).get()!!.state)
+        }
+        runUpload(a);assertEquals(1,app.fileArchives().pendingCount(source.id))
+        runUpload(settings.read());assertEquals(0,app.fileArchives().pendingCount(source.id))
+        val id=Ingress3Receipt.captureId(source.id,bmanifest.getJSONObject("item"));assertEquals(200,get(app,"b","/api/captures/$id").first);assertEquals(404,get(app,"a","/api/captures/$id").first)
+        assertEquals("Synthetic B source context",get(app,"b","/api/sources/${source.id}/context").second!!.getString("description"))
+        login(app,"a");assertEquals(aDirectory,app.accountDirectory().absolutePath);assertArrayEquals(bytes,app.fileArchives().part(source.id,0))
+        runUpload(settings.read());assertEquals(0,app.fileArchives().pendingCount(source.id));assertEquals(200,get(app,"a","/api/captures/$id").first)
+        assertEquals("Synthetic A source context",get(app,"a","/api/sources/${source.id}/context").second!!.getString("description"))
+        app.localSources().save(source.copy(syncContinuously=true))
+        val scan=OneTimeWorkRequestBuilder<SourceScanWorker>().setInputData(workDataOf("manual" to true,"owner" to settings.read().ownerKey(),"sourceId" to source.id)).build()
+        WorkManager.getInstance(app).enqueue(scan).result.get();waitFor {WorkManager.getInstance(app).getWorkInfoById(scan.id).get()!!.state.isFinished}
+        assertEquals("permission",app.localSources().state(source.id).optString("status"));assertEquals(0,app.fileArchives().pendingCount(source.id))
+    }
+
     @Test fun anonymousFileTaskDraftRequiresExplicitBindingWithAnEmptyQueue() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))

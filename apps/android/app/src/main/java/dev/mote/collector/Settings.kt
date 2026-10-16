@@ -216,7 +216,7 @@ class Settings(private val context: Context) {
     /** Sticky while records or prepared submissions exist, including after disconnecting. */
     fun dataOrigin(): String = requireNotNull(prefs.getString("dataOrigin", null)) { MoteI18n.text(LocalDataFormat.RESET_MESSAGE) }
     fun hasPendingData(): Boolean = context.fileArchives().pendingSync().count > 0 || context.queue().hasPendingConnectionWork() || BulkDedupeStore(context).quarantine().hasUnboundRecords() || QuickNotes.draft(context).read().let { it.prepared != null || it.text.isNotEmpty() || it.mood.isNotEmpty() } ||
-        context.localSources().sources().any { (context.localSources().state(it.id).optJSONArray("pending")?.length() ?: 0) > 0 }
+        context.localSources().sources().isNotEmpty() || context.accountDirectory().listFiles()?.any { it.isFile && it.name.matches(Regex("file-task-[a-f0-9]{64}\\.enc")) } == true
     private fun originAfterChange(next: CollectorConfig): String = next.account()?.key ?: ""
     private fun accountState() = context.accountPreferences("account-state")
     fun lastSyncDispatch(): Long = accountState().getLong("lastSyncDispatch", 0)
