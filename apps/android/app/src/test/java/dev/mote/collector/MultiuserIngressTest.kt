@@ -45,6 +45,12 @@ class MultiuserIngressTest {
     private fun central(server: String, token: String) = CentralClient(server,token,{ method,url,body,_,_ ->
         request(server,token,method,url.removePrefix(server),body?.let { JSONObject(String(it,Charsets.UTF_8)) })
     })
+    @Test fun `native Vault export starts a real owner portable task instead of the retired global bundle`() = fixture { f ->
+        val server=f.getString("address");val token=f.getJSONObject("a").getString("token")
+        val id=UUID.randomUUID().toString();val receipt=CentralPortable(central(server,token)).start(id)
+        assertEquals(id,receipt.getString("id"));assertEquals("export",receipt.getString("kind"))
+        assertEquals(owner(server,token).userId,receipt.getString("userId"));assertEquals(3,receipt.getInt("version"))
+    }
     @Test fun `actual native plugin inventory consumes owned M09 rather than legacy host aggregate`() = fixture { f ->
         val token=f.getJSONObject("a").getString("token");val control=PluginControlClient(central(f.getString("address"),token))
         val inventory=control.inventory()
