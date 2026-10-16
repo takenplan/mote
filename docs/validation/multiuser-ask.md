@@ -225,3 +225,17 @@ Own composition `20506aefe8f269a6c80656e2e5a74ed5d8ba9fae` retains both appended
 policy lifecycle and long Coding tests, 2/2 EXIT0,7062.811125ms
 (`/tmp/m08-20506-composition-append.log/.exit`), server typecheck0. No production
 conflict was resolved in this merge; final whole-code checks remain pending.
+
+The representative test candidate supersedes f072 with
+`c53c199876bbfee2acfe8c38ecda7403af7f809d` (test-only readiness increment).
+Its original A fixture could observe the first catalog item before processing
+finished; the correction reuses the existing bounded production-state waiter for
+A/B exact original publication and selects the associated A Material. Retirement,
+history, three-domain restore, B and original-byte assertions stay unchanged.
+Own test-only cherry-pick is `1b86e51a9e7537f8de23ff259a1f47449e59ede6`.
+Independent literal c53 B3 + kind + old tombstone characterization: 5/5 EXIT0,
+36713.438833ms (`/tmp/m08-unified-c53-B.log/.exit`); unchanged legacy all-tool,
+partial-ready and canonical paging: 3/3 EXIT0,9082.869ms
+(`/tmp/m08-unified-c53-legacy.log/.exit`). No new runtime or test framework was
+introduced by this readiness correction. Final A/C same-candidate receipts and
+per-module gates remain explicitly tracked before delivery.
