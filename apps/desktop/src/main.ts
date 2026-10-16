@@ -83,6 +83,7 @@ let tray: Tray | undefined;
 let collector: Collector;
 let localSources: LocalSourceManager | undefined;
 let updater: DesktopUpdater | undefined;
+let calendarDelivery:Promise<unknown>|undefined;
 const onboarding = new ConnectionOnboarding();
 let connectionState: ConnectionStatus = { state: 'unchecked', get message() { return moteText("连接尚未检查"); } };
 let quitting = false;
@@ -163,7 +164,7 @@ else {
     quitting = true; void events.record('APP', 'STOPPED'); collector?.shutdown();
     if (notesSettledForQuit) return;
     event.preventDefault();
-    void Promise.allSettled([controlChain, settleNoteWork(), localSources?.close(), updater?.close(), collector?.settleCapture()]).then(() => events.read()).finally(() => { notesSettledForQuit = true; app.quit(); });
+    void Promise.allSettled([controlChain, calendarDelivery, settleNoteWork(), localSources?.close(), updater?.close(), collector?.settleCapture()]).then(() => events.read()).finally(() => { notesSettledForQuit = true; app.quit(); });
   });
   app.on('window-all-closed', () => { /* Tray keeps the collector and durable uploader alive. */ });
   app.on('activate', showWindow);
@@ -212,10 +213,15 @@ else {
     }));
     let syncHistory = new SyncHistory(join(accountDirectory,'sync-history.sqlite')); await syncHistory.initialize();
     collector = new Collector(settings, queue, helperPath, encryptedStorageAvailable, updateUi, diagnostics, events, localSources,syncHistory);
-    let calendarDelivery:Promise<void>|undefined;
+    const calendarOperation=(kind:'connect'|'deliver')=>{
+      const requested=settings,generation=accountGeneration,directory=accountDirectory,previous=calendarDelivery;
+      const assertCurrent=()=>{if(quitting||accountTransition||settings!==requested||generation!==accountGeneration)throw Error('Desktop account changed');};
+      const task=(async()=>{await previous?.catch(()=>{});assertCurrent();if(!accountKey(requested)||!connectionToken(requested))throw Error('Sign in before connecting a calendar');return nativeCalendarActions(requested,helperPath,directory,assertCurrent)[kind]();})();
+      calendarDelivery=task;void task.finally(()=>{if(calendarDelivery===task)calendarDelivery=undefined;}).catch(()=>{});return task;
+    };
     const calendarTimer=setInterval(()=>{
-      if(calendarDelivery||!connectionToken(settings)||!settings.serverUrl||settings.syncMode==='manual'||process.platform!=='darwin')return;
-      calendarDelivery=nativeCalendarActions({...settings},helperPath,accountDirectory).deliver().catch(()=>{}).finally(()=>{calendarDelivery=undefined;});
+      if(quitting||accountTransition||calendarDelivery||!connectionToken(settings)||!settings.serverUrl||settings.syncMode==='manual'||process.platform!=='darwin')return;
+      void calendarOperation('deliver').catch(()=>{});
     },60000);calendarTimer.unref();
     app.once('before-quit',()=>clearInterval(calendarTimer));
 
@@ -465,6 +471,8 @@ else {
     handle('mote:sources', () => localSources!.status());
     handle('mote:source-sync', async () => { const scan = localSources!.sync(true); await collector.retry(); await scan; await collector.retry(); });
     handle('mote:calendar-authorize', () => serialize(() => {requireAccount();return localSources!.authorizeCalendar();}));
+    handle('mote:calendar-actions-connect',()=>serialize(()=>calendarOperation('connect')));
+    handle('mote:calendar-actions-deliver',()=>serialize(()=>calendarOperation('deliver')));
     handle('mote:source-calendar', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("日历选择无效")); requireAccount();await localSources!.addCalendar(id, options); }));
     handle('mote:source-update', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("来源选择无效")); await localSources!.update(id, options); }));
     const sourceSelections = new Map<string,string[]>();

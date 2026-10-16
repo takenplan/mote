@@ -1,10 +1,10 @@
+import {registerScopedTodos} from './todos.js';
+import {registerScopedActions} from './action-routes.js';
+import type {ScopedActions} from './actions.js';
 import {registerWebAssets} from '../web-assets.js';
 import {registerWebInventory} from './web-routes.js';
 import {registerScopedActivity} from './activity.js';
 import {registerOwnerQuestions} from './owner-question-routes.js';
-import {registerScopedTodos} from './todos.js';
-import {registerScopedActions} from './action-routes.js';
-import type {ScopedActions} from './actions.js';
 import {registerScopedConnectors} from './connector-routes.js';
 import type {ScopedConnectors} from './connectors.js';
 import type {ConnectorTransports,ConnectorDefinition} from './connector-contract.js';
@@ -60,9 +60,9 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
   let ask:AskHost|undefined;
   let processing:ProcessingHost|undefined;
   let mcp:ScopedMcp|undefined;
+  let actions:ScopedActions|undefined;
   let lifecycle:LifecycleOperations|undefined;
   let management:Awaited<ReturnType<typeof registerManagement>>|undefined;
-  let actions:ScopedActions|undefined;
   try{
     const app=Fastify({logger:false});
     const accounts=new Accounts(storage.db,storage.deploymentId);
@@ -80,7 +80,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
     app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','connectors','memory','ask']:[]),...(actions?['actions','todos']:[]),...(mcp?['mcp-sources']:[]),...(mcp&&memory?['mcp-memory']:[])]}));
-    registerPrivateData(runtime,storage.db);
+    const privateCursorKey=registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
     execution?.bindConfiguration(configuration);
@@ -92,7 +92,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
       const {receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial}=ingress.bindSource(context,sourceIds,assertCurrent);
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
-    if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins);await processing.ready();}
+    if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins,privateCursorKey);await processing.ready();}
     registerCaptureBrowserReads(runtime,ingress,processing,(context,id)=>{if(!ask)throw new ScopeError('scope_unavailable',503);return ask.originalReadReceipt(context,id);});
     if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory},ownerQuestions);memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);mcp?.bindMemory(memory);}
     if(execution&&memory){ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);if(processing)ask.bindProcessing(processing);mcp?.bindAsk(ask);}
@@ -107,6 +107,6 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     await registerWebAssets(app);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,lifecycle,todos,actions,deploymentId:storage.deploymentId};
+    return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,deploymentId:storage.deploymentId};
   }catch(error){await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();await management?.close();storage.close();throw error;}
 }

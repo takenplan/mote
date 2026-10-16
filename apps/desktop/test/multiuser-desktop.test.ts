@@ -96,6 +96,19 @@ async function productionDesktop(f:Awaited<ReturnType<typeof fixture>>,profile=j
  const documentCall=(name:string,method:string,args:any[]=[])=>new Promise<any>((resolve,reject)=>{const id=++nextId;results.set(id,{resolve,reject});child.send({type:'document-invoke',id,document:name,method,args});});
  return {child,call,document,documentCall,get generation(){return generation;},get latest(){return latest;},profile,set intercept(fn:typeof intercept){intercept=fn;},async kill(){child.kill('SIGKILL');await new Promise(r=>child.once('exit',r));}};
 }
+it('restores native calendar target connection through actual main/preload while retiring A controls after B login',async()=>{
+ const f=await fixture(),app=await productionDesktop(f),nativeCalls:string[]=[];
+ app.child.on('message',(raw:any)=>{if(raw.type==='generated-calendar')nativeCalls.push(raw.command);});
+ await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('A');
+ await app.documentCall('A','connectCalendarActions');
+ expect((await f.request(f.a.token,'/api/actions')).json().targets[0].calendars[0].id).toBe('generated-calendar');
+ await app.call('mote:ask',['login',{token:f.b.token}]);
+ await expect(app.documentCall('A','connectCalendarActions')).rejects.toThrow(/Untrusted request origin|account changed/);
+ await app.document('B');await app.documentCall('B','deliverCalendarActions');
+ expect((await f.request(f.b.token,'/api/actions')).json().targets).toEqual([]);expect(nativeCalls).toEqual(['calendar-permission']);
+ await app.documentCall('B','connectCalendarActions');expect(nativeCalls).toEqual(['calendar-permission','calendar-permission']);
+ expect((await f.request(f.b.token,'/api/actions')).json().targets[0].calendars[0].id).toBe('generated-calendar');
+},30000);
 it('runs actual emitted main IPC: offline A queue/draft → B explicit capture → SIGKILL/restart → A resumes; retired document rejects',async()=>{
  const f=await fixture();let app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);
  let status=await app.call('mote:get-status');await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false,defaultCollection:'activity'}]);

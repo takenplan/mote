@@ -12,6 +12,19 @@ import {scopedMemoryFixture} from './fixtures/scoped-memory-host.js';
 import {defaultModelSettings} from '../src/model-settings.js';
 import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider.js';
 
+test('personal import retains validated historical Memory evidence after a Material update without making it current execution input',async t=>{
+ const f=await scopedMemoryFixture(t),material=await f.publish(f.a,'A');await f.wait(f.a,(await f.submit(f.a,[material.id])).id);
+ const saved=await archive(f),context=await f.node.authority.authenticate(f.a.token),bound=f.node.ingress.bindSource(context,['same-source'],()=>{});
+ const draft=JSON.parse(String(f.read(db=>db.prepare('SELECT json FROM pd_material_versions WHERE user_id=? AND material_id=? AND revision=?').get(f.a.userId,material.id,material.revision)!.json)));
+ const current=bound.publishMaterial({...draft,title:'Generated newer material title'});assert.notEqual(current.revision,material.revision);
+ const before=f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),calls=f.requests.length;
+ const receipt=await imported(f,saved);assert.equal(receipt.state,'completed',JSON.stringify(receipt));
+ assert.deepEqual(f.read(db=>db.prepare('SELECT * FROM task_authorizations ORDER BY task_id').all()),before);assert.equal(f.requests.length,calls);
+ const old=await f.request(f.a.token,'/api/memory/jobs','POST',{materialIds:[material.id],materialRevisions:{[material.id]:material.revision},operationId:randomUUID()});assert.equal(old.statusCode,409,old.body);assert.equal(f.requests.length,calls);
+ const selected=await f.request(f.a.token,'/api/memory/materials/'+material.id+'?revision='+current.revision);assert.equal(selected.statusCode,200,selected.body);assert.equal(selected.json().status,'ready');
+ await f.wait(f.a,(await f.submit(f.a,[material.id])).id);assert.ok(f.requests.length>calls,'a legitimate fresh owner request still executes against the current revision');
+});
+
 async function archive(f:Awaited<ReturnType<typeof scopedMemoryFixture>>){
  for(let attempt=0;attempt<1000;attempt++){if(!f.read(db=>db.prepare("SELECT id FROM execution_steps WHERE state='running' OR(state='waiting' AND coalesce(error,'')<>'memory_window_pending') LIMIT 1").get()))break;await delay(5);}
  const id=randomUUID(),started=await f.request(f.a.token,'/api/portable/exports','POST',{operationId:id});assert.equal(started.statusCode,200,started.body);

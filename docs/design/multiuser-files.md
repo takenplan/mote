@@ -1,0 +1,92 @@
+# Shared owned Files/Imports adaptation: staged delivery
+
+This closes shared production seams for the original Web/Android consumers; it
+does not introduce another FileStore, ImportManager, executor or user database.
+The [original recording ADR](../adr-recording-outcomes-runtime.md),
+[speaker/correction ADR](../adr-speaker-range-and-display.md) and
+[file source ADR](../adr-file-source-context.md) keep their semantic requirements.
+The [joint matrix](../validation/multiuser-joint-validation.md) remains pending.
+
+## Read checkpoint: implemented, narrow validation only
+
+The existing M06 registrar installs `scope/processing-files.ts`. It reads current
+M03 originals, source heads, M06 artifacts/publications and actual M05 task
+receipts through owner-bound SQL. Source/owner/query filters precede pagination.
+It creates no private rows, model work or execution authority. The existing M02
+cursor key is passed only through trusted composition to PrivateCursor.
+
+| Entry | Contract |
+| --- | --- |
+| `GET /api/files` | Optional sourceId, query (original title), mimePrefix and limit1–100; signed opaque nextCursor binds deployment/user/full query/limit. Current enabled source heads only. No other account's rows or cursor. |
+| `GET /api/files/:captureId` | Owned original capture, sourceId, originalRef, exact size/hash/availability, item metadata, actual M06 saved/processed/indexed/derivations in `processing`, and actual admitted M05 `job` or null. No synthetic legacy queue/summary counts. |
+| `GET /api/files/:captureId/chunks?offset=N` | Current extraction's complete structured segments, 100 per page with nextOffset. Existing Capture-style text and fileEvidence preserve artifact/chunk identity, timing, anonymous speaker/uncertainty/overlap and document/image location. M06 artifact IDs are64hex; shared schema retains UUIDs for existing algorithm fixtures and accepts those actual scoped IDs. |
+| `POST /api/files/:captureId/playback {}` | Delegates to M03's account/credential/epoch-bound play ticket. Returned URL is the authenticated Ingress3 original reader, preserving byte Range. Fetch with the original Api/native credential and required protocol headers; renderer audio/image uses the authenticated bytes/Blob. The URL alone does not remove M03 auth. |
+| `GET /api/files/:captureId/export` | Current transcript JSON/Markdown/CSV, current available derivations and exact original/artifact manifest in the existing USTAR+gzip format. Pure existing formatting/tar code is extracted once for legacy and scoped consumers, with an authority check at stream boundaries. Existing64MiB export bound remains. No raw original, credential or other account's content is included. |
+
+This read checkpoint does **not** close reference-only catalog files, proposed review,
+acoustic override/sample assets,
+cancel/retry/forget or complete original legacy recording export outcomes. Those
+remain explicit shared Files work; neither the current transcript export nor a
+generic Material list substitutes for them.
+
+## Owner corrections and speaker confirmation: candidate under validation
+
+The existing M06 service accepts the original exact `artifactId`, `chunkId`,
+`originalText` and `correctedText` correction contract. It reuses the production
+evidence-ID function, retains the uncorrected immutable extraction, creates a new
+owner-bound artifact, and republishes through M06's existing Material algorithm.
+A stale artifact/text/chunk or another owner's artifact rejects. Identical text
+is unchanged. No model or new task is admitted by an owner edit.
+
+The original speaker-name contract keeps anonymous labels, timing and text;
+only the owner confirms an existing label's name. Confirmations include the
+existing owner/UUID/time provenance and survive later text corrections. Their
+small per-owner annotation journal references both the current and original raw
+M06 artifact. Existing Material revisions retire dependent views. Old artifacts
+remain retained evidence rather than new execution input.
+
+The existing tar export includes current and uncorrected JSON/Markdown/CSV in
+separate entries, raw artifact identity in the manifest, and a separate confirmed
+speaker attribution entry. M16 portable export, semantic merge, physical account
+deletion, and offline instance backup/restore include this canonical journal.
+Older imported names cannot overwrite an existing newer confirmation. Corrupt
+raw-artifact links reject atomically. Recovery does not renew login or execution
+grants. Newly produced instance backups require the complete annotation table;
+pre-candidate backups have not been accepted as compatible by this checkpoint.
+
+An actual older-archive merge after a speaker/Material update exposed an existing
+Memory restore conflict: it validated historical archive evidence through the
+current execution reader. Recovery now uses a narrowly named retained projection
+of the same canonical algorithm. Live `materialEvidence`/`evidence`, admission
+and revision checks stay current-only. A generated real-host/model regression
+retains old history, rejects old-revision execution and permits a fresh current
+owner request. No retired evidence is promoted to current authority.
+
+These are narrowly exercised candidate paths, not final Files, Imports or joint
+acceptance. Type/build/affected and independent review receipts must be recorded
+before a shared write freeze is offered to consumers. Proposed model-assisted
+reviews/calendar matching, acoustic per-file overrides, sample assets and all
+remaining lifecycle controls are still OPEN.
+
+## Remaining shared Imports contract
+
+Android's actual entry uploads `{id,name,sizeBytes,mimeType}`, sends raw4MiB parts,
+commits to an archived file ID, then creates a preview ImportJob using stable
+requestId and explicit instruction. Both clients need real list/detail,
+capabilities, preview/ambiguity, confirm, retry/resume, cancel and archived bytes.
+M03 has account-bound original/parts/commit/receipts; M06 has deterministic/media
+processors and artifacts; M05 owns execution; M07 owns downstream Memory.
+
+The original ImportStore cannot be mounted: it reaches the retired unscoped
+Store, SourceStore, FileStore and runtime. Keep its pure schemas, decoder,
+manifest/disposition validation and review-gate semantics. Unconfirmed parser
+rows must remain staged and outside query-visible evidence. M03 intake completion
+and automatic M06 publication cannot be used as preview/confirmation success.
+Ordinary import must not regain shell/host-path authority. Administrator-only
+host import stays separate. Model interpretation uses existing M04 leases/M05
+tasks and generated external transports in validation; no semantic keyword rules.
+
+The joint thread owns this shared backend adaptation. M13/M14/M15 own their
+original thin UI/native consumers and final acceptance. They were notified to
+avoid a second backend projection. Until a tested shared freeze is published,
+these Imports/write paths remain OPEN rather than faked or silently removed.

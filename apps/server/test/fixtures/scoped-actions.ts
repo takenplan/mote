@@ -37,4 +37,3 @@ export function respond(body:any,raw:string,res:ServerResponse,owner:string){
  const id=envelope.untrustedEvidence[0].id;
  writeMessagesResponse(res,{stage:uses.length+1,text:JSON.stringify({answer:JSON.stringify({actions:envelope.untrustedEvidence[0].ocrText.includes('GENERATED_'+owner+'_PRIVATE_APPOINTMENT')?[{kind:'calendar.create',event:{...event,title:'Generated '+owner},uncertainty:'Generated proposal',sameAs:null,evidence:[{id,quote:'GENERATED_'+owner+'_PRIVATE_APPOINTMENT'}]}]:[]}),citationIds:[id]})});
 }
-

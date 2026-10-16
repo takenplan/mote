@@ -1708,6 +1708,7 @@
       "table:mp_artifact_usage",
       "table:mp_artifacts",
       "table:mp_derivations",
+      "table:mp_file_annotations",
       "table:mp_original_formats",
       "table:mp_publications",
       "table:mp_restore",
@@ -2278,13 +2279,6 @@
       "extension:runtime.services.registerInstance:'instance-management'"
     ]
   },
-  "apps/server/src/scope/ingress-lifecycle.ts": {
-    "scope": "user",
-    "module": "M16",
-    "surfaces": [
-      "directory:path"
-    ]
-  },
   "apps/server/src/scope/capture-browser-routes.ts": {
     "scope": "user",
     "module": "M13",
@@ -2297,6 +2291,13 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/sessions',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/updates',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/devices/:id/updates',service:'ingress'"
+    ]
+  },
+  "apps/server/src/scope/ingress-lifecycle.ts": {
+    "scope": "user",
+    "module": "M16",
+    "surfaces": [
+      "directory:path"
     ]
   },
   "apps/server/src/scope/action-delivery.ts": {
@@ -2371,6 +2372,19 @@
       "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'PATCH',url:'/api/todos/:id'",
       "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'POST',url:'/api/todos'",
       "extension:runtime.services.registerUser:TODOS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/processing-files.ts": {
+    "scope": "user",
+    "module": "M06",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/corrections'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/speakers'"
     ]
   }
 }
