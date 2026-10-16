@@ -108,3 +108,12 @@ test('Web reference form transport retains metadata and retries one owned Ingres
  assert.doesNotMatch(JSON.stringify(await b.request('/api/source-items')),/GENERATED_A_REFERENCE/);
  await assert.rejects(saveWebReference(a,'STALE_A_REFERENCE',uri),error=>(error as any).code==='session_changed');
 });
+
+test('Web Ask model availability treats an actual empty account selection as normal configuration state',async t=>{
+ const {askModelSelectionPath}=await import('../../web/src/ask-model-selection.js'),f=await fixture(t),a=f.api();
+ const empty=await a.request<any>('/api/models');assert.equal(askModelSelectionPath(empty),null);
+ const settings={...defaultModelSettings(),provider:'custom',protocol:'openai-completions',baseUrl:'https://synthetic.invalid/v1',model:'generated-model',apiKey:'GENERATED_A_MODEL_KEY'};
+ const view=await a.request<any>('/api/configuration');await a.request('/api/configuration/models',{method:'PUT',body:JSON.stringify({revision:view.revision,value:{profiles:[{id:'generated',name:'Generated',settings}],selections:{chat:{kind:'personal',id:'generated'}}}})});
+ const selected=await a.request<any>('/api/models'),path=askModelSelectionPath(selected);assert.equal(path,'/api/models/selection/chat');assert.equal((await a.request<any>(path!)).model,'generated-model');
+ f.cookie('b');assert.equal(askModelSelectionPath(await createApi(f.bi).request<any>('/api/models')),null);
+});
