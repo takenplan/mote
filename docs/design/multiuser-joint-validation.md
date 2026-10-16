@@ -182,3 +182,22 @@ validates owner/original/artifact/type/generation links before any writes and
 never restores execution rights. Existing destination intent wins on merge.
 Native backup lists both tables. Historical M06 artifacts without a recorded
 stage reference are not guessed into raw ASR based on an engine-name string.
+
+## Acoustic previews and recording-export candidate
+
+KEEP anonymous sample audition, private WAV delivery and the full raw/unaltered/
+corrected recording export distinction. CHANGE the unavailable assets endpoint to
+read only the exact current owner-bound diarization stage, with the original
+WAV header/size checks before that stage can be accepted. Detail exposes sample
+metadata without base64 bytes; file-list rows do not materialize acoustic bodies.
+The existing private assets route delivers validated WAV bytes with no-store.
+Original raw ASR/extraction, aligned/uncorrected/corrected transcript, diarization
+JSON/RTTM/CSV, sample WAVs and confirmed names remain distinct export entries.
+A partial pipeline can export accepted raw evidence without claiming indexing or
+complete processing in its manifest. Stream proof includes source/file, current
+Material revision and metadata-only raw/diarization stage IDs; it is checked at
+consumption and while yielding existing gzip chunks. REMOVE false missing assets
+for an accepted current speaker sample. EXCEPTION replacement/foreign acoustic
+IDs are404; an invalid sample cannot replace the last valid publication. UNKNOWN
+calendar confirmations/model review and the remaining old capability matrix are
+still open. No filesystem asset store, new model call or new executor is added.

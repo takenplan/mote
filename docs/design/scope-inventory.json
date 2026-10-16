@@ -2404,6 +2404,7 @@
     "surfaces": [
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/assets'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/cancel'",

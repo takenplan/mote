@@ -663,3 +663,20 @@ independently of replay acknowledgement, not only the Files retry endpoint.
 The corrected same case is recorded separately; no acknowledgement marks a fact
 succeeded or frees a live worker. This extends the earlier endpoint-local fix,
 not a new confirmation policy or executor.
+
+Acoustic export: original accepted diarization has no preview artifact in the
+first actual RED /tmp/mote-joint-file-acoustic-export-red.log/.exit (c3e1007b).
+New private WAV asset/metadata and complete archive same-case GREEN1/1 are in
+/tmp/mote-joint-file-acoustic-export-green.log/.exit. Current adjacent3/3/EXIT0
+/tmp/mote-joint-file-acoustic-export-adjacent.log/.exit covers that case, actual
+HTTP onSend source-retirement/B-positive and child-process gzip error settlement.
+The later precise RTTM newline/CSV CRLF plus invalid WAV/last-good-retention test
+passes1/1/EXIT0 in /tmp/mote-joint-file-acoustic-export-newlines-red.log/.exit:
+that filename was provisional; the run is GREEN and does not establish a format
+bug. Metadata-only lookups keep export stream fences from reparsing large raw or
+acoustic bodies on every gzip chunk. Generated fake transport only; actual host
+storage/authorization/executor/archive stream are used. The broader M06 physical
+occupancy fix51d same case is1/1/EXIT0 in
+/tmp/mote-joint-processing-physical-ack-green.log/.exit. Current types and bounded
+review remain pending, and these outcomes do not close model reviews/calendar
+associations, image-policy/attachment parity, forget/allowagain or final gates.

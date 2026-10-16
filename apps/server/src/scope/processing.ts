@@ -30,6 +30,7 @@ import {identityHash} from './originals.js';
 import {analyzeProcessing,evidenceId,analysisInputSchema,derivativeInputSchema,type AnalysisInput} from './processing-analysis.js';
 import {processingInputSchema,processingSettingsSchema,defaultProcessingSettings,installProcessing,type ProcessingInput} from './processing-schema.js';
 import {importJobArchive} from './processing-import-archive.js';
+import {validBase64} from '../base64.js';
 import {processingImports} from './processing-imports.js';
 import type {ImportPythonPackConfig} from '../config.js';
 
@@ -134,7 +135,10 @@ export class ProcessingHost {
   derive:async(value:unknown)=>{const input=z.object({originalRef:z.string(),operationId:z.string().min(1).max(256),modes:z.array(z.enum(['summary','turns','image'])).min(1).max(3)}).strict().parse(value);await this.configuration.forUser(context).view();return this.submitDerivatives(context,input.originalRef,input.operationId,input.modes);},
   status:(ref:string)=>{const {sql,original,current}=this.input(context,{originalRef:ref,...this.snapshot(context,ref)},true),row=sql.get('SELECT p.*,h.revision AS current_revision,h.sequence,h.min_visible_sequence FROM mp_publications p JOIN pd_materials h ON h.user_id=p.user_id AND h.id=p.material_id WHERE p.user_id=$user AND h.user_id=$user AND p.original_id=? AND h.sequence>=h.min_visible_sequence',ref.slice(9)),processed=sql.get('SELECT id FROM mp_artifacts WHERE user_id=$user AND original_id=? AND complete=1 LIMIT 1',ref.slice(9));return {original,current,saved:true,processed:!!processed,indexed:!!row,...(row?{artifactId:String(row.artifact_id),materialId:String(row.material_id),revision:String(row.current_revision)}:{}),index:{material:!!row,memory:false},derivations:sql.all('SELECT d.kind,d.artifact_id AS artifactId,d.material_id AS materialId,h.revision FROM mp_derivations d JOIN pd_materials h ON h.user_id=d.user_id AND h.id=d.material_id WHERE d.user_id=$user AND h.user_id=$user AND d.original_id=? AND h.sequence>=h.min_visible_sequence ORDER BY d.kind',ref.slice(9))};},
   artifact:(id:string)=>this.artifact(context,id),
+  fileStageIds:(ref:string)=>this.fileStageIds(context,ref),
   rawFileArtifact:(ref:string)=>this.rawFileArtifact(context,ref),
+  fileDiarization:(ref:string)=>this.fileDiarization(context,ref),
+  fileAsset:(ref:string,artifactId:string,name:string)=>this.fileAsset(context,ref,artifactId,name),
   cancellation:(ref:string)=>this.cancellation(context,ref),
   cancelFile:(ref:string)=>this.cancelFile(context,ref),
   retryFile:(ref:string,value:unknown)=>this.retryFile(context,ref,value),
@@ -158,9 +162,18 @@ export class ProcessingHost {
    return {state:'cancelled',...this.cancellation(context,ref)};
   });
  }
- private rawFileArtifact(context:UserContext,ref:string){
-  const {sql}=this.input(context,{originalRef:ref,...this.snapshot(context,ref)},true),row=sql.get("SELECT artifact_id FROM mp_file_steps WHERE user_id=$user AND original_id=? AND stage='extract' ORDER BY generation DESC LIMIT 1",ref.slice(9));return row?this.artifact(context,String(row.artifact_id)):undefined;
+ private fileStageIds(context:UserContext,ref:string){
+  const {sql}=this.input(context,{originalRef:ref,...this.snapshot(context,ref)},true),row=sql.get("SELECT r.artifact_id raw,d.artifact_id diarization FROM mp_file_steps r LEFT JOIN mp_file_steps d ON d.user_id=r.user_id AND d.original_id=r.original_id AND d.generation=r.generation AND d.stage='diarize' WHERE r.user_id=$user AND r.original_id=? AND r.stage='extract' ORDER BY r.generation DESC LIMIT 1",ref.slice(9));return {raw:row?String(row.raw):undefined,diarization:row?.diarization?String(row.diarization):undefined};
  }
+ private rawFileArtifact(context:UserContext,ref:string){const id=this.fileStageIds(context,ref).raw;return id?this.artifact(context,id):undefined;}
+ private fileDiarization(context:UserContext,ref:string){
+  const id=this.fileStageIds(context,ref).diarization;if(!id)return;const artifact=this.artifact(context,id),{samples,...data}=diarizationSchema.parse(artifact.payload);return {id:artifact.id,...data,samples:samples.map(({wavBase64,...sample})=>sample)};
+ }
+ private fileAsset(context:UserContext,ref:string,artifactId:string,name:string){
+  if(!/^speaker_samples\/SPEAKER_[0-9]{1,5}\.wav$/.test(name)||this.fileStageIds(context,ref).diarization!==artifactId)throw missing();
+  const payload=diarizationSchema.parse(this.artifact(context,artifactId).payload),sample=payload.samples.find(sample=>'speaker_samples/'+sample.speaker+'.wav'===name);if(!sample)throw missing();return this.sampleBytes(sample.wavBase64);
+ }
+ private sampleBytes(value:string){const bytes=Buffer.from(value,'base64');if(!validBase64(value)||bytes.length>768*1024||bytes.subarray(0,4).toString()!=='RIFF'||bytes.subarray(8,12).toString()!=='WAVE')throw new ExecutionFailure('permanent','processing_sample_invalid');return bytes;}
  private async retryFile(context:UserContext,ref:string,value:unknown){
   const request=z.object({operationId:z.string().min(1).max(128),stage:z.enum(['transcribe','diarize','summary']).default('transcribe'),confirmUnknown:z.boolean().default(false),diarization:z.object({artifactId:z.string().regex(/^[a-f0-9]{64}$/),options:fileDiarizationOptionsSchema.nullable()}).strict().optional()}).strict().parse(value);await this.configuration.forUser(context).view();
   const sql=this.sql(context),digest=identityHash(request);return sql.transaction(()=>{
@@ -255,7 +268,7 @@ export class ProcessingHost {
    const store=async(key:string,work:()=>Promise<unknown>,parse:(value:unknown)=>unknown,role?:'extract'|'diarize')=>{const reused=role==='extract'&&input.diarizeFrom?this.artifact(run.context,input.diarizeFrom):undefined,result=reused?{artifactId:reused.id,payload:parse(reused.payload)}:await this.stage(run,input,original,identityHash([key,plan.fingerprint,processorContract(processor),processorSettingsFingerprint(processor,settings,{}),request.sourceItem]),work,parse);run.grant.commit(()=>{const {sql}=this.input(run.context,input);if(role)sql.run('INSERT INTO mp_file_steps VALUES($user,?,?,?,?) ON CONFLICT(user_id,original_id,generation,stage) DO UPDATE SET artifact_id=excluded.artifact_id',original.ref.slice(9),input.fileGeneration??0,role,result.artifactId);});artifacts.set(result.artifactId,result.payload);return result.artifactId;};
    const final=await this.processors.recipes.run(recipe,{semanticTurns:false},(step,dependencies)=>({input:request,dependencies,readArtifact:id=>{if(!artifacts.has(id))throw new ExecutionFailure('stale','processing_checkpoint_unavailable');return artifacts.get(id);},transform:(type,execute)=>store(step.name,()=>execute(request.signal),value=>this.processors.outputs.decode(type,value).transcript),builtin:async operation=>{
     if(operation==='extract')return store(step.name,()=>{mediaCalled ||= kind!=='extract';return this.io(run,input,()=>processor.process(request));},value=>this.processors.outputs.decode(output,value).transcript,'extract');
-    if(operation==='diarize')return store(step.name,()=>{mediaCalled=true;return this.io(run,input,()=>this.processors.registry.get(settings.diarizationProcessor).process(request));},value=>diarizationSchema.parse(value),'diarize');
+    if(operation==='diarize')return store(step.name,()=>{mediaCalled=true;return this.io(run,input,()=>this.processors.registry.get(settings.diarizationProcessor).process(request));},value=>{const parsed=diarizationSchema.parse(value);for(const sample of parsed.samples){if(!/^SPEAKER_[0-9]{1,5}$/.test(sample.speaker))throw new ExecutionFailure('permanent','processing_sample_invalid');this.sampleBytes(sample.wavBase64);}return parsed;},'diarize');
     if(operation==='align'){const raw=artifacts.get(dependencies.extract),diarization=artifacts.get(dependencies.diarize);return store(step.name,async()=>alignDialogue(transcriptSchema.parse(raw),diarizationSchema.parse(diarization)),value=>transcriptSchema.parse(value));}
     throw new ExecutionFailure('blocked','processing_stage_unavailable');
    }}),id=>{run.grant.assert();this.input(run.context,input);if(!artifacts.has(id))throw new ExecutionFailure('stale','processing_checkpoint_unavailable');});return {artifactId:final,payload:transcriptSchema.parse(artifacts.get(final))};

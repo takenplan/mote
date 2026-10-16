@@ -1,5 +1,5 @@
 import {z} from 'zod';
-import {exportTar,transcriptMarkdown,transcriptCsv} from '../file-export-tar.js';
+import {exportTar,transcriptMarkdown,transcriptCsv,csvCell} from '../file-export-tar.js';
 import {transcriptSchema} from '@mote/shared';
 import {executionEnvelope} from '@mote/shared/execution';
 import type {DatabaseSync} from 'node:sqlite';
@@ -27,13 +27,13 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
       const ref='original:'+row.id,info=originals.readOriginal(ref,{length:0}),capture=JSON.parse(String(row.capture)),status=service.status(ref);
       return {row,ref,info,capture,status};
     };
-    const detail=(id:string)=>{
+    const detail=(id:string,includeAcoustics=true)=>{
       const {row,ref,info,capture,status}=owned(id),taskRow=sql.get('SELECT a.task_id FROM mp_admissions a JOIN execution_steps e ON e.user_id=a.user_id AND e.id=a.task_id WHERE a.user_id=$user AND e.user_id=$user AND a.original_id=? ORDER BY e.updated_at DESC,e.id LIMIT 1',String(row.id));
-      const task=taskRow?execution.forUser(context).get(String(taskRow.task_id)):undefined;
+      const task=taskRow?execution.forUser(context).get(String(taskRow.task_id)):undefined,diarization=includeAcoustics?service.fileDiarization(ref):undefined;
       return {captureId:id,sourceId:info.sourceId,originalRef:ref,sizeBytes:info.totalBytes,sha256:info.hash,hasOriginal:info.available!==false,originMissing:!status.current,
-        rawArtifactId:service.rawFileArtifact(ref)?.id,cancellation:service.cancellation(ref),item:{...capture.provenance,title:capture.windowTitle,observedAt:capture.capturedAt,mimeType:info.mime},processing:status,
+        rawArtifactId:service.fileStageIds(ref).raw,cancellation:service.cancellation(ref),item:{...capture.provenance,title:capture.windowTitle,observedAt:capture.capturedAt,mimeType:info.mime},processing:status,
         job:task?{state:task.state,stage:task.kind,attempts:task.attempts,error:task.failure?.code??null,execution:executionEnvelope({state:task.state,attempts:task.attempts,errorCode:task.failure?.code})}:null,
-        artifacts:[...(status.artifactId?[{id:status.artifactId,kind:'transcript',complete:true}]:[]),...status.derivations.map(x=>({id:x.artifactId,kind:x.kind==='turns'?'dialogue':x.kind,complete:true}))]};
+        artifacts:[...(diarization?[{...diarization,kind:'diarization',complete:true}]:[]),...(status.artifactId?[{id:status.artifactId,kind:'transcript',complete:true}]:[]),...status.derivations.map(x=>({id:x.artifactId,kind:x.kind==='turns'?'dialogue':x.kind,complete:true}))]};
     };
     return {owned,detail,
       list:(raw:unknown)=>{
@@ -43,7 +43,7 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
         if(filters.mimePrefix){where.push('instr(r.mime,?)=1');args.push(filters.mimePrefix);}
         if(position){where.push('(c.context_at<? OR(c.context_at=? AND c.id>?))');args.push(position.at,position.at,position.id);}
         const rows=sql.all(`SELECT c.id,c.context_at ${base} AND r.user_id=$user ${where.length?' AND '+where.join(' AND '):''} ORDER BY c.context_at DESC,c.id LIMIT ?`,...args,limit+1),page=rows.slice(0,limit),last=page.at(-1);
-        return {items:page.map(row=>detail(String(row.id))),nextCursor:rows.length>limit&&last?cursor.encodeCompact(query,{at:String(last.context_at),id:String(last.id)}):null};
+        return {items:page.map(row=>detail(String(row.id),false)),nextCursor:rows.length>limit&&last?cursor.encodeCompact(query,{at:String(last.context_at),id:String(last.id)}):null};
       },
       chunks:(id:string,raw:unknown)=>{
         const {offset}=z.object({offset:z.coerce.number().int().min(0).default(0)}).strict().parse(raw),{capture,status}=owned(id);
@@ -55,15 +55,17 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
       },
       playback:(id:string)=>{const {ref}=owned(id),ticket=originals.ticket(ref,'play');return {url:'/api/ingress/originals/'+ref.slice(9)+'/content?ticket='+encodeURIComponent(ticket.ticket)};},
       export:(id:string)=>{
-        const {capture,status}=owned(id);if(!status.artifactId)throw missing();
-        const transcript=transcriptSchema.parse(service.artifact(status.artifactId).payload),raw=service.originalFileArtifact(status.original.ref,status.artifactId),uncorrected=transcriptSchema.parse(raw.payload);
-        const entries=[{name:'transcript.md',bytes:Buffer.from(transcriptMarkdown(transcript,capture.windowTitle))},{name:'transcript.csv',bytes:Buffer.from(transcriptCsv(transcript))},{name:'transcript.json',bytes:Buffer.from(JSON.stringify(transcript,null,2))},{name:'manifest.json',bytes:Buffer.from(JSON.stringify({version:1,captureId:id,sourceId:capture.provenance.sourceId,artifactId:status.artifactId,originalRef:status.original.ref,originalSha256:status.original.hash,uncorrectedPreserved:true,uncorrectedArtifactId:raw.id}))}];
+        const {capture,status,ref}=owned(id),extracted=service.rawFileArtifact(ref),currentId=status.artifactId??extracted?.id;if(!currentId)throw missing();
+        const transcript=transcriptSchema.parse(service.artifact(currentId).payload),raw=service.originalFileArtifact(status.original.ref,currentId),uncorrected=transcriptSchema.parse(raw.payload),diarization=service.fileDiarization(ref);
+        const entries=[{name:'transcript.md',bytes:Buffer.from(transcriptMarkdown(transcript,capture.windowTitle))},{name:'transcript.csv',bytes:Buffer.from(transcriptCsv(transcript))},{name:'transcript.json',bytes:Buffer.from(JSON.stringify(transcript,null,2))},{name:'manifest.json',bytes:Buffer.from(JSON.stringify({version:1,captureId:id,sourceId:capture.provenance.sourceId,artifactId:currentId,rawExtractionArtifactId:extracted?.id,diarizationArtifactId:diarization?.id,processed:status.processed,indexed:status.indexed,originalRef:status.original.ref,originalSha256:status.original.hash,uncorrectedPreserved:true,uncorrectedArtifactId:raw.id}))}];
         entries.push({name:'uncorrected-transcript.json',bytes:Buffer.from(JSON.stringify(uncorrected,null,2))},{name:'uncorrected-transcript.md',bytes:Buffer.from(transcriptMarkdown(uncorrected,capture.windowTitle))},{name:'uncorrected-transcript.csv',bytes:Buffer.from(transcriptCsv(uncorrected))});
-        const names=service.fileSpeakerNames(status.original.ref,status.artifactId);if(Object.keys(names).length)entries.push({name:'confirmed-speakers.json',bytes:Buffer.from(JSON.stringify({inputArtifact:status.artifactId,attributions:names},null,2))});
+        if(extracted){const original=transcriptSchema.parse(extracted.payload),prefix=status.original.mime.startsWith('audio/')?'raw-asr-transcript':'raw-extraction';entries.push({name:prefix+'.json',bytes:Buffer.from(JSON.stringify(original,null,2))},{name:prefix+'.md',bytes:Buffer.from(transcriptMarkdown(original,capture.windowTitle))},{name:prefix+'.csv',bytes:Buffer.from(transcriptCsv(original))});}
+        if(diarization){entries.push({name:'diarization.json',bytes:Buffer.from(JSON.stringify(diarization,null,2))},{name:'diarization.rttm',bytes:Buffer.from(diarization.segments.map(segment=>`SPEAKER ${id} 1 ${(segment.startMs/1000).toFixed(3)} ${((segment.endMs-segment.startMs)/1000).toFixed(3)} <NA> <NA> ${segment.speaker} <NA> <NA>`).join('\n')+'\n')},{name:'diarization.csv',bytes:Buffer.from([['start_ms','end_ms','speaker'],...diarization.segments.map(segment=>[segment.startMs,segment.endMs,segment.speaker])].map(row=>row.map(csvCell).join(',')).join('\r\n'))});for(const sample of diarization.samples){const name='speaker_samples/'+sample.speaker+'.wav';entries.push({name,bytes:service.fileAsset(ref,diarization.id,name)});}}
+        const names=service.fileSpeakerNames(status.original.ref,currentId);if(Object.keys(names).length)entries.push({name:'confirmed-speakers.json',bytes:Buffer.from(JSON.stringify({inputArtifact:currentId,attributions:names},null,2))});
         for(const item of status.derivations){const payload=transcriptSchema.parse(service.artifact(String(item.artifactId)).payload);entries.push({name:item.kind+'.json',bytes:Buffer.from(JSON.stringify(payload,null,2))},{name:item.kind+'.md',bytes:Buffer.from(transcriptMarkdown(payload,capture.windowTitle))},{name:item.kind+'.csv',bytes:Buffer.from(transcriptCsv(payload))});}
         if(entries.reduce((size,item)=>size+item.bytes.length,0)>64*1024*1024)throw new PrivateDataError('invalid_data',413);
-        const proof=identityHash([status.original.ref,status.original.hash,status.artifactId,status.derivations]);
-        const current=()=>{assert();const value=owned(id);if(identityHash([value.status.original.ref,value.status.original.hash,value.status.artifactId,value.status.derivations])!==proof)throw new PrivateDataError('conflict',409);};
+        const proof=identityHash([status.original.ref,status.original.hash,status.artifactId,status.revision,status.derivations,{raw:extracted?.id,diarization:diarization?.id}]);
+        const current=()=>{assert();const value=owned(id);if(identityHash([value.status.original.ref,value.status.original.hash,value.status.artifactId,value.status.revision,value.status.derivations,service.fileStageIds(ref)])!==proof)throw new PrivateDataError('conflict',409);};
         current();return exportTar(entries,current);
       },
     };
@@ -73,6 +75,7 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks',handle:({context,request})=>bind(context).chunks(z.object({id:z.string().uuid()}).parse(request.params).id,request.query)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback',handle:({context,request})=>{z.object({}).strict().parse(request.body??{});return bind(context).playback(z.object({id:z.string().uuid()}).parse(request.params).id);}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export',handle:({context,request,reply})=>reply.type('application/gzip').header('Cache-Control','no-store').header('Content-Disposition','attachment; filename="mote-recording.tar.gz"').send(bind(context).export(z.object({id:z.string().uuid()}).parse(request.params).id))});
+  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/assets',handle:({context,request,reply})=>{const file=bind(context).owned(z.object({id:z.string().uuid()}).parse(request.params).id),query=z.object({artifactId:z.string().regex(/^[a-f0-9]{64}$/),name:z.string().max(100)}).strict().parse(request.query);return reply.header('Cache-Control','no-store').type('audio/wav').send(processing.forUser(context).fileAsset(file.ref,query.artifactId,query.name));}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/cancel',handle:({context,request})=>{z.object({}).strict().parse(request.body??{});const file=bind(context).owned(z.object({id:z.string().uuid()}).parse(request.params).id);return processing.forUser(context).cancelFile(file.ref);}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/retry',handle:({context,request})=>{const file=bind(context).owned(z.object({id:z.string().uuid()}).parse(request.params).id);return processing.forUser(context).retryFile(file.ref,request.body);}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/corrections',handle:({context,request})=>{const file=bind(context).owned(z.object({id:z.string().uuid()}).parse(request.params).id);return processing.forUser(context).correctFile(file.ref,request.body);}});
