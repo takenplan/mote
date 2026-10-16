@@ -1,7 +1,12 @@
-import {afterEach,expect,it,vi} from 'vitest';
-import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {afterEach,expect,it,vi,beforeAll} from 'vitest';
+import {mkdtemp,readFile,rm,writeFile,readdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {join,resolve} from 'node:path';
+import {fork,execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {DesktopAccountStorage} from '../src/account-storage';
+import {LocalSourceManager} from '../src/source-manager';
+import {DEFAULT_SOURCE_OPTIONS} from '../src/source-types';
 import {tsImport} from 'tsx/esm/api';
 import {defaultConfig} from '../src/config';
 import {testConnection} from '../src/connection';
@@ -16,6 +21,7 @@ vi.mock('electron',async()=>{
 import {Collector} from '../src/collector';
 
 const cleanup:(()=>Promise<unknown>)[]=[];
+beforeAll(async()=>{await promisify(execFile)(process.execPath,[resolve('node_modules/typescript/bin/tsc'),'-p',resolve('apps/desktop/tsconfig.json')]);},60000);
 afterEach(async()=>{for(const close of cleanup.splice(0).reverse())await close();vi.unstubAllGlobals();});
 async function fixture(){
  const {buildApp}=await tsImport('../../server/src/app.ts',import.meta.url) as typeof import('../../server/src/app');
@@ -40,6 +46,57 @@ it('characterizes the actual durable input/blob journal and same-owner retry bef
  const before=await readFile(join(path,'events',event().id+'.json'));queue=new DurableQueue(path,config);await queue.initialize();
  expect(queue.stats().depth).toBe(1);expect((await queue.next(1_000_000))!.image).toEqual(image);expect(await readFile(join(path,'events',event().id+'.json'))).toEqual(before);
 });
+it('keeps real original spools, source cursors and drafts separated while A and B share device and input bytes',async()=>{
+ const f=await fixture(),secrets={available:()=>true,encrypt:(v:string)=>Buffer.from(v),decrypt:(v:Buffer)=>v.toString()},storage=new DesktopAccountStorage(join(f.directory,'desktop'),secrets);
+ const input=join(f.directory,'generated.md');await writeFile(input,'Generated equal file bytes; no personal data.');
+ for(const grant of [f.a,f.b]){
+  const config=f.config(grant),directory=await storage.open(config),sources=new LocalSourceManager(join(directory,'sources'),config,'/generated/no-helper',true);cleanup.push(()=>sources.close());
+  await sources.initialize();await sources.addFiles(input,{...DEFAULT_SOURCE_OPTIONS,retention:'archive'});await sources.sync(true);
+  expect(sources.pendingContent(),JSON.stringify(sources.status())).toHaveLength(1);await sources.flushPending(new AbortController().signal);expect(sources.pendingContent()).toHaveLength(0);
+  const context=await f.node.authority.authenticate(grant.token),originals=f.node.ingress.forUser(context).pageOriginals(sources.status()[0].source.id);
+  expect(originals.items).toHaveLength(1);
+ }
+ expect(storage.directory(f.config(f.a))).not.toBe(storage.directory(f.config(f.b)));
+ expect(f.calls.filter(v=>v.url.includes('file-sync'))).toHaveLength(0);
+});
+
+async function productionDesktop(f:Awaited<ReturnType<typeof fixture>>,profile=join(f.directory,'profile')){
+ const child=fork(resolve('apps/desktop/test/main-process-fixture.cjs'),[profile],{env:{...process.env,MOTE_PROFILE:'default',MOTE_URL:'',MOTE_TOKEN:''},stdio:['ignore','pipe','pipe','ipc']});
+ let nextId=0,generation=0,ready=false,exited=false,error='',latest:any;const results=new Map<number,{resolve:(v:any)=>void;reject:(e:Error)=>void}>();
+ child.stderr!.on('data',chunk=>{error+=chunk.toString();});child.on('exit',()=>{exited=true;});
+ let intercept:((message:any,reply:()=>Promise<void>)=>Promise<boolean>)|undefined;
+ child.on('message',async(raw:any)=>{
+  if(raw.type==='ready')ready=true;
+  if(raw.type==='startup-error')error+=raw.error;
+  if(raw.type==='status'){latest=raw.status;generation=raw.status.authorizationGeneration;}
+  if(raw.type==='result'){const result=results.get(raw.id);results.delete(raw.id);if(raw.error)result?.reject(Error(raw.error));else result?.resolve(raw.value);}
+  if(raw.type==='fetch'){
+   const reply=async()=>{try{const r=await f.node.app.inject({url:new URL(raw.url).pathname+new URL(raw.url).search,method:raw.method,headers:raw.headers,...(raw.body?{payload:Buffer.from(raw.body,'base64')}:{})});if(!exited)child.send({type:'fetch-response',id:raw.id,status:r.statusCode,headers:r.headers,body:r.rawPayload.toString('base64')});}catch(e){if(!exited)child.send({type:'fetch-response',id:raw.id,error:String(e)});}};
+   if(!await intercept?.(raw,reply))await reply();
+  }
+ });
+ cleanup.push(async()=>{if(!exited){child.kill('SIGKILL');await new Promise(r=>child.once('exit',r));}});
+ await vi.waitFor(()=>{expect(error).toBe('');expect(ready).toBe(true);},{timeout:15000});
+ const call=(channel:string,args:any[]=[],expected=generation,paths?:string[])=>new Promise<any>((resolve,reject)=>{const id=++nextId;results.set(id,{resolve,reject});child.send({type:'invoke',id,channel,args,generation:expected,paths});});
+ const status=await call('mote:get-status');generation=status.authorizationGeneration;
+ return {child,call,get generation(){return generation;},get latest(){return latest;},profile,set intercept(fn:typeof intercept){intercept=fn;},async kill(){child.kill('SIGKILL');await new Promise(r=>child.once('exit',r));}};
+}
+it('runs actual emitted main IPC: offline A queue/draft → B explicit capture → SIGKILL/restart → A resumes; retired document rejects',async()=>{
+ const f=await fixture();let app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);
+ let status=await app.call('mote:get-status');await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false,defaultCollection:'activity'}]);
+ const draft=await app.call('mote:note-draft');await app.call('mote:note',[{...draft,text:'Generated A pending note',revision:1}]);
+ const authored=await app.call('mote:note-draft');await app.call('mote:note-draft-update',[{...authored,text:'Generated A private draft',revision:1}]);
+ const oldGeneration=app.generation,aDirectory=(await app.call('mote:get-status')).storage.directory;
+ await app.call('mote:ask',['login',{token:f.b.token}]);status=await app.call('mote:get-status');expect(status.queueDepth).toBe(0);expect(status.running).toBe(false);expect((await app.call('mote:note-draft')).text).toBe('');
+ await expect(app.call('mote:note',[{...authored,text:'late A submit',revision:2}],oldGeneration)).rejects.toThrow('account changed');
+ const bDirectory=status.storage.directory;expect(bDirectory).not.toBe(aDirectory);
+ await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false,defaultCollection:'activity'}]);await app.call('mote:start');await app.call('mote:stop');
+ expect((await app.call('mote:get-status')).running).toBe(false);
+ await app.kill();app=await productionDesktop(f,app.profile);status=await app.call('mote:get-status');expect(status.config.account.userId).toBe(f.b.userId);expect(status.running).toBe(false);expect((await app.call('mote:note-draft')).text).toBe('');
+ const rotated=await f.login('generated-a');await app.call('mote:ask',['login',{token:rotated.token}]);status=await app.call('mote:get-status');expect(status.queueDepth).toBe(1);expect(status.storage.directory).toBe(aDirectory);expect((await app.call('mote:note-draft')).text).toBe('Generated A private draft');
+ await app.call('mote:retry');expect((await app.call('mote:get-status')).queueDepth).toBe(0);
+ expect((await f.request(rotated.token,'/api/captures/'+draft.id)).statusCode).toBe(200);expect((await f.request((await f.login('generated-b')).token,'/api/captures/'+draft.id)).statusCode).toBe(404);
+},60000);
 it('consumes the real M01 connection identity instead of assuming a global owner credential',async()=>{
  const f=await fixture(),identity=await testConnection(f.config(f.a));
  expect(identity).toMatchObject({account:{deploymentId:f.a.deploymentId,userId:f.a.userId,username:'generated-a'},credential:{kind:'client'},protocol:{min:2,max:2}});
