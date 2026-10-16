@@ -542,6 +542,9 @@ class MultiuserWorkerInstrumentedTest {
             var original:JSONObject?=null
             waitFor {val sources=a.get("/api/sources").getJSONArray("items");val source=(0 until sources.length()).map(sources::getJSONObject).singleOrNull {it.optString("kind")=="lark-docs"};if(source==null)false else {val rows=a.get("/api/ingress/sources/"+source.getString("id")+"/originals").getJSONArray("items");if(rows.length()==0)false else {original=rows.getJSONObject(0);true}}}
             assertNotNull(original);assertEquals(beforeB,b.get("/api/source-items").toString())
+            press("资料说明（选填）");ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="可说明格式、时间、作者，以及哪些内容属于你。"}.setText("Generated native Lark source context")};press("保存说明");ready()
+            val sourceRows=a.get("/api/sources").getJSONArray("items");val source=(0 until sourceRows.length()).map(sourceRows::getJSONObject).single {it.optString("kind")=="lark-docs"}
+            assertEquals("Generated native Lark source context",a.get("/api/sources/"+source.getString("id")+"/context").getString("description"))
             val oldSync=button("立即同步");assertNotNull(oldSync)
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldSync!!.performClick()};ready();assertEquals(beforeB,b.get("/api/source-items").toString())
         }
