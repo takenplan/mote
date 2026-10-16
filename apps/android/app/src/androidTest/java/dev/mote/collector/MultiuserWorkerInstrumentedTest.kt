@@ -33,6 +33,194 @@ class MultiuserWorkerInstrumentedTest {
     private fun control(path: String): JSONObject {
         val (code,value)=HttpJson.post(fixture().getString("androidControlAddress")+path,JSONObject());check(code==200);return value!!
     }
+    @Test fun actualNativeVaultExportsVerifiedPersonalBytesThroughTheDocumentResultAndRetiresOnSwitch() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val output=File(app.cacheDir,"generated-portable-result.json").apply {delete()}
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        var monitor: android.app.Instrumentation.ActivityMonitor? = null
+        val watchdog=Thread { try { Thread.sleep(15000);File(app.cacheDir,"m15-vault-stall.txt").writeText(Thread.getAllStackTraces().entries.joinToString("\n\n") { (thread,stack)->thread.name+" "+thread.state+"\n"+stack.joinToString("\n") }) } catch (_:InterruptedException) {} }.apply {isDaemon=true;start()}
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try {
+            androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","vault")).use { scenario ->
+                fun button(label:String):android.widget.Button? {var result:android.widget.Button?=null;scenario.onActivity {activity->result=views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}};return result}
+                fun click(label:String) {waitFor {button(label)!=null};val target=button(label)!!;instrumentation.runOnMainSync {target.performClick()}}
+                waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+                click("中央资料与附件导出")
+                waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+                waitFor {if(button("下载")!=null)true else {val refresh=button("刷新");if(refresh!=null)instrumentation.runOnMainSync {refresh.performClick()};false}}
+                monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("application/json")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(android.net.Uri.fromFile(output))),true)
+                val oldDownload=button("下载")!!;click("下载")
+                waitFor {output.isFile&&output.length()>0};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+                val bytes=output.readBytes();val archive=JSONObject(String(bytes,Charsets.UTF_8));assertEquals(settings.read().account()!!.userId,archive.getString("userId"));assertEquals(3,archive.getInt("version"))
+                assertEquals(1,monitor!!.hits);assertFalse(String(bytes,Charsets.UTF_8).contains(token("a")))
+                val page=CentralPortable(CentralAccess.requireClient(app)).list();val id=page.getJSONArray("items").getJSONObject(0).getString("id")
+                assertEquals(Ingress3Client.hash(bytes),CentralPortable(CentralAccess.requireClient(app)).read(id).getString("sha256"))
+                // Reopen through normal native navigation before the independent cancellation case.
+                scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready};click("查看详情")
+                waitFor {button("下载")!=null}
+                val sentinel="Generated existing document must survive a retired export"
+                output.writeText(sentinel)
+                CentralPortable(CentralAccess.requireClient(app)).control(id,"cancel")
+                click("下载")
+                waitFor {monitor!!.hits==2}
+                waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()&&it.text.toString()!="资料已导出"}};ready}
+                assertEquals(sentinel,output.readText())
+                login(app,"b");scenario.onActivity {it.navigate("vault")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+                scenario.onActivity {activity->oldDownload.performClick();assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(id)})}
+                assertEquals(2,monitor!!.hits);assertEquals(sentinel,output.readText());assertEquals(0,CentralPortable(CentralAccess.requireClient(app)).list().getJSONArray("items").length())
+            }
+        } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
+    }
+    @Test fun failedGenericSupportDownloadPreservesTheSelectedExistingDocument() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val sentinel="Generated existing support document "+java.util.UUID.randomUUID()
+        val output=File(app.cacheDir,"generated-support-result.json").apply {writeText(sentinel)}
+        val instrumentation=InstrumentationRegistry.getInstrumentation();var monitor:android.app.Instrumentation.ActivityMonitor?=null
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try {
+            androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","developer")).use {scenario->
+                waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+                monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("application/json")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(android.net.Uri.fromFile(output))),true)
+                var clicked=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()=="导出支持包"&&it.isEnabled}?.let {it.performClick();clicked=true}};clicked}
+                waitFor {monitor!!.hits==1};waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()&&it.text.toString()!="资料已导出"}};ready}
+                assertEquals("An unavailable or forbidden download must not truncate an existing selected document",sentinel,output.readText())
+            }
+        } finally {monitor?.let(instrumentation::removeMonitor);output.delete()}
+    }
+
+    @Test fun actualNativeCentralDraftStoresRetireWhenTheSameOriginChangesAccount() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server=endpoint(),token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false),confirmCentralEndpoint=true);login(app,"a");MoteI18n.select(app,"zh-CN")
+        val aDraft="Synthetic A unsaved private central draft";val bDraft="Synthetic B explicitly created central draft"
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","notes")).use { scenario ->
+            fun ready() {waitFor {var value=false;scenario.onActivity {activity->value=activity.client!=null&&!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.hint.toString()=="此刻想留下什么？"}};value}}
+            fun draft():String {var value="";scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="此刻想留下什么？"}.text.toString()};return value}
+            fun edit(text:String) {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="此刻想留下什么？"}.setText(text)};CentralDraftWrites.barrier {Unit}}
+            ready();edit(aDraft);var original:CentralClient?=null;scenario.onActivity {original=it.client}
+            login(app,"b");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready()
+            assertEquals("B must not read A's retained native draft","",draft());edit(bDraft)
+            scenario.onActivity {original=it.client};login(app,"a");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready();assertEquals(aDraft,draft())
+            scenario.onActivity {original=it.client};login(app,"b");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready();assertEquals(bDraft,draft())
+        }
+    }
+
+    @Test fun sameIdentityResumeKeepsTheNativeSaveActionUsable() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val text="Generated note after a same-account native Activity resume "+java.util.UUID.randomUUID()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","notes")).use { scenario ->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="此刻想留下什么？"}.setText(text);views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存并同步"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val rows=CentralAccess.requireClient(app).get("/api/captures?kind=note&limit=30").getJSONArray("items")
+            val saved=(0 until rows.length()).map {rows.getJSONObject(it)}.firstOrNull {it.optString("ocrText")==text}
+            assertNotNull("Same-identity resume must not retire every existing native action",saved)
+            assertEquals(404,get(app,"b","/api/captures/"+saved!!.getString("id")).first)
+        }
+    }
+
+    @Test fun actualNativeMemorySettingsUseTheOwnedConfigurationCAS() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val before=api.get("/api/configuration")
+        val bBefore=CentralClient(endpoint(),token("b")).get("/api/configuration")
+        fun domain(view:JSONObject):JSONObject { val items=view.getJSONArray("domains");return (0 until items.length()).map {items.getJSONObject(it)}.single {it.getString("id")=="memory"}.getJSONObject("saved") }
+        val zone=if(domain(before).getString("timeZone")=="Asia/Tokyo")"UTC" else "Asia/Tokyo"
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("记忆设置");ready();click("记忆自动处理");ready()
+            scenario.onActivity {activity->val field=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().firstOrNull {it.hint.toString()=="timeZone"};assertNotNull("Native Memory settings must open the actual owned M04 domain",field);field!!.setText(zone)}
+            click("保存设置");ready()
+            val after=api.get("/api/configuration");assertEquals(zone,domain(after).getString("timeZone"))
+            assertEquals(domain(bBefore).toString(),domain(CentralClient(endpoint(),token("b")).get("/api/configuration")).toString())
+            assertEquals(409,assertThrows(CentralFailure::class.java){api.put("/api/configuration/memory",JSONObject().put("revision",before.getLong("revision")).put("value",domain(before)).put("preserveRedactedSecrets",true))}.status)
+        }
+    }
+
+    @Test fun actualNativeModelSettingsUseTheOwnedDomainAndPreserveMaskedCredentials() {
+        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val bApi=CentralClient(endpoint(),token("b"));val bBefore=bApi.get("/api/configuration")
+        fun models(view:JSONObject):JSONObject {val domains=view.getJSONArray("domains");return (0 until domains.length()).map {domains.getJSONObject(it)}.single {it.getString("id")=="models"}.getJSONObject("saved")}
+        val before=models(api.get("/api/configuration"));val name="Generated native owned profile "+java.util.UUID.randomUUID()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("模型配置");ready()
+            scenario.onActivity {activity->val field=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().firstOrNull {it.hint.toString()=="profiles · 高级 JSON"};assertNotNull("Native models must use the owned M04 configuration",field);val profiles=org.json.JSONArray(field!!.text.toString());profiles.getJSONObject(0).put("name",name);field.setText(profiles.toString())}
+            click("保存设置");ready()
+            val after=models(api.get("/api/configuration"));assertEquals(name,after.getJSONArray("profiles").getJSONObject(0).getString("name"));assertEquals(before.getJSONObject("selections").toString(),after.getJSONObject("selections").toString())
+            assertEquals(before.getJSONArray("profiles").getJSONObject(0).getJSONObject("settings").toString(),after.getJSONArray("profiles").getJSONObject(0).getJSONObject("settings").toString())
+            assertEquals(models(bBefore).toString(),models(bApi.get("/api/configuration")).toString())
+        }
+    }
+
+    @Test fun actualNativeRecipeSelectionUsesTheScopedCatalogAndOwnedCAS() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val bApi=CentralClient(endpoint(),token("b"));val bBefore=bApi.get("/api/configuration")
+        val catalog=api.get("/api/memory/recipes").getJSONArray("items");val recipe=(0 until catalog.length()).map {catalog.getJSONObject(it)}.first {it.optBoolean("available",true)}
+        val label=recipe.optString("name",recipe.getString("id"))+" · "+recipe.getString("version")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("记忆设置");ready();click("记忆提取配方");ready()
+            scenario.onActivity {activity->val boxes=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>();val chosen=boxes.firstOrNull {it.text.toString()==label};assertNotNull("Native recipe choices must consume the actual M07 catalog",chosen);chosen!!.isChecked=true;boxes.filter {it!==chosen}.forEach {it.isChecked=false}}
+            click("保存设置");ready()
+            fun memory(view:JSONObject):JSONObject {val values=view.getJSONArray("domains");return (0 until values.length()).map {values.getJSONObject(it)}.single {it.getString("id")=="memory"}.getJSONObject("saved")}
+            val refs=memory(api.get("/api/configuration")).getJSONArray("recipes");assertEquals(1,refs.length());assertEquals(recipe.getString("id"),refs.getJSONObject(0).getString("id"));assertEquals(recipe.getString("version"),refs.getJSONObject(0).getString("version"))
+            assertEquals(memory(bBefore).toString(),memory(bApi.get("/api/configuration")).toString())
+        }
+    }
+
+    @Test fun actualPublishedMemoryEvidenceUsesTheCanonicalReaderUnderItsOwner() {
+        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready};click("查看详情")
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready};click("查看原文依据 1")
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->assertTrue("Canonical M07 evidence text must remain readable",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_MEMORY_A")})}
+            login(app,"b");scenario.onActivity {it.navigate("memories")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_MEMORY_A")})}
+        }
+    }
+
+    @Test fun actualPublishedMemoryCorrectionFollowsItsCommittedNewVersion() {
+        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val corrected="Generated explicit owner correction from the native Memory editor "+java.util.UUID.randomUUID()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready};click("查看详情")
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="陈述"}.setText(corrected)}
+            click("保存校正");waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val deadline=android.os.SystemClock.elapsedRealtime()+10000
+            var saved:JSONObject?=null
+            do {val page=CentralAccess.requireClient(app).get("/api/memories?limit=30").getJSONArray("items");saved=(0 until page.length()).map {page.getJSONObject(it)}.firstOrNull {it.optString("statement").contains(corrected)};if(saved!=null)break;Thread.sleep(30)} while(android.os.SystemClock.elapsedRealtime()<deadline)
+            assertNotNull("Owner correction must publish a new current Memory",saved)
+            assertNotEquals(fixture().getJSONObject("published").getJSONObject("a").getString("memoryId"),saved!!.getString("id"))
+            click("刷新");waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready};click("查看记忆")
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->assertTrue("Native correction must open the actual succeeded task result",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()==saved!!.getString("statement")})}
+            assertFalse(CentralClient(endpoint(),token("b")).get("/api/memories?limit=30").toString().contains(corrected))
+        }
+    }
+
     @Test fun generatedScreenshotDuringAccountDrainCannotEnterBAndExplicitBStillCaptures() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,

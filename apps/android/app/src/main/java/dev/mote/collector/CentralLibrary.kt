@@ -371,13 +371,20 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         }
     }
     private fun memories() {
-        memoryDeletionNotice?.takeIf { it.first === client }?.let { ui.text(it.second) }
-        ui.button(MoteI18n.text("提取记忆")) { CentralAdmin(screens).memoryJobs() }
-        ui.button(MoteI18n.text("记忆设置")) { CentralAdmin(screens).memorySettings() }
-        paged("/api/memories?limit=30", ui.card()) { row, card ->
-            ui.text(row.getString("title"), NativeFontRole.SECTION, card)
-            ui.text(memoryStatus(row) + " · " + row.getInt("evidenceCount") + " " + MoteI18n.text("条证据"), parent = card)
-            ui.button(MoteI18n.text("查看详情"), parent = card) { memory(row.getString("id")) }
+        val api = client; val path = "/api/memories?limit=30"
+        ui.work(MoteI18n.text("正在读取记忆…"), { api.get(path) to screens.pendingMemoryCorrection() }) { (page, pending) ->
+            memoryDeletionNotice?.takeIf { it.first === api }?.let { ui.text(it.second) }
+            ui.button(MoteI18n.text("提取记忆")) { CentralAdmin(screens).memoryJobs() }
+            ui.button(MoteI18n.text("记忆设置")) { CentralAdmin(screens).memorySettings() }
+            if (pending != null) {
+                ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"))
+                ui.button(MoteI18n.text("重试同一请求")) { ui.work(MoteI18n.text("正在保存…"), { screens.retryMemoryCorrection(api) }) { CentralAdmin(screens).run("/api/memory/jobs", it.getString("id")) } }
+            }
+            renderPage(path, ui.card(), null, page) { row, card ->
+                ui.text(row.getString("title"), NativeFontRole.SECTION, card)
+                ui.text(memoryStatus(row) + " · " + row.getJSONArray("evidenceIds").length() + " " + MoteI18n.text("条证据"), parent = card)
+                ui.button(MoteI18n.text("查看详情"), parent = card) { memory(row.getString("id")) }
+            }
         }
     }
     private fun memoryStatus(row: JSONObject): String = when (row.optString("status")) {
@@ -392,7 +399,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 "stale" -> MoteI18n.text("需要重验")
                 else -> row.optString("status")
     }
-    private fun memory(id: String) {
+    fun memory(id: String) {
         val api = client
         ui.work(MoteI18n.text("正在读取记忆…"), { api.get("/api/memories/" + enc(id)) }) { row ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
@@ -418,13 +425,13 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             ui.text(MoteI18n.text("不确定性"), NativeFontRole.SECTION, facts)
             ui.text(row.optString("uncertainty"), parent = facts)
             ui.disclosure(MoteI18n.text("元数据")) { target -> ui.text(row.toString(2), parent = target) }
-            for (i in 0 until evidenceIds.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (i + 1)) { captureEvidence(evidenceIds.getString(i)) }
+            for (i in 0 until evidenceIds.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (i + 1)) { queryEvidence(evidenceIds.getString(i)) }
             val statement = ui.field(MoteI18n.text("陈述"), row.optString("statement"), multiline = true)
             val title = ui.field(MoteI18n.text("标题"), row.optString("title"))
             val uncertainty = ui.field(MoteI18n.text("不确定性"), row.optString("uncertainty"), multiline = true)
             ui.button(MoteI18n.text("保存校正"), true) {
                 val corrected = JSONObject().put("title", title.text.toString()).put("statement", statement.text.toString()).put("uncertainty", uncertainty.text.toString()).put("version", row.optInt("version", 1))
-                ui.work(MoteI18n.text("正在保存…"), { api.post("/api/memories/" + enc(id) + "/correct", corrected) }) { memory(id) }
+                ui.work(MoteI18n.text("正在保存…"), { screens.correctMemory(api, id, corrected) }) { CentralAdmin(screens).run("/api/memory/jobs", it.getString("id")) }
             }
             ui.button(MoteI18n.text("删除记忆")) { screens.confirm(MoteI18n.text("删除记忆"), MoteI18n.text("删除后无法恢复。")) {
                 ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/memories/" + enc(id)) }) { receipt ->
