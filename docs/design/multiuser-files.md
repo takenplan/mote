@@ -228,3 +228,14 @@ retry generation. Zero stays omitted for historical identity compatibility. Wire
 contracts do not change. The replacement candidate still awaits its new types and
 independent bounded delta review; do not move0095 checks to it or treat0095's two
 failed reimport paths as accepted.
+
+Current consumer PREP source is0095c897078fce04ce75c687a0e1fc6abc81b479, followed
+by doc-onlyd8be43d5. Contract bodies above are fixed so client controls/reviews can
+adapt. Its independent forget-incarnation finding is now actualRED and must use
+the later0563 fix before that flow is accepted; acoustic publication likewise
+requires679a. No replacement source freeze is inferred before new type/delta
+checks. Remaining image work is finite: retain original named profile/source-MIME
+rules and original-only archive choice, then exact parent/archive attachment
+preparation and transitive retirement. Existing host leaseModel/leaseReference and
+M03/M06 algorithms are the intended seams; no second secret store, private runtime,
+permission flow or guessed profile-to-model mapping is introduced.
