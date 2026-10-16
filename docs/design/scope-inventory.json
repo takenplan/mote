@@ -779,17 +779,15 @@
     ]
   },
   "apps/server/src/hindsight-engine.ts": {
-    "scope": "user",
-    "module": "M07",
-    "status": "implemented",
+    "scope": "legacy-quarantined",
+    "module": "M02",
     "surfaces": [
       "directory:this.options.directory"
     ]
   },
   "apps/server/src/hindsight-runtime.ts": {
-    "scope": "user",
-    "module": "M07",
-    "status": "implemented",
+    "scope": "legacy-quarantined",
+    "module": "M02",
     "surfaces": [
       "directory:this.options.directory"
     ]
@@ -957,9 +955,8 @@
     ]
   },
   "apps/server/src/mem0-memory-runtime.ts": {
-    "scope": "user",
+    "scope": "legacy-quarantined",
     "module": "M07",
-    "status": "implemented",
     "surfaces": [
       "directory:this.config.directory",
       "table:provider_operations",
@@ -1952,6 +1949,7 @@
     "surfaces": [
       "extension:runtime.services.registerUser:MEMORY_DOMAIN",
       "task:execution.register:kind:'memory.'+stage",
+      "task:execution.register:kind:'memory.admit'",
       "task:execution.register:kind:'memory.correct'",
       "task:execution.register:kind:'memory.reconcile'"
     ]
@@ -1978,6 +1976,61 @@
     "status": "implemented",
     "surfaces": [
       "task:execution.register:kind:'memory.integration-window'"
+    ]
+  },
+  "apps/server/src/scope/ask-routes.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host context, source scope, evidence and request/task publication fences; acceptance tracked separately.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'DELETE',url:'/api/conversations/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-artifacts/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations/:id/compact'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insights'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action"
+    ]
+  },
+  "apps/server/src/scope/ask-schema.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host context, source scope, evidence and request/task publication fences; acceptance tracked separately.",
+    "surfaces": [
+      "table:ma_artifacts",
+      "table:ma_conversations",
+      "table:ma_fragments",
+      "table:ma_meta",
+      "table:ma_restore",
+      "table:ma_runs",
+      "table:ma_sources",
+      "table:ma_state",
+      "table:ma_traces",
+      "table:ma_turns",
+      "table:ma_units"
+    ]
+  },
+  "apps/server/src/scope/ask.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host context, source scope, evidence and request/task publication fences; acceptance tracked separately.",
+    "surfaces": [
+      "extension:runtime.services.registerUser:ASK_DOMAIN",
+      "task:execution.register:kind:'ask.'+mode",
+      "task:execution.register:kind:'ask.coordinate'"
     ]
   }
 }
