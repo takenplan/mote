@@ -54,11 +54,17 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private val library = CentralLibrary(screens)
     private val plugins = CentralPlugins(screens) { extensions() }
     private var connectorPage: CentralConnectors? = null
-    fun close() { plugins.close(); connectorPage?.close() }
-    fun clearPrivateState() { plugins.clearPrivateState(); connectorPage?.close(); connectorPage = null }
-    fun resume() { plugins.resume(); connectorPage?.resume() }
+    private var larkConnection: CentralLarkConnection? = null
+    private var larkChoices = emptyList<JSONObject>()
+    private var larkCalendarMode = false
+    private val larkHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val larkPoll = Runnable { lark() }
+    fun close() { plugins.close(); connectorPage?.close(); larkHandler.removeCallbacks(larkPoll) }
+    fun clearPrivateState() { plugins.clearPrivateState(); connectorPage?.close(); connectorPage = null; larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
+    fun resume() { plugins.resume(); connectorPage?.resume(); if (larkConnection != null) lark() }
 
     fun show(page: String) {
+        if (page != "lark") { larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
         ui.button(MoteI18n.text("刷新")) { screens.refresh() }
         when (page) {
             "devices" -> devices()
@@ -629,31 +635,74 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         CentralMcp(screens).show()
     }
     private fun lark() {
-        val api = client
+        larkHandler.removeCallbacks(larkPoll)
+        val selected = larkConnection
+        if (selected == null) {
+            val api = client
+            ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors").getJSONArray("connections") }) { rows ->
+                larkChoices = (0 until rows.length()).map(rows::getJSONObject).filter { it.getString("provider") == "lark" }
+                body.removeAllViews()
+                if (larkChoices.isEmpty()) {
+                    ui.text(MoteI18n.text("暂无记录")); ui.button(MoteI18n.text("来源与外部应用")) { connections() }
+                } else { selectLark(larkChoices.first()); lark() }
+            }
+            return
+        }
+        val api = selected
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark") to api.get("/api/sources") }) { (value, sourceList) ->
+            if (larkConnection !== api) return@work
             body.removeAllViews(); screens.setBack { screens.refresh() }
+            if (larkCalendarMode && !api.polling && api.calendars != null) {
+                larkCalendarSelection(api, value.getJSONObject("selection"), api.calendars!!)
+                return@work
+            }
+            body.addView(Spinner(ui).apply {
+                contentDescription = MoteI18n.text("连接 ID")
+                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, larkChoices.map { it.getString("id") })
+                setSelection(larkChoices.indexOfFirst { it.getString("id") == api.id })
+                onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                    override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+                    override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                        val next = larkChoices[position]; if (larkConnection === api && next.getString("id") != api.id) { selectLark(next); lark() }
+                    }
+                }
+            })
             ui.button(MoteI18n.text("刷新")) { lark() }
             ui.text(MoteI18n.text("飞书文档与日历"), DesignTokens.fontTitleMobile.toFloat())
             ui.text(MoteI18n.text("照常在飞书写日记、会议纪要和方案。中央节点归档文档与活动线索，供回顾、问答和 Memory 使用。"))
             ui.text(MoteI18n.text("打开、编辑等线索单独保存；打开不代表读完、认同或当时看到的版本。"))
             val account = ui.card()
+            if (api.uncertain) {
+                ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"), parent = account)
+                ui.button(MoteI18n.text("重试"), parent = account) { ui.work(MoteI18n.text("正在处理…"), { api.retry() }) { if (larkConnection === api) lark() } }
+                ui.button(MoteI18n.text("清除本机待确认请求"), parent = account) {
+                    if (larkConnection === api && screens.ownsSelectedAccount()) screens.confirm(MoteI18n.text("清除本机待确认请求"), MoteI18n.text("这只清除本机待确认请求，已在中央接收的任务仍会继续。")) {
+                        ui.work(MoteI18n.text("正在保存…"), { api.clearPending() }) { if (larkConnection === api) lark() }
+                    }
+                }
+            }
             ui.text(if (value.optBoolean("connected")) MoteI18n.text("已连接") else MoteI18n.text("尚未授权"), DesignTokens.fontSection.toFloat(), account)
             if (value.optString("accountName").isNotBlank()) ui.text(value.optString("accountName"), parent = account)
-            listOf("check" to "检查状态", "install" to "安装 CLI", "setup" to "开始配置", "login" to "扫码登录并授权只读权限").forEach { (command, label) ->
-                ui.button(MoteI18n.text(label), parent = account) { action("/api/connectors/lark/$command") { lark() } }
+            if (value.optBoolean("installed")) ui.text("Lark CLI " + value.optString("version"), parent = account)
+            ui.button(MoteI18n.text("安装 CLI") + " · " + MoteI18n.text("暂不可用"), parent = account) {}.isEnabled = false
+            listOf("check" to "检查状态", "setup" to "开始配置", "login" to "扫码登录并授权只读权限").forEach { (command, label) ->
+                ui.button(MoteI18n.text(label), parent = account) { larkAction(api, command) }
             }
             ui.button(MoteI18n.text("配置应用凭据"), parent = account) {
-                edit(MoteI18n.text("配置应用凭据"), "/api/connectors/lark/configure", JSONObject().put("appId", "").put("secret", "").put("brand", "feishu"), "POST")
+                if (larkConnection !== api) return@button
+                body.removeAllViews(); screens.setBack { lark() }
+                val collect = form(JSONObject().put("appId", "").put("secret", "").put("brand", "feishu"), ui.card())
+                ui.button(MoteI18n.text("保存设置"), true) { larkAction(api, "configure", collect()) }
             }
             value.optJSONObject("job")?.let { job ->
                 ui.text(if (job.optString("state") == "completed") MoteI18n.text("已完成") else stateLabel(job.optString("state")), parent = account)
                 if (job.optString("error").isNotBlank()) ui.text(CentralLarkSelection.failure(job.getString("error")), parent = account)
-                if (job.optString("state") in listOf("waiting", "running")) ui.button(MoteI18n.text("取消当前操作"), parent = account) { action("/api/connectors/lark/cancel") { lark() } }
+                if (job.optString("state") in listOf("waiting", "running")) ui.button(MoteI18n.text("取消当前操作"), parent = account) { larkAction(api, "cancel") }
                 job.optString("authorizationUrl").takeIf(String::isNotBlank)?.let { url ->
                     val parsed = Uri.parse(url); val host = parsed.host.orEmpty()
                     if (parsed.scheme == "https" && parsed.userInfo == null && parsed.port == -1 &&
                         listOf("feishu.cn", "larksuite.com", "larkoffice.com").any { host == it || host.endsWith(".$it") })
-                        ui.button(MoteI18n.text("打开授权页面"), parent = account) { ui.startActivity(Intent(Intent.ACTION_VIEW, parsed)) }
+                        ui.button(MoteI18n.text("打开授权页面"), parent = account) { if (larkConnection === api && screens.ownsSelectedAccount()) ui.startActivity(Intent(Intent.ACTION_VIEW, parsed)) }
                 }
             }
             ui.button(MoteI18n.text("查看授权进度"), parent = account) { lark() }
@@ -664,7 +713,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             ui.text(MoteI18n.text("首次回溯 {0} 天；之后随你的新活动归档。指定文档、文件夹和知识库分支持续跟踪。", selected.optInt("firstSyncDays", 30)), parent = range)
             ui.button(MoteI18n.text("选择文档与活动范围"), parent = range) { larkSelection() }
             ui.text(MoteI18n.text("需要日历时，先单独授权日历读取，再加载并选择日历。授权本身不会开始收集日程。"), parent = range)
-            ui.button(MoteI18n.text("授权日历读取"), parent = range) { action("/api/connectors/lark/login", JSONObject().put("calendar", true)) { lark() } }
+            ui.button(MoteI18n.text("授权日历读取"), parent = range) { larkAction(api, "login", JSONObject().put("calendar", true)) }
             ui.button(MoteI18n.text("选择日历"), parent = range) { calendarSelection(true) }
             ui.button(MoteI18n.text("飞书文档默认组合"), parent = range) { recipeSettings(false, "lark-docs") }
             ui.text(MoteI18n.text("中央节点每 {0} 分钟检查；关闭页面后继续运行。", value.optInt("syncIntervalSeconds", 900) / 60), parent = range)
@@ -677,10 +726,10 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 ui.button(MoteI18n.text(if (paused) "恢复接入" else "暂停接入")) {
                     ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/sources/" + enc(sourceId), JSONObject().put("enabled", paused)) }) { lark() }
                 }
-                ui.button(MoteI18n.text("资料说明（选填）")) { larkSourceDescription(sourceId) }
+                ui.button(MoteI18n.text("资料说明（选填）")) { larkSourceDescription(api, sourceId) }
             }
             if (paused) ui.text(MoteI18n.text("此文档来源已暂停；保存范围或重新授权不会恢复接入。"))
-            ui.button(MoteI18n.text("预览文档范围")) { action("/api/connectors/lark/preview") { lark() } }
+            ui.button(MoteI18n.text("预览文档范围")) { larkAction(api, "preview") }
             sync?.optJSONArray("preview")?.let { preview ->
                 val card = ui.card(); ui.text(MoteI18n.text("实际发现的文档"), DesignTokens.fontSection.toFloat(), card)
                 ui.text(MoteI18n.text("下列为可用文档标题与引用，尚未因预览读取正文。归档时保存当前版本及可获得的活动线索。"), parent = card)
@@ -690,7 +739,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 ui.text(MoteI18n.text("预览最多显示 50 篇；同步会分页处理全部选定范围。"), parent = card)
             }
             if (!paused && (sync?.optBoolean("confirmed") == true || sync?.has("preview") == true || sync == null && (selection.optJSONArray("calendarIds")?.length() ?: 0) > 0))
-                ui.button(if (sync != null && !sync.optBoolean("confirmed")) MoteI18n.text("确认并开始归档") else MoteI18n.text("立即同步"), true) { action("/api/connectors/lark/sync") { lark() } }
+                ui.button(if (sync != null && !sync.optBoolean("confirmed")) MoteI18n.text("确认并开始归档") else MoteI18n.text("立即同步"), true) { larkAction(api, "sync") }
             sync?.let {
                 ui.text(MoteI18n.text("已归档 {0} 篇文档 · {1} 条活动线索 · {2} 项待处理 · {3} 项失败", it.optInt("documents"), it.optInt("activities"), it.optInt("pending"), it.optInt("failed")))
                 val failures = it.optJSONArray("errors") ?: JSONArray()
@@ -704,7 +753,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                             api.patch("/api/sources/" + enc(sourceId), JSONObject().put("retention", "archive"))
                             api.post("/api/connectors/lark/sync", JSONObject().put("document", failure.getString("reference")))
                         }) { lark() }
-                        else action("/api/connectors/lark/sync", JSONObject().put("document", failure.getString("reference"))) { lark() }
+                        else larkAction(api, "sync", JSONObject().put("document", failure.getString("reference")))
                     }
                 }
             }
@@ -713,10 +762,24 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             ui.button(MoteI18n.text("断开连接")) { screens.confirm(MoteI18n.text("断开连接"), MoteI18n.text("断开会停止读取并暂停这些来源，保留已归档资料。飞书端授权及 CLI 凭据仍保留，可在飞书中单独撤销。")) {
                 ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/lark") }) { lark() }
             } }
+            if (api.polling) larkHandler.postDelayed(larkPoll, 500)
         }
     }
-    private fun larkSourceDescription(sourceId: String) {
-        val api = client; val path = "/api/sources/" + enc(sourceId) + "/context"
+    private fun selectLark(row: JSONObject) {
+        larkHandler.removeCallbacks(larkPoll)
+        larkCalendarMode = false
+        lateinit var next: CentralLarkConnection
+        next = CentralLarkConnection(screens, row.getString("id"), row.getLong("generation")) { larkConnection === next }
+        larkConnection = next
+    }
+    private fun larkAction(api: CentralLarkConnection, command: String, payload: JSONObject = JSONObject()) {
+        if (larkConnection !== api || !screens.ownsSelectedAccount()) return
+        ui.work(MoteI18n.text("正在处理…"), { runCatching { api.post("/api/connectors/lark/" + command, payload) } }) { result ->
+            if (larkConnection === api) { result.exceptionOrNull()?.let { ui.requestFailure(it) }; lark() }
+        }
+    }
+    private fun larkSourceDescription(api: CentralLarkConnection, sourceId: String) {
+        val path = "/api/sources/" + enc(sourceId) + "/context"
         ui.work(MoteI18n.text("正在读取资料说明…"), { api.get(path) }) { current ->
             body.removeAllViews(); screens.setBack { lark() }
             ui.text(MoteI18n.text("资料说明（选填）"), DesignTokens.fontTitleMobile.toFloat())
@@ -730,7 +793,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun larkSelection() {
-        val api = client
+        val api = requireNotNull(larkConnection)
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark").getJSONObject("selection") }) { current ->
             body.removeAllViews(); screens.setBack { lark() }
             ui.text(MoteI18n.text("选择文档与活动范围"), DesignTokens.fontTitleMobile.toFloat())
@@ -760,6 +823,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun calendarSelection(lark: Boolean) {
+        if (lark) { val api = requireNotNull(larkConnection); larkCalendarMode = true; larkAction(api, "calendars"); return }
         val api = client; val path = if (lark) "/api/connectors/lark" else "/api/connectors/google"
         ui.work(MoteI18n.text("正在读取…"), {
             api.get(path + "/calendars") to if (lark) api.get(path).getJSONObject("selection") else JSONObject()
@@ -780,6 +844,21 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 payload.put("calendarIds", JSONArray(fields.filter { it.first.isChecked }.map { it.second }))
                 ui.work(MoteI18n.text("正在保存…"), { api.put(path + if (lark) "/selection" else "/calendars", payload) }) { screens.refresh() }
             }
+        }
+    }
+    private fun larkCalendarSelection(api: CentralLarkConnection, current: JSONObject, calendars: JSONArray) {
+        screens.setBack { larkCalendarMode = false; lark() }
+        val selected = current.getJSONArray("calendarIds"); val ids = (0 until selected.length()).map(selected::getString).toSet()
+        val fields = (0 until calendars.length()).map { index ->
+            val item = calendars.getJSONObject(index); val id = item.getString("id")
+            CheckBox(ui).apply { text = item.getString("name"); isChecked = id in ids; body.addView(this) } to id
+        }
+        val collect = form(pick(current, "pastDays", "futureDays", "timeZone"), ui.card())
+        ui.button(MoteI18n.text("保存设置"), true) {
+            if (larkConnection !== api || !screens.ownsSelectedAccount()) return@button
+            val payload = JSONObject(current.toString()); val edited = collect()
+            edited.keys().forEach { payload.put(it, edited.get(it)) }; payload.put("calendarIds", JSONArray(fields.filter { it.first.isChecked }.map { it.second }))
+            larkCalendarMode = false; larkAction(api, "select", payload)
         }
     }
     private fun recordingSteps(path: String, cursors: List<Long?> = listOf(null)) {
