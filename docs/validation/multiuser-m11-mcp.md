@@ -79,6 +79,24 @@ Fresh `npm run build:libs` on the composed runtime exits0,
 `/tmp/m11-f79-libs-build.log/.exit`. This fixes the stale ignored agent-consumer dist
 before the new real Harness checks. No current whole-scope, full-MCP, server emitted,
 required affected/Android or CI result is claimed by the bounded B checkpoint.
+An additional actual SDK Coding consumer case passes1/1,EXIT0,3959.835666ms,
+`/tmp/m11-ca87-coding-sdk.log/.exit`: complete declared human/final dialogue is
+queryable after real M03/M06/Memory organizers settle, tool/analysis/unattributed/
+host-envelope/foreign body is absent from all returned Materials/search, raw tool
+UUID is denied and exact retained M03 bytes stay available through their valid
+owner capability. This covers fresh-input query consumers, not all old-v1 retirement.
+The legacy20-tool/UTF16/canonical-page bounded subset also passes3/3,EXIT0,
+7305.59025ms, `/tmp/m11-ca87-legacy-query-subset.log/.exit`.
+
+Current known RED is `multiuser-mcp-tombstone.test.ts` at
+ca87afbe6ecfb208b866e3ae573cdb8feb42f51e: actual M03 source-reported deletion
+has a current deleted head; default SDK result is empty correctly, but
+`mote_items(includeDeleted:true)` omits its expected normal tombstone metadata.
+0/1,EXIT1,963.261416ms, `/tmp/m11-ca87-tombstone-red.log/.exit`.
+This is a legacy-capability migration omission, distinct from owner DELETE and
+cross-user disclosure. M08 owns the minimal host fix; this new RED is not ignored
+or labeled a whole-module pass. Its old-body exclusion assertion stays unchanged.
+
 M07's full retained/history/restore and actual running-I/O SIGKILL A/C work remains
 pending; the public review's old search1→0 sample alone does not close those paths.
 
