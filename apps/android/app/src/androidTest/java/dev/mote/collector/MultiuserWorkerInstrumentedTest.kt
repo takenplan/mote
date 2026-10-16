@@ -519,6 +519,41 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeRecordingRetainsProcessingAndAnonymousSpeakerConfirmationWithCorrections() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val id=fixture().getString("captureId");val initial=api.get("/api/files/"+id+"/chunks").getJSONArray("items").getJSONObject(0)
+        val bApi=CentralClient(endpoint(),token("b"),{true});val beforeB=bApi.get("/api/files/"+id+"/chunks").toString()
+        assertEquals("SPEAKER_0",initial.getJSONObject("fileEvidence").getString("speaker"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label};assertNotNull("Missing original file control: "+label,button);button!!.performClick()}}
+            ready();press("查看详情");ready()
+            scenario.onActivity {activity->val text=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()};assertFalse("Actual succeeded M06 work must not be called unscheduled",text.any {it.contains("尚未调度")});assertTrue("Anonymous cluster identity must remain visible",text.any {it.contains("SPEAKER_0")})}
+            press("确认说话人");scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="SPEAKER_0"}.setText("Generated A confirmed speaker")};press("保存说话人姓名");ready()
+            val named=api.get("/api/files/"+id+"/chunks").getJSONArray("items").getJSONObject(0);assertEquals("Generated A confirmed speaker",named.getJSONObject("fileEvidence").getJSONObject("speakerAttribution").getString("name"));assertEquals(initial.getString("ocrText"),named.getString("ocrText"))
+            press("纠正此段");scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="校正此段文字"}.setText("Generated A owner corrected recording")};press("保存校正");ready()
+            val corrected=api.get("/api/files/"+id+"/chunks").getJSONArray("items").getJSONObject(0);assertEquals("Generated A owner corrected recording",corrected.getString("ocrText"));assertNotEquals(initial.getJSONObject("fileEvidence").getString("artifactId"),corrected.getJSONObject("fileEvidence").getString("artifactId"));assertEquals("Generated A confirmed speaker",corrected.getJSONObject("fileEvidence").getJSONObject("speakerAttribution").getString("name"))
+            assertEquals(initial.getString("ocrText"),api.get("/api/processing/artifacts/"+initial.getJSONObject("fileEvidence").getString("artifactId")).getJSONObject("payload").getJSONArray("segments").getJSONObject(0).getString("text"))
+            press("确认说话人");lateinit var oldSave:android.widget.Button;scenario.onActivity {activity->oldSave=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存说话人姓名"}}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldSave.performClick()};ready();assertEquals(beforeB,CentralAccess.requireClient(app).get("/api/files/"+id+"/chunks").toString())
+        }
+    }
+
+    @Test fun originalNativeRecordingSavesExactAuthenticatedOriginalThroughItsDocumentResult() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val output=File(app.cacheDir,"generated-recording.wav").apply {writeText("Generated existing document sentinel")};val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("audio/wav")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(android.net.Uri.fromFile(output))),true)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try {androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            ready();press("查看详情");ready();press("保存原件");waitFor {monitor.hits==1};ready();assertArrayEquals(android.util.Base64.decode(fixture().getString("wave"),android.util.Base64.DEFAULT),output.readBytes())
+        }}finally{instrumentation.removeMonitor(monitor)}
+    }
+
     @Test fun originalNativeGoogleConnectionSettingsCreateDisabledAndKeepMaskedCasUnderTheirOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
