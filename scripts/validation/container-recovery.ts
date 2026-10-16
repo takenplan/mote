@@ -8,8 +8,9 @@ import {randomUUID,createHash} from 'node:crypto';
 import {execFileSync,spawnSync} from 'node:child_process';
 import {DatabaseSync} from 'node:sqlite';
 import {setTimeout as delay} from 'node:timers/promises';
-import {EXECUTION_POLICIES} from '../../apps/server/src/execution-policy.ts';
-import {buildApp} from '../../apps/server/src/app.ts';
+import {EXECUTION_POLICIES} from '../../apps/server/src/execution-policy.js';
+import {buildApp} from '../../apps/server/src/app.js';
+import type {UserTaskHandler} from '../../apps/server/src/scope/task-execution.js';
 import {backupScopedInstance} from '../scoped-backup.mjs';
 import {initialize,profilePaths,loadProfile,restoreProfile,backupProfile,dockerConfigurationUser} from '../profile-lib.mjs';
 const runId='container142-'+randomUUID(),directory=mkdtempSync(join(tmpdir(),'mote-actual-container-')),source=join(directory,'source'),archive=join(directory,'archive');
@@ -24,7 +25,7 @@ const container=runId+'-central';
 const execute=async(command:string,args:string[])=>{assert.equal(command,'docker');const actual=args[0]==='run'?['run','--name',runId+'-'+(++index),'--label','dev.mote.fixture='+runId,...args.slice(1)]:args;return docker(actual);};
 try{
  node=await buildApp({dataDir:source});assert.ok(node.execution);
- node.execution.register({kind:'generated.container-unknown',pool:'generated-container',concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic,parseInput:input=>input,portableInput:input=>input,execute:async run=>{run.external.begin('generated-external-unknown');return null;}});
+ node.execution.register({kind:'generated.container-unknown',pool:'generated-container',concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic,parseInput:input=>input as Record<string,unknown>,portableInput:input=>input,execute:async run=>{run.external.begin('generated-external-unknown');return null;}} satisfies UserTaskHandler);
  const password='Generated-actual-container-password';await node.accounts.initialize('generated-admin',password);const admin=await node.accounts.login('generated-admin',password,'generated','client',0),context=await node.authority.authenticate(admin.token),users=[];
  const captureId='03030303-0303-4303-8303-030303030303';
  const original=Buffer.alloc(2*1024*1024+71,0x61);original.write('Generated actual Docker original bytes; both owner namespaces retain this original.');
@@ -42,7 +43,7 @@ try{
  await assert.rejects(restoreProfile(p,archive,{execute}),/empty data volume/);assert.equal(readFileSync(p.configFile,'utf8'),selectedYaml);
  const targetPaths=profilePaths('empty-target',join(directory,'profiles'));await initialize(targetPaths,{runtime:'docker',image});p=await loadProfile(targetPaths);selected=p.meta.volume;docker(['volume','create','--label','dev.mote.fixture='+runId,selected]);created.add(selected);
 
- const restored=await restoreProfile(p,archive,{execute});created.add(restored.volume);assert.notEqual(restored.volume,selected);assert.equal(restored.deploymentId,deploymentId);p=await loadProfile(profilePaths(p.profile,p.home));assert.equal(p.meta.volume,restored.volume);
+ const restored=await restoreProfile(p,archive,{execute});assert.ok(restored.volume);created.add(restored.volume);assert.notEqual(restored.volume,selected);assert.equal(restored.deploymentId,deploymentId);p=await loadProfile(profilePaths(p.profile,p.home));assert.equal(p.meta.volume,restored.volume);
  if(production){
   const user=await dockerConfigurationUser(p,execute);
   docker(['run','--pull','never','--detach','--name',container,'--label','dev.mote.fixture='+runId,'--network','none','--security-opt','no-new-privileges:true','--cap-drop','ALL','--user',user,'--mount',`type=volume,source=${restored.volume},target=/data`,'--mount',`type=bind,source=${p.directory},target=/config`,'--env','MOTE_CONFIG_FILE=/config/mote.yaml',image!]);containerCreated=true;
