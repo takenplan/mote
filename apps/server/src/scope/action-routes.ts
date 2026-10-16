@@ -8,10 +8,12 @@ import {ScopedActions} from './actions.js';
 import {ACTIONS_DOMAIN} from './actions-schema.js';
 import type {AskHost} from './ask.js';
 import type {IngressHost} from './ingress.js';
+import {ActionSettingsSaveError} from '../action-contract.js';
 export function registerScopedActions(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,questions:ScopedOwnerQuestions,ask:AskHost,ingress:IngressHost){
  const host=new ScopedActions(runtime,db,configuration,execution,questions,ask,ingress),id=(params:unknown)=>z.object({id:z.string().uuid()}).parse(params).id;
  registerUserRoute(runtime,{scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions',handle:({context,request})=>host.forUser(context).view(request.query)});
- registerUserRoute(runtime,{scope:'user',service:ACTIONS_DOMAIN,method:'PUT',url:'/api/actions/settings',handle:({context,request})=>host.forUser(context).saveSettings(request.body)});
+ registerUserRoute(runtime,{scope:'user',service:ACTIONS_DOMAIN,method:'PUT',url:'/api/actions/settings',handle:async({context,request,reply})=>{try{return await host.forUser(context).saveSettings(request.body);}catch(error){runtime.authority.assert(context);if(!(error instanceof ActionSettingsSaveError))throw error;reply.code(error.statusCode);return {error:error.code,authorizationRevoked:true,revokedDeviceIds:error.revokedDeviceIds,authorizationRevision:error.authorizationRevision};}}});
+ registerUserRoute(runtime,{scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions/:id/reviews/:questionId',handle:({context,request})=>{const args=z.object({id:z.string().uuid(),questionId:z.string().uuid()}).strict().parse(request.params);return host.reviewDetails(context,args.id,args.questionId);}});
  registerUserRoute(runtime,{scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/targets',handle:({context,request})=>host.forUser(context).registerTarget(request.body)});
  registerUserRoute(runtime,{scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/retry',handle:({context})=>host.forUser(context).retry()});
  registerUserRoute(runtime,{scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions/deliveries',handle:({context,request})=>host.delivery.deliveries(context,z.object({deviceId:z.string().min(1).max(200)}).strict().parse(request.query).deviceId)});
