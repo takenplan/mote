@@ -7,6 +7,8 @@ import {resources} from './resource-cache';
 import {lifecycleReceipt,lifecycleLabel,type LifecycleReceipt} from './lifecycle-receipt';
 
 export function ScopedVault({api,embedded,disconnect}:{api:Api;embedded?:boolean;disconnect:()=>void}){
+ const connection=api.connection;if(connection?.mode!=='web')throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
+ const userId=connection.userId;
  const [id,setId]=useState<string>(),[cursor,setCursor]=useState<string>(),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const owner=useRef(api),alive=useRef(true),intent=useRef<string|undefined>(undefined);owner.current=api;
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[api]);
@@ -14,10 +16,10 @@ export function ScopedVault({api,embedded,disconnect}:{api:Api;embedded?:boolean
  const page=useResource<{items:unknown[];nextCursor:string|null}>(api,base+'?limit=20'+(cursor?'&cursor='+encodeURIComponent(cursor):''));
  const selected=useResource<unknown>(api,id?base+'/'+encodeURIComponent(id):null,1000);
  let receipt:LifecycleReceipt|undefined,items:LifecycleReceipt[]=[],readError=selected.error??page.error;
- try{if(selected.data)receipt=lifecycleReceipt(api,selected.data,'export',api.connection!.userId,id);items=(page.data?.items??[]).map(value=>lifecycleReceipt(api,value,'export',api.connection!.userId));}catch(e){readError=e;}
+ try{if(selected.data)receipt=lifecycleReceipt(api,selected.data,'export',userId,id);items=(page.data?.items??[]).map(value=>lifecycleReceipt(api,value,'export',userId));}catch(e){readError=e;}
  const refresh=()=>resources(api).invalidate(key=>key.startsWith(base));
- async function start(){if(busy||!live(api))return;const fixed=api;intent.current??=crypto.randomUUID();const operationId=intent.current;setBusy(true);setError('');try{const result=lifecycleReceipt(fixed,await fixed.request(base,{method:'POST',body:JSON.stringify({operationId})}),'export',fixed.connection!.userId,operationId);if(!live(fixed))return;setId(result.id);intent.current=undefined;refresh();}catch(e){if(live(fixed))setError(errorMessage(e));}finally{if(live(fixed))setBusy(false);}}
- async function control(action:'retry'|'cancel'){if(!receipt||busy||!live(api))return;const fixed=api,target=receipt.id;setBusy(true);setError('');try{lifecycleReceipt(fixed,await fixed.request(base+'/'+target+'/'+action,{method:'POST',body:'{}'}),'export',fixed.connection!.userId,target);if(live(fixed))refresh();}catch(e){if(live(fixed))setError(errorMessage(e));}finally{if(live(fixed))setBusy(false);}}
+ async function start(){if(busy||!live(api))return;const fixed=api;intent.current??=crypto.randomUUID();const operationId=intent.current;setBusy(true);setError('');try{const result=lifecycleReceipt(fixed,await fixed.request(base,{method:'POST',body:JSON.stringify({operationId})}),'export',userId,operationId);if(!live(fixed))return;setId(result.id);intent.current=undefined;refresh();}catch(e){if(live(fixed))setError(errorMessage(e));}finally{if(live(fixed))setBusy(false);}}
+ async function control(action:'retry'|'cancel'){if(!receipt||busy||!live(api))return;const fixed=api,target=receipt.id;setBusy(true);setError('');try{lifecycleReceipt(fixed,await fixed.request(base+'/'+target+'/'+action,{method:'POST',body:'{}'}),'export',userId,target);if(live(fixed))refresh();}catch(e){if(live(fixed))setError(errorMessage(e));}finally{if(live(fixed))setBusy(false);}}
  async function download(){if(!receipt||receipt.state!=='completed'||busy||!live(api))return;const fixed=api,expected=receipt;setBusy(true);setError('');try{
   const response=await fixed.raw(base+'/'+expected.id+'/content'),buffer=await response.arrayBuffer();if(!live(fixed))return;
   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',buffer)),v=>v.toString(16).padStart(2,'0')).join('');if(!live(fixed))return;
@@ -33,5 +35,5 @@ export function ScopedVault({api,embedded,disconnect}:{api:Api;embedded?:boolean
  <p role="status">{moteText('当前支持账号归档；元数据和附件分别导出的接口尚待接入。')}</p><div className="transfer-export-actions"><button className="button subtle" disabled>{moteText('导出元数据')}</button><button className="button subtle" disabled>{moteText('导出资料与附件')}</button></div>
  <div className="transfer-action"><div><h3>{moteText('导入归档')}</h3><p role="status">{moteText('个人归档导入的合并与去重协议尚待完成，当前不能提交导入。')}</p></div><button className="button subtle" disabled>{moteText('选择文件')}</button></div>
  <div className="backup-note"><Info size={16}/><div><strong>{moteText('大资料库适合使用离线备份')}</strong><p>{moteText('实例备份与恢复由中央节点停机命令执行。')}</p><code>npm run backup -- --help</code></div></div></section>
- <section className="panel node-settings"><div><strong>{moteText('当前服务（中央节点）')}</strong><p>{api.connection?.origin}</p></div><button className="button subtle" onClick={disconnect}><Unplug size={15}/>{moteText('退出登录')}</button></section></>;
+ <section className="panel node-settings"><div><strong>{moteText('当前服务（中央节点）')}</strong><p>{connection.origin}</p></div><button className="button subtle" onClick={disconnect}><Unplug size={15}/>{moteText('退出登录')}</button></section></>;
 }

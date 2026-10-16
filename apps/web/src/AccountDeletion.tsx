@@ -13,7 +13,7 @@ export function AccountDeletion({api,account}:{api:Api;account:{userId:string;us
  const receiptId=id??account.deletionId,read=useResource<unknown>(api,show&&receiptId?'/api/admin/account-deletions/'+encodeURIComponent(receiptId):null,1000);
  let receipt:LifecycleReceipt|undefined,readError=read.error;try{if(read.data)receipt=lifecycleReceipt(api,read.data,'delete',account.userId,receiptId);}catch(e){readError=e;}
  async function submit(){const intent=dialog;if(!intent||busy||!active.current)return;setBusy(true);setError('');try{
-  const request=()=>intent.api.request('/api/admin/accounts/'+encodeURIComponent(intent.userId),{method:'DELETE',body:JSON.stringify({operationId:intent.operationId})}),self=intent.api.connection?.userId===intent.userId;
+  const request=()=>intent.api.request('/api/admin/accounts/'+encodeURIComponent(intent.userId),{method:'DELETE',body:JSON.stringify({operationId:intent.operationId})}),self=intent.api.connection?.mode==='web'&&intent.api.connection.userId===intent.userId;
   const value=await (self?changeWebAuthentication(request,false):request());if(self)intent.api.close?.();
   const result=lifecycleReceipt(intent.api,value,'delete',intent.userId,intent.operationId);if(!active.current)return;
   setDialog(undefined);setId(result.id);setShow(true);resources(intent.api).invalidate(key=>key==='/api/admin/accounts');
