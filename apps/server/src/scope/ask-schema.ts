@@ -17,7 +17,12 @@ export type AskScope={sourceIds?:readonly string[];snapshot?:AskSnapshot;assertC
 export type EvidencePin={id:string;hash:string;receipt?:string;kind?:'measurement'|'history'|'attachment';headId?:string;source?:{id:string;incarnation:string}};
 export type MaterialPin={id:string;revision:string;sources?:{id:string;incarnation:string}[];sourceContext?:{sourceId:string;version:number;fingerprint:string}};
 export type AskRow={id:string;input:string;fingerprint:string;mode:'chat'|'insight'|'compact';status:string;generation:number;fragment:number;task_id:string|null;model:string;scope:string;context:string;conversation_revision:number;conversation_incarnation:string;pins:string;materials:string;memory_pins:string;events:string;workspace:string|null;request_bound:number;created_at:string;updated_at:string;result:string|null};
-export function installAsk(db:DatabaseSync){db.function('ma_catalog_parent',{deterministic:true},catalogParent);db.exec(`
+export function installAsk(db:DatabaseSync){
+ db.exec('SAVEPOINT ma_schema_install');try{
+ // Backfill is a one-time schema migration. Normal publication triggers keep
+ // the journal current; repeating it would turn personal imports into new work.
+ const initializeEvents=!db.prepare("SELECT 1 FROM sqlite_schema WHERE type='table' AND name='ma_auto_events'").get();
+ db.function('ma_catalog_parent',{deterministic:true},catalogParent);db.exec(`
  CREATE TABLE IF NOT EXISTS ma_meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1),cursor_key TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS ma_sources(user_id TEXT NOT NULL,id TEXT NOT NULL,incarnation TEXT NOT NULL,PRIMARY KEY(user_id,id));
  INSERT OR IGNORE INTO ma_sources SELECT user_id,id,lower(hex(randomblob(16))) FROM pd_sources;
@@ -45,11 +50,10 @@ export function installAsk(db:DatabaseSync){db.function('ma_catalog_parent',{det
  CREATE TRIGGER IF NOT EXISTS ma_auto_material_insert AFTER INSERT ON pd_materials BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'insights',new.id); END;
  CREATE TRIGGER IF NOT EXISTS ma_auto_material_update AFTER UPDATE ON pd_materials WHEN new.revision!=old.revision OR new.min_visible_sequence!=old.min_visible_sequence BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'insights',new.id); END;
  CREATE TRIGGER IF NOT EXISTS ma_auto_turn AFTER INSERT ON ma_turns BEGIN INSERT INTO ma_auto_events(user_id,kind,entity) VALUES(new.user_id,'working',new.conversation_id); END;
- INSERT INTO ma_auto_events(user_id,kind,entity) SELECT m.user_id,'insights',m.id FROM pd_materials m WHERE NOT EXISTS(SELECT 1 FROM ma_auto_events e WHERE e.user_id=m.user_id AND e.entity=m.id AND e.kind='insights');
  CREATE TABLE IF NOT EXISTS ma_auto_windows(user_id TEXT NOT NULL,id TEXT NOT NULL,policy_id TEXT NOT NULL,generation TEXT NOT NULL,state TEXT NOT NULL,through INTEGER NOT NULL,plan TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ma_auto_runs(user_id TEXT NOT NULL,run_id TEXT NOT NULL,window_id TEXT NOT NULL,policy_id TEXT NOT NULL,generation TEXT NOT NULL,PRIMARY KEY(user_id,run_id));
  CREATE TABLE IF NOT EXISTS ma_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
- `);db.prepare('INSERT OR IGNORE INTO ma_meta VALUES(1,?)').run(randomBytes(32).toString('hex'));return String(db.prepare('SELECT cursor_key FROM ma_meta WHERE singleton=1').get()!.cursor_key);}
+ `);if(initializeEvents)db.exec("INSERT INTO ma_auto_events(user_id,kind,entity) SELECT m.user_id,'insights',m.id FROM pd_materials m");db.prepare('INSERT OR IGNORE INTO ma_meta VALUES(1,?)').run(randomBytes(32).toString('hex'));const cursorKey=String(db.prepare('SELECT cursor_key FROM ma_meta WHERE singleton=1').get()!.cursor_key);db.exec('RELEASE ma_schema_install');return cursorKey;}catch(error){db.exec('ROLLBACK TO ma_schema_install;RELEASE ma_schema_install');throw error;}}
 
 /** Host-only M05 validation, before a task context exists. Owner comes only from the engine's durable ownership record. */
 export function persistedAskRun(db:DatabaseSync,userId:string,id:string){return db.prepare('SELECT * FROM ma_runs WHERE user_id=? AND id=?').get(userId,id) as AskRow|undefined;}

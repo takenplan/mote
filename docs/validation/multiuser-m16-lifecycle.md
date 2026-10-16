@@ -430,3 +430,29 @@ Existing domain adapter adjacent journeys also pass 11/11, exit 0:
 historical-body export/stale builtin restore, held provider deletion, original
 identity stitching rejection and processing publication/hash parents. They are
 adjacent adapter evidence, not a full server or all-module acceptance run.
+
+### Actual earlier-instance/later-personal-data restart correction
+
+A new end-to-end case takes an actual stopped instance backup before a generated
+Material, exports that later Material under the same account/deployment, restores
+the earlier instance, logs in again (old credentials correctly rejected), imports
+the later portable archive, then restarts the real host. At `dd284ad0` it reaches
+its intended assertion and fails: import-time suppression leaves zero new events,
+but the repeated Ask schema backfill creates an insights notification on restart.
+`/tmp/m16-import-restart-notification-red.log` is exit 1, 1/1 valid RED. This proves
+a new automatic-input notification, not an executed external/model action.
+
+The correction runs the canonical automation-event backfill only when installing
+that journal table for the first time, in the same SQLite savepoint as schema and
+cursor initialization. Existing normal publication triggers are retained. A
+positive migration case reconstructs the real pre-journal schema checkpoint,
+proves first install seeds the existing Material exactly once, restart does not
+reseed it, and later real publication still produces a normal notification.
+The two focused cases pass 2/2 (`/tmp/m16-import-restart-notification-green.log`),
+followed by the final full personal-import suite recorded separately. No new
+policy, task runtime, external replay or M12 interaction is added.
+
+After the atomic migration correction, all personal import cases pass 14/14,
+exit 0 in `/tmp/m16-personal-import-fourteen.log`; no skip. Scope inventory and
+production boundary check also exit 0. This remains narrow evidence awaiting the
+new combined required/build and current UI consumer acceptance.

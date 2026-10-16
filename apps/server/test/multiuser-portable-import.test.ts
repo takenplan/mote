@@ -114,3 +114,10 @@ test('later personal data imported into an earlier stopped instance does not bec
   await restored.app.close();restored=await buildApp({dataDir:target});assert.deepEqual(events(),[],'restart must not turn imported canonical data into a newly authorized automation notification');
  }finally{if(restored)await restored.app.close();rmSync(directory,{recursive:true,force:true});}
 });
+
+test('first automation-journal schema installation backfills existing canonical data once and normal publication still notifies',async t=>{
+ const f=await scopedMemoryFixture(t),material=await f.publish(f.a,'A');await f.node.app.close();
+ f.read(db=>db.exec('DROP TRIGGER ma_auto_material_insert;DROP TRIGGER ma_auto_material_update;DROP TRIGGER ma_auto_turn;DROP TABLE ma_auto_events;'));await f.restart();
+ const events=()=>f.read(db=>db.prepare("SELECT entity FROM ma_auto_events WHERE user_id=? AND kind='insights' ORDER BY seq").all(f.a.userId).map(row=>row.entity));assert.deepEqual(events(),[material.id]);await f.restart();assert.deepEqual(events(),[material.id]);
+ const next=await f.publish(f.a,'A','same-source','generated-next');assert.deepEqual(events(),[material.id,next.id]);
+});
