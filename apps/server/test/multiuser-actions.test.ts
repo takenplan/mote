@@ -67,3 +67,11 @@ test('actual Actions settings and equal device/calendar targets are owner bound 
  assert.equal((await f.request(f.a.token,'/api/actions/targets','POST',{ownerId:f.b.userId,deviceId:'same-device',deviceName:'forged',calendars:[]})).statusCode,401);
  await f.restart();assert.equal((await f.ok(f.a.token,'/api/actions')).settings.timeZone,'UTC');
 });
+
+test('explicit owned todo restore after domain deletion preserves create receipts and leaves B unchanged',async t=>{
+ const f=await fixture(t),id=randomUUID(),input={id,title:'Generated restored A'};assert.equal((await f.request(f.a.token,'/api/todos','POST',input)).statusCode,201);assert.equal((await f.request(f.b.token,'/api/todos','POST',{id,title:'Generated B'})).statusCode,201);
+ const context=await f.node.authority.authenticate(f.a.token),services=f.node.services.forUser(context),archive=await services.exportUser('todos'),before=await f.ok(f.b.token,'/api/todos');
+ await services.deleteUser('todos','generated-delete');assert.equal((await f.request(f.a.token,'/api/todos')).statusCode,503);
+ await services.restoreUser('todos',archive,'generated-restore');await services.restoreUser('todos',archive,'generated-restore');
+ assert.equal((await f.ok(f.a.token,'/api/todos')).items[0].title,input.title);assert.equal((await f.request(f.a.token,'/api/todos','POST',input)).json().id,id);assert.deepEqual(await f.ok(f.b.token,'/api/todos'),before);
+});
