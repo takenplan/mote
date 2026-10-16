@@ -20,7 +20,7 @@ type ActionsProps={api:ReturnType<typeof createApi>;onOpen:(id:string)=>void};
 export function Actions(props:ActionsProps){return <ActionsPage key={JSON.stringify(props.api.connection)} {...props}/>;}
 function ActionsPage({api,onOpen}:ActionsProps){
  const scoped=api.connection?.mode==='web',mounted=useRef(true),running=useRef(false);
- useEffect(()=>()=>{mounted.current=false;},[]);
+ useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
  const activeApi=useRef(api);activeApi.current=api;const live=()=>mounted.current&&activeApi.current===api;
  const [timeZoneEdit,setTimeZoneEdit]=useState<{api:typeof api;revision:number;authorizationRevision:number;initialTimeZone:string;settings:ActionSettings}>(),[settingsError,setSettingsError]=useState(false),[withdrawalApplied,setWithdrawalApplied]=useState(false);
  const [error,setError]=useState(''),[busy,setBusy]=useState(false),[review,setReview]=useState<ActionProposal>(),[draft,setDraft]=useState<CalendarDraft>(),[target,setTarget]=useState(''),[localId,setLocalId]=useState<string>(),[tab,setTab]=useState('proposed'),[cursor,setCursor]=useState<string|number>(0),[fixed,setFixed]=useState<FixedActionReview>();
