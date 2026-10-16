@@ -218,3 +218,28 @@ adds no route, table, scheduler, provider call or new execution authority.
 Disconnect uses the existing vault retirement; lifecycle export/deletion and
 instance backup already cover the same encrypted state. The inventory is a
 read-only discovery receipt and never grants calendar write or source admission.
+## Current-selection recording checkpoints
+
+`GET /api/connectors/:id/recordings?limit=1..100&cursor=opaque` is a private M10
+read of the existing recording adapter's current-selection journal. It admits
+no task and does not call the external account/CLI. The host reuses the existing
+M02 `PrivateCursor` key supplied by scoped bootstrap, binding deployment, user,
+connection ID/generation, saved selection epoch and complete page query. A cursor
+from another account, query limit or selection is invalid. No new table, executor,
+timer, provider runtime or lifecycle state is introduced.
+
+The response is `{sourceId?,items,nextCursor}`. `sourceId` is the canonical M03
+source mapped by owner+connection+local source ID, never an adapter-local path.
+Each item keeps its provider recording `id`, optional actual metadata title/time,
+`transcript:{archived,blocked,attempts,nextAttemptAt?}` and
+`audio:{required,archived,blocked,attempts,nextAttemptAt?}`. Optional `error` is the
+existing sanitized ledger code; `transcriptCaptureId`/`audioCaptureId` identify
+the exact current canonical source heads. Known raw-export `empty`/`unsupported`
+markers are preserved without inferring processing, indexing or Memory success.
+Account/connection retirement is rechecked after adapter cleanup.
+
+This is the current-selection checkpoint reader, not a replacement for canonical
+archive history outside that selection, M06 processing, or the original native
+recording controls. Those consumer/history acceptance rows remain open until
+their actual entry tests pass. Existing archived bytes stay under M03 and all
+original/file reads still require their normal current authority and receipts.

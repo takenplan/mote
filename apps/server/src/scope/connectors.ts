@@ -26,6 +26,7 @@ import {PrivateData} from './private-data.js';
 import {ConnectorVault,connectorHash as hash} from './connector-vault.js';
 import {connectorSettings,connectionSchema,connectorTask,type ConnectorTask,type ConnectionSettings,type ConnectorProvider,type ConnectorTransports,type ConnectorAdapter,type ConnectorDefinition} from './connector-contract.js';
 import {ScopedRecordingAdapter} from './connector-recordings.js';
+import {PrivateCursor} from './private-data-sql.js';
 
 type Row={user_id:string;id:string;generation:number;removed:number;settings:string;sync_authorized:number;storage_generation:number};
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,child])=>[key,canonical(child)])):value;
@@ -50,7 +51,7 @@ export class ScopedConnectors {
  private readonly lifecycleQueue=new Map<string,Promise<void>>();
  private closed=false;
  private closing?:Promise<void>;
- constructor(private runtime:ScopedRuntime,private options:{db:DatabaseSync;directory:string;configuration:Configurations;execution:TaskExecution;plugins:ScopedPluginHost;ingress:IngressHost;transports?:ConnectorTransports;definitions?:readonly ConnectorDefinition[];processing?:import('./processing.js').ProcessingHost}){
+ constructor(private runtime:ScopedRuntime,private options:{db:DatabaseSync;directory:string;cursorKey:string;configuration:Configurations;execution:TaskExecution;plugins:ScopedPluginHost;ingress:IngressHost;transports?:ConnectorTransports;definitions?:readonly ConnectorDefinition[];processing?:import('./processing.js').ProcessingHost}){
   const {db,configuration,execution,plugins}=options;const detach=options.processing?connectorOriginalProcessors.map(processor=>options.processing!.processors.registry.register(processor)):[];this.detachOriginalProcessor=()=>{for(const dispose of detach)dispose();};
   db.exec(`CREATE TABLE IF NOT EXISTS connector_connections(user_id TEXT NOT NULL,id TEXT NOT NULL,generation INTEGER NOT NULL,removed INTEGER NOT NULL,settings TEXT NOT NULL,sync_authorized INTEGER NOT NULL DEFAULT 0,storage_generation INTEGER NOT NULL DEFAULT 1,PRIMARY KEY(user_id,id));
    CREATE TABLE IF NOT EXISTS connector_activity(user_id TEXT NOT NULL,id TEXT NOT NULL,instance_id TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(user_id,id));
@@ -269,6 +270,19 @@ export class ScopedConnectors {
       const inventory=this.vault(context,id,activity.assert).read<{taskId:string;generation:number;items:unknown[]}>('calendar-inventory');
       if(inventory?.generation===row.generation)result={...result as object,calendarInventory:{taskId:inventory.taskId,items:inventory.items}};
      }
+    }finally{await activity.finish();}
+    activity.assert();return result;
+   },
+   recordings:async(id:string,query:{limit:number;cursor?:string})=>{
+    const row=this.row(context.userId,id),activity=this.activity(context,row),codec=new PrivateCursor(this.options.cursorKey,context.deploymentId,context.userId);
+    let result:{sourceId?:string;items:Awaited<ReturnType<ScopedRecordingAdapter['recordingPage']>>['items'];nextCursor:string|null};
+    try{
+     const adapter=await activity.open();if(!(adapter instanceof ScopedRecordingAdapter))throw new ConnectorError('connector_recordings_unavailable',400);
+     const identity=(epoch:string)=>({collection:'connector-recordings',id,generation:row.generation,epoch,limit:query.limit});
+     const page=await adapter.recordingPage(query.limit,epoch=>query.cursor?codec.decode(query.cursor,identity(epoch)).id:undefined);activity.assert();
+     const mapped=page.sourceId?this.options.db.prepare('SELECT source_id FROM connector_sources WHERE user_id=? AND instance_id=? AND local_id=?').get(context.userId,id,page.sourceId):undefined;
+     if(page.sourceId&&!mapped)throw new ConnectorError('connector_source_missing',404);
+     result={...(mapped?{sourceId:String(mapped.source_id)}:{}),items:page.items,nextCursor:page.nextKey?codec.encode(identity(page.epoch),{at:'',id:page.nextKey}):null};
     }finally{await activity.finish();}
     activity.assert();return result;
    },

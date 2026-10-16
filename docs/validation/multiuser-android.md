@@ -293,3 +293,6 @@ The actual executable environment returned after the parent reported the desktop
 Current test-only follow-ups64b/ffe/2f892/4b323/f129 are UNCOMPILED/UNRUN: formal overview statistics/devices, private Notes resume before a blocked account resolver, Actions settings revision envelope, and old CalendarActionWorker permission-check/account-admission race. These are candidates, not confirmed new failures. Calendar control509 corrects only its unregistered single-item reader, preserving the already-observed actual uncertain stage. Independent native journeys get two distinct generated B proposals; the earlier three successful UI cases used the original21A/1B producer and are not relabeled as reruns on the later fixture.
 
 The explicitly frozen M12/M16 literal10748005 was merged as04b929d6. Conflict resolution retained the M15-only native tests/ledger and incoming M16 evidence append; no Android source/test byte changed relative to95475. `dcad6088` is an ancestor, and all Android main source is byte-identical to tested9e. New test-only candidates still need a testAPK; the future synthetic backend must start from the new combined server source. No old server process or native acceptance is relabeled as running107.
+
+
+Recording reader37c8ac83 consumed by Web recording feature; owner evidence and exact bounds are in multiuser-connectors.md.
