@@ -40,6 +40,12 @@ internal class CentralClient(
         if (status !in 200..299) fail(status, value)
         return value ?: if (status == 204) JSONObject() else throw IllegalStateException(MoteI18n.text("中央响应格式无效，请刷新后重试。"))
     }
+    fun ingress(deviceId: String, deviceName: String = "Android"): Ingress3Client {
+        val binding = AccountBinding.self(server, get("/api/connections/self"))
+        return Ingress3Client(binding, deviceId, deviceName, { method, path, body ->
+            200 to request(method, path, body)
+        }, current = active)
+    }
     internal fun destination(path: String): String {
         val uri = URI(path)
         require(!uri.isAbsolute && uri.rawAuthority == null && uri.rawFragment == null && uri.rawPath.startsWith("/api/") &&

@@ -29,19 +29,19 @@ class CentralNativeContractTest {
     private val origin = "https://central.fixture.invalid"
     private val token = "generated-native-owner-fixture-token-123456"
 
-    @Test fun allFeaturesUseTheSameConfiguredLoginIncludingPairedTokens() {
-        val config = CollectorConfig(server = origin, token = token, deviceName = "Generated phone")
+    @Test fun allFeaturesUseTheSameVerifiedAccountLogin() {
+        val config = CollectorConfig(server = origin, token = token, deviceName = "Generated phone", accountBinding = AccountBinding(origin,"generated-deployment","generated-user").json().toString())
         assertEquals(token, config.connectionToken()); assertTrue(config.hasSyncConnection())
     }
     @Test fun signedOutAndExpiredLoginsCannotResumeCollectionOrCentralRequests() {
-        val config = CollectorConfig(server = origin, token = token, deviceName = "Generated phone")
+        val config = CollectorConfig(server = origin, token = token, deviceName = "Generated phone", accountBinding = AccountBinding(origin,"generated-deployment","generated-user").json().toString())
         for (closed in listOf(config.copy(authSignedOut = true), config.copy(authExpiresAt = 1))) {
             assertEquals("", closed.connectionToken()); assertFalse(closed.hasSyncConnection())
         }
         assertEquals(token, config.copy(authExpiresAt = System.currentTimeMillis() + 86400000).connectionToken())
     }
     @Test fun appOnlyLoginCannotRestoreAfterProcessRestart() {
-        val config = CollectorConfig(server = origin, token = token, deviceName = "Generated phone")
+        val config = CollectorConfig(server = origin, token = token, deviceName = "Generated phone", accountBinding = AccountBinding(origin,"generated-deployment","generated-user").json().toString())
         assertEquals(token, config.copy(authProcess = LoginProcess.id).connectionToken())
         assertEquals("", config.copy(authProcess = "generated-previous-process").connectionToken())
     }
@@ -94,17 +94,29 @@ class CentralNativeContractTest {
     }
     @Test fun attachmentRetryPreservesManifestAndSkipsDurableParts() = temporary { root ->
         val file = File(root, "generated-image").apply { writeBytes(ByteArray(4 * 1024 * 1024 + 3) { (it % 251).toByte() }) }
-        val uploadId = UUID.randomUUID().toString(); val captureId = UUID.randomUUID().toString()
+        val uploadId = UUID.randomUUID().toString()
+        val owner = AccountBinding(origin,"generated-deployment","generated-user")
         val manifests = mutableListOf<String>(); val parts = mutableListOf<String>(); var attempt = 0
+        var manifest = JSONObject(); var sourceId = ""; var captureId = ""; var batchId = ""
         val client = CentralClient(origin, token, { _, url, bytes, _, _ ->
+            val body = bytes?.let { JSONObject(String(it)) }
             when {
-                url.endsWith("/api/sources") -> 200 to JSONObject()
+                url.endsWith("/api/connections/self") -> 200 to JSONObject().put("protocol",JSONObject().put("min",2).put("max",2))
+                    .put("account",owner.json()).put("credential",JSONObject().put("kind","client"))
+                    .put("capabilities",JSONObject().put("ingest",true).put("ingressVersion",3))
+                url.endsWith("/api/ingress/devices") -> 200 to body
+                url.endsWith("/api/ingress/sources") -> 200 to body
                 url.endsWith("/uploads") -> {
-                    manifests.add(String(bytes!!)); attempt++
-                    200 to JSONObject().put("uploadId", uploadId).put("parts", if (attempt == 1) JSONArray() else JSONArray().put(JSONObject().put("part", 0)))
+                    manifests.add(String(bytes!!)); attempt++; manifest=body!!.getJSONObject("revision");sourceId=manifest.getString("sourceId")
+                    batchId=body.getString("batchId");captureId=Ingress3Receipt.captureId(sourceId,manifest.getJSONObject("item"))
+                    200 to JSONObject().put("id",uploadId).put("partBytes",FileArchiveQueue.PART_BYTES).put("deploymentId",owner.deploymentId).put("userId",owner.userId).put("sourceId",sourceId)
+                        .put("parts",if(attempt==1) JSONArray() else JSONArray().put(JSONObject().put("part",0).put("bytes",FileArchiveQueue.PART_BYTES).put("checksum",Ingress3Client.hash(file.readBytes().copyOfRange(0,FileArchiveQueue.PART_BYTES)))))
                 }
-                url.contains("/parts/") -> { parts.add(url); 200 to JSONObject() }
-                else -> if (attempt == 1) throw java.io.IOException("Generated lost response") else 200 to JSONObject().put("captureId", captureId)
+                url.contains("/parts/") -> { parts.add(url);200 to JSONObject().put("part",url.substringAfterLast('/').toInt()).put("bytes",java.util.Base64.getDecoder().decode(body!!.getString("bytes")).size).put("checksum",body.getString("checksum")) }
+                else -> if (attempt == 1) throw java.io.IOException("Generated lost response") else 200 to JSONObject()
+                    .put("version",3).put("state","received").put("deploymentId",owner.deploymentId).put("userId",owner.userId).put("sourceId",sourceId).put("batchId",batchId)
+                    .put("id",SourceRules.hash(JSONArray().put(owner.deploymentId).put(owner.userId).put(sourceId).put(batchId).toString()))
+                    .put("captures",JSONArray().put(JSONObject().put("id",captureId).put("duplicate",false).put("original",JSONObject().put("ref","original:"+"a".repeat(64)).put("sourceId",sourceId).put("captureId",captureId).put("hash",manifest.getString("sha256")).put("bytes",file.length()))))
             }
         })
         assertThrows(java.io.IOException::class.java) { CentralAttachments.upload(client, file, "fixture.png", "image/png", "fixture-phone", { 1000L }) }

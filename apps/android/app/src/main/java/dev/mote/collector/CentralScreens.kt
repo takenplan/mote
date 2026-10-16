@@ -143,7 +143,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 val recent = (0 until runs.length()).map { runs.getJSONObject(it) }.firstOrNull { it.optString("status") == "running" }
                 recent?.let { state.put("runId", it.getString("id")); if (it.has("conversationId")) state.put("conversationId", it.getString("conversationId")) }
             }
-            Triple(state, api.get("/api/conversations?limit=30"), api.get("/api/model-settings"))
+            Triple(state, api.get("/api/conversations?limit=30"), CentralModels.inventory(api))
         }) { (state, history, settings) ->
             askState = state; modelSettings = settings; buildAsk(history)
             val conversationId = askState.optString("conversationId")
@@ -174,7 +174,9 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             setSelection(ids.indexOf(askState.optString("modelProfileId")).coerceAtLeast(0))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                    askState.put("modelProfileId", ids[position]); persistAsk()
+                    askState.put("modelProfileId", ids[position])
+                    if (CentralModels.reference(ids[position])?.optString("kind") == "shared") { askState.remove("modelOverride"); model?.setText("") }
+                    persistAsk(); controlsAsk()
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
@@ -219,7 +221,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private fun controlsAsk() {
         val busy = askState.has("pending") || askState.optString("runStatus") == "running"
         question?.isEnabled = !busy
-        preset?.isEnabled = !busy; model?.isEnabled = !busy
+        preset?.isEnabled = !busy; model?.isEnabled = !busy && CentralModels.reference(askState.optString("modelProfileId"))?.optString("kind") != "shared"
         send?.isEnabled = !busy || askState.has("pending")
         send?.text = if (askState.has("pending")) MoteI18n.text("重试同一请求") else MoteI18n.text("发送")
         stop?.visibility = if (askState.optString("runStatus") == "running") android.view.View.VISIBLE else android.view.View.GONE
@@ -230,7 +232,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val text = question?.text?.toString()?.trim().orEmpty()
             if (text.isBlank()) { ui.notice(MoteI18n.text("请输入问题（最多 8000 字）")); return }
             val input = JSONObject().put("question", text).put("timeZone", java.time.ZoneId.systemDefault().id)
-            askState.optString("modelProfileId").takeIf { it.isNotBlank() }?.let { input.put("modelProfileId", it) }
+            CentralModels.reference(askState.optString("modelProfileId"))?.let { input.put("modelReference", it) }
             askState.optString("modelOverride").trim().takeIf { it.isNotBlank() }?.let { input.put("modelOverride", it) }
             askState.optString("conversationId").takeIf { it.isNotBlank() }?.let { input.put("conversationId", it) }
             val attachments = askState.optJSONArray("attachments") ?: JSONArray()
@@ -313,7 +315,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private fun loadNotes() {
         val api = client
         ui.work(MoteI18n.text("正在读取随手记…"), {
-            CentralDraftWrites.barrier { draftFailure.get()?.let { throw it }; noteStore.read() } to runCatching { api.get("/api/notes?limit=30") }
+            CentralDraftWrites.barrier { draftFailure.get()?.let { throw it }; noteStore.read() } to runCatching { api.get("/api/captures?kind=note&limit=30") }
         }) { (state, history) ->
             noteDraft = state.getJSONObject("draft"); noteHistory = history.getOrDefault(JSONObject()); buildNotes(state, noteHistory)
             history.exceptionOrNull()?.let(ui::requestFailure)
@@ -360,7 +362,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         }
         next(history)?.let { cursor -> ui.button(MoteI18n.text("加载更早的随手记")) {
             val api = client
-            ui.work(MoteI18n.text("正在读取随手记…"), { api.get("/api/notes?limit=30&cursor=" + encode(cursor)) }) { noteHistory = it; buildNotes(state, it) }
+            ui.work(MoteI18n.text("正在读取随手记…"), { api.get("/api/captures?kind=note&limit=30&cursor=" + encode(cursor)) }) { noteHistory = it; buildNotes(state, it) }
         } }
     }
 
@@ -377,7 +379,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 for (i in 0 until items.length()) {
                     val note = items.getJSONObject(i)
                     val response = CentralNotes.send(api, note)
-                    CentralDraftWrites.barrier { noteStore.acknowledge(note.getString("id"), response) }
+                    CentralDraftWrites.barrier { CentralNotes.acknowledge(noteStore, api, note, response) }
                 }
             }
             CentralDraftWrites.barrier { noteStore.read() } to outcome
