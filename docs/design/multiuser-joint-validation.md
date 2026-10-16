@@ -106,3 +106,23 @@ inside the existing issuance hook. The original operation's ACK retry returns
 its existing task. Previously queued parents cannot evade the I/O guard; an
 explicit retry acknowledgement still applies to its existing issuance and never
 changes an old fact to succeeded. No new per-file runtime or outcome store.
+
+## Original per-file cancellation
+
+KEEP the original file cancel journey: revoke unfinished file processing, retain
+completed raw/canonical results and originals, report a running/unknown external
+wait honestly, and allow explicit owner evidence correction. CHANGE the missing
+scoped endpoint to M05 cancellation plus one owner/original cancellation generation
+inside M06. This fences late stage/plugin publication and stops automatic intake
+from reopening that original; unrelated A files and equal-ID B remain independent.
+The small canonical intent table is included in M06 portable merge/deletion and
+the existing stopped-backup catalog. Portable merge does not replace an existing
+local control, and it never restores an M05 task/model authorization. REMOVE the
+scope_unavailable response for this established endpoint, not the old outcome.
+EXCEPTION exact late transport completion may settle its fact; cancellation and
+replay acknowledgement never certify unknown remote execution as stopped.
+UNKNOWN file retry/reprocess, selected diarization/acoustic overrides, reviews,
+image-profile and complete recording parity still require their own implementation
+and acceptance. This candidate does not introduce a second executor or generic
+control framework. Native archives predating this new required table are not
+claimed compatible; older personal payloads default missing controls to empty.

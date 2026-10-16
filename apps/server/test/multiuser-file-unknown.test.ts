@@ -22,6 +22,7 @@ test('a bare media503 remains unknown and cannot automatically repeat a possibly
  const tasks=await f.checked(f.a.token,'/api/tasks'),child=tasks.items.find((task:any)=>task.kind==='processing.asr');assert.ok(child);assert.equal(child.state,'blocked');assert.ok(child.externalUnresolved>0);
  assert.equal((await f.checked(f.a.token,'/api/processing','POST',{originalRef:a.original.ref,operationId:'same-unknown-processing'})).id,at.id,'an ACK retry returns the existing pipeline');
  const replay=await f.request(f.a.token,'/api/processing','POST',{originalRef:a.original.ref,operationId:'new-operation-must-not-bypass-unknown'});if(replay.statusCode===200)await waitForScopedState(()=>calls===2,()=>'fresh operation was admitted but did not reach its actual ASR transport');assert.equal(replay.statusCode,409,'a fresh operation ID cannot bypass an unacknowledged issued call');
+ const cancelled=await f.checked(f.a.token,'/api/files/'+a.id+'/cancel','POST',{});assert.equal(cancelled.state,'cancelled');assert.equal(cancelled.wait,'unknown');assert.equal(cancelled.canCancel,false);assert.equal((await f.checked(f.a.token,'/api/tasks/'+child.id)).externalUnresolved,1,'cancellation never settles the provider fact');assert.equal(calls,1);assert.equal((await f.checked(f.b.token,'/api/files/'+b.id)).processing.indexed,true);
 });
 
 async function recordingFixture(t:TestContext,port:number){

@@ -565,3 +565,28 @@ names and produced a file-level success; it is explicitly not case evidence.
 Combined actual Docker/Managed Hindsight production and final client/affected
 proof remain pending. Content audit:
 /tmp/mote-joint-container-composition-content-audit.md.
+
+Files cancellation candidate after host recovery: baseline original endpoint
+returns503 scope_unavailable (actual RED,
+/tmp/mote-joint-file-cancel-entry-red.log and .exit). The pre-disconnect same-case
+GREEN session57818 had an unknown outcome until recovery. On restored Bogon,
+its saved log/exit proves1/1/EXIT0; scoped process inventory confirms no old test
+is still running. Transport disconnect/ps sandbox denial are environment facts,
+not code failures. The five original uncommitted files were preserved.
+
+The extended actual cancel case now includes held A ASR, unaffected other A file,
+equal-ID B, missing B original404, valid late completion/no A publication,
+retained original, sticky cancel across ordinary restart, private portable export/
+merge, corrupt original-control link rejection, and stopped-instance restoration
+with old token401/no resumed cancelled work.1/1/no skip/EXIT0 in
+/tmp/mote-joint-file-cancel-lifecycle.log and .exit. Latest missing-owner check plus
+unknown503 cancellation pass2/2/no skip/EXIT0 in
+/tmp/mote-joint-file-cancel-unknown-isolation.log and .exit: wait remains unknown,
+old external fact remains unresolved and B is still indexed. A separate real
+language-agent cancellation retains the completed raw Material, rejects the held
+late summary and allows exact owner text correction;1/1/EXIT0,
+/tmp/mote-joint-file-cancel-owner-edit.log and .exit. All transports/content are
+generated; M01/M03/M04/M05/M06/M16 and restart/backup/portable entries are real.
+Types, independent bounded review and current affected/compiled/client gates are
+pending for this candidate. c45 remains the previously declared thin consumer
+freeze until a new one is explicitly released; file retry is not implemented here.
