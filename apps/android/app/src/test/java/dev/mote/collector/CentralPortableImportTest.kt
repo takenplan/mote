@@ -21,6 +21,12 @@ class CentralPortableImportTest {
             .put("credentials", false).put("activeAuthorization", false).put("instanceBackup", false))
         .put("domains", JSONArray().put(JSONObject().put("domain", "private-data").put("state", "complete")).put(JSONObject().put("domain", "configuration").put("state", "preserved")))
 
+    @Test fun `completed receipt cannot drop a required canonical domain and acknowledge only its declared subset`() {
+        val response=receipt()
+        val api=CentralClient("https://generated.invalid","generated-token",{method,_,_,_,_->200 to if(method=="GET")self() else response})
+        assertThrows(Exception::class.java) {CentralPortable(api).importArchive(operation,archive())}
+    }
+
     @Test fun `foreign archive identities are rejected before sending any private archive bytes`() {
         for (variant in listOf("owner", "deployment", "domain", "legacy")) {
             var posted = 0

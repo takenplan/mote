@@ -72,6 +72,28 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun queuedArchiveReadCannotResolveTheNextAccountsCredentialWhilePaused() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val note="Generated queued A archive "+java.util.UUID.randomUUID();QuickNotes.save(app,note,"");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CaptureRecordsActivity>(android.content.Intent(app,CaptureRecordsActivity::class.java).putExtra("recordSource","note")).use {scenario->
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {it.adapter.getItem(0).toString()=="本机记录"}.setSelection(1)}
+            waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(note)}};shown}
+            lateinit var executor:java.util.concurrent.ThreadPoolExecutor
+            scenario.onActivity {activity->executor=CaptureRecordsActivity::class.java.getDeclaredField("executor").apply {isAccessible=true}.get(activity) as java.util.concurrent.ThreadPoolExecutor}
+            val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+            executor.execute {entered.countDown();release.await(20,TimeUnit.SECONDS)};assertTrue(entered.await(5,TimeUnit.SECONDS))
+            try {
+                scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="刷新"}.performClick()}
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");control("/archive-reads/reset")
+                release.countDown();executor.submit {}.get(15,TimeUnit.SECONDS)
+                val reads=control("/archive-reads").getJSONArray("archiveReads")
+                assertEquals("The old queued A operation must not issue a private read using B's credential before resume",0,(0 until reads.length()).count {reads.getJSONObject(it).getString("owner")=="b"})
+            } finally {release.countDown()}
+        }
+    }
+
     @Test fun actualNativeArchiveRetiresVisiblePrivateRowsBeforeResumingAnotherAccount() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
