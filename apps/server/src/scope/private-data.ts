@@ -283,6 +283,17 @@ export class PrivateData{
     const rows=this.sql.all(`SELECT h.id,h.updated_at FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id WHERE h.user_id=$user AND v.user_id=$user AND ${clauses.join(' AND ')} ORDER BY h.updated_at DESC,h.id DESC LIMIT ?`,...values,limit+1),last=rows.slice(0,limit).at(-1);
     return {items:rows.slice(0,limit).map(r=>this.material(String(r.id))),nextCursor:rows.length>limit&&last?this.cursor.encode(query,{at:String(last.updated_at),id:String(last.id)}):null};
   }
+  /** Metadata projection for the existing Library UI. Content and opaque
+   * pagination still come from the same canonical, owner-bound material reader. */
+  catalog(raw:ListInput={}){
+    const page=this.materials(raw);
+    const sources=this.sql.all(`SELECT h.source_id id,COUNT(*) count,json_extract(s.json,'$.name') label
+      FROM pd_materials h LEFT JOIN pd_sources s ON s.user_id=h.user_id AND s.id=h.source_id
+      WHERE h.user_id=$user AND h.sequence>=h.min_visible_sequence GROUP BY h.source_id ORDER BY h.source_id LIMIT 201`);
+    // No scoped host presentation descriptors are installed yet. The established
+    // generic Material card/body remains usable; this does not advertise a pack.
+    return {schemaVersion:1 as const,types:[],...page,sources:sources.slice(0,200).map(source=>({id:String(source.id),label:String(source.label??source.id).slice(0,120),count:Number(source.count)})),sourcesTruncated:sources.length>200};
+  }
   readMaterial(id:string,options:{revision?:string;offset?:number;length?:number}={}){
     const material=this.material(id,options.revision),offset=z.number().int().min(0).parse(options.offset??0),length=z.number().int().min(1).max(12000).parse(options.length??12000);
     const row=this.sql.get('SELECT json,text FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',material.id,material.revision)!;

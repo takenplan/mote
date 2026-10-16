@@ -1636,6 +1636,7 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/data/search',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/data/statistics',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/layers',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/library/catalog',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials/:id',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials/:id/members',service:PRIVATE_DATA_DOMAIN",
@@ -2206,6 +2207,15 @@
     "surfaces": [
       "extension:runtime.services.registerUser:'ask-automation'",
       "task:execution.register:kind:'ask.automation'"
+    ]
+  },
+  "apps/server/src/scope/web-routes.ts": {
+    "scope": "mixed",
+    "module": "M13",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/features'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/skills'",
+      "extension:registry.install:id:'mote.scoped-http'"
     ]
   }
 }
