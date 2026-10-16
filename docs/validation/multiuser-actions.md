@@ -26,18 +26,20 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 | 真正 provider 401 的安全进度、retry、成功单元不重跑；删除失败来源不保留错误 | `37a91174`，修正夹具后的 `m12-progress-valid-red` EXIT1，缺 provider_authentication | `09d3a32c`，`m12-recovery-green3` 3/3 EXIT0。 |
 | GET/catalog 不暗写、来源擦除后迟到回执仍固定原事件 | `10a2c68d`，`m12-readonly-red` 0/2 EXIT1，GET 改库、错误 native ID 返回 200 | `0bc5cf08`，`m12-readonly-green` 2/2 EXIT0。 |
 | 纯本地完成不能产生外部 issuance | `03943c97`，`m12-local-only-red` 200 而非 409 EXIT1 | `0bc5cf08`，`m12-local-only-green` 原生变更 3/3 EXIT0。 |
-| 同一 formal Material 的跨原文约定 | `ffa55e81`，`m12-material-red` 6 completed 但无跨原文建议 EXIT1 | `m12-material-green` 1/1 EXIT0，真实 Material、Harness 与删除 scrub。 |
+| 同一 formal Material 的跨原文约定 | `ffa55e81`，`m12-material-red` 6 completed 但无跨原文建议 EXIT1 | `c7aaebb6`，`m12-material-green` 1/1 EXIT0，真实 Material、Harness 与删除 scrub。 |
 
 ## 额外生产链覆盖
 
 | 场景与旧入口 | 实际窄证据 |
 | --- | --- |
 | 两个真实 OS 进程：生产 server 与实际 Desktop CalendarActions；外部假日历成功后 SIGKILL 两者、丢本地账本再启动，成功模型单元与原生变更均不重放，B 不变 | `72a16962`，`multiuser-actions-process.test.ts`，`m12-process-source` 1/1 EXIT0；fresh emitted 仍待最终重型。 |
-| 真设备 credential 的同设备/目标授权，配置失败前已撤权，时区与错误设备/日历目标 | `72a16962`，`multiuser-actions-device.test.ts`，`m12-device` 3/3 EXIT0。 |
+| 真设备 credential 的同设备/目标授权，配置失败前已撤权，时区与错误设备/日历目标 | `72a16962`，`multiuser-actions-device.test.ts`，`m12-device` 3/3 EXIT0；批准后过期的首次 claim 拒绝（合成 Date 时钟）`m12-expiry` 1/1 EXIT0。 |
 | 模型选择独立同标题事件及语义 sameAs、保留 dismissed；16 项真实建议无漏页、来源过滤先于 LIMIT、跨 owner/filter 游标拒绝 | `72a16962`，`multiuser-actions-catalog.test.ts` 前 2 项，`m12-catalog` 2pass/1timeout EXIT1，不能算整组通过。 |
 | M03 真实上传→M06 正文→真实 Harness 最后 Unicode 范围，时区 UTC、无断 surrogate | `72a16962`，同文件第 3 项，改为等待实际终态后 `m12-long-state-wait` 1/1 EXIT0，29474ms。 |
 | M05 同步 onIssued 回调 throw/thenable：journal 与领域 intent 同时回滚；固定 A 的任务/issuance 在撤权后只结算 A 外部事实 | `multiuser-actions-issuance.test.ts`，`m12-issuance` 3/3 EXIT0。 |
 | 六种迟到事实围栏：cancel、grant revoke、目标 change、账号 disable、credential revoke、domain delete；unknown 不盲重放、重复批准/ACK 幂等 | `multiuser-actions-fences.test.ts` 与 `multiuser-actions-recovery.test.ts`，窄原始证据如上，最终组合待复跑。 |
+
+当前 `d66b6ed9` 的目录/sameAs/交错审批邻接回归：`m12-catalog-approval-current` 3/3 EXIT0；真实 A/B 同 requestId 收据分离。
 
 ## 必须如实分类的中间失败
 
