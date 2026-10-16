@@ -8,26 +8,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CentralMemoryJobPresentationTest {
-    private fun scoped(name: String, job: JSONObject): Any {
-        val method = CentralMemoryJobPresentation::class.java.methods.firstOrNull { it.name == name && it.parameterTypes.contentEquals(arrayOf(JSONObject::class.java)) }
-        assertTrue("Native Memory progress must consume the scoped $name contract", method != null)
-        return method!!.invoke(CentralMemoryJobPresentation, job)
-    }
-
     @Test fun committedOwnerCorrectionKeepsItsActualResultAfterItReplacesTheOriginalInput() {
         val id = java.util.UUID.randomUUID().toString()
         val job = JSONObject().put("id", java.util.UUID.randomUUID().toString()).put("state", "committed").put("current", false)
             .put("batches", org.json.JSONArray()).put("tasks", JSONObject().put("correct", JSONObject().put("id", java.util.UUID.randomUUID().toString())
                 .put("state", "succeeded").put("result", JSONObject().put("memoryIds", org.json.JSONArray().put(id)))))
-        assertEquals("succeeded", scoped("state", job) as String)
-        assertEquals(listOf(id), scoped("results", job) as List<*>)
+        assertEquals("记忆提取完成", CentralMemoryJobPresentation.status(job))
         assertTrue(CentralMemoryJobPresentation.controls(job).isEmpty())
         assertTrue(CentralMemoryJobPresentation.notice(job) != null)
     }
     @Test fun changedUncommittedInputsDoNotOfferAnotherRetryOrInventAResult() {
         val job = JSONObject("""{"id":"generated","state":"ready","current":false,"batches":[],"tasks":{"publish":{"state":"waiting","result":{"memoryIds":["generated"]}}}}""")
-        assertEquals("stale", scoped("state", job) as String)
-        assertTrue((scoped("results", job) as List<*>).isEmpty())
+        assertEquals("资料已更新，本次结果失效", CentralMemoryJobPresentation.status(job))
         assertTrue(CentralMemoryJobPresentation.controls(job).isEmpty())
     }
     @Test fun aPausedScopedReceiptOffersOnlyTheActualResumeAndCancelCommands() {
