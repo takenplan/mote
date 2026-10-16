@@ -165,3 +165,45 @@ corruption also fails 0/2 before the fix (`/tmp/m16-cli-original-red.log/.exit`,
 exit 1). It now validates the transmitted image hash, byte count and MIME after
 the common envelope parser; SourceSync's existing full original ACK checks are
 unchanged. A later combined log records the complete green result.
+
+## Epoch-5 stopped instance checkpoint
+
+`MOTE_M16_COMPILED_HOST=1 node --import tsx --test
+apps/server/test/multiuser-instance-backup.test.ts
+apps/server/test/multiuser-lifecycle.test.ts
+apps/server/test/multiuser-auth.test.ts apps/server/test/multiuser-cli.test.ts
+scripts/client.test.ts`: **31/31 exit 0**, `/tmp/m16-freeze-backup-cli-auth.log/.exit`.
+The default durable process test starts the real TypeScript production entry;
+the explicit compiled mode additionally used freshly built `dist/index.js` twice.
+`npm run build:central`: exit 0, `/tmp/m16-central-build1.log/.exit` (before this
+script-only backup delta; no later server runtime change in this checkpoint).
+The earlier freeze command named nonexistent `scope-auth.test.ts`; Node selected
+15 real tests and passed them, so its log is **15**, not authentication coverage.
+
+Actual coverage: existing backup CLI and native profile restore; standalone
+restore CLI; generated A/B identities, exact originals, real Memory extraction,
+conversation metadata, user YAML, completed tasks; actual native Mem0 SDK vector,
+operation and history SQLite files; fixed installed package validation; unchanged
+succeeded/issued external journals; old retry grants rejected; two compiled host
+starts/stops without old model work. Faults cover missing/damaged files, linked
+files, traversal, rehashed wrong database deployment, mismatched expected identity,
+nonempty target preservation, live Central PID and a self-consistent manifest
+omitting required native vectors. Source and target are always disposable.
+
+The valid extra RED `/tmp/m16-backup-combined-red3.log/.exit` is restored Memory
+`desired=2` rather than 0; stage restoration now pauses automatic admission in
+SQL and its authoritative user YAML. Its prior source-kind conflict and nonexistent
+`execution_steps.result` were fixture errors. Native first attempt found the real
+scoped YAML domain is `pluginInstances`; the old `plugins` rewrite left old desired
+state and correctly failed `config_prepare_failed`. This was corrected, and all
+temporary diagnostic instrumentation was removed. `/tmp/m16-backup-native2.log`
+and the final 31-case log pass; no debug production change remains.
+
+The existing Hindsight owned-volume snapshot/restore implementation is reused,
+but actual M16 Docker/native-volume validation is **not run**: sandbox socket
+access first failed; an approved read-only image check then confirmed the Docker
+daemon is unavailable (exit 1). No daemon was started, image pulled, system setting
+changed or existing volume inspected. Epoch-5 Docker profile restore remains an
+explicit pre-write rejection; portable import, M12 and final M15 composition,
+management boundaries, independent backup review and final required checks remain
+OPEN. This green checkpoint closes the inherited epoch-5 backup RED, not M16.
