@@ -196,45 +196,61 @@ an explicitly consumable replacement for the previous public thin checkpoint.
 
 ## Original file forgetting — current typed candidate
 
-Candidate0095c897 restores DELETE `/:captureId` and POST
-`/:captureId/allow-again {sourceId,externalId}`. Only the owner can remove every
-file revision with that exact source/external ID. M06 retires existing file work;
-M03 persists a content-free per-file tombstone, removes canonical captures and old
-upload/batch receipts in SQL, then attempts existing pin-aware GC after commit.
-The response reports `{deleted,cleanup:'complete'|'pending'}`; a physical reader or
-GC fault cannot roll SQL back to point at removed bytes. Other owned files and B
-remain independent, including identical retained bytes.
+Current source4be0cb4c supersedes0095's delete/allow-again bodies. Files detail
+adds `originalGeneration` (zero for an original never forgotten). A new explicit
+DELETE `/:captureId` sends `{operationId,originalGeneration}`; preserve that exact
+body and operation ID across lost ACK/restart. Missing/stale generation or a
+changed body under an existing operation ID returns409. Never fetch a newer
+generation automatically to rebase a delayed delete intent.
 
-Forgotten source items and upload/resume entries retain the original410 rejection
-until explicit allow-again. The tombstone identity survives canonical removal;
-allow-again checks that exact deleted capture and source/external ID, is idempotent,
-and never recreates content or an old task. Its generation also fences signed
-original tickets across delete/re-import of the same deterministic original ID.
-Personal import rejects an older forgotten original atomically rather than
-resurrecting it; current target tombstone intent wins. Portable/native metadata
-retains tombstones without preserving old upload/task authorization. Older personal
-Ingress payloads without this optional field continue to parse.
+The response is `{deleted,cleanup:'complete'|'pending',decision:{sourceId,
+externalId,decisionId,generation}}`. M03 keeps a fixed owner-only deletion receipt;
+a repeated operation returns it even after the file has been explicitly reimported,
+and cannot delete that newer incarnation. Only the owner can remove all revisions
+at the exact source/external ID. M06 retires existing work; M03 commits the
+content-free tombstone, canonical removal and receipt before existing pin-aware
+physical GC. An I/O fault or held physical reader reports pending and does not
+roll SQL back to point at missing bytes. Other owned files and B remain independent.
 
-Server/scripts types and targeted real owner/route/portable/restart/pin/held-worker
-cases are0. Independent bounded review and current full affected/production/client
-combination are pending. The explicit consumer checkpoint and its evidence limits
-are tracked in the shared handoff; no whole Files/Imports acceptance is inferred.
+POST `/:captureId/allow-again` sends the returned `decision` object. Its opaque
+`decisionId` binds the exact delete decision, even when an identical capture UUID
+is reused. The same current decision is idempotent; missing/older decision IDs
+return409 and cannot unblock upload410. This action recreates no data or task.
+GET `/:captureId/forgotten` returns `{captureId,decision,blocked}` for owner reload
+or explicit recovery of the current decision, with no additional approval step.
+A client must not silently replace an old failed allow request with this newer
+response: applying the newer decision remains a new explicit owner action.
+
+The generation separately fences old original tickets and M06 task inputs.
+Personal import rejects an older forgotten original atomically; local tombstone
+intent wins. Data-only personal export retains tombstone identity/generation/blocked
+state, excludes operation receipts and decision UUIDs, and restore mints a fresh
+UUID so a pre-restore decision cannot revive. Native metadata includes the exact
+journal/decision fields; whole-instance identity retirement remains M16's contract.
+Older optional tombstone payloads still parse. Existing shared databases receive
+one UUID per historical tombstone on schema installation, including recovery of
+an interrupted nullable-column upgrade, without rotating an existing decision.
+
+This source has10/10 narrow actual cases (decision replay, lost DELETE ACK across
+actual app restart, stale independent operation, schema upgrade, historical-zero
+identity, portable restore, revisions/pins, held worker, automatic reimport and
+old parentless retry). Types for203997 cover earlier0563/679a only. New4be0cb4c
+noEmit, independent delta review, full affected/compiled/client/schema combination
+remain pending; this is not whole Files/Imports acceptance.
 
 Independent review then confirmed0095 missed the original automatic reimport
 incarnation. Actual same-ID/bytes allow-again must receive a new task; a parentless
 old retry must become stale before execution. Fix056380c2 adds the existing M03
 forget generation to M06's immutable input/cache proof, independently of cancel/
-retry generation. Zero stays omitted for historical identity compatibility. Wire
-contracts do not change. The replacement candidate still awaits its new types and
-independent bounded delta review; do not move0095 checks to it or treat0095's two
-failed reimport paths as accepted.
+retry generation. Zero stays omitted for historical identity compatibility. That0563 patch preserved the wire; later4be0cb4c separately changes the decision
+contract above. The0563/679a noEmit and bounded delta reviews passed at203997;
+do not move those checks to4be0cb4c or treat0095's failed reimport paths as accepted.
 
-Current consumer PREP source is0095c897078fce04ce75c687a0e1fc6abc81b479, followed
-by doc-onlyd8be43d5. Contract bodies above are fixed so client controls/reviews can
-adapt. Its independent forget-incarnation finding is now actualRED and must use
-the later0563 fix before that flow is accepted; acoustic publication likewise
-requires679a. No replacement source freeze is inferred before new type/delta
-checks. Remaining image work is finite: retain original named profile/source-MIME
+The historical consumer PREP source0095c897078fce04ce75c687a0e1fc6abc81b479
+must use0563 for task incarnation,679a for late sample publication, and4be0cb4c
+for delete/allow decision correctness. The4be replacement will be explicitly
+released after its own noEmit and bounded review; no WIP consumer freeze is implied.
+Remaining image work is finite: retain original named profile/source-MIME
 rules and original-only archive choice, then exact parent/archive attachment
 preparation and transitive retirement. Existing host leaseModel/leaseReference and
 M03/M06 algorithms are the intended seams; no second secret store, private runtime,

@@ -860,3 +860,30 @@ raw full diarization arrays in detail were also part of the original legacy shap
 No new quota, silent array truncation or invented paging framework is added from
 that source-only observation. Preserve it for bounded consumer/old-path comparison
 before deciding whether it is a regression or an existing scaling limit.
+
+
+### Exact delete decisions —4be0cb4c
+
+M15's independent same-capture replay report is /tmp/mote-m15-review-joint-files-0095.md;
+its2cc60c20 actual execution remains M15 evidence. Own durable9360ca56 reproduces
+two failures at real M01/M03/M06 HTTP entry: stale first allow-again after a second
+forget returns200 and permits upload200 (expected409/410), and lost DELETE ACK
+retry returns404 (expected fixed200 receipt). Own /tmp/mote-joint-file-forget-decision-red.log/.exit
+is2/2fail EXIT1. This is separate from0563's already-fixed task incarnation issue.
+
+Minimal4be0cb4c adds exact decision CAS, expected original generation and stable
+owner operation receipts. /tmp/mote-joint-file-forget-cas-final-narrow.log/.exit is
+10/10pass, 0skip/fail,8.397s EXIT0: two original same-path fixes, missing/stale
+metadata, old independent delete intent, actual app restart before ACK replay,
+schema/partial-upgrade initialization, historical-zero task identity, older archive
+conflict+data-only tombstone restore/old decision rejection, all revisions/shared
+bytes/pin, held fake transport+B, automatic same-byte reimport and parentless old
+retry. No real provider or personal content was used. Scope inventory0 in
+/tmp/mote-joint-file-forget-cas-scope.log/.exit. Earlier intermediate green2 is3/3;
+prior neighbors6/6 selected only by name, and is not a complete file suite.
+
+Current4be0cb4c noEmit/independent source review/affected/compiled/native/client/
+Docker schema combination are pending. Previous203997 types cover0563/679a but
+not this changed wire. Profiles/rules and parent-bound imported image preparation
+remain OPEN; the new attachment target test has no production implementation and
+its first503 denial is not a positive attachment/Memory proof.

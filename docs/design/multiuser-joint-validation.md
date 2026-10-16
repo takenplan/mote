@@ -227,3 +227,20 @@ No account-wide task/config reset, per-user runtime or real user deletion is use
 Current deletion intent rejects conflicting older personal content atomically; this
 is explicitly validated with archive_conflict and unchanged target/B state. Additions
 are specific to the original Files policy, not a general deletion framework.
+
+
+## Exact forget decision and lost deletion acknowledgement
+
+Independent M15 actual same-capture stale allow-again200/upload200 was reproduced
+locally, alongside lost DELETE acknowledgement404 (durable9360ca56; both actual
+RED). Fix4be0cb4c binds allow-again to a fresh opaque decision UUID and DELETE to
+its captured original generation plus stable operation ID. Fixed owner-only
+receipts survive canonical deletion and replay without acting on a later import.
+This is transport/lifecycle metadata for the existing owner actions, not another
+approval or new deletion policy. Missing expected metadata returns409 instead of
+silently targeting the latest state. Consumers must preserve exact request bodies
+across delays/restarts and may only choose a newer decision by a new explicit
+owner action. Personal data restore mints new decision IDs and excludes operation
+receipts, retaining the existing no-authority-restoration boundary. Native schema
+admission includes the new metadata column/journal. Actual narrow10/10 is recorded
+separately; previous types/full gates do not cover this change.
