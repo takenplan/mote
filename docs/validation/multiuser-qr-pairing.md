@@ -146,7 +146,10 @@ assertions remain.
 Fixture repair commit: `79d94dfd77077d44337102e8553ca92f4135b0f6`. Separate
 production seam repair: `87ba2f2c4d2738d32673a1a9d586a7af5810d33c`. Both
 received bounded independent source review; reviewers ran no additional heavy
-checks. QR authentication producer bytes remain at the original `6a84ec6a` freeze.
+checks. Joint also independently reviewed exact `87ba2f2c` and accepted composition
+with its current M06 physical-call and unknown-result fences, with no newly
+confirmed issue. It did not run tests or modify this workspace. QR authentication
+producer bytes remain at the original `6a84ec6a` freeze.
 
 The repaired full affected gate is **pending**. Narrow GREEN does not supersede
 the completed failing gate or establish central-runner/release-tool acceptance.
