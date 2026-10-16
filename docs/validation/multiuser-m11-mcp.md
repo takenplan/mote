@@ -6,6 +6,58 @@ Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
 this feature. Final accepted M07/M08 real query tools remain required.
 No mock Memory, Ask, connector or processing service proves them.
 
+## Paused for the shared architecture review
+
+At the parent's request, M11 stops after its current narrow checks on a clean
+feature commit. It is **not finally accepted and has no final Draft PR**. No new
+full affected/Android checks or implementation expansion starts during this pause.
+The exact runtime/HEAD and reusable-boundary inventory are recorded in
+`/tmp/mote-m11-architecture-pause-handoff.md`.
+
+The latest bounded change restores the old outbound MCP import status flow, a
+confirmed migration omission rather than evidence of an old-flow defect or a
+cross-user disclosure. Its actual SDK regression first fails because syncing
+status is absent: `/tmp/m11-outbound-status-before.log/.exit`, EXIT1. The final
+complete protocol/source file passes **26/26**, no failures/cancellations/skips,
+EXIT0,14362.323ms:
+
+```sh
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-mcp.test.ts
+npm run typecheck -w @mote/server
+node scripts/check-scope-contracts.mjs
+```
+
+Receipts: `/tmp/m11-outbound-status-final-protocol.log/.exit`,
+`/tmp/m11-outbound-status-final-types.log/.exit`,
+`/tmp/m11-outbound-status-final-scope.log/.exit`, all EXIT0. Real HTTP/SDK fixtures
+cover identical A/B IDs, syncing/fixed error/success, retry, metadata rename,
+configuration retirement, held restart, cancellation, domain deletion/restore and
+Ask's actual source status reader. No neighboring service is replaced. This new
+status delta still needs independent review and final whole-module gates.
+
+Independent bounded M08 review of exact
+`1fe83c78d62bc7a7f0c9ba92c162c226164bb2f1` passes working/restart/task-owner
+barriers **3/3**, EXIT0,12677.666792ms and the original actual one-minute A/B
+Insight/frozen snapshot/late-stop case **1/1**, EXIT0,70338.220083ms:
+`/tmp/m11-review-m08-1fe-periodic.log/.exit`,
+`/tmp/m11-review-m08-1fe-insight.log/.exit`. No confirmed actionable P0/P1/P2
+was found in this bounded review; it does not certify the complete M08 module and
+this newer freeze is not yet composed into M11.
+
+M07 ca69 required affected failed separately:2315 server tests,2312 passed,
+2 failed,1 optional skipped,EXIT1; Android was not reached. One zero-Material
+assertion predates the restored real producer; the other is a fixed5s plugin
+late-ACK observation pending independent diagnosis. More significantly, M07's
+isolated settled-producer probe confirms a **new migration integration defect**:
+generic M06 `source.original` publishes raw Coding tool-result text as searchable
+Material. This violates the Coding projection/disclosure boundary; it is not
+yet evidence of cross-user reading, and there is no old-version reproduction
+proving that the original flow already had it. M07 is fixing the structural
+projection while retaining real originals, producer and valid dialogue positives.
+Its precise fix and an actual M11 SDK regression remain pending. The failure
+receipts `/tmp/m07-ca69-affected.log/.exit` and
+`/tmp/m07-ingress-ca69-probe-raw.log/.exit` remain failures, not passes.
+
 ## Current bounded composition receipts
 
 Exact runtime composition `96f955a687279b110c17cca20251a00ae996f3b7` contains
@@ -81,7 +133,8 @@ the held invocation usable. With three neighboring connection/policy checks,
 Initial diagnostic logs `/tmp/m11-instance-policy-{before,fixed}.log/.exit` fail
 because the probe wrongly treated a saved restart candidate as an immediate
 withdrawal. That production P2 hypothesis was withdrawn, its uncommitted runtime
-experiment removed, and original `scope/mcp.ts` is byte-identical to96f. The
+experiment removed, and original `scope/mcp.ts` was restored byte-identically to96f before the later
+outbound status delta. The
 correct regression uses the real configuration and app restart; no setting
 activation semantics were changed.
 

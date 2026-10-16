@@ -3,7 +3,7 @@ import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/st
 import {z} from 'zod';
 import {remoteUrl,restrictedFetch} from '../connectors/network.js';
 import {ConnectorError} from '../connectors/types.js';
-import type {SourceItem} from '@mote/shared';
+import type {SourceItem,SourceConnection} from '@mote/shared';
 import type {PrivateData} from './private-data.js';
 import type {IngressHost} from './ingress.js';
 import type {PrivateSql} from './private-data-sql.js';
@@ -14,7 +14,7 @@ export const outboundConnection=z.object({id:z.string().regex(/^[a-zA-Z0-9_.:-]{
 export const outboundSettings=z.object({connections:z.array(outboundConnection).max(500).default([])}).strict().superRefine((value,ctx)=>{if(new Set(value.connections.map(c=>c.id)).size!==value.connections.length)ctx.addIssue({code:'custom',message:'Duplicate MCP connection'});for(const c of value.connections)try{remoteUrl(c.url,true);}catch{ctx.addIssue({code:'custom',message:'Invalid MCP endpoint'});}});
 export type OutboundConnection=z.infer<typeof outboundConnection>;
 const selection=z.object({sourceId:z.string().min(1).max(128),resourceUris:z.array(z.string().min(1).max(4000)).max(30).refine(values=>new Set(values).size===values.length).optional(),tool:z.object({name:z.string().min(1).max(200),arguments:z.record(z.unknown()).default({}),confirmedReadOnly:z.literal(true)}).strict().optional()}).strict().refine(value=>Boolean(value.resourceUris?.length)!==Boolean(value.tool));
-type Binding={context:UserContext;connection:OutboundConnection;sql:PrivateSql;data:PrivateData;ingress:IngressHost;allowLocal:boolean;assert:()=>void;pinSource:(id:string)=>number};
+type Binding={context:UserContext;connection:OutboundConnection;sql:PrivateSql;data:PrivateData;ingress:IngressHost;allowLocal:boolean;assert:()=>void;pinSource:(id:string)=>number;reportStatus:(sourceId:string,revision:number,status:NonNullable<SourceConnection['status']>)=>void};
 
 /** SDK clients, headers, sessions and cancellation belong to one invocation of
  * one user connection. No global client/credential/session cache is shared. */
@@ -22,6 +22,7 @@ export class McpOutbound{
  private readonly active=new Set<{user:string;connection:string;fingerprint:string;client:Client;abort:AbortController;settled:Promise<unknown>}>();
  private readonly queues=new Map<string,Promise<unknown>>();
  private closed=false;
+ importing(user:string,connection:string,source:string){return this.queues.has(identityHash([user,connection,source]));}
  private invoke<T>(binding:Binding,work:(client:Client,signal:AbortSignal)=>Promise<T>,signal?:AbortSignal):Promise<T>{
   let settle!:()=>void;const settled=new Promise<void>(resolve=>settle=resolve),client=new Client({name:'mote-source-importer',version:'1'},{capabilities:{}}),abort=new AbortController(),entry={user:binding.context.userId,connection:binding.connection.id,fingerprint:identityHash(binding.connection),client,abort,settled};
   const run=async()=>{
@@ -45,7 +46,10 @@ export class McpOutbound{
  },signal);}
  import(binding:Binding,raw:unknown,signal?:AbortSignal){
   const input=selection.parse(raw),key=identityHash([binding.context.userId,binding.connection.id,input.sourceId]),prior=this.queues.get(key)??Promise.resolve();
-  const work=prior.catch(()=>{}).then(()=>this.invoke(binding,async(client,signal)=>{
+  const work=prior.catch(()=>{}).then(async()=>{
+   binding.assert();if(!binding.connection.sourceIds.includes(input.sourceId))throw new ConnectorError('mcp_source_invalid',404);const initial=binding.data.source(input.sourceId);if(initial.kind!=='mcp'||!initial.enabled)throw new ConnectorError('mcp_source_invalid',404);const revision=binding.pinSource(initial.id),initialHash=identityHash(initial),assertCurrent=()=>{binding.assert();signal?.throwIfAborted();if(binding.pinSource(initial.id)!==revision||identityHash(binding.data.source(initial.id))!==initialHash)throw new ConnectorError('mcp_source_changed',409);},report=(status:NonNullable<SourceConnection['status']>)=>{assertCurrent();binding.reportStatus(initial.id,revision,status);};
+   report({state:'syncing'});
+   try{const result=await this.invoke({...binding,assert:assertCurrent},async(client,signal)=>{
    const check=()=>{binding.assert();signal.throwIfAborted();if(!binding.connection.sourceIds.includes(input.sourceId))throw new ConnectorError('mcp_source_invalid',404);const source=binding.data.source(input.sourceId);if(source.kind!=='mcp'||!source.enabled)throw new ConnectorError('mcp_source_invalid',404);return source;};
    const source=check(),fingerprint=identityHash(source),epoch=binding.pinSource(source.id),assert=()=>{if(binding.pinSource(source.id)!==epoch||identityHash(check())!==fingerprint)throw new ConnectorError('mcp_source_changed',409);};
    const ingress=binding.ingress.bindSource(binding.context,[source.id],assert),chunks:{identity:string;externalId:string;title:string;text:string;mimeType:string;uri?:string}[]=[],manifests=new Map<string,string[]>();
@@ -82,7 +86,8 @@ export class McpOutbound{
     }
     assert();return {imported,duplicates};
    });
-  },signal));
+  },signal);report({state:'idle',lastSyncAt:new Date().toISOString()});return result;}catch(error){try{report({state:'error',code:'mcp_import_failed'});}catch{/* Lost authority cannot publish even operational status. */}throw error;}
+  });
   this.queues.set(key,work);void work.finally(()=>{if(this.queues.get(key)===work)this.queues.delete(key);}).catch(()=>{});return work;
  }
  async closeUser(user:string){const entries=[...this.active].filter(entry=>entry.user===user);for(const entry of entries)entry.abort.abort();await Promise.allSettled(entries.map(async entry=>{await entry.client.close();await entry.settled;}));}

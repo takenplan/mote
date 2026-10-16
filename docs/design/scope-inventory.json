@@ -1911,6 +1911,7 @@
     "surfaces": [
       "table:mc_manifests",
       "table:mc_source_epochs",
+      "table:mc_source_status",
       "table:mc_state"
     ]
   },

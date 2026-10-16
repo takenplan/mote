@@ -134,8 +134,9 @@ the external resource and reuses only identical owned immutable revisions.
 ## Lifecycle and supersession
 
 MCP lifecycle exports membership manifests only; it excludes credentials,
-configuration connections, SDK sessions and handles. Delete sets a durable domain
+configuration connections, SDK sessions, handles and operational source status. Delete sets a durable domain
 tombstone/generation, revokes that user's M01 MCP credentials, removes manifests
+and operational status
 and joins local handles/sessions. Restore validates its envelope and duplicate
 identities, restores metadata only and never renews old credentials/sessions.
 Source epoch tombstones retain only owner/source IDs and counters needed to
@@ -150,3 +151,20 @@ session/client/configuration caches. EXCEPTION trusted host code and deployment
 operators retain server plaintext access; this is not a malicious-code sandbox.
 UNKNOWN final M07/M08 composition, full-module acceptance, physical clients,
 real credentials/providers/models and deployment until actually verified.
+
+## Restored outbound source status
+
+The existing remote MCP importer reported syncing, idle/lastSyncAt and a fixed
+import failure code. The scoped importer now retains that flow. Its owner-bound
+`mc_source_status` record pins the source incarnation and connection fingerprint;
+metadata renaming keeps the last status, while source recreation or connection
+replacement cannot expose an obsolete result. Both MCP sources and Ask source
+views use `ScopedConnectors.registerSourceStatusReader`, the same status reader
+used for real adapter ledgers. Reading status opens no external adapter or client.
+
+The SDK import queue supplies current handle liveness. A persisted syncing record
+without its live invocation is reported as interrupted, including after restart;
+no old credential gains permission to write a late status. Status does not prove
+that M06 indexing or Memory extraction completed. Domain deletion removes these
+records. They are explicitly excluded from portable metadata restoration, along
+with connections and live handles, and do not revive external authorization.
