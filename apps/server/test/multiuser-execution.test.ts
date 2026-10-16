@@ -37,6 +37,15 @@ async function fixture(t:TestContext,register?:(node:ProductionNode)=>void){
  return {directory,node,nodes,request,login,admin,a,b,alice,bob,submit,task,waitTask};
 }
 
+test('caught synchronous child admission failure leaves no authority or runnable work when the outer commit succeeds',async t=>{
+ let executions=0,caught=false;const f=await fixture(t,node=>{
+  node.execution.register(handler({kind:'generated.bad-resource',pool:'generated-child',resources:()=>[{scope:'invalid' as 'user',key:'generated'}],execute:async()=>{executions++;return null;}}));
+  node.execution.register(handler({execute:async()=>null,commit:run=>{try{node.execution.forUser(run.context).submitSync({kind:'generated.bad-resource',operationId:'generated-child',input:{label:'Generated child'}});}catch{caught=true;}}}));
+ });
+ const parent=await f.submit(f.alice.token,'generated-parent');await f.waitTask(f.alice.token,parent.id);for(let i=0;i<5;i++)await f.node.execution.tick();assert.equal(caught,true);assert.equal(executions,0);
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{for(const table of ['user_tasks','task_authorizations','execution_steps'])assert.equal(db.prepare('SELECT count(*) n FROM '+table).get()!.n,1);for(const table of ['execution_resources','execution_operation_steps'])assert.equal(db.prepare('SELECT count(*) n FROM '+table+' a LEFT JOIN execution_steps e ON e.id=a.step_id WHERE e.id IS NULL').get()!.n,0);assert.equal(db.prepare("SELECT count(*) n FROM execution_fairness WHERE pool='generated-child'").get()!.n,0);assert.equal(db.prepare('SELECT next FROM execution_user_sequence WHERE user_id=?').get(f.a.userId)!.next,1);assert.equal(db.prepare('SELECT count(*) n FROM operation_progress').get()!.n,1);}finally{db.close();}
+});
+
 test('real task and Operations APIs isolate same business identities, control, dependency admission and change subscriptions',async t=>{
  const f=await fixture(t,node=>node.execution.register(handler({execute:async run=>{run.progress({label:run.task.input.label});return {label:run.task.input.label};}})));
  const a=await f.submit(f.alice.token,'same-business-id',{label:'Generated A'}),b=await f.submit(f.bob.token,'same-business-id',{label:'B_PRIVATE_EXECUTION_RESULT'});

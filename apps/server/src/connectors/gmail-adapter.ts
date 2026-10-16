@@ -1,3 +1,4 @@
+import type {FileProcessor} from '../file-processors.js';
 import {isDeepStrictEqual} from 'node:util';
 import {createHash,randomBytes,randomUUID} from 'node:crypto';
 import {OAuth2Client,type Credentials} from 'google-auth-library';
@@ -162,3 +163,10 @@ export class GmailAdapter {
   private checkClosed(){if(this.closed)throw new ConnectorError('connector_closed',503);}
   async close(){this.closed=true;this.abort.abort();if(this.timer)clearInterval(this.timer);this.timer=undefined;this.pending.clear();await this.sequence;await this.file.flush();}
 }
+
+/** Actual retained Gmail MIME decoding, registered in the existing processor
+ * runtime by the trusted connector host. Ordinary JSON uploads never select it. */
+export const gmailOriginalProcessor:FileProcessor={id:'connector.gmail-original',version:'1',name:'Gmail original MIME',stage:'extract',mediaTypes:['application/json'],localOnly:true,dependencies:{settings:[],parameters:[]},async process(input){
+ if(input.file.sizeBytes>8*1024*1024||!input.sourceItem)throw new ConnectorError('gmail_original_identity_invalid',409);const parts:Buffer[]=[];let size=0;for await(const part of input.readOriginal()){input.signal.throwIfAborted();size+=part.length;if(size>input.file.sizeBytes)throw new ConnectorError('gmail_original_invalid',409);parts.push(part);}if(size!==input.file.sizeBytes)throw new ConnectorError('gmail_original_invalid',409);
+ const message=JSON.parse(Buffer.concat(parts).toString('utf8')) as Message;if(input.sourceItem.document?.originalMetadata?.provider!=='gmail'||input.sourceItem.document.originalMetadata.messageId!==message.id)throw new ConnectorError('gmail_original_identity_invalid',409);const item=gmailItems(message,input.sourceItem.observedAt).find(item=>item.externalId===input.sourceItem!.externalId);if(!item)throw new ConnectorError('gmail_original_identity_invalid',409);const segments=[];for(let offset=0;offset<item.text.length;){let end=Math.min(item.text.length,offset+8000);if(end<item.text.length&&/[\uD800-\uDBFF]/.test(item.text[end-1]))end--;segments.push({startMs:0,endMs:0,text:item.text.slice(offset,end)});offset=end;}return {durationMs:0,segments,coverage:'full',engine:'mote-gmail-original-v1'};
+}};

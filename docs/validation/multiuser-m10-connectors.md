@@ -1,10 +1,12 @@
 # M10 connector validation
 
-Status: independent M06 review rejected the earlier candidate for Lark secret
-retention in durable task input. The repair and new regressions are implemented;
-replacement frozen checks and independent re-review remain required.
+Status: M06 independently closed the task-secret P1 at `8987feb6a88729ddfa56048c145ec9a67d000c71`.
+Accepted M06 #133 is now stacked with real provider-original-to-Material integration.
+Final composed freeze, M11 independent review and final verification are pending.
 Baseline: PR #132 `cdc5c34c36fc5743049007ee2c76d705fde3dd7f`.
 Integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
+Additional accepted dependency: Draft #133 head `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`,
+runtime `07ad9ddb17a0d2cd0004c50958670145b1457446`.
 All data, OAuth codes, provider responses and credentials below are isolated synthetic fixtures.
 
 ## Acceptance mapping
@@ -98,8 +100,8 @@ CI is disabled by instruction; workflows must remain disabled and CI unrun.
 
 ## Known boundaries
 
-M13 renderer integration and M06/M07 processing/Memory consumers are separate
-modules. M10 restores true source+provider-original intake. Native CLI binaries
+M13 renderer and M07 Memory remain separate modules. The final M10 feature
+includes accepted M06 and restores actual source/provider-original/processing/Material intake. Native CLI binaries
 are deployment dependencies, verified at their pinned versions before use.
 Windows native credential storage is explicitly unsupported until an isolated
 backend exists; Google HTTP connectors are independent of that limitation.
@@ -122,3 +124,41 @@ pre-admission validation and history-preserving upgrade of earlier candidate inp
 The interrupted full affected invocations exited 143 and are not accepted evidence.
 M06 owns the heavy slot while M10 repairs and read-reviews its frozen implementation.
 Final M06+M10 provider-original-to-Material combination remains required.
+
+
+## Real M06 composition acceptance
+
+The accepted M06 source is stacked only on M10's feature. All joint tests use the
+actual production app, SQLite, M03 original/source services, M04 configuration and
+media leases, M05 shared executor, M09 instances, existing FileProcessorRegistry,
+real provider decoders and Material/FTS publication. Only external provider I/O
+and external ASR responses are scripted. Component fixtures explicitly disable
+processing automation; these joint scenarios explicitly enable the real pipeline.
+
+| Actual composed journey | Durable regression |
+| --- | --- |
+| A/B same Gmail account, plain/HTML MIME, 65000-character body across provider parts, snapshot/archive, immutable raw bytes and correct searchable Material after duplicate/restart | `real M06 automatic pipeline decodes Gmail MIME originals for A/B in snapshot and archive without indexing provider JSON or losing long bodies` |
+| Actual Lark document bytes and long calendar SourceItem originals, A/B and restart | `real M06 automatic pipeline consumes actual Lark document bytes and long calendar SourceItem originals into scoped Material after restart` |
+| Feishu/DingTalk vendor export decoder plus binary audio through real M04 ASR leases; correct speaker/timing/JSON MIME; same IDs/bytes, private cache/keys and no repeated ASR on restart | `real M06 pipeline decodes feishu-recordings vendor originals and binary audio into separate scoped Material with genuine M04 ASR leases`; same prefix for `dingtalk-recordings` |
+| Held ASR response after source pause; A cannot publish while B completes | `real connector-to-M06 held media result cannot publish after its source is paused while B processing continues` |
+| Synthetic pre-M06 format-metadata fixture, existing archive original and immutable first bytes | `pre-M06 retained Gmail archive re-observation restores its trusted decoder format and keeps its first raw original` |
+| Copied opaque credential reference refused for another task, instance, owner and revoked generation | `an opaque configuration payload reference cannot authorize a different task, instance, owner or revoked generation` |
+
+Diagnostic prototype Gmail/Lark2/2 exit0 `/tmp/m10-joint-gmail-lark-paged.log`;
+both recordings and source barrier3/3 exit0 `/tmp/m10-joint-recordings-first.log`.
+The first long-body assertions read only the API's first12000 characters; the test
+client now follows actual `nextOffset` pages and verifies the complete tail.
+The first foreign-snapshot negative expected401/403, but the real M09 privacy
+contract deliberately returns404/not_found; the assertion was corrected to that
+exact denial. Neither issue was hidden by weakening production guards.
+The first full composed module47/47 exit0 `/tmp/m10-stack-prefreeze-module.log`
+preceded the final two upgrade/reference regressions and 65000-character expansion.
+Final SHA receipts replace these diagnostics below; no diagnostic is final acceptance.
+
+Independent M06 review closed P1 with its unchanged probe0/0/0,1/1 exit0 and
+independent five secret-lifecycle regressions5/5 exit0. Report
+`/tmp/mote-m06-review-m10.md`. M10 independently approved full M06 runtime07ad
+using literal source archives (8 core,2 image-context and8 final lineage/legacy
+cases, all exit0); report `/tmp/mote-m10-review-m06.md`.
+Final new composition is assigned to active M11 for read-only independent review;
+completed M06 must not be awakened. No additional execution conversation is created.

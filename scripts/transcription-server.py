@@ -4,6 +4,7 @@ import argparse
 import hmac
 import json
 import math
+import re
 import importlib.util
 import shutil
 import multiprocessing
@@ -21,7 +22,7 @@ def recognize(path, stage, settings, budget, speakers, sender):
             os.setsid()
         from mote_audio import offline_process, normalize, transcribe, diarize
         offline_process()
-        with TemporaryDirectory(prefix='mote-normalized-') as temporary:
+        with TemporaryDirectory(prefix='normalized-', dir=str(Path(path).parent)) as temporary:
             wav = Path(temporary) / 'normalized.wav'
             normalize(path, wav, budget, settings['timeout'])
             if stage == 'transcribe':
@@ -150,7 +151,11 @@ def main():
                 if not 0 < length <= 512 * 1024 * 1024 or not math.isfinite(budget) or budget <= 0 or not 0 <= speakers <= 16:
                     self.send_error(413)
                     return
-                with TemporaryDirectory(prefix='mote-audio-input-') as directory:
+                scope = self.headers.get('X-Mote-Request-Scope', '')
+                if scope and re.fullmatch(r'[a-f0-9]{64}', scope) is None:
+                    self.reject_before_execution(400, 'Invalid request scope')
+                    return
+                with TemporaryDirectory(prefix='mote-audio-' + (scope + '-' if scope else 'input-')) as directory:
                     audio = Path(directory) / 'original.audio'
                     with audio.open('xb') as output:
                         remaining = length

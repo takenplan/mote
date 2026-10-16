@@ -72,6 +72,8 @@ export interface ContextReader {
 }
 
 export interface AgentOptions {
+  /** Host-only private root for grant-owned temporary runtime data. */
+  temporaryRoot?:string;
   /** Trusted benchmark arm only; no profile, HTTP or product setting. */
   contextToolMode?:'all-native'|'catalog';
   /** Host-only evidence authorization before each outbound HTTP model attempt, including SDK turns/repairs. */

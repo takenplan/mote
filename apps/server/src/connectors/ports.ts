@@ -39,5 +39,5 @@ export interface LarkLedger {
 }
 export interface LarkContext extends AdapterContext {
  ledger:LarkLedger;
- publishFile(sourceId:string,item:SourceItem,bytes:Buffer,authorize:()=>void,signal:AbortSignal):Promise<{id:string;duplicate:boolean}>;
+ publishFile(sourceId:string,item:SourceItem,bytes:Buffer,authorize:()=>void,signal:AbortSignal,format?:`processor:${string}`):Promise<{id:string;duplicate:boolean}>;
 }

@@ -25,6 +25,8 @@ import {ConfigServiceError,type ConfigDocument} from '../config-service.js';
 import type {LifecycleAuthority} from './lifecycle.js';
 import {registerScopedPlugins} from './plugin-routes.js';
 import type {PluginReleaseTransport} from '../plugin-release.js';
+import {registerProcessing} from './processing-routes.js';
+import type {ProcessingHost} from './processing.js';
 import type {ScopedPluginHost} from './plugins.js';
 export {registerUserRoute,requestContext} from './http.js';
 
@@ -35,6 +37,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
   let configuration:Configurations|undefined;
   let plugins:ScopedPluginHost|undefined;
   let connectors:ScopedConnectors|undefined;
+  let processing:ProcessingHost|undefined;
   try{
     const app=Fastify({logger:false});
     const accounts=new Accounts(storage.db,storage.deploymentId);
@@ -47,7 +50,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
-    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','connectors']:[])]}));
+    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','connectors']:[])]}));
     registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority:options.lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
@@ -58,10 +61,11 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       const {receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial}=ingress.bindSource(context,sourceIds,assertCurrent);
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
-    if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,transports:options.connectorTransports,definitions:options.connectorDefinitions});
-    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await connectors?.close();await plugins?.close();});}
+    if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins);await processing.ready();}
+    if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
+    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await connectors?.close();await processing?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
-    app.addHook('onClose',async()=>{await connectors?.close();await plugins?.close();await configuration?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,plugins,ingress,connectors,deploymentId:storage.deploymentId};
-  }catch(error){await connectors?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
+    app.addHook('onClose',async()=>{await connectors?.close();await processing?.close();await plugins?.close();await configuration?.close();accounts.close();storage.close();});
+    return {...runtime,execution,configuration,plugins,ingress,processing,connectors,deploymentId:storage.deploymentId};
+  }catch(error){await connectors?.close();await processing?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
 }

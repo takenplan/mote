@@ -2,7 +2,11 @@
 
 Baseline: PR #132 `cdc5c34c36fc5743049007ee2c76d705fde3dd7f`, including
 M00/M01/M02/M03/M04/M05/M09. This module targets the unchanged integration
-branch, without merging prerequisites or touching the original checkout.
+branch and leaves the original checkout untouched.
+The final M10 feature also stacks accepted M06 Draft #133, published head
+`470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`, tested runtime
+`07ad9ddb17a0d2cd0004c50958670145b1457446`. This composition is confined to the
+M10 feature branch; the protected integration branch stays unchanged.
 
 ## Scope and supersession
 
@@ -16,7 +20,7 @@ SQL, separate connector executors, and installation triggering user collection.
 EXCEPTION: trusted installed code is not a hostile-code sandbox. UNKNOWN: real
 OAuth accounts, vendor permissions, long-lived token refresh and physical recorders
 are outside synthetic fixture acceptance. MCP authentication and sessions remain
-M11; Memory/processing consumers remain M06/M07.
+M11. M06 processing is now stacked for real connector intake; Memory remains M07.
 
 The runtime must exercise the existing provider adapters through isolated fake
 transport, not replace their parsing or publication with mock services. Package
@@ -112,6 +116,18 @@ original bytes for the same revision still conflicts. Normalized adapter heads
 are encrypted, fixed to the same scope and checked against the canonical capture
 ID; they are not indexed as evidence. Canonical source records and full originals
 are the actual M03 production data, available to M06/M07's domain consumers.
+The composed M06 host receives the same transactional intake receipt with a
+trusted format for each original. Ordinary uploaded JSON stays a file. Gmail MIME
+JSON and both recording export formats select fixed local processors registered
+in the existing FileProcessorRegistry; these call the real `gmailItems`,
+`feishuTranscript` and `dingtalkTranscript` algorithms on bounded retained bytes.
+Their exact original-bound source identity participates in cache fingerprints;
+they never select a newer source head. No format selector enters source worker RPC.
+Normalized connector snapshots, including calendars, retain serialized SourceItem
+originals for real automatic processing; reference sources retain no bytes.
+SourceItem extraction preserves bounded text chunks and available speaker/time
+metadata. Material titles use the canonical parent title. DingTalk export MIME is
+JSON, and a changed MIME creates a new revision while retaining old evidence.
 Gmail envelope-only changes such as `historyId` retain the canonical original of
 an unchanged semantic revision. New semantic revisions supply new provider bytes;
 the generic M03 conflicting-original check remains strict.
@@ -155,3 +171,7 @@ A changed command payload or account epoch conflicts. The callback is not a wire
 field or worker capability. M09 snapshot validity is also part of M10 task
 validation through final result publication. Native CLI cancellation waits for
 physical child close; a revoked output callback cannot escape the event handler.
+Gmail retains the complete provider Message response and decoded body parts;
+binary attachments remain uncollected as declared by its existing
+`attachmentsCollected:false` metadata. This does not claim a full RFC822 mailbox
+or attachment backup.
