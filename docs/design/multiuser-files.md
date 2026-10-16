@@ -29,7 +29,7 @@ cancel/retry/forget or complete original legacy recording export outcomes. Those
 remain explicit shared Files work; neither the current transcript export nor a
 generic Material list substitutes for them.
 
-## Owner corrections and speaker confirmation: candidate under validation
+## Owner corrections and speaker confirmation: narrow shared freeze
 
 The existing M06 service accepts the original exact `artifactId`, `chunkId`,
 `originalText` and `correctedText` correction contract. It reuses the production
@@ -62,9 +62,19 @@ and revision checks stay current-only. A generated real-host/model regression
 retains old history, rejects old-revision execution and permits a fresh current
 owner request. No retired evidence is promoted to current authority.
 
-These are narrowly exercised candidate paths, not final Files, Imports or joint
-acceptance. Type/build/affected and independent review receipts must be recorded
-before a shared write freeze is offered to consumers. Proposed model-assisted
+Thin freeze: `a10effd109e64651e5cafe801b686238271964bf`. Exact current server
+types pass; seven actual source cases and all fifteen affected portable cases
+pass without skips. M13 bounded review of exact643812 plus a10 finds no new
+confirmed P0/P1/P2. Its reviewer did not execute these tests. Read endpoints now
+also require M06's trusted `file`/`processor:*` original format, so a retained
+source-item JSON envelope is not an external file or playback authority. The
+speaker/recovery cases use generated WAV through actual M03/M04/M05/M06 with
+only external ASR transport substituted. Details and log identities are in the
+[joint ledger](../validation/multiuser-joint-validation.md).
+
+These are narrowly exercised paths, not final Files, Imports or joint acceptance.
+Fresh own compiled/client artifacts and the final affected gate remain pending
+the complete final composition. Proposed model-assisted
 reviews/calendar matching, acoustic per-file overrides, sample assets and all
 remaining lifecycle controls are still OPEN.
 
@@ -90,3 +100,43 @@ The joint thread owns this shared backend adaptation. M13/M14/M15 own their
 original thin UI/native consumers and final acceptance. They were notified to
 avoid a second backend projection. Until a tested shared freeze is published,
 these Imports/write paths remain OPEN rather than faked or silently removed.
+
+
+## Shared Imports consumer PREP contract
+
+Supersedes only the earlier unavailable/write-path paragraph above. The current
+clean consumable source checkpoint is `43dbf8ab6e55f747bd4c941d0419a86955826123`;
+production runtime is `1f377f826809b897a9a4723a8039ac7c47bc51cb` with subsequent
+generated tests/validation only. This is a thin integration checkpoint, not a
+whole Imports/Files or client final delivery. It includes M14 final cd46 and the
+delivered M12/M16 ancestors, and excludes later peer WIP and independent theme.
+
+| Original user entry | Scoped contract and authority |
+| --- | --- |
+| Upload originals | POST `/api/import-uploads` with stable optional UUID `id`, relative `name`, `sizeBytes`, optional `mimeType`; PUT `/:id/parts/:part` raw exact4MiB parts; POST `/:id/commit` returns `ArchivedFile`. Replay the same upload ID/bytes after ACK loss. One-day staging/64MiB file bounds remain. |
+| Prepare private import | POST `/api/imports` with stable `requestId`, archived file IDs or inline name/mimeType/dataBase64 files, instruction, automatic/preview and optional configured SourcePack. Returns202 ImportJob. Same ID/body resumes; changed body409; host directory403. |
+| Read original workflow | GET `/api/imports`, `/:id`, `/api/import-capabilities`, `/api/import-source-packs`, `/api/archived-files/:id` and `/content`. These are account client/web routes, not collector/device/plugin upload aliases. |
+| Preview and owner decision | POST `/:id/prepare` with optional instruction; `/confirm`, `/cancel`, `/retry` with empty objects. Models map only admitted original readers into private validated rows; no query evidence is published before confirmation, except the existing deterministic automatic review rule. |
+| Confirmed publication | Exact manifest/current epoch/owner generation binds original M03 receipts, immutable attribution and archived file links, followed by existing M06/M05 processing and M08 intake. No new runtime/executor or implicit owner. |
+| Delete | DELETE `/:id` retains sibling job/capture references and B objects. Returns files/bytes/garbagePending. Metadata commits before physical GC; activity, real pins, a surrounding host transaction or GC failure defer physical cleanup to the existing `/api/ingress/gc` path. |
+| Status and recovery | Import publication, searchable Material and Memory are separate. Memory counts follow actual selected recipe/intake/task/job receipts; a proposed job ID is not a link until the job exists. Personal/instance recovery carries private history without old grants; incomplete previews require fresh preparation and the original review/confirmation rule. |
+
+Canonical schemas are `packages/shared/src/imports.ts` and archive-contract.ts;
+route registration is scope/processing-routes.ts and scope/ingress-routes.ts.
+The model-preview control appends only validated private preview fragments under
+a stable local ID; it cannot create Capture/Material/Memory, open host paths or
+issue authorization. ZIP expansion and trusted configured Python packs reuse the
+existing fixed workers/limits; uploaded executables are not accepted.
+
+Server noEmit on43db is actual EXIT0. Source checkpoints have separate generated
+entry, worker, model-barrier, personal/instance restore, physical GC/pin, recipe
+batch/cancel and erasure receipts in the joint validation ledger. They are not a
+compiled/client/affected gate. Consumers must preserve their original navigation
+and label unfinished processing honestly. Explicit image profiles currently
+block image media rather than being ignored; full image-profile/attachment parity
+remains OPEN. Missing-model admission's actual stale/grant_revoked receipt is
+failed, not invented model-wait. Later generated actual paused/resume, capacity
+backoff/restart and exact unavailable-snapshot recovery have separate receipts in
+the joint validation ledger on unchanged projection source; final composed gates
+remain pending. Files model reviews/calendar matching, acoustic samples/overrides, lifecycle
+controls and complete recording exports remain OPEN.

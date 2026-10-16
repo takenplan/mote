@@ -1,3 +1,4 @@
+import type {ImportPythonPackConfig} from '../config.js';
 import {readFileSync,readdirSync} from 'node:fs';
 import {join,dirname} from 'node:path';
 import {z} from 'zod';
@@ -7,7 +8,7 @@ import {repositoryRoot} from '../config.js';
 import {privateDirectory,privateFile} from '../private-storage.js';
 import {registerAuthenticatedRoute,type ScopedRuntime} from './http.js';
 import type {Configurations} from './configuration.js';
-export type ManagementConfig={dataDir:string;profile?:string;configuration?:{runtime?:'native'|'docker'|'unknown';hostConfigFile?:string|null}};
+export type ManagementConfig={dataDir:string;importPythonPacks?:ImportPythonPackConfig[];profile?:string;configuration?:{runtime?:'native'|'docker'|'unknown';hostConfigFile?:string|null}};
 const empty=z.object({}).strict(),metrics=['durationMs','statusCode','pending','failed','queueDepth','activeQueries','httpStatus'] as const;
 /** The old global trace/raw reader cannot become administrator private access.
  * Project only finite operational metadata, including when reading old files. */

@@ -13,6 +13,9 @@ export const processingInputSchema=z.object({originalRef:z.string().regex(/^orig
 export type ProcessingInput=z.infer<typeof processingInputSchema>;
 
 export function installProcessing(db:DatabaseSync){db.exec(`
+ CREATE TABLE IF NOT EXISTS mp_import_jobs(user_id TEXT NOT NULL,id TEXT NOT NULL,fingerprint TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,id));
+ CREATE TABLE IF NOT EXISTS mp_import_files(user_id TEXT NOT NULL,job_id TEXT NOT NULL,file_id TEXT NOT NULL,PRIMARY KEY(user_id,job_id,file_id),FOREIGN KEY(user_id,job_id) REFERENCES mp_import_jobs(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,file_id) REFERENCES ig_archive_files(user_id,id));
+ CREATE TABLE IF NOT EXISTS mp_import_records(user_id TEXT NOT NULL,job_id TEXT NOT NULL,generation INTEGER NOT NULL,position INTEGER NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,job_id,generation,position),FOREIGN KEY(user_id,job_id) REFERENCES mp_import_jobs(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS mp_original_formats(user_id TEXT NOT NULL,original_id TEXT NOT NULL,format TEXT NOT NULL,PRIMARY KEY(user_id,original_id),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS mp_admissions(user_id TEXT NOT NULL,original_id TEXT NOT NULL,request_key TEXT NOT NULL,task_id TEXT,state TEXT NOT NULL,PRIMARY KEY(user_id,original_id,request_key),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS mp_activity(user_id TEXT NOT NULL,id TEXT NOT NULL,state TEXT NOT NULL,PRIMARY KEY(user_id,id));
