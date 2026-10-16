@@ -27,6 +27,19 @@ const node=await buildApp({dataDir:directory},{connectorTransports:{google:({use
   return new Response(JSON.stringify(response),{headers:{'content-type':'application/json'}});
  }) as typeof fetch,
 })}});
+let dropCommands=false;
+const commands:Array<{actor:string;path:string;operationId:string;taskId:string}>=[];
+node.app.addHook('onSend',async(request,reply,payload)=>{
+ if(request.method==='POST'&&/^\/api\/connectors\/[^/]+\/(sync|disconnect|operations)$/.test(request.url)&&reply.statusCode===200){
+  const body=request.body as {operationId:string},task=JSON.parse(String(payload));
+  commands.push({actor:request.headers.authorization==='Bearer '+a.token?'a':request.headers.authorization==='Bearer '+b.token?'b':'other',path:request.url,operationId:body.operationId,taskId:task.id});
+  if(dropCommands)reply.raw.destroy();
+ }
+ return payload;
+});
+node.app.post('/generated/drop-commands',async()=>{dropCommands=true;return {dropCommands};});
+node.app.post('/generated/release-commands',async()=>{dropCommands=false;return {dropCommands};});
+node.app.post('/generated/commands',async()=>({commands,dropCommands}));
 const {ok}=queryHttp(()=>node),{admin,a,b}=await queryAccounts(node,ok);
 for(const actor of [a,b]){const view=await ok(actor.token,'/api/configuration');await ok(actor.token,'/api/configuration/processing','PUT',{revision:view.revision,value:{...defaultProcessingSettings(),automatic:false,understandingEnabled:false}});}
 for(const provider of ['gmail','google-calendar']){

@@ -557,21 +557,45 @@ class MultiuserWorkerInstrumentedTest {
         }}finally{instrumentation.removeMonitor(monitor)}
     }
 
+    private fun connectGeneratedGoogle(actor:String,id:String,provider:String) {
+        val api=CentralClient(endpoint(),token(actor));val path="/api/connectors/"+id;val inventory=api.get("/api/connectors")
+        api.put(path,JSONObject().put("expectedRevision",inventory.getLong("revision")).put("connection",JSONObject().put("provider",provider).put("autoSync",false).put("syncIntervalMs",300000).put("googleClientId","GENERATED_"+actor+"_CLIENT").put("googleClientSecret","GENERATED_"+actor+"_SECRET").put("googleRedirectUri","https://fixture.invalid/generated-callback")))
+        api.post(path+"/enable",JSONObject().put("expectedRevision",api.get("/api/plugins").getLong("revision")))
+        val auth=api.post(path+"/start");val state=android.net.Uri.parse(auth.getString("authorizationUrl")).getQueryParameter("state")!!
+        val callback=java.net.URL(endpoint()+"/oauth/google/callback?state="+CentralScreens.encode(state)+"&code=generated-native-code").openConnection() as java.net.HttpURLConnection
+        try{assertEquals(200,callback.responseCode);callback.inputStream.close()}finally{callback.disconnect()}
+        waitFor {api.get("/api/tasks/"+auth.getString("taskId")).getString("state")=="succeeded"};assertTrue(api.get(path).getBoolean("connected"))
+    }
+
+    @Test fun originalNativeGmailLostAckSurvivesRecreationAndSwitchWithoutCreatingANewAdmission() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val id="same-native-mail";for(actor in listOf("a","b"))connectGeneratedGoogle(actor,id,"gmail")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val beforeB=b.get("/api/source-items").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun card(activity:CentralActivity)=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().single {it.text.toString()==id+" · gmail"}.parent as android.view.ViewGroup
+            fun button(label:String):android.widget.Button? {var value:android.widget.Button?=null;scenario.onActivity {activity->value=views(card(activity)).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label}};return value}
+            fun sources(){ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="来源与外部应用"}.performClick()};ready()}
+            fun press(label:String){val target=button(label);assertNotNull("Missing owned Gmail control: "+label,target);scenario.onActivity {target!!.performClick()}}
+            sources();control("/generated/drop-commands");press("立即同步");ready()
+            waitFor {button("重试")!=null};val oldRetry=button("重试")!!
+            waitFor {a.get("/api/source-items").getJSONArray("items").length()>0}
+            val attempts=control("/generated/commands").getJSONArray("commands");val before=(0 until attempts.length()).map(attempts::getJSONObject).filter {it.getString("actor")=="a"&&it.getString("path").endsWith("/sync")};assertTrue(before.isNotEmpty());assertEquals(1,before.map {it.getString("operationId")}.toSet().size);val operation=before.first().getString("operationId");val task=before.first().getString("taskId")
+            scenario.recreate();sources();assertNotNull(button("重试"))
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);ready();scenario.onActivity {oldRetry.performClick()};sources();assertNull("A pending command must not appear in same-ID B",button("重试"));assertEquals(beforeB,b.get("/api/source-items").toString())
+            control("/generated/release-commands");scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"a");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);sources();press("重试");ready()
+            val after=control("/generated/commands").getJSONArray("commands");val retried=(0 until after.length()).map(after::getJSONObject).filter {it.getString("actor")=="a"&&it.getString("path").endsWith("/sync")};assertTrue(retried.size>before.size);assertEquals(setOf(operation),retried.map {it.getString("operationId")}.toSet());assertEquals(setOf(task),retried.map {it.getString("taskId")}.toSet())
+            assertEquals(1,a.get("/api/source-items").getJSONArray("items").length());assertEquals(beforeB,b.get("/api/source-items").toString())
+        }
+    }
+
     @Test fun originalNativeGoogleCalendarSelectionAndSyncUseOwnedM10TasksAndRetireDetachedAButtons() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
         val id="same-native-calendar";val path="/api/connectors/"+id
-        for(actor in listOf("a","b")) {
-            val api=CentralClient(endpoint(),token(actor));val inventory=api.get("/api/connectors")
-            api.put(path,JSONObject().put("expectedRevision",inventory.getLong("revision")).put("connection",JSONObject().put("provider","google-calendar").put("autoSync",false).put("syncIntervalMs",300000).put("googleClientId","GENERATED_"+actor+"_CLIENT").put("googleClientSecret","GENERATED_"+actor+"_SECRET").put("googleRedirectUri","https://fixture.invalid/generated-callback")))
-            api.post(path+"/enable",JSONObject().put("expectedRevision",api.get("/api/plugins").getLong("revision")))
-            val auth=api.post(path+"/start");val state=android.net.Uri.parse(auth.getString("authorizationUrl")).getQueryParameter("state")!!
-            // Only the generated loopback callback is visited. Never launch Google.
-            val callback=java.net.URL(endpoint()+"/oauth/google/callback?state="+CentralScreens.encode(state)+"&code=generated-native-code").openConnection() as java.net.HttpURLConnection
-            try{assertEquals(200,callback.responseCode);callback.inputStream.close()}finally{callback.disconnect()}
-            waitFor {api.get("/api/tasks/"+auth.getString("taskId")).getString("state")=="succeeded"}
-            assertTrue(api.get(path).getBoolean("connected"))
-        }
+        for(actor in listOf("a","b")) connectGeneratedGoogle(actor,id,"google-calendar")
         val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val beforeB=b.get("/api/source-items").toString()
         fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
         androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
