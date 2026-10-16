@@ -49,3 +49,11 @@ test('explicit masked reference preservation edits the existing owned instance u
  bi.name='B edited';assert.equal((await f.request(f.b,'/api/plugin-instances','POST',{instance:bi,expectedRevision:bv.revision,preserveRedactedSecrets:true})).statusCode,200);
  const cb=await f.node.authority.authenticate(f.b);assert.equal(f.stored(cb.userId).configuration.credential,'personal:B');
 });
+
+test('memory control reload discovers only its own durable preparation without readmission',async t=>{
+ const f=await fixture(t),id=randomUUID(),prepared=await f.request(f.a,'/api/memory/bindings','POST',{operationId:id});assert.equal(prepared.statusCode,200,prepared.body);
+ const view=await f.request(f.a,'/api/memory');assert.equal(view.json().bindingPreparation,id);assert.equal((await f.request(f.b,'/api/memory')).json().bindingPreparation,undefined);
+ assert.equal((await f.request(f.b,'/api/memory/bindings/'+id)).statusCode,404);
+ assert.equal((await f.request(f.a,'/api/memory/bindings/'+id+'/cancel','POST',{})).statusCode,200);
+ assert.equal((await f.request(f.a,'/api/memory')).json().bindingPreparation,undefined);
+});
