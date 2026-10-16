@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
 import {modelFixture} from './fixtures/scoped-actions.js';
-import {waitForState} from './fixtures/scoped-query-accounts.js';
+import {source,waitForState} from './fixtures/scoped-query-accounts.js';
 
 const privateTables=['ac_proposals','ac_operations','ac_sources','ac_dependencies','ac_restore','ac_targets','ac_jobs'];
 async function issued(t:Parameters<typeof modelFixture>[0]){
@@ -18,7 +18,7 @@ test('an actual uncertain calendar receipt remains unknown during domain deletio
 
 test('a settled Actions domain erases private metadata and retains only an inactive authorization tombstone',async t=>{
  const f=await issued(t);await f.callback({operationId:f.action.operationId,status:'succeeded',externalId:'generated-known-event'});assert.equal((await f.node.services.forUser(f.context).deleteUser('actions',randomUUID())).status,'complete');
- for(const table of privateTables)assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM '+table+' WHERE user_id=?').get(f.a.userId)!.n)),0,table);const state=f.read(db=>db.prepare('SELECT * FROM ac_state WHERE user_id=?').get(f.a.userId)!);assert.equal(state.deleted,1);assert.equal(JSON.parse(String(state.settings)).enabled,false);assert.equal(state.policy_id,null);assert.equal(state.policy_task,null);assert.equal(state.review_devices,'[]');
+ for(const table of privateTables)assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM '+table+' WHERE user_id=?').get(f.a.userId)!.n)),0,table);const state=f.read(db=>db.prepare('SELECT * FROM ac_state WHERE user_id=?').get(f.a.userId)!);assert.equal(state.deleted,1);assert.equal(JSON.parse(String(state.settings)).enabled,false);assert.equal(state.policy_id,null);assert.equal(state.policy_task,null);assert.equal(state.review_devices,'[]');await f.ok(f.a.token,'/api/ingress/sources','POST',source('after-domain-delete'));assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM ac_sources WHERE user_id=?').get(f.a.userId)!.n)),0,'a deleted Actions domain must not reacquire source metadata');
 });
 
 test('actual M16 account deletion waits for the issued calendar fact then physically removes both Actions and todos',async t=>{
