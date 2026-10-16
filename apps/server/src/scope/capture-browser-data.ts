@@ -1,7 +1,7 @@
 import {z} from 'zod';
 import {sourceSchema,systemEventText,transcriptSchema,type CapturePreview,type CaptureRecord} from '@mote/shared';
 import {captureOcrState} from '@mote/shared/metadata';
-import {PrivateSql,PrivateCursor,missing} from './private-data-sql.js';
+import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
 
 const time=z.string().datetime({offset:true});
 export const captureBrowseSchema=z.object({
@@ -19,13 +19,13 @@ const positionSchema=z.object({at:time,id:z.string()}).strict();
  * No original bytes, legacy Store or separate user runtime is constructed. */
 export class CaptureBrowserData{
  constructor(private readonly sql:PrivateSql,private readonly cursor:PrivateCursor,private readonly capture:(id:string)=>CaptureRecord,private readonly processing=false){}
- private get base(){return `WITH extraction AS (${this.processing?`SELECT r.capture_id,p.material_id,a.json payload,v.created_at updated_at FROM ig_originals r
+ private get base(){return `WITH extraction AS (${this.processing?`SELECT r.capture_id,p.material_id,a.id artifact_id,a.json payload,v.created_at updated_at FROM ig_originals r
   JOIN mp_publications p ON p.user_id=r.user_id AND p.original_id=r.id JOIN mp_artifacts a ON a.user_id=p.user_id AND a.id=p.artifact_id AND a.original_id=r.id AND a.complete=1
   JOIN pd_materials h ON h.user_id=p.user_id AND h.id=p.material_id JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id AND v.revision=h.revision
   JOIN pd_material_captures m ON m.user_id=h.user_id AND m.material_id=h.id AND m.revision=h.revision AND m.capture_id=r.capture_id AND m.member_id='original'
   WHERE r.user_id=$user AND p.user_id=$user AND a.user_id=$user AND h.user_id=$user AND v.user_id=$user AND m.user_id=$user AND h.sequence>=h.min_visible_sequence
-  AND EXISTS(SELECT 1 FROM json_each(v.json,'$.artifacts') artifact WHERE json_extract(artifact.value,'$.key')='extraction' AND json_extract(artifact.value,'$.state')='ready' AND json_extract(artifact.value,'$.revision')=a.id)`:`SELECT id capture_id,NULL material_id,NULL payload,NULL updated_at FROM pd_captures WHERE user_id=$user AND 0`}),
-  browser AS (SELECT c.user_id,c.id,c.context_at,c.json,x.material_id extraction_material,x.payload extraction_payload,x.updated_at extraction_at,
+  AND EXISTS(SELECT 1 FROM json_each(v.json,'$.artifacts') artifact WHERE json_extract(artifact.value,'$.key')='extraction' AND json_extract(artifact.value,'$.state')='ready' AND json_extract(artifact.value,'$.revision')=a.id)`:`SELECT id capture_id,NULL material_id,NULL artifact_id,NULL payload,NULL updated_at FROM pd_captures WHERE user_id=$user AND 0`}),
+  browser AS (SELECT c.user_id,c.id,c.context_at,c.json,x.material_id extraction_material,x.artifact_id extraction_artifact,x.payload extraction_payload,x.updated_at extraction_at,
   json_extract(c.json,'$.deviceId') device_id,json_extract(c.json,'$.appId') app_id,json_extract(c.json,'$.appName') app_name,
   json_extract(c.json,'$.capturedAt') captured_at,json_extract(c.json,'$.source') source,
   json_extract(c.json,'$.originalImage.hash') IS NOT NULL has_image,
@@ -44,7 +44,7 @@ export class CaptureBrowserData{
   return {where:clauses.join(' AND '),args};
  }
  private pageCursor(query:unknown,value:string|undefined){return value?positionSchema.parse(this.cursor.decodeCompact(value,query)):undefined;}
- record(id:string,raw:unknown={}){
+ record(id:string,raw:unknown={}):CaptureRecord{
   z.string().uuid().parse(id);const filters=captureBrowseSchema.parse(raw),{where,args}=this.scope(filters);
   const row=this.sql.get(`${this.base} SELECT * FROM browser WHERE user_id=$user AND ${where} AND id=?`,...args,id);if(!row)throw missing();
   const record=this.capture(id);if(record.source!=='screen'||!row.extraction_payload)return record;
@@ -64,10 +64,20 @@ export class CaptureBrowserData{
   * M16 may call the same hook after a successful canonical merge. It authorizes
   * no work and restores no old task/model/credential authority. */
  published(materialId:string){
-  const rows=this.sql.all(`${this.base} SELECT DISTINCT c.id,json_extract(c.json,'$.deviceId') device FROM browser c JOIN pd_material_captures m ON m.capture_id=c.id JOIN pd_materials h ON h.user_id=m.user_id AND h.id=m.material_id AND h.revision=m.revision WHERE c.user_id=$user AND m.user_id=$user AND h.user_id=$user AND h.id=? AND h.id=c.extraction_material AND h.sequence>=h.min_visible_sequence AND c.source='screen' AND c.extraction_payload IS NOT NULL`,materialId);
-  this.sql.transaction(()=>{for(const row of rows){const device=String(row.device),sequence=this.sql.get('INSERT INTO ig_capture_update_sequences VALUES($user,?,1) ON CONFLICT(user_id,device_id) DO UPDATE SET next=next+1 RETURNING next',device)!.next;this.sql.run('INSERT INTO ig_capture_updates VALUES($user,?,?,?)',device,sequence,String(row.id));}});
+  const rows=this.sql.all(`${this.base} SELECT DISTINCT c.id,c.device_id device,c.extraction_artifact artifact FROM browser c JOIN pd_material_captures m ON m.capture_id=c.id JOIN pd_materials h ON h.user_id=m.user_id AND h.id=m.material_id AND h.revision=m.revision WHERE c.user_id=$user AND m.user_id=$user AND h.user_id=$user AND h.id=? AND h.id=c.extraction_material AND h.sequence>=h.min_visible_sequence AND c.source='screen' AND c.extraction_artifact IS NOT NULL`,materialId);
+  this.appendUpdates(rows);
+ }
+ private appendUpdates(rows:Record<string,any>[]){this.sql.transaction(()=>{for(const row of rows){const device=String(row.device),capture=String(row.id),artifact=String(row.artifact);if(this.sql.get('SELECT sequence FROM ig_capture_updates WHERE user_id=$user AND device_id=? AND capture_id=? AND artifact_id=?',device,capture,artifact))continue;const sequence=this.sql.get('INSERT INTO ig_capture_update_sequences VALUES($user,?,1) ON CONFLICT(user_id,device_id) DO UPDATE SET next=next+1 RETURNING next',device)!.next;this.sql.run('INSERT INTO ig_capture_updates VALUES($user,?,?,?,?)',device,sequence,capture,artifact);}});}
+ private reconcileUpdates(deviceId:string,limit:number){
+  const rows=this.sql.all(`${this.base} SELECT c.id,c.device_id device,c.extraction_artifact artifact FROM browser c JOIN ig_capture_scopes b ON b.user_id=c.user_id AND b.capture_id=c.id JOIN pd_sources s ON s.user_id=b.user_id AND s.id=b.source_id WHERE c.user_id=$user AND b.user_id=$user AND s.user_id=$user AND c.device_id=? AND c.source='screen' AND c.extraction_artifact IS NOT NULL AND COALESCE(json_extract(s.json,'$.enabled'),1)=1 AND NOT EXISTS(SELECT 1 FROM ig_capture_updates u WHERE u.user_id=$user AND u.device_id=c.device_id AND u.capture_id=c.id AND u.artifact_id=c.extraction_artifact) ORDER BY c.id LIMIT ?`,deviceId,limit);
+  this.appendUpdates(rows);
  }
  updates(deviceId:string,cursor=0,limit=100){
+  const previous=Number(this.sql.get('SELECT next FROM ig_capture_update_sequences WHERE user_id=$user AND device_id=?',deviceId)?.next??0);
+  if(cursor>previous)throw new PrivateDataError('invalid_cursor',409);
+  // A canonical import/first upgrade may have no derived notification rows.
+  // Reconcile a bounded page under this read's existing authority, never a task.
+  this.reconcileUpdates(deviceId,limit);
   const rows=this.sql.all(`SELECT u.sequence,u.capture_id FROM ig_capture_updates u JOIN pd_captures c ON c.user_id=u.user_id AND c.id=u.capture_id JOIN ig_capture_scopes b ON b.user_id=c.user_id AND b.capture_id=c.id JOIN pd_sources s ON s.user_id=b.user_id AND s.id=b.source_id WHERE u.user_id=$user AND c.user_id=$user AND b.user_id=$user AND s.user_id=$user AND u.device_id=? AND u.sequence>? AND json_extract(c.json,'$.deviceId')=? AND COALESCE(json_extract(s.json,'$.enabled'),1)=1 ORDER BY u.sequence LIMIT ?`,deviceId,cursor,deviceId,limit);
   const items=rows.flatMap(row=>{try{const record=this.record(String(row.capture_id));return [{id:record.id,ocr:captureOcrState(record),textPreview:record.ocrText.slice(0,1000),textLength:record.ocrText.length}];}catch(error){if(error instanceof Error&&'statusCode' in error&&error.statusCode===404)return [];throw error;}});
   const high=Number(this.sql.get('SELECT next FROM ig_capture_update_sequences WHERE user_id=$user AND device_id=?',deviceId)?.next??0);

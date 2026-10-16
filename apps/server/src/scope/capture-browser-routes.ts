@@ -14,7 +14,10 @@ import {ScopeError} from './baseline.js';
 export function registerCaptureBrowserReads(runtime:ScopedRuntime,ingress:IngressHost,processing?:ProcessingHost){
  const id=(value:unknown)=>z.object({id:z.string().uuid()}).parse(value).id;
  const browser=(services:ReturnType<ScopedRuntime['services']['forUser']>)=>services.get<PrivateData>(PRIVATE_DATA_DOMAIN).captureBrowser(Boolean(processing));
- for(const [path,read]of [['','previews'],['/albums','albums'],['/album-images','images'],['/sessions','sessions']] as const)registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/capture-browser'+path,service:PRIVATE_DATA_DOMAIN,handle:({services,request})=>{const data=browser(services);return read==='previews'?data.previews(request.query):read==='sessions'?data.sessions(request.query):data.gallery(request.query,read==='albums');}});
+ registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/capture-browser',service:PRIVATE_DATA_DOMAIN,handle:({services,request})=>browser(services).previews(request.query)});
+ registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/capture-browser/albums',service:PRIVATE_DATA_DOMAIN,handle:({services,request})=>browser(services).gallery(request.query,true)});
+ registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/capture-browser/album-images',service:PRIVATE_DATA_DOMAIN,handle:({services,request})=>browser(services).gallery(request.query,false)});
+ registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/capture-browser/sessions',service:PRIVATE_DATA_DOMAIN,handle:({services,request})=>browser(services).sessions(request.query)});
  const updates=z.object({deviceId:z.string().min(1).max(128),cursor:z.coerce.number().int().min(0).max(Number.MAX_SAFE_INTEGER).default(0),limit:z.coerce.number().int().min(1).max(100).default(100)}).strict();
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/capture-browser/updates',service:PRIVATE_DATA_DOMAIN,handle:({services,request})=>{const q=updates.parse(request.query);return browser(services).updates(q.deviceId,q.cursor,q.limit);}});
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/ingress/devices/:id/updates',service:'ingress',handle:({context,services,request})=>{

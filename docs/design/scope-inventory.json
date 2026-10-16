@@ -1545,6 +1545,8 @@
       "table:ig_activity",
       "table:ig_batches",
       "table:ig_capture_scopes",
+      "table:ig_capture_update_sequences",
+      "table:ig_capture_updates",
       "table:ig_devices",
       "table:ig_meta",
       "table:ig_objects",
@@ -2270,6 +2272,20 @@
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/software-update/check'",
       "directory:path",
       "extension:runtime.services.registerInstance:'instance-management'"
+    ]
+  },
+  "apps/server/src/scope/capture-browser-routes.ts": {
+    "scope": "user",
+    "module": "M13",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/:id/image',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/album-images',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/albums',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/sessions',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/updates',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/devices/:id/updates',service:'ingress'"
     ]
   }
 }
