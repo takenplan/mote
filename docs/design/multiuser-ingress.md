@@ -161,7 +161,11 @@ The existing file snapshot processing input retains its one-day byte window.
 This applies to FileRevision `item.layer=snapshot` with `document.fileIndex`,
 not every ordinary original whose M03 retention label is `snapshot`. Receipt
 replay and restart do not renew that window. A successful durable M06 extraction
-releases the temporary byte authorization. The immutable original descriptor,
+releases the temporary byte authorization after the configured stages that need
+original pixels finish. Image understanding holds an exact original pin across
+its model/pixel awaits and releases the input after successful publication. A
+failed attempt retains the original unexpired window for retry; retry cannot
+renew released/expired byte authorization. The immutable original descriptor,
 hash/size and capture/source authorization remain so published artifacts and
 Material are readable after byte GC. Downloads fail with 410 once unavailable;
 an exact trusted original pin can finish its already-admitted byte read.
