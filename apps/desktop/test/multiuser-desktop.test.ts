@@ -277,4 +277,5 @@ it('recovers an expired exact file snapshot through the production source scanne
  await sources.sync(true);await sources.flushPending(new AbortController().signal);expect(sources.pendingContent()).toHaveLength(0);
  await vi.waitFor(async()=>expect((await f.request(f.a.token,'/api/processing/originals/'+original.ref.slice(9))).json().indexed).toBe(true));
  const state=(await f.request(f.a.token,'/api/processing/originals/'+original.ref.slice(9))).json();expect((await f.request(f.a.token,'/api/materials/'+state.materialId+'/read')).json().text).toBe(body);expect((await f.request(f.b.token,'/api/captures/'+original.captureId)).statusCode).toBe(404);
+ const app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);const page=await app.call('mote:work-activity',[{state:'completed'}]);expect(page.items.find((work:any)=>work.id==='file:'+original.ref.slice(9))).toMatchObject({kind:'file',progress:{unit:'records',total:1,completed:1}});await app.call('mote:ask',['login',{token:f.b.token}]);expect((await app.call('mote:work-activity',[{state:'completed'}])).items).toHaveLength(0);
 });
