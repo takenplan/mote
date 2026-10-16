@@ -4,32 +4,26 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current acceptance boundary: the last full Android/production build remains
+Current acceptance boundary: the last full Android/production debug build remains
 runtime48a797854e96eedf57c4edbd451fa2e5c5132a73,353/353. Newer native
-runtime da54a804dec1db0446fa59e08629c149c0c2e233 narrowly passes original
-browser login0.972s, recording connection/retry2.496s, and expanded Lark
-calendar/retry/pause/cancel6.009s. The accompanying fixture app/test APK and
-fresh Shared/Server/Web types pass. These do not substitute for final full
-Android or affected checks on the new composition. Joint's explicitly frozen
-Imports/unknown-issuance candidate c45fdb4a2518fef0d5072b02aafbe8f46cb5a90b
-is now composed in9bbb41e33de64465caac79f4885805a9ef814fe4. New native
-multipart/private-preview/ACK-loss/confirmation and JVM acknowledgement tests
-are authored but have not run. Shared Files acoustic/review/control and image
-profile gaps remain explicit, and Android does not implement duplicate backends.
-Final affected, independent final review, push and Draft PR remain pending.
-QR pairing still has no tested replacement for the old invitation exchange;
-the parent owns scheduling that finite common task, not a pending user decision
-or a competing Android backend. Physical-device and
-live-provider checks are separate. No total test count closes these gaps.
+Imports54ad, Lark95c, recording playback, Agent10442 and QR e8b9/806 have narrow
+real-backend/native evidence below; they do not substitute for a fresh final
+Android or affected gate on the new composition. Joint's explicitly frozen
+Imports c45fdb4a2518fef0d5072b02aafbe8f46cb5a90b and QR producer
+6a84ec6a477bb4698002234fd81bb669ce98cc06 are composed. QR parsing5/5 and
+original pairing loss/recovery2.041s, original native QR generation0.935s,
+and Agent canonical expansion0.928s pass. The additional pairing self/reauthorize
+case reached its final draft assertion but needs a fixture correction: normal
+QuickNotes.save deliberately clears a submitted draft. That failure is retained
+and is not a product RED; the corrected test is not yet compiled or rerun.
 
-Newer limited runtime49347f929c3919a6e8471efbe458e6c0806a79fa adds the original
-native Lark panels through saved owned M10 connections. Its real authorization,
-explicit document archive, source-context and A/B retirement journey passed1/1
-in3.112s after consuming exact M13 source projection0a3f as3808d399. This is newer
-than the full353-test runtime and has not yet passed a fresh full Android/required
-gate. Test-onlya924 expands calendars/retry/pause/cancel but is UNCOMPILED/UNRUN.
-The actual generated-only local `gpt-6.1-sol` native Ask case passed separately
-against preserved tested48a in11.281s; it is not live-provider-wide acceptance.
+Shared Files acoustic/review/control, image profile and Agent startup/events gaps
+remain explicit. Android does not implement duplicate backends. Final affected,
+independent final review, push and Draft PR remain pending. Physical-device,
+public HTTPS and live-provider checks remain separate. One existing-local-Codex
+connectivity check used only an authored generated prompt and exact gpt-6.1-sol;
+it is not provider-wide or model-quality acceptance. No total count closes the
+remaining capability or platform gaps.
 
 | Decision | Existing capability and real chain | Required account adaptation / evidence |
 | --- | --- | --- |
@@ -831,3 +825,67 @@ M13's bounded37c/e4f reader/resume reviews are now read from
 `/tmp/mote-m13-review-m15-recordings-{37c8,e4f8}.md`: no new confirmed P0/P1/P2,
 without reviewer execution or native/current build coverage. Separate native
 recording and54ad acknowledgement reviews are still due.
+
+### Original QR pairing and declared Agent catalog expansion
+
+QR producer6a84ec6a477bb4698002234fd81bb669ce98cc06 is consumed as7a25f2ee.
+It keeps the existing invitation creation consent, fixed deployment/account/device
+purpose and original origin-confirmation journey. Android adds no browser approval
+step and no device private-read permission. Tests d090/beccf3b6 first produce valid
+RED: ConnectionAndOperations5 total2pass3fail, EXIT1, with the test APK assembled
+successfully in the same11s73-task command (`/tmp/m15-qr-jvm-testapk-red.log/.exit`).
+The real original ConnectionActivity then receives an actual v2 M01 invitation
+but cannot open its normal confirmation dialog:1/1 EXIT1,0.462s,
+`/tmp/m15-native-qr-valid-red.log/.exit`. Raw JVM XML is saved separately at
+`/tmp/m15-qr-jvm-valid-red.xml`.
+
+Production e8b9a54c retains the original encrypted recovery file. It writes the
+immutable invitation, device metadata and random PKCE verifier before the first
+claim; persists the M01 request and grant; verifies exact self account credential
+ID, deployment/user/device and Wire2/Ingress3; saves only the verified stable
+account with the actual grant expiry; then ACKs. A lost successful ACK uses the
+cached grant and duplicate ACK rather than polling a consumed request. Settings
+also checks the expected account before its final write. Invitation v1/owner or
+wrong-purpose input is rejected before networking. Original-device selection,
+local QR rendering and existing revoke control remain in the original Devices
+page. The following806fb895 fences scan/document results by their original
+configuration and keeps the original modal's expected configuration through
+RuntimeSettings pause/drain/apply.
+
+Same JVM5/5 passes, fixture app/test APK18s91tasks16executed EXIT0,
+`/tmp/m15-qr-first-green-build.log/.exit`. The identical native pairing case passes
+1/1,2.041s,`/tmp/m15-native-qr-first-green.log/.exit`: actual redeem200 reply loss,
+recreation, same PKCE/claim ID recovery, actual ACK200 reply loss, cached-grant
+recovery and successful duplicate ACK; no browser opens. Explicitly adopted local
+note uploads through the actual worker to A, B returns404, and collection remains
+stopped. Original native Devices→explicit original device→save→locally decode the
+rendered QR also passes1/1,0.935s,`/tmp/m15-native-qr-issuer-first.log/.exit`;
+the detached A issuer button after B resume creates no new invitation.
+
+Expanded app/test APK passes12s67tasks9executed EXIT0,
+`/tmp/m15-qr-expanded-build.log/.exit`. Its four-field self-corruption and same-device
+reauthorization test executes all identity-rejection assertions and credential
+rotation, then fails0.294s at its final draft assertion
+(`/tmp/m15-native-qr-self-first.log/.exit`). The fixture had submitted that draft
+with QuickNotes.save, whose normal success clears the submitted draft. Test-only
+79ca608e instead asserts anonymous draft adoption before submitting a separate
+note, then creates a fresh unsaved A draft before reauthorization. This corrected
+test has not yet been compiled or rerun; no passing reauthorization claim is made.
+
+Agent test d1a41a94 uses actual M01/M03/M06 generated canonical Materials and
+first confirms its declared M08 material-read succeeds. Old native expansion
+then incorrectly calls an unavailable old evidence endpoint:1/1 EXIT1,0.607s,
+`/tmp/m15-native-agent-valid-red.log/.exit`. Minimal10442b46 consumes each row's
+existing declared material_read or M08 context reader. Same original native
+catalog→episodes→expand→A text/B denial→old A action retired under B passes1/1,
+0.928s,`/tmp/m15-native-agent-first-green.log/.exit`. This does not replace the
+still-unavailable shared Agent startup/events contracts with fabricated results.
+
+All data and accounts are generated; corruption hooks change only declared self
+fields, and network fault hooks remove real successful replies. They never mint
+a token or fabricate an authority/receipt. Parent22:08 serial instruction takes
+priority over stale resource files: M15 keeps all heavy work released while Joint's
+already-running finite regression finishes, then QR owns its full gate. Further
+M15 build/full Android/affected slots await the parent's fresh allocation. Current
+native deltas have been requested for bounded independent review; no final M15
+remote head or Draft PR exists yet.
