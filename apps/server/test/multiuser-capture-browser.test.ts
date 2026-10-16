@@ -1,29 +1,13 @@
-import test, {type TestContext} from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import {randomUUID} from 'node:crypto';
-import {mkdtempSync, rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
 import {captureSessions} from '@mote/shared';
 import sharp from 'sharp';
-import {buildApp} from '../src/app.js';
+import {createServer} from 'node:http';
+import {setTimeout as delay} from 'node:timers/promises';
+import {defaultProcessingSettings} from '../src/scope/processing-schema.js';
+import {defaultModelSettings} from '../src/model-settings.js';
+import {captureBrowserRecord as record,scopedCaptureFixture as fixture} from './fixtures/scoped-capture-host.js';
 
-const password='Generated-M13-archive-only-01';
-const protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
-const record=(at:number, appId='target', extra:Record<string,unknown>={})=>({id:randomUUID(),deviceId:'same-device',deviceName:'Generated device',platform:'import',source:'screen',capturedAt:new Date(Date.UTC(2026,8,13)+at).toISOString(),durationMs:0,appId,appName:appId,windowTitle:'Generated archive',ocrText:'GENERATED_A_ARCHIVE',ocr:{status:'completed'},privacy:{excluded:false,collection:'content'},...extra});
-async function fixture(t:TestContext){
- const directory=mkdtempSync(join(tmpdir(),'mote-m13-browser-')),host=await buildApp({dataDir:directory});
- t.after(async()=>{await host.app.close();rmSync(directory,{recursive:true,force:true});});
- await host.accounts!.initialize('generated-admin',password);
- const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>host.app.inject({method,url,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
- const login=async(username:string)=>{const r=await request(undefined,'/api/auth/login','POST',{username,password,mode:'client'});assert.equal(r.statusCode,200,r.body);return r.json();};
- const admin=await login('generated-admin');
- for(const username of ['generated-a','generated-b']){const r=await request(admin.token,'/api/admin/accounts','POST',{username,password});assert.equal(r.statusCode,200,r.body);}
- const a=await login('generated-a'),b=await login('generated-b');
- for(const account of [a,b]){const r=await request(account.token,'/api/ingress/sources','POST',{id:'same-source',name:'Generated archive',kind:'local-files',deviceId:'same-device',platform:'import',retention:'snapshot'});assert.equal(r.statusCode,200,r.body);}
- const receive=async(account:typeof a,items:unknown[])=>{const r=await request(account.token,'/api/ingress/sources/same-source/captures','POST',{batchId:randomUUID(),items});assert.equal(r.statusCode,200,r.body);return r.json();};
- return {host,a,b,admin,request,receive};
-}
 
 test('original raw record filters run before LIMIT and signed pages stay bound to their owner and full query',async t=>{
  const f=await fixture(t),first=record(1000),second=record(2000),other=Array.from({length:70},(_,n)=>record(3000+n,'other'));
@@ -80,4 +64,17 @@ test('an awaited thumbnail loses its snapshot bytes grant when M03 releases that
  let entered!:()=>void,release!:()=>void;const arrived=new Promise<void>(r=>entered=r),gate=new Promise<void>(r=>release=r),original=sharp.prototype.toBuffer;
  t.mock.method(sharp.prototype,'toBuffer',async function(this:sharp.Sharp,...args:any[]){const bytes=await original.apply(this,args as any);entered();await gate;return bytes;});t.after(()=>release());
  const path='/api/capture-browser/'+input.id+'/image',pending=f.request(f.a.token,path+'?thumbnail=1');await arrived;f.host.ingress.forUser(await f.host.authority.authenticate(f.a.token)).releaseSnapshot(receipt.captures[0].original.ref);release();const retired=await pending;assert.equal(retired.statusCode,410,retired.body);assert.match(retired.headers['content-type']??'',/application\/json/);assert.equal((await f.request(f.a.token,path)).statusCode,410);
+});
+
+test('central OCR publication reaches the original raw detail, before-LIMIT status filter and device update reader without changing intake bytes',async t=>{
+ const server=createServer(async(req,res)=>{for await(const _part of req){}res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:0,segments:[{startMs:0,endMs:0,text:'GENERATED_A_CENTRAL_OCR'}],coverage:'full',engine:'generated-http-fixture'}));});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise<void>(resolve=>server.close(()=>resolve())));const address=server.address();assert.ok(address&&typeof address!=='string');
+ const f=await fixture(t),configure=async(domain:string,value:unknown)=>{const revision=(await f.request(f.a.token,'/api/configuration')).json().revision,r=await f.request(f.a.token,'/api/configuration/'+domain,'PUT',{revision,value});assert.equal(r.statusCode,200,r.body);};
+ await configure('processing',{...defaultProcessingSettings(),automatic:false,understandingEnabled:false,summarize:false});await configure('models',{profiles:[{id:'generated-ocr',name:'Generated OCR',settings:{...defaultModelSettings(),provider:'custom',protocol:'mote-media',baseUrl:'http://127.0.0.1:'+address.port+'/transcribe',model:'generated-ocr',apiKey:'GENERATED_A_KEY'}}],selections:{ocr:{kind:'personal',id:'generated-ocr'}}});
+ const image=await sharp({create:{width:24,height:24,channels:3,background:'#234567'}}).png().toBuffer(),input=record(1000,'same-app',{ocrText:'',ocr:{status:'disabled'},imageBase64:image.toString('base64'),imageMime:'image/png'}),receipt=await f.receive(f.a,[input]);await f.receive(f.b,[input]);
+ const admission=await f.request(f.a.token,'/api/processing','POST',{originalRef:receipt.captures[0].original.ref,operationId:'generated-central-ocr'});assert.equal(admission.statusCode,200,admission.body);
+ let task:any;for(let n=0;n<1200;n++){task=(await f.request(f.a.token,'/api/tasks/'+admission.json().id)).json();if(task.state==='succeeded')break;assert.ok(!['failed','stale','cancelled','blocked'].includes(task.state),JSON.stringify(task));await delay(10);}assert.equal(task.state,'succeeded',JSON.stringify(task));
+ const filtered=await f.request(f.a.token,'/api/capture-browser?ocrStatus=completed&limit=1');assert.equal(filtered.statusCode,200,filtered.body);assert.equal(filtered.json().totalCount,1,'actual M06 extraction status is filtered before pagination');assert.equal(filtered.json().items[0].ocr.status,'completed');assert.match(filtered.json().items[0].textPreview,/GENERATED_A_CENTRAL_OCR/);
+ const detail=await f.request(f.a.token,'/api/capture-browser/'+input.id);assert.equal(detail.statusCode,200,detail.body);assert.match(detail.json().ocrText,/GENERATED_A_CENTRAL_OCR/);assert.equal((await f.request(f.a.token,'/api/captures/'+input.id)).json().ocrText,'','the canonical intake is unchanged');
+ const path='/api/capture-browser/updates?deviceId=same-device&cursor=0&limit=1',updates=await f.request(f.a.token,path);assert.equal(updates.statusCode,200,updates.body);assert.equal(updates.json().items.length,1);assert.match(updates.body,/GENERATED_A_CENTRAL_OCR/);assert.ok(updates.json().nextCursor>0);const next=await f.request(f.a.token,path.replace('cursor=0','cursor='+updates.json().nextCursor));assert.equal(next.json().items.length,0);assert.equal(next.json().nextCursor,updates.json().nextCursor);
+ assert.doesNotMatch((await f.request(f.b.token,path)).body,/GENERATED_A_CENTRAL_OCR/);assert.equal((await f.request(f.b.token,'/api/capture-browser?ocrStatus=completed')).json().totalCount,0);
 });
