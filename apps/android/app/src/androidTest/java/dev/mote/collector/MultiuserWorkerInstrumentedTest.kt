@@ -424,6 +424,15 @@ class MultiuserWorkerInstrumentedTest {
             assertTrue(imported.toString().contains("GENERATED_A_PRIVATE_MCP_CONTENT"));assertFalse(imported.toString().contains("GENERATED_B_PRIVATE_MCP_CONTENT"))
             scenario.onActivity {oldImport.performClick()};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
             val sourceItems=a.get("/api/source-items?sourceId=same-source").getJSONArray("items");assertEquals(1,sourceItems.length())
+            lateinit var toolImport:android.widget.Button
+            scenario.onActivity {activity->
+                assertTrue(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="导入完成：0 条新资料，1 条已存在。"})
+                toolImport=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="导入工具结果"};toolImport.performClick()
+            }
+            assertEquals("Unchecked native tool approval must not import anything",1,a.get("/api/source-items?sourceId=same-source").getJSONArray("items").length())
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="我确认此工具只读"}.isChecked=true;toolImport.performClick()}
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val withTool=a.get("/api/source-items?sourceId=same-source");assertEquals(2,withTool.getJSONArray("items").length());assertTrue(withTool.toString().contains("GENERATED_A_READ_ONLY_TOOL_CONTENT"))
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
             scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_A_RESOURCE")});oldImport.performClick()}
             waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
