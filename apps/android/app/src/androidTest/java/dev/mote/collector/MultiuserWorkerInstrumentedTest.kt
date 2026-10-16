@@ -192,12 +192,22 @@ class MultiuserWorkerInstrumentedTest {
         assertEquals("Synthetic provider snapshot exact bytes",file.readText())
     }
 
+    @Test fun actualQueueValidationDoesNotWaitForTheCredentialSettingsMonitor() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val queue=app.queue();val completed=java.util.concurrent.CountDownLatch(1);val entered=java.util.concurrent.CountDownLatch(1);val failure=java.util.concurrent.atomic.AtomicReference<Throwable>()
+        val reader=Thread {entered.countDown();try {queue.depth()} catch(error:Throwable){failure.set(error)} finally {completed.countDown()}}
+        try {
+            synchronized(Settings::class.java) {reader.start();assertTrue(entered.await(2,TimeUnit.SECONDS));assertTrue("Existing queue identity validation must not invert queue and credential-settings locks",completed.await(2,TimeUnit.SECONDS))}
+        } finally {reader.join(10000)}
+        failure.get()?.let {throw it}
+    }
+
     @Test fun actualSourceWorkerKeepsEqualIdsSpoolsContextAndRevokedAccessUnderTheirOriginalOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val watchdog=Thread { try { Thread.sleep(10000);File(app.cacheDir,"m15-source-stall.txt").writeText(Thread.getAllStackTraces().entries.joinToString("\n\n") { (thread,stack)->thread.name+" "+thread.state+"\n"+stack.joinToString("\n") }) } catch (_:InterruptedException) {} }.apply {isDaemon=true;start()}
         try {
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
-        login(app,"a");val a=settings.read();val source=LocalSource(id="same-native-file-source",name="Synthetic source",kind="local-files",uri="content://dev.synthetic.generated/document",retention="archive",syncContinuously=false,description="Synthetic A source context",contextDirty=true)
+        login(app,"a");val a=settings.read();val source=LocalSource(id="native-source-"+java.util.UUID.randomUUID(),name="Synthetic source",kind="local-files",uri="content://dev.synthetic.generated/document",retention="archive",syncContinuously=false,description="Synthetic A source context",contextDirty=true)
         val bytes="Synthetic preserved source original bytes".toByteArray()
         fun prepare(selected:LocalSource):JSONObject {
             app.localSources().save(selected);val q=app.fileArchives();val generation=q.configure(selected).getString("generation")
