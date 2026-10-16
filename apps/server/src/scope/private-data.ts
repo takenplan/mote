@@ -1,3 +1,4 @@
+import {isStateExtension} from '@mote/shared/state-series';
 import {ScopedImportAttribution} from './import-attribution.js';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
@@ -76,8 +77,14 @@ export class PrivateData{
   private insertCapture(input:CaptureInput,sourceFingerprint?:string,ingressSourceId?:string){
     const at=now(),record={...storeCapture({...input,capturedAt:new Date(input.capturedAt).toISOString()}),...(ingressSourceId?{ingressSourceId}:{})},fingerprint=sourceFingerprint??hash(record);
     if(Date.parse(record.capturedAt)>Date.now()+86400000)throw new PrivateDataError('invalid_data');
-    const prior=this.sql.get('SELECT fingerprint FROM pd_captures WHERE user_id=$user AND id=?',record.id);
-    if(prior){if(prior.fingerprint!==fingerprint)throw conflict();return {id:record.id,duplicate:true};}
+    const prior=this.sql.get('SELECT fingerprint,json FROM pd_captures WHERE user_id=$user AND id=?',record.id);
+    if(prior){
+      if(sourceFingerprint===undefined&&record.stateSeries){const previous=JSON.parse(String(prior.json)) as StoredCapture;
+        if(isStateExtension(previous,record)){this.sql.run('UPDATE pd_captures SET json=?,fingerprint=? WHERE user_id=$user AND id=?',JSON.stringify(record),fingerprint,record.id);return {id:record.id,duplicate:true};}
+        if(isStateExtension(record,previous))return {id:record.id,duplicate:true};
+      }
+      if(prior.fingerprint!==fingerprint)throw conflict();return {id:record.id,duplicate:true};
+    }
     const p=record.provenance;
     this.sql.run('INSERT INTO pd_captures VALUES($user,?,?,?,?,?,?,?,?)',record.id,p?.sourceId??null,p?.externalId??null,p?.revision??null,fingerprint,new Date(sourceContentTime(record)).toISOString(),at,JSON.stringify(record));
     return {id:record.id,duplicate:false};
