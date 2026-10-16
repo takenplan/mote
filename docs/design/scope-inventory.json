@@ -1519,6 +1519,7 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/head',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/originals',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/receipts/:batch',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/recovery',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/uploads/:id',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
@@ -1530,6 +1531,7 @@
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/captures',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/items',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/recovery/:captureId/uploads',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/uploads',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/uploads/:id/commit',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/ingress/uploads/:id/parts/:part',service:INGRESS_DOMAIN"
@@ -1549,9 +1551,11 @@
       "table:ig_parts",
       "table:ig_pins",
       "table:ig_restore",
+      "table:ig_snapshot_inputs",
       "table:ig_state",
       "table:ig_upload_imports",
       "table:ig_upload_parts",
+      "table:ig_upload_recoveries",
       "table:ig_uploads",
       "table:ig_work"
     ]

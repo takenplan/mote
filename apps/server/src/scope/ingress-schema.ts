@@ -11,18 +11,24 @@ export function installIngress(db:DatabaseSync){
  CREATE TABLE IF NOT EXISTS ig_parts(user_id TEXT NOT NULL,hash TEXT NOT NULL,part INTEGER NOT NULL,checksum TEXT NOT NULL,PRIMARY KEY(user_id,hash,part),FOREIGN KEY(user_id,hash) REFERENCES ig_objects(user_id,hash) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_originals(user_id TEXT NOT NULL,id TEXT NOT NULL,source_id TEXT NOT NULL,capture_id TEXT NOT NULL,hash TEXT NOT NULL,mime TEXT NOT NULL,retention TEXT NOT NULL,
  PRIMARY KEY(user_id,id),UNIQUE(user_id,source_id,capture_id),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,hash) REFERENCES ig_objects(user_id,hash));
+ CREATE TABLE IF NOT EXISTS ig_snapshot_inputs(user_id TEXT NOT NULL,original_id TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(user_id,original_id),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_capture_scopes(user_id TEXT NOT NULL,capture_id TEXT NOT NULL,source_id TEXT NOT NULL,PRIMARY KEY(user_id,capture_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
  CREATE TRIGGER IF NOT EXISTS ig_source_delete BEFORE DELETE ON pd_sources BEGIN DELETE FROM pd_captures WHERE user_id=old.user_id AND id IN(SELECT capture_id FROM ig_capture_scopes WHERE user_id=old.user_id AND source_id=old.id); END;
  CREATE TABLE IF NOT EXISTS ig_pins(user_id TEXT NOT NULL,id TEXT NOT NULL,hash TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(user_id,id),FOREIGN KEY(user_id,hash) REFERENCES ig_objects(user_id,hash) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_uploads(user_id TEXT NOT NULL,id TEXT NOT NULL,source_id TEXT NOT NULL,request_key TEXT NOT NULL,manifest_hash TEXT NOT NULL,manifest TEXT NOT NULL,authorization_epoch INTEGER NOT NULL,expires INTEGER NOT NULL,receipt TEXT,PRIMARY KEY(user_id,id),UNIQUE(user_id,source_id,request_key),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_upload_imports(user_id TEXT NOT NULL,upload_id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,upload_id),FOREIGN KEY(user_id,upload_id) REFERENCES ig_uploads(user_id,id) ON DELETE CASCADE);
    CREATE TABLE IF NOT EXISTS ig_upload_parts(user_id TEXT NOT NULL,upload_id TEXT NOT NULL,part INTEGER NOT NULL,checksum TEXT NOT NULL,bytes INTEGER NOT NULL,PRIMARY KEY(user_id,upload_id,part),FOREIGN KEY(user_id,upload_id) REFERENCES ig_uploads(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS ig_upload_recoveries(user_id TEXT NOT NULL,upload_id TEXT NOT NULL,original_id TEXT NOT NULL,recovery_id TEXT NOT NULL,PRIMARY KEY(user_id,upload_id),FOREIGN KEY(user_id,upload_id) REFERENCES ig_uploads(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_batches(user_id TEXT NOT NULL,source_id TEXT NOT NULL,batch_id TEXT NOT NULL,digest TEXT NOT NULL,receipt TEXT NOT NULL,PRIMARY KEY(user_id,source_id,batch_id),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_devices(user_id TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ig_work(user_id TEXT NOT NULL,id TEXT NOT NULL,expires INTEGER NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ig_activity(user_id TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ig_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
  `);
+ if(!db.prepare('PRAGMA table_info(ig_pins)').all().some(row=>row.name==='original_id'))db.exec('ALTER TABLE ig_pins ADD COLUMN original_id TEXT');
+ // Existing admitted snapshot references receive their initial recovery window
+ // once. Restart and receipt replay never extend an existing window.
+ db.prepare("INSERT INTO ig_snapshot_inputs SELECT r.user_id,r.id,? FROM ig_originals r JOIN pd_captures c ON c.user_id=r.user_id AND c.id=r.capture_id WHERE r.retention='snapshot' AND json_extract(c.json,'$.source')='file' AND json_extract(c.json,'$.provenance.layer')='snapshot' AND json_type(c.json,'$.provenance.document.fileIndex')='object' ON CONFLICT(user_id,original_id) DO NOTHING").run(Date.now()+86400000);
  db.prepare('INSERT OR IGNORE INTO ig_meta VALUES(1,?)').run(randomBytes(32).toString('hex'));
  return String(db.prepare('SELECT ticket_key FROM ig_meta WHERE singleton=1').get()!.ticket_key);
 }

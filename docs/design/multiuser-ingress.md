@@ -154,3 +154,38 @@ REMOVE: owner intake, client-selected ownership and ordinary host-path import.
 EXCEPTION: trusted plugin/host code is not a malicious-code sandbox.
 UNKNOWN: physical devices, external providers/models, downstream algorithms and
 whole-instance M16 orchestration require their owning modules' acceptance.
+
+## M14 file snapshot recovery extension
+
+The existing file snapshot processing input retains its one-day byte window.
+This applies to FileRevision `item.layer=snapshot` with `document.fileIndex`,
+not every ordinary original whose M03 retention label is `snapshot`. Receipt
+replay and restart do not renew that window. A successful durable M06 extraction
+releases the temporary byte authorization. The immutable original descriptor,
+hash/size and capture/source authorization remain so published artifacts and
+Material are readable after byte GC. Downloads fail with 410 once unavailable;
+an exact trusted original pin can finish its already-admitted byte read.
+
+`GET /api/ingress/sources/:id/recovery?after=<original-id>` returns at most
+200 candidate rows per page, `nextCursor` and `items`. It requests only a current,
+enabled file snapshot with expired/released bytes, a waiting extraction or an
+extraction blocked by `snapshot_input_expired`, and no durable complete extraction.
+Each item contains `captureId`, `externalId`, `revision`, `sha256`, `sizeBytes`,
+`observedAt` and `recoveryId`. The latter binds the exact expired byte window.
+Clients follow the cursor even when a filtered page contains no eligible items.
+
+`POST /api/ingress/sources/:id/recovery/:captureId/uploads` accepts
+`{batchId, revision: FileRevision, recoveryId}`. The current source/head, complete
+item identity, observation instant, original hash/size and recovery window must
+match. It reuses the existing part upload, checked worker and commit endpoints.
+An unchanged lost-ACK retry reuses that upload; expired upload grants are never
+renewed. Commit rechecks the current recovery conditions before restoring bytes
+and resumes only this original's tasks blocked by the expired input. Clients
+rescan their currently authorized local source; the server supplies no host path
+and cannot authorize scanning a newly configured source or adopting another user.
+
+`Original.available` separates byte availability from descriptor existence.
+The existing ingress lifecycle payload optionally carries snapshot deadlines and
+metadata-only sizes; restore preserves those deadlines and never manufactures
+released bytes. This maintains the existing domain adapter after byte release;
+whole-instance backup, personal export and M16 orchestration are separate work.
