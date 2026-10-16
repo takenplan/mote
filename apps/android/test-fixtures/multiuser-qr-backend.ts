@@ -21,7 +21,7 @@ function observe(host:Awaited<ReturnType<typeof buildApp>>){
   if(request.method==='POST'&&request.url==='/api/login/ack'&&reply.statusCode===200){acks.push((request.body as {id:string}).id);if(dropAck)reply.raw.destroy();}
   if(request.method==='GET'&&request.url==='/api/connections/self'&&reply.statusCode===200&&badSelf){
    const value=JSON.parse(String(payload));if(value.credential.deviceId){
-    if(badSelf==='owner')value.account.userId='generated-wrong-owner';else if(badSelf==='credential')value.account.credentialId='generated-wrong-credential';else if(badSelf==='deployment')value.account.deploymentId='generated-replacement';else if(badSelf==='kind')value.credential.kind='owner';else value.credential.deviceId='generated-wrong-device';
+    if(badSelf==='owner')value.account.userId='generated-wrong-owner';else if(badSelf==='credential')value.account.credentialId='generated-wrong-credential';else if(badSelf==='deployment')value.account.deploymentId='generated-replacement';else if(badSelf==='kind')value.credential.kind='device';else value.credential.deviceId='generated-wrong-device';
     return JSON.stringify(value);
    }
   }
