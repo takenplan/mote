@@ -2,6 +2,21 @@
 
 ## Resumed native calendar consumer (current work)
 
+At `0549b3a5`, fresh libs exit 0; restricted Desktop build exits 1 at
+`iconutil`, and the exact command through standard approval exits 0:
+`/tmp/m14-resumed-{libs-build,desktop-build-authorized}.log/.exit`.
+The generated real Electron Desktop main/preload/renderer then passes:
+`/tmp/m14-calendar-native-journey.log/.exit`, exit 0. Actual button clicks
+register the native target, preserve the owner Actions login destination,
+deliver after actual fixed OwnerQuestions approval and settle M05. Original
+Ask citation, offline A queue, B stopped/empty state, SIGKILL/restart B and
+A draft/queue resume also pass (five generated provider requests).
+Native permission/write, capture, credentials and browser launch remain
+external I/O substitutes; no real system calendar or personal data is read.
+This candidate includes the explicitly frozen Android `220c175e`, whose
+production source is byte-identical in the composition. Final required affected
+and independent review remain pending.
+
 The parent restored this same M14 thread. Composition now includes delivered M16
 `eec967c6` (and delivered M12), tested Web `aed42550` and Android `9e824c00`.
 The pause section below is historical; PR139 is still at its earlier remote
