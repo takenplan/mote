@@ -96,6 +96,16 @@ test('trusted Memory inputs reject foreign hosts, fabricated identities and cros
 });
 const awaitableIdentity={deploymentId:'generated',userId:'generated',credentialId:'generated',authorizationEpoch:1};
 
+test('Web Memory evidence navigation resolves declared pinned Materials rather than raw synthetic UUIDs',async t=>{
+ const f=await fixture(t),am=await f.publish(f.a,'A'),bm=await f.publish(f.b,'B');assert.equal(am.id,bm.id);
+ await f.wait(f.a,(await f.submit(f.a,[am.id])).id);const memories=await f.request(f.a.token,'/api/memories');assert.equal(memories.statusCode,200,memories.body);assert.equal(memories.json().items.length,1);
+ const memory=memories.json().items[0],opened=await f.request(f.a.token,'/api/context/read','POST',{refs:['memory:'+memory.id]});assert.equal(opened.statusCode,200,opened.body);
+ const original=await f.request(f.a.token,'/api/context/read','POST',{refs:opened.json().items[0].evidenceRefs});assert.equal(original.statusCode,200,original.body);assert.ok(original.body.includes(text('A')));assert.ok(!original.body.includes(text('B')));
+ assert.deepEqual(opened.json().items[0].evidenceRefs,[am.ref]);
+ assert.equal((await f.request(f.b.token,'/api/context/read','POST',{refs:['memory:'+memory.id]})).statusCode,404);
+ assert.equal((await f.request(f.b.token,'/api/context/read','POST',{refs:[am.ref]})).statusCode,404);
+});
+
 test('stopping automatic work preserves an already admitted manual job and the other user',async t=>{
  const f=await fixture(t),am=await f.publish(f.a,'A'),bm=await f.publish(f.b,'B'),gate={entered:deferred(),release:deferred()};f.gates.set('A',gate);
  const aj=await f.submit(f.a,[am.id]);await gate.entered.promise;
