@@ -590,6 +590,37 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeGenericImportRetainsMultipartPrivatePreviewAndLostAckUntilExplicitOwnerConfirmation() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val content="GENERATED_NATIVE_IMPORT_LINE_\n".repeat(150000);val bytes=content.toByteArray();assertTrue(bytes.size>4*1024*1024)
+        val file=File(app.cacheDir,"generated-native-import.txt").apply {writeBytes(bytes)}
+        val instrumentation=InstrumentationRegistry.getInstrumentation();val monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("*/*")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(android.net.Uri.fromFile(file))),true)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try {androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","imports")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun button(label:String):android.widget.Button? {var value:android.widget.Button?=null;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label}};return value}
+            fun press(label:String){val target=button(label);assertNotNull("Missing original import control: "+label,target);scenario.onActivity {target!!.performClick()}}
+            ready();control("/generated/drop-import-ack");press("选择文件导入");ready();assertEquals(1,monitor.hits)
+            val admissions=control("/generated/import-commands").getJSONArray("commands");val first=(0 until admissions.length()).map(admissions::getJSONObject).first {it.getString("path")=="/api/imports"};val id=first.getString("requestId");val fileId=first.getString("fileId")
+            waitFor {a.get("/api/imports/"+id).getString("status")=="awaiting_confirmation"};assertEquals(0,a.get("/api/captures").getJSONArray("items").length());assertEquals(0,a.get("/api/imports/"+id).getJSONObject("progress").getInt("imported"))
+            val bJob=b.post("/api/imports",JSONObject().put("requestId",id).put("processing","automatic").put("files",org.json.JSONArray().put(JSONObject().put("name","generated-b.txt").put("mimeType","text/plain").put("dataBase64",android.util.Base64.encodeToString("GENERATED_B_INDEPENDENT_IMPORT".toByteArray(),android.util.Base64.NO_WRAP)))))
+            assertEquals(id,bJob.getString("id"));waitFor {b.get("/api/imports/"+id).getString("status")=="completed"};val beforeB=b.get("/api/imports/"+id).toString()
+            scenario.recreate();ready();val oldRetry=button("重试同一请求");assertNotNull("Lost ACK must retain the original encrypted upload/admission intent across recreation",oldRetry)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);ready();scenario.onActivity {oldRetry!!.performClick()};ready();assertNull(button("重试同一请求"));assertEquals(beforeB,b.get("/api/imports/"+id).toString())
+            control("/generated/release-import-ack");scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"a");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);ready();press("重试同一请求");ready()
+            val after=control("/generated/import-commands").getJSONArray("commands");val repeated=(0 until after.length()).map(after::getJSONObject).filter {it.getString("actor")=="a"&&it.getString("path")=="/api/imports"};assertTrue(repeated.size>=2);assertEquals(setOf(id),repeated.map {it.getString("requestId")}.toSet());assertEquals(setOf(fileId),repeated.map {it.getString("fileId")}.toSet())
+            assertEquals(2,(0 until after.length()).map(after::getJSONObject).count {it.getString("actor")=="a"&&it.getString("path").contains("/parts/")})
+            press("确认导入");scenario.onActivity {
+                @Suppress("UNCHECKED_CAST") val all=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+                all.mapNotNull {it.get()}.single {it.isShowing}.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+            };ready();waitFor {CentralAccess.requireClient(app).get("/api/imports/"+id).getString("status")=="completed"}
+            val complete=CentralAccess.requireClient(app).get("/api/imports/"+id);assertTrue(complete.getJSONObject("progress").getInt("imported")>0);assertTrue(complete.getJSONArray("captureIds").length()>0)
+            val archived=CentralAccess.requireClient(app).get("/api/archived-files/"+fileId);assertEquals(bytes.size.toLong(),archived.getLong("sizeBytes"));assertEquals(Ingress3Client.hash(bytes),archived.getString("hash"));assertEquals(beforeB,b.get("/api/imports/"+id).toString())
+            assertEquals(1,CentralAccess.requireClient(app).get("/api/imports").getJSONArray("items").length())
+        }} finally {instrumentation.removeMonitor(monitor);file.delete()}
+    }
+
     @Test fun originalNativeBrowserLoginReturnsACentralSessionWhileDevicePairingRemainsScoped() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")

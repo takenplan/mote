@@ -1,0 +1,43 @@
+import type {TestContext} from 'node:test';
+import {createServer} from 'node:http';
+import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider.js';
+import {scopedFilesFixture} from '../../server/test/fixtures/scoped-files.js';
+import {defaultModelSettings} from '../../server/src/model-settings.js';
+
+// Actual M01/M03/M04/M05/M06 private preview and confirmation. Only model HTTP
+// responses are generated. No live model, real documents or external account.
+const cleanup:Array<()=>unknown>=[],commands:Array<{actor:string;path:string;requestId?:string;uploadId?:string;fileId?:string}> = [];
+let dropping=false;
+let actors:{a:{token:string};b:{token:string}};
+const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} as unknown as TestContext,host=>{
+ host.app.addHook('onSend',async(request,reply,payload)=>{
+  if(request.method==='POST'&&request.url==='/api/imports'&&reply.statusCode===202){
+   const body=request.body as {requestId:string;archivedFileIds:string[]};commands.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':request.headers.authorization==='Bearer '+actors.b.token?'b':'other',path:request.url,requestId:body.requestId,fileId:body.archivedFileIds[0]});
+   if(dropping&&request.headers.authorization==='Bearer '+actors.a.token)reply.raw.destroy();
+  }
+  if(request.method==='PUT'&&/^\/api\/import-uploads\/[^/]+\/parts\/\d+$/.test(request.url)&&reply.statusCode===200)commands.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':'b',path:request.url,uploadId:request.url.split('/')[3]});
+  return payload;
+ });
+});actors=f;
+const calls=new Map<string,number>();
+const model=createServer((request,response)=>{void(async()=>{
+ for await(const _ of request){}const actor=String(request.headers.authorization).includes('GENERATED_B')?'b':'a',stage=(calls.get(actor)??0)+1;calls.set(actor,stage);
+ if(stage===1){writeMessagesResponse(response,{stage,tool:{name:'timeline',args:{limit:100}}});return;}
+ writeMessagesResponse(response,{stage,text:JSON.stringify({answer:JSON.stringify({summary:'Generated native private import preview',warnings:[],reviewDecision:{confidence:'high',ambiguous:false,reason:'Generated deterministic fixture preserves supplied originals.'},preserveAll:true}),citationIds:[]})});
+ })().catch(()=>response.destroy());});
+await new Promise<void>(resolve=>model.listen(0,'127.0.0.1',resolve));const modelAddress=model.address();if(!modelAddress||typeof modelAddress==='string')throw Error('Missing generated import model');
+for(const[actor,label]of [[f.a,'A'],[f.b,'B']] as const){
+ let view=await f.checked(actor.token,'/api/configuration');const memory=view.domains.find((domain:any)=>domain.id==='memory').effective;
+ await f.checked(actor.token,'/api/configuration/memory','PUT',{revision:view.revision,value:{...memory,automatic:false,integration:false,lifecycle:{...memory.lifecycle,insights:{...memory.lifecycle.insights,enabled:false},working:{...memory.lifecycle.working,enabled:false},consolidation:{...memory.lifecycle.consolidation,enabled:false}}}});
+ view=await f.checked(actor.token,'/api/configuration');await f.checked(actor.token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[{id:'generated-import',name:'Generated import mapper',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-native-import',baseUrl:'http://127.0.0.1:'+modelAddress.port+'/v1',apiKey:'GENERATED_'+label}}],selections:{import:{kind:'personal',id:'generated-import'}}}});
+}
+const control=createServer((request,response)=>{
+ if(request.method!=='POST'){response.statusCode=404;response.end();return;}
+ if(request.url==='/generated/drop-import-ack')dropping=true;
+ else if(request.url==='/generated/release-import-ack')dropping=false;
+ else if(request.url!=='/generated/import-commands'){response.statusCode=404;response.end();return;}
+ response.setHeader('content-type','application/json');response.end(JSON.stringify({dropping,commands}));
+});await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));const controlAddress=control.address();if(!controlAddress||typeof controlAddress==='string')throw Error('Missing generated import control');
+const address=await f.host.app.listen({host:'127.0.0.1',port:0});process.stdout.write(JSON.stringify({address,controlAddress:'http://127.0.0.1:'+controlAddress.port,a:f.a,b:f.b,admin:f.admin,password:'Generated-joint-files-password',pid:process.pid})+'\n');
+let closing=false;async function close(){if(closing)return;closing=true;control.closeAllConnections();for(const work of cleanup.reverse())await work();model.closeAllConnections();await Promise.all([new Promise<void>(resolve=>control.close(()=>resolve())),new Promise<void>(resolve=>model.close(()=>resolve()))]);process.exit(0);}
+process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());
