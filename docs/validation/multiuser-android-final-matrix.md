@@ -13,7 +13,7 @@ resource files do not authorize another build.
 | Offline queue, WorkManager, file/calendar sources, originals and recovery | Actual A offline→B→late ACK/network recovery, source spool/head/context/snapshot recovery, token rotation, replacement deployment, process SIGKILL/restart evidence exists at exact earlier SHAs. | Fresh final core Worker/source/snapshot/restart representative run; current357 full JVM is recorded separately below; it does not substitute for final composed native recovery. |
 | Drafts, local archive and native raw reader | Account-local drafts/caches/cursors, synchronous A presentation retirement, canonical central OCR/own device updates; real native RED→GREEN in the ledger. | Retain final A/B and same-owner recovery assertions; no raw-history fallback for M08 query evidence. |
 | Native Ask/Insight, Memory, plugins, MCP, owned configuration and Activity | Original native controls consume M04/M05/M07/M08/M09/M11/M12 and the declared readers. Independent bounded reviews and generated native journeys exist. | Final composed representatives and new bounded delta review; exact existing local Codex gpt-6.1-sol check remains generated-prompt-only evidence, not model-quality acceptance. |
-| Native Google/Gmail/Lark/recording connectors | Owned M10 instances, encrypted same-operation intents, source mappings, OAuth/status/cancel/retry/disconnect and real authenticated original WAV playback narrowly pass. | Obtain explicitly frozen M13 large UTF-8 result/fixed task-identity delta, then exercise the original large preview/status task result. Ordinary CLI installation has no scoped operation; retain it as an explicit capability/policy gap, never a shell fallback. |
+| Native Google/Gmail/Lark/recording connectors | Owned M10 instances, encrypted same-operation intents, source mappings, OAuth/status/cancel/retry/disconnect and real authenticated original WAV playback narrowly pass. | Obtain explicitly frozen M13 large UTF-8 result/fixed task-identity delta, then exercise the original large preview/status task result. M10 explicitly assigns pinned CLI dependency installation to the deployment administrator; the disabled native user-install entry reflects that established permission change, not a pending user-level installer API. Never add a shell fallback. |
 | Generic Imports and upload staging | Joint c45; multipart/private preview/explicit confirmation/actual lost admission ACK passes13.234s. CentralImports exact original/archive/admission checks pass3 JVM tests. | Final same-body recovery regression plus required related server tests. Explicit confirmation must still be the publication boundary; saved M03 bytes alone are insufficient. |
 | Files raw/current text, original playback, correction, confirmed names and export | Joint a10 is already consumed. Actual native generated WAV/chunks/correction/names/exact text and authenticated original playback pass. | Retain exact source/artifact/chunk/text and original hash assertions in final representative. |
 | Original Files cancel/stage-retry/delete | Joint owns the shared producer. Candidate36ff was read only; it is not a frozen Android dependency. Native original retry body lacks the candidate's required stable operationId. | Consume only an explicit freeze. TDD the original stop/retry/delete controls, retained operation/body on lost ACK, unknown/physical occupancy, diarize-only preserving raw ASR, raw/processed export identity and A/B. Do not create another backend. |
@@ -34,6 +34,12 @@ and export completeness, but are not silently counted as missing old Android UI
 or automatically expanded into new M15 widgets. Likewise, old native Memory has no
 Web audit filter form, so a Web-only audit-filter gap is not an Android regression.
 The original native model copy/probe/directory buttons do exist and remain in scope.
+M10 explicitly assigns CLI dependency installation to the deployment administrator
+at pinned versions and states that user routes never install packages. Native
+setup/configure/device login remain real account-bound M05 operations. The
+ordinary CLI install control is disabled under that existing policy; do not invent
+a missing user-install API or claim bundled connector package install is the same
+as installing its host CLI dependency.
 
 ## Actual current route audit
 
