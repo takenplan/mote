@@ -49,6 +49,9 @@ test('browser login, account switch and logout do not change MCP owner; revocati
 
 test('source paging cursors, lexical candidates and history cannot escape account or source grants and survive restart',async t=>{
  const f=await fixture(t);for(const [token,owner] of [[f.a.token,'A'],[f.b.token,'B']])for(let i=0;i<3;i++)await f.put(token,'common PRIVATE_'+owner,'item-'+i);
+ // The real capture organizer replaces raw views asynchronously. Establish the
+ // formal dataset before testing a cursor across restart; never disable it.
+ for(const token of [f.a.token,f.b.token]){const end=Date.now()+8000;while((await f.ok(token,'/api/materials')).items.filter((material:any)=>material.origin.sourceId==='same-source'&&/^item-[0-2]$/.test(material.origin.externalId)).length!==3){assert.ok(Date.now()<end,'real capture organizer did not finish the paging dataset');await new Promise(resolve=>setTimeout(resolve,10));}}
  const grant=await f.mint(f.a.token),a=await f.connect(grant),b=await f.connect(await f.mint(f.b.token)),first=value(await call(a.client,'mote_items',{sourceId:'same-source',limit:1}));assert.ok(first.nextCursor);assert.equal((await call(b.client,'mote_items',{sourceId:'same-source',limit:1,cursor:first.nextCursor})).isError,true);
  const other=await f.connect(await f.mint(f.a.token,'read',['other-source']));assert.equal((await call(other.client,'mote_items',{sourceId:'other-source',limit:1,cursor:first.nextCursor})).isError,true);assert.doesNotMatch(JSON.stringify(await call(a.client,'mote_search',{sourceId:'same-source',query:'common'})),/PRIVATE_B/);
  await f.restart();const resumed=await f.connect(grant),second=value(await call(resumed.client,'mote_items',{sourceId:'same-source',limit:1,cursor:first.nextCursor}));assert.equal(second.items.length,1);assert.notEqual(second.items[0].captureId,first.items[0].captureId);
