@@ -568,8 +568,8 @@ class MultiuserWorkerInstrumentedTest {
         val requestId=java.util.concurrent.atomic.AtomicReference<String?>()
         val instrumentation=InstrumentationRegistry.getInstrumentation()
         val monitor=object:android.app.Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:android.content.Intent):android.app.Instrumentation.ActivityResult? {
-            val url=intent.data
-            if(intent.action==android.content.Intent.ACTION_VIEW&&url?.toString()?.startsWith(endpoint()+"/#/ask?loginRequest=")==true){
+            val url=intent.data ?: return null
+            if(intent.action==android.content.Intent.ACTION_VIEW&&url.toString().startsWith(endpoint()+"/#/ask?loginRequest=")){
                 requestId.set(android.net.Uri.parse("https://fixture.invalid/?"+url.fragment!!.substringAfter('?')).getQueryParameter("loginRequest"))
                 return android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED,null)
             }
