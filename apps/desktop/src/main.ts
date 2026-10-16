@@ -178,6 +178,12 @@ else {
     };
     const store = new ConfigStore(dataDirectory, secrets, () => profileDefaults(profile, {}), () => profileDefaults(profile, process.env));
     settings = await store.load();
+    if(connectionToken(settings)&&!accountKey(settings)){
+      // New-profile environment credentials are explicit bootstrap input, not
+      // evidence of ownership. Confirm M01 before creating any private stores.
+      try{const identity=await testConnection(settings,fetch,false);settings={...settings,account:identity.account,credentialScope:'client',authSignedOut:false,authExpiresAt:identity.credential.expiresAt};}
+      catch{settings={...settings,token:undefined,account:undefined,authSignedOut:true};}
+    }
     await store.save(settings); // Persist stable device identity before the first observation.
     void events.record('APP', 'STARTED');
     const accounts=new DesktopAccountStorage(dataDirectory,secrets);
