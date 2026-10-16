@@ -15,6 +15,15 @@ controls are still explicit KEEP gaps awaiting the Joint backend owner. QR pairi
 has no tested replacement for the old invitation exchange. Physical-device and
 live-provider checks are separate. No total test count closes these gaps.
 
+Newer limited runtime49347f929c3919a6e8471efbe458e6c0806a79fa adds the original
+native Lark panels through saved owned M10 connections. Its real authorization,
+explicit document archive, source-context and A/B retirement journey passed1/1
+in3.112s after consuming exact M13 source projection0a3f as3808d399. This is newer
+than the full353-test runtime and has not yet passed a fresh full Android/required
+gate. Test-onlya924 expands calendars/retry/pause/cancel but is UNCOMPILED/UNRUN.
+The actual generated-only local `gpt-6.1-sol` native Ask case passed separately
+against preserved tested48a in11.281s; it is not live-provider-wide acceptance.
+
 | Decision | Existing capability and real chain | Required account adaptation / evidence |
 | --- | --- | --- |
 | KEEP | Accessibility/UI-page/MediaProjection screenshots → CapturePipeline/staging → DurableQueue → UploadWorker | Preserve privacy masks, OCR gate, image dedupe, metadata, timestamps and original bytes. Freeze collector configuration/owner before asynchronous capture; pause on account switch. |
@@ -28,7 +37,7 @@ live-provider checks are separate. No total test count closes these gaps.
 | CHANGE | Local storage format 3 without stable account binding | Format 4 rejects old marker/config before writes; no auto-migration, deletion or inferred owner. Anonymous local collection remains explicitly local until user confirms binding. |
 | REMOVE | Treating HTTP success or legacy v2 receipt as sufficient ACK; same URL as owner | New account-bound complete M03 receipt must match owner/source/batch/capture set. |
 | EXCEPTION | Shared device settings, update artifacts, bundled OCR models and encryption key | Non-private installation resources remain shared; content/cursors/drafts are account-scoped. |
-| UNKNOWN | Real phone/vendor background behavior, system calendar permissions/native writes, live providers/models | Not exercised with real data; synthetic I/O and real phone/system-permission evidence are reported separately. |
+| UNKNOWN | Real phone/vendor background behavior, system calendar permissions/native writes, live providers/model quality | No real private data or real provider account was exercised; one existing-local-Codex connectivity case used only a generated prompt. System-permission, real-device and model-quality evidence remain separate. |
 
 ## Evidence
 
@@ -582,3 +591,27 @@ mock isolation/retry assertion was replaced. All records and the prompt were
 generated, the temporary host had no private central content, and no answer,
 auth material or model output was added to Git. This is one actual local-model
 connectivity regression, not real-account, provider-wide or model-quality acceptance.
+
+### First native Lark GREEN (49347f92)
+
+The first candidate app/test assembly completed EXIT0 in7s,67tasks9executed
+(`/tmp/m15-native-lark-first-green-build.log/.exit`). The expanded original native
+journey reached a real archived original, then failed at the absent source-context
+control in2.236s (`/tmp/m15-native-lark-first-green.log/.exit`1). The server was
+still returning the private adapter-local document source ID. Exact M13
+0a3f268d was consumed as3808d399; only the existing scoped connector status/task
+projection changes, mapping owner+instance+local ID through connector_sources.
+The documentation conflict kept current composed records plus that exact source
+projection evidence, rather than importing unrelated paused Web work.
+
+With a fresh generated backend and the identical already-compiled Android APK/test,
+the same method passed1/1 in3.112s, EXIT0
+(`/tmp/m15-native-lark-source-green.log/.exit`). It exercised the saved owned
+connection, actual CLI check and held authorization URL, explicit scope/preview
+and archive, exact public source-context CAS, and a detached old A sync button
+under same-ID B. The original document source and original bytes remain M03-owned;
+the client introduces no collector, scheduler, CLI installer or Web fallback.
+Only external CLI responses are generated. i18n8455 EXIT0. Full Android/required
+and independent review of this new consumer remain pending. The test-onlya924
+extension for calendars, failure retry, source pause/resume and cancellation has
+not been compiled/run and is not included in this GREEN claim.
