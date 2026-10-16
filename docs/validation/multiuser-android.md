@@ -557,3 +557,28 @@ be replaced by a shell command or silently equated to bundled plugin install.
 Recording-provider controls, shared arbitrary-file Imports, remaining Files
 controls/review/acoustic, and the original Agent View contract remain separate
 open capability rows. The prepared Lark test does not close any of them.
+
+The test APK was subsequently compiled successfully in7s,49tasks6executed
+(`/tmp/m15-native-lark-codex-testapk-build.log/.exit`). With the preserved tested
+48a APK, the same durable Lark method executed1/1 and failed at the missing
+saved-connection selector in0.485s (`/tmp/m15-native-lark-owned-entry-valid-red.log/.exit`).
+The normal public MainActivity → Add content → Lark path also showed the missing
+record notice, while the generated A inventory actually contained `same-lark`
+and the retired singleton GET returned404. Direct shell startup of the private,
+non-exported CentralActivity was rejected by Android; no manifest, permission or
+system setting was changed. That rejected startup is not a product RED.
+The new Lark production code remains uncommitted/unaccepted pending its APK and
+the unchanged native scenario's GREEN; this paragraph supersedes UNRUN above.
+
+### Actual opted-in local Codex Native Ask (tested Android48a)
+
+The original native Ask page sent the authored generated connectivity question
+through real M01/M04/M08 and the existing logged-in local Codex. The exact selected
+model was `gpt-6.1-sol`; the actual run completed, displayed a nonempty answer in
+the native page and returned404 to B. The single instrumentation test passed in
+11.281s, EXIT0 (`/tmp/m15-native-local-codex-first.log/.exit`). This supersedes the
+prepared-only model paragraph above. No semantic answer score is asserted and no
+mock isolation/retry assertion was replaced. All records and the prompt were
+generated, the temporary host had no private central content, and no answer,
+auth material or model output was added to Git. This is one actual local-model
+connectivity regression, not real-account, provider-wide or model-quality acceptance.
