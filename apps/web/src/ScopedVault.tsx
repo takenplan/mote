@@ -14,9 +14,11 @@ export function ScopedVault({api,embedded,disconnect}:{api:Api;embedded?:boolean
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[api]);
  const live=(value:Api)=>alive.current&&owner.current===value,base='/api/portable/exports';
  const page=useResource<{items:unknown[];nextCursor:string|null}>(api,base+'?limit=20'+(cursor?'&cursor='+encodeURIComponent(cursor):''));
- const selected=useResource<unknown>(api,id?base+'/'+encodeURIComponent(id):null,1000);
+ const path=id?base+'/'+encodeURIComponent(id):null,selected=useResource<unknown>(api,path);
  let receipt:LifecycleReceipt|undefined,items:LifecycleReceipt[]=[],readError=selected.error??page.error;
  try{if(selected.data)receipt=lifecycleReceipt(api,selected.data,'export',userId,id);items=(page.data?.items??[]).map(value=>lifecycleReceipt(api,value,'export',userId));}catch(e){readError=e;}
+ useEffect(()=>path&&receipt?.state==='working'?resources(api).get(path).poll(1000):undefined,[api,path,receipt?.state]);
+ useEffect(()=>{if(receipt&&['completed','cancelled','failed'].includes(receipt.state))resources(api).invalidate(key=>key.startsWith(base+'?'));},[api,receipt?.id,receipt?.state]);
  const refresh=()=>resources(api).invalidate(key=>key.startsWith(base));
  async function start(){if(busy||!live(api))return;const fixed=api;intent.current??=crypto.randomUUID();const operationId=intent.current;setBusy(true);setError('');try{const result=lifecycleReceipt(fixed,await fixed.request(base,{method:'POST',body:JSON.stringify({operationId})}),'export',userId,operationId);if(!live(fixed))return;setId(result.id);intent.current=undefined;refresh();}catch(e){if(live(fixed))setError(errorMessage(e));}finally{if(live(fixed))setBusy(false);}}
  async function control(action:'retry'|'cancel'){if(!receipt||busy||!live(api))return;const fixed=api,target=receipt.id;setBusy(true);setError('');try{lifecycleReceipt(fixed,await fixed.request(base+'/'+target+'/'+action,{method:'POST',body:'{}'}),'export',userId,target);if(live(fixed))refresh();}catch(e){if(live(fixed))setError(errorMessage(e));}finally{if(live(fixed))setBusy(false);}}
