@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React,{act} from 'react';
-import {createRoot} from 'react-dom/client';
 import {JSDOM} from 'jsdom';
 import {setTimeout as delay} from 'node:timers/promises';
 import {configureLocale} from '@mote/shared/i18n';
@@ -16,6 +15,7 @@ test('original Memories reads real M07 publication and opens its evidence throug
  await Promise.all([f.wait(f.a,(await f.submit(f.a,[am.id])).id),f.wait(f.b,(await f.submit(f.b,[bm.id])).id)]);
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/#/library?view=memories',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>();
  for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
+ const {createRoot}=await import('react-dom/client');
  const root=createRoot(dom.window.document.getElementById('root')!),calls:{owner:string;path:string;status:number}[]=[],opened:string[]=[];
  t.after(async()=>{await act(async()=>root.unmount());for(const [key,value]of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
  const api=(account:any,owner:string):Api=>({connection:{mode:'web',origin:'http://localhost',deploymentId:'generated',userId:owner,credentialId:owner,csrfToken:'generated',username:owner,administrator:false},request:async(path,init)=>{const r=await f.request(account.token,path,init?.method,init?.body?JSON.parse(String(init.body)):undefined);calls.push({owner,path,status:r.statusCode});if(r.statusCode!==200)throw Error(r.statusCode+' '+r.body);return r.json();}} as Api);
@@ -34,5 +34,10 @@ test('original Memories reads real M07 publication and opens its evidence throug
  const nested=Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent?.startsWith('查看原始记录'));assert.ok(nested,d.body.textContent!);await act(async()=>nested.click());assert.match(opened[1],/^context:capture:/,'expanded Memory retains the declared reader for nested evidence');
  const read=await f.request(f.a.token,'/api/context/read','POST',{refs:[opened[0].slice(8)]});assert.equal(read.statusCode,200,read.body);assert.match(read.body,/GENERATED_MEMORY_A/);assert.doesNotMatch(read.body,/GENERATED_MEMORY_B/);
  await render(api(f.b,'B'));assert.match(d.body.textContent!,/Generated B/);assert.doesNotMatch(d.body.textContent!,/Generated A/);assert.equal(d.querySelector('.memory-detail'),null);
+ await act(async()=>{d.querySelector<HTMLButtonElement>('.workspace-select')!.click();await delay(20);});
+ await act(async()=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(button=>button.textContent==='纠正记忆')!.click());
+ await act(async()=>{const field=d.querySelector<HTMLTextAreaElement>('form.memory-correction textarea')!;Object.getOwnPropertyDescriptor(dom.window.HTMLTextAreaElement.prototype,'value')!.set!.call(field,'GENERATED_OWNER_CORRECTION_B');field.dispatchEvent(new dom.window.Event('input',{bubbles:true}));field.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+ const save=d.querySelector<HTMLButtonElement>('form.memory-correction button[type=submit]')!;assert.ok(save&&!save.disabled,'fixture input must first enter React correction state');await act(async()=>{save.click();await delay(30);});
+ const corrected=calls.find(call=>call.owner==='B'&&/\/correct$/.test(call.path));assert.ok(corrected,'actual correction response must arrive');assert.equal(corrected.status,200,JSON.stringify(corrected));
  assert.equal(calls.filter(call=>call.path.startsWith('/api/memories?')&&call.status!==200).length,0);
 });
