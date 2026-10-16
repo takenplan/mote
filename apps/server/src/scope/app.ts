@@ -92,7 +92,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
       const {receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial}=ingress.bindSource(context,sourceIds,assertCurrent);
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
-    if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins,privateCursorKey);await processing.ready();}
+    if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins,privateCursorKey,config.importPythonPacks);await processing.ready();}
     registerCaptureBrowserReads(runtime,ingress,processing,(context,id)=>{if(!ask)throw new ScopeError('scope_unavailable',503);return ask.originalReadReceipt(context,id);});
     if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory},ownerQuestions);memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);mcp?.bindMemory(memory);}
     if(execution&&memory){ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);if(processing)ask.bindProcessing(processing);mcp?.bindAsk(ask);}

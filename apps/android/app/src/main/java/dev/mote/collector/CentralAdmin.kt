@@ -420,7 +420,18 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun actions() {
         ui.button(MoteI18n.text("日程建议")) { ui.startActivity(Intent(ui, CalendarActionsActivity::class.java)) }
         ui.button(MoteI18n.text("行动设置")) {
-            configuration(MoteI18n.text("行动设置"), "/api/actions", "/api/actions/settings") { it.getJSONObject("settings") }
+            val api = client
+            ui.work(MoteI18n.text("正在读取…"), { api.get("/api/actions") }) { snapshot ->
+                body.removeAllViews(); screens.setBack { screens.refresh() }
+                ui.text(MoteI18n.text("行动设置"), NativeFontRole.TITLE_MOBILE)
+                val collect = form(snapshot.getJSONObject("settings"), body)
+                val revision = snapshot.getLong("revision")
+                val authorizationRevision = snapshot.getLong("authorizationRevision")
+                ui.button(MoteI18n.text("保存设置"), true) {
+                    val payload = JSONObject().put("revision", revision).put("authorizationRevision", authorizationRevision).put("settings", collect())
+                    ui.work(MoteI18n.text("正在保存…"), { api.put("/api/actions/settings", payload) }) { screens.refresh() }
+                }
+            }
         }
         val todo = ui.field(MoteI18n.text("待办标题"))
         ui.button(MoteI18n.text("添加待办"), true) {

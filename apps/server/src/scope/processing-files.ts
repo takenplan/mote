@@ -62,7 +62,9 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
         const names=service.fileSpeakerNames(status.original.ref,status.artifactId);if(Object.keys(names).length)entries.push({name:'confirmed-speakers.json',bytes:Buffer.from(JSON.stringify({inputArtifact:status.artifactId,attributions:names},null,2))});
         for(const item of status.derivations){const payload=transcriptSchema.parse(service.artifact(String(item.artifactId)).payload);entries.push({name:item.kind+'.json',bytes:Buffer.from(JSON.stringify(payload,null,2))},{name:item.kind+'.md',bytes:Buffer.from(transcriptMarkdown(payload,capture.windowTitle))},{name:item.kind+'.csv',bytes:Buffer.from(transcriptCsv(payload))});}
         if(entries.reduce((size,item)=>size+item.bytes.length,0)>64*1024*1024)throw new PrivateDataError('invalid_data',413);
-        assert();return exportTar(entries,assert);
+        const proof=identityHash([status.original.ref,status.original.hash,status.artifactId,status.derivations]);
+        const current=()=>{assert();const value=owned(id);if(identityHash([value.status.original.ref,value.status.original.hash,value.status.artifactId,value.status.derivations])!==proof)throw new PrivateDataError('conflict',409);};
+        current();return exportTar(entries,current);
       },
     };
   };

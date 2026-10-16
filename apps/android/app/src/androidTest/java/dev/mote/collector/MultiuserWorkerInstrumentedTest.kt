@@ -72,6 +72,147 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun actualNativeActionsPreservesTheOpaqueSecondPageFromRealProducer() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val initial=CentralAccess.requireClient(app).get("/api/actions")
+        assertEquals(20,initial.getJSONArray("items").length());assertTrue(initial.get("nextCursor") is String)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CalendarActionsActivity>(android.content.Intent(app,CalendarActionsActivity::class.java)).use {scenario->
+            fun count():Int {var value=0;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().count {it.text.toString()=="Generated A"}};return value}
+            waitFor {count()==20}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="更早建议"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {activity->ready=!(CalendarActionsActivity::class.java.getDeclaredField("task").apply {isAccessible=true}.get(activity) as UiTask).busy};ready}
+            assertEquals("The existing earlier-page action must preserve the server's opaque cursor",1,count())
+        }
+    }
+
+    @Test fun actualNativeCalendarDeliveryReconcilesUncertainInsertWithItsOriginalAccountAndMarker() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        assertNotEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,app.checkSelfPermission(android.Manifest.permission.READ_CALENDAR))
+        assertNotEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,app.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR))
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        check(app.getSharedPreferences("mote",Context.MODE_PRIVATE).edit().putString("deviceId","same-device").commit());login(app,"a")
+        val generated=File(app.cacheDir,"generated-calendar-native-state.json");generated.delete()
+        val native=GeneratedCalendarProvider(generated);val device=GeneratedCalendarContext(app,native)
+        try {
+            fun currentAction(id:String):JSONObject {
+                val rows=CentralAccess.requireClient(app).get("/api/actions?limit=100").getJSONArray("items")
+                return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")==id}
+            }
+            val client=CalendarActions(device,foreground=true);client.connect()
+            val items=client.list().getJSONArray("items")
+            val original=(0 until items.length()).map(items::getJSONObject).first {it.getString("status")=="proposed"}
+            val approved=client.confirm(original,original.getJSONObject("event"),"7");val id=approved.getString("id")
+            assertEquals("approved",approved.getString("status"))
+            native.failAfterNextInsert=true
+            assertThrows(IllegalStateException::class.java){client.execute(id)}
+            assertEquals(1,native.inserts)
+            assertEquals("uncertain",currentAction(id).getString("status"))
+            val operation=approved.getString("operationId")
+            val journal=File(app.accountDirectory(),"calendar-actions/"+SourceRules.hash(settings.read().server.trimEnd('/')+settings.deviceId)+"/"+operation)
+            assertEquals("attempting",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
+            val previousCalls=native.calls;device.allowed=false
+            assertThrows(IllegalStateException::class.java){client.execute(id)}
+            assertEquals(previousCalls,native.calls);device.allowed=true
+            login(app,"b")
+            assertThrows(IllegalStateException::class.java){client.execute(id)}
+            assertEquals(previousCalls,native.calls)
+            val bRows=CentralAccess.requireClient(app).get("/api/actions?limit=100").getJSONArray("items")
+            assertFalse((0 until bRows.length()).any {bRows.getJSONObject(it).getString("id")==id})
+            val bClient=CalendarActions(device,foreground=true);bClient.connect()
+            val bItems=bClient.list().getJSONArray("items")
+            val bOriginal=(0 until bItems.length()).map(bItems::getJSONObject).first {it.getString("status")=="proposed"}
+            val bApproved=bClient.confirm(bOriginal,bOriginal.getJSONObject("event"),"7")
+            bClient.execute(bApproved.getString("id"))
+            assertEquals("succeeded",currentAction(bApproved.getString("id")).getString("status"));assertEquals(2,native.inserts)
+            login(app,"a")
+            // Reconstruct the native adapter and original client from durable files.
+            // This is reconstruction evidence, not a claimed OS SIGKILL.
+            val recoveredNative=GeneratedCalendarProvider(generated)
+            val recovered=CalendarActions(GeneratedCalendarContext(app,recoveredNative),foreground=true)
+            recovered.execute(id)
+            assertEquals(2,recoveredNative.inserts)
+            val completed=currentAction(id)
+            assertEquals("succeeded",completed.getString("status"));assertEquals("101",completed.getString("externalId"))
+            assertEquals("101",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
+            recovered.execute(id);assertEquals(2,recoveredNative.inserts)
+        } finally {cancel(app);generated.delete()}
+    }
+
+    @Test fun anOldCalendarWorkerCannotAcquireBWhileItsNativePermissionCheckIsDelayed() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        assertNotEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,app.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR))
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        check(app.getSharedPreferences("mote",Context.MODE_PRIVATE).edit().putString("deviceId","same-device").commit())
+        val generated=File(app.cacheDir,"generated-calendar-worker-state.json");generated.delete()
+        val native=GeneratedCalendarProvider(generated);val device=GeneratedCalendarContext(app,native)
+        val pool=java.util.concurrent.Executors.newSingleThreadExecutor();val release=java.util.concurrent.CountDownLatch(1)
+        fun parameters(owner:String):WorkerParameters {
+            // Direct doWork boundary. These unused async progress/foreground
+            // collaborators are null; no WorkManager persistence claim is made.
+            return WorkerParameters::class.java.constructors.single().newInstance(java.util.UUID.randomUUID(),workDataOf("owner" to owner),emptyList<String>(),WorkerParameters.RuntimeExtras(),0,0,java.util.concurrent.Executor {it.run()},kotlin.coroutines.EmptyCoroutineContext,null,null,null,null) as WorkerParameters
+        }
+        try {
+            login(app,"b");val bClient=CalendarActions(device,foreground=true);bClient.connect()
+            val rows=bClient.list().getJSONArray("items");val original=(0 until rows.length()).map(rows::getJSONObject).first {it.getString("status")=="proposed"}
+            val approved=bClient.confirm(original,original.getJSONObject("event"),"7");val id=approved.getString("id")
+            login(app,"a");settings.save(settings.read().copy(syncMode="realtime",syncPaused=false))
+            val ownerA=settings.read().ownerKey();val entered=java.util.concurrent.CountDownLatch(1)
+            device.beforePermission={entered.countDown();check(release.await(20,TimeUnit.SECONDS))}
+            val old=pool.submit<androidx.work.ListenableWorker.Result> {CalendarActionWorker(device,parameters(ownerA)).doWork()}
+            assertTrue(entered.await(5,TimeUnit.SECONDS));login(app,"b")
+            // Explicit B sending policy must not legitimize an old A job.
+            settings.save(settings.read().copy(syncMode="realtime",syncPaused=false));release.countDown();old.get(20,TimeUnit.SECONDS)
+            assertEquals("The old A worker must not dispatch B's approved native operation",0,native.inserts)
+            fun bAction():JSONObject {val page=CentralAccess.requireClient(app).get("/api/actions?limit=100").getJSONArray("items");return (0 until page.length()).map(page::getJSONObject).single {it.getString("id")==id}}
+            assertEquals("approved",bAction().getString("status"))
+            val current=CalendarActionWorker(device,parameters(settings.read().ownerKey())).doWork()
+            assertEquals(androidx.work.ListenableWorker.Result.success(),current);assertEquals(1,native.inserts);assertEquals("succeeded",bAction().getString("status"))
+        } finally {release.countDown();pool.shutdownNow();cancel(app);generated.delete()}
+    }
+
+    @Test fun actualNativeActionsRetiresVisiblePrivateProposalsBeforeAnotherAccountResumes() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CalendarActionsActivity>(android.content.Intent(app,CalendarActionsActivity::class.java)).use {scenario->
+            waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="Generated A"}};shown}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity {activity->assertFalse("B must not resume A's already rendered private Actions proposals",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="Generated A"})}
+            waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="Generated B"}};shown}
+            assertEquals(21,get(app,"a","/api/actions?limit=100").second!!.getJSONArray("items").length())
+        }
+    }
+
+    @Test fun actualNativeActionsClosesOriginalEvidenceOnSwitchAndKeepsSameOwnerRecreation() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        fun dialogs():List<android.app.AlertDialog> {
+            @Suppress("UNCHECKED_CAST")
+            val all=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+            return all.mapNotNull {it.get()}.filter {it.isShowing}
+        }
+        androidx.test.core.app.ActivityScenario.launch<CalendarActionsActivity>(android.content.Intent(app,CalendarActionsActivity::class.java)).use {scenario->
+            fun shown(label:String):Boolean {var value=false;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()==label}};return value}
+            waitFor {shown("Generated A")};scenario.recreate();waitFor {shown("Generated A")}
+            lateinit var evidence:android.app.AlertDialog
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.Button>().first {it.text.toString()=="查看原文依据"}.performClick()
+                evidence=dialogs().single()
+                assertTrue(views(evidence.window!!.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_A_PRIVATE_APPOINTMENT")})
+            }
+            val statuses=get(app,"a","/api/actions?limit=100").second!!.getJSONArray("items").let {rows->(0 until rows.length()).associate {rows.getJSONObject(it).getString("id") to rows.getJSONObject(it).getString("status")}}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity {assertFalse("The original account's evidence dialog must retire with its page",evidence.isShowing)}
+            waitFor {shown("Generated B")}
+            assertFalse(shown("Generated A"))
+            val retained=get(app,"a","/api/actions?limit=100").second!!.getJSONArray("items").let {rows->(0 until rows.length()).associate {rows.getJSONObject(it).getString("id") to rows.getJSONObject(it).getString("status")}}
+            assertEquals(statuses,retained)
+        }
+    }
+
     @Test fun calendarReviewClientRetainsItsOriginalAccountWithoutRequestingCalendarPermission() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
@@ -225,6 +366,79 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals("B must not read A's retained native draft","",draft());edit(bDraft)
             scenario.onActivity {original=it.client};login(app,"a");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready();assertEquals(aDraft,draft())
             scenario.onActivity {original=it.client};login(app,"b");scenario.onActivity {it.navigate("notes")};waitFor {var changed=false;scenario.onActivity {changed=it.client!=null&&it.client!==original&&!it.isWorking};changed};ready();assertEquals(bDraft,draft())
+        }
+    }
+
+    @Test fun pausedNativeNotesRetirePrivateTextBeforeQueuedSessionResolutionOnResume() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val privateDraft="Generated A private draft before blocked resume "+java.util.UUID.randomUUID()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","notes")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {activity->ready=activity.client!=null&&!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.hint.toString()=="此刻想留下什么？"}};ready}
+            lateinit var executor:java.util.concurrent.ExecutorService
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="此刻想留下什么？"}.setText(privateDraft)
+                val content=CentralActivity::class.java.getDeclaredField("content").apply {isAccessible=true}.get(activity)
+                val task=(CentralContent::class.java.getDeclaredField("task\$delegate").apply {isAccessible=true}.get(content) as Lazy<*>).value
+                executor=UiTask::class.java.getDeclaredField("executor").apply {isAccessible=true}.get(task) as java.util.concurrent.ExecutorService
+            }
+            CentralDraftWrites.barrier {Unit}
+            val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+            executor.execute {entered.countDown();release.await(20,TimeUnit.SECONDS)};assertTrue(entered.await(5,TimeUnit.SECONDS))
+            try {
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+                scenario.onActivity {activity->assertFalse("The old private draft must retire before the queued account resolver runs",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(privateDraft)})}
+            } finally {release.countDown();executor.submit {}.get(15,TimeUnit.SECONDS)}
+            waitFor {var ready=false;scenario.onActivity {activity->ready=activity.client!=null&&!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.hint.toString()=="此刻想留下什么？"&&it.text.isEmpty()}};ready}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"a");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.text.toString()==privateDraft}};ready}
+        }
+    }
+
+    @Test fun actualNativeOverviewReadsOwnedStatisticsAndCanonicalDeviceMetadata() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val statistics=CentralAccess.requireClient(app).get("/api/data/statistics")
+        assertTrue(statistics.getLong("captures")>0)
+        CentralAccess.requireClient(app).post("/api/ingress/devices",JSONObject().put("id",settings.deviceId).put("name","Generated A overview device").put("platform","android"))
+        val devices=CentralAccess.requireClient(app).get("/api/ingress/devices").getJSONArray("items")
+        assertTrue(devices.length()>0)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","overview")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->
+                val text=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()}
+                assertTrue("Original native overview must display this account's actual capture count",text.contains("原始采集记录 · "+statistics.getLong("captures")))
+                assertTrue(text.contains("正式资料 · "+statistics.getLong("materials")))
+                assertTrue(text.contains("来源与连接 · "+statistics.getLong("sources")))
+                for(index in 0 until devices.length())assertTrue(text.any {it.contains(devices.getJSONObject(index).getString("name"))})
+            }
+        }
+    }
+
+    @Test fun actualNativeActionsSettingsPreserveOwnedRevisionAndRetireTheOriginalSave() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val before=a.get("/api/actions");assertTrue(before.getJSONObject("settings").getBoolean("enabled"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","actions")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="行动设置"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().any {it.text.toString()=="启用"}};ready}
+            lateinit var originalSave:android.widget.Button
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="启用"}.isChecked=false
+                originalSave=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存设置"};originalSave.performClick()
+            }
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val after=a.get("/api/actions")
+            assertFalse("The native setting form must submit M12 revision and authorizationRevision with its settings",after.getJSONObject("settings").getBoolean("enabled"))
+            assertEquals(before.getJSONObject("settings").getJSONArray("reviewDeviceIds").toString(),after.getJSONObject("settings").getJSONArray("reviewDeviceIds").toString())
+            assertTrue(after.getLong("revision")>before.getLong("revision"))
+            login(app,"b");scenario.onActivity {it.navigate("actions")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {originalSave.performClick()}
+            assertTrue(CentralAccess.requireClient(app).get("/api/actions").getJSONObject("settings").getBoolean("enabled"))
         }
     }
 

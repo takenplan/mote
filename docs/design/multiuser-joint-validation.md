@@ -25,3 +25,58 @@ shared secret exposure or user-facing approval step is proposed here. Technical
 choices reuse the current tools and tests. If closing a retained capability needs
 an architectural change, provide the parent a concrete minimal proposal and its
 effect before treating it as accepted scope.
+
+## Later explicit model/data regression constraint
+
+User amendment `Sentinel_90402956f4b881918763a8a61d350969` authorizes real-model
+regression through this computer’s signed-in Codex “GPE 6.1 sol”; the parent
+interprets the intended name as GPT-6.1 sol. Verify actual availability and its
+exact interface before running; do not substitute a model/provider, add secrets,
+or restart the coding session to satisfy a regression-model choice. Deterministic
+generated transport tests retain their role in account/fence/retry assertions.
+This supersedes the initial prohibition on all real-model checks only for that
+explicit local-model regression scope; real calendar/mail writes remain excluded.
+
+Prefer generated fixtures. If necessary, local Central content may be read only
+and copied outside the repository for isolated tests. Its original contents and
+all derived materials (including prompts, responses, summaries, embeddings,
+screenshots, archives, logs and fixtures) are forbidden in Git operations, PR
+content, shared logs/attachments and cross-thread messages. Check staged diffs
+and every new file before publishing; do not rely only on ignore rules. If an
+accidental Git inclusion is found, stop push and report to the parent, preserving
+history until directed. Joint has not read local Central private content and its
+current fixtures are entirely generated. J14 now has M15 owner-reported generated Native Ask evidence on exact local
+`gpt-6.1-sol`; final composed execution and the privacy audit remain pending.
+
+
+## Shared Imports restoration inside existing domains
+
+KEEP: original upload/part/commit and inline request bodies, stable same-input
+source identity, private preview and explicit review gate, real format workers,
+trusted pinned Python pack sandbox, original dedup/retention, and one M05 executor.
+CHANGE: route the old outcome through M03 archived originals plus M06's private
+journal, with M04 model leases and current-account task grants. M03's host-only
+expanded-original retention is absent from user/plugin facades; no current task
+context is minted from stored JSON. Capture receipt, attribution/link/checkpoint
+and no-model child admission share one SQLite commit for a fresh publication.
+REMOVE: the single-owner ImportJobs/Store composition from production scoped
+routes. Its review rule is extracted unchanged into a pure helper; legacy fixtures
+continue to exercise their own old algorithms.
+EXCEPTION: deterministic plain decoding, known media intake and fixed source packs
+need no language-model lease. Semantic mapping uses only authorized job originals
+through the read-only reader; bounded host preview fragments reuse the existing
+host-control transport and task checkpoint without publishing domain products.
+UNKNOWN: image profile/attachment equivalence, full partial-recovery/unknown-result
+and Memory recipe progress, deletion reclamation and remaining Files controls are
+still acceptance blockers. No success is inferred from a partial route adapter.
+
+
+Import progress admission seam: KEEP M05/M08 as execution/job authorities.
+CHANGE only the read projection when an intake has reserved a job ID but job
+admission failed before the job row existed: report its actual owner intake task
+state, and link only existing owner jobs. REMOVE the implicit assumption that a
+proposed ID proves a created job. EXCEPTION no failure is interpreted as semantic
+success or model waiting unless the actual task code says so. UNKNOWN model-wait
+backoff/paused/partial-instance-restore variants still need execution. Basis:
+generated missing-model actual Import404 RED -> exact case plus selected-recipe
+batch/cancel/B-positive GREEN; no additional engine, grant, model or store.

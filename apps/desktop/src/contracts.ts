@@ -134,6 +134,8 @@ export interface DesktopApi {
   localContentDetail(key:string, image?:boolean): Promise<import('./content-library').ContentDetail|import('./sync-content').SyncContent>;
   chooseSourceFiles(mode: 'files' | 'directory', options: import('./source-types').SourceOptions): Promise<{ canceled: boolean }>;
   authorizeCalendar(): Promise<import('./source-types').CalendarChoice[]>;
+  connectCalendarActions(): Promise<{deviceId:string}>;
+  deliverCalendarActions(): Promise<void>;
   addCalendarSource(id: string, options: import('./source-types').SourceOptions): Promise<void>;
   updateSource(id: string, options: import('./source-types').SourceOptions & { enabled: boolean }): Promise<void>;
   syncSources(): Promise<void>;
