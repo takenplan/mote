@@ -239,3 +239,10 @@ partial-ready and canonical paging: 3/3 EXIT0,9082.869ms
 (`/tmp/m08-unified-c53-legacy.log/.exit`). No new runtime or test framework was
 introduced by this readiness correction. Final A/C same-candidate receipts and
 per-module gates remain explicitly tracked before delivery.
+
+Representative contract closure uses that exact c53 candidate throughout:
+M07 independent A/C7/7 EXIT0,54178ms
+(`/tmp/m07-uniform-c53-AC.log/.exit`), M08 B/parameters5/5 and old-tool3/3
+above, and M11 owning13/13 EXIT0,92271ms. These independent receipts close the
+shared A/B/C representative contract only. They do not stand in for each module's
+final focused/combined/build/emitted/affected or remote-head/PR gates.
