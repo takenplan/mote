@@ -72,6 +72,16 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun calendarReviewClientRetainsItsOriginalAccountWithoutRequestingCalendarPermission() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val original=CalendarActions(app,foreground=true)
+        assertNotNull(original.list().getJSONArray("items"))
+        login(app,"b")
+        assertThrows("A's retained native Actions client cannot borrow B's current credential",IllegalStateException::class.java){original.list()}
+        assertNotNull(CalendarActions(app,foreground=true).list().getJSONArray("items"))
+    }
+
     @Test fun queuedArchiveReadCannotResolveTheNextAccountsCredentialWhilePaused() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
