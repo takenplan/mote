@@ -71,6 +71,7 @@ test('production account deletion revokes before erasure, is durable and cannot 
  assert.deepEqual(credentials.prepare('SELECT * FROM auth_credentials WHERE user_id=? ORDER BY id').all(f.b.userId),bCredentials);
  assert.deepEqual((await f.request(f.b.token,'GET','/api/captures')).json(),before.json());
  assert.equal((await f.request(f.admin.token,'PATCH','/api/admin/accounts/'+f.a.userId,{disabled:false})).statusCode,409);
+ assert.equal((await f.request(f.admin.token,'POST','/api/admin/accounts/'+f.a.userId+'/password',{password:'Generated-new-deleted-password'})).statusCode,409,'a deleted identity cannot reacquire password material through administrator reset');
  await f.restart();assert.deepEqual((await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+receipt.id)).json(),receipt);
  assert.equal((await f.request(f.admin.token,'DELETE','/api/admin/accounts/'+f.a.userId,{operationId})).json().id,receipt.id);
  const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.a.userId)!.n,0);assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.b.userId)!.n,1);}finally{db.close();}
@@ -112,6 +113,7 @@ test('unknown external task outcome stops erasure durably; retry never repeats t
  const deletion=await f.request(f.admin.token,'DELETE','/api/admin/accounts/'+f.a.userId,{operationId:randomUUID()});assert.equal(deletion.statusCode,200,deletion.body);const id=deletion.json().id;
  await waitForScopedState(async()=>(await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+id)).json().state==='result_unknown',()=> 'unknown erasure was not reported');
  await f.restart();assert.equal((await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+id)).json().state,'result_unknown');
+ assert.equal((await f.request(f.admin.token,'POST','/api/admin/accounts/'+f.a.userId+'/password',{password:'Generated-new-deleted-password'})).statusCode,409,'an approved pending deletion cannot reacquire password material');
  for(let i=0;i<2;i++){assert.equal((await f.request(f.admin.token,'POST','/api/admin/account-deletions/'+id+'/retry',{})).statusCode,200);await waitForScopedState(async()=>(await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+id)).json().state==='result_unknown',()=> 'retry invented success');}
  assert.equal(calls,1);const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.a.userId)!.n,1);assert.equal(db.prepare('SELECT revoked FROM task_authorizations WHERE task_id=?').get(task.json().id)!.revoked,1);}finally{db.close();}
  assert.equal((await f.request(f.b.token,'GET','/api/captures')).json().items.length,1);
