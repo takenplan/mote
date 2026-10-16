@@ -1952,6 +1952,7 @@
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id/review'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/materials/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
