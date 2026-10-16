@@ -321,3 +321,17 @@ The original hidden Electron tests pass 2/2 in
 No window was shown or system permission changed. Full required retry remains
 mandatory after these runtime and test corrections. Personal import, M12,
 Docker native-volume evidence and independent backup/management review remain OPEN.
+
+At clean `05e434ee6904a95b50ed0f16195e3baec483493f`, fresh
+`npm run build:central` exits 0 (`/tmp/m16-central-build2.log/.exit`). Then
+`MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1 node --import tsx --test
+apps/server/test/multiuser-instance-backup.test.ts`: **8/8 exit 0**,
+`/tmp/m16-backup-compiled-packaged-green.log/.exit`. This starts/stops/restarts
+actual compiled `dist/index.js` against the restored temporary instance twice.
+The native Mem0 scenario additionally runs both backup and restore CLIs from a
+runtime projection containing the Docker COPY files and compiled server,
+without server TypeScript source; it verifies installed fixed packages, actual
+SDK SQLite state, preserved Memory rows and retired plugin snapshots. This is
+compiled package/entry proof, not a container image/daemon or native Hindsight
+volume proof. The optional flags select these explicit integration checks; the
+default full suite also executes the source-host backup cases.
