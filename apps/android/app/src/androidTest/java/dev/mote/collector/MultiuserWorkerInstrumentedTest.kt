@@ -72,6 +72,37 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun actualNativePortableImportUsesTheChosenArchiveAndOriginalOwnerReceipt() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val defaults=api.get("/api/configuration").toString();val note=QuickNotes.save(app,"Generated portable import original "+java.util.UUID.randomUUID(),"");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        val portable=CentralPortable(api);val export=portable.start(java.util.UUID.randomUUID().toString());var receipt=export
+        waitFor {receipt=portable.read(export.getString("id"));receipt.getString("state")=="completed"}
+        val file=File(app.filesDir,"generated-file-sync/native-portable.json").apply {parentFile!!.mkdirs()};portable.save(receipt,app.cacheDir) {file.outputStream()}
+        val uri=android.provider.DocumentsContract.buildDocumentUri(app.packageName+".file-fixtures","native-portable.json")
+        val instrumentation=InstrumentationRegistry.getInstrumentation();var monitor:android.app.Instrumentation.ActivityMonitor?=null
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try {
+            androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","imports")).use {scenario->
+                fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+                fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+                ready()
+                scenario.onActivity {activity->assertTrue("The native import page must offer the frozen same-account portable import",views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="导入个人归档"&&it.isEnabled})}
+                monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_OPEN_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("application/json")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(uri)),true)
+                click("导入个人归档");ready();assertEquals(1,monitor!!.hits)
+                var imported:JSONObject?=null;waitFor {val items=api.get("/api/portable/imports?limit=20").getJSONArray("items");imported=(0 until items.length()).map {items.getJSONObject(it)}.firstOrNull {it.getString("state")=="completed"};imported!=null}
+                click("刷新");ready()
+                scenario.onActivity {activity->assertTrue(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="已完成"})}
+                assertEquals(defaults,api.get("/api/configuration").toString());assertEquals(200,get(app,"a","/api/captures/$note").first)
+                assertEquals(409,assertThrows(CentralFailure::class.java){api.post("/api/portable/imports/"+imported!!.getString("id")+"/cancel")}.status)
+                login(app,"b");scenario.onActivity {it.navigate("imports")};ready()
+                scenario.onActivity {it.activityResult(74,android.app.Activity.RESULT_OK,android.content.Intent().setData(uri))};ready()
+                assertEquals(0,CentralAccess.requireClient(app).get("/api/portable/imports?limit=20").getJSONArray("items").length())
+                assertEquals(404,assertThrows(CentralFailure::class.java){CentralAccess.requireClient(app).get("/api/portable/imports/"+imported!!.getString("id"))}.status)
+            }
+        } finally {monitor?.let(instrumentation::removeMonitor);file.delete()}
+    }
+
     @Test fun failedGenericSupportDownloadPreservesTheSelectedExistingDocument() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
