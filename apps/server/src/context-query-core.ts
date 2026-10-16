@@ -200,3 +200,6 @@ export const CONTEXT_DIRECTORIES=[
  {path:'/context/sources',layer:'L0/L1',description:'Original source catalog; exact or fresh evidence remains directly searchable',expand:'sources'},
 ] as const;
 
+
+/** Existing minimum-budget navigation card; keep its stable expansion reference. */
+export function compactContextCard(card:ContextCard){card.snippet='';card.title=card.title.slice(0,64);card.matchReasons=[];card.evidenceRefs=[];delete card.applicability;delete card.expansion;card.origin={source:card.origin.source,deviceId:card.origin.deviceId,appName:'',capturedAt:card.origin.capturedAt,receivedAt:card.origin.receivedAt};delete card.revision;}
