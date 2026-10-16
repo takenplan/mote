@@ -534,3 +534,12 @@ or activity. The same three cases pass3/3/no skip/EXIT0 in
 pre-I/O fact, never inferred from a provider message or used to settle the older
 unknown call. ce3572 review covers the preceding query; this final one-fact delta
 is separately identifiable for the reviewer and current types remain pending.
+
+Explicit narrow release: c45fdb4a2518fef0d5072b02aafbe8f46cb5a90b Server source
+noEmit ACTUAL EXIT0, /tmp/mote-joint-unknown-current-types.log,
+/tmp/mote-joint-unknown-current-types.exit and .sha. It was a few-second idle-gap
+claim after Container final3 explicit release, with immediate Joint RELEASE.
+M13's final c45 pre-transport fact review also has no new confirmed P0/P1/P2,
+/tmp/mote-m13-review-joint-unknown-c45f.md. Together with the exact narrow actual
+receipts, this permits clients to compose this thin checkpoint. It is not a new
+module-final/full affected result and does not close remaining original outcomes.

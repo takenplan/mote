@@ -140,3 +140,25 @@ backoff/restart and exact unavailable-snapshot recovery have separate receipts i
 the joint validation ledger on unchanged projection source; final composed gates
 remain pending. Files model reviews/calendar matching, acoustic samples/overrides, lifecycle
 controls and complete recording exports remain OPEN.
+
+### New narrow processing freeze (supersedes the earlier PREP source only)
+
+`c45fdb4a2518fef0d5072b02aafbe8f46cb5a90b` is now the explicitly consumable
+thin source checkpoint. It contains43db/fbc and the same Imports wire contract;
+there is no new client payload or independent backend projection. Current Server
+source noEmit is EXIT0. Actual bare503 unknown/new-operation/queued-operation and
+late account-delete ACK cases pass, with scoped B positives; existing ASR stages,
+explicit unknown retry, cancellation, summary, M16 erasure and Imports entry
+adjacencies have their separate narrow receipts. M13's three bounded source
+reviews find no new confirmed P0/P1/P2 and did not execute the tests.
+
+M06 now records its calls in M05 before I/O. A bare503/network/timeout without
+known never-started facts cannot automatically repeat, nor can a fresh operation
+ID evade an unacknowledged call for that original. The same original operation
+still returns its idempotent task. Use the existing owner task retry with
+confirmUnknown when required; acknowledgement leaves old unknown facts intact.
+A valid late reply may settle only the exact old fact, never revive private
+publication authority. The pre-transport rejected queued task spends zero call
+attempts. New file controls, image profiles, model reviews, acoustics and complete
+recording outcomes listed above remain OPEN. This checkpoint has no whole-module,
+compiled-production/client, final affected or joint acceptance claim.
