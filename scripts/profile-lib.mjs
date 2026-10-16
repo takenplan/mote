@@ -508,9 +508,8 @@ async function restoreScopedDockerProfile(p, checked, dependencies) {
   await assertStopped();
   const image = (await run('docker', ['image','inspect','--format','{{.Id}}',p.meta.image], {capture:true})).trim();
   if (!/^sha256:[a-f0-9]{64}$/.test(image)) throw Error('Restore requires the already installed profile image');
-  const existing = (await run('docker',['volume','ls','--filter',`name=^${selected.replaceAll('.', '\\.')}$`,'--format','{{.Name}}'],{capture:true})).trim().split(/\s+/).filter(Boolean);
   const common = ['run','--rm','--pull','never','--network','none','--read-only','--security-opt','no-new-privileges:true'];
-  const assertEmpty=async()=>{if(existing.includes(selected)) await run('docker',[...common,'--mount',`type=volume,source=${selected},target=/source,readonly`,'--entrypoint','node',image,'-e',"if(require('node:fs').readdirSync('/source').length)throw Error('Restore requires an empty data volume; existing data is never overwritten')"],{capture:true});};
+  const assertEmpty=async()=>{const existing=(await run('docker',['volume','ls','--filter',`name=^${selected.replaceAll('.', '\\.')}$`,'--format','{{.Name}}'],{capture:true})).trim().split(/\s+/).filter(Boolean);if(existing.includes(selected)) await run('docker',[...common,'--mount',`type=volume,source=${selected},target=/source,readonly`,'--entrypoint','node',image,'-e',"if(require('node:fs').readdirSync('/source').length)throw Error('Restore requires an empty data volume; existing data is never overwritten')"],{capture:true});};
   await assertEmpty();
   const stage = join(await realpath(p.directory), `.mote-restore-${randomUUID()}`), volume = `${p.project}-restore-${randomUUID()}`;
   if (/[\r\n,]/.test(stage)) throw Error('Docker restore bind path must not contain commas or line breaks');

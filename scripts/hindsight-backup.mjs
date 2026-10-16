@@ -1,7 +1,7 @@
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {createHash,randomUUID} from 'node:crypto';
-import {createReadStream} from 'node:fs';
+import {createReadStream,constants} from 'node:fs';
 import {mkdir,lstat,realpath,readFile,writeFile,copyFile,readdir,chmod} from 'node:fs/promises';
 import {resolve,join} from 'node:path';
 
@@ -116,7 +116,7 @@ export async function restoreHindsight({archiveDirectory,runtimeDirectory,provid
    const extract=`import tarfile\nwith tarfile.open('/backup/volume.tar') as archive:\n def safe(member,path):\n  checked=tarfile.data_filter(member,path)\n  return checked.replace(uid=member.uid,gid=member.gid,uname=member.uname,gname=member.gname,mode=member.mode&0o777) if checked else None\n archive.extractall('/target',filter=safe)`;
    await invoke(['run','--pull','never','--rm','--network','none','--read-only','--user','0','--volume',volume+':/target','--volume',archiveDirectory+':/backup:ro','--entrypoint','python3',runtime.image,'-c',extract]);
    for(const directory of [runtimeDirectory,providerDirectory]){await mkdir(directory,{recursive:true,mode:0o700});await ordinary(directory,true);if((await readdir(directory)).length)throw Error('Hindsight restore target changed');}
-   await copyFile(join(archiveDirectory,'provider-control.json'),join(providerDirectory,'provider-control.json'));
+   await copyFile(join(archiveDirectory,'provider-control.json'),join(providerDirectory,'provider-control.json'),constants.COPYFILE_EXCL);
    await chmod(join(providerDirectory,'provider-control.json'),0o600);
    await writeFile(join(runtimeDirectory,'runtime-descriptor.json'),JSON.stringify(runtime),{mode:0o600,flag:'wx'});
  }catch(error){try{const ownership=JSON.parse(await invoke(['volume','inspect',volume]))[0];if(ownership.Name===volume&&ownership.Labels?.['mote.runtime.identity']===runtime.identity)await invoke(['volume','rm',volume]);}catch{}throw error;}
