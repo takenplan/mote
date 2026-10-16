@@ -489,3 +489,19 @@ recovery pass 3/3 in
 /tmp/mote-joint-file-unknown-cross-operation-adjacent.log/.exit. The new admission
 query does not turn a replay confirmation into outcome settlement. Types,
 independent review of this additional delta and final composed gate remain due.
+
+Two additional Imports→Memory projection journeys need no production change.
+A real held extraction is paused by its owner, its successful checkpoint settles,
+then host restart retains paused1/completed0; resume runs the still-pending
+independent review and completes, while equal import-ID B remains complete and
+cannot control A's job. 1/1/no skip/EXIT0,4.995s,
+/tmp/mote-joint-import-memory-paused-restart.log/.exit. A separate real429
+Retry-After60 capacity response leaves the saved Import completed but Memory
+pending1/completed0/failed0 and no spent execution attempt. Host restart/tick
+preserves that future wait without another model request; B cannot retry A;
+explicit owner job retry performs the missing work and completes.1/1/no skip/
+EXIT0,5.570s,/tmp/mote-joint-import-memory-capacity-restart.log/.exit. Only model
+transport responses are generated; actual M01/M03/M04/M05/M06/M08 receipts and
+host restart order are exercised. Missing-model intake failure remains the
+previous distinct actual stale receipt, not a fabricated waitingForModel pass.
+Unavailable snapshot recovery and additional Files/image-profile parity stay OPEN.
