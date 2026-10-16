@@ -155,22 +155,25 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val target = ui.card()
         val api = client
         ui.work(MoteI18n.text("正在连接中央节点…"), {
-            listOf(api.get("/api/status"), api.get("/api/devices"), api.get("/api/operations?limit=5"))
+            listOf(api.get("/api/data/statistics"), api.get("/api/ingress/devices"), CentralModels.inventory(api))
         }) { data ->
-            val status = data[0]
+            val statistics = data[0]
             ui.text(MoteI18n.text("中央工作台"), NativeFontRole.TITLE_MOBILE, target)
-            val agent = status.getJSONObject("agent")
-            ui.text(if (agent.optBoolean("configured")) MoteI18n.text("模型已配置") else MoteI18n.text("请先配置模型服务"), parent = target)
-            ui.text(agent.optString("model"), parent = target)
-            admin.values(status.optJSONObject("storage") ?: JSONObject(), target)
+            for ((key, label) in listOf("captures" to "原始采集记录", "materials" to "正式资料", "sources" to "来源与连接")) {
+                ui.text(MoteI18n.text(label) + " · " + statistics.getLong(key), parent = target)
+            }
+            ui.text(MoteI18n.text("模型预设"), NativeFontRole.SECTION, target)
+            val profiles = data[2].getJSONArray("profiles")
+            if (profiles.length() == 0) ui.text(MoteI18n.text("请先配置模型服务"), parent = target)
+            for (i in 0 until profiles.length()) ui.text(profiles.getJSONObject(i).getString("name"), parent = target)
             ui.text(MoteI18n.text("设备"), NativeFontRole.SECTION, target)
             val devices = data[1].optJSONArray("items") ?: JSONArray()
             for (i in 0 until devices.length()) {
                 val device = devices.getJSONObject(i)
-                ui.text(device.optString("deviceName") + " · " + device.optString("lastSeenAt"), parent = target)
+                ui.text(device.getString("name") + " · " + device.getString("platform"), parent = target)
             }
             ui.text(MoteI18n.text("处理任务"), NativeFontRole.SECTION, target)
-            admin.items(data[2], target) { row -> admin.operation(row.optString("id")) }
+            ui.button(MoteI18n.text("处理任务"), parent = target) { ui.navigate("activity") }
         }
         ui.button(MoteI18n.text("中央资料库")) { ui.navigate("archive") }
         ui.button(MoteI18n.text("日程建议")) {

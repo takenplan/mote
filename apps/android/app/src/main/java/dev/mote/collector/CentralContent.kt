@@ -162,6 +162,12 @@ internal class CentralContent(
 
     fun resume() {
         resumed = true; foregroundRevision++
+        // Retire already-rendered private content before the async resolver can
+        // wait behind other work. The original account's durable state stays put.
+        if (screens?.ownsSelectedAccount() == false) {
+            revision++; pending.clear(); screens?.close(); screens?.clearPrivateState()
+            screens = null; client = null; status.text = ""; collectionBar.visibility = View.GONE
+        }
         handler.removeCallbacks(refreshLogin); handler.postDelayed(refreshLogin, 1000)
         work(MoteI18n.text("正在读取本机设置…"), { CentralAccess.resolve(this) }, allowSessionChange = true) { selected ->
             applyAccess(selected)
