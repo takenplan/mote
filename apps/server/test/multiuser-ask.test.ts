@@ -323,7 +323,7 @@ test('native source item kind filters match the canonical record kind while Mate
 test('explicit request model reference and personal model ID preserve own fixed transport without changing feature defaults',async t=>{
  const f=await fixture(t);await f.publish(f.a,'A');
  const view=await f.checked(f.a.token,'/api/configuration'),models=view.domains.find((value:any)=>value.id==='models').effective;
- await f.replace(f.a.token,'models',{...models,profiles:[...models.profiles,{id:'request-only',name:'Generated request-only',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'request-base',baseUrl:f.modelUrl,apiKey:'GENERATED_A_REQUEST_KEY',headers:{},extraBody:{}}}]});
+ await f.replace(f.a.token,'models',{...models,profiles:[{id:'same-model',name:'Generated Ask model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-ask',baseUrl:f.modelUrl,apiKey:'GENERATED_A_KEY',headers:{},extraBody:{}}},{id:'request-only',name:'Generated request-only',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'request-base',baseUrl:f.modelUrl,apiKey:'GENERATED_A_REQUEST_KEY',headers:{},extraBody:{}}}]});
  const before=await f.checked(f.a.token,'/api/models');const id=randomUUID();
  await f.checked(f.a.token,'/api/query-runs','POST',{id,input:{question:'Generated explicit personal model request',modelReference:{kind:'personal',id:'request-only'},modelOverride:'request-override'}});
  assert.equal((await f.wait(f.a,id)).status,'completed');assert.ok(f.requests.length>0);assert.ok(f.requests.every(value=>value.owner==='A'&&value.body.model==='request-override'));
