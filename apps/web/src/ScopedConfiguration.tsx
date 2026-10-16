@@ -1,4 +1,5 @@
 import {ScopedModelsForm} from './ScopedModelsForm';
+import {MemoryLifecycleFields} from './MemorySettings';
 import {useEffect,useState} from 'react';
 import {moteText} from '@mote/shared/i18n';
 import type {ConfigDomainView,ConfigServiceView} from '@mote/shared';
@@ -18,6 +19,7 @@ function DomainEditor({api,domain,view,administrator=false}:{api:Api;domain:Conf
   <p>{moteText('版本 {0}',base.revision)}</p><form onSubmit={event=>{event.preventDefault();if(busy)return;setBusy(true);setError('');setNotice('');void (async()=>{
    try{const value=JSON.parse(text),path=administrator?'/api/admin/configuration/models':'/api/configuration/'+encodeURIComponent(domain.id);const next=await api.request<ConfigServiceView>(path,{method:'PUT',body:JSON.stringify({revision:base.revision,value,preserveRedactedSecrets:true})});setBase(next);setText(JSON.stringify(next.domains.find(item=>item.id===domain.id)?.saved,null,2));resources(api).invalidate(key=>key==='/api/configuration'||key==='/api/models'||key==='/api/admin/configuration/models');setNotice(moteText('已保存到配置文件'));}catch(e){setError(errorMessage(e));}finally{setBusy(false);}
   })();}}>
+   {domain.id==='memory'&&modelValue?.lifecycle&&<MemoryLifecycleFields draft={modelValue.lifecycle} setDraft={lifecycle=>setText(JSON.stringify({...modelValue,lifecycle},null,2))} busy={busy}/>}
    {domain.id==='models'&&modelValue&&<ScopedModelsForm api={api} value={modelValue} onChange={value=>setText(JSON.stringify(value,null,2))} administrator={administrator}/>}
    <details><summary>{moteText('高级设置')}</summary><label>{moteText('文件中保存的值')}<textarea aria-label={domain.id+' '+moteText('配置')} value={text} onChange={e=>setText(e.target.value)} rows={12} spellCheck={false}/></label></details>
    <p className="fine-print">{moteText('凭据的 true / false 仅表示配置状态；保持原值会保留同一条目的凭据。填写新值可替换，清空字符串可清除。')}</p>
