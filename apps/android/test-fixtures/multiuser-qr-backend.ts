@@ -1,12 +1,14 @@
 import type {TestContext} from 'node:test';
 import {createServer} from 'node:http';
+import {buildApp} from '../../server/src/app.js';
 import {scopedFilesFixture} from '../../server/test/fixtures/scoped-files.js';
 
 // Actual M01 pairing and M03 upload. Faults only remove real HTTP replies or
 // corrupt a declared self field; no token/receipt/authority is manufactured.
 const cleanup:Array<()=>unknown>=[],claims:Array<{id:string;challenge:string;deviceId:string;userId:string}>=[],acks:string[]=[],invitations:Array<{userId:string;deviceId?:string}>=[];
 let dropRedeem=false,dropAck=false,badSelf='';
-const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} as unknown as TestContext,host=>{
+const restartAfterAck=process.argv.includes('--restart-after-ack');let restarted=false;
+function observe(host:Awaited<ReturnType<typeof buildApp>>){
  host.app.addHook('onSend',async(request,reply,payload)=>{
   if(request.method==='POST'&&request.url==='/api/connections/invitations'&&reply.statusCode===200){const value=JSON.parse(String(payload)).invitation;invitations.push({userId:value.userId,...value.deviceId?{deviceId:value.deviceId}:{}});}
   if(request.method==='POST'&&request.url==='/api/connections/redeem'&&reply.statusCode===200){
@@ -21,19 +23,29 @@ const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} 
   }
   return payload;
  });
-});
+}
+const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} as unknown as TestContext,observe);
+let currentHost=f.host;
 for(const actor of [f.a,f.b]){
  const config=await f.checked(actor.token,'/api/configuration'),memory=config.domains.find((domain:any)=>domain.id==='memory').effective;
  await f.checked(actor.token,'/api/configuration/memory','PUT',{revision:config.revision,value:{...memory,automatic:false,integration:false,lifecycle:{...memory.lifecycle,insights:{...memory.lifecycle.insights,enabled:false},working:{...memory.lifecycle.working,enabled:false},consolidation:{...memory.lifecycle.consolidation,enabled:false}}}});
 }
-const control=createServer((request,response)=>{
+const control=createServer((request,response)=>{void(async()=>{
  if(request.method!=='POST'){response.statusCode=404;response.end();return;}
  if(request.url==='/generated/drop-redeem')dropRedeem=true;
  else if(request.url==='/generated/drop-ack'){dropRedeem=false;dropAck=true;}
- else if(request.url==='/generated/release-pairing'){dropRedeem=false;dropAck=false;badSelf='';}
+ else if(request.url==='/generated/release-pairing'){
+  dropRedeem=false;dropAck=false;badSelf='';
+  if(restartAfterAck&&acks.length&&!restarted){
+   const oldAddress=currentHost.app.server.address();if(!oldAddress||typeof oldAddress==='string')throw Error('No generated source host port');
+   await currentHost.app.close();currentHost=await buildApp({dataDir:f.directory});observe(currentHost);cleanup.push(()=>currentHost.app.close());
+   await currentHost.app.listen({host:'127.0.0.1',port:oldAddress.port});restarted=true;
+  }
+ }
  else if(request.url?.startsWith('/generated/bad-self/'))badSelf=request.url.split('/').at(-1)!;
  else if(request.url!=='/generated/pairing-state'){response.statusCode=404;response.end();return;}
- response.setHeader('content-type','application/json');response.end(JSON.stringify({claims,acks,invitations,dropRedeem,dropAck}));
+ response.setHeader('content-type','application/json');response.end(JSON.stringify({claims,acks,invitations,dropRedeem,dropAck,restarted}));
+ })().catch(error=>{response.statusCode=500;response.end(JSON.stringify({error:'generated_restart_failed',name:error?.name??'Error'}));});
 });await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));const controlAddress=control.address();if(!controlAddress||typeof controlAddress==='string')throw Error('No generated pairing control');
 const address=await f.host.app.listen({host:'127.0.0.1',port:0});process.stdout.write(JSON.stringify({address,controlAddress:'http://127.0.0.1:'+controlAddress.port,a:f.a,b:f.b,admin:f.admin,password:'Generated-joint-files-password',pid:process.pid})+'\n');
 let closing=false;async function close(){if(closing)return;closing=true;control.closeAllConnections();for(const work of cleanup.reverse())await work();await new Promise<void>(resolve=>control.close(()=>resolve()));process.exit(0);}
