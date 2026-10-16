@@ -9,16 +9,21 @@ import {RequestedDetails} from './RequestedDetails';
 
 /** Keeps the existing Sources/MCP resource selection flow. M11 requires a saved
  * owner connection; no discovery or import body carries endpoint credentials. */
-export function ScopedMcpImport({api,refresh,requested}:{api:Api;refresh:()=>Promise<void>;requested:boolean}){
+type Props={api:Api;refresh:()=>Promise<void>;requested:boolean};
+export function ScopedMcpImport(props:Props){
+ const connection=props.api.connection;
+ return <OwnedMcpImport key={connection?.mode==='web'?JSON.stringify([connection.origin,connection.deploymentId,connection.userId,connection.credentialId,connection.viewScope]):'legacy'} {...props}/>;
+}
+function OwnedMcpImport({api,refresh,requested}:Props){
  const config=useResource<ConfigServiceView>(api,'/api/configuration'),sources=useResource<{items:{id:string;name:string;kind:string;enabled:boolean}[]}>(api,'/api/sources');
  const connections=config.data?webMcpConnections(config.data):[],[connectionId,setConnectionId]=useState(''),[sourceId,setSourceId]=useState('');
  const selected=connections.find(connection=>connection.id===connectionId),eligible=selected?.sourceIds.flatMap(id=>sources.data?.items.filter(source=>source.id===id&&source.kind==='mcp'&&source.enabled)??[])??[];
  const chosenSource=sourceId|| (eligible.length===1?eligible[0].id:'');
  const [baseline,setBaseline]=useState<ConfigServiceView>(),[id,setId]=useState(()=> 'mcp-'+crypto.randomUUID()),[name,setName]=useState(moteText('MCP 导入资料')),[url,setUrl]=useState(''),[token,setToken]=useState('');
  const [remote,setRemote]=useState<{uri:string;name:string}[]>([]),[uris,setUris]=useState<string[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
- const controller=useRef<AbortController|undefined>(undefined),owner=useRef(api);owner.current=api;
+ const controller=useRef<AbortController|undefined>(undefined),owner=useRef<Api|undefined>(api);owner.current=api;
  useEffect(()=>{if(config.data&&!baseline)setBaseline(config.data);},[config.data,baseline]);
- useEffect(()=>()=>controller.current?.abort(),[api]);
+ useEffect(()=>{owner.current=api;return()=>{controller.current?.abort();if(owner.current===api)owner.current=undefined;};},[api]);
  const active=()=>owner.current===api;
  async function action(task:(signal:AbortSignal)=>Promise<void>){if(busy)return;const request=new AbortController();controller.current=request;setBusy(true);setError('');setMessage('');try{await task(request.signal);}catch(cause){if(active()&&!request.signal.aborted)setError(errorMessage(cause));}finally{if(active()&&!request.signal.aborted)setBusy(false);}}
  return <RequestedDetails className="source-item" requested={requested}><summary>{moteText('其他 Chatbot 与 MCP')}</summary>
@@ -35,7 +40,7 @@ export function ScopedMcpImport({api,refresh,requested}:{api:Api;refresh:()=>Pro
    <label>{moteText('服务地址')}<input aria-label={moteText('MCP 服务地址')} type="url" value={url} placeholder="https://example.com/mcp" required disabled={busy} onChange={event=>setUrl(event.target.value)}/></label>
    <label>{moteText('来源名称')}<input aria-label={moteText('MCP 来源名称')} value={name} required disabled={busy} onChange={event=>setName(event.target.value)}/></label>
    <label>{moteText('远端 Bearer 令牌（如需）')}<input aria-label={moteText('远端 MCP 令牌')} type="password" autoComplete="off" value={token} disabled={busy} onChange={event=>setToken(event.target.value)}/></label>
-   <button className="button primary" disabled={busy||!baseline}>{moteText('保存并应用')}</button><button className="button subtle" type="button" disabled={busy} onClick={()=>{if(config.data)setBaseline(config.data);setError('');config.refresh();}}>{moteText('重新读取并还原草稿')}</button>
+   <button className="button primary" disabled={busy||!baseline}>{moteText('保存并应用')}</button><button className="button subtle" type="button" disabled={busy} onClick={()=>void action(async signal=>{const next=await api.request<ConfigServiceView>('/api/configuration',{signal});if(!active())return;setBaseline(next);setName(moteText('MCP 导入资料'));setUrl('');setToken('');config.refresh();})}>{moteText('重新读取并还原草稿')}</button>
   </form></details>{message&&<p role="status">{message}</p>}
  </RequestedDetails>;
 }
