@@ -727,6 +727,33 @@ class MultiuserWorkerInstrumentedTest {
             scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.ImageView>().any {it.contentDescription?.toString()=="设备连接邀请二维码"})}
         }
     }
+    @Test fun originalInvitationFilePickerDiscardsAHeldAReadAfterBSwitchAndStillAcceptsANewBSelection() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        fun invitation(actor:String)=CentralClient(endpoint(),token(actor)).post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated JSON selection")).getJSONObject("invitation")
+        val a=invitation("a");val b=invitation("b");val selected=java.util.concurrent.atomic.AtomicReference<android.net.Uri>()
+        val file=File(app.cacheDir,"generated-pairing-selection.json").apply {writeText(a.toString())};selected.set(android.net.Uri.fromFile(file))
+        val fifo=File(app.cacheDir,"generated-pairing-held.pipe").apply {delete()};android.system.Os.mkfifo(fifo.path,384)
+        val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+        val writer=Thread {java.io.FileOutputStream(fifo).use {out->entered.countDown();check(release.await(30,TimeUnit.SECONDS));out.write(a.toString().toByteArray())}}.apply {isDaemon=true}
+        val instrumentation=InstrumentationRegistry.getInstrumentation();val monitor=object:android.app.Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:android.content.Intent):android.app.Instrumentation.ActivityResult? = if(intent.action==android.content.Intent.ACTION_OPEN_DOCUMENT)android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(selected.get()))else null};instrumentation.addMonitor(monitor)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root)+if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
+        try {androidx.test.core.app.ActivityScenario.launch<ConnectionActivity>(android.content.Intent(app,ConnectionActivity::class.java)).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="选择连接 JSON 文件"}&&!(ConnectionActivity::class.java.getDeclaredField("working").apply {isAccessible=true}.get(activity) as Boolean)};value}}
+            fun choose(){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="选择连接 JSON 文件"}.performClick()}}
+            fun input():String{var value="";scenario.onActivity {activity->value=(ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString()};return value}
+            ready();choose();ready();assertTrue(input().contains(a.getString("code")))
+            scenario.onActivity {activity->(ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.clear()}
+            selected.set(android.net.Uri.fromFile(fifo));writer.start();choose();assertTrue(entered.await(10,TimeUnit.SECONDS))
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            // Hold the periodic refresh to expose the real reader-completion window;
+            // it must not be the authority fence for an already admitted A file.
+            scenario.onActivity {activity->val handler=ConnectionActivity::class.java.getDeclaredField("handler").apply {isAccessible=true}.get(activity) as android.os.Handler;val refresh=ConnectionActivity::class.java.getDeclaredField("refresh").apply {isAccessible=true}.get(activity) as Runnable;handler.removeCallbacks(refresh)}
+            release.countDown();writer.join(10000);ready();assertFalse("A's held JSON result must not populate B's invitation input",input().contains(a.getString("code")))
+            scenario.recreate();ready();file.writeText(b.toString());selected.set(android.net.Uri.fromFile(file));choose();ready();assertTrue(input().contains(b.getString("code")));assertEquals(fixture().getJSONObject("b").getString("userId"),settings.read().account()!!.userId)
+            assertEquals(0,control("/generated/pairing-state").getJSONArray("claims").length())
+        }} finally {release.countDown();writer.join(10000);instrumentation.removeMonitor(monitor);file.delete();fifo.delete()}
+    }
     @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
