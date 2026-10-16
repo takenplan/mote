@@ -384,6 +384,31 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun actualNativeActionsSettingsPreserveOwnedRevisionAndRetireTheOriginalSave() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val before=a.get("/api/actions");assertTrue(before.getJSONObject("settings").getBoolean("enabled"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","actions")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="行动设置"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().any {it.text.toString()=="启用"}};ready}
+            lateinit var originalSave:android.widget.Button
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="启用"}.isChecked=false
+                originalSave=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存设置"};originalSave.performClick()
+            }
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val after=a.get("/api/actions")
+            assertFalse("The native setting form must submit M12 revision and authorizationRevision with its settings",after.getJSONObject("settings").getBoolean("enabled"))
+            assertEquals(before.getJSONObject("settings").getJSONArray("reviewDeviceIds").toString(),after.getJSONObject("settings").getJSONArray("reviewDeviceIds").toString())
+            assertTrue(after.getLong("revision")>before.getLong("revision"))
+            login(app,"b");scenario.onActivity {it.navigate("actions")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {originalSave.performClick()}
+            assertTrue(CentralAccess.requireClient(app).get("/api/actions").getJSONObject("settings").getBoolean("enabled"))
+        }
+    }
+
     @Test fun sameIdentityResumeKeepsTheNativeSaveActionUsable() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
