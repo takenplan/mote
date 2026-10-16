@@ -523,7 +523,7 @@ class MultiuserWorkerInstrumentedTest {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
         val api=CentralAccess.requireClient(app);val id=fixture().getString("captureId");val initial=api.get("/api/files/"+id+"/chunks").getJSONArray("items").getJSONObject(0)
-        val bApi=CentralClient(endpoint(),token("b"),{true});val beforeB=bApi.get("/api/files/"+id+"/chunks").toString()
+        val bApi=CentralClient(endpoint(),token("b"));val beforeB=bApi.get("/api/files/"+id+"/chunks").toString()
         assertEquals("SPEAKER_0",initial.getJSONObject("fileEvidence").getString("speaker"))
         fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
         androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
