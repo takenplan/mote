@@ -59,5 +59,17 @@ export function importUploadData(sql:PrivateSql,originals:Originals,epoch:number
   })),
   file,
   bytes:(id:string)=>{const value=file(id),bytes=originals.readObject(value.hash);if(bytes.length!==value.sizeBytes)throw conflict();return bytes;},
+  remove:(ids:readonly string[])=>sql.transaction(()=>{
+   admit();let files=0,bytes=0;
+   for(const id of new Set(ids)){
+    if(sql.get('SELECT file_id FROM ig_archive_links WHERE user_id=$user AND file_id=? LIMIT 1',id))continue;
+    if(sql.get("SELECT name FROM sqlite_master WHERE name='mp_import_files' AND EXISTS(SELECT 1 FROM ig_archive_files WHERE user_id=$user AND id=?)",id)&&sql.get('SELECT file_id FROM mp_import_files WHERE user_id=$user AND file_id=? LIMIT 1',id))continue;
+    const row=sql.get('SELECT hash,json FROM ig_archive_files WHERE user_id=$user AND id=?',id);if(!row)continue;
+    for(const upload of sql.all('SELECT id,stage_id FROM ig_import_uploads WHERE user_id=$user AND file_id=?',id)){originals.cleanUpload(String(upload.stage_id));sql.run('DELETE FROM ig_import_uploads WHERE user_id=$user AND id=?',upload.id);}
+    sql.run('DELETE FROM ig_archive_files WHERE user_id=$user AND id=?',id);files++;
+    if(!sql.get('SELECT id FROM ig_archive_files WHERE user_id=$user AND hash=? LIMIT 1',row.hash)&&!sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND hash=? LIMIT 1',row.hash))bytes+=Number(JSON.parse(String(row.json)).sizeBytes);
+   }
+   const garbagePending=!!sql.get('SELECT id FROM ig_activity WHERE user_id=$user LIMIT 1');if(!garbagePending)originals.gc();return {files,bytes,garbagePending};
+  }),
  });
 }

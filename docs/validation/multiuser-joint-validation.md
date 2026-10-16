@@ -348,8 +348,30 @@ pre-consumer boundary; it is not a cross-account leak claim or all socket timing
 
 Still OPEN before whole Imports/Files acceptance: image profile/attachment image
 pipeline equivalence (explicit image profile currently blocks rather than being
-silently ignored); partial-commit recovery/ambiguity/fault branches; import deletion
-original reclamation parity; full Memory per-recipe/batch progress; Files review
+silently ignored); partial-commit recovery/ambiguity/fault branches; full Memory per-recipe/batch progress; Files review
 proposals/acoustic samples/per-file overrides/reprocess/cancel/retry/forget and
 complete recording export. Current source checkpoint is not a compiled/final
 candidate, client consumer acceptance, required affected gate, or joint PR.
+
+
+Deletion and stopped-instance import seams (post-ead narrow checkpoint): the
+last-import delete previously left its private original downloadable (actual
+RED against ead; /tmp/mote-joint-import-delete-red.log/.exit). M03 now removes
+unreferenced archived file metadata and staging receipts, retaining other jobs
+and capture links, and uses existing object GC when no M03 activity is active.
+The same last-delete case passes, including actual absent A object path and
+same-upload-ID B bytes. Personal unconfirmed export -> delete -> restore -> new
+preview/confirmation also passes: two selected cases, 2/2, no skip, EXIT0 in
+/tmp/mote-joint-import-delete-restore-approved.log/.exit. The initial sandbox
+run's localhost listen EPERM is retained as environment failure, not code RED.
+
+A new real stopped backup/restore case preserves A private preview and equal-ID
+B completed history, rejects the pre-restore token and old confirm, then uses a
+fresh model lease/preview/explicit confirmation before importing A. B capture
+IDs stay unchanged. 1/1, no skip, EXIT0 in
+/tmp/mote-joint-import-instance-restore.log/.exit. This is generated SQLite/FS/
+production HTTP/backup script evidence with synthetic localhost model transport;
+it does not substitute for physical clients, provider accuracy, partial-commit
+recovery, pin-held deferred GC characterization, or the final affected gate.
+Scope inventory passes; no new types/build/fullsuite was run during theme's
+soleheavy window.
