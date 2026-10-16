@@ -122,6 +122,11 @@ test('scoped Activity deduplicates original records across real jobs and filters
  gate.release.resolve();f.gates.delete('A');await f.wait(f.a,active.id);
 });
 
+test('scoped Activity retains an admitted empty-body Material as an unfinished original before any batch exists',async t=>{
+ const f=await fixture(t),material=await f.publish(f.a,'A','same-source','empty-body',''),job=await f.submit(f.a,[material.id]);assert.deepEqual(job.batches,[]);
+ const page=await f.request(f.a.token,'/api/work-activity?sourceId=same-source');assert.equal(page.statusCode,200,page.body);const work=page.json().items.find((item:any)=>item.kind==='memory');assert.ok(work);assert.equal(work.progress.mode,'determinate');assert.equal(work.progress.total,1);assert.equal(work.progress.completed,0);assert.notEqual(work.state,'completed');
+});
+
 test('pause drains admitted extraction and review without revoking its durable authority',async t=>{
  const f=await fixture(t),material=await f.publish(f.a,'A'),gate={entered:deferred(),release:deferred()};f.gates.set('A',gate);
  const job=await f.submit(f.a,[material.id]);await gate.entered.promise;const before=(await f.request(f.a.token,'/api/memory')).json();
