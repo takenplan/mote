@@ -121,6 +121,25 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeCentralArchiveReaderShowsActualDerivedOcrInsteadOfImmutableEmptyIntake() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val id=java.util.UUID.randomUUID().toString();val label="Generated OCR reader "+id
+        val bitmap=android.graphics.Bitmap.createBitmap(24,24,android.graphics.Bitmap.Config.ARGB_8888).apply {eraseColor(android.graphics.Color.GREEN)}
+        val bytes=java.io.ByteArrayOutputStream().also {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}.toByteArray();bitmap.recycle()
+        app.queue().enqueue(JSONObject().put("id",id).put("deviceId",settings.deviceId).put("deviceName","Generated OCR reader").put("platform","android").put("source","screen").put("capturedAt",java.time.Instant.now().toString()).put("durationMs",0).put("appId","generated.reader").put("appName",label).put("imageMime","image/png").put("ocrText","").put("ocr",JSONObject().put("status","disabled")).put("privacy",JSONObject().put("excluded",false).put("redacted",false).put("mode","local").put("collection","content")),bytes,settings.read().maxQueueMiB*1024L*1024L)
+        UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};control("/ocr/a/$id")
+        assertEquals("",CentralAccess.requireClient(app).get("/api/captures/$id").getString("ocrText"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","archive")).use {scenario->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("原始采集记录");ready()
+            var opened=false;waitFor {scenario.onActivity {activity->val title=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().firstOrNull {it.text.toString()==label};if(title!=null){views(title.parent as android.view.View).filterIsInstance<android.widget.Button>().single {it.text.toString()=="查看原文"}.performClick();opened=true}};opened};ready()
+            scenario.onActivity {activity->assertTrue("Original native raw reader must show actual M06 OCR, while immutable intake stays unchanged",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="GENERATED_A_NATIVE_CENTRAL_OCR"})}
+        }
+    }
+
     @Test fun deviceBoundPerceptionPullCachesItsOwnActualCentralOcrAndResetsFutureCursor() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
