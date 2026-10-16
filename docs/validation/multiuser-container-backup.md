@@ -83,8 +83,9 @@ The unique image `mote-container-validation:142` has immutable ID
 `sha256:a5f4366e834695d5f363b920c104953a535d3a9864d1bdf74566a0ebe01daee5`.
 The source checkout was 53b with the host profile-copy candidate at build start;
 subsequent differences are profile-lib (not copied into this image), opt-in
-validation entries (not copied), and docs. All Dockerfile-selected application/
-package/runtime sources are unchanged through the later tested candidate.
+validation entries (not copied), and docs. All emitted application/package/runtime inputs remain unchanged; the later
+SDK regression changes only a test fixture copied into the build stage, outside
+the server compiler's source inputs and runtime image.
 This build installs the repository's pinned/locked npm, PyPI and Debian runtime
 dependencies; no host package or model weight is installed by these tests.
 The original production entry was subsequently verified after the agreed slots
@@ -243,6 +244,26 @@ tsx resolution of all six imported runtime modules both exit 0:
 `/tmp/mote-container-validation-types.log/.exit` and
 `/tmp/mote-container-validation-imports.log/.exit`. The failed full invocation is
 retained; these narrow checks do not replace its pending full retry.
+
+The second final invocation on `b722de7453aa85f39e0468392754fc3428df6d5a`
+ended **exit 1**, preserved in `/tmp/mote-container-required-final2.log/.exit/.sha`.
+Types and Desktop492/Web505/Agent317 (+ one installed-Codex opt-in skip)/Shared192
+passed, but Server2640 passed and one failed (+ one default macOS-sandbox opt-in
+skip). Root/client/Android were not reached. The failure was an existing SDK
+UTF-16 fixture reading a note's raw locator after its real automatic Material
+had already replaced it; the actual tool correctly returned `not_found`.
+A standalone run passing does not erase this full-gate failure.
+
+A deterministic barrier waiting for the real note Material reproduces the same
+failure at `1f1897dbde03c7af2d13cd82a3528be987e63025`, exit 1. The fixture-only
+repair at `0efc09edfe8e3d2a2d91ab69b70f9d320b2b3399` keeps that settled-note raw
+rejection, then uses the genuine unprocessed M03 source-item HTTP path for its
+raw UTF-16 read before explicit formal Material publication. Exact character,
+offset/total/nextOffset, spans and retired-raw rejection assertions remain.
+Same-case exit 0: `/tmp/mote-container-mcp-unicode-race-green.log/.exit/.sha`;
+the corresponding `-red` files retain the deterministic failure. Production
+reader/privacy and container recovery code are unchanged. A fresh full retry is
+still required after this test repair.
 
 Actual volume publication and native Hindsight recovery now have the evidence
 above, including actual Mote production startup/restart and managed Hindsight
