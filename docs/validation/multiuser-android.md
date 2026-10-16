@@ -423,3 +423,17 @@ account store was added. Existing encrypted queues, scoped API and staging are
 reused. Shared cancel/retry/delete/review/acoustic and generic Imports are not
 silently replaced by raw intake or a successful export. Full current gates and
 whole-module closure remain pending.
+
+### Additional exact-text regression, GREEN pending resource window
+
+While Container owns the required-check window, a single existing compiled native
+journey was repeated against a new generated ASR fixture that literally begins
+its transcript with `[SPEAKER_0] `. This is evidence text, not a presentation prefix.
+The native correction still removed it and actual M06 refused the mismatched
+originalText. Durable fixture7c4c87bb and
+`/tmp/m15-native-files-literal-prefix-valid-red.log/.exit` record1/1 EXIT1,0.987s.
+The minimal one-line fix retains exact `ocrText` when constructing correction
+input. No inference, text rewriting or backend change is added. Its current code
+is intentionally not a tested freeze until Container explicitly releases and the
+same native case becomes GREEN. The prior652 narrow positive checkpoint does
+not cover this newly confirmed input variation.
