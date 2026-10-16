@@ -73,10 +73,20 @@ class ConnectionClient(private val context: Context) {
         val binding = AccountBinding.self(server, self)
         settings.saveConnection(server, grant.getString("token"), intent.getString("deviceName"), debugHttp, binding, grant.getLong("expiresAt"))
         require(settings.read().let { it.account() == binding && it.token == grant.getString("token") })
-        // The cached grant is essential: after a lost successful ACK, poll is deliberately 410.
-        if (post(server, "/api/login/ack", command).opt("acknowledged") != true) throw ConnectionFailure("response")
+        // The credential is independent of the transient handoff. After restart/expiry,
+        // ACK can be gone while this exact device credential is still live. Never
+        // call that an ACK: reverify its current authority before retiring recovery.
+        val (ackStatus, acknowledgement) = HttpJson.post(server + "/api/login/ack", command)
+        val acknowledged = ackStatus == 200 && acknowledgement?.opt("acknowledged") == true
+        if (!acknowledged) {
+            if (ackStatus != 410 || acknowledgement?.opt("error") != "login_expired") {
+                if (ackStatus in setOf(401, 403)) throw ConnectionFailure("authentication")
+                throw ConnectionFailure(if (ackStatus == 200) "response" else "network")
+            }
+            verifySelf(server, grant.getString("token"), grant.getString("credentialId"), invitation)
+        }
         if (!pending.delete()) throw SettingsWriteFailure()
-        prefs.edit().putString("credentialId", grant.getString("credentialId")).putString("scope", "client")
+        prefs.edit().putString("credentialId", grant.getString("credentialId")).putString("scope", "client").putBoolean("pairingAcknowledged", acknowledged)
             .putString("targetHash", SourceRules.target(server, grant.getString("token"))).putString("status", "connected").putLong("at", System.currentTimeMillis()).commit()
         Operations.record(context, OperationKind.CONNECTION_OK)
     }
