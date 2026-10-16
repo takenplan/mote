@@ -115,7 +115,8 @@ without weakening assertions in `340fca21`:
   composition is GREEN 13/13. All byte and authorization assertions remain.
 - Both cases also passed in the natural complete full run above.
 
-The four failures found by the complete run received named-case reproduction:
+The four failures found by the complete run received named-case reproduction
+(durations below are command wall times):
 
 | Case | Unchanged prerequisite baseline | Current RED | Repair and actual narrow GREEN |
 | --- | --- | --- | --- |
@@ -132,6 +133,8 @@ activity tracking. Pin acquisition is lazy inside actual uncached work, so cache
 stages and artifact-only transforms do not acquire a new byte requirement.
 Related real single cases remain GREEN: pin/retention 1.164 s, snapshot release
 2.421 s, unknown external transport 2.621 s, ASR checkpoint restart 2.563 s.
+Fully cached stages after byte expiry received source review, not a separately
+forced runtime scenario.
 
 Named-case local evidence uses `/tmp/mote-qr-*-baseline-repro.log`,
 `/tmp/mote-qr-*-current-red.log`, `/tmp/mote-qr-*-fixture-green.log` and
