@@ -116,6 +116,30 @@ function preserveReferences(raw: unknown, previous: unknown, next: unknown): unk
   return clone(next);
 }
 
+/** A rendered credential status is never a credential. Explicit view edits may
+ * retain only the secret of the same stable list entity at the pinned revision. */
+function retainViewSecret(next:unknown,previous:unknown,path:string[]):unknown {
+  if(!path.length){
+    if(typeof next!=='boolean')return next;
+    const configured=Boolean(previous&&(typeof previous!=='object'||Object.keys(previous as object).length));
+    if(next!==configured)throw new ConfigServiceError('config_invalid');
+    return clone(previous);
+  }
+  if(!object(next)&&!Array.isArray(next))return next;
+  const result=clone(next) as Record<string,unknown>,[head,...tail]=path;
+  for(const key of head==='*'?Object.keys(result):[head!])if(Object.hasOwn(result,key)){
+    let prior=(previous as Record<string,unknown>|undefined)?.[key];
+    const item=result[key];
+    if(Array.isArray(next)&&object(item)&&typeof item.id==='string'){
+      const matches=Array.isArray(previous)?previous.filter(value=>object(value)&&value.id===item.id):[];
+      if(matches.length>1)throw new ConfigServiceError('config_invalid');
+      prior=matches[0];
+    }
+    result[key]=retainViewSecret(item,prior,tail);
+  }
+  return result;
+}
+
 /** One owner-editable file, one transaction queue, and independently registered domains. */
 export class ConfigService {
   readonly path: string;
@@ -448,7 +472,10 @@ export class ConfigService {
   replace(id: string, value: unknown, expectedRevision: number, assertCurrent?: () => void): Promise<ConfigServiceView> {
     return this.updateMany({ [id]: value }, expectedRevision, true, assertCurrent);
   }
-  updateMany(patches: Record<string, unknown>, expectedRevision: number, replace = false, assertCurrent?: () => void): Promise<ConfigServiceView> {
+  replaceView(id:string,value:unknown,expectedRevision:number,assertCurrent?:()=>void):Promise<ConfigServiceView>{
+    return this.updateMany({[id]:value},expectedRevision,true,assertCurrent,true);
+  }
+  updateMany(patches: Record<string, unknown>, expectedRevision: number, replace = false, assertCurrent?: () => void, preserveViewSecrets=false): Promise<ConfigServiceView> {
     return this.serialize(async () => {
       try {
         if (!object(patches) || !Object.keys(patches).length || !Number.isSafeInteger(expectedRevision) || expectedRevision < 0) throw new ConfigServiceError('config_invalid');
@@ -459,7 +486,9 @@ export class ConfigService {
         const state = this.state(); if (expectedRevision !== state.revision) throw new ConfigServiceError('config_conflict');
         const next = clone(state);
         for (const [id, patch] of Object.entries(patches)) {
-          const domain = this.domains.get(id)!, saved = this.saved(id), value = replace ? clone(patch) : merge(this.domainRaw(state, domain) ?? domain.defaultValue, patch);
+          const domain = this.domains.get(id)!, saved = this.saved(id);
+          let value = replace ? clone(patch) : merge(this.domainRaw(state, domain) ?? domain.defaultValue, patch);
+          if(preserveViewSecrets)for(const field of domain.fields??[])if(field.sensitive)value=retainViewSecret(value,saved,field.path.split('.'));
           if (id === 'plugins' && object(patch) && Object.hasOwn(patch, 'configuration')) throw new ConfigServiceError('config_invalid');
           this.assignRaw(next, domain, preserveReferences(this.domainRaw(state, domain), saved, value));
         }

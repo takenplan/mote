@@ -5,7 +5,7 @@ import { defaultConfig, updateConfig } from '../src/config';
 import { readFileSync } from 'node:fs';
 const now = 1789350000000, token = 'synthetic-collector-token-' + 'a'.repeat(32);
 const invitation = { format: 'mote.connection' as const, version: 1 as const, code: 'a'.repeat(43), serverUrl: 'https://central.example', expiresAt: new Date(now + 60000).toISOString() };
-const identity = { credential: { id: 'fixture-credential', scope: 'owner', label: 'Synthetic Mac', deviceId: 'fixture-device' }, node: { version: '0.6.0', profile: 'test', protocol:{min:1,max:1} }, capabilities: { ingest: true, ingressVersion: 2, ownSources: true, archiveRead: true } };
+const identity={account:{deploymentId:'generated-deployment',userId:'generated-user',username:'generated-account',administrator:false,disabled:false,authorizationEpoch:0,createdAt:0,credentialId:'fixture-credential'},credential:{kind:'client',expiresAt:Date.now()+86400000,deviceId:'fixture-device'},protocol:{min:2,max:2},capabilities:{authentication:true,ingest:true,ingressVersion:3,archiveRead:false}};
 function response(value: unknown, status = 200) { return new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } }); }
 it('previews JSON and URI without network or disclosing the invitation code, then requires the exact reviewed origin', async () => {
   let calls = 0; const value = new ConnectionOnboarding(async () => { calls++; return response({ serverUrl: invitation.serverUrl, token, credentialId: 'fixture-credential', scope: 'owner' }); }, () => now);
@@ -56,17 +56,17 @@ it('returns fixed network/409 errors without provider body or token leakage and 
 });
 it('validates connection scope, device binding and bounded responses', async () => {
   const config = { serverUrl: invitation.serverUrl, token, deviceId: 'fixture-device' };
-  const result = await testConnection(config, async (_url, init) => { expect(init?.headers).toEqual({ Authorization: 'Bearer ' + token, 'Accept-Language': 'zh-CN', 'X-Mote-Protocol-Version': '1' }); expect(init?.redirect).toBe('error'); return response(identity); });
-  expect(result.credential.scope).toBe('owner'); expect(result.capabilities.ingressVersion).toBe(2); expect(JSON.stringify(result)).not.toContain(token);
+  const result = await testConnection(config, async (_url, init) => { expect(init?.headers).toEqual({ Authorization: 'Bearer ' + token, 'Accept-Language': 'zh-CN', 'X-Mote-Protocol-Version': '2' }); expect(init?.redirect).toBe('error'); return response(identity); });
+  expect(result.credential.scope).toBe('client'); expect(result.capabilities.ingressVersion).toBe(3); expect(JSON.stringify(result)).not.toContain(token);
   for (const bad of [{ ...identity, credential: { ...identity.credential, scope: 'collector' } }, { ...identity, credential: { ...identity.credential, scope: 'mcp' } }, { ...identity, credential: { ...identity.credential, deviceId: 'other' } }, { ...identity, capabilities: { ...identity.capabilities, ingressVersion: '2' } }, { ...identity, credential: { ...identity.credential, token } }]) await expect(testConnection(config, async () => response(bad))).rejects.toThrow();
   await expect(testConnection(config, async () => new Response('x'.repeat(16385)))).rejects.toThrow();
 });
 const protocolFixtures = JSON.parse(readFileSync(new URL('../../../protocol/fixtures/compatibility.json', import.meta.url), 'utf8')) as Array<{name:string;protocol?:unknown;expected?:{min:number;max:number};error?:string}>;
 it.each(protocolFixtures)('enforces generated compatibility for independent product versions: $name', async fixture => {
-  const node = { profile:identity.node.profile, version: '9.123.456', ...(Object.hasOwn(fixture, 'protocol') ? { protocol: fixture.protocol } : {}) };
-  const checked = testConnection({ serverUrl: invitation.serverUrl, token, deviceId: 'fixture-device' }, async () => response({ ...identity, node }));
+  const protocol=fixture.protocol;
+  const checked = testConnection({ serverUrl: invitation.serverUrl, token, deviceId: 'fixture-device' }, async () => response({ ...identity,protocol }));
   if (fixture.error) await expect(checked).rejects.toMatchObject({ code: fixture.error === 'incompatible_protocol' ? 'PROTOCOL_INCOMPATIBLE' : 'INVALID_RESPONSE' });
-  else expect((await checked).node.protocol).toEqual(fixture.expected);
+  else expect((await checked).protocol).toEqual(fixture.expected);
 });
 it('blocks changing node or credential for pending screenshots, prepared notes, paused source bodies or in-flight work', () => {
   const empty = { running: false, inFlight: false, queued: 0, preparedNote: false, sourcePending: 0, sourceInFlight: false };
@@ -85,8 +85,8 @@ it('allows explicitly confirmed same-node invitations to resume pending data onl
   for (const state of [{ running: true }, { inFlight: true }, { sourceInFlight: true }]) expect(() => assertConnectionChangeSafe({ ...pending, ...state }, true)).toThrow();
 });
 
-it('accepts registered owner identity and rejects retired collector or MCP credentials even with claimed owner capabilities',async()=>{
+it('accepts a registered personal client identity and rejects owner or MCP response shapes',async()=>{
  const config={serverUrl:invitation.serverUrl,token,deviceId:'fixture-device'};
- expect((await testConnection(config,async()=>response(identity))).capabilities.archiveRead).toBe(true);
+ expect((await testConnection(config,async()=>response(identity))).capabilities.ingressVersion).toBe(3);
  for(const scope of ['collector','mcp'])await expect(testConnection(config,async()=>response({...identity,credential:{...identity.credential,scope},capabilities:{...identity.capabilities,archiveRead:true}}))).rejects.toMatchObject({code:'INVALID_RESPONSE'});
 });

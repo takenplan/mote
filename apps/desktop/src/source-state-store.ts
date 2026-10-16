@@ -42,7 +42,7 @@ export function sourceState(path: string, patches?: StatePatch[], maximum?: numb
   try {
     db.exec('PRAGMA busy_timeout=5000;');
     if(exists&&Number(db.prepare('PRAGMA user_version').get()!.user_version)!==DESKTOP_STORAGE_VERSION)throw Error(RESET_REQUIRED);
-    db.exec('PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS entries(section TEXT NOT NULL,key TEXT NOT NULL,value BLOB NOT NULL,PRIMARY KEY(section,key)); PRAGMA user_version=3;');
+    db.exec(`PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; CREATE TABLE IF NOT EXISTS entries(section TEXT NOT NULL,key TEXT NOT NULL,value BLOB NOT NULL,PRIMARY KEY(section,key)); PRAGMA user_version=${DESKTOP_STORAGE_VERSION};`);
     if(db.prepare("SELECT 1 FROM entries WHERE section='state' AND key IN ('pendingRealtime','pendingHistory','localProcessing') OR section IN ('codingWireFields','localProcessing') LIMIT 1").get())throw Error(RESET_REQUIRED);
     const checkpoint=db.prepare("SELECT value FROM entries WHERE section='state' AND key='checkpoint'").get();
     if(checkpoint&&Object.keys(JSON.parse(decodeLocalContent(Buffer.from(checkpoint.value as Uint8Array)).toString()).catalog??{}).length)throw Error(RESET_REQUIRED);

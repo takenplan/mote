@@ -1,3 +1,4 @@
+import {DESKTOP_PROTOCOL_HEADERS} from './account';
 import { connectionToken, requireConnectionToken } from './login-session';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import type { Config } from './contracts';
@@ -26,7 +27,7 @@ export class AskClient {
         path = '/api/query-runs'; body = JSON.stringify({id: id(), input: { question: input.question.trim(), ...(input.conversationId ? {conversationId: input.conversationId} : {}), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone }}); break;
       default: throw Error('Unsupported ask command');
     }
-    const response = await fetch(origin + path, {method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(30000), headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept-Language': getLocale()}, ...(body ? {body} : {})});
+    const response = await fetch(origin + path, {method: body ? 'POST' : 'GET', redirect: 'error', signal: AbortSignal.timeout(30000), headers: {...DESKTOP_PROTOCOL_HEADERS,Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Accept-Language': getLocale()}, ...(body ? {body} : {})});
     if(!this.isCurrent(config)||!connectionToken(config)){await response.body?.cancel();this.check(config);}
     if (!response.ok) {
       await response.body?.cancel();

@@ -1,3 +1,4 @@
+import {loginWeb,durationForLifetime} from './web-auth';
 import {ImageProgress} from './ImageProgress';
 import {formatEvidenceRef} from '@mote/shared';
 import {memorySourceRoute} from './memory-source-route';
@@ -28,6 +29,7 @@ useState
 import { AnswerMarkdown } from "./AnswerMarkdown";
 import { EvidenceState,EvidenceProcessingHelp } from './EvidenceState';
 import { ReferenceDetail } from './ReferenceDetail';
+import {contextEvidenceReference} from './evidence-route';
 import { TurnUsage } from './Usage';
 import {
 ApiError,
@@ -305,7 +307,8 @@ export function LoginDialog({ destination, onConnected, onClose }: {
   onConnected: (value: Connection, lifetime: SessionLifetime) => void;
   onClose: () => void;
 }) {
-  const [token, setToken] = useState("");
+  const [username,setUsername]=useState("");
+  const [password,setPassword]=useState("");
   const [lifetime, setLifetime] = useState<SessionLifetime>(readSessionLifetime);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -321,16 +324,11 @@ export function LoginDialog({ destination, onConnected, onClose }: {
     const controller = new AbortController(); active.current = controller;
     setBusy(true); setError("");
     try {
-      if (!token.trim()) throw new Error(moteText("请输入管理访问令牌。"));
-      const connection = {token: token.trim()};
-      // Every human client uses the same node permissions.
-      await createApi(connection).request("/api/configuration", {signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)])});
-      const durationMs=({session:0,'1d':86400000,'7d':604800000,'30d':2592000000})[lifetime];
-      const session=await createApi(connection).request<Connection>('/api/login/session',{method:'POST',body:JSON.stringify({serverUrl:location.origin,deviceId:crypto.randomUUID(),deviceName:'Mote Browser',platform:'other',durationMs}),signal:controller.signal});
-      if (!controller.signal.aborted) onConnected({...session,serverExpiresAt:session.expiresAt}, lifetime);
+      const session=await loginWeb(username.trim(),password,durationForLifetime[lifetime]);
+      if (!controller.signal.aborted) onConnected(session, lifetime);
     } catch (e) {
       if (!controller.signal.aborted) setError(e instanceof ApiError && e.status === 401
-        ? moteText("令牌无效或已失效，请检查后重新登录。")
+        ? moteText("用户名或密码不正确，请重新登录。")
         : e instanceof ApiError && e.status === 403
           ? moteText("请升级中央节点后再登录。")
           : errorMessage(e));
@@ -342,16 +340,17 @@ export function LoginDialog({ destination, onConnected, onClose }: {
       <div className="modal-icon"><ShieldCheck size={24}/></div>
       <div className="eyebrow">{moteText("MOTE · 中央管理界面")}</div>
       <h2 id="connect-title">{moteText("登录 Mote")}</h2>
-      <p className="muted-copy">{moteText("此服务就是中央节点，负责接收和归档客户端采集的数据。验证管理令牌后，进入「")}{destination}{getLocale()==='en'?'”.':'」。'}</p>
+      <p className="muted-copy">{moteText("登录后进入「")}{destination}{getLocale()==='en'?'”.':'」。'}</p>
       <form onSubmit={connect}>
         <p className="login-endpoint">{moteText("当前服务")}{' '}<strong>{window.location.origin}</strong></p>
-        <label>{moteText("管理访问令牌")}<input ref={tokenInput} aria-label={moteText("管理访问令牌")} autoFocus type="password" autoComplete="off" placeholder={moteText("输入此节点的管理令牌")} value={token} onChange={e=>setToken(e.target.value)} required disabled={busy}/></label>
-        <label className="session-lifetime-control"><span>{moteText("登录会话有效期")}</span><select aria-label={moteText("登录会话有效期")} value={lifetime} onChange={e=>setLifetime(e.target.value as SessionLifetime)} disabled={busy}><option value="session">{moteText("当前窗口（Session）")}</option><option value="1d">{moteText("1 天")}</option><option value="7d">{moteText("7 天")}</option><option value="30d">{moteText("30 天")}</option></select></label>
-        <div className="field-note"><ShieldCheck size={15}/>{lifetime==='session'?moteText("令牌只保留在当前标签页会话，退出登录后清除。"):moteText("令牌会保存在此浏览器中，并在所选期限后自动清除；退出登录会立即清除。")}</div>
+        <label>{moteText("用户名")}<input ref={tokenInput} aria-label={moteText("用户名")} autoFocus autoComplete="username" value={username} onChange={e=>setUsername(e.target.value)} required disabled={busy}/></label>
+        <label>{moteText("密码")}<input aria-label={moteText("密码")} type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)} required disabled={busy}/></label>
+        <label className="session-lifetime-control"><span>{moteText("登录会话有效期")}</span><select aria-label={moteText("登录会话有效期")} value={lifetime} onChange={e=>setLifetime(e.target.value as SessionLifetime)} disabled={busy}><option value="session">{moteText("浏览器会话")}</option><option value="1d">{moteText("1 天")}</option><option value="7d">{moteText("7 天")}</option><option value="30d">{moteText("30 天")}</option></select></label>
+        <div className="field-note"><ShieldCheck size={15}/>{lifetime==='session'?moteText("关闭浏览器后需要重新登录。"):moteText("登录会话在所选期限后失效，退出登录立即撤销当前会话。")}</div>
         {error && <ErrorNotice text={error}/>}
-        <button className="button primary full" disabled={busy}>{busy ? <Spinner label={moteText("正在验证令牌…")}/> : <>{moteText("登录并继续")}<ArrowRight size={16}/></>}</button>
+        <button className="button primary full" disabled={busy}>{busy ? <Spinner label={moteText("正在验证登录权限…")}/> : <>{moteText("登录并继续")}<ArrowRight size={16}/></>}</button>
       </form>
-      <details className="connection-help"><summary>{moteText("在哪里获取管理令牌？")}</summary><p>{moteText("在部署机器上运行")}{' '}<code>node scripts/mote.mjs token --profile dev</code>{' '}{moteText("（日常环境使用对应名称），或读取部署配置中的")}{' '}<code>mote.yaml → server.token</code>{moteText("。设备扫码使用单独的一次性邀请。")}</p></details>
+
     </section>
   </div>;
 }
@@ -385,9 +384,10 @@ export function EvidenceDialog({
   onDeleted: () => void;
   onOpen: (id:string) => void;
 }) {
+  const contextReference=id.startsWith('context:')&&parseEvidenceRef(id.slice(8))?.kind==='capture'?id.slice(8):undefined;
   const parsedRef=parseEvidenceRef(id),captureRef=parsedRef?.kind==='capture';
   const captureId=captureRef?parsedRef.id:undefined;
-  const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
+  const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/${api.connection?.mode==='web'?'captures':'capture-browser'}/${encodeURIComponent(captureId!)}`:null);
   useOperationUpdates(api);
   const [mutationError,setError]=useState('');
   const error=mutationError||(readError?errorMessage(readError):'');
@@ -463,7 +463,7 @@ export function EvidenceDialog({
         {capture?.revisionState==='historical'&&<p role="status">{moteText('历史证据，仅用于核对当时的内容。')}</p>}
         {presentation?.nativeFile && <FileDetail api={api} id={presentation.nativeFile.captureId} startMs={presentation.nativeFile.startMs} onOpen={onOpen}/>}
         {error && <ErrorNotice text={error} />}
-        {!captureRef&&<ReferenceDetail key={id} api={api} reference={id} onOpen={onOpen}/>}
+        {!captureRef&&<ReferenceDetail key={id} api={api} reference={contextReference??id} onOpen={reference=>onOpen(contextReference?contextEvidenceReference(reference):reference)}/>}
         {captureRef && !capture && !error && (
           <div className="panel-pad">
             <Spinner />

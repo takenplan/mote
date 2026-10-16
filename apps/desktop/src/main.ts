@@ -1,3 +1,5 @@
+import {DesktopAccountStorage} from './account-storage';
+import {accountKey,sameAccount} from './account';
 import { connectionToken, loginRequest, loginVerifier } from './login-session';
 import { SyncHistory, type SyncHistoryQuery, type SyncHistoryContentQuery } from './sync-history';
 import { localContentPage, localContentDetail, centralContentPage } from './content-library';
@@ -91,17 +93,20 @@ function trackNote<T>(task: Promise<T>): Promise<T> {
 }
 async function settleNoteWork(): Promise<void> { while (noteWork.size) await Promise.allSettled([...noteWork]); }
 let settings: Config;
+let accountGeneration=0;
+let accountTransition=false;
 let recoveryRequired: string | undefined;
 const events = new EventJournal(join(profile.dataDirectory, 'diagnostics'), () => Boolean(settings?.diagnosticsEnabled));
 let pendingNoteStatus = () => ({ count: 0, unbound: true, baseRecords: undefined as number | undefined });
 function includePreparedNote(status: Status): Status { const note = pendingNoteStatus(); return { ...status, sync: { ...status.sync, pendingRecords: (note.baseRecords ?? status.sync.pendingRecords) + note.count, localBacklogUnbound: (note.baseRecords ?? status.sync.pendingRecords) + note.count > 0 && note.unbound } }; }
 let storageStatus: () => Status['storage'] = () => undefined;
-function clientStatus(): Status { return { ...includePreparedNote(collector.status()), operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } }; }
+function clientStatus(): Status { return { ...includePreparedNote(collector.status()), authorizationGeneration:accountGeneration, operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } }; }
 const backgroundJobs = new BackgroundJobs();
 let controlChain: Promise<unknown> = Promise.resolve();
 
 function serialize<T>(operation: () => Promise<T>): Promise<T> {
-  const result = controlChain.then(() => { if (recoveryRequired) throw new Error(recoveryRequired); return operation(); });
+  const expected=accountGeneration;
+  const result = controlChain.then(() => { if(expected!==accountGeneration)throw Error('Desktop account changed'); if (recoveryRequired) throw new Error(recoveryRequired); return operation(); });
   controlChain = result.catch(() => undefined);
   return result;
 }
@@ -113,8 +118,9 @@ let ensureBrowserLogin: (()=>Promise<void>)|undefined;
 async function showCentral(page?: string, evidenceId?: string,workId?:string): Promise<void> {
   if(!connectionToken(settings)){if(browserLogin)return browserLogin(page,evidenceId,undefined,workId);throw Error(moteText('请先登录中央节点，各页面会共用这次登录。'));}
   await ensureBrowserLogin?.();
-  const {code}=await loginRequest(settings,'/api/login/ticket',{expiresAt:settings.authExpiresAt},connectionToken(settings));
-  await openCentralBrowser(settings.serverUrl, page, process.platform,
+  const selected=settings;const {code}=await loginRequest(selected,'/api/login/ticket',{},connectionToken(selected));
+  if(settings!==selected)throw Error('Desktop account changed');
+  await openCentralBrowser(selected.serverUrl, page, process.platform,
     url => promisify(execFile)('/usr/bin/open', ['-a', 'Google Chrome', url]), url => shell.openExternal(url), evidenceId, code,undefined,workId);
 }
 function showWindow(): void { window?.show(); window?.focus(); }
@@ -131,7 +137,8 @@ function trayIcon(): Electron.NativeImage {
   return icon;
 }
 function updateUi(status: Status): void {
-  status = { ...includePreparedNote(status), operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } };
+  if(accountTransition)return;
+  status = { ...includePreparedNote(status), authorizationGeneration:accountGeneration, operations: backgroundJobs.snapshot(), storage: storageStatus(), environment: { profile: profile.name, defaultProfile: profile.defaultProfile, dataDirectory: profile.dataDirectory } };
   if (window && !window.isDestroyed()) window.webContents.send('mote:status', status);
   tray?.setToolTip(moteText("Mote [{0}] · {1} · 待上传 {2}", profile.name, status.running ? moteText("采集中") : moteText("已停止"), status.queueDepth));
   tray?.setContextMenu(Menu.buildFromTemplate([
@@ -142,7 +149,7 @@ function updateUi(status: Status): void {
     { label: moteText("随手记"), click: () => showClientPage('notes') },
     { label: moteText("设置…"), click: () => showClientPage('settings') },
     { label: moteText("打开中央仓库"), click: () => { void showCentral().catch(e => dialog.showErrorBox(moteText("中央仓库"), (e as Error).message)); } },
-    { label: moteText("开始采集"), enabled: !status.running, click: () => { void serialize(() => collector.start()).catch(error => dialog.showErrorBox(moteText("无法开始采集"), (error as Error).message)); } },
+    { label: moteText("开始采集"), enabled: !status.running, click: () => { void serialize(() => {if(!accountKey(settings)||!connectionToken(settings))throw Error('Sign in before collecting personal data');return collector.start();}).catch(error => dialog.showErrorBox(moteText("无法开始采集"), (error as Error).message)); } },
     { label: moteText("停止采集"), enabled: status.running, click: () => { collector.stop(); void serialize(() => collector.settleCapture()); } },
     { type: 'separator' },
     { label: moteText("退出 Mote（停止采集和上传）"), click: () => app.quit() },
@@ -171,11 +178,19 @@ else {
     };
     const store = new ConfigStore(dataDirectory, secrets, () => profileDefaults(profile, {}), () => profileDefaults(profile, process.env));
     settings = await store.load();
+    if(connectionToken(settings)&&!accountKey(settings)){
+      // New-profile environment credentials are explicit bootstrap input, not
+      // evidence of ownership. Confirm M01 before creating any private stores.
+      try{const identity=await testConnection(settings,fetch,false);settings={...settings,account:identity.account,credentialScope:'client',authSignedOut:false,authExpiresAt:identity.credential.expiresAt};}
+      catch{settings={...settings,token:undefined,account:undefined,authSignedOut:true};}
+    }
     await store.save(settings); // Persist stable device identity before the first observation.
     void events.record('APP', 'STARTED');
-    const noteDrafts = new NoteDraftStore(join(dataDirectory, 'notes')); await noteDrafts.initialize();
-    const storage = new QueueStorage(dataDirectory, profile.name, settings.deviceId, [dataDirectory, ...await Promise.all([defaultDataDirectory, `${defaultDataDirectory}-profiles`].map(path => realpath(path).catch(() => resolve(path))))]);
-    const queue = new DurableQueue(await storage.open(settings.captureStorageDirectory), settings);
+    const accounts=new DesktopAccountStorage(dataDirectory,secrets);
+    let accountDirectory=await accounts.open(settings);
+    let noteDrafts = new NoteDraftStore(join(accountDirectory, 'notes'),connectionToken(settings)?accountKey(settings):undefined); await noteDrafts.initialize();
+    let storage = new QueueStorage(accountDirectory, profile.name, settings.deviceId, [dataDirectory, ...await Promise.all([defaultDataDirectory, `${defaultDataDirectory}-profiles`].map(path => realpath(path).catch(() => resolve(path))))]);
+    let queue = new DurableQueue(await storage.open(connectionToken(settings)?settings.captureStorageDirectory:''), connectionToken(settings)?settings:{...settings,account:undefined});
     queue.setStorageGuard(async () => { if (recoveryRequired) throw new Error(recoveryRequired); await storage.assertOwned(queue.directory); });
     await queue.initialize();
     await storage.recover(queue.directory);
@@ -189,23 +204,25 @@ else {
     const updateSession = session.fromPartition('mote-public-updates', { cache: false });
     updater = new DesktopUpdater({ directory: updateDirectory, helper: app.isPackaged ? join(process.resourcesPath, 'native', 'mote-updater') : join(__dirname, '..', 'native', 'bin', 'mote-updater'), bundlePath, currentVersion: app.getVersion(), arch: process.arch === 'arm64' ? 'arm64' : 'x64', profile: profile.name }, createUpdateNetwork(createChromiumUpdateFetch(options => net.request({ ...options, session: updateSession }))));
     await updater.initialize();
-    localSources = new LocalSourceManager(join(dataDirectory, 'local-sources'), settings, helperPath, true, events);
+    localSources = new LocalSourceManager(join(accountDirectory, 'local-sources'), connectionToken(settings)?settings:{...settings,account:undefined}, helperPath, true, events);
     await localSources.initialize();
-    const diagnostics = new DiagnosticsRecorder(join(dataDirectory, 'diagnostics'));
+    let diagnostics = new DiagnosticsRecorder(join(accountDirectory, 'diagnostics'));
     const configureDiagnostics = async () => diagnostics.configure({ enabled: settings.diagnosticsEnabled, intervalMs: settings.diagnosticIntervalSeconds * 1000 }, async () => ({
       queueBytes: queue.stats().bytes, modelBytes: 0, ...await readPowerState(helperPath).catch(() => ({})),
     }));
-    const syncHistory = new SyncHistory(join(dataDirectory,'sync-history.sqlite')); await syncHistory.initialize();
+    let syncHistory = new SyncHistory(join(accountDirectory,'sync-history.sqlite')); await syncHistory.initialize();
     collector = new Collector(settings, queue, helperPath, encryptedStorageAvailable, updateUi, diagnostics, events, localSources,syncHistory);
     let calendarDelivery:Promise<void>|undefined;
     const calendarTimer=setInterval(()=>{
       if(calendarDelivery||!connectionToken(settings)||!settings.serverUrl||settings.syncMode==='manual'||process.platform!=='darwin')return;
-      calendarDelivery=nativeCalendarActions({...settings},helperPath,dataDirectory).deliver().catch(()=>{}).finally(()=>{calendarDelivery=undefined;});
+      calendarDelivery=nativeCalendarActions({...settings},helperPath,accountDirectory).deliver().catch(()=>{}).finally(()=>{calendarDelivery=undefined;});
     },60000);calendarTimer.unref();
     app.once('before-quit',()=>clearInterval(calendarTimer));
 
     await configureDiagnostics();
     const pageUrl = pathToFileURL(join(__dirname, 'index.html')).href;
+    let activePageUrl=pageUrl+'?document='+randomUUID();
+    const loadAccountDocument=async()=>{activePageUrl=pageUrl+'?document='+randomUUID();await window!.loadURL(activePageUrl);};
     window = new BrowserWindow({
       width: 1140, height: 840, minWidth: 820, minHeight: 620, title: `Mote [${profileLabel}]`, backgroundColor: '#f7f8f5',
       webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, devTools: !app.isPackaged || developmentBuild },
@@ -217,7 +234,7 @@ else {
     window.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
     window.on('close', event => { if (!quitting) { event.preventDefault(); window?.hide(); } });
     const trusted = (event: IpcMainInvokeEvent) => {
-      if (!window || event.sender !== window.webContents || event.senderFrame?.url !== pageUrl || event.senderFrame !== window.webContents.mainFrame) throw new Error(moteText("请求来源不受信任"));
+      if (!window || event.sender !== window.webContents || event.senderFrame?.url !== activePageUrl || event.senderFrame !== window.webContents.mainFrame) throw new Error(moteText("请求来源不受信任"));
     };
       ipcMain.handle('mote:language', event => { trusted(event); return languageState(); });
     ipcMain.handle('mote:set-language', async (event, raw: unknown) => {
@@ -245,12 +262,14 @@ else {
     };
     const handle = (channel: string, operation: (...args: unknown[]) => unknown) => {
       const stage: EventStage | undefined = ({ 'mote:source-sync': 'SOURCE', 'mote:source-files': 'SOURCE', 'mote:source-calendar': 'SOURCE', 'mote:source-update': 'SOURCE', 'mote:connection-confirm': 'CONNECTION', 'mote:connection-test': 'CONNECTION', 'mote:update-check': 'UPDATE', 'mote:update-download': 'UPDATE', 'mote:update-install': 'UPDATE', 'mote:retry': 'UPLOAD', 'mote:configure': 'CONFIG', 'mote:start': 'CAPTURE', 'mote:stop': 'CAPTURE', 'mote:note': 'NOTE', 'mote:note-draft-update': 'NOTE', 'mote:support-export': 'SUPPORT', 'mote:import-queue': 'QUEUE', 'mote:export-queue': 'QUEUE' } as Record<string, EventStage>)[channel];
-    ipcMain.handle(channel, async (event, ...args) => {
+    ipcMain.handle(channel, async (event, bound, ...args) => {
         trusted(event);
+        const expected=accountGeneration;
+        if(channel!=='mote:get-status'&&bound?.accountGeneration!==expected)throw Error('Desktop account changed; reload the window');
         if (recoveryRequired && !['mote:get-status', 'mote:storage-restart', 'mote:stop', 'mote:note-draft', 'mote:connection-status', 'mote:update-status', 'mote:sources'].includes(channel)) throw new Error(recoveryRequired);
         const startedAt = Date.now();
         if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'STARTED');
-        try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt }); return result; }
+        try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if(expected!==accountGeneration&&channel!=='mote:ask'&&channel!=='mote:configure'&&channel!=='mote:connection-confirm')throw Error('Desktop account changed; reload the window'); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt }); return result; }
         catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt }); throw error; }
       });
     };
@@ -266,11 +285,6 @@ else {
         await releaseCollector();
       }
     };
-    const connectionChange = async <T>(operation: () => Promise<T>, sameNodeInvitation = false, confirmedInitial = false): Promise<T> => pausedSettings(async () => {
-      const source = localSources!.connectionActivity();
-      assertConnectionChangeSafe({ running: clientStatus().running, inFlight: collector.connectionActivity().inFlight, queued: queue.stats().depth, preparedNote: noteDrafts.hasPrepared(), sourcePending: source.pending, sourceInFlight: source.inFlight }, sameNodeInvitation || (confirmedInitial && unboundBacklog()));
-      return operation();
-    });
     const requireRecovery = (message: string): void => { recoveryRequired = message; collector.requireRecovery(message); void localSources!.close(); };
     const applySettings = async (updated: Config): Promise<void> => {
       const previous = settings;
@@ -284,6 +298,7 @@ else {
         settings = updated; collector.updateConfig(updated); await configureDiagnostics();
         if (relocating) await queue.relocate(updated.captureStorageDirectory || storage.defaultDirectory, storage, () => store.save(updated), async () => (await store.load()).captureStorageDirectory || storage.defaultDirectory, value => backgroundJobs.progress('mote:configure', value));
         else await store.save(updated);
+        await accounts.remember(updated);
       } catch (error) {
         // A failed directory fsync may follow a successful rename. Preserve both copies and stop all IO.
         const persisted = await store.load().catch(() => undefined);
@@ -305,20 +320,59 @@ else {
       }
       pendingStorageDirectory = undefined;
     };
-    const commitConnection = async (updated: Config, sameNodeInvitation = false, confirmedInitial = false): Promise<void> => {
-      // Checkpoint before config save so a crash cannot switch credentials without the original source queue.
-      const initial = confirmedInitial && unboundBacklog();
-      queue.binding.assertChange(updated, queue.stats().depth > 0 || noteDrafts.hasPrepared(), initial, sameNodeInvitation);
-      localSources!.nodeBinding.assertChange(updated, localSources!.connectionActivity().pending > 0, initial, sameNodeInvitation);
-      if (initial) await localSources!.prepareInitialConnection(updated);
-      else if (sameNodeInvitation) await localSources!.prepareReauthorization(updated);
-      // Bind before config persistence: after a crash, a mismatched editable config cannot upload old bodies.
-      await queue.binding.commit(updated, queue.stats().depth > 0 || noteDrafts.hasPrepared(), initial, sameNodeInvitation);
-      await localSources!.nodeBinding.commit(updated, localSources!.connectionActivity().pending > 0, initial, sameNodeInvitation);
-      if (initial) await noteDrafts.bindPreparedOrigin(updated.serverUrl);
-      if (sameNodeInvitation) await queue.resetRetries();
-      await applySettings(updated);
-      connectionState = { state: 'unchecked', message: moteText("连接已保存，可测试权限与节点版本") };
+    const requireAccount=()=>{if(!accountKey(settings)||!connectionToken(settings))throw Error('Sign in before collecting personal data');};
+    const commitConnection = async (requested:Config):Promise<void> => {
+      const previous=settings,oldDirectory=accountDirectory;
+      const nextDirectory=accounts.directory(requested),switching=nextDirectory!==oldDirectory;
+      // Account changes retire running intent. Credential rotation within the
+      // same stable account preserves the existing settings suspension policy.
+      if(switching||!sameAccount(previous,requested)||!connectionToken(requested)){collector.stop();await collector.settleCapture();}
+      await settleNoteWork();
+      const releaseCollector=await collector.suspendForSettings();
+      const oldSources=localSources!;const releaseSources=await oldSources.holdConnection();
+      // Revoke every old document entry, including bootstrap, before replacing
+      // any private reference. Retired and initializing collectors may publish
+      // internally, but their intermediate state cannot reach a renderer.
+      accountTransition=true;accountGeneration++;activePageUrl=pageUrl+'?document='+randomUUID();
+      try {
+        await calendarDelivery;
+        await accounts.remember(previous);
+        const updated=switching&&connectionToken(requested)&&accountKey(requested)?await accounts.forLogin(requested):requested;
+        if(!switching){
+          await queue.binding.commit(updated,queue.stats().depth>0);
+          await oldSources.changeConnection(updated);
+          await store.save(updated);await accounts.remember(updated);
+          settings=updated;collector.updateConfig(updated);
+          await queue.resetRetries();
+        }else{
+          const directory=await accounts.open(updated),nextNotes=new NoteDraftStore(join(directory,'notes'),connectionToken(updated)?accountKey(updated):undefined);await nextNotes.initialize();
+          const nextStorage=new QueueStorage(directory,profile.name,updated.deviceId,[dataDirectory,defaultDataDirectory,`${defaultDataDirectory}-profiles`]);
+          const nextQueue=new DurableQueue(await nextStorage.open(connectionToken(updated)?updated.captureStorageDirectory:''),connectionToken(updated)?updated:{...updated,account:undefined});
+          nextQueue.setStorageGuard(async()=>{if(recoveryRequired)throw Error(recoveryRequired);await nextStorage.assertOwned(nextQueue.directory);});
+          await nextQueue.initialize();await nextStorage.recover(nextQueue.directory);
+          const nextSources=new LocalSourceManager(join(directory,'local-sources'),connectionToken(updated)?updated:{...updated,account:undefined},helperPath,true,events);
+          await nextSources.initialize();
+          const holdNext=await nextSources.holdConnection();
+          const nextHistory=new SyncHistory(join(directory,'sync-history.sqlite'));await nextHistory.initialize();
+          try{await store.save(updated);}catch(error){await nextSources.close();nextHistory.close();throw error;}
+          collector.shutdown();await oldSources.close();syncHistory.close();await diagnostics.close();
+          accountDirectory=directory;settings=updated;queue=nextQueue;storage=nextStorage;noteDrafts=nextNotes;syncHistory=nextHistory;localSources=nextSources;
+          diagnostics=new DiagnosticsRecorder(join(directory,'diagnostics'));await configureDiagnostics();
+          collector=new Collector(updated,queue,helperPath,encryptedStorageAvailable,updateUi,diagnostics,events,nextSources,nextHistory);
+          holdNext();collector.initialize();
+        }
+        pendingStorageDirectory=undefined;sourceSelections.clear();onboarding.clear();
+        connectionState={state:'unchecked',message:moteText('连接已保存，可测试权限与节点版本')};
+        // Revoke the old document before sending any new account status. Each
+        // navigation has a fresh unguessable bootstrap URL, including get-status.
+        await loadAccountDocument();accountTransition=false;
+        updateUi(clientStatus());
+      }catch(error){
+        const persisted=await store.load().catch(()=>undefined);
+        if(!persisted||!sameAccount(persisted,previous)||persisted.token!==previous.token||persisted.authSignedOut!==previous.authSignedOut)requireRecovery('Desktop account transition needs restart; all account data was preserved');
+        else {await loadAccountDocument();accountTransition=false;updateUi(clientStatus());}
+        throw error;
+      }finally{releaseSources();await releaseCollector();}
     };
     const readSelectedInvitation = async (path: string, maximum: number): Promise<Buffer> => {
       const file = await open(path, 'r');
@@ -340,21 +394,21 @@ else {
         return { canceled: false, preview: onboarding.preview(input) };
       } catch { throw new Error(moteText("无法读取有效邀请，请检查 JSON/二维码格式、有效期和文件大小；原连接未变动")); }
     }));
-    handle('mote:connection-confirm', (id, origin, deviceName) => serialize(async () => { await connectionChange(async () => {
-      if (!encryptedStorageAvailable()) throw new Error(moteText("系统加密存储不可用，不能交换并保存凭据"));
-      if (typeof deviceName !== 'string') throw new Error('Invalid device name');
-      const named = updateConfig(settings, { ...settings, deviceName });
-      const result = await onboarding.redeem(id, origin, named, currentPlatform);
-      const updated = { ...updateConfig(settings, { ...named, serverUrl: result.serverUrl, token: result.token }), credentialScope: result.scope, authSignedOut:false, authExpiresAt:undefined, authSessionOnly:false };
-      const identity = await testConnection(updated);
-      if (identity.credential.id !== result.credentialId || identity.credential.scope !== 'owner') throw new Error(moteText("中央凭据身份确认不一致，原连接未修改；请重新生成邀请"));
-      await commitConnection(updated, origin === settings.serverUrl, true);
-      connectionState = { state: 'connected', message: moteText("登录成功，可使用所有中央功能。"), checkedAt: new Date().toISOString(), identity };
-    }, origin === settings.serverUrl, true); return clientStatus(); }));
+    handle('mote:connection-confirm', async (id, origin, deviceName) => {
+      await serialize(async()=>{
+        if(!encryptedStorageAvailable())throw Error(moteText('系统加密存储不可用，不能交换并保存凭据'));
+        if(typeof deviceName!=='string')throw Error('Invalid device name');
+        const serverUrl=onboarding.confirmNode(id,origin),named=updateConfig(settings,{...settings,deviceName,serverUrl,token:''});
+        await commitConnection({...named,account:undefined,authSignedOut:true,token:undefined});
+      });
+      // Old owner invitation secrets cannot establish a personal owner. The
+      // confirmed origin now starts the existing account/device approval flow.
+      await browserLogin!();return clientStatus();
+    });
     handle('mote:connection-test', async () => {
       if (connectionState.state === 'checking') return connectionState;
       const requested = settings; connectionState = { state: 'checking', message: moteText("正在验证已保存连接与权限…") };
-      try { const identity = await testConnection(requested); if (settings === requested) connectionState = { state: 'connected', message: moteText("管理员连接正常 · 可访问完整中央仓库"), checkedAt: new Date().toISOString(), identity }; }
+      try { const identity = await testConnection(requested); if (settings === requested) connectionState = { state: 'connected', message:identity.account.username, checkedAt: new Date().toISOString(), identity }; }
       catch (error) { if (settings === requested) connectionState = { state: 'error', message: error instanceof ConnectionError ? error.message : moteText("连接检查失败；已保存配置未改变"), checkedAt: new Date().toISOString() }; }
       return connectionState;
     });
@@ -407,11 +461,11 @@ else {
       environment: moteText("桌面客户端 · {0}", ['dev', 'test', 'prod', 'default'].includes(profile.name) ? profile.name : moteText("自定义环境")),
     })));
     handle('mote:coding-agents', () => discoverCodingAgents());
-    handle('mote:source-coding', (provider, options) => serialize(() => { if (provider !== 'claude' && provider !== 'codex' && provider !== 'kimi') throw new Error(moteText("不支持的 Coding Agent")); return localSources!.addCodingAgent(provider, options); }));
+    handle('mote:source-coding', (provider, options) => serialize(() => { if (provider !== 'claude' && provider !== 'codex' && provider !== 'kimi') throw new Error(moteText("不支持的 Coding Agent")); requireAccount();return localSources!.addCodingAgent(provider, options); }));
     handle('mote:sources', () => localSources!.status());
     handle('mote:source-sync', async () => { const scan = localSources!.sync(true); await collector.retry(); await scan; await collector.retry(); });
-    handle('mote:calendar-authorize', () => serialize(() => localSources!.authorizeCalendar()));
-    handle('mote:source-calendar', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("日历选择无效")); await localSources!.addCalendar(id, options); }));
+    handle('mote:calendar-authorize', () => serialize(() => {requireAccount();return localSources!.authorizeCalendar();}));
+    handle('mote:source-calendar', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("日历选择无效")); requireAccount();await localSources!.addCalendar(id, options); }));
     handle('mote:source-update', (id, options) => serialize(async () => { if (typeof id !== 'string') throw new Error(moteText("来源选择无效")); await localSources!.update(id, options); }));
     const sourceSelections = new Map<string,string[]>();
     handle('mote:source-select', mode => serialize(async () => {
@@ -426,7 +480,7 @@ else {
     handle('mote:source-confirm', (id,input) => serialize(async () => {
       const paths=typeof id==='string'?sourceSelections.get(id):undefined;
       if (!paths) throw new Error(moteText("文件选择已失效，请重新选择"));
-      const options=normalizeSourceOptions(input);
+      requireAccount();const options=normalizeSourceOptions(input);
       // Remove successful members individually: a retry after a partial failure never duplicates them.
       while(paths.length) { await localSources!.addFiles(paths[0],options); paths.shift(); }
       sourceSelections.delete(id as string);
@@ -434,12 +488,16 @@ else {
     handle('mote:content-central', cursor => browseWithConnection(config=>centralContentPage(config,cursor as string|undefined)));
     handle('mote:content-central-detail',(id,offset,image)=>browseWithConnection(config=>{if(typeof id!=='string'||!/^[a-f0-9-]{36}$/i.test(id)||offset!==undefined&&(!Number.isSafeInteger(offset)||Number(offset)<0))throw Error('Invalid content reference');return readCentralContent(config,{key:id,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false},Number(offset??0),image===true);}));
     handle('mote:content-local', offset => localContentPage(queue,localSources!,offset as number|undefined));
-    handle('mote:content-local-detail', (key,image) => browseWithConnection(() => localContentDetail(queue,localSources!,key as string,image as boolean|undefined).catch(async error=>{
-      if(typeof key!=='string')throw error;const parts=key.split(':');const receiptKey=parts[0]==='queue'?parts[1]:parts[0]==='source'?require('node:crypto').createHash('sha256').update(`${parts[1]}\0${parts[2]}`).digest('hex'):undefined;
-      const id=receiptKey?syncHistory.receivedCapture(settings,receiptKey):undefined;if(!id)throw error;return readCentralContent(settings,{key:receiptKey!,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false,...(parts[0]==='source'?{sourceId:parts[1]}:{})},0,image===true);
-    })));
+    handle('mote:content-local-detail', (key,image) => browseWithConnection(config => {
+      const selectedQueue=queue,selectedSources=localSources!,selectedHistory=syncHistory;
+      return localContentDetail(selectedQueue,selectedSources,key as string,image as boolean|undefined).catch(async error=>{
+        if(settings!==config)throw Error('Desktop account changed');
+        if(typeof key!=='string')throw error;const parts=key.split(':');const receiptKey=parts[0]==='queue'?parts[1]:parts[0]==='source'?require('node:crypto').createHash('sha256').update(`${parts[1]}\0${parts[2]}`).digest('hex'):undefined;
+        const id=receiptKey?selectedHistory.receivedCapture(config,receiptKey):undefined;if(!id)throw error;return readCentralContent(config,{key:receiptKey!,captureId:id,source:'file',title:'',observedAt:'',outcome:'received',firstReceipt:false,...(parts[0]==='source'?{sourceId:parts[1]}:{})},0,image===true);
+      });
+    }));
     handle('mote:source-files', (mode, input) => serialize(async () => {
-      const options = normalizeSourceOptions(input);
+      requireAccount();const options = normalizeSourceOptions(input);
       if (mode !== 'files' && mode !== 'directory') throw new Error(moteText("文件选择方式无效"));
       const result = await dialog.showOpenDialog(window!, { title: moteText("选择持续同步到中央仓库的本地资料"), properties: mode === 'directory' ? ['openDirectory'] : ['openFile', 'multiSelections'], ...(mode === 'files' ? { filters: [{ name: moteText("UTF-8 文本资料"), extensions: options.extensions.map(e => e.slice(1)) }] } : {}) });
       if (result.canceled) return { canceled: true };
@@ -452,17 +510,21 @@ else {
     handle('mote:events-raw', async () => events.readRaw());
     handle('mote:events-read', async () => events.read(true));
     handle('mote:diagnostics-export', async () => {
+      const selectedDiagnostics=diagnostics,expected=accountGeneration;
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出本机数值诊断（不含内容与令牌）"), defaultPath: 'mote-diagnostics.json', filters: [{ name: 'JSON diagnostics', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePath) return { canceled: true };
-      await diagnostics.sample(); await diagnostics.exportTo(selected.filePath); return { canceled: false };
+      if(expected!==accountGeneration)throw Error('Desktop account changed');await selectedDiagnostics.sample();if(expected!==accountGeneration)throw Error('Desktop account changed');await selectedDiagnostics.exportTo(selected.filePath); return { canceled: false };
     });
     handle('mote:support-export', async rawHours => {
+      const expected=accountGeneration,selectedDiagnostics=diagnostics;
       const hours=rawHours===undefined?24:Number(rawHours);if(![1,24,168].includes(hours))throw new Error('Invalid log range');
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出支持包（数值与固定事件，不含内容和令牌）"), defaultPath: `mote-support-${profile.name}.json`, filters: [{ name: 'JSON support bundle', extensions: ['json'] }] });
       if (selected.canceled || !selected.filePath) return { canceled: true };
-      await diagnostics.sample();
+      if(expected!==accountGeneration)throw Error('Desktop account changed');await selectedDiagnostics.sample();
+      const selectedStatus=clientStatus();
       const logs=await events.exportRange(Date.now()-hours*3600000);
-      await writeFile(selected.filePath, JSON.stringify({...buildSupportBundle(profile, app.getVersion(), clientStatus(), logs.events),...logs}, null, 2), { mode: 0o600 });
+      if(expected!==accountGeneration)throw Error('Desktop account changed');
+      await writeFile(selected.filePath, JSON.stringify({...buildSupportBundle(profile, app.getVersion(), selectedStatus, logs.events),...logs}, null, 2), { mode: 0o600 });
       return { canceled: false };
     });
     handle('mote:central', async (page, evidenceId) => {
@@ -471,9 +533,9 @@ else {
     });
     handle('mote:central-work',async workId=>showCentral('activity',undefined,validateCentralWorkId(workId)));
     handle('mote:note-draft', () => noteDrafts.get());
-    handle('mote:note-draft-update', input => trackNote(noteDrafts.update(input as NoteDraft)));
+    handle('mote:note-draft-update', input => {requireAccount();return trackNote(noteDrafts.update(input as NoteDraft));});
     handle('mote:note', input => trackNote(serialize(async () => {
-      const result = await noteDrafts.submit(input as NoteDraft, settings, currentPlatform, queue, () => collectRecordMetadata(helperPath, dataDirectory, 'manual'));
+      requireAccount();const result = await noteDrafts.submit(input as NoteDraft, settings, currentPlatform, queue, () => collectRecordMetadata(helperPath, dataDirectory, 'manual'));
       updateUi(clientStatus()); if (!quitting) void collector.upload(); return result;
     })));
     handle('mote:storage-restart', () => { app.relaunch(); app.quit(); });
@@ -484,11 +546,10 @@ else {
       return { canceled: false, directory: pendingStorageDirectory };
     }));
     handle('mote:storage-open', async () => {
-      await storage.assertOwned(queue.directory); const error = await shell.openPath(queue.directory); if (error) throw new Error(moteText("无法打开截图目录，请检查磁盘是否已连接"));
+      const selectedStorage=storage,directory=queue.directory,expected=accountGeneration;await selectedStorage.assertOwned(directory);if(expected!==accountGeneration)throw Error('Desktop account changed'); const error = await shell.openPath(directory); if (error) throw new Error(moteText("无法打开截图目录，请检查磁盘是否已连接"));
     });
     handle('mote:configure', input => serialize(async () => {
-      const confirmedInitial = (input as ConfigUpdate).confirmLocalBacklog === true && unboundBacklog();
-      let updated = updateConfig(settings, input as ConfigUpdate, queue.stats().depth + (noteDrafts.hasPrepared() ? 1 : 0), confirmedInitial);
+      let updated = updateConfig(settings, input as ConfigUpdate);
       if (!profile.defaultProfile && updated.openAtLogin) throw new Error(moteText("命名环境请使用带 --profile 的启动命令；系统默认登录项不能保留环境参数"));
       const relocating = updated.captureStorageDirectory !== settings.captureStorageDirectory;
       const changingConnection = updated.serverUrl !== settings.serverUrl || updated.token !== settings.token;
@@ -496,15 +557,13 @@ else {
       if (relocating && changingConnection) throw new Error(moteText("请先保存截图位置，再单独保存节点连接；每次切换均会自动应用"));
       if(changingConnection&&updated.token){
         const identity=await testConnection(updated,fetch,false);
-        if(!identity.capabilities.archiveRead)throw Error(moteText('请升级中央节点后再登录。'));
-        if(identity.credential.id==='owner'||identity.credential.deviceId!==updated.deviceId){const grant=await loginRequest(updated,'/api/login/session',{serverUrl:updated.serverUrl,deviceId:updated.deviceId,deviceName:updated.deviceName,platform:currentPlatform,durationMs:30*86400000},updated.token);updated={...updated,token:grant.token,authExpiresAt:grant.expiresAt};}
-        updated={...updated,credentialScope:'owner',authSignedOut:false,authSessionOnly:false};
+        updated={...updated,account:identity.account,credentialScope:'client',authSignedOut:false,authSessionOnly:false,authExpiresAt:identity.credential.expiresAt};
       }
-      if (changingConnection) await connectionChange(() => commitConnection(updated, false, confirmedInitial), false, confirmedInitial);
-      else await pausedSettings(() => applySettings(updated));
+      if(changingConnection)await commitConnection(updated);
+      else await pausedSettings(()=>applySettings(updated));
       updateUi(clientStatus()); return clientStatus();
     }));
-    handle('mote:start', () => serialize(async () => { await collector.start(); return clientStatus(); }));
+    handle('mote:start', () => serialize(async () => { requireAccount();await collector.start(); return clientStatus(); }));
     handle('mote:stop', () => { collector.stop(); return serialize(async () => { await collector.settleCapture(); return clientStatus(); }); });
     handle('mote:review-pending', () => queue!.reviewPending());
     handle('mote:review-reject', async (id:unknown) => { if(typeof id!=='string')throw Error('Invalid review ID');await queue!.rejectReview(id); });
@@ -516,34 +575,30 @@ else {
       loginGeneration++;
       const token=connectionToken(settings);
       // Locally sign out even when the node is offline; never fall back to another credential.
-      await pausedSettings(()=>applySettings({...settings,authSignedOut:true}));
-      if(token)await loginRequest(settings,'/api/login/logout',{},token).catch(()=>{});
+      const signedOut={...settings,authSignedOut:true,token:undefined};await commitConnection(signedOut);
+      if(token)await loginRequest(settings,'/api/auth/logout',{},token).catch(()=>{});
       updateUi(clientStatus());
     });
     const installLogin=async(token:string,durationMs=30*86400000,expectedGeneration=loginGeneration)=>{
       if(![0,86400000,604800000,2592000000].includes(durationMs))throw Error('Invalid lifetime');
       const requested=settings;
       const identity=await testConnection({...requested,token},fetch,false);
-      if(!identity.capabilities.archiveRead)throw Error(moteText('请升级中央节点后再登录。'));
-      let credential=token,expiresAt=durationMs?Date.now()+durationMs:undefined;
-      let minted=false;
-      if(identity.credential.id==='owner'||identity.credential.deviceId!==requested.deviceId){
-        const grant=await loginRequest(requested,'/api/login/session',{serverUrl:requested.serverUrl,deviceId:requested.deviceId,deviceName:requested.deviceName,platform:currentPlatform,durationMs},token);credential=grant.token;expiresAt=grant.expiresAt;minted=true;
-      }
+      const credential=token,expiresAt=identity.credential.expiresAt;
+      const minted=false;
       try {
         await serialize(()=>{
           // Check after waiting for other settings/logout operations as well as network I/O.
           if(settings!==requested||expectedGeneration!==loginGeneration)throw Error(moteText('登录会话已变更，请重新打开中央页面。'));
-          return connectionChange(()=>commitConnection({...requested,token:credential,credentialScope:'owner',authSignedOut:false,authSessionOnly:durationMs===0,authExpiresAt:expiresAt},true,true),true,true);
+          return commitConnection({...requested,token:credential,account:identity.account,credentialScope:'client',authSignedOut:false,authSessionOnly:durationMs===0,authExpiresAt:expiresAt});
         });
       } catch(error) {
-        if(minted)await loginRequest(requested,'/api/login/logout',{},credential).catch(()=>{});
+        if(minted)await loginRequest(requested,'/api/auth/logout',{},credential).catch(()=>{});
         throw error;
       }
       loginGeneration++;updateUi(clientStatus());
-      if(requested.token&&requested.token!==credential)await loginRequest(requested,'/api/login/logout',{},requested.token).catch(()=>{});
+      if(requested.token&&requested.token!==credential)await loginRequest(requested,'/api/auth/logout',{},requested.token).catch(()=>{});
     };
-    ensureBrowserLogin=async()=>{const current=settings;if(connectionToken(current)&&(await testConnection(current)).credential.id==='owner')await installLogin(current.token!,current.authSessionOnly?0:2592000000);};
+    ensureBrowserLogin=async()=>{const current=settings;if(connectionToken(current)){const identity=await testConnection(current);if(settings!==current||!sameAccount(current,{...current,account:identity.account}))throw Error('Desktop account changed');if(identity.credential.deviceId)throw Error(moteText('设备授权只允许采集；请使用用户名和密码登录后打开私人资料。'));}};
     browserLogin=async(page,evidenceId,durationMs=2592000000,workId)=>{
       if(![0,86400000,604800000,2592000000].includes(durationMs))throw Error('Invalid lifetime');
       const requested=settings,generation=++loginGeneration,{verifier,challenge}=loginVerifier();
@@ -563,7 +618,7 @@ else {
       if(settings.token&&!settings.authSignedOut&&settings.authExpiresAt&&settings.authExpiresAt<=Date.now())void endLogin().catch(()=>{});
     },1000);authTimer.unref();app.once('before-quit',()=>clearInterval(authTimer));
     handle('mote:ask', async (command,input) => {
-      if(command==='login'){const value=input as {token?:string;durationMs?:number};if(typeof value?.token!=='string'||value.token.length<32||value.token.length>8192||/[\r\n]/.test(value.token))throw Error(moteText('请输入有效的中央所有者令牌'));await installLogin(value.token.trim(),value.durationMs);return {};}
+      if(command==='login'){const value=input as {token?:string;username?:string;password?:string;durationMs?:number};if(value?.username!==undefined){const requested=settings;const grant=await loginRequest(requested,'/api/auth/login',{username:value.username,password:value.password,mode:'client',durationMs:value.durationMs??0});if(settings!==requested)throw Error('Desktop account changed');await installLogin(grant.token,value.durationMs);return {};} if(typeof value?.token!=='string'||value.token.length<32||value.token.length>8192||/[\r\n]/.test(value.token))throw Error(moteText('请输入有效的个人登录凭据'));await installLogin(value.token.trim(),value.durationMs);return {};}
       if(command==='logout'){await endLogin();return {};}
       if(command==='login-browser'){await browserLogin!(undefined,undefined,(input as {durationMs?:number})?.durationMs);return {};}
       try{return await askClient.request(settings,command as import('./ask').AskCommand,input as Parameters<AskClient['request']>[2]);}
@@ -587,13 +642,17 @@ else {
     handle('mote:permissions', async () => { if (process.platform === 'darwin') { await shell.openExternal('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture'); } });
     handle('mote:data-folder', async () => { await shell.openPath(dataDirectory); });
     handle('mote:export-metadata', async () => {
+      const selectedQueue=queue,expected=accountGeneration;
       const selected=await dialog.showSaveDialog(window!,{defaultPath:'mote-local-metadata.json'});
-      if(!selected.canceled&&selected.filePath)await writeFile(selected.filePath,JSON.stringify(queue.exportMetadata()),{mode:0o600});
+      if(expected!==accountGeneration)throw Error('Desktop account changed; export selection expired');
+      if(!selected.canceled&&selected.filePath)await writeFile(selected.filePath,JSON.stringify(selectedQueue.exportMetadata()),{mode:0o600});
     });
     handle('mote:export-queue', async () => {
+      const selectedQueue=queue,expected=accountGeneration;
       const selected = await dialog.showSaveDialog(window!, { title: moteText("导出已脱敏待上传队列（包含个人资料）"), defaultPath: `mote-queue-${new Date().toISOString().slice(0, 10)}.json`, filters: [{ name: 'Mote queue archive', extensions: ['json'] }] });
+      if(expected!==accountGeneration)throw Error('Desktop account changed; export selection expired');
       if (selected.canceled || !selected.filePath) return { canceled: true };
-      await queue.exportArchiveFile(selected.filePath, value => backgroundJobs.progress('mote:export-queue', value));
+      await selectedQueue.exportArchiveFile(selected.filePath, value => backgroundJobs.progress('mote:export-queue', value));
       return { canceled: false, path: selected.filePath };
     });
     handle('mote:import-queue', () => serialize(async () => {
@@ -607,7 +666,7 @@ else {
     tray = new Tray(trayIcon());
     tray.on('click', showWindow);
     updateUi(clientStatus());
-    await window.loadURL(pageUrl);
+    await window.loadURL(activePageUrl);
     await acknowledgeInstalledUpdate({ argv: process.argv, directory: updateDirectory, bundlePath, version: app.getVersion(), profile: profile.name });
     await updater.startupCompleted();
     const receiptTimer = setTimeout(() => { void updater?.startupCompleted(); }, 2500); receiptTimer.unref();

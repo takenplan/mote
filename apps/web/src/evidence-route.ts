@@ -1,9 +1,19 @@
 import {parseEvidenceRef,formatEvidenceRef,parseArtifactRef} from '@mote/shared';
 function normalizePublicReference(value:string):string|null {
+ if(value.startsWith('context:')){
+  const target=parseEvidenceRef(value.slice('context:'.length));
+  return target?.kind==='capture'?'context:'+formatEvidenceRef(target.kind,target.id):null;
+ }
  const parsed=parseEvidenceRef(value);
  if(parsed)return formatEvidenceRef(parsed.kind,parsed.id);
  if(/^material:mat_[a-f0-9]{64}@[a-f0-9]{64}$/.test(value)||parseArtifactRef(value))return value;
  return null;
+}
+/** UI routing metadata only. The enclosed reference stays an M08 public ref;
+ * the reader boundary must never be guessed from UUID equality or a 404. */
+export function contextEvidenceReference(value:string):string{
+ const parsed=parseEvidenceRef(value);
+ return parsed?.kind==='capture'?'context:'+formatEvidenceRef(parsed.kind,parsed.id):value;
 }
 export function readEvidenceRoute(hash:string):string|null {
  const value=new URLSearchParams(hash.split('?')[1]??'').get('evidence');

@@ -1,3 +1,5 @@
+import {captureOcrState} from '@mote/shared/metadata';
+import {systemEventText} from '@mote/shared';
 import {isStateExtension} from '@mote/shared/state-series';
 import {ScopedImportAttribution} from './import-attribution.js';
 import {createHash} from 'node:crypto';
@@ -134,14 +136,14 @@ export class PrivateData{
     const head=this.sourceItem(sourceId,externalId);
     return this.sql.all('SELECT id FROM pd_captures WHERE user_id=$user AND source_id=? AND external_id=? ORDER BY received_at DESC,id DESC LIMIT 100',sourceId,externalId).map(r=>this.item(String(r.id),r.id===head?.captureId));
   }
-  private filter(raw:ListInput,collection:'captures'|'source-items'|'materials',sourceIds?:readonly string[]){
+  private filter(raw:ListInput,collection:'captures'|'capture-previews'|'source-items'|'materials',sourceIds?:readonly string[]){
     const args=privateListSchema.parse(raw),{cursor,limit,...filters}=args;
     if(filters.sourceId)this.source(filters.sourceId);
     const query={collection,...filters,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}:{})},position=cursor?this.cursor.decode(cursor,query):undefined;
     return {args,query,position,limit};
   }
-  captures(raw:ListInput={},heads=false){
-    const {args,query,position,limit}=this.filter(raw,heads?'source-items':'captures');
+  captures(raw:ListInput={},heads=false,previews=false){
+    const {args,query,position,limit}=this.filter(raw,heads?'source-items':previews?'capture-previews':'captures');
     const clauses=['1'],values:(string|number)[]=[];
     if(heads)clauses.push("EXISTS(SELECT 1 FROM pd_source_heads h WHERE h.user_id=$user AND h.capture_id=c.id) AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0");
     if(args.sourceId){clauses.push('c.source_id=?');values.push(args.sourceId);}
@@ -152,7 +154,10 @@ export class PrivateData{
     if(position){clauses.push('(c.context_at<? OR(c.context_at=? AND c.id<?))');values.push(position.at,position.at,position.id);}
     const rows=this.sql.all(`SELECT c.id,c.context_at FROM pd_captures c WHERE c.user_id=$user AND ${clauses.join(' AND ')} ORDER BY c.context_at DESC,c.id DESC LIMIT ?`,...values,limit+1);
     const visible=rows.slice(0,limit),last=visible.at(-1);
-    return {items:visible.map(r=>heads?this.item(String(r.id),true):this.capture(String(r.id))),nextCursor:rows.length>limit&&last?this.cursor.encode(query,{at:String(last.context_at),id:String(last.id)}):null};
+    return {items:visible.map(r=>{
+      if(heads)return this.item(String(r.id),true);const record=this.capture(String(r.id));if(!previews)return record;
+      return {id:record.id,deviceId:record.deviceId,deviceName:record.deviceName,platform:record.platform,capturedAt:record.capturedAt,source:record.source,appId:record.appId,appName:record.appName,windowTitle:(record.windowTitle??'').slice(0,300),durationMs:record.durationMs,hasImage:Boolean(record.blobHash),ocr:captureOcrState(record),textPreview:(['notification','device_event'].includes(record.source)?systemEventText(record.metadata):record.ocrText??'').slice(0,160),...(record.stateSeries?{stateSummary:{count:record.stateSeries.samples.length,lastAt:record.stateSeries.samples.at(-1)!.at}}:{})};
+    }),nextCursor:rows.length>limit&&last?this.cursor.encode(query,{at:String(last.context_at),id:String(last.id)}):null};
   }
   publishMaterial(raw:unknown,expectedRevision?:string){
     return this.publishVersion(raw,expectedRevision);

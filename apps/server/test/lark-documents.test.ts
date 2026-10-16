@@ -115,8 +115,11 @@ test('large generated Markdown uses the existing original-file upload lifecycle 
 
 test('overlapping polls across hour boundaries do not turn one provider signal into multiple activities',async t=>{
  const f=await fixture(t);f.state.searchPages=[matches('DocumentDiary123')];await f.c.select({...selection,documentDiscovery:{created:false,edited:false,opened:true,firstSyncDays:30}});
- const actualNow=Date.now;let clock=Date.parse('2026-10-15T10:13:00.000Z');Date.now=()=>clock;t.after(()=>{Date.now=actualNow;});
- f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
+ // Keep the same :13 -> :33 -> next-hour :13 windows near the real Date
+ // constructor used for observedAt; a fixed past date eventually trips the
+ // production future-observation guard instead of exercising overlap dedup.
+ const actualNow=Date.now;let clock=Math.floor(actualNow()/3600000)*3600000+13*60000;Date.now=()=>clock;t.after(()=>{Date.now=actualNow;});
+ f.c.startSync();assert.equal((await done(f.c)).job?.state,'completed');assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
  clock+=20*60000;f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
  clock+=40*60000;f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
  assert.equal(f.sources.listItems({kind:'file'}).items.length,1);

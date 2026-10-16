@@ -1,5 +1,6 @@
 import {registerWebAssets} from '../web-assets.js';
 import {registerWebInventory} from './web-routes.js';
+import {registerScopedActivity} from './activity.js';
 import {registerOwnerQuestions} from './owner-question-routes.js';
 import {registerScopedConnectors} from './connector-routes.js';
 import type {ScopedConnectors} from './connectors.js';
@@ -84,6 +85,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(connectors&&mcp){const host=mcp;connectors.registerSourceStatusReader((context,ids)=>host.forUser(context).sourceStatuses(ids));}
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await mcp?.close();await execution.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
+    if(execution&&ask&&memory&&processing)registerScopedActivity(runtime,storage.db,execution,{ask,memory,processing});
     await registerWebAssets(app);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await mcp?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await configuration?.close();accounts.close();storage.close();});
