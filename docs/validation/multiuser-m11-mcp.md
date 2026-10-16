@@ -65,6 +65,34 @@ fresh Server/Web builds, emitted-code smoke and
 M10 owns the sole full-affected/Android slot; M11 has not run either concurrently.
 No Draft PR or complete M11 acceptance is claimed by this phase record.
 
+## Frozen protocol/source receipts
+
+Exact runtime/test/design freeze:
+`63427a7798680bc60bf12cb135527bd27dd2648f`, clean independent checkout
+`task-13/mote`, feature `codex/mote-multiuser-m11-mcp`.
+Subsequent evidence-only Markdown does not change runtime/test inputs.
+
+| Exact frozen command | Result and evidence |
+| --- | --- |
+| `node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-auth.test.ts apps/server/test/multiuser-ingress.test.ts apps/server/test/multiuser-mcp.test.ts apps/server/test/multiuser-mcp-process.test.ts apps/server/test/scope*.test.ts` | **64/64**,0fail/cancel/skip,exit0,28757ms; `/tmp/m11-frozen-adjacent.log/.exit`. Includes all22 M11 cases (21 domain scenarios plus actual production process). This is the actual M01/M02/M03/M06 source composition, not the still-missing full M07/M08/M10 combination. |
+| `npm run typecheck -w @mote/server` | exit0, `/tmp/m11-frozen-typecheck.log/.exit`. |
+| `npm run build -w @mote/server` | exit0, `/tmp/m11-frozen-server-build.log/.exit`. |
+| `npm run build -w @mote/web` | exit0, `/tmp/m11-frozen-web-build.log/.exit`; existing bundle-size warning. |
+| `MOTE_MCP_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-mcp-process.test.ts` | Fresh emitted production index/real SDK/SIGKILL smoke **1/1**,0fail/cancel/skip,exit0,1349ms; `/tmp/m11-frozen-compiled-smoke.log/.exit`. |
+| `node --import tsx --test --test-concurrency=1 --test-name-pattern='remote fetch denies\|malformed remote HTTP status' apps/server/test/connectors.test.ts` | Existing reused transport compatibility **2/2**,0fail/cancel/skip,exit0; `/tmp/m11-frozen-network-compat.log/.exit`. |
+| `node scripts/check-scope-contracts.mjs` | exit0, `/tmp/m11-frozen-scope.log/.exit`; exact existing http surface preserved as M01 mixed. |
+| `git diff --check` | exit0, `/tmp/m11-frozen-diff.log/.exit`. |
+| `npm run check:affected -- --base origin/codex/mote-multiuser-integration --dry-run` | exit0, `/tmp/m11-phase-affected-dry2.log/.exit`; selects check:local and Android. **Dry run only**, not executed checks. First dry run failed because this fresh clone lacked the remote-tracking base; fetching exact remote refs fixed that, without moving any protected branch. |
+
+Final read-only remote check: integration
+`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`, PR133
+`470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`; own remote branch absent, no PR
+created/pushed. Workflow API confirms Checks/Component checks
+`disabled_manually`, existing three release workflows active/untouched. No CI
+was run, enabled or claimed passed. M11 has not run full affected or Android;
+the peer's heavy slot and final actual downstream module dependencies are
+respected. Independent M11 review remains pending parent scheduling.
+
 CI Checks/Component checks remain disabled and have not run. No workflow setting
 was changed. Real accounts/data/credentials, external services/models, physical
 devices, deployment and M16 complete export/delete/restore are unrun. No main or
