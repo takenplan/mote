@@ -45,7 +45,7 @@ export function Sources({ api, onOpen, onImport, mode = 'connections', onBrowse 
     const versions = useResource<{
         items: SourceItemRecord[];
     }>(api, historyKey);
-    const connectorStatus = useResource<Record<string, unknown>>(api, '/api/connectors/status');
+    const connectorStatus = useResource<Record<string, unknown>>(api, mode==='connections'&&adding&&addKind==='connectors'?'/api/connectors/status':null);
     useOperationUpdates(api);
     const withdrawn = page.error instanceof ApiError && [401, 403, 404, 410].includes(page.error.status), previous = withdrawn ? [] : currentPages?.previous ?? [];
     useEffect(() => { setPages(value => !value ? value : value.api !== api || value.scope !== listScope ? undefined : withdrawn ? {...value, previous:[]} : value); }, [api, listScope, withdrawn]);
