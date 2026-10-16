@@ -47,6 +47,8 @@ export type TaskRun={context:UserContext;services:ReturnType<ScopedServices['for
 };
 export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;policy:ExecutionPolicy;
  modelFeature?:ModelFeature;
+ /** Host-only immutable parent snapshot fork; JSON/API callers cannot install this callback. */
+ leaseModel?:(context:UserContext,input:Record<string,unknown>,operationId:string)=>Promise<TaskModelLease>;
  parseInput:(input:unknown)=>Record<string,unknown>;
  /** Domain authorization at admission and again after any model hydration. */
  authorizeInput?:(context:UserContext,input:Record<string,unknown>)=>void;
@@ -186,7 +188,7 @@ export class TaskExecution {
    submitSync:(value:unknown)=>{const prepared=prepare(value,false);return admit(prepared);},
    submit:async(value:unknown)=>{
     const prepared=prepare(value),{handler,operationId,taskId}=prepared;let modelLease:TaskModelLease|undefined;
-    if(handler.modelFeature&&!this.row(taskId)){if(!this.modelHost)throw new TaskError('model_configuration_unavailable',503);modelLease=await this.services.forUser(context).get<TaskModelConfiguration>('configuration').lease(handler.modelFeature,operationId);assert();if(modelLease.userId!==context.userId||modelLease.deploymentId!==context.deploymentId||modelLease.operationId!==operationId||modelLease.feature!==handler.modelFeature)throw new ScopeError('invalid_identity',401);this.modelHost.assertLease(modelLease);}
+    if(handler.modelFeature&&!this.row(taskId)){if(!this.modelHost)throw new TaskError('model_configuration_unavailable',503);modelLease=handler.leaseModel?await handler.leaseModel(context,prepared.input,operationId):await this.services.forUser(context).get<TaskModelConfiguration>('configuration').lease(handler.modelFeature,operationId);assert();if(modelLease.userId!==context.userId||modelLease.deploymentId!==context.deploymentId||modelLease.operationId!==operationId||modelLease.feature!==handler.modelFeature)throw new ScopeError('invalid_identity',401);this.modelHost.assertLease(modelLease);}
     return admit(prepared,modelLease);
    },
    get:(taskId:string)=>this.view(owned(taskId)),

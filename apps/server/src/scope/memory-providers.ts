@@ -12,6 +12,7 @@ import {hindsightModelFingerprint,type HindsightRuntime} from '../hindsight-runt
 import {WorkerMemoryProvider} from '../worker-memory-provider.js';
 import {MemoryProviderError,memoryProviderNamespaceSchema,type MemoryProvider,type MemoryProviderNamespace} from '../memory-provider-contract.js';
 import {PrivateSql,PrivateDataError} from './private-data-sql.js';
+import type {UserDataSubject} from './lifecycle.js';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {Configurations,ModelLease} from './configuration.js';
 import type {ScopedPluginHost} from './plugins.js';
@@ -52,7 +53,7 @@ export class ScopedMemoryProviders {
    if(descriptor.adapter==='mote.mem0@1'){
     if(descriptor.configuration.embeddingBaseUrl!==settings.baseUrl||descriptor.configuration.embeddingModel!==settings.model)throw new PrivateDataError('invalid_data');
     z.number().int().positive().parse(descriptor.configuration.embeddingDimension);
-   }return {settings:{...settings,apiKey:'',headers:{},extraBody:{}},modelFingerprint:hindsightModelFingerprint(settings)};
+   }const endpoint=new URL(settings.baseUrl);endpoint.username='';endpoint.password='';endpoint.search='';endpoint.hash='';return {settings:{...settings,baseUrl:endpoint.toString(),apiKey:'',headers:{},extraBody:{}},modelFingerprint:hindsightModelFingerprint(settings)};
   });descriptor.assertCurrent();sql.transaction(()=>{sql.run('INSERT INTO mm_provider_config VALUES($user,?,?,?,?)',tag,lease.snapshotId,operationId,hash);sql.run('INSERT INTO mm_provider_descriptors VALUES($user,?,?)',tag,JSON.stringify(literal));});
  }
  private async open(context:UserContext,binding:Binding):Promise<Entry>{
@@ -107,5 +108,28 @@ export class ScopedMemoryProviders {
   if(memoryHash(descriptor.namespace)!==memoryHash(input.namespace))throw unavailable();
   return this.call(context,binding,assertCurrent,provider=>{if(!(provider instanceof HindsightEngine))throw unavailable();return provider.prepare(input);});
  }
+ /** A lifecycle grant opens only literal read/export or exact erasure. It
+  * carries no model lease and cannot authorize semantic provider operations. */
+ async maintenance(subject:UserDataSubject,binding:Binding,purpose:'export'|'delete'){
+  const descriptor=this.plugins.memoryMaintenance(subject,binding.snapshotId,purpose),namespace=descriptor.namespace;if(namespace.ownerId!==subject.userId||namespace.instanceId!==binding.instanceId||namespace.bindingRevision!==binding.revision)throw unavailable();
+  const cacheKey=memoryHash([descriptor.namespace,descriptor.configuration]),retained=this.entries.get(cacheKey);if(retained){this.entries.delete(cacheKey);const entry=await retained;await entry.tail;await entry.provider.close();descriptor.assertCurrent();}
+  let provider:MemoryProvider;
+  if(!descriptor.adapter)provider=new WorkerMemoryProvider(await descriptor.runtime());
+  else{
+   const tag=memoryHash(namespace),sql=new PrivateSql(this.db,subject.userId,descriptor.assertCurrent),saved=sql.get('SELECT json FROM mm_provider_descriptors WHERE user_id=$user AND namespace_hash=?',tag),base=sql.get('SELECT * FROM mm_provider_config WHERE user_id=$user AND namespace_hash=?',tag) as ProviderConfig|undefined;
+   if(!saved||!base||base.configuration_hash!==memoryHash([descriptor.adapter,descriptor.configuration]))throw unavailable();
+   const literal=z.object({settings:modelSettingsSchema,modelFingerprint:z.string()}).strict().parse(JSON.parse(String(saved.json))),directory=join(descriptor.directory,'memory-'+tag);
+   if(descriptor.adapter==='mote.mem0@1'){
+    if(!['operations.db','vectors.db','history.db'].every(file=>existsSync(join(directory,file))))throw unavailable();
+    provider=new Mem0MemoryProvider({directory,embedding:{baseUrl:literal.settings.baseUrl,model:literal.settings.model,dimension:z.number().int().positive().parse(descriptor.configuration.embeddingDimension),apiKey:'unused-local-maintenance'}},{embeddingUnavailable:unavailable(),assertEmbeddingAuthority:()=>{throw unavailable();}});
+   }else if(descriptor.adapter==='mote.hindsight@1'){
+    const options:Parameters<typeof createHindsightEngine>[0]={directory,instanceId:binding.instanceId,configurationIdentity:memoryHash([subject.deploymentId,namespace,base.configuration_hash]),modelFingerprint:literal.modelFingerprint,settings:literal.settings,assertModelAuthority:()=>{throw unavailable();},runModel:async()=>{throw unavailable();}};
+    provider=this.options.hindsightRuntimeFactory?new HindsightEngine({directory:join(directory,'provider'),runtime:this.options.hindsightRuntimeFactory({...options,userId:subject.userId}),model:literal.settings.model}):createHindsightEngine(options);
+   }else throw unavailable();
+  }
+  const assert=descriptor.assertCurrent,check=(actual:MemoryProviderNamespace)=>{assert();if(memoryHash(actual)!==memoryHash(namespace))throw unavailable();};
+  return Object.freeze({discardPrepared:async(input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'})=>{check(input.namespace);if(purpose!=='delete')throw unavailable();if(provider instanceof HindsightEngine)await provider.discardPrepared(input);assert();},read:async(input:Parameters<MemoryProvider['read']>[0])=>{check(input.namespace);if(purpose!=='export')throw unavailable();const value=await provider.read(input);assert();return value;},remove:async(input:Parameters<MemoryProvider['remove']>[0])=>{check(input.namespace);if(purpose!=='delete')throw unavailable();const value=await provider.remove(input);assert();return value;},close:()=>provider.close()});
+ }
+ async discardPrepared(context:UserContext,binding:Binding,input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'},assertCurrent:()=>void){return this.call(context,binding,assertCurrent,provider=>provider instanceof HindsightEngine?provider.discardPrepared(input):Promise.resolve(),true);}
  async close(){if(this.closed)return;this.closed=true;for(const promise of this.entries.values()){try{await (await promise).provider.close();}catch{}}this.entries.clear();for(const release of this.releaseFactories.reverse())await release();}
 }

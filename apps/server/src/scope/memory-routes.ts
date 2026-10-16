@@ -16,11 +16,13 @@ export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configurati
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel',handle:({context,request})=>service(context).cancel((request.params as {id:string}).id)});
  for(const kind of ['pause','resume','stop'] as const)registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind,handle:({context,request})=>service(context).control(kind,request.body)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories',handle:({context,request})=>service(context).page(z.object({query:z.string().optional(),cursor:z.string().optional(),limit:z.coerce.number().optional(),includeHistory:z.enum(['true','false']).transform(value=>value==='true').optional()}).strict().parse(request.query))});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile',handle:({context})=>service(context).reconcile()});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id/versions/:version',handle:({context,request})=>{const input=z.object({id:z.string().uuid(),version:z.coerce.number().int().positive()}).parse(request.params);return service(context).readVersion(input.id,input.version);}});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id',handle:({context,request})=>service(context).read((request.params as {id:string}).id)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'DELETE',url:'/api/memories/:id',handle:({context,request})=>service(context).delete((request.params as {id:string}).id)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings',handle:({context,request})=>host.bindings.prepare(context,request.body)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/bindings/:id',handle:({context,request})=>host.bindings.view(context,(request.params as {id:string}).id)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/activate',handle:({context,request})=>host.bindings.activate(context,(request.params as {id:string}).id,request.body)});
- registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/cancel',handle:({context,request})=>host.bindings.cancel(context,(request.params as {id:string}).id)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/cancel',handle:async({context,request})=>{const result=host.bindings.cancel(context,(request.params as {id:string}).id);await service(context).reconcile();return result;}});
  return host;
 }

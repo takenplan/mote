@@ -117,6 +117,18 @@ export class ScopedPluginHost {
    runtime:async()=>{assertCurrent();const runtime=await this.runtime(snapshot,fixed);assertCurrent();return Object.freeze({call:async(method:Parameters<PluginRuntime['call']>[0],params:unknown)=>{assertCurrent();const value=await runtime.worker.call(method,params);assertCurrent();return value;},close:async()=>{}});},
   });
  }
+ /** Purpose-limited Memory lifecycle access. A revoked task snapshot cannot
+  * regain inference, source tools or ordinary reads through this capability. */
+ memoryMaintenance(subject:UserDataSubject,snapshotId:string,purpose:'export'|'delete'){
+  const assert=()=>{this.options.services.assertSubject(subject,'memory',purpose);if(this.closed)throw new ScopeError('scope_unavailable',503);};assert();
+  const snapshot=this.snapshot(snapshotId);if(snapshot.user_id!==subject.userId)throw new ScopeError('invalid_identity',403);const fixed=JSON.parse(snapshot.json) as Fixed;
+  if(!fixed.instance.grants.capabilities.some(capability=>['repository','engine'].includes(capability)))throw new StoreError('Memory provider capability unavailable',503);
+  const pkg=this.package(fixed.packageId);if(pkg.view.source.digest!==fixed.digest||pkg.view.version!==fixed.version)throw new StoreError('Pinned provider unavailable',503);
+  const directory=join(this.directory(subject.userId),digest([fixed.instance.id,fixed.packageId,fixed.instance.configuration]));
+  return Object.freeze({instanceId:snapshot.instance_id,namespace:this.namespace(snapshot),configuration:Object.freeze(clone(fixed.instance.configuration)),adapter:pkg.hostAdapter,directory,assertCurrent:assert,
+   runtime:async()=>{assert();const worker=new WorkerPluginRuntime(join(pkg.directory!,pkg.manifest.entry),clone(fixed.instance.configuration),directory);try{const actual=z.object({components:z.array(componentSchema)}).strict().parse(await worker.call('describe',{}));assert();if(digest(actual.components)!==digest(fixed.components))throw new StoreError('Pinned maintenance provider differs',409);}catch(error){await worker.close();throw error;}return Object.freeze({call:async(method:Parameters<PluginRuntime['call']>[0],params:unknown)=>{assert();if(!(purpose==='delete'?['remove']:['read','export']).includes(method))throw new ScopeError('invalid_identity',403);const value=await worker.call(method,params);assert();return value;},close:()=>worker.close()});},
+  });
+ }
  forAdministrator(context:UserContext){
   const check=()=>{if(this.closed)throw new ScopeError('invalid_identity',401);this.options.authority.assertAdministrator(context);};check();
   return Object.freeze({view:()=>{check();return this.catalog.view();},resolve:async(input:unknown)=>{check();const result=await this.catalog.resolve(input);check();return result;},install:(input:unknown)=>{check();return this.catalog.install(input);},uninstall:(id:string,input:unknown)=>{check();return this.catalog.uninstall(id,input);}});

@@ -73,7 +73,7 @@ export function checkProductionImports(directory=root){
   for(const path of ['plugin-center.ts','plugin-release.ts','plugin-runtime.ts','backend-plugin-scope.ts','execution-policy.ts'])allowed.add(sourceRoot+'/'+path);
   // M07 reuses these pure Memory contracts and exact-output/review/publication
   // validators; none constructs a legacy Store, scheduler or provider runtime.
-  for(const path of ['memory-schema.ts','memory-errors.ts','memory-contract.ts','memory-review.ts','memory-provider-contract.ts','memory-provider-publication.ts','memory-deletion-review.ts','memory-strategies.ts','memory-work-contract.ts','memory-strategy-contract.ts','memory-range-selection-policy.ts','memory-integration-policy.ts','memory-configuration.ts','mem0-memory-provider.ts','hindsight-engine.ts','worker-memory-provider.ts'])allowed.add(sourceRoot+'/'+path);
+  for(const path of ['capture-memory-source.ts','memory-range-chunks.ts','material-readiness.ts','hindsight-runtime.ts','memory-schema.ts','memory-errors.ts','memory-contract.ts','memory-review.ts','memory-provider-contract.ts','memory-provider-publication.ts','memory-deletion-review.ts','memory-strategies.ts','memory-work-contract.ts','memory-strategy-contract.ts','memory-range-selection-policy.ts','memory-integration-policy.ts','memory-configuration.ts','mem0-memory-provider.ts','hindsight-engine.ts','worker-memory-provider.ts'])allowed.add(sourceRoot+'/'+path);
   // M06 constructs only the existing shared processor registry and uses pure
   // recipes, decoder subprocess, transport and fingerprint algorithms. No
   // legacy private Store is constructed; scoped Original/TaskRun provide I/O.
