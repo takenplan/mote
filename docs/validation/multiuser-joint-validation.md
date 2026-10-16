@@ -124,10 +124,16 @@ original-byte reader17fd and raw Library entrybe6e; M15new7eca/107f work.
 The exact17fd original-byte delta was independently source
 reviewed here with no new confirmed P0/P1/P2; report
 `/tmp/mote-joint-review-m13-file-original-17fd.md`, no test/build rerun. Its3/3
-runtime result belongs to M13. Original invitation/QR pairing remains a shared
-UNKNOWN: M01 PKCE approve/poll/ACK is implemented; no frozen canonical equivalent
-for old invitation redemption/scan was delivered. Username login and MCP QR do
-not close that retained outcome.
+runtime result belongs to M13. The earlier no-frozen-QR state is superseded by
+producer6a84ec6a477bb4698002234fd81bb669ce98cc06 in Draft PR144, contract
+`docs/design/multiuser-qr-pairing.md` in the independent task-4 checkout. It retains
+Generate invitation consent, origin confirmation and device-only PKCE/poll/ACK;
+no additional browser confirmation. Owner20/20 narrow and Server types are not a
+full gate: its complete affected timed out124 and remains pending repaired rerun.
+Web/Android consumer acceptance is separate, and the producer explicitly leaves
+Desktop v2 import unimplemented/unverified. Prior M14 final139 cannot close that
+newly frozen consumer contract. Username login and MCP QR are not substitutes.
+All final joint QR outcomes remain OPEN until actual composed client execution.
 
 ## Independent preparation probes: narrow scope only
 
@@ -701,3 +707,17 @@ Server workspace and repository root, respectively
 /tmp/mote-joint-export-workspace-entry-green.log/.exit and
 /tmp/mote-joint-export-root-entry-green.log/.exit. No runtime source changed;
 QR's parallel prerequisite-fixture repair remains its own work/evidence.
+
+
+Current bounded M06/Files component regression naturally terminates EXIT0,
+53/53 pass,0failure/cancel/skip,69.462s, fixed test HEAD
+e2d3b1b20a80287161212e09ce994cadc659eebf (production36ffde5c):
+/tmp/mote-joint-file-component-current.log/.exit/.sha. The six files are
+multiuser-processing, multiuser-file-controls, multiuser-file-unknown,
+multiuser-files-stream, file-export-stream and scope-architecture. Actual
+M01/M03/M04/M05/M06/M09/M16 paths, generated external transports, no skipped
+case; this is neither full Server nor affected/compiled/client joint proof.
+Source and tests stayed fixed throughout. All heavy work was released immediately.
+Under the parent's22:08 resource ruling QR is the next sole heavy owner; Joint
+and M15 await parent allocation afterward and do not infer another slot from old
+status files. The producer's124 and stopped superseded gate remain non-passing.
