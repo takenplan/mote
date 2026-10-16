@@ -45,6 +45,12 @@ class MultiuserIngressTest {
     private fun central(server: String, token: String) = CentralClient(server,token,{ method,url,body,_,_ ->
         request(server,token,method,url.removePrefix(server),body?.let { JSONObject(String(it,Charsets.UTF_8)) })
     })
+    @Test fun `actual native plugin inventory consumes owned M09 rather than legacy host aggregate`() = fixture { f ->
+        val token=f.getJSONObject("a").getString("token");val control=PluginControlClient(central(f.getString("address"),token))
+        val inventory=control.inventory()
+        assertTrue(inventory.packages.isEmpty());assertTrue(inventory.instances.isEmpty());assertTrue(inventory.catalog.isEmpty())
+        assertFalse(inventory.installation.getBoolean("supported"))
+    }
     @Test fun `actual native note and original attachment use scoped ingress instead of retired routes`() = fixture { f ->
         val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val api=central(server,token)
         val note=JSONObject().put("id",UUID.randomUUID().toString()).put("deviceId","native-phone").put("deviceName","Synthetic native")
