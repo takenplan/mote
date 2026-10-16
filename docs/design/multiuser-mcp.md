@@ -12,16 +12,19 @@ remotely verified accepted M10 Draft PR134 complete head
 `56bcb1cf6e46304254318fed659efe861113c6ae`. M10 was independently reviewed
 in `/tmp/mote-m11-review-m10.md`; its closed execution conversation is not reused.
 
-**M11 is not fully accepted.** Accepted PR134 is composed. Current M11 core
-`c53c199876bbfee2acfe8c38ecda7403af7f809d` composes genuine M08 production freeze
-`3bda432740e2af374b71500e9ce21110de45837c` and M07 A/C freeze
-`c5661258cc24628100878b59e96c0cebcb36ee57`, plus PR135 public contracts.
-These are stable runtime/test freezes, not final M07/M08 module acceptance. All 20 original read
-tools now use genuine scoped readers. Logical processed history, UTF16 windows,
-partial ready-only text, navigation, context inclusion/budget/cursors, actual
-source status, file directories and exact Memory filter/pin consumption have
-real SDK coverage. Final dependency alignment and whole-module gates remain;
-no mock neighboring service supplies capabilities.
+The final code/test candidate is `00a2b350105551d072097471b70fb0610aa0f53f`.
+It composes accepted [M07 PR136](https://github.com/utopiafar/mote/pull/136)
+`cd7a306cce0f6cd5fec3c9e91e6dee0761352115` and
+[M08 PR137](https://github.com/utopiafar/mote/pull/137)
+`58944f00837c89bc1d302ecd7be7a568db4abe44`, plus PR135 public contracts.
+All 20 original read tools use genuine scoped readers. Logical processed history,
+UTF16 windows, ready-only text, navigation, context inclusion/budget/cursors,
+actual source status, file directories and exact Memory filter/pin consumption
+have actual SDK coverage. No replacement neighboring service supplies capabilities.
+The [validation record](../validation/multiuser-m11-mcp.md) identifies each exact
+checked SHA, retained failure and final required-gate outcome. The final test-only
+wait-budget change has zero runtime/model-script/assertion difference from the
+583-case combination and fresh compiled-process candidate `690bcbb699a16d01b0fa48972ee9427b325911b3`.
 
 ## Host identity and protocol
 
@@ -68,7 +71,7 @@ request while the credential remains usable on the next request. Explicit query
 source filters never widen credential authority. Strict SDK schemas reject
 unknown authority selectors and unsupported fields rather than dropping them.
 The [query composition plan](multiuser-mcp-query.md) tracks all 21 original tools
-and remaining legacy parity gates individually.
+and their actual production composition individually.
 
 | Surface | Current production composition |
 | --- | --- |
@@ -77,9 +80,9 @@ and remaining legacy parity gates individually.
 | `mote_items`, `mote_history` | Genuine query-visible source views; raw screenshot/Coding/archive UUID bypasses denied. Logical history follows actual M06 current formal mapping, including processed:<captureId>. |
 | `mote_materials`, `mote_material`, `mote_material_read` | Real current M06/M02 Materials through M08, transitive source SQL before LIMIT, exact revision pins and ready-only text. Shared UTF16-safe windows preserve complete characters and exact coordinates. |
 | `mote_search`, `mote_browse`, `mote_retrieve` | Actual query-visible scoped FTS candidates and authenticated user/scope/filter cursors, before ranking/LIMIT; no global single-owner embeddings fallback. |
-| `mote_file_catalog`, `mote_segments`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_evidence` | Real M08 reader handlers. SDK verifies all names, owner/source isolation and measured interval unions. Ready-only segments, actual directory/file paging, typed navigation, context flags/budget/durable cursors and real status are covered by SDK regressions. Full M08 acceptance remains separate. |
+| `mote_file_catalog`, `mote_segments`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_evidence` | Real M08 reader handlers. SDK verifies all names, owner/source isolation and measured interval unions. Ready-only segments, actual directory/file paging, typed navigation, context flags/budget/durable cursors and real status are covered by SDK regressions. Accepted M08 PR137 supplies these production readers. |
 | `mote_memories`, `mote://memories` resource | Genuine M07 page/read/search/exact historical provider bodies. MCP empty/all scope maps explicitly to undefined; a nonempty allowlist is retained. Every request snapshots source incarnations/revisions. Full query filters precede provider keys; exact reads use M07 opaque selected-version pins with no current-body prefetch. All observed Memory/original pins are rechecked before SDK publication. Cards remain derived context and do not grant original disclosure to another tool. |
-| inbound resource templates/prompts/subscriptions | No private template/prompt/subscription is registered in this phase. Their absence is explicit, not a simulated successful empty Memory query. |
+| inbound resource templates/prompts/subscriptions | No private template/prompt/subscription is registered. Their absence is explicit, not a simulated successful empty Memory query. |
 
 Write sessions expose only the write tool. They do not gain read or ordinary
 private HTTP API rights. Signed paging cursors remain durable

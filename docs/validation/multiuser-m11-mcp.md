@@ -1,10 +1,69 @@
 # M11 protocol, source and genuine query validation
 
-This record covers the protocol/source phase, not complete M11 acceptance.
-The initial baseline is PR133 `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`.
-Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
-this feature. Final accepted M07/M08 real query tools remain required.
-No mock Memory, Ask, connector or processing service proves them.
+Final code/test candidate: **`00a2b350105551d072097471b70fb0610aa0f53f`**.
+It contains accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda`, PR135,
+[M07 PR136](https://github.com/utopiafar/mote/pull/136)
+`cd7a306cce0f6cd5fec3c9e91e6dee0761352115` and
+[M08 PR137](https://github.com/utopiafar/mote/pull/137)
+`58944f00837c89bc1d302ecd7be7a568db4abe44`. Final required affected and actual
+Android execution both exit0. Subsequent delivery edits change documentation only.
+
+## Final receipts and exact inputs
+
+| Gate | Checked commit and actual result |
+| --- | --- |
+| Actual full MCP HTTP/SDK suite | `00a2b350105551d072097471b70fb0610aa0f53f`: **72/72**,0fail/skip/cancel,EXIT0,187579.788875ms; `/tmp/m11-00a2-final-focused.log/.exit`. |
+| Actual53file multiuser/scope/shared combination | `690bcbb699a16d01b0fa48972ee9427b325911b3`: **583/583**,0fail/skip/cancel,EXIT0,1187096.096583ms; `/tmp/m11-final-combined.log/.exit`. |
+| Fresh libraries/server builds and scope checker | `690bcbb699a16d01b0fa48972ee9427b325911b3`: each EXIT0; `/tmp/m11-final-{libs-build,server-build,scope}.log/.exit`. |
+| Fresh emitted production processes | `690bcbb699a16d01b0fa48972ee9427b325911b3`: **3/3**,0fail/skip/cancel,EXIT0,56536.821625ms; `/tmp/m11-final-emitted-smoke.log/.exit`. Actual compiled index and matching initialize-admin, HTTP/SDK/SIGKILL/restart and M10 original→Material seams. |
+| Required affected retry | Clean `00a2b350105551d072097471b70fb0610aa0f53f`: **EXIT0**, `/tmp/m11-00a2-final-affected.log/.exit`. Server2453pass+1existing opt-in skip/2454total, Desktop456, Web469, Agent317pass+1existing opt-in skip, Diagnostics5, Shared190, root81, client4 and central runner all pass. |
+| Actual fresh Android execution | Same00a2: **329/329**,70fresh JUnit suites,0fail/error/skip,EXIT0,38s,25tasks actually executed; `/tmp/m11-00a2-final-android-rerun.log/.exit`, `/tmp/m11-00a2-final-android-junit.json`. |
+
+The required command first reported Android25tasks UP-TO-DATE/5s. That cache
+result is retained and is not claimed as a new execution. The additional offline
+`--rerun-tasks` command generated all70 JUnit files after the recorded pre-check
+time; it produced329 actual tests with no failure/error/skip.
+
+The completed72-suite before the wait-budget correction also passes72/72 on690,
+`/tmp/m11-final-focused-retry.log/.exit`. The parent explicitly directed retaining
+unchanged expensive receipts instead of mechanically repeating them:690→00a2
+changes only the Ask fixture's optional wait budget and this validation document.
+Runtime, packages, model scripts and semantic assertions have zero difference.
+M13 independently verified this exact delta without executing tests:
+`/tmp/mote-m13-review-m11-00a2.md`. The final72 above had already started and was
+allowed to finish; no second583/build/emitted execution is claimed.
+
+Commands:
+
+```sh
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-mcp*.test.ts
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-*.test.ts apps/server/test/scope-*.test.ts apps/server/test/{insight-snapshots,material-organizers,memory-image-proof,memory-review-budget,memory-review,plugin-control-journeys,private-data,private-data-lifecycle}.test.ts
+npm run build:libs
+npm run build -w @mote/server
+node scripts/check-scope-contracts.mjs
+MOTE_MCP_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" MOTE_ASK_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" MOTE_CONNECTORS_PROCESS_ENTRY="$PWD/apps/server/dist/app.js" node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-mcp-process.test.ts apps/server/test/multiuser-ask-process.test.ts apps/server/test/multiuser-connectors-process.test.ts
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/utopiafar/Library/Android/sdk ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk npm run check:affected -- --base origin/codex/mote-multiuser-integration
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/utopiafar/Library/Android/sdk ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk apps/android/gradlew -p apps/android --no-daemon --offline --rerun-tasks :app:testDebugUnitTest
+```
+
+Independent review ranges and closures: M07 protocol/source and Memory adapter plus
+current MCP/outbound/status delta (`/tmp/mote-m07-review-m11-query-core.md`),
+M08 all20 projections/pins/artifacts/limits and operational status
+(`/tmp/mote-m08-review-m11-query.md`, `/tmp/mote-m08-review-m11-status.md`), M13
+final fixture-only locators and wait budget (`/tmp/mote-m13-review-m11-{690,00a2}.md`).
+No confirmed P0/P1/P2 remains in these recorded ranges. These bounded reviews are
+not presented as independent repetitions of whole owning-module suites.
+
+Checks/Component checks stay `disabled_manually`; CI is unrun. Synthetic fixtures
+replace external I/O only. No real user data/credentials/provider/model, deployment
+or physical-device validation was performed. No main/integration write or merge.
+Final remote head/base and Draft PR metadata belong to the delivery handoff.
+
+## Historical checkpoints
+
+The following sections preserve then-current results, failures and outstanding
+gates. Their old “pending/current” wording applies only to the stated checkpoint;
+the final receipts above supersede it. Counts overlap and must not be added.
 
 ## Unified representative candidate
 
@@ -90,8 +149,9 @@ source/time/device and parent-dialogue/workspace exclusion assertion. The
 multi-stage positive now receives an explicit60s completion budget within the
 existing120s per-test bound; all other fixture waits keep20s. No runtime, model
 script, production retry, assertion or processing producer changes. This is a
-bounded fixture-budget correction, not a claimed production isolation fix. All
-final gates must complete again on the corrected test candidate.
+bounded fixture-budget correction, not a claimed production isolation fix. The
+final affected gate reruns on the corrected test candidate; unchanged expensive
+receipts retain their original SHA as directed by the parent.
 
 ## Resumed common-contract representative B checkpoint
 
@@ -252,7 +312,7 @@ Its precise fix and an actual M11 SDK regression remain pending. The failure
 receipts `/tmp/m07-ca69-affected.log/.exit` and
 `/tmp/m07-ingress-ca69-probe-raw.log/.exit` remain failures, not passes.
 
-## Current bounded composition receipts
+## Historical bounded composition receipts
 
 Exact runtime composition `96f955a687279b110c17cca20251a00ae996f3b7` contains
 M07 closure443c201a9159d77120d990a1b2d888cb2015d139 and M08
@@ -493,7 +553,7 @@ required affected gates and the module Draft PR remain outstanding. The followin
 full affected receipts belong to the previous protocol/source runtime only;
 they are not claimed for this new Memory increment.
 
-## Current accepted-M10 protocol/source freeze
+## Historical accepted-M10 protocol/source freeze
 
 Authoritative runtime/test commit:
 `4175d4e9b9231d0741b14af4b4b8ebc6f099ded5`.

@@ -1,16 +1,16 @@
 # M11 real query composition
 
-M11 current unified consumer candidate is `c53c199876bbfee2acfe8c38ecda7403af7f809d`.
-It retains accepted [PR #134](https://github.com/utopiafar/mote/pull/134) complete
-head `7572b573b03437ff743652c13181b9fdcf251fda`, actual M08 production freeze
-`3bda432740e2af374b71500e9ce21110de45837c` and M07 A/C freeze
-`c5661258cc24628100878b59e96c0cebcb36ee57` (runtime
-`84a405f5c52f951f05db975705c12c3bb646dd67`). The candidate also contains the
-independently closed M11 operational-status correction and a test-only exact A/B
-original publication wait. These are precise capability freezes; final
-whole-module acceptance and M11 final gates remain pending.
-No final M11 acceptance or own Draft PR is claimed. Integration remains
-`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
+M11 final code/test candidate is `00a2b350105551d072097471b70fb0610aa0f53f`.
+It retains accepted [PR134](https://github.com/utopiafar/mote/pull/134)
+`7572b573b03437ff743652c13181b9fdcf251fda`,
+[M07 PR136](https://github.com/utopiafar/mote/pull/136)
+`cd7a306cce0f6cd5fec3c9e91e6dee0761352115`,
+[M08 PR137](https://github.com/utopiafar/mote/pull/137)
+`58944f00837c89bc1d302ecd7be7a568db4abe44`, and PR135 public contracts.
+The same-runtime representative candidate is
+`c53c199876bbfee2acfe8c38ecda7403af7f809d`; later test-only changes correct
+real-producer readiness/locators and one bounded multi-stage completion wait.
+Integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 
 The host maps M01 read credential sourceIds=[] (account-wide) explicitly to
 M07/M08 sourceIds=undefined. Their [] grants nothing. Narrow lists remain copied,
@@ -70,20 +70,24 @@ issues exactly its target-version key. Deletion during the selected-version read
 invalidates the pin. Memory cards and citation metadata do not confer original
 read grants on subsequent requests.
 
-## Acceptance still required
+## Composition evidence and limits
 
-The [validation record](../validation/multiuser-m11-mcp.md) separates development
-receipts, closed independent findings and the older protocol-only full gates.
-Remaining gates are final accepted M07/M08 capability composition, final whole
-M11 independent review, actual combined/build/emitted/affected checks on that final
-code, then a Draft PR with verified remote head/base. M07 daily, feedback,
-owner questions, owner-only proposed/stale audit and exact fresh import attribution
-are composed. Audit work is `usableAsMemory:false` and cannot be obtained with
-an MCP credential or through `bindRead`; published query Memory remains the
-read capability. Independent review is bounded, with final M07 gates separate.
-M08 canonical paging, file range bridge and durable compaction are restored;
-periodic working-memory/automatic Insight lifecycle and frozen InsightSnapshot
-are composed with bounded independent evidence. Final M08 acceptance remains
-separate. Checks/Component checks remain disabled and unrun.
-Real credentials, personal data, live external providers/models, deployments and
-physical-device validation are outside this task's authorization.
+The [validation record](../validation/multiuser-m11-mcp.md) separates final gates,
+closed independent findings and historical development receipts. M07 daily,
+feedback, owner questions, owner-only proposed/stale audit and exact fresh import
+attribution are composed. Audit work is `usableAsMemory:false` and cannot be
+obtained with an MCP credential or through `bindRead`; published query Memory
+remains the read capability. M08 canonical paging, file range bridge, durable
+compaction, periodic working/automatic Insight and frozen InsightSnapshot use the
+accepted real module implementation.
+
+Independent protocol/source, Memory, all20 reader projections and outbound/status
+reviews have no remaining confirmed P0/P1/P2 in their recorded ranges. Final
+test-only locator/wait deltas have separate bounded independent reviews. The
+583-case combination, fresh build and three emitted-process receipts retain their
+actual `690bcbb699a16d01b0fa48972ee9427b325911b3` SHA; the final test-only candidate
+has zero runtime diff and does not relabel those results as reruns. The final
+required affected command and its actual Android evidence are recorded separately.
+Checks/Component checks remain disabled and unrun. Real credentials, personal
+data, live external providers/models, deployments and physical-device validation
+are outside this task's authorization.
