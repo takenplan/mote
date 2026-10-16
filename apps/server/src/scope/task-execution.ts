@@ -208,6 +208,14 @@ export class TaskExecution {
   * authenticated. A late, validated ACK may settle only that external fact;
   * this closure never restores task, account or private publication authority.
   * It is deliberately absent from forUser() and all task HTTP/model tools. */
+ /** Host domain's explicit replacement operation may acknowledge old unknown
+  * facts without requeuing an obsolete input or reviving its task grant. No HTTP
+  * or model tool exposes this capability. Facts themselves remain unresolved. */
+ acknowledgeExternalReplay(context:UserContext,taskId:string){
+  return this.transaction(()=>{this.authority.assert(context);this.enabled(context.userId);const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);
+   for(const call of this.db.prepare("SELECT issuance_id FROM task_external_calls c WHERE c.task_id=? AND c.user_id=? AND c.state IN ('issued','unknown') AND NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations a WHERE a.user_id=c.user_id AND a.issuance_id=c.issuance_id)").all(taskId,context.userId))this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),String(call.issuance_id),context.userId,context.authorizationEpoch,Date.now());
+  });
+ }
  bindExternalCompletion(context:UserContext,taskId:string,issuanceId:string){
   this.authority.assert(context);const row=this.row(taskId),call=this.db.prepare('SELECT * FROM task_external_calls WHERE issuance_id=? AND task_id=? AND user_id=?').get(issuanceId,taskId,context.userId);
   if(!row||row.user_id!==context.userId||!call)throw new TaskError('task_not_found',404);
