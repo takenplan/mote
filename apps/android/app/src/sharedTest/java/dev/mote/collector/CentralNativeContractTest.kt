@@ -65,6 +65,17 @@ class CentralNativeContractTest {
         assertEquals("google_not_connected", separate.code); assertEquals("Generated connector status", separate.message)
         assertEquals(1, invalidations)
     }
+    @Test fun defaultDeleteSendsTheScopedEmptyJsonBodyAndPreservesExplicitControlFields() {
+        val bodies=mutableListOf<JSONObject>()
+        val api=CentralClient(origin,token,{method,_,bytes,_,mime->
+            assertEquals("DELETE",method);assertEquals("application/json",mime)
+            assertNotNull("Scoped DELETE must not use the Android implicit empty-body media type",bytes)
+            bodies.add(JSONObject(String(bytes!!,Charsets.UTF_8)));200 to JSONObject().put("deleted",true)
+        })
+        api.delete("/api/files/"+UUID.randomUUID());assertEquals(0,bodies.single().length())
+        val operationId=UUID.randomUUID().toString();api.delete("/api/admin/accounts/"+UUID.randomUUID(),JSONObject().put("operationId",operationId))
+        assertEquals(operationId,bodies[1].getString("operationId"))
+    }
     @Test fun backgroundTransportPreservesNodeLoginWhenExternalAuthorizationFails() {
         val previous = HttpJson.onUnauthorized; var invalidations = 0
         HttpJson.onUnauthorized = { url, credential -> assertEquals("$origin/api/status", url); assertEquals(token, credential); invalidations++ }

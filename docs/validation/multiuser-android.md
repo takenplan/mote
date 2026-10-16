@@ -979,3 +979,43 @@ submission still returns an earlier-turn-not-confirmed error; M15 does not claim
 a candidate freeze was received or proxy/retry that failed delivery. The current
 capability matrix distinguishes original Android controls from Web-only widgets
 and lists genuine remaining contracts. Final affected/push/Draft PR remain open.
+
+
+## Allocated Files retry phase: real GREEN and separate DELETE refusal
+
+Parent23:30 order was followed: Joint latest203997e5 types actually0 and fresh
+RELEASE preceded M15 CLAIM. Fixed combination d524140f0e93844058cb82348274b76ed7e855a7
+contains the declared public Files patch combination and Androiddc634 source.
+Offline JDK21/installedSDK command `:app:testDebugUnitTest
+:app:assembleMultiuserFixture :app:assembleMultiuserFixtureAndroidTest` actually
+exited0 in40s,91tasks14executed. Fresh75XML suites357tests,0failures/errors/skips,
+`/tmp/m15-files-short-green-build.log/.exit/.sha/-counts.json`. The test task
+executed; this is not an oldXML/up-to-date-only claim. No final affected ran.
+
+Original existingAPK Launcher→More→Content→Files retry was actualHTTP400
+without operationId (`m15-native-file-retry-ui-red3`, retained). Minimal encrypted
+same-operation fix now passes the actual sourcehost/native lostACK→recreation→
+samebody/task→B oldcallback retirement **1/1 EXIT0,1.272s**,
+`/tmp/m15-native-file-retry-first-green.log/.exit`, ownbackendcleanup0.
+
+The second original stop/consent/freshretry/delete case reached its final delete
+assertion but failed **1/1 EXIT1,1.9s**, expectedA404/actual200. Its predecessor
+assertions passed; this is not whole stop/delete acceptance. Exact response probe
+shows real cancel200 and DELETE503/error scope_unavailable. The next exact probe
+retains the original Fastify `Unsupported Media Type` stack **before** the route
+handler, so this is not a missing private route or permission expansion request.
+`/tmp/m15-native-file-stop-delete-{first-green,response-probe,stack-probe}` logs
+and exits are retained; each generatedbackend cleanup0. Native DELETE default
+previously supplied null instead of the scoped JSONemptyobject. A minimal
+CentralClient default `{}` and shared JVM regression are prepared after this real
+RED, but remain UNCOMPILED/UNVERIFIED until a new allocated short slot. Explicit
+account-delete operation fields remain supplied by the caller. No backend facade
+or global HTTP engine was changed.
+
+M15 explicitly RELEASED all heavy after the phase, before QR's next gate.
+Subsequent checks are single existingAPK/fixture-only, no Gradle/build/fullsuite.
+The already-visible invitation resume candidate first execution **0.495s EXIT1**
+stopped at an invalid fixture precondition: the test searched the base64 URI for
+its plaintext code. It did not reach B/resume and is NOT a confirmed production
+RED. Test-only correction decodes through the real ConnectionInvitation parser;
+no invitation runtime change or GREEN is claimed.
