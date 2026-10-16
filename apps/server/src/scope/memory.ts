@@ -34,7 +34,7 @@ import type {Configurations} from './configuration.js';
 import type {TaskExecution,TaskRun} from './task-execution.js';
 import {isCaptureMemorySource} from '../capture-memory-source.js';
 import {memoryRangeChunks} from '../memory-range-chunks.js';
-import {ScopedMemoryData,memoryPageSchema,memoryUUID,memoryHash,type MemoryRow,type MemoryState} from './memory-data.js';
+import {ScopedMemoryData,memoryPageSchema,memoryReadFiltersSchema,type MemoryReadFilters,memoryUUID,memoryHash,type MemoryRow,type MemoryState} from './memory-data.js';
 import {installScopedMemory,ScopedMemoryError,MEMORY_DOMAIN,scopedMemoryTaskSchema,memoryBindingSchema,memorySettingsSchema,defaultMemorySettings,type ScopedMemoryTask,type ScopedMemoryBinding} from './memory-schema.js';
 
 export type MemoryReadScope={sourceIds?:readonly string[];assertCurrent:()=>void};
@@ -79,18 +79,18 @@ export class MemoryHost {
  private assertJob(context:UserContext,input:ScopedMemoryTask){const data=this.data(context);data.assertInputs(input);if(input.binding.kind==='plugin'){let grant;try{grant=this.plugins.domainGrant(context,input.binding.snapshotId,'repository');}catch{grant=this.plugins.domainGrant(context,input.binding.snapshotId,'engine');}grant.assertCurrent();data.assertSources(input.inputs.map(pin=>pin.id),grant.sourceIds);}const parent=data.sql.get('SELECT * FROM mm_jobs WHERE user_id=$user AND id=?',input.jobId) as Job|undefined,job=(input.batchId?data.sql.get('SELECT * FROM mm_job_batches WHERE user_id=$user AND job_id=? AND id=?',input.jobId,input.batchId):parent) as Job|undefined;if(!parent||!job||job.input!==JSON.stringify(input)||['cancelled','deleted'].includes(parent.state))throw new PrivateDataError('conflict',409);return job;}
  private async provider(context:UserContext,binding:ScopedMemoryBinding,assertCurrent:()=>void){assertCurrent();if(binding.kind!=='plugin')throw new PrivateDataError('scope_unavailable',503);const provider=await this.providers.provider(context,binding,assertCurrent);assertCurrent();return provider;}
  private namespace(context:UserContext,binding:Extract<ScopedMemoryBinding,{kind:'plugin'}>):MemoryProviderNamespace{return Object.freeze({ownerId:context.userId,instanceId:binding.instanceId,bindingRevision:binding.revision});}
- private async read(context:UserContext,id:string,scope?:MemoryReadScope){
-  const data=this.data(context,scope?.assertCurrent),row=data.row(id),host=data.assertCurrentRecord(row),binding=JSON.parse(row.binding) as ScopedMemoryBinding;
-  const assert=()=>{scope?.assertCurrent();const current=data.row(id);data.assertCurrentRecord(current);if(scope?.sourceIds)data.assertSources(host.evidenceIds,scope.sourceIds);if(current.body_digest!==row.body_digest||current.version!==row.version||current.binding!==row.binding)throw new PrivateDataError('conflict',409);};assert();
+ private async read(context:UserContext,id:string,scope?:MemoryReadScope,filters?:MemoryReadFilters){
+  const selected=filters===undefined?undefined:memoryReadFiltersSchema.parse(filters),data=this.data(context,scope?.assertCurrent),row=data.row(id),host=data.assertCurrentRecord(row),binding=JSON.parse(row.binding) as ScopedMemoryBinding;
+  const assert=()=>{scope?.assertCurrent();const current=data.row(id);data.assertCurrentRecord(current);if(scope?.sourceIds)data.assertSources(host.evidenceIds,scope.sourceIds);if(selected&&!data.matches(host,selected,scope?.sourceIds))throw missing();if(current.body_digest!==row.body_digest||current.version!==row.version||current.binding!==row.binding)throw new PrivateDataError('conflict',409);};assert();
   if(binding.kind==='builtin')return host;
   const descriptor=await this.providers.descriptor(context,binding);assert();data.assertSources(host.evidenceIds,descriptor.sourceIds);
   const current=()=>{assert();descriptor.assertCurrent();},provider=await this.provider(context,binding,current),value=await provider.read({namespace:this.namespace(context,binding),key:memoryProviderKey(host)});current();
   if(!value||memoryBodyDigest(value)!==row.body_digest)throw new PrivateDataError('scope_unavailable',503);return withMemoryHostState(value,host);
  }
- private async readVersion(context:UserContext,id:string,version:number,scope?:MemoryReadScope){
-  const data=this.data(context,scope?.assertCurrent),current=data.row(id);data.assertCurrentRecord(current);if(current.version===version)return this.read(context,id,scope);
+ private async readVersion(context:UserContext,id:string,version:number,scope?:MemoryReadScope,filters?:MemoryReadFilters){
+  const selected=filters===undefined?undefined:memoryReadFiltersSchema.parse(filters),data=this.data(context,scope?.assertCurrent),current=data.row(id);data.assertCurrentRecord(current);if(current.version===version)return this.read(context,id,scope,selected);
   const row=data.sql.get('SELECT v.json,b.binding,b.body_digest FROM mm_versions v JOIN mm_version_bindings b ON b.user_id=v.user_id AND b.id=v.id AND b.version=v.version WHERE v.user_id=$user AND b.user_id=$user AND v.id=? AND v.version=?',id,version);if(!row)throw missing();
-  const memory=memorySchema.parse(JSON.parse(String(row.json))),assert=()=>{scope?.assertCurrent();data.assertCurrentRecord(data.row(id));data.evidence(memory.evidenceIds);if(scope?.sourceIds)data.assertSources(memory.evidenceIds,scope.sourceIds);};assert();const binding=JSON.parse(String(row.binding)) as ScopedMemoryBinding;if(binding.kind==='builtin')return memory;
+  const memory=memorySchema.parse(JSON.parse(String(row.json))),assert=()=>{scope?.assertCurrent();data.assertCurrentRecord(data.row(id));data.evidence(memory.evidenceIds);if(scope?.sourceIds)data.assertSources(memory.evidenceIds,scope.sourceIds);if(selected&&(!data.matches(memory,selected,scope?.sourceIds)||!selected.includeHistory&&!data.matches(data.assertCurrentRecord(data.row(id)),{includeHistory:false,asOf:selected.asOf})))throw missing();};assert();const binding=JSON.parse(String(row.binding)) as ScopedMemoryBinding;if(binding.kind==='builtin')return memory;
   const descriptor=await this.providers.descriptor(context,binding);assert();data.assertSources(memory.evidenceIds,descriptor.sourceIds);const valid=()=>{assert();descriptor.assertCurrent();},provider=await this.provider(context,binding,valid),value=await provider.read({namespace:descriptor.namespace,key:memoryProviderKey(memory)});valid();if(!value||memoryBodyDigest(value)!==row.body_digest)throw new ScopedMemoryError('memory_provider_unavailable');return value;
  }
  private async scheduleReconcile(context:UserContext){return this.execution.forUser(context).submit({kind:'memory.reconcile',operationId:'memory-reconcile:'+crypto.randomUUID(),input:{operationId:crypto.randomUUID()}});}
@@ -104,6 +104,7 @@ export class MemoryHost {
    assertScope();for(const row of readRows){const current=data.row(row.id),memory=data.assertCurrentRecord(current);if(scope?.sourceIds)data.assertSources(memory.evidenceIds,scope.sourceIds);if(memoryHash(current)!==memoryHash(row))throw new PrivateDataError('conflict',409);}return {items,nextCursor:page.nextCursor};
   }
   const rows:MemoryRow[]=[];let cursor:string|undefined;const {query:_query,cursor:_cursor,...filters}=request;do{const page=data.page({...filters,limit:100,...(cursor?{cursor}:{})},scope?.sourceIds);rows.push(...page.rows);cursor=page.nextCursor??undefined;}while(cursor);
+  if(!rows.length){const selected=data.rankedPage(request,[],scope?.sourceIds);assertScope();return {items:[],nextCursor:selected.nextCursor};}
   const descriptor=await this.providers.descriptor(context,binding);assertScope();const current=rows.filter(row=>memoryHash(JSON.parse(row.binding))===memoryHash(binding)),keys=current.map(row=>{const memory=data.assertCurrentRecord(row);data.assertSources(memory.evidenceIds,descriptor.sourceIds);return memoryProviderKey(memory);}),assert=()=>{assertScope();descriptor.assertCurrent();for(const row of current){const actual=data.row(row.id),memory=data.assertCurrentRecord(actual);if(scope?.sourceIds)data.assertSources(memory.evidenceIds,scope.sourceIds);data.assertSources(memory.evidenceIds,descriptor.sourceIds);if(memoryHash([actual.id,actual.version,actual.body_digest,actual.binding,actual.json])!==memoryHash([row.id,row.version,row.body_digest,row.binding,row.json]))throw new PrivateDataError('conflict',409);}};
   const provider=await this.provider(context,binding,assert),hits=await provider.search({namespace:descriptor.namespace,query:request.query,keys,limit:Math.max(keys.length,1)});assert();
   const seen=new Set<string>();for(const hit of hits){const row=current.find(row=>row.id===hit.key.memoryId);if(!row||!keys.some(key=>memoryHash(key)===memoryHash(hit.key))||memoryBodyDigest(hit.memory)!==row.body_digest||seen.has(hit.memory.id))throw new PrivateDataError('scope_unavailable',503);seen.add(hit.memory.id);}
@@ -116,7 +117,7 @@ export class MemoryHost {
   const evidence=(ids:readonly string[])=>{assert();const records=data.evidence(ids);if(sourceIds)data.assertSources(ids,sourceIds);assert();return records;},assertEvidence=(pins:readonly {id:string;hash:string}[])=>{const records=evidence(pins.map(pin=>pin.id));for(const pin of pins)if(memoryHashEvidence(records.find(record=>record.id===pin.id)!)!==pin.hash)throw new PrivateDataError('conflict',409);};
   assert();return Object.freeze({
    assertCurrent:assert,
-   read:(id:string,version?:number)=>version===undefined?this.read(context,id,scope):this.readVersion(context,id,version,scope),
+   read:(id:string,version?:number,filters?:MemoryReadFilters)=>version===undefined?this.read(context,id,scope,filters):this.readVersion(context,id,version,scope,filters),
    page:(raw:unknown={})=>this.page(context,raw,scope),
    opening:(raw:unknown={})=>this.page(context,raw,scope),
    search:(raw:unknown)=>this.page(context,raw,scope),
@@ -231,8 +232,8 @@ export class MemoryHost {
   submit:(raw:unknown)=>{const request=submitSchema.parse(raw),id=request.operationId,key=context.userId+':'+id,fingerprint=memoryHash(request),pending=this.admissions.get(key);if(pending){if(pending.fingerprint!==fingerprint)throw new PrivateDataError('conflict',409);return pending.promise;}const task=this.admit(context,request),entry={fingerprint,promise:task};this.admissions.set(key,entry);void task.finally(()=>{if(this.admissions.get(key)===entry)this.admissions.delete(key);}).catch(()=>{});return task;},
   job:(id:string)=>this.job(context,id),
   correct:(id:string,raw:unknown)=>this.correct(context,id,raw),
-  read:(id:string)=>this.read(context,id),
-  readVersion:(id:string,version:number)=>this.readVersion(context,id,version),
+  read:(id:string,filters?:MemoryReadFilters)=>this.read(context,id,undefined,filters),
+  readVersion:(id:string,version:number,filters?:MemoryReadFilters)=>this.readVersion(context,id,version,undefined,filters),
   reconcile:()=>this.scheduleReconcile(context),
   page:(raw:unknown)=>this.page(context,raw),
   control:(kind:'pause'|'resume'|'stop',raw:unknown)=>{const data=this.data(context),state=data.control(kind,raw);if(kind==='stop')for(const row of data.sql.all("SELECT id,tasks FROM mm_jobs WHERE user_id=$user AND json_extract(input,'$.automatic')=1 AND state IN ('ready','admitting')")){queueMemoryErases(data.sql,{jobId:String(row.id)});queueNativeCleanup(data.sql,String(row.id));data.sql.run("UPDATE mm_jobs SET state='cancelled',draft=NULL,review=NULL,prepared=NULL WHERE user_id=$user AND id=?",row.id);for(const id of Object.values(JSON.parse(String(row.tasks))))this.execution.forUser(context).cancel(String(id));}return {revision:state.revision,generation:state.generation,desired:Boolean(state.desired)};},
