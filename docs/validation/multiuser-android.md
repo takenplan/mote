@@ -531,3 +531,29 @@ retain a one-step exchange by adding a new account-bound invitation contract.
 Neither option is implemented or presumed selected without the actual response.
 The extra step is a user-facing behavior choice under AGENTS.md and the existing
 multiuser/client ADRs; it is distinct from a request to expand device permissions.
+
+### Original Lark entry characterization prepared (4b16dc20)
+
+The native page still calls the retired singleton `/api/connectors/lark` facade.
+The prepared durable native journey selects a real saved `same-lark` connection,
+checks the actual CLI probe task, observes held authorization progress, saves an
+explicit document range, previews metadata, confirms archival, and retires a
+detached A sync button after switching to B with the same connection ID. The
+fixture uses the actual M01/M04/M09/M10/M05/M03 host; only external CLI responses
+are generated. No CLI installation, real provider credentials or personal data
+are involved. The test remains UNCOMPILED/UNRUN, so no RED or GREEN is claimed.
+
+Fixture startup first failed before business assertions because a control route
+was registered after Fastify readiness. The corrected fixture uses a separate
+loopback-only control listener and reached ready successfully; its startup is
+not native acceptance. Production Android is unchanged from tested48a79785.
+
+KEEP: the existing document/activity discovery and exclusions, explicit preview
+and archive, calendars, per-document retry, source pause/context, cancellation,
+and retained archive on disconnect. CHANGE: the selected owned M10 connection,
+M05 task ID/progress and the existing encrypted same-operation command journal.
+UNKNOWN: ordinary CLI installation has no allowed scoped operation; it must not
+be replaced by a shell command or silently equated to bundled plugin install.
+Recording-provider controls, shared arbitrary-file Imports, remaining Files
+controls/review/acoustic, and the original Agent View contract remain separate
+open capability rows. The prepared Lark test does not close any of them.
