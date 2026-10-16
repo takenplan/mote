@@ -17,6 +17,7 @@ import {createRequire} from 'node:module';
 import {pathToFileURL,fileURLToPath} from 'node:url';
 const repository=fileURLToPath(new URL('../../../',import.meta.url));
 const nativeImport=createRequire(import.meta.url)('./native-backend.cjs') as (url:string)=>Promise<any>;
+import {createHash} from 'node:crypto';
 import {defaultConfig} from '../src/config';
 import {testConnection} from '../src/connection';
 import {DurableQueue} from '../src/queue';
@@ -214,4 +215,21 @@ it('revokes the old actual document before replacing private stores or publishin
  const switching=app.call('mote:ask',['login',{token:f.b.token}]);await vi.waitFor(()=>expect(entered).toBe(true));
  const oldStatus=await app.documentCall('A','status').catch(error=>error),oldDraft=await app.documentCall('A','noteDraft').catch(error=>error);app.child.send({type:'release-diagnostics'});await switching;
  expect(oldStatus).toBeInstanceOf(Error);expect(oldDraft).toBeInstanceOf(Error);expect(statuses.some(status=>status.config.account?.userId===f.b.userId)).toBe(false);await app.document('B');expect((await app.documentCall('B','status')).config.account.userId).toBe(f.b.userId);
+});
+
+it('reads complete generated material membership beyond the first 200 members with account-specific text paging',async()=>{
+ const f=await fixture(),sourceId='reading-source',externalId='generated-material',materialId='mat_'+createHash('sha256').update(JSON.stringify([sourceId,externalId])).digest('hex');let selected:string='';
+ for(const [grant,text] of [[f.a,'Generated A full material text '.repeat(600)],[f.b,'Generated B private text']] as const){
+  const config=f.config(grant);expect((await f.request(grant.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated source',kind:'local-files',deviceId:config.deviceId,platform:'macos',retention:'snapshot'})).statusCode).toBe(200);
+  const receipt=await f.request(grant.token,`/api/ingress/sources/${sourceId}/items`,'POST',{batchId:'generated',items:['prefix','selected'].map(externalId=>({externalId,revision:'r1',observedAt:'2026-01-01T00:00:00Z',title:'Generated item',text:'Generated raw',kind:'file',layer:'snapshot'}))});expect(receipt.statusCode,receipt.body).toBe(200);const [prefix,last]=receipt.json().captures;selected=last.id;
+  const producer=f.node.ingress.bindSource(await f.node.authority.authenticate(grant.token),[sourceId],()=>{});producer.publishMaterial({id:materialId,kind:'document',schemaVersion:1,title:'Generated material',origin:{sourceId,externalId,deviceId:config.deviceId},blocks:[{id:'body',kind:'text',format:'plain',text,memberIds:['selected']}],members:[...Array.from({length:200},(_,i)=>({id:'prefix-'+i,kind:'capture',ref:'capture:'+prefix.id})),{id:'selected',kind:'capture',ref:'capture:'+last.id}],coverage:{state:'complete'},fidelity:{state:'lossless',limitations:[]},retention:{original:'retained',policy:'keep'}});
+ }
+ const item={key:selected,source:'file' as const,title:'',observedAt:'',outcome:'received' as const,firstReceipt:true,captureId:selected,sourceId};const page=await readCentralContent(f.config(f.a),item);expect(page.text).toBe('Generated A full material text '.repeat(600).slice(0,12000));expect(page.nextChunkOffset).toBe(12000);expect(page.readiness).toBe('ready');
+ expect((await readCentralContent(f.config(f.a),item,12000)).text).toBe('Generated A full material text '.repeat(600).slice(12000));expect((await readCentralContent(f.config(f.b),{...item})).text).toBe('Generated B private text');
+});
+it('preserves capture browsing for a legitimate page whose full OCR body exceeds the reader budget',async()=>{
+ const f=await fixture(),config=f.config(f.a),sourceId='large-reader-source';expect((await f.request(f.a.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated source',kind:'mote.desktop',deviceId:config.deviceId,platform:'macos',retention:'archive'})).statusCode).toBe(200);
+ const items=Array.from({length:61},(_,i)=>({...event('00000000-0000-4000-8000-'+String(i+1).padStart(12,'0')),deviceId:config.deviceId,ocrText:'Generated content '.repeat(5555),imageBase64:image.toString('base64')}));const response=await f.request(f.a.token,`/api/ingress/sources/${sourceId}/captures`,'POST',{batchId:'generated-large',items});expect(response.statusCode,response.body).toBe(200);
+ const queue=new DurableQueue(join(f.directory,'large-reader'),config);await queue.initialize();const page=await browseCaptures(queue,config,{location:'central',day:'2026-09-13',grouping:'records'});expect(page.totalCount).toBe(61);expect(page.items).toHaveLength(30);expect(page.items.every(v=>v.textPreview===items[0].ocrText.slice(0,160))).toBe(true);
+ expect((await captureDetail(queue,config,'central',items[0].id)).ocrText).toBe(items[0].ocrText);expect((await f.request(f.b.token,'/api/captures')).json().items).toHaveLength(0);
 });
