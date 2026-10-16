@@ -70,3 +70,22 @@ test('Activity follows real failed export and explicit same-operation retry with
  fail=false;await f.checked(f.a.token,'/api/portable/exports/'+receipt.id+'/retry','POST',{});await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+receipt.id)).state==='completed',()=> 'explicit export retry did not complete');
  const done=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(done.state,'completed');assert.equal(done.branchCounts.completed,done.branchCounts.total);assert.equal(done.artifacts[0].id,receipt.id);assert.equal((await f.checked(f.a.token,'/api/work-activity?state=attention')).items.length,0);
 });
+
+for(const mode of ['complete','cancel'] as const)test('actual same-account portable import Activity follows '+mode+' without inventing an artifact or restoring preserved authority',async t=>{
+ const f=await fixture(t),sourceId='generated-import-source';
+ await f.checked(f.a.token,'/api/ingress/sources','POST',{id:sourceId,name:'Generated source',kind:'local-files',deviceId:'generated-device',platform:'import',retention:'archive'});
+ const exported=await f.checked(f.a.token,'/api/portable/exports','POST',{operationId:randomUUID()});await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+exported.id)).state==='completed',()=> 'archive for actual import did not complete');
+ const archive=await f.checked(f.a.token,'/api/portable/exports/'+exported.id+'/content');await f.checked(f.a.token,'/api/sources/'+sourceId,'DELETE');
+ const entry=(f.node.services as any).users.get('memory'),read=entry.lifecycle.exportUser,entered=deferred(),release=deferred();f.releaseOnClose.push(release.resolve);
+ entry.lifecycle.exportUser=async(subject:unknown)=>{const result=await read(subject);entered.resolve();await release.promise;return result;};
+ const receipt=await f.checked(f.a.token,'/api/portable/imports','POST',{operationId:randomUUID(),archive}),id='import:'+receipt.id;await entered.promise;
+ const active=await f.checked(f.a.token,'/api/work-activity?state=active&limit=1');assert.equal(active.items[0]?.id,id);assert.equal(active.items[0].state,'running');assert.equal(active.items[0].progress.mode,'semantic');assert.deepEqual(active.items[0].artifacts,[]);
+ for(const token of [f.b.token,f.admin.token])assert.equal((await f.request(token,'/api/work-activity/'+id)).statusCode,404);
+ assert.equal((await f.checked(f.a.token,'/api/work-activity?sourceId='+sourceId)).items.length,0,'a whole-account import does not advertise a synthetic source association');
+ if(mode==='cancel')await f.checked(f.a.token,'/api/portable/imports/'+receipt.id+'/cancel','POST',{});release.resolve();
+ await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/imports/'+receipt.id)).state===(mode==='complete'?'completed':'cancelled'),()=> 'actual import did not settle');
+ const done=await f.checked(f.a.token,'/api/work-activity/'+id);assert.equal(done.state,mode==='complete'?'completed':'cancelled');assert.equal(done.kind,'import');assert.equal(done.progress.mode,'semantic');assert.deepEqual(done.artifacts,[]);assert.deepEqual(done.evidence,{count:0,refs:[]});assert.deepEqual(done.technical.operationIds,[]);
+ if(mode==='complete'){assert.equal((await f.checked(f.a.token,'/api/sources/'+sourceId)).enabled,false);assert.equal((await f.request(f.a.token,'/api/portable/imports/'+receipt.id+'/cancel','POST',{})).statusCode,409);assert.ok(done.branches.some((branch:any)=>branch.state==='excluded'),'preserved current configuration is not mislabeled restored data');assert.ok(done.branchCounts.completed<done.branchCounts.total);}
+ else assert.equal((await f.request(f.a.token,'/api/sources/'+sourceId)).statusCode,404);
+ await f.restart();assert.equal((await f.checked(f.a.token,'/api/work-activity/'+id)).state,done.state);
+});
