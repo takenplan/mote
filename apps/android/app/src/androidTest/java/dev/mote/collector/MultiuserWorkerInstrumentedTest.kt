@@ -145,6 +145,25 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun actualNativeModelSettingsUseTheOwnedDomainAndPreserveMaskedCredentials() {
+        val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val bApi=CentralClient(endpoint(),token("b"));val bBefore=bApi.get("/api/configuration")
+        fun models(view:JSONObject):JSONObject {val domains=view.getJSONArray("domains");return (0 until domains.length()).map {domains.getJSONObject(it)}.single {it.getString("id")=="models"}.getJSONObject("saved")}
+        val before=models(api.get("/api/configuration"));val name="Generated native owned profile "+java.util.UUID.randomUUID()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("模型配置");ready()
+            scenario.onActivity {activity->val field=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().firstOrNull {it.hint.toString()=="profiles · 高级 JSON"};assertNotNull("Native models must use the owned M04 configuration",field);val profiles=org.json.JSONArray(field!!.text.toString());profiles.getJSONObject(0).put("name",name);field.setText(profiles.toString())}
+            click("保存设置");ready()
+            val after=models(api.get("/api/configuration"));assertEquals(name,after.getJSONArray("profiles").getJSONObject(0).getString("name"));assertEquals(before.getJSONObject("selections").toString(),after.getJSONObject("selections").toString())
+            assertEquals(before.getJSONArray("profiles").getJSONObject(0).getJSONObject("settings").toString(),after.getJSONArray("profiles").getJSONObject(0).getJSONObject("settings").toString())
+            assertEquals(models(bBefore).toString(),models(bApi.get("/api/configuration")).toString())
+        }
+    }
+
     @Test fun actualNativeRecipeSelectionUsesTheScopedCatalogAndOwnedCAS() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
