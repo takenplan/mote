@@ -309,3 +309,90 @@ only on loopback listen EPERM and passed unchanged with loopback access; preserv
 Independent architecture/TDD review, final full combination, fresh builds/emitted
 processes and required affected/Android remain pending. No final acceptance or
 Draft PR is claimed from this narrow checkpoint. CI is disabled and unrun.
+
+## Public-contract A: actual restore and bounded ordinary page reads
+
+After the completed PR135 architecture review, test-only RED commit
+`6d40b997866d19ee1e0b9cde5d6579f3b38cdf3a` extends both retained-v1 cases
+through actual purpose-bound private-data/ingress/processing export, deletion and
+restore. The same previously retained reader is reused after restore; current,
+historical and dependent unfiltered projections stay withdrawn, original bytes
+and B remain intact, and restart grants no task replay. Portable fixtures use
+canonical schema normalization and exact current member refs; earlier malformed
+fixture rejection is not a production failure.
+
+The additional ordinary-page regression measures real PrivateSql calls without
+replacing SQL execution: 80 normal Materials per owner, an actual HTTP 50-item
+page. RED: 52 full-owner legacy scans, 2 restore cases passed and 1 performance
+case failed, exit 1 (`/tmp/m07-public-A-restore-perf-red-valid.log`). This is a
+new migration performance defect, not a pre-existing legacy-flow bug. Exact
+Material reads now scope migration root detection to that ID. Page/search retain
+the full-owner before-candidate/LIMIT check and transitive withdrawal semantics.
+GREEN: 5/5, exit 0, 6766.278291ms, full-owner scans 2, measured page 7.069ms
+(`/tmp/m07-public-A-restore-perf-fixed.log`). This bounds repeated scan count,
+not a claim about production-scale throughput. Server typecheck exits 0.
+Final same-SHA A/B/C, full affected/Android and PR gates remain pending.
+
+The exact-read optimization's first version missed a held-reader direct derived
+Material read before any global refresh. Peer M11 identified this boundary;
+independent RED `90b7a4c9e4ba0de9b41d610eacd464a7fbf52cff` records 1/2 passed,
+exit 1 (`/tmp/m07-public-A-direct-dependent-red.log`). This is a new optimization
+regression, not a legacy-flow bug. The minimal correction follows the target's
+exact revision input ancestors in the existing SQL graph before selecting unsafe
+current roots; existing withdrawal cascades remain authoritative. Same reader
+before first search and after real restore now refuses the known dependent.
+Fresh Coding positives, both retained/history/restore cases and ordinary page
+cost: 5/5, exit 0, 6647.40075ms; full-owner scans remain 2
+(`/tmp/m07-public-A-ancestor-fixed.log`). Scan instrumentation distinguishes an
+owner-wide query from a parameter-bound target query without replacing SQL.
+
+## Public-contract representative A/C fixture closure
+
+A legal 11,000-character declared human Coding message (existing 12,000-character
+message bound unchanged) now runs real M03 archive intake → M06 source extraction
+and segmented Material → 4096-character read pages → M04/M05 Memory extraction
+and independent review for equal A/B source/device/event/revision/batch IDs. The
+full tail reaches the actual model transport; tool/archive bytes remain retained
+and outside search/model inputs, and host envelope/B prose is absent. 1/1, exit 0,
+5636.619083ms (`/tmp/m07-public-A-long-valid.log`). The earlier 13,000-character
+fixture exceeded the existing product bound, and the first paging assumption
+used the wrong response field; these were fixture defects, not product REDs.
+
+C uses two actual HTTP app processes and an installed M09 generated plugin worker.
+Only model/provider external I/O is synthetic. A's real provider `put` has arrived
+at the external HTTP server but cannot commit or ACK. The owner cancels the actual
+job, visibility is revoked while `pendingExternal` remains positive, and the host
+is killed with real SIGKILL before releasing the remote operation. The observed
+worker PID subsequently disappears from the OS. On restart, purpose-limited
+reconciliation reports `result_unknown` rather than replaying the old write or
+claiming erase success while that request can still commit. The external server
+then commits the exact old key after both processes died; a second reconciliation
+observes and removes its actual fixture file and records `erased`. B remains
+byte-for-byte stable; 19 succeeded task IDs/attempts are retained, four original
+model calls do not replay, and A's next legitimate job succeeds with two calls to
+its newly selected model. Exact old opId has only one `put`. All generated adapter
+PIDs disappear after final close. Physical erasure here means the synthetic
+external file and real worker process, not a claim about live vendor retention.
+
+Source C: 1/1, exit 0, 39371.613542ms,
+`/tmp/m07-public-C-process-routed.log`. Two earlier C runs rejected the SDK's real
+messages path/beta query in the new external fixture; these were fixture routing
+errors and no product failure is claimed. The minimal shared `scoped-process`
+helper supplies only actual child launch, deadline/state observation and HTTP
+request/configuration setup. Its two concrete consumers retain domain-specific
+setup and assertions. Existing review/admission/feedback/owner-reply SIGKILL cases
+after extraction: 4/4, exit 0, 81577.311958ms,
+`/tmp/m07-public-process-fixture.log`. Existing PrivateData/lifecycle: 23/23,
+exit 0, 2114.752458ms (`/tmp/m07-public-A-final-data.log`).
+
+These are owning-module source receipts. Independent final A/C review, the same
+unified A/B/C SHA, fresh emitted checks and required affected/Android remain
+separate gates. CI remains disabled and unrun.
+
+The selected-derived-history hotspot is also exercised through real safe parent
+and summary republishing before any global refresh, then through the same actual
+three-domain restore: the exact old summary revision is rejected both times by
+the existing visibility sequence fence. This static concern did not reproduce as
+a production defect; no additional history algorithm was added. Both retained
+variants plus page cost: 3/3, exit 0, 3500.662417ms,
+`/tmp/m07-public-A-history-derived.log`.
