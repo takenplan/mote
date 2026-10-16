@@ -387,7 +387,7 @@ export function EvidenceDialog({
   const contextReference=id.startsWith('context:')&&parseEvidenceRef(id.slice(8))?.kind==='capture'?id.slice(8):undefined;
   const parsedRef=parseEvidenceRef(id),captureRef=parsedRef?.kind==='capture';
   const captureId=captureRef?parsedRef.id:undefined;
-  const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
+  const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/${api.connection?.mode==='web'?'captures':'capture-browser'}/${encodeURIComponent(captureId!)}`:null);
   useOperationUpdates(api);
   const [mutationError,setError]=useState('');
   const error=mutationError||(readError?errorMessage(readError):'');
