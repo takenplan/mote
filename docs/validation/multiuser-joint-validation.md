@@ -654,3 +654,12 @@ owner-keyed M06 tables and original cancel/retry endpoints. No Central data or
 real media/model input was read; all artifacts and fixtures are generated.
 This candidate still awaits types, independent review and the affected/compiled/
 client gates; the declared consumer freeze remains c45.
+
+A separate original Task cancel→confirmUnknown→fresh Processing operation
+combination actually issued a second held provider call before the first ended:
+/tmp/mote-joint-processing-physical-ack-red.log/.exit,1/1 EXIT1, durable c2403df1.
+The shared M06 admission and pre-I/O guard now both inspect physical activity
+independently of replay acknowledgement, not only the Files retry endpoint.
+The corrected same case is recorded separately; no acknowledgement marks a fact
+succeeded or frees a live worker. This extends the earlier endpoint-local fix,
+not a new confirmation policy or executor.
