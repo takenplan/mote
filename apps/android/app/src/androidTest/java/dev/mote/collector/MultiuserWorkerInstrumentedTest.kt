@@ -519,6 +519,35 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeGoogleConnectionSettingsCreateDisabledAndKeepMaskedCasUnderTheirOwner() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);assertEquals(0,a.get("/api/connectors").getJSONArray("connections").length())
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label};assertNotNull("Missing original owned connection control: "+label,button);button!!.performClick()}}
+            fun fill(label:String,value:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()==label}.setText(value)}}
+            ready();press("来源与外部应用");ready();press("新建连接");ready()
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {spinner->(0 until spinner.count).any {spinner.getItemAtPosition(it).toString()=="gmail"}}.let {spinner->spinner.setSelection((0 until spinner.count).single {spinner.getItemAtPosition(it).toString()=="gmail"})}}
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            fill("连接 ID","same-mail");fill("Google 客户端 ID","GENERATED_A_CLIENT");fill("Google 客户端密钥","GENERATED_A_SECRET");fill("Google 授权回调地址","https://fixture.invalid/a-callback");press("保存连接");ready()
+            val inventory=a.get("/api/connectors");assertEquals(1,inventory.getJSONArray("connections").length());assertEquals("same-mail",inventory.getJSONArray("connections").getJSONObject(0).getString("id"))
+            fun instance():JSONObject {val rows=a.get("/api/plugins").getJSONArray("instances");return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")=="connector.same-mail"}}
+            assertFalse("Saving never starts background execution",instance().getBoolean("desired"))
+            press("编辑连接");ready();scenario.onActivity {activity->assertEquals("",views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="Google 客户端密钥"}.text.toString())}
+            fill("Google 授权回调地址","https://fixture.invalid/a-callback-edited");press("保存连接");ready()
+            val domains=a.get("/api/configuration").getJSONArray("domains");val saved=(0 until domains.length()).map(domains::getJSONObject).single {it.getString("id")=="connectorSettings"}.getJSONObject("saved").getJSONArray("connections").getJSONObject(0)
+            assertTrue(saved.getBoolean("googleClientSecret"));assertEquals("https://fixture.invalid/a-callback-edited",saved.getString("googleRedirectUri"));assertTrue(a.get("/api/connectors/same-mail").getBoolean("configured"))
+            press("启用");ready();assertTrue(instance().getBoolean("desired"));press("暂停");ready();assertFalse(instance().getBoolean("desired"))
+            press("编辑连接");ready();fill("Google 授权回调地址","https://fixture.invalid/old-a-save")
+            lateinit var oldSave:android.widget.Button;scenario.onActivity {activity->oldSave=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存连接"}}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldSave.performClick()};ready()
+            val bDomains=CentralAccess.requireClient(app).get("/api/configuration").getJSONArray("domains");val bSaved=(0 until bDomains.length()).map(bDomains::getJSONObject).single {it.getString("id")=="connectorSettings"}.getJSONObject("saved").getJSONArray("connections").getJSONObject(0)
+            assertEquals("same-mail",bSaved.getString("id"));assertEquals("GENERATED_B_CLIENT",bSaved.getString("googleClientId"));assertEquals("https://fixture.invalid/b-callback",bSaved.getString("googleRedirectUri"))
+        }
+    }
+
     @Test fun actualNativeOverviewReadsOwnedStatisticsAndCanonicalDeviceMetadata() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
