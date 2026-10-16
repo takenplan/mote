@@ -17,6 +17,25 @@ extraction, intake is unchanged and B's same-ID record retains its own raw state
 The 33 unselected tests are not counted as acceptance. No raw projection, task
 runtime, classification rule or model service is added by Desktop.
 
+M13 and M16 bounded independent reviews of exact `d26db7fa` found no new
+confirmed P0/P1/P2; reports `/tmp/mote-m13-review-m14-d26.md` and
+`/tmp/mote-m16-review-m14-d26.md`. M16 separately identified a possible existing
+detail-source assumption, now under a dedicated actual regression; the review
+conclusions are limited to the two thin preview changes.
+
+M13's same-byte original recreation RED `47405f0d` and fix `729cd21e` are
+composed: the original M08 persistent incarnation receipt fences the image await.
+M14's bounded follow-up is `/tmp/mote-m14-review-m13-729.md`; it does not claim
+independent execution of that race. M16 backup RED `b24ec6b8` and fix `63a39c79`
+are composed, preserving and admitting both device notification tables and
+monotonic counters; bounded review `/tmp/mote-m14-review-m16-63a.md` found no new
+issue. During M14's manual inventory conflict resolution, the two already
+declared table entries were accidentally omitted. The scope checker reported
+exactly those two omissions (exit 1); restoring the original declarations in
+`0dd0e08e` gives exit 0. Both logs are retained at
+`/tmp/m14-resumed-composed-scopes{,-green}.log/.exit`; this was an M14 composition
+error, not a missing M13 contract or a scope exception.
+
 Current consumer composition after the resumed increment includes M13
 `f1e059e4c0bf86b860d8b1c9154b1cb36b0fbd13` plus exact Vault
 `07f54ac3163b2688fbb6a259f164eef1771d23ff`, M15 Android
