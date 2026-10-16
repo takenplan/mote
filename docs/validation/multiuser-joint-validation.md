@@ -505,3 +505,15 @@ transport responses are generated; actual M01/M03/M04/M05/M06/M08 receipts and
 host restart order are exercised. Missing-model intake failure remains the
 previous distinct actual stale receipt, not a fabricated waitingForModel pass.
 Unavailable snapshot recovery and additional Files/image-profile parity stay OPEN.
+
+A genuinely unavailable retained M04 snapshot now has its distinct composed
+case: after real429 capacity waiting, corrupt only the generated exact encrypted
+snapshot tag, restart, and owner retry. The actual M05 task blocks with
+model_snapshot_unavailable; GET Import remains saved/completed but reports
+Memory waitingForModel1/completed0/failed0, with zero additional A model calls
+and B still complete. Restore only the exact retained encrypted tag, restart,
+and owner retry completes through the original snapshot.1/1/no skip/EXIT0,
+5.304s,/tmp/mote-joint-import-memory-snapshot-recovery.log/.exit. Ciphertext and
+keys stay in the generated temporary fixture/in-process memory, never in Git or
+logs. This is a snapshot fault/recovery assertion, not permission to substitute
+a fresh model for a withdrawn snapshot or a real-model semantic validation.
