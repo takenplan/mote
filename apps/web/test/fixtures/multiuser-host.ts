@@ -7,9 +7,11 @@ import {noteCapture} from '@mote/shared';
 import assert from 'node:assert/strict';
 import {generatedWebProvider} from './multiuser-provider.js';
 import {defaultModelSettings} from '../../../server/src/model-settings.js';
+import {generatedScopedPluginRelease} from '../../../server/test/fixtures/scoped-plugin-release.js';
 
 const root=mkdtempSync(join(tmpdir(),'mote-m13-renderer-host-')),password='Generated-M13-account-password-01';
-const host=await buildApp({dataDir:root});
+const pluginRelease=generatedScopedPluginRelease();
+const host=await buildApp({dataDir:root},{pluginReleaseTransport:pluginRelease.transport});
 let provider:Awaited<ReturnType<typeof generatedWebProvider>>|undefined;
 const gates=new Map<string,{entered:boolean;release:()=>void;promise:Promise<void>}>();
 const requests:{method:string;url:string;credentialId?:string;body?:unknown}[]=[];
