@@ -340,7 +340,7 @@ internal class CentralContent(
         work(MoteI18n.text("正在连接中央节点…"), {
             val config = Settings(this).read()
             val (code, value) = HttpJson.post(origin + "/api/login/requests", org.json.JSONObject().put("serverUrl", origin).put("deviceId", Settings(this).deviceId)
-                .put("deviceName", config.deviceName).put("platform", "android").put("challenge", SourceRules.hash(verifier)).put("durationMs", durationMs))
+                .put("deviceName", config.deviceName).put("platform", "android").put("purpose", "central").put("challenge", SourceRules.hash(verifier)).put("durationMs", durationMs))
             check(code == 200); requireNotNull(value).getString("id")
         }) { id ->
             check(origin == server && expected == accessGeneration)

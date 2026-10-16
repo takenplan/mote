@@ -615,3 +615,39 @@ Only external CLI responses are generated. i18n8455 EXIT0. Full Android/required
 and independent review of this new consumer remain pending. The test-onlya924
 extension for calendars, failure retry, source pause/resume and cancellation has
 not been compiled/run and is not included in this GREEN claim.
+
+### Native browser Central-login contract repair in progress
+
+Static consumer/protocol mapping found a different existing-flow mismatch:
+CentralContent's browser login and ClientLoginApproval promise all Central
+functions, while the default M01 request produces a device-bound credential that
+UnifiedCentralSession intentionally refuses as a private Central client. Device
+isolation remains correct. New explicit-purpose server characterization eebdbe64
+failed400 at the absent purpose field (`/tmp/m15-native-browser-central-contract-red.log/.exit`).
+The minimal producer now preserves default device grants and issues an existing
+personal client only for an immutable `purpose:central` request approved by a
+current full account session. New contract test1/1 GREEN, old PKCE account-binding
+neighbor GREEN, and the independent unfiltered legacy handoff file4/4 GREEN
+(`/tmp/m15-native-browser-central-contract-green`, `/tmp/m15-browser-auth-adjacent`,
+`/tmp/m15-browser-legacy-handoffs`, each `.log/.exit`). Device private GET and
+device approval remain403; central grant private GET200/admin403, wrong verifier,
+cross-account reapproval, one-use ACK, revocation and B positive are retained.
+
+The original browser approval component also had two actual renderer failures:
+it promised all Central functions for a device request, and a replacement request
+could retain the previous device's enabled approval button before its own details
+resolved. Test-only41f25299 retains valid RED2/2 in
+`/tmp/m15-browser-approval-valid-red2.log/.exit`; unchanged assertions pass2/2 in
+`/tmp/m15-browser-approval-first-green.log/.exit`. The first attempt from repository
+root failed before business assertions because TSX used the wrong workspace JSX
+configuration (`React is not defined`); it is fixture execution setup, not a valid
+product RED. The real Web-workspace command is recorded in the valid logs.
+
+Native original browser entry test1ca774b7 is UNCOMPILED/UNRUN. It will intercept
+only the generated loopback browser Intent, use real approval/poll/ACK, and check
+the actual native device inventory under A with same-ID B. The native one-line
+purpose consumer, producer and Web repair are not claimed final until that
+unchanged native case and current types/build/review run. i18n8456 EXIT0. This
+restores the existing full-client browser login promise under the accepted M01
+boundary; it does not choose the pending QR pairing product flow or expose private
+APIs to device-bound credentials.

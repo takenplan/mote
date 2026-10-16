@@ -5,7 +5,7 @@ import { ConnectionError } from './connection-error.js';
 import type { Connections } from './connections.js';
 const secret = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
-export const loginDeviceSchema = z.object({serverUrl:z.string().transform((v,ctx)=>{try{return connectionServerUrl(v);}catch{ctx.addIssue({code:'custom',message:'Invalid server URL'});return z.NEVER;}}),deviceId:z.string().regex(/^[a-zA-Z0-9_.:-]{1,128}$/),deviceName:z.string().trim().min(1).max(128),platform:z.enum(['android','macos','windows','linux','other']),challenge:z.string().regex(/^[a-f0-9]{64}$/),durationMs:z.union([z.literal(0),z.literal(86400000),z.literal(604800000),z.literal(2592000000)]).default(2592000000)}).strict();
+export const loginDeviceSchema = z.object({serverUrl:z.string().transform((v,ctx)=>{try{return connectionServerUrl(v);}catch{ctx.addIssue({code:'custom',message:'Invalid server URL'});return z.NEVER;}}),deviceId:z.string().regex(/^[a-zA-Z0-9_.:-]{1,128}$/),deviceName:z.string().trim().min(1).max(128),platform:z.enum(['android','macos','windows','linux','other']),purpose:z.enum(['device','central']).default('device'),challenge:z.string().regex(/^[a-f0-9]{64}$/),durationMs:z.union([z.literal(0),z.literal(86400000),z.literal(604800000),z.literal(2592000000)]).default(2592000000)}).strict();
 type Grant = Omit<Awaited<ReturnType<Connections['session']>>,'scope'> & {scope:'owner'|'client';deploymentId?:string;userId?:string};
 export interface LoginConnections {
   session(server:string,label:string,device?:{deviceId:string;deviceName:string;platform:'android'|'macos'|'windows'|'linux'|'other'},durationMs?:number):Promise<Grant>;
@@ -32,10 +32,10 @@ export class LoginHandoffs {
   }
   create(raw:unknown){this.prune();if(this.requests.size>=512)throw new ConnectionError('login_capacity',429,'Login exchange capacity reached');const input=loginDeviceSchema.parse(raw),id=randomBytes(32).toString('base64url');this.requests.set(hash(id),{input,deadline:this.clock()+10*60000});return {id};}
   private request(id:string){secret.parse(id);this.prune();const request=this.requests.get(hash(id));if(!request)throw new ConnectionError('login_expired',410,'Login request expired');return request;}
-  detail(id:string){const r=this.request(id);return {deviceName:r.input.deviceName,platform:r.input.platform,serverUrl:r.input.serverUrl,expiresAt:r.deadline};}
+  detail(id:string){const r=this.request(id);return {deviceName:r.input.deviceName,platform:r.input.platform,serverUrl:r.input.serverUrl,expiresAt:r.deadline,...(r.input.purpose==='central'?{purpose:'central' as const}:{})};}
   async approve(id:string,authorize:()=>void,ownerKey?:string,connections:LoginConnections=this.connections){
     const r=this.request(id);authorize();if(r.ownerKey!==undefined&&r.ownerKey!==ownerKey)throw new ConnectionError('login_owner_changed',403,'Login approval belongs to another account');r.ownerKey=ownerKey;if(r.grant)return {approved:true};
-    r.approval??=(async()=>{const {serverUrl,deviceId,deviceName,platform,durationMs}=r.input;const grant=await connections.session(serverUrl,deviceName,{deviceId,deviceName,platform},durationMs);
+    r.approval??=(async()=>{const {serverUrl,deviceId,deviceName,platform,durationMs,purpose}=r.input;const grant=await connections.session(serverUrl,deviceName,purpose==='central'?undefined:{deviceId,deviceName,platform},durationMs);
       try{authorize();if(r.deadline<=this.clock())throw new ConnectionError('login_expired',410,'Login request expired');}
       catch(e){await connections.revoke(grant.credentialId);throw e;}
       r.grant=grant;r.authorize=()=>{const c=connections.authenticate('Bearer '+grant.token);if(!c)throw new ConnectionError('unauthorized',401,'Login revoked');connections.assertActive(c);};return grant;
