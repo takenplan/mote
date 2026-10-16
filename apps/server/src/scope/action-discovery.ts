@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {moteText} from '../i18n.js';
 import {z} from 'zod';
 import {createAgent,type QueryInput} from '@mote/agent';
 import {actionEvidenceText,calendarExpired,sourceContentTime,ProviderFailure,type ActionProposal,type CaptureRecord,type QueryResult,type TokenUsage} from '@mote/shared';
@@ -77,7 +78,7 @@ export class ActionDiscovery{
   for(const row of this.host.sql(context).all('SELECT id,task_id,state FROM ac_jobs WHERE user_id=$user')){const task=row.task_id?this.host.execution.engine.get(String(row.task_id)):undefined;let current=true;try{this.job(context,String(row.id));}catch(error){if(!(error instanceof PrivateDataError))throw error;current=false;}
    const status=row.state==='completed'?'completed':!current?'stale':task?.state==='waiting'?'pending':task?.state??'pending';counts.set(status,(counts.get(status)??0)+1);if(current&&task?.error&&['failed','blocked'].includes(task.state))failure={code:task.error,availableAt:task.availableAt};
   }
-  return {jobs:[...counts].sort(([a],[b])=>a.localeCompare(b)).map(([status,count])=>({status,count})),running:(counts.get('running')??0)>0,error:failure?'action_analysis_failed':null,...(failure?{errorCode:failure.code,availableAt:failure.availableAt}:{})};
+  return {jobs:[...counts].sort(([a],[b])=>a.localeCompare(b)).map(([status,count])=>({status,count})),running:(counts.get('running')??0)>0,error:failure?moteText('日程分析未完成，可能是模型不可用、证据更新或结果未通过校验。可重试失败批次。'):null,...(failure?{errorCode:failure.code,availableAt:failure.availableAt}:{})};
  }
  async retry(context:UserContext){for(const row of this.host.sql(context).all('SELECT id,task_id FROM ac_jobs WHERE user_id=$user AND task_id IS NOT NULL')){try{this.job(context,String(row.id));const task=this.host.execution.forUser(context).get(String(row.task_id));if(['failed','blocked','stale','cancelled'].includes(task.state))this.host.execution.forUser(context).retry(task.id);}catch(error){if(!(error instanceof PrivateDataError))throw error;}}await this.enable(context);const state=this.host.state(context);if(state.policy_task){const task=this.host.execution.forUser(context).get(state.policy_task);if(task.state!=='running'&&task.state!=='succeeded')this.host.execution.forUser(context).retry(task.id);}return {ok:true};}
  async close(){await Promise.allSettled([...this.active]);for(const dispose of this.disposers.reverse())await dispose();}
