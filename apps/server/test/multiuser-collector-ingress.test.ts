@@ -36,3 +36,14 @@ test('collector source edits, exact heads and description CAS retain account and
  assert.equal((await f.request(f.a.token,'/api/sources/same-source','PATCH',{enabled:false})).statusCode,200);
  assert.equal((await f.request(token,context)).statusCode,409);assert.equal((await f.request(token,context,'PATCH',{expectedVersion:1,description:'Paused edit'})).statusCode,409);assert.equal((await f.request(f.b.token,context)).statusCode,200);
 });
+test('scoped capture receipts retain only exact state prefixes and never move a compacted record between sources or owners',async t=>{
+ const f=await fixture(t);await f.register(f.a.token);await f.register(f.b.token);await f.register(f.a.token,'second-source');
+ const first={id:'00000000-0000-4000-8000-000000000001',deviceId:'same-device',deviceName:'Generated device',platform:'macos',capturedAt:'2026-01-01T00:00:00.000Z',durationMs:0,source:'activity',appId:'generated.app',appName:'Generated A',privacy:{excluded:false,redacted:false,mode:'none',collection:'activity'},stateSeries:{version:1,samples:[{at:'2026-01-01T00:00:00.000Z',durationMs:0}]}};
+ const send=(token:string,batchId:string,value:unknown,source='same-source')=>f.request(token,`/api/ingress/sources/${source}/captures`,'POST',{batchId,items:[value]});
+ assert.equal((await send(f.a.token,'prefix',first)).statusCode,200);assert.equal((await send(f.b.token,'prefix',{...first,appName:'Generated B'})).statusCode,200);
+ const extended={...first,stateSeries:{version:1,samples:[...first.stateSeries.samples,{at:'2026-01-01T00:00:05.000Z',durationMs:5000}]}};
+ assert.equal((await send(f.a.token,'extension',extended)).statusCode,200);assert.equal((await send(f.a.token,'old-retry',first)).statusCode,200);assert.equal((await send(f.a.token,'prefix',first)).statusCode,200);
+ assert.equal((await f.request(f.a.token,'/api/captures/'+first.id)).json().stateSeries.samples.length,2);const b=await f.request(f.b.token,'/api/captures/'+first.id);assert.equal(b.json().appName,'Generated B');assert.equal(b.json().stateSeries.samples.length,1);
+ assert.equal((await send(f.a.token,'different',{...extended,appName:'Modified original'})).statusCode,409);assert.equal((await send(f.a.token,'extension',first)).statusCode,409);assert.equal((await send(f.a.token,'move',extended,'second-source')).statusCode,409);
+ assert.equal((await f.request(f.a.token,'/api/captures/'+first.id)).json().stateSeries.samples.length,2);assert.equal((await f.request(f.b.token,'/api/captures/'+first.id)).json().stateSeries.samples.length,1);
+});
