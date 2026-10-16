@@ -31,7 +31,7 @@ object SyncSchedule {
         return PendingSync(captures.count + sources.count + files.count, listOfNotNull(captures.oldestAt, sources.oldestAt, files.oldestAt).minOrNull(), sources.pendingUpdates)
     }
     // Scheduling identity binds current ingress, connection and dispatch policy.
-    fun stamp(config: CollectorConfig) = SourceRules.hash(listOf(IngressV2Protocol.VERSION, config.server, config.connectionToken(), config.syncPaused, config.syncMode, config.syncIntervalMinutes, config.syncBatchSize, config.wifiOnly, config.syncChargingOnly, config.syncBatteryNotLow).joinToString("\u0000"))
+    fun stamp(config: CollectorConfig) = SourceRules.hash(listOf("3", config.ownerKey(), config.server, config.connectionToken(), config.syncPaused, config.syncMode, config.syncIntervalMinutes, config.syncBatchSize, config.wifiOnly, config.syncChargingOnly, config.syncBatteryNotLow).joinToString("\u0000"))
     fun delay(context: Context, config: CollectorConfig, explicit: Boolean = false): Long? {
         if (!config.hasSyncConnection() || config.syncPaused) return null
         val pending = pending(context)

@@ -55,6 +55,8 @@ object MoteI18n {
 
 /** Recreate stale screens after returning from an app-language change. */
 open class MoteActivity : Activity() {
+    private var displayedOwner = ""
+    protected fun requireDisplayedAccount() { check(Settings(this).read().ownerKey() == displayedOwner) { "Account changed" } }
     private var displayedLanguage = ""
     private var displayedUiRevision = -1L
     private var uiResumed = false
@@ -62,6 +64,7 @@ open class MoteActivity : Activity() {
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
     override fun attachBaseContext(newBase: Context) { super.attachBaseContext(MoteI18n.wrap(newBase)) }
     override fun onCreate(savedInstanceState: Bundle?) {
+        displayedOwner = runCatching { Settings(this).read().ownerKey() }.getOrDefault("")
         displayedLanguage = MoteI18n.language()
         displayedUiRevision = NativeUiPacks.registry.revision
         setTheme(if (lightSurface()) R.style.AppThemeLight else R.style.AppTheme)
@@ -91,6 +94,7 @@ open class MoteActivity : Activity() {
         }
     }
     override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {
+        if (runCatching { Settings(this).read().ownerKey() }.getOrDefault("") != displayedOwner) { recreate(); return true }
         if (event.action == android.view.MotionEvent.ACTION_DOWN) {
             val field = currentFocus as? android.widget.EditText
             if (field != null) {

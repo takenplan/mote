@@ -92,7 +92,9 @@ class FileTaskActivity : MoteActivity() {
         val file = draftFile()
         return if (file.exists()) JSONObject(String(localContentCipher().open(file.readBytes()), Charsets.UTF_8)) else null
     }
-    private fun draftFile() = File(noBackupFilesDir, "file-task-${SourceRules.hash(draftKey)}.enc")
+    private val draftOwner by lazy { Settings(this).read().ownerKey() }
+    private val draftDirectory by lazy { accountDirectory() }
+    private fun draftFile(): File { check(Settings(this).read().ownerKey() == draftOwner) { "Account changed" }; return File(draftDirectory, "file-task-${SourceRules.hash(draftKey)}.enc") }
     private fun values() = JSONObject().put("description", description.text.toString()).put("name", name.text.toString())
         .put("retention", retention.selectedItemPosition).put("initial", initial.selectedItemPosition).put("interval", interval.text.toString())
         .put("maximum", maximum.text.toString()).put("extensions", extensions.text.toString()).put("excludes", excludes.text.toString())
@@ -307,7 +309,7 @@ class FileTaskActivity : MoteActivity() {
                 check(latest == original || acknowledgedOnly) { MoteI18n.text("来源已在后台更新，请重新打开设置；当前草稿仍在页面中。") }
                 val saved = if (acknowledgedOnly && source.contextVersion == original.contextVersion && source.contextTarget == original.contextTarget)
                     next.copy(contextVersion = latest.contextVersion, contextTarget = latest.contextTarget, contextDirty = latest.contextDirty || descriptionText != latest.description) else next
-                store.save(saved); SourceWork.schedule(applicationContext, true); draftFile().delete()
+                requireDisplayedAccount(); store.save(saved); SourceWork.schedule(applicationContext, true); draftFile().delete()
                 savedSource?.uri?.takeIf { it != next.uri }?.let(::releaseUnused)
                 saved
             }) { result ->
@@ -329,7 +331,7 @@ class FileTaskActivity : MoteActivity() {
             result.getOrNull()?.takeIf { it.version > 0 }?.let { snapshot ->
                 if (description.text.toString() == current.description) {
                     task.start(MoteI18n.text("正在保存来源设置…"), { status.text = it }, {
-                        localSources().confirmContext(current, SourceRules.target(config.server, config.token), snapshot)
+                        localSources().confirmContext(current, config.ownerKey(), snapshot)
                     }) { ack -> ack.getOrNull()?.let {
                         source = it; savedSource = it
                         // The metadata ACK can arrive after the user started typing in this still-editable field.
@@ -352,10 +354,10 @@ class FileTaskActivity : MoteActivity() {
                 MoteDialogBuilder(this).setTitle(MoteI18n.text("解决资料说明冲突"))
                     .setMessage(MoteI18n.text("中央说明（版本 {0}）：\n{1}\n\n本机说明：\n{2}", remote.version, remote.description, description.text.toString()))
                     .setPositiveButton(MoteI18n.text("以本机说明更新")) { _, _ ->
-                        source = source.copy(contextVersion = remote.version, contextTarget = SourceRules.target(config.server, config.token), contextDirty = true)
+                        source = source.copy(contextVersion = remote.version, contextTarget = config.ownerKey(), contextDirty = true)
                         status.text = MoteI18n.text("请保存设置以确认本机说明。")
                     }.setNeutralButton(MoteI18n.text("使用中央说明")) { _, _ ->
-                        source = source.copy(contextVersion = remote.version, description = remote.description, contextTarget = SourceRules.target(config.server, config.token), contextDirty = false)
+                        source = source.copy(contextVersion = remote.version, description = remote.description, contextTarget = config.ownerKey(), contextDirty = false)
                         description.setText(remote.description); status.text = MoteI18n.text("请保存设置以确认中央说明。")
                     }.setNegativeButton(MoteI18n.text("取消"), null).show()
             }.onFailure { status.text = MoteI18n.text("无法读取中央资料说明；本机草稿保留，请重试。") }

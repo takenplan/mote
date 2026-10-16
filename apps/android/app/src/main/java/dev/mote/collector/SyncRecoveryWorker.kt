@@ -12,7 +12,7 @@ class SyncRecoveryWorker(context: Context, params: WorkerParameters) : Worker(co
     override fun doWork(): Result = ConnectionGuard.sync { run() } ?: Result.retry()
     private fun run(): Result {
         val settings = Settings(applicationContext); val config = settings.read()
-        val state = applicationContext.getSharedPreferences("sync-recovery", Context.MODE_PRIVATE)
+        val state = applicationContext.accountPreferences("sync-recovery")
         fun report(message: String) { state.edit().putString("message", message).putString("at", Instant.now().toString()).commit() }
         try {
             if (inputData.getString("syncStamp") != SyncSchedule.stamp(config)) { report(MoteI18n.text("连接或同步策略已变化，本次操作已停止；请重新发起")); return Result.failure() }
@@ -73,7 +73,7 @@ class SyncRecoveryWorker(context: Context, params: WorkerParameters) : Worker(co
                 .setInputData(workDataOf("replay" to replay, "syncStamp" to SyncSchedule.stamp(config)))
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS).build()
             WorkManager.getInstance(context).enqueueUniqueWork("mote-sync-recovery", ExistingWorkPolicy.KEEP, request)
-            context.getSharedPreferences("sync-recovery", Context.MODE_PRIVATE).edit().putString("message", MoteI18n.text("操作已请求；重复点击会合并，等待网络条件或当前操作完成")).apply()
+            context.accountPreferences("sync-recovery").edit().putString("message", MoteI18n.text("操作已请求；重复点击会合并，等待网络条件或当前操作完成")).apply()
         }
     }
 }

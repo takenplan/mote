@@ -24,6 +24,7 @@ internal class CentralClient(
     },
     private val active: () -> Boolean = { true },
     private val unauthorized: () -> Unit = {},
+    private val verify: () -> Unit = {},
 ) {
     fun get(path: String) = request("GET", path)
     fun post(path: String, body: JSONObject = JSONObject()) = request("POST", path, body)
@@ -33,7 +34,7 @@ internal class CentralClient(
     private fun request(method: String, path: String, body: JSONObject? = null): JSONObject =
         bytes(method, path, body?.toString()?.toByteArray(Charsets.UTF_8), "application/json")
     fun bytes(method: String, path: String, body: ByteArray?, mime: String): JSONObject {
-        checkActive()
+        checkActive(); verify(); checkActive()
         val (status, value) = transport(method, destination(path), body, token, mime)
         checkActive()
         if (status !in 200..299) fail(status, value)
@@ -47,10 +48,11 @@ internal class CentralClient(
         return server.trimEnd('/') + path
     }
     fun download(path: String, output: java.io.OutputStream, maxBytes: Long = Long.MAX_VALUE) {
-        checkActive()
+        checkActive(); verify(); checkActive()
         val connection = URL(destination(path)).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 120000
+            ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
@@ -65,10 +67,11 @@ internal class CentralClient(
         } finally { connection.disconnect() }
     }
     fun image(path: String): ByteArray {
-        checkActive()
+        checkActive(); verify(); checkActive()
         val connection = URL(destination(path)).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 30000
+            ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
@@ -98,7 +101,7 @@ internal class UnifiedCentralSession(private val context: Context) {
     private val settings get() = Settings(context.applicationContext)
     @Synchronized private fun refresh(): CollectorConfig {
         val config = settings.read()
-        val next = SourceRules.hash(listOf(config.server, config.token, config.authSignedOut.toString(), config.authExpiresAt.toString(), config.authProcess).joinToString("\u0000"))
+        val next = SourceRules.hash(listOf(config.server, config.token, config.authSignedOut.toString(), config.authExpiresAt.toString(), config.authProcess, config.ownerKey()).joinToString("\u0000"))
         if (next != stamp) { stamp = next; version++ }
         return config
     }
@@ -106,21 +109,24 @@ internal class UnifiedCentralSession(private val context: Context) {
     @Synchronized fun select(server: String) { if (selected != server) { selected = server; version++ }; refresh() }
     @Synchronized fun client(server: String): CentralClient? {
         val config = refresh(); val token = config.connectionToken()
-        if (server != config.server.trim().trimEnd('/') || server != settings.centralEndpoint().trim().trimEnd('/') || token.isBlank()) return null
+        if (server != config.server.trim().trimEnd('/') || server != settings.centralEndpoint().trim().trimEnd('/') || token.isBlank() || config.deviceBoundCredential) return null
         val expected = generation
-        return CentralClient(server, token, active = { generation == expected && settings.read().connectionToken() == token }, unauthorized = { signOut(expected) })
+        return CentralClient(server, token, active = { generation == expected && settings.read().connectionToken() == token }, unauthorized = { signOut(expected) }, verify = { check(settings.verifyAccount(server, token) == config.account()) { "Deployment or account changed" } })
     }
-    @Synchronized fun signIn(server: String, token: String, durationMs: Long = 2592000000L, expectedGeneration: Long? = null) {
+    @Synchronized fun signIn(server: String, token: String, durationMs: Long = 2592000000L, expectedGeneration: Long? = null, bindLocal: Boolean = false) {
         check(expectedGeneration == null || generation == expectedGeneration) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
         val config = refresh()
         check(server == config.server.trim().trimEnd('/'))
-        settings.signIn(server, token, durationMs); refresh()
+        val binding = settings.verifyAccount(server, token)
+        check(generation == expectedGeneration || expectedGeneration == null)
+        RuntimeSettings.replaceAccount(context, bindLocal) { settings.signIn(binding.origin, token, durationMs) }
+        refresh()
     }
     @Synchronized fun signOut(expectedGeneration: Long? = null) {
         if (expectedGeneration != null && generation != expectedGeneration) return
         val config = refresh(); val token = config.connectionToken()
         settings.signOut(); refresh()
-        if (token.isNotBlank()) runCatching { HttpJson.post(config.server + "/api/login/logout", JSONObject(), token) }
+        if (token.isNotBlank()) runCatching { HttpJson.post(config.server + "/api/auth/logout", JSONObject(), token) }
     }
 }
 internal object CentralSession {

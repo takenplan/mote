@@ -268,13 +268,14 @@ class FileArchiveQueue(private val directory: File, private val cipher: ByteCiph
         }
     }
     fun part(id: String, part: Int): ByteArray = synchronized(lock) { require(part >= 0); cipher.open(File(File(root(id), "spool"), part.toString()).readBytes()) }
-    fun acknowledge(id: String, row: JSONObject, ack: JSONObject) = synchronized(lock) {
+    fun acknowledge(id: String, row: JSONObject, ack: JSONObject, binding: AccountBinding? = null) = synchronized(lock) {
         val pending = row.getJSONObject("pending"); val manifest = pending.getJSONObject("manifest"); val item = manifest.getJSONObject("item")
-        check(IngressV2Protocol.validFile(id, item, ack)) { MoteI18n.text("中央归档确认不匹配") }
-        if (manifest.has("sha256")) check(ack.optString("sha256") == manifest.getString("sha256") && ack.optLong("sizeBytes", -1) == manifest.getLong("sizeBytes")) { MoteI18n.text("中央原件校验确认不匹配") }
+        if (binding != null) Ingress3Receipt.file(binding, id, manifest, ack)
+        else check(IngressV2Protocol.validFile(id, item, ack)) { MoteI18n.text("中央归档确认不匹配") }
+        if (binding == null && manifest.has("sha256")) check(ack.optString("sha256") == manifest.getString("sha256") && ack.optLong("sizeBytes", -1) == manifest.getLong("sizeBytes")) { MoteI18n.text("中央原件校验确认不匹配") }
         val current = read(itemFile(id, item.getString("externalId")))
         check(current.optJSONObject("pending")?.getJSONObject("manifest")?.getJSONObject("item")?.getString("revision") == item.getString("revision"))
-        current.put("captureId", ack.optString("captureId", ack.getString("id"))).put("acknowledgedAt", Instant.now().toString()).put("signature", pending.getString("signature")).put("revision", item.getString("revision")).apply { remove("pending"); remove("syncFailure"); remove("nextPrepareAt") }
+        current.put("captureId", if (binding != null) ack.getJSONArray("captures").getJSONObject(0).getString("id") else ack.optString("captureId", ack.getString("id"))).put("acknowledgedAt", Instant.now().toString()).put("signature", pending.getString("signature")).put("revision", item.getString("revision")).apply { remove("pending"); remove("syncFailure"); remove("nextPrepareAt") }
         saveRow(id, current); saveState(id, state(id).put("lastAcknowledgedAt", Instant.now().toString())); File(root(id), "spool").deleteRecursively()
     }
     /** Preview/export only the immutable saved version, never the provider's current URI. */

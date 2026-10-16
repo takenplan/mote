@@ -16,6 +16,26 @@ object RuntimeSettings {
     @Volatile var stopping = false; private set
     private val projectionConsent = ProjectionConsentHandoff()
     private var configurationObserver: (() -> Unit)? = null
+    /** Background native login reuses the existing stop/drain/write guard. New owner always starts paused. */
+    internal fun replaceAccount(context: Context, bindLocal: Boolean = false, action: () -> Unit) {
+        check(Looper.myLooper() != Looper.getMainLooper())
+        check(ConnectionGuard.beginReconfiguration()) { "Configuration busy" }
+        try {
+            val settings = Settings(context)
+            settings.enabled = false
+            HttpJson.cancelActive()
+            val work = WorkManager.getInstance(context)
+            listOf("mote-upload", "mote-upload-timer", "mote-upload-recovery", "mote-source-upload", "mote-source-scan", "mote-source-periodic", "mote-heartbeat", "mote-heartbeat-now", "mote-sync-recovery", "mote-capture-ocr", "mote-capture-ocr-recovery", "mote-calendar-delivery").forEach { work.cancelUniqueWork(it).result.get(10, TimeUnit.SECONDS) }
+            val deadline = SystemClock.elapsedRealtime() + 120000
+            while (ConnectionGuard.processing.get() > 0) { check(SystemClock.elapsedRealtime() < deadline); Thread.sleep(25) }
+            ConnectionGuard.reconfigure(context, "", bindLocal) { action() }
+        } finally { ConnectionGuard.endReconfiguration() }
+        context.stopService(android.content.Intent(context, ProjectionService::class.java))
+        MediaCollection.clear()
+        SyncSchedule.invalidate()
+        UploadWorker.schedule(context, Settings(context).read())
+        SourceWork.schedule(context)
+    }
     fun observeConfiguration(observer: (() -> Unit)?) { configurationObserver = observer }
     fun takeProjectionConsentRequest() = projectionConsent.take()
     fun observeProjectionConsent(observer: (() -> Unit)?) { if (observer == null) projectionConsent.detach() else projectionConsent.attach(observer) }
