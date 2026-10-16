@@ -34,3 +34,7 @@ test('an event that expires after exact approval cannot obtain its first externa
  const f=await modelFixture(t);await f.ingest(f.a,'A');await f.enable(f.a);await f.ok(f.a.token,'/api/actions/targets','POST',{deviceId:'same-device',deviceName:'Generated',calendars:[{id:'same-calendar',title:'Generated'}]});const a=(await f.proposal(f.a)).items[0],now=Date.now(),event={...a.event,start:new Date(now+30000).toISOString(),end:new Date(now+60000).toISOString()};await f.ok(f.a.token,'/api/actions/'+a.id+'/confirm','POST',{version:a.version,event,target:{deviceId:'same-device',calendarId:'same-calendar'}});
  t.mock.timers.enable({apis:['Date'],now:now+120000});assert.equal((await f.request(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).statusCode,409);assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),0);t.mock.timers.reset();
 });
+
+test('existing clients may use zero for the first Actions page while other positions require signed cursors',async t=>{
+ const f=await fixture(t);assert.equal((await f.request(f.a.token,'/api/actions?cursor=0')).statusCode,200);assert.equal((await f.request(f.a.token,'/api/actions?cursor=1')).statusCode,400);assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM ac_proposals').get()!.n)),0);
+});
