@@ -2,10 +2,11 @@ import {createHash,randomUUID} from 'node:crypto';
 import {unknownAttributionContext,type QueryResult,type CaptureRecord} from '@mote/shared';
 import {z} from 'zod';
 import type {QueryInput} from '@mote/agent';
+import {readMemoryWorkCoverage,type MemoryWorkMember} from '../memory-work-contract.js';
 import {reviewMemoryDeletionCandidates} from '../memory-deletion-review.js';
 import {memorySchema,type Memory} from '../memory-schema.js';
 import {memoryBodyDigest,memoryProviderKey,withMemoryHostState} from '../memory-provider-contract.js';
-import {validateMemoryExtraction,memoryEvidenceFingerprint,type MemoryRecord,type MemoryExtractOptions} from '../memory-contract.js';
+import {validateMemoryExtraction,memoryEvidenceFingerprint,type MemoryRecord,type MemoryExtractOptions,type PreparedMemoryExtraction} from '../memory-contract.js';
 import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
 import type {PrivateData} from './private-data.js';
 import {materialDraftSchema,type MaterialDraft} from './material-model.js';
@@ -52,6 +53,7 @@ export class ScopedMemoryData {
    const record=JSON.parse(String(row.json)) as MemoryRecord;if(memoryEvidenceFingerprint(record)!==row.hash)throw new PrivateDataError('invalid_data');return record;
   });
  }
+ assertSources(ids:readonly string[],sourceIds:readonly string[]){for(const id of ids){const evidence=this.sql.get('SELECT material_id,material_revision FROM mm_evidence WHERE user_id=$user AND id=?',id);if(!evidence)throw missing();const sources=this.sql.all('SELECT source_id FROM pd_material_sources WHERE user_id=$user AND material_id=? AND revision=?',evidence.material_id,evidence.material_revision);if(!sources.length||sources.some(row=>!sourceIds.includes(String(row.source_id))))throw missing();}}
  assertInputs(input:ScopedMemoryTask){
   const state=this.state();if(state.generation!==input.generation||memoryHash(this.binding())!==memoryHash(input.binding)||input.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
   const evidence=this.evidence(input.inputs.map(pin=>pin.id));for(const pin of input.inputs)if(memoryEvidenceFingerprint(evidence.find(item=>item.id===pin.id)!)!==pin.hash)throw new PrivateDataError('conflict',409);
@@ -67,34 +69,41 @@ export class ScopedMemoryData {
   if(dependencies.some(dep=>memoryEvidenceFingerprint(records.find(record=>record.id===dep.evidence_id)!)!==dep.hash))throw new PrivateDataError('conflict',409);
   return value;
  }
- options(input:ScopedMemoryTask):MemoryExtractOptions{return {profile:input.profile,tier:input.phase==='integrate'?'consolidated':'episode',relatedMemoryIds:input.related.map(pin=>pin.id),expectedFingerprints:Object.fromEntries(input.inputs.map(pin=>[pin.id,pin.hash])),evidenceRanges:this.assertInputs(input).map(record=>({id:record.id,offset:0,length:record.ocrText.length}))};}
+ members(input:ScopedMemoryTask):MemoryWorkMember[]{return this.assertInputs(input).map(record=>({key:memoryHash([record.id,memoryEvidenceFingerprint(record),input.strategy]),id:record.id,offset:0,length:record.ocrText.length,fingerprint:memoryEvidenceFingerprint(record),sourceId:record.provenance?.sourceId,attributionContext:record.attributionContext,contextTime:record.capturedAt,state:'pending' as const,memoryIds:[]}));}
+ options(input:ScopedMemoryTask):MemoryExtractOptions{return {workContract:input.strategy?.workContract,strategy:input.strategy,integration:input.integration,profile:input.profile,tier:input.phase==='integrate'?'consolidated':'episode',relatedMemoryIds:input.related.map(pin=>pin.id),expectedFingerprints:Object.fromEntries(input.inputs.map(pin=>[pin.id,pin.hash])),evidenceRanges:this.assertInputs(input).map(record=>({id:record.id,offset:0,length:record.ocrText.length}))};}
  validate(result:QueryResult,input:ScopedMemoryTask,related:readonly Memory[]=[]){
-  const options=this.options(input),records=this.assertInputs(input);return validateMemoryExtraction(result,options,{readEvidence:ids=>{if(ids.some(id=>!input.inputs.some(pin=>pin.id===id)))throw missing();return records.filter(record=>ids.includes(record.id));},isCurrentEvidence:id=>{try{return this.evidence([id]).length===1;}catch{return false;}},get:id=>{const memory=related.find(item=>item.id===id);if(!memory)throw missing();return memory;}});
+  const options=this.options(input),records=this.assertInputs(input);if(input.strategy?.workContract)readMemoryWorkCoverage(result,this.members(input),undefined,id=>records.find(record=>record.id===id)?.ocrText,input.strategy.workContract);return validateMemoryExtraction(result,options,{readEvidence:ids=>{if(ids.some(id=>!input.inputs.some(pin=>pin.id===id)))throw missing();return records.filter(record=>ids.includes(record.id));},isCurrentEvidence:id=>{try{return this.evidence([id]).length===1;}catch{return false;}},get:id=>{const memory=related.find(item=>item.id===id);if(!memory)throw missing();return memory;}});
  }
- prepareExtract(result:QueryResult,input:ScopedMemoryTask,related:readonly Memory[]=[],receipt?:Memory['reviewReceipt']){
+ private claimFingerprint(claim:ReturnType<ScopedMemoryData['validate']>[number],input:ScopedMemoryTask){return memoryHash([input.phase,input.strategy??null,input.integration??null,claim.admission,claim.coding??null,claim.relations??null,claim.validFrom??null,claim.validUntil??null,claim.statement,[...claim.evidenceIds].sort(),claim.evidence]);}
+ duplicateIds(result:QueryResult,input:ScopedMemoryTask,related:readonly Memory[]){return this.validate(result,input,related).flatMap(claim=>{const prior=this.sql.get('SELECT id FROM mm_records WHERE user_id=$user AND fingerprint=? AND json_extract(json,\'$.status\')=\'published\'',this.claimFingerprint(claim,input));return prior?[String(prior.id)]:[];});}
+ prepareExtract(result:QueryResult,input:ScopedMemoryTask,related:readonly Memory[]=[],receipt?:Memory['reviewReceipt'],duplicates:readonly Memory[]=[]):PreparedMemoryExtraction{
   if(!receipt||receipt.deletionSnapshot!==input.deletionSnapshot||receipt.resultHash!==memoryHashAnswer(result.answer)||receipt.decision!=='empty'&&!receipt.reviewRunId)throw new PrivateDataError('invalid_data');
-  const claims=this.validate(result,input,related),createdAt=receipt.checkedAt;
-  return claims.map(claim=>{
-   const fingerprint=memoryHash([input.phase,claim.admission,claim.coding??null,claim.relations??null,claim.validFrom??null,claim.validUntil??null,claim.statement,[...claim.evidenceIds].sort(),claim.evidence]);
-   const prior=this.sql.get('SELECT json FROM mm_records WHERE user_id=$user AND fingerprint=? AND json_extract(json,\'$.status\')=\'published\'',fingerprint);
-   if(prior)return memorySchema.parse(JSON.parse(String(prior.json)));
-   return memorySchema.parse({...claim,id:uuid([this.sql.userId,input.jobId,fingerprint]),version:1,fingerprint,tier:input.phase==='integrate'?'consolidated':'episode',kind:claim.kind??'episodic',createdAt,status:'published',model:receipt.model??'unknown',runId:result.runId,reviewRunId:receipt.reviewRunId,reviewReceipt:receipt});
-  });
+  const claims=this.validate(result,input,related),createdAt=receipt.checkedAt,changed=new Map<string,Memory>(),expected:Record<string,string|null>={};
+  const expect=(id:string)=>{if(Object.hasOwn(expected,id))return;const prior=this.sql.get('SELECT json FROM mm_records WHERE user_id=$user AND id=?',id);expected[id]=prior?memoryHashAnswer(String(prior.json)):null;};
+  const items=claims.map(claim=>{
+   const fingerprint=this.claimFingerprint(claim,input),prior=this.sql.get('SELECT id,body_digest FROM mm_records WHERE user_id=$user AND fingerprint=? AND json_extract(json,\'$.status\')=\'published\'',fingerprint);
+   if(prior){const existing=duplicates.find(memory=>memory.id===prior.id);if(!existing||memoryBodyDigest(existing)!==prior.body_digest)throw new PrivateDataError('scope_unavailable',503);expect(existing.id);return memorySchema.parse(existing);}
+   const memory=memorySchema.parse({...claim,strategy:input.strategy,integration:input.integration,id:uuid([this.sql.userId,input.jobId,fingerprint]),version:1,fingerprint,tier:input.phase==='integrate'?'consolidated':'episode',kind:claim.kind??'episodic',createdAt,status:'published',model:receipt.model??'unknown',runId:result.runId,reviewRunId:receipt.reviewRunId,reviewReceipt:receipt});expect(memory.id);changed.set(memory.id,memory);
+   for(const relation of memory.relations??[])if(relation.kind==='supersedes'){
+    const target=related.find(item=>item.id===relation.memoryId);if(!target||target.supersededBy||target.version!==relation.version||target.fingerprint!==relation.fingerprint||changed.has(target.id))throw new PrivateDataError('conflict',409);
+    expect(target.id);changed.set(target.id,memorySchema.parse({...target,version:target.version+1,supersededBy:memory.id,supersededAt:memory.validFrom??receipt.contextTime??createdAt,updatedAt:createdAt}));
+   }
+   return memory;
+  });return {at:createdAt,resultHash:receipt.resultHash!,items,changed:[...changed.values()],expected,deletionSnapshot:input.deletionSnapshot};
  }
- commit(records:readonly Memory[],input:ScopedMemoryTask){return this.sql.transaction(()=>{
-  this.assertInputs(input);
-  for(const value of records){
-   const memory=memorySchema.parse(value),prior=this.sql.get('SELECT json FROM mm_records WHERE user_id=$user AND id=?',memory.id);
-   if(prior&&memoryHash(JSON.parse(String(prior.json)))!==memoryHash(memory))throw new PrivateDataError('conflict',409);
-   this.sql.run('INSERT OR IGNORE INTO mm_records VALUES($user,?,?,?,?,?,?,?)',memory.id,memory.version,memory.fingerprint,memoryBodyDigest(memory),JSON.stringify(input.binding),JSON.stringify(memory),memory.createdAt);
+ assertPrepared(prepared:PreparedMemoryExtraction,input:ScopedMemoryTask){
+  this.assertInputs(input);if(prepared.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
+  for(const [id,hash] of Object.entries(prepared.expected)){const row=this.sql.get('SELECT json FROM mm_records WHERE user_id=$user AND id=?',id);if((row?memoryHashAnswer(String(row.json)):null)!==hash)throw new PrivateDataError('conflict',409);}
+ }
+ commit(prepared:PreparedMemoryExtraction,input:ScopedMemoryTask){return this.sql.transaction(()=>{
+  this.assertPrepared(prepared,input);
+  for(const memory of prepared.changed){
+   memorySchema.parse(memory);const historical=this.sql.get('SELECT json FROM mm_versions WHERE user_id=$user AND id=? AND version=?',memory.id,memory.version);if(historical&&historical.json!==JSON.stringify(memory))throw new PrivateDataError('conflict',409);
+   this.sql.run('INSERT INTO mm_records VALUES($user,?,?,?,?,?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET version=excluded.version,fingerprint=excluded.fingerprint,body_digest=excluded.body_digest,binding=excluded.binding,json=excluded.json',memory.id,memory.version,memory.fingerprint,memoryBodyDigest(memory),JSON.stringify(input.binding),JSON.stringify(memory),memory.createdAt);
    this.sql.run('INSERT OR IGNORE INTO mm_versions VALUES($user,?,?,?,?)',memory.id,memory.version,memory.fingerprint,JSON.stringify(memory));
    for(const id of memory.evidenceIds){const pin=input.inputs.find(item=>item.id===id);if(!pin)throw missing();this.sql.run('INSERT OR IGNORE INTO mm_dependencies VALUES($user,?,?,?)',memory.id,id,pin.hash);}
-   for(const relation of memory.relations??[])if(relation.kind==='supersedes'){
-    const target=this.assertCurrentRecord(this.row(relation.memoryId));if(target.version!==relation.version||target.fingerprint!==relation.fingerprint)throw new PrivateDataError('conflict',409);
-    const updated=memorySchema.parse({...target,supersededBy:memory.id,supersededAt:memory.validFrom??memory.createdAt,updatedAt:memory.createdAt});this.sql.run('UPDATE mm_records SET json=? WHERE user_id=$user AND id=?',JSON.stringify(updated),target.id);
-   }
   }
-  this.sql.run("UPDATE mm_jobs SET state='committed' WHERE user_id=$user AND id=?",input.jobId);return records;
+  this.sql.run("UPDATE mm_jobs SET state='committed' WHERE user_id=$user AND id=?",input.jobId);return prepared.items;
  });}
  page(raw:unknown={}){
   this.state();const {cursor,...query}=pageSchema.parse(raw),position=cursor?this.cursor.decode(cursor,query):undefined,conditions=["json_extract(r.json,'$.status')='published'"],args:(string|number)[]=[];
@@ -103,6 +112,11 @@ export class ScopedMemoryData {
   if(position){conditions.push('(r.created_at<? OR (r.created_at=? AND r.id<?))');args.push(position.at,position.at,position.id);}
   const rows=this.sql.all(`SELECT r.* FROM mm_records r WHERE r.user_id=$user AND ${conditions.join(' AND ')} ORDER BY r.created_at DESC,r.id DESC LIMIT ?`,...args,query.limit+1) as MemoryRow[],last=rows.slice(0,query.limit).at(-1);
   return {rows:rows.slice(0,query.limit),nextCursor:rows.length>query.limit&&last?this.cursor.encode(query,{at:last.created_at,id:last.id}):null};
+ }
+ rankedPage(raw:unknown,ids:readonly string[]){
+  const {cursor,...query}=pageSchema.parse(raw),identity={collection:'memory-provider',...query,binding:this.binding(),ranked:memoryHash(ids)},position=cursor?this.cursor.decode(cursor,identity):undefined,start=position?Number(position.at):0;
+  if(!Number.isSafeInteger(start)||start<0||start>ids.length||position&&ids[start-1]!==position.id)throw new PrivateDataError('invalid_cursor');
+  const end=Math.min(start+query.limit,ids.length),items=ids.slice(start,end);return {ids:items,nextCursor:end<ids.length?this.cursor.encode(identity,{at:String(end),id:ids[end-1]}):null};
  }
  delete(id:string){return this.sql.transaction(()=>{
   const row=this.row(id),memory=memorySchema.parse(JSON.parse(row.json));

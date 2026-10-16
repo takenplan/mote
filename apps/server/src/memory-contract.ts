@@ -8,7 +8,7 @@ import {PERSONAL_CONTEXT_POLICY} from './memory-policy.js';
 import {codingProjectIdentity} from './coding-project.js';
 import {memoryWorkCoverageSchema,memoryWorkCoverageFor,memoryWorkCapacitySchema,assertMemoryWorkAnswerSize} from './memory-work-contract.js';
 import type {MemoryWorkContract} from './memory-strategy-contract.js';
-import {CODING_MEMORY_CONTRACT,codingMemorySchema,memoryAdmissionSchema,memoryRelationSchema,type Memory,type MemoryEvidence,type EvidenceRange,type MemoryReviewReceipt} from './memory-schema.js';
+import {memorySchema,CODING_MEMORY_CONTRACT,codingMemorySchema,memoryAdmissionSchema,memoryRelationSchema,type Memory,type MemoryEvidence,type EvidenceRange,type MemoryReviewReceipt} from './memory-schema.js';
 import {memoryImageReadReceipts,memoryImageSelectorSchema} from './memory-image-proof.js';
 import {validationLocation,validationProblem,type MemoryValidationDetails,type MemoryOutputValidationCode} from './memory-validation.js';
 const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
@@ -37,6 +37,7 @@ export function memoryEvidenceReference(record:MemoryRecord,span?:{offset?:numbe
 }
 export type PreparedMemoryExtraction={at:string;resultHash:string;items:Memory[];changed:Memory[];expected:Record<string,string|null>;deletionSnapshot:string};
 export type MemoryExtractOptions={workContract?:MemoryWorkContract;prepared?:PreparedMemoryExtraction;at?:string;maxCandidates?:number;integration?:Memory['integration'];strategy?:Memory['strategy'];requireAdmission?:boolean;reviewRunId?:string;reviewReceipt?:MemoryReviewReceipt;validateOnly?:boolean;profile?:'personal'|'coding';tier?:Memory['tier'];relatedMemoryIds?:string[];skillVersion?:string;evidenceRanges?:EvidenceRange[];expectedFingerprints?:Record<string,string>;onSaved?:(items:Memory[])=>void};
+export const preparedMemoryExtractionSchema=z.object({at:z.string(),resultHash:z.string(),items:z.array(memorySchema),changed:z.array(memorySchema),expected:z.record(z.string().nullable()),deletionSnapshot:z.string()}).strict();
 /** Shared exact-output validator for legacy algorithm fixtures and the scoped
  * production pipeline. The host supplies only currently authorized originals
  * and Memory records; semantic attribution remains a model/reviewer decision. */

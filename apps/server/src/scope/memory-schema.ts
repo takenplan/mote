@@ -1,8 +1,13 @@
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import {randomBytes} from 'node:crypto';
+import {memoryRecipeBindingSchema,memoryIntegrationBindingSchema,memoryStrategyRefSchema} from '../memory-strategy-contract.js';
+import {RANGE_SELECTION_PERSONAL_RECIPE,RANGE_SELECTION_CODING_RECIPE} from '../memory-range-selection-policy.js';
+import {defaultMemoryIntegrationRecipe} from '../memory-integration-policy.js';
+import {lifecycleSettingsSchema,defaultLifecycleSettings} from '../memory-configuration.js';
 
 export const MEMORY_DOMAIN='memory';
+export class ScopedMemoryError extends Error{constructor(readonly code:'memory_provider_unavailable'|'memory_provider_invalid_record'|'memory_provider_result_unknown',readonly statusCode=503){super(code);}}
 const revision=z.string().regex(/^[a-f0-9]{64}$/);
 export const memoryInputPinSchema=z.object({id:z.string().uuid(),hash:revision}).strict();
 export const memoryBindingSchema=z.discriminatedUnion('kind',[
@@ -10,9 +15,9 @@ export const memoryBindingSchema=z.discriminatedUnion('kind',[
  z.object({kind:z.literal('plugin'),revision:z.number().int().positive(),instanceId:z.string().min(1),snapshotId:z.string().uuid()}).strict(),
 ]);
 export type ScopedMemoryBinding=z.infer<typeof memoryBindingSchema>;
-export const memorySettingsSchema=z.object({automatic:z.boolean(),integration:z.boolean(),profile:z.enum(['personal','coding']),timeZone:z.string().refine(value=>{try{new Intl.DateTimeFormat('en',{timeZone:value});return true;}catch{return false;}})}).strict();
-export const defaultMemorySettings=()=>({automatic:false,integration:false,profile:'personal' as const,timeZone:'UTC'});
-export const scopedMemoryTaskSchema=z.object({jobId:z.string().uuid(),phase:z.enum(['extract','integrate']),inputs:z.array(memoryInputPinSchema).min(1),related:z.array(z.object({id:z.string().uuid(),version:z.number().int().positive(),fingerprint:revision}).strict()),binding:memoryBindingSchema,generation:z.number().int().nonnegative(),deletionSnapshot:revision,automatic:z.boolean(),profile:z.enum(['personal','coding']),timeZone:z.string()}).strict();
+export const memorySettingsSchema=z.object({automatic:z.boolean(),integration:z.boolean(),profile:z.enum(['personal','coding']),recipe:memoryStrategyRefSchema.default(RANGE_SELECTION_PERSONAL_RECIPE),codingRecipe:memoryStrategyRefSchema.default(RANGE_SELECTION_CODING_RECIPE),integrationRecipe:memoryStrategyRefSchema.default(defaultMemoryIntegrationRecipe),lifecycle:lifecycleSettingsSchema.default(defaultLifecycleSettings),timeZone:z.string().refine(value=>{try{new Intl.DateTimeFormat('en',{timeZone:value});return true;}catch{return false;}})}).strict();
+export const defaultMemorySettings=()=>({automatic:true,integration:true,profile:'personal' as const,recipe:RANGE_SELECTION_PERSONAL_RECIPE,codingRecipe:RANGE_SELECTION_CODING_RECIPE,integrationRecipe:defaultMemoryIntegrationRecipe,lifecycle:defaultLifecycleSettings,timeZone:'UTC'});
+export const scopedMemoryTaskSchema=z.object({jobId:z.string().uuid(),phase:z.enum(['extract','integrate']),strategy:memoryRecipeBindingSchema.optional(),integration:memoryIntegrationBindingSchema.optional(),inputs:z.array(memoryInputPinSchema).min(1),related:z.array(z.object({id:z.string().uuid(),version:z.number().int().positive(),fingerprint:revision}).strict()),binding:memoryBindingSchema,generation:z.number().int().nonnegative(),deletionSnapshot:revision,automatic:z.boolean(),profile:z.enum(['personal','coding']),timeZone:z.string()}).strict();
 export type ScopedMemoryTask=z.infer<typeof scopedMemoryTaskSchema>;
 
 /** One shared database. Every private key and relationship starts with the
@@ -25,6 +30,10 @@ export function installScopedMemory(db:DatabaseSync){
  CREATE TABLE IF NOT EXISTS mm_versions(user_id TEXT NOT NULL,id TEXT NOT NULL,version INTEGER NOT NULL,fingerprint TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,id,version),FOREIGN KEY(user_id,id) REFERENCES mm_records(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS mm_dependencies(user_id TEXT NOT NULL,memory_id TEXT NOT NULL,evidence_id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,memory_id,evidence_id),FOREIGN KEY(user_id,memory_id) REFERENCES mm_records(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS mm_jobs(user_id TEXT NOT NULL,id TEXT NOT NULL,input TEXT NOT NULL,draft TEXT,review TEXT,prepared TEXT,state TEXT NOT NULL DEFAULT 'admitting',tasks TEXT NOT NULL DEFAULT '{}',PRIMARY KEY(user_id,id));
+ CREATE TABLE IF NOT EXISTS mm_binding_locks(user_id TEXT PRIMARY KEY,operation_id TEXT NOT NULL);
+ CREATE TABLE IF NOT EXISTS mm_binding_preparations(user_id TEXT NOT NULL,id TEXT NOT NULL,source TEXT NOT NULL,target TEXT NOT NULL,catalog_hash TEXT,json TEXT NOT NULL,state TEXT NOT NULL,task_id TEXT,PRIMARY KEY(user_id,id));
+ CREATE TABLE IF NOT EXISTS mm_provider_descriptors(user_id TEXT NOT NULL,namespace_hash TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,namespace_hash));
+ CREATE TABLE IF NOT EXISTS mm_provider_config(user_id TEXT NOT NULL,namespace_hash TEXT NOT NULL,snapshot_id TEXT NOT NULL,operation_id TEXT NOT NULL,configuration_hash TEXT NOT NULL,PRIMARY KEY(user_id,namespace_hash));
  CREATE TABLE IF NOT EXISTS mm_provider_journal(user_id TEXT NOT NULL,id TEXT NOT NULL,job_id TEXT NOT NULL,namespace TEXT NOT NULL,key_json TEXT NOT NULL,body_digest TEXT NOT NULL,payload_digest TEXT NOT NULL,state TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS mm_deletions(user_id TEXT NOT NULL,id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS mm_commands(user_id TEXT NOT NULL,id TEXT NOT NULL,fingerprint TEXT NOT NULL,PRIMARY KEY(user_id,id));

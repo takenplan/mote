@@ -1,7 +1,9 @@
 import {z} from 'zod';
 import {memorySchema} from './memory-schema.js';
 import {memoryProviderKeySchema,memoryProviderNamespaceSchema,memoryProviderRecordSchema,type MemoryProvider,type MemoryProviderHealth,type MemoryProviderWrite,type MemoryProviderRead,type MemoryProviderRemove,type MemoryProviderSearch} from './memory-provider-contract.js';
-import {sha256,StoreError} from './store.js';
+import {StoreError} from './execution-storage.js';
+import {createHash} from 'node:crypto';
+const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
 import type {PluginRuntime} from './plugin-runtime.js';
 
 const receiptSchema=z.object({opId:z.string(),namespace:memoryProviderNamespaceSchema,key:memoryProviderKeySchema,payloadDigest:z.string().regex(/^[a-f0-9]{64}$/),externalId:z.string().optional(),state:z.enum(['applied','removed','unknown']),currentRemoved:z.boolean().optional(),historyRetained:z.boolean().optional(),eraseVerified:z.boolean(),recordedAt:z.string()}).strict();

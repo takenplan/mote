@@ -6,7 +6,7 @@ import {z} from 'zod';
 import type {CaptureRecord,QueryResult,TokenUsage} from '@mote/shared';
 import type {ModelSettings} from '@mote/shared/models';
 import {memorySchema,type Memory} from './memory-schema.js';
-import {claimSchema} from './memory.js';
+import {claimSchema} from './memory-contract.js';
 import {memoryProviderRecordSchema,memoryProviderNamespaceSchema,memoryProviderKeySchema,memoryProviderKey,MemoryProviderError,type MemoryProvider,type MemoryProviderNamespace,type MemoryProviderKey,type MemoryProviderRecord,type MemoryProviderWrite,type MemoryProviderRead,type MemoryProviderRemove,type MemoryProviderSearch,type MemoryProviderReceipt,type MemoryProviderHealth,type MemoryProviderHit} from './memory-provider-contract.js';
 import {HindsightService,ManagedHindsightRuntime,HINDSIGHT_VERSION,hindsightDigest,type HindsightRuntime,type HindsightModelCallbacks} from './hindsight-runtime.js';
 
@@ -280,7 +280,7 @@ export class HindsightEngine implements MemoryProvider {
   async close(){if(this.closed)return;this.closed=true;for(const operation of this.running.values())operation.abort('Hindsight provider closed');await this.options.runtime.close();await this.tail;}
 }
 
-export function createHindsightEngine(options:{directory:string;instanceId:string;configurationIdentity?:string;settings:ModelSettings;codex?:{executable?:string;home?:string}}&HindsightModelCallbacks){
+export function createHindsightEngine(options:{directory:string;instanceId:string;configurationIdentity?:string;modelFingerprint?:string;settings:ModelSettings;codex?:{executable?:string;home?:string}}&HindsightModelCallbacks){
   const runtime=new ManagedHindsightRuntime({...options,directory:join(options.directory,'runtime')});
   return new HindsightEngine({directory:join(options.directory,'provider'),runtime,model:options.settings.model});
 }

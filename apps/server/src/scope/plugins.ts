@@ -102,7 +102,21 @@ export class ScopedPluginHost {
  private adapter(capability:PluginCapabilityId){const value=this.adapters.get(capability);if(!value)throw new StoreError('The scoped domain adapter is unavailable',503);return value;}
  registerAdapter(capability:PluginCapabilityId,adapter:PluginDomainAdapter){if(this.closed||this.adapters.has(capability)||typeof adapter.validateResult!=='function')throw new StoreError('Plugin domain registration conflict',409);const dispose=adapter.modelFeature?this.installTask('plugin.invoke.'+capability,adapter.modelFeature):undefined;this.adapters.set(capability,adapter);return async()=>{if(this.adapters.get(capability)===adapter)this.adapters.delete(capability);await dispose?.();};}
  registerRuntimeFactory(id:string,factory:PluginRuntimeFactory){if(this.closed||!id||this.runtimeFactories.has(id))throw new StoreError('Plugin runtime registration conflict',409);this.runtimeFactories.set(id,factory);return async()=>{if(this.runtimeFactories.get(id)===factory)this.runtimeFactories.delete(id);if(!await this.closeWorkers(record=>record.factory===factory))throw new StoreError('Plugin runtime retirement requires reconciliation',503);};}
+ /** Host-only retained domain grant. A worker receives neither this method nor its context. */
+ domainGrant(context:UserContext,snapshotId:string,capability:PluginCapabilityId){const current=()=>{const value=this.owned(context,snapshotId),fixed=JSON.parse(value.json) as Fixed;if(value.mode!=='task'||!fixed.instance.grants.capabilities.includes(capability)||!fixed.components.some(c=>c.capability===capability))throw new ScopeError('invalid_identity',403);return fixed;};const fixed=current();return Object.freeze({sourceIds:Object.freeze([...fixed.instance.grants.sourceIds]),assertCurrent:()=>{current();},assertAdmission:()=>{current();if(!JSON.parse(this.instance(context.userId,fixed.instance.id).json).desired)throw new StoreError('Plugin admission is closed',409);}});}
  bindSource(bind:SourceCapabilityBinder,validateResult:PluginDomainAdapter['validateResult']=value=>value){return this.registerAdapter('source',{bind:invocation=>bind(invocation.context,invocation.sourceIds,invocation.assertCurrent),validateResult});}
+ /** Trusted domain-only retained descriptor. Ordinary services and JSON RPC
+  * never expose this API, its context, package paths or runtime handle. */
+ async domainProvider(context:UserContext,snapshotId:string,capabilities:readonly PluginCapabilityId[]){
+  const snapshot=this.owned(context,snapshotId),fixed=JSON.parse(snapshot.json) as Fixed;
+  if(!capabilities.some(capability=>fixed.instance.grants.capabilities.includes(capability)))throw new StoreError('Provider capability unavailable',503);
+  const pkg=this.package(fixed.packageId);if(pkg.view.source.digest!==fixed.digest||pkg.view.version!==fixed.version)throw new StoreError('Pinned provider unavailable',503);
+  const assertCurrent=()=>{this.owned(context,snapshotId);};
+  const root=this.directory(context.userId),directory=join(root,digest([fixed.instance.id,fixed.packageId,fixed.instance.configuration]));privateDirectory(directory);
+  return Object.freeze({instanceId:snapshot.instance_id,namespace:this.namespace(snapshot),sourceIds:Object.freeze([...fixed.instance.grants.sourceIds]),history:fixed.instance.grants.history,configuration:Object.freeze(clone(fixed.instance.configuration)),adapter:pkg.hostAdapter,directory,assertCurrent,
+   runtime:async()=>{assertCurrent();const runtime=await this.runtime(snapshot,fixed);assertCurrent();return Object.freeze({call:async(method:Parameters<PluginRuntime['call']>[0],params:unknown)=>{assertCurrent();const value=await runtime.worker.call(method,params);assertCurrent();return value;},close:async()=>{}});},
+  });
+ }
  forAdministrator(context:UserContext){
   const check=()=>{if(this.closed)throw new ScopeError('invalid_identity',401);this.options.authority.assertAdministrator(context);};check();
   return Object.freeze({view:()=>{check();return this.catalog.view();},resolve:async(input:unknown)=>{check();const result=await this.catalog.resolve(input);check();return result;},install:(input:unknown)=>{check();return this.catalog.install(input);},uninstall:(id:string,input:unknown)=>{check();return this.catalog.uninstall(id,input);}});

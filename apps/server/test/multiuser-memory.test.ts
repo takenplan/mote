@@ -1,7 +1,7 @@
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
-import {mkdtempSync,rmSync} from 'node:fs';
+import {mkdtempSync,rmSync,writeFileSync,unlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
@@ -11,6 +11,9 @@ import {buildApp} from '../src/app.js';
 import {defaultModelSettings} from '../src/model-settings.js';
 import {materialId} from '../src/materials.js';
 import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider.js';
+import {generatedMemoryRelease,generatedMem0Release,generatedHindsightRelease} from './fixtures/scoped-memory-release.js';
+import {hindsightHttpFixture} from './fixtures/hindsight-http.js';
+import type {HindsightRuntimeFactory} from '../src/scope/memory-providers.js';
 import {PrivateSql,PrivateCursor} from '../src/scope/private-data-sql.js';
 import {ScopedMemoryData} from '../src/scope/memory-data.js';
 import type {PrivateData} from '../src/scope/private-data.js';
@@ -19,18 +22,19 @@ const password='Generated-memory-password-only-01';
 const protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
 const text=(owner:string)=>'GENERATED_MEMORY_'+owner+': Nora prefers generated tea.';
 const deferred=()=>{let resolve!:()=>void;const promise=new Promise<void>(r=>resolve=r);return {promise,resolve};};
-async function fixture(t:TestContext){
+async function fixture(t:TestContext,release?:ReturnType<typeof generatedMemoryRelease>,hindsightRuntimeFactory?:HindsightRuntimeFactory){
  const directory=mkdtempSync(join(tmpdir(),'mote-m07-')),requests:{key:string;body:any;raw:string}[]=[],gates=new Map<string,{entered:ReturnType<typeof deferred>;release:ReturnType<typeof deferred>}>();
  const provider=createServer(async(req,res)=>{
   let raw='';for await(const chunk of req)raw+=chunk;const body=JSON.parse(raw),key=String(req.headers['x-api-key']??''),owner=key.includes('GENERATED_A_KEY')?'A':'B';requests.push({key,body,raw});
   const gate=gates.get(owner);if(gate){gate.entered.resolve();await gate.release.promise;}
   const ids=[...new Set(raw.match(/[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}/g)??[])],id=ids[0];
+  const keys=[...new Set([...raw.matchAll(/\\?"key\\?"\s*:\s*\\?"(member_[0-9]+)/g)].map(match=>match[1]))];
   const memories=id?[{title:'Generated '+owner,statement:`Nora prefers generated tea. [${id}]`,uncertainty:'Synthetic attributed statement only',admission:{layer:'memory',reason:'Synthetic explicitly expressed preference',scope:'Nora in generated fixture',attribution:'third_party'},evidenceIds:[id],evidence:[{id,quote:text(owner)}]}]:[];
   if(raw.includes('Host Memory deletion review.')){writeMessagesResponse(res,{stage:requests.length,text:JSON.stringify({answer:JSON.stringify({sameConclusion:true,newSupportEvidenceIds:[]}),citationIds:[]})});return;}
-  writeMessagesResponse(res,{stage:requests.length,model:'generated-memory',text:JSON.stringify({answer:JSON.stringify({memories}),citationIds:id?[id]:[]})});
+  writeMessagesResponse(res,{stage:requests.length,model:'generated-memory',text:JSON.stringify({answer:JSON.stringify({memories,...(keys.length?{coverage:keys.map((key,index)=>({key,state:index===0&&memories.length?'checked':'no_candidates',candidateIndexes:index===0&&memories.length?[0]:[]}))}:{})}),citationIds:id?[id]:[]})});
  });
  await new Promise<void>(resolve=>provider.listen(0,'127.0.0.1',resolve));
- let node=await buildApp({dataDir:directory});const nodes=[node];
+ let node=await buildApp({dataDir:directory},{...(release?{pluginReleaseTransport:release.transport}:{}),...(hindsightRuntimeFactory?{hindsightRuntimeFactory}:{})});const nodes=[node];
  t.after(async()=>{for(const gate of gates.values())gate.release.resolve();for(const current of nodes.reverse())await current.app.close();provider.closeAllConnections();await new Promise<void>(resolve=>provider.close(()=>resolve()));rmSync(directory,{recursive:true,force:true});});
  await node.accounts!.initialize('generated-admin',password);
  const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>node.app.inject({method,url,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
@@ -47,10 +51,13 @@ async function fixture(t:TestContext){
  };
  const submit=async(user:any,materialIds:string[],operationId=randomUUID())=>{const response=await request(user.token,'/api/memory/jobs','POST',{materialIds,operationId});assert.equal(response.statusCode,200,response.body);return response.json();};
  const wait=async(user:any,id:string)=>{const deadline=Date.now()+30000;for(;;){const response=await request(user.token,'/api/memory/jobs/'+id);assert.equal(response.statusCode,200,response.body);const job=response.json(),tasks=Object.values(job.tasks) as any[];if(tasks.length===3&&tasks.every(task=>task.state==='succeeded'))return job;if(tasks.some(task=>['failed','stale','blocked','cancelled'].includes(task.state)))assert.fail(JSON.stringify(job));if(Date.now()>deadline)assert.fail('Memory job timeout '+JSON.stringify(job));await delay(10);}};
+ const install=async()=>{assert.ok(release);const preview=await request(admin.token,'/api/plugins/resolve','POST',{repository:release.repository,tag:release.tag}),catalog=await request(admin.token,'/api/admin/plugins');assert.equal(preview.statusCode,200,preview.body);const installed=await request(admin.token,'/api/plugins/install','POST',{previewId:preview.json().id,expectedRevision:catalog.json().revision,operationId:randomUUID()});assert.equal(installed.statusCode,200,installed.body);const pkg=installed.json().packages.find((value:any)=>value.version===release.manifest.version);const deadline=Date.now()+10000;while(node.plugins!.catalog.view().packages.find(value=>value.id===pkg.id)?.state==='installing'){assert.ok(Date.now()<deadline);await delay(5);}return pkg.id as string;};
+ const plugin=async(user:any,packageId:string,sourceIds=['same-source'],configuration:Record<string,unknown>={label:'Generated Memory',credential:'personal:same-model'},capabilities:string[]=['repository','retrieval'])=>{const view=await request(user.token,'/api/plugins'),configured=await request(user.token,'/api/plugin-instances','POST',{expectedRevision:view.json().revision,instance:{id:'same-instance',packageId,name:'Generated Memory provider',configuration,desired:false,grants:{capabilities,sourceIds,history:true}}});assert.equal(configured.statusCode,200,configured.body);const checked=await request(user.token,'/api/plugin-instances/same-instance/check','POST',{});assert.equal(checked.statusCode,200,checked.body);const next=await request(user.token,'/api/plugins'),enabled=await request(user.token,'/api/plugin-instances/same-instance/enable','POST',{expectedRevision:next.json().revision});assert.equal(enabled.statusCode,200,enabled.body);};
+ const bind=async(user:any,instanceId?:string)=>{const prepared=await request(user.token,'/api/memory/bindings','POST',{operationId:randomUUID(),...(instanceId?{instanceId}:{})});assert.equal(prepared.statusCode,200,prepared.body);const deadline=Date.now()+15000;let view=prepared.json();while(view.state!=='verified'){assert.ok(Date.now()<deadline,JSON.stringify(view));assert.ok(!['failed','blocked','stale'].includes(view.task?.state),JSON.stringify(view));await delay(5);view=(await request(user.token,'/api/memory/bindings/'+view.id)).json();}const state=(await request(user.token,'/api/memory')).json(),activated=await request(user.token,'/api/memory/bindings/'+view.id+'/activate','POST',{expectedRevision:state.revision});assert.equal(activated.statusCode,200,activated.body);return activated.json();};
  const read=<T>(work:(db:DatabaseSync)=>T)=>{const db=new DatabaseSync(join(directory,'mote.sqlite'));try{return work(db);}finally{db.close();}};
  const data=async(user:any)=>{const context=await node.authority.authenticate(user.token),db=new DatabaseSync(join(directory,'mote.sqlite'));t.after(()=>db.close());return new ScopedMemoryData(new PrivateSql(db,context.userId,()=>node.authority.assert(context)),node.services.forUser(context).get<PrivateData>('private-data'),new PrivateCursor(read(db=>String(db.prepare('SELECT cursor_key FROM pd_meta').get()!.cursor_key)),node.deploymentId,context.userId));};
  const terminal=async(taskId:string)=>{const deadline=Date.now()+10000;for(;;){const row=read(db=>db.prepare('SELECT state FROM execution_steps WHERE id=?').get(taskId));if(row&&!['running','waiting'].includes(String(row.state)))return String(row.state);if(Date.now()>deadline)assert.fail('Expected terminal Memory extraction '+JSON.stringify(row));await delay(5);}};
- return {get node(){return node;},terminal,a,b,admin,directory,request,replace,publish,submit,wait,requests,gates,read,data,restart:async()=>{await node.app.close();node=await buildApp({dataDir:directory});nodes.push(node);}};
+ return {get node(){return node;},modelUrl:'http://127.0.0.1:'+(provider.address() as any).port+'/v1',terminal,install,plugin,bind,a,b,admin,directory,request,replace,publish,submit,wait,requests,gates,read,data,restart:async()=>{await node.app.close();node=await buildApp({dataDir:directory},{...(release?{pluginReleaseTransport:release.transport}:{}),...(hindsightRuntimeFactory?{hindsightRuntimeFactory}:{})});nodes.push(node);}};
 }
 
 test('real production Memory extraction/review/publication binds equal Material IDs and entity names before model disclosure',async t=>{
@@ -164,4 +171,67 @@ test('portable Memory restore validates exact owner and Material parents, stays 
  const other=f.node.services.forUser(await f.node.authority.authenticate(f.b.token));assert.throws(()=>other.restoreUser('memory',archive,randomUUID()));
  const bad=structuredClone(archive);(bad.payload as any).evidence[0].json='{}';await assert.rejects(service.restoreUser('memory',bad,randomUUID()));
  assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM mm_restore WHERE user_id=?').get(f.a.userId)!.n)),1);
+});
+
+test('actual generated provider migrates and reads exact A/B bodies under the same instance ID across restart',async t=>{
+ const f=await fixture(t,generatedMemoryRelease()),packageId=await f.install(),am=await f.publish(f.a,'A'),bm=await f.publish(f.b,'B');await f.plugin(f.a,packageId);await f.plugin(f.b,packageId);
+ const aJob=await f.submit(f.a,[am.id]),bJob=await f.submit(f.b,[bm.id]);await Promise.all([f.wait(f.a,aJob.id),f.wait(f.b,bJob.id)]);const beforeA=(await f.request(f.a.token,'/api/memories')).json().items,beforeB=(await f.request(f.b.token,'/api/memories')).json().items;
+ const [aBinding,bBinding]=await Promise.all([f.bind(f.a,'same-instance'),f.bind(f.b,'same-instance')]);assert.equal(aBinding.target.instanceId,bBinding.target.instanceId);assert.equal(aBinding.target.revision,bBinding.target.revision);
+ const afterA=await f.request(f.a.token,'/api/memories'),afterB=await f.request(f.b.token,'/api/memories');assert.equal(afterA.statusCode,200,afterA.body);assert.equal(afterB.statusCode,200,afterB.body);assert.deepEqual(afterA.json().items,beforeA);assert.deepEqual(afterB.json().items,beforeB);await f.restart();assert.deepEqual((await f.request(f.a.token,'/api/memories')).json().items,beforeA);assert.equal((await f.request(f.a.token,'/api/memories/'+beforeB[0].id)).statusCode,404);
+ await f.bind(f.a);assert.deepEqual((await f.request(f.a.token,'/api/memories')).json().items,beforeA);assert.deepEqual((await f.request(f.b.token,'/api/memories')).json().items,beforeB);
+});
+
+test('provider binding rejects a same-user source grant that excludes the original dependencies',async t=>{
+ const f=await fixture(t,generatedMemoryRelease()),packageId=await f.install(),material=await f.publish(f.a,'A'),job=await f.submit(f.a,[material.id]);await f.wait(f.a,job.id);await f.plugin(f.a,packageId,['other-source']);
+ const prepared=await f.request(f.a.token,'/api/memory/bindings','POST',{operationId:randomUUID(),instanceId:'same-instance'});assert.equal(prepared.statusCode,200,prepared.body);assert.equal(await f.terminal(prepared.json().task.id),'blocked');const current=(await f.request(f.a.token,'/api/memory')).json();assert.equal(current.binding.kind,'builtin');assert.equal((await f.request(f.a.token,'/api/memories')).json().items.length,1);
+ assert.equal((await f.request(f.b.token,'/api/memory/bindings/'+prepared.json().id)).statusCode,404);assert.equal((await f.request(f.a.token,'/api/memory/bindings/'+prepared.json().id+'/cancel','POST',{})).statusCode,200);
+});
+
+test('external provider read/search failures never return the cached SQL Memory body and leave B usable',async t=>{
+ const f=await fixture(t,generatedMemoryRelease()),packageId=await f.install(),am=await f.publish(f.a,'A'),bm=await f.publish(f.b,'B');await f.plugin(f.a,packageId);await f.plugin(f.b,packageId);await f.wait(f.a,(await f.submit(f.a,[am.id])).id);await f.wait(f.b,(await f.submit(f.b,[bm.id])).id);const binding=await f.bind(f.a,'same-instance');await f.bind(f.b,'same-instance');
+ const context=await f.node.authority.authenticate(f.a.token),descriptor=await f.node.plugins!.domainProvider(context,binding.target.snapshotId,['repository']);
+ writeFileSync(join(descriptor.directory,'fail-read'),'generated');const unreadable=await f.request(f.a.token,'/api/memories');assert.equal(unreadable.statusCode,503,unreadable.body);assert.ok(!unreadable.body.includes('Nora'));unlinkSync(join(descriptor.directory,'fail-read'));
+ writeFileSync(join(descriptor.directory,'fail-search'),'generated');const unavailable=await f.request(f.a.token,'/api/memories?query=tea');assert.equal(unavailable.statusCode,503,unavailable.body);assert.ok(!unavailable.body.includes('Nora'));assert.equal((await f.request(f.b.token,'/api/memories?query=tea')).json().items.length,1);
+});
+
+test('native Mem0 uses actual SDK storage with fixed M04 embedding references and isolated A/B namespaces across restart',async t=>{
+ const embeddingRequests:{key:string;raw:string}[]=[],embedding=createServer(async(req,res)=>{let raw='';for await(const chunk of req)raw+=chunk;embeddingRequests.push({key:String(req.headers.authorization),raw});const body=JSON.parse(raw),inputs=Array.isArray(body.input)?body.input:[body.input];res.setHeader('content-type','application/json');res.end(JSON.stringify({object:'list',model:'generated-embedding',data:inputs.map((_:unknown,index:number)=>({object:'embedding',index,embedding:[1,0,0]}))}));});await new Promise<void>(resolve=>embedding.listen(0,'127.0.0.1',resolve));t.after(async()=>{embedding.closeAllConnections();await new Promise<void>(resolve=>embedding.close(()=>resolve()));});
+ const embeddingBaseUrl='http://127.0.0.1:'+(embedding.address() as any).port+'/v1',f=await fixture(t,generatedMem0Release()),packageId=await f.install();
+ for(const [user,label] of [[f.a,'A'],[f.b,'B']] as const){await f.replace(user.token,'models',{profiles:[{id:'same-model',name:'Generated language model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-memory',baseUrl:f.modelUrl,apiKey:'GENERATED_'+label+'_KEY',headers:{},extraBody:{}}},{id:'same-embedding',name:'Generated embedding model',settings:{...defaultModelSettings(),provider:'custom',protocol:'openai-completions',model:'generated-embedding',baseUrl:embeddingBaseUrl,apiKey:'GENERATED_EMBEDDING_'+label+'_KEY',headers:{},extraBody:{}}}],selections:{memory:{kind:'personal',id:'same-model'}}});await f.plugin(user,packageId,['same-source'],{embeddingBaseUrl,embeddingModel:'generated-embedding',embeddingDimension:3,embeddingSecretReference:'personal:same-embedding'});}
+ const am=await f.publish(f.a,'A'),bm=await f.publish(f.b,'B');await f.wait(f.a,(await f.submit(f.a,[am.id])).id);await f.wait(f.b,(await f.submit(f.b,[bm.id])).id);const aBefore=(await f.request(f.a.token,'/api/memories')).json().items,bBefore=(await f.request(f.b.token,'/api/memories')).json().items;
+ await f.bind(f.a,'same-instance');await f.bind(f.b,'same-instance');assert.deepEqual((await f.request(f.a.token,'/api/memories?query=tea')).json().items,aBefore);assert.deepEqual((await f.request(f.b.token,'/api/memories?query=tea')).json().items,bBefore);
+ assert.ok(embeddingRequests.some(request=>request.key==='Bearer GENERATED_EMBEDDING_A_KEY'));assert.ok(embeddingRequests.some(request=>request.key==='Bearer GENERATED_EMBEDDING_B_KEY'));
+ for(const request of embeddingRequests){const foreign=request.key.includes('_A_')?bBefore:aBefore;for(const memory of foreign){assert.ok(!request.raw.includes(memory.id));for(const id of memory.evidenceIds)assert.ok(!request.raw.includes(id));}}
+ await f.restart();assert.deepEqual((await f.request(f.a.token,'/api/memories')).json().items,aBefore);assert.deepEqual((await f.request(f.b.token,'/api/memories')).json().items,bBefore);assert.equal((await f.request(f.a.token,'/api/memories/'+bBefore[0].id)).statusCode,404);
+ await f.replace(f.a.token,'models',{profiles:[],selections:{}});const calls=embeddingRequests.length;assert.deepEqual((await f.request(f.a.token,'/api/memories')).json().items,aBefore);assert.equal((await f.request(f.a.token,'/api/memories?query=tea')).statusCode,503);await f.restart();const retained=await f.request(f.a.token,'/api/memories');assert.equal(retained.statusCode,200,retained.body);assert.deepEqual(retained.json().items,aBefore);assert.equal(embeddingRequests.length,calls,'literal recovery must not use revoked embedding credentials');assert.ok(!f.read(db=>String(db.prepare('SELECT json FROM mm_provider_descriptors WHERE user_id=?').get(f.a.userId)!.json)).includes('GENERATED_EMBEDDING_A_KEY'));
+});
+
+test('new Memory in an activated external provider uses real extraction/review/publication; provider pause drains only admitted work',async t=>{
+ const f=await fixture(t,generatedMemoryRelease()),packageId=await f.install();await f.plugin(f.a,packageId);await f.bind(f.a,'same-instance');const material=await f.publish(f.a,'A'),gate={entered:deferred(),release:deferred()};f.gates.set('A',gate);const job=await f.submit(f.a,[material.id]);await gate.entered.promise;
+ const view=(await f.request(f.a.token,'/api/plugins')).json(),paused=await f.request(f.a.token,'/api/plugin-instances/same-instance/pause','POST',{expectedRevision:view.revision});assert.equal(paused.statusCode,200,paused.body);
+ const denied=await f.request(f.a.token,'/api/memory/jobs','POST',{materialIds:[material.id],operationId:randomUUID()});assert.equal(denied.statusCode,409,denied.body);gate.release.resolve();await f.wait(f.a,job.id);const memories=await f.request(f.a.token,'/api/memories?query=tea');assert.equal(memories.statusCode,200,memories.body);assert.equal(memories.json().items.length,1);
+});
+
+test('native provider configuration cannot combine a scoped model key with a different plugin endpoint',async t=>{
+ const f=await fixture(t,generatedMem0Release()),packageId=await f.install();await f.plugin(f.a,packageId,['same-source'],{embeddingBaseUrl:'http://127.0.0.1:9/v1',embeddingModel:'generated-memory',embeddingDimension:3,embeddingSecretReference:'personal:same-model'});
+ const prepared=await f.request(f.a.token,'/api/memory/bindings','POST',{operationId:randomUUID(),instanceId:'same-instance'});assert.equal(prepared.statusCode,200,prepared.body);assert.equal(await f.terminal(prepared.json().task.id),'blocked');assert.equal(f.requests.length,0,'no model or unapproved embedding transport may start');assert.equal((await f.request(f.a.token,'/api/memory')).json().binding.kind,'builtin');
+});
+
+test('native Hindsight uses the real engine, independent review and exact private read banks across A/B and restart',async t=>{
+ const native=await hindsightHttpFixture();t.after(()=>native.close());const f=await fixture(t,generatedHindsightRelease(),native.runtimeFactory),packageId=await f.install();
+ for(const user of [f.a,f.b]){await f.plugin(user,packageId,['same-source'],{modelProfileId:'personal:same-model'},['engine']);await f.bind(user,'same-instance');}
+ const am=await f.publish(f.a,'A'),bm=await f.publish(f.b,'B');await Promise.all([f.wait(f.a,(await f.submit(f.a,[am.id])).id),f.wait(f.b,(await f.submit(f.b,[bm.id])).id)]);
+ assert.notEqual(native.descriptors.find(value=>value.userId===f.a.userId)!.container,native.descriptors.find(value=>value.userId===f.b.userId)!.container);assert.notEqual(native.descriptors.find(value=>value.userId===f.a.userId)!.volume,native.descriptors.find(value=>value.userId===f.b.userId)!.volume);
+ assert.equal(f.requests.length,2,'native extraction is followed by one real independent model review per user');
+ const a=await f.request(f.a.token,'/api/memories?query=tea'),b=await f.request(f.b.token,'/api/memories?query=tea');assert.equal(a.statusCode,200,a.body);assert.equal(b.statusCode,200,b.body);assert.equal(a.json().items.length,1);assert.equal(b.json().items.length,1);assert.equal(a.json().items[0].admission.attribution,'third_party');
+ const ai=a.json().items[0],bi=b.json().items[0];for(const event of native.events){if(![f.a.userId,f.b.userId].includes(event.userId))continue;const foreign=event.userId===f.a.userId?bi:ai,body=JSON.stringify({body:event.body,facts:event.facts});assert.ok(!body.includes(foreign.id));for(const id of foreign.evidenceIds)assert.ok(!body.includes(id));}
+ await f.restart();assert.deepEqual((await f.request(f.a.token,'/api/memories')).json().items,[ai]);assert.deepEqual((await f.request(f.b.token,'/api/memories')).json().items,[bi]);assert.equal((await f.request(f.a.token,'/api/memories/'+bi.id)).statusCode,404);
+ const originalContainer=native.descriptors.find(value=>value.userId===f.a.userId)!.container;await f.replace(f.a.token,'models',{profiles:[],selections:{}});await f.restart();const retained=await f.request(f.a.token,'/api/memories?query=tea');assert.equal(retained.statusCode,200,retained.body);assert.deepEqual(retained.json().items,[ai]);assert.equal(native.descriptors.filter(value=>value.userId===f.a.userId).at(-1)!.container,originalContainer,'literal recovery keeps the exact original native volume identity');assert.equal(f.requests.length,2,'literal/read-bank recovery must not use a replacement language model');
+});
+
+for(const external of [false,true])test('concurrent independent extractions deduplicate only under the real publication coordinator: '+(external?'external provider':'builtin'),async t=>{
+ const f=await fixture(t,external?generatedMemoryRelease():undefined);if(external){const packageId=await f.install();await f.plugin(f.a,packageId);await f.bind(f.a,'same-instance');}
+ const material=await f.publish(f.a,'A'),[one,two]=await Promise.all([f.submit(f.a,[material.id]),f.submit(f.a,[material.id])]);await Promise.all([f.wait(f.a,one.id),f.wait(f.a,two.id)]);
+ const memories=await f.request(f.a.token,'/api/memories');assert.equal(memories.statusCode,200,memories.body);assert.equal(memories.json().items.length,1);assert.equal(f.requests.length,4);assert.ok(memories.json().items[0].strategy.recipe.fingerprint);
+ if(external)assert.equal(f.read(db=>Number(db.prepare("SELECT count(*) n FROM mm_provider_journal WHERE user_id=? AND state='acknowledged'").get(f.a.userId)!.n)),1);
 });

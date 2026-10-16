@@ -769,15 +769,17 @@
     ]
   },
   "apps/server/src/hindsight-engine.ts": {
-    "scope": "legacy-quarantined",
-    "module": "M02",
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
     "surfaces": [
       "directory:this.options.directory"
     ]
   },
   "apps/server/src/hindsight-runtime.ts": {
-    "scope": "legacy-quarantined",
-    "module": "M02",
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
     "surfaces": [
       "directory:this.options.directory"
     ]
@@ -945,8 +947,9 @@
     ]
   },
   "apps/server/src/mem0-memory-runtime.ts": {
-    "scope": "legacy-quarantined",
+    "scope": "user",
     "module": "M07",
+    "status": "implemented",
     "surfaces": [
       "directory:this.config.directory",
       "table:provider_operations",
@@ -1771,8 +1774,12 @@
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/bindings/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/activate'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/cancel'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel'"
     ]
@@ -1782,6 +1789,8 @@
     "module": "M07",
     "status": "implemented",
     "surfaces": [
+      "table:mm_binding_locks",
+      "table:mm_binding_preparations",
       "table:mm_commands",
       "table:mm_deletions",
       "table:mm_dependencies",
@@ -1789,6 +1798,7 @@
       "table:mm_fts",
       "table:mm_jobs",
       "table:mm_meta",
+      "table:mm_provider_config",
       "table:mm_provider_journal",
       "table:mm_records",
       "table:mm_restore",
@@ -1803,6 +1813,14 @@
     "surfaces": [
       "extension:runtime.services.registerUser:MEMORY_DOMAIN",
       "task:execution.register:kind:'memory.'+stage"
+    ]
+  },
+  "apps/server/src/scope/memory-bindings.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "task:execution.register:kind:'memory.binding'"
     ]
   }
 }

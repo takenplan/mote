@@ -22,13 +22,15 @@ import type {LifecycleAuthority} from './lifecycle.js';
 import {registerScopedPlugins} from './plugin-routes.js';
 import type {PluginReleaseTransport} from '../plugin-release.js';
 import {registerMemory} from './memory-routes.js';
+import {ScopedMemoryError} from './memory-schema.js';
+import type {HindsightRuntimeFactory} from './memory-providers.js';
 import type {MemoryHost} from './memory.js';
 import type {ScopedPluginHost} from './plugins.js';
 export {registerUserRoute,requestContext} from './http.js';
 
 /** Production composition. Domains register only after their isolation adapter
  * is complete. Account administration never mounts the retired owner services. */
-export async function buildScopedApp(config:{dataDir:string;configuration?:{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport}={}){
+export async function buildScopedApp(config:{dataDir:string;configuration?:{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;hindsightRuntimeFactory?:HindsightRuntimeFactory}={}){
   const storage=openScopeStorage(config.dataDir);
   let configuration:Configurations|undefined;
   let plugins:ScopedPluginHost|undefined;
@@ -41,7 +43,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     const execution=taskAuthorization?new TaskExecution(storage.db,authority,services,taskAuthorization):undefined;
     const runtime={app,authority,services,...(!options.verifier?{accounts}:{})};
     app.setErrorHandler((error,_request,reply)=>{
-      const failure=error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
+      const failure=error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError||error instanceof ScopedMemoryError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
@@ -56,7 +58,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       const {receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial}=ingress.bindSource(context,sourceIds,assertCurrent);
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
-    if(execution)memory=registerMemory(runtime,storage.db,configuration,execution);
+    if(execution)memory=registerMemory(runtime,storage.db,configuration,execution,plugins!,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await memory?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await plugins?.close();await configuration?.close();accounts.close();storage.close();});
