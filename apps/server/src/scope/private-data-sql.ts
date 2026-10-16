@@ -1,5 +1,6 @@
 import type {DatabaseSync,SQLInputValue} from 'node:sqlite';
 import {createHmac,timingSafeEqual} from 'node:crypto';
+import {deflateRawSync,inflateRawSync} from 'node:zlib';
 
 export class PrivateDataError extends Error{
   constructor(readonly code:'not_found'|'conflict'|'invalid_data'|'invalid_cursor'|'scope_unavailable',readonly statusCode=400){super(code);}
@@ -36,6 +37,10 @@ export class PrivateCursor{
     const body=Buffer.from(JSON.stringify({v:1,deployment:this.deploymentId,user:this.userId,query,position})).toString('base64url');
     return body+'.'+createHmac('sha256',this.key).update(body).digest('base64url');
   }
+  /** Nested read cursors remain opaque while their full query, user and host are
+   * authenticated without repeating that metadata in every response budget. */
+  encodeCompact(query:unknown,position:unknown){const serialized=JSON.stringify(position);if(Buffer.byteLength(serialized)>16384)throw new PrivateDataError('invalid_cursor');const body=deflateRawSync(Buffer.from(serialized)).toString('base64url'),signature=createHmac('sha256',this.key).update(JSON.stringify(['private-compact-v1',this.deploymentId,this.userId,query,body])).digest('base64url');return body+'.'+signature;}
+  decodeCompact(cursor:string,query:unknown):unknown{try{if(cursor.length>16384)throw Error();const [body,signature,...rest]=cursor.split('.');if(rest.length||!body||!signature)throw Error();const expected=createHmac('sha256',this.key).update(JSON.stringify(['private-compact-v1',this.deploymentId,this.userId,query,body])).digest(),actual=Buffer.from(signature,'base64url');if(expected.length!==actual.length||!timingSafeEqual(expected,actual))throw Error();return JSON.parse(inflateRawSync(Buffer.from(body,'base64url'),{maxOutputLength:16384}).toString());}catch{throw new PrivateDataError('invalid_cursor');}}
   decode(cursor:string,query:unknown):{at:string;id:string}{
     try{
       const [body,signature,...extra]=cursor.split('.');

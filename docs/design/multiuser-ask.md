@@ -126,3 +126,18 @@ restart1/1 exit0,41742ms (`/tmp/m08-ask-process-first.log/.exit`), with no repla
 successful child model transports. The process fixture supports emitted entry via
 MOTE_ASK_PROCESS_ENTRY; compiled execution is still pending. M11's unchanged host
 and SDK P1 probes both independently pass exactc66, as recorded in its review report.
+
+The query disclosure fence now keeps a separate exact-original receipt alongside
+Memory's unchanged semantic fingerprint. Raw originals have durable row
+incarnations; formal originals include all transitive capture incarnations and
+full stored receipts. Deleting and recreating the same UUID with identical text
+cannot revive an earlier disclosure. Portable restore rebinds current receipts
+only after validating semantic evidence and ownership.
+
+Context budgets include the actual serialized continuation. Minimum-size first
+cards reuse the existing compact navigation projection. Owner-bound durable
+navigation checkpoints preserve both independent channels across restart without
+repeating long provider cursors in the response. They contain navigation state,
+are excluded from portable authority, and are cleared with Ask user deletion.
+Raw capture source filters use trusted ingress bindings without adding fabricated
+provenance or changing evidence fingerprints.
