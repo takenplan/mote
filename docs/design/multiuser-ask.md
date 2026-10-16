@@ -141,3 +141,21 @@ repeating long provider cursors in the response. They contain navigation state,
 are excluded from portable authority, and are cleared with Ask user deletion.
 Raw capture source filters use trusted ingress bindings without adding fabricated
 provenance or changing evidence fingerprints.
+
+M07 exact/page query filters now flow through the real Memory reader, context
+bundle, catalog and model opening without dropping source, time, device, coding,
+kind or validity fields. Exact typed Memory reads pass the same filters. Both
+HTTP and Harness share the actual context catalog. Source sync status comes
+from the real owned M10 ledger through its read-only service, with no adapter I/O.
+
+Conversation lists and turns use signed owner/scope/revision cursors. Stale
+originals hide saved answer bodies and summaries; run listings retain safe
+failure metadata. Cancel/pause on completed runs is idempotent. New owned Ask
+artifacts have typed `artifact:` read locators with safe UTF-16 windows.
+
+Explicit image attachments use genuine retained M03 upload receipts and current
+logical heads. Their grant is host request input, never a model tool argument.
+Pixels flow on demand through the existing image renderer and actual Harness;
+ordinary UUID discovery grants no pixels. The exact attachment identity joins
+all later model, artifact and publication fences, and current prior attachments
+can remain available in later dialogue turns. Model selections remain M04 owned.
