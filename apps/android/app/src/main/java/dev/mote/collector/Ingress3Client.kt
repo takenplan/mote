@@ -12,6 +12,7 @@ internal class Ingress3Client(
     private val deviceName: String,
     private val request: (String, String, JSONObject?) -> Pair<Int, JSONObject?>,
     private val current: () -> Boolean = { true },
+    private val compressed: ((String, String, List<JSONObject>) -> Pair<Int, JSONObject?>)? = null,
 ) {
     fun verify() {
         check(current()) { "Account changed" }
@@ -34,13 +35,24 @@ internal class Ingress3Client(
         val result = send("POST", "/api/ingress/sources", source)
         check(result.optString("id") == source.getString("id") && result.optString("deviceId") == deviceId && result.optString("platform") == "android")
         check(result.optBoolean("enabled", true))
+        if (listOf("name", "retention", "initialSync").any { source.has(it) && source.opt(it) != result.opt(it) }) {
+            val patch = JSONObject(); for (key in listOf("name", "retention", "initialSync")) if (source.has(key)) patch.put(key, source.get(key))
+            val updated = send("PATCH", "/api/ingress/sources/${source.getString("id")}", patch)
+            check(updated.optString("id") == source.getString("id"))
+        }
     }
     fun captures(events: List<JSONObject>): JSONObject {
         require(events.isNotEmpty())
         val sourceId = "android-capture-${SourceRules.hash(deviceId).take(32)}"
         register(JSONObject().put("id", sourceId).put("name", deviceName).put("deviceId", deviceId).put("platform", "android").put("kind", "custom").put("retention", "snapshot"))
         val batch = batchId(JSONArray(events))
-        val receipt = send("POST", "/api/ingress/sources/$sourceId/captures", JSONObject().put("batchId", batch).put("items", JSONArray(events)))
+        val path = "/api/ingress/sources/$sourceId/captures"
+        val receipt = if (compressed != null) {
+            verify()
+            val (status, value) = compressed.invoke(path, batch, events)
+            if (status !in 200..299 || value == null) throw FileTransportFailure(status, "Ingress3 compressed request failed")
+            check(current()); value
+        } else send("POST", path, JSONObject().put("batchId", batch).put("items", JSONArray(events)))
         Ingress3Receipt.require(binding, sourceId, batch, events.map { it.getString("id") }, receipt)
         return receipt
     }
@@ -51,6 +63,7 @@ internal class Ingress3Client(
         Ingress3Receipt.require(binding, source.id, batch, listOf(Ingress3Receipt.captureId(source.id, body)), receipt)
         return receipt
     }
+    fun head(sourceId: String, externalId: String): String? = send("GET", "/api/ingress/sources/$sourceId/head?externalId=${java.net.URLEncoder.encode(externalId, "UTF-8")}").let { if (it.isNull("revision")) null else it.getString("revision") }
     fun begin(sourceId: String, manifest: JSONObject): Pair<String, JSONObject> {
         val batch = fileBatch(manifest)
         val result = send("POST", "/api/ingress/sources/$sourceId/uploads", JSONObject().put("batchId", batch).put("revision", manifest))

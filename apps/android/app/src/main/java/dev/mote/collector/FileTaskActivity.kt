@@ -325,7 +325,7 @@ class FileTaskActivity : MoteActivity() {
         if (!config.hasSyncConnection() || current.contextDirty || hasContextConflict) return
         // Reading metadata is independent of upload policies; unsupported older nodes preserve old settings.
         task.start(MoteI18n.text("正在读取资料说明…"), { status.text = it }, {
-            val (code, value) = HttpJson.get(config.server.trimEnd('/') + "/api/sources/${current.id}/context", config.connectionToken())
+            val (code, value) = HttpJson.get(config.server.trimEnd('/') + "/api/ingress/sources/${current.id}/context", config.connectionToken())
             if (code !in 200..299 || value == null) null else SourceContextSnapshot.from(value, current.id)
         }) { result ->
             result.getOrNull()?.takeIf { it.version > 0 }?.let { snapshot ->
@@ -347,7 +347,7 @@ class FileTaskActivity : MoteActivity() {
         if (task.busy) return
         val config = Settings(this).read(); if (!config.hasSyncConnection()) { status.text = MoteI18n.text("等待网络/节点恢复"); return }
         task.start(MoteI18n.text("正在读取资料说明…"), { status.text = it }, {
-            val (code, body) = HttpJson.get(config.server.trimEnd('/') + "/api/sources/${source.id}/context", config.connectionToken())
+            val (code, body) = HttpJson.get(config.server.trimEnd('/') + "/api/ingress/sources/${source.id}/context", config.connectionToken())
             check(code in 200..299 && body != null); SourceContextSnapshot.from(body!!, source.id)
         }) { result ->
             result.onSuccess { remote ->

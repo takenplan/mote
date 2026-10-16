@@ -5,7 +5,7 @@ import java.net.URLEncoder
 object PerceptionSync {
  fun pull(context: Context, settings: Settings, config: CollectorConfig, queue: DurableQueue) {
   val prefs=context.accountPreferences("central-perception")
-  val key=SourceRules.hash(config.server+"\n"+config.token+"\n"+settings.deviceId)
+  val key=SourceRules.hash(config.ownerKey()+"\n"+settings.deviceId)
   val cursor=prefs.getLong(key,0)
   SyncSchedule.requireConditions(context,config)
   val (code,body)=HttpJson.get("${config.server}/api/capture-browser/updates?cursor=$cursor&limit=20&deviceId=${URLEncoder.encode(settings.deviceId,"UTF-8")}",config.connectionToken())

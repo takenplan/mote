@@ -41,8 +41,8 @@ class SyncRecoveryWorker(context: Context, params: WorkerParameters) : Worker(co
                     return Result.success()
                 }
                 SyncSchedule.requireConditions(applicationContext, config)
-                val (code, response) = CollectorHttp(applicationContext).post("${config.server}/api/capture-browser/reconcile",
-                    JSONObject().put("deviceId", settings.deviceId).put("ids", JSONArray(ids)), config.connectionToken())
+                val (code, response) = CollectorHttp(applicationContext).post("${config.server}/api/ingress/devices/${settings.deviceId}/reconcile",
+                    JSONObject().put("ids", JSONArray(ids)), config.connectionToken())
                 if (code == 401 || code == 403) { report(MoteI18n.text("检查失败：连接授权失效，请重新连接同一节点后重试")); return Result.failure() }
                 if (code == 404) { report(MoteI18n.text("中央节点尚不支持两端检查，请升级中央端代码；未修改本机状态")); return Result.failure() }
                 check(code == 200) { MoteI18n.text("检查响应未确认") }

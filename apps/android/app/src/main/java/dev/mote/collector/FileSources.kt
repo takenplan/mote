@@ -166,7 +166,7 @@ object FileUpload {
             }
             val client = context.ingress3(config, stillSelected)
             queue.configure(source)
-            val row = queue.next(source.id) ?: FileSources(context).prepare(source, onSelected = { observe(it, FileSyncPhase.PREPARING) }) ?: return queue.pendingCount(source.id) == 0
+            val row = queue.next(source.id) ?: FileSources(context).prepare(source, onSelected = { observe(it, FileSyncPhase.PREPARING) }, anchor = { client.head(source.id, it) }) ?: return queue.pendingCount(source.id) == 0
             selectedRow = row
             observe(row, FileSyncPhase.UPLOADING)
             fun checkSelection() { check(stillSelected()); queue.assertCurrent(source, row); SyncSchedule.requireConditions(context, config) }

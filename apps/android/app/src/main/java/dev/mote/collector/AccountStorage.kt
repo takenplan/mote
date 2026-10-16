@@ -19,5 +19,9 @@ internal fun android.content.Context.ingress3(config: CollectorConfig, current: 
     return Ingress3Client(binding, settings.deviceId, config.deviceName, request = { method, path, body ->
         SyncSchedule.requireConditions(this, config)
         HttpJson.requestBytes(method, binding.origin + path, body?.toString()?.toByteArray(Charsets.UTF_8), config.connectionToken(), sendingContext = this)
-    }, current = { current() && Settings(this).read().let { it.account() == binding && it.connectionToken() == config.connectionToken() && it.hasSyncConnection() } })
+    }, current = { current() && Settings(this).read().let { it.account() == binding && it.connectionToken() == config.connectionToken() && it.hasSyncConnection() } }, compressed = if (!config.packedUpload) null else { path, batch, events ->
+        SyncSchedule.requireConditions(this, config)
+        HttpJson.requestBytes("POST", binding.origin + path, CaptureBundle.encode(events), config.connectionToken(), CaptureBundle.CONTENT_TYPE,
+            headers = mapOf("X-Mote-Batch-Id" to batch), sendingContext = this)
+    })
 }

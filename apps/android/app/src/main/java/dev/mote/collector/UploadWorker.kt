@@ -159,7 +159,13 @@ class UploadWorker(context: Context, params: WorkerParameters) : Worker(context,
                 var wireBytes = 0L
                 val individual = !config.packedUpload
                 wireBytes = sent.sumOf { it.toString().toByteArray(Charsets.UTF_8).size.toLong() }
-                applicationContext.ingress3(config) { !isStopped && !ConnectionGuard.reconfiguring() }.captures(sent)
+                val client = applicationContext.ingress3(config) { !isStopped && !ConnectionGuard.reconfiguring() }
+                val result = UploadNegotiation.sendShrinking(sent) { selected ->
+                    try { 200 to client.captures(selected) }
+                    catch (error: FileTransportFailure) { if (error.httpStatus == 413) 413 to null else throw error }
+                }
+                sent = result.first
+                if (result.second.first != 200) return failed(MoteI18n.text("批量上传未确认（HTTP {0}）", result.second.first), false)
                 slice.record(wireBytes)
                 liveBytes = if (preferNew) liveBytes + wireBytes else 0L
                 retainTurn()
@@ -246,7 +252,7 @@ internal object SyncHeartbeat {
         else if (status == "error") body.put("error", settings.message())
         SyncSchedule.requireConditions(context, config)
         Diagnostics(context).add("heartbeatRequests")
-        val (code, response) = CollectorHttp(context).post("${config.server}/api/devices/heartbeat", body, config.connectionToken())
+        val (code, response) = CollectorHttp(context).post("${config.server}/api/ingress/devices/heartbeat", body, config.connectionToken())
         if (code !in 200..299 || response?.optBoolean("ok") != true) SupportEvents.record(context, EventStage.HEARTBEAT, EventJournal.httpFailure(code), httpStatus = code)
         if (code !in 200..299 || response?.optBoolean("ok") != true) {
             Operations.record(context, OperationKind.HEARTBEAT_FAILED, Operations.httpReason(code), httpStatus = code)
