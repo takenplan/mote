@@ -39,6 +39,7 @@ export const scopedBackupSchema = Object.freeze({
  "execution_user_sequence":["user_id","next"],
  "ig_activity":["user_id","id"],
  "ig_archive_links":["user_id","capture_id","file_id"],
+ "ig_file_forgets":["user_id","source_id","external_id","capture_id","generation","blocked"],
  "ig_archive_files":["user_id","id","hash","json"],
  "ig_import_uploads":["user_id","id","stage_id","manifest","epoch","expires","file_id"],
  "ig_import_parts":["user_id","upload_id","part","checksum","bytes"],
