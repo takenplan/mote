@@ -35,6 +35,16 @@ export async function accountOriginal(config:Config,record:any):Promise<{descrip
  const descriptor=await accountOriginalDescriptor(config,record);if(!descriptor||descriptor.available===false)return;
  const id=descriptor.ref.slice(9),ticket=await accountJson(config,`/api/ingress/originals/${id}/tickets`,{mode:'download'});return {descriptor,response:await accountResponse(config,`/api/ingress/originals/${id}/content?ticket=${encodeURIComponent(ticket.ticket)}`)};
 }
+/** Received capture flags are immutable. Observe the admitted central stages
+ * through the existing Activity receipt; successful text still requires the
+ * exact declared extraction Material below. */
+export async function accountCaptureProcessing(config:Config,record:any):Promise<'pending'|'failed'|undefined>{
+ const original=await accountOriginalDescriptor(config,record);if(!original)return;
+ try{const work=await accountJson(config,'/api/work-activity/'+encodeURIComponent('file:'+original.ref.slice(9)));
+  if(['failed','stale','needs_input','cancelled'].includes(work.state))return 'failed';
+  if(['waiting','running'].includes(work.state))return 'pending';
+ }catch(error){if((error as Error&{statusCode?:number}).statusCode!==404)throw error;}
+}
 /** Canonical extraction is separate from the immutable received capture. M06
  * origins need not carry a device: exact capture membership is the binding. */
 export async function accountCaptureMaterial(config:Config,record:any):Promise<any|undefined>{

@@ -1,4 +1,4 @@
-import {accountJson,accountOriginal,accountOriginalDescriptor,accountCaptureMaterial} from './account-reader';
+import {accountJson,accountOriginal,accountOriginalDescriptor,accountCaptureMaterial,accountCaptureProcessing} from './account-reader';
 import {DESKTOP_PROTOCOL_HEADERS} from './account';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
@@ -73,7 +73,7 @@ export async function readCentralContent(config:Config,item:SyncHistoryItem,chun
     if(record.imageMime||provenance?.document){const descriptor=await accountOriginalDescriptor(config,record);result.retainsOriginal=Boolean(descriptor&&descriptor.available!==false);}
     const found=provenance?.sourceId||!record.ocrText||record.ocr?.status==='pending'?await accountCaptureMaterial(config,record):undefined;
     if(found){const page=await accountJson(config,`/api/materials/${found.id}/read?revision=${found.revision}&offset=${chunkOffset}&length=12000`);result.text=page.text;result.nextChunkOffset=page.textRange?.nextOffset??undefined;result.truncated=Boolean(result.nextChunkOffset);result.readiness=found.coverage?.state==='complete'&&found.indexing?.state==='indexed'?'ready':found.indexing?.state==='failed'?'failed':'pending';result.processing=false;}
-    else{result.readiness=result.metadataOnly?'metadata':provenance?.document||record.ocr?.status==='pending'?'pending':record.ocr?.status==='failed'?'failed':'unknown';result.processing=result.readiness==='pending';}
+    else{const central=record.ocr?.status==='pending'||!record.ocrText&&(record.imageMime||provenance?.document?.fileIndex)?await accountCaptureProcessing(config,record):undefined;result.readiness=result.metadataOnly?'metadata':central??(provenance?.document||record.ocr?.status==='pending'?'pending':record.ocr?.status==='failed'?'failed':'unknown');result.processing=result.readiness==='pending';}
     return result;
   }
   const ocr = record.ocr as { status?: string } | undefined;

@@ -7,7 +7,7 @@ import type { DurableQueue, QueueRecord } from './queue';
 import { MAX_IMAGE_BYTES, validateServerUrl } from './config';
 import { readResponseText } from './response-body';
 import { captureOcrState } from '@mote/shared/metadata';
-import {accountCaptures,accountJson,accountOriginal,accountCaptureMaterial} from './account-reader';
+import {accountCaptures,accountJson,accountOriginal,accountCaptureMaterial,accountCaptureProcessing} from './account-reader';
 import {DESKTOP_PROTOCOL_HEADERS,accountKey} from './account';
 import {ingressKey} from './ingress-client';
 
@@ -132,7 +132,7 @@ export async function captureDetail(queue: DurableQueue, config: Config, source:
         const next=page.textRange?.nextOffset;if(next===null||next===undefined)break;if(!Number.isSafeInteger(next)||next<=offset)throw Error('Invalid material text cursor');offset=next;
       }while(body.length<100000);
       value.ocrText=body;value.ocr={status:'completed'};
-    }
+    }else{const state=await accountCaptureProcessing(config,value);if(state)value.ocr={status:state};}
   }
   return { ...preview({ ...value, hasImage: Boolean(value.imageMime) }), ocrText: String(value.ocrText ?? '').slice(0, 100000), deviceName: String(value.deviceName ?? '').slice(0, 128) };
 }
