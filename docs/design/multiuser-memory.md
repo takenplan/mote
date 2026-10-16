@@ -149,3 +149,13 @@ The event grants no full-account read or periodic working/insight policy.
 Those owning domains must admit their own retained M05 policy grant from an
 explicit trusted owner context; a configuration lifecycle subject or narrowed
 MCP request cannot be promoted to such a context.
+
+### M13 original manual model consumer
+
+The manual `/api/memory/jobs` request may carry the same owned `modelReference`
+and personal `modelOverride` as M08. M07 consumes the existing M04
+`leaseReference` seam; it does not change the global Memory default, endpoint or
+key, and shared resources retain M04's fixed model restriction. The explicit
+request metadata is retained in the durable job input so a retry of the same
+operation cannot substitute another requested model. Existing automatic jobs
+and requests without those fields retain their original task form and lease.
