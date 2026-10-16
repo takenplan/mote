@@ -154,3 +154,31 @@ fresh extraction fingerprints. Portable archives retain the per-file control
 intent but exclude retry/admission history and execution grants. The native backup
 catalog covers the new owner-keyed `mp_file_retries` journal. This is still WIP,
 not a replacement consumer freeze or complete Files acceptance.
+
+## Exact raw extraction and diarization-only candidate
+
+KEEP accepted raw ASR separately from aligned dialogue and explicit per-file
+speaker options. CHANGE the missing raw locator to M06 canonical stage-output
+references, written under the existing M05 grant after validated stage output.
+`mp_file_steps` stores only owner/original/generation/role/artifact references;
+`mp_file_diarization` stores the original exact-count/range/processor option.
+Neither table schedules work or carries model endpoints/credentials. Diarize
+retry selects the current accepted raw extraction, checks an optional supplied
+artifact ID exactly, then reuses that immutable artifact in the existing audio
+recipe. The new file generation fences all obsolete jobs. The override persists
+for this original only; explicit null removes it and restores inherited settings.
+REMOVE repeated ASR as a side effect of retrying diarization. EXCEPTION a failed
+diarizer leaves validated raw extraction readable but does not claim a complete
+indexed pipeline. UNKNOWN acoustic sample/assets, model reviews, image profiles,
+calendar associations and full native/production acceptance remain open.
+
+The candidate expands retry stage to `transcribe|diarize|summary`. Optional
+`diarization:{artifactId,options}` is valid only for diarize; options use the
+existing FileDiarizationOptions contract or null. Old UUID artifact assumptions
+are replaced by the M06 64-hex identifier; no new user confirmation is added.
+GET Files detail exposes `rawArtifactId` even when later diarization failed.
+Portable export/merge includes canonical stage references and per-file options,
+validates owner/original/artifact/type/generation links before any writes and
+never restores execution rights. Existing destination intent wins on merge.
+Native backup lists both tables. Historical M06 artifacts without a recorded
+stage reference are not guessed into raw ASR based on an engine-name string.

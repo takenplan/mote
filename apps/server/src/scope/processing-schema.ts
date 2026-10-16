@@ -11,7 +11,7 @@ export const defaultProcessingSettings=()=>processingSettingsSchema.parse({});
 const plugin=z.object({snapshotId:z.string().uuid(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 // Zero predates per-file cancellation and must keep the original serialized
 // M05 identity. A nonzero generation is still an immutable admitted fence.
-export const processingInputSchema=z.object({originalRef:z.string().regex(/^original:[a-f0-9]{64}$/),generation:z.number().int().nonnegative(),fileGeneration:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).transform(value=>value===0?undefined:value),settings:processingSettingsSchema,plugin:plugin.optional(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
+export const processingInputSchema=z.object({originalRef:z.string().regex(/^original:[a-f0-9]{64}$/),generation:z.number().int().nonnegative(),fileGeneration:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).transform(value=>value===0?undefined:value),diarizeFrom:z.string().regex(/^[a-f0-9]{64}$/).optional(),settings:processingSettingsSchema,plugin:plugin.optional(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
 export type ProcessingInput=z.infer<typeof processingInputSchema>;
 
 export function installProcessing(db:DatabaseSync){db.exec(`
@@ -29,5 +29,7 @@ export function installProcessing(db:DatabaseSync){db.exec(`
  CREATE TABLE IF NOT EXISTS mp_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
  CREATE TABLE IF NOT EXISTS mp_file_controls(user_id TEXT NOT NULL,original_id TEXT NOT NULL,generation INTEGER NOT NULL DEFAULT 0,cancelled INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,original_id),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS mp_file_retries(user_id TEXT NOT NULL,original_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,task_id TEXT NOT NULL,PRIMARY KEY(user_id,original_id,operation_id),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS mp_file_steps(user_id TEXT NOT NULL,original_id TEXT NOT NULL,generation INTEGER NOT NULL,stage TEXT NOT NULL,artifact_id TEXT NOT NULL,PRIMARY KEY(user_id,original_id,generation,stage),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,artifact_id) REFERENCES mp_artifacts(user_id,id));
+ CREATE TABLE IF NOT EXISTS mp_file_diarization(user_id TEXT NOT NULL,original_id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,original_id),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS mp_file_annotations(user_id TEXT NOT NULL,original_id TEXT NOT NULL,artifact_id TEXT NOT NULL,raw_artifact_id TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,original_id,artifact_id),FOREIGN KEY(user_id,original_id) REFERENCES ig_originals(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,artifact_id) REFERENCES mp_artifacts(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,raw_artifact_id) REFERENCES mp_artifacts(user_id,id) ON DELETE CASCADE);
 `);}

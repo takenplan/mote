@@ -633,3 +633,24 @@ without extra calls;1/1/EXIT0 in
 /tmp/mote-joint-file-summary-reprocess-green.log/.exit. All inputs/transports are
 generated; no Central original or derivative was read or staged. Diarization-only
 retry/overrides, acoustic assets/reviews and broader Files outcomes remain OPEN.
+
+Diarization-only candidate: actual initial partial pipeline has accepted raw ASR
+but no exposed exact raw locator;1/1 EXIT1 in
+/tmp/mote-joint-file-diarize-only-red.log/.exit (durable test a060e73f).
+After adding canonical stage references, the first implementation attempt's
+misplaced code block returned503; /tmp/mote-joint-file-diarize-only-green.log/.exit
+is retained as a failure, not a fixture/environment reclassification. Corrected
+same case passes1/1/EXIT0 in the green2 log. Latest extended case passes1/1/EXIT0
+in /tmp/mote-joint-file-diarize-portable-green.log/.exit: invalid raw ID409,
+no repeated ASR during diarize-only, stable ACK, file-specific speaker count,
+restart retention, fresh full transcription with sticky policy, explicit null
+reset, B default policy/foreign raw rejection, personal export/merge without task
+IDs, future-generation proof rejection and retained valid raw reference.
+Adjacent cancel/unknown/zero-identity/diarize cases pass4/4/EXIT0 in
+/tmp/mote-joint-file-retry-diarize-adjacent-green.log/.exit. Current AST inventory
+and transitive production boundary pass in
+/tmp/mote-joint-file-controls-scope.log/.exit; declarations add only the four
+owner-keyed M06 tables and original cancel/retry endpoints. No Central data or
+real media/model input was read; all artifacts and fixtures are generated.
+This candidate still awaits types, independent review and the affected/compiled/
+client gates; the declared consumer freeze remains c45.
