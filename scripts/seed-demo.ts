@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID,createHash } from 'node:crypto';
 import sharp from 'sharp';
 import { apiClient } from './client.js';
 import {ingressKey,requireAccountReceipt} from '../apps/desktop/src/ingress-client.js';
@@ -15,6 +15,6 @@ for(let i=0;i<24;i++) {
   const capture={id:randomUUID(),deviceId:request.identity.credential.deviceId??(mobile?'fixture-android':'fixture-mac'),deviceName:mobile?'演示 · Android':'演示 · Mac',platform:mobile?'android':'macos',capturedAt:new Date(now-(24-i)*15000).toISOString(),durationMs:15000,appName:source.app,appId:source.id,windowTitle:'合成演示资料',ocrText:source.text,imageBase64:image.toString('base64'),imageMime:'image/webp',source:'screen'},sourceId='cli-demo-'+ingressKey([capture.deviceId,capture.platform]).slice(0,40),batchId='capture-'+ingressKey(capture);
   await request('/api/ingress/devices',{id:capture.deviceId,name:capture.deviceName,platform:capture.platform},'POST');
   await request('/api/ingress/sources',{id:sourceId,deviceId:capture.deviceId,name:capture.deviceName,kind:'mote.cli',platform:capture.platform,retention:'archive'},'POST');
-  const receipt=await request(`/api/ingress/sources/${sourceId}/captures`,{batchId,items:[capture]},'POST');requireAccountReceipt(receipt,{account:request.account},sourceId,batchId,[capture]);
+  const receipt=await request(`/api/ingress/sources/${sourceId}/captures`,{batchId,items:[capture]},'POST');const [confirmed]=requireAccountReceipt(receipt,{account:request.account},sourceId,batchId,[capture]);if(confirmed.original?.hash!==createHash('sha256').update(image).digest('hex')||confirmed.original?.bytes!==image.length||confirmed.original?.mime!==capture.imageMime)throw Error('Account capture original receipt mismatch');
 }
 console.info('Imported 24 clearly labeled synthetic observations. No personal screen was captured.');

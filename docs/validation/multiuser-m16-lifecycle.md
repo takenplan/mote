@@ -148,3 +148,20 @@ wrong owner, linked spool and offline dry run. Its one legacy v2 SourceSync test
 is deliberately an algorithm characterization, not scoped protocol acceptance.
 New binding test's first two attempts read the obsolete JSON state path; this
 fixture error was corrected to SourceSync's actual SQLite path.
+
+M14 bounded review found two CLI defects after b960636c (report
+`/tmp/mote-m14-review-m16-cli-b960.md`): P1 startup-only self confirmation and
+P2 synthetic seed image ACK missing expected-original checks. The first actual
+same-URL replacement deployment accepts the generated old credential and private
+POST before the fix (`/tmp/m16-cli-deployment-red.log/.exit`, 0/1 exit 1).
+Each CLI request now calls the existing `assertAccountConnection` before private
+transport and checks cancellation after that await. The URL, owner and selected
+credential remain immutable. `/tmp/m16-cli-deployment-green.log/.exit`: 7/7 exit 0,
+including replacement receiving only `/api/connections/self` and zero device rows.
+This is admission checking; an already issued request cannot be retargeted or
+retracted across an independent server replacement during its network flight.
+The seed's actual M03 publication with response-only missing/wrong original
+corruption also fails 0/2 before the fix (`/tmp/m16-cli-original-red.log/.exit`,
+exit 1). It now validates the transmitted image hash, byte count and MIME after
+the common envelope parser; SourceSync's existing full original ACK checks are
+unchanged. A later combined log records the complete green result.
