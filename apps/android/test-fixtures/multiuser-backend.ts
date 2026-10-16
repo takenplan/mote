@@ -8,6 +8,7 @@ const directory=mkdtempSync(join(tmpdir(),'m15-kotlin-backend-'));
 const node=await buildApp({dataDir:directory});
 let holdNext=false,entered=false,release:(()=>void)|undefined;
 node.app.addHook('onSend',async(request,reply,payload)=>{
+ if(reply.statusCode>=400)process.stderr.write(JSON.stringify({method:request.method,path:request.url,status:reply.statusCode,response:payload})+'\n');
  if(holdNext&&reply.statusCode===200&&/^\/api\/ingress\/sources\/[^/]+\/captures$/.test(request.url)){holdNext=false;entered=true;await new Promise<void>(resolve=>{release=resolve;});}
  return payload;
 });
