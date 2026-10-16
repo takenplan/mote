@@ -781,7 +781,8 @@ class MultiuserWorkerInstrumentedTest {
             waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}};ready}
             lateinit var dialog:android.app.AlertDialog
             scenario.onActivity {activity->
-                assertTrue((ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString().contains(code))
+                val raw=(ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString()
+                assertEquals(code,ConnectionInvitation.parse(raw,true,BuildConfig.DEBUG).code)
                 views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="确认连接此节点"}.performClick()
                 @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
                 dialog=dialogs.mapNotNull {it.get()}.single {it.isShowing}

@@ -16,7 +16,13 @@ let holdNextAsr=false,asrHeld=false,releaseAsr:(()=>void)|undefined;
 const asrCalls:string[]=[];
 // Record only generated account labels and retry metadata. The HTTP handler has
 // already admitted the real M05 task before its successful reply is dropped.
-const f=await scopedFilesFixture({after:(callback:()=>unknown)=>cleanup.push(callback)} as unknown as TestContext,host=>host.app.addHook('onSend',async(request,reply,payload)=>{
+const f=await scopedFilesFixture({after:(callback:()=>unknown)=>cleanup.push(callback)} as unknown as TestContext,host=>{
+host.app.addHook('onError',async(request,_reply,error)=>{if(request.method==='DELETE'&&request.url.startsWith('/api/files/'))process.stderr.write(String(error.stack)+'\n');});
+host.app.addHook('onSend',async(request,reply,payload)=>{
+ if(request.method==='DELETE'&&/^\/api\/files\/[^/]+$/.test(request.url)||request.method==='POST'&&/^\/api\/files\/[^/]+\/cancel$/.test(request.url)){
+  let error:string|undefined;try{error=JSON.parse(String(payload)).error;}catch{}
+  process.stderr.write(JSON.stringify({type:'generated-file-control',method:request.method,path:request.url,status:reply.statusCode,...(error?{error}:{})})+'\n');
+ }
  if(request.method==='POST'&&/^\/api\/files\/[^/]+\/retry$/.test(request.url)){
   const actor=request.headers.authorization==='Bearer '+aToken?'a':request.headers.authorization==='Bearer '+bToken?'b':'other';
   let taskId:string|undefined;try{taskId=JSON.parse(String(payload)).taskId;}catch{}
@@ -24,7 +30,7 @@ const f=await scopedFilesFixture({after:(callback:()=>unknown)=>cleanup.push(cal
   if(dropRetryAck&&actor==='a'&&reply.statusCode===200)reply.raw.destroy();
  }
  return payload;
-}));
+});});
 aToken=f.a.token;bToken=f.b.token;
 const control=createServer((request,response)=>{void(async()=>{
  for await(const _ of request){}
@@ -54,5 +60,5 @@ for(const [actor,label] of [[f.a,'A'],[f.b,'B']] as const){
 }
 const server=await f.host.app.listen({host:'127.0.0.1',port:0});
 process.stdout.write(JSON.stringify({address:server,controlAddress:'http://127.0.0.1:'+controlAddress.port,a:f.a,b:f.b,admin:f.admin,password:'Generated-joint-files-password',captureId:receipts[0].id,wave:wave.toString('base64'),pid:process.pid})+'\n');
-let closing=false;async function close(){if(closing)return;closing=true;releaseAsr?.();for(const work of cleanup.reverse())await work();asr.closeAllConnections();await new Promise<void>(resolve=>asr.close(()=>resolve()));process.exit(0);}
+let closing=false;async function close(){if(closing)return;closing=true;process.stderr.write(JSON.stringify({type:'generated-file-final',asrCalls,retries:retries.map(entry=>{const body=entry.body as {stage?:string;operationId?:string;confirmUnknown?:boolean};return {actor:entry.actor,status:entry.status,taskId:entry.taskId,stage:body.stage,operationId:body.operationId,confirmUnknown:body.confirmUnknown};})})+'\n');releaseAsr?.();for(const work of cleanup.reverse())await work();asr.closeAllConnections();await new Promise<void>(resolve=>asr.close(()=>resolve()));process.exit(0);}
 process.on('SIGINT',()=>void close());process.on('SIGTERM',()=>void close());
