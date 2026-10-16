@@ -249,3 +249,20 @@ it('binds an environment credential to the actual M01 account before opening the
  const f=await fixture(),config=f.config(f.a),app=await productionDesktop(f,join(f.directory,'bootstrap'),{url:config.serverUrl,token:config.token!});const status=await app.call('mote:get-status');expect(status.config.account).toMatchObject({origin:config.serverUrl,deploymentId:f.a.deploymentId,userId:f.a.userId});expect(status.storage.directory).not.toContain('signed-out');await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false}]);const note=await app.call('mote:note-draft');await app.call('mote:note',[{...note,text:'Generated bootstrap account note',revision:1}]);await app.call('mote:retry');expect((await f.request(f.a.token,'/api/captures/'+note.id)).statusCode).toBe(200);expect((await f.request(f.b.token,'/api/captures/'+note.id)).statusCode).toBe(404);
  const rejected=await productionDesktop(f,join(f.directory,'bootstrap-rejected'),{url:config.serverUrl,token:'generated-unrecognized-credential-00000000'});expect((await rejected.call('mote:get-status')).config.tokenConfigured).toBe(false);await expect(rejected.call('mote:start')).rejects.toThrow('Sign in');
 });
+
+it('reads canonical central extraction for raw screen captures without provenance or Material device metadata',async()=>{
+ const f=await fixture(),body='Generated A central OCR '.repeat(1000),sourceId='desktop-'+createHash('sha256').update(JSON.stringify([f.config(f.a).deviceId,'macos'])).digest('hex').slice(0,40);
+ for(const [grant,text] of [[f.a,body],[f.b,'Generated B central OCR']] as const){
+  const config=f.config(grant);await uploadCapture(config,{...event(),deviceId:config.deviceId,ocrText:'',ocr:{status:'pending'}},image);
+  const producer=f.node.ingress.bindSource(await f.node.authority.authenticate(grant.token),[sourceId],()=>{});
+  for(const mode of ['extraction','summary']){
+   const externalId=(mode==='extraction'?'processed:':'processed-summary:')+event().id;
+   producer.publishMaterial({id:'mat_'+createHash('sha256').update(JSON.stringify([sourceId,externalId])).digest('hex'),kind:mode==='extraction'?'document':'summary',schemaVersion:1,title:'Generated central output',origin:{sourceId,externalId},members:[{id:'original',kind:'capture',ref:'capture:'+event().id}],blocks:[{id:'text',kind:'text',format:'plain',text:mode==='extraction'?text:'Generated summary must not replace OCR',memberIds:['original']}],coverage:{state:'complete'},artifacts:[{key:mode,state:'ready'}],fidelity:{state:mode==='extraction'?'derived':'summary-only',limitations:[]},retention:{original:'retained',policy:'allow-expiry'}});
+  }
+ }
+ const config=f.config(f.a),queue=new DurableQueue(join(f.directory,'derived-reader'),config);await queue.initialize();
+ const detail=await captureDetail(queue,config,'central',event().id);expect(detail.ocrText).toBe(body);expect(detail.ocr.status).toBe('completed');
+ const item={key:event().id,source:'screen' as const,title:'',observedAt:event().capturedAt,outcome:'received' as const,firstReceipt:true,captureId:event().id};
+ const first=await readCentralContent(config,item);expect(first.text).toBe(body.slice(0,12000));expect(first.nextChunkOffset).toBe(12000);expect(first.readiness).toBe('ready');expect(first.retainsOriginal).toBe(true);expect(first.processing).toBe(false);
+ expect((await readCentralContent(config,item,12000)).text).toBe(body.slice(12000));expect((await captureDetail(queue,f.config(f.b),'central',event().id)).ocrText).toBe('Generated B central OCR');
+});
