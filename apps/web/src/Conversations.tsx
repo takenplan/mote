@@ -39,7 +39,7 @@ interface HistoryPage {items: ConversationSummary[]; nextCursor?: string | null}
 export function Conversations({api, configured, devices, renderAnswer,onOpen=()=>{}}: {
   api: Api;
   configured: boolean;
-  devices: Device[];
+  devices: Pick<Device,'deviceId'|'deviceName'>[];
   renderAnswer: (answer: Answer) => ReactNode;
   onOpen?: (ref:string)=>void;
 }) {
