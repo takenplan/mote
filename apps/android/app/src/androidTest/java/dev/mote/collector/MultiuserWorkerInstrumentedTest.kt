@@ -551,8 +551,9 @@ class MultiuserWorkerInstrumentedTest {
             fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
             fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
             ready();press("查看详情");ready();press("保存原件");waitFor {monitor.hits==1}
-            waitFor {var settled=false;scenario.onActivity {activity->settled=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()&&it.text.toString()!="正在导出中央资料…"&&it.text.toString()!="正在读取…"}};settled}
-            assertArrayEquals(android.util.Base64.decode(fixture().getString("wave"),android.util.Base64.DEFAULT),output.readBytes())
+            var outcome=""
+            waitFor {var settled=false;scenario.onActivity {activity->outcome=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().filter {it.tag=="central-status"}.joinToString {it.text.toString()};settled=!activity.isWorking&&outcome.isNotBlank()&&outcome!="正在导出中央资料…"&&outcome!="正在读取…"};settled}
+            assertArrayEquals("Native document outcome: "+outcome,android.util.Base64.decode(fixture().getString("wave"),android.util.Base64.DEFAULT),output.readBytes())
         }}finally{instrumentation.removeMonitor(monitor)}
     }
 
