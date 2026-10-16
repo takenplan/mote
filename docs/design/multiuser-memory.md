@@ -87,7 +87,9 @@ it does not replay unknown writes. Logical removal is not proof of physical
 provider erasure. Unavailable or unverifiable cleanup remains pending/unknown.
 Purpose-limited domain lifecycle capabilities allow literal export/cleanup after
 ordinary runtime or account retirement without granting new inference authority.
-Portable restore validates owner/deployment and original evidence and restores
+Portable export reads all exact current/historical bodies from their actual
+providers and rejects a concurrent catalog change. Portable restore validates
+owner/deployment and original evidence and restores
 stale builtin records, never task/model/plugin execution authority. M16 owns
 whole-user lifecycle ordering and retention of cleanup resources.
 

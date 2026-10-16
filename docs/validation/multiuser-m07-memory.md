@@ -89,8 +89,8 @@ version with assertSources before target provision/verify/write and across await
 The unchanged probe scenario now reports binding blocked and leaked=false.
 
 Latest targeted checks: host-bound source/cursor/evidence scope, actual image
-pipeline and independent migration regression: 3/3 pass, exit0, matching Node
-24.21.0 runtime; /tmp/m07-read-contract-first.log/.exit. Server typecheck exit0
+pipeline and independent migration regression: 3/3 pass, exit0, Node
+24.21.0 runtime (these three tests do not load the native Mem0 SQLite binding); /tmp/m07-read-contract-first.log/.exit. Server typecheck exit0
 /tmp/m07-read-contract-final-types.log/.exit. Scope inventory/import/SQL checks
 exit0. These do not substitute for final combined or affected checks.
 
@@ -104,3 +104,34 @@ Unresolved acceptance gates: final independent delta review; final focused and
 actual composed suites; fresh compiled production smoke; final check:affected;
 final remote head/base verification and Draft PR. CI workflows stay disabled and
 unrun. No live-model, real-account/provider, device or deployment checks were run.
+
+
+## Independent read race and subsequent fixes
+
+M11's independent exact c0aedbbf page probe reproduced a P1: a body fetched
+before a later provider await could still be returned after its deletion. The
+page now revalidates every returned exact row and its original dependencies
+before disclosing the complete result. The durable regression observes
+leaked=false/outcome=blocked. Portable export applies the same complete-catalog
+fence and now includes every exact historical provider body. Restore retains
+those versions as stale builtin data without runtime/model authority.
+
+Default Memory settings also now deep-copy nested policy/recipe defaults.
+The former shared mutable object allowed one caller's threshold mutation to
+change later callers' defaults. A regression verifies independent owner objects.
+
+Node24 full specialized repetition failed 65/68 (exit1): the Mem0 binary in this
+checkout uses ABI147/Node26, while Node24 needs ABI137; two later fixture tests
+also exposed shared default-policy mutation. No dependencies were recompiled or
+installed. System Node26.11.1 :memory: native binding probe passes. After the
+policy repair, complete Memory/review/M05 specialized suite passes69/69 exit0,
+/tmp/m07-policy-isolation-focused.log/.exit,168535ms. This predates the final
+page/history changes and is historical evidence, not final acceptance.
+
+Page race/default isolation/full external history restore/concurrent export
+checks pass4/4 exit0, /tmp/m07-review-page-history-second.log/.exit,11541ms.
+The first page probe correction blocked the leak but its test teardown wrote a
+release marker after fixture directory removal; cleanup now releases barriers
+before closing the fixture. Server typecheck0 at
+/tmp/m07-page-history-types.log/.exit. Final whole combination and required
+affected checks remain pending, as does independent exact final-delta approval.
