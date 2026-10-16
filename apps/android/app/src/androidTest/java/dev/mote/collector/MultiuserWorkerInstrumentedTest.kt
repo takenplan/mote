@@ -396,6 +396,40 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeMcpDiscoveryAndImportUseTheOwnedConnectionAndKeepAccountDraftsSeparate() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val view=a.get("/api/configuration")
+        val domains=view.getJSONArray("domains");val saved=(0 until domains.length()).map(domains::getJSONObject).single {it.getString("id")=="mcpConnections"}.getJSONObject("saved")
+        assertEquals("same-connection",saved.getJSONArray("connections").getJSONObject(0).getString("id"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="来源与外部应用"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->
+                assertTrue("MCP must select a saved owned connection instead of sending endpoint credentials in discovery",views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().any {spinner->(0 until spinner.count).any {spinner.getItemAtPosition(it).toString().contains("same-connection")}})
+                views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {spinner->(0 until spinner.count).any {spinner.getItemAtPosition(it).toString().contains("same-connection")}}.setSelection(1)
+                views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="发现 MCP 资源"}.performClick()
+            }
+            waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().any {it.text.toString()=="GENERATED_A_RESOURCE"}};ready}
+            lateinit var oldImport:android.widget.Button
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="GENERATED_A_RESOURCE"}.isChecked=true
+                oldImport=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="导入所选资源"};oldImport.performClick()
+            }
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val item=a.get("/api/sources/same-source/item?externalId=fixture%3A%2F%2Fsame")
+            assertTrue(item.toString().contains("GENERATED_A_PRIVATE_MCP_CONTENT"));assertFalse(item.toString().contains("GENERATED_B_PRIVATE_MCP_CONTENT"))
+            scenario.onActivity {oldImport.performClick()};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val sourceItems=a.get("/api/source-items?sourceId=same-source").getJSONArray("items");assertEquals(1,sourceItems.length())
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity {activity->assertFalse(views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains("GENERATED_A_RESOURCE")});oldImport.performClick()}
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            assertEquals(0,CentralAccess.requireClient(app).get("/api/source-items?sourceId=same-source").getJSONArray("items").length())
+        }
+    }
+
     @Test fun actualNativeOverviewReadsOwnedStatisticsAndCanonicalDeviceMetadata() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
