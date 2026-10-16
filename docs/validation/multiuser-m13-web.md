@@ -330,3 +330,17 @@ The original filter now uses the existing owner-only M07 /memory/audit?kind=stal
 Owner audit i18n final `/tmp/m13-memory-audit-i18n-green.log` EXIT0,8395 messages; earlier missing empty-state key is retained in the failed first log. Final same-SHA build/IAB/affected still pending.
 
 New audit consumer plus terminal export poll fix Web typecheck `/tmp/m13-memory-audit-typecheck.log/.exit` EXIT0 in the explicitly borrowed short slot; no server/full affected/Android run in that slot.
+
+
+### M16 management original-page consumer
+
+Own feature composed e91d381e926ecc0c7ca1077053a4ab958d12c015,1976bcf9763f03dc89d23248f4e223f44619796e,d7879a9e98a0e24cb85228e790a1dd0036ed0883. Only the management test hunk of mixed a21cc0148c96137434c74547eaede13695f89ec6 was applied as own1954b827; its unrelated backup RED was not imported. Documentation conflicts retain only the corresponding changed domain sections, without claiming unfinished CLI/backup code was composed here. Backend tests/type/affected for the resulting own combination remain pending.
+
+56ba6620 actual renderer RED `/tmp/m13-management-route-red.log`: original diagnostics route is empty for an authenticated Web session when global status is absent. First post-route attempt `/tmp/m13-management-snapshot-red.log` only hit a fixture omission: the login grant was used without actual auth/self administrator metadata. This is excluded as a product RED. Corrected fixture performs actual M01 self discovery; with only original Diagnostics temporarily restored from committed source, `/tmp/m13-management-snapshot-valid-red.log` EXIT1 reproduces TypeError reading missing snapshot.queue.reportedPending. The pending fixed file was then restored unchanged; no peer worktree change.
+
+`/tmp/m13-management-renderer-green.log`1/1 EXIT0: original route -> real M01 self/administrator -> M16 safe snapshot/log page -> original diagnostics metrics without private queue/index/services zeroes -> actual signed manifest checker with only external fetch substituted -> verified0.5.0, exact administrator check POST; switching ordinary B retires the administrator tree and sends no admin/old-global configuration fallback requests. Scope/coverage and unavailable instance YAML editing are explicit. No updater, deployment, real network/service or M12 action. Later copy-clipboard retirement and retained version-mismatch warning are small follow-ups awaiting the same test/type checks.
+
+M15 independent bounded review05c+58+e57 `/tmp/mote-m15-review-m13-memory-e57.md` found no confirmed P0/P1/P2 in complete pins/current owner/recipes/retained M04 lease and original Api+body operation retry. Its own backend3/3 is separate actual evidence; it did not run Web UI or review94c audit. M13 bounded review of M16 e91/1976 and d787 is recorded in `/tmp/mote-m13-review-m16-e91-1976.md` and `/tmp/mote-m13-review-m16-d787.md`; known async reply P2 is statically closed at d787, not retroactively accepted at1976.
+
+
+Management final narrow renderer `/tmp/m13-management-renderer-final-green.log`1/1 EXIT0, including the small clipboard lifecycle guard and retained version-mismatch warning. i18n `/tmp/m13-management-i18n.log/.exit` EXIT0,8401 messages. Fresh final Web/server build/type/affected and actual IAB for this management increment remain pending M16's sole-heavy gate.

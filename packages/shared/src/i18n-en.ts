@@ -1,5 +1,11 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "实例诊断与更新检查仅向当前管理员开放。": "Instance diagnostics and update checks are available only to the current administrator.",
+  "实例日志与更新配置由启动 YAML 管理，网页编辑协议尚待接入。": "Instance log and update settings use the startup YAML. Web editing is awaiting integration.",
+  "实例诊断响应未声明安全元数据范围，未显示内容。": "The diagnostics response does not declare its safe metadata scope. Its content was not displayed.",
+  "此页仅展示实例运行元数据；私人正文、历史 Trace、端点队列和索引统计不在覆盖范围内。": "This page shows instance operational metadata only. Private content, historical traces, device queues and index statistics are outside its coverage.",
+  "已核验发布版本：{0}": "Verified release version: {0}",
+  "此处仅检查签名发布信息，不会执行更新或回滚。": "Checks signed release information only. No update or rollback is executed.",
   "这些记录仅供本人审阅，不参与问答。审阅列表暂不使用时间、搜索和分类筛选。": "These records are for your review only and are not used in answers. Time, search and category filters are not yet available for this review list.",
   "查看删除进度": "View deletion progress",
   "删除账号": "Delete account",
