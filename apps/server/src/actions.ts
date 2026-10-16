@@ -22,7 +22,7 @@ const settingsUpdateSchema=z.object({revision:z.number().int().nonnegative().max
 export class ActionSettingsSaveError extends Error {
   constructor(readonly code:string,readonly statusCode:number,readonly revokedDeviceIds:string[],readonly authorizationRevision:number,readonly revision:number|undefined){super('Action authorization was revoked; refresh the settings before retrying');this.name='ActionSettingsSaveError';}
 }
-const proposedSchema=z.object({actions:z.array(z.object({kind:z.enum(['calendar.create','calendar.update','calendar.cancel','calendar.complete']),event:calendarDraftSchema,uncertainty:z.string().max(2000),evidence:z.array(z.object({id:z.string().uuid(),quote:z.string().min(1).max(2000)}).strict()).min(1).max(20),sameAs:z.string().uuid().nullable()}).strict()).max(8)}).strict();
+export const proposedSchema=z.object({actions:z.array(z.object({kind:z.enum(['calendar.create','calendar.update','calendar.cancel','calendar.complete']),event:calendarDraftSchema,uncertainty:z.string().max(2000),evidence:z.array(z.object({id:z.string().uuid(),quote:z.string().min(1).max(2000)}).strict()).min(1).max(20),sameAs:z.string().uuid().nullable()}).strict()).max(8)}).strict();
 const fingerprint=(r:CaptureRecord)=>sha256(JSON.stringify([r.id,r.ocrText,r.metadata,r.provenance,(r as CaptureRecord & {fileEvidence?:{captureId:string}}).fileEvidence]));
 type Job={key:string;id:string;offset:number;length:number;fingerprint:string};
 /** Host-owned durable proposals and execution receipts. The query agent has only a read-only comparison catalog, never mutation tools. */
