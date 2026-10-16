@@ -1,6 +1,7 @@
 import type {DatabaseSync} from 'node:sqlite';
 import {randomBytes,createHash} from 'node:crypto';
 import {z} from 'zod';
+import {catalogParent} from '../source-catalog-path.js';
 
 export const ASK_DOMAIN='ask';
 export class AskError extends Error{constructor(readonly code:string,readonly statusCode=400){super(code);}}
@@ -15,7 +16,7 @@ export type AskScope={sourceIds?:readonly string[];assertCurrent:()=>void};
 export type EvidencePin={id:string;hash:string;receipt?:string;kind?:'measurement'|'history'|'attachment';headId?:string;source?:{id:string;incarnation:string}};
 export type MaterialPin={id:string;revision:string;sources?:{id:string;incarnation:string}[]};
 export type AskRow={id:string;input:string;fingerprint:string;mode:'chat'|'insight'|'compact';status:string;generation:number;fragment:number;task_id:string|null;model:string;scope:string;context:string;conversation_revision:number;conversation_incarnation:string;pins:string;materials:string;memory_pins:string;events:string;workspace:string|null;request_bound:number;created_at:string;updated_at:string;result:string|null};
-export function installAsk(db:DatabaseSync){db.exec(`
+export function installAsk(db:DatabaseSync){db.function('ma_catalog_parent',{deterministic:true},catalogParent);db.exec(`
  CREATE TABLE IF NOT EXISTS ma_meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1),cursor_key TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS ma_sources(user_id TEXT NOT NULL,id TEXT NOT NULL,incarnation TEXT NOT NULL,PRIMARY KEY(user_id,id));
  INSERT OR IGNORE INTO ma_sources SELECT user_id,id,lower(hex(randomblob(16))) FROM pd_sources;
