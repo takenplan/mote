@@ -671,6 +671,30 @@ class MultiuserWorkerInstrumentedTest {
             UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};assertEquals(200,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first)
         }} finally {instrumentation.removeMonitor(browser)}
     }
+    @Test fun actualQrPairingRejectsChangedSelfBeforeLocalWriteAndReauthorizesOnlyItsOriginalDevice() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        QuickNotes.draft(app).update("GENERATED_UNBOUND_QR_DRAFT","")
+        val issuer=CentralClient(endpoint(),token("a"))
+        var latest:ConnectionInvitation?=null
+        for(field in listOf("owner","deployment","credential","device")) {
+            control("/generated/release-pairing")
+            val value=issuer.post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated bound device").put("deviceId",settings.deviceId))
+            val invitation=ConnectionInvitation.parse(value.getString("uri"),true,true);latest=invitation
+            control("/generated/bad-self/"+field)
+            assertThrows(ConnectionFailure::class.java){RuntimeSettings.replaceAccount(app,bindLocal=true){ConnectionClient(app).connect(invitation,"Generated Android",true,bindLocal=true)}}
+            assertNull("Changed self "+field+" must fail before writing an account",settings.read().account());assertEquals("",settings.read().token)
+            assertEquals("GENERATED_UNBOUND_QR_DRAFT",QuickNotes.draft(app).read().text)
+        }
+        control("/generated/release-pairing");RuntimeSettings.replaceAccount(app,bindLocal=true){ConnectionClient(app).resume("Ignored changed recovery name",true,bindLocal=true)}
+        val original=settings.read();assertEquals(latest!!.userId,original.account()!!.userId);assertEquals("Generated Android",original.deviceName);assertTrue(original.authExpiresAt>System.currentTimeMillis());assertFalse(settings.enabled)
+        val note=QuickNotes.save(app,"GENERATED_SAME_OWNER_REAUTHORIZE","",scheduleUpload={});val owner=original.ownerKey();val directory=app.accountDirectory().canonicalPath
+        val replacement=issuer.post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated explicit reauthorization").put("deviceId",settings.deviceId))
+        RuntimeSettings.replaceAccount(app){ConnectionClient(app).connect(ConnectionInvitation.parse(replacement.getString("uri"),true,true),"Generated renamed Android",true)}
+        assertEquals(owner,settings.read().ownerKey());assertEquals(directory,app.accountDirectory().canonicalPath);assertNotEquals(original.token,settings.read().token)
+        assertEquals(401,HttpJson.get(endpoint()+"/api/connections/self",original.token).first);assertEquals(note,app.queue().peek()!!.getString("id"));assertEquals("GENERATED_UNBOUND_QR_DRAFT",QuickNotes.draft(app).read().text)
+        UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};assertEquals(200,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first)
+    }
     @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
