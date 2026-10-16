@@ -519,6 +519,22 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun optedInGeneratedNativeAskUsesTheVerifiedLocalCodexModelWithoutPrivateCentralData() {
+        val app=context();require(fixture().optString("model")=="gpt-6.1-sol");waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);assertEquals("gpt-6.1-sol",api.get("/api/models/selection/chat").getString("model"));assertEquals(0,api.get("/api/query-runs").getJSONArray("items").length())
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","ask")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.contentDescription=="你的问题"}.setText("This is a generated M15 Android connectivity regression. There are no private records. Reply with a short confirmation; no external tools or private information are needed.");views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="发送"}.performClick()}
+            var run:JSONObject?=null;val deadline=android.os.SystemClock.elapsedRealtime()+180000
+            while(true){val rows=api.get("/api/query-runs").getJSONArray("items");if(rows.length()>0){run=api.get("/api/query-runs/"+rows.getJSONObject(0).getString("id"));if(run!!.getString("status")!="running")break};check(android.os.SystemClock.elapsedRealtime()<deadline){"Generated local Codex regression deadline; state="+run?.optString("status")};Thread.sleep(300)}
+            assertEquals(run!!.optJSONObject("error")?.optString("code"),"completed",run!!.getString("status"));assertTrue(run!!.getJSONObject("result").getString("answer").isNotBlank())
+            assertEquals(404,HttpJson.get(endpoint()+"/api/query-runs/"+run!!.getString("id"),token("b")).first)
+            waitFor {var visible=false;scenario.onActivity {activity->visible=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()==run!!.getJSONObject("result").getString("answer")}};visible}
+        }
+    }
+
     @Test fun originalNativeRecordingRetainsProcessingAndAnonymousSpeakerConfirmationWithCorrections() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
