@@ -785,3 +785,14 @@ This is not yet a composed87 held-M06-response reproduction. QR owner received t
 bounded finding and cleanup-only exact-pin recommendation; Joint has not duplicated
 or merged the fix. Account deletion, which clears pins, is a different boundary.
 No independent reviewer execution or whole QR acceptance is inferred.
+
+Original Files forget/allow-again is still an actual capability gap, not merely a
+source suspicion: generated same-capture-ID A/B file DELETE currently returns
+scope_unavailable503 in `/tmp/mote-joint-file-forget-entry-red.log/.exit`,1/1 EXIT1.
+The durable test retains the old410 forgotten-resync guard and explicit allow-again
+outcome as its target; assertions after the first failure are not executed evidence.
+The current74fe review implementation does not claim to implement file forgetting.
+Before closing this gap, preserve per-source/external-ID tombstones, all owned
+revisions, derived visibility retirement, late-worker/old receipt/ticket fences,
+post-commit pin-aware physical GC and personal merge/restart semantics. A simple
+DELETE alias or metadata-only hide cannot count as original capability parity.
