@@ -36,25 +36,29 @@ export class ScopedMemoryBindings {
   const source=data.binding(),revision=source.revision+1,snapshot=request.instanceId?await this.plugins.forUser(context).admit(request.instanceId,'task',revision):undefined,target:ScopedMemoryBinding=request.instanceId?{kind:'plugin',instanceId:request.instanceId,revision,snapshotId:snapshot!.id}:{kind:'builtin',revision};
   data.sql.transaction(()=>{if(data.sql.get('SELECT 1 FROM mm_binding_locks WHERE user_id=$user'))throw new PrivateDataError('conflict',409);data.state();if(memoryHash(data.binding())!==memoryHash(source))throw new PrivateDataError('conflict',409);data.sql.run('INSERT INTO mm_binding_locks VALUES($user,?)',request.operationId);data.sql.run("INSERT INTO mm_binding_preparations VALUES($user,?,?,?,NULL,?,'preparing',NULL)",request.operationId,JSON.stringify(source),JSON.stringify(target),JSON.stringify({requestHash}));});
   for(const row of data.sql.all("SELECT i.task_id FROM mm_intakes i JOIN execution_steps e ON e.id=i.task_id WHERE i.user_id=$user AND e.user_id=$user AND i.revoked=0 AND i.state='pending' AND e.state='waiting'"))this.execution.forUser(context).retry(String(row.task_id));
+  for(const row of data.sql.all("SELECT i.task_id FROM mm_integration_windows i JOIN execution_steps e ON e.id=i.task_id WHERE i.user_id=$user AND e.user_id=$user AND i.revoked=0 AND i.state='pending' AND e.state='waiting'"))this.execution.forUser(context).retry(String(row.task_id));
   const task=await this.execution.forUser(context).submit({kind:'memory.binding',operationId:'memory-binding:'+request.operationId,input:{id:request.operationId}});data.sql.run('UPDATE mm_binding_preparations SET task_id=? WHERE user_id=$user AND id=?',task.id,request.operationId);return this.view(context,request.operationId);
  }
  view(context:UserContext,id:string){const preparation=this.owned(context,id);return {id,state:preparation.state,source:memoryBindingSchema.parse(JSON.parse(preparation.source)),target:memoryBindingSchema.parse(JSON.parse(preparation.target)),...(preparation.task_id?{task:this.execution.forUser(context).get(preparation.task_id)}:{})};}
  private async execute(run:TaskRun){
   const {id}=taskSchema.parse(run.task.input),data=this.data(run.context),preparation=this.owned(run.context,id),assert=()=>{run.grant.assert();this.assert(run.context,preparation);};assert();
+  if(data.sql.get("SELECT 1 FROM mm_integration_windows i JOIN execution_steps e ON e.id=i.task_id WHERE i.user_id=$user AND e.user_id=$user AND i.revoked=0 AND i.state='pending' AND e.state IN ('running','waiting') LIMIT 1"))throw new ExecutionFailure('waiting','memory_binding_draining',100,{executionStarted:false});
   if(data.sql.get("SELECT 1 FROM mm_intakes i JOIN execution_steps e ON e.id=i.task_id WHERE i.user_id=$user AND e.user_id=$user AND i.revoked=0 AND i.state='pending' AND e.state IN ('running','waiting') LIMIT 1"))throw new ExecutionFailure('waiting','memory_binding_draining',100,{executionStarted:false});
   if(data.sql.get("SELECT 1 FROM mm_jobs j JOIN json_each(j.tasks) t JOIN execution_steps s ON s.id=t.value JOIN user_tasks u ON u.task_id=s.id WHERE j.user_id=$user AND u.user_id=$user AND s.state IN ('waiting','running') LIMIT 1"))throw new ExecutionFailure('waiting','memory_binding_draining',100,{executionStarted:false});
   if(data.sql.get("SELECT 1 FROM mm_provider_journal WHERE user_id=$user AND state IN ('submitted','erase_submitted') LIMIT 1"))throw new ExecutionFailure('blocked','memory_provider_result_unknown');
-  const target=memoryBindingSchema.parse(JSON.parse(preparation.target)),catalog=this.catalog(data),rows=data.sql.all('SELECT id,version FROM mm_versions WHERE user_id=$user ORDER BY id,version'),records:Memory[]=[];
+  const target=memoryBindingSchema.parse(JSON.parse(preparation.target)),catalog=this.catalog(data),rows=data.sql.all("SELECT v.id,v.version FROM mm_versions v JOIN mm_records r ON r.user_id=v.user_id AND r.id=v.id WHERE v.id=r.id AND v.user_id=$user AND r.user_id=$user AND json_extract(r.json,'$.status')='published' ORDER BY v.id,v.version"),records:Memory[]=[];
   for(const row of rows){records.push(await this.readVersion(run.context,String(row.id),Number(row.version)));assert();}
   if(target.kind==='plugin'){
-   await this.providers.provision(run.context,target);assert();const descriptor=await this.providers.descriptor(run.context,target),provider=await this.providers.provider(run.context,target,assert);assert();
-   const health=await this.providers.verify(run.context,target,assert,run.signal);assert();if(!health.ready||!health.verified.persistentCrud||!health.verified.scopedRetrieval||!health.verified.immutableRecords||!health.verified.idempotentReplay)throw new ExecutionFailure('blocked','memory_provider_unverified');
+   const descriptor=await this.providers.descriptor(run.context,target),assertTarget=()=>{assert();descriptor.assertCurrent();for(const memory of records){data.evidence(memory.evidenceIds);data.assertSources(memory.evidenceIds,descriptor.sourceIds);}};
+   // Every current and historical body must fit the full transitive allowlist
+   // before provider setup, verification or any disclosure to its runtime.
+   assertTarget();await this.providers.provision(run.context,target);assertTarget();const provider=await this.providers.provider(run.context,target,assertTarget);assertTarget();
+   const health=await this.providers.verify(run.context,target,assertTarget,run.signal);assertTarget();if(!health.ready||!health.verified.persistentCrud||!health.verified.scopedRetrieval||!health.verified.immutableRecords||!health.verified.idempotentReplay)throw new ExecutionFailure('blocked','memory_provider_unverified');
    for(const memory of records){
-    // The target's fixed source grants authorize migration of every dependency.
-    for(const evidence of data.evidence(memory.evidenceIds)){const source=evidence.provenance?.sourceId;if(!source||!descriptor.sourceIds.includes(source))throw new PrivateDataError('invalid_data');}
+    assertTarget();
     const namespace=descriptor.namespace,key=memoryProviderKey(memory),opId='memory-binding:'+memoryHash([id,namespace,key]),write={namespace,key,memory,opId};
     run.grant.commit(()=>{assert();data.sql.run("INSERT OR IGNORE INTO mm_provider_journal VALUES($user,?,?,?,?,?,?,'submitted',?)",opId,id,JSON.stringify(namespace),JSON.stringify(key),memoryBodyDigest(memory),memoryHash({namespace,key,memory}),JSON.stringify({...write,binding:target}));});
-    await stageVerifiedMemoryWrite(provider,write,assert);run.grant.commit(()=>{assert();data.sql.run("UPDATE mm_provider_journal SET state='acknowledged' WHERE user_id=$user AND id=?",opId);});
+    await stageVerifiedMemoryWrite(provider,write,assertTarget);run.grant.commit(()=>{assertTarget();data.sql.run("UPDATE mm_provider_journal SET state='acknowledged' WHERE user_id=$user AND id=?",opId);});
    }
   }
   assert();if(this.catalog(data)!==catalog)throw new PrivateDataError('conflict',409);

@@ -73,3 +73,34 @@ No CI workflow was enabled. CI is **unrun**, not passed. No PR/main/integration
 merge, deployment, live model check, real-user-data operation or main-worktree
 edit occurred. The final handoff must report full local/remote/head/base SHAs,
 test counts and exit receipts; these partial receipts cannot replace that gate.
+
+## Subsequent implementation freeze (final acceptance pending)
+
+The feature now composes accepted M06 PR #133 head
+470516b7ed4ab7ee8b0fba344883c6b42bb7ce56. Production upload/processing intake,
+policy windows, long-range batches, automatic integration, actual Mem0/Hindsight,
+visual originals, owner correction, provider migration/history and purpose-limited
+lifecycle cleanup are implemented. This section supersedes the initial checkpoint's
+remaining-work list; the initial commands remain historical evidence only.
+
+Independent M08 review of exact c678d24ab672d11f7262ae12b5a1f510f6f685c6 found a
+P1 transitive-source migration disclosure. The fix checks every current/historical
+version with assertSources before target provision/verify/write and across awaits.
+The unchanged probe scenario now reports binding blocked and leaked=false.
+
+Latest targeted checks: host-bound source/cursor/evidence scope, actual image
+pipeline and independent migration regression: 3/3 pass, exit0, matching Node
+24.21.0 runtime; /tmp/m07-read-contract-first.log/.exit. Server typecheck exit0
+/tmp/m07-read-contract-final-types.log/.exit. Scope inventory/import/SQL checks
+exit0. These do not substitute for final combined or affected checks.
+
+Two actual source-host processes verified retained successful extraction and
+original M04 authority after SIGKILL/restart: 1/1 pass exit0,
+/tmp/m07-process-second.log/.exit. Interrupted independent review retries are
+expected; successful retained extraction is not repeated. A fresh compiled-process
+run remains required after the final build.
+
+Unresolved acceptance gates: final independent delta review; final focused and
+actual composed suites; fresh compiled production smoke; final check:affected;
+final remote head/base verification and Draft PR. CI workflows stay disabled and
+unrun. No live-model, real-account/provider, device or deployment checks were run.

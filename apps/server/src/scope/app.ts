@@ -62,7 +62,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
     if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins);await processing.ready();}
-    if(execution){memory=registerMemory(runtime,storage.db,configuration,execution,plugins!,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});if(processing)memory.bindProcessing(processing);}
+    if(execution){memory=registerMemory(runtime,storage.db,configuration,execution,plugins!,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);}
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await memory?.close();await processing?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await plugins?.close();await configuration?.close();accounts.close();storage.close();});

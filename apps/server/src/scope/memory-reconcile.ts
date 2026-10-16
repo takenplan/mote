@@ -20,11 +20,13 @@ export async function reconcileMemory(sql:PrivateSql,providers:ScopedMemoryProvi
  let unknown=false;
  for(const row of sql.all("SELECT * FROM mm_native_cleanup WHERE user_id=$user AND state='pending'")){let provider:Awaited<ReturnType<ScopedMemoryProviders['maintenance']>>|undefined;try{const binding=memoryBindingSchema.parse(JSON.parse(String(row.binding)));if(binding.kind!=='plugin')continue;provider=await providers.maintenance(subject,binding,'delete');await provider.discardPrepared({namespace:{ownerId:subject.userId,instanceId:binding.instanceId,bindingRevision:binding.revision},opId:String(row.id),phase:zPhase(row.phase)});sql.run("UPDATE mm_native_cleanup SET state='complete' WHERE user_id=$user AND id=?",row.id);}catch{unknown=true;}finally{await provider?.close().catch(()=>{});}}
 
- for(const row of sql.all("SELECT * FROM mm_provider_journal WHERE user_id=$user AND state='erase_submitted' ORDER BY id")){
+ for(const row of sql.all("SELECT * FROM mm_provider_journal WHERE user_id=$user AND state IN ('erase_submitted','erase_pending') ORDER BY id")){
   const value=JSON.parse(String(row.json)),binding=memoryBindingSchema.parse(value.binding);if(binding.kind!=='plugin')continue;
   let provider:Awaited<ReturnType<ScopedMemoryProviders['maintenance']>>|undefined;
-  try{provider=await providers.maintenance(subject,binding,'delete');const namespace=memoryProviderNamespaceSchema.parse(JSON.parse(String(row.namespace))),key=memoryProviderKeySchema.parse(JSON.parse(String(row.key_json))),receipt=await provider.remove({namespace,key,opId:'memory-erase:'+memoryHash([row.id,namespace,key])});
-   const uncertain=value.previousState==='submitted';unknown ||= uncertain;sql.run('UPDATE mm_provider_journal SET state=?,json=? WHERE user_id=$user AND id=?',receipt.eraseVerified&&!uncertain?'erased':'erase_pending',JSON.stringify({binding,previousState:value.previousState,receipt}),row.id);
+  try{provider=await providers.maintenance(subject,binding,'delete');const namespace=memoryProviderNamespaceSchema.parse(JSON.parse(String(row.namespace))),key=memoryProviderKeySchema.parse(JSON.parse(String(row.key_json))),observed=await provider.observe({namespace,key});
+   if(row.state==='erase_pending'&&!observed.present){unknown ||= value.previousState==='submitted';continue;}
+   const attempt=Number(value.attempt??0)+1,receipt=await provider.remove({namespace,key,opId:'memory-erase:'+memoryHash([row.id,namespace,key,attempt])}),uncertain=value.previousState==='submitted'&&!observed.present;
+   unknown ||= uncertain;sql.run('UPDATE mm_provider_journal SET state=?,json=? WHERE user_id=$user AND id=?',receipt.eraseVerified&&!uncertain?'erased':'erase_pending',JSON.stringify({binding,previousState:uncertain?'submitted':'observed',attempt,receipt}),row.id);
   }catch{unknown=true;}finally{await provider?.close().catch(()=>{});}
  }
  const pending=Number(sql.get("SELECT count(*) n FROM mm_provider_journal WHERE user_id=$user AND state IN ('submitted','erase_submitted','erase_pending')")!.n);return {status:unknown?'result_unknown':pending?'pending':'complete',pending} as const;

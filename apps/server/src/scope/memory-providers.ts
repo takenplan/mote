@@ -10,7 +10,7 @@ import {Mem0MemoryProvider} from '../mem0-memory-provider.js';
 import {createHindsightEngine,HindsightEngine,type HindsightPrepare} from '../hindsight-engine.js';
 import {hindsightModelFingerprint,type HindsightRuntime} from '../hindsight-runtime.js';
 import {WorkerMemoryProvider} from '../worker-memory-provider.js';
-import {MemoryProviderError,memoryProviderNamespaceSchema,type MemoryProvider,type MemoryProviderNamespace} from '../memory-provider-contract.js';
+import {MemoryProviderError,memoryProviderNamespaceSchema,memoryBodyDigest,type MemoryProvider,type MemoryProviderNamespace} from '../memory-provider-contract.js';
 import {PrivateSql,PrivateDataError} from './private-data-sql.js';
 import type {UserDataSubject} from './lifecycle.js';
 import type {UserContext,UserContextAuthority} from './context.js';
@@ -62,7 +62,7 @@ export class ScopedMemoryProviders {
   if(!base||base.configuration_hash!==memoryHash([descriptor.adapter,descriptor.configuration]))throw unavailable();
   const restored=await this.configuration.restoreLease(context,base.snapshot_id,base.operation_id);descriptor.assertCurrent();const saved=sql.get('SELECT json FROM mm_provider_descriptors WHERE user_id=$user AND namespace_hash=?',tag);
   const literal=saved?z.object({settings:modelSettingsSchema,modelFingerprint:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(JSON.parse(String(saved.json))):undefined;
-  if(restored.status!=='restored'&&(!['credentials_revoked','configuration_deleted'].includes(restored.reason)||!literal))throw unavailable();
+  if(restored.status!=='restored'&&(!['credentials_revoked','configuration_deleted','shared_resource_revoked'].includes(restored.reason)||!literal))throw unavailable();
   const directory=join(descriptor.directory,'memory-'+tag);if(restored.status!=='restored'&&descriptor.adapter==='mote.mem0@1'&&!['operations.db','vectors.db','history.db'].every(file=>existsSync(join(directory,file))))throw unavailable();
   const entry:Entry={provider:undefined as unknown as MemoryProvider,tail:Promise.resolve(),base};
   const create=async(settings:Readonly<ModelSettings>)=>{
@@ -81,10 +81,10 @@ export class ScopedMemoryProviders {
   assertCurrent();const descriptor=await this.descriptor(context,binding),entry=await this.entry(context,binding);assertCurrent();
   const assert=()=>{this.authority.assert(context);descriptor.assertCurrent();assertCurrent();if(this.closed)throw unavailable();};
   const execute=async()=>{
-   assert();let lease:ModelLease|undefined;if(entry.base.snapshot_id){const current=await this.configuration.restoreLease(context,entry.base.snapshot_id,entry.base.operation_id);assert();if(current.status==='restored')lease=await this.configuration.forkLease(context,entry.base.snapshot_id,entry.base.operation_id,'memory-call:'+randomUUID());else if(!literalRead||!['credentials_revoked','configuration_deleted'].includes(current.reason))throw unavailable();}assert();
+   assert();let lease:ModelLease|undefined;if(entry.base.snapshot_id){const current=await this.configuration.restoreLease(context,entry.base.snapshot_id,entry.base.operation_id);assert();if(current.status==='restored')lease=await this.configuration.forkLease(context,entry.base.snapshot_id,entry.base.operation_id,'memory-call:'+randomUUID());else if(!literalRead||!['credentials_revoked','configuration_deleted','shared_resource_revoked'].includes(current.reason))throw unavailable();}assert();
    entry.active={assert,lease,started:Date.now(),modelStarted:false};
    try{const result=await work(entry.provider);assert();if(lease&&entry.active?.modelStarted)this.configuration.recordUsage(lease,{status:'completed',durationMs:Date.now()-entry.active!.started,...(entry.active!.tokens?{tokens:entry.active!.tokens}:{})});return result;}
-   catch(error){assert();if(lease&&entry.active?.modelStarted)this.configuration.recordUsage(lease,{status:'failed',durationMs:Date.now()-entry.active!.started,...(entry.active!.tokens?{tokens:entry.active!.tokens}:{})});throw error instanceof MemoryProviderError?new ScopedMemoryError(error.code==='unknown_result'?'memory_provider_result_unknown':error.code==='invalid_record'||error.code==='conflict'?'memory_provider_invalid_record':'memory_provider_unavailable',error.code==='invalid_record'||error.code==='conflict'?502:503):error instanceof z.ZodError?new ScopedMemoryError('memory_provider_invalid_record',502):new ScopedMemoryError('memory_provider_unavailable');}
+   catch(error){assert();if(lease&&entry.active?.modelStarted)this.configuration.recordUsage(lease,{status:'failed',durationMs:Date.now()-entry.active!.started,...(entry.active!.tokens?{tokens:entry.active!.tokens}:{})});throw error instanceof MemoryProviderError?new ScopedMemoryError(error.code==='unknown_result'?'memory_provider_result_unknown':error.code==='unsupported_input'?'memory_provider_unsupported_input':error.code==='invalid_record'||error.code==='conflict'?'memory_provider_invalid_record':'memory_provider_unavailable',error.code==='invalid_record'||error.code==='conflict'?502:503):error instanceof z.ZodError?new ScopedMemoryError('memory_provider_invalid_record',502):new ScopedMemoryError('memory_provider_unavailable');}
    finally{entry.active=undefined;}
   };
   const result=entry.tail.then(execute);entry.tail=result.then(()=>{},()=>{});return result;
@@ -128,7 +128,7 @@ export class ScopedMemoryProviders {
    }else throw unavailable();
   }
   const assert=descriptor.assertCurrent,check=(actual:MemoryProviderNamespace)=>{assert();if(memoryHash(actual)!==memoryHash(namespace))throw unavailable();};
-  return Object.freeze({discardPrepared:async(input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'})=>{check(input.namespace);if(purpose!=='delete')throw unavailable();if(provider instanceof HindsightEngine)await provider.discardPrepared(input);assert();},read:async(input:Parameters<MemoryProvider['read']>[0])=>{check(input.namespace);if(purpose!=='export')throw unavailable();const value=await provider.read(input);assert();return value;},remove:async(input:Parameters<MemoryProvider['remove']>[0])=>{check(input.namespace);if(purpose!=='delete')throw unavailable();const value=await provider.remove(input);assert();return value;},close:()=>provider.close()});
+  return Object.freeze({observe:async(input:Parameters<MemoryProvider['read']>[0])=>{check(input.namespace);if(purpose!=='delete')throw unavailable();const value=await provider.read(input);assert();return {present:value!==null,...(value?{bodyDigest:memoryBodyDigest(value)}:{})};},discardPrepared:async(input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'})=>{check(input.namespace);if(purpose!=='delete')throw unavailable();if(provider instanceof HindsightEngine)await provider.discardPrepared(input);assert();},read:async(input:Parameters<MemoryProvider['read']>[0])=>{check(input.namespace);if(purpose!=='export')throw unavailable();const value=await provider.read(input);assert();return value;},remove:async(input:Parameters<MemoryProvider['remove']>[0])=>{check(input.namespace);if(purpose!=='delete')throw unavailable();const value=await provider.remove(input);assert();return value;},close:()=>provider.close()});
  }
  async discardPrepared(context:UserContext,binding:Binding,input:{namespace:MemoryProviderNamespace;opId:string;phase:'extract'|'integrate'},assertCurrent:()=>void){return this.call(context,binding,assertCurrent,provider=>provider instanceof HindsightEngine?provider.discardPrepared(input):Promise.resolve(),true);}
  async close(){if(this.closed)return;this.closed=true;for(const promise of this.entries.values()){try{await (await promise).provider.close();}catch{}}this.entries.clear();for(const release of this.releaseFactories.reverse())await release();}

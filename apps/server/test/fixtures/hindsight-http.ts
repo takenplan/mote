@@ -9,6 +9,7 @@ import type {HindsightRuntimeFactory} from '../../src/scope/memory-providers.js'
  * durable recovery; the real M04/M05/M09 product chain supplies all authority. */
 export async function hindsightHttpFixture(){
  type Bank={facts:any[];operations:Map<string,any>;documents:Set<string>};
+ const faults={consolidateAfterCommit:false};
  const descriptors:{userId:string;container:string;volume:string}[]=[];
  const banks=new Map<string,Bank>(),scopes=new Map<string,Parameters<HindsightRuntimeFactory>[0]>(),events:{userId?:string;bank:string;path:string;body:unknown;facts:any[]}[]=[];
  const server=createServer(async(req,res)=>{
@@ -37,7 +38,7 @@ export async function hindsightHttpFixture(){
     if(!bank.operations.has(body.operation_id)){await semantic();for(const item of body.items)if(!bank.documents.has(item.document_id)){bank.documents.add(item.document_id);bank.facts.push({id:randomUUID(),text:item.content,metadata:item.metadata,fact_type:'world'});}bank.operations.set(body.operation_id,{id:body.operation_id,status:'completed',task_type:'retain'});}respond({operation_id:body.operation_id});return;
    }
    if(req.method==='POST'&&path==='/consolidate'){
-    await semantic();const sources=bank.facts.filter(fact=>fact.fact_type!=='observation'),operation_id=randomUUID();bank.facts.push({id:randomUUID(),text:'Generated synthesis of the supplied original context.',fact_type:'observation',source_memory_ids:sources.map(fact=>fact.id)});bank.operations.set(operation_id,{id:operation_id,status:'completed',task_type:'consolidation'});respond({operation_id});return;
+    await semantic();const sources=bank.facts.filter(fact=>fact.fact_type!=='observation'),operation_id=randomUUID();bank.facts.push({id:randomUUID(),text:'Generated synthesis of the supplied original context.',fact_type:'observation',source_memory_ids:sources.map(fact=>fact.id)});bank.operations.set(operation_id,{id:operation_id,status:'completed',task_type:'consolidation'});if(faults.consolidateAfterCommit){faults.consolidateAfterCommit=false;respond({error:'generated-lost-consolidation-response'},500);return;}respond({operation_id});return;
    }
    if(req.method==='POST'&&path==='/memories/recall'){respond({results:bank.facts.filter(fact=>fact.metadata?.mote_record).map(fact=>({...fact,score:1}))});return;}
    if(req.method==='POST'&&path==='/reflect'){await semantic();respond({text:'Generated reflection from the exact read bank.',based_on:{memories:bank.facts.filter(fact=>fact.metadata?.mote_record),mental_models:[],directives:[]}});return;}
@@ -46,5 +47,5 @@ export async function hindsightHttpFixture(){
  });
  await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));const service=new HindsightService('http://127.0.0.1:'+(server.address() as any).port);
  const runtimeFactory:HindsightRuntimeFactory=options=>{const descriptor=new ManagedHindsightRuntime(options);descriptors.push({userId:options.userId,container:descriptor.container,volume:descriptor.volume});return {service:async()=>service,existingService:()=>Promise.resolve(service),startWorker:async admitted=>{for(const bank of admitted){const existing=scopes.get(bank);if(existing&&existing.userId!==options.userId)throw Error('Cross-user native bank collision');scopes.set(bank,options);}},stopWorker:async()=>{},close:async()=>{}};};
- return {runtimeFactory,descriptors,events,banks,close:async()=>{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}};
+ return {faults,runtimeFactory,descriptors,events,banks,close:async()=>{server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));}};
 }
