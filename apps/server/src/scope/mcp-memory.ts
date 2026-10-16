@@ -5,7 +5,7 @@ import {memoryEvidenceFingerprint} from '../memory-contract.js';
 import {memoryPageSchema} from './memory-data.js';
 import type {MemoryHost} from './memory.js';
 import type {UserContext} from './context.js';
-import {missing} from './private-data-sql.js';
+import {missing,PrivateDataError} from './private-data-sql.js';
 
 const memoryRef=z.string().max(64).refine(value=>Boolean(evidenceRefId(value,'memory')),'Invalid Memory reference');
 export const mcpMemoryInput={...memoryPageSchema.shape,sourceId:sourceIdSchema.optional(),id:memoryRef.optional(),version:z.number().int().positive().optional()};
@@ -25,8 +25,8 @@ export class McpMemory{
   const reader=this.host.bindRead(this.context,{sourceIds,assertCurrent:assert});
   const memories=new Map<string,{id:string;version:number;fingerprint:string}>(),evidence=new Map<string,{id:string;hash:string}>();
   const remember=(memory:Memory,current=true)=>{
-   assert();if(current){reader.assertMemory(memory);memories.set(memory.id,{id:memory.id,version:memory.version,fingerprint:memory.fingerprint});}
-   for(const record of reader.evidence(memory.evidenceIds))evidence.set(record.id,{id:record.id,hash:memoryEvidenceFingerprint(record)});
+   assert();if(current){reader.assertMemory(memory);const old=memories.get(memory.id);if(old&&(old.version!==memory.version||old.fingerprint!==memory.fingerprint))throw new PrivateDataError('conflict',409);if(!old)memories.set(memory.id,{id:memory.id,version:memory.version,fingerprint:memory.fingerprint});}
+   for(const record of reader.evidence(memory.evidenceIds)){const hash=memoryEvidenceFingerprint(record),old=evidence.get(record.id);if(old&&old.hash!==hash)throw new PrivateDataError('conflict',409);if(!old)evidence.set(record.id,{id:record.id,hash});}
   };
   const assertCurrent=()=>{assert();for(const pin of memories.values())reader.assertMemory(pin);reader.assertEvidence([...evidence.values()]);assert();};
   return Object.freeze({assertCurrent,

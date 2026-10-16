@@ -171,6 +171,28 @@
     "module": "M10",
     "surfaces": [
       "api:all:'/mcp'",
+      "mcp:registerResource:'source-catalog':'mote://sources'",
+      "mcp:registerTool:'mote_activity'",
+      "mcp:registerTool:'mote_browse'",
+      "mcp:registerTool:'mote_context'",
+      "mcp:registerTool:'mote_evidence'",
+      "mcp:registerTool:'mote_file_catalog'",
+      "mcp:registerTool:'mote_file_chunks'",
+      "mcp:registerTool:'mote_history'",
+      "mcp:registerTool:'mote_items'",
+      "mcp:registerTool:'mote_material'",
+      "mcp:registerTool:'mote_material_read'",
+      "mcp:registerTool:'mote_materials'",
+      "mcp:registerTool:'mote_media_activity'",
+      "mcp:registerTool:'mote_memories'",
+      "mcp:registerTool:'mote_put_item'",
+      "mcp:registerTool:'mote_read'",
+      "mcp:registerTool:'mote_retrieve'",
+      "mcp:registerTool:'mote_search'",
+      "mcp:registerTool:'mote_segments'",
+      "mcp:registerTool:'mote_sources'",
+      "mcp:registerTool:'mote_status'",
+      "mcp:registerTool:'mote_timeline'",
       "table:mcp_import_manifests"
     ]
   },
@@ -1865,9 +1887,14 @@
   "apps/server/src/scope/mcp-inbound.ts": {
     "scope": "user",
     "module": "M11",
-    "status": "implemented-protocol-source-phase",
+    "status": "implemented-query-core-phase",
     "surfaces": [
-      "api:all:'/mcp'"
+      "api:all:'/mcp'",
+      "mcp:registerResource:'memory-catalog':'mote://memories'",
+      "mcp:registerResource:'source-catalog':'mote://sources'",
+      "mcp:registerTool:'mote_memories'",
+      "mcp:registerTool:'mote_put_item'",
+      "mcp:registerTool:'mote_sources'"
     ]
   },
   "apps/server/src/scope/mcp-schema.ts": {
@@ -2032,6 +2059,31 @@
       "extension:runtime.services.registerUser:ASK_DOMAIN",
       "task:execution.register:kind:'ask.'+mode",
       "task:execution.register:kind:'ask.coordinate'"
+    ]
+  },
+  "apps/server/src/scope/mcp-query.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-query-core-phase",
+    "surfaces": [
+      "mcp:registerTool:'mote_activity'",
+      "mcp:registerTool:'mote_browse'",
+      "mcp:registerTool:'mote_context'",
+      "mcp:registerTool:'mote_evidence'",
+      "mcp:registerTool:'mote_file_catalog'",
+      "mcp:registerTool:'mote_file_chunks'",
+      "mcp:registerTool:'mote_history'",
+      "mcp:registerTool:'mote_items'",
+      "mcp:registerTool:'mote_material'",
+      "mcp:registerTool:'mote_material_read'",
+      "mcp:registerTool:'mote_materials'",
+      "mcp:registerTool:'mote_media_activity'",
+      "mcp:registerTool:'mote_read'",
+      "mcp:registerTool:'mote_retrieve'",
+      "mcp:registerTool:'mote_search'",
+      "mcp:registerTool:'mote_segments'",
+      "mcp:registerTool:'mote_status'",
+      "mcp:registerTool:'mote_timeline'"
     ]
   }
 }

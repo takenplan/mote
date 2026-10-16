@@ -6,6 +6,46 @@ Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
 this feature. Final accepted M07/M08 real query tools remain required.
 No mock Memory, Ask, connector or processing service proves them.
 
+## Genuine query reader core composition (not final acceptance)
+
+M08 exact `c66feee724c477e785af544bc4e4675c33cf4970` is composed, including
+M07 runtime1536 and PR134. The core restores real handlers for all 20 original
+read tool names, keeps the explicit write-only credential alternative and removes
+the former direct M02 read fallback. Strict SDK schemas, request-bound original/
+Material/Memory pin fences and fixed errors are used throughout.
+
+Development source+Memory+query matrix passed **44/44**,0fail/cancel/skip,exit0,
+94237.2045ms: `/tmp/m11-query-composed-focused.log/.exit`. Command:
+`node --import tsx --test --test-concurrency=1 --test-timeout=60000 apps/server/test/multiuser-mcp.test.ts apps/server/test/multiuser-mcp-process.test.ts apps/server/test/multiuser-mcp-memory.test.ts apps/server/test/multiuser-mcp-query.test.ts`.
+This is a development receipt before the additional parity regressions below,
+not a final-code receipt. M08 CAS P1 was independently reproduced on exact e7
+and closed on literal c66: original host probe1/1,exit0,3584.606792ms,
+`/tmp/m11-review-m08-c66-pins.log/.exit`; unchanged actual SDK probe1/1,exit0,
+2720.412ms,`/tmp/m11-query-sdk-c66-pins.log/.exit`.
+
+Additional account-wide enabled-source-set await fences pass2/2,exit0,
+5142.642875ms,`/tmp/m11-query-all-source-fence.log/.exit`. Narrow credentials
+and next requests remain valid. MCP callback architecture inventory regression
+passes4/4,exit0,1513.157375ms,`/tmp/m11-query-scope-architecture.log/.exit`.
+Types and scope checks exit0. No heavy affected/Android rerun was started.
+
+Unresolved production parity has durable actual SDK failure evidence:
+
+- Partial Material `mote_segments` discloses pending block text:0/1,exit1,
+  `/tmp/m11-query-partial-before.log/.exit`. Other query exits are asserted in
+  the same nine-surface scenario; segments is the first failure.
+- UTF16 window splits an emoji; context(includeMemories:false) still calls the
+  real provider:0/2,exit1,`/tmp/m11-query-legacy-options-before.log/.exit`.
+- Automatic MCP→M03→M06 creates a processed:<captureId> Material, but logical
+  source history still returns not_found:0/1,exit1,
+  `/tmp/m11-query-processed-history-before.log/.exit`.
+- Navigation refs, full status/context option parity and legacy Memory filters
+  await the next real M07/M08 contract. They are not simulated by empty services.
+
+All failures above are tracked with M08. Final accepted dependency heads, final
+focused/actual combined/build/emitted/affected checks, independent M11 final
+review and its Draft PR remain pending. CI remains disabled and unrun.
+
 ## Actual M07 Memory read increment
 
 The reviewed M07 read-contract freeze
@@ -24,7 +64,9 @@ failure without cached SQL bodies; held provider revoke/disable/source recreatio
 toggle/Memory deletion/SDK cancellation with B still reading; earlier-page-entry
 deletion; and exact provider-backed historical reads after an owner correction.
 Only external model/provider I/O is synthetic. Memory/Ask/processing services are
-not replaced. Final-code focused receipts follow its next committed freeze.
+not replaced. Exact Memory increment `af361cce371e81cd3bc3240a34783e8392500f4e`
+source+Memory focused matrix34/34,0fail/cancel/skip,exit0,61254ms:
+`/tmp/m11-memory-frozen-focused.log/.exit`.
 
 M08's stable reader core now permits the next actual query composition. Full
 M07/M08 legacy capabilities, final whole-module review, combined/build/emitted/

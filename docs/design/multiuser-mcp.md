@@ -1,4 +1,4 @@
-# M11: user-bound MCP protocol and source capabilities
+# M11: user-bound inbound/outbound MCP
 
 This is the independently implementable protocol/source phase of M11. The
 feature starts at remotely verified PR #133 head
@@ -17,10 +17,14 @@ on this feature. The reviewed M07 read-contract freeze
 `a6bc94c43e34ce91439cfeff6ad669264610d1d1` is now also composed by feature-only
 merge `0b0bdfcc98aec66fcebc80cafffe8590252e3bbc`, retaining both M05 model forks
 and M10 atomic onAdmitted/submitSync. This is not final M07 acceptance. Actual
-Ask/EvidenceReader and the full query surface still require the real M08 reader.
-No fake neighboring service supplies those features. The following production
-source and Memory capabilities work now; the complete legacy query surface
-will be restored and validated using the actual scoped query adapters.
+M08 interface freeze `e7ebbf4414d9ed6ccf2c5f660f371c0a320bbf78` (including M07
+runtime `1536d4850626cc55c9d1639de88f9462717af72e`), followed by CAS repair
+`c66feee724c477e785af544bc4e4675c33cf4970`, is now composed. This is an
+interface/core composition, not final M07/M08 acceptance. All 20 original read
+tool names now bind genuine scoped readers. Legacy parity gaps remain in logical
+processed-source history, navigation, context options/status, UTF16 windows,
+Memory filters and partial Material segment projection; persistent SDK
+regressions identify these gaps. No mock neighboring service supplies them.
 
 ## Host identity and protocol
 
@@ -55,33 +59,41 @@ valid credential can explicitly initialize again. Global/static owner and legacy
 MCP configuration tokens are never fallback credentials. Origin and forged host
 identity selectors are rejected before dispatch; responses disable caching.
 
-## Actual source surfaces and remaining query surfaces
+## Actual source and query surfaces
 
-The protocol/source phase proves host user/source isolation. Final MCP query
-acceptance also requires the actual M08 query-visible projection, including
-Material replacement of assembled raw source records and the existing archive,
-screenshot and Coding disclosure rules. In particular, source-domain
-`mote_items`, `mote_history` and literal `mote_search` must be rebound to that
-production projection before full M11 is shipped. Their phase receipts do not
-prove the complete query behavior. The [remaining query composition plan](multiuser-mcp-query.md)
-inventories all 21 original tools and the source resource individually.
+MCP content reads use actual M08 AskHost.reader and M07 MemoryHost.bindRead.
+The former direct M02 read facade is removed. Every SDK query creates a fresh
+request capability with immutable credential source scope, source incarnation/
+revision fences, AbortSignal and all observed original/Material/Memory pins
+revalidated after awaits and before publication. Account-wide requests also
+freeze the enabled source set: adding a source during a held read rejects that
+request while the credential remains usable on the next request. Explicit query
+source filters never widen credential authority. Strict SDK schemas reject
+unknown authority selectors and unsupported fields rather than dropping them.
+The [query composition plan](multiuser-mcp-query.md) tracks all 21 original tools
+and remaining legacy parity gates individually.
 
-| Surface | Protocol/source phase |
+| Surface | Current production composition |
 | --- | --- |
 | `mote_put_item` | Real immutable M03 source intake; existing explicit source only; no source creation or external mutation. Archive input enters real automatic M06 processing. |
 | `mote_sources`, `mote://sources` resource | Authorized enabled source metadata only; independent A/B same IDs. |
-| `mote_items`, `mote_history` | Actual M02 current immutable source records/history within one explicit source; Coding raw bodies remain reserved for its query projection. |
-| `mote_materials`, `mote_material_read` | Real M06-published/M02 Material, with full transitive source dependency authorization and bounded text windows. |
-| `mote_search` | Literal M02 FTS candidates filtered by owner and selected source in SQL before candidate ordering/limit; no semantic model invocation. |
-| `mote_material`, `mote_file_catalog`, `mote_segments`, `mote_browse`, `mote_retrieve`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_evidence` | Await actual accepted M07/M08 query/EvidenceReader/Memory/activity projection. Final M11 acceptance must check each tool and its original/Coding disclosure rules. |
+| `mote_items`, `mote_history` | Genuine query-visible source views; raw screenshot/Coding/archive UUID bypasses denied. M06 processed-original logical history remains a failing parity regression awaiting the M08 logical-history contract. |
+| `mote_materials`, `mote_material`, `mote_material_read` | Real current M06/M02 Materials through M08, transitive source SQL before LIMIT, exact revision pins and ready-only text. UTF16-safe window restoration remains pending. |
+| `mote_search`, `mote_browse`, `mote_retrieve` | Actual query-visible scoped FTS candidates and authenticated user/scope/filter cursors, before ranking/LIMIT; no global single-owner embeddings fallback. |
+| `mote_file_catalog`, `mote_segments`, `mote_read`, `mote_context`, `mote_status`, `mote_timeline`, `mote_file_chunks`, `mote_activity`, `mote_media_activity`, `mote_evidence` | Real M08 reader handlers. SDK verifies all names, owner/source isolation and measured interval unions. Pending-block segment disclosure and ignored context inclusion options are explicit failing regressions; navigation and full status/option parity are not accepted yet. |
 | `mote_memories`, `mote://memories` resource | Genuine M07 page/read/search/exact historical provider bodies. MCP empty/all scope maps explicitly to undefined; a nonempty allowlist is retained. Every request snapshots source incarnations/revisions and validates all returned current Memory and original evidence pins after later awaits and before SDK publication. Cards remain derived context and do not grant original disclosure to another tool. |
 | inbound resource templates/prompts/subscriptions | No private template/prompt/subscription is registered in this phase. Their absence is explicit, not a simulated successful empty Memory query. |
 
 Write sessions expose only the write tool. They do not gain read or ordinary
-private HTTP API rights. Signed paging cursors remain M02's durable
+private HTTP API rights. Signed paging cursors remain durable
 deployment/user/collection/filter-bound cursors. Source scopes are checked before
 reading pages, history or Material dependencies. Original filesystem paths and
 raw Original read capabilities are never granted to MCP SDK clients.
+
+The M00 architecture scanner now inventories MCP tool/resource/prompt callbacks
+as private surfaces, including quarantined legacy registrations. Runtime SDK
+inventory checks verify the 20 read tool names, the write-only alternative and
+the two actual resources. No inbound private prompts/templates are advertised.
 
 ## Outbound user instances
 

@@ -34,6 +34,7 @@ export function scopeSurfaces(source,path='fixture.ts'){
       const receiver=ts.isPropertyAccessExpression(node.expression)?node.expression.expression.getText(tree):'';
       if(/^(?:get|post|put|patch|delete|head|options|all|route)$/.test(method)&&(receivers.has(receiver)||/^['"`]\//.test(argument)))add('api',`${method}:${argument}`);
       if(['registerUserRoute','registerAuthenticatedRoute'].includes(expression))add('api',`${expression}:${keyArgument(node.arguments[1])}`);
+      if(['registerTool','registerResource','registerPrompt'].includes(method))add('mcp',`${method}:${argument}${method==='registerResource'?':'+keyArgument(node.arguments[1]):''}`);
       if(/(?:^|\.)(?:mkdir|mkdirSync|mkdtemp|mkdtempSync|privateDirectory)$/.test(expression))add('directory',argument);
       if(/\b(?:executor|execution|engine|this\.executor|this\.execution)\.(?:register|enqueue|program)$/.test(expression))add('task',`${expression}:${argument}`);
       if(/\.(?:provide|plugin|install|registerCapability|registerUser|registerInstance)$/.test(expression)||/^register\w+(?:Routes|Extensions|Connectors)$/.test(expression))add('extension',`${expression}:${argument}`);
