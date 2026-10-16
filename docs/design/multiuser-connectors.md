@@ -60,6 +60,15 @@ M04 domain with revision checks. `enable`, `pause`, `resume`, `stop`, `start`,
 `sync`, `operations`, `disconnect`, and deletion all use this fixed instance.
 Provider operations are fixed names with adapter schemas; clients never supply
 argv, credential directory, context or a callback owner. M13 owns renderer wiring.
+Operation payloads are validated before task admission and stored only as encrypted
+vault envelopes. Durable task input carries a random reference; its envelope is
+bound to the exact task, user/instance/epoch namespace, operation, generation and
+M09 snapshot. Failed work can retry after restart through that same reference.
+Disconnect, instance removal and configuration retirement clear payload envelopes;
+domain deletion removes the remaining scoped vault. Earlier candidate task inputs
+are upgraded transactionally before execution starts: task records survive while
+raw payloads move into encrypted envelopes, and revoked incarnations gain no new
+usable reference. Trusted connector definitions declare operation schemas too.
 
 The administrator installs bundled definitions through
 `POST /api/admin/connectors/:provider/install` and M09's catalog revision/idempotency

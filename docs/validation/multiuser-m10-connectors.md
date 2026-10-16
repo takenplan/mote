@@ -1,7 +1,8 @@
 # M10 connector validation
 
-Status: final Gmail envelope-only replay fix committed after the earlier freeze;
-renewed final checks and independent review pending.
+Status: independent M06 review rejected the earlier candidate for Lark secret
+retention in durable task input. The repair and new regressions are implemented;
+replacement frozen checks and independent re-review remain required.
 Baseline: PR #132 `cdc5c34c36fc5743049007ee2c76d705fde3dd7f`.
 Integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 All data, OAuth codes, provider responses and credentials below are isolated synthetic fixtures.
@@ -50,6 +51,11 @@ HTTP/CLI I/O is substituted; source/archive/task services are real.
 | Seeded durable crash activity, purpose-bound erasure reconciliation and B denial | `durable crashed-activity fixture requires a purpose-bound stopped observation before connector erasure and never settles B` |
 | Archive-retention Gmail incremental replay and immutable raw original | `snapshot-retention Gmail delta replay retains canonical normalized head and the same immutable provider original when only its provider envelope changes`; same for `archive-retention` |
 | Distinct process HTTP listener, pending OAuth recovery, A/B source/original reads, replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals through the production composition` |
+| Configure secret never enters task/event/export storage, interrupted restart, A/B and scoped disconnect | `Lark configure encrypted task reference survives interrupted restart, isolates A/B and disconnect removes only A payloads` |
+| Provider failure prose is fixed, encrypted retry survives restart | `failed Lark configuration keeps only encrypted retry payload across restart and exposes fixed errors` |
+| Instance removal/domain erasure clears payload envelopes without changing B | `removing a configured Lark instance and deleting its connector domain erases operation payloads without erasing B` |
+| Unknown operations/malformed secret-bearing payload fail before admission, no reflection | `invalid provider operation payloads reject before task admission and never persist or reflect supplied secrets` |
+| Earlier candidate input upgrade preserves existing task identity/history | `startup migrates earlier candidate raw operation inputs into encrypted references without dropping task history` |
 
 ## Intermediate receipts and final gates
 
@@ -101,3 +107,18 @@ No real mailbox, live OAuth grant, long-lived provider credential, deployed inst
 physical recorder or external model was accessed. No main/integration changes or
 PR merges are authorized. Whole-instance recovery and external issuance settlement
 remain M16 orchestration responsibilities.
+
+## Independent P1 repair
+
+M06 independently confirmed Lark configure secret retention in `user_tasks.input`
+and `execution_steps.input` after disconnect. Report:
+`/tmp/mote-m06-review-m10.md`. The unchanged peer probe now returns counts **0/0/0**
+(task rows/execution rows containing the synthetic secret/remaining connector
+secret rows), exit 0 (`/tmp/m10-peer-secret-probe-fixed.log`, `.exit`). Five new
+real-app secret lifecycle regressions passed **5/5**, exit 0
+(`/tmp/m10-secret-ref-tests.log`, `.exit`). They scan every SQLite table, verify
+credential-free domain exports, retry/restart, scoped disconnect/removal/deletion,
+pre-admission validation and history-preserving upgrade of earlier candidate input.
+The interrupted full affected invocations exited 143 and are not accepted evidence.
+M06 owns the heavy slot while M10 repairs and read-reviews its frozen implementation.
+Final M06+M10 provider-original-to-Material combination remains required.

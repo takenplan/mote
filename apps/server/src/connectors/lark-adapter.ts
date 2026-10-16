@@ -23,7 +23,8 @@ function missingScopes(selection:LarkSelection,granted:ReadonlySet<string>){retu
 const hash=(value:string)=>createHash('sha256').update(value).digest('hex');
 const now=()=>new Date().toISOString();
 export const documentReference=(value:string)=>larkReference(value);
-const selectionSchema=z.object({...documentSelectionSchema,calendarIds:z.array(z.string().min(1).max(1000)).max(10),pastDays:z.number().int().min(0).max(180),futureDays:z.number().int().min(1).max(180),timeZone:z.string().max(100).refine(v=>{try{new Intl.DateTimeFormat('en',{timeZone:v});return true;}catch{return false;}}),autoSync:z.boolean()}).strict();
+export const selectionSchema=z.object({...documentSelectionSchema,calendarIds:z.array(z.string().min(1).max(1000)).max(10),pastDays:z.number().int().min(0).max(180),futureDays:z.number().int().min(1).max(180),timeZone:z.string().max(100).refine(v=>{try{new Intl.DateTimeFormat('en',{timeZone:v});return true;}catch{return false;}}),autoSync:z.boolean()}).strict();
+export const larkConfigureSchema=z.object({appId:z.string().regex(/^cli_[A-Za-z0-9]+$/).max(100),secret:z.string().min(1).max(1000).refine(v=>!/[\r\n\0]/.test(v)),brand:z.enum(['feishu','lark'])}).strict();
 const defaults=():LarkSelection=>({documents:[],calendarIds:[],pastDays:30,futureDays:90,timeZone:'Asia/Shanghai',autoSync:true,documentDiscovery:{created:true,edited:true,opened:true,firstSyncDays:30}});
 const savedSchema=z.object({version:z.literal(1),enabled:z.boolean(),selectionAuthorized:z.boolean().optional(),account:z.string().optional(),selection:selectionSchema,lastSyncAt:z.string().datetime().optional()}).strict();
 type Saved=z.infer<typeof savedSchema>;
@@ -104,7 +105,7 @@ export class LarkAdapter{
     await this.runner({kind:'setup'},{signal,onOutput:chunk=>{buffer=(buffer+chunk).slice(-20000);for(const line of buffer.split(/\r?\n/).slice(0,-1)){const url=line.trim();if(authorizationUrl(url)){job.authorizationUrl=url;job.expiresAt=new Date(Date.now()+600000).toISOString();job.state='waiting';}}}});
     await this.probe();if(!this.snapshot.configured)throw new ConnectorError('lark_not_configured',409);
   });}
-  configure(raw:unknown){const input=z.object({appId:z.string().regex(/^cli_[A-Za-z0-9]+$/).max(100),secret:z.string().min(1).max(1000).refine(v=>!/[\r\n\0]/.test(v)),brand:z.enum(['feishu','lark'])}).strict().parse(raw);return this.start('configure',async signal=>{await this.disable();await this.run({kind:'configure',...input},signal);await this.probe();if(!this.snapshot.configured)throw new ConnectorError('lark_not_configured',409);});}
+  configure(raw:unknown){const input=larkConfigureSchema.parse(raw);return this.start('configure',async signal=>{await this.disable();await this.run({kind:'configure',...input},signal);await this.probe();if(!this.snapshot.configured)throw new ConnectorError('lark_not_configured',409);});}
   login(calendar=false){return this.start('login',async(signal,job)=>{
     const priorEnabled=new Map(this.ctx.sources.listSources().map(source=>[source.id,source.enabled]));
     await this.disable();
