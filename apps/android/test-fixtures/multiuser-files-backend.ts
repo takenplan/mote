@@ -9,20 +9,21 @@ import {defaultProcessingSettings} from '../../server/src/scope/processing-schem
 // ASR transport is substituted; no real recording, model or account is accessed.
 const literalSpeakerPrefix=process.argv.includes('--literal-speaker-prefix');
 const cleanup:Array<()=>unknown>=[];
-const f=await scopedFilesFixture({after:(callback:()=>unknown)=>cleanup.push(callback)} as unknown as TestContext);
 const retries:Array<{actor:string;body:unknown;status:number;taskId?:string}>=[];
 let dropRetryAck=false;
+let aToken='',bToken='';
 // Record only generated account labels and retry metadata. The HTTP handler has
 // already admitted the real M05 task before its successful reply is dropped.
-f.host.app.addHook('onSend',async(request,reply,payload)=>{
+const f=await scopedFilesFixture({after:(callback:()=>unknown)=>cleanup.push(callback)} as unknown as TestContext,host=>host.app.addHook('onSend',async(request,reply,payload)=>{
  if(request.method==='POST'&&/^\/api\/files\/[^/]+\/retry$/.test(request.url)){
-  const actor=request.headers.authorization==='Bearer '+f.a.token?'a':request.headers.authorization==='Bearer '+f.b.token?'b':'other';
+  const actor=request.headers.authorization==='Bearer '+aToken?'a':request.headers.authorization==='Bearer '+bToken?'b':'other';
   let taskId:string|undefined;try{taskId=JSON.parse(String(payload)).taskId;}catch{}
   retries.push({actor,body:request.body,status:reply.statusCode,...(taskId?{taskId}:{})});
   if(dropRetryAck&&actor==='a'&&reply.statusCode===200)reply.raw.destroy();
  }
  return payload;
-});
+}));
+aToken=f.a.token;bToken=f.b.token;
 const control=createServer((request,response)=>{void(async()=>{
  for await(const _ of request){}
  if(request.url==='/generated/drop-file-retry-ack')dropRetryAck=true;
