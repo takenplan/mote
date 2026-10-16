@@ -10,7 +10,7 @@ for(const preference of ['light','dark','auto'])for(const os of ['light','dark']
  const root=await mkdtemp(join(tmpdir(),'mote-theme-process-'));await writeFile(join(root,'fixture-marker'),'synthetic-only',{mode:0o600});
  try{
   for(const restart of [false,true]){
-   const child=spawn(electron,[join(directory,'appearance-smoke.cjs')],{env:{...process.env,MOTE_THEME_FIXTURE_ROOT:root,MOTE_THEME_FIXTURE_PREFERENCE:restart?'dark':preference,MOTE_THEME_FIXTURE_OS:os,...(restart?{MOTE_THEME_FIXTURE_RESTART:'1'}:{})},stdio:['ignore','pipe','pipe']});
+   const child=spawn(electron,[join(directory,'appearance-smoke.cjs')],{env:{...process.env,MOTE_THEME_FIXTURE_ROOT:root,MOTE_THEME_FIXTURE_PREFERENCE:preference,MOTE_THEME_FIXTURE_OS:os,...(restart?{MOTE_THEME_FIXTURE_RESTART:'1'}:{})},stdio:['ignore','pipe','pipe']});
    let stdout='',stderr='';child.stdout.on('data',chunk=>stdout+=chunk);child.stderr.on('data',chunk=>stderr+=chunk);
    const code=await new Promise((resolve,reject)=>{child.on('exit',resolve);child.on('error',reject);});
    assert.equal(code,0,`${preference}/${os}/${restart?'restart':'cold'}: ${stderr.slice(-4000)}`);

@@ -77,6 +77,11 @@ app.on('browser-window-created',(_event,window)=>{
   const reloaded=new Promise(resolve=>wc.once('did-finish-load',resolve));wc.reload();await reloaded;await until(()=>js(`Boolean(document.querySelector('#appearance'))&&document.documentElement.dataset.colorScheme==='dark'`),'reload persisted explicit choice');
   assert.equal(loads,1);assert.deepEqual(errors.filter(message=>!message.includes('EISDIR')),[]);
   rmSync(join(profile,'appearance.json.tmp'),{recursive:true,force:true});
+  // Persist each original choice through product IPC before the separate-process restart.
+  // Auto was just resolved under the opposite OS color; the next process receives the original OS.
+  await js(`window.mote.setAppearance(${JSON.stringify(preference)})`);
+  await until(()=>js(`document.querySelector('#appearance').value===${JSON.stringify(preference)}`),'original choice persisted for process restart');
+  assert.equal(JSON.parse(readFileSync(join(profile,'appearance.json'),'utf8')),preference);
   console.log(JSON.stringify({ok:true,preference,simulatedOS:process.env.MOTE_THEME_FIXTURE_OS,coldPreload:true,nativeChrome:true,increasedContrast:true,actualDraftAndModal:true,saveFailure:true,reload:true,globalOSUnchanged:true,fixtureOnly:true}));
   clearTimeout(timeout);app.exit(0);
  })().catch(error=>{console.error(error.stack||error);app.exit(1);}));
