@@ -195,7 +195,11 @@ export class ProcessingHost {
  }
  private async extract(run:TaskRun,kind:'extract'|'ocr'|'asr'){
   const input=processingInputSchema.parse(run.task.input),{source,original,record,format}=this.input(run.context,input);await this.processors.ready;run.grant.assert();
-  const bytes=async function*(host:ProcessingHost){const release=host.ingress.forUser(run.context).holdOriginal(original.ref);try{let offset=0;while(offset<original.bytes){run.grant.assert();host.input(run.context,input);const chunk=source.readOriginal(original.ref,{offset});if(!chunk.bytes.length)throw new ExecutionFailure('stale','processing_input_changed');yield chunk.bytes;offset+=chunk.bytes.length;}}finally{release();}};
+  let releaseOriginal:(()=>void)|undefined;
+  // Admit local bytes before recording an external call. Cached stages do not
+  // need expired bytes, and every reader shares the same exact-original pin.
+  const holdOriginal=()=>{releaseOriginal??=this.ingress.forUser(run.context).holdOriginal(original.ref);};
+  const bytes=async function*(host:ProcessingHost){holdOriginal();let offset=0;while(offset<original.bytes){run.grant.assert();host.input(run.context,input);const chunk=source.readOriginal(original.ref,{offset});if(!chunk.bytes.length)throw new ExecutionFailure('stale','processing_input_changed');yield chunk.bytes;offset+=chunk.bytes.length;}};
   let mediaCalled=false;
   const withSettings=async(settings:ReturnType<typeof fileProcessingSchema.parse>)=>{
    const processorId=kind==='ocr'?'image.http':kind==='asr'?settings.audioProcessor:format.startsWith('processor:')?format.slice(10):format==='source-item'?'source.original':original.mime.startsWith('text/')||original.mime==='application/json'?'text.utf8':DOCUMENT_MIME_TYPES.includes(original.mime as any)?'document.generic':undefined;
@@ -207,12 +211,13 @@ export class ProcessingHost {
    const output=defaultFileOutput(processor),recipe=defaultFileRecipe(processor),plan=this.processors.recipes.resolve(recipe,{semanticTurns:false}),artifacts=new Map<string,unknown>();
    const store=async(key:string,work:()=>Promise<unknown>,parse:(value:unknown)=>unknown)=>{const result=await this.stage(run,input,original,identityHash([key,plan.fingerprint,processorContract(processor),processorSettingsFingerprint(processor,settings,{}),request.sourceItem]),work,parse);artifacts.set(result.artifactId,result.payload);return result.artifactId;};
    const final=await this.processors.recipes.run(recipe,{semanticTurns:false},(step,dependencies)=>({input:request,dependencies,readArtifact:id=>{if(!artifacts.has(id))throw new ExecutionFailure('stale','processing_checkpoint_unavailable');return artifacts.get(id);},transform:(type,execute)=>store(step.name,()=>execute(request.signal),value=>this.processors.outputs.decode(type,value).transcript),builtin:async operation=>{
-    if(operation==='extract')return store(step.name,()=>{mediaCalled ||= kind!=='extract';return this.io(run,input,()=>processor.process(request));},value=>this.processors.outputs.decode(output,value).transcript);
-    if(operation==='diarize')return store(step.name,()=>{mediaCalled=true;return this.io(run,input,()=>this.processors.registry.get(settings.diarizationProcessor).process(request));},value=>diarizationSchema.parse(value));
+    if(operation==='extract')return store(step.name,()=>{holdOriginal();mediaCalled ||= kind!=='extract';return this.io(run,input,()=>processor.process(request));},value=>this.processors.outputs.decode(output,value).transcript);
+    if(operation==='diarize')return store(step.name,()=>{holdOriginal();mediaCalled=true;return this.io(run,input,()=>this.processors.registry.get(settings.diarizationProcessor).process(request));},value=>diarizationSchema.parse(value));
     if(operation==='align'){const raw=artifacts.get(dependencies.extract),diarization=artifacts.get(dependencies.diarize);return store(step.name,async()=>alignDialogue(transcriptSchema.parse(raw),diarizationSchema.parse(diarization)),value=>transcriptSchema.parse(value));}
     throw new ExecutionFailure('blocked','processing_stage_unavailable');
    }}),id=>{run.grant.assert();this.input(run.context,input);if(!artifacts.has(id))throw new ExecutionFailure('stale','processing_checkpoint_unavailable');});return {artifactId:final,payload:transcriptSchema.parse(artifacts.get(final))};
   };
+  try{
   let result:{artifactId:string;payload:unknown};
   if(kind==='extract')result=await withSettings(fileProcessingSchema.parse((({automatic,understandingEnabled,...settings})=>settings)(input.settings)));
   else{
@@ -221,6 +226,7 @@ export class ProcessingHost {
    if(mediaCalled)run.model.recordUsage({status:'completed',durationMs:Date.now()-start});
   }
   run.grant.assert();this.input(run.context,input);return {artifactId:result.artifactId};
+  }finally{releaseOriginal?.();}
  }
  private publish(run:TaskRun,value:unknown,fixedInput?:ProcessingInput,derived?:AnalysisInput){
   const input=fixedInput??processingInputSchema.parse(run.task.input),material=this.publishArtifact(run.context,input,resultSchema.parse(value).artifactId,derived);this.notifyMaterial(run,material);
