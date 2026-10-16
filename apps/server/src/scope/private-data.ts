@@ -250,8 +250,7 @@ export class PrivateData{
     });
   }
   material(id:string,revision?:string){
-    this.withdrawUnfilteredCoding();
-    const key=ref(id);revision??=key.revision;
+    const key=ref(id);this.withdrawUnfilteredCoding(key.id);revision??=key.revision;
     const head=this.sql.get('SELECT * FROM pd_materials WHERE user_id=$user AND id=?',key.id);if(!head)throw missing();
     const version=this.sql.get('SELECT * FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',key.id,revision??String(head.revision));
     if(!version||Number(version.sequence)<Number(head.min_visible_sequence))throw missing();
@@ -338,14 +337,14 @@ export class PrivateData{
   /** Earlier scoped Coding projections predate the existing dialogue filter.
    * Retire their visibility, including exact dependent revisions, while keeping
    * originals, artifacts and version bodies. A read never grants reconstruction. */
-  private withdrawUnfilteredCoding(){
-    const roots=()=>this.sql.all(`SELECT h.id FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id AND v.revision=h.revision
-      WHERE h.user_id=$user AND v.user_id=$user AND h.sequence>=h.min_visible_sequence
+  private withdrawUnfilteredCoding(id?:string){
+    const roots=()=>this.sql.all(`${id===undefined?'':`WITH RECURSIVE coding_inputs(id,revision) AS(SELECT id,revision FROM pd_materials WHERE user_id=$user AND id=? UNION SELECT d.input_material_id,d.input_revision FROM pd_material_inputs d JOIN coding_inputs i ON d.material_id=i.id AND d.revision=i.revision WHERE d.user_id=$user) `}SELECT h.id FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id AND v.revision=h.revision
+      WHERE h.user_id=$user AND v.user_id=$user AND h.sequence>=h.min_visible_sequence ${id===undefined?'':'AND EXISTS(SELECT 1 FROM coding_inputs i WHERE i.id=h.id AND i.revision=h.revision)'}
       AND NOT EXISTS(SELECT 1 FROM json_each(v.json,'$.artifacts') a WHERE json_extract(a.value,'$.key')='coding-dialogue' AND json_extract(a.value,'$.state')='ready' AND json_extract(a.value,'$.revision')='1')
       AND(json_extract(v.json,'$.kind')='mote.coding-session' OR EXISTS(
         SELECT 1 FROM pd_material_captures m JOIN pd_captures c ON c.user_id=m.user_id AND c.id=m.capture_id
         WHERE m.user_id=$user AND c.user_id=$user AND m.material_id=h.id AND m.revision=h.revision AND m.member_id='original'
-        AND h.external_id='processed:'||c.id AND json_type(c.json,'$.provenance.document.coding')='object'))`);
+        AND h.external_id='processed:'||c.id AND json_type(c.json,'$.provenance.document.coding')='object'))`,...(id===undefined?[]:[id]));
     if(roots().length)this.sql.transaction(()=>this.hideMaterials(roots().map(row=>String(row.id))));
   }
   private hideMaterials(ids:string[]){

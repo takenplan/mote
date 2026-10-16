@@ -3,13 +3,15 @@ import {generatedScopedPluginRelease} from './scoped-plugin-release.js';
 const components=[{id:'generated.memory.repository',version:'4',surface:'data',capability:'repository'},{id:'generated.memory.retrieval',version:'4',surface:'data',capability:'retrieval'}] as const;
 /** Actual generated worker installed through M09; its storage/transport is the
  * external provider fixture. Mote Memory, grants and publication remain real. */
-export function generatedMemoryRelease(){
+export function generatedMemoryRelease(externalUrl?:string){
  const code=String.raw`
 import {readFile,writeFile,appendFile,access} from 'node:fs/promises';
 import {createHash} from 'node:crypto';
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const exists=path=>access(path).then(()=>true,()=>false);
-export async function createMotePlugin(){
+export async function createMotePlugin(configuration){
+ if(EXTERNAL_URL){const invoke=async(method,input)=>{const response=await fetch(EXTERNAL_URL+'/'+method,{method:'POST',headers:{'content-type':'application/json','x-generated-worker-pid':String(process.pid),'x-generated-owner-label':configuration.label},body:JSON.stringify(input)});if(!response.ok)throw Error('Generated external provider transport');return response.json();};return {components:COMPONENTS.map(c=>({...c,invoke:async()=>{throw Error('Use the host Memory domain');}})),...Object.fromEntries(['put','read','search','export','remove','health'].map(method=>[method,input=>invoke(method,input)])),async close(){}};}
+
  const read=async()=>{try{return JSON.parse(await readFile('memory-records.json','utf8'));}catch{return {records:{},operations:{}};}};
  const save=value=>writeFile('memory-records.json',JSON.stringify(value));
  const tag=input=>digest([input.namespace,input.key]);
@@ -21,7 +23,7 @@ export async function createMotePlugin(){
   async remove(input){const state=await read();delete state.records[tag(input)];await save(state);return {opId:input.opId,namespace:input.namespace,key:input.key,payloadDigest:digest(input),state:'removed',currentRemoved:true,historyRetained:false,eraseVerified:false,recordedAt:new Date().toISOString()};},
   async health(){return {providerId:'generated-scoped-memory',version:'4',ready:true,verified:{persistentCrud:true,scopedRetrieval:true,immutableRecords:true,idempotentReplay:true,history:true,physicalErase:false},problems:[]};},async close(){} };
 }
-`.replace('COMPONENTS',JSON.stringify(components));
+`.replaceAll('COMPONENTS',JSON.stringify(components)).replaceAll('EXTERNAL_URL',JSON.stringify(externalUrl??''));
  const release=generatedScopedPluginRelease('4',code);release.manifest.components=components.map(value=>({...value}));release.manifest.capabilities=['repository','retrieval'];return release;
 }
 
