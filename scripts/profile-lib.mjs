@@ -121,7 +121,7 @@ export async function loadProfile(paths) {
   if (!env.MOTE_TOKEN || env.MOTE_TOKEN.length < 32 || /[\r\n]/.test(env.MOTE_TOKEN)) throw Error('Profile requires server.token of at least 32 characters');
   // YAML is the storage selection authority. profile.json retains the initial
   // deployment metadata, so an offline restore needs only one atomic pointer.
-  if (meta.runtime === 'docker') meta.volume = document.storage?.source;
+  if (meta.runtime === 'docker') { meta.modelsVolume ??= meta.volume+'-models'; meta.volume = document.storage?.source; }
   if (!/^[a-z0-9][a-z0-9_.-]+$/i.test(meta.volume)) throw Error('Invalid profile volume');
   if (paths.profile !== 'prod' && !meta.volume.startsWith(paths.project + '-')) throw Error('Development/test volumes must belong to their own profile project');
   if (meta.modelsVolume && (!/^[a-z0-9][a-z0-9_.-]+$/i.test(meta.modelsVolume) || paths.profile !== 'prod' && !meta.modelsVolume.startsWith(paths.project + '-'))) throw Error('Invalid profile models volume');

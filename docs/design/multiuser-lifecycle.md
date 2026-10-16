@@ -59,8 +59,11 @@ replace the profile. Use that returned file explicitly when selecting the backed
 up instance configuration. External environment-secret references still require
 the operator's original secret source. Downloaded model weights/logs are excluded.
 This is an operator archive containing private configuration/key material, distinct
-from credential-free portable 3. Epoch-5 Docker profile publication is OPEN and
-rejects before staging; its old copy-into-volume path cannot promise atomic restore.
+from credential-free portable 3. The [container follow-up](../validation/multiuser-container-backup.md)
+replaces epoch-5 Docker refusal with fresh-volume staging and a single atomic
+YAML storage-pointer publication, retaining old volumes and staying stopped.
+Actual daemon/image/volume acceptance remains OPEN; protocol tests cannot
+establish Docker production startup or native-volume recovery.
 Hindsight reuses the existing pinned owned-volume protocol; no daemon/image is
 started or downloaded automatically. This checkpoint does not declare that native
 path or the whole module accepted.
