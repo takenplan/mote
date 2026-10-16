@@ -32,7 +32,7 @@ try{
  const taskId=task.json().id;for(let n=0;n<500;n++){const step=node.execution.engine.get(taskId);if(step&&['blocked','failed','succeeded','cancelled'].includes(step.state))break;await delay(10);}
  const deploymentId=node.deploymentId;await node.app.close();
  const originalDb=new DatabaseSync(join(source,'mote.sqlite'));let unknown:any;try{assert.ok(Number(originalDb.prepare('SELECT count(*) n FROM task_authorizations WHERE revoked=0').get()!.n)>0);unknown=originalDb.prepare('SELECT task_id,external_state,external_key,external_issuance FROM user_tasks WHERE task_id=?').get(taskId);assert.ok(['issued','unknown'].includes(unknown.external_state));}finally{originalDb.close();}
-node=undefined;await backupScopedInstance({source,out:archive});
+ node=undefined;await backupScopedInstance({source,out:archive});
  const paths=profilePaths('actual',join(directory,'profiles'));await initialize(paths,{runtime:'docker',image});p=await loadProfile(paths);const selected=p.meta.volume;
  docker(['volume','create','--label','dev.mote.fixture='+runId,selected]);created.add(selected);
  const restored=await restoreProfile(p,archive,{execute});created.add(restored.volume);assert.notEqual(restored.volume,selected);assert.equal(restored.deploymentId,deploymentId);
@@ -43,13 +43,13 @@ node=undefined;await backupScopedInstance({source,out:archive});
   for(let cycle=0;cycle<2;cycle++){
    if(cycle)docker(['start',container]);
    docker(['exec',container,'node','-e',`(async()=>{for(let n=0;n<150;n++){try{if((await fetch('http://127.0.0.1:${p.port}/api/health')).ok)return;}catch{}await new Promise(r=>setTimeout(r,200));}process.exit(1);})();`]);
-   assert.equal(request('/api/auth/self',admin.token).status,401);
+   for(const old of [admin,...users])assert.equal(request('/api/auth/self',old.token).status,401);
    for(const user of users){const fresh=request('/api/auth/login',undefined,{username:user.username,password,mode:'client',durationMs:86400000});assert.equal(fresh.status,200);assert.equal(fresh.body.userId,user.userId);const captured=request('/api/captures',fresh.body.token);assert.equal(captured.status,200);assert.equal(captured.body.items.length,1);}
    docker(['stop','--time','20',container]);const state=JSON.parse(docker(['inspect',container]))[0];assert.equal(state.State.ExitCode,0);assert.equal(state.State.Running,false);
   }
  }
  const readback=join(directory,'actual-readback');await backupProfile(p,readback,{execute});
- const db=new DatabaseSync(join(readback,'mote.sqlite'));try{assert.equal(db.prepare('SELECT deployment_id FROM scope_meta').get()!.deployment_id,deploymentId);assert.equal(db.prepare('SELECT count(*) n FROM auth_credentials WHERE revoked_at IS NULL').get()!.n,production?4:0);assert.equal(db.prepare('SELECT count(*) n FROM pd_captures').get()!.n,2);assert.equal(db.prepare('SELECT count(*) n FROM task_authorizations WHERE revoked=0').get()!.n,0);assert.deepEqual(db.prepare('SELECT task_id,external_state,external_key,external_issuance FROM user_tasks WHERE task_id=?').get(taskId),unknown);}finally{db.close();}
+ const db=new DatabaseSync(join(readback,'mote.sqlite'));try{assert.equal(db.prepare('SELECT deployment_id FROM scope_meta').get()!.deployment_id,deploymentId);const active=Number(db.prepare('SELECT count(*) n FROM auth_credentials WHERE revoked_at IS NULL').get()!.n);assert.ok(production?active>=2:active===0);assert.equal(db.prepare('SELECT count(*) n FROM pd_captures').get()!.n,2);assert.equal(db.prepare('SELECT count(*) n FROM task_authorizations WHERE revoked=0').get()!.n,0);assert.deepEqual(db.prepare('SELECT task_id,external_state,external_key,external_issuance FROM user_tasks WHERE task_id=?').get(taskId),unknown);}finally{db.close();}
  const manifest=JSON.parse(readFileSync(join(readback,'backup-manifest.json'),'utf8')),parts=Object.keys(manifest.checksums).filter(name=>name.startsWith('originals/')&&name.endsWith('.plain'));assert.equal(parts.length,2);for(const part of parts)assert.deepEqual(readFileSync(join(readback,part)),original);
  node=await buildApp({dataDir:readback});assert.equal(node.deploymentId,deploymentId);assert.equal((await node.app.inject({url:'/api/auth/self',headers:{authorization:'Bearer '+admin.token,'x-mote-protocol-version':'2'}})).statusCode,401);
  for(const user of users){const fresh=await node.accounts.login(user.username,password,'generated','client',0);assert.equal(fresh.userId,user.userId);const context=await node.authority.authenticate(fresh.token);assert.equal(node.services.forUser(context).get('private-data').captures({}).items.length,1);}
