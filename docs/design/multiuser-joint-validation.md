@@ -217,3 +217,13 @@ artifact revision and calendar hash are rechecked after awaits and on confirmati
 Current narrow receipts are in the validation ledger. Original profile/rule routing,
 all client consumers, native/container schema combination and final whole acceptance
 remain independently tracked; these new review cases do not supersede those gaps.
+
+KEEP the original per-source/external-ID forgotten-file policy and explicit
+allow-again, including410 before any stale upload/batch replay. The shared M03
+owner tombstone survives removal of all revisions; its generation retires signed
+original tickets without changing account credentials. M06 cancels owned file
+work before canonical removal; physical GC follows SQL commit and remains pin-aware.
+No account-wide task/config reset, per-user runtime or real user deletion is used.
+Current deletion intent rejects conflicting older personal content atomically; this
+is explicitly validated with archive_conflict and unchanged target/B state. Additions
+are specific to the original Files policy, not a general deletion framework.

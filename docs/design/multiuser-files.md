@@ -193,3 +193,29 @@ cannot resume old model work. This candidate has narrow actual journey evidence
 in the joint validation ledger; source types, independent review, complete affected
 and final composed client/compiled/container gates remain pending. It is not yet
 an explicitly consumable replacement for the previous public thin checkpoint.
+
+## Original file forgetting — current typed candidate
+
+Candidate0095c897 restores DELETE `/:captureId` and POST
+`/:captureId/allow-again {sourceId,externalId}`. Only the owner can remove every
+file revision with that exact source/external ID. M06 retires existing file work;
+M03 persists a content-free per-file tombstone, removes canonical captures and old
+upload/batch receipts in SQL, then attempts existing pin-aware GC after commit.
+The response reports `{deleted,cleanup:'complete'|'pending'}`; a physical reader or
+GC fault cannot roll SQL back to point at removed bytes. Other owned files and B
+remain independent, including identical retained bytes.
+
+Forgotten source items and upload/resume entries retain the original410 rejection
+until explicit allow-again. The tombstone identity survives canonical removal;
+allow-again checks that exact deleted capture and source/external ID, is idempotent,
+and never recreates content or an old task. Its generation also fences signed
+original tickets across delete/re-import of the same deterministic original ID.
+Personal import rejects an older forgotten original atomically rather than
+resurrecting it; current target tombstone intent wins. Portable/native metadata
+retains tombstones without preserving old upload/task authorization. Older personal
+Ingress payloads without this optional field continue to parse.
+
+Server/scripts types and targeted real owner/route/portable/restart/pin/held-worker
+cases are0. Independent bounded review and current full affected/production/client
+combination are pending. The explicit consumer checkpoint and its evidence limits
+are tracked in the shared handoff; no whole Files/Imports acceptance is inferred.

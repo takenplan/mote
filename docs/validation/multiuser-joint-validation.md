@@ -796,3 +796,26 @@ Before closing this gap, preserve per-source/external-ID tombstones, all owned
 revisions, derived visibility retirement, late-worker/old receipt/ticket fences,
 post-commit pin-aware physical GC and personal merge/restart semantics. A simple
 DELETE alias or metadata-only hide cannot count as original capability parity.
+
+Current forget implementation0095c897078fce04ce75c687a0e1fc6abc81b479 closes the
+original503 route RED in its bounded scope. Same original user entry now passes
+with B isolation,410 resync refusal, explicit allow-again without automatic content,
+and rejection of an old signed ticket even after the deterministic original ID is
+reimported. Full personal old-archive import fails archive_conflict with no canonical
+resurrection, followed by restart; content-free tombstone Ingress-domain export/
+delete/restore retains the block. `/tmp/mote-joint-file-forget-portable-green.log/.exit`,1/1 EXIT0.
+The stronger final two-case receipt `/tmp/mote-joint-file-forget-revisions.log/.exit`
+is2/2 EXIT0: all two owned revisions retire, an old revision cannot undo the newer
+forget intent, exact held pin defers physical cleanup, independent same bytes and
+B survive. `/tmp/mote-joint-file-forget-held.log/.exit`,1/1 EXIT0, exercises a real
+held generated media transport: no late A artifact, one old call fact only, B
+processes normally, exact manual pin remains until release and existing GC then
+removes A's physical object. No live provider is involved.
+
+Parent23:03 allocated only a5–10s type window after QR's fresh release. Fixed0095
+Server and scripts noEmit ACTUAL EXIT0 in about5s:
+`/tmp/mote-joint-file-reviews-forget-types.log/.exit/.sha`. PTY23986 was read to
+terminal0, all heavy work explicitly released to QR's post-disposer final affected.
+No full suite/build/Gradle was appended to that short window. Scope AST on current
+forget source0 (`/tmp/mote-joint-file-forget-scope2.log/.exit`). Independent review
+of the new review and forget implementation remains pending; no final joint gate.
