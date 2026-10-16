@@ -1,3 +1,4 @@
+import {randomUUID} from 'node:crypto';
 import {forgottenFileSchema} from './ingress-file-forget.js';
 import type {DatabaseSync} from 'node:sqlite';
 import {existsSync,rmSync,lstatSync} from 'node:fs';
@@ -65,7 +66,7 @@ export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory
     for(const [hash,size] of metadata)if(!objects.has(hash))sql.run('INSERT INTO ig_objects VALUES($user,?,?,?) ON CONFLICT(user_id,hash) DO NOTHING',hash,size,Math.ceil(size/(4*1024*1024)));
     for(const row of files){const prior=sql.get('SELECT hash,json FROM ig_archive_files WHERE user_id=$user AND id=?',row.id);if(prior&&(prior.hash!==row.hash||prior.json!==row.json))throw new PrivateDataError('conflict',409);sql.run('INSERT INTO ig_archive_files VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',row.id,row.hash,row.json);}
     for(const row of payload.archiveLinks??[])sql.run('INSERT OR IGNORE INTO ig_archive_links VALUES($user,?,?)',row.capture_id,row.file_id);
-    for(const row of forgotten)sql.run('INSERT INTO ig_file_forgets VALUES($user,?,?,?,?,?) ON CONFLICT(user_id,source_id,external_id) DO NOTHING',row.source_id,row.external_id,row.capture_id,row.generation,row.blocked);
+    for(const row of forgotten)sql.run('INSERT INTO ig_file_forgets(user_id,source_id,external_id,capture_id,generation,blocked,decision_id) VALUES($user,?,?,?,?,?,?) ON CONFLICT(user_id,source_id,external_id) DO NOTHING',row.source_id,row.external_id,row.capture_id,row.generation,row.blocked,randomUUID());
     for(const row of payload.originals)sql.run('INSERT INTO ig_originals VALUES($user,?,?,?,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',row.id,row.source_id,row.capture_id,row.hash,row.mime,row.retention);
     for(const state of snapshots.values())sql.run('INSERT INTO ig_snapshot_inputs VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO NOTHING',state.id,state.expires);
     for(const row of payload.scopes){const old=sql.get('SELECT source_id FROM ig_capture_scopes WHERE user_id=$user AND capture_id=?',row.capture_id);if(old&&old.source_id!==row.source_id)throw invalid();sql.run('INSERT INTO ig_capture_scopes VALUES($user,?,?) ON CONFLICT(user_id,capture_id) DO NOTHING',row.capture_id,row.source_id);}
@@ -87,7 +88,7 @@ export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory
   deleteUser:async(subject,operationId)=>{
    const {sql,originals,assert}=bound(subject,'delete');sql.transaction(()=>{
     sql.run('INSERT INTO ig_state(user_id,deleted) VALUES($user,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1');
-    for(const table of ['ig_file_forgets','ig_capture_updates','ig_capture_update_sequences','ig_import_uploads','ig_archive_links','ig_archive_files','ig_originals','ig_capture_scopes','ig_uploads','ig_batches','ig_devices','ig_pins','ig_work'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
+    for(const table of ['ig_file_forget_operations','ig_file_forgets','ig_capture_updates','ig_capture_update_sequences','ig_import_uploads','ig_archive_links','ig_archive_files','ig_originals','ig_capture_scopes','ig_uploads','ig_batches','ig_devices','ig_pins','ig_work'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
    });
    // A live or interrupted child can still own filesystem work. A crashed
    // activity requires M16 reconciliation; elapsed time is not erasure proof.

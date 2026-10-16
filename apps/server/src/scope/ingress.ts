@@ -146,7 +146,7 @@ export class IngressHost{
    /** Host adapter seam: the original is selected before publication, so one
     * capture has one immutable descriptor. Worker RPCs never expose this seam. */
    receiveSourceItemsWithOriginals:(sourceId:string,id:string,values:unknown[],inputs:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[])=>intakeSourceItems(sourceId,id,values,inputs,formats),
-   forgetFile:forgetting.forget,allowFileAgain:forgetting.allowAgain,
+   forgetFile:forgetting.forget,fileForgetReceipt:forgetting.receipt,forgottenFile:forgetting.forgotten,allowFileAgain:forgetting.allowAgain,
    readOriginal:(ref:string,range?:{offset?:number;length?:number})=>{original(ref);const result=originals.read(ref,range);assert();return result;},
    originalForCapture:(id:string)=>{data().capture(id);const row=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND capture_id=?',id);if(!row)throw missing();return original('original:'+row.id);},
    holdOriginal:(ref:string)=>{const value=original(ref);if(value.available===false)throw new PrivateDataError('snapshot_input_expired',410);return originals.pin(value.hash,false,ref.slice(9));},
