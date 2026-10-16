@@ -1990,6 +1990,7 @@
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insights'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces'",

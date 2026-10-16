@@ -70,3 +70,29 @@ Composed real Harness/chat/query/Memory/Insight/portable interface matrix18/18,
 Server typecheck exit0 (`/tmp/m08-interface-types.log/.exit`); scope/import/SQL
 inventory check exit0. Earlier fixture failures are retained as diagnostic logs,
 not passes. These are synthetic fixtures, not final M08 acceptance or live checks.
+
+## Reviewed pin regression and delegation delta
+
+M11 independently reproduced a P1 at e7ebbf44 through the host reader and actual
+MCP SDK: capture X, external Memory await, delete/recreate X, capture X could
+replace the first pin and publish the earlier deleted body. The reader now keeps
+first Evidence/Material/Memory observations and rejects conflicting hash/revision/
+version/incarnation; validation callbacks cannot replace them. Original independent
+host probe unchanged on a disposable patched archive:1/1 exit0, leaked=false
+(`/tmp/m08-m11-original-pins-fixed.log/.exit`). Independent exact-commit host+SDK
+recheck remains pending. Durable retained scenario is multiuser-ask-read-races.
+
+Ordered context.research units now use the existing input/receipt/control protocol,
+stable task identities, full plan admission before async forks, current-generation
+recovery and successful-child checkpoints. Parent citations require the actual
+worker-delivered ranges, freshly revalidated. Harness yield is translated into a
+checkpoint inside the M04 callback, so credential sanitization cannot turn the
+semantic pause into a config error. Actual HTTP foreground disconnect carries an
+AbortSignal; background admission retains its separate explicit lifecycle.
+
+Current full focused matrix22/22,0skip/fail/cancel,exit0,84711ms:
+`node --import tsx --test --test-concurrency=1 --test-timeout=60000
+apps/server/test/multiuser-ask.test.ts apps/server/test/multiuser-ask-read-races.test.ts`
+(`/tmp/m08-core-delta-22.log/.exit`). Types and scope/import/SQL exit0.
+Final SIGKILL/compiled/combined/affected gates and remaining legacy query option
+parity are still pending. This remains an implementation review freeze.
