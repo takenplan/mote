@@ -577,3 +577,40 @@ separately after completion.
 Heavy work was explicitly released when the failed command ended, before the
 queued Android narrow checks; the planned Desktop build was postponed. No
 healthy test was restarted due to the platform disconnection notification.
+
+
+## Authorized M12 archive composition
+
+Merged M12 public `4a0e82dbb28908e6ec34a6703e86fcd1229dfaf5` as `bed65864`
+after its own actual lifecycle/portable RED→GREEN and bounded review. No conflict
+or default-domain fallback was introduced. Todos uses the existing synchronous
+canonical transaction; Actions explicitly preserves its current personal state.
+This follows the original JSON-v2 `EvidenceStore.exportArchive/importArchive`
+Todos section. The companion `archive-export.ts` bundle is a different v1 format;
+its name is not evidence of the JSON-v2 version.
+
+New durable backup RED `2affb338` runs real A/B M03→M06→M12 model publication,
+approval, actual M05 issuance and succeeded/uncertain native receipts, plus manual
+Todos with different states. `/tmp/m16-backup-actions-red.log/.exit` exits 1:
+17 total, 1 already rejected by the existing foreign-key boundary and 16 failures
+(including the parent). The restored inherited instance policy remained enabled;
+fourteen incomplete table/column cases incorrectly published. These are actual
+production-path failures, not a failed fixture or skipped input.
+
+The minimal existing-helper correction adds the 13 exact required table/column
+sets and retires Actions authority in both inherited/private YAML and SQL before
+publication. No claimed flag, issuance ID, native event ID, ACK or task linkage is
+cleared to allow replay; Todos and completed model history retain exact bytes.
+The same test passes **17/17, exit 0, no skips** in 13 seconds,
+`/tmp/m16-backup-actions-green.log/.exit`: all thirteen individually dropped tables
+and two renamed mandatory columns reject before target publication, while the
+positive recovery preserves A/B canonical data and external facts, rejects old
+credentials and remains inactive through two actual source-host process restarts.
+A fresh compiled-host pass and final combined required remain necessary after
+this runtime increment.
+
+CLI responsibility correction `7fb3d4be` additionally passes the actual M01/M03
+CLI plus root-client combination **9/9, exit 0**, including same-URL replacement
+with only self/zero private body and missing/wrong original ACK rejection;
+`/tmp/m16-cli-shared-admission-composed.log/.exit`. Independent M13 bounded review
+finds no new confirmed issue in that two-line transport delegation.
