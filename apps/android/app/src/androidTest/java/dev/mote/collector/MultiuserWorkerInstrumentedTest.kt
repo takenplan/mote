@@ -882,6 +882,38 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalFileStageRetryRetainsItsAdmittedOperationAcrossLostAckRecreationAndAccountSwitch() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val id=fixture().getString("captureId")
+        val before=api.get("/api/files/"+id+"/chunks").getJSONArray("items").getJSONObject(0)
+        val b=CentralClient(endpoint(),token("b"));val beforeB=b.get("/api/files/"+id+"/chunks").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        control("/generated/drop-file-retry-ack")
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label};assertNotNull("Missing original file control: "+label,button);button!!.performClick()}}
+            ready();press("查看详情");ready();press("重试 · 转写");ready()
+            val first=control("/generated/file-retries").getJSONArray("retries")
+            assertEquals("The original file retry must reach real admission",1,first.length())
+            val admitted=first.getJSONObject(0);assertEquals(200,admitted.getInt("status"));assertEquals("a",admitted.getString("actor"))
+            val body=admitted.getJSONObject("body");java.util.UUID.fromString(body.getString("operationId"));assertEquals("transcribe",body.getString("stage"))
+            val taskId=admitted.getString("taskId");assertTrue(Regex("[a-f0-9]{64}").matches(taskId))
+            scenario.recreate();ready();press("查看详情");ready();control("/generated/release-file-retry-ack")
+            lateinit var oldRetry:android.widget.Button
+            scenario.onActivity {activity->oldRetry=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="重试同一请求"};oldRetry.performClick()};ready()
+            val attempts=control("/generated/file-retries").getJSONArray("retries");assertEquals(2,attempts.length())
+            assertEquals(SourceRules.canonical(body),SourceRules.canonical(attempts.getJSONObject(1).getJSONObject("body")))
+            assertEquals(taskId,attempts.getJSONObject(1).getString("taskId"));waitFor {api.get("/api/tasks/"+taskId).getString("state")=="succeeded"}
+            val after=api.get("/api/files/"+id+"/chunks").getJSONArray("items").getJSONObject(0)
+            assertNotEquals(before.getJSONObject("fileEvidence").getString("artifactId"),after.getJSONObject("fileEvidence").getString("artifactId"))
+            assertEquals(before.getString("ocrText"),after.getString("ocrText"))
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity {oldRetry.performClick()};ready()
+            assertEquals(2,control("/generated/file-retries").getJSONArray("retries").length());assertEquals(beforeB,b.get("/api/files/"+id+"/chunks").toString())
+        }
+    }
+
     @Test fun originalNativeRecordingSavesExactAuthenticatedOriginalThroughItsDocumentResult() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
