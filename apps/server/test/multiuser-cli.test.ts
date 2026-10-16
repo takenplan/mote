@@ -1,0 +1,29 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtempSync,rmSync,writeFileSync,readdirSync,readFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
+import {DatabaseSync} from 'node:sqlite';
+import {buildApp} from '../src/app.js';
+import {serializeConfigDocument} from '@mote/shared/config-file';
+
+const script=fileURLToPath(new URL('../../../scripts/import-files.ts',import.meta.url)),password='Generated-M16-CLI-password';
+test('actual CLI scan/SourceSync uses M01 identity and M03 original upload for A/B and same-owner credential rotation',async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'mote-m16-cli-')),vault=join(directory,'vault'),file=join(directory,'generated.txt'),config=join(directory,'generated.yaml'),node=await buildApp({dataDir:vault});
+ t.after(async()=>{await node.app.close();rmSync(directory,{recursive:true,force:true});});
+ await node.accounts!.initialize('generated-admin',password);const admin=await node.accounts!.login('generated-admin',password,'generated','client',0),context=await node.authority.authenticate(admin.token);
+ for(const username of ['generated-alice','generated-bob'])await node.accounts!.createAccount(context,node.authority,{username,password,administrator:false});
+ const a=await node.accounts!.login('generated-alice',password,'generated','client',0),b=await node.accounts!.login('generated-bob',password,'generated','client',0);
+ const url=await node.app.listen({host:'127.0.0.1',port:0});writeFileSync(config,serializeConfigDocument({version:1,revision:0}));writeFileSync(file,'Generated exact CLI original');
+ const run=(token:string)=>promisify(execFile)(process.execPath,['--import','tsx',script,'--root',file,'--retention','archive'],{env:{...process.env,MOTE_CONFIG_FILE:config,MOTE_URL:url,MOTE_TOKEN:token},timeout:30000});
+ assert.match((await run(a.token)).stdout,/Received 1 changed files/);
+ assert.match((await run(b.token)).stdout,/Received 1 changed files/);
+ const db=new DatabaseSync(join(vault,'mote.sqlite'));t.after(()=>db.close());assert.equal(db.prepare('SELECT count(*) n FROM ig_originals WHERE user_id=?').get(a.userId)!.n,1);assert.equal(db.prepare('SELECT count(*) n FROM ig_originals WHERE user_id=?').get(b.userId)!.n,1);
+ const aContext=await node.authority.authenticate(a.token);node.accounts!.revoke(aContext,node.authority,a.credentialId);const rotated=await node.accounts!.login('generated-alice',password,'generated','client',0);
+ assert.match((await run(rotated.token)).stdout,/Received 0 changed files/,'credential rotation keeps the same durable owner checkpoint');
+ const names=readdirSync(join(directory,'file-sync','accounts'));assert.equal(names.length,2);const markers=names.map(name=>JSON.parse(readFileSync(join(directory,'file-sync','accounts',name,'connection-binding.json'),'utf8')));assert.deepEqual(markers.map(marker=>marker.userId).sort(),[a.userId,b.userId].sort());assert.ok(markers.every(marker=>marker.deploymentId===node.deploymentId&&!('credentialHash' in marker)));
+ assert.equal(db.prepare('SELECT count(*) n FROM pd_captures').get()!.n,2,'unchanged same-owner CLI replay does not import twice');
+});
