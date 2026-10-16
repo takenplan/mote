@@ -117,6 +117,26 @@ class MultiuserIngressTest {
         assertNotEquals(original.key,original.copy(userId=b.getString("userId")).key)
     }
 
+    @Test fun `same real loopback URL with replacement deployment rejects old owner before any private bytes`() {
+        val processes=mutableListOf<Process>();val logs=mutableListOf<File>()
+        fun start(port:Int):JSONObject {
+            val log=File.createTempFile("m15-redeployment-", ".log");logs.add(log)
+            val process=ProcessBuilder("node","--import","tsx","apps/android/test-fixtures/multiuser-backend.ts","--port=$port").directory(root()).redirectError(log).start();processes.add(process)
+            return JSONObject(process.inputStream.bufferedReader().readLine()?:error(log.readText()))
+        }
+        try {
+            val first=start(0);val url=first.getString("address");val original=owner(url,first.getJSONObject("a").getString("token"))
+            processes[0].destroy();assertTrue(processes[0].waitFor(15,java.util.concurrent.TimeUnit.SECONDS))
+            val second=start(java.net.URI(url).port);assertEquals(url,second.getString("address"));val token=second.getJSONObject("a").getString("token");val replacement=owner(url,token)
+            assertNotEquals(original.deploymentId,replacement.deploymentId);assertNotEquals(original.key,replacement.key)
+            val calls=mutableListOf<String>();val old=Ingress3Client(original,"same-device","Synthetic redeployment",request={method,path,body->calls.add(method+" "+path);request(url,token,method,path,body)})
+            val record=event(UUID.randomUUID().toString(),"Synthetic original A deployment bytes")
+            assertThrows(IllegalStateException::class.java){old.captures(listOf(record))};assertEquals(listOf("GET /api/connections/self"),calls)
+            assertEquals(404,request(url,token,"GET","/api/captures/"+record.getString("id"),null).first)
+            val receipt=client(url,token).captures(listOf(record));assertEquals(replacement.deploymentId,receipt.getString("deploymentId"));assertEquals(replacement.userId,receipt.getString("userId"))
+        } finally {for(process in processes)if(process.isAlive){process.destroy();if(!process.waitFor(15,java.util.concurrent.TimeUnit.SECONDS))process.destroyForcibly()};logs.forEach {it.delete()}}
+    }
+
     @Test fun `native query citations use actual scoped read and cannot fall back to raw owner history`() = fixture { f ->
         val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val id=UUID.randomUUID().toString()
         val receipt=client(server,token).captures(listOf(event(id,"Synthetic native query original")))
