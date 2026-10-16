@@ -1,4 +1,6 @@
 {
+  "Gmail 连接": "Gmail connection",
+  "选择连接": "Select a connection",
   "取消导入": "Cancel import",
   "请选择原部署和原账号的 Mote portable3 归档。": "Select a Mote portable3 archive from the original deployment and account.",
   "仅合并原部署和原账号的规范资料；当前设置、凭据和执行授权保持不变。": "Merges canonical data from the original deployment and account. Current settings, credentials and execution authority are preserved.",

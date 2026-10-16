@@ -3,8 +3,10 @@
 Base: M08 `58944f00837c89bc1d302ecd7be7a568db4abe44`, including M07
 `cd7a306cce0f6cd5fec3c9e91e6dee0761352115` and the public contract PR135.
 Final M11 PR138 `98d76945e091d7234217ebcf532ebeff3350937c` is composed.
-M12 is paused and its contract handoff remains denied pending explicit user
-authorization. Final M13 composition and checks are separate gates.
+The parent has confirmed the M12→M13 handoff succeeded and lifted the wait.
+Stable M12 checkpoint35d661b24da32231e7c5c643530fedbcba8778a4 may be consumed
+for development; its newer lifecycle fixes and final acceptance remain pending.
+Final M13 composition and checks are separate gates.
 
 ## Capability ledger before implementation
 
@@ -54,7 +56,7 @@ scoped host has no legacy runtime/store mounted. Audit is against the actual M08
 | Formal detail / citation / attribution | `/materials/:id`, revisions/read/members/context; optional descriptor/source-view/index retry | M02 exact same material read/revision/members/context; M08 canonical context | Core routes available. Source-view/presentation/index-retry do not exist in589 scoped host: optional presentation must use established generic body fallback, retry must not claim unavailable index work. Explicit Memory Material links and manual selection consume M07 canonical preflight and pin the selected revision again at admission; returned evidence remains under the declared context reader. |
 | Raw records / evidence / albums / sessions / image OCR | `/capture-browser*`, image/ocr; capture delete | M02 `/captures`, `/captures/:id`, delete; M03 original tickets/content; M08 segments | OPEN: text/current capture consumer can adapt; before-LIMIT source/app/privacy/OCR filters, albums/sessions grouping, original image/thumbnail/OCR projection are genuine missing scoped adapters (M02/M03/M06). Do not silently drop filters or reconstruct canonical refs. |
 | Sources metadata/history/context | `/sources`, `/source-items`, history/context | M02 same owned endpoints | Available normal metadata contracts; actual renderer compatibility pending. |
-| External source settings / OAuth / recording connector | `/connectors/status`, vendor paths, old sync/delete | M10 `/connectors` per-instance config/revision, `/start`, `/sync`, `/disconnect`, `/operations` | OPEN M13 consumer adaptation to fixed per-user connection IDs + CAS; vendor-specific response/view compatibility requires M10 domain contract. No alias may infer another account. |
+| External source settings / OAuth / recording connector | `/connectors/status`, vendor paths, old sync/delete | M10 `/connectors` per-instance config/revision, `/start`, `/sync`, `/disconnect`, `/operations` | Original Gmail card now explicitly selects an owned connection and follows real OAuth/sync/disconnect task receipts, including lost sync ACK and account retirement. Configuration CRUD/CAS, uncertain disconnect retry and other vendor views remain OPEN. No alias may infer another account. |
 | External MCP discovery/import | `/connectors/mcp/discover`, `/import` | M11 strict discover/import, user mcpConnections domain | M11 final composed; owned preparation/CAS and same-ID draft retirement pass real backend/component tests. IAB connection/source save passed. Actual renderer discovery/import success remains OPEN; contract `/tmp/mote-m11-web-contract.md`. |
 | Web reference import | PUT `/sources/:id/items` | M03 explicit device/source registration + POST ingress items/batch receipt | Implemented5b042c4b; actual M03 metadata/retry/history/A-B tests and IAB save/switch passed. Identity-corrupted actual ACK RED51101a26 → strict c1b6f159 GREEN; no URI is fetched. |
 | Notes and chat attachments | `/sources`, `/file-sync/v1/uploads`, parts/commit | M03 ingress devices/sources/uploads/parts/commit with actual file revision/receipt | Implemented b64afe07 transport adapter using original chunk algorithm, exact user/deployment/source/batch/hash/byte receipt validation. Actual HTTP byte read/retry/isolation and old upload characterization pass; renderer attachment increment pending. Text notes already actual Ingress3. |
