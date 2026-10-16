@@ -30,7 +30,9 @@ internal object CentralDraftWrites {
 }
 
 internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, private val directory: File) {
-    val client get() = requireNotNull(ui.client)
+    private val ownerKey = ui.accountOwnerKey()
+    fun ownsSelectedAccount() = ui.accountOwnerKey() == ownerKey
+    val client get() = requireNotNull(ui.client).also { check(ownsSelectedAccount()) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") } }
     private val cipher = SecretBox()
     private val askStore = CentralStateFile(directory, "ask", cipher)
     private val noteStore = CentralNoteStore(directory, cipher)
@@ -467,7 +469,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun playAudio(path: String, target: LinearLayout) {
         close(); val api = client; val revision = ui.navigationRevision
         ui.work(MoteI18n.text("正在读取录音…"), {
-            val file = File.createTempFile("central-audio-", ".tmp", ui.cacheDir)
+            val file = File.createTempFile("central-audio-", ".tmp", directory.apply { mkdirs() })
             audioFile = file
             try {
                 file.outputStream().use { api.download(path, it, 256 * 1024 * 1024L) }

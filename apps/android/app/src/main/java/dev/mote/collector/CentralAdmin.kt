@@ -490,6 +490,8 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             ui.work(MoteI18n.text("正在导出中央资料…"), { try { exports.start(id).also { check(pending.edit().remove("operationId").commit()) } }
                 catch (failure: CentralFailure) { if (failure.code == "archive_authorization_changed") check(pending.edit().remove("operationId").commit()); throw failure } }) { portableExport(it.getString("id")) }
         }
+        ui.button(MoteI18n.text("中央元数据导出")) {}.isEnabled = false
+        ui.text(MoteI18n.text("元数据单独导出的接口尚待接入；当前归档包含本账号的资料与可用原件。"))
         ui.button(MoteI18n.text("导入")) { ui.navigate("imports") }
         val target = ui.card()
         ui.work(MoteI18n.text("正在读取…"), { exports.list(cursor) }) { result ->
@@ -497,20 +499,22 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             if (rows.length() == 0) ui.text(MoteI18n.text("暂无记录"), parent = target)
             for (i in 0 until rows.length()) {
                 val row = rows.getJSONObject(i); val card = ui.card(target)
-                ui.text(row.getString("createdAt") + " · " + stateLabel(row.getString("state")), parent = card)
+                ui.text(row.getString("createdAt") + " · " + portableState(row.getString("state")), parent = card)
                 ui.button(MoteI18n.text("查看详情"), parent = card) { portableExport(row.getString("id")) }
             }
             if (previous.isNotEmpty()) ui.button(MoteI18n.text("上一页"), parent = target) { body.removeAllViews(); vault(previous.last(), previous.dropLast(1)) }
             if (!result.isNull("nextCursor")) ui.button(MoteI18n.text("下一页"), parent = target) { body.removeAllViews(); vault(result.getString("nextCursor"), previous + cursor) }
         }
     }
+    private fun portableState(state: String) = MoteI18n.text(mapOf("working" to "正在处理…", "completed" to "已完成", "failed" to "失败", "cancelled" to "已取消").getValue(state))
     private fun portableExport(id: String) {
         body.removeAllViews(); screens.setBack { screens.refresh() }
         val exports = CentralPortable(client)
         ui.button(MoteI18n.text("刷新")) { portableExport(id) }
         ui.work(MoteI18n.text("正在读取…"), { exports.read(id) }) { receipt ->
-            ui.text(stateLabel(receipt.getString("state")), NativeFontRole.SECTION)
-            val target = ui.card(); values(receipt, target)
+            ui.text(portableState(receipt.getString("state")), NativeFontRole.SECTION)
+            ui.text(receipt.getString("createdAt"))
+            ui.disclosure(MoteI18n.text("元数据")) { values(receipt, it) }
             if (receipt.getString("state") == "completed") ui.button(MoteI18n.text("下载"), true) { ui.savePortable(receipt) }
             if (receipt.getString("state") == "failed") ui.button(MoteI18n.text("重试")) {
                 ui.work(MoteI18n.text("正在处理…"), { exports.control(id, "retry") }) { portableExport(id) }

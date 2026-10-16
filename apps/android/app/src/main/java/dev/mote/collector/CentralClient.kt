@@ -80,17 +80,19 @@ internal class CentralClient(
             if (expected != null) require(received == expected.bytes && digest.digest().joinToString("") { "%02x".format(it) } == expected.sha256) { "Export bytes do not match their receipt" }
         } finally { connection.disconnect() }
     }
-    fun downloadVerified(path: String, output: java.io.OutputStream, expected: CentralDownload, directory: File) {
+    fun downloadVerified(path: String, openOutput: () -> java.io.OutputStream, expected: CentralDownload, directory: File) {
         directory.mkdirs()
         val staged = File.createTempFile("portable-", ".part", directory)
         try {
             staged.outputStream().use { download(path, it, expected.bytes, expected) }
             checkActive(); verify(); checkActive()
-            staged.inputStream().use { input ->
-                val buffer = ByteArray(65536)
-                while (true) {
-                    checkActive(); val count = input.read(buffer); if (count < 0) break
-                    output.write(buffer, 0, count)
+            openOutput().use { output ->
+                staged.inputStream().use { input ->
+                    val buffer = ByteArray(65536)
+                    while (true) {
+                        checkActive(); val count = input.read(buffer); if (count < 0) break
+                        output.write(buffer, 0, count)
+                    }
                 }
             }
             checkActive()

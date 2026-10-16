@@ -61,7 +61,7 @@ class MultiuserIngressTest {
         assertEquals(404,assertThrows(CentralFailure::class.java){b.read(id)}.status)
         val directory=java.nio.file.Files.createTempDirectory("m15-portable-native-").toFile()
         try {
-            val output=java.io.ByteArrayOutputStream();a.save(receipt,directory,output)
+            val output=java.io.ByteArrayOutputStream();a.save(receipt,directory) {output}
             val bytes=output.toByteArray();assertEquals(receipt.getLong("bytes"),bytes.size.toLong())
             assertEquals(receipt.getString("sha256"),Ingress3Client.hash(bytes))
             val archive=JSONObject(String(bytes,Charsets.UTF_8));assertEquals(receipt.getString("userId"),archive.getString("userId"))
@@ -69,10 +69,10 @@ class MultiuserIngressTest {
             assertEquals(0,directory.listFiles()!!.size)
             for((field,value) in listOf("userId" to f.getJSONObject("b").getString("userId"),"deploymentId" to "other-deployment","filename" to "wrong.json","sha256" to "wrong")) {
                 val corrupt=JSONObject(receipt.toString()).put(field,value);val untouched=java.io.ByteArrayOutputStream()
-                assertThrows(IllegalArgumentException::class.java){a.save(corrupt,directory,untouched)};assertEquals(0,untouched.size())
+                assertThrows(IllegalArgumentException::class.java){a.save(corrupt,directory) {untouched}};assertEquals(0,untouched.size())
             }
             assertEquals("cancelled",a.control(id,"cancel").getString("state"));val untouched=java.io.ByteArrayOutputStream()
-            assertThrows(IllegalArgumentException::class.java){a.save(receipt,directory,untouched)};assertEquals(0,untouched.size())
+            assertThrows(IllegalArgumentException::class.java){a.save(receipt,directory) {untouched}};assertEquals(0,untouched.size())
         } finally { directory.deleteRecursively() }
     }
     @Test fun `actual native plugin inventory consumes owned M09 rather than legacy host aggregate`() = fixture { f ->

@@ -2,7 +2,6 @@ package dev.mote.collector
 
 import org.junit.Assert.*
 import org.junit.Test
-import java.io.ByteArrayOutputStream
 import java.net.ServerSocket
 import java.nio.file.Files
 import java.util.concurrent.Executors
@@ -33,12 +32,13 @@ class CentralPortableDownloadTest {
                 }
                 var active=true;var verifies=0
                 val api=CentralClient("http://127.0.0.1:${listener.localPort}","synthetic-export-token",active={active},verify={verifies++;if(case=="retired"&&verifies==2)active=false})
-                val output=ByteArrayOutputStream()
+                val output=java.io.File(directory,"selected.json").apply {writeText("Generated existing document sentinel")}
+                var opened=0
                 try {
-                    val run={api.downloadVerified("/api/portable/exports/generated/content",output,CentralDownload(bytes.size.toLong(),sha,"application/json; charset=utf-8"),directory)}
-                    if(case=="good") {run();assertArrayEquals(bytes,output.toByteArray())}
-                    else {assertThrows(Exception::class.java,run);assertEquals(0,output.size())}
-                    assertEquals(0,directory.listFiles()!!.size);response.get(5,TimeUnit.SECONDS)
+                    val run={api.downloadVerified("/api/portable/exports/generated/content",{opened++;output.outputStream()},CentralDownload(bytes.size.toLong(),sha,"application/json; charset=utf-8"),directory)}
+                    if(case=="good") {run();assertArrayEquals(bytes,output.readBytes());assertEquals(1,opened)}
+                    else {assertThrows(Exception::class.java,run);assertEquals("Generated existing document sentinel",output.readText());assertEquals(0,opened)}
+                    assertEquals(listOf("selected.json"),directory.listFiles()!!.map {it.name});response.get(5,TimeUnit.SECONDS)
                 } finally {executor.shutdownNow();directory.deleteRecursively()}
             }
         }

@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "元数据单独导出的接口尚待接入；当前归档包含本账号的资料与可用原件。": "Separate metadata export is awaiting integration; the current archive includes this account’s data and available originals.",
   "个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。": "Personal exports contain this account’s data and registered domains, excluding login credentials, execution authority, and instance backups.",
   "取消后将不能下载这份导出文件。": "Cancelling makes this export unavailable for download.",
   "下载": "Download",

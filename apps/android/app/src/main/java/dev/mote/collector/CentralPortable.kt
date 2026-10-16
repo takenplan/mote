@@ -28,12 +28,12 @@ internal class CentralPortable(private val api: CentralClient) {
         require(command in setOf("retry", "cancel")); current()
         return receipt(api.post(path(id) + "/" + command), id)
     }
-    fun save(frozen: JSONObject, directory: File, output: OutputStream) {
+    fun save(frozen: JSONObject, directory: File, openOutput: () -> OutputStream) {
         receipt(frozen)
         val id = frozen.getString("id"); val latest = read(id)
         val expected = completed(frozen)
         require(completed(latest) == expected) { "Export artifact changed" }
-        api.downloadVerified(path(id) + "/content", output, expected, directory)
+        api.downloadVerified(path(id) + "/content", openOutput, expected, directory)
     }
     internal fun receipt(value: JSONObject, id: String? = null): JSONObject {
         val actual = value.getString("id"); UUID.fromString(actual)
