@@ -9,7 +9,7 @@ import {memorySchema,type Memory} from './memory-schema.js';
 import {randomUUID} from 'node:crypto';
 import {installMemoryPublicationRetirement,registerMemoryPublicationDependencies,memoryPublicationRetired,type MemoryPublicationDependencies} from './memory-private-storage.js';
 
-import {stageVerifiedMemoryWrite} from './memory-provider-publication.js';
+import {assertVerifiedMemoryBody} from './memory-provider-publication.js';
 export {stageVerifiedMemoryWrite} from './memory-provider-publication.js';
 export type MemoryPublicationReceipt={operationId:string;binding:ReturnType<MemoryBindings['binding']>;prepared:PreparedMemoryExtraction;payloadHash:string};
 function recordDependencies(records:Memory[]):MemoryPublicationDependencies{return {memoryIds:records.map(memory=>memory.id),evidenceIds:records.flatMap(memory=>memory.evidenceIds)};}
@@ -72,7 +72,7 @@ export class MemoryPublication {
     // Submission is not completion. An interrupted transport keeps this intent
     // observable until a read/recovery proves the immutable body or its removal.
     let receipt:MemoryProviderReceipt;
-    try{receipt=await stageVerifiedMemoryWrite(provider,write,assertAuthority);}catch(error){this.scheduleReconcile();throw error;}
+    try{receipt=await provider.put(write);const exact=await provider.read({namespace,key});assertVerifiedMemoryBody(write,exact);}catch(error){this.scheduleReconcile();throw error;}
     this.store.db.prepare("UPDATE memory_provider_writes SET state='acknowledged' WHERE id=?").run(opId);assertAuthority();this.assertRetained(operationId);
     return receipt;
   }

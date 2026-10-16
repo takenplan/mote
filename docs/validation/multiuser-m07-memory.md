@@ -224,3 +224,44 @@ production imports / private SQL0 and diff check0. Stronger import regression
 also checks an imported and unrelated original combined in one Material:
 canonical root prose cannot enter the unrelated block; exact portable
 restoration passes. These receipts remain a subset, not final module acceptance.
+
+### ca69 required affected failure and bounded corrections
+
+The first required affected run on `ca69ed69b04f4cf481a1d099e4b5013f97931d45`
+exited 1: server 2312 passed, two failed, one optional test skipped (2315 total).
+Android was not reached. Preserve `/tmp/m07-ca69-affected.log` and `.exit`;
+389/389 preceding serial combination and emitted 4/4 are separate checkpoints.
+
+- **New implementation defect:** the M06 `source.original` projection decoded
+  Coding tool bodies into searchable same-owner Material. This was introduced by
+  the scoped migration, not demonstrated as an old-flow bug. The fix extracts and
+  reuses the existing complete-part `conversationRecords` algorithm, including
+  declared human/agent-final roles and host-envelope removal. M06 keeps its real
+  pipeline; the Memory organizer reads exact M03 originals under its existing
+  grant and preserves all original dependencies. Raw retained bytes are unchanged.
+  Positive A/B multipart human/final dialogue remains available.
+- **Obsolete fixture assumption:** the rejected cross-source publication test
+  expected the entire Material catalog to stay empty. Real automatic producers
+  now publish legitimate Material. The assertion checks the exact rejected ID,
+  and the raw-body search assertion runs after actual producers settle.
+- **New implementation defect:** extracting shared external body verification
+  put a cancellation fence ahead of the legacy late-acknowledgement journal
+  update. Restore its original transport settlement order; exact-body verification
+  is shared, while publication still checks authority after journal settlement.
+  Both received and lost acknowledgements retain the old binding and recovery.
+
+The failing-test commit is `1d88bddf8a372e20a3c56bd1cc962e6fcae7ae78`:
+its literal archive produced 1 pass / 3 failures, exit 1, using the two Coding
+scenarios and existing received/lost worker ACK scenarios. Evidence:
+`/tmp/m07-coding-red-1d88.log` and `.exit`. The fixture wait was narrowed to the
+M06/Material producers under test; unrelated policy waiting is not completion.
+These results concern same-owner projection and cancellation/recovery semantics;
+they do not establish cross-user leakage. No environment failure is claimed.
+Final combination, compiled processes and required affected must be rerun after
+these corrections and independent review. CI remains disabled and unrun.
+
+The bounded corrected regression command (same two files plus the raw Coding
+budget scenario in `multiuser-memory.test.ts`) passed 5/5, exit 0,
+8208.262625ms: `/tmp/m07-coding-green.log` and `.exit`. Server typecheck,
+scope/import/private-SQL contracts and `git diff --check` also exited 0.
+This is a small correction checkpoint, not full module acceptance.
