@@ -44,11 +44,11 @@ export class MemoryCaptureMaterials {
     screenGroup:()=>{const start=Math.floor(Date.parse(record.capturedAt)/300000)*300000;return sameGroup(1000,"json_extract(c.json,'$.deviceId')=? AND json_extract(c.json,'$.source')=? AND coalesce(json_extract(c.json,'$.appId'),'')=? AND coalesce(json_extract(c.json,'$.windowTitle'),'')=? AND coalesce(c.source_id,'')=? AND julianday(c.context_at)>=julianday(?) AND julianday(c.context_at)<julianday(?)",[record.deviceId,record.source,record.appId??'',record.windowTitle??'',record.provenance?.sourceId??'',new Date(start).toISOString(),new Date(start+300000).toISOString()],{ascending:true});},
     uiPageGroup:()=>group.captureId?{records:[permit(record)!],truncated:false}:sameGroup(2000,"json_extract(c.json,'$.source')='ui_page' AND json_extract(c.json,'$.metadata.uiPage.version')=2 AND json_extract(c.json,'$.appId')=? AND json_extract(c.json,'$.metadata.uiPage.objects[0].kind')=? AND json_extract(c.json,'$.metadata.uiPage.objects[0].identity.type')=? AND json_extract(c.json,'$.metadata.uiPage.objects[0].identity.value')=?",[group.appId,group.kind,group.identityType,group.identityValue],{pageBudget:true}),
     file:id=>allowed.has(id)?this.file(data,id):undefined};
-   const draft=organizer.build(reader,group);if(!draft)continue;
+   const draft=organizer.build(reader,group);if(!draft)continue;if(organizer.id===codingSession.id)draft.artifacts=[{key:'coding-dialogue',state:'ready',revision:'1',blockIds:draft.blocks.map(block=>block.id)}];
    // M03 owns transport source identity. Builder-local source naming cannot
    // switch the host grant or manufacture another source's authorization.
    draft.origin.sourceId=source.id;draft.id='mat_'+memoryHash([source.id,draft.origin.externalId]);
-   const prior=data.sql.get('SELECT revision FROM pd_materials WHERE user_id=$user AND id=?',draft.id);if(prior&&data.privateData.material(draft.id).kind!==draft.kind)continue;
+   const prior=data.sql.get("SELECT h.revision,json_extract(v.json,'$.kind') AS kind FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id AND v.revision=h.revision WHERE h.user_id=$user AND v.user_id=$user AND h.id=?",draft.id);if(prior&&prior.kind!==draft.kind)continue;
    const material=data.privateData.publishMaterial(draft,prior?String(prior.revision):undefined);run.grant.assert();this.published(run,material);
   }
  }

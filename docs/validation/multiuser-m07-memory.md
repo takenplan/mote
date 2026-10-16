@@ -265,3 +265,47 @@ budget scenario in `multiuser-memory.test.ts`) passed 5/5, exit 0,
 8208.262625ms: `/tmp/m07-coding-green.log` and `.exit`. Server typecheck,
 scope/import/private-SQL contracts and `git diff --check` also exited 0.
 This is a small correction checkpoint, not full module acceptance.
+
+### Retained v1 Coding visibility: test first, then minimal correction
+
+The actual pre-fix host -> corrected host restart probe initially reported
+`before:1, after:1`, exit 1 (`/tmp/m07-retained-v1-red-actual.log`). Its unchanged
+production scenario now reports `before:1, after:0`, exit 0
+(`/tmp/m07-retained-v1-actual-final.log`). The first `.ts` launch failed because
+its temporary runner was treated as CommonJS; the `.mts` production observation
+is the evidence, not that environment launch error.
+
+Durable failing tests were committed before the retirement runtime change:
+`55fd7b332b999042aaf359bc31084cef94d38830` (0/1, exit 1), extended by
+`7dba36ca3067c903b7fb1f70538336c60a0f5a75` (literal archive 0/2, exit 1;
+`/tmp/m07-v1-literal-red-7dba.log`). They use a generated persisted v1 shape
+independently confirmed against the actual pre-fix host, and test both an old
+current head and a newer filtered head with an obsolete retained target version.
+The latter initially returned the old body with HTTP 200; this is a new migration
+history gap. A preliminary derivation assertion expected 409 but received a safe
+503 refusal; that status mismatch was not a disclosure. The completed guard now
+explicitly rejects obsolete v1 derivation input with 409 before new task admission.
+
+The fix reuses PrivateData's existing `min_visible_sequence` withdrawal and
+transitive Material traversal. It performs owner-bound checks before SQL
+candidates/body reads, validates selected historical versions too, and marks
+supported built-in projections with a host artifact version. No unconditional
+write transaction is added to ordinary valid reads: only detected legacy roots
+enter the existing transaction and are rechecked there. Old decoded artifacts
+cannot feed processing analysis; original bytes/artifacts/version rows remain
+stored. No task or reconstruction authority is created by a read/restart.
+
+Final narrow correction set: 7/7, exit 0, 9892.323208ms,
+`/tmp/m07-v1-final-regressions.log` (Coding fresh/current/history, transitive
+withdrawal, raw retention, B unchanged, no task replay, received/lost worker ACK).
+Existing private-data/lifecycle tests: 23/23, exit 0, 2532.899291ms,
+`/tmp/m07-v1-final-data.log`. Existing organizer/processing/data broader checkpoint
+preceding the final historical guard: 79/79, exit 0, 58998.654583ms,
+`/tmp/m07-retirement-data-processing.log`. Final server typecheck, scope/import/
+private-SQL contracts and diff check exit 0. One restricted-sandbox rerun failed
+only on loopback listen EPERM and passed unchanged with loopback access; preserve
+`/tmp/m07-retirement-final-data.log` and the successful `-data-loopback.log`.
+
+Independent architecture/TDD review, final full combination, fresh builds/emitted
+processes and required affected/Android remain pending. No final acceptance or
+Draft PR is claimed from this narrow checkpoint. CI is disabled and unrun.
