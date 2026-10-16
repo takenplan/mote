@@ -61,6 +61,17 @@ OwnerQuestions 的选择回复用现有 `{requestId,expectedRevision,action:'ans
 宿主预绑定的回调只结算确切外部事实；它不能恢复身份、grant 或任务访问。
 新 HTTP 请求仍须通过正常认证，撤销凭据不能凭旧操作 ID 绕过认证。
 
+## Web 最小消费映射
+
+| 原消费点 | 当前合同 |
+| --- | --- |
+| `Actions.tsx` 列表 | `GET /api/actions?cursor=<encoded opaque string>`；省略、空串或 `0` 为首屏，`nextCursor:string|null`；其余列表字段保留。 |
+| Actions 设置 | `PUT /api/actions/settings` 保留 `{revision,authorizationRevision,settings}`；配置失败但撤权已提交时返回 `authorizationRevoked/revokedDeviceIds/authorizationRevision`。 |
+| 审批弹窗 | proposal.version 创建 review；呈现 reviewedAction；使用 question.revision 作为 OwnerQuestions expectedRevision。fingerprint 是服务端绑定内容的标识，不是 credential；epoch 不由客户端选择或提交。 |
+| 撤销/并发 | `/cancel {version}` 撤销已批准确切操作；旧版本或不同并发回复冲突 409；跨用户对象 404；同 requestId/同内容收据幂等。 |
+| 旧 `/api/devices` | M03 `GET /api/ingress/devices`，`x-mote-ingress-version: 3`，`{items:[{id,name,platform}]}` 映射到 UI 的 deviceId/deviceName；不恢复旧全局路由。 |
+| 待办 | 既有 create/CAS/filter 流程保留，游标为用户/筛选绑定字符串；owner 不在请求体。 |
+
 ## 任务、恢复与公开范围
 
 M05 `actions.watch` 是用户开启发现时签发的 durable authorization，沿原 15 秒发现周期等待；
