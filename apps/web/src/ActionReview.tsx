@@ -20,7 +20,8 @@ export type FixedActionReview=z.infer<typeof reviewSchema>;
 export function readActionReview(value:unknown,actionId:string,questionId?:string):FixedActionReview{
  const result=reviewSchema.parse(value),action=result.reviewedAction;
  if(result.provider.id!=='actions.calendar'||result.provider.version!=='1'||result.workId!==actionId||action.id!==actionId||questionId!==undefined&&result.id!==questionId||result.choices.length!==2||new Set(result.choices.map(choice=>choice.id)).size!==2||!result.choices.every(choice=>['approve','dismiss'].includes(choice.id)))throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
- if(Boolean(action.target)!==Boolean(action.targetDetails)||action.target&&(action.target.deviceId!==action.targetDetails!.deviceId||action.target.calendarId!==action.targetDetails!.calendar.id)||action.kind==='calendar.create'&&!action.target)throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
+ const needsTarget=action.kind==='calendar.create'||Boolean(action.related?.externalId)&&['calendar.update','calendar.cancel'].includes(action.kind);
+ if(Boolean(action.target)!==Boolean(action.targetDetails)||action.target&&(action.target.deviceId!==action.targetDetails!.deviceId||action.target.calendarId!==action.targetDetails!.calendar.id)||needsTarget&&!action.target)throw Error(moteText('服务返回的操作回执与当前账号不一致。'));
  if(['calendar.create','calendar.update'].includes(action.kind))calendarEventSchema.parse(action.event);
  return result;
 }
