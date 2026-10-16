@@ -121,7 +121,8 @@ class MultiuserWorkerInstrumentedTest {
             val bRows=CentralAccess.requireClient(app).get("/api/actions?limit=100").getJSONArray("items")
             assertFalse((0 until bRows.length()).any {bRows.getJSONObject(it).getString("id")==id})
             val bClient=CalendarActions(device,foreground=true);bClient.connect()
-            val bOriginal=bClient.list().getJSONArray("items").getJSONObject(0)
+            val bItems=bClient.list().getJSONArray("items")
+            val bOriginal=(0 until bItems.length()).map(bItems::getJSONObject).first {it.getString("status")=="proposed"}
             val bApproved=bClient.confirm(bOriginal,bOriginal.getJSONObject("event"),"7")
             val bReceipt=bClient.execute(bApproved.getString("id")) as JSONObject
             assertTrue(bReceipt.getBoolean("acknowledged"));assertTrue(bReceipt.getBoolean("published"));assertEquals(2,native.inserts)
