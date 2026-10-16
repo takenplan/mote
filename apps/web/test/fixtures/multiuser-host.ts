@@ -5,9 +5,12 @@ import {join} from 'node:path';
 import {buildApp} from '../../../server/src/app.js';
 import {noteCapture} from '@mote/shared';
 import assert from 'node:assert/strict';
+import {generatedWebProvider} from './multiuser-provider.js';
+import {defaultModelSettings} from '../../../server/src/model-settings.js';
 
 const root=mkdtempSync(join(tmpdir(),'mote-m13-renderer-host-')),password='Generated-M13-account-password-01';
 const host=await buildApp({dataDir:root});
+let provider:Awaited<ReturnType<typeof generatedWebProvider>>|undefined;
 const gates=new Map<string,{entered:boolean;release:()=>void;promise:Promise<void>}>();
 const requests:{method:string;url:string;credentialId?:string;body?:unknown}[]=[];
 host.app.addHook('onSend',async(req,_reply,payload)=>{
@@ -39,14 +42,23 @@ process.on('message',async(message:any)=>{
   if(message.command==='hold'){
    let release!:()=>void;const promise=new Promise<void>(done=>{release=done;});gates.set(message.key,{entered:false,release,promise});result=true;
   }else if(message.command==='release'){gates.get(message.key)?.release();result=true;
-  }else if(message.command==='requests')result=requests;
+  }else if(message.command==='requests')result=requests.filter(request=>!message.prefix||request.url.startsWith(message.prefix)).slice(-(message.limit??requests.length));
+  else if(message.command==='models'){
+   provider??=await generatedWebProvider();
+   for(const owner of ['a','b']){
+    const token=users[owner].token,view=await call(token,'/api/configuration');
+    await call(token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[{id:'generated',name:'Generated Web model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-web',baseUrl:provider.url,apiKey:'GENERATED_'+owner.toUpperCase()+'_KEY',headers:{},extraBody:{}}}],selections:{chat:{kind:'personal',id:'generated'},insight:{kind:'personal',id:'generated'}}}});
+   }result=true;
+  }else if(message.command==='hold-provider'){if(!provider)throw Error('Configure generated models first');provider.hold(message.owner.toUpperCase());result=true;}
+  else if(message.command==='release-provider'){provider?.release();result=true;}
+  else if(message.command==='provider-requests')result=provider?.requests;
   else if(message.command==='handoff')result=await call(undefined,'/api/login/requests','POST',{serverUrl:'http://localhost:'+port,deviceId:'same-approval-device',deviceName:'Generated approval device',platform:'other',challenge:createHash('sha256').update('x'.repeat(43)).digest('hex')});
   else if(message.command==='poll')result=await call(undefined,'/api/login/poll','POST',{id:message.requestId,verifier:'x'.repeat(43)});
   else if(message.command==='data')result=await call(users[message.owner].token,'/api/captures?limit=200');
   else if(message.command==='disable')result=await call(admin.token,'/api/admin/accounts/'+users[message.owner].userId,'PATCH',{disabled:message.disabled});
   else if(message.command==='revoke')result=await call(users[message.owner].token,'/api/connections/'+message.credentialId,'DELETE');
   else if(message.command==='close'){
-   for(const gate of gates.values())gate.release();await host.app.close();rmSync(root,{recursive:true,force:true});process.send?.({id:message.id,result:true});process.disconnect();return;
+   for(const gate of gates.values())gate.release();provider?.release();await host.app.close();await provider?.close();rmSync(root,{recursive:true,force:true});process.send?.({id:message.id,result:true});process.disconnect();return;
   }else throw Error('Unknown fixture command');
   process.send?.({id:message.id,result});
  }catch(error){process.send?.({id:message.id,error:String(error)});}
