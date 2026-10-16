@@ -96,6 +96,10 @@ class MultiuserWorkerInstrumentedTest {
         val generated=File(app.cacheDir,"generated-calendar-native-state.json");generated.delete()
         val native=GeneratedCalendarProvider(generated);val device=GeneratedCalendarContext(app,native)
         try {
+            fun currentAction(id:String):JSONObject {
+                val rows=CentralAccess.requireClient(app).get("/api/actions?limit=100").getJSONArray("items")
+                return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")==id}
+            }
             val client=CalendarActions(device,foreground=true);client.connect()
             val items=client.list().getJSONArray("items")
             val original=(0 until items.length()).map(items::getJSONObject).first {it.getString("status")=="proposed"}
@@ -104,7 +108,7 @@ class MultiuserWorkerInstrumentedTest {
             native.failAfterNextInsert=true
             assertThrows(IllegalStateException::class.java){client.execute(id)}
             assertEquals(1,native.inserts)
-            assertEquals("uncertain",CentralAccess.requireClient(app).get("/api/actions/$id").getString("status"))
+            assertEquals("uncertain",currentAction(id).getString("status"))
             val operation=approved.getString("operationId")
             val journal=File(app.accountDirectory(),"calendar-actions/"+SourceRules.hash(settings.read().server.trimEnd('/')+settings.deviceId)+"/"+operation)
             assertEquals("attempting",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
@@ -114,7 +118,8 @@ class MultiuserWorkerInstrumentedTest {
             login(app,"b")
             assertThrows(IllegalStateException::class.java){client.execute(id)}
             assertEquals(previousCalls,native.calls)
-            assertEquals(404,get(app,"b","/api/actions/$id").first)
+            val bRows=CentralAccess.requireClient(app).get("/api/actions?limit=100").getJSONArray("items")
+            assertFalse((0 until bRows.length()).any {bRows.getJSONObject(it).getString("id")==id})
             val bClient=CalendarActions(device,foreground=true);bClient.connect()
             val bOriginal=bClient.list().getJSONArray("items").getJSONObject(0)
             val bApproved=bClient.confirm(bOriginal,bOriginal.getJSONObject("event"),"7")
@@ -127,7 +132,7 @@ class MultiuserWorkerInstrumentedTest {
             val recovered=CalendarActions(GeneratedCalendarContext(app,recoveredNative),foreground=true)
             val receipt=recovered.execute(id) as JSONObject
             assertTrue(receipt.getBoolean("acknowledged"));assertTrue(receipt.getBoolean("published"));assertEquals(2,recoveredNative.inserts)
-            val completed=CentralAccess.requireClient(app).get("/api/actions/$id")
+            val completed=currentAction(id)
             assertEquals("succeeded",completed.getString("status"));assertEquals("101",completed.getString("externalId"))
             assertEquals("101",String(SecretBox().open(journal.readBytes()),Charsets.UTF_8))
             recovered.execute(id);assertEquals(2,recoveredNative.inserts)
