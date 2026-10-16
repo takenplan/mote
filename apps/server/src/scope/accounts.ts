@@ -148,5 +148,24 @@ export class Accounts implements IdentityVerifier {
     authenticate:header=>{const c=header?.startsWith('Bearer ')?this.findToken(header.slice(7)):undefined;return c?.user_id===context.userId&&this.current(c)&&c.kind==='client'?{id:c.id}:undefined;},
     assertActive:c=>{const current=this.current(this.credential(c.id));if(!current||current.a.user_id!==context.userId||current.c.kind!=='client')throw new ScopeError('invalid_identity',401);},
   };}
+  /** Reuse M01 credentials for a pre-authorized QR device. A known device must
+   * have been selected explicitly by this account; replacement occurs only after
+   * the handoff's final consent/cancellation/expiry fence, in one transaction. */
+  pairingConnections(context:UserContext,authority:UserContextAuthority,boundDevice?:string,knownDevice:((id:string)=>boolean)=()=>false):LoginConnections{
+    const connections=this.handoffConnections(context,authority);
+    const known=(deviceId:string,except='')=>Boolean(this.db.prepare("SELECT id FROM auth_credentials WHERE user_id=? AND kind='client' AND json_extract(metadata,'$.deviceId')=? AND id<>? LIMIT 1").get(context.userId,deviceId,except))||knownDevice(deviceId);
+    return {...connections,session:async(serverUrl,label,device,durationMs=2592000000)=>{
+      authority.assert(context);
+      if(!device||boundDevice&&device.deviceId!==boundDevice)throw new AuthError('invitation_device_mismatch',403);
+      if(!boundDevice&&known(device.deviceId))throw new AuthError('device_already_registered',409);
+      return connections.session(serverUrl,label,device,durationMs);
+    },activate:credentialId=>this.transaction(()=>{
+      authority.assert(context);
+      const current=this.credential(credentialId),metadata=JSON.parse(current!.metadata);
+      if(!this.current(current)||current!.user_id!==context.userId||!metadata.deviceId)throw new ScopeError('invalid_identity',401);
+      if(!boundDevice&&known(metadata.deviceId,credentialId))throw new AuthError('device_already_registered',409);
+      if(boundDevice)this.db.prepare("UPDATE auth_credentials SET revoked_at=? WHERE user_id=? AND kind='client' AND json_extract(metadata,'$.deviceId')=? AND id<>? AND revoked_at IS NULL").run(this.clock(),context.userId,boundDevice,credentialId);
+    })};
+  }
   close(){this.closed=true;}
 }
