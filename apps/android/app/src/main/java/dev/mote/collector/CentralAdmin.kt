@@ -598,7 +598,8 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 if (row.has("path")) agent(row.getString("path"))
                 else if (row.optString("expand") == "source_items") {
                     library.paged("/api/agent-view/source-items?sourceId=" + enc(row.getString("id")) + "&limit=12", card) { item, child ->
-                        ui.text(item.optString("title"), parent = child); ui.button(MoteI18n.text("查看原文"), parent = child) { library.evidence(item.getString("ref")) }
+                        ui.text(item.optString("title", item.optString("windowTitle")), parent = child)
+                        ui.button(MoteI18n.text("查看原文"), parent = child) { library.queryEvidence(item.optString("ref").takeIf(String::isNotBlank) ?: "capture:" + item.getString("id")) }
                     }
                 } else agentDetail(row, path)
             }
@@ -609,19 +610,33 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     private fun agentDetail(row: JSONObject, path: String, offset: Int = 0) {
         val kind = row.optString("expand")
+        if (kind == "material_read") {
+            val api = client
+            ui.work(MoteI18n.text("正在读取…"), { api.get("/api/agent-view/material-read?ref=" + enc(row.getString("ref")) + "&offset=$offset&length=4000") }) { result ->
+                body.removeAllViews(); screens.setBack { agent(path) }
+                ui.text(result.getJSONObject("material").getString("title"), NativeFontRole.SECTION); ui.text(result.getString("text"))
+                val originals = result.getJSONArray("originalRefs")
+                for (index in 0 until originals.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (index + 1)) { library.queryEvidence(originals.getString(index)) }
+                val range = result.getJSONObject("textRange")
+                if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { agentDetail(row, path, range.getInt("nextOffset")) }
+            }
+            return
+        }
+        if (kind !in setOf("memories", "segments")) { library.queryEvidence(row.optString("ref").takeIf(String::isNotBlank) ?: row.getString("id"), offset); return }
         val endpoint = when (kind) { "memories" -> "memories"; "segments" -> "segments"; else -> "evidence" }
         val id = if (kind == "segments") row.getString("ref") else row.optString("id", row.optString("ref"))
         val extra = if (kind == "memories") "&includeEvidence=true" else if (endpoint == "evidence") "&offset=$offset" else ""
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/agent-view/$endpoint?id=" + enc(id) + extra) }) { result ->
             body.removeAllViews(); screens.setBack { agent(path) }; values(result, ui.card())
+            result.optJSONArray("evidence")?.let { rows -> for (index in 0 until rows.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (index + 1)) { library.queryEvidence(rows.getJSONObject(index).getString("id")) } }
             val items = result.optJSONArray("items") ?: JSONArray()
             for (i in 0 until items.length()) {
                 val item = items.getJSONObject(i)
                 val evidence = item.optJSONArray("evidence") ?: JSONArray()
-                for (j in 0 until evidence.length()) ui.button(MoteI18n.text("查看原文依据")) { library.captureEvidence(evidence.getJSONObject(j).getString("id")) }
+                for (j in 0 until evidence.length()) ui.button(MoteI18n.text("查看原文依据")) { library.queryEvidence(evidence.getJSONObject(j).getString("id")) }
                 val members = item.optJSONArray("members") ?: JSONArray()
-                for (j in 0 until members.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (j + 1)) { library.captureEvidence(members.getString(j)) }
+                for (j in 0 until members.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (j + 1)) { library.queryEvidence(members.getString(j)) }
                 item.optJSONObject("textRange")?.let { range ->
                     if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("下一页")) { agentDetail(row, path, range.getInt("nextOffset")) }
                 }
