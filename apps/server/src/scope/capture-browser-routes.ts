@@ -4,7 +4,7 @@ import {FILE_PART_BYTES} from '@mote/shared';
 import {registerUserRoute,type ScopedRuntime} from './http.js';
 import {PrivateData,PRIVATE_DATA_DOMAIN} from './private-data.js';
 import {type IngressHost} from './ingress.js';
-import {missing} from './private-data-sql.js';
+import {missing,PrivateDataError} from './private-data-sql.js';
 
 /** Browser reads retain the existing M02 record and M03 original authorities.
  * A private archive session is required; a device upload capability is not a
@@ -21,7 +21,9 @@ export function registerCaptureBrowserReads(runtime:ScopedRuntime,ingress:Ingres
   if(thumbnail){bytes=await sharp(bytes,{limitInputPixels:24_000_000}).resize({width:480,height:480,fit:'inside',withoutEnlargement:true}).jpeg({quality:72}).toBuffer();mime='image/jpeg';}
   // The expensive image await must finish before the original context is
   // checked again, and before any response headers or payload are published.
-  data.captureBrowser().record(captureId,scope);const current=source.originalForCapture(captureId);source.readOriginal(current.ref,{length:0});runtime.authority.assert(context);
+  const currentRecord=data.captureBrowser().record(captureId,scope),current=source.originalForCapture(captureId);
+  if(current.ref!==original.ref||current.hash!==original.hash||currentRecord.blobHash!==original.hash)throw new PrivateDataError('conflict',409);
+  source.readOriginal(current.ref,{length:0});runtime.authority.assert(context);
   reply.type(mime).header('Cache-Control','no-store').header('X-Content-Type-Options','nosniff');return bytes;
  }});
 }
