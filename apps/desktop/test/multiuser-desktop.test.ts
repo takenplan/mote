@@ -10,7 +10,7 @@ import {DEFAULT_SOURCE_OPTIONS} from '../src/source-types';
 import {browseCaptures,captureDetail,captureImage} from '../src/capture-browser';
 import {centralContentPage} from '../src/content-library';
 import {readCentralContent} from '../src/sync-content';
-import {uploadCapture} from '../src/transport';
+import {uploadCapture,uploadCaptureBatch} from '../src/transport';
 import {ensureStorageFormat} from '../src/storage-format';
 import sharp from 'sharp';
 import {createRequire} from 'node:module';
@@ -191,4 +191,20 @@ it('retires the actual preload document including status bootstrap after account
  expect((await app.documentCall('A','status')).config.account.userId).toBe(f.a.userId);
  await app.call('mote:ask',['login',{token:f.b.token}]);await expect(app.documentCall('A','status')).rejects.toThrow();
  await expect(app.documentCall('A','noteDraft')).rejects.toThrow();await app.document('B');expect((await app.documentCall('B','status')).config.account.userId).toBe(f.b.userId);
+});
+
+it('preserves packed production uploads and rejects a foreign batch ACK before queue deletion',async()=>{
+ const f=await fixture(),config={...f.config(f.a),packedUpload:true},queue=new DurableQueue(join(f.directory,'packed'),config);await queue.initialize();
+ for(const id of ['00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000002'])await queue.enqueue({...event(id),deviceId:config.deviceId},image);
+ const collector=new Collector(config,queue,'/generated/no-helper',()=>true,()=>{});cleanup.push(async()=>{collector.shutdown();const release=await collector.holdConnection();release();});await collector.upload(true);
+ expect(queue.stats().depth).toBe(0);const posts=f.calls.filter(v=>v.url.endsWith('/captures')&&v.body);expect(posts).toHaveLength(1);expect(posts[0].body.items).toHaveLength(2);
+});
+it('retains state-series observations appended during a real ACK and extends only the same account record',async()=>{
+ const f=await fixture(),config=f.config(f.a),queue=new DurableQueue(join(f.directory,'series'),config);await queue.initialize();
+ const {imageMime,ocrText,...base}=event(),first={...base,deviceId:config.deviceId,source:'activity' as const,durationMs:0,privacy:{excluded:false as const,redacted:false,mode:'none' as const,collection:'activity' as const}};await queue.enqueue(first);
+ const original=f.fetcher.getMockImplementation()!;let entered=false,release!:()=>void;f.fetcher.mockImplementation(async(input,init)=>{const response=await original(input,init);if(String(input).endsWith('/captures')&&!entered){entered=true;await new Promise<void>(r=>{release=r;});}return response;});
+ const collector=new Collector(config,queue,'/generated/no-helper',()=>true,()=>{});cleanup.push(async()=>{collector.shutdown();const release=await collector.holdConnection();release();});const uploading=collector.upload(true);await vi.waitFor(()=>expect(entered).toBe(true));
+ await queue.enqueue({...first,id:'00000000-0000-4000-8000-000000000099',capturedAt:new Date(Date.parse(first.capturedAt)+5000).toISOString(),durationMs:5000});release();await uploading;expect(queue.stats().depth).toBe(1);
+ await collector.upload(true);expect(queue.stats().depth).toBe(0);expect((await f.request(f.a.token,'/api/captures/'+first.id)).json().stateSeries.samples).toHaveLength(2);expect((await f.request(f.b.token,'/api/captures/'+first.id)).statusCode).toBe(404);
+ await uploadCapture(f.config(f.b),{...first,stateSeries:{version:1,samples:[{at:first.capturedAt,durationMs:0}]}});expect((await f.request(f.b.token,'/api/captures/'+first.id)).json().stateSeries.samples).toHaveLength(1);
 });
