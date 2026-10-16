@@ -6,6 +6,30 @@ All fixtures are generated and isolated. Models/worker/network I/O use loopback
 scripted substitutes with actual Harness, transport, M04 leases, M05 executor,
 M03 originals, M06 processing and real M07 provider/Memory read paths.
 
+## Existing capability ledger
+
+The source paths below are relative to `apps/server/src`. Legacy code is used
+for characterization; it is not mounted as a production fallback. This ledger
+follows the [shared migration contract](../design/multiuser-public-contracts.md).
+
+| Existing implementation to retain | Scoped production entry | Concrete evidence below |
+| --- | --- | --- |
+| `query-agent.ts`, actual Harness/transport and citation disclosure | `scope/ask.ts`, POST `/api/query` and `/api/query-runs` | Equal-ID actual model requests; undisclosed citations; HTTP cancellation |
+| `conversations.ts`: dialogue, provenance, continuations and deletion | `/api/conversations`, owned turns and run artifacts | Conversation CAS/cursors; pause/restart; deleted evidence and artifacts |
+| `working-memory.ts` and shared `working-memory-plan.ts`: ordered complete prefixes/spans | `/api/conversations/:id/compact`, online working preparation | Long complete spans; retained successful summary; fixed configuration |
+| `lifecycle-extensions.ts`: working OR-threshold/wait, Insight AND-interval/increments | Explicit ordinary owner `/api/ask-automations` admission, one M05 coordinator | Working keep2/restart; actual-minute Insight; task context cannot admit |
+| `insight-runs.ts`, `insights.ts`, `insight-snapshots.ts` | `/api/insight-runs`, `/api/insights`, immutable scoped snapshot | Real Memory→Insight/static HTML, coverage/version/boundaries and portable snapshot |
+| `delegated-query-runs.ts`, `delegation-runtime.ts`, existing delegation protocol/controls | Real Harness controls, M05 ordered child tasks and private artifact reader | Ordered/any/all/retry/cancel; narrowed child requests; successful child no replay |
+| `evidence-reader.ts`, canonical Material/evidence and ready projection | `AskHost.bind(context, scope).reader()` and `/api/context/*` | Transitive before-LIMIT scopes; real source history; partial ready blocks; exact pins |
+| `context-routes.ts`, navigation, context cards, file windows/directories | `/api/context/*`, `/api/agent-view/*`, host reader consumed by M11 | UTF16; minimum budget; two channels; canonical block limits/revisions/history |
+| Existing Activity/media measurement | Real reader activity/media methods and Insight coverage | Observed union/overlap/gaps; upper-bound clipping; scope and privacy |
+| Existing M03 attachments and M07 provider-backed curated leads | Scoped original/image capability, actual `MemoryHost.bindRead` | Actual pixels; real provider reads; no SQL body fallback or lead-only citations |
+| Existing static data retention/export | `ask` and `ask-automation` domain lifecycle | Exact parent validation; idempotent restore; no task/model regrant |
+
+The owner policy admission is the necessary replacement for the former global
+owner; it does not add a new semantic model procedure. Client UI/account wiring
+and whole-instance restore orchestration remain explicit later-module gates.
+
 ## Scenario-to-test map
 
 | Journey and transition | Durable test |
@@ -48,8 +72,9 @@ subsets and do not substitute final whole-module review.
 
 ## Pending gates and practical limits
 
-Real M07 through443c201a is composed, including its ordinary owner audit/import
-closure. Query-visible Memory stays published-only; audit/stale/proposed bodies
+Real M07 through f436d7e8e3e78dcda4509731038d64183c5dcee4 is composed,
+including ordinary owner audit/import and retained Coding projection withdrawal.
+The PR135 public contract documents are also composed. Query-visible Memory stays published-only; audit/stale/proposed bodies
 do not become model evidence. Final M07 acceptance and subsequent integration
 fixes remain dependency gates. No SQL body substitute or fake service claims parity. Final focused, all-scope/multiuser actual
 composition, fresh libraries/server build, emitted two-process HTTP and required
@@ -146,3 +171,36 @@ report metadata only to the parent review. Ordinary delegation, narrowed workers
 and Insight delegation passed 3/3 EXIT0,34030ms
 (`/tmp/m08-insight-worker-snapshot-fixed.log/.exit`). The confirmed impact is
 same-owner task scope, not evidence of a cross-user disclosure or an old-flow bug.
+
+Exact `4a18aff95cff214d78ad901589c41b2a12a7a742` complete Ask/read-races:
+56/56 pass,0 fail/skip/cancel,EXIT0,316139ms
+(`/tmp/m08-4a18-full-ask.log/.exit`). It precedes final M07 composition gates;
+the composed runtime `f10b687e6094f664ad337300e973642c1e28d49a` passed server
+typecheck and scope checks. The unified A/B/C representative candidate with M11,
+fresh builds/emitted process and required affected checks remain pending.
+
+At clean `09af174dfb2a16212a4f9e84e12a8d0769247105` (runtime
+`f10b687e6094f664ad337300e973642c1e28d49a`), the 43-file actual source
+composition passed 506/506, EXIT0, zero skips/cancels/failures, 951576ms
+(`/tmp/m08-09af-combined.log/.exit`). This is a pre-fix checkpoint, not final
+same-SHA A/B/C acceptance or an affected-check result.
+
+Native source-item kind self-consistency is a confirmed migration omission:
+Material canonical originals return `CaptureRecord.source`, but the SQL filter
+previously compared their parent `Material.kind`. RED commit `7f86d514` retains
+the valid failure (one characterization pass, one regression failure, EXIT1,
+1975ms; `/tmp/m08-query-kind-characterization-red.log/.exit`). The fix selects
+the emitted native kind before candidate ordering/LIMIT; entity cards and the
+Material catalog continue filtering by their own Material kind. The enhanced
+regression checks both projections: 2/2 EXIT0,2006ms, server typecheck0 and
+scope checks0 (`/tmp/m08-query-kind-{green,types,scope}.log/.exit`). This is
+same-owner query correctness, not a cross-user disclosure finding.
+
+The initial includeDeleted 0→1 expectation was invalid: the original integration
+`connectors.test.ts` explicitly excludes tombstones even with this parameter.
+Its failed logs (`/tmp/m08-query-params-red.log/.exit` and the preliminary
+`/tmp/m08-tombstone-host-before-valid.log/.exit`) remain diagnostic evidence of
+an incorrect test expectation, not production RED or a delivered fix. Production
+tombstone logic was never changed. The durable characterization keeps the owner
+metadata head positive while both query includeDeleted values return no items
+and direct prior/current tombstoned original expansion is refused for A and B.
