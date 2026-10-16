@@ -1,5 +1,17 @@
 # M14 Desktop validation checkpoint
 
+Current consumer composition after the resumed increment includes M13
+`f1e059e4c0bf86b860d8b1c9154b1cb36b0fbd13` plus exact Vault
+`07f54ac3163b2688fbb6a259f164eef1771d23ff`, M15 Android
+`c81ca46fac0e6073c7881f842cf0d7dfa62ec770`, M16 portable import
+`89ddc973f0eb68262f047826d2df23c4b41df5ad` and restart fix
+`1fd1189ec760b4eedb784973a96e8eab5c52ee61`. The Android merge at `f4b493ba`
+resolves only catalog prefix insertions with the union of both synchronized
+message sets; bilingual validation exits 0. Its runtime is the exact tested c81
+consumer, not an untested later Android candidate. M13 raw archive and Web import
+consumers still await their frozen owning-module increments. These dependency
+checkpoints do not imply completion of M13/M15/M16 or M12 acceptance.
+
 ## Portable import Activity
 
 M16's exact `89ddc973f0eb68262f047826d2df23c4b41df5ad` is composed. RED
