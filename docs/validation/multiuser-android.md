@@ -664,3 +664,21 @@ retirement fence fixes only that publication boundary; all three original
 browser approval renderer cases now pass3/3, no skip
 (`/tmp/m15-browser-approval-final-narrow.log/.exit`0). Native entry/types/build and
 independent review are still pending, so this is not a final shared freeze.
+
+### Recording checkpoint reader: narrow producer acceptance
+
+Original native recording controls still refer to the retired global registry,
+steps and item routes. Test8f8090b1 first ran actual M01/M04/M09/M10/M05/M03 for
+same-ID A/B, retaining successful transcripts while generated audio failed. The
+absent scoped checkpoint route failed503≠200 at the real HTTP read
+(`/tmp/m15-recording-reader-valid-red.log/.exit`1), not during fixture setup.
+The new existing-ledger reader passes the unchanged case1/1,no skip in2.895s
+(`/tmp/m15-recording-reader-green2.log/.exit`0), including actual audio recovery,
+unchanged transcript capture, owner/query/selection-bound pagination, no external
+I/O during reads, and disabled-A/B-positive controls. Scope inventory0.
+
+This producer adds no schema/state/runtime and reuses the existing host-provided
+PrivateCursor key. Current-selection archive/checkpoint flags are distinct from
+M06 indexed/Memory outcomes and from historical archive browsing outside that
+selection. Native recording consumers, full history, types, independent review
+and final gates are still pending; this is not a complete recording freeze.

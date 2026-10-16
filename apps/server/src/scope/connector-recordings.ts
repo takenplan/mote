@@ -41,6 +41,24 @@ export class ScopedRecordingAdapter {
  private sourceId(){if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);return this.provider.id+'-recordings-'+hash(this.saved.account.id).slice(0,24);}
  private async fence(){this.assert();if(this.signal.aborted)throw new ConnectorError('recording_cancelled',409);const current=await this.provider.account(this.signal);this.assert();if(current.id!==this.saved.account?.id)throw new ConnectorError('recording_account_changed',409);}
  async status(){await this.init();return {provider:this.provider.id,connected:Boolean(this.saved.account),selection:this.saved.selection,counts:{pending:this.ledger.rows<Work>(this.saved.epoch,'work:').filter(r=>!r.value.transcript||this.saved.selection.backupAudio&&!r.value.media).length,failed:this.ledger.rows<Work>(this.saved.epoch,'work:',-1,true).length}};}
+ /** Read the existing current-selection journal; no provider probe or task is
+  * admitted. Archived files outside this selection remain in canonical M03. */
+ async recordingPage(limit:number,position:(epoch:string)=>string|undefined){
+  await this.init();const epoch=this.saved.epoch,after=position(epoch),rows=this.ledger.rows<Work>(epoch,'work:');
+  const index=after===undefined?-1:rows.findIndex(row=>row.key===after);if(after!==undefined&&index<0)throw new ConnectorError('invalid_cursor',400);
+  const page=rows.slice(index+1,index+limit+2),visible=page.slice(0,limit),sourceId=this.saved.account?this.sourceId():undefined;
+  const items=visible.map(({value:work})=>{
+   const transcript=sourceId?this.ctx.sources.getItem(sourceId,work.id+':export'):undefined,audio=sourceId?this.ctx.sources.getItem(sourceId,work.id+':audio'):undefined,metadata=transcript?.document?.originalMetadata;
+   return {id:work.id,...(work.metadata?{title:work.metadata.title.slice(0,2000),...(work.metadata.recordedAt?{recordedAt:work.metadata.recordedAt}:{})}:{}),
+    transcript:{archived:Boolean(work.transcript),blocked:Boolean(work.transcriptBlocked),attempts:work.transcriptAttempts??0,...(work.transcriptNextAt?{nextAttemptAt:work.transcriptNextAt}:{})},
+    audio:{required:this.saved.selection.backupAudio,archived:Boolean(work.media),blocked:Boolean(work.mediaBlocked),attempts:work.mediaAttempts??0,...(work.mediaNextAt?{nextAttemptAt:work.mediaNextAt}:{})},
+    ...(work.error?{error:work.error}:{}),...(transcript?{transcriptCaptureId:transcript.captureId}:{}),...(audio?{audioCaptureId:audio.captureId}:{}),
+    ...(typeof metadata?.formatError==='string'&&metadata.formatError?{unsupported:true}:typeof metadata?.empty==='boolean'?{empty:metadata.empty}:{}),
+   };
+  });
+  const latest=await this.file.read();this.assert();if(latest?latest.epoch!==epoch:Boolean(this.saved.account))throw new ConnectorError('recording_state_changed',409);
+  return {epoch,sourceId,items,nextKey:page.length>limit?visible.at(-1)!.key:undefined};
+ }
  async login(progress:(value:unknown)=>void){await this.init();await this.authorize!(progress);return this.connect();}
  async connect(){await this.init();const account=await this.provider.account(this.signal);this.assert();if(this.saved.account?.id!==account.id){if(this.saved.account)this.ctx.sources.update(this.sourceId(),{enabled:false});this.saved={...this.saved,account,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};}await this.file.write(this.saved);this.ctx.sources.register({id:this.sourceId(),name:this.provider.id+' recordings',kind:this.provider.id+'.recordings',deviceId:this.sourceId(),platform:'import',retention:'archive',enabled:false});return this.status();}
  async select(value:unknown){await this.init();const selection=recordingSelectionSchema.parse(value);await this.fence();if(JSON.stringify(selection)!==JSON.stringify(this.saved.selection))this.saved={...this.saved,epoch:randomUUID(),selection};await this.file.write(this.saved);this.ctx.sources.update(this.sourceId(),{enabled:selection.enabled});return this.status();}
