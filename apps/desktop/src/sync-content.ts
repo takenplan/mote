@@ -73,10 +73,17 @@ export async function readCentralContent(config:Config,item:SyncHistoryItem,chun
     if(provenance?.sourceId){
       let cursor:string|undefined;let found:any;const seen=new Set<string>();
       do{const page=await accountJson(config,'/api/materials?'+new URLSearchParams({sourceId:String(provenance.sourceId),deviceId:config.deviceId,limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items))throw Error('Invalid material page');
-        for(const material of page.items){const members=await accountJson(config,`/api/materials/${material.id}/members?revision=${material.revision}&limit=200`);if(members.items?.some((member:any)=>member.kind==='capture'&&member.ref==='capture:'+record.id)){found=material;break;}}
+        for(const material of page.items){let offset=0;
+          while(true){const members=await accountJson(config,`/api/materials/${material.id}/members?revision=${material.revision}&offset=${offset}&limit=200`);if(!Array.isArray(members.items)||members.items.length>200)throw Error('Invalid material member page');
+            if(members.items.some((member:any)=>member.kind==='capture'&&member.ref==='capture:'+record.id)){found=material;break;}
+            if(members.nextOffset===null||members.nextOffset===undefined)break;
+            if(!Number.isSafeInteger(members.nextOffset)||members.nextOffset<=offset)throw Error('Invalid material member cursor');offset=members.nextOffset;
+          }
+          if(found)break;
+        }
         cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated material cursor');seen.add(cursor);}
       }while(!found&&cursor);
-      if(found){const page=await accountJson(config,`/api/materials/${found.id}/read?revision=${found.revision}&offset=${chunkOffset}&length=12000`);result.text=page.text;result.nextChunkOffset=page.textRange?.nextOffset??undefined;result.truncated=Boolean(result.nextChunkOffset);result.readiness=found.coverage?.state==='complete'?'ready':'pending';}
+      if(found){const page=await accountJson(config,`/api/materials/${found.id}/read?revision=${found.revision}&offset=${chunkOffset}&length=12000`);result.text=page.text;result.nextChunkOffset=page.textRange?.nextOffset??undefined;result.truncated=Boolean(result.nextChunkOffset);result.readiness=found.coverage?.state==='complete'&&found.indexing?.state==='indexed'?'ready':found.indexing?.state==='failed'?'failed':'pending';}
       else result.readiness=provenance.layer==='reference'?'metadata':provenance.document?'pending':'unknown';
     }
     return result;

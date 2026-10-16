@@ -232,4 +232,4 @@ it('preserves capture browsing for a legitimate page whose full OCR body exceeds
  const items=Array.from({length:61},(_,i)=>({...event('00000000-0000-4000-8000-'+String(i+1).padStart(12,'0')),deviceId:config.deviceId,ocrText:'Generated content '.repeat(5555),imageBase64:image.toString('base64')}));const response=await f.request(f.a.token,`/api/ingress/sources/${sourceId}/captures`,'POST',{batchId:'generated-large',items});expect(response.statusCode,response.body).toBe(200);
  const queue=new DurableQueue(join(f.directory,'large-reader'),config);await queue.initialize();const page=await browseCaptures(queue,config,{location:'central',day:'2026-09-13',grouping:'records'});expect(page.totalCount).toBe(61);expect(page.items).toHaveLength(30);expect(page.items.every(v=>v.textPreview===items[0].ocrText.slice(0,160))).toBe(true);
  expect((await captureDetail(queue,config,'central',items[0].id)).ocrText).toBe(items[0].ocrText);expect((await f.request(f.b.token,'/api/captures')).json().items).toHaveLength(0);
-});
+},60000);

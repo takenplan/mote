@@ -15,7 +15,7 @@ export async function accountJson(config:Config,path:string,body?:unknown):Promi
 /** Walk the real signed server cursor; never apply a local filter after LIMIT. */
 export async function accountCaptures(config:Config,filters:Record<string,string>={}):Promise<any[]>{
  const items:any[]=[],seen=new Set<string>();let cursor:string|undefined;
- do{const page=await accountJson(config,'/api/captures?'+new URLSearchParams({deviceId:config.deviceId,...filters,limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items)||page.items.some((v:any)=>v.deviceId!==config.deviceId))throw Error('Private capture page mismatch');items.push(...page.items);cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated private capture cursor');seen.add(cursor);}}while(cursor);
+ do{const page=await accountJson(config,'/api/captures?'+new URLSearchParams({deviceId:config.deviceId,...filters,projection:'preview',limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items)||page.items.some((v:any)=>v.deviceId!==config.deviceId))throw Error('Private capture page mismatch');items.push(...page.items);cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated private capture cursor');seen.add(cursor);}}while(cursor);
  return items;
 }
 export function accountPagePosition(config:Config,cursor:string|undefined,query:unknown):number{

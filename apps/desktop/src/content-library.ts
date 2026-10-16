@@ -36,7 +36,7 @@ export interface CentralContentPage {items:ContentItem[];total:number;nextCursor
 export async function centralContentPage(config:import('./contracts').Config,cursor?:string):Promise<CentralContentPage>{
   if(config.account){
     const query={deviceId:config.deviceId},offset=accountPagePosition(config,cursor,query),rows=await accountCaptures(config),page=rows.slice(offset,offset+30);
-    return {items:page.map(row=>({key:`capture:${row.id}`,source:row.source==='message'?'coding':row.source,title:String(row.windowTitle||row.appName||'').slice(0,200),observedAt:row.capturedAt,preview:String(row.ocrText??'').slice(0,160),sourceName:row.deviceName})),total:rows.length,...(offset+30<rows.length?{nextCursor:accountPageCursor(config,query,offset+30)}:{})};
+    return {items:page.map(row=>({key:`capture:${row.id}`,source:row.source==='message'?'coding':row.source,title:String(row.windowTitle||row.appName||'').slice(0,200),observedAt:row.capturedAt,preview:String(row.textPreview??row.ocrText??'').slice(0,160),sourceName:row.deviceName})),total:rows.length,...(offset+30<rows.length?{nextCursor:accountPageCursor(config,query,offset+30)}:{})};
   }
   const {requireConnectionToken}=await import('./login-session.js');const {validateServerUrl}=await import('./config.js');const {readResponseText}=await import('./response-body.js');
   if(cursor!==undefined&&(typeof cursor!=='string'||cursor.length>512))throw Error(moteText('分页参数无效'));
