@@ -29,6 +29,31 @@ class CentralPortableDownloadTest {
             } finally {executor.shutdownNow();directory.deleteRecursively()}
         }
     }
+    @Test fun `original ticket download sends Ingress3 and verifies exact bytes without a portable ETag`() {
+        val bytes="Generated original WAV bytes".toByteArray();val sha=Ingress3Client.hash(bytes)
+        for(case in listOf("good","hash")) {
+            val directory=Files.createTempDirectory("m15-original-download-").toFile();val executor=Executors.newSingleThreadExecutor()
+            ServerSocket(0,1,java.net.InetAddress.getLoopbackAddress()).use {listener->
+                val response=executor.submit {
+                    listener.accept().use {socket->
+                        socket.soTimeout=5000;val input=socket.getInputStream().bufferedReader();val lines=mutableListOf<String>()
+                        while(true){val line=input.readLine();if(line.isEmpty())break;lines.add(line)}
+                        assertTrue(lines.any {it.equals("X-Mote-Ingress-Version: 3",ignoreCase=true)})
+                        val actual=bytes.copyOf().apply {if(case=="hash")this[0]=(this[0]+1).toByte()}
+                        socket.getOutputStream().apply {write("HTTP/1.1 200 OK\r\nContent-Type: audio/wav\r\nContent-Length: ${actual.size}\r\nConnection: close\r\n\r\n".toByteArray());write(actual);flush()}
+                    }
+                }
+                val api=CentralClient("http://127.0.0.1:${listener.localPort}","generated-original-token");val output=java.io.File(directory,"selected.wav").apply {writeText("Generated existing document sentinel")};var opened=0
+                try {
+                    val run={api.downloadVerified("/api/ingress/originals/generated/content?ticket=generated",{opened++;output.outputStream()},CentralDownload(bytes.size.toLong(),sha,"audio/wav",false),directory)}
+                    if(case=="good"){run();assertArrayEquals(bytes,output.readBytes());assertEquals(1,opened)}
+                    else{assertThrows(Exception::class.java,run);assertEquals(0,opened);assertEquals("Generated existing document sentinel",output.readText())}
+                    assertEquals(listOf("selected.wav"),directory.listFiles()!!.map {it.name});response.get(5,TimeUnit.SECONDS)
+                }finally{executor.shutdownNow();directory.deleteRecursively()}
+            }
+        }
+    }
+
     @Test fun `download publishes only exact receipt bytes and removes all staging`() {
         val bytes="Synthetic private export 中文".toByteArray(Charsets.UTF_8)
         val sha=Ingress3Client.hash(bytes)

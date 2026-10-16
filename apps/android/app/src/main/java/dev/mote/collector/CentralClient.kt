@@ -61,6 +61,7 @@ internal class CentralClient(
         try {
             connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 120000
             ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            if (URI(path).path.startsWith("/api/ingress/")) connection.setRequestProperty("X-Mote-Ingress-Version", "3")
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
@@ -112,6 +113,7 @@ internal class CentralClient(
         try {
             connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 30000
             ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            if (URI(path).path.startsWith("/api/ingress/")) connection.setRequestProperty("X-Mote-Ingress-Version", "3")
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
