@@ -147,7 +147,7 @@ export class DurableQueue {
         await readFile(join(target, 'connection-binding.json'));
         const binding = new ConnectionBindingStore(join(target, 'connection-binding.json'), async (path, value) => { await this.storageGuard?.(); await atomicWrite(path, JSON.stringify(value)); });
         const config = this.limits as QueueLimits & Partial<Config>;
-        await binding.initialize({ serverUrl: config.serverUrl ?? '', token: config.token }, activeUsage(this.records.values()).depth > 0);
+        await binding.initialize({ serverUrl: config.serverUrl ?? '', token: config.token,account:config.account }, activeUsage(this.records.values()).depth > 0);
         await commitConfig();
         // No fallible operation after the durable pointer commit and before activation.
         this.storageDirectory = target; this.storageBinding = binding;
@@ -230,7 +230,7 @@ export class DurableQueue {
         if (name.endsWith('.tmp') || (name.endsWith('.jpg') && HASH.test(name.slice(0, -4)) && !checked.has(name.slice(0, -4)))) await unlink(join(this.directory, 'blobs', name));
       }
       const config = this.limits as QueueLimits & Partial<Config>;
-      await this.binding.initialize({ serverUrl: config.serverUrl ?? '', token: config.token }, activeUsage(restored.values()).depth > 0);
+      await this.binding.initialize({ serverUrl: config.serverUrl ?? '', token: config.token,account:config.account }, activeUsage(restored.values()).depth > 0);
       try { const checkpoint = JSON.parse(await readFile(join(this.directory, 'sync-checkpoint.json'), 'utf8')); this.lastUploadAt = checkpoint.lastUploadAt; this.sourceRetryAt = checkpoint.nextRetryAt; this.archiveAcknowledgment = checkpoint.archiveAcknowledgment; } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
       this.initialized = true;
     });

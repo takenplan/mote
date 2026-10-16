@@ -4,6 +4,7 @@ export type CollectionMode = 'content' | 'activity' | 'off';
 export type Platform = 'macos' | 'windows' | 'linux';
 export type Rectangle = { x: number; y: number; width: number; height: number };
 export interface Config {
+  account?: import('./account').DesktopAccount;
   uploadGate?: import('./upload-gate').UploadGateConfig;
   serverUrl: string;
   syncMode: SyncMode;
