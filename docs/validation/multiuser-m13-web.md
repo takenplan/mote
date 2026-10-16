@@ -344,3 +344,10 @@ M15 independent bounded review05c+58+e57 `/tmp/mote-m15-review-m13-memory-e57.md
 
 
 Management final narrow renderer `/tmp/m13-management-renderer-final-green.log`1/1 EXIT0, including the small clipboard lifecycle guard and retained version-mismatch warning. i18n `/tmp/m13-management-i18n.log/.exit` EXIT0,8401 messages. Fresh final Web/server build/type/affected and actual IAB for this management increment remain pending M16's sole-heavy gate.
+
+
+### Original Activity consumer after M14 composition
+
+ce3f2144 actual renderer RED `/tmp/m13-activity-route-red.log` EXIT1: a real M07 publication is already returned by the composed M14 work-activity API, while the original Web Activity entry renders Processing instead of goal cards. Restoring the existing Activity entry reaches a second business RED `/tmp/m13-activity-evidence-loopback-red.log` EXIT1: Memory evidence is opened as a raw capture rather than the declared M08 context reader. The first restricted attempt `/tmp/m13-activity-evidence-red.log` only failed listen EPERM before business assertions and is an environment failure, not another RED.
+
+The original Activity component is reused with full Api identity retirement. Only Web Memory/Ask/Insight producers mark capture references as context reads; ingestion File/Image cards retain their raw-capture boundary. No backend aggregate or runtime is duplicated. `/tmp/m13-activity-memory-green.log/.exit` 5/5 EXIT0 covers the actual Material→chosen model→lost admission ACK→same operation→publication→Activity card/detail→evidence/context read chain, earlier actual Memory correction/audit/account boundaries, and three legacy Activity characterization cases. This is narrow renderer evidence; fresh type/build/IAB/full affected of the resulting candidate remain pending.
