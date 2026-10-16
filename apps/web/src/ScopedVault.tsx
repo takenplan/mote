@@ -5,6 +5,7 @@ import {type Api,bytes,dateTime,errorMessage} from './api';
 import {useResource} from './useResource';
 import {resources} from './resource-cache';
 import {lifecycleReceipt,lifecycleLabel,type LifecycleReceipt} from './lifecycle-receipt';
+import {ScopedPortableImport} from './ScopedPortableImport';
 const selectedExport=()=>{const id=new URLSearchParams(window.location.hash.split('?')[1]??'').get('export');return id&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id)?id:undefined;};
 
 export function ScopedVault({api,embedded,disconnect}:{api:Api;embedded?:boolean;disconnect:()=>void}){
@@ -38,7 +39,7 @@ export function ScopedVault({api,embedded,disconnect}:{api:Api;embedded?:boolean
  {receipt&&<section className="portable-export-receipt" aria-live="polite"><h3>{lifecycleLabel(receipt.state)}</h3><p>{dateTime(receipt.createdAt)}</p><p>{moteText('当前阶段：{0}',receipt.phase)}</p>{receipt.error&&<p role="status">{receipt.error}</p>}<details><summary>{moteText('覆盖范围与处理状态')}</summary>{receipt.domains.map(domain=><p key={domain.domain}>{domain.domain} · {domain.state}</p>)}</details>{receipt.state==='completed'&&<><p>{bytes(receipt.bytes!)}</p><button className="button" disabled={busy} onClick={()=>void download()}>{moteText('下载归档')}</button></>}{receipt.state==='failed'&&<button className="button" disabled={busy} onClick={()=>void control('retry')}>{moteText('重试')}</button>}{receipt.state!=='cancelled'&&<button className="button subtle" disabled={busy} onClick={()=>void control('cancel')}>{moteText('取消归档')}</button>}</section>}
  <div className="connection-list">{items.map(item=><button className="button subtle" key={item.id} onClick={()=>select(item.id)}>{dateTime(item.createdAt)} · {lifecycleLabel(item.state)}</button>)}</div><div className="processing-actions">{cursor&&<button className="button" onClick={()=>setCursor(undefined)}>{moteText('返回第一页')}</button>}{page.data?.nextCursor&&<button className="button" onClick={()=>setCursor(page.data!.nextCursor!)}>{moteText('下一页')}</button>}<button className="button subtle" onClick={refresh}>{moteText('刷新')}</button></div>
  <p role="status">{moteText('当前支持账号归档；元数据和附件分别导出的接口尚待接入。')}</p><div className="transfer-export-actions"><button className="button subtle" disabled>{moteText('导出元数据')}</button><button className="button subtle" disabled>{moteText('导出资料与附件')}</button></div>
- <div className="transfer-action"><div><h3>{moteText('导入归档')}</h3><p role="status">{moteText('个人归档导入的合并与去重协议尚待完成，当前不能提交导入。')}</p></div><button className="button subtle" disabled>{moteText('选择文件')}</button></div>
+ <ScopedPortableImport api={api}/>
  <div className="backup-note"><Info size={16}/><div><strong>{moteText('大资料库适合使用离线备份')}</strong><p>{moteText('实例备份与恢复由中央节点停机命令执行。')}</p><code>npm run backup -- --help</code></div></div></section>
  <section className="panel node-settings"><div><strong>{moteText('当前服务（中央节点）')}</strong><p>{connection.origin}</p></div><button className="button subtle" onClick={disconnect}><Unplug size={15}/>{moteText('退出登录')}</button></section></>;
 }
