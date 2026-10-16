@@ -1,10 +1,10 @@
 # M10 connector validation
 
-Status: M06 independently closed the task-secret P1 at `8987feb6a88729ddfa56048c145ec9a67d000c71`.
+M06 independently closed the task-secret P1 at `8987feb6a88729ddfa56048c145ec9a67d000c71`.
 Accepted M06 #133 is now stacked with real provider-original-to-Material integration.
-M11 approved composed freeze `41d2775307db5afecbb5b40b81b5fd8c8a0b9b9b`.
-A later emitted-code probe confirmed a subjectless-email publication edge case;
-its repair, follow-up independent review and final verification are pending.
+Status: completed final runtime acceptance at `2ae03155ef766655f4996977e4eedcc0a2177e9d`.
+M11 approved the complete composed freeze and the subjectless-email follow-up delta;
+no remaining confirmed P0/P1/P2. Final receipts are recorded below.
 Baseline: PR #132 `cdc5c34c36fc5743049007ee2c76d705fde3dd7f`.
 Integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 Additional accepted dependency: Draft #133 head `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`,
@@ -54,7 +54,7 @@ HTTP/CLI I/O is substituted; source/archive/task services are real.
 | Controlled shutdown during a blocked Gmail read, original task resumes after restart | `controlled shutdown interrupts active Gmail work into waiting and restart resumes its admitted task and original cursor` |
 | Seeded durable crash activity, purpose-bound erasure reconciliation and B denial | `durable crashed-activity fixture requires a purpose-bound stopped observation before connector erasure and never settles B` |
 | Archive-retention Gmail incremental replay and immutable raw original | `snapshot-retention Gmail delta replay retains canonical normalized head and the same immutable provider original when only its provider envelope changes`; same for `archive-retention` |
-| Distinct process HTTP listener, pending OAuth recovery, A/B source/original reads, replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals and decoded subjectless Material through the production composition` |
+| Distinct process HTTP listener, pending OAuth recovery, A/B raw originals and decoded subjectless Material, display fallback and foreign/replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals and decoded subjectless Material through the production composition` |
 | Configure secret never enters task/event/export storage, interrupted restart, A/B and scoped disconnect | `Lark configure encrypted task reference survives interrupted restart, isolates A/B and disconnect removes only A payloads` |
 | Provider failure prose is fixed, encrypted retry survives restart | `failed Lark configuration keeps only encrypted retry payload across restart and exposes fixed errors` |
 | Instance removal/domain erasure clears payload envelopes without changing B | `removing a configured Lark instance and deleting its connector domain erases operation payloads without erasing B` |
@@ -102,7 +102,7 @@ CI is disabled by instruction; workflows must remain disabled and CI unrun.
 
 ## Known boundaries
 
-M13 renderer and M07 Memory remain separate modules. The final M10 feature
+M13 renderer, M07 Memory and M11 MCP remain separate modules. The final M10 feature
 includes accepted M06 and restores actual source/provider-original/processing/Material intake. Native CLI binaries
 are deployment dependencies, verified at their pinned versions before use.
 Windows native credential storage is explicitly unsupported until an isolated
@@ -124,8 +124,8 @@ real-app secret lifecycle regressions passed **5/5**, exit 0
 credential-free domain exports, retry/restart, scoped disconnect/removal/deletion,
 pre-admission validation and history-preserving upgrade of earlier candidate input.
 The interrupted full affected invocations exited 143 and are not accepted evidence.
-M06 owns the heavy slot while M10 repairs and read-reviews its frozen implementation.
-Final M06+M10 provider-original-to-Material combination remains required.
+At that repair stage M06 owned the heavy slot while M10 repaired and read-reviewed
+its frozen implementation. The final real M06+M10 combination is now verified below.
 
 
 ## Real M06 composition acceptance
@@ -162,8 +162,9 @@ independent five secret-lifecycle regressions5/5 exit0. Report
 `/tmp/mote-m06-review-m10.md`. M10 independently approved full M06 runtime07ad
 using literal source archives (8 core,2 image-context and8 final lineage/legacy
 cases, all exit0); report `/tmp/mote-m10-review-m06.md`.
-Final new composition is assigned to active M11 for read-only independent review;
-completed M06 must not be awakened. No additional execution conversation is created.
+M11 completed read-only independent review of the final new composition and its
+follow-up repair. Completed M06 was not awakened; no extra execution conversation
+was created.
 
 
 ## Subjectless Gmail publication repair
@@ -186,4 +187,90 @@ the real Material metadata endpoint. Final targeted process regression1/1, exit0
 Prior exact41d module49/49, actual combination282/282, Server/Web builds and original
 emitted smoke all exited0. The subsequent exact41d full affected was interrupted
 with exit143 when this source repair became necessary and is diagnostic only.
-Final frozen-source checks and follow-up peer review replace these receipts.
+The final frozen-source checks and follow-up peer review below replace these receipts.
+
+
+## Final frozen-source acceptance
+
+All commands below ran on clean final runtime commit
+`2ae03155ef766655f4996977e4eedcc0a2177e9d`, including accepted M06 #133
+head `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56` and baseline #132
+head `cdc5c34c36fc5743049007ee2c76d705fde3dd7f`. Post-validation publication
+changes contain Markdown evidence only; the exact remote publication head and
+protected base are recorded in the Draft PR and executor final handoff.
+
+| Final command | Result | Receipt |
+| --- | --- | --- |
+| `node --import tsx --test --test-concurrency=2 --test-timeout=120000 apps/server/test/multiuser-connectors.test.ts apps/server/test/multiuser-connectors-cli.test.ts apps/server/test/multiuser-connectors-process.test.ts` | 49/49, zero failures/cancellations/skips, exit0 | `/tmp/m10-2ae-focused.log`, `.exit` |
+| `node --import tsx --test --test-concurrency=2 --test-timeout=120000 apps/server/test/scope*.test.ts apps/server/test/multiuser*.test.ts` | 282/282, zero failures/cancellations/skips, exit0 | `/tmp/m10-2ae-combined.log`, `.exit` |
+| `npm run build -w @mote/server` | fresh build, exit0 | `/tmp/m10-2ae-server-build.log`, `.exit` |
+| `npm run build -w @mote/web` | fresh build, exit0; existing chunk-size warning | `/tmp/m10-2ae-web-build.log`, `.exit` |
+| `MOTE_CONNECTORS_PROCESS_ENTRY="$PWD/apps/server/dist/app.js" node --import tsx --test apps/server/test/multiuser-connectors-process.test.ts` | 1/1, zero failures/cancellations/skips, exit0; genuine emitted HTTP two-process pending OAuth recovery, decoded subjectless Material and A/B denials | `/tmp/m10-2ae-emitted.log`, `.exit` |
+| `npm run check:affected -- --base origin/codex/mote-multiuser-integration` | full affected plan, exit0 | `/tmp/m10-2ae-affected.log`, `.exit` |
+
+The affected plan selected `check:local` and
+`apps/android/gradlew -p apps/android --no-daemon :app:testDebugUnitTest`.
+It used the existing documented environment, without installing or changing it:
+
+```sh
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
+PATH="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin:$PATH" \
+npm run check:affected -- --base origin/codex/mote-multiuser-integration
+```
+
+I18n, library builds and every workspace/scripts typecheck passed. Actual full
+check counts (the focused and combined commands above overlap these suites):
+
+| Full affected component | Passed | Skipped | Failed |
+| --- | ---: | ---: | ---: |
+| Desktop, 58 test files | 456 | 0 | 0 |
+| Server | 2238 | 1 | 0 |
+| Web | 469 | 0 | 0 |
+| Agent | 317 | 1 | 0 |
+| Diagnostics | 5 | 0 | 0 |
+| Shared | 190 | 0 | 0 |
+| Root release/media/security/reset/proxy scripts | 81 | 0 | 0 |
+| CLI client | 4 | 0 | 0 |
+| Android, 70 JUnit XML suites | 329 | 0 | 0 |
+
+The two existing opt-in skips are `macOS sandbox permits staged input but denies
+files and network outside it` and `installed Codex speaks to a synthetic local
+Responses fixture with Mote evidence tools and ephemeral planning only`. They
+were not run and are not passes. The central runner also returned its actual
+`status:passed` receipt, including restart/log bounds, private content suppression,
+file mode, exit/signal preservation and disk-failure handling. Android was fresh
+in this checkout: `BUILD SUCCESSFUL in 41s`, `25 actionable tasks: 25 executed`;
+JUnit totals329, failures0, errors0, skipped0. Existing Kotlin/compiler warnings
+remain warnings; no physical device or emulator validation is claimed.
+
+## Completed independent review
+
+M06's original P1 secret-retention finding is closed at
+`8987feb6a88729ddfa56048c145ec9a67d000c71`; its unchanged probe reports0/0/0,
+1/1 exit0, plus independent five secret-lifecycle regressions5/5 exit0. Report:
+`/tmp/mote-m06-review-m10.md`.
+
+M11 reviewed exact clean composition
+`41d2775307db5afecbb5b40b81b5fd8c8a0b9b9b`, then the full `41d..2ae`
+subjectless-mail delta, without sibling source or existing database writes. It
+found no remaining confirmed P0/P1/P2. Its independent receipts are:
+
+- Real joint/upgrade/opaque-reference scenarios7/7, exit0:
+  `/tmp/m11-independent-m10-joint-authorized.log`, `.exit`.
+- Secret lifecycle and synchronous admission scenarios6/6, exit0:
+  `/tmp/m11-independent-m10-secrets-admission.log`, `.exit`.
+- Final2ae existing source-entry real HTTP two-process subjectless-mail smoke1/1,
+  zero failures/cancellations/skips, exit0:
+  `/tmp/m11-independent-m10-subjectless-process.log`, `.exit`.
+
+Report: `/tmp/mote-m11-review-m10.md`. The first M11 joint invocation could not bind
+loopback in the default sandbox (`EPERM`, exit1); the exact same command with
+authorized generated loopback fixtures passed. That first invocation is diagnostic.
+M11 did not overlap a heavy affected or Android run, and M06 was not awakened.
+
+CI Checks and Component checks remain `disabled_manually`; CI is **unrun**, never
+reported as passed. Existing tag/manual Release Android/Central/Desktop settings
+are unchanged. The protected integration branch and main were not modified; no PR
+was merged. All runtime acceptance uses generated isolated provider/model fixtures,
+not real mail, user data, grants, persistent live credentials, devices or deployment.
