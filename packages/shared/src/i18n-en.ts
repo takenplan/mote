@@ -8451,5 +8451,6 @@ export const english: Readonly<Record<string, string>> = {
   "保存说话人姓名": "Save speaker names",
   "原件已保存": "Original saved",
   "正文已处理": "Content processed",
-  "正文已索引": "Content indexed"
+  "正文已索引": "Content indexed",
+  "定位信息": "Evidence location"
 };
