@@ -309,3 +309,26 @@ only on loopback listen EPERM and passed unchanged with loopback access; preserv
 Independent architecture/TDD review, final full combination, fresh builds/emitted
 processes and required affected/Android remain pending. No final acceptance or
 Draft PR is claimed from this narrow checkpoint. CI is disabled and unrun.
+
+## Public-contract A: actual restore and bounded ordinary page reads
+
+After the completed PR135 architecture review, test-only RED commit
+`6d40b997866d19ee1e0b9cde5d6579f3b38cdf3a` extends both retained-v1 cases
+through actual purpose-bound private-data/ingress/processing export, deletion and
+restore. The same previously retained reader is reused after restore; current,
+historical and dependent unfiltered projections stay withdrawn, original bytes
+and B remain intact, and restart grants no task replay. Portable fixtures use
+canonical schema normalization and exact current member refs; earlier malformed
+fixture rejection is not a production failure.
+
+The additional ordinary-page regression measures real PrivateSql calls without
+replacing SQL execution: 80 normal Materials per owner, an actual HTTP 50-item
+page. RED: 52 full-owner legacy scans, 2 restore cases passed and 1 performance
+case failed, exit 1 (`/tmp/m07-public-A-restore-perf-red-valid.log`). This is a
+new migration performance defect, not a pre-existing legacy-flow bug. Exact
+Material reads now scope migration root detection to that ID. Page/search retain
+the full-owner before-candidate/LIMIT check and transitive withdrawal semantics.
+GREEN: 5/5, exit 0, 6766.278291ms, full-owner scans 2, measured page 7.069ms
+(`/tmp/m07-public-A-restore-perf-fixed.log`). This bounds repeated scan count,
+not a claim about production-scale throughput. Server typecheck exits 0.
+Final same-SHA A/B/C, full affected/Android and PR gates remain pending.
