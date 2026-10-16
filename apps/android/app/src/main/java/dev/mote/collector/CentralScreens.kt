@@ -503,8 +503,9 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     }
 
     fun confirm(title: String, message: String, action: () -> Unit) {
+        val owner = client; val revision = ui.navigationRevision
         MoteDialogBuilder(ui).setTitle(title).setMessage(message).setNegativeButton(MoteI18n.text("取消"), null)
-            .setPositiveButton(MoteI18n.text("确认")) { _, _ -> action() }.show()
+            .setPositiveButton(MoteI18n.text("确认")) { _, _ -> if (ui.client === owner && ui.navigationRevision == revision) action() }.show()
     }
     companion object {
         fun encode(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")
