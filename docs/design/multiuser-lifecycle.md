@@ -40,6 +40,7 @@ files and an exclusive destination outside the vault. SQLite backup runs against
 a disposable copy including WAL, leaving the source untouched. The manifest is
 published last; missing/unexpected files, paths, links, checksums, deployment,
 SQL consistency, required epoch-5 tables/columns, installed package integrity and native Mem0 records are verified. A cold account with only usage/state metadata may retain an implicit unchanged default configuration; any durable initialization, credential, receipt or restore provenance requires its canonical YAML.
+Known private SQL owner namespaces must name a safe canonical account before any owner path is resolved. Original completeness includes active physical pins and cannot be weakened by a future manifest timestamp; expired unpinned snapshots retain their original deadlines and unavailable metadata.
 Unknown external Memory providers without a native snapshot protocol fail closed.
 
 `npm run restore:instance -- --from BACKUP --data EMPTY_TARGET

@@ -335,3 +335,56 @@ SDK SQLite state, preserved Memory rows and retired plugin snapshots. This is
 compiled package/entry proof, not a container image/daemon or native Hindsight
 volume proof. The optional flags select these explicit integration checks; the
 default full suite also executes the source-host backup cases.
+
+
+## Third gate and subsequent independently discovered boundaries
+
+The complete required command at clean `ce9b832f565f6f128cc7159ed3a068e67d233acd`
+exited **0**, `/tmp/m16-required-affected-third.log/.exit`: Desktop 484/484,
+Server 2515 passed, zero failed and one existing opt-in OS sandbox skip; Web
+490/490; all other workspaces/root checks and the actual Android JVM task passed
+(`BUILD SUCCESSFUL`, 49 seconds, 25 executed tasks). This result covers that
+candidate, not the later fixes below.
+
+M15 independently found that two diagnostic attachment handlers awaited real
+file I/O and then called `reply.send` before the shared authorization wrapper's
+final check. Durable generated-account/actual-file barriers revoke the original
+administrator during that read and previously received 200 on both `/logs` and
+`/support-bundle`. Two additional real archive faults bypassed complete-original
+verification: a future manifest date hid an unexpired snapshot, and an expired
+snapshot with a live M03 physical pin was ignored. A canonical configuration
+owner containing `../../../outside` also selected a generated sibling YAML
+outside the archive. With regenerated manifest checksums these were accepted.
+The combined actual RED is **five failures/one positive**, exit 1,
+`/tmp/m16-retirement-owner-snapshot-red.log/.exit`, committed as `a21cc014`.
+
+`d7879a9e` asserts the captured administrator after the last await and before
+headers, then returns an unsent payload for the existing wrapper to authorize
+before serialization. `9797ca15` validates known SQL owner namespaces against
+real account identities before filesystem resolution, preserving the shared
+executor/operation empty-owner catalogs. Original completeness uses the earlier
+of manifest time and current time, and includes active same-owner/hash physical
+pins; expired unpinned metadata retains its existing unavailable/410 behavior.
+It does not renew snapshot deadlines, collector grants or execution permissions.
+The combined source suites passed **17/17**, exit 0,
+`/tmp/m16-retirement-owner-snapshot-green.log/.exit`; additional traversal,
+well-formed orphan and unsafe-account rejection passed **3/3**, exit 0,
+`/tmp/m16-backup-owner-extra-green.log/.exit`. All rejected restore targets remain
+absent. The expanded final suite contains those additional owner cases.
+
+At `9797ca15`, fresh `npm run build:central` exited 0,
+`/tmp/m16-central-build3.log/.exit`; explicit compiled-host/packaged-CLI backup
+suite passed **14/14**, exit 0,
+`/tmp/m16-backup-compiled-packaged-final.log/.exit`. It again exercises actual
+compiled process recovery and both CLI entry points without server TS sources.
+M13 independently reviewed the management fix (`/tmp/mote-m13-review-m16-d787.md`)
+and M15 reviewed the backup delta (`/tmp/mote-m15-review-m16-9797.md`); neither
+found a new confirmed P0/P1/P2. These are bounded static reviews, not independent
+reruns or whole-module acceptance. A fresh full required check remains mandatory.
+
+Personal import remains OPEN: the current adapters restore only their original
+identity and either an empty target or an identical replay, while the original
+personal import merged/deduplicated data. Host identity mapping and per-domain
+merge contracts must be defined before those hooks can safely expose that
+capability. The M12 handoff remains unauthorized. No missing domain is treated as
+successful, and neither this gate nor a draft PR means M16/project acceptance.
