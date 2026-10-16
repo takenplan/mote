@@ -14,6 +14,7 @@ const uuid=/^[a-f0-9-]{36}$/;
 const conflict=()=>new PrivateDataError('conflict',409);
 const sync=(path:string)=>{const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);try{fsyncSync(fd);}finally{closeSync(fd);}};
 type ObjectRow={hash:string;bytes:number;parts:number};
+export interface OriginalWorkspace {withDirectory<T>(work:(path:string)=>Promise<T>):Promise<T>;write(name:string,bytes:Buffer):void;read(name:string):Buffer;withFile<T>(name:string,work:(path:string)=>Promise<T>):Promise<T>}
 export type Original={ref:string;sourceId:string;captureId:string;hash:string;bytes:number;mime:string;retention:'snapshot'|'archive'};
 
 /** Scoped adapter for the original AssetStore's chunk layout, checksums, durable
@@ -127,10 +128,10 @@ export class Originals{
  });}
  cleanUpload(id:string){if(!uuid.test(id))throw missing();const path=join(this.trustedArea('uploads'),id);if(existsSync(path)){privateDirectory(path);rmSync(path,{recursive:true});}}
  cleanWork(id:string){if(!uuid.test(id))throw missing();const path=join(this.trustedArea('work'),id);if(existsSync(path)){privateDirectory(path);rmSync(path,{recursive:true});}}
- async workspace<T>(work:(workspace:{write(name:string,bytes:Buffer):void;read(name:string):Buffer})=>Promise<T>){
+ async workspace<T>(work:(workspace:OriginalWorkspace)=>Promise<T>){
   const id=randomUUID(),root=this.area('work'),path=join(root,id);privateDirectory(path);
   const child=(name:string)=>{this.assert();if(!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(name)||name==='..')throw new PrivateDataError('invalid_data');privateDirectory(this.area('work'));privateDirectory(path);return join(path,name);};
-  try{this.sql.run('INSERT INTO ig_work VALUES($user,?,?)',id,Date.now()+86400000);const result=await work(Object.freeze({write:(name:string,bytes:Buffer)=>{if(!Buffer.isBuffer(bytes)||bytes.length>FILE_MAX_BYTES)throw new PrivateDataError('invalid_data');const target=child(name);if(existsSync(target)){const info=lstatSync(target);if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1)throw conflict();}const fd=openSync(target,constants.O_WRONLY|constants.O_CREAT|constants.O_TRUNC|constants.O_NOFOLLOW,0o600);try{writeFileSync(fd,bytes);}finally{closeSync(fd);}},read:(name:string)=>this.readFile(child(name))}));this.assert();return result;}
+  try{this.sql.run('INSERT INTO ig_work VALUES($user,?,?)',id,Date.now()+86400000);const result=await work(Object.freeze({withDirectory:async<T>(callback:(path:string)=>Promise<T>)=>{this.assert();const value=await callback(path);this.assert();return value;},write:(name:string,bytes:Buffer)=>{if(!Buffer.isBuffer(bytes)||bytes.length>FILE_MAX_BYTES)throw new PrivateDataError('invalid_data');const target=child(name);if(existsSync(target)){const info=lstatSync(target);if(!info.isFile()||info.isSymbolicLink()||info.nlink!==1)throw conflict();}const fd=openSync(target,constants.O_WRONLY|constants.O_CREAT|constants.O_TRUNC|constants.O_NOFOLLOW,0o600);try{writeFileSync(fd,bytes);}finally{closeSync(fd);}},read:(name:string)=>this.readFile(child(name)),withFile:async<T>(name:string,callback:(path:string)=>Promise<T>)=>{const target=child(name);this.readFile(target);this.assert();const value=await callback(target);this.assert();return value;}}));this.assert();return result;}
   finally{this.cleanWork(id);try{this.sql.run('DELETE FROM ig_work WHERE user_id=$user AND id=?',id);}catch{/* A revoked metadata row is swept by lifecycle/recovery. */}}
  }
 }

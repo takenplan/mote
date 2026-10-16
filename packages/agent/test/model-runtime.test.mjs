@@ -1,6 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {modelConnection,modelRuntimeEntries} from '../dist/model-runtime.js';
+import {modelConnection,modelRuntimeEntries,validateModelOptions} from '../dist/model-runtime.js';
+import {createAgent} from '../dist/index.js';
+
+test('fixed media profiles are valid connections but cannot enter a language-agent runtime or override binary transport',()=>{
+ const settings={protocol:'mote-media',baseUrl:'http://127.0.0.1:9009/transcribe',model:'generated-asr',reasoningEffort:'auto'};
+ assert.doesNotThrow(()=>validateModelOptions(settings));
+ assert.throws(()=>modelRuntimeEntries(settings),/processing runtime/);
+ assert.throws(()=>createAgent({...settings,reader:{}}),/processing runtime/);
+ for(const extra of [{headers:{'X-Generated':'private'}},{extraBody:{temperature:1}}])assert.throws(()=>validateModelOptions({...settings,...extra}),/fixed binary transport/);
+});
 
 test('explicit endpoints are preserved and only an omitted endpoint selects the current preset',()=>{
  assert.equal(modelConnection({protocol:'deepseek'}).baseUrl,'https://api.deepseek.com/anthropic');

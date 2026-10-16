@@ -74,6 +74,10 @@ export function checkProductionImports(directory=root){
   // M07 reuses these pure Memory contracts and exact-output/review/publication
   // validators; none constructs a legacy Store, scheduler or provider runtime.
   for(const path of ['memory-schema.ts','memory-errors.ts','memory-contract.ts','memory-review.ts','memory-provider-contract.ts','memory-provider-publication.ts','memory-deletion-review.ts','memory-strategies.ts','memory-work-contract.ts','memory-strategy-contract.ts','memory-range-selection-policy.ts','memory-integration-policy.ts','memory-configuration.ts','mem0-memory-provider.ts','hindsight-engine.ts','worker-memory-provider.ts'])allowed.add(sourceRoot+'/'+path);
+  // M06 constructs only the existing shared processor registry and uses pure
+  // recipes, decoder subprocess, transport and fingerprint algorithms. No
+  // legacy private Store is constructed; scoped Original/TaskRun provide I/O.
+  for(const path of ['file-processors.ts','file-recipes.ts','file-dialogue.ts','format-work.ts','file-configuration.ts','local-http.ts','image-understanding.ts','evidence-image.ts'])allowed.add(sourceRoot+'/'+path);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){
@@ -110,7 +114,7 @@ export function checkScopes(directory=root){
  * installation is the explicit, inventoried exception; it is never a user API.
  * This detects new bypasses, and complements real A/B and composite-FK tests. */
 export function privateSqlViolations(source,path){
-  if(path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/memory-schema.ts')return [];
+  if(path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/memory-schema.ts'||path==='apps/server/src/scope/processing-schema.ts')return [];
   const failures=[],tree=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);
   function visit(node){
     if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){

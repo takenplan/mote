@@ -25,6 +25,8 @@ import {registerMemory} from './memory-routes.js';
 import {ScopedMemoryError} from './memory-schema.js';
 import type {HindsightRuntimeFactory} from './memory-providers.js';
 import type {MemoryHost} from './memory.js';
+import {registerProcessing} from './processing-routes.js';
+import type {ProcessingHost} from './processing.js';
 import type {ScopedPluginHost} from './plugins.js';
 export {registerUserRoute,requestContext} from './http.js';
 
@@ -35,6 +37,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
   let configuration:Configurations|undefined;
   let plugins:ScopedPluginHost|undefined;
   let memory:MemoryHost|undefined;
+  let processing:ProcessingHost|undefined;
   try{
     const app=Fastify({logger:false});
     const accounts=new Accounts(storage.db,storage.deploymentId);
@@ -47,7 +50,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
-    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','memory']:[])]}));
+    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','memory']:[])]}));
     registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority:options.lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
@@ -58,10 +61,11 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       const {receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial}=ingress.bindSource(context,sourceIds,assertCurrent);
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
+    if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins);await processing.ready();}
     if(execution)memory=registerMemory(runtime,storage.db,configuration,execution,plugins!,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});
-    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await memory?.close();await plugins?.close();});}
+    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await memory?.close();await processing?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await plugins?.close();await configuration?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,plugins,ingress,memory,deploymentId:storage.deploymentId};
-  }catch(error){await memory?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
+    return {...runtime,execution,configuration,plugins,ingress,memory,processing,deploymentId:storage.deploymentId};
+  }catch(error){await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
 }

@@ -85,7 +85,12 @@ export class TaskExecution {
  /** The integration composition passes the existing M04 Configurations host. */
  bindConfiguration(host:TaskModelHost){if(this.modelHost&&this.modelHost!==host)throw new TaskError('model_host_conflict',409);this.modelHost=host;}
  private modelCurrent(step:ExecutionStep){const row=this.row(step.id);if(!row?.model_receipt)return true;const lease=this.modelLeases.get(step.id);if(!lease){const fence=this.modelRecovery.get(step.id);return Boolean(fence&&this.engine.isCurrentGrant(step.id,fence));}try{this.modelHost?.assertLease(lease);return Boolean(this.modelHost);}catch{return false;}}
- private transaction<T>(write:()=>T):T{const own=!this.db.isTransaction;if(own)this.db.exec('BEGIN IMMEDIATE');try{const value=write();if(own)this.db.exec('COMMIT');return value;}catch(error){if(own&&this.db.isTransaction)this.db.exec('ROLLBACK');throw error;}}
+ private transaction<T>(write:()=>T):T{
+  const nested=this.db.isTransaction,savepoint='user_task_'+randomUUID().replaceAll('-','');
+  this.db.exec(nested?'SAVEPOINT '+savepoint:'BEGIN IMMEDIATE');
+  try{const value=write();this.db.exec(nested?'RELEASE '+savepoint:'COMMIT');return value;}
+  catch(error){if(this.db.isTransaction){if(nested){this.db.exec('ROLLBACK TO '+savepoint);this.db.exec('RELEASE '+savepoint);}else this.db.exec('ROLLBACK');}throw error;}
+ }
  private row(taskId:string){return this.db.prepare('SELECT * FROM user_tasks WHERE task_id=?').get(taskId) as TaskRow|undefined;}
  private enabled(userId:string){if(this.db.prepare('SELECT 1 FROM task_lifecycle_state WHERE user_id=? AND deleted=1').get(userId))throw new ScopeError('invalid_identity',401);}
  private assertTask(step:ExecutionStep){
@@ -157,13 +162,14 @@ export class TaskExecution {
  forUser(context:UserContext){
   const assert=()=>{this.authority.assert(context);this.enabled(context.userId);};
   const owned=(taskId:string)=>{assert();const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);return row;};
-  return Object.freeze({
-   submit:async(value:unknown)=>{
-    assert();const request=submitSchema.parse(value),handler=this.handlers.get(request.kind);if(!handler)throw new TaskError('task_handler_unavailable',503);
+  const prepare=(value:unknown,allowModels=true)=>{
+    assert();const request=submitSchema.parse(value),handler=this.handlers.get(request.kind);if(!handler)throw new TaskError('task_handler_unavailable',503);if(!allowModels&&handler.modelFeature)throw new TaskError('synchronous_model_admission_forbidden',409);
     const input=canonical(handler.parseInput(request.input)) as Record<string,unknown>,encoded=json(input),operationId='task:'+hash([context.userId,request.operationId]),taskId=hash([context.userId,request.operationId,request.kind,input]);
     handler.authorizeInput?.(context,input);
-    let modelLease:TaskModelLease|undefined;
-    if(handler.modelFeature&&!this.row(taskId)){if(!this.modelHost)throw new TaskError('model_configuration_unavailable',503);modelLease=await this.services.forUser(context).get<TaskModelConfiguration>('configuration').lease(handler.modelFeature,operationId);assert();if(modelLease.userId!==context.userId||modelLease.deploymentId!==context.deploymentId||modelLease.operationId!==operationId||modelLease.feature!==handler.modelFeature)throw new ScopeError('invalid_identity',401);this.modelHost.assertLease(modelLease);}
+    return {request,handler,input,encoded,operationId,taskId};
+  };
+  const admit=(prepared:ReturnType<typeof prepare>,modelLease?:TaskModelLease)=>{
+    const {request,handler,input,encoded,operationId,taskId}=prepared;
     return this.transaction(()=>{assert();handler.authorizeInput?.(context,input);const prior=this.row(taskId);if(prior){this.assertTask(this.engine.get(taskId)!);const dependencies=this.db.prepare('SELECT dependency_id FROM execution_dependencies WHERE step_id=? ORDER BY dependency_id').all(taskId).map(row=>String(row.dependency_id));if(JSON.stringify(dependencies)!==JSON.stringify([...new Set(request.dependencies)].sort()))throw new TaskError('task_identity_conflict',409);return this.view(prior);}
      for(const dependency of request.dependencies)owned(dependency);
      const grantId=this.grants.issue(context,taskId);
@@ -172,6 +178,16 @@ export class TaskExecution {
      if(modelLease)this.modelLeases.set(taskId,modelLease);
      return this.view(this.row(taskId)!);
     });
+  };
+  return Object.freeze({
+   /** Host domains use this only for no-model intake inside a publication
+    * transaction. All normal authorization/dependency/idempotency checks apply.
+    * Async model lease acquisition is deliberately rejected before any writes. */
+   submitSync:(value:unknown)=>{const prepared=prepare(value,false);return admit(prepared);},
+   submit:async(value:unknown)=>{
+    const prepared=prepare(value),{handler,operationId,taskId}=prepared;let modelLease:TaskModelLease|undefined;
+    if(handler.modelFeature&&!this.row(taskId)){if(!this.modelHost)throw new TaskError('model_configuration_unavailable',503);modelLease=await this.services.forUser(context).get<TaskModelConfiguration>('configuration').lease(handler.modelFeature,operationId);assert();if(modelLease.userId!==context.userId||modelLease.deploymentId!==context.deploymentId||modelLease.operationId!==operationId||modelLease.feature!==handler.modelFeature)throw new ScopeError('invalid_identity',401);this.modelHost.assertLease(modelLease);}
+    return admit(prepared,modelLease);
    },
    get:(taskId:string)=>this.view(owned(taskId)),
    list:(args:{cursor?:number;limit?:number}={})=>{assert();const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.db.prepare('SELECT user_position,* FROM user_tasks WHERE user_id=? AND user_position>? ORDER BY user_position LIMIT ?').all(context.userId,args.cursor??0,limit+1) as (TaskRow&{user_position:number})[];return {items:rows.slice(0,limit).map(row=>this.view(row)),nextCursor:rows.length>limit?rows[limit-1].user_position:null};},
