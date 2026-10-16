@@ -37,7 +37,26 @@ export class ActionDiscovery{
   const id=randomUUID();sql.transaction(()=>{sql.run('UPDATE ac_state SET policy_id=?,policy_task=NULL WHERE user_id=$user',id);const task=this.host.execution.forUser(context).submitSync({kind:'actions.watch',operationId:'actions-watch:'+id,input:{id,generation:state.generation}});sql.run('UPDATE ac_state SET policy_task=? WHERE user_id=$user',task.id);});
  }
  private job(context:UserContext,id:string){const row=this.host.sql(context).get('SELECT * FROM ac_jobs WHERE user_id=$user AND id=?',id) as Job|undefined;if(!row)throw missing();const plan=parse<Plan>(row.input),state=this.host.state(context);if(plan.parentTaskId&&!['waiting','running'].includes(this.host.execution.engine.get(plan.parentTaskId)?.state??''))throw new PrivateDataError('conflict',409);if(state.generation!==plan.generation||!JSON.parse(state.settings).enabled)throw new PrivateDataError('conflict',409);this.host.assertProof(context,parse(row.proof),plan.sourceIds);return row;}
- async stage(context:UserContext,records:readonly CaptureRecord[],sourceIds?:readonly string[],parentTaskId?:string){sourceIds=sourceIds===undefined?undefined:Object.freeze([...new Set(sourceIds)].sort());const state=this.host.state(context),settings=JSON.parse(state.settings);if(!settings.enabled)throw new PrivateDataError('conflict',409);for(const record of records){const text=actionEvidenceText(record);if(!text.trim())continue;for(let offset=0;offset<text.length;){let end=Math.min(offset+12000,text.length);if(end<text.length&&/[\uD800-\uDBFF]/u.test(text[end-1]))end--;const plan:Plan={ranges:[{id:record.id,offset,length:end-offset}],timeZone:settings.timeZone,generation:state.generation,...(parentTaskId?{parentTaskId}:{}),...(sourceIds?{sourceIds:[...sourceIds]}:{})},proof=this.host.proof(context,[record.id],sourceIds),id=askHash({plan,proof}),sql=this.host.sql(context);sql.run('INSERT OR IGNORE INTO ac_jobs(user_id,id,input,proof) VALUES($user,?,?,?)',id,JSON.stringify(plan),JSON.stringify(proof));const row=this.job(context,id);if(!row.task_id){await this.host.execution.forUser(context).submit({kind:'actions.extract',operationId:'actions-extract:'+id,input:{jobId:id}},task=>{this.job(context,id);sql.run('UPDATE ac_jobs SET task_id=? WHERE user_id=$user AND id=?',task.id,id);});}if(end===text.length)break;offset=end-2000;if(/[\uDC00-\uDFFF]/u.test(text[offset]))offset++;}}
+ async stage(context:UserContext,records:readonly CaptureRecord[],sourceIds?:readonly string[],parentTaskId?:string){
+  sourceIds=sourceIds===undefined?undefined:Object.freeze([...new Set(sourceIds)].sort());
+  const state=this.host.state(context),settings=JSON.parse(state.settings);
+  if(!settings.enabled)throw new PrivateDataError('conflict',409);
+  // A formal Material is one existing interpretation unit. Keep neighbouring
+  // short originals together, within the original extraction window budget.
+  // Long originals retain the old overlap and UTF-16 boundary behaviour.
+  const batches:Plan['ranges'][]=[];let ranges:Plan['ranges']=[],characters=0;
+  const flush=()=>{if(ranges.length)batches.push(ranges);ranges=[];characters=0;};
+  for(const record of records){const text=actionEvidenceText(record);if(!text.trim())continue;
+   for(let offset=0;offset<text.length;){let end=Math.min(offset+12000,text.length);if(end<text.length&&/[\uD800-\uDBFF]/u.test(text[end-1]))end--;
+    if(characters+end-offset>12000)flush();ranges.push({id:record.id,offset,length:end-offset});characters+=end-offset;
+    if(end===text.length)break;flush();offset=end-2000;if(/[\uDC00-\uDFFF]/u.test(text[offset]))offset++;
+   }
+  }
+  flush();
+  for(const ranges of batches){const plan:Plan={ranges,timeZone:settings.timeZone,generation:state.generation,...(parentTaskId?{parentTaskId}:{}),...(sourceIds?{sourceIds:[...sourceIds]}:{})},proof=this.host.proof(context,[...new Set(ranges.map(range=>range.id))],sourceIds),id=askHash({plan,proof}),sql=this.host.sql(context);
+   sql.run('INSERT OR IGNORE INTO ac_jobs(user_id,id,input,proof) VALUES($user,?,?,?)',id,JSON.stringify(plan),JSON.stringify(proof));
+   const row=this.job(context,id);if(!row.task_id){await this.host.execution.forUser(context).submit({kind:'actions.extract',operationId:'actions-extract:'+id,input:{jobId:id}},task=>{this.job(context,id);sql.run('UPDATE ac_jobs SET task_id=? WHERE user_id=$user AND id=?',task.id,id);});}
+  }
  }
  private async watch(run:TaskRun){const input=policyInput.parse(run.task.input);const policy=this.current(run.context,input);if(policy.policy_task!==run.task.id)throw new PrivateDataError('conflict',409);const sql=this.host.sql(run.context),repo=this.host.evidence(run.context),captureAfter=run.checkpoint.read<number>('captures')??0,materialAfter=run.checkpoint.read<number>('materials')??0;
   const rows=sql.all('SELECT rowid,id FROM pd_captures WHERE user_id=$user AND rowid>? ORDER BY rowid LIMIT 200',captureAfter);for(const row of rows){run.grant.assert();this.current(run.context,input);let records:CaptureRecord[];try{records=repo.evidence([String(row.id)]);}catch(error){if(!(error instanceof PrivateDataError))throw error;continue;}await this.stage(run.context,records,undefined,run.task.id);run.grant.assert();this.current(run.context,input);}if(rows.length)run.checkpoint.write('captures',Number(rows.at(-1)!.rowid));
