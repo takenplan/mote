@@ -550,7 +550,9 @@ class MultiuserWorkerInstrumentedTest {
         try {androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
             fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
             fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
-            ready();press("查看详情");ready();press("保存原件");waitFor {monitor.hits==1};ready();assertArrayEquals(android.util.Base64.decode(fixture().getString("wave"),android.util.Base64.DEFAULT),output.readBytes())
+            ready();press("查看详情");ready();press("保存原件");waitFor {monitor.hits==1}
+            waitFor {var settled=false;scenario.onActivity {activity->settled=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()&&it.text.toString()!="正在导出中央资料…"&&it.text.toString()!="正在读取…"}};settled}
+            assertArrayEquals(android.util.Base64.decode(fixture().getString("wave"),android.util.Base64.DEFAULT),output.readBytes())
         }}finally{instrumentation.removeMonitor(monitor)}
     }
 
