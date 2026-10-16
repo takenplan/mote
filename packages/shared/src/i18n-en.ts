@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "能力授权": "Capability grants",
+  "允许历史读取": "Allow history reads",
+  "仅管理员可安装或卸载插件。": "Only administrators can install or uninstall plugins.",
   "屏幕录制": "Screen Recording",
   "辅助功能": "Accessibility",
   "内容记录：优先提取文章或商品字段，未取得结构化内容时截图。": "Content: extract article or product fields first, falling back to screenshots when structured content is unavailable.",
