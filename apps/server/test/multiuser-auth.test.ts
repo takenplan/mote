@@ -157,6 +157,9 @@ test('actual stdin initialization entry creates only a synthetic admin and never
 
 test('authentication composes with a binary private route while Cookie mutations still require CSRF',async t=>{
  const f=await fixture(t,node=>{
+  // This synthetic route owns its parser. M03's production parser deliberately
+  // accepts only its import-upload route; leave that production policy intact.
+  node.app.removeContentTypeParser('application/octet-stream');
   node.app.addContentTypeParser('application/octet-stream',{parseAs:'buffer'},(_req,body,done)=>done(null,body));
   node.services.registerUser('binary-test',{scope:'user',create:()=>({}),lifecycle:{exportUser:async c=>({domain:'binary-test',version:1,deploymentId:c.deploymentId,userId:c.userId,payload:null}),deleteUser:async(_c,operationId)=>({status:'complete',operationId}),restoreUser:async()=>{}}});
   registerUserRoute(node,{scope:'user',method:'POST',url:'/api/binary-test',service:'binary-test',handle:({context,request})=>({userId:context.userId,bytes:Buffer.isBuffer(request.body)?request.body.length:0})});

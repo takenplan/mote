@@ -3,8 +3,9 @@ import assert from 'node:assert/strict';
 import {spawnSync} from 'node:child_process';
 
 test('the actual export stream delivers a source authorization failure to its returned gzip without a process crash or hang', () => {
+  const entry = new URL('../src/file-export-tar.ts', import.meta.url).href;
   const script = `
-    import {exportTar} from './apps/server/src/file-export-tar.ts';
+    const {exportTar} = await import(${JSON.stringify(entry)});
     let checks=0;
     const output=exportTar([{name:'generated.txt',bytes:Buffer.from('Generated private original')}],()=>{if(++checks===2)throw Error('generated-authority-revoked');});
     const deadline=setTimeout(()=>{console.error('export did not settle');process.exit(2);},3000);
