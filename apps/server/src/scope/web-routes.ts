@@ -19,7 +19,7 @@ export function registerWebInventory(runtime:ScopedRuntime){
   const inventory=registry.inventory();let administrator=false;
   try{runtime.authority.assertAdministrator(context);administrator=true;}catch{}
   if(administrator)return inventory;
-  const visible=(id:string)=>!/^http:[^:]+:\/api\/admin(?:\/|$)/.test(id);
+  const visible=(id:string)=>!/^http:[^:]+:\/api\/(?:admin(?:\/|$)|software-update(?:\/|$)|diagnostics(?:\/|$)|support-bundle(?:\?|$))/.test(id);
   return {...inventory,features:inventory.features.map(feature=>({...feature,components:feature.components.filter(component=>visible(component.id))})),capabilities:inventory.capabilities.filter(capability=>visible(capability.id))};
  }});
 }

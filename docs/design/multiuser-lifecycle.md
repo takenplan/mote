@@ -62,3 +62,25 @@ rejects before staging; its old copy-into-volume path cannot promise atomic rest
 Hindsight reuses the existing pinned owned-volume protocol; no daemon/image is
 started or downloaded automatically. This checkpoint does not declare that native
 path or the whole module accepted.
+
+## Instance management boundary
+
+The original `/api/software-update` and `/api/software-update/check` reuse the
+read-only signed-release service and require a current administrator. HTTP cannot
+select a repository, command, key or path; update/rollback remain explicit operator
+CLI actions. The instance YAML's update configuration retains its startup semantics.
+
+`/api/diagnostics`, `/api/diagnostics/events`, `/api/diagnostics/log-pages`,
+`/api/diagnostics/logs` and `/api/support-bundle` require an administrator. They
+reuse bounded ServerDiagnostics storage under `logs/instance`, with private-file
+admission, but only project instance runtime metadata. Snapshot coverage declares
+`privateContents:false, privateTraces:false`; historical raw trace bodies, identity
+fields and arbitrary prose are never passed through. The old raw-log route now
+returns curated metadata JSON lines. Owner Agent traces and old global private
+queue/index/device statistics are not fabricated as zeroes. Their private scoped
+contracts remain separate gaps. Ordinary feature inventory hides these management
+routes; management grants never become a `forUser(otherOwner)` capability.
+
+Original GC stays at M03 `POST /api/ingress/gc {}` for the caller's own domain.
+An administrator cannot supply another user or invoke a global private GC fallback.
+Retention, references, physical holds and snapshot expiry remain M03 responsibilities.

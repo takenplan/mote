@@ -41,12 +41,13 @@ import type {ProcessingHost} from './processing.js';
 import type {ScopedPluginHost} from './plugins.js';
 import {registerScopedMcp,type ScopedMcp} from './mcp.js';
 import {LifecycleOperations} from './lifecycle-operations.js';
+import {registerManagement,type ManagementConfig} from './management.js';
 import {registerLifecycleRoutes} from './lifecycle-routes.js';
 export {registerUserRoute,requestContext} from './http.js';
 
 /** Production composition. Domains register only after their isolation adapter
  * is complete. Account administration never mounts the retired owner services. */
-export async function buildScopedApp(config:{dataDir:string;maxExportBytes?:number;configuration?:{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory}={}){
+export async function buildScopedApp(config:ManagementConfig&{dataDir:string;maxExportBytes?:number;configuration?:ManagementConfig['configuration']&{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory;updateDependencies?:Parameters<typeof registerManagement>[3]}={}){
   const storage=openScopeStorage(config.dataDir);
   let configuration:Configurations|undefined;
   let plugins:ScopedPluginHost|undefined;
@@ -56,6 +57,7 @@ export async function buildScopedApp(config:{dataDir:string;maxExportBytes?:numb
   let processing:ProcessingHost|undefined;
   let mcp:ScopedMcp|undefined;
   let lifecycle:LifecycleOperations|undefined;
+  let management:Awaited<ReturnType<typeof registerManagement>>|undefined;
   try{
     const app=Fastify({logger:false});
     const accounts=new Accounts(storage.db,storage.deploymentId);
@@ -91,11 +93,11 @@ export async function buildScopedApp(config:{dataDir:string;maxExportBytes?:numb
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(connectors&&mcp){const host=mcp;connectors.registerSourceStatusReader((context,ids)=>host.forUser(context).sourceStatuses(ids));}
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await lifecycle?.close();await mcp?.close();await execution.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
-    if(lifecycle){lifecycle.recover();registerLifecycleRoutes(runtime,lifecycle);}
+    if(lifecycle){lifecycle.recover();registerLifecycleRoutes(runtime,lifecycle);management=await registerManagement(runtime,configuration,config,options.updateDependencies);}
     if(execution&&ask&&memory&&processing)registerScopedActivity(runtime,storage.db,execution,{ask,memory,processing});
     await registerWebAssets(app);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
-    app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await configuration?.close();accounts.close();storage.close();});
+    app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
     return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,lifecycle,deploymentId:storage.deploymentId};
-  }catch(error){await lifecycle?.close();await mcp?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
+  }catch(error){await lifecycle?.close();await mcp?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();await management?.close();storage.close();throw error;}
 }

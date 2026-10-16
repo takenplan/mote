@@ -291,8 +291,8 @@
     ]
   },
   "apps/server/src/diagnostics.ts": {
-    "scope": "legacy-quarantined",
-    "module": "M02",
+    "scope": "instance",
+    "module": "M16",
     "surfaces": [
       "directory:this.options.directory"
     ]
@@ -1867,8 +1867,8 @@
     ]
   },
   "apps/server/src/updates.ts": {
-    "scope": "legacy-quarantined",
-    "module": "M02",
+    "scope": "instance",
+    "module": "M16",
     "surfaces": [
       "api:get:'/api/software-update'",
       "api:post:'/api/software-update/check'"
@@ -2254,6 +2254,21 @@
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/cancel'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/retry'"
+    ]
+  },
+  "apps/server/src/scope/management.ts": {
+    "scope": "instance",
+    "module": "M16",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/events'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/log-pages'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/logs'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/software-update'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/support-bundle'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/software-update/check'",
+      "directory:path",
+      "extension:runtime.services.registerInstance:'instance-management'"
     ]
   }
 }

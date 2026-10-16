@@ -221,3 +221,28 @@ lifecycle + authentication **18/18 exit 0**, A late-domain rows erased once, B
 unchanged, no grant or private-query delegation to the administrator. No export
 receipt or content protocol changed. Backup checkpoint f33 remains separately
 reviewable; this later server delta requires its own final composition checks.
+
+## Management boundary checkpoint
+
+The original management path first fails actual scoped admission in
+`/tmp/m16-management-red.log/.exit` (0/1 exit 1, ordinary 503 rather than a real
+administrator-only feature). The implementation reuses `createUpdateService` and
+bounded `ServerDiagnostics`, with explicit production import/inventory declarations.
+`/tmp/m16-management-lifecycle-green.log/.exit`: **25/25 exit 0**, actual M01
+ordinary/admin/unauthenticated routes, real signed release parser with generated
+RSA envelope and response-only network fixture, no startup network, rejected
+repository selector, administrator disable during held response, unchanged B,
+private trace/token/user ID exclusion from logs/pages/events/support, own M03 GC
+and cross-owner rejection, linked diagnostic storage preserving sentinel bytes/mode,
+plus adjacent lifecycle/auth and original update-service behavior. No updater,
+deployment, real third-party request or system configuration was invoked.
+
+Server typecheck and scope inventory/import-boundary check exit 0 in
+`/tmp/m16-management-types2.log/.exit` and
+`/tmp/m16-management-scope-green2.log/.exit` (prior to later test/comment-only edits).
+`node --test scripts/update-tests.mjs`: 12/12 exit 0,
+`/tmp/m16-update-adjacent1.log/.exit`, including ordinary unbuilt Docker profile
+commands after adding the new backup helper to the generated release fixture.
+Management adds no private trace or old queue/index statistics impersonation. The
+Web/Android original diagnostic consumers must recognize the declared metadata
+coverage; this checkpoint does not claim their complete UI or final required gate.
