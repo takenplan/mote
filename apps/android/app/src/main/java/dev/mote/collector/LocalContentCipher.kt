@@ -1,6 +1,6 @@
 package dev.mote.collector
 
-/** Format 3 stores content verbatim. Current credentials and private ledgers use SecretBox separately. */
+/** Account-bound format 4 preserves existing content bytes verbatim. Credentials and native private ledgers use SecretBox separately. */
 class LocalContentCipher : ByteCipher {
     override fun seal(bytes: ByteArray): ByteArray = bytes
     override fun open(bytes: ByteArray): ByteArray = bytes

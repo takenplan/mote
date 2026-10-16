@@ -12,11 +12,37 @@ import java.util.UUID
 
 /** Publication outcomes describe the current result; persisted status still owns scheduling. */
 internal object CentralMemoryJobPresentation {
-    private val controls = listOf("pause" to "暂停", "resume" to "继续", "cancel" to "取消", "retry" to "重试")
-    fun invalidated(job: JSONObject) = job.optString("outcome") == "input_invalidated"
-    fun status(job: JSONObject) = if (invalidated(job)) MoteI18n.text("资料已更新，本次结果失效") else job.optString("state", job.optString("status"))
-    fun notice(job: JSONObject): String? = if (invalidated(job)) MoteI18n.text("历史结果保留；请查看当前资料版本。失效输入不能直接重试。") else null
-    fun controls(job: JSONObject) = if (invalidated(job)) emptyList() else controls
+    private val legacyControls = listOf("pause" to "暂停", "resume" to "继续", "cancel" to "取消", "retry" to "重试")
+    fun state(job: JSONObject): String {
+        if (!job.has("tasks")) return job.optString("state", job.optString("status"))
+        val top = job.getString("state")
+        if (top in setOf("cancelled", "deleted", "paused")) return top
+        if (top == "awaiting_context") return "needs_input"
+        val tasks = job.getJSONObject("tasks"); val states = tasks.keys().asSequence().map { tasks.getJSONObject(it).getString("state") }.toList()
+        for (failure in listOf("failed", "blocked", "stale")) if (failure in states) return failure
+        if (states.isNotEmpty() && states.all { it == "succeeded" } && top == "committed") return "succeeded"
+        if (!job.getBoolean("current")) return "stale"
+        return if ("running" in states) "running" else "waiting"
+    }
+    fun invalidated(job: JSONObject) = if (job.has("tasks")) state(job) == "stale" else job.optString("outcome") == "input_invalidated"
+    fun status(job: JSONObject): String = if (!job.has("tasks")) {
+        if (invalidated(job)) MoteI18n.text("资料已更新，本次结果失效") else state(job)
+    } else MoteI18n.text(when (state(job)) {
+        "waiting" -> "等待提取记忆"; "running" -> "正在分批提取记忆"; "succeeded" -> "记忆提取完成"
+        "failed" -> "部分记忆提取需要重试"; "blocked", "needs_input" -> "需要处理"; "stale" -> "资料已更新，本次结果失效"
+        "cancelled" -> "记忆提取已停止"; "deleted" -> "已删除"; "paused" -> "已暂停"; else -> state(job)
+    })
+    fun notice(job: JSONObject): String? = if (job.has("tasks") && !job.getBoolean("current")) MoteI18n.text("输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。")
+        else if (invalidated(job)) MoteI18n.text("历史结果保留；请查看当前资料版本。失效输入不能直接重试。") else null
+    fun controls(job: JSONObject): List<Pair<String, String>> = if (!job.has("tasks")) { if (invalidated(job)) emptyList() else legacyControls }
+        else when (state(job)) { "paused" -> listOf("resume" to "继续", "cancel" to "取消"); "waiting", "running" -> listOf("pause" to "暂停", "cancel" to "取消"); "failed", "blocked" -> listOf("retry" to "重试", "cancel" to "取消"); "needs_input" -> listOf("cancel" to "取消"); else -> emptyList() }
+    fun results(job: JSONObject): List<String> {
+        val tasks = job.getJSONObject("tasks")
+        return tasks.keys().asSequence().filter { it == "correct" || it.startsWith("publish") }.flatMap { stage ->
+            val task = tasks.getJSONObject(stage); val ids = if (task.optString("state") == "succeeded") task.optJSONObject("result")?.optJSONArray("memoryIds") else null
+            if (ids == null) emptySequence() else (0 until ids.length()).asSequence().map { ids.getString(it).also { value -> UUID.fromString(value) } }
+        }.distinct().toList()
+    }
 }
 
 /** Management uses native controls and explicit endpoint contracts, never a web fallback. */
@@ -190,81 +216,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         }
     }
-    private fun models() {
-        val api = client
-        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/model-settings") }) { value ->
-            body.removeAllViews(); screens.setBack { screens.refresh() }
-            ui.text(MoteI18n.text("模型配置"), NativeFontRole.TITLE_MOBILE)
-            ui.button(MoteI18n.text("功能默认模型")) { modelDefaults(value) }
-            val profiles = value.getJSONArray("profiles")
-            val choice = Spinner(ui).apply {
-                contentDescription = MoteI18n.text("Provider 预设")
-                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item,
-                    (0 until profiles.length()).map { profiles.getJSONObject(it).optString("name") })
-            }
-            body.addView(choice, LinearLayout.LayoutParams(-1, ui.moteDp(52)))
-            val selected = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }
-            body.addView(selected)
-            fun renderProfile(i: Int) {
-                selected.removeAllViews()
-
-                val profile = profiles.getJSONObject(i); val id = profile.getString("id"); val card = ui.card(selected)
-                ui.text(profile.optString("name") + " · " + profile.getJSONObject("settings").optString("model"), NativeFontRole.ROW, card)
-                if (!profile.optBoolean("readOnly")) {
-                    ui.button(MoteI18n.text("编辑"), parent = card) {
-                        val settings = cleanSettings(profile.getJSONObject("settings")).put("apiKey", "").put("headers", JSONObject.NULL).put("extraBody", JSONObject.NULL)
-                        val request = JSONObject().put("revision", value.getLong("revision")).put("settings", settings)
-                        request.put("name", profile.getString("name"))
-                        edit(MoteI18n.text("模型配置"), "/api/model-settings/profiles/" + enc(id), request, back = { models() })
-                    }
-                    ui.button(MoteI18n.text("删除"), parent = card) { screens.confirm(MoteI18n.text("删除"), MoteI18n.text("删除后无法恢复。")) {
-                        ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/model-settings/profiles/" + enc(id), JSONObject().put("revision", value.getLong("revision"))) }) { models() }
-                    } }
-                }
-                ui.button(MoteI18n.text("复制为新预设"), parent = card) {
-                    edit(MoteI18n.text("复制为新预设"), "/api/model-settings/profiles/" + enc(id) + "/copy",
-                        JSONObject().put("revision", value.getLong("revision")).put("id", "preset-" + UUID.randomUUID().toString().take(8)).put("name", profile.optString("name") + " copy").put("includeCredentials", true), "POST", back = { models() })
-                }
-                ui.button(MoteI18n.text("测试连接"), parent = card) {
-                    action("/api/model-settings/profiles/" + enc(id) + "/test", JSONObject().put("revision", value.getLong("revision")).put("settings", cleanSettings(profile.getJSONObject("settings")))) { values(it, card) }
-                }
-                ui.button(MoteI18n.text("可用模型"), parent = card) { read("/api/model-settings/profiles/" + enc(id) + "/models", card) }
-            }
-            choice.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-                override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) { renderProfile(position) }
-            }
-        }
-    }
-    private fun cleanSettings(value: JSONObject) = pick(value, "provider", "protocol", "baseUrl", "model", "reasoningEffort", "serviceTier", "maxTokens", "modelRequestTimeoutMs", "agentTimeoutMs", "allowUnauthenticatedLocal").apply {
-        if (getString("protocol") == "codex-app-server") require(getString("serviceTier") in setOf("default", "fast"))
-    }
-    private fun modelDefaults(value: JSONObject) {
-        body.removeAllViews(); screens.setBack { models() }
-        val profiles = value.getJSONArray("profiles"); val ids = (0 until profiles.length()).map { profiles.getJSONObject(it).getString("id") }
-        val names = (0 until profiles.length()).map { profiles.getJSONObject(it).getString("name") }
-        val defaults = value.getJSONObject("defaults"); val models = value.getJSONObject("defaultModels")
-        val fields = linkedMapOf<String, Pair<Spinner, EditText>>()
-        for (feature in defaults.keys()) {
-            ui.text(label(feature), NativeFontRole.ROW)
-            val choice = Spinner(ui).apply {
-                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, names)
-                setSelection(ids.indexOf(defaults.getString(feature)).coerceAtLeast(0))
-            }; body.addView(choice)
-            fields[feature] = choice to ui.field(MoteI18n.text("模型 ID（可选覆盖）"), models.optString(feature))
-        }
-        ui.button(MoteI18n.text("保存设置"), true) {
-            val selections = JSONObject(); val overrides = JSONObject()
-            fields.forEach { (feature, inputs) ->
-                selections.put(feature, ids[inputs.first.selectedItemPosition])
-                inputs.second.text.toString().trim().takeIf(String::isNotBlank)?.let { overrides.put(feature, it) }
-            }
-            val api = client
-            ui.work(MoteI18n.text("正在保存…"), {
-                api.put("/api/model-settings/defaults", JSONObject().put("revision", value.getLong("revision")).put("defaults", selections).put("defaultModels", overrides))
-            }) { models() }
-        }
-    }
+    private fun models(): Unit = ownedConfiguration(MoteI18n.text("模型配置"), "models", { screens.refresh() }, { models() })
     fun fileSettings() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/file-processing") }) { value ->
@@ -276,57 +228,76 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             edit(MoteI18n.text("处理设置"), "/api/file-processing", payload)
         }
     }
+    private fun ownedConfiguration(title: String, domainId: String, back: () -> Unit = { memorySettings() }, done: () -> Unit = back) {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") }) { view ->
+            val domains = view.getJSONArray("domains")
+            val value = (0 until domains.length()).map { domains.getJSONObject(it) }.single { it.getString("id") == domainId }.getJSONObject("saved")
+            body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
+            if (domainId == "models") ui.text(MoteI18n.text("模型预设和默认选择保存在本人配置；复制带凭据、测试连接和模型目录尚待多用户接口。"))
+            val collect = form(value, ui.card(), emptySet())
+            ui.button(MoteI18n.text("保存设置"), true) {
+                val payload = JSONObject().put("revision", view.getLong("revision")).put("value", collect()).put("preserveRedactedSecrets", true)
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/" + enc(domainId), payload) }) { done() }
+            }
+        }
+    }
     fun memorySettings() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        ui.button(MoteI18n.text("记忆自动处理")) { configuration(MoteI18n.text("记忆自动处理"), "/api/memory-settings") { it.getJSONObject("settings") } }
+        ui.button(MoteI18n.text("记忆自动处理")) { ownedConfiguration(MoteI18n.text("记忆自动处理"), "memory") }
         ui.button(MoteI18n.text("记忆提取配方")) {
             recipeSettings(false)
         }
         ui.button(MoteI18n.text("记忆整合")) { recipeSettings(true) }
-        read("/api/memory-settings")
+        read("/api/memory")
     }
     private fun recipeSettings(integration: Boolean, scope: String? = null) {
-        val api = client; val path = if (integration) "/api/memory-integration-settings" else "/api/memory-recipe-settings"
-        ui.work(MoteI18n.text("正在读取…"), {
-            api.get(path + (scope?.let { "?scope=" + enc(it) } ?: "")) to api.get(if (integration) "/api/memory-integration-recipes" else "/api/memory-recipes")
-        }) { (selection, catalog) ->
-            body.removeAllViews(); screens.setBack { memorySettings() }; if (!integration) ui.text(MoteI18n.text("这些提取门槛与最大等待时间只控制历史资料的窗口处理。已授权且内容就绪的新资料直接进入自动记忆队列，按可用名额持续处理。"))
-            val current = if (integration) listOfNotNull(selection.optJSONObject("binding")?.optJSONObject("recipe"))
-                else selection.getJSONArray("items").let { items -> (0 until items.length()).map { items.getJSONObject(it).getJSONObject("binding").getJSONObject("recipe") } }
-            val choices = catalog.getJSONArray("items"); val selected = mutableListOf<JSONObject>()
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") to api.get("/api/memory/recipes") }) { (view, catalog) ->
+            val domains = view.getJSONArray("domains")
+            val settings = JSONObject((0 until domains.length()).map { domains.getJSONObject(it) }.single { it.getString("id") == "memory" }.getJSONObject("saved").toString())
+            body.removeAllViews(); screens.setBack { memorySettings() }
+            val field = when (scope) { "capture" -> "captureRecipes"; "lark-docs" -> "documentRecipes"; else -> "recipes" }
+            val current = if (integration) { if (settings.getBoolean("integration")) listOf(settings.getJSONObject("integrationRecipe")) else emptyList() }
+                else (settings.optJSONArray(field) ?: JSONArray().put(settings.getJSONObject(if (settings.optString("profile") == "coding") "codingRecipe" else "recipe"))).let { items -> (0 until items.length()).map { items.getJSONObject(it) } }
+            val choices = catalog.getJSONArray(if (integration) "integrations" else "items")
             val fields = mutableListOf<Pair<CheckBox, JSONObject>>()
             for (i in 0 until choices.length()) {
                 val recipe = choices.getJSONObject(i); val ref = pick(recipe, "id", "version")
                 val check = CheckBox(ui).apply {
-                    text = recipe.optString("name", recipe.optString("id")) + " · " + recipe.optString("version")
-                    isChecked = current.any { it.optString("id") == ref.optString("id") && it.optString("version") == ref.optString("version") }
+                    text = recipe.optString("name", recipe.getString("id")) + " · " + recipe.getString("version")
+                    isChecked = current.any { it.getString("id") == ref.getString("id") && it.getString("version") == ref.getString("version") }
+                    isEnabled = recipe.optBoolean("available", true) || isChecked
                 }; fields.add(check to ref); body.addView(check)
                 if (!integration) check.setOnCheckedChangeListener { _, checked -> if (!checked && fields.none { it.first.isChecked }) check.isChecked = true }
-                if (integration) check.setOnCheckedChangeListener { _, checked -> if (checked) fields.filter { it.first !== check }.forEach { it.first.isChecked = false } }
+                else check.setOnCheckedChangeListener { _, checked -> if (checked) fields.filter { it.first !== check }.forEach { it.first.isChecked = false } }
             }
             ui.button(MoteI18n.text("保存设置"), true) {
-                selected.clear(); fields.filter { it.first.isChecked }.forEach { selected.add(it.second) }
-                if (!integration && selected.isEmpty()) return@button
-                val payload = if (integration) JSONObject().put("recipe", selected.firstOrNull() ?: JSONObject.NULL)
-                    else JSONObject().put("recipes", JSONArray(selected))
-                if (scope != null) payload.put("scope", scope)
-                ui.work(MoteI18n.text("正在保存…"), { api.put(path, payload) }) { memorySettings() }
+                val selected = fields.filter { it.first.isChecked }.map { it.second }
+                if (integration) { settings.put("integration", selected.isNotEmpty()); selected.firstOrNull()?.let { settings.put("integrationRecipe", it) } }
+                else { if (selected.isEmpty()) return@button; settings.put(field, JSONArray(selected)) }
+                val payload = JSONObject().put("revision", view.getLong("revision")).put("value", settings).put("preserveRedactedSecrets", true)
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/memory", payload) }) { memorySettings() }
             }
         }
     }
     fun memoryJobs() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
         ui.button(MoteI18n.text("开始提取"), true) { action("/api/memory-jobs") { run("/api/memory-jobs", it.getString("id")) } }
-        library.paged("/api/memory-jobs", ui.card()) { row, card ->
+        library.paged("/api/memory/jobs", ui.card()) { row, card ->
             ui.text(CentralMemoryJobPresentation.status(row), parent = card)
-            ui.button(MoteI18n.text("查看详情"), parent = card) { run("/api/memory-jobs", row.getString("id")) }
+            ui.button(MoteI18n.text("查看详情"), parent = card) { run("/api/memory/jobs", row.getString("id")) }
         }
     }
     fun run(path: String, id: String) {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        if (path == "/api/memory-jobs") {
+        if (path == "/api/memory/jobs") {
             val target = ui.card(); val api = client
             ui.work(MoteI18n.text("正在读取…"), { api.get(path + "/" + enc(id)) }) { job ->
+                job.getJSONObject("tasks"); job.getBoolean("current")
+                ui.text(CentralMemoryJobPresentation.status(job), NativeFontRole.SECTION, target)
+                CentralMemoryJobPresentation.notice(job)?.let { ui.text(it, parent = target) }
+                for (memoryId in CentralMemoryJobPresentation.results(job)) ui.button(MoteI18n.text("查看记忆"), parent = target) { library.memory(memoryId) }
                 if (CentralMemoryJobPresentation.invalidated(job)) {
                     ui.text(CentralMemoryJobPresentation.status(job), 18f, target)
                     CentralMemoryJobPresentation.notice(job)?.let { ui.text(it, parent = target) }
@@ -336,7 +307,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         } else read(path + "/" + enc(id))
         ui.button(MoteI18n.text("刷新")) { run(path, id) }
-        if (path != "/api/memory-jobs") ui.button(MoteI18n.text("停止")) { action(path + "/" + enc(id) + "/cancel") { run(path, id) } }
+        if (path != "/api/memory/jobs") ui.button(MoteI18n.text("停止")) { action(path + "/" + enc(id) + "/cancel") { run(path, id) } }
     }
     private fun devices() {
         library.paged("/api/devices", ui.card()) { row, card -> values(row, card) }
@@ -481,12 +452,48 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
         ui.button(MoteI18n.text("查询")) { load() }; load()
     }
-    private fun vault() {
-        read("/api/status")
-        ui.button(MoteI18n.text("重新建立索引"), true) { action("/api/index/retry") }
-        ui.button(MoteI18n.text("中央元数据导出")) { ui.saveCentral("/api/export-bundle?mode=metadata", "mote-central-metadata.tar.gz", "application/gzip") }
-        ui.button(MoteI18n.text("中央资料与附件导出")) { ui.saveCentral("/api/export-bundle?mode=data", "mote-central-data.tar.gz", "application/gzip") }
+    private fun vault(cursor: String? = null, previous: List<String?> = emptyList()) {
+        val api = client; val exports = CentralPortable(api)
+        val pending = ui.accountPreferences("central-portable")
+        ui.text(MoteI18n.text("个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。"))
+        ui.button(MoteI18n.text("中央资料与附件导出"), true) {
+            val id = pending.getString("operationId", null) ?: UUID.randomUUID().toString().also { check(pending.edit().putString("operationId", it).commit()) }
+            ui.work(MoteI18n.text("正在导出中央资料…"), { try { exports.start(id).also { check(pending.edit().remove("operationId").commit()) } }
+                catch (failure: CentralFailure) { if (failure.code == "archive_authorization_changed") check(pending.edit().remove("operationId").commit()); throw failure } }) { portableExport(it.getString("id")) }
+        }
+        ui.button(MoteI18n.text("中央元数据导出")) {}.isEnabled = false
+        ui.text(MoteI18n.text("元数据单独导出的接口尚待接入；当前归档包含本账号的资料与可用原件。"))
         ui.button(MoteI18n.text("导入")) { ui.navigate("imports") }
+        val target = ui.card()
+        ui.work(MoteI18n.text("正在读取…"), { exports.list(cursor) }) { result ->
+            val rows = result.getJSONArray("items")
+            if (rows.length() == 0) ui.text(MoteI18n.text("暂无记录"), parent = target)
+            for (i in 0 until rows.length()) {
+                val row = rows.getJSONObject(i); val card = ui.card(target)
+                ui.text(row.getString("createdAt") + " · " + portableState(row.getString("state")), parent = card)
+                ui.button(MoteI18n.text("查看详情"), parent = card) { portableExport(row.getString("id")) }
+            }
+            if (previous.isNotEmpty()) ui.button(MoteI18n.text("上一页"), parent = target) { body.removeAllViews(); vault(previous.last(), previous.dropLast(1)) }
+            if (!result.isNull("nextCursor")) ui.button(MoteI18n.text("下一页"), parent = target) { body.removeAllViews(); vault(result.getString("nextCursor"), previous + cursor) }
+        }
+    }
+    private fun portableState(state: String) = MoteI18n.text(mapOf("working" to "正在处理…", "completed" to "已完成", "failed" to "失败", "cancelled" to "已取消").getValue(state))
+    private fun portableExport(id: String) {
+        body.removeAllViews(); screens.setBack { screens.refresh() }
+        val exports = CentralPortable(client)
+        ui.button(MoteI18n.text("刷新")) { portableExport(id) }
+        ui.work(MoteI18n.text("正在读取…"), { exports.read(id) }) { receipt ->
+            ui.text(portableState(receipt.getString("state")), NativeFontRole.SECTION)
+            ui.text(receipt.getString("createdAt"))
+            ui.disclosure(MoteI18n.text("元数据")) { values(receipt, it) }
+            if (receipt.getString("state") == "completed") ui.button(MoteI18n.text("下载"), true) { ui.savePortable(receipt) }
+            if (receipt.getString("state") == "failed") ui.button(MoteI18n.text("重试")) {
+                ui.work(MoteI18n.text("正在处理…"), { exports.control(id, "retry") }) { portableExport(id) }
+            }
+            if (receipt.getString("state") != "cancelled") ui.button(MoteI18n.text("取消")) {
+                screens.confirm(MoteI18n.text("取消"), MoteI18n.text("取消后将不能下载这份导出文件。")) { ui.work(MoteI18n.text("正在处理…"), { exports.control(id, "cancel") }) { portableExport(id) } }
+            }
+        }
     }
     private fun diagnostics() {
         ui.button(MoteI18n.text("诊断设置")) { configuration(MoteI18n.text("诊断设置"), "/api/diagnostics-settings") }

@@ -125,6 +125,89 @@ Additional old capability gap reported by M14: `scripts/client.ts` and
 and old source routes. Their old fake-fetch tests do not prove a scoped CLI
 consumer. Track this explicitly in M16's old-capability closure.
 
+## CLI M01/M03 consumer checkpoint
+
+The existing `scripts/client.ts`, `import-files.ts` and synthetic `seed-demo.ts`
+now reuse Desktop's actual `testConnection`, `ingressRequest`, account key,
+connection binding and SourceSync. Confirmation precedes state/spool open;
+origin/deployment/user partitions replace credential hashes. Existing nonempty
+unmarked state is preserved and rejected, and token rotation cannot change owner.
+Explicit selected YAML/credential file precedence remains authoritative. The
+retired implicit owner access-token file and v2 POST fallback are removed.
+SourceSync's local schema version 4 / ingressVersion 2 checkpoint is unchanged;
+its `request.account` selects the actual wire-2 / Ingress-3 transport.
+
+`/tmp/m16-cli-contract-red.log/.exit`: actual generated account/server/file scan
+against the old CLI fails HTTP 426 (exit 1). Earlier loopback EPERM and missing
+credential in the selected generated YAML were environment/fixture failures,
+not production RED. `/tmp/m16-cli-green2.log/.exit`: actual scan A/B, same-owner
+credential rotation, exact original SQL/FS publication and the second real
+synthetic seed-demo consumer pass 1/1, exit 0. No real files/service were imported.
+`/tmp/m16-cli-unit-final3.log/.exit`: 5/5, exit 0, including unchanged old outbox,
+wrong owner, linked spool and offline dry run. Its one legacy v2 SourceSync test
+is deliberately an algorithm characterization, not scoped protocol acceptance.
+New binding test's first two attempts read the obsolete JSON state path; this
+fixture error was corrected to SourceSync's actual SQLite path.
+
+M14 bounded review found two CLI defects after b960636c (report
+`/tmp/mote-m14-review-m16-cli-b960.md`): P1 startup-only self confirmation and
+P2 synthetic seed image ACK missing expected-original checks. The first actual
+same-URL replacement deployment accepts the generated old credential and private
+POST before the fix (`/tmp/m16-cli-deployment-red.log/.exit`, 0/1 exit 1).
+Each CLI request now calls the existing `assertAccountConnection` before private
+transport and checks cancellation after that await. The URL, owner and selected
+credential remain immutable. `/tmp/m16-cli-deployment-green.log/.exit`: 7/7 exit 0,
+including replacement receiving only `/api/connections/self` and zero device rows.
+This is admission checking; an already issued request cannot be retargeted or
+retracted across an independent server replacement during its network flight.
+The seed's actual M03 publication with response-only missing/wrong original
+corruption also fails 0/2 before the fix (`/tmp/m16-cli-original-red.log/.exit`,
+exit 1). It now validates the transmitted image hash, byte count and MIME after
+the common envelope parser; SourceSync's existing full original ACK checks are
+unchanged. A later combined log records the complete green result.
+
+## Epoch-5 stopped instance checkpoint
+
+`MOTE_M16_COMPILED_HOST=1 node --import tsx --test
+apps/server/test/multiuser-instance-backup.test.ts
+apps/server/test/multiuser-lifecycle.test.ts
+apps/server/test/multiuser-auth.test.ts apps/server/test/multiuser-cli.test.ts
+scripts/client.test.ts`: **31/31 exit 0**, `/tmp/m16-freeze-backup-cli-auth.log/.exit`.
+The default durable process test starts the real TypeScript production entry;
+the explicit compiled mode additionally used freshly built `dist/index.js` twice.
+`npm run build:central`: exit 0, `/tmp/m16-central-build1.log/.exit` (before this
+script-only backup delta; no later server runtime change in this checkpoint).
+The earlier freeze command named nonexistent `scope-auth.test.ts`; Node selected
+15 real tests and passed them, so its log is **15**, not authentication coverage.
+
+Actual coverage: existing backup CLI and native profile restore; standalone
+restore CLI; generated A/B identities, exact originals, real Memory extraction,
+conversation metadata, user YAML, completed tasks; actual native Mem0 SDK vector,
+operation and history SQLite files; fixed installed package validation; unchanged
+succeeded/issued external journals; old retry grants rejected; two compiled host
+starts/stops without old model work. Faults cover missing/damaged files, linked
+files, traversal, rehashed wrong database deployment, mismatched expected identity,
+nonempty target preservation, live Central PID and a self-consistent manifest
+omitting required native vectors. Source and target are always disposable.
+
+The valid extra RED `/tmp/m16-backup-combined-red3.log/.exit` is restored Memory
+`desired=2` rather than 0; stage restoration now pauses automatic admission in
+SQL and its authoritative user YAML. Its prior source-kind conflict and nonexistent
+`execution_steps.result` were fixture errors. Native first attempt found the real
+scoped YAML domain is `pluginInstances`; the old `plugins` rewrite left old desired
+state and correctly failed `config_prepare_failed`. This was corrected, and all
+temporary diagnostic instrumentation was removed. `/tmp/m16-backup-native2.log`
+and the final 31-case log pass; no debug production change remains.
+
+The existing Hindsight owned-volume snapshot/restore implementation is reused,
+but actual M16 Docker/native-volume validation is **not run**: sandbox socket
+access first failed; an approved read-only image check then confirmed the Docker
+daemon is unavailable (exit 1). No daemon was started, image pulled, system setting
+changed or existing volume inspected. Epoch-5 Docker profile restore remains an
+explicit pre-write rejection; portable import, M12 and final M15 composition,
+management boundaries, independent backup review and final required checks remain
+OPEN. This green checkpoint closes the inherited epoch-5 backup RED, not M16.
+
 ## Registry change during physical erasure
 
 A real registered extension adding a private domain while deletion was running
@@ -163,3 +246,213 @@ commands after adding the new backup helper to the generated release fixture.
 Management adds no private trace or old queue/index statistics impersonation. The
 Web/Android original diagnostic consumers must recognize the declared metadata
 coverage; this checkpoint does not claim their complete UI or final required gate.
+
+First required affected attempt at 1976bcf9 exits **1** during root tools TypeScript
+checking, before the full test workspaces or Android stage:
+`/tmp/m16-required-affected-first.log/.exit`. Missing `scoped-backup.d.mts`
+(TS7016) and a test-only SourceRequest GET call with too few arguments (TS2554)
+are tooling/type integration failures. The explicit public declaration and full
+GET arguments fix them without runtime behavior changes. A root typecheck green
+and later required retry are separate evidence; the failed attempt is retained.
+
+## Required retry and backup completeness corrections
+
+Second required at `8eb07ad281f919717f978e68c9d921f3d58d281a` completed
+**exit 1**, `/tmp/m16-required-affected-second.log/.exit`. Desktop: 476/484,
+seven old v2 fake-HTTP CLI fixtures and one absent local Electron binary; Server:
+2511 pass, one backup/cold-user configuration failure, one existing opt-in OS
+sandbox skip (2513 total); Web: 490/490; Agent: 317 pass/1 existing skip, Diagnostics: 5/5 and
+Shared: 192/192. Root test commands after the failed workspaces and actual Android
+were not reached. These failures are retained, not replaced by narrow green claims.
+
+The cold-user failure is a production backup admission defect: `GET /api/usage`
+may create `user_configuration_state` before ConfigService initializes a YAML file.
+Only unchanged, never-initialized defaults without durable model/configuration
+provenance may omit that file. A materialized configuration remains mandatory.
+
+Additional actual regressions, committed in `39c203a2`, produced **0/3 exit 1** in
+`/tmp/m16-backup-completeness-red.log/.exit`: an actual completed Ask turn was
+backed up, then dropping `ma_turns` and regenerating the outer SQLite checksum was
+incorrectly accepted; Docker's real runtime COPY projection omitted the new
+helper, preventing even backup `--help`; and a cold account's usage metadata
+incorrectly prevented backup. The first temporary schema attempt failed module
+loading and is not product RED. The valid temporary schema RED is
+`/tmp/m16-backup-schema-red2.log/.exit`.
+
+Stopped backup admission now requires the current production epoch-5 table and
+column contract in `scoped-backup-schema.mjs`, while preserving additional
+extension tables/columns. Missing turns, a renamed result column and an omitted
+unused domain table all fail before target publication. A real restored
+conversation returns its saved answer through the authenticated conversation HTTP
+entry, beyond the earlier metadata-only conversation check. Docker copies the
+backup/restore helpers and schema; fixed package verification consumes the shipped
+compiled release verifier when TypeScript source is absent. Docker runtime file
+projection is not a Docker daemon/image/volume run.
+
+`node --import tsx --test apps/server/test/multiuser-instance-backup.test.ts`:
+**8/8 exit 0**, `/tmp/m16-backup-completeness-green2.log/.exit`. Its prior green1
+was 7/8: a new test interpreted a single-file Docker COPY destination as a directory;
+that test projection bug was corrected. The product missing-helper RED remains
+valid. Compiled package projection and fresh compiled production restart are
+separate checks, still pending at this writing. Server/tools typechecks exit 0 in
+`/tmp/m16-backup-{server,tools}-types.log/.exit`; update/profile adjacent tests:
+12/12 exit 0, `/tmp/m16-backup-update-adjacent.log/.exit`.
+
+The seven original CLI scenarios now use actual generated M01/M03 hosts, SQLite,
+files and child CLI processes: account-isolated profiles; lost real commit ACK
+with no duplicate canonical capture; explicit deletion/restoration; dead-process
+lock recovery in the stable account partition; A pending original/B new scan;
+reference with zero originals; dry-run/consent; and multipart directory paging.
+Only the real HTTP response is dropped after publication for the ACK fault.
+`/tmp/m16-cli-desktop-real3.log/.exit`: **7/7 exit 0**. The first migrated run was
+6/7: the old fake accepted a 17 MiB snapshot despite the existing shared 16 MiB
+snapshot contract. The paging case now explicitly requests archive (five full/
+partial original parts plus the next file), without changing runtime limits or
+adding an automatic retention fallback. An intervening command used the wrong
+working-directory path for this test edit, so real2 repeated that same failure;
+it is not a second product defect.
+
+The omitted npm-install Electron distribution was restored only inside this
+clone's ignored dependencies from the already-installed same version 41.10.7.
+Executable SHA-256 on both copies:
+`0c23b9764481d57cd769318ec81b42e8337ed7d1cad241b82592d88a80ef8a64`.
+The original hidden Electron tests pass 2/2 in
+`/tmp/m16-cli-desktop-real2.log` (that command still failed its old paging case).
+No window was shown or system permission changed. Full required retry remains
+mandatory after these runtime and test corrections. Personal import, M12,
+Docker native-volume evidence and independent backup/management review remain OPEN.
+
+At clean `05e434ee6904a95b50ed0f16195e3baec483493f`, fresh
+`npm run build:central` exits 0 (`/tmp/m16-central-build2.log/.exit`). Then
+`MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1 node --import tsx --test
+apps/server/test/multiuser-instance-backup.test.ts`: **8/8 exit 0**,
+`/tmp/m16-backup-compiled-packaged-green.log/.exit`. This starts/stops/restarts
+actual compiled `dist/index.js` against the restored temporary instance twice.
+The native Mem0 scenario additionally runs both backup and restore CLIs from a
+runtime projection containing the Docker COPY files and compiled server,
+without server TypeScript source; it verifies installed fixed packages, actual
+SDK SQLite state, preserved Memory rows and retired plugin snapshots. This is
+compiled package/entry proof, not a container image/daemon or native Hindsight
+volume proof. The optional flags select these explicit integration checks; the
+default full suite also executes the source-host backup cases.
+
+
+## Third gate and subsequent independently discovered boundaries
+
+The complete required command at clean `ce9b832f565f6f128cc7159ed3a068e67d233acd`
+exited **0**, `/tmp/m16-required-affected-third.log/.exit`: Desktop 484/484,
+Server 2515 passed, zero failed and one existing opt-in OS sandbox skip; Web
+490/490; all other workspaces/root checks and the actual Android JVM task passed
+(`BUILD SUCCESSFUL`, 49 seconds, 25 executed tasks). This result covers that
+candidate, not the later fixes below.
+
+M15 independently found that two diagnostic attachment handlers awaited real
+file I/O and then called `reply.send` before the shared authorization wrapper's
+final check. Durable generated-account/actual-file barriers revoke the original
+administrator during that read and previously received 200 on both `/logs` and
+`/support-bundle`. Two additional real archive faults bypassed complete-original
+verification: a future manifest date hid an unexpired snapshot, and an expired
+snapshot with a live M03 physical pin was ignored. A canonical configuration
+owner containing `../../../outside` also selected a generated sibling YAML
+outside the archive. With regenerated manifest checksums these were accepted.
+The combined actual RED is **five failures/one positive**, exit 1,
+`/tmp/m16-retirement-owner-snapshot-red.log/.exit`, committed as `a21cc014`.
+
+`d7879a9e` asserts the captured administrator after the last await and before
+headers, then returns an unsent payload for the existing wrapper to authorize
+before serialization. `9797ca15` validates known SQL owner namespaces against
+real account identities before filesystem resolution, preserving the shared
+executor/operation empty-owner catalogs. Original completeness uses the earlier
+of manifest time and current time, and includes active same-owner/hash physical
+pins; expired unpinned metadata retains its existing unavailable/410 behavior.
+It does not renew snapshot deadlines, collector grants or execution permissions.
+The combined source suites passed **17/17**, exit 0,
+`/tmp/m16-retirement-owner-snapshot-green.log/.exit`; additional traversal,
+well-formed orphan and unsafe-account rejection passed **3/3**, exit 0,
+`/tmp/m16-backup-owner-extra-green.log/.exit`. All rejected restore targets remain
+absent. The expanded final suite contains those additional owner cases.
+
+At `9797ca15`, fresh `npm run build:central` exited 0,
+`/tmp/m16-central-build3.log/.exit`; explicit compiled-host/packaged-CLI backup
+suite passed **14/14**, exit 0,
+`/tmp/m16-backup-compiled-packaged-final.log/.exit`. It again exercises actual
+compiled process recovery and both CLI entry points without server TS sources.
+M13 independently reviewed the management fix (`/tmp/mote-m13-review-m16-d787.md`)
+and M15 reviewed the backup delta (`/tmp/mote-m15-review-m16-9797.md`); neither
+found a new confirmed P0/P1/P2. These are bounded static reviews, not independent
+reruns or whole-module acceptance. A fresh full required check remains mandatory.
+
+Personal import remains OPEN: the current adapters restore only their original
+identity and either an empty target or an identical replay, while the original
+personal import merged/deduplicated data. Host identity mapping and per-domain
+merge contracts must be defined before those hooks can safely expose that
+capability. The M12 handoff remains unauthorized. No missing domain is treated as
+successful, and neither this gate nor a draft PR means M16/project acceptance.
+
+## Personal import implementation checkpoint (not final acceptance)
+
+This supersedes the earlier OPEN identity decision: the user approved only the
+original deployment/account and canonical merge/dedup. The actual public endpoint
+was first RED 3/3 at `0499fe5c`, `/tmp/m16-personal-import-first-red.log` (exit 1,
+missing production import entry), before its implementation.
+
+The current narrow actual-host suite is 12/12, exit 0:
+`node --import tsx --test apps/server/test/multiuser-portable-import.test.ts`,
+`/tmp/m16-personal-import-twelve.log`. It exercises original bytes and missing
+sources, B unchanged, duplicate/restart receipts, actual Memory/model completion
+and saved conversations, deletion then reimport, current grant/policy/model-call
+preservation, real-domain-read barriers for cancel/disable/logout/restart,
+wrong owner/deployment/version/coverage rejection, later-domain SQL/FS rollback,
+newer source-head/retired Material preservation, valid source identity conflict,
+corrupt original bytes, changed retry input, empty owner and cursor-bound pages.
+A conflict fixture initially changed deviceId while leaving its captures tied to
+the previous device; it was correctly invalid_data rather than a valid immutable
+conflict. That assertion failure is retained in the boundaries-first log; the
+corrected source-kind conflict reaches archive_conflict and passes. It is not a
+production RED. Barrier cleanup is registered before host close to avoid a failed
+assertion stranding the generated provider.
+
+Server typecheck exits 0 (`/tmp/m16-personal-import-types2.log`); scope inventory
+and production import boundary exit 0. The new import list/receipt/control routes
+and private original rollback directory admission are explicitly inventoried.
+`ig_state` restore/delete now names its existing columns for compatibility with
+M13's proposed derived notification column; no unreviewed journal is assumed.
+
+This public checkpoint still needs independent review, adjacent adapter checks,
+real original UI consumers and a new combined required/build window. The ec6
+required result does not cover this runtime. M12 remains unavailable by the
+explicit handoff restriction; Docker publication/native-volume limitations and
+final all-module joint validation remain separate OPEN items.
+
+Existing domain adapter adjacent journeys also pass 11/11, exit 0:
+`node --import tsx --test --test-concurrency=1 --test-name-pattern='restore|portable|lifecycle' apps/server/test/multiuser-ask.test.ts apps/server/test/multiuser-memory.test.ts apps/server/test/multiuser-ingress.test.ts apps/server/test/multiuser-processing.test.ts`,
+`/tmp/m16-personal-import-adapter-adjacent.log`. These include real external Memory
+historical-body export/stale builtin restore, held provider deletion, original
+identity stitching rejection and processing publication/hash parents. They are
+adjacent adapter evidence, not a full server or all-module acceptance run.
+
+### Actual earlier-instance/later-personal-data restart correction
+
+A new end-to-end case takes an actual stopped instance backup before a generated
+Material, exports that later Material under the same account/deployment, restores
+the earlier instance, logs in again (old credentials correctly rejected), imports
+the later portable archive, then restarts the real host. At `dd284ad0` it reaches
+its intended assertion and fails: import-time suppression leaves zero new events,
+but the repeated Ask schema backfill creates an insights notification on restart.
+`/tmp/m16-import-restart-notification-red.log` is exit 1, 1/1 valid RED. This proves
+a new automatic-input notification, not an executed external/model action.
+
+The correction runs the canonical automation-event backfill only when installing
+that journal table for the first time, in the same SQLite savepoint as schema and
+cursor initialization. Existing normal publication triggers are retained. A
+positive migration case reconstructs the real pre-journal schema checkpoint,
+proves first install seeds the existing Material exactly once, restart does not
+reseed it, and later real publication still produces a normal notification.
+The two focused cases pass 2/2 (`/tmp/m16-import-restart-notification-green.log`),
+followed by the final full personal-import suite recorded separately. No new
+policy, task runtime, external replay or M12 interaction is added.
+
+After the atomic migration correction, all personal import cases pass 14/14,
+exit 0 in `/tmp/m16-personal-import-fourteen.log`; no skip. Scope inventory and
+production boundary check also exit 0. This remains narrow evidence awaiting the
+new combined required/build and current UI consumer acceptance.

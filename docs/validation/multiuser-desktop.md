@@ -1,5 +1,156 @@
 # M14 Desktop validation checkpoint
 
+## Portable import Activity
+
+M16's exact `89ddc973f0eb68262f047826d2df23c4b41df5ad` is composed. RED
+`690b85e7` exercises actual export, source deletion, same-account import and its
+real preflight barrier: both Activity cases fail because no card exists
+(`/tmp/m14-import-activity-red.log`, **0/2, exit 1**). The unchanged tests and
+the original export/delete cases pass **6/6, exit 0** in
+`/tmp/m14-import-activity-green.log` after adding the existing import receipt to
+the metadata projection. Running, completed, cancelled and restart states stay
+owner/current-epoch bound. Preserved domains are excluded branches, not restored
+authority or record counts. Import has no artifact, evidence or technical task
+IDs, and a committed import cannot be cancelled. B and an unrelated administrator
+cannot inspect A's import. No second import runtime is introduced.
+
+`/tmp/m14-import-desktop-entry.log/.exit`: **1/1 selected, exit 0**, 2.75s.
+Production main/preload read the actual committed import, preserve its operation
+identity through a real one-use browser login exchange, and expose no artifact.
+After switching to B, B's Activity is empty and A's old document cannot hand off
+the work. The 32 unselected cases are not counted as acceptance. This short
+compiler invocation and M15's short Gradle claim crossed in message delivery;
+no additional build was started during its window.
+
+M16's bounded independent review of exact `c2c0cbc4` found no new confirmed
+P0/P1/P2 (`/tmp/mote-m16-review-m14-c2c0.md`), without rerunning these tests.
+The separate actual import/restart notification RED `dd284ad0` and fix
+`1fd1189e` are composed. M14's bounded static review found no new issue in the
+one-time schema backfill/savepoint change, with review limits recorded at
+`/tmp/mote-m14-review-m16-1fd.md`. These checks do not replace final affected
+validation of the combined candidate.
+
+## Refreshed generated Desktop native acceptance
+
+At `e070c4da`, the fresh Desktop build first exits 1 at restricted `iconutil`
+(`/tmp/m14-resumed-desktop-build.log/.exit`); the same command passes after
+standard review (`/tmp/m14-resumed-desktop-build-approved.log/.exit`). The real
+generated Desktop main/preload/renderer runner then exits 0 in
+`/tmp/m14-resumed-native-ask.log/.exit`. Ask uses the real Harness and a scripted
+loopback provider (three requests), renders a canonical citation, and its actual
+button click hands off the explicit context reader. M08 returns A's body and
+rejects B; the raw capture route is absent. The same run also verifies offline
+A queue/draft, B stopped until explicit collection, B queue completion,
+SIGKILL/restart B and recovery/upload of A's original queue and editable draft.
+The browser opener, capture, calendar and credential store are external-I/O
+substitutes. This is the separately authorized Desktop fixture, not the denied
+M13 Web Electron action; no personal data, live model or system permission was
+accessed or changed.
+
+## Resumed M16 Activity consumption
+
+Composed the exact clean M16 dependency `ec6d12c6601109f7527b012fb28915dc76d6e598`
+into the M14 feature. The earlier a439 required-affected success remains evidence
+for that earlier composition, not for the new runtime. M16's later negative-byte
+backup regression and newly approved personal import are not claimed covered by
+ec6. No M12 handoff was read or relayed.
+
+Actual production M01/M16 routes at RED `60a0fa00` omit all lifecycle Activity
+cards: `/tmp/m14-lifecycle-activity-valid-red.log/.exit`, **0/3, exit 1**.
+The unchanged tests pass **3/3, exit 0** after the narrow read projection:
+`/tmp/m14-lifecycle-activity-green.log/.exit`. They cover a real held export,
+completion/current owner artifact, cancel and restart, owner/epoch and state
+filtering before pagination, and an actual administrator deletion that stops at
+`result_unknown` and completes only after explicit retry. Administrator metadata
+does not expose target data or export downloads. The first test attempt hung in
+fixture cleanup before reporting assertions; its generated runner was identified
+and stopped through standard review, and cleanup now releases its provider
+barrier before closing the actual host. That first attempt is not a valid RED.
+
+Server typecheck, scope inventory and bilingual catalog checks exit 0:
+`/tmp/m14-lifecycle-server-typecheck.log/.exit`,
+`/tmp/m14-lifecycle-scope.log/.exit`, `/tmp/m14-lifecycle-i18n.log`.
+This checkpoint does not replace the pending Desktop entry-point, independent
+review, final dependency combination and required-affected evidence.
+
+The expanded production lifecycle Activity file now passes **4/4, exit 0** in
+`/tmp/m14-lifecycle-activity-expanded2.log/.exit`, adding actual failed export /
+explicit retry and retirement of an administrator credential. The unchanged
+semantic record accounting never labels domains as records. The M13 stable Web
+consumer `f1e059e4c0bf86b860d8b1c9154b1cb36b0fbd13` is composed at `d7e8ea88`;
+merge conflicts retain the newer ec6 M16 documents and the lifecycle Activity host
+injection. This includes M13's actual M07 model/material adapters and restored
+Activity route, not its later raw archive WIP or final module acceptance.
+
+`/tmp/m14-lifecycle-desktop-entry4.log/.exit`: **1/1 selected, exit 0** through
+the emitted production main and preload, generated native-I/O substitutes and
+actual M01/M16 backend. A's real successful Activity response is held, B activates
+and the old response/document are rejected; restart retains B's empty view.
+Fresh A credentials recover A's original export identity. The actual one-use
+browser handoff is exchanged for A's Cookie session, which reads the exact work;
+cancel removes its artifact. Native browser launch is the simulated external I/O,
+so no browser or Electron is launched by this Node fixture. The other 27 cases
+were not selected, not silently accepted. Earlier attempts 1–3 are fixture errors
+(server authorization delayed past logout, reuse of a logged-out token, and
+missing Wire2 exchange header), preserved in adjacent logs and not product REDs.
+
+### Same-URL deployment replacement between requests
+
+Actual RED `f6db6226`: **0/3, exit 1** in
+`/tmp/m14-request-deployment-red.log/.exit`. The generated real app is stopped,
+its deployment identity is replaced while its credential rows remain valid, and
+the same URL resolves to the rebuilt real app. Production main Ask sends its
+question to `/query-runs`; SourceManager sends original parts after an old
+manifest ACK; capture upload sends bytes after old source registration. The old
+single batch/factory identity check is insufficient even though the late receipt
+is rejected. This is a confirmed production regression, not a provider fixture.
+
+The unchanged three tests pass **3/3, exit 0** in
+`/tmp/m14-request-deployment-green.log/.exit`: every ingress request reuses the
+existing actual self confirmation and checks cancellation after that await; Ask
+rechecks the same identity and its captured main connection before transport.
+The source factory cache and redundant outer batch/heartbeat checks are removed.
+The replacement receives only identity admission, no question/capture/parts;
+source pending input and original spool remain intact. An already issued network
+request cannot be retracted across a server replacement during that flight; this
+guard admits the next request only under its confirmed stable owner. No protocol,
+runtime, owner key, retry algorithm or system network setting is introduced.
+
+M13 independently reviewed exact c18ca001's four runtime files without new
+confirmed P0/P1/P2 (`/tmp/mote-m13-review-m14-c18.md`). M16 independently reviewed
+exact96cd160a's lifecycle Activity and production composition without new
+confirmed P0/P1/P2 (`/tmp/mote-m16-review-m14-96cd.md`). These were bounded static
+reviews, not independently rerun suites.
+
+At composition `6c239a23` (M15 stable8c92/backup473, M13 f1 and exact Vault07f54,
+M16 ec6 and M14 c18), fresh shared build and Desktop typecheck exit 0. The first
+full Desktop run exits 1: 462/488 pass, 26 failures include restricted loopback
+`listen EPERM`, native watcher/background fixture restrictions and timeouts.
+`/tmp/m14-c18-desktop-full.log/.exit` is retained. The exact suite was then
+allowed by standard review and passes **59 files, 488/488, exit 0**, 68.99s:
+`/tmp/m14-c18-desktop-full-approved.log/.exit`. Its standalone generated Desktop
+background-policy fixture loads only a generated data page; this is not M13's
+denied Web Electron action. No real capture, calendar, credential store or
+external model was accessed, and no permissions or network settings changed.
+New later runtime changes still require affected validation on their final SHA.
+
+### Declared Ask evidence handoff
+
+RED `9e8e34f6`, `/tmp/m14-ask-context-red.log/.exit`, **0/1, exit 1**: an actual
+M07 canonical preview supplies evidence that is absent from raw M02 captures;
+M08 reads A's canonical body while B gets404. The production main/preload browser
+handoff rejects its explicitly declared context reader. Ask's UI citation callback
+now marks that reader, and the existing central-browser handoff preserves it as
+`context:capture:<id>`. Ingestion evidence keeps the raw reader. No error-driven
+fallback or new backend read authority is introduced.
+
+`/tmp/m14-ask-context-green.log/.exit`: **2/2 selected, exit 0**, same actual
+M07/M08→main/preload→browser-route test plus strict context namespace validation.
+The real Web evidence route retains the marker. Browser launch is external-I/O
+substitution; this is not a live-model Ask run or native renderer citation click.
+No unselected case is reported as passed, and the later full affected/native
+evidence must identify its actual coverage.
+
 This is an in-progress evidence record, not final acceptance or a delivery claim.
 Work is isolated in task-18/mote on `codex/mote-multiuser-m14-desktop`.
 The dirty original checkout was not modified. Initial characterization uses
@@ -200,6 +351,65 @@ denied M13 Web action. The initial full command remains EXIT1 and is not called
 both catalogs makes8373-message i18n validation EXIT0:
 `/tmp/m14-composed-i18n-green.log/.exit` (initial failure retained separately).
 
+The later clean composition9bc65b53d5823443ad1ecffb49d2c6eecc687927 adds
+Web's tested3300db2180ac9c935c9bfb7109a9d31b1e27fa03 Memory read consumer to
+Android tested5a0dd911 and Desktop c16/0c5. Translation conflicts retain the
+shared/Android union; i18n checks8376 messages and scope checks EXIT0. M14's
+bounded read-only review of the Web increment found no confirmed new finding
+(`/tmp/mote-m14-review-m13-3300.md`), without accepting its still-open parity.
+Later peer WIP is not part of this composition.
+
+Fresh shared build EXIT0 (`/tmp/m14-final-shared-build.log/.exit`). The restricted
+Desktop build initially failed at macOS iconutil `Invalid Iconset`; the exact
+standard-reviewed retry EXIT0 is retained separately in
+`/tmp/m14-final-desktop-build-approved.log/.exit`. Generated native main/preload/
+renderer A/B offline queues/drafts, SIGKILL/restart and actual backend isolation
+EXIT0 in `/tmp/m14-final-native.log/.exit`. After the Web3300 shared message
+addition, fresh Desktop build and the same actual native chain both EXIT0 in
+`/tmp/m14-9bc-{desktop-build,native}.log/.exit`. These executions use only the
+Desktop fixture, temporary generated profiles, synthetic native I/O and its own
+child process; they do not run M13's denied Web Electron action.
+
+The first real required affected run on clean9bc65b53 is retained as EXIT1 in
+`/tmp/m14-required-affected.log/.exit`: Desktop59files/484tests passed, Web490
+passed, all workspace typechecks passed. Server2495 tests had2493 pass,1 failure
+and1 default opt-in OS-sandbox skip. The failed old Lark overlap fixture fixed
+`Date.now` to2026-10-15 while `observedAt` used real `new Date`; after24 hours,
+the unchanged future-observation guard correctly rejected its fixture inputs.
+The unchanged single-case reproduction fails in
+`/tmp/m14-lark-overlap-diagnostic.log/.exit`. Test-onlya43979dc anchors the same
+:13→:33→next-hour:13 windows to the current hour and retains all event/file/body
+fetch/dedup assertions, adding an explicit first-poll completed assertion. The
+same case1/1 EXIT0 is `/tmp/m14-lark-overlap-green.log/.exit`. There is zero
+production runtime diff from9bc65b53. M13's independent exacta439 read review
+found no weakened assertion or new confirmed finding in
+`/tmp/mote-m13-review-m14-a439.md`. The default skip is the existing
+`MOTE_TEST_PYTHON_OS_SANDBOX` opt-in scenario, not a claimed native permission
+check. No skipped or narrow result is substituted for the required command.
+
+This host's default shell has no Java runtime. Before the final run reached its
+Android stage, an ignored workspace-local `node_modules/.bin/java` launcher was
+configured for installed Homebrew JDK21 and the existing Android SDK. It changes
+no system Java, permissions, credentials or tracked source and is removed after
+the run. The equivalent
+reproduction environment is
+`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
+and `ANDROID_HOME=/Users/utopiafar/Library/Android/sdk`. The required command's
+Android stage still runs the actual Gradle JVM tests; no checker step is skipped.
+
+The final required command on exacta43979dc18a90517cd641d38787674586a20499d
+completed EXIT0: `/tmp/m14-required-affected-final.log/.exit`. It runs
+`check:local` and the actual `:app:testDebugUnitTest`, without a cached or skipped
+checker stage. Desktop59files/484tests passed; Server2494 passed/0 failed with
+the1 default OS-sandbox opt-in skip; Web490 passed; Agent317 passed/0 failed
+with1 default installed-Codex synthetic-fixture opt-in skip; Diagnostics5 and
+Shared192 passed. The repository script group81, CLI characterization4 and
+generated Node supervisor fixture passed. Android rebuilt25 tasks in48 seconds;
+JUnit XML has72 suites/340 tests,0 failures/errors/skips. Workspace types and
+the8376-message i18n check passed. No opt-in skip is presented as live-model,
+real permissions or physical-device evidence. Only these two evidence/design
+documents change aftera439; production and fixture diff is zero.
+
 ## Finite remaining acceptance
 
 Activity and the central status consumer now have the real-chain evidence above.
@@ -209,11 +419,21 @@ and instance backup/restore/delete public orchestration; this snapshot byte
 recovery is a separate existing collector path. No replacement framework is
 introduced to bypass those owners.
 
-Remaining gates: actual final dependency composition; bounded review of later
-deltas; final Desktop suite/build/generated native journey; required
-`npm run check:affected -- --base origin/codex/mote-multiuser-integration` on the
-final runtime candidate; then push and verify remote feature SHA and create a
-Draft PR targeting integration. No merge/main/deployment is authorized.
-The remote integration ref was fetched and remains6272a9b5. No final affected
-pass, remote feature SHA or PR is claimed at this checkpoint. Physical-device,
-live-model, real permissions and production deployment checks remain unrun.
+M16's first export/delete contractf24dbad6 and credential cleanup23e135ac were
+received and independently reviewed in bounded source ranges, but are not in
+this frozen composition. M14's static credential-retention P1 received an actual
+M16 RED→GREEN and bounded follow-up closure; this is peer evidence, not an M14
+rerun. M16's Activity categories, personal import and instance orchestration
+remain future composition work. The root `scripts/client.ts`/`import-files.ts`
+still use their legacy v2/token-hash consumer in this candidate; their generated
+fake-fetch characterization passing does not prove a scoped production CLI.
+That concrete entry-point gap was handed to M16, without changing its workspace.
+
+The current frozen consumer combination, bounded reviews, Desktop build/native
+journey and required affected gate are verified above. This supports a Draft
+checkpoint, not final M14 or joint acceptance: authorized M12 consumption,
+M13's later final parity and M16's later real consumers remain open. Remote
+feature/PR identity is reported in the final delivery note after verification.
+No merge/main/deployment is authorized. The remote integration ref remains
+6272a9b5. Physical-device, live-model, real permissions and production deployment
+checks remain unrun.

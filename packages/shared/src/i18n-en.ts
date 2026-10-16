@@ -24,7 +24,7 @@ export const english: Readonly<Record<string, string>> = {
   "实例备份与恢复由中央节点停机命令执行。": "Instance backup and restore use offline commands on the central node.",
   "当前账号的存储统计与索引管理接口尚待接入。": "Storage statistics and index management for the current account are awaiting integration.",
   "当前支持账号归档；元数据和附件分别导出的接口尚待接入。": "Account archives are supported. Separate metadata and attachment exports are awaiting integration.",
-  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions changed. The completion receipt is retained; open the memory to check its currently readable version.",
+  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions have changed; the completed task record remains. Open the Memory to check the currently readable version.",
   "已删除": "Deleted",
   "生成 {0} 条记忆": "Created {0} memories",
   "已生成的批次": "Persisted batches",
@@ -2054,6 +2054,7 @@ export const english: Readonly<Record<string, string>> = {
   "导入与导出": "Import and export",
   "可移植归档，保留完整上下文。": "Portable archives preserving full context.",
   "导出资料": "Export data",
+  "删除账号资料": "Delete account data",
   "记录、原始影像和校验信息。访问令牌不会包含在内。": "Records, original images, and checksums. Access tokens are excluded.",
   "导出": "Export",
   "导入归档": "Import archive",
@@ -8400,5 +8401,10 @@ export const english: Readonly<Record<string, string>> = {
   "使用账号登录全部功能，或在浏览器中批准采集设备。": "Sign in with your account for all features, or approve a collection device in your browser.",
   "设备授权只允许采集；请使用用户名和密码登录后打开私人资料。": "Device approval permits collection. Sign in with your username and password to open private content.",
   "将本机未绑定资料归入此账号": "Assign unbound local records to this account",
-  "整理记忆": "Organize memories"
+  "整理记忆": "Organize memories",
+  "元数据单独导出的接口尚待接入；当前归档包含本账号的资料与可用原件。": "Separate metadata export is awaiting integration; the current archive includes this account’s data and available originals.",
+  "个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。": "Personal exports contain this account’s data and registered domains, excluding login credentials, execution authority, and instance backups.",
+  "取消后将不能下载这份导出文件。": "Cancelling makes this export unavailable for download.",
+  "下载": "Download",
+  "模型预设和默认选择保存在本人配置；复制带凭据、测试连接和模型目录尚待多用户接口。": "Model profiles and default selections are saved in your configuration. Copying credentials, connection tests and model catalogs still need multiuser interfaces."
 };
