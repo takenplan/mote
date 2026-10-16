@@ -18,6 +18,7 @@ import {McpMemory} from './mcp-memory.js';
 import {McpQuery} from './mcp-query.js';
 import type {AskHost} from './ask.js';
 import type {MemoryHost} from './memory.js';
+import type {ConnectorSourceStatusReader} from './connectors.js';
 import {McpOutbound,outboundSettings,type OutboundConnection} from './mcp-outbound.js';
 
 export const MCP_DOMAIN='mcp';
@@ -39,7 +40,7 @@ export class ScopedMcp{
   this.inbound=new McpInbound(runtime,(context,authorization)=>{
    const sql=this.sql(context),generation=this.state(sql).generation;
    const assert=()=>{runtime.authority.assert(context);authorization.assertCurrent();const state=this.state(sql);if(this.closed||state.deleted||state.generation!==generation)throw new ScopeError('invalid_identity',401);for(const id of authorization.sourceIds)if(authorization.sourcePins[id]!==this.pinSources(context,[id])[id])throw new ScopeError('invalid_identity',401);};
-   const data=this.data(context),sources=mcpSources(data,ingress,context,authorization.sourceIds,authorization.write,assert);sources.check();return {sources,assert,...(this.memory?{memory:new McpMemory(this.memory,context,authorization.sourceIds,assert,ids=>this.memorySourceFence(context,ids))}:{}),...(this.ask?{query:new McpQuery(this.ask,data,context,authorization.sourceIds,assert,ids=>this.memorySourceFence(context,ids))}:{})};
+   const data=this.data(context),sources=mcpSources(data,ingress,context,authorization.sourceIds,authorization.write,assert,ids=>runtime.services.forUser(context).get<ConnectorSourceStatusReader>('connectors').sourceStatuses(ids));sources.check();return {sources,assert,...(this.memory?{memory:new McpMemory(this.memory,context,authorization.sourceIds,assert,ids=>this.memorySourceFence(context,ids))}:{}),...(this.ask?{query:new McpQuery(this.ask,data,context,authorization.sourceIds,assert,ids=>this.memorySourceFence(context,ids))}:{})};
   },()=>configuration.instance.current<{allowedOrigins:string[]}>('server').allowedOrigins);
  }
  bindMemory(memory:MemoryHost){if(this.memory&&this.memory!==memory)throw new Error('MCP Memory host already bound');this.memory=memory;}
