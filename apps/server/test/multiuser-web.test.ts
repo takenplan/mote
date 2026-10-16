@@ -109,6 +109,39 @@ test('Web reference form transport retains metadata and retries one owned Ingres
  await assert.rejects(saveWebReference(a,'STALE_A_REFERENCE',uri),error=>(error as any).code==='session_changed');
 });
 
+test('Web source-item consumers reject identity-corrupted actual M03 acknowledgements',async t=>{
+ const {saveWebReference}=await import('../../web/src/web-reference.js'),f=await fixture(t),a=f.api();
+ const file=new File(['GENERATED_IDENTITY_BYTES'],'identity.wav',{type:'audio/wav',lastModified:0});
+ const good=await uploadNoteAttachment(a,file,'same-device'),uri='nas://generated/identity.txt';
+ await saveWebReference(a,'Generated identity',uri);
+ const transport=globalThis.fetch;let corrupt:((receipt:any)=>void)|undefined;
+ t.mock.method(globalThis,'fetch',async(...args:Parameters<typeof fetch>)=>{
+  const response=await transport(...args),url=String(args[0]);
+  if(!corrupt||!url.startsWith('/api/ingress/')||!/(?:\/uploads|\/commit|\/items)$/.test(url))return response;
+  const body=await response.json(),receipt=body.receipt??body;
+  if(!receipt.captures)return new Response(JSON.stringify(body),{status:response.status,headers:response.headers});
+  corrupt(receipt);return new Response(JSON.stringify(body),{status:response.status,headers:response.headers});
+ });
+ const mutations:Record<string,(receipt:any)=>void>={
+  capture:receipt=>{receipt.captures[0].id='b20a6edc-90ef-43c6-9d88-df798fd20c09';if(receipt.captures[0].original)receipt.captures[0].original.captureId=receipt.captures[0].id;},
+  source:receipt=>{receipt.captures[0].sourceId='other-generated-source';},
+  external:receipt=>{receipt.captures[0].externalId='other-generated-item';},
+  revision:receipt=>{receipt.captures[0].revision='other-generated-revision';},
+ };
+ for(const [name,mutation]of Object.entries(mutations))await t.test(name,async()=>{
+  corrupt=mutation;
+  await assert.rejects(uploadNoteAttachment(a,file,'same-device'),/acknowledgement does not match/);
+  await assert.rejects(saveWebReference(a,'Generated identity',uri),/acknowledgement does not match/);
+ });
+ await t.test('original source binding',async()=>{
+  corrupt=receipt=>{receipt.captures[0].original.sourceId='other-generated-source';};
+  await assert.rejects(uploadNoteAttachment(a,file,'same-device'),/acknowledgement does not match/);
+ });
+ corrupt=undefined;assert.equal(await uploadNoteAttachment(a,file,'same-device'),good);
+ f.cookie('b');const b=createApi(f.bi);assert.equal(await uploadNoteAttachment(b,file,'same-device'),good,'equal logical IDs are valid in their independent accounts');
+ await saveWebReference(b,'Generated B identity',uri);assert.doesNotMatch(JSON.stringify(await b.request('/api/source-items')),/Generated identity/);
+});
+
 test('Web Ask model availability treats an actual empty account selection as normal configuration state',async t=>{
  const {askModelSelectionPath}=await import('../../web/src/ask-model-selection.js'),f=await fixture(t),a=f.api();
  const empty=await a.request<any>('/api/models');assert.equal(askModelSelectionPath(empty),null);
