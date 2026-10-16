@@ -1,9 +1,11 @@
-# M07 Memory validation checkpoint
+# M07 Memory validation
 
-This is a partial-core checkpoint. M07 is not accepted and has no Draft PR yet.
-The prerequisite is PR #132 exact
-`cdc5c34c36fc5743049007ee2c76d705fde3dd7f`; the protected integration base is
-`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
+The latest feature receipts are in [Final feature receipts](#final-feature-receipts).
+Earlier checkpoints below preserve their original failures, partial coverage and
+then-pending work; they are historical, not substitute final receipts. Final
+prerequisites are PR134 `7572b573b03437ff743652c13181b9fdcf251fda` (including
+PR132/133) and docs-only PR135 `094b69d0c4d623a3b478ae4c05ee249b024ba73b`.
+The unchanged integration base is `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 
 ## Reproducible test mapping
 
@@ -396,3 +398,95 @@ the existing visibility sequence fence. This static concern did not reproduce as
 a production defect; no additional history algorithm was added. Both retained
 variants plus page cost: 3/3, exit 0, 3500.662417ms,
 `/tmp/m07-public-A-history-derived.log`.
+
+
+## Final feature receipts
+
+Production runtime: `84a405f5c52f951f05db975705c12c3bb646dd67`.
+Final code/test commit: `3415cabdf85f6b9798b0e19c94b80c1b09fda140`.
+Only documentation follows this commit. Node 26.11.1; Java 21 and the existing
+local Android SDK. All external model/provider inputs and records are synthetic.
+
+| Gate | Exact result and command / receipt |
+| --- | --- |
+| Complete source scope/multiuser + old review/ACK/PrivateData combination | 424/424, exit 0, no skipped/cancelled, 628564.600916ms at `c5661258cc24628100878b59e96c0cebcb36ee57`; `/tmp/m07-c566-combined.log` / `.exit`. Command below. |
+| Final fixture readiness correction | Only peer test commit `c53c199876bbfee2acfe8c38ecda7403af7f809d` picked as final code/test3415; exact original A/B indexed Material readiness replaces six ticks/first row. Original retained cases 2/2, exit 0, 2975.145584ms; `/tmp/m07-final-readiness.log` / `.exit`. Runtime unchanged. |
+| Same unified A/B/C candidate | `c53c199876bbfee2acfe8c38ecda7403af7f809d`: own literal archive A/C 7/7, exit 0, 54178.698542ms, `/tmp/m07-uniform-c53-AC.log` / `.exit`; M11 13/13 and independent M08 B 5/5 plus legacy tools 3/3, all exit 0. This includes actual Memory/provider/Ask Harness/HTTP SDK rather than substituted domain services. |
+| Independent final delta review | M08 exact c566 A 5/5 + long A 1/1, exit 0 (`/tmp/mote-m08-review-m07-c566.md`); M11 full runtime84a/C code review and actual C 1/1, exit 0 (`/tmp/mote-m11-review-m07.md`). No remaining confirmed P0/P1/P2 in reviewed scopes. Earlier core/review fixes and their independent receipts remain above. |
+| Fresh libraries | `npm run build:libs`, exit 0; `/tmp/m07-final-libs-build.log` / `.exit`. |
+| Fresh server | `npm run build -w @mote/server`, exit 0; `/tmp/m07-final-server-build.log` / `.exit`. |
+| Fresh emitted real HTTP processes | 5/5, exit 0, no skipped/cancelled, 122175.8835ms; `/tmp/m07-final-emitted-process.log` / `.exit`. Includes review, admission, feedback, owner reply, running external write/cancel/SIGKILL/unknown/actual worker retirement and exact external fixture-file erasure. |
+| Required affected | `npm run check:affected -- --base origin/codex/mote-multiuser-integration`, exit 0 on final3415, `/tmp/m07-final-affected.log` / `.exit`; all component typechecks, root/scripts/client/central runner and Android reached. |
+| Scope / working tree | `node scripts/check-scope-contracts.mjs`, exit 0, `/tmp/m07-final-scope.log` / `.exit`; uncommitted `git diff --check` exit 0 and clean code/test tree before final docs. |
+
+The full source combination command was:
+
+```sh
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 \
+  apps/server/test/*scope*.test.ts apps/server/test/multiuser-*.test.ts \
+  apps/server/test/memory-review.test.ts \
+  apps/server/test/memory-publication-retirement.test.ts \
+  apps/server/test/private-data.test.ts apps/server/test/private-data-lifecycle.test.ts
+```
+
+The final same-candidate A/C command was run in a literal c53 archive with its own
+workspace links and copied dependencies (not peer source/DB/dependency writes):
+
+```sh
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 \
+  --test-name-pattern='retained unfiltered Coding|ordinary Material pages|actual M03 Coding|source/Coding archive|representative A keeps|representative C' \
+  apps/server/test/multiuser-ingress.test.ts apps/server/test/multiuser-memory.test.ts \
+  apps/server/test/multiuser-memory-outcome-process.test.ts
+```
+
+Fresh emitted smoke and required affected commands:
+
+```sh
+MOTE_MEMORY_PROCESS_ENTRY="$PWD/apps/server/dist/app.js" \
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 \
+  apps/server/test/multiuser-memory-process.test.ts \
+  apps/server/test/multiuser-memory-outcome-process.test.ts
+
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
+ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk \
+npm run check:affected -- --base origin/codex/mote-multiuser-integration
+```
+
+Final required affected counts (all zero failures):
+
+| Component | Passed | Skipped / execution note |
+| --- | ---: | --- |
+| Desktop | 456 | 0; includes hidden Electron fixture |
+| Server | 2320 | 1 existing optional integration skip; 2321 total |
+| Web | 469 | 0 |
+| Agent | 317 | 1 existing optional integration skip; 318 total |
+| Diagnostics | 5 | 0 |
+| Shared | 190 | 0 |
+| Root release/media/security/reset/network scripts | 81 | 0 |
+| Client scripts | 4 | 0 |
+| Central runner | successful script | exit 0 |
+| Android JUnit | 329 | 70 suites, 0 skipped/failures/errors; BUILD SUCCESSFUL in 42s, 25 actionable tasks all executed |
+
+The earlier ca69 affected exit 1 (two server failures; Android never reached) is
+retained. New scoped Coding projection and legacy late-ACK defects, then retained
+v1 visibility and bounded-read regression, were preserved with RED commits and
+fixed; the final affected run above does not relabel the earlier run. The f072
+independent 6/7 included one pre-assertion fixture readiness TypeError; original
+failure and its bounded exact-publication test-only correction are preserved.
+
+Committed whole-stack whitespace checking separately returns exit 2 for two blank
+EOF lines: the pure extracted `material-organizer-contract.ts` and inherited M04
+`multiuser-model-snapshots.test.ts`. Receipt: `/tmp/m07-final-stack-whitespace.log`
+/ `.exit`. These are formatting notes, not test failures; no source-format edits
+were mixed into the validated freeze. The uncommitted diff check above is distinct.
+
+Checks and Component checks remain disabled and **unrun**, not passed. No workflow
+was enabled or manually triggered. Physical devices, live vendor retention/erase,
+real credentials/user data, production model calls and deployment were not tested
+or authorized. The page-cost fixture bounds repeated scans (80 Materials/owner,
+50 returned) and is not a production-scale load claim. M16 owns cross-domain
+lifecycle orchestration and later clients/UI have their own modules. The same
+candidate A/B/C chain does not replace M08/M11 owning-module final gates.
+Main and integration are unchanged; this feature is delivered as a Draft PR and
+no merge is authorized by these local results.
