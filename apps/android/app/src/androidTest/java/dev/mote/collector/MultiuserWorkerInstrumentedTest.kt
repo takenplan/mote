@@ -462,6 +462,54 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeProcessingSettingsUseTheScopedProcessingDomainAndKeepSpeakerChoices() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app)
+        fun processing():Pair<Long,JSONObject> {val view=api.get("/api/configuration");val domains=view.getJSONArray("domains");return view.getLong("revision") to (0 until domains.length()).map(domains::getJSONObject).single {it.getString("id")=="processing"}.getJSONObject("saved")}
+        val before=processing()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="处理设置"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            lateinit var oldSave:android.widget.Button
+            scenario.onActivity {activity->
+                val automatic=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().singleOrNull {it.text.toString()=="自动处理"}
+                assertNotNull("The original native processing form must consume the actual owned M04/M06 settings",automatic)
+                automatic!!.isChecked=!before.second.getBoolean("automatic")
+                oldSave=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存设置"};oldSave.performClick()
+            }
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            val after=processing();assertTrue(after.first>before.first);assertEquals(!before.second.getBoolean("automatic"),after.second.getBoolean("automatic"))
+            for(key in listOf("audioProcessor","diarizationProcessor","speakerCount","speakerMin","speakerMax","maxAudioMinutes","timeoutMs","enabled","summarize","semanticTurns","understandingEnabled"))assertEquals(key,before.second.get(key),after.second.get(key))
+            login(app,"b");scenario.onActivity {it.navigate("settings")};waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            val b=CentralAccess.requireClient(app);val bBefore=b.get("/api/configuration").toString();scenario.onActivity {oldSave.performClick()};assertEquals(bBefore,b.get("/api/configuration").toString())
+        }
+    }
+
+    @Test fun originalNativeDeviceInventoryUsesCanonicalSameIdOwnedMetadata() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));MoteI18n.select(app,"zh-CN")
+        for(owner in listOf("a","b")){login(app,owner);CentralAccess.requireClient(app).post("/api/ingress/devices",JSONObject().put("id","same-device").put("name","Generated native inventory "+owner).put("platform","android"))};login(app,"a")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","devices")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->val text=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()};assertTrue("The original devices entry must read the scoped canonical inventory",text.any {it.contains("Generated native inventory a")});assertFalse(text.any {it.contains("Generated native inventory b")})}
+        }
+    }
+
+    @Test fun originalNativeStatisticsUsesCurrentOwnerCountsInsteadOfGlobalStorage() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val expected=CentralAccess.requireClient(app).get("/api/data/statistics")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","statistics")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->val text=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()};assertTrue("Native account statistics must not call the retired global storage endpoint",text.contains("原始采集记录 · "+expected.getLong("captures")));assertTrue(text.contains("来源与连接 · "+expected.getLong("sources")))}
+        }
+    }
+
     @Test fun actualNativeOverviewReadsOwnedStatisticsAndCanonicalDeviceMetadata() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
