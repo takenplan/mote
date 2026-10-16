@@ -203,3 +203,12 @@ archive history outside that selection, M06 processing, or the original native
 recording controls. Those consumer/history acceptance rows remain open until
 their actual entry tests pass. Existing archived bytes stay under M03 and all
 original/file reads still require their normal current authority and receipts.
+
+For the original “retry failed steps” user action, the existing recording
+`retry` operation accepts optional `{resume:true}`. Its single existing M05 task
+resets the existing failed checkpoint budget and continues only unfinished
+transcript/media stages, without rediscovering the range or fetching completed
+text. It continues when the client closes. The default empty payload retains
+its previous budget-reset-only behavior. Source/account/device authorization,
+original publication, five-attempt budget and normal explicit Sync's discovery
+algorithm remain unchanged; this adds no second job coordinator.

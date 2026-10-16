@@ -682,3 +682,16 @@ PrivateCursor key. Current-selection archive/checkpoint flags are distinct from
 M06 indexed/Memory outcomes and from historical archive browsing outside that
 selection. Native recording consumers, full history, types, independent review
 and final gates are still pending; this is not a complete recording freeze.
+
+Original failed-step retry needs to continue under the admitted central task,
+including after UI closure. Test84dba2a7 retains real400
+`connector_operation_invalid` for explicit `{resume:true}` after the real
+transcript-success/audio-failure setup
+(`/tmp/m15-recording-resume-valid-red.log/.exit`1). The existing M05 operation now
+continues the existing pending-stage loop, skipping normal scan/discovery. The
+same case passes1/1 in2.225s, EXIT0
+(`/tmp/m15-recording-resume-first-green.log/.exit`): completed transcript capture
+and transcript/search call counts do not change, audio saves successfully,
+default empty retry still resets without provider I/O, and the earlier owner/
+cursor/range/revocation controls remain. No native or broad-gate acceptance is
+inferred from this additional producer test.
