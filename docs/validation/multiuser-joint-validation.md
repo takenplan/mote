@@ -525,3 +525,12 @@ private-preview/confirmation plus equal-ID WAV Imports→real M03/M04/M05/M06
 adjacent cases pass2/2 in
 /tmp/mote-joint-unknown-import-entry-adjacent.log/.exit on the new runtime. This
 supports the narrow candidate; fresh source types and final gates remain due.
+
+The atomic cross-operation guard rejects before transport begins. Its existing
+ExecutionFailure fact now explicitly records executionStarted:false, so the
+queued rejected task retains zero spent attempts as well as no second issuance
+or activity. The same three cases pass3/3/no skip/EXIT0 in
+/tmp/mote-joint-file-unknown-no-issuance-budget.log/.exit. This flag is a host
+pre-I/O fact, never inferred from a provider message or used to settle the older
+unknown call. ce3572 review covers the preceding query; this final one-fact delta
+is separately identifiable for the reviewer and current types remain pending.

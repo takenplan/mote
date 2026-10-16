@@ -257,7 +257,7 @@ export class ProcessingHost {
  private deletionSql(subject:UserDataSubject){const assert=()=>{this.runtime.services.assertSubject(subject,PROCESSING_DOMAIN,'delete');if('credentialId' in subject)throw new ScopeError('invalid_identity',403);};const sql=new PrivateSql(this.db,subject.userId,assert);if(!sql.get('SELECT deleted FROM mp_state WHERE user_id=$user')?.deleted)throw new PrivateDataError('conflict',409);return sql;}
  private async io<T>(run:TaskRun,input:ProcessingInput,work:()=>Promise<T>){
   const id=randomUUID(),key=identityHash([run.context.userId,id]),cleanup=new PrivateSql(this.db,run.context.userId,()=>{});let complete!:()=>unknown;
-  run.external.begin('processing:'+run.task.id+':'+id,issuance=>{if(this.unacknowledgedCall(run.context,input.originalRef,run.task.id))throw new ExecutionFailure('blocked','external_result_unknown');this.input(run.context,input).sql.run("INSERT INTO mp_activity VALUES($user,?,'active')",id);complete=this.execution.bindExternalCompletion(run.context,run.task.id,issuance);});this.active.add(key);let settled=false;
+  run.external.begin('processing:'+run.task.id+':'+id,issuance=>{if(this.unacknowledgedCall(run.context,input.originalRef,run.task.id))throw new ExecutionFailure('blocked','external_result_unknown',undefined,{executionStarted:false});this.input(run.context,input).sql.run("INSERT INTO mp_activity VALUES($user,?,'active')",id);complete=this.execution.bindExternalCompletion(run.context,run.task.id,issuance);});this.active.add(key);let settled=false;
   // The exact transport completion may settle its issued fact after revoke;
   // it cannot restore the task grant or publish a private artifact.
   const finish=()=>{complete();settled=true;};
