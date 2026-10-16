@@ -523,13 +523,13 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             }
         }
     }
-    fun playAudio(path: String, target: LinearLayout) {
+    fun playAudio(path: String, target: LinearLayout, expected: CentralDownload? = null) {
         close(); val api = client; val revision = ui.navigationRevision
         ui.work(MoteI18n.text("正在读取录音…"), {
             val file = File.createTempFile("central-audio-", ".tmp", directory.apply { mkdirs() })
             audioFile = file
             try {
-                file.outputStream().use { api.download(path, it, 256 * 1024 * 1024L) }
+                file.outputStream().use { api.download(path, it, 256 * 1024 * 1024L, expected) }
                 check(!ui.isDestroyed && !ui.isFinishing && ui.navigationRevision == revision)
                 file
             }

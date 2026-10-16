@@ -8446,5 +8446,10 @@ export const english: Readonly<Record<string, string>> = {
   "说话人分离处理器": "Speaker diarization processor",
   "说话人数": "Speaker count",
   "最长录音时长（分钟）": "Maximum recording duration (minutes)",
-  "处理超时（毫秒）": "Processing timeout (milliseconds)"
+  "处理超时（毫秒）": "Processing timeout (milliseconds)",
+  "确认说话人": "Confirm speakers",
+  "保存说话人姓名": "Save speaker names",
+  "原件已保存": "Original saved",
+  "正文已处理": "Content processed",
+  "正文已索引": "Content indexed"
 };

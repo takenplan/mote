@@ -7,7 +7,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 
-internal data class CentralDownload(val bytes: Long, val sha256: String, val contentType: String)
+internal data class CentralDownload(val bytes: Long, val sha256: String, val contentType: String, val requireEtag: Boolean = true)
 
 internal class CentralFailure(val status: Int, val code: String = "", val detail: String = "") : IllegalStateException(when {
     status == 401 && code in setOf("", "unauthorized") -> MoteI18n.text("令牌无效或已失效，请检查后重新登录。")
@@ -69,7 +69,7 @@ internal class CentralClient(
                 requireNotNull(value.toLongOrNull()).also { require(it >= 0 && it <= maxBytes) }
             }
             if (expected != null) {
-                require(status == 200 && connection.contentType == expected.contentType && connection.getHeaderField("ETag") == "\"${expected.sha256}\"") { "Export response does not match its receipt" }
+                require(status == 200 && connection.contentType == expected.contentType && (!expected.requireEtag || connection.getHeaderField("ETag") == "\"${expected.sha256}\"")) { "Export response does not match its receipt" }
                 require(connection.getHeaderField("Content-Length")?.toLongOrNull() == expected.bytes)
             }
             val digest = java.security.MessageDigest.getInstance("SHA-256"); var received = 0L

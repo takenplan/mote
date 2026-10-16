@@ -267,6 +267,8 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         val api = client
         ui.work(MoteI18n.text("正在读取文件…"), { api.get("/api/files/" + enc(id)) to api.get("/api/files/" + enc(id) + "/chunks?offset=$offset") }) { (row, chunks) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
+            val navigation = ui.navigationRevision
+            fun active() = screens.ownsSelectedAccount() && ui.client === api && ui.navigationRevision == navigation
             val item = row.getJSONObject("item")
             ui.text(item.optString("title"), NativeFontRole.TITLE_MOBILE); ui.text(item.optString("mimeType")); ui.text(item.optString("text"))
             val job = row.optJSONObject("job")
@@ -284,26 +286,83 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 "unknown" -> ui.text(MoteI18n.text("上次处理是否结束未知，重试可能重复执行。请确认后继续。"), parent = processing)
             }
             if (job != null) ui.disclosure(MoteI18n.text("处理详情")) { target -> ui.text(job.toString(2), parent = target) }
-            if (row.optBoolean("hasOriginal")) {
-                if (item.optString("mimeType").startsWith("image/")) ui.button(MoteI18n.text("查看原图")) { image("/api/files/" + enc(id) + "/content", body) }
-                if (item.optString("mimeType").startsWith("audio/")) ui.button(MoteI18n.text("播放录音")) { screens.playAudio("/api/files/" + enc(id) + "/content", body) }
-                ui.button(MoteI18n.text("保存原件")) { ui.saveCentral("/api/files/" + enc(id) + "/content", item.optString("title", "mote-file"), item.optString("mimeType", "application/octet-stream")) }
+            row.optJSONObject("processing")?.let { status ->
+                for ((key, title) in listOf("saved" to "原件已保存", "processed" to "正文已处理", "indexed" to "正文已索引"))
+                    ui.text(MoteI18n.text(title) + " · " + status.getBoolean(key), parent = processing)
             }
-            ui.button(MoteI18n.text("导出")) { ui.saveCentral("/api/files/" + enc(id) + "/export", "mote-file.tar.gz", "application/gzip") }
+            val originalRef = row.getString("originalRef"); require(Regex("original:[a-f0-9]{64}").matches(originalRef))
+            val originalPath = "/api/ingress/originals/" + originalRef.removePrefix("original:")
+            val mime = item.getString("mimeType")
+            val expected = CentralDownload(row.getLong("sizeBytes"), row.getString("sha256"), if (Regex("(?:audio|video)/[A-Za-z0-9.+-]+").matches(mime)) mime else "application/octet-stream", false)
+            fun withOriginal(mode: String, action: (String) -> Unit) {
+                if (!active()) return
+                ui.work(MoteI18n.text("正在读取…"), { api.post(originalPath + "/tickets", JSONObject().put("mode", mode)) }) { ticket ->
+                    if (active()) action(originalPath + "/content?ticket=" + enc(ticket.getString("ticket")))
+                }
+            }
+            if (row.optBoolean("hasOriginal")) {
+                if (mime.startsWith("image/")) ui.button(MoteI18n.text("查看原图")) { withOriginal("download") { image(it, body, expected) } }
+                if (mime.startsWith("audio/")) ui.button(MoteI18n.text("播放录音")) { withOriginal("play") { screens.playAudio(it, body, expected) } }
+                ui.button(MoteI18n.text("保存原件")) { withOriginal("download") { ui.saveCentral(it, item.optString("title", "mote-file"), mime, expected) } }
+            }
+            ui.button(MoteI18n.text("导出")) { if (active()) ui.saveCentral("/api/files/" + enc(id) + "/export", "mote-file.tar.gz", "application/gzip") }
             val items = chunks.optJSONArray("items") ?: JSONArray()
+            if (row.optJSONObject("processing")?.has("artifactId") == true) ui.button(MoteI18n.text("确认说话人")) {
+                if (!active()) return@button
+                ui.work(MoteI18n.text("正在读取…"), {
+                    // Names replace the exact artifact's complete map. Read all pages
+                    // so editing one visible page never drops a later confirmation.
+                    val evidence = mutableListOf<JSONObject>(); var pageOffset = 0
+                    while (true) {
+                        val page = api.get("/api/files/" + enc(id) + "/chunks?offset=" + pageOffset)
+                        val rows = page.getJSONArray("items")
+                        for (index in 0 until rows.length()) {
+                            val item = rows.getJSONObject(index).getJSONObject("fileEvidence")
+                            check(item.getString("artifactId") == row.getJSONObject("processing").getString("artifactId"))
+                            if (item.optString("speaker").isNotBlank()) evidence.add(item)
+                        }
+                        if (page.isNull("nextOffset")) break
+                        val next = page.getInt("nextOffset"); check(next > pageOffset); pageOffset = next
+                    }; evidence.distinctBy { it.getString("speaker") }
+                }) { completeSpeakers ->
+                if (!active()) return@work
+                val panel = ui.card(); val fields = linkedMapOf<String, EditText>()
+                for (evidence in completeSpeakers) {
+                    val speaker = evidence.getString("speaker")
+                    fields[speaker] = ui.field(speaker, evidence.optJSONObject("speakerAttribution")?.optString("name").orEmpty(), parent = panel)
+                }
+                ui.button(MoteI18n.text("保存说话人姓名"), true, panel) {
+                    if (!active()) return@button
+                    val names = JSONObject(); fields.forEach { (speaker, field) -> if (field.text.isNotBlank()) names.put(speaker, field.text.toString()) }
+                    val input = JSONObject().put("artifactId", row.getJSONObject("processing").getString("artifactId")).put("names", names)
+                    ui.work(MoteI18n.text("正在保存…"), { api.post("/api/files/" + enc(id) + "/speakers", input) }) { if (active()) file(id, offset) }
+                }
+                }
+            }
             for (i in 0 until items.length()) {
                 val chunk = items.getJSONObject(i); val card = ui.card()
                 ui.text(chunk.optString("ocrText"), parent = card)
                 val fileEvidence = chunk.optJSONObject("fileEvidence")
+                if (fileEvidence != null) {
+                    if (fileEvidence.optString("speaker").isNotBlank()) ui.text(fileEvidence.getString("speaker"), NativeFontRole.SUPPORT, card)
+                    fileEvidence.optJSONObject("speakerAttribution")?.let { ui.text(MoteI18n.text("已确认说话人：{0}", it.getString("name")), parent = card) }
+                    ui.text(fileEvidence.optLong("startMs").toString() + "–" + fileEvidence.optLong("endMs") + " ms", NativeFontRole.SUPPORT, card)
+                    ui.disclosure(MoteI18n.text("定位信息")) { detail ->
+                        val location = JSONObject(fileEvidence.toString()).apply { listOf("captureId", "revision", "artifactId", "chunkId").forEach(::remove) }
+                        ui.text(location.toString(2), parent = detail)
+                    }
+                }
                 if (fileEvidence != null) ui.button(MoteI18n.text("纠正此段"), parent = card) {
+                    if (!active()) return@button
                     val original = if (fileEvidence.optString("speaker").isNotBlank()) chunk.optString("ocrText").removePrefix("[" + fileEvidence.getString("speaker") + "] ") else chunk.optString("ocrText")
                     val text = ui.field(MoteI18n.text("校正此段文字"), original, multiline = true, parent = card)
                     ui.button(MoteI18n.text("保存校正"), true, parent = card) {
+                        if (!active()) return@button
                         val value = text.text.toString()
                         ui.work(MoteI18n.text("正在保存…"), {
                             api.post("/api/files/" + enc(id) + "/corrections", JSONObject().put("artifactId", fileEvidence.getString("artifactId"))
                                 .put("chunkId", chunk.getString("id")).put("originalText", original).put("correctedText", value))
-                        }) { file(id, offset) }
+                        }) { if (active()) file(id, offset) }
                     }
                 }
             }
@@ -467,10 +526,10 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             for (i in 0 until citations.length()) ui.button(MoteI18n.text("查看原文依据"), parent = card) { queryEvidence(citations.getJSONObject(i).getString("id")) }
         }
     }
-    private fun image(path: String, parent: LinearLayout) {
+    private fun image(path: String, parent: LinearLayout, expected: CentralDownload? = null) {
         val api = client
         ui.work(MoteI18n.text("正在读取原图…"), {
-            val bytes = api.image(path)
+            val bytes = if (expected == null) api.image(path) else java.io.ByteArrayOutputStream().also { api.download(path, it, 12 * 1024 * 1024L, expected) }.toByteArray()
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }; BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
             require(bounds.outWidth > 0 && bounds.outHeight > 0)
             var sample = 1; while (maxOf(bounds.outWidth, bounds.outHeight) / sample > 2048) sample *= 2
