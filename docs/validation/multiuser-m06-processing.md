@@ -44,19 +44,19 @@ M07 independently reproduced P1 in the new synchronous admission seam: if
 commit retained a runnable child. Nested admission now uses a savepoint.
 Unchanged external probe changed from childExecutions=1 to 0 while parent
 succeeded. M05 full execution tests11/11 passed, exit0. Exact isolated fix is
-`3798e10e8a1845ada5bb7ba550ee7ddc97d741ec`; full M06 independent review remains
-pending a frozen implementation, and is not substituted by this seam check.
+`3798e10e8a1845ada5bb7ba550ee7ddc97d741ec`. This narrow seam review does not
+replace the final full-module independent review recorded below.
 
-Final frozen command/count/exit receipts and independent review will be appended
-after completion. Interim passes and earlier failed diagnostics are not final
-acceptance. Earlier fixture failures included sandbox EPERM loopback restrictions,
+Final frozen command/count/exit receipts and independent review appear below.
+Interim passes and earlier failed diagnostics are not final acceptance. Earlier fixture failures included sandbox EPERM loopback restrictions,
 a corrected uploaded-JSON processor MIME check, a process barrier that matched
 unstarted tasks, and a DOCX recovery fixture that incorrectly assumed one segment
 per paragraph. No requirement or assertion was removed to hide a product failure.
 
 ## Unrun and remaining boundaries
 
-CI workflows are disabled and must remain disabled. No CI result is claimed.
+Checks and Component checks are disabled and must remain disabled. No CI result
+is claimed; release workflows are untouched.
 Real credentials/providers/models, native CLI authorization, physical clients and
 deployment are unrun. Shared model weights and trusted installed provider code
 remain outside a malicious-code sandbox. M16 must compose canonical originals,
@@ -66,29 +66,61 @@ requests remain result_unknown until physical settlement is established. M07 and
 M10 full-stack consumer acceptance requires their own finalized implementation;
 M06's synchronous hook and PR #132 stack do not claim those later journeys.
 
-Frozen runtime/test implementation: `6c0eb66635c77d2d53679c219b052c5bc2e17f24`.
-The following commands ran against that exact runtime and test tree:
+## Final frozen implementation
+
+Runtime `07ad9ddb17a0d2cd0004c50958670145b1457446` has no further source changes.
 
 | Command | Result | Receipt |
 | --- | --- | --- |
-| `node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-processing.test.ts apps/server/test/multiuser-processing-process.test.ts apps/server/test/multiuser-ingress-process.test.ts` | 40/40, no fail/skip, exit0 | `/tmp/m06-prefreeze-focused.log`, `.exit` |
-| `node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-*.test.ts apps/server/test/scope*.test.ts` | 233/233, no fail/skip, exit0 | `/tmp/m06-frozen-combined.log`, `.exit` |
-| `npm run build -w @mote/server` and `npm run build -w @mote/web` | each exit0; existing Web chunk warning | `/tmp/m06-frozen-{server,web}-build.log`, `.exit` |
-| `MOTE_PROCESSING_PROCESS_ENTRY=$PWD/apps/server/dist/app.js MOTE_INGRESS_PROCESS_ENTRY=$PWD/apps/server/dist/index.js node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-processing-process.test.ts apps/server/test/multiuser-ingress-process.test.ts` | 2/2, no fail/skip, exit0 | `/tmp/m06-frozen-emitted-smoke.log`, `.exit` |
-| `node --test scripts/media-workers.test.mjs packages/agent/test/model-runtime.test.mjs` | 10/10, no fail/skip, exit0 | `/tmp/m06-frozen-workers-model.log`, `.exit` |
-| `npm run typecheck -w @mote/server`; `node scripts/check-i18n.mjs`; `node scripts/check-scope-contracts.mjs`; `git diff --check` | each exit0 | `/tmp/m06-final-typecheck.log`, `/tmp/m06-frozen-i18n.log` and direct boundary checks |
+| `node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-processing.test.ts apps/server/test/image-processing.test.ts` | 64/64, no fail/skip, exit0 | `/tmp/m06-07ad-focused.log`, `.exit` |
+| `node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-*.test.ts apps/server/test/scope*.test.ts` | 233/233, no fail/skip, exit0 | `/tmp/m06-07ad-combined.log`, `.exit` |
+| `npm run build -w @mote/server` and `npm run build -w @mote/web` | each exit0; existing Web chunk warning | `/tmp/m06-07ad-{server,web}-build.log` |
+| `MOTE_PROCESSING_PROCESS_ENTRY=$PWD/apps/server/dist/app.js MOTE_INGRESS_PROCESS_ENTRY=$PWD/apps/server/dist/index.js node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-processing-process.test.ts apps/server/test/multiuser-ingress-process.test.ts` | 2/2, no fail/skip, exit0 | `/tmp/m06-07ad-emitted.log` |
+| `node --test scripts/media-workers.test.mjs packages/agent/test/model-runtime.test.mjs` | 10/10, no fail/skip, exit0 | `/tmp/m06-07ad-workers-model.log` |
+| `npm run typecheck -w @mote/server`; scope inventory; `git diff --check` | each exit0 | `/tmp/m06-image-lineage-typecheck.log`, `.exit`, direct checks |
 
-Full `check:affected` and independent full-module review are still pending; the
-matrix above does not mark them passed. Checks and Component checks were remotely
-confirmed `disabled_manually`; Release workflows were active and untouched. No CI
-execution is inferred from the empty pending status of a disabled workflow.
+The sequential fresh build / compiled smoke / workers command returned exit0 in
+`/tmp/m06-07ad-build-smoke.exit`; each prerequisite had to exit0 before the next.
 
-A later self-audit found the image Agent's first request omitted declared source
-prose after oversized OCR was removed from its question. An external unchanged
-native-Agent probe reproduced that gap. The repair uses the existing bounded
-background task-context envelope for a 12000-unit OCR excerpt, explicit range /
-total length and full source declaration; original rereads remain limited to this
-one image. The native request regression now asserts the exact declaration,
-third-party attribution and OCR are delivered. Unchanged probe1/1 and repaired
-native image test1/1 passed, exit0. The interrupted first affected run ended143
-and is diagnostic only; renewed exact frozen acceptance follows below.
+M10 independently reviewed the exact core `6c0eb66635c77d2d53679c219b052c5bc2e17f24`
+with 8/8 real seam tests, and the image-context repair with 2/2 native tests.
+Final literal `07ad9ddb` archive additionally passed 8/8 independent native image,
+pixel-negative, late source-context and existing image-consumer journeys, no
+fail/skip, exit0: `/tmp/m10-independent-m06-lineage-final.log`, `.exit`.
+The reviewer approved final M06 with no remaining P0/P1/P2;
+`/tmp/mote-m10-review-m06.md` records exact source snapshots and commands.
+M07's unchanged admission probe and final4/4 narrow seam regressions independently
+closed the caught-child P1 at observed `3f3399e0`, without claiming full M06 review.
+
+A self-audit found the image Agent first request omitted declared source prose
+after oversized OCR was removed from its question. The unchanged external native
+probe reproduced it. The repair uses the existing background task-context envelope
+for a 12000-unit OCR excerpt with explicit range/total, complete source declaration
+and exact original/source dependency pins. Existing lineage guards initially
+rejected the new context without provenance (62/64, two old image consumers);
+adding the proper dependencies fixed those consumers without relaxing a guard.
+The final64/64,233/233 and independent8/8 above supersede those diagnostics.
+The first affected invocation was intentionally stopped143 for this confirmed
+repair and is not a pass. Final required affected receipt is recorded below.
+
+Checks and Component checks were remotely confirmed `disabled_manually`; Release
+workflows were active and untouched. No CI execution is inferred from an empty
+pending status. Final local affected, PR head/base and CI readback are separate
+gates and are not replaced by independent code review.
+
+## Required full affected gate
+
+`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/utopiafar/Library/Android/sdk npm run check:affected -- --base origin/codex/mote-multiuser-integration`
+ran against final runtime `07ad9ddb17a0d2cd0004c50958670145b1457446`, exit0;
+`/tmp/m06-07ad-affected.log` and `.exit`. Existing JDK/SDK only; no CI settings changed.
+
+Desktop456, Server2189, Web469, Agent317, Diagnostics5, Shared190, root81 and
+client4 passed; central-runner checks passed. Two preexisting opt-in checks were
+skipped: the Server macOS native sandbox fixture and Agent installed-Codex fixture.
+They are not counted as passes. The unchanged thousand-original background
+regression passed in132270ms. Android compiled and executed25 tasks, `BUILD
+SUCCESSFUL in38s`; own generated XML reports329 tests across70 suites, no failure,
+error or skip. Existing compiler/bundle warnings remain, with no failed gate.
+
+Final documentation-only updates preserve this tested runtime and dependency
+state. Remote Draft PR/head/base/CI observation is recorded at publication.
