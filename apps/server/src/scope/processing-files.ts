@@ -20,8 +20,8 @@ const listSchema = z.object({sourceId:z.string().max(128).optional(),query:z.str
 export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,processing:ProcessingHost,ingress:IngressHost,execution:TaskExecution,key:string){
   const bind=(context:UserContext)=>{
     const assert=()=>runtime.authority.assert(context),sql=new PrivateSql(db,context.userId,assert),cursor=new PrivateCursor(key,context.deploymentId,context.userId),originals=ingress.forUser(context),service=processing.forUser(context);
-    const base=`FROM ig_originals r JOIN pd_captures c ON c.user_id=r.user_id AND c.id=r.capture_id JOIN pd_sources s ON s.user_id=r.user_id AND s.id=r.source_id JOIN pd_source_heads h ON h.user_id=r.user_id AND h.capture_id=c.id
-      WHERE r.user_id=$user AND c.user_id=$user AND s.user_id=$user AND h.user_id=$user AND COALESCE(json_extract(s.json,'$.enabled'),1)=1 AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0 AND json_extract(c.json,'$.source')='file'`;
+    const base=`FROM ig_originals r JOIN pd_captures c ON c.user_id=r.user_id AND c.id=r.capture_id JOIN pd_sources s ON s.user_id=r.user_id AND s.id=r.source_id JOIN pd_source_heads h ON h.user_id=r.user_id AND h.capture_id=c.id JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id
+      WHERE r.user_id=$user AND c.user_id=$user AND s.user_id=$user AND h.user_id=$user AND f.user_id=$user AND (f.format='file' OR instr(f.format,'processor:')=1) AND COALESCE(json_extract(s.json,'$.enabled'),1)=1 AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0 AND json_extract(c.json,'$.source')='file'`;
     const owned=(id:string)=>{
       z.string().uuid().parse(id); const row=sql.get(`SELECT r.*,c.json capture ${base} AND r.user_id=$user AND c.id=?`,id); if(!row)throw missing();
       const ref='original:'+row.id,info=originals.readOriginal(ref,{length:0}),capture=JSON.parse(String(row.capture)),status=service.status(ref);
