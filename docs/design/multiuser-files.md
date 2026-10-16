@@ -219,3 +219,12 @@ Server/scripts types and targeted real owner/route/portable/restart/pin/held-wor
 cases are0. Independent bounded review and current full affected/production/client
 combination are pending. The explicit consumer checkpoint and its evidence limits
 are tracked in the shared handoff; no whole Files/Imports acceptance is inferred.
+
+Independent review then confirmed0095 missed the original automatic reimport
+incarnation. Actual same-ID/bytes allow-again must receive a new task; a parentless
+old retry must become stale before execution. Fix056380c2 adds the existing M03
+forget generation to M06's immutable input/cache proof, independently of cancel/
+retry generation. Zero stays omitted for historical identity compatibility. Wire
+contracts do not change. The replacement candidate still awaits its new types and
+independent bounded delta review; do not move0095 checks to it or treat0095's two
+failed reimport paths as accepted.

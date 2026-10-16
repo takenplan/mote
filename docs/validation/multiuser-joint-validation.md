@@ -819,3 +819,25 @@ terminal0, all heavy work explicitly released to QR's post-disposer final affect
 No full suite/build/Gradle was appended to that short window. Scope AST on current
 forget source0 (`/tmp/mote-joint-file-forget-scope2.log/.exit`). Independent review
 of the new review and forget implementation remains pending; no final joint gate.
+
+Independent QR readonly review accepted the74fe review producer with its source-only
+limits (`/tmp/mote-qr-review-joint-owner-review-74fe.md`). Its0095 forget review found
+one incarnation path requiring actual proof (`/tmp/mote-qr-review-joint-forget-0095.md`).
+Joint actual automatic=true same-byte/original/receipt allow-again+restart returned
+the retired successful task: `/tmp/mote-joint-file-forget-incarnation-red.log/.exit`,1/1 EXIT1.
+A parentless old extract retry actually executed again and failed instead of being
+stale: `/tmp/mote-joint-file-forget-parentless-red.log/.exit`,1/1 EXIT1. Durable
+regressionsb024d64a;0095 is not accepted for those paths and its types do not cover
+this later fix.
+
+Fix056380c2c036f48d32241e8db3a59e8081cf5e4c binds M06 input/current/cache and review
+base to the existing M03 forgotten-original generation. This is independent of
+per-file cancel/retry generation; zero is omitted from serialized identities and
+stage fingerprints, preserving historical tasks/cache. No new table, route,
+executor, grant renewal or wire request is added. Exact two regressions plus the
+existing historical generation-zero/lost-ACK identity case pass3/3 EXIT0 in
+`/tmp/mote-joint-file-forget-incarnation-green2.log/.exit`. The first post-fix run's
+extra-call assertion incorrectly expected zero despite the actual initial decoder
+call; its failed receipt is preserved. The final fixture compares the actual
+pre-retry count and keeps the stale-before-execution assertion unchanged. Fix0563
+is submitted for bounded independent review; new noEmit/whole gates remain pending.
