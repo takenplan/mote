@@ -82,7 +82,7 @@ function FileDetailContents({api,id,startMs=0,onOpen}:{api:Api;id:string;startMs
  const chunkRequest=useRef<AbortController|null>(null),chunkGeneration=useRef(0);
  const [chunksLoading,setChunksLoading]=useState(false);
  const textArtifact=file?.artifacts.find(a=>a.kind==='corrected-dialogue')??file?.artifacts.find(a=>a.kind==='dialogue')??file?.artifacts.find(a=>['transcript','text','image-text'].includes(a.kind));
- const rawTranscript=textArtifact?.kind==='transcript';
+ const rawTranscript=api.connection?.mode!=='web'&&textArtifact?.kind==='transcript';
  const summaryDisabled=file?.processingPolicy?.capabilities?.summary===false||(file?.processingPolicy?.applied??file?.processingPolicy?.current)?.profile?.summarize===false;
  const processingError=file?.job?.error&&['failed','blocked'].includes(file.job.state);
  const summaryExecution=file?.job?.summaryExecution,summaryFailure=summaryExecution?.failure,summaryError=summaryExecution?(summaryExecution.status==='failed'?summaryFailure:undefined):(file?.job?.error&&!processingError&&!summaryDisabled&&['failed','blocked'].includes(file.job.summary_state)?file.job.error:undefined);
