@@ -157,3 +157,17 @@ test('pinned prices and per-user usage survive restart without reviving host lea
   assert.throws(()=>restarted.configuration.assertLease(lease),{code:'invalid_identity'});
  }finally{await restarted.app.close();}
 });
+
+test('personal request model override survives exact lease restoration and cannot alter a shared resource',async t=>{
+ const f=await fixture(t);assert.equal((await f.save(f.a,'synthetic-A-key')).statusCode,200);
+ const context=await f.context(f.a),lease=await f.node.configuration!.leaseReference(context,'chat','generated-explicit-model',{kind:'personal',id:'same-profile'},'generated-request-model');
+ assert.equal(lease.model,'generated-request-model');
+ const restored=await f.node.configuration!.restoreLease(context,lease.snapshotId,'generated-explicit-model');assert.equal(restored.status,'restored');
+ if(restored.status==='restored')await f.node.configuration!.withModel(restored.lease,async settings=>{assert.equal(settings.model,'generated-request-model');assert.equal(settings.apiKey,'synthetic-A-key');assert.equal(settings.baseUrl,'https://synthetic.invalid/v1');});
+ const fork=await f.node.configuration!.forkLease(context,lease.snapshotId,'generated-explicit-model','generated-explicit-child');assert.equal(fork.model,'generated-request-model');
+ const catalog=await (await f.service(f.a)).models();const shared=catalog.shared[0];assert.ok(shared);
+ await assert.rejects(f.node.configuration!.leaseReference(context,'chat','generated-shared-forgery',{kind:'shared',id:shared.id},'unapproved-model'));
+ assert.equal((await f.node.configuration!.leaseReference(context,'chat','generated-shared-selection',{kind:'shared',id:shared.id})).model,shared.model);
+ const config=await (await f.service(f.a)).view();await (await f.service(f.a)).replace('models',{profiles:[],selections:{}},config.revision);
+ assert.equal((await f.node.configuration!.restoreLease(context,lease.snapshotId,'generated-explicit-model')).status,'unavailable');
+});

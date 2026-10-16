@@ -319,3 +319,17 @@ test('source tombstones remain owner metadata and cannot expand through the quer
 test('native source item kind filters match the canonical record kind while Material catalogs retain their own kind',async t=>{
  const f=await fixture(t),material=await f.publish(f.a,'A'),reader=f.node.ask!.bind(await f.node.authority.authenticate(f.a.token),{sourceIds:['same-source'],assertCurrent:()=>{}}).reader(),all=await reader.agent.sourceItems!({sourceId:'same-source',limit:100}),kind=(all.items[0] as any).source;assert.ok(kind);const expected=all.items.filter(record=>(record as any).source===kind).map(record=>record.id).sort(),filtered=await reader.agent.sourceItems!({sourceId:'same-source',kind,limit:100});assert.deepEqual(filtered.items.map(record=>record.id).sort(),expected,'a returned canonical kind must select the same native records');const catalog=await reader.agent.materialCatalog!({sourceId:'same-source',kind:'document'});assert.ok(catalog.items.some(item=>item.id===material.id));const entities=await reader.browse({sourceId:'same-source',kind:'document'});assert.ok(entities.items.some(item=>item.id===material.id));assert.deepEqual((await reader.agent.sourceItems!({sourceId:'same-source',kind:'document'})).items,[]);
 });
+
+test('explicit request model reference and personal model ID preserve own fixed transport without changing feature defaults',async t=>{
+ const f=await fixture(t);await f.publish(f.a,'A');
+ const view=await f.checked(f.a.token,'/api/configuration'),models=view.domains.find((value:any)=>value.id==='models').effective;
+ await f.replace(f.a.token,'models',{...models,profiles:[{id:'same-model',name:'Generated Ask model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-ask',baseUrl:f.modelUrl,apiKey:'GENERATED_A_KEY',headers:{},extraBody:{}}},{id:'request-only',name:'Generated request-only',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'request-base',baseUrl:f.modelUrl,apiKey:'GENERATED_A_REQUEST_KEY',headers:{},extraBody:{}}}]});
+ const before=await f.checked(f.a.token,'/api/models');const id=randomUUID();
+ await f.checked(f.a.token,'/api/query-runs','POST',{id,input:{question:'Generated explicit personal model request',modelReference:{kind:'personal',id:'request-only'},modelOverride:'request-override'}});
+ assert.equal((await f.wait(f.a,id)).status,'completed');assert.ok(f.requests.length>0);assert.ok(f.requests.every(value=>value.owner==='A'&&value.body.model==='request-override'));
+ assert.deepEqual(await f.checked(f.a.token,'/api/models'),before,'per-request selection cannot silently mutate defaults');
+ const prior=f.requests.length;
+ assert.equal((await f.request(f.b.token,'/api/query-runs','POST',{id:randomUUID(),input:{question:'Generated foreign personal profile',modelReference:{kind:'personal',id:'request-only'}}})).statusCode,400);
+ assert.equal((await f.request(f.a.token,'/api/query-runs','POST',{id:randomUUID(),input:{question:'Generated forged endpoint',modelReference:{kind:'personal',id:'request-only',baseUrl:'https://external.invalid'}}})).statusCode,400);
+ assert.equal(f.requests.length,prior);
+});
