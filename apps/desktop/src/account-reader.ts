@@ -13,9 +13,13 @@ export async function accountResponse(config:Config,path:string,body?:unknown):P
 }
 export async function accountJson(config:Config,path:string,body?:unknown):Promise<any>{return JSON.parse(await readResponseText(await accountResponse(config,path,body),4*1024*1024));}
 /** Walk the real signed server cursor; never apply a local filter after LIMIT. */
-export async function accountCaptures(config:Config,filters:Record<string,string>={}):Promise<any[]>{
+export async function accountCaptures(config:Config,filters:Record<string,string>={}):Promise<any[]>{return capturePages(config,filters,false);}
+/** The original archive presentation observes current declared extraction,
+ * while canonical intake/content readers retain their immutable capture API. */
+export async function accountCapturePreviews(config:Config,filters:Record<string,string>={}):Promise<any[]>{return capturePages(config,filters,true);}
+async function capturePages(config:Config,filters:Record<string,string>,browser:boolean):Promise<any[]>{
  const items:any[]=[],seen=new Set<string>();let cursor:string|undefined;
- do{const page=await accountJson(config,'/api/captures?'+new URLSearchParams({deviceId:config.deviceId,...filters,projection:'preview',limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items)||page.items.some((v:any)=>v.deviceId!==config.deviceId))throw Error('Private capture page mismatch');items.push(...page.items);cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated private capture cursor');seen.add(cursor);}}while(cursor);
+ do{const page=await accountJson(config,(browser?'/api/capture-browser?':'/api/captures?')+new URLSearchParams({deviceId:config.deviceId,...filters,...(browser?{limit:'60'}:{projection:'preview',limit:'200'}),...(cursor?{cursor}:{})}));if(!Array.isArray(page.items)||page.items.some((v:any)=>v.deviceId!==config.deviceId))throw Error('Private capture page mismatch');items.push(...page.items);cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated private capture cursor');seen.add(cursor);}}while(cursor);
  return items;
 }
 export function accountPagePosition(config:Config,cursor:string|undefined,query:unknown):number{
