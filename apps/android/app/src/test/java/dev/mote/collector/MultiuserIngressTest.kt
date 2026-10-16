@@ -104,7 +104,7 @@ class MultiuserIngressTest {
 
     @Test fun `actual image capture rejects corrupt original reference mime and retention despite a complete owner receipt`() = fixture { f ->
         val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val binding=owner(server,token)
-        val image=event(UUID.randomUUID().toString(),"Synthetic image fixture").put("imageMime","image/png").put("imageBase64","iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII=")
+        val image=event(UUID.randomUUID().toString(),"Synthetic image fixture").put("source","screen").put("imageMime","image/png").put("imageBase64","iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII=")
         client(server,token).captures(listOf(image))
         for((key,value) in listOf("ref" to "original:"+"0".repeat(64),"mime" to "image/jpeg","retention" to "archive")) {
             val corrupt=Ingress3Client(binding,"same-device","Synthetic Android",{method,path,body->
