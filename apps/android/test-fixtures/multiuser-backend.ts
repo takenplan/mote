@@ -2,6 +2,7 @@ import {mkdtempSync,rmSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {createServer} from 'node:http';
+import {DatabaseSync} from 'node:sqlite';
 import {buildApp} from '../../server/src/app.js';
 const directory=mkdtempSync(join(tmpdir(),'m15-kotlin-backend-'));
 const node=await buildApp({dataDir:directory});
@@ -27,6 +28,7 @@ const control=createServer((request,response)=>{void(async()=>{
  else if(request.url==='/release'){release?.();release=undefined;}
  else if(request.url==='/network/off'){node.app.server.closeAllConnections();await new Promise<void>((resolve,reject)=>node.app.server.close(error=>error?reject(error):resolve()));}
  else if(request.url==='/network/on'){await new Promise<void>((resolve,reject)=>{node.app.server.once('error',reject);node.app.server.listen(port,'127.0.0.1',()=>{node.app.server.removeListener('error',reject);resolve();});});}
+ else if(request.url==='/snapshot/expire'){const db=new DatabaseSync(join(directory,'mote.sqlite'));try{db.prepare('UPDATE ig_snapshot_inputs SET expires=?').run(Date.now()-1);}finally{db.close();}}
  else if(request.url!=='/state'){response.writeHead(404);response.end();return;}
  response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release}));
  })().catch(error=>{response.writeHead(500);response.end(JSON.stringify({error:String(error)}));});});

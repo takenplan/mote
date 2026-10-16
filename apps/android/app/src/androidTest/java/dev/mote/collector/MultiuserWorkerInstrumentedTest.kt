@@ -102,6 +102,30 @@ class MultiuserWorkerInstrumentedTest {
         assertEquals(404,get(app,"b","/api/captures/$aid").first)
     }
 
+    @Test fun expiredSnapshotUsesActualProviderDurableRecoveryAndExistingWorkerUnderAOnly() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        login(app,"a");val config=settings.read();val api=CentralAccess.requireClient(app)
+        val view=api.get("/api/configuration");val domains=view.getJSONArray("domains");val processing=(0 until domains.length()).map {domains.getJSONObject(it)}.single {it.getString("id")=="processing"}.getJSONObject("effective")
+        api.put("/api/configuration/processing",JSONObject().put("revision",view.getLong("revision")).put("value",processing.put("automatic",false).put("summarize",false).put("understandingEnabled",false)))
+        val file=File(app.filesDir,"generated-file-sync/generated-snapshot.txt").apply {parentFile!!.mkdirs();writeText("Synthetic provider snapshot exact bytes")}
+        val uri=android.provider.DocumentsContract.buildDocumentUri(app.packageName+".file-fixtures","generated-snapshot.txt")
+        val source=LocalSource(id="same-snapshot-source",name="Synthetic snapshot",kind="local-files",uri=uri.toString(),retention="snapshot",syncContinuously=false,centralProcessingConsent=true,extensions="txt")
+        app.localSources().save(source);val scanner=FileSources(app);assertTrue(scanner.scan(source));val row=scanner.prepare(source)!!;val manifest=row.getJSONObject("pending").getJSONObject("manifest")
+        fun runUpload(c:CollectorConfig) {val request=OneTimeWorkRequestBuilder<SourceUploadWorker>().setInputData(workDataOf("manual" to true,"syncStamp" to SyncSchedule.stamp(c))).build();WorkManager.getInstance(app).enqueue(request).result.get();waitFor {WorkManager.getInstance(app).getWorkInfoById(request.id).get()!!.state.isFinished};assertEquals(WorkInfo.State.SUCCEEDED,WorkManager.getInstance(app).getWorkInfoById(request.id).get()!!.state)}
+        runUpload(config);assertEquals(0,app.fileArchives().pendingCount(source.id))
+        val original=api.get("/api/ingress/sources/${source.id}/originals").getJSONArray("items").getJSONObject(0);control("/snapshot/expire")
+        val task=api.post("/api/processing",JSONObject().put("originalRef",original.getString("ref")).put("operationId","generated-android-recovery"))
+        waitFor {api.get("/api/tasks/"+task.getString("id")).optString("state")=="blocked"}
+        assertEquals(1,api.get("/api/ingress/sources/${source.id}/recovery").getJSONArray("items").length())
+        login(app,"b");runUpload(config);assertEquals(404,get(app,"b","/api/processing/originals/"+original.getString("ref").removePrefix("original:")).first)
+        login(app,"a");runUpload(settings.read())
+        assertEquals(0,CentralAccess.requireClient(app).get("/api/ingress/sources/${source.id}/recovery").getJSONArray("items").length())
+        waitFor {get(app,"a","/api/tasks/"+task.getString("id")).second!!.optString("state")=="succeeded"}
+        assertEquals(0,app.fileArchives().pendingCount(source.id));assertEquals(1,CentralAccess.requireClient(app).get("/api/sources/${source.id}/history?externalId="+java.net.URLEncoder.encode(manifest.getJSONObject("item").getString("externalId"),"UTF-8")).getJSONArray("items").length())
+        assertEquals("Synthetic provider snapshot exact bytes",file.readText())
+    }
+
     @Test fun actualSourceWorkerKeepsEqualIdsSpoolsContextAndRevokedAccessUnderTheirOriginalOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
