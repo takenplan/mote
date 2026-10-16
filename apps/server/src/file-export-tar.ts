@@ -1,6 +1,6 @@
 import {moteText} from './i18n.js';
 import type {Transcript} from '@mote/shared';
-import {Readable} from 'node:stream';
+import {Readable,pipeline} from 'node:stream';
 import {createGzip} from 'node:zlib';
 import {StoreError} from './execution-storage.js';
 
@@ -15,5 +15,7 @@ export function exportTar(entries:{name:string;bytes:Buffer}[],assertCurrent:()=
     const header=Buffer.alloc(512);name.copy(header);header.write('0000600\0',100);header.write('0000000\0',108);header.write('0000000\0',116);header.write(entry.bytes.length.toString(8).padStart(11,'0')+'\0',124);header.write('00000000000\0',136);header.fill(32,148,156);header[156]=48;header.write('ustar\0',257);header.write('00',263);
     const sum=header.reduce((a,b)=>a+b,0);header.write(sum.toString(8).padStart(6,'0')+'\0 ',148);yield header;assertCurrent();yield entry.bytes;const padding=(512-entry.bytes.length%512)%512;if(padding)yield Buffer.alloc(padding);
   }assertCurrent();yield Buffer.alloc(1024);}
-  return Readable.from(blocks()).pipe(createGzip());
+  const output=createGzip();
+  pipeline(Readable.from(blocks()),output,()=>{});
+  return output;
 }
