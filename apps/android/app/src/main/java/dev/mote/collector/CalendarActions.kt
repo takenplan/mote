@@ -34,16 +34,18 @@ object CalendarActionRules {
 class CalendarActions(private val context: Context, private val foreground: Boolean = false) {
     companion object { private val executionLock = Any() }
     private val settings = Settings(context)
+    private val originalOwner = settings.read().ownerKey()
+    private fun currentAccount() = settings.read().also { check(it.ownerKey() == originalOwner) { "Account changed" } }
     fun permissions() = listOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR).all { context.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
     private fun request(path: String, body: JSONObject? = null): JSONObject {
+        val c = currentAccount(); c.validateConnection()
         if (foreground) CentralAccess.resolve(context).client?.let { return if (body == null) it.get(path) else it.post(path, body) }
-        val c = settings.read(); c.validateConnection()
-        val (status, value) = HttpJson.request(if (body == null) "GET" else "POST", c.server.trimEnd('/') + path, body, c.connectionToken())
-        if (status !in 200..299 || value == null) throw IllegalStateException(if (status == 403) MoteI18n.text("请在中央「行动」设置中授权此设备，或登录中央管理会话。") else MoteI18n.text("中央日程操作未完成（{0}），请刷新重试", status))
-        return value
+        // The same stable owner must be verified before each device/private request.
+        return context.ingress3(c).send(if (body == null) "GET" else "POST", path, body)
     }
     fun list(cursor: Long = 0): JSONObject = ConnectionGuard.sync { request("/api/actions?cursor=$cursor") } ?: error(MoteI18n.text("连接正在切换"))
     fun calendars(): JSONArray {
+        currentAccount()
         check(permissions()) { MoteI18n.text("请先连接日历并允许权限") }
         val result = JSONArray()
         context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, arrayOf("_id", "calendar_displayName"), "calendar_access_level>=? AND visible=1", arrayOf(CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR.toString()), null)?.use { c ->

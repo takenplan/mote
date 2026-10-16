@@ -59,7 +59,7 @@ internal class CentralPortable(private val api: CentralClient) {
         for (field in listOf("credentials", "activeAuthorization", "instanceBackup")) require(coverage.get(field) == false)
         fun domains(field: String) = coverage.getJSONArray(field).let { items -> (0 until items.length()).map { items.getString(it) } }
         val imported = domains("importedDomains"); val preserved = domains("preservedDomains"); val declared = imported + preserved
-        require(imported.isNotEmpty() && declared.size == declared.toSet().size)
+        require(imported.containsAll(listOf("private-data", "ingress", "processing", "memory", "ask")) && declared.size == declared.toSet().size)
         val rows = value.getJSONArray("domains")
         require(rows.length() == declared.size && (0 until rows.length()).map { rows.getJSONObject(it).getString("domain") }.toSet() == declared.toSet())
         for (i in 0 until rows.length()) { val row = rows.getJSONObject(i); require(if (row.getString("domain") in preserved) row.getString("state") == "preserved" else row.getString("state") in if (state == "completed") setOf("complete") else setOf("waiting", "complete")) }
