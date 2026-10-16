@@ -38,6 +38,8 @@ export interface ConnectorSourceStatusReader{sourceStatuses(sourceIds:readonly s
 /** One registrar, one shared executor, and M09's existing user instance lifecycle.
  * Provider factories below use actual adapters with transport-only injection. */
 export class ScopedConnectors {
+ private readonly sourceStatusReaders=new Set<(context:UserContext,sourceIds:readonly string[])=>ReadonlyMap<string,NonNullable<SourceConnection['status']>>>();
+ registerSourceStatusReader(reader:(context:UserContext,sourceIds:readonly string[])=>ReadonlyMap<string,NonNullable<SourceConnection['status']>>){this.sourceStatusReaders.add(reader);return ()=>{this.sourceStatusReaders.delete(reader);};}
  private readonly extensions=new Map<string,ConnectorDefinition>();
  private readonly packages=new Map<ConnectorProvider,string>();
  private readonly active=new Map<string,Set<AbortController>>();
@@ -231,7 +233,7 @@ export class ScopedConnectors {
     // Read the real adapter ledger without opening an adapter, vault, activity,
     // model, network handle or authorization. Actual source IDs stay owner-bound.
     const rows=this.options.db.prepare("SELECT s.source_id,l.json FROM connector_sources s JOIN connector_connections c ON c.user_id=s.user_id AND c.id=s.instance_id JOIN connector_ledger l ON l.user_id=s.user_id AND l.instance_id=s.instance_id AND l.scope='source-status' AND l.key=s.local_id WHERE s.user_id=? AND c.removed=0 AND s.source_id IN(SELECT value FROM json_each(?)) ORDER BY s.source_id").all(context.userId,JSON.stringify(owned));
-    for(const row of rows){const parsed=sourceStatusSchema.safeParse(JSON.parse(String(row.json)));if(!parsed.success)throw new ConnectorError('connector_status_invalid',502);result.set(String(row.source_id),parsed.data);}this.assert(context);return result;
+    for(const row of rows){const parsed=sourceStatusSchema.safeParse(JSON.parse(String(row.json)));if(!parsed.success)throw new ConnectorError('connector_status_invalid',502);result.set(String(row.source_id),parsed.data);}for(const reader of this.sourceStatusReaders)for(const [id,status] of reader(context,Object.freeze(owned))){if(!owned.includes(id)||result.has(id))throw new ConnectorError('connector_status_invalid',502);result.set(id,sourceStatusSchema.parse(status));}this.assert(context);return result;
    },
    view:async()=>{const {view}=await settings();return {revision:view.revision,providers:this.available(),connections:this.options.db.prepare('SELECT * FROM connector_connections WHERE user_id=? AND removed=0 ORDER BY id').all(context.userId).map(value=>{const row=value as Row;return {...publicSettings(connectionSchema.parse(JSON.parse(row.settings))),generation:row.generation,syncAuthorized:Boolean(row.sync_authorized)};})};},
    configure:async(value:unknown,expectedRevision:number)=>{const input=connectionSchema.parse(value);if(!this.packages.has(input.provider))throw new ConnectorError('connector_provider_unavailable');const {view,connections}=await settings();const existing=connections.find(c=>c.id===input.id);if(existing&&existing.provider!==input.provider)throw new ConnectorError('connector_provider_changed',409);if(view.revision!==expectedRevision)throw new ConnectorError('connector_configuration_changed',409);

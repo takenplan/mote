@@ -85,6 +85,7 @@ test('device and MCP credentials belong to the authenticated account even for id
  const inventory=await f.request('GET','/api/connections',undefined,headers(f.alice.token));assert.ok(inventory.json().items.some((c:any)=>c.id===a.credentialId));assert.ok(!inventory.body.includes(b.credentialId));
  assert.equal((await f.request('DELETE','/api/connections/'+b.credentialId,{},headers(f.alice.token))).statusCode,404);
  assert.equal((await f.request('DELETE','/api/connections/'+b.credentialId,{},headers(f.owner.token))).statusCode,404);
+ await f.request('POST','/api/sources',{id:'same-source',name:'Generated source',kind:'mcp',deviceId:'same-device',platform:'import'},headers(f.alice.token));
  const mcp=(await f.request('POST','/api/connections/mcp',{access:'write',sourceIds:['same-source'],label:'Synthetic MCP'},headers(f.alice.token))).json();
  const authorization=f.node.accounts.mcpAuthorization(mcp.token)!;assert.equal(authorization.identity.userId,f.a.userId);assert.deepEqual(authorization.sourceIds,['same-source']);assert.equal(authorization.write,true);
  for(const url of ['/api/auth/self','/api/admin/accounts'])assert.equal((await f.request('GET',url,undefined,headers(mcp.token))).statusCode,401);

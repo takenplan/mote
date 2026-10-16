@@ -127,10 +127,10 @@ export class PrivateData{
     const head=this.sourceItem(sourceId,externalId);
     return this.sql.all('SELECT id FROM pd_captures WHERE user_id=$user AND source_id=? AND external_id=? ORDER BY received_at DESC,id DESC LIMIT 100',sourceId,externalId).map(r=>this.item(String(r.id),r.id===head?.captureId));
   }
-  private filter(raw:ListInput,collection:'captures'|'source-items'|'materials'){
+  private filter(raw:ListInput,collection:'captures'|'source-items'|'materials',sourceIds?:readonly string[]){
     const args=privateListSchema.parse(raw),{cursor,limit,...filters}=args;
     if(filters.sourceId)this.source(filters.sourceId);
-    const query={collection,...filters},position=cursor?this.cursor.decode(cursor,query):undefined;
+    const query={collection,...filters,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}:{})},position=cursor?this.cursor.decode(cursor,query):undefined;
     return {args,query,position,limit};
   }
   captures(raw:ListInput={},heads=false){
@@ -258,14 +258,15 @@ export class PrivateData{
     if(!manifest.artifacts?.some(artifact=>artifact.key==='coding-dialogue'&&artifact.state==='ready'&&artifact.revision==='1')&&(manifest.kind==='mote.coding-session'||members.some(member=>member.kind==='capture'&&member.id==='original'&&manifest.origin.externalId==='processed:'+member.ref.slice(8)&&this.sql.get("SELECT id FROM pd_captures WHERE user_id=$user AND id=? AND json_type(json,'$.provenance.document.coding')='object'",member.ref.slice(8)))))throw missing();
     return {...manifest,revision:String(version!.revision),ref:`material:${key.id}@${version!.revision}`,sequence:Number(version!.sequence),createdAt:String(version!.created_at),updatedAt:String(head.updated_at),blockCount:blocks.length,memberCount:members.length,textLength:String(version!.text).length,assetCount:0,indexing:{state:'indexed'}};
   }
-  materials(raw:ListInput={}){
+  materials(raw:ListInput={},sourceIds?:readonly string[]){
     this.withdrawUnfilteredCoding();
-    const {args,query,position,limit}=this.filter(raw,'materials'),clauses=['v.material_id=h.id','v.revision=h.revision','h.sequence>=h.min_visible_sequence'],values:(string|number)[]=[];
+    const {args,query,position,limit}=this.filter(raw,'materials',sourceIds),clauses=['v.material_id=h.id','v.revision=h.revision','h.sequence>=h.min_visible_sequence'],values:(string|number)[]=[];
     if(args.sourceId){clauses.push('h.source_id=?');values.push(args.sourceId);}
     if(args.deviceId){clauses.push("json_extract(v.json,'$.origin.deviceId')=?");values.push(args.deviceId);}
     if(args.kind){clauses.push("json_extract(v.json,'$.kind')=?");values.push(args.kind);}
     if(args.after){clauses.push('h.updated_at>=?');values.push(new Date(args.after).toISOString());}
     if(args.before){clauses.push('h.updated_at<?');values.push(new Date(args.before).toISOString());}
+    if(sourceIds){clauses.push('h.source_id IN(SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM pd_material_sources s WHERE s.user_id=$user AND s.material_id=h.id AND s.revision=h.revision AND s.source_id NOT IN(SELECT value FROM json_each(?)))');values.push(JSON.stringify(sourceIds),JSON.stringify(sourceIds));}
     if(position){clauses.push('(h.updated_at<? OR(h.updated_at=? AND h.id<?))');values.push(position.at,position.at,position.id);}
     const rows=this.sql.all(`SELECT h.id,h.updated_at FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id WHERE h.user_id=$user AND v.user_id=$user AND ${clauses.join(' AND ')} ORDER BY h.updated_at DESC,h.id DESC LIMIT ?`,...values,limit+1),last=rows.slice(0,limit).at(-1);
     return {items:rows.slice(0,limit).map(r=>this.material(String(r.id))),nextCursor:rows.length>limit&&last?this.cursor.encode(query,{at:String(last.updated_at),id:String(last.id)}):null};
@@ -325,17 +326,22 @@ export class PrivateData{
   /** FTS only generates lexical candidates. Owner filtering occurs inside the
    * materialized candidate CTE before ORDER/LIMIT. We deliberately do not use
    * global bm25 corpus statistics; M07 may rerank only this returned slice. */
-  search(raw:{query:string;limit?:number}){
+  search(raw:{query:string;limit?:number},sourceIds?:readonly string[]){
     this.withdrawUnfilteredCoding();
     const {query,limit}=z.object({query:z.string().trim().min(1).max(500),limit:z.number().int().min(1).max(200).default(50)}).strict().parse(raw);
     const match='"'+query.replaceAll('"','""')+'"',short=Array.from(query).length<3;
     return {items:this.sql.all(`WITH candidates AS MATERIALIZED (
       SELECT kind,entity_id,revision,text FROM pd_fts WHERE user_id=$user AND ${short?'instr(lower(text),lower(?))>0':'pd_fts MATCH ?'}
       AND ((kind='capture' AND EXISTS(SELECT 1 FROM pd_captures c WHERE c.user_id=$user AND c.id=pd_fts.entity_id
+        ${sourceIds?'AND c.source_id IN(SELECT value FROM json_each(?))':''}
         AND (c.source_id IS NULL OR EXISTS(SELECT 1 FROM pd_source_heads h WHERE h.user_id=$user AND h.capture_id=c.id AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0))))
-        OR (kind='material' AND EXISTS(SELECT 1 FROM pd_materials m WHERE m.user_id=$user AND m.id=pd_fts.entity_id AND m.revision=pd_fts.revision AND m.sequence>=m.min_visible_sequence))))
-      SELECT kind,entity_id,revision,text FROM candidates ORDER BY kind,entity_id,revision LIMIT ?`,short?query:match,limit).map(r=>({kind:r.kind,id:r.entity_id,revision:r.revision,text:r.text}))};
+        OR (kind='material' AND EXISTS(SELECT 1 FROM pd_materials m WHERE m.user_id=$user AND m.id=pd_fts.entity_id AND m.revision=pd_fts.revision AND m.sequence>=m.min_visible_sequence
+        ${sourceIds?'AND m.source_id IN(SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM pd_material_sources s WHERE s.user_id=$user AND s.material_id=m.id AND s.revision=m.revision AND s.source_id NOT IN(SELECT value FROM json_each(?)))':''}))))
+      SELECT kind,entity_id,revision,text FROM candidates ORDER BY kind,entity_id,revision LIMIT ?`,short?query:match,...(sourceIds?[JSON.stringify(sourceIds),JSON.stringify(sourceIds),JSON.stringify(sourceIds)]:[]),limit).map(r=>({kind:r.kind,id:r.entity_id,revision:r.revision,text:r.text}))};
   }
+  /** Host adapters must check the complete dependency set before disclosing a
+   * Material through a restricted source capability. */
+  materialSources(id:string){const material=this.material(id);return this.sql.all('SELECT source_id FROM pd_material_sources WHERE user_id=$user AND material_id=? AND revision=? ORDER BY source_id',material.id,material.revision).map(row=>String(row.source_id));}
   private removeCaptureMaterials(id:string){this.removeMaterials(this.sql.all('SELECT DISTINCT material_id AS id FROM pd_material_captures WHERE user_id=$user AND capture_id=?',id).map(r=>String(r.id)));}
   /** Withdraw stale projections without discarding originals or user edits.
    * M05/M06 can rebuild using the old head's retained correction and sequence. */
