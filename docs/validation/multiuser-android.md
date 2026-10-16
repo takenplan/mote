@@ -4,17 +4,22 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current acceptance boundary: tested runtime48a797854e96eedf57c4edbd451fa2e5c5132a73 includes the tested220c account/worker fixes,
-7eca native MCP and recent-five Overview,107f owned processing/devices/statistics,
-3a2 native Google connection configuration, Joint Filesa10 and M14 finalcd46.
-New original native recording speaker/correction, M03 ticket download and Google/Gmail
-journeys pass narrowly; detailed exact-SHA evidence follows below. Own full Android
-353/353 and production build pass on48a. Final required affected, independent final
-review, push and Draft PR remain pending. Shared arbitrary-file Imports/preview/review and remaining Files acoustic/
-controls are still explicit KEEP gaps awaiting the Joint backend owner. QR pairing
-has no tested replacement for the old invitation exchange; the parent now owns
-scheduling that finite common task when the fourth slot releases, not a pending
-user decision and not a new Android-owned backend. Physical-device and
+Current acceptance boundary: the last full Android/production build remains
+runtime48a797854e96eedf57c4edbd451fa2e5c5132a73,353/353. Newer native
+runtime da54a804dec1db0446fa59e08629c149c0c2e233 narrowly passes original
+browser login0.972s, recording connection/retry2.496s, and expanded Lark
+calendar/retry/pause/cancel6.009s. The accompanying fixture app/test APK and
+fresh Shared/Server/Web types pass. These do not substitute for final full
+Android or affected checks on the new composition. Joint's explicitly frozen
+Imports/unknown-issuance candidate c45fdb4a2518fef0d5072b02aafbe8f46cb5a90b
+is now composed in9bbb41e33de64465caac79f4885805a9ef814fe4. New native
+multipart/private-preview/ACK-loss/confirmation and JVM acknowledgement tests
+are authored but have not run. Shared Files acoustic/review/control and image
+profile gaps remain explicit, and Android does not implement duplicate backends.
+Final affected, independent final review, push and Draft PR remain pending.
+QR pairing still has no tested replacement for the old invitation exchange;
+the parent owns scheduling that finite common task, not a pending user decision
+or a competing Android backend. Physical-device and
 live-provider checks are separate. No total test count closes these gaps.
 
 Newer limited runtime49347f929c3919a6e8471efbe458e6c0806a79fa adds the original
@@ -728,3 +733,22 @@ the native archive list must use current canonical Files by exact mapped source,
 and all playback uses authenticated original tickets and exact descriptor checks.
 Full latest Android, native GREEN, server/Web types, review and affected gates
 remain pending. Earlier 353/353 at runtime48a is retained only at that SHA.
+
+### Connection recovery and composed generic Imports tests (pending execution)
+
+After the host transport disconnected, no product test was relabeled as failed
+or successful. Parent21:20 UTC confirmed Bogon authorized/attached/connected and
+resumed this original workspace. Read-only Git and logs verified9bbb plus the
+untouched native Imports test and generated fixture. Both were audited and
+saved as test-onlyc253a93a; additional pure-JVM malformed archive/admission
+acknowledgement tests are test-only6f618976. They are not yet executed REDs.
+The prior source merge only unified the fixture's optional source-pack/options
+and before-ready callback; it calls that callback exactly once.
+
+Standard approved read-only process/adb probes confirmed old fixture PIDs72188,
+73265 and76510 were gone and no emulator was connected. Old PID97032 had been
+reused by a system guardian, so no cleanup signal was sent. Only the idle Gradle
+daemon was observed; parent-prioritized Theme's new explicit short Android
+window remains separate from M15. M15 kept all heavy work released. A fresh
+generated source-host for native Imports now listens on loopback only. No real
+Central data, model output or credentials were read or copied into Git.
