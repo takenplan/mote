@@ -211,6 +211,7 @@ class CaptureRecordsActivity : MoteActivity() {
         metadataLoading = true
         val scroll = body.parent as? ScrollView
         val scrollY = scroll?.scrollY ?: 0
+        val expectedOwner = pageOwner
         val request = ++loadGeneration; val remote = central; val source = recordSource; val selected = album; val sessions = sessionGrouping
         if (!backgroundRefresh) { generation++; renderedPage = null }
         backToAlbums.visibility = if (selected != null) View.VISIBLE else View.GONE
@@ -235,12 +236,14 @@ class CaptureRecordsActivity : MoteActivity() {
         executor.execute {
             try {
                 if (request != loadGeneration) return@execute
-                val settings = Settings(this); val config = settings.read()
-                val localQueue = if (remote) null else queue()
-                val owner = if (remote) CentralAccess.resolve(this).client else null
-                if (remote && !config.hasSyncConnection() && owner == null) error(MoteI18n.text("请先在连接与同步中配置中央节点"))
-                val client = if (remote) CaptureRecordClient(config, settings.deviceId, owner) else null
-        val page = if (source == "screen" && sessions) {
+                val (config, localQueue, client) = ConnectionGuard.sync {
+                    val settings = Settings(this); val config = settings.read()
+                    check(request == loadGeneration && pageOwner == expectedOwner && config.ownerKey() == expectedOwner) { "Account changed" }
+                    val owner = if (remote) CentralAccess.resolve(this).client else null
+                    check(!remote || owner != null) { MoteI18n.text("当前连接没有查看此记录的权限，请检查连接凭据") }
+                    Triple(config, if (remote) null else queue(), if (remote) CaptureRecordClient(config, settings.deviceId, owner) else null)
+                } ?: error(MoteI18n.text("连接正在切换"))
+                val page = if (source == "screen" && sessions) {
                     client?.sessions(after, before, cursor, selected?.getString("id")) ?: requireNotNull(localQueue).sessionPage(after, before, cursor, selected?.getString("id"))
                 } else if (source == "screen" && selected == null) {
                     client?.albums(after, before, cursor) ?: requireNotNull(localQueue).albumPage(after, before, cursor)
@@ -433,6 +436,7 @@ class CaptureRecordsActivity : MoteActivity() {
     }
     private fun detail(id: String, remote: Boolean, client: CaptureRecordClient?, stamp: Int) {
         if (stamp != generation || retireChangedAccount()) return
+        val expectedOwner = pageOwner
         val localReader = if (remote) null else queue()
         readerDialog?.dismiss()
         openReader = ReaderRequest(id, remote)
@@ -452,10 +456,14 @@ class CaptureRecordsActivity : MoteActivity() {
         dialog.show(); dialog.window?.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         detailExecutor.execute {
             try {
-                val readerClient = if (remote && client == null) {
-                    val settings = Settings(this)
-                    CaptureRecordClient(settings.read(), settings.deviceId, CentralAccess.resolve(this).client)
-                } else client
+                val readerClient = ConnectionGuard.sync {
+                    check(stamp == generation && pageOwner == expectedOwner && Settings(this).read().ownerKey() == expectedOwner) { "Account changed" }
+                    if (remote && client == null) {
+                        val settings = Settings(this)
+                        CaptureRecordClient(settings.read(), settings.deviceId, CentralAccess.requireClient(this))
+                    } else client
+                }
+                if (remote) checkNotNull(readerClient) { MoteI18n.text("连接正在切换") }
                 val record = if (remote) requireNotNull(readerClient).detail(id)
                     else requireNotNull(localReader).capture(id) ?: error(MoteI18n.text("本机记录已同步并清理，请切换到中央归档查看"))
                 runOnUiThread { if (currentAccount() && stamp == generation && dialog.isShowing && CapturePreview.hasImage(record)) message.text = MoteI18n.text("记录已读取，正在加载图片…") }
