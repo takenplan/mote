@@ -39,4 +39,4 @@ export function installActions(db:DatabaseSync){db.exec(`
  db.prepare('INSERT OR IGNORE INTO ac_meta VALUES(1,?,?)').run(randomBytes(32).toString('hex'),randomUUID());return db.prepare('SELECT cursor_key,installation_epoch FROM ac_meta WHERE id=1').get() as {cursor_key:string;installation_epoch:string};}
 
 export const actionsDeleted=(db:DatabaseSync,userId:string)=>Boolean(db.prepare('SELECT deleted FROM ac_state WHERE user_id=?').get(userId)?.deleted);
-export function actionPolicyCurrent(db:DatabaseSync,userId:string,input:{id:unknown;generation:unknown}){const state=db.prepare('SELECT * FROM ac_state WHERE user_id=?').get(userId);return Boolean(state&&!state.deleted&&JSON.parse(String(state.settings)).enabled===true&&state.policy_id===input.id&&state.generation===input.generation);}
+export function actionPolicyCurrent(db:DatabaseSync,userId:string,input:{id:unknown;generation:unknown},taskId:string){const state=db.prepare('SELECT * FROM ac_state WHERE user_id=?').get(userId);return Boolean(state&&!state.deleted&&JSON.parse(String(state.settings)).enabled===true&&state.policy_id===input.id&&state.generation===input.generation&&state.policy_task===taskId);}

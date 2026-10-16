@@ -101,12 +101,12 @@ export class ScopedActions{
    if(archive.domain!==ACTIONS_DOMAIN||archive.version!==1||archive.userId!==subject.userId||archive.deploymentId!==subject.deploymentId)throw new PrivateDataError('invalid_data');
    const input=z.object({proposals:z.array(archivedActionSchema),coverage:z.object({activeAuthorization:z.literal(false),credentials:z.literal(false),externalErasure:z.literal(false)}).strict()}).strict().parse(archive.payload),data=sql(subject,'restore'),hash=askHash(input);
    if(new Set(input.proposals.map(action=>action.id)).size!==input.proposals.length)throw new PrivateDataError('invalid_data');
-   data.transaction(()=>{if(data.get('SELECT deleted FROM ac_state WHERE user_id=$user')?.deleted)throw new PrivateDataError('scope_unavailable',503);const old=data.get('SELECT hash FROM ac_restore WHERE user_id=$user AND id=?',operationId);if(old){if(old.hash!==hash)throw conflict();return;}
-    for(const action of input.proposals){const prior=data.get('SELECT json FROM ac_proposals WHERE user_id=$user AND id=?',action.id);if(prior){if(askHash(JSON.parse(String(prior.json)))!==askHash(action))throw conflict();continue;}
+   data.transaction(()=>{const wasDeleted=Boolean(data.get('SELECT deleted FROM ac_state WHERE user_id=$user')?.deleted);const old=data.get('SELECT hash FROM ac_restore WHERE user_id=$user AND id=?',operationId);if(old){if(old.hash!==hash)throw conflict();return;}
+    for(const action of input.proposals){const prior=data.get('SELECT json FROM ac_proposals WHERE user_id=$user AND id=?',action.id);if(prior&&!wasDeleted){if(askHash(JSON.parse(String(prior.json)))!==askHash(action))throw conflict();continue;}
      const {operationId:_,nativeOperationId:__,target:___,related:____,...history}=action,restored={...history,status:'stale',evidence:[],error:'restored_without_authority'};
-     data.run('INSERT INTO ac_proposals VALUES($user,?,?,?,?,?)',action.id,JSON.stringify(restored),JSON.stringify({pins:[],materials:[],sources:[]}),JSON.stringify({sourceIds:[]}),action.createdAt);
+     data.run('DELETE FROM ac_dependencies WHERE user_id=$user AND action_id=?',action.id);data.run('INSERT INTO ac_proposals VALUES($user,?,?,?,?,?) ON CONFLICT(user_id,id) DO UPDATE SET json=excluded.json,proof=excluded.proof,scope=excluded.scope,created_at=excluded.created_at',action.id,JSON.stringify(restored),JSON.stringify({pins:[],materials:[],sources:[]}),JSON.stringify({sourceIds:[]}),action.createdAt);
     }
-    data.run('INSERT INTO ac_restore VALUES($user,?,?)',operationId,hash);
+    if(wasDeleted)data.run("UPDATE ac_state SET deleted=0,generation=generation+1,policy_id=NULL,policy_task=NULL,review_devices='[]',authorization_revision=authorization_revision+1 WHERE user_id=$user");data.run('INSERT OR IGNORE INTO ac_state(user_id) VALUES($user)');data.run('INSERT INTO ac_restore VALUES($user,?,?)',operationId,hash);
    });
   },
  };}
