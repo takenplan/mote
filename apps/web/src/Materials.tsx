@@ -85,7 +85,7 @@ export function MaterialDetail({ api, material, onOpen, agent = false, scope = {
             name: string;
         }[];
     }>(api, !agent && tab === 'origin' ? '/api/sources' : null);
-    const presentation = useResource<LibraryCatalogDescriptor>(api, agent ? null : '/api/library/descriptor', 5000);
+    const presentation = useResource<LibraryCatalogDescriptor>(api, agent || api.connection?.mode==='web' ? null : '/api/library/descriptor', 5000);
     const selected = current.error === undefined && current.data?.revision === material.revision ? current.data : read.error === undefined ? read.data?.material ?? material : material;
     const rebuilding = selected.coverage.reason === 'source_evidence_changed' || read.error instanceof ApiError && read.error.status === 409;
     const historical = current.error === undefined && current.data && current.data.revision !== material.revision;

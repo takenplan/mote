@@ -8357,5 +8357,6 @@ export const english: Readonly<Record<string, string>> = {
   "登录后进入「": "Sign in to open “",
   "登录已失效，请重新登录。": "Your session has expired. Sign in again.",
   "浏览器会话": "Browser session",
-  "草稿和待同步内容按当前部署和账号保存在本机，重新登录同一账号后可继续；清除本机数据会移除它们。": "Drafts and pending notes are saved locally for this deployment and account. Sign in to the same account to continue. Clearing local data removes them."
+  "草稿和待同步内容按当前部署和账号保存在本机，重新登录同一账号后可继续；清除本机数据会移除它们。": "Drafts and pending notes are saved locally for this deployment and account. Sign in to the same account to continue. Clearing local data removes them.",
+  "登录后访问个人资料": "Sign in to access your personal context"
 };

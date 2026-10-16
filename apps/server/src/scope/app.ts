@@ -1,4 +1,5 @@
 import {registerWebAssets} from '../web-assets.js';
+import {registerWebInventory} from './web-routes.js';
 import {registerAsk} from './ask-routes.js';
 import {AskError} from './ask-schema.js';
 import type {AskHost} from './ask.js';
@@ -56,6 +57,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     const authority=new UserContextAuthority(storage.deploymentId,options.verifier??accounts,taskAuthorization),services=new ScopedServices(authority,options.lifecycleAuthority);
     const execution=taskAuthorization?new TaskExecution(storage.db,authority,services,taskAuthorization):undefined;
     const runtime={app,authority,services,...(!options.verifier?{accounts}:{})};
+    registerWebInventory(runtime);
     app.setErrorHandler((error,_request,reply)=>{
       const failure=error instanceof AskError||error instanceof ScopedMemoryError||error instanceof ConnectorError||error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
       return reply.code(failure.statusCode).send({error:failure.code});
