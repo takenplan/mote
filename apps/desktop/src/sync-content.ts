@@ -1,4 +1,4 @@
-import {accountJson,accountOriginal} from './account-reader';
+import {accountJson,accountOriginal,accountOriginalDescriptor,accountCaptureMaterial} from './account-reader';
 import {DESKTOP_PROTOCOL_HEADERS} from './account';
 import { getLocale, moteText } from '@mote/shared/i18n';
 import { previewWork, sourceWork } from './background';
@@ -70,22 +70,10 @@ export async function readCentralContent(config:Config,item:SyncHistoryItem,chun
   if(config.account){
     result.hasImage=Boolean(record.imageMime);result.readiness=result.metadataOnly?'metadata':'unknown';
     if(record.imageMime&&includeImage){const original=await accountOriginal(config,record);if(original){if(original.descriptor.bytes>MAX_IMAGE_BYTES){await original.response.body?.cancel();throw Error('Original image exceeds limit');}const bytes=Buffer.from(await original.response.arrayBuffer());if(bytes.length>MAX_IMAGE_BYTES)throw Error('Original image exceeds limit');result.image=await previewWork.run<string>({kind:'preview',bytes,thumbnail:false});result.retainsOriginal=true;}}
-    if(provenance?.sourceId){
-      let cursor:string|undefined;let found:any;const seen=new Set<string>();
-      do{const page=await accountJson(config,'/api/materials?'+new URLSearchParams({sourceId:String(provenance.sourceId),deviceId:config.deviceId,limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items))throw Error('Invalid material page');
-        for(const material of page.items){let offset=0;
-          while(true){const members=await accountJson(config,`/api/materials/${material.id}/members?revision=${material.revision}&offset=${offset}&limit=200`);if(!Array.isArray(members.items)||members.items.length>200)throw Error('Invalid material member page');
-            if(members.items.some((member:any)=>member.kind==='capture'&&member.ref==='capture:'+record.id)){found=material;break;}
-            if(members.nextOffset===null||members.nextOffset===undefined)break;
-            if(!Number.isSafeInteger(members.nextOffset)||members.nextOffset<=offset)throw Error('Invalid material member cursor');offset=members.nextOffset;
-          }
-          if(found)break;
-        }
-        cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated material cursor');seen.add(cursor);}
-      }while(!found&&cursor);
-      if(found){const page=await accountJson(config,`/api/materials/${found.id}/read?revision=${found.revision}&offset=${chunkOffset}&length=12000`);result.text=page.text;result.nextChunkOffset=page.textRange?.nextOffset??undefined;result.truncated=Boolean(result.nextChunkOffset);result.readiness=found.coverage?.state==='complete'&&found.indexing?.state==='indexed'?'ready':found.indexing?.state==='failed'?'failed':'pending';}
-      else result.readiness=provenance.layer==='reference'?'metadata':provenance.document?'pending':'unknown';
-    }
+    if(record.imageMime||provenance?.document){const descriptor=await accountOriginalDescriptor(config,record);result.retainsOriginal=Boolean(descriptor);}
+    const found=provenance?.sourceId||!record.ocrText||record.ocr?.status==='pending'?await accountCaptureMaterial(config,record):undefined;
+    if(found){const page=await accountJson(config,`/api/materials/${found.id}/read?revision=${found.revision}&offset=${chunkOffset}&length=12000`);result.text=page.text;result.nextChunkOffset=page.textRange?.nextOffset??undefined;result.truncated=Boolean(result.nextChunkOffset);result.readiness=found.coverage?.state==='complete'&&found.indexing?.state==='indexed'?'ready':found.indexing?.state==='failed'?'failed':'pending';result.processing=false;}
+    else{result.readiness=result.metadataOnly?'metadata':provenance?.document||record.ocr?.status==='pending'?'pending':record.ocr?.status==='failed'?'failed':'unknown';result.processing=result.readiness==='pending';}
     return result;
   }
   const ocr = record.ocr as { status?: string } | undefined;

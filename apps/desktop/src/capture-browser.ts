@@ -7,7 +7,7 @@ import type { DurableQueue, QueueRecord } from './queue';
 import { MAX_IMAGE_BYTES, validateServerUrl } from './config';
 import { readResponseText } from './response-body';
 import { captureOcrState } from '@mote/shared/metadata';
-import {accountCaptures,accountJson,accountOriginal} from './account-reader';
+import {accountCaptures,accountJson,accountOriginal,accountCaptureMaterial} from './account-reader';
 import {DESKTOP_PROTOCOL_HEADERS,accountKey} from './account';
 import {ingressKey} from './ingress-client';
 
@@ -125,6 +125,15 @@ export async function captureDetail(queue: DurableQueue, config: Config, source:
     return { ...preview(record.event, record), ocrText: record.event.ocrText ?? '', deviceName: record.event.deviceName };
   }
   const value = await remoteDetail(config, id);
+  if(config.account&&(!value.ocrText||value.ocr?.status==='pending')){
+    const material=await accountCaptureMaterial(config,value);
+    if(material){let body='',offset=0;
+      do{const page=await accountJson(config,`/api/materials/${material.id}/read?revision=${material.revision}&offset=${offset}&length=${Math.min(12000,100000-body.length)}`);if(typeof page.text!=='string')throw Error('Invalid material text page');body+=page.text;
+        const next=page.textRange?.nextOffset;if(next===null||next===undefined)break;if(!Number.isSafeInteger(next)||next<=offset)throw Error('Invalid material text cursor');offset=next;
+      }while(body.length<100000);
+      value.ocrText=body;value.ocr={status:'completed'};
+    }
+  }
   return { ...preview({ ...value, hasImage: Boolean(value.imageMime) }), ocrText: String(value.ocrText ?? '').slice(0, 100000), deviceName: String(value.deviceName ?? '').slice(0, 128) };
 }
 export async function captureImage(queue: DurableQueue, config: Config, source: CaptureLocation, id: string, thumbnail: boolean): Promise<string> {

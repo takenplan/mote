@@ -23,11 +23,35 @@ export function accountPagePosition(config:Config,cursor:string|undefined,query:
  if(value.account!==accountKey(config)||value.query!==ingressKey(query)||!Number.isSafeInteger(value.offset)||value.offset<0)throw Error('Invalid account page cursor');return value.offset;
 }
 export function accountPageCursor(config:Config,query:unknown,offset:number):string{return Buffer.from(JSON.stringify({account:accountKey(config),query:ingressKey(query),offset})).toString('base64url');}
-export async function accountOriginal(config:Config,record:any):Promise<{descriptor:any;response:Response}|undefined>{
+export async function accountOriginalDescriptor(config:Config,record:any):Promise<any|undefined>{
  const sourceId=record.provenance?.sourceId??'desktop-'+ingressKey([record.deviceId,record.platform]).slice(0,40);let after:string|undefined;const seen=new Set<string>();
  do{const page=await accountJson(config,`/api/ingress/sources/${encodeURIComponent(sourceId)}/originals?`+new URLSearchParams({limit:'100',...(after?{after}:{})}));
   if(!Array.isArray(page.items))throw Error('Invalid original page');const descriptor=page.items.find((item:any)=>item.captureId===record.id);
-  if(descriptor){if(descriptor.sourceId!==sourceId||!/^original:[a-f0-9]{64}$/.test(descriptor.ref))throw Error('Original binding mismatch');const id=descriptor.ref.slice(9),ticket=await accountJson(config,`/api/ingress/originals/${id}/tickets`,{mode:'download'});return {descriptor,response:await accountResponse(config,`/api/ingress/originals/${id}/content?ticket=${encodeURIComponent(ticket.ticket)}`)};}
+  if(descriptor){if(descriptor.sourceId!==sourceId||!/^original:[a-f0-9]{64}$/.test(descriptor.ref))throw Error('Original binding mismatch');return descriptor;}
   after=page.nextCursor??undefined;if(after){if(seen.has(after))throw Error('Repeated original cursor');seen.add(after);}
  }while(after);return;
+}
+export async function accountOriginal(config:Config,record:any):Promise<{descriptor:any;response:Response}|undefined>{
+ const descriptor=await accountOriginalDescriptor(config,record);if(!descriptor)return;
+ const id=descriptor.ref.slice(9),ticket=await accountJson(config,`/api/ingress/originals/${id}/tickets`,{mode:'download'});return {descriptor,response:await accountResponse(config,`/api/ingress/originals/${id}/content?ticket=${encodeURIComponent(ticket.ticket)}`)};
+}
+/** Canonical extraction is separate from the immutable received capture. M06
+ * origins need not carry a device: exact capture membership is the binding. */
+export async function accountCaptureMaterial(config:Config,record:any):Promise<any|undefined>{
+ const sourceId=record.provenance?.sourceId??'desktop-'+ingressKey([record.deviceId,record.platform]).slice(0,40);
+ let cursor:string|undefined,fallback:any;const seen=new Set<string>();
+ do{const page=await accountJson(config,'/api/materials?'+new URLSearchParams({sourceId,limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items))throw Error('Invalid material page');
+  for(const material of page.items){
+   // Summaries and interpretations must not replace the extracted original body.
+   if(material.kind==='summary'||material.kind==='image-interpretation')continue;
+   let offset=0,matched=false;
+   while(true){const members=await accountJson(config,`/api/materials/${material.id}/members?revision=${material.revision}&offset=${offset}&limit=200`);if(!Array.isArray(members.items)||members.items.length>200)throw Error('Invalid material member page');
+    if(members.items.some((member:any)=>member.kind==='capture'&&member.ref==='capture:'+record.id)){matched=true;break;}
+    if(members.nextOffset===null||members.nextOffset===undefined)break;
+    if(!Number.isSafeInteger(members.nextOffset)||members.nextOffset<=offset)throw Error('Invalid material member cursor');offset=members.nextOffset;
+   }
+   if(matched){if(material.artifacts?.some((artifact:any)=>artifact.key==='extraction'&&artifact.state==='ready'))return material;if(!fallback||fallback.origin?.deviceId!==record.deviceId&&material.origin?.deviceId===record.deviceId)fallback=material;}
+  }
+  cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated material cursor');seen.add(cursor);}
+ }while(cursor);return fallback;
 }
