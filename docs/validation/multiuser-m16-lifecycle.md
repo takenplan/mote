@@ -456,3 +456,30 @@ After the atomic migration correction, all personal import cases pass 14/14,
 exit 0 in `/tmp/m16-personal-import-fourteen.log`; no skip. Scope inventory and
 production boundary check also exit 0. This remains narrow evidence awaiting the
 new combined required/build and current UI consumer acceptance.
+
+
+## M13 device notification journal composition
+
+Consumed pure server `0172bf14bef8ef6699beff8915715ea3267570ee` as
+`515fc169`: keep the full M16 ingress merge/rollback adapter and add the two
+M03 deletion tables; retain both scope declarations and take the full new actual
+raw reader test. No M12 or peer Web WIP was consumed.
+
+Required stopped-backup schema now includes all columns of
+`ig_capture_update_sequences` and `ig_capture_updates` (160 required tables).
+The offline verifier also checks the existing domain invariant: counters and
+sequences are safe nonnegative/positive integers, every event has its matching
+owner/device counter, and the counter is at least every surviving sequence. A
+counter higher than the last surviving event is deliberately retained, never
+rebuilt from MAX(sequence).
+
+Durable RED `b24ec6b8` uses actual generated M06 OCR publications twice, deletes
+the highest capture, makes a stopped instance backup, restores it and proves exact
+journal/counter rows plus an authorized unchanged cursor=2 read. Then six damaged
+copies have valid refreshed database checksums but lose either table, artifact
+column, counter row, or rewind/negate the counter. All six unexpectedly published
+before the fix: `/tmp/m16-backup-derived-red.log`, exit 1 (six subcase failures
+plus the parent). After schema/invariant admission they all reject before target
+creation and the valid round trip remains exact: 7/7, exit 0,
+`/tmp/m16-backup-derived-green.log`. No business or storage I/O was mocked; the
+only replacement was the external generated HTTP OCR service. Scope check exits 0.
