@@ -667,7 +667,12 @@ class MultiuserWorkerInstrumentedTest {
             control("/generated/release-pairing");scenario.recreate();ready();press("恢复中断的连接确认");ready();confirm();assertNull(ConnectionClient(app).pendingServer())
             assertEquals(paired.token,settings.read().token);val trace=control("/generated/pairing-state");val claims=trace.getJSONArray("claims");assertTrue(claims.length()>=2)
             for(index in 0 until claims.length()){val row=claims.getJSONObject(index);assertEquals(claim.getString("id"),row.getString("id"));assertEquals(claim.getString("challenge"),row.getString("challenge"));assertEquals(settings.deviceId,row.getString("deviceId"))}
-            assertEquals(2,trace.getJSONArray("acks").length());assertEquals(0,browser.hits)
+            if(trace.optBoolean("restarted")) {
+                assertEquals(listOf(200,410),(0 until trace.getJSONArray("ackStatuses").length()).map {trace.getJSONArray("ackStatuses").getInt(it)})
+                assertFalse(app.getSharedPreferences("connection",Context.MODE_PRIVATE).getBoolean("pairingAcknowledged",true))
+                assertEquals(200,HttpJson.get(endpoint()+"/api/connections/self",settings.read().connectionToken()).first)
+            } else {assertEquals(2,trace.getJSONArray("acks").length());assertTrue(app.getSharedPreferences("connection",Context.MODE_PRIVATE).getBoolean("pairingAcknowledged",false))}
+            assertEquals(0,browser.hits)
             UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};assertEquals(200,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first)
         }} finally {instrumentation.removeMonitor(browser)}
     }
