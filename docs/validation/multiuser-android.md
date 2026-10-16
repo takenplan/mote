@@ -328,3 +328,27 @@ Decision provenance is [M11 public MCP](../design/multiuser-mcp.md) and [M04 con
 Additional shared pairing boundary: scoped M01 does not register the old `/api/connections/invitations` or `/redeem` routes used by the original QR/JSON invitation reader. Its supported native flow is PKCE `/login/requests`→fixed-device browser approval→`/poll`→`/ack`; device grants remain ingress/self/logout only. Existing direct username login and actual device-bound Ingress tests do not prove an equivalent QR generation/scanning journey. M13 independently confirmed no frozen canonical QR replacement. This remains an explicit KEEP/CHANGE gap for joint/parent ADR alignment; no legacy owner alias or expanded device private permission is introduced by Android.
 
 The same recent-work characterization is now GREEN1/1 EXIT0,0.610s `/tmp/m15-overview-recent-preview-first-green.log/.exit`, including real M05 detail navigation; no empty-list fixture substituted. Original MCP SDK consumer is GREEN1/1 EXIT0,1.386s `/tmp/m15-native-mcp-first-green.log/.exit`: actual A resource import, exact duplicate receipt0new/1existing, unchecked tool approval makes no import, explicit read-only tool admission publishes its own second item, immediate B retirement and detached A import leave B empty. Additional explicit M04 preparation control1/1 EXIT0,1.063s `/tmp/m15-native-mcp-preparation-control.log/.exit`: source/device+connection save, existing masked token retained and real SDK rediscovery still authorized, B same-ID configuration untouched by old A Save. Fixture app/testAPK14s EXIT0 `/tmp/m15-mcp-overview-green-build.log/.exit`. Runtime freeze7eca52d9783f875aa38860ae1ca0a78c467cbd52 (including2cd/e6 anddf917); later9aae is only additional UNRUN consumer tests/Google I/O fixture. Bounded closure review and final affected remain pending.
+
+### 107f native owned settings/readers checkpoint
+
+Runtime `107f0038fc67d5236db99a09616fbd4e3b5ca411` changes only the existing
+CentralAdmin consumers of processing settings, devices and statistics, plus eight
+synchronized labels. The original processing form now reads/writes the M04
+`processing` domain with its captured revision; the native device list consumes
+M03 canonical ingress metadata and statistics consume M02 own counts. No processor,
+speaker algorithm or configuration default was replaced.
+
+The three original native journeys that failed against the saved 220c APK now pass
+individually on 107f: processing settings 1/1 (0.785s), same-ID device inventory 1/1
+(0.545s), own statistics 1/1 (0.538s). Logs are
+`/tmp/m15-native-{processing-settings,device-inventory,statistics}-first-green.log`
+with separate `.exit` files, all 0. Fixture app and test APK compiled in 10s, EXIT0
+(`/tmp/m15-processing-device-statistics-green-build.log`). An initial sandbox adb
+listener EPERM occurred before tests; the existing emulator and backend were found
+healthy and the same commands passed standard review. It is an environment failure,
+not a product RED. This checkpoint does not supersede the full 352-test evidence on
+220c or claim whole-module acceptance.
+
+M13 bounded review of exact 7eca found no new confirmed P0/P1/P2 and statically
+closed the prior Overview recent-five P2; the actual characterization RED/GREEN
+remains M15 evidence. Report: `/tmp/mote-m13-review-m15-mcp-7eca.md`.
