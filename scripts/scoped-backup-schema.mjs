@@ -31,6 +31,8 @@ export const scopedBackupSchema = Object.freeze({
  "ig_activity":["user_id","id"],
  "ig_batches":["user_id","source_id","batch_id","digest","receipt"],
  "ig_capture_scopes":["user_id","capture_id","source_id"],
+ "ig_capture_update_sequences":["user_id","device_id","next"],
+ "ig_capture_updates":["user_id","device_id","sequence","capture_id","artifact_id"],
  "ig_devices":["user_id","id","json"],
  "ig_meta":["singleton","ticket_key"],
  "ig_objects":["user_id","hash","bytes","parts"],

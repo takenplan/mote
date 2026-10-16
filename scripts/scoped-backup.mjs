@@ -37,7 +37,14 @@ function metadata(db){
  if(!row||row.epoch!==5||row.format!=='mote-private-users-v1'||!/^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,159}$/.test(row.deployment_id)||db.prepare('PRAGMA user_version').get().user_version!==5)throw Error('Unsupported backup storage epoch');
  return {deploymentId:row.deployment_id};
 }
-function validateDatabase(db){const meta=metadata(db);if(!meta)throw Error('Unsupported backup storage epoch');if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Incomplete or corrupt instance database');for(const [name,required] of Object.entries(scopedBackupSchema)){if(!has(db,name))throw Error('Incomplete instance domain database');const columns=new Set(db.prepare('PRAGMA table_info('+JSON.stringify(name)+')').all().map(column=>column.name));if(required.some(column=>!columns.has(column)))throw Error('Incomplete instance domain database');}validateOwners(db);return meta;}
+function validateDatabase(db){const meta=metadata(db);if(!meta)throw Error('Unsupported backup storage epoch');if(db.prepare('PRAGMA quick_check').get().quick_check!=='ok'||db.prepare('PRAGMA foreign_key_check').all().length)throw Error('Incomplete or corrupt instance database');for(const [name,required] of Object.entries(scopedBackupSchema)){if(!has(db,name))throw Error('Incomplete instance domain database');const columns=new Set(db.prepare('PRAGMA table_info('+JSON.stringify(name)+')').all().map(column=>column.name));if(required.some(column=>!columns.has(column)))throw Error('Incomplete instance domain database');}validateOwners(db);validateCaptureUpdates(db);return meta;}
+// This journal's high-water counter cannot be inferred from surviving events:
+// a deleted highest capture is valid, but a missing/rewound counter is not.
+function validateCaptureUpdates(db){
+ const max=Number.MAX_SAFE_INTEGER;
+ if(db.prepare("SELECT 1 FROM ig_capture_update_sequences WHERE typeof(next)<>'integer' OR next<0 OR next>? LIMIT 1").get(max)||
+  db.prepare("SELECT 1 FROM ig_capture_updates u LEFT JOIN ig_capture_update_sequences s ON s.user_id=u.user_id AND s.device_id=u.device_id WHERE typeof(u.sequence)<>'integer' OR u.sequence<1 OR u.sequence>? OR s.next IS NULL OR s.next<u.sequence LIMIT 1").get(max))throw Error('Incomplete or corrupt device update journal');
+}
 // SQL owner namespaces must be validated before they can select canonical paths.
 // Empty owners are reserved by the existing shared execution/operation catalogs.
 function validateOwners(db){
