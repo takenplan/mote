@@ -2,6 +2,15 @@
 // Keep this stopped-archive admission contract in step with domain schema changes.
 // Extra extension tables/columns are preserved by SQLite and remain allowed.
 export const scopedBackupSchema = Object.freeze({
+ "ac_dependencies":["user_id","action_id","kind","id"],
+ "ac_jobs":["user_id","id","input","proof","task_id","state"],
+ "ac_meta":["id","cursor_key","installation_epoch"],
+ "ac_operations":["user_id","id","action_id","approval_hash","target_epoch","authorization_revision","account_epoch","native_external_id","task_id","issuance_id","claimed","ack","revoked","published"],
+ "ac_proposals":["user_id","id","json","proof","scope","created_at"],
+ "ac_restore":["user_id","id","hash"],
+ "ac_sources":["user_id","id","epoch"],
+ "ac_state":["user_id","deleted","generation","settings","authorization_revision","review_devices","policy_id","policy_task"],
+ "ac_targets":["user_id","device_id","epoch","json"],
  "auth_account_deletions":["user_id","operation_id","created_at"],
  "auth_accounts":["user_id","username","password_salt","password_hash","administrator","disabled","authorization_epoch","created_at"],
  "auth_attempts":["attempt_key","started_at","attempts"],
@@ -155,6 +164,10 @@ export const scopedBackupSchema = Object.freeze({
  "task_external_retry_confirmations":["confirmation_id","issuance_id","user_id","authorization_epoch","confirmed_at"],
  "task_lifecycle_state":["user_id","deleted"],
  "task_restore_journal":["user_id","operation_id","payload_hash"],
+ "td_meta":["id","cursor_key"],
+ "td_restore":["user_id","id","hash"],
+ "td_state":["user_id","deleted"],
+ "td_todos":["user_id","id","created_at","status","version","request_hash","json"],
  "user_configuration_restore_journal":["user_id","operation_id","payload_hash","generation","target_hash","staging_id"],
  "user_configuration_state":["user_id","generation","deleted","restore_operation"],
  "user_model_credential_generations":["user_id","profile_id","generation","recovery_generation","present","has_credentials","fingerprint","components"],

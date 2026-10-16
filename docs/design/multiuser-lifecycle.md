@@ -2,7 +2,8 @@
 
 This work starts at the clean M14 composition `9bc65b53d5823443ad1ecffb49d2c6eecc687927`.
 All runtime validation uses generated accounts and disposable directories. The
-M12 handoff is not authorized; its interface and final composition are pending.
+M12 handoff was unauthorized at the initial checkpoint; its later authorized
+resumption is recorded below. Its final composition is still pending.
 
 | Disposition | Original capability | M16 responsibility |
 | --- | --- | --- |
@@ -147,3 +148,70 @@ negative/unsafe/noninteger sequence state, or an incomplete schema. It accepts a
 counter above surviving events after capture deletion and preserves it exactly.
 Personal import still excludes this derived journal; the M13 current-artifact
 reader reconciles missing notifications without re-admitting a task.
+
+
+## Decision provenance and closure ledger
+
+These choices implement the existing self-hosted private-library direction; they
+are not a new sharing, cloud recovery or workflow product. The owning discussion
+and its adoption are recorded in [Multi-user scope: Decision and provenance](../adr-multiuser-scope.md#decision-and-provenance).
+The original multi-user recommendation is linked there as thread
+`01a140d6-59b6-7251-8306-931da89e156d`; this ledger does not invent separate
+approvals for its individual implementation details. The parent additionally
+confirmed original-deployment/original-account personal import and delegated
+ordinary technical decisions. There is currently no M16 question or approval
+waiting on the user. M12's later parent-authorized resumption is recorded below;
+no earlier rejected action is delegated or retried by M16.
+
+| Problem | Decision and existing authority | Reason / impact | Executed verification / remaining limit |
+| --- | --- | --- | --- |
+| A disabled account must still be erasable without private impersonation. | Purpose-bound durable lifecycle grants, revoke ordinary access before erasure; retain unknown outcomes. [Multi-user scope: host contracts](../adr-multiuser-scope.md#m00-executable-boundary), [domain lifecycle contract](multiuser-modules.md#domain-lifecycle-contract), [recovery failure contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract). | Reuses the shared SQLite, domain adapters and single executor; admin status never grants another account's private service. Physical completion includes credential metadata and the final current domain set. | Actual HTTP deletion, delayed unknown cleanup, A/B SQL/hash checks, reset-password and registry-race RED→GREEN; no real account was deleted. |
+| Personal import must preserve the previous merge/dedup journey without accidentally becoming historical execution recovery. | Same original deployment/account, complete declared coverage, five canonical domain merges in one synchronous SQLite transaction; explicitly preserve current settings and execution authorization. [Storage and recovery / Supersession](../adr-multiuser-scope.md#supersession), [MVP baseline](../adr-mvp-baseline.md), [M16 matrix](multiuser-modules.md#模块改造与验收矩阵), [transaction and external results](multiuser-public-contracts.md#同步事务外部结果与恢复). Identity policy is explicitly approved by the parent. | Keeps one private library, immutable data and current merge/dedup; adds no per-user PITR, cross-account mapping, old credential or model-call replay. New registered domains declare merge/preserve rather than extending a central business switch. | Actual source-host personal import 14/14 and combined backup/import 37/37; restoreUser adjacent 11/11; final current compiled/required checks remain separate. |
+| A personal merge can otherwise create fresh automatic work on the next restart. | Suppress only the import's synchronous automatic events and restrict old Ask journal backfill to atomic first installation. [Task recovery: failure contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract), [system refactor: KEEP fences and one engine](../adr-system-refactor.md), [public recovery contract](multiuser-public-contracts.md#同步事务外部结果与恢复). | Keeps normal producer triggers and previously authorized events; no history migration, new queue or automatic reopening of old work. | Actual earlier instance backup → later personal archive → restore/import → restart valid RED→GREEN; first-install positive and normal new publication positive; import suite 14/14. |
+| A successful export or UI receipt must describe its actual authorization and coverage. | Owner/deployment/epoch-qualified persistent receipts, exact bytes/hash, current download authorization, semantic progress and explicit exclusions. [Multi-user scope: Ownership/Privacy/Storage](../adr-multiuser-scope.md#decision-and-provenance), [Central request admission: structural pages exception](../adr-central-request-admission.md#supersession-check). | Reuses existing UI entry points and bounded transport pages, without record-total claims, arbitrary backlog quotas or successful empty domain fallback. | Actual Range/ETag/cancel/epoch/pagination and consumer fixtures; malformed consumer receipt correction tracked independently. |
+| A backup can be internally checksummed yet omit required originals, tables or durable notification counters. | Verify required schema, references/pins, bytes and safe owner paths before staged publication; preserve both OCR journal tables and exact high-water counters. [MVP write admission](../adr-mvp-baseline.md), [multi-user new baseline](../adr-multiuser-scope.md#new-baseline-and-write-admission), [capture journal contract](multiuser-capture-browser.md). | Rejects half recovery without rewriting existing data; deleted-highest events do not rewind a device cursor. Personal import excludes this derived journal and uses the existing bounded read reconciliation. | Actual native SQLite/files/process round trips, corruption/link/path cases; six checksummed journal corruptions RED→GREEN and 7/7; later composed 14/14. |
+| Restoring data must not authorize previous external effects again. | Preserve successful/unknown journals, retire old credentials/task/plugin grants and pause automatic/outbound authority; operator reauthorizes explicitly. [Recovery failure contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract), [multi-user recovery boundary](../adr-multiuser-scope.md#decision-and-provenance). | Separates recovery of canonical records from execution rights and does not infer non-execution from timeout, cancellation or process death. | Actual generated external journals and restart tests, native Mem0 SDK canonical bodies; no live provider or real external action. |
+| Existing management pages contain private one-owner assumptions. | Admin finite instance metadata and signed read-only update checks; no impersonation, fake zero private queue/index metrics or HTTP update execution. [Multi-user Privacy](../adr-multiuser-scope.md#decision-and-provenance), [ConfigService responsibility/transaction](../adr-unified-configuration.md#responsibilities-and-transaction). | Retains existing settings/navigation and file configuration authority; configuration changes and deployment remain explicit operator actions. | Actual management post-await revocation RED→GREEN and Web consumer; private storage encryption/index gaps are not represented as restored. |
+| The old Docker copy-into-volume restore cannot promise atomic epoch-5 publication, and no Docker daemon is available for verification. | Keep the verified native stopped-instance path; reject unsupported Docker epoch-5 publication before mutation and report this as an OPEN retained-capability gap, not accepted removal. [Module M16 backup scope](multiuser-modules.md#模块改造与验收矩阵), [ConfigService UNKNOWN container validation](../adr-unified-configuration.md#compatibility-and-validation), [AGENTS completion rule](../../AGENTS.md). | Recommended to the parent: retain the explicit gap until atomic volume publication and real daemon recovery can be implemented/verified. No silent scope reduction, daemon start, deployment or synthetic claim of Docker acceptance. | Native source/compiled/package paths have historical positive evidence; approved read-only Docker version check reports daemon unavailable. Docker publication and native Hindsight-volume validation remain unexecuted/incomplete. |
+
+The cited ADRs take precedence over a local shortcut. A conflict with these
+boundaries must be reported to the parent with a recommendation before changing
+product direction. Current final checks, exact SHAs and remaining gaps are listed
+in the [validation ledger](../validation/multiuser-m16-lifecycle.md); historical
+passing checkpoints do not validate later runtime changes.
+
+
+### Authorized M12 resumption after this candidate freeze
+
+After candidate `589d6ad7` was frozen and its required check started, the parent
+explicitly restored the original M12 conversation. Earlier handoff restrictions
+are historical; M16 began bounded read-only review only after that new trusted
+instruction. This does not retroactively include M12 in the running candidate.
+Its Actions unknown-result deletion correction, explicit Actions/Todos import
+policies and complete offline table/column plus authority-retirement contract
+remain owning-module prerequisites for a later combined freeze. No ended
+M14/M11 conversation is awakened, and no previously rejected operation is
+reissued through another thread.
+
+
+### M12 domain composition and stopped archive authority
+
+The authorized M12 freeze `4a0e82db` (runtime `5172f099`) is now composed.
+Its synchronous Todos hook extends personal canonical merge to six domains;
+Actions declares preserve-current explicitly. This retains the original
+`EvidenceStore.exportArchive/importArchive` JSON-v2 Todos behavior without
+inventing Actions personal historical merge. The companion tar-bundle exporter
+is `mote-data-export` v1, not that JSON-v2 format. Registry-driven coverage and
+clients must allow these explicitly declared extra domains, rather than fix the
+number of merged domains at five.
+
+The stopped archive now requires all columns of the thirteen Actions/Todos tables
+(173 core tables total). Restore disables inherited instance and actual private
+YAML Actions settings, advances SQL policy/authorization generations, clears
+review-device and policy-task authority, retires target registrations and revokes
+operations. Exact claimed/issuance/native-ID/ACK/task linkage, successful history,
+unknown external facts and manual Todo content/state remain unchanged. This is
+the same [multi-user recovery boundary](../adr-multiuser-scope.md#decision-and-provenance)
+and [unknown-result contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract),
+not a new approval or backup framework. The operator reauthorizes future work;
+recovery never manufactures first-issuance eligibility.

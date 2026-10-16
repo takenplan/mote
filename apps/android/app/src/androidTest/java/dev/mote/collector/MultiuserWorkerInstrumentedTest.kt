@@ -72,6 +72,96 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun calendarReviewClientRetainsItsOriginalAccountWithoutRequestingCalendarPermission() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val original=CalendarActions(app,foreground=true)
+        assertNotNull(original.list().getJSONArray("items"))
+        login(app,"b")
+        assertThrows("A's retained native Actions client cannot borrow B's current credential",IllegalStateException::class.java){original.list()}
+        assertNotNull(CalendarActions(app,foreground=true).list().getJSONArray("items"))
+    }
+
+    @Test fun queuedArchiveReadCannotResolveTheNextAccountsCredentialWhilePaused() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val note="Generated queued A archive "+java.util.UUID.randomUUID();QuickNotes.save(app,note,"");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CaptureRecordsActivity>(android.content.Intent(app,CaptureRecordsActivity::class.java).putExtra("recordSource","note")).use {scenario->
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {it.adapter.getItem(0).toString()=="本机记录"}.setSelection(1)}
+            waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(note)}};shown}
+            lateinit var executor:java.util.concurrent.ThreadPoolExecutor
+            scenario.onActivity {activity->executor=CaptureRecordsActivity::class.java.getDeclaredField("executor").apply {isAccessible=true}.get(activity) as java.util.concurrent.ThreadPoolExecutor}
+            val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+            executor.execute {entered.countDown();release.await(20,TimeUnit.SECONDS)};assertTrue(entered.await(5,TimeUnit.SECONDS))
+            try {
+                scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="刷新"}.performClick()}
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");control("/archive-reads/reset")
+                release.countDown();executor.submit {}.get(15,TimeUnit.SECONDS)
+                val reads=control("/archive-reads").getJSONArray("archiveReads")
+                assertEquals("The old queued A operation must not issue a private read using B's credential before resume",0,(0 until reads.length()).count {reads.getJSONObject(it).getString("owner")=="b"})
+            } finally {release.countDown()}
+        }
+    }
+
+    @Test fun actualNativeArchiveRetiresVisiblePrivateRowsBeforeResumingAnotherAccount() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val privateText="Generated private A visible archive "+java.util.UUID.randomUUID()
+        QuickNotes.save(app,privateText,"");UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CaptureRecordsActivity>(android.content.Intent(app,CaptureRecordsActivity::class.java).putExtra("recordSource","note")).use {scenario->
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {it.adapter.getItem(0).toString()=="本机记录"}.setSelection(1)}
+            waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(privateText)}};shown}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            login(app,"b")
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            // Inspect before any touch, explicit navigation or refresh could retire the old page.
+            scenario.onActivity {activity->assertFalse("Returning under B must not display A's already rendered private archive",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(privateText)})}
+        }
+    }
+
+    @Test fun originalNativeCentralArchiveReaderShowsActualDerivedOcrInsteadOfImmutableEmptyIntake() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val id=java.util.UUID.randomUUID().toString();val label="Generated OCR reader "+id
+        val bitmap=android.graphics.Bitmap.createBitmap(24,24,android.graphics.Bitmap.Config.ARGB_8888).apply {eraseColor(android.graphics.Color.GREEN)}
+        val bytes=java.io.ByteArrayOutputStream().also {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}.toByteArray();bitmap.recycle()
+        app.queue().enqueue(JSONObject().put("id",id).put("deviceId",settings.deviceId).put("deviceName","Generated OCR reader").put("platform","android").put("source","screen").put("capturedAt",java.time.Instant.now().toString()).put("durationMs",0).put("appId","generated.reader").put("appName",label).put("imageMime","image/png").put("ocrText","").put("ocr",JSONObject().put("status","disabled")).put("privacy",JSONObject().put("excluded",false).put("redacted",false).put("mode","local").put("collection","content")),bytes,settings.read().maxQueueMiB*1024L*1024L)
+        UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};control("/ocr/a/$id")
+        assertEquals("",CentralAccess.requireClient(app).get("/api/captures/$id").getString("ocrText"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","archive")).use {scenario->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("原始采集记录");ready()
+            var opened=false;waitFor {scenario.onActivity {activity->val title=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().firstOrNull {it.text.toString()==label};if(title!=null){views(title.parent as android.view.View).filterIsInstance<android.widget.Button>().single {it.text.toString()=="查看原文"}.performClick();opened=true}};opened};ready()
+            scenario.onActivity {activity->assertTrue("Original native raw reader must show actual M06 OCR, while immutable intake stays unchanged",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="GENERATED_A_NATIVE_CENTRAL_OCR"})}
+        }
+    }
+
+    @Test fun deviceBoundPerceptionPullCachesItsOwnActualCentralOcrAndResetsFutureCursor() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val bitmap=android.graphics.Bitmap.createBitmap(24,24,android.graphics.Bitmap.Config.ARGB_8888).apply {eraseColor(android.graphics.Color.BLUE)}
+        val bytes=java.io.ByteArrayOutputStream().also {bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)}.toByteArray();bitmap.recycle()
+        val at=java.time.Instant.now().toString();val id=java.util.UUID.randomUUID().toString()
+        val event=JSONObject().put("id",id).put("deviceId",settings.deviceId).put("deviceName","Generated native OCR").put("platform","android").put("source","screen").put("capturedAt",at).put("durationMs",0).put("appId","generated.raw").put("appName","Generated raw").put("imageMime","image/png").put("ocrText","").put("ocr",JSONObject().put("status","disabled")).put("privacy",JSONObject().put("excluded",false).put("redacted",false).put("mode","local").put("collection","content"))
+        app.queue().enqueue(event,bytes,settings.read().maxQueueMiB*1024L*1024L);UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        val range=java.time.Instant.parse(at);val browser=CaptureRecordClient(settings.read(),settings.deviceId,api)
+        assertTrue(browser.albums(range.minusSeconds(60).toString(),range.plusSeconds(60).toString(),null).getJSONArray("items").length()>0)
+        assertArrayEquals(bytes,browser.image(id,false));assertNotNull(CapturePreview.decode(browser.image(id,true),480))
+        control("/ocr/a/$id");assertEquals("",api.get("/api/captures/$id").getString("ocrText"));assertEquals("GENERATED_A_NATIVE_CENTRAL_OCR",browser.detail(id).getString("ocrText"))
+        val invitation=api.post("/api/login/session",JSONObject().put("serverUrl",endpoint()).put("deviceId",settings.deviceId).put("deviceName","Generated native OCR").put("platform","android"))
+        RuntimeSettings.replaceAccount(app){settings.signIn(endpoint(),invitation.getString("token"),2592000000)};val bound=settings.read();assertTrue(bound.deviceBoundCredential)
+        val prefs=app.accountPreferences("central-perception");val key=SourceRules.hash(bound.ownerKey()+"\n"+settings.deviceId);check(prefs.edit().putLong(key,9007199254740991L).commit())
+        val queue=app.queue();PerceptionSync.pull(app,settings,bound,queue)
+        assertEquals("Device-bound sync must use its narrow ingress reader and repair a verified future cursor", "GENERATED_A_NATIVE_CENTRAL_OCR",queue.capture(id)!!.getString("ocrText"))
+        assertTrue(prefs.getLong(key,0) in 1 until 9007199254740991L)
+        login(app,"b");assertThrows(IllegalStateException::class.java){PerceptionSync.pull(app,settings,bound,queue)};assertEquals(0,app.queue().depth())
+        login(app,"a");assertEquals("GENERATED_A_NATIVE_CENTRAL_OCR",app.queue().capture(id)!!.getString("ocrText"))
+    }
+
     @Test fun actualNativePortableImportUsesTheChosenArchiveAndOriginalOwnerReceipt() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")

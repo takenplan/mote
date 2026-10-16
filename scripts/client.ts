@@ -5,7 +5,7 @@ import {loadEnvironment} from '@mote/shared/environment';
 import {accountKey} from '../apps/desktop/src/account.js';
 import {defaultConfig,validateServerUrl} from '../apps/desktop/src/config.js';
 import {testConnection} from '../apps/desktop/src/connection.js';
-import {assertAccountConnection,ingressRequest} from '../apps/desktop/src/ingress-client.js';
+import {ingressRequest} from '../apps/desktop/src/ingress-client.js';
 import type {SourceRequest} from '../apps/desktop/src/source-types.js';
 const {env,baseDir,envFile}=loadEnvironment(fileURLToPath(new URL('../',import.meta.url)));
 export const resolvedConnection={url:(env.MOTE_URL||`http://127.0.0.1:${env.MOTE_PORT||47832}`).replace(/\/$/,''),baseDir,envFile,profileDirectory:env.MOTE_CONFIG_FILE?baseDir:undefined,profile:env.MOTE_PROFILE||'default'};
@@ -23,8 +23,8 @@ export async function apiClient(connection?:{url:string;token:string}){
  const config={...defaultConfig(),serverUrl:url,token,account,authSignedOut:false,authExpiresAt:identity.credential.expiresAt,credentialScope:'client' as const,deviceId:identity.credential.deviceId??'cli'};
  const request:SourceRequest=async(path,body,method=body===undefined?'GET':'POST',signal)=>{
   if(method==='POST'&&['/api/captures','/api/notes'].includes(path))throw Error('Use the account-bound Ingress 3 source endpoint');
-  await assertAccountConnection(config);
-  signal?.throwIfAborted();
+  // The shared transport owns fresh identity admission and abort checks for
+  // every private request. Do not add a second outer handshake.
   return ingressRequest(config,path,body,method,signal);
  };
  return Object.assign(request,{account,binding:accountKey(config)!,identity,config});
