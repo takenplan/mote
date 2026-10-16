@@ -10,6 +10,8 @@ h3,.library-record-copy strong,.discovery-intake-card strong,.settings-link-grid
 .page-heading,.library-heading { margin-bottom:var(--mote-space-group); }
 .section-heading { margin-bottom:var(--mote-space-item); }
 .panel,.home-archive-intro,.home-record-list,.library-browser,.library-record-list,.settings-menu,.preference-menu,.discovery-model-start,.conversation-layout,.modal { border:var(--mote-panel-border-width) solid var(--mote-border); border-radius:var(--mote-radius-container); background:var(--mote-panel-background); box-shadow:var(--mote-shadow); }
+/* Floating approval content must remain readable over flat-theme page panels. */
+.panel.action-dialog { background:var(--mote-surface); }
 .home-archive-intro,.note-composer,.note-pending,.settings-surface .panel,.discovery-settings-boundary,.discovery-model-start { padding:var(--mote-space-panel); }
 .home-archive-intro { gap:var(--mote-space-group); }
 .home-retrieval { padding-left:var(--mote-space-group); }
