@@ -55,19 +55,51 @@ internal class CentralImports(private val directory: File, private val cipher: B
     }
     fun send(client: CentralClient, progress: (Int, Int) -> Unit): JSONObject {
         val saved = pending(); val manifest = saved.getJSONObject("manifest")
-        val upload = client.post("/api/import-uploads", manifest)
         val id = manifest.getString("id"); UUID.fromString(id)
+        val requestId = saved.getString("requestId"); UUID.fromString(requestId)
+        val size = manifest.getLong("sizeBytes"); require(size in 0..MAX)
+        val total = ((size + PART - 1) / PART).toInt()
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+        val hashes = (0 until total).map { part ->
+            val bytes = cipher.open(File(directory, "part-$part.enc").readBytes())
+            require(bytes.size.toLong() == minOf(PART.toLong(), size - part.toLong() * PART))
+            digest.update(bytes); Ingress3Client.hash(bytes)
+        }
+        val hash = digest.digest().joinToString("") { "%02x".format(it) }
+        fun verifyOriginal(value: JSONObject, expectedId: String): JSONObject {
+            UUID.fromString(expectedId)
+            require(value.getString("id") == expectedId && value.getString("hash") == hash && value.getLong("sizeBytes") == size)
+            require(value.getString("relativePath") == manifest.getString("name") && value.getString("name") == manifest.getString("name").substringAfterLast('/'))
+            require(value.getString("mimeType") == manifest.optString("mimeType", "application/octet-stream").ifBlank { "application/octet-stream" })
+            return value
+        }
+        val upload = client.post("/api/import-uploads", manifest)
         require(upload.getString("id") == id && upload.getInt("partBytes") == PART)
-        val received = upload.getJSONArray("parts").let { parts -> (0 until parts.length()).map { parts.getJSONObject(it).getInt("part") }.toSet() }
-        val total = ((manifest.getLong("sizeBytes") + PART - 1) / PART).toInt()
+        val received = upload.getJSONArray("parts").let { parts ->
+            (0 until parts.length()).map { index ->
+                val part = parts.getJSONObject(index); val position = part.getInt("part")
+                require(position in 0 until total && part.getString("hash") == hashes[position] && part.getLong("bytes") == minOf(PART.toLong(), size - position.toLong() * PART))
+                position
+            }.also { require(it.toSet().size == it.size) }.toSet()
+        }
         if (upload.optString("fileId").isBlank()) repeat(total) { part ->
-            if (part !in received) client.bytes("PUT", "/api/import-uploads/$id/parts/$part", cipher.open(File(directory, "part-$part.enc").readBytes()), "application/octet-stream")
+            if (part !in received) {
+                val bytes = cipher.open(File(directory, "part-$part.enc").readBytes()); require(Ingress3Client.hash(bytes) == hashes[part])
+                val ack = client.bytes("PUT", "/api/import-uploads/$id/parts/$part", bytes, "application/octet-stream")
+                require(ack.getInt("part") == part && ack.getLong("bytes") == bytes.size.toLong() && ack.getString("hash") == hashes[part])
+            }
             progress(part + 1, total)
         }
-        val fileId = upload.optString("fileId").ifBlank { client.post("/api/import-uploads/$id/commit").getString("id") }
-        val request = JSONObject().put("requestId", saved.getString("requestId")).put("processing", "preview")
+        val file = upload.optString("fileId").takeIf(String::isNotBlank)?.let { verifyOriginal(client.get("/api/archived-files/" + it), it) }
+            ?: client.post("/api/import-uploads/$id/commit").let { verifyOriginal(it, it.getString("id")) }
+        val fileId = file.getString("id")
+        val request = JSONObject().put("requestId", requestId).put("processing", "preview")
             .put("instruction", saved.getString("instruction")).put("archivedFileIds", JSONArray().put(fileId))
         val result = client.post("/api/imports", request)
+        require(result.getString("id") == requestId && result.getString("status") in setOf("queued", "preparing", "awaiting_confirmation", "importing", "completed", "failed", "cancelled", "needs_configuration", "unsupported"))
+        val originals = result.getJSONArray("files")
+        val matching = (0 until originals.length()).map(originals::getJSONObject).single { it.getString("id") == fileId }
+        verifyOriginal(matching, fileId)
         discard(); return result
     }
     fun discard() { directory.listFiles()?.forEach { check(it.delete()) }; }
