@@ -150,6 +150,27 @@ test('Web Ask model availability treats an actual empty account selection as nor
  f.cookie('b');assert.equal(askModelSelectionPath(await createApi(f.bi).request<any>('/api/models')),null);
 });
 
+test('Web insight progress receives its actual persisted scope on admission, list, cancellation and refresh',async t=>{
+ const f=await fixture(t),a=f.api(),settings={...defaultModelSettings(),provider:'custom',protocol:'openai-completions',baseUrl:'https://synthetic.invalid/v1',model:'generated-model',apiKey:'GENERATED_A_MODEL_KEY'};
+ const view=await a.request<any>('/api/configuration');await a.request('/api/configuration/models',{method:'PUT',body:JSON.stringify({revision:view.revision,value:{profiles:[{id:'generated',name:'Generated',settings}],selections:{insight:{kind:'personal',id:'generated'}}}})});
+ const scope={after:'2026-01-01T00:00:00Z',before:'2026-01-02T00:00:00Z',timeZone:'UTC'},id=crypto.randomUUID();
+ const run=await a.request<any>('/api/insight-runs',{method:'POST',body:JSON.stringify({requestId:id,prompt:'Generated bounded review',...scope})});
+ assert.deepEqual(run.scope,scope);assert.equal(run.snapshot.id,id);assert.deepEqual(run.snapshot.scope,scope);
+ assert.deepEqual((await a.request<any>('/api/insight-runs')).items[0].scope,scope);
+ await a.request('/api/insight-runs/'+id+'/cancel',{method:'POST',body:'{}'});
+ assert.deepEqual((await a.request<any>('/api/insight-runs/'+id)).scope,scope);
+ f.cookie('b');const b=createApi(f.bi);assert.equal((await b.request<any>('/api/insight-runs')).items.length,0);
+ await assert.rejects(b.request('/api/insight-runs/'+id),error=>(error as any).status===404);
+});
+
+test('Web conversation list includes actual owned turn counts for equal conversation IDs',async t=>{
+ const f=await fixture(t),a=f.api(),id=crypto.randomUUID();
+ await a.request('/api/conversations',{method:'POST',body:JSON.stringify({id,title:'Generated A conversation'})});
+ assert.equal((await a.request<any>('/api/conversations')).items[0].turnCount,0);
+ f.cookie('b');const b=createApi(f.bi);await b.request('/api/conversations',{method:'POST',body:JSON.stringify({id,title:'Generated B conversation'})});
+ const page=await b.request<any>('/api/conversations');assert.equal(page.items[0].turnCount,0);assert.doesNotMatch(JSON.stringify(page),/Generated A conversation/);
+});
+
 test('Web outbound MCP preparation uses owned Ingress sources and original user configuration CAS without exposing saved tokens',async t=>{
  const {prepareWebMcpConnection}=await import('../../web/src/web-mcp.js'),f=await fixture(t),a=f.api(),baseline=await a.request<any>('/api/configuration');
  const input={id:'generated-mcp',sourceId:'generated-mcp-source',name:'Generated MCP source',url:'https://synthetic.invalid/mcp',token:'GENERATED_A_MCP_SECRET'};
