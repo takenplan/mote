@@ -368,6 +368,7 @@ class MultiuserWorkerInstrumentedTest {
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
         val statistics=CentralAccess.requireClient(app).get("/api/data/statistics")
         assertTrue(statistics.getLong("captures")>0)
+        CentralAccess.requireClient(app).post("/api/ingress/devices",JSONObject().put("id",settings.deviceId).put("name","Generated A overview device").put("platform","android"))
         val devices=CentralAccess.requireClient(app).get("/api/ingress/devices").getJSONArray("items")
         assertTrue(devices.length()>0)
         fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
