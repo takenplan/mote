@@ -231,6 +231,19 @@ was valid for d181/53b. The later actual Docker failure led to the streamed-copy
 fix and durable opt-in entries, so a fresh final required gate is pending; the
 earlier result is not relabelled as covering these later changes.
 
+The first final invocation on `271779bdc21b5205530947153ade28919eea5721`
+ended **exit 2** during script type checking, before the suites:
+`/tmp/mote-container-required-final.log/.exit` (exact SHA in `.sha`). The new
+opt-in entries used TypeScript import suffixes under NodeNext, lacked the profile
+module declaration, and lost task-handler contextual types. The repair uses the
+repository's `.js` import convention, declares the consumed profile APIs, checks
+the handler against its host contract and asserts the Docker result volume.
+No production recovery logic changed. Narrow script type checking and actual
+tsx resolution of all six imported runtime modules both exit 0:
+`/tmp/mote-container-validation-types.log/.exit` and
+`/tmp/mote-container-validation-imports.log/.exit`. The failed full invocation is
+retained; these narrow checks do not replace its pending full retry.
+
 Actual volume publication and native Hindsight recovery now have the evidence
 above, including actual Mote production startup/restart and managed Hindsight
 canonical reads. A fresh final affected gate is the remaining local check before

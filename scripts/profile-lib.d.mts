@@ -7,7 +7,7 @@ export interface ProfilePaths {
 }
 export interface LoadedProfile extends ProfilePaths {
  document:ConfigDocument;savedDocument:ConfigDocument;env:Record<string,string>;
- meta:{version:1;profile:string;runtime:'native'|'docker';release:string;image:string;volume:string;modelsVolume:string;[key:string]:unknown};
+ meta:{version:1;profile:string;runtime:'native'|'docker';volume:string;release?:string;image?:string;modelsVolume?:string;[key:string]:unknown};
  port:number;dataDir:string;modelDirectory:string;url:string;
 }
 export interface ExecuteOptions {env?:NodeJS.ProcessEnv;cwd?:string;capture?:boolean;timeoutMs?:number}
