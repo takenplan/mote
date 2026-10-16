@@ -159,3 +159,15 @@ Pixels flow on demand through the existing image renderer and actual Harness;
 ordinary UUID discovery grants no pixels. The exact attachment identity joins
 all later model, artifact and publication fences, and current prior attachments
 can remain available in later dialogue turns. Model selections remain M04 owned.
+
+File directory discovery now reuses the existing literal URI-parent semantics.
+Its owner/source-filtered SQL includes actual current M06 formal replacements
+before grouping, ordering and LIMIT; raw archived/replaced bodies remain behind
+their original reader. A directory response is metadata with a resumable signed
+cursor; file entries expand their real canonical Material refs.
+
+Context packages use one stable Material locator per logical Material rather
+than advancing a cursor after delivering just the first block. Expanding that
+locator retains every ready block. Search candidate text and Material catalog
+text predicates use ready blocks before candidate ordering/LIMIT, so pending
+text is absent from candidate selection as well as rendered projections.
