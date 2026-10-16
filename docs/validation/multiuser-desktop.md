@@ -1,5 +1,26 @@
 # M14 Desktop validation checkpoint
 
+## Explicit source identity in original/detail reads
+
+Actual RED `ace31bdf` is now executed, not merely a proposed case:
+`/tmp/m14-explicit-source-valid-red.log/.exit`, **1 failed / 1 existing positive,
+exit 1**. Both use actual M03/M06 and emitted main/preload; a same-device source
+with an explicit non-Desktop name lists correctly but fails detail lookup.
+The first two-line attempt still fails in `explicit-source-green.log` (exit 1):
+M02 deliberately strips internal `ingressSourceId`, so assuming that field exists
+in the public record does not fix the reader. That attempt was not committed.
+
+The final adapter reuses the actual owner `/sources` inventory, selects matching
+device/platform sources, walks original pages and accepts only the exact capture
+and source-bound descriptor. Material lookup reuses that confirmed source. No
+internal field, guessed owner, new backend route/runtime or read permission is
+introduced. `/tmp/m14-explicit-source-green2.log/.exit`: **2/2 selected, exit 0**,
+4.27s, adding real original image reads and raw detail before processing. The
+unchanged central OCR/body and B same-ID isolation assertions pass. The 33
+unselected cases are not acceptance. The initially announced slot was cancelled
+before execution for Android/Web scheduling; only the later actual log above is
+the RED evidence.
+
 ## Portable import Activity
 
 M16's exact `89ddc973f0eb68262f047826d2df23c4b41df5ad` is composed. RED
