@@ -41,6 +41,8 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 
 当前 `d66b6ed9` 的目录/sameAs/交错审批邻接回归：`m12-catalog-approval-current` 3/3 EXIT0；真实 A/B 同 requestId 收据分离。
 
+旧算法 characterization 另外运行：`node --import tsx --test --test-concurrency=1 apps/server/test/actions.test.ts apps/server/test/todos.test.ts`，`m12-legacy-server` 18/18 EXIT0；`npm test -w @mote/desktop -- test/calendar-actions.test.ts`，`m12-native-characterization` 7/7 EXIT0。它们不替代 scoped 身份或 emitted 证据。
+
 ## 必须如实分类的中间失败
 
 - `m12-harness-red` 是 sandbox loopback EPERM，属于环境失败，不能算业务 RED；授权本机假服务后另跑有效 RED。
@@ -48,6 +50,7 @@ M08 Harness、M05 执行器与实际 Desktop CalendarActions adapter 使用合�
 - `m12-catalog` 的长文件 15 秒超时保留了 6 completed/6 pending；是夹具等待不符合实际生产终态的假设失效，不能声称尾段丢失。改成等待实际尾段输出，未降低内容断言，独立通过。
 - 最初 recovery 假模型对不含合成约定的原文也输出硬编码日程，导致正确的 calendar_quote 拒绝。修正夹具按真正提供的文本返回后，另在原进度实现上复现了有效 RED；没有放宽生产 quote 校验。
 - `m12-delivery-probe`/早期 green2 的嵌套 grant 和 unknown 状态错误均保留原始失败，只有最终 green3 被记通过。
+- `m12-legacy-contracts` 把原有 Vitest Desktop 文件误交给 node:test，runner 不匹配，18pass/1filefail EXIT1；按两个包各自既有 runner 重跑得到上述 18/18 与 7/7，没有改测试或生产代码。
 - 初次类型检查缺工作区依赖 `mem0ai/oss` 属环境准备问题；依赖复制到本模块本地后 server typecheck EXIT0。无同伴 node_modules 写入或软链到同伴工作树。
 
 ## 最终门禁（待重型窗口）
