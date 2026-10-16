@@ -69,16 +69,17 @@ test('epoch-5 Docker publication stages complete retired authority then atomical
  const copied=new DatabaseSync(join(again,'mote.sqlite'));try{assert.equal(copied.prepare('SELECT deployment_id FROM scope_meta').get()!.deployment_id,f.deployment);}finally{copied.close();}
 });
 
-for(const timing of ['occupied','running','late-write','yaml-race'])test('Docker restore preserves current state for '+timing,async t=>{
+for(const timing of ['occupied','running','late-write','late-created-volume','yaml-race'])test('Docker restore preserves current state for '+timing,async t=>{
  const f=await fixture(t),before=readFileSync(f.p.configFile,'utf8'),selected=f.volumes.get(f.originalVolume)!.directory;
  if(timing==='occupied')writeFileSync(join(selected,'sentinel'),'Generated current valid data');
  if(timing==='running')f.running();
  if(timing==='late-write')f.afterTransfer(()=>writeFileSync(join(selected,'sentinel'),'Generated current valid data'));
+ if(timing==='late-created-volume'){const original=f.volumes.get(f.originalVolume)!;f.volumes.delete(f.originalVolume);f.afterTransfer(()=>{f.volumes.set(f.originalVolume,original);writeFileSync(join(selected,'sentinel'),'Generated current valid data');});}
  if(timing==='yaml-race')f.afterTransfer(()=>writeFileSync(f.p.configFile,before+'\n# Generated concurrent operator edit\n'));
  await assert.rejects(restoreProfile(f.p,f.archive,f.dependencies),/empty data volume|Stop every container|Configuration changed/);
  assert.equal(f.volumes.size,1);assert.equal(f.p.meta.volume,f.originalVolume);
  assert.equal(readFileSync(f.p.configFile,'utf8'),timing==='yaml-race'?before+'\n# Generated concurrent operator edit\n':before);
- if(timing==='occupied'||timing==='late-write')assert.equal(readFileSync(join(selected,'sentinel'),'utf8'),'Generated current valid data');
+ if(timing==='occupied'||timing==='late-write'||timing==='late-created-volume')assert.equal(readFileSync(join(selected,'sentinel'),'utf8'),'Generated current valid data');
 });
 
 test('Docker restore copy failure leaves selected profile and original volume unchanged',async t=>{
