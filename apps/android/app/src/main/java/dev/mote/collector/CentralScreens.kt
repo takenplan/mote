@@ -39,6 +39,26 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private val importStore = CentralImports(File(directory, "import-pending"), cipher)
     private val attachmentStore = CentralStateFile(directory, "attachment-times", cipher)
     private val insightStore = CentralStateFile(directory, "insight-request", cipher)
+    private val memoryCorrectionStore = CentralStateFile(directory, "memory-correction", cipher)
+    fun pendingMemoryCorrection(): JSONObject? = CentralDraftWrites.barrier { memoryCorrectionStore.read().takeIf { it.has("operationId") } }
+    fun correctMemory(api: CentralClient, id: String, correction: JSONObject): JSONObject {
+        val fields = JSONArray().apply { listOf("title", "statement", "uncertainty", "version", "validFrom", "validUntil").forEach { put(JSONArray().put(it).put(correction.opt(it))) } }
+        val key = id + ":" + fields.toString()
+        val intent = CentralDraftWrites.barrier {
+            val old = memoryCorrectionStore.read()
+            if (old.optString("key") == key && old.has("operationId")) old
+            else JSONObject().put("key", key).put("memoryId", id).put("operationId", UUID.randomUUID().toString()).put("correction", JSONObject(correction.toString())).also(memoryCorrectionStore::write)
+        }
+        return sendMemoryCorrection(api, intent)
+    }
+    fun retryMemoryCorrection(api: CentralClient) = sendMemoryCorrection(api, requireNotNull(pendingMemoryCorrection()))
+    private fun sendMemoryCorrection(api: CentralClient, intent: JSONObject): JSONObject {
+        val id = intent.getString("operationId"); UUID.fromString(id)
+        val job = api.post("/api/memories/" + encode(intent.getString("memoryId")) + "/correct", JSONObject().put("operationId", id).put("correction", intent.getJSONObject("correction")))
+        require(job.getString("id") == id); job.getJSONObject("tasks"); job.getBoolean("current")
+        CentralDraftWrites.barrier { if (memoryCorrectionStore.read().optString("operationId") == id) memoryCorrectionStore.write(JSONObject()) }
+        return job
+    }
     private val draftFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
     var importInstruction = ""
     private var player: android.media.MediaPlayer? = null

@@ -3,6 +3,9 @@
   "个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。": "Personal exports contain this account’s data and registered domains, excluding login credentials, execution authority, and instance backups.",
   "取消后将不能下载这份导出文件。": "Cancelling makes this export unavailable for download.",
   "下载": "Download",
+  "已删除": "Deleted",
+  "生成 {0} 条记忆": "Created {0} memories",
+  "已生成的批次": "Persisted batches",
   "当前准入代次 {0}": "Current admission generation {0}",
   "内置记忆方案": "Built-in memory plan",
   "外部结果待确认 {0}": "External results awaiting confirmation {0}",
@@ -8376,7 +8379,5 @@
   "设备授权只允许采集；请使用用户名和密码登录后打开私人资料。": "Device approval permits collection. Sign in with your username and password to open private content.",
   "将本机未绑定资料归入此账号": "Assign unbound local records to this account",
   "整理记忆": "Organize memories",
-  "已生成的批次": "Persisted batches",
-  "生成 {0} 条记忆": "Created {0} memories",
-  "已删除": "Deleted"
+  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions have changed; the completed task record remains. Open the Memory to check the currently readable version."
 }

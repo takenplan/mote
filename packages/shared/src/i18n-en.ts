@@ -8379,5 +8379,6 @@ export const english: Readonly<Record<string, string>> = {
   "使用账号登录全部功能，或在浏览器中批准采集设备。": "Sign in with your account for all features, or approve a collection device in your browser.",
   "设备授权只允许采集；请使用用户名和密码登录后打开私人资料。": "Device approval permits collection. Sign in with your username and password to open private content.",
   "将本机未绑定资料归入此账号": "Assign unbound local records to this account",
-  "整理记忆": "Organize memories"
+  "整理记忆": "Organize memories",
+  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions have changed; the completed task record remains. Open the Memory to check the currently readable version."
 };

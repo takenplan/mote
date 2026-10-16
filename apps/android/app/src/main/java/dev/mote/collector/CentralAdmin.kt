@@ -12,11 +12,37 @@ import java.util.UUID
 
 /** Publication outcomes describe the current result; persisted status still owns scheduling. */
 internal object CentralMemoryJobPresentation {
-    private val controls = listOf("pause" to "暂停", "resume" to "继续", "cancel" to "取消", "retry" to "重试")
-    fun invalidated(job: JSONObject) = job.optString("outcome") == "input_invalidated"
-    fun status(job: JSONObject) = if (invalidated(job)) MoteI18n.text("资料已更新，本次结果失效") else job.optString("state", job.optString("status"))
-    fun notice(job: JSONObject): String? = if (invalidated(job)) MoteI18n.text("历史结果保留；请查看当前资料版本。失效输入不能直接重试。") else null
-    fun controls(job: JSONObject) = if (invalidated(job)) emptyList() else controls
+    private val legacyControls = listOf("pause" to "暂停", "resume" to "继续", "cancel" to "取消", "retry" to "重试")
+    fun state(job: JSONObject): String {
+        if (!job.has("tasks")) return job.optString("state", job.optString("status"))
+        val top = job.getString("state")
+        if (top in setOf("cancelled", "deleted", "paused")) return top
+        if (top == "awaiting_context") return "needs_input"
+        val tasks = job.getJSONObject("tasks"); val states = tasks.keys().asSequence().map { tasks.getJSONObject(it).getString("state") }.toList()
+        for (failure in listOf("failed", "blocked", "stale")) if (failure in states) return failure
+        if (states.isNotEmpty() && states.all { it == "succeeded" } && top == "committed") return "succeeded"
+        if (!job.getBoolean("current")) return "stale"
+        return if ("running" in states) "running" else "waiting"
+    }
+    fun invalidated(job: JSONObject) = if (job.has("tasks")) state(job) == "stale" else job.optString("outcome") == "input_invalidated"
+    fun status(job: JSONObject): String = if (!job.has("tasks")) {
+        if (invalidated(job)) MoteI18n.text("资料已更新，本次结果失效") else state(job)
+    } else MoteI18n.text(when (state(job)) {
+        "waiting" -> "等待提取记忆"; "running" -> "正在分批提取记忆"; "succeeded" -> "记忆提取完成"
+        "failed" -> "部分记忆提取需要重试"; "blocked", "needs_input" -> "需要处理"; "stale" -> "资料已更新，本次结果失效"
+        "cancelled" -> "记忆提取已停止"; "deleted" -> "已删除"; "paused" -> "已暂停"; else -> state(job)
+    })
+    fun notice(job: JSONObject): String? = if (job.has("tasks") && !job.getBoolean("current")) MoteI18n.text("输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。")
+        else if (invalidated(job)) MoteI18n.text("历史结果保留；请查看当前资料版本。失效输入不能直接重试。") else null
+    fun controls(job: JSONObject): List<Pair<String, String>> = if (!job.has("tasks")) { if (invalidated(job)) emptyList() else legacyControls }
+        else when (state(job)) { "paused" -> listOf("resume" to "继续", "cancel" to "取消"); "waiting", "running" -> listOf("pause" to "暂停", "cancel" to "取消"); "failed", "blocked" -> listOf("retry" to "重试", "cancel" to "取消"); "needs_input" -> listOf("cancel" to "取消"); else -> emptyList() }
+    fun results(job: JSONObject): List<String> {
+        val tasks = job.getJSONObject("tasks")
+        return tasks.keys().asSequence().filter { it == "correct" || it.startsWith("publish") }.flatMap { stage ->
+            val task = tasks.getJSONObject(stage); val ids = if (task.optString("state") == "succeeded") task.optJSONObject("result")?.optJSONArray("memoryIds") else null
+            if (ids == null) emptySequence() else (0 until ids.length()).asSequence().map { ids.getString(it).also(UUID::fromString) }
+        }.distinct().toList()
+    }
 }
 
 /** Management uses native controls and explicit endpoint contracts, never a web fallback. */
@@ -276,14 +302,27 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             edit(MoteI18n.text("处理设置"), "/api/file-processing", payload)
         }
     }
+    private fun ownedConfiguration(title: String, domainId: String) {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") }) { view ->
+            val domains = view.getJSONArray("domains")
+            val value = (0 until domains.length()).map { domains.getJSONObject(it) }.single { it.getString("id") == domainId }.getJSONObject("saved")
+            body.removeAllViews(); screens.setBack { memorySettings() }; ui.text(title, NativeFontRole.TITLE_MOBILE)
+            val collect = form(value, ui.card(), emptySet())
+            ui.button(MoteI18n.text("保存设置"), true) {
+                val payload = JSONObject().put("revision", view.getLong("revision")).put("value", collect()).put("preserveRedactedSecrets", true)
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/" + enc(domainId), payload) }) { memorySettings() }
+            }
+        }
+    }
     fun memorySettings() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        ui.button(MoteI18n.text("记忆自动处理")) { configuration(MoteI18n.text("记忆自动处理"), "/api/memory-settings") { it.getJSONObject("settings") } }
+        ui.button(MoteI18n.text("记忆自动处理")) { ownedConfiguration(MoteI18n.text("记忆自动处理"), "memory") }
         ui.button(MoteI18n.text("记忆提取配方")) {
             recipeSettings(false)
         }
         ui.button(MoteI18n.text("记忆整合")) { recipeSettings(true) }
-        read("/api/memory-settings")
+        read("/api/memory")
     }
     private fun recipeSettings(integration: Boolean, scope: String? = null) {
         val api = client; val path = if (integration) "/api/memory-integration-settings" else "/api/memory-recipe-settings"
@@ -317,16 +356,20 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     fun memoryJobs() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
         ui.button(MoteI18n.text("开始提取"), true) { action("/api/memory-jobs") { run("/api/memory-jobs", it.getString("id")) } }
-        library.paged("/api/memory-jobs", ui.card()) { row, card ->
+        library.paged("/api/memory/jobs", ui.card()) { row, card ->
             ui.text(CentralMemoryJobPresentation.status(row), parent = card)
-            ui.button(MoteI18n.text("查看详情"), parent = card) { run("/api/memory-jobs", row.getString("id")) }
+            ui.button(MoteI18n.text("查看详情"), parent = card) { run("/api/memory/jobs", row.getString("id")) }
         }
     }
     fun run(path: String, id: String) {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        if (path == "/api/memory-jobs") {
+        if (path == "/api/memory/jobs") {
             val target = ui.card(); val api = client
             ui.work(MoteI18n.text("正在读取…"), { api.get(path + "/" + enc(id)) }) { job ->
+                job.getJSONObject("tasks"); job.getBoolean("current")
+                ui.text(CentralMemoryJobPresentation.status(job), NativeFontRole.SECTION, target)
+                CentralMemoryJobPresentation.notice(job)?.let { ui.text(it, parent = target) }
+                for (memoryId in CentralMemoryJobPresentation.results(job)) ui.button(MoteI18n.text("查看记忆"), parent = target) { library.memory(memoryId) }
                 if (CentralMemoryJobPresentation.invalidated(job)) {
                     ui.text(CentralMemoryJobPresentation.status(job), 18f, target)
                     CentralMemoryJobPresentation.notice(job)?.let { ui.text(it, parent = target) }
@@ -336,7 +379,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         } else read(path + "/" + enc(id))
         ui.button(MoteI18n.text("刷新")) { run(path, id) }
-        if (path != "/api/memory-jobs") ui.button(MoteI18n.text("停止")) { action(path + "/" + enc(id) + "/cancel") { run(path, id) } }
+        if (path != "/api/memory/jobs") ui.button(MoteI18n.text("停止")) { action(path + "/" + enc(id) + "/cancel") { run(path, id) } }
     }
     private fun devices() {
         library.paged("/api/devices", ui.card()) { row, card -> values(row, card) }

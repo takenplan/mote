@@ -158,6 +158,9 @@ class MultiuserWorkerInstrumentedTest {
             do {val page=CentralAccess.requireClient(app).get("/api/memories?limit=30").getJSONArray("items");saved=(0 until page.length()).map {page.getJSONObject(it)}.firstOrNull {it.optString("statement")==corrected};if(saved!=null)break;Thread.sleep(30)} while(android.os.SystemClock.elapsedRealtime()<deadline)
             assertNotNull("Owner correction must publish a new current Memory",saved)
             assertNotEquals(fixture().getJSONObject("published").getJSONObject("a").getString("memoryId"),saved!!.getString("id"))
+            click("刷新");waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready};click("查看记忆")
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->assertTrue("Native correction must open the actual succeeded task result",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()==corrected})}
             assertFalse(CentralClient(endpoint(),token("b")).get("/api/memories?limit=30").toString().contains(corrected))
         }
     }
