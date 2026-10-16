@@ -102,11 +102,32 @@ class MultiuserWorkerInstrumentedTest {
         assertEquals(404,get(app,"b","/api/captures/$aid").first)
     }
 
+    @Test fun openMemoryStopDialogRetiresOnAccountSwitchBeforeAnyBCommand() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val before=get(app,"b","/api/memory").second!!.getLong("revision")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","plugins")).use { scenario ->
+            waitFor {var ready=false;scenario.onActivity {activity->val select=views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().firstOrNull {it.contentDescription=="插件页面"};if(select!=null&&!activity.isWorking){select.setSelection(2);ready=true}};ready}
+            waitFor {var clicked=false;scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()=="立即停止自动记忆"};if(button!=null&&!activity.isWorking){button.performClick();clicked=true}};clicked}
+            fun confirmNode():android.view.accessibility.AccessibilityNodeInfo? {
+                fun find(node:android.view.accessibility.AccessibilityNodeInfo?):android.view.accessibility.AccessibilityNodeInfo? {if(node==null)return null;if(node.text?.toString()=="确认"&&node.isClickable)return node;for(index in 0 until node.childCount)find(node.getChild(index))?.let {return it};return null}
+                return find(InstrumentationRegistry.getInstrumentation().uiAutomation.rootInActiveWindow)
+            }
+            waitFor {confirmNode()!=null};login(app,"b");scenario.onActivity {it.navigate("plugins")}
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking&&it.client!=null};ready}
+            confirmNode()?.performAction(android.view.accessibility.AccessibilityNodeInfo.ACTION_CLICK)
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            assertEquals(before,get(app,"b","/api/memory").second!!.getLong("revision"))
+        }
+    }
+
     @Test fun tokenRotationKeepsOriginalQueueDraftAndDirectoryButRetiresOldWorkerIntent() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
         login(app,"a");val before=settings.read();val directory=app.accountDirectory().absolutePath
-        QuickNotes.save(app,"Synthetic A before token rotation","");QuickNotes.draft(app).save("Synthetic A unsent draft","")
+        QuickNotes.save(app,"Synthetic A before token rotation","");QuickNotes.draft(app).update("Synthetic A unsent draft","")
         val capture=app.queue().peek()!!.getString("id")
         val (status,rotated)=HttpJson.post(endpoint()+"/api/auth/login",JSONObject().put("username","generated-a").put("password",fixture().getString("password")).put("mode","client"))
         assertEquals(200,status);val nextToken=rotated!!.getString("token");assertNotEquals(before.token,nextToken)
