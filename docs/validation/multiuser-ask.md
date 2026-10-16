@@ -32,6 +32,7 @@ M03 originals, M06 processing and real M07 provider/Memory read paths.
 | Ordered deduplicated actual worker units, fresh child receipts, prior-fragment/handle citation rejected | multiuser-ask: real ordered Agent subtasks…; parent cannot cite… |
 | Failed worker retries only its branch; any/all waits and cancel held sibling; late artifact withheld | multiuser-ask: failed real child retries…; any-child wait… |
 | Worker owner/source inheritance, narrower actual time/device selection, no parent dialogue or query workspace | multiuser-ask: real delegated workers… |
+| Narrow Insight research child omits the parent report's full-range coverage metadata while parent retains its snapshot | multiuser-ask: Insight research children… |
 | Explicit and online compaction retain owner, complete prior summary and every huge-turn span; budget and source validity | multiuser-ask: real compaction…; automatic working-memory compaction… |
 | Successful compaction span pause/restart/config change has no replay; current settings cannot enlarge admitted snapshot | multiuser-ask: successful compaction spans… |
 | Source/compiled two HTTP processes, SIGKILL, successful child not replayed, fixed model/price and own artifact/turn | multiuser-ask-process |
@@ -136,3 +137,12 @@ still rejects disabled sources. Its expanded regression checks A/B paused-source
 metadata and completed snapshot export/delete/idempotent restore/restart without
 model calls, followed by version3 linked to the restored version2: 1/1 EXIT0,
 11099ms (`/tmp/m08-insight-paused-restore-green.log/.exit`), typecheck0.
+
+The new snapshot increment initially copied parent report metadata to narrowed
+research children. This implementation defect is preserved by RED commit
+`b915496b1403c3e9bcd21cc31c4a44e1d2eabaee`, 0/1 EXIT1,9473ms
+(`/tmp/m08-insight-worker-snapshot-before.log/.exit`). The host now supplies
+report metadata only to the parent review. Ordinary delegation, narrowed workers
+and Insight delegation passed 3/3 EXIT0,34030ms
+(`/tmp/m08-insight-worker-snapshot-fixed.log/.exit`). The confirmed impact is
+same-owner task scope, not evidence of a cross-user disclosure or an old-flow bug.
