@@ -40,7 +40,7 @@ internal object CentralMemoryJobPresentation {
         val tasks = job.getJSONObject("tasks")
         return tasks.keys().asSequence().filter { it == "correct" || it.startsWith("publish") }.flatMap { stage ->
             val task = tasks.getJSONObject(stage); val ids = if (task.optString("state") == "succeeded") task.optJSONObject("result")?.optJSONArray("memoryIds") else null
-            if (ids == null) emptySequence() else (0 until ids.length()).asSequence().map { ids.getString(it).also(UUID::fromString) }
+            if (ids == null) emptySequence() else (0 until ids.length()).asSequence().map { ids.getString(it).also { value -> UUID.fromString(value) } }
         }.distinct().toList()
     }
 }

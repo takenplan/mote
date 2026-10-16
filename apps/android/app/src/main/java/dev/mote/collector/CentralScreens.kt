@@ -108,7 +108,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun pollWorkActivity() { if (currentPage == "activity") activity.poll() }
     fun saveWorkState(out: android.os.Bundle) = activity.saveState(out)
     fun restoreWorkState(value: android.os.Bundle) = activity.restoreState(value)
-    fun openWorkEvidence(ref: String) = library.evidence(CentralEvidenceReference.normalize(ref))
+    fun openWorkEvidence(ref: String) = library.queryEvidence(ref)
     fun clearPrivateState() { askState = JSONObject(); question = null; messages = null; noteText = null; noteMood = null; admin.clearPrivateState(); activity.clearPrivateState(); body.removeAllViews() }
     fun refresh() { ui.navigate(currentPage) }
     fun insightRequest(prompt: String): JSONObject = CentralDraftWrites.barrier {

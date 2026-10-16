@@ -127,6 +127,25 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun actualNativeRecipeSelectionUsesTheScopedCatalogAndOwnedCAS() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val bApi=CentralClient(endpoint(),token("b"));val bBefore=bApi.get("/api/configuration")
+        val catalog=api.get("/api/memory/recipes").getJSONArray("items");val recipe=(0 until catalog.length()).map {catalog.getJSONObject(it)}.first {it.optBoolean("available",true)}
+        val label=recipe.optString("name",recipe.getString("id"))+" · "+recipe.getString("version")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
+            fun ready() {waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun click(label:String) {var done=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()==label&&it.isEnabled}?.let {it.performClick();done=true}};done}}
+            ready();click("记忆设置");ready();click("记忆提取配方");ready()
+            scenario.onActivity {activity->val boxes=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>();val chosen=boxes.firstOrNull {it.text.toString()==label};assertNotNull("Native recipe choices must consume the actual M07 catalog",chosen);chosen!!.isChecked=true;boxes.filter {it!==chosen}.forEach {it.isChecked=false}}
+            click("保存设置");ready()
+            fun memory(view:JSONObject):JSONObject {val values=view.getJSONArray("domains");return (0 until values.length()).map {values.getJSONObject(it)}.single {it.getString("id")=="memory"}.getJSONObject("saved")}
+            val refs=memory(api.get("/api/configuration")).getJSONArray("recipes");assertEquals(1,refs.length());assertEquals(recipe.getString("id"),refs.getJSONObject(0).getString("id"));assertEquals(recipe.getString("version"),refs.getJSONObject(0).getString("version"))
+            assertEquals(memory(bBefore).toString(),memory(bApi.get("/api/configuration")).toString())
+        }
+    }
+
     @Test fun actualPublishedMemoryEvidenceUsesTheCanonicalReaderUnderItsOwner() {
         val app=context();check(fixture().has("published"));waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
