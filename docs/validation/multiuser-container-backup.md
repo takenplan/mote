@@ -71,7 +71,9 @@ real path substitutes. Native Python extraction/PostgreSQL does not run there.
 
 Independent source-only review: `/tmp/mote-joint-review-container-ca22.md`.
 The reviewer did not execute tests/Docker. This owner then reproduced and fixed
-both findings. Final follow-up review/check evidence is recorded below.
+both findings. Exact `39009c78` race-fix and `d1810cd0` historical model-volume
+default follow-ups are recorded there with no new confirmed finding in those
+bounded deltas. This is not an actual Docker acceptance review.
 
 ## Failed attempts and dependency correction
 
@@ -87,8 +89,46 @@ not changed, and nothing was installed/downloaded. The same failed Mem0 case the
 passed 1/1, exit 0: `/tmp/mote-container-mem0-deps-restored.log/.exit`. Earlier
 failed runs remain failures. Final checks use installed Node 26 and JDK 21.
 
-## Final acceptance
+## Final local gate and remaining acceptance
 
-Pending final required checks and review of race fixes. Actual Docker and native
-Hindsight remain blocked above and cannot be counted as passed even if local
-automated gates pass.
+Fixed tested candidate: `d1810cd095e8c0075eb1caecdf45395825ec6bbd`.
+
+```sh
+export PATH=/opt/homebrew/opt/openjdk@21/bin:/opt/homebrew/bin:$PATH
+export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
+export ANDROID_HOME=/Users/utopiafar/Library/Android/sdk
+export ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk
+npm run check:affected -- --base origin/codex/mote-multiuser-integration
+```
+
+Actual **exit 0**: `/tmp/mote-container-required-d181-resumed.log/.exit`.
+Desktop 492/492; Server 2641 pass, 0 fail, one existing default macOS-sandbox
+opt-in skip; Web 505/505; Agent 317 pass and one existing installed-Codex opt-in
+skip; Diagnostics 5/5; Shared 192/192; root 81/81; client 5/5; Central runner 0;
+all types and library builds 0. Server duration: 857778 ms.
+
+Android: **352/352**, 74 XML files, 0 failure/error/skip. Gradle 51 seconds,
+25/25 tasks executed; Kotlin/Java and unit-test compilation plus
+`:app:testDebugUnitTest` actually ran, rather than an up-to-date/cache-only gate.
+The own protocol cases are included in the Server result. Source-host native
+backup/reopening is freshly checked; M16's prior compiled/package evidence is
+not relabelled as a fresh compiled or Docker run here.
+
+The initial same-SHA required invocation exited 1 before a test plan because the
+new local clone lacked `origin/codex/mote-multiuser-integration`:
+`/tmp/mote-container-required-d181.log/.exit`. A read-only remote fetch supplied
+the missing reference and independently verified both main/integration remained
+`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`. Only then was the unchanged candidate
+run to exit 0 above. The original failed invocation remains recorded.
+
+All heavy work was explicitly released after that exit 0. Final changes after
+`d1810cd0` are documentation only, checked for formatting/links and with
+`git diff --check`; apps/packages/scripts/protocol have zero difference.
+
+Actual Docker and native Hindsight remain blocked above. No existing
+container/volume was inspected successfully or operated on, and no real Docker
+profile publication, container production startup/restart, native tar/Python/
+PostgreSQL extraction or Hindsight service recovery is counted as passed.
+The source fixes and local gates are reviewable; overall container acceptance
+remains OPEN pending a working existing daemon and a separately coordinated
+generated-data run. Joint's new catalog/Imports composition is a later gate.

@@ -177,6 +177,11 @@ no earlier rejected action is delegated or retried by M16.
 | Existing management pages contain private one-owner assumptions. | Admin finite instance metadata and signed read-only update checks; no impersonation, fake zero private queue/index metrics or HTTP update execution. [Multi-user Privacy](../adr-multiuser-scope.md#decision-and-provenance), [ConfigService responsibility/transaction](../adr-unified-configuration.md#responsibilities-and-transaction). | Retains existing settings/navigation and file configuration authority; configuration changes and deployment remain explicit operator actions. | Actual management post-await revocation RED→GREEN and Web consumer; private storage encryption/index gaps are not represented as restored. |
 | The old Docker copy-into-volume restore cannot promise atomic epoch-5 publication, and no Docker daemon is available for verification. | Keep the verified native stopped-instance path; reject unsupported Docker epoch-5 publication before mutation and report this as an OPEN retained-capability gap, not accepted removal. [Module M16 backup scope](multiuser-modules.md#模块改造与验收矩阵), [ConfigService UNKNOWN container validation](../adr-unified-configuration.md#compatibility-and-validation), [AGENTS completion rule](../../AGENTS.md). | Recommended to the parent: retain the explicit gap until atomic volume publication and real daemon recovery can be implemented/verified. No silent scope reduction, daemon start, deployment or synthetic claim of Docker acceptance. | Native source/compiled/package paths have historical positive evidence; approved read-only Docker version check reports daemon unavailable. Docker publication and native Hindsight-volume validation remain unexecuted/incomplete. |
 
+The last row records the original M16 checkpoint. The
+[container follow-up](../validation/multiuser-container-backup.md) supersedes its
+blanket Docker refusal with staged fresh-volume publication; it retains the
+OPEN actual-daemon/native-volume acceptance boundary.
+
 The cited ADRs take precedence over a local shortcut. A conflict with these
 boundaries must be reported to the parent with a recommendation before changing
 product direction. Current final checks, exact SHAs and remaining gaps are listed
