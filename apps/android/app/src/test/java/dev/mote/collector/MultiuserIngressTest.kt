@@ -13,13 +13,23 @@ import java.io.ByteArrayInputStream
 class MultiuserIngressTest {
     private fun root(): File = generateSequence(File(System.getProperty("user.dir")!!)) { it.parentFile }.first { File(it, "package.json").isFile && File(it, "apps/server").isDirectory }
     private fun request(server: String, token: String, method: String, path: String, body: JSONObject?): Pair<Int, JSONObject?> {
-        java.net.http.HttpClient.newBuilder().followRedirects(java.net.http.HttpClient.Redirect.NEVER).build().use { http ->
-            val payload = if (body == null) java.net.http.HttpRequest.BodyPublishers.noBody() else java.net.http.HttpRequest.BodyPublishers.ofString(body.toString())
-            val request = java.net.http.HttpRequest.newBuilder(java.net.URI(server + path)).header("X-Mote-Protocol-Version", "2").header("X-Mote-Ingress-Version", "3").header("Content-Type", "application/json").header("Authorization", "Bearer $token").method(method, payload).build()
-            val response = http.send(request,java.net.http.HttpResponse.BodyHandlers.ofString())
-            return response.statusCode() to response.body().takeIf { it.isNotBlank() }?.let(::JSONObject)
+        // JVM-only external HTTP adapter: Android bootclasspath has no java.net.http,
+        // and JDK HttpURLConnection rejects PATCH. Product Android transport is unchanged.
+        val uri = java.net.URI(server + path)
+        require(uri.scheme == "http" && uri.host == "127.0.0.1")
+        return java.net.Socket(uri.host, uri.port).use { socket ->
+            socket.soTimeout = 15000
+            val bytes = body?.toString()?.toByteArray(Charsets.UTF_8) ?: byteArrayOf()
+            val headers = "$method ${uri.rawPath}${uri.rawQuery?.let { "?$it" } ?: ""} HTTP/1.1\r\nHost: ${uri.host}:${uri.port}\r\nConnection: close\r\nX-Mote-Protocol-Version: 2\r\nX-Mote-Ingress-Version: 3\r\nContent-Type: application/json\r\nAuthorization: Bearer $token\r\nContent-Length: ${bytes.size}\r\n\r\n"
+            socket.getOutputStream().apply { write(headers.toByteArray(Charsets.US_ASCII)); write(bytes); flush() }
+            val raw = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
+            val split = raw.indexOf("\r\n\r\n"); check(split > 0)
+            val status = raw.substringBefore("\r\n").split(" ")[1].toInt()
+            check(!raw.substring(0,split).contains("transfer-encoding: chunked",ignoreCase=true))
+            status to raw.substring(split+4).takeIf { it.isNotBlank() }?.let(::JSONObject)
         }
     }
+
     private fun fixture(test: (JSONObject) -> Unit) {
         val errors = File.createTempFile("m15-backend-", ".log")
         val process = ProcessBuilder("node", "--import", "tsx", "apps/android/test-fixtures/multiuser-backend.ts").directory(root()).redirectError(errors).start()

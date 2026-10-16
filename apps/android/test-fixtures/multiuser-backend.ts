@@ -5,6 +5,11 @@ import {createServer} from 'node:http';
 import {buildApp} from '../../server/src/app.js';
 const directory=mkdtempSync(join(tmpdir(),'m15-kotlin-backend-'));
 const node=await buildApp({dataDir:directory});
+let holdNext=false,entered=false,release:(()=>void)|undefined;
+node.app.addHook('onSend',async(request,reply,payload)=>{
+ if(holdNext&&reply.statusCode===200&&/^\/api\/ingress\/sources\/[^/]+\/captures$/.test(request.url)){holdNext=false;entered=true;await new Promise<void>(resolve=>{release=resolve;});}
+ return payload;
+});
 const password='Generated-M15-fixture-only-01';
 await node.accounts!.initialize('generated-admin',password);
 const headers={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
@@ -15,11 +20,6 @@ for(const username of ['generated-a','generated-b']){
  if(response.statusCode!==200)throw new Error(response.body);
 }
 const a=await login('generated-a'),b=await login('generated-b');
-let holdNext=false,entered=false,release:(()=>void)|undefined;
-node.app.addHook('onSend',async(request,reply,payload)=>{
- if(holdNext&&reply.statusCode===200&&/^\/api\/ingress\/sources\/[^/]+\/captures$/.test(request.url)){holdNext=false;entered=true;await new Promise<void>(resolve=>{release=resolve;});}
- return payload;
-});
 const address=await node.app.listen({host:'127.0.0.1',port:0});
 const port=Number(new URL(address).port);
 const control=createServer((request,response)=>{void(async()=>{
