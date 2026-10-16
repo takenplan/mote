@@ -37,6 +37,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private val askStore = CentralStateFile(directory, "ask", cipher)
     private val noteStore = CentralNoteStore(directory, cipher)
     private val importStore = CentralImports(File(directory, "import-pending"), cipher)
+    private val portableImportStore = CentralImports(File(directory, "portable-import-pending"), cipher)
     private val attachmentStore = CentralStateFile(directory, "attachment-times", cipher)
     private val insightStore = CentralStateFile(directory, "insight-request", cipher)
     private val memoryCorrectionStore = CentralStateFile(directory, "memory-correction", cipher)
@@ -490,6 +491,16 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             importStore.send(api) { done, total -> progress.message = MoteI18n.text("正在上传附件 {0}/{1}", done, total) }
         }) { admin.importDetail(it.getString("id")) }
     }
+    fun importPortableFile(uri: Uri, operationId: String? = null) {
+        val api = client
+        ui.work(MoteI18n.text("正在导入文件…"), {
+            portableImportStore.stagePortable(ui, uri, operationId)
+            portableImportStore.sendPortable(api)
+        }) { admin.portableImportDetail(it.getString("id")) }
+    }
+    fun pendingPortableImport() = portableImportStore.pending()
+    fun retryPortableImport(api: CentralClient) = portableImportStore.sendPortable(api)
+    fun discardPortableImport() = portableImportStore.discard()
     fun importPending(target: LinearLayout) {
         ui.work(MoteI18n.text("正在读取…"), { importStore.pending() }) { saved ->
             if (saved.has("manifest")) {

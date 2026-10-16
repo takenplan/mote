@@ -881,6 +881,20 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun imports() {
+        val api = client
+        ui.text(MoteI18n.text("个人归档只能合并回原实例的原账号，不恢复登录授权或后台任务。"))
+        ui.button(MoteI18n.text("导入个人归档"), true) { ui.pickPortableImport() }
+        val pending = ui.card()
+        ui.work(MoteI18n.text("正在读取…"), { screens.pendingPortableImport() }) { saved ->
+            if (saved.has("manifest")) {
+                ui.text(saved.getJSONObject("manifest").getString("name"), parent = pending)
+                ui.button(MoteI18n.text("重试同一请求"), parent = pending) { ui.work(MoteI18n.text("正在导入文件…"), { screens.retryPortableImport(api) }) { portableImportDetail(it.getString("id")) } }
+                ui.button(MoteI18n.text("放弃待导入文件"), parent = pending) { screens.confirm(MoteI18n.text("放弃待导入文件"), MoteI18n.text("这只清除本机待确认请求，已在中央接收的任务仍会继续。")) {
+                    ui.work(MoteI18n.text("正在处理…"), { screens.discardPortableImport() }) { screens.refresh() }
+                } }
+            }
+        }
+        portableImportHistory(ui.card())
         val instruction = ui.field(MoteI18n.text("导入要求（可选）"), screens.importInstruction, multiline = true)
         ui.button(MoteI18n.text("选择文件导入")) { screens.importInstruction = instruction.text.toString(); ui.pickImport() }
         screens.importPending(ui.card())
@@ -889,6 +903,40 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             ui.button(MoteI18n.text("查看预览"), parent = card) { importDetail(row.getString("id")) }
         }
         read("/api/import-capabilities")
+    }
+    private fun portableImportHistory(target: LinearLayout, cursor: String? = null, previous: List<String?> = emptyList()) {
+        val portable = CentralPortable(client)
+        ui.work(MoteI18n.text("正在读取…"), { portable.listImports(cursor) }) { result ->
+            target.removeAllViews(); val items = result.getJSONArray("items")
+            for (index in 0 until items.length()) {
+                val row = items.getJSONObject(index); val card = ui.card(target)
+                ui.text(row.getString("createdAt") + " · " + portableState(row.getString("state")), parent = card)
+                ui.button(MoteI18n.text("查看详情"), parent = card) { portableImportDetail(row.getString("id")) }
+            }
+            if (previous.isNotEmpty()) ui.button(MoteI18n.text("上一页"), parent = target) { portableImportHistory(target, previous.last(), previous.dropLast(1)) }
+            if (!result.isNull("nextCursor")) ui.button(MoteI18n.text("下一页"), parent = target) { portableImportHistory(target, result.getString("nextCursor"), previous + cursor) }
+        }
+    }
+    fun portableImportDetail(id: String) {
+        body.removeAllViews(); screens.setBack { screens.refresh() }
+        val api = client; val portable = CentralPortable(api)
+        ui.button(MoteI18n.text("刷新")) { portableImportDetail(id) }
+        ui.work(MoteI18n.text("正在读取…"), {
+            val receipt = portable.readImport(id); val pending = screens.pendingPortableImport()
+            if (receipt.getString("state") == "completed" && pending.optString("requestId") == id) screens.discardPortableImport()
+            receipt to pending
+        }) { (receipt, pending) ->
+            ui.text(portableState(receipt.getString("state")), NativeFontRole.SECTION)
+            ui.disclosure(MoteI18n.text("元数据")) { values(receipt, it) }
+            if (receipt.getString("state") == "failed") {
+                if (pending.optString("requestId") == id) ui.button(MoteI18n.text("重试同一请求")) {
+                    ui.work(MoteI18n.text("正在导入文件…"), { screens.retryPortableImport(api) }) { portableImportDetail(id) }
+                } else ui.button(MoteI18n.text("重新选择同一归档重试")) { ui.pickPortableImport(id) }
+            }
+            if (receipt.getString("state") in setOf("working", "failed")) ui.button(MoteI18n.text("取消")) {
+                ui.work(MoteI18n.text("正在处理…"), { portable.cancelImport(id) }) { portableImportDetail(id) }
+            }
+        }
     }
     fun importDetail(id: String) {
         body.removeAllViews(); screens.setBack { screens.refresh() }

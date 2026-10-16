@@ -1,5 +1,9 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "归档必须来自当前实例和当前账号。": "The archive must come from the current instance and account.",
+  "个人归档只能合并回原实例的原账号，不恢复登录授权或后台任务。": "Personal archives can only merge into the original account on the original instance. Login authority and background tasks are not restored.",
+  "导入个人归档": "Import personal archive",
+  "重新选择同一归档重试": "Select the same archive again to retry",
   "清除本机待确认请求": "Clear the pending request on this device",
   "这只清除本机待确认请求，已在中央接收的任务仍会继续。": "This only clears the pending request on this device. Tasks already accepted by the central node will continue.",
   "仅处理所选资料的固定版本；未选配方时沿用当前记忆设置。": "Process only the pinned versions of selected materials. Leave recipes unselected to use the current Memory settings.",
