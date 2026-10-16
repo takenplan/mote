@@ -7,7 +7,7 @@ import type {UserContext} from './context.js';
 import type {PrivateData} from './private-data.js';
 import {PrivateDataError,missing} from './private-data-sql.js';
 import {navigationScopeSchema,MAX_CONTEXT_REF_LENGTH} from '../context-navigation.js';
-import {identityHash} from './originals.js';
+import {safeTextWindow} from '../text-window.js';
 
 const readonly={readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false};
 const captureRef=z.string().max(64).refine(value=>Boolean(evidenceRefId(value,'capture')),'Invalid capture reference');
@@ -24,19 +24,15 @@ export class McpQuery{
   this.assertParent();signal.throwIfAborted();if(sourceId!==undefined){sourceIdSchema.parse(sourceId);if(this.sourceIds.length&&!this.sourceIds.includes(sourceId))throw missing();this.data.source(sourceId);}
   const ids=sourceId&&restrictToSource?[sourceId]:this.sourceIds.length?this.sourceIds:undefined,fence=this.sourceFence(ids),assert=()=>{this.assertParent();signal.throwIfAborted();fence();},reader=this.host.bind(this.context,{sourceIds:ids,assertCurrent:assert}).reader({signal});
   return Object.freeze({...reader,history:async(input:{sourceId:string;externalId:string})=>{
-   assert();const head=this.data.sourceItem(input.sourceId,input.externalId);if(!head)return {items:[]};let formal;try{formal=this.data.material('mat_'+identityHash([input.sourceId,input.externalId]));}catch(error){if(!(error instanceof PrivateDataError)||error.code!=='not_found')throw error;}
-   // A logical source item with a formal current Material expands through its
-   // canonical query-visible originals. Raw known IDs never bypass this reader.
-   const records=formal?await reader.agent.materialRead!({ref:formal.ref,length:1}).then(page=>reader.agent.sourceHistory!({id:evidenceRefId(page.originalRefs[0],'capture')!})):await reader.agent.sourceHistory!({id:head.captureId});reader.assertCurrent();return {items:records.map(record=>sourceItem(record as CaptureRecord,record.id===head.captureId))};
+   assert();const head=this.data.sourceItem(input.sourceId,input.externalId);if(!head)return {items:[]};const page=await reader.logicalHistory(input);reader.assertCurrent();return {items:page.items.map(record=>sourceItem(record as CaptureRecord,record.id===head.captureId))};
   }});
  }
 }
 type Request=ReturnType<McpQuery['request']>;
 type Run=(operation:()=>unknown,signal:AbortSignal,beforePublish?:()=>void)=>Promise<CallToolResult>;
-const sourceItem=(record:CaptureRecord,current=true)=>({sourceId:record.provenance?.sourceId,externalId:record.provenance?.externalId,revision:record.provenance?.revision,ref:formatEvidenceRef('capture',record.id),observedAt:record.capturedAt,title:record.windowTitle,text:record.ocrText.slice(0,2000),textLength:record.ocrText.length,kind:record.source,layer:record.provenance?.layer,deleted:record.provenance?.deleted??false,captureId:record.id,receivedAt:record.receivedAt,current});
+const sourceItem=(record:CaptureRecord,current=true)=>({sourceId:record.provenance?.sourceId,externalId:record.provenance?.externalId,revision:record.provenance?.revision,ref:formatEvidenceRef('capture',record.id),observedAt:record.capturedAt,title:record.windowTitle,text:safeTextWindow(record.ocrText,0,2000).text,textLength:record.ocrText.length,kind:record.source,layer:record.provenance?.layer,deleted:record.provenance?.deleted??false,captureId:record.id,receivedAt:record.receivedAt,current});
 const evidence=(record:CaptureRecord,offset=0,length=2000)=>{
- let start=Math.min(offset,record.ocrText.length),end=Math.min(start+length,record.ocrText.length);const split=(at:number)=>at>0&&at<record.ocrText.length&&/[\uD800-\uDBFF]/.test(record.ocrText[at-1])&&/[\uDC00-\uDFFF]/.test(record.ocrText[at]);if(split(start))start--;if(split(end))end--;if(end<=start&&start<record.ocrText.length)end=Math.min(start+2,record.ocrText.length);
- return {id:record.id,ref:formatEvidenceRef('capture',record.id),capturedAt:record.capturedAt,appName:record.appName,text:record.ocrText.slice(start,end),textRange:{offset:start,total:record.ocrText.length,nextOffset:end<record.ocrText.length?end:null},source:record.source,provenance:record.provenance,mood:record.mood,appId:record.appId,deviceId:record.deviceId,durationMs:record.durationMs,receivedAt:record.receivedAt,privacy:record.privacy,metadata:record.metadata};
+ return {id:record.id,ref:formatEvidenceRef('capture',record.id),capturedAt:record.capturedAt,appName:record.appName,...safeTextWindow(record.ocrText,offset,length),source:record.source,provenance:record.provenance,mood:record.mood,appId:record.appId,deviceId:record.deviceId,durationMs:record.durationMs,receivedAt:record.receivedAt,privacy:record.privacy,metadata:record.metadata};
 };
 
 export function registerMcpQuery(server:McpServer,query:McpQuery,run:Run){
