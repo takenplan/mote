@@ -30,6 +30,14 @@ class CentralPortableImportTest {
         assertThrows(Exception::class.java) {CentralPortable(api).importArchive(operation,archive())}
     }
 
+    @Test fun `explicit extra canonical import domains remain compatible with the complete core`() {
+        val response=receipt()
+        response.getJSONObject("coverage").getJSONArray("importedDomains").put("todos")
+        response.getJSONArray("domains").put(JSONObject().put("domain","todos").put("state","complete"))
+        val api=CentralClient("https://generated.invalid","generated-token",{method,_,_,_,_->200 to if(method=="GET")self() else response})
+        assertEquals(operation,CentralPortable(api).importArchive(operation,archive()).getString("id"))
+    }
+
     @Test fun `foreign archive identities are rejected before sending any private archive bytes`() {
         for (variant in listOf("owner", "deployment", "domain", "legacy")) {
             var posted = 0
