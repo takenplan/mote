@@ -33,7 +33,17 @@ fixture cleanup before the final run. No real EventKit permission/calendar,
 private data or external model is accessed. Main/preload/UI entry restoration
 and final affected checks are still pending; these results are not module final.
 
-## Parent-directed pause and resumable boundary
+Actual emitted main/preload entry has RED `8c9f9118` (missing API),
+`/tmp/m14-calendar-main-red.log` exit 1. The same case after the thin IPC entry
+passes with a separate B connection and rejection of retired A document.
+The first GREEN attempt only mismatched the expected rejection message (real
+trusted-document rejection precedes generation rejection); fixture expectation
+now accepts those two existing fences. The browser destination independently
+has actual RED (`#/ask` instead of `#/actions`). Both selected cases pass
+**2/2 exit 0**, `/tmp/m14-calendar-main-green2.log/.exit`; 49 unselected cases
+are not counted. Current synchronized i18n check is **8438**, exit 0.
+
+## Parent-directed pause and resumable boundary (historical)
 
 The parent instructed M14 to finish the running named-source repair, save a clean
 checkpoint and release this execution slot for M12. This is not module completion.
