@@ -1,3 +1,4 @@
+import {importDeclarationSchema} from './import-attribution.js';
 import type {FastifyRequest} from 'fastify';
 import {Readable} from 'node:stream';
 import {constants,openSync,closeSync,fstatSync,lstatSync,readFileSync} from 'node:fs';
@@ -12,7 +13,7 @@ import {bytesHash} from './originals.js';
 import type {DatabaseSync} from 'node:sqlite';
 const id=(request:FastifyRequest)=>(request.params as {id:string}).id;
 const version=(request:FastifyRequest)=>{if(request.headers['x-mote-ingress-version']!=='3')throw new ScopeError('incompatible_protocol',426);};
-const batch=z.object({batchId:z.string().min(1).max(256),items:z.array(z.unknown()).min(1).max(500)}).strict();
+const batch=z.object({batchId:z.string().min(1).max(256),items:z.array(z.unknown()).min(1).max(500),importDeclaration:importDeclarationSchema.optional()}).strict();
 
 /** Restores only the version-3, account-bound ingress. Old owner transports,
  * shell execution, processor algorithms and external connectors remain closed. */
@@ -22,8 +23,8 @@ export function registerIngress(runtime:ScopedRuntime,db:DatabaseSync,directory:
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/devices',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).registerDevice(request.body);}});
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/ingress/devices',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).devices();}});
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/sources',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).registerSource(request.body);}});
- registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/sources/:id/captures',bodyLimit:16*1024*1024,service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);const input=batch.parse(request.body);return service(services).receiveCaptures(id(request),input.batchId,input.items);}});
- registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/sources/:id/items',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);const input=batch.parse(request.body);return service(services).receiveSourceItems(id(request),input.batchId,input.items);}});
+ registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/sources/:id/captures',bodyLimit:16*1024*1024,service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);const input=batch.parse(request.body);return service(services).receiveCaptures(id(request),input.batchId,input.items,input.importDeclaration);}});
+ registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/sources/:id/items',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);const input=batch.parse(request.body);return service(services).receiveSourceItems(id(request),input.batchId,input.items,input.importDeclaration);}});
  registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/ingress/sources/:id/receipts/:batch',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).batchReceipt(id(request),(request.params as {batch:string}).batch);}});
  registerUserRoute(runtime,{scope:'user',method:'POST',url:'/api/ingress/sources/:id/uploads',service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).beginUpload(id(request),request.body);}});
  registerUserRoute(runtime,{scope:'user',method:'PUT',url:'/api/ingress/uploads/:id/parts/:part',bodyLimit:6*1024*1024,service:INGRESS_DOMAIN,handle:({services,request})=>{version(request);return service(services).uploadPart(id(request),z.coerce.number().int().nonnegative().parse((request.params as {part:string}).part),request.body);}});

@@ -68,6 +68,9 @@ export class ScopedMemoryData {
    if(String(row.block_id).startsWith('image:')&&!this.image(id))throw missing();const record=JSON.parse(String(row.json)) as MemoryRecord;if(memoryEvidenceFingerprint(record)!==row.hash)throw new PrivateDataError('invalid_data');return record;
   });
  }
+ /** Owner audit reads retained historical originals; it grants no execution
+  * or query-context authority. Canonically hidden/deleted inputs still deny. */
+ retainedEvidence(ids:readonly string[]):MemoryRecord[]{this.state();return [...new Set(ids)].map(id=>{const row=this.sql.get('SELECT * FROM mm_evidence WHERE user_id=$user AND id=?',id);if(!row)throw missing();this.privateData.material(String(row.material_id),String(row.material_revision));const record=JSON.parse(String(row.json)) as MemoryRecord;if(memoryEvidenceFingerprint(record)!==row.hash)throw new PrivateDataError('invalid_data');return record;});}
  assertSources(ids:readonly string[],sourceIds:readonly string[]){for(const id of ids){const evidence=this.sql.get('SELECT material_id,material_revision FROM mm_evidence WHERE user_id=$user AND id=?',id);if(!evidence)throw missing();const sources=this.sql.all('SELECT source_id FROM pd_material_sources WHERE user_id=$user AND material_id=? AND revision=?',evidence.material_id,evidence.material_revision);if(!sources.length||sources.some(row=>!sourceIds.includes(String(row.source_id))))throw missing();}}
  assertInputs(input:ScopedMemoryTask){
   const state=this.state();if(input.ownerParentJobId&&this.sql.get('SELECT job_id FROM mm_owner_cancellations WHERE user_id=$user AND job_id=?',input.ownerParentJobId))throw new PrivateDataError('conflict',409);if(state.generation!==input.generation||memoryHash(this.binding())!==memoryHash(input.binding)||input.deletionSnapshot!==this.deletionSnapshot())throw new PrivateDataError('conflict',409);
