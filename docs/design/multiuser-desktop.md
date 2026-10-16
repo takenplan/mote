@@ -33,3 +33,18 @@ Freeze RED and GREEN commits, commands, exits and logs in the validation record.
 No real calendar, mail, model, screenshot or personal library is accessed. M13's
 denied hidden Electron action is not repeated. Independent Desktop UI/native
 validation, if needed, requires its own exact supported execution and evidence.
+
+## Resumed lifecycle consumer increment
+
+The M16 dependency composition is frozen at `ec6d12c6`; its previously passed
+checks are dependency evidence, not acceptance of the new M14 consumption.
+
+| Decision | Existing capability | This increment |
+| --- | --- | --- |
+| KEEP | Desktop Activity cards, filters, paging and central account handoff | Retain the existing UI and original operation identity across navigation. |
+| CHANGE | Personal portable export progress and saved result | Project the real M16 owner/current-epoch journal with semantic progress. Only the live owner receipt can advertise a completed archive; download still revalidates the exact bytes through M16. |
+| CHANGE | Account deletion status | Current administrators may see the existing deletion receipt's metadata and incomplete/unknown state. This never grants private account data or an export download. |
+| KEEP | Local queue/support archives and stopped instance backup | Preserve these separate existing workflows. A stopped CLI backup is not an online Activity task. |
+| OPEN | Personal portable import | M16 owns the newly approved original-deployment/original-account merge and deduplication engine. No import progress or success is fabricated before its frozen contract. |
+| OPEN | Raw archive album, sessions, image/thumbnail/OCR filtering | M13 owns the shared original-page projection. Native consumers wait for its actual stable contract. |
+| EXCEPTION | M12 consumption | The denied cross-thread handoff remains unconsumed pending explicit authorization. |
