@@ -200,6 +200,65 @@ denied M13 Web action. The initial full command remains EXIT1 and is not called
 both catalogs makes8373-message i18n validation EXIT0:
 `/tmp/m14-composed-i18n-green.log/.exit` (initial failure retained separately).
 
+The later clean composition9bc65b53d5823443ad1ecffb49d2c6eecc687927 adds
+Web's tested3300db2180ac9c935c9bfb7109a9d31b1e27fa03 Memory read consumer to
+Android tested5a0dd911 and Desktop c16/0c5. Translation conflicts retain the
+shared/Android union; i18n checks8376 messages and scope checks EXIT0. M14's
+bounded read-only review of the Web increment found no confirmed new finding
+(`/tmp/mote-m14-review-m13-3300.md`), without accepting its still-open parity.
+Later peer WIP is not part of this composition.
+
+Fresh shared build EXIT0 (`/tmp/m14-final-shared-build.log/.exit`). The restricted
+Desktop build initially failed at macOS iconutil `Invalid Iconset`; the exact
+standard-reviewed retry EXIT0 is retained separately in
+`/tmp/m14-final-desktop-build-approved.log/.exit`. Generated native main/preload/
+renderer A/B offline queues/drafts, SIGKILL/restart and actual backend isolation
+EXIT0 in `/tmp/m14-final-native.log/.exit`. After the Web3300 shared message
+addition, fresh Desktop build and the same actual native chain both EXIT0 in
+`/tmp/m14-9bc-{desktop-build,native}.log/.exit`. These executions use only the
+Desktop fixture, temporary generated profiles, synthetic native I/O and its own
+child process; they do not run M13's denied Web Electron action.
+
+The first real required affected run on clean9bc65b53 is retained as EXIT1 in
+`/tmp/m14-required-affected.log/.exit`: Desktop59files/484tests passed, Web490
+passed, all workspace typechecks passed. Server2495 tests had2493 pass,1 failure
+and1 default opt-in OS-sandbox skip. The failed old Lark overlap fixture fixed
+`Date.now` to2026-10-15 while `observedAt` used real `new Date`; after24 hours,
+the unchanged future-observation guard correctly rejected its fixture inputs.
+The unchanged single-case reproduction fails in
+`/tmp/m14-lark-overlap-diagnostic.log/.exit`. Test-onlya43979dc anchors the same
+:13→:33→next-hour:13 windows to the current hour and retains all event/file/body
+fetch/dedup assertions, adding an explicit first-poll completed assertion. The
+same case1/1 EXIT0 is `/tmp/m14-lark-overlap-green.log/.exit`. There is zero
+production runtime diff from9bc65b53. M13's independent exacta439 read review
+found no weakened assertion or new confirmed finding in
+`/tmp/mote-m13-review-m14-a439.md`. The default skip is the existing
+`MOTE_TEST_PYTHON_OS_SANDBOX` opt-in scenario, not a claimed native permission
+check. No skipped or narrow result is substituted for the required command.
+
+This host's default shell has no Java runtime. Before the final run reached its
+Android stage, an ignored workspace-local `node_modules/.bin/java` launcher was
+configured for installed Homebrew JDK21 and the existing Android SDK. It changes
+no system Java, permissions, credentials or tracked source and is removed after
+the run. The equivalent
+reproduction environment is
+`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
+and `ANDROID_HOME=/Users/utopiafar/Library/Android/sdk`. The required command's
+Android stage still runs the actual Gradle JVM tests; no checker step is skipped.
+
+The final required command on exacta43979dc18a90517cd641d38787674586a20499d
+completed EXIT0: `/tmp/m14-required-affected-final.log/.exit`. It runs
+`check:local` and the actual `:app:testDebugUnitTest`, without a cached or skipped
+checker stage. Desktop59files/484tests passed; Server2494 passed/0 failed with
+the1 default OS-sandbox opt-in skip; Web490 passed; Agent317 passed/0 failed
+with1 default installed-Codex synthetic-fixture opt-in skip; Diagnostics5 and
+Shared192 passed. The repository script group81, CLI characterization4 and
+generated Node supervisor fixture passed. Android rebuilt25 tasks in48 seconds;
+JUnit XML has72 suites/340 tests,0 failures/errors/skips. Workspace types and
+the8376-message i18n check passed. No opt-in skip is presented as live-model,
+real permissions or physical-device evidence. Only these two evidence/design
+documents change aftera439; production and fixture diff is zero.
+
 ## Finite remaining acceptance
 
 Activity and the central status consumer now have the real-chain evidence above.
@@ -209,11 +268,21 @@ and instance backup/restore/delete public orchestration; this snapshot byte
 recovery is a separate existing collector path. No replacement framework is
 introduced to bypass those owners.
 
-Remaining gates: actual final dependency composition; bounded review of later
-deltas; final Desktop suite/build/generated native journey; required
-`npm run check:affected -- --base origin/codex/mote-multiuser-integration` on the
-final runtime candidate; then push and verify remote feature SHA and create a
-Draft PR targeting integration. No merge/main/deployment is authorized.
-The remote integration ref was fetched and remains6272a9b5. No final affected
-pass, remote feature SHA or PR is claimed at this checkpoint. Physical-device,
-live-model, real permissions and production deployment checks remain unrun.
+M16's first export/delete contractf24dbad6 and credential cleanup23e135ac were
+received and independently reviewed in bounded source ranges, but are not in
+this frozen composition. M14's static credential-retention P1 received an actual
+M16 RED→GREEN and bounded follow-up closure; this is peer evidence, not an M14
+rerun. M16's Activity categories, personal import and instance orchestration
+remain future composition work. The root `scripts/client.ts`/`import-files.ts`
+still use their legacy v2/token-hash consumer in this candidate; their generated
+fake-fetch characterization passing does not prove a scoped production CLI.
+That concrete entry-point gap was handed to M16, without changing its workspace.
+
+The current frozen consumer combination, bounded reviews, Desktop build/native
+journey and required affected gate are verified above. This supports a Draft
+checkpoint, not final M14 or joint acceptance: authorized M12 consumption,
+M13's later final parity and M16's later real consumers remain open. Remote
+feature/PR identity is reported in the final delivery note after verification.
+No merge/main/deployment is authorized. The remote integration ref remains
+6272a9b5. Physical-device, live-model, real permissions and production deployment
+checks remain unrun.
