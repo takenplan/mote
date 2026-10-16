@@ -112,7 +112,7 @@ class MultiuserWorkerInstrumentedTest {
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
         val api=CentralAccess.requireClient(app);val before=api.get("/api/configuration")
         val bBefore=CentralClient(endpoint(),token("b")).get("/api/configuration")
-        fun domain(view:JSONObject)=view.getJSONArray("domains").let {items->(0 until items.length()).map {items.getJSONObject(it)}.single {it.getString("id")=="memory"}.getJSONObject("saved")
+        fun domain(view:JSONObject):JSONObject { val items=view.getJSONArray("domains");return (0 until items.length()).map {items.getJSONObject(it)}.single {it.getString("id")=="memory"}.getJSONObject("saved") }
         val zone=if(domain(before).getString("timeZone")=="Asia/Tokyo")"UTC" else "Asia/Tokyo"
         fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
         androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","memories")).use { scenario ->
