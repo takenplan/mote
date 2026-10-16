@@ -1,10 +1,11 @@
 # Final multi-user joint acceptance: fixed scope and preparation ledger
 
-Status: **PREPARATION; NOT final acceptance**, updated 2026-10-16 17:22 UTC. All final-gate
+Status: **PREPARATION; NOT final acceptance**, updated 2026-10-16 UTC. All final-gate
 rows below are pending unless an actual execution receipt explicitly says otherwise.
-The 14 delivered modules and architecture review are dependencies, not proof that
-all 17 modules work together. M13/M14/M15 remain checkpoints with known capability
-gaps. No whole-project completion, final candidate or final PR is claimed.
+The 15 delivered modules (including resumed M14) and architecture review are
+dependencies, not proof that all17 modules work together. M13/M15 remain
+checkpoints with known capability gaps. No whole-project completion, final
+candidate or final joint PR is claimed.
 
 ## Authority, composition and evidence rules
 
@@ -87,15 +88,16 @@ including PR135, are literal ancestors of5656.
 
 ## Client readiness and remaining original capabilities
 
-All entries are **CHECKPOINT**, not final candidates. Finalization requires each
+M13/M15 entries are **CHECKPOINT**, not final candidates; M14's module delivery
+is final within its declared boundary. Finalization requires each remaining
 owner's explicit final tested SHA, final affected/native/UI receipts, bounded
 review and exact remote Draft PR head. Later WIP is never imported as a freeze.
 
 | Owner | Explicitly reported composable checkpoint | Remaining gate / original capability |
 | --- | --- | --- |
 | M13 Web | `c21184829f03669229770de3d62bddfb63e29d33`; tested code/test `aed42550`, later docs only | FullWeb515/515 and fresh Central passed in owner environment. No push/PR/final affected. Still open: Calendar/Lark/recordings UI; generic Imports preview/ambiguity/confirm/resume; Files/audio/review/speaker/export; raw pending/failed controls; Memory raw/range/integration/full settings/audit; Agent startup trace/advanced models; storage/encryption/index/runtime config; native Actions bridge. |
-| M14 Desktop | New runtime `c56e4399da9b1fc3b1e20185affbc950f9664379`, narrow checkpoint `eb9d3d1bcfe6f66aa25993cd7d73d85fa8d2819b`; final-required candidate `45467379c5645dec62cc4b03e891b404b675193b` | Owner reports real main/preload/renderer native-calendar→M12 fixed review→M05 receipt plus Ask/offline A/B/SIGKILL/restart GREEN, bounded M13 review no new confirmed finding. At latest report required still running: all types0, Desktop501/501, server2626 pass/0 fail/1 existing default OS opt-in skip. Root/Web/Android final exit and PR139 update pending; do not infer whole-gate exit. The previously observed remote PR139 checkpoint was7e080. No Files write WIP is in454. |
-| M15 Android | New tested runtime `220c175ea9900c39477df0cf2da4aaecba9ca26a` includes107/9e/881 | Owner reports four actual native RED→same GREEN and synthetic Calendar journal positive; Android352/352/no fail/error/skip plus production assembleDebug EXIT0. Full affected/final review/push/PR pending. M13 bounded review found recent-five-work preview dropped at220c: actual RED then df917 fix, GREEN pending the heavy slot. MCP consumer also actual RED/WIP. Generic Imports/remaining Files lack frozen shared equivalents.220c is not whole-module final. |
+| M14 Desktop | **FINAL module delivery** remote `cd46f25a030bdbe593bc138adc375577b4d032ae`; tested `45467379c5645dec62cc4b03e891b404b675193b`, later only two docs | Own independent GitHub readback confirms PR139 OPEN/Draft/base integration/exact final head (`/tmp/mote-joint-pr139-final-readback.json`). Owner required actual EXIT0: Desktop501/501, Server2626 pass/0 fail/1 existing OS opt-in skip, Web515/515, Android352/352/no failure/error/skip, types/root/shared/CLI0, Agent317+1 opt-in skip. Real generated Desktop native-calendar→M12 fixed review→M05 plus Ask/offline A/B/SIGKILL/restart passed; M13 bounded review no new confirmed finding. Handoff `/tmp/mote-m14-final-delivery-resumed.md`. No joint Files writes were in454; this is not whole joint proof. M14 ended, do not awaken. |
+| M15 Android | Tested main `220c175ea9900c39477df0cf2da4aaecba9ca26a`; new composable narrow runtime `7eca52d9783f875aa38860ae1ca0a78c467cbd52` | Android352/352 and production assembleDebug EXIT0 apply to220c. New7eca has recent-five-work preview actual RED→GREEN and MCP actual SDK/native three controls GREEN; review received. New processing/devices/statistics consumer107f has APK build0, native GREEN still in progress. Full affected/current production/final review/push/PR pending. Generic Imports/remaining Files stay OPEN. Do not move220c full evidence to newer runtime. |
 
 Shared-page ownership remains in the owners' existing ledger
 `/tmp/mote-m13-shared-page-contract-map.md`,
@@ -106,9 +108,19 @@ Missing original capabilities are blockers; a new route or generic Material list
 does not substitute for their intended user outcomes. Route changes allowed by
 the MVP do not authorize capability removal.
 
-Later bounded client deltas are not yet imported into this workspace: M13
-CSS10f11, Google0384 and original-byte reader17fd; M14c56; M15 220c and its newer
-preview/MCP work. The exact17fd original-byte delta was independently source
+Own composition `abbb3a786ab1cc5daa44a1fed20a2f5dde15cf4c` includes M14finalcd46,
+M13CSS10f11 and M15stable220c. Android native main differs from220c only in the
+shared translation catalog, retaining equal messages; no peer Android runtime
+was edited. Four append/history conflicts took the delivered final/native test
+versions after checking the concrete conflict. Two prior duplicate-key cleanup
+commits deleted opposite occurrences, causing14 keys to disappear on merge;
+own check:i18n actual RED then `d7990a85` restores exactly those14 shared/Android
+keys once. Same checker GREEN8439 synchronized messages/call sites. This is a
+joint merge repair, not a failure in M14's tested tree.
+
+Later bounded client deltas are not yet imported here: M13Google0384,
+original-byte reader17fd and raw Library entrybe6e; M15new7eca/107f work.
+The exact17fd original-byte delta was independently source
 reviewed here with no new confirmed P0/P1/P2; report
 `/tmp/mote-joint-review-m13-file-original-17fd.md`, no test/build rerun. Its3/3
 runtime result belongs to M13. Original invitation/QR pairing remains a shared
@@ -160,6 +172,49 @@ the same command passed under normal authorized review, no real model contacted.
 These write/recovery changes remain a candidate until types, adjacent checks and
 bounded review complete; no final affected or module claim is inferred.
 
+**Current shared thin freeze: `a10effd109e64651e5cafe801b686238271964bf`.**
+Its write core is643812, with M14final composition and the catalog repair above.
+M13 independently reviewed exact643812 and the exacta10 two-line format filter,
+no new confirmed P0/P1/P2, `/tmp/mote-m13-review-joint-files-6438.md`; no reviewer
+test rerun. At9b96 an actual retained source-item JSON envelope incorrectly
+appeared as an external file: valid RED `/tmp/mote-joint-files-envelope-red.log`.
+a10 limits the common owned-read base to M06's trusted `file`/`processor:*`
+format. Reference captures remain readable through their own source entry; no
+playback/download authority is fabricated from their retained JSON wrapper.
+
+Earlier speaker/backup cases used structured source-item metadata. They are
+superseded for external-recording proof by actual generated WAV M03 upload→M04
+lease→M05→M06, substituting only the external loopback ASR response. Current
+seven source tests (three file views, three correction/speaker/recovery, one
+stream-failure regression) pass7/7/no skip/EXIT0,8.65s:
+`/tmp/mote-joint-files-real-recording-green.log/.exit`. The old export algorithm
+positive separately passes1/1. Server types at643812 passed; the current exacta10
+types and adjacent complete portable suite receive their own receipt below.
+The freeze was offered to active M13/M15 consumers, not ended M14. It closes only
+these listed seams; review proposals/acoustic assets/controls and Imports remain
+OPEN. Whole final candidate/required/compiled/native/client acceptance is pending.
+
+Exacta10 server noEmit exits0 (`/tmp/mote-joint-a10-types.log/.exit`, SHA256
+`d92fa527b2cf6e7a734a389df70ded049e13fde5d094ded997bb6d7bd18c61e9`).
+The complete affected personal-portable suite passes15/15/no skip/EXIT0,33.57s,
+`/tmp/mote-joint-a10-portable.log/.exit`, SHA256
+`0caa291aa0843e97741243d610a6306ce4cb6b595ea559fa5a7eb56da7cf9efd`.
+The current seven Files cases' log SHA256 is
+`95901430f445b32fb99c4e29e1f68fd3e7f06c4ac7070506ee49082ec1c47978`.
+These are independent source-entry receipts, no compiled/server-wide gate claim.
+All Joint processes completed and the heavy slot is explicitly RELEASED.
+
+The parent assigned the former M14 slot to container validation
+`01a145c1-31b7-75e9-b834-56885c972010`, based on M16eec. That owner handles Docker
+profile/backup/restore and Hindsight logic/tests/docs; Joint owns only the new
+annotation table's backup-schema declaration. Container owner reports a later
+explicit parent authorization to start the official Docker app: start returned0
+with already-running, but version/info/image/ps/volume remained daemon-connect
+EXIT1. No context/permission/install/restart workaround was performed. This is
+owner-reported environment evidence, not a Joint rerun or actual recovery pass.
+Protocol mocks/native checks are in progress and do not close actual Docker or
+Hindsight volume recovery.
+
 ## Finite final acceptance matrix
 
 The following 13 rows are the final scope. Reuse the named tests/fixtures and add
@@ -169,7 +224,7 @@ Every row is **FINAL PENDING**. Owning-module history is supporting evidence onl
 
 | ID / real entry | Required finite journey and observations | Reused evidence / blocking condition |
 | --- | --- | --- |
-| J01 Accounts/private HTTP/MCP | A/B equal business IDs and bytes; valid login→read/write; exchange ID/cursor/download/token; admin cannot browse B; logout leaves previously admitted work; disable/reset rejects late publication. Verify counts and errors do not disclose B. | `multiuser-auth*.test.ts`, `private-data.test.ts`, `multiuser-ingress*.test.ts`, `multiuser-mcp*.test.ts`; real production route registration, no default owner. |
+| J01 Accounts/private HTTP/MCP | A/B equal business IDs and bytes; valid login→read/write; exchange ID/cursor/download/token; admin cannot browse B; logout leaves previously admitted work; disable/reset rejects late publication. Verify counts and errors do not disclose B; retain original device pairing/QR outcome against canonical M01 contract. | `multiuser-auth*.test.ts`, `private-data.test.ts`, `multiuser-ingress*.test.ts`, `multiuser-mcp*.test.ts`; real production route registration, no default owner. Canonical QR equivalence is explicitly UNKNOWN, not passed by login or MCP authorization. |
 | J02 Web renderer | A→B, old tab/API/modal/draft, slow read and held write; old A request cannot use B's cookie; B positive request succeeds. Include actual Actions/OQ revision and portable import/export UI. | M13 current IAB journey and actual host; owner-reported old hidden Electron action was denied and unexecuted, so do not retry it or count it as a pass. Final IAB receipt pending. |
 | J03 Desktop main/preload/collector | A offline queue/draft/source→B explicit start→process death/restart→late A ACK→A resumes; exact original bytes; same-account token rotation preserves owner; same URL/new deployment stops bytes; old local format refuses before mutation. | `apps/desktop/test/multiuser-desktop.test.ts`, existing headless native runner and final M14 Actions path. Settings/current status, source edits, original file scan and raw/context readers remain positive cases. |
 | J04 Android Activity/WorkManager | Same queue/switch/death/late ACK/rotation/deployment matrix; native notes/capture/source/snapshot recovery and original bytes; stale detached modal/page/CalendarWorker does not adopt B; new B note/capture positive. | Existing `MultiuserWorkerInstrumentedTest.kt`, JVM tests and isolated headless fixture APK. Actual system grant/revoke and physical-device behavior remain separately unrun; do not change system permissions. |
@@ -211,7 +266,8 @@ source inspection also confirms `restoreProfile`'s explicit epoch5 Docker refusa
    and relevant UI/native receipts, review and remote Draft PR verification. Any
    still-missing KEEP capability blocks the relevant row and whole-project claim.
 3. Agree one final runtime/test combination and exclusive heavy window with the
-   three active owners. No fifth execution thread and no awakening M12/M16.
+   active owners. The parent's four current slots are M13/M15/Joint/container
+   recovery; M14 has ended. No fifth thread and no awakening M12/M14/M16.
    Build shared libraries/Central/Desktop/current APK as relevant; run J01–J13's
    existing representative cases and actual client entry journeys on that tree.
 4. Execute the repository-required

@@ -29,7 +29,7 @@ cancel/retry/forget or complete original legacy recording export outcomes. Those
 remain explicit shared Files work; neither the current transcript export nor a
 generic Material list substitutes for them.
 
-## Owner corrections and speaker confirmation: candidate under validation
+## Owner corrections and speaker confirmation: narrow shared freeze
 
 The existing M06 service accepts the original exact `artifactId`, `chunkId`,
 `originalText` and `correctedText` correction contract. It reuses the production
@@ -62,9 +62,19 @@ and revision checks stay current-only. A generated real-host/model regression
 retains old history, rejects old-revision execution and permits a fresh current
 owner request. No retired evidence is promoted to current authority.
 
-These are narrowly exercised candidate paths, not final Files, Imports or joint
-acceptance. Type/build/affected and independent review receipts must be recorded
-before a shared write freeze is offered to consumers. Proposed model-assisted
+Thin freeze: `a10effd109e64651e5cafe801b686238271964bf`. Exact current server
+types pass; seven actual source cases and all fifteen affected portable cases
+pass without skips. M13 bounded review of exact643812 plus a10 finds no new
+confirmed P0/P1/P2. Its reviewer did not execute these tests. Read endpoints now
+also require M06's trusted `file`/`processor:*` original format, so a retained
+source-item JSON envelope is not an external file or playback authority. The
+speaker/recovery cases use generated WAV through actual M03/M04/M05/M06 with
+only external ASR transport substituted. Details and log identities are in the
+[joint ledger](../validation/multiuser-joint-validation.md).
+
+These are narrowly exercised paths, not final Files, Imports or joint acceptance.
+Fresh own compiled/client artifacts and the final affected gate remain pending
+the complete final composition. Proposed model-assisted
 reviews/calendar matching, acoustic per-file overrides, sample assets and all
 remaining lifecycle controls are still OPEN.
 
