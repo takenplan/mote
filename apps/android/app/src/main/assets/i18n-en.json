@@ -5109,6 +5109,7 @@
   "在中央节点连接文档与日历。选择需要保留的资料，让它们成为可追溯的上下文。": "Connect documents and calendars on the central server. Choose what to archive as traceable context.",
   "本期只读": "Read-only integration",
   "只读取你选中的文档和日历，不修改飞书内容。同步的正文进入 Mote 资料库，可由你配置的模型检索和分析。": "Only selected documents and calendars are read. Feishu content is never modified. Synced text is archived in Mote and can be retrieved and analyzed by your configured model.",
+  "尚未提供账号隔离的 CLI 安装入口。": "An account-scoped CLI installation action is not available yet.",
   "正在检测服务端环境…": "Checking the server environment…",
   "服务端环境": "Server environment",
   "未安装": "Not installed",
