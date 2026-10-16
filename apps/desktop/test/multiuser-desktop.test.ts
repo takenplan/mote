@@ -166,3 +166,11 @@ it('rejects old unbound storage before mutation and refuses to import another ac
  const a=new DurableQueue(join(f.directory,'a'),f.config(f.a)),b=new DurableQueue(join(f.directory,'b'),f.config(f.b));await a.initialize();await b.initialize();await a.enqueue(event(),image);await b.enqueue(event(),image);
  await expect(b.importArchive(await a.exportArchive())).rejects.toThrow('another account');expect((await b.next())!.image).toEqual(image);expect(a.stats().depth).toBe(1);expect(b.stats().depth).toBe(1);
 });
+it('preserves source policy/name edits and central pause through the actual Desktop source and M03 contract',async()=>{
+ const f=await fixture(),config=f.config(f.a),input=join(f.directory,'generated-secret.md');await writeFile(input,'Generated content must remain local after reference selection');
+ const sources=new LocalSourceManager(join(f.directory,'sources-policy'),config,'/generated/no-helper',true);cleanup.push(()=>sources.close());await sources.initialize();await sources.addFiles(input,{...DEFAULT_SOURCE_OPTIONS,retention:'archive'});await sources.sync(true);await sources.flushPending(new AbortController().signal);
+ const id=sources.status()[0].source.id,options={...DEFAULT_SOURCE_OPTIONS,retention:'reference' as const,enabled:true,redactLiterals:['secret']};await sources.update(id,options);await sources.sync(true);await sources.flushPending(new AbortController().signal);
+ const actual=await f.request(f.a.token,'/api/sources/'+id);expect(actual.json()).toMatchObject({retention:'reference',name:'generated-[REDACTED].md'});
+ expect((await f.request(f.a.token,'/api/sources/'+id,'PATCH',{enabled:false})).statusCode).toBe(200);await sources.update(id,{...options,retention:'snapshot'});await sources.sync(true);
+ await expect(sources.flushPending(new AbortController().signal)).rejects.toThrow();expect((await f.request(f.a.token,'/api/sources/'+id)).json().enabled).toBe(false);
+});
