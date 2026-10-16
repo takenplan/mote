@@ -1,8 +1,10 @@
 # M15 Android capability and acceptance ledger
 
-Production parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 final including M01/M03).
+Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 final including M01/M03).
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
-No M12 handoff is consumed. M13/M14 work in progress is not accepted dependency evidence.
+Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
+
+Current acceptance boundary: runtime9e Actions paging/visible retirement/modal control has three native GREEN cases and a12s fixture build; complete results are below. Later test-only candidates are explicitly uncompiled/unrun. Own final current-composition Android/full required checks, push and Draft PR are pending. Shared old arbitrary-file Import/Files/review/media/export has no stable equivalent M06 projection (M13's current contract map); it remains an explicit KEEP gap, not a removed capability or a successful empty result. Physical-device/live-provider checks remain separate.
 
 | Decision | Existing capability and real chain | Required account adaptation / evidence |
 | --- | --- | --- |
@@ -12,12 +14,12 @@ No M12 handoff is consumed. M13/M14 work in progress is not accepted dependency 
 | KEEP | SourceScanWorker/SourceProviders → LocalSourceStore; FileSources → FileArchiveQueue byte-preserving spool → SourceUploadWorker/FileUpload | Preserve calendar and selected files/folders, original/snapshot/reference, one-time/continuous scans, original bytes, late ACK and retry. Owner-specific cursor, configuration, registration and spool. |
 | KEEP | SyncSchedule/Heartbeat/Recovery/WorkManager | Preserve manual/timer/batch/network/charging conditions, cancellation/backoff, reconciliation and retention. Worker intent carries original owner; old worker cannot adopt B. |
 | KEEP | QueueStorage/QueueLocationStore, local browse, dedupe, export/import and diagnostics | Existing queue engine and encryption remain; account namespace precedes directory selection. Cross-owner archive restore must reject; retain A files. |
-| KEEP | CentralContent/CentralScreens/CentralClient native navigation, Ask, Library, configuration, plugins, administration, file/note drafts, media | One account shared with collection, immutable client/generation fences, scoped cache/drafts; username/password and browser handoff use M01. Per-domain wire adaptation recorded separately; M12 remains pending. |
+| KEEP | CentralContent/CentralScreens/CentralClient native navigation, Ask, Library, configuration, plugins, administration, file/note drafts, media | One account shared with collection, immutable client/generation fences, scoped cache/drafts; username/password and browser handoff use M01. Per-domain wire adaptation and remaining shared contract gaps are recorded separately; M12 public contract is now available. |
 | CHANGE | URL dataOrigin / token-hash source target; owner token login / invite | Stable normalized origin + server-verified deploymentId/userId; credential rotation retains owner; different deployment at same URL is different owner. Wire 2, Ingress 3. |
 | CHANGE | Local storage format 3 without stable account binding | Format 4 rejects old marker/config before writes; no auto-migration, deletion or inferred owner. Anonymous local collection remains explicitly local until user confirms binding. |
 | REMOVE | Treating HTTP success or legacy v2 receipt as sufficient ACK; same URL as owner | New account-bound complete M03 receipt must match owner/source/batch/capture set. |
 | EXCEPTION | Shared device settings, update artifacts, bundled OCR models and encryption key | Non-private installation resources remain shared; content/cursors/drafts are account-scoped. |
-| UNKNOWN | Real phone/vendor background behavior, live providers/models; M12-dependent action contract | Not exercised with real data; report independently. |
+| UNKNOWN | Real phone/vendor background behavior, system calendar permissions/native writes, live providers/models | Not exercised with real data; synthetic I/O and real phone/system-permission evidence are reported separately. |
 
 ## Evidence
 
@@ -279,3 +281,15 @@ Decision ledger: problem=old Android Actions consumes numeric cursors and retain
 The revised real producer completed21 A proposals and1 B proposal. Both original UI cases now have valid pre-fix failures on preserved881 fixture APK: `/tmp/m15-actions-paging-valid-red.log/.exit`1/1 EXIT1,0.762s (earlier page still20 instead of1), and `/tmp/m15-actions-resume-valid-red.log/.exit`1/1 EXIT1,0.887s (B resumes A's already-rendered proposals before any touch). No calendar permission is requested. M16's fixed6f5 combined gate is independent and does not cover this new UI fix.
 
 The minimal UI delta keeps a construction-time CalendarActions client, binds page work/results/buttons to that page owner, checks queued work under the existing ConnectionGuard, and retires the original list/status/poll/dialogs before recreating under another owner. Evidence/edit/date/time dialogs and detached callbacks share that retirement. The existing UI/navigation and calendar execution remain; opaque cursor strings are encoded and returned unchanged. This delta is intentionally UNCOMPILED/UNRUN until M16 releases the heavy window, then the identical native cases must pass. No runtime fix is claimed delivered from static review alone.
+
+Fresh9e runtime +242 control-test build `/tmp/m15-actions-ui-green-build.log/.exit` genuinely EXIT0,12s. Identical paging and visible-resume native cases now1/1 EXIT0 each: `/tmp/m15-actions-paging-first-green`0.926s and `/tmp/m15-actions-resume-first-green`0.982s. Additional existing evidence dialog/same-owner Activity recreation/switch control passes1/1 EXIT0,1.492s `/tmp/m15-actions-modal-first-green` (all `.log/.exit`). M13 independently bounded exact9e two-file delta, `/tmp/mote-m13-review-m15-9e824.md`, no new confirmed finding; no independent test rerun or whole native delivery claim.
+
+The separate generated calendar I/O test uses ContentResolver.wrap of an unregistered ContentProvider, never the system resolver, and asserts the isolated app lacks both calendar permissions. Its first attempt reached one native insert followed by an uncertain receipt, then failed because the test queried an unregistered GET /actions/:id (503). `/tmp/m15-actions-native-io-first.log/.exit` is retained as fixture/API mismatch, not product RED or full acceptance. The test now reads the formal Actions list and checks account isolation there; pending compilation and rerun after the currently held M16 window. Adapter reconstruction from files is explicitly different from real OS SIGKILL.
+
+### Desktop restart recovery,16:04UTC
+
+The actual executable environment returned after the parent reported the desktop restart. Workspace was clean exact2f892217; prior M15 backend PIDs70108/62614 no longer existed, the old PTY returned executor-key-changed/transport-disconnected, and emulator5562 was absent. No healthy process was killed and no completed test was rerun. Existing build/native success and fixture failure logs remain intact. The adb read started its normal daemon but did not boot an emulator or grant permissions. M16 owns resumed107 required; M15 remains released and will restore only the confirmed-stopped fixtures/emulator in its next coordinated window.
+
+Current test-only follow-ups64b/ffe/2f892/4b323/f129 are UNCOMPILED/UNRUN: formal overview statistics/devices, private Notes resume before a blocked account resolver, Actions settings revision envelope, and old CalendarActionWorker permission-check/account-admission race. These are candidates, not confirmed new failures. Calendar control509 corrects only its unregistered single-item reader, preserving the already-observed actual uncertain stage. Independent native journeys get two distinct generated B proposals; the earlier three successful UI cases used the original21A/1B producer and are not relabeled as reruns on the later fixture.
+
+The explicitly frozen M12/M16 literal10748005 was merged as04b929d6. Conflict resolution retained the M15-only native tests/ledger and incoming M16 evidence append; no Android source/test byte changed relative to95475. `dcad6088` is an ancestor, and all Android main source is byte-identical to tested9e. New test-only candidates still need a testAPK; the future synthetic backend must start from the new combined server source. No old server process or native acceptance is relabeled as running107.

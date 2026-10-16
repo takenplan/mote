@@ -91,12 +91,12 @@ export function checkProductionImports(directory=root){
   // M11 uses only the existing pinned-address HTTP transport and fixed error
   // type. Neither constructs a legacy Store or connector service.
   for(const path of ['connectors/network.ts','connectors/types.ts'])allowed.add(sourceRoot+'/'+path);
+  // M12 moves existing pure field/output contracts out of the retired Store hosts.
+  for(const path of ['action-contract.ts','todo-contract.ts','actions-configuration.ts'])allowed.add(sourceRoot+'/'+path);
   // M16 reuses the bounded diagnostics implementation behind a metadata-only
   // projection, and the read-only signed-release checker. Neither opens a
   // private Store or executes updater commands; owner route registration is unused.
   for(const path of ['diagnostics.ts','updates.ts'])allowed.add(sourceRoot+'/'+path);
-  // M12 moves existing pure field/output contracts out of the retired Store hosts.
-  for(const path of ['action-contract.ts','todo-contract.ts','actions-configuration.ts'])allowed.add(sourceRoot+'/'+path);
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){

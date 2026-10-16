@@ -1,6 +1,109 @@
-# M14 Desktop validation checkpoint
+# M14 Desktop validation
 
-## Parent-directed pause and resumable boundary
+## Final resumed candidate and Draft PR139 update
+
+Fixed tested candidate: `45467379c5645dec62cc4b03e891b404b675193b`.
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration`
+actually exits **0**: `/tmp/m14-resumed-required-affected.log/.exit`.
+The command uses JDK21 and the installed Android SDK through standard approval
+for generated loopback fixtures, without real personal data or permissions.
+
+| Required component | Actual result |
+| --- | --- |
+| i18n, fresh libs and all workspace/root TypeScript | exit 0; 8439 synchronized bilingual messages |
+| Desktop | 60 files, **501/501**, exit 0 |
+| Server | **2626 pass / 0 fail / 1 default opt-in skip**, exit 0; 930.6s |
+| Web | **515/515**, no skip, exit 0 |
+| Agent | **317 pass / 0 fail / 1 opt-in skip**, exit 0 |
+| Diagnostics/shared/root/CLI and central runner | all required commands exit 0 |
+| Android JVM | actual Kotlin compile and test, **352/352**, no failure/error/skip; 74 XML files, Gradle 45s exit 0 |
+
+M13 independently reviewed the exact calendar/main/preload increment at
+`c56e4399`: `/tmp/mote-m13-review-m14-calendar-c56.md`, no new confirmed
+P0/P1/P2. The earlier exact `ceae83a5` original-source reader review is retained
+in `/tmp/mote-m16-review-m14-ceae.md`; ended M12/M16 were not awakened.
+M14 separately read the two-line M13 dialog surface fix `10f11f99` before
+composing it; its actual Web build/IAB proof belongs to M13, not an M14 rerun.
+
+After this tested candidate, only documentation is changed: reconcile the
+current source/manual guidance with format4, stable ownership, retained queues
+and the restored native calendar journey, and record these results. Runtime,
+tests, build scripts and protocol have zero diff from the tested candidate.
+The prior fresh Desktop build and generated native run at `0549b3a5` retain
+their exact artifact boundary below; their business logic is unchanged in the
+final candidate. No unnecessary repeat of those native checks is claimed.
+
+The delivery updates the existing Draft PR139 against
+`codex/mote-multiuser-integration`; remote SHA is independently verified and
+recorded in the final handoff after push. Main/integration remain untouched.
+All M14 test/provider/native processes have completed and the heavy window is
+released. There is no outstanding M14 approval or user-input request.
+
+This is M14 acceptance and a fixed consumer composition, not whole M13/M15 or
+joint acceptance. Further shared Files/Imports contracts belong to the joint
+thread; Docker epoch5/Hindsight restore, real system permissions, personal
+capture/calendar writes and real model accuracy are unverified. No deployment,
+merge or disabled CI change occurred.
+
+## Resumed native calendar consumer (current work)
+
+At `0549b3a5`, fresh libs exit 0; restricted Desktop build exits 1 at
+`iconutil`, and the exact command through standard approval exits 0:
+`/tmp/m14-resumed-{libs-build,desktop-build-authorized}.log/.exit`.
+The generated real Electron Desktop main/preload/renderer then passes:
+`/tmp/m14-calendar-native-journey.log/.exit`, exit 0. Actual button clicks
+register the native target, preserve the owner Actions login destination,
+deliver after actual fixed OwnerQuestions approval and settle M05. Original
+Ask citation, offline A queue, B stopped/empty state, SIGKILL/restart B and
+A draft/queue resume also pass (five generated provider requests).
+Native permission/write, capture, credentials and browser launch remain
+external I/O substitutes; no real system calendar or personal data is read.
+This candidate includes the explicitly frozen Android `220c175e`, whose
+production source is byte-identical in the composition. Final required affected
+and independent review remain pending.
+
+The parent restored this same M14 thread. Composition now includes delivered M16
+`eec967c6` (and delivered M12), tested Web `aed42550` and Android `9e824c00`.
+The pause section below is historical; PR139 is still at its earlier remote
+head until the resumed candidate passes its own final required affected.
+
+The actual Desktop calendar factory initially sends an obsolete protocol to
+real M01/M12: RED `594f75ee`, `m14-calendar-factory-red.log` exit 1. Only native
+permission I/O is substituted. The same case is GREEN at `5f0e5d33`.
+An expanded real consumer case then proves B inherits A's local `enabled` marker
+when server/device/directory match: RED `980204cf`, `calendar-owner-red.log`
+exit 1. `c91dd774` keys the existing ledger by stable account and device;
+`calendar-owner-green.log` is 9/9 exit 0 including the original algorithm suite.
+
+Permission held across retirement and replacement deployment both have actual
+RED at `f29feb28`, `calendar-retire-red.log` exit 1. `6336d50e` reuses current
+M01 self verification before native/private requests and checks captured main
+intent after awaits; the same tests plus original suite are 11/11 exit 0.
+The original account ledger retains an external fact after native completion,
+while the next request must prove current authority again.
+
+`c967138b` extends this to actual M12 fixed review/OwnerQuestions, M05 claim and
+receipt, native disk ledger, success ACK loss, backend restart, same-owner token
+rotation and late A native completion followed by B/A reconciliation. With
+the original seven algorithm cases, **13/13 exit 0**, 14.9s:
+`/tmp/m14-calendar-actual-journey-green.log/.exit`. The first sandbox command
+fails with loopback listen EPERM (exit 1); standard reviewed exact retry runs.
+Its first authorized run has a test-mock reset error (5/6), corrected only in
+fixture cleanup before the final run. No real EventKit permission/calendar,
+private data or external model is accessed. Main/preload/UI entry restoration
+and final affected checks are still pending; these results are not module final.
+
+Actual emitted main/preload entry has RED `8c9f9118` (missing API),
+`/tmp/m14-calendar-main-red.log` exit 1. The same case after the thin IPC entry
+passes with a separate B connection and rejection of retired A document.
+The first GREEN attempt only mismatched the expected rejection message (real
+trusted-document rejection precedes generation rejection); fixture expectation
+now accepts those two existing fences. The browser destination independently
+has actual RED (`#/ask` instead of `#/actions`). Both selected cases pass
+**2/2 exit 0**, `/tmp/m14-calendar-main-green2.log/.exit`; 49 unselected cases
+are not counted. Current synchronized i18n check is **8438**, exit 0.
+
+## Parent-directed pause and resumable boundary (historical)
 
 The parent instructed M14 to finish the running named-source repair, save a clean
 checkpoint and release this execution slot for M12. This is not module completion.
@@ -154,9 +257,6 @@ The browser opener, capture, calendar and credential store are external-I/O
 substitutes. This is the separately authorized Desktop fixture, not the denied
 M13 Web Electron action; no personal data, live model or system permission was
 accessed or changed.
-
-This is backend/consumer projection evidence, not yet the final affected check or
-acceptance of M16's separately discovered restart notification regression.
 
 ## Resumed M16 Activity consumption
 
@@ -548,20 +648,3 @@ feature/PR identity is reported in the final delivery note after verification.
 No merge/main/deployment is authorized. The remote integration ref remains
 6272a9b5. Physical-device, live-model, real permissions and production deployment
 checks remain unrun.
-
-## Archive list observes actual central OCR
-
-M13 pure server raw-reader freeze `0172bf14` is composed at `034555f5`, keeping
-the newer M16 import/rollback lifecycle and adding both derived tables to its
-deletion cleanup. RED `2c79cd6d` passes through real emitted main, M03 intake and
-a real M06 OCR task using a generated HTTP worker. M13's exact raw detail already
-shows the extraction, while the actual Desktop archive list still reports
-`disabled` and an empty preview (`/tmp/m14-archive-ocr-valid-red.log/.exit`,
-**0/1, exit 1**). The minimal consumer uses the existing scoped raw-preview
-reader, walks every signed page and retains the original local/session
-presentation. Immutable content intake keeps its existing `/captures` reader.
-The unchanged actual test passes **1/1, exit 0**, 3.10s,
-`/tmp/m14-archive-ocr-green.log/.exit`: list and detail show A's real published
-extraction, intake is unchanged and B's same-ID record retains its own raw state.
-The 33 unselected tests are not counted as acceptance. No raw projection, task
-runtime, classification rule or model service is added by Desktop.

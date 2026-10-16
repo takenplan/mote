@@ -9,7 +9,6 @@ export const english: Readonly<Record<string, string>> = {
   "请选择原部署和原账号的 Mote portable3 归档。": "Select a Mote portable3 archive from the original deployment and account.",
   "仅合并原部署和原账号的规范资料；当前设置、凭据和执行授权保持不变。": "Merges canonical data from the original deployment and account. Current settings, credentials and execution authority are preserved.",
   "重试需使用同一归档和原操作；刷新后请选择原文件。": "Retry with the same archive and operation. After refreshing, select the original file.",
-
   "实例诊断与更新检查仅向当前管理员开放。": "Instance diagnostics and update checks are available only to the current administrator.",
   "实例日志与更新配置由启动 YAML 管理，网页编辑协议尚待接入。": "Instance log and update settings use the startup YAML. Web editing is awaiting integration.",
   "实例诊断响应未声明安全元数据范围，未显示内容。": "The diagnostics response does not declare its safe metadata scope. Its content was not displayed.",
@@ -35,20 +34,6 @@ export const english: Readonly<Record<string, string>> = {
   "当前账号的存储统计与索引管理接口尚待接入。": "Storage statistics and index management for the current account are awaiting integration.",
   "当前支持账号归档；元数据和附件分别导出的接口尚待接入。": "Account archives are supported. Separate metadata and attachment exports are awaiting integration.",
   "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions have changed; the completed task record remains. Open the Memory to check the currently readable version.",
-  "归档必须来自当前实例和当前账号。": "The archive must come from the current instance and account.",
-  "个人归档只能合并回原实例的原账号，不恢复登录授权或后台任务。": "Personal archives can only merge into the original account on the original instance. Login authority and background tasks are not restored.",
-  "导入个人归档": "Import personal archive",
-  "重新选择同一归档重试": "Select the same archive again to retry",
-  "清除本机待确认请求": "Clear the pending request on this device",
-  "这只清除本机待确认请求，已在中央接收的任务仍会继续。": "This only clears the pending request on this device. Tasks already accepted by the central node will continue.",
-  "仅处理所选资料的固定版本；未选配方时沿用当前记忆设置。": "Process only the pinned versions of selected materials. Leave recipes unselected to use the current Memory settings.",
-  "已选择 {0} 份资料": "{0} materials selected",
-  "请选择至少一份资料。": "Select at least one material.",
-  "提交所选资料": "Submit selected materials",
-  "元数据单独导出的接口尚待接入；当前归档包含本账号的资料与可用原件。": "Separate metadata export is awaiting integration; the current archive includes this account’s data and available originals.",
-  "个人导出包含本账号的资料和已注册数据域，不包含登录凭据、执行授权或整实例备份。": "Personal exports contain this account’s data and registered domains, excluding login credentials, execution authority, and instance backups.",
-  "取消后将不能下载这份导出文件。": "Cancelling makes this export unavailable for download.",
-  "下载": "Download",
   "已删除": "Deleted",
   "生成 {0} 条记忆": "Created {0} memories",
   "已生成的批次": "Persisted batches",
@@ -8437,5 +8422,7 @@ export const english: Readonly<Record<string, string>> = {
   "留空保留已保存密钥。": "Leave blank to keep the saved secret.",
   "连接不存在，请重新读取。": "The connection no longer exists. Reload it.",
   "同步间隔不符合要求。": "The sync interval is invalid.",
-  "确认移除": "Confirm removal"
+  "确认移除": "Confirm removal",
+  "在中央网页逐条核对日程；只有已确认的建议会写入本机已有日历。连接与只读采集分别授权。": "Review each event in central web. Only confirmed suggestions are written to an existing local calendar. This connection is separate from read-only collection.",
+  "每来源待传上限 4000 版本 / 32 MiB。路径与待传正文只保存在本机私有来源目录，不进入支持包。同步状态按服务器实例与账号归属；同一账号更换凭据保留原队列，切换账号不会发送原账号待传版本。": "Each source can queue 4,000 versions / 32 MiB. Paths and pending text stay in a private local source directory and are excluded from support bundles. Sync state belongs to the server deployment and account. Credential rotation within an account retains its queue; switching accounts never sends the previous account's pending versions."
 };
