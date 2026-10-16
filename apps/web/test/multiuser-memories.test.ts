@@ -24,6 +24,7 @@ test('original Memories reads real M07 publication and opens its evidence throug
  const card=d.querySelector<HTMLButtonElement>('.workspace-select');assert.ok(card,'actual M07 published memory is visible through the original page: '+d.body.textContent);
  assert.ok(calls.some(call=>call.path==='/api/memory/jobs'&&call.status===200),'existing job history consumes actual M07 jobs');
  assert.match(card.textContent!,/Generated A/);assert.doesNotMatch(d.body.textContent!,/Generated B/);
+ const completed=d.querySelector<HTMLButtonElement>('.memory-job-history button');assert.ok(completed);await act(async()=>{completed.click();await delay(20);});for(let n=0;n<20&&!d.querySelector('.memory-progress');n++)await act(async()=>delay(10));assert.match(d.querySelector('.memory-progress')!.textContent!,/记忆提取完成/);assert.doesNotMatch(d.querySelector('.memory-progress')!.textContent!,/输入方案/);
  await act(async()=>{card.click();await delay(30);});assert.match(d.querySelector('.memory-detail')!.textContent!,/Nora prefers generated tea/);
  const evidence=d.querySelector<HTMLButtonElement>('.memory-evidence .evidence-card');assert.ok(evidence);await act(async()=>evidence.click());
  assert.match(opened[0],/^context:capture:/,'M07 normalized evidence belongs to the context reader, not raw captures');
