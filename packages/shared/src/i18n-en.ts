@@ -8443,5 +8443,12 @@ export const english: Readonly<Record<string, string>> = {
   "说话人分离处理器": "Speaker diarization processor",
   "说话人数": "Speaker count",
   "最长录音时长（分钟）": "Maximum recording duration (minutes)",
-  "处理超时（毫秒）": "Processing timeout (milliseconds)"
+  "处理超时（毫秒）": "Processing timeout (milliseconds)",
+  "新建连接": "New connection",
+  "编辑连接": "Edit connection",
+  "连接 ID": "Connection ID",
+  "Google 客户端 ID": "Google client ID",
+  "Google 客户端密钥": "Google client secret",
+  "保存连接": "Save connection",
+  "自动同步": "Automatic sync"
 };

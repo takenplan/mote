@@ -621,17 +621,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     fun connectors() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        listOf("google" to "Google 日历", "gmail" to "Gmail").forEach { (provider, title) ->
-            ui.text(MoteI18n.text(title), NativeFontRole.SECTION)
-            ui.button(MoteI18n.text("连接")) { action("/api/connectors/$provider/start") { value ->
-                val url = Uri.parse(value.getString("authorizationUrl"))
-                require(url.scheme == "https" && url.host == "accounts.google.com")
-                ui.startActivity(Intent(Intent.ACTION_VIEW, url))
-            } }
-            ui.button(MoteI18n.text("立即同步"), true) { action("/api/connectors/$provider/sync") }
-            ui.button(MoteI18n.text("断开连接")) { val api = client; ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/$provider") }) { screens.refresh() } }
-        }
-        ui.button(MoteI18n.text("选择 Google 日历")) { calendarSelection(false) }
+        CentralConnectors(screens) { value, target -> values(value, target) }.show()
         ui.button(MoteI18n.text("录音归档")) { recordings() }
         read("/api/connectors")
         ui.button(MoteI18n.text("飞书")) { ui.navigate("lark") }
