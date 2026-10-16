@@ -23,8 +23,8 @@ export function registerAsk(runtime:ScopedRuntime,db:DatabaseSync,configuration:
  for(const action of ['cancel','pause','resume'] as const)registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action,handle:({context,request})=>service(context)[action](id(request))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces',handle:({context,request})=>service(context).traces(id(request))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations',handle:({context,request})=>service(context).createConversation(request.body??{})});
- registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations',handle:({context})=>service(context).conversations()});
- registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id',handle:({context,request})=>service(context).conversation(id(request))});
+ registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations',handle:({context,request})=>service(context).conversations(request.query)});
+ registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id',handle:({context,request})=>service(context).conversation(id(request),request.query)});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'DELETE',url:'/api/conversations/:id',handle:({context,request})=>service(context).deleteConversation(id(request))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations/:id/compact',handle:({context,request,reply})=>duringRequest(request,reply,signal=>service(context).compact(id(request),{signal}))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insights',handle:({context,request,reply})=>duringRequest(request,reply,signal=>service(context).insight(insightInputSchema.parse(request.body??{}),{signal}))});
