@@ -29,3 +29,8 @@ test('calendar approval checks explicit timezone and native target before issuan
  assert.equal((await f.request(wrong.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).statusCode,403);assert.equal((await f.request(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'wrong-device'})).statusCode,403);
  assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),0);assert.equal((await f.ok(f.a.token,'/api/actions')).items[0].operationId,approved.operationId);
 });
+
+test('an event that expires after exact approval cannot obtain its first external issuance',async t=>{
+ const f=await modelFixture(t);await f.ingest(f.a,'A');await f.enable(f.a);await f.ok(f.a.token,'/api/actions/targets','POST',{deviceId:'same-device',deviceName:'Generated',calendars:[{id:'same-calendar',title:'Generated'}]});const a=(await f.proposal(f.a)).items[0],now=Date.now(),event={...a.event,start:new Date(now+30000).toISOString(),end:new Date(now+60000).toISOString()};await f.ok(f.a.token,'/api/actions/'+a.id+'/confirm','POST',{version:a.version,event,target:{deviceId:'same-device',calendarId:'same-calendar'}});
+ t.mock.timers.enable({apis:['Date'],now:now+120000});assert.equal((await f.request(f.a.token,'/api/actions/'+a.id+'/claim','POST',{deviceId:'same-device'})).statusCode,409);assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM task_external_calls WHERE user_id=?').get(f.a.userId)!.n)),0);t.mock.timers.reset();
+});
