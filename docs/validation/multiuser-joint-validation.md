@@ -416,3 +416,16 @@ actual stale receipt is not relabelled waitingForModel. Media job links also joi
 actual owner mm_jobs. New known-model-wait/paused/backoff/restore branches remain
 unverified, as does semantic extraction accuracy; current code still needs final
 types/affected/compiled/client acceptance.
+
+
+Partial instance recovery now has its separate actual case: before second M03
+record publication a generated fault leaves exactly one committed record and
+one durable checkpoint. Stop -> real epoch5 backup -> fresh target restore ->
+old confirmation409 -> fresh model preview with zero new publications -> explicit
+owner confirmation imports only the second record and deduplicates the first;
+the original first capture ID survives. 1/1/no skip/EXIT0, 7.43s in
+/tmp/mote-joint-import-partial-instance-restore.log/.exit. It uses actual M01/M03/
+M04/M05/M06/SQL/FS/backup entry points with a synthetic model transport. No
+production change was needed for this scenario. Unknown external results, image
+profile parity, remaining Memory states and the previously listed Files gaps
+remain OPEN; this case does not replace a final candidate gate.
