@@ -1114,7 +1114,7 @@ function renderAsk(): void {
   for (const turn of askConversation?.turns ?? []) {
     const article = document.createElement('article'), question = document.createElement('h3');
     question.textContent = turn.question;
-    const openEvidence = (id: string) => void askAction(() => desktopApi.openCentral('ask', id));
+    const openEvidence = (id: string) => void askAction(() => desktopApi.openCentral('ask', 'context:'+id));
     article.append(question, renderAskAnswer(document, turn.result?.answer ?? turn.error?.message ?? moteText('回答未完成'), turn.result?.citations ?? [], openEvidence));
     for (const citation of turn.result?.citations ?? []) article.append(renderAskCitation(document, citation, openEvidence));
     messages.append(article);

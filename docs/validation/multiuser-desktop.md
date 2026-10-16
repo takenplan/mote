@@ -69,6 +69,41 @@ request cannot be retracted across a server replacement during that flight; this
 guard admits the next request only under its confirmed stable owner. No protocol,
 runtime, owner key, retry algorithm or system network setting is introduced.
 
+M13 independently reviewed exact c18ca001's four runtime files without new
+confirmed P0/P1/P2 (`/tmp/mote-m13-review-m14-c18.md`). M16 independently reviewed
+exact96cd160a's lifecycle Activity and production composition without new
+confirmed P0/P1/P2 (`/tmp/mote-m16-review-m14-96cd.md`). These were bounded static
+reviews, not independently rerun suites.
+
+At composition `6c239a23` (M15 stable8c92/backup473, M13 f1 and exact Vault07f54,
+M16 ec6 and M14 c18), fresh shared build and Desktop typecheck exit 0. The first
+full Desktop run exits 1: 462/488 pass, 26 failures include restricted loopback
+`listen EPERM`, native watcher/background fixture restrictions and timeouts.
+`/tmp/m14-c18-desktop-full.log/.exit` is retained. The exact suite was then
+allowed by standard review and passes **59 files, 488/488, exit 0**, 68.99s:
+`/tmp/m14-c18-desktop-full-approved.log/.exit`. Its standalone generated Desktop
+background-policy fixture loads only a generated data page; this is not M13's
+denied Web Electron action. No real capture, calendar, credential store or
+external model was accessed, and no permissions or network settings changed.
+New later runtime changes still require affected validation on their final SHA.
+
+### Declared Ask evidence handoff
+
+RED `9e8e34f6`, `/tmp/m14-ask-context-red.log/.exit`, **0/1, exit 1**: an actual
+M07 canonical preview supplies evidence that is absent from raw M02 captures;
+M08 reads A's canonical body while B gets404. The production main/preload browser
+handoff rejects its explicitly declared context reader. Ask's UI citation callback
+now marks that reader, and the existing central-browser handoff preserves it as
+`context:capture:<id>`. Ingestion evidence keeps the raw reader. No error-driven
+fallback or new backend read authority is introduced.
+
+`/tmp/m14-ask-context-green.log/.exit`: **2/2 selected, exit 0**, same actual
+M07/M08→main/preload→browser-route test plus strict context namespace validation.
+The real Web evidence route retains the marker. Browser launch is external-I/O
+substitution; this is not a live-model Ask run or native renderer citation click.
+No unselected case is reported as passed, and the later full affected/native
+evidence must identify its actual coverage.
+
 This is an in-progress evidence record, not final acceptance or a delivery claim.
 Work is isolated in task-18/mote on `codex/mote-multiuser-m14-desktop`.
 The dirty original checkout was not modified. Initial characterization uses
