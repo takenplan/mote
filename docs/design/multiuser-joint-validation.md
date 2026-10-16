@@ -69,3 +69,14 @@ host-control transport and task checkpoint without publishing domain products.
 UNKNOWN: image profile/attachment equivalence, full partial-recovery/unknown-result
 and Memory recipe progress, deletion reclamation and remaining Files controls are
 still acceptance blockers. No success is inferred from a partial route adapter.
+
+
+Import progress admission seam: KEEP M05/M08 as execution/job authorities.
+CHANGE only the read projection when an intake has reserved a job ID but job
+admission failed before the job row existed: report its actual owner intake task
+state, and link only existing owner jobs. REMOVE the implicit assumption that a
+proposed ID proves a created job. EXCEPTION no failure is interpreted as semantic
+success or model waiting unless the actual task code says so. UNKNOWN model-wait
+backoff/paused/partial-instance-restore variants still need execution. Basis:
+generated missing-model actual Import404 RED -> exact case plus selected-recipe
+batch/cancel/B-positive GREEN; no additional engine, grant, model or store.

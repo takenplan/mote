@@ -395,3 +395,24 @@ GC failure -> committed deletion/pending GC -> retry; actual Originals.pin ->
 metadata deletion/physical retention -> release -> physical GC. This closes these
 concrete branches, not partial instance-restore or every ambiguity/external-I/O
 path. No final types/affected/compiled/client acceptance is inferred.
+
+
+Non-disabled Memory progress now has two concrete real entry cases, not merely
+SQL seed coverage. /tmp/mote-joint-import-memory-composed-green.log/.exit is
+2/2/no skip/EXIT0, 13.53s: same import ID A/B, two original records and two
+selected recipes per owner, actual M03/M06/M08 workers with two-record batches,
+then A cancellation of one selected recipe while its sibling commits. Both
+selected recipes must complete before an original is completed; cancelled A
+originals do not inherit B completion. The external model transport supplies
+generated empty candidates with exact target coverage, not real model accuracy.
+
+The missing-A-model case exposed an actual GET Import404 while the saved import
+and original existed: mm_intakes had a proposed job_id but admission's actual
+M05 task was stale/grant_revoked before mm_jobs existed. That failure is retained
+in /tmp/mote-joint-import-memory-model-wait-red2.log/.exit. Projection now catches
+only that missing Memory job, reads its actual intake task, and exposes failed
+progress without a nonexistent job link; B completes through B model only. The
+actual stale receipt is not relabelled waitingForModel. Media job links also join
+actual owner mm_jobs. New known-model-wait/paused/backoff/restore branches remain
+unverified, as does semantic extraction accuracy; current code still needs final
+types/affected/compiled/client acceptance.
