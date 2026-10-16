@@ -124,3 +124,17 @@ Additional old capability gap reported by M14: `scripts/client.ts` and
 `scripts/import-files.ts` still use the legacy wire/Ingress, token-hash binding
 and old source routes. Their old fake-fetch tests do not prove a scoped CLI
 consumer. Track this explicitly in M16's old-capability closure.
+
+## Registry change during physical erasure
+
+A real registered extension adding a private domain while deletion was running
+could leave A's rows and still produce `completed`. The generated actual DELETE
+regression fails 0/1 in `/tmp/m16-delete-registry-red.log/.exit` (exit 1).
+Completion now rechecks the registered domain set. A changed registry yields
+`blocked/domain_registry_changed`; explicit administrator retry adds durable
+per-domain grants under the existing approved account operation, retaining prior
+completed domains and missing-domain blockers. `/tmp/m16-delete-registry-green.log/.exit`:
+lifecycle + authentication **18/18 exit 0**, A late-domain rows erased once, B
+unchanged, no grant or private-query delegation to the administrator. No export
+receipt or content protocol changed. Backup checkpoint f33 remains separately
+reviewable; this later server delta requires its own final composition checks.
