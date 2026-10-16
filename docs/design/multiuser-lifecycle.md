@@ -2,7 +2,8 @@
 
 This work starts at the clean M14 composition `9bc65b53d5823443ad1ecffb49d2c6eecc687927`.
 All runtime validation uses generated accounts and disposable directories. The
-M12 handoff is not authorized; its interface and final composition are pending.
+M12 handoff was unauthorized at the initial checkpoint; its later authorized
+resumption is recorded below. Its final composition is still pending.
 
 | Disposition | Original capability | M16 responsibility |
 | --- | --- | --- |
@@ -159,8 +160,8 @@ The original multi-user recommendation is linked there as thread
 approvals for its individual implementation details. The parent additionally
 confirmed original-deployment/original-account personal import and delegated
 ordinary technical decisions. There is currently no M16 question or approval
-waiting on the user. M12's rejected cross-thread handoff remains outside this
-work and is not a request being retried here.
+waiting on the user. M12's later parent-authorized resumption is recorded below;
+no earlier rejected action is delegated or retried by M16.
 
 | Problem | Decision and existing authority | Reason / impact | Executed verification / remaining limit |
 | --- | --- | --- | --- |
@@ -178,3 +179,16 @@ boundaries must be reported to the parent with a recommendation before changing
 product direction. Current final checks, exact SHAs and remaining gaps are listed
 in the [validation ledger](../validation/multiuser-m16-lifecycle.md); historical
 passing checkpoints do not validate later runtime changes.
+
+
+### Authorized M12 resumption after this candidate freeze
+
+After candidate `589d6ad7` was frozen and its required check started, the parent
+explicitly restored the original M12 conversation. Earlier handoff restrictions
+are historical; M16 began bounded read-only review only after that new trusted
+instruction. This does not retroactively include M12 in the running candidate.
+Its Actions unknown-result deletion correction, explicit Actions/Todos import
+policies and complete offline table/column plus authority-retirement contract
+remain owning-module prerequisites for a later combined freeze. No ended
+M14/M11 conversation is awakened, and no previously rejected operation is
+reissued through another thread.

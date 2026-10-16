@@ -499,3 +499,50 @@ paused automatic authority, succeeded/unknown external journals, all new device
 cursor corruption cases, and personal-import restart fences. This invocation uses
 the source host; fresh compiled/package-host verification remains a distinct final
 build step. It does not execute Docker daemon/native Hindsight recovery.
+
+
+## Final consumer candidate and compiled checkpoint
+
+Candidate `589d6ad7c4a36de21cb105a7be41a599d0fae1df` adds only the frozen
+consumer increments after the earlier source-host 37/37 checkpoint:
+
+- M13 original Web picker `23b347c9`/`ee4bb999` plus actual malformed import
+  receipt RED `e674a68f` and fix `5df66796`. The bounded M16 review initially
+  reported the completed-domain closure P2; unique complete declared coverage,
+  per-domain states, exact phase and no-artifact validation now close it. Root
+  picks are `21c834bc`, `b1f2fa33`, `1809c5d1`, `822eda00`.
+- M14 actual named-source reader RED `ace31bdf` and fix `ceae83a5`: actual
+  owned source inventory and exact original binding replace a guessed source.
+  Root picks `c5d55633`/`6c186a64`; static review found no additional confirmed
+  P0/P1/P2. M14's same actual two cases pass, including image and raw detail.
+- M15 device-only OCR RED `d83705d1` and fix `2ff31228`, plus visible archive
+  account-resume RED `ac16d97e` and fix `10a1de3d`; root picks
+  `0cef4324`/`b2adce9c` and `2108df2f`/`589d6ad7`. Bounded M16 reviews found
+  no additional confirmed issue. Native original-entry positives remain M15's
+  executed evidence; this review did not rerun an emulator or physical device.
+
+Only the incoming commits' new validation sections were appended when peer
+history differed; the existing root history and runtime adapters were retained.
+Shared/Android bilingual catalogs agree at 8421 keys, and the scope checker exits
+0. An initial manually typed nonexistent `check-scope-inventory.mjs` command
+failed MODULE_NOT_FOUND without running a checker; the actual
+`node scripts/check-scope-contracts.mjs` then passed. This is a verification-command
+correction, not a product failure or a skipped check.
+
+Fresh `npm run build:central` at this candidate exits 0,
+`/tmp/m16-final-central-build.log/.exit`. The existing Vite large-chunk advisory
+is nonfatal. Then:
+
+```
+MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1 node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-instance-backup.test.ts apps/server/test/multiuser-backup-capture-updates.test.ts
+```
+
+passes **23/23, exit 0, no skips** in 24 seconds,
+`/tmp/m16-final-compiled-backup.log/.exit`. The primary instance suite uses the
+fresh compiled production process and package CLI projection, including process
+restart, actual native Mem0 SDK canonical data, conversations, original files,
+execution retirement and successful/unknown external journals. The appended
+capture-journal suite exercises the actual source host and stopped archive helper;
+it is not mislabeled as a second compiled-host test. No real Docker daemon/volume
+or native Hindsight recovery was exercised. Required affected is a separate
+ongoing command recorded after completion.
