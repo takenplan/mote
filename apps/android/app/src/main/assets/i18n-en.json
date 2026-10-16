@@ -6332,6 +6332,7 @@
   "服务暂时限流，将自动继续": "Service temporarily rate limited. The queue will continue automatically.",
   "客户端登录": "Client login",
   "允许「{0}」登录并使用所有中央功能。": "Allow “{0}” to sign in and use all central features.",
+  "允许「{0}」连接为采集设备。": "Allow “{0}” to connect as a collection device.",
   "继续登录客户端": "Continue client login",
   "客户端已登录，可返回客户端继续。": "The client is signed in. Return to the client to continue.",
   "请升级中央节点后再登录。": "Upgrade the central node before signing in.",
