@@ -89,20 +89,38 @@ internal class Ingress3Client(
 }
 
 internal object Ingress3Receipt {
+    // Android JSONObject escapes every slash; the server hashes JSON.stringify bytes.
+    // Keep this identity encoding separate from legacy local canonicalization.
+    private fun identity(vararg values: String): String = SourceRules.hash(values.joinToString(",", "[", "]") { value ->
+        buildString {
+            append('"')
+            for ((index, char) in value.withIndex()) when (char) {
+                '"' -> append("\\\"")
+                '\\' -> append("\\\\")
+                '\b' -> append("\\b")
+                '\u000c' -> append("\\f")
+                '\n' -> append("\\n")
+                '\r' -> append("\\r")
+                '\t' -> append("\\t")
+                else -> if (char.code < 32 || (char.isHighSurrogate() && (index + 1 == value.length || !value[index + 1].isLowSurrogate())) || (char.isLowSurrogate() && (index == 0 || !value[index - 1].isHighSurrogate()))) append("\\u%04x".format(char.code)) else append(char)
+            }
+            append('"')
+        }
+    })
     fun captureId(sourceId: String, item: JSONObject): String {
-        val hash = SourceRules.hash(JSONArray().put(sourceId).put(item.getString("externalId")).put(item.getString("revision")).toString())
+        val hash = identity(sourceId, item.getString("externalId"), item.getString("revision"))
         return "${hash.take(8)}-${hash.substring(8,12)}-5${hash.substring(13,16)}-a${hash.substring(17,20)}-${hash.substring(20,32)}"
     }
     fun require(owner: AccountBinding, source: String, batch: String, ids: List<String>, receipt: JSONObject) {
         check(receipt.opt("version") == 3 && receipt.optString("state") == "received" && receipt.optString("deploymentId") == owner.deploymentId && receipt.optString("userId") == owner.userId && receipt.optString("sourceId") == source && receipt.optString("batchId") == batch)
-        val receiptId = SourceRules.hash(JSONArray().put(owner.deploymentId).put(owner.userId).put(source).put(batch).toString())
+        val receiptId = identity(owner.deploymentId, owner.userId, source, batch)
         check(receipt.optString("id") == receiptId)
         val captures = receipt.getJSONArray("captures")
         check(captures.length() == ids.size && ids.toSet().size == ids.size)
         for (index in ids.indices) { val ack = captures.getJSONObject(index); check(ack.optString("id") == ids[index] && ack.opt("duplicate") is Boolean) }
     }
     private fun original(owner: AccountBinding, source: String, capture: String, hash: String, bytes: Long, mime: String, retention: String, value: JSONObject) {
-        val ref = "original:" + SourceRules.hash(JSONArray().put(owner.userId).put(source).put(capture).put(hash).put(mime).put(retention).toString())
+        val ref = "original:" + identity(owner.userId, source, capture, hash, mime, retention)
         check(value.optString("ref") == ref && value.optString("sourceId") == source && value.optString("captureId") == capture &&
             value.optString("hash") == hash && value.optLong("bytes", -1) == bytes && value.optString("mime") == mime && value.optString("retention") == retention)
     }
