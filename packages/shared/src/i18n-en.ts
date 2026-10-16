@@ -1,5 +1,6 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "这些记录仅供本人审阅，不参与问答。审阅列表暂不使用时间、搜索和分类筛选。": "These records are for your review only and are not used in answers. Time, search and category filters are not yet available for this review list.",
   "查看删除进度": "View deletion progress",
   "删除账号": "Delete account",
   "账号访问已撤销；清除结果以此回执为准。": "Account access has been revoked. This receipt records erasure progress.",

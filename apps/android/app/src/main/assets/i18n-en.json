@@ -8392,5 +8392,6 @@
   "删除账号": "Delete account",
   "账号访问已撤销；清除结果以此回执为准。": "Account access has been revoked. This receipt records erasure progress.",
   "确认后立即撤销此账号访问，并按持久回执清除资料。外部结果不确定时不会显示清除完成。": "Confirmation immediately revokes this account’s access and starts durable erasure. An uncertain external outcome is not shown as completed erasure.",
-  "确认删除账号": "Confirm account deletion"
+  "确认删除账号": "Confirm account deletion",
+  "这些记录仅供本人审阅，不参与问答。审阅列表暂不使用时间、搜索和分类筛选。": "These records are for your review only and are not used in answers. Time, search and category filters are not yet available for this review list."
 }
