@@ -12,7 +12,9 @@ journeys pass narrowly; detailed exact-SHA evidence follows below. Own full Andr
 353/353 and production build pass on48a. Final required affected, independent final
 review, push and Draft PR remain pending. Shared arbitrary-file Imports/preview/review and remaining Files acoustic/
 controls are still explicit KEEP gaps awaiting the Joint backend owner. QR pairing
-has no tested replacement for the old invitation exchange. Physical-device and
+has no tested replacement for the old invitation exchange; the parent now owns
+scheduling that finite common task when the fourth slot releases, not a pending
+user decision and not a new Android-owned backend. Physical-device and
 live-provider checks are separate. No total test count closes these gaps.
 
 Newer limited runtime49347f929c3919a6e8471efbe458e6c0806a79fa adds the original
@@ -534,12 +536,14 @@ no silent model/tier fallback is implemented. This is interface preflight, not
 real-model answer validation. The prepared synthetic host is ready; Native Ask
 execution still waits for its test APK compilation after the resource window.
 
-QR pairing remains an explicit product-flow decision: the owner was asked whether
+Historical QR question (superseded by the parent's later scheduling instruction): the owner was asked whether
 to reuse M01 device PKCE/browser approval after scanning server metadata, or to
 retain a one-step exchange by adding a new account-bound invitation contract.
-Neither option is implemented or presumed selected without the actual response.
-The extra step is a user-facing behavior choice under AGENTS.md and the existing
-multiuser/client ADRs; it is distinct from a request to expand device permissions.
+The parent has since clarified that ordinary decisions are already authorized for
+the parent to resolve and that a finite public pairing task will be assigned when
+the fourth slot releases. Android does not wait for the earlier question or
+implement a competing QR backend. The existing QR capability remains open until
+that actual common contract and its consumer acceptance are delivered.
 
 ### Original Lark entry characterization prepared (4b16dc20)
 
