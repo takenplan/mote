@@ -57,6 +57,9 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
  admit?:(task:ExecutionStep)=>ExecutionFailure|undefined;
  execute:(run:TaskRun)=>Promise<unknown>;
  commit?:(run:TaskRun,result:unknown)=>void;
+ /** Domain-owned bodies live in its scoped artifact store; task receipts can
+  * retain a bounded locator without copying a report into task metadata. */
+ publicResult?:(result:unknown)=>unknown;
  classify?:(error:unknown)=>ExecutionFailure;
  /** Portable input must be explicitly credential-free; otherwise export omits
   * the payload and portable recovery stays unavailable for that task kind. */
@@ -155,7 +158,7 @@ export class TaskExecution {
     };
     const result=await handler.execute(run);grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure('blocked','external_result_unknown');return {value:result,run};
    },
-   commit:(step,result)=>{this.assertTask(step);const {run,value}=result as {run:TaskRun;value:unknown};this.authority.assert(run.context);handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(value??null),step.id);},
+   commit:(step,result)=>{this.assertTask(step);const {run,value}=result as {run:TaskRun;value:unknown};this.authority.assert(run.context);handler.commit?.(run,value);this.db.prepare('UPDATE user_tasks SET result=? WHERE task_id=?').run(json(handler.publicResult?handler.publicResult(value):value??null),step.id);},
    project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);},
    classify:error=>error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','grant_revoked'):handler.classify?.(error)??new ExecutionFailure('permanent','task_failed'),
   });

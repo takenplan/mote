@@ -77,6 +77,9 @@ export function checkProductionImports(directory=root){
   // M07 reuses these pure Memory contracts and exact-output/review/publication
   // validators; none constructs a legacy Store, scheduler or provider runtime.
   for(const path of ['memory-image-proof.ts','memory-owner-correction.ts','capture-memory-source.ts','memory-range-chunks.ts','material-readiness.ts','hindsight-runtime.ts','memory-schema.ts','memory-errors.ts','memory-contract.ts','memory-review.ts','memory-provider-contract.ts','memory-provider-publication.ts','memory-deletion-review.ts','memory-strategies.ts','memory-work-contract.ts','memory-strategy-contract.ts','memory-range-selection-policy.ts','memory-integration-policy.ts','memory-configuration.ts','mem0-memory-provider.ts','hindsight-engine.ts','worker-memory-provider.ts'])allowed.add(sourceRoot+'/'+path);
+  // M08 shares pure evidence scope, presentation, measurement, report and control contracts.
+  // Every private repository remains behind its context-bound ScopedServices facade.
+  for(const path of ['activity-measurement.ts','media-activity.ts','context-query-core.ts','context-navigation.ts','evidence-range.ts','delegation-controls.ts','delegation-protocol.ts','insights.ts'])allowed.add(sourceRoot+'/'+path);
   // M06 constructs only the existing shared processor registry and uses pure
   // recipes, decoder subprocess, transport and fingerprint algorithms. No
   // legacy private Store is constructed; scoped Original/TaskRun provide I/O.
@@ -117,7 +120,7 @@ export function checkScopes(directory=root){
  * installation is the explicit, inventoried exception; it is never a user API.
  * This detects new bypasses, and complements real A/B and composite-FK tests. */
 export function privateSqlViolations(source,path){
-  if(path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/memory-schema.ts'||path==='apps/server/src/scope/processing-schema.ts')return [];
+  if(path==='apps/server/src/scope/private-data-schema.ts'||path==='apps/server/src/scope/private-data-sql.ts'||path==='apps/server/src/scope/ingress-schema.ts'||path==='apps/server/src/scope/memory-schema.ts'||path==='apps/server/src/scope/ask-schema.ts'||path==='apps/server/src/scope/processing-schema.ts')return [];
   const failures=[],tree=ts.createSourceFile(path,source,ts.ScriptTarget.Latest,true);
   function visit(node){
     if(ts.isCallExpression(node)&&ts.isPropertyAccessExpression(node.expression)){

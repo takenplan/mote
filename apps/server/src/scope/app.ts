@@ -1,3 +1,6 @@
+import {registerAsk} from './ask-routes.js';
+import {AskError} from './ask-schema.js';
+import type {AskHost} from './ask.js';
 import {registerScopedConnectors} from './connector-routes.js';
 import type {ScopedConnectors} from './connectors.js';
 import type {ConnectorTransports,ConnectorDefinition} from './connector-contract.js';
@@ -42,6 +45,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
   let plugins:ScopedPluginHost|undefined;
   let connectors:ScopedConnectors|undefined;
   let memory:MemoryHost|undefined;
+  let ask:AskHost|undefined;
   let processing:ProcessingHost|undefined;
   try{
     const app=Fastify({logger:false});
@@ -51,11 +55,11 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     const execution=taskAuthorization?new TaskExecution(storage.db,authority,services,taskAuthorization):undefined;
     const runtime={app,authority,services,...(!options.verifier?{accounts}:{})};
     app.setErrorHandler((error,_request,reply)=>{
-      const failure=error instanceof ScopedMemoryError||error instanceof ConnectorError||error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
+      const failure=error instanceof AskError||error instanceof ScopedMemoryError||error instanceof ConnectorError||error instanceof ScopeError||error instanceof AuthError||error instanceof ConnectionError||error instanceof PrivateDataError||error instanceof TaskError||error instanceof ConfigServiceError?error:error instanceof StoreError?new TaskError(error.statusCode===404?'not_found':error.statusCode===409?'conflict':'execution_unavailable',error.statusCode):error instanceof ZodError?new AuthError('invalid_request',400):new ScopeError('scope_unavailable',503);
       return reply.code(failure.statusCode).send({error:failure.code});
     });
     if(!options.verifier)registerAuthentication({...runtime,accounts},config.configuration?.publicUrl);
-    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','connectors','memory']:[])]}));
+    app.get('/api/health',async()=>({ok:true,mode:'multiuser-auth',protocol:{min:SCOPE_BASELINE.wireProtocol,max:SCOPE_BASELINE.wireProtocol},storageEpoch:SCOPE_BASELINE.storageEpoch,authentication:'username-password',privateCapabilities:['private-data','configuration','ingress',...(execution?['execution','plugins','processing','connectors','memory','ask']:[])]}));
     registerPrivateData(runtime,storage.db);
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority:options.lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
@@ -68,10 +72,11 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     });
     if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins);await processing.ready();}
     if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);}
+    if(execution&&memory)ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
-    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
+    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
-    app.addHook('onClose',async()=>{await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,deploymentId:storage.deploymentId};
-  }catch(error){await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
+    app.addHook('onClose',async()=>{await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();accounts.close();storage.close();});
+    return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,ask,deploymentId:storage.deploymentId};
+  }catch(error){await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
 }
