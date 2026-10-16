@@ -184,3 +184,13 @@ REMOVE old-token login, implicit/default-owner lookup and full-client MCP access
 EXCEPTION authentication-only attempt protection and trusted operator plaintext.
 UNKNOWN browser/native UI, live models, real providers and deployment behavior
 until their respective modules are implemented and verified.
+
+## Central-generated device QR invitations
+
+The old invitation journey now has a production account-bound producer. Its
+[QR contract](multiuser-qr-pairing.md) freezes v2 invitations, creation consent,
+fixed device purpose, original-account PKCE claim, M01 poll/ACK, cancellation and
+same-device reauthorization. This supersedes the old owner invitation semantics
+in `connections.md` and `web-login-and-pairing.md`; `purpose:central` remains the
+separate native browser-login capability. Web and Android consumers retain their
+own acceptance responsibility.
