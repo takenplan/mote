@@ -1,42 +1,9 @@
-import test, {type TestContext} from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, rmSync} from 'node:fs';
-import {tmpdir} from 'node:os';
-import {join} from 'node:path';
 import {gunzipSync} from 'node:zlib';
-import {buildApp} from '../src/app.js';
-import {bytesHash} from '../src/scope/originals.js';
-import {defaultProcessingSettings} from '../src/scope/processing-schema.js';
+import {fileEvidenceSchema} from '../../../packages/shared/src/files.js';
 import {waitForScopedState} from './fixtures/scoped-process.js';
-
-async function fixture(t: TestContext) {
-  const directory = mkdtempSync(join(tmpdir(), 'mote-joint-files-'));
-  const host = await buildApp({dataDir: directory});
-  t.after(async () => { await host.app.close(); rmSync(directory, {recursive: true, force: true}); });
-  const password = 'Generated-joint-files-password';
-  const headers = {'x-mote-protocol-version': '2', 'x-mote-ingress-version': '3'};
-  const request = (token: string | undefined, url: string, method: any = 'GET', payload?: unknown, extra = {}) => host.app.inject({method, url, headers: {...headers, ...(token ? {authorization: 'Bearer ' + token} : {}), ...extra}, ...(payload === undefined ? {} : {payload})});
-  const checked = async (...args: Parameters<typeof request>) => {
-    const response = await request(...args); assert.equal(response.statusCode, 200, response.body); return response.json();
-  };
-  await host.accounts!.initialize('generated-admin', password);
-  const login = (username: string) => checked(undefined, '/api/auth/login', 'POST', {username, password, mode: 'client'});
-  const admin = await login('generated-admin');
-  for (const username of ['generated-a', 'generated-b']) await checked(admin.token, '/api/admin/accounts', 'POST', {username, password});
-  const a = await login('generated-a'), b = await login('generated-b');
-  for (const account of [a, b]) {
-    await checked(account.token, '/api/ingress/sources', 'POST', {id: 'same-source', name: 'Generated files', kind: 'local-files', deviceId: 'same-device', platform: 'import', retention: 'archive'});
-    const view = await checked(account.token, '/api/configuration');
-    await checked(account.token, '/api/configuration/processing', 'PUT', {revision: view.revision, value: {...defaultProcessingSettings(), automatic: false, summarize: false, semanticTurns: false}});
-  }
-  const upload = async (token: string, externalId: string, text: string) => {
-    const bytes = Buffer.from(text), hash = bytesHash(bytes);
-    const input = await checked(token, '/api/ingress/sources/same-source/uploads', 'POST', {batchId: externalId, revision: {sourceId: 'same-source', previousRevision: null, sizeBytes: bytes.length, sha256: hash, relativePath: externalId + '.txt', item: {externalId, revision: 'same-r1', observedAt: '2026-10-16T00:00:00Z', title: externalId, text: '', kind: 'file', layer: 'original', mimeType: 'text/plain'}}});
-    await checked(token, '/api/ingress/uploads/' + input.id + '/parts/0', 'PUT', {bytes: bytes.toString('base64'), checksum: hash});
-    return (await checked(token, '/api/ingress/uploads/' + input.id + '/commit', 'POST', {})).captures[0];
-  };
-  return {host, a, b, admin, request, checked, upload};
-}
+import {scopedFilesFixture as fixture} from './fixtures/scoped-files.js';
 
 test('actual file views retain originals, current M06 text, owned paging and authenticated ranged playback for equal A/B IDs', async t => {
   const f = await fixture(t), text = 'Generated A original, complete tail Ω🙂';
@@ -54,11 +21,14 @@ test('actual file views retain originals, current M06 text, owned paging and aut
   const chunks = await f.checked(f.a.token, '/api/files/' + a.id + '/chunks?offset=0');
   assert.equal(chunks.items.map((x: any) => x.ocrText).join(''), text);
   assert.equal(chunks.items[0].fileEvidence.artifactId, detail.processing.artifactId);
+  fileEvidenceSchema.parse(chunks.items[0].fileEvidence);
   const first = await f.checked(f.a.token, '/api/files?limit=1');
   assert.equal(first.items.length, 1); assert.ok(first.nextCursor);
   const second = await f.checked(f.a.token, '/api/files?limit=1&cursor=' + encodeURIComponent(first.nextCursor));
   assert.deepEqual(new Set([...first.items, ...second.items].map((x: any) => x.captureId)), new Set([a.id, extra.id]));
   assert.equal((await f.request(f.b.token, '/api/files?limit=1&cursor=' + encodeURIComponent(first.nextCursor))).statusCode, 400);
+  assert.equal((await f.request(f.a.token, '/api/files?limit=2&cursor=' + encodeURIComponent(first.nextCursor))).statusCode, 400);
+  assert.equal((await f.request(f.a.token, '/api/files?limit=1&query=second&cursor=' + encodeURIComponent(first.nextCursor))).statusCode, 400);
   assert.equal((await f.request(f.a.token, '/api/files/' + foreign.id)).statusCode, 404);
   assert.equal((await f.request(f.admin.token, '/api/files/' + a.id)).statusCode, 404);
   const playback = await f.checked(f.a.token, '/api/files/' + a.id + '/playback', 'POST', {});
@@ -71,4 +41,30 @@ test('actual file views retain originals, current M06 text, owned paging and aut
   assert.ok(archive.includes(text)); assert.ok(!archive.includes('Generated B'));
   assert.equal((await f.request(undefined, '/api/files')).statusCode, 401);
   assert.equal((await f.checked(f.b.token, '/api/files/' + b.id)).processing.processed, false);
+  await f.checked(f.a.token, '/api/sources/same-source', 'PATCH', {enabled:false});
+  assert.equal((await f.request(f.a.token, playback.url)).statusCode, 404);
+  assert.equal((await f.request(f.a.token, '/api/files/' + a.id)).statusCode, 404);
+  const bPlayback = await f.checked(f.b.token, '/api/files/' + b.id + '/playback', 'POST', {});
+  assert.equal((await f.request(f.b.token, bPlayback.url)).rawPayload.toString(), 'Generated B private file');
+});
+
+test('the actual file reader preserves a complete transcript beyond its first hundred segments and filters before paging', async t => {
+  const f = await fixture(t), text = 'x'.repeat(8000 * 102) + 'GENERATED_FULL_TAIL_Ω🙂';
+  const original = await f.upload(f.a.token, 'long-file', text);
+  await f.upload(f.a.token, 'unrelated-file', 'Generated unrelated');
+  const task = await f.checked(f.a.token, '/api/processing', 'POST', {originalRef: original.original.ref, operationId: 'long-file-processing'});
+  await waitForScopedState(async () => (await f.checked(f.a.token, '/api/tasks/' + task.id)).state === 'succeeded', () => 'long text did not reach an actual terminal M06 receipt');
+  const first = await f.checked(f.a.token, '/api/files/' + original.id + '/chunks?offset=0');
+  assert.equal(first.items.length, 100); assert.equal(first.nextOffset, 100);
+  const all = [...first.items]; let offset = first.nextOffset;
+  while (offset !== null) {
+    const page = await f.checked(f.a.token, '/api/files/' + original.id + '/chunks?offset=' + offset);
+    assert.ok(page.items.length > 0); all.push(...page.items);
+    assert.ok(page.nextOffset === null || page.nextOffset > offset); offset = page.nextOffset;
+  }
+  assert.equal(all.map((item: any) => item.ocrText).join(''), text);
+  assert.equal(new Set(all.map((item: any) => item.id)).size, all.length);
+  const page = await f.checked(f.a.token, '/api/files?limit=1&query=long-file&mimePrefix=text/');
+  assert.deepEqual(page.items.map((item: any) => item.captureId), [original.id]); assert.equal(page.nextCursor, null);
+  assert.deepEqual((await f.checked(f.b.token, '/api/files?query=long-file')).items, []);
 });
