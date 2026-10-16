@@ -43,7 +43,7 @@ type TaskRow={task_id:string;user_id:string;grant_id:string;input:string;progres
 export type TaskRun={context:UserContext;services:ReturnType<ScopedServices['forUser']>;task:ExecutionStep;signal:AbortSignal;grant:ExecutionGrant;model?:TaskModelRun;
  checkpoint:{read<T=unknown>(key:string):T|undefined;write(key:string,value:unknown):void};
  progress(value:unknown):void;
- external:{begin(key:string):string;complete():void};
+ external:{begin(key:string,onIssued?:(issuanceId:string)=>unknown):string;complete():void};
 };
 export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;policy:ExecutionPolicy;
  modelFeature?:ModelFeature;
@@ -154,7 +154,7 @@ export class TaskExecution {
     const run:TaskRun={...(model?{model}:{}),context,services:this.services.forUser(context),task:step,signal,grant,
      checkpoint:{read:<T>(key:string)=>{grant.assert();const values=JSON.parse(this.row(step.id)!.checkpoints);return Object.hasOwn(values,key)?values[key] as T:undefined;},write:(key,value)=>{id.parse(key);write(()=>{const checkpoints=JSON.parse(this.row(step.id)!.checkpoints);Object.defineProperty(checkpoints,key,{value,enumerable:true,writable:true,configurable:true});this.db.prepare('UPDATE user_tasks SET checkpoints=? WHERE task_id=?').run(json(checkpoints),step.id);});}},
      progress:value=>write(()=>this.db.prepare('UPDATE user_tasks SET progress=? WHERE task_id=?').run(json(value),step.id)),
-     external:{begin:key=>{id.parse(key);const issuanceId=randomUUID();write(()=>{const current=this.row(step.id)!;if(current.external_state!=='none')throw new ExecutionFailure('blocked','external_result_unknown');this.db.prepare("INSERT INTO task_external_calls VALUES(?,?,?,?,'issued',?,?,?,NULL)").run(issuanceId,step.id,current.user_id,key,step.ownership!.authorizationEpoch,step.attempts,Date.now());this.db.prepare("UPDATE user_tasks SET external_state='issued',external_key=?,external_issuance=? WHERE task_id=?").run(key,issuanceId,step.id);});return issuanceId;},complete:()=>write(()=>{const current=this.row(step.id)!;if(current.external_state!=='issued'||!current.external_issuance)throw new ExecutionFailure('permanent','external_call_not_issued');this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=? WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),current.external_issuance,step.id,current.user_id);this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=?").run(step.id);})},
+     external:{begin:(key,onIssued)=>{id.parse(key);const issuanceId=randomUUID();write(()=>{const current=this.row(step.id)!;if(current.external_state!=='none')throw new ExecutionFailure('blocked','external_result_unknown');this.db.prepare("INSERT INTO task_external_calls VALUES(?,?,?,?,'issued',?,?,?,NULL)").run(issuanceId,step.id,current.user_id,key,step.ownership!.authorizationEpoch,step.attempts,Date.now());this.db.prepare("UPDATE user_tasks SET external_state='issued',external_key=?,external_issuance=? WHERE task_id=?").run(key,issuanceId,step.id);if(onIssued){const result=onIssued(issuanceId);if(result&&typeof (result as {then?:unknown}).then==='function')throw new TaskError('asynchronous_external_admission',409);}});return issuanceId;},complete:()=>write(()=>{const current=this.row(step.id)!;if(current.external_state!=='issued'||!current.external_issuance)throw new ExecutionFailure('permanent','external_call_not_issued');this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=? WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),current.external_issuance,step.id,current.user_id);this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=?").run(step.id);})},
     };
     const result=await handler.execute(run);grant.assert();if(this.row(step.id)!.external_state==='issued')throw new ExecutionFailure('blocked','external_result_unknown');return {value:result,run};
    },
@@ -204,6 +204,22 @@ export class TaskExecution {
  private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id);return {...step,input:undefined,ownership:undefined,progress:JSON.parse(row.progress),checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
  tick(){return this.engine.tick();}
  start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(()=>{});},100);this.timer.unref();void this.tick().catch(()=>{});}
+ /** Trusted transport adapters bind an exact issuance while its owner is
+  * authenticated. A late, validated ACK may settle only that external fact;
+  * this closure never restores task, account or private publication authority.
+  * It is deliberately absent from forUser() and all task HTTP/model tools. */
+ bindExternalCompletion(context:UserContext,taskId:string,issuanceId:string){
+  this.authority.assert(context);const row=this.row(taskId),call=this.db.prepare('SELECT * FROM task_external_calls WHERE issuance_id=? AND task_id=? AND user_id=?').get(issuanceId,taskId,context.userId);
+  if(!row||row.user_id!==context.userId||!call)throw new TaskError('task_not_found',404);
+  const owner=context.userId,key=String(call.request_key),epoch=Number(call.authorization_epoch);
+  return ()=>this.transaction(()=>{
+   const current=this.db.prepare('SELECT * FROM task_external_calls WHERE issuance_id=? AND task_id=? AND user_id=?').get(issuanceId,taskId,owner);
+   if(!current||current.request_key!==key||current.authorization_epoch!==epoch)throw new TaskError('task_not_found',404);
+   if(current.state==='not_executed')throw new TaskError('task_outcome_conflict',409);
+   this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=coalesce(settled_at,?) WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),issuanceId,taskId,owner);
+   this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=? AND user_id=? AND external_issuance=?").run(taskId,owner,issuanceId);
+  });
+ }
  async close(){if(this.timer)clearInterval(this.timer);this.timer=undefined;await this.engine.close();this.modelLeases.clear();this.modelRecovery.clear();}
  /** M16 observes only purpose-limited journal facts after deletion admission
   * has been fenced. No ordinary context can select or settle external calls. */

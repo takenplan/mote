@@ -24,7 +24,7 @@ export async function requestContext(req:FastifyRequest,authority:UserContextAut
   const context=await authority.authenticate(cookie??(typeof auth==='string'&&auth.startsWith('Bearer ')?auth.slice(7):undefined));
   // A device handoff is an ingestion capability, not a private archive session.
   // Check before every existing domain route, including credential minting.
-  if(accounts?.credentialInfo(context,authority).deviceId&&!req.url.startsWith('/api/ingress/')&&!['/api/connections/self','/api/auth/logout'].includes(req.url.split('?')[0]))throw new ScopeError('invalid_identity',403);
+  if(accounts?.credentialInfo(context,authority).deviceId&&!req.url.startsWith('/api/ingress/')&&!req.url.startsWith('/api/actions/')&&req.url.split('?')[0]!=='/api/actions'&&!['/api/connections/self','/api/auth/logout'].includes(req.url.split('?')[0]))throw new ScopeError('invalid_identity',403);
   if(req.headers['x-mote-protocol-version']!==String(SCOPE_BASELINE.wireProtocol))throw new ScopeError('incompatible_protocol',426);
   if(cookie){
     if(!accounts||accounts.credentialInfo(context,authority).kind!=='web')throw new ScopeError('invalid_identity',401);
