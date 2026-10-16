@@ -98,7 +98,10 @@ class AppearanceInstrumentedTest {
                     assertSame(activity,it);assertSame(root,it.window.decorView);assertTrue(modal.isShowing)
                     assertEquals("Generated theme draft",note.text.toString());assertEquals("Generated unsaved modal",modalField.text.toString())
                     assertEquals(3,modalField.selectionStart);assertEquals(9,modalField.selectionEnd);assertTrue(modalField.hasFocus())
-                    assertEquals(MoteTheme.ink,modalField.currentTextColor);screenshot(it,"${preference.value}-live-modal-host")
+                    assertEquals(MoteTheme.ink,modalField.currentTextColor)
+                    modalField.isEnabled=false;assertEquals(MoteTheme.muted,modalField.currentTextColor);modalField.isEnabled=true
+                    modalField.requestFocus();modalField.setSelection(3,9);assertNotNull(modalField.textCursorDrawable)
+                    screenshot(it,"${preference.value}-live-modal-host")
                     MoteAppearance.select(it,AppearancePreference.AUTO)
                 }
                 waitFor("Auto clears the package override and resolves the current OS") { MoteTheme.background==android.graphics.Color.parseColor("#1c1b1a") }

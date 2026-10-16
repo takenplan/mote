@@ -47,6 +47,15 @@ test('appearance changes preserve actual draft nodes, selection, hash and open d
   }
  }finally{dom.window.close();}
 });
+test('fixed legacy presentation palettes retain matching native controls and cleanup restores authored root state',()=>{
+ const {dom}=fixture();const root=dom.window.document.documentElement;
+ try{
+  root.dataset.colorScheme='light';root.style.setProperty('--mote-ink','#123456','important');root.style.setProperty('background-color','pink','important');root.style.colorScheme='light';
+  const restore=applyAppearanceTheme(root,{...linearUiTheme,schemes:undefined},'light');
+  assert.equal(root.style.colorScheme,'dark');assert.equal(root.dataset.colorScheme,'dark');
+  restore();assert.equal(root.dataset.colorScheme,'light');assert.equal(root.style.colorScheme,'light');assert.equal(root.style.backgroundColor,'pink');assert.equal(root.style.getPropertyValue('--mote-ink'),'#123456');assert.equal(root.style.getPropertyPriority('background-color'),'important');
+ }finally{dom.window.close();}
+});
 test('early local bootstrap precedes application paint, honors explicit preferences, handles denied storage and has no inline CSP exception',()=>{
  const script=readFileSync(new URL('../public/appearance-init.js',import.meta.url),'utf8');
  for(const preference of ['light','dark','auto','broken'])for(const systemDark of [false,true]){

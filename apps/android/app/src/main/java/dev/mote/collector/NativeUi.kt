@@ -47,7 +47,8 @@ internal object MoteUi {
         setLineSpacing(0f, MoteTheme.lineBody); letterSpacing = if (heading) MoteTheme.letterTitle else 0f
         setTag(R.id.mote_type, size)
     }
-    fun textColor(view: TextView, role: NativeColorRole) { NativePresentationStyles.bind(view, "text-color") { (it as TextView).setTextColor(role.color()) } }
+    private fun enabledColors(color: Int) = ColorStateList(arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()), intArrayOf(MoteTheme.muted, color))
+    fun textColor(view: TextView, role: NativeColorRole) { NativePresentationStyles.bind(view, "text-color") { (it as TextView).setTextColor(enabledColors(role.color())) } }
     fun backgroundColor(view: View, role: NativeColorRole) { NativePresentationStyles.bind(view, "background-color") { it.setBackgroundColor(role.color()) } }
     fun shape(context: Context, fill: NativeColorRole = NativeColorRole.SURFACE, radius: NativeRadiusRole = NativeRadiusRole.CONTAINER, outline: Boolean? = null, strokeColor: NativeColorRole = NativeColorRole.BORDER): GradientDrawable =
         NativeThemeShape(context.resources.displayMetrics.density, fill, { radius.dp() }, outline, strokeColor)
@@ -86,13 +87,22 @@ internal object MoteUi {
         if (applyPadding) setPadding(context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceInline), context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceInline))
     }
 
+    private fun inputColors(field: EditText) = field.apply {
+        highlightColor = MoteTheme.tint; setHintTextColor(MoteTheme.muted)
+        // Native text editing drawables are retained by the View; retint them in place.
+        listOf(textCursorDrawable, textSelectHandle, textSelectHandleLeft, textSelectHandleRight).filterNotNull().forEach { it.mutate().setTint(MoteTheme.accent) }
+    }
     fun field(field: EditText): EditText = field.apply {
         NativePresentationStyles.remember(this, "field") { value -> (value as EditText).apply {
-            MoteUi.textColor(this, NativeColorRole.INK); highlightColor = MoteTheme.tint; setHintTextColor(MoteTheme.muted); minHeight = context.moteDp(MoteTheme.controlHeight); minimumHeight = minHeight
+            MoteUi.textColor(this, NativeColorRole.INK); inputColors(this); minHeight = context.moteDp(MoteTheme.controlHeight); minimumHeight = minHeight
         } }
-        textColor(this, NativeColorRole.INK); highlightColor = MoteTheme.tint; setHintTextColor(muted); type(this, NativeFontRole.BODY)
+        textColor(this, NativeColorRole.INK); inputColors(this); type(this, NativeFontRole.BODY)
         backgroundTintList = null
-        background = shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.CONTROL_BORDER)
+        background = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(-android.R.attr.state_enabled), shape(context, NativeColorRole.BACKGROUND, NativeRadiusRole.CONTROL, true, NativeColorRole.BORDER))
+            addState(intArrayOf(android.R.attr.state_focused), shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.ACCENT))
+            addState(intArrayOf(), shape(context, NativeColorRole.SURFACE, NativeRadiusRole.CONTROL, true, NativeColorRole.CONTROL_BORDER))
+        }
         setPadding(context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem), context.moteDp(MoteTheme.spacePanel), context.moteDp(MoteTheme.spaceItem))
         minHeight = context.moteDp(MoteTheme.controlHeight)
         minimumHeight = minHeight
@@ -129,7 +139,7 @@ internal object MoteUi {
         }
     }
     private fun compound(view: CompoundButton) { NativePresentationStyles.bind(view, "compound") { value -> (value as CompoundButton).apply {
-        setTextColor(MoteTheme.ink); type(this, NativeFontRole.BODY); buttonTintList = ColorStateList.valueOf(MoteTheme.accent); minHeight = context.moteDp(MoteTheme.controlHeight)
+        setTextColor(enabledColors(MoteTheme.ink)); type(this, NativeFontRole.BODY); buttonTintList = enabledColors(MoteTheme.accent); minHeight = context.moteDp(MoteTheme.controlHeight)
     } } }
     private fun progress(view: ProgressBar) { NativePresentationStyles.bind(view, "progress") { value -> (value as ProgressBar).apply {
         indeterminateTintList = ColorStateList.valueOf(MoteTheme.accent); progressTintList = ColorStateList.valueOf(MoteTheme.accent)

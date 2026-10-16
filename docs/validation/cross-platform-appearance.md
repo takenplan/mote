@@ -32,7 +32,7 @@ Additional failure/lifecycle cases: missing/corrupt/rejected Web storage; Web cr
 - Actual production Web UI matrix passes all six pairs in hidden Electron browser renderers: module fetch held before app execution under the real server CSP verifies canvas/background/meta color on first paint; unique cache-disabled URLs ensure a new cold request. Refresh, live media changes, cross-tab Settings changes, real controlled Login dialog and Notes draft identity/selection/focus/hash, phone widths without overflow, and emulated increased-contrast/reduced-transparency media all pass. `scripts/test-appearance-ui.cjs` uses its own loopback fixture server, not a local central instance. Initial failures were fixture session UUID, renderer initialization and cache assumptions; they did not alter product code.
 - Screenshot inspection confirms the same navigation, hierarchy and spacing in both colors. Retained images: [Web Light](appearance/web-light.png), [Web Dark phone](appearance/web-dark-phone.png), [Desktop Light](appearance/desktop-light.png), [Desktop Dark](appearance/desktop-dark.png), [Android Light](appearance/android-light.png), [Android Dark](appearance/android-dark.png). Every image is a generated fixture window; no user content appears.
 
-Full affected gates and final delta review remain pending.
+Final bounded delta review also reports no new confirmed P0/P1/P2 finding (`/tmp/mote-joint-review-theme-appearance-final-delta.md`), with hashes of the four changed lifecycle files. Full affected gates remain pending.
 
 Reproducible entry points (build first; native UI runs require normal host process access):
 

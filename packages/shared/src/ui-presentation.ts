@@ -91,8 +91,10 @@ export function applyAppearanceTheme(root:HTMLElement,theme:UiThemePack,scheme:'
   const previousScheme=root.dataset.colorScheme;
   const meta=root.ownerDocument.querySelector<HTMLMetaElement>('meta[name="theme-color"]'),previousMeta=meta?.content;
   for(const [key,value] of Object.entries(tokens))root.style.setProperty('--mote-'+key,value);
-  root.dataset.colorScheme=scheme;
-  root.style.colorScheme=scheme;
+  const channels=[1,3,5].map(index=>Number.parseInt(tokens.background.slice(index,index+2),16));
+  const nativeScheme=theme.schemes?scheme:(channels[0]*299+channels[1]*587+channels[2]*114)/1000<128?'dark':'light';
+  root.dataset.colorScheme=nativeScheme;
+  root.style.colorScheme=nativeScheme;
   root.style.backgroundColor=tokens.background;
   if(meta)meta.content=tokens.background;
   return ()=>{
