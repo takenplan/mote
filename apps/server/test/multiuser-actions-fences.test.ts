@@ -61,3 +61,11 @@ test('portable action restore validates atomically and restores history without 
  await assert.rejects(services.restoreUser('actions',{...archive,payload:{...(archive.payload as any),proposals:[{...clone,id:randomUUID()},{id:'malformed'}]}},'generated-invalid-restore'));
  assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM ac_proposals WHERE user_id=?').get(f.a.userId)!.n)),2);
 });
+
+test('the immutable review exposes the exact edited content and native account while cross-user details stay absent',async t=>{
+ const f=await proposed(t),input={...f.input,event:{...f.input.event,title:'Generated explicitly edited title',description:'Generated complete reviewed description'}},q=await f.ok(f.a.token,'/api/actions/'+f.aProposal.id+'/review','POST',input);
+ assert.deepEqual(q.reviewedAction.event,input.event);assert.deepEqual(q.reviewedAction.target,target);assert.equal(q.reviewedAction.targetDetails.calendar.accountId,'first-account');
+ const path='/api/actions/'+f.aProposal.id+'/reviews/'+q.id;assert.deepEqual((await f.ok(f.a.token,path)).reviewedAction,q.reviewedAction);assert.equal((await f.request(f.b.token,path)).statusCode,404);
+ await f.ok(f.a.token,'/api/owner-questions/'+q.id+'/reply','POST',{requestId:randomUUID(),expectedRevision:q.revision,action:'answer',choiceId:'dismiss'});
+ assert.equal((await f.ok(f.a.token,'/api/actions')).items[0].status,'dismissed');
+});
