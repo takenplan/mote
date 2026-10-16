@@ -8375,5 +8375,17 @@
   "已生成的批次": "Persisted batches",
   "生成 {0} 条记忆": "Created {0} memories",
   "已删除": "Deleted",
-  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions changed. The completion receipt is retained; open the memory to check its currently readable version."
+  "输入版本已变化；任务完成记录保留，请打开记忆核对当前可读版本。": "Input versions changed. The completion receipt is retained; open the memory to check its currently readable version.",
+  "服务返回的操作回执与当前账号不一致。": "The operation receipt does not match the current account.",
+  "等待清除确认": "Awaiting erasure confirmation",
+  "外部结果待确认": "External outcome awaiting confirmation",
+  "归档校验失败，请重新读取操作回执。": "Archive verification failed. Reload the operation receipt.",
+  "仅导出当前账号的规范资料；凭据、执行授权和实例备份不包含在内。": "Exports canonical records for the current account only. Credentials, execution authority and instance backups are excluded.",
+  "覆盖范围与处理状态": "Coverage and processing status",
+  "下载归档": "Download archive",
+  "取消归档": "Cancel archive",
+  "个人归档导入的合并与去重协议尚待完成，当前不能提交导入。": "The merge and deduplication contract for personal imports is pending. Imports cannot be submitted yet.",
+  "实例备份与恢复由中央节点停机命令执行。": "Instance backup and restore use offline commands on the central node.",
+  "当前账号的存储统计与索引管理接口尚待接入。": "Storage statistics and index management for the current account are awaiting integration.",
+  "当前支持账号归档；元数据和附件分别导出的接口尚待接入。": "Account archives are supported. Separate metadata and attachment exports are awaiting integration."
 }
