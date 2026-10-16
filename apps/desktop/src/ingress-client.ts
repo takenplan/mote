@@ -22,8 +22,12 @@ export async function ingressRequest(config:Config,path:string,body:unknown,meth
  return JSON.parse(await readResponseText(response,2*1024*1024));
 }
 export function requireAccountReceipt(value:any,config:Pick<Config,'account'>,sourceId:string,batchId:string,expected:readonly {id?:string;externalId?:string;revision?:string}[]):any[]{
- if(!value||value.version!==3||value.state!=='received'||value.deploymentId!==config.account?.deploymentId||value.userId!==config.account?.userId||value.sourceId!==sourceId||value.batchId!==batchId||typeof value.id!=='string'||!Array.isArray(value.captures)||value.captures.length!==expected.length)throw Error('Account ingress receipt mismatch');
- for(const [i,item] of value.captures.entries()){const target=expected[i];if(!item||typeof item.id!=='string'||!/^[0-9a-f-]{36}$/i.test(item.id)||typeof item.duplicate!=='boolean'||target.id!==undefined&&item.id!==target.id||target.externalId!==undefined&&(item.externalId!==target.externalId||item.revision!==target.revision))throw Error('Account ingress item receipt mismatch');}
+ if(!value||value.version!==3||value.state!=='received'||value.deploymentId!==config.account?.deploymentId||value.userId!==config.account?.userId||value.sourceId!==sourceId||value.batchId!==batchId||value.id!==ingressKey([config.account?.deploymentId,config.account?.userId,sourceId,batchId])||!Array.isArray(value.captures)||value.captures.length!==expected.length)throw Error('Account ingress receipt mismatch');
+ for(const [i,item] of value.captures.entries()){
+  const target=expected[i],digest=target.externalId===undefined?undefined:ingressKey([sourceId,target.externalId,target.revision]),id=target.id??(digest?`${digest.slice(0,8)}-${digest.slice(8,12)}-5${digest.slice(13,16)}-a${digest.slice(17,20)}-${digest.slice(20,32)}`:undefined);
+  if(!item||typeof item.id!=='string'||!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(item.id)||typeof item.duplicate!=='boolean'||id!==undefined&&item.id!==id||target.externalId!==undefined&&(item.externalId!==target.externalId||item.revision!==target.revision))throw Error('Account ingress item receipt mismatch');
+  const original=item.original;if(original&&(original.sourceId!==sourceId||original.captureId!==item.id||!Number.isSafeInteger(original.bytes)||original.bytes<0||typeof original.hash!=='string'||!/^[a-f0-9]{64}$/.test(original.hash)||typeof original.mime!=='string'||!['snapshot','archive'].includes(original.retention)||original.ref!=='original:'+ingressKey([config.account?.userId,sourceId,item.id,original.hash,original.mime,original.retention])))throw Error('Account original receipt mismatch');
+ }
  return value.captures;
 }
 export async function uploadAccountCaptures(config:Config,entries:readonly {event:CaptureEvent;image?:Buffer}[],signal?:AbortSignal,onBytes?:(bytes:number)=>void):Promise<Map<string,number>>{
@@ -41,7 +45,7 @@ export async function uploadAccountCaptures(config:Config,entries:readonly {even
    signal?.throwIfAborted();const items=batch.map(entry=>({...entry.event,...(entry.image?{imageBase64:entry.image.toString('base64')}:{})})),batchId='capture-'+ingressKey(items);
    try{
     const receipt=await ingressRequest(config,`/api/ingress/sources/${sourceId}/captures`,{batchId,items},'POST',signal,onBytes);
-    requireAccountReceipt(receipt,config,sourceId,batchId,batch.map(entry=>({id:entry.event.id})));for(const entry of batch)result.set(entry.event.id,200);
+    const captures=requireAccountReceipt(receipt,config,sourceId,batchId,batch.map(entry=>({id:entry.event.id})));for(const [i,entry] of batch.entries()){if(entry.image&&(captures[i].original?.hash!==createHash('sha256').update(entry.image).digest('hex')||captures[i].original?.bytes!==entry.image.length||captures[i].original?.mime!==entry.event.imageMime))throw Error('Account capture original receipt mismatch');result.set(entry.event.id,200);}
    }catch(error){
     if(error instanceof TransportFailure&&[409,410,413].includes(error.httpStatus??0)&&batch.length>1){const middle=Math.ceil(batch.length/2);await send(batch.slice(0,middle));await send(batch.slice(middle));}
     else if(error instanceof TransportFailure&&[409,410].includes(error.httpStatus??0))result.set(batch[0].event.id,error.httpStatus!);
