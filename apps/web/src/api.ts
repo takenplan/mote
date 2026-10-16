@@ -1,14 +1,38 @@
 import {failureMessage} from './failure-message';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import type {RecordMetadata, SourceMetadata, OcrResult, CaptureRecord} from '@mote/shared';
-export interface Connection {
-  token: string;
-  /** Browser-only expiry for a persisted management session; the server token is unchanged. */
+export interface WebConnection {
+  mode: 'web';
+  origin: string;
+  deploymentId: string;
+  userId: string;
+  credentialId: string;
+  csrfToken: string;
+  username: string;
+  administrator: boolean;
   expiresAt?: number;
-  /** Maximum deadline imposed by the shared native/server session. */
-  serverExpiresAt?: number;
-  /** Non-secret identity for tab view state; never sent to the server. */
   viewScope?: string;
+  token?: never;
+}
+/** Bearer transport is explicit for native/legacy consumers. Browser login uses WebConnection. */
+export type Connection = WebConnection | {
+  token: string;
+  mode?: never;
+  expiresAt?: number;
+  serverExpiresAt?: number;
+  viewScope?: string;
+};
+export const isWebConnection = (connection: Connection): connection is WebConnection => connection.mode === 'web';
+export interface Api {
+  request<T>(path: string, init?: RequestInit): Promise<T>;
+  raw(path: string, init?: RequestInit): Promise<Response>;
+  readonly connection?: Readonly<Connection>;
+  close?(): void;
+}
+/** Draft identity survives credential rotation, but never crosses deployment/account boundaries. */
+export function apiOwnerKey(api: Api): string {
+  const value=api.connection;
+  return value && isWebConnection(value) ? JSON.stringify([value.origin,value.deploymentId,value.userId]) : globalThis.location?.origin ?? 'legacy-fixture';
 }
 export interface FileEvidence {
   captureId: string;
@@ -149,12 +173,21 @@ export class ApiError extends Error {
     super(message);
   }
 }
-export function createApi(connection: Connection, onUnauthorized?: () => void, isCurrentConnection: () => boolean = () => true) {
+export function createApi(input: Connection, onUnauthorized?: () => void, isCurrentConnection: () => boolean = () => true): Api {
+  const connection=Object.freeze({...input});
+  let closed=false;
+  const assertCurrent=()=>{
+    if(closed || !isCurrentConnection() || (connection.expiresAt!==undefined && connection.expiresAt<=Date.now()) || (isWebConnection(connection) && globalThis.location && connection.origin!==location.origin))
+      throw new ApiError(moteText('登录会话已改变，请重新登录。'),401,undefined,'session_changed');
+  };
   async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const response = await raw(path, init);
-    return response.json() as Promise<T>;
+    const value=await response.json() as T;
+    assertCurrent();
+    return value;
   }
   async function raw(path: string, init: RequestInit = {}) {
+    assertCurrent();
     const modelOperation = init.method?.toUpperCase() === 'POST' && ['/api/query', '/api/insights', '/api/memories/extract'].includes(path);
     // The server accounts admitted execution time. A browser wall-clock timer
     // cannot know how long this operation waits for resources or durable work.
@@ -163,18 +196,23 @@ export function createApi(connection: Connection, onUnauthorized?: () => void, i
     if (!path.startsWith('/api/') || path.includes('\\') || /[\r\n\t]/.test(path)) {
       throw new Error(moteText("管理请求必须使用当前服务的 API 路径。"));
     }
+    const headers=new Headers(init.headers);
+    headers.set('Accept-Language',getLocale());
+    if(init.body && !headers.has('Content-Type'))headers.set('Content-Type','application/json');
+    headers.set('X-Mote-Protocol-Version','2');
+    if(isWebConnection(connection)){
+      headers.delete('Authorization');
+      headers.set('X-Mote-Session-Id',connection.credentialId);
+      headers.set('X-Mote-CSRF',connection.csrfToken);
+    }else headers.set('Authorization',`Bearer ${connection.token}`);
     const response = await fetch(path, {
       ...init,
       redirect: "error",
-      credentials: path.startsWith("/api/files/") ? "same-origin" : "omit",
+      credentials: isWebConnection(connection) || path.startsWith("/api/files/") ? "same-origin" : "omit",
       signal,
-      headers: {
-        "Accept-Language": getLocale(),
-        ...(init.body ? { "Content-Type": "application/json" } : {}),
-        ...init.headers,
-        Authorization: `Bearer ${connection.token}`,
-      },
+      headers,
     });
+    assertCurrent();
     if (!response.ok) {
       let message = response.status === 524
         ? moteText("入口等待服务响应超时（524）。请检查节点运行诊断；较慢的模型请求可能超过代理等待上限。")
@@ -199,15 +237,15 @@ export function createApi(connection: Connection, onUnauthorized?: () => void, i
       } catch {
         /* response might not be JSON */
       }
-      if (response.status === 401 && (!code || ['unauthorized','connection_revoked'].includes(code)) && !init.signal?.aborted && isCurrentConnection()) onUnauthorized?.();
+      if (response.status === 401 && (!code || ['unauthorized','connection_revoked','invalid_identity','session_binding_required'].includes(code)) && !init.signal?.aborted && isCurrentConnection()) onUnauthorized?.();
+      assertCurrent();
       if (!requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) requestId = undefined;
       throw new ApiError(message, response.status, requestId, code, retryAfterMs);
     }
     return response;
   }
-  return { request, raw };
+  return { request, raw, connection, close:()=>{closed=true;} };
 }
-export type Api = ReturnType<typeof createApi>;
 export function queryString(
   range: Range,
   extra: Record<string, string | number | undefined> = {},
