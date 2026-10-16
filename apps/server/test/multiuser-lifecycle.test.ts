@@ -1,11 +1,15 @@
 import test,{type TestContext} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,rmSync,readFileSync} from 'node:fs';
+import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {DatabaseSync} from 'node:sqlite';
 import {buildApp} from '../src/app.js';
+import {waitForScopedState} from './fixtures/scoped-process.js';
+import {EXECUTION_POLICIES} from '../src/execution-policy.js';
+import {ExecutionFailure} from '../src/execution-engine.js';
+import type {TaskRun} from '../src/scope/task-execution.js';
 
 const password='Generated-M16-account-password';
 const protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
@@ -30,6 +34,8 @@ async function fixture(t:TestContext){
 
 test('portable 3 actual production entry exports only its owner, exact resumable bytes and no login grants',async t=>{
  const f=await fixture(t),operationId=randomUUID();
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'));t.after(()=>db.close());
+ await waitForScopedState(()=>!db.prepare("SELECT 1 FROM execution_steps WHERE state='running' OR(state='waiting' AND coalesce(error,'')<>'memory_window_pending') LIMIT 1").get(),()=>JSON.stringify(db.prepare('SELECT kind,state,error FROM execution_steps').all()));
  const started=await f.request(f.a.token,'POST','/api/portable/exports',{operationId});
  assert.equal(started.statusCode,200,started.body);
  const id=started.json().id;
@@ -65,4 +71,45 @@ test('production account deletion revokes before erasure, is durable and cannot 
  await f.restart();assert.deepEqual((await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+receipt.id)).json(),receipt);
  assert.equal((await f.request(f.admin.token,'DELETE','/api/admin/accounts/'+f.a.userId,{operationId})).json().id,receipt.id);
  const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.a.userId)!.n,0);assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.b.userId)!.n,1);}finally{db.close();}
+});
+
+test('portable receipt paging is owner/query/epoch qualified through 205 cancelled operations',async t=>{
+ const f=await fixture(t),ids=new Set<string>();
+ for(let i=0;i<205;i++){const id=randomUUID();ids.add(id);assert.equal((await f.request(f.a.token,'POST','/api/portable/exports',{operationId:id})).statusCode,200);assert.equal((await f.request(f.a.token,'POST','/api/portable/exports/'+id+'/cancel',{})).statusCode,200);}
+ let cursor:string|undefined,seen=new Set<string>(),firstCursor:string|undefined;
+ do{const page=await f.request(f.a.token,'GET','/api/portable/exports?limit=31'+(cursor?'&cursor='+encodeURIComponent(cursor):''));assert.equal(page.statusCode,200,page.body);for(const item of page.json().items){assert.equal(item.userId,f.a.userId);assert.equal(item.state,'cancelled');assert.ok(ids.has(item.id));assert.ok(!seen.has(item.id));seen.add(item.id);}cursor=page.json().nextCursor;if(!firstCursor)firstCursor=cursor;}while(cursor);
+ assert.equal(seen.size,205);assert.ok(firstCursor);
+ assert.deepEqual((await f.request(f.b.token,'GET','/api/portable/exports')).json().items,[]);
+ assert.equal((await f.request(f.b.token,'GET','/api/portable/exports?limit=31&cursor='+encodeURIComponent(firstCursor!))).statusCode,400);
+ assert.equal((await f.request(f.a.token,'GET','/api/portable/exports?limit=30&cursor='+encodeURIComponent(firstCursor!))).statusCode,400);
+ assert.equal((await f.request(f.a.token,'GET','/api/portable/exports?userId='+f.b.userId)).statusCode,401);
+ const web=await f.request(undefined,'POST','/api/auth/login',{username:'generated-alice',password,mode:'web'}),cookie=String(web.headers['set-cookie']).split(';')[0];
+ assert.equal((await f.request(undefined,'POST','/api/portable/exports',{operationId:randomUUID()},{cookie,'x-mote-session-id':web.json().credentialId})).statusCode,403);
+});
+
+test('real executing A task loses publication before delete finishes while B still commits',async t=>{
+ const f=await fixture(t);let held:TaskRun|undefined,release!:()=>void;const wait=new Promise<void>(resolve=>release=resolve),committed:string[]=[];
+ f.node.execution!.register({kind:'generated.m16-held',pool:'generated-m16',policy:EXECUTION_POLICIES.deterministic,concurrency:()=>2,parseInput:value=>value as Record<string,unknown>,execute:async run=>{if(run.context.userId===f.a.userId){held=run;await wait;}return run.context.userId;},commit:(run)=>{committed.push(run.context.userId);}});t.after(()=>release());
+ const a=await f.request(f.a.token,'POST','/api/tasks',{kind:'generated.m16-held',operationId:'same-held',input:{}});assert.equal(a.statusCode,200,a.body);
+ await waitForScopedState(()=>held,()=> 'generated A task was not executing');
+ const b=await f.request(f.b.token,'POST','/api/tasks',{kind:'generated.m16-held',operationId:'same-held',input:{}});assert.equal(b.statusCode,200,b.body);
+ await waitForScopedState(()=>committed.includes(f.b.userId),()=> 'generated B task did not commit');
+ const deletion=await f.request(f.admin.token,'DELETE','/api/admin/accounts/'+f.a.userId,{operationId:randomUUID()});assert.equal(deletion.statusCode,200,deletion.body);
+ assert.throws(()=>held!.grant.commit(()=>committed.push(f.a.userId)));assert.throws(()=>held!.checkpoint.write('late',{value:'Generated A'}));
+ assert.equal((await f.request(f.a.token,'POST','/api/tasks',{kind:'generated.m16-held',operationId:'late',input:{}})).statusCode,401);
+ release();await waitForScopedState(async()=>{const r=await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+deletion.json().id);return r.json().state==='completed';},()=> 'deletion did not finish');
+ assert.deepEqual(committed,[f.b.userId]);assert.equal((await f.request(f.b.token,'GET','/api/tasks/'+b.json().id)).json().state,'succeeded');
+});
+
+test('unknown external task outcome stops erasure durably; retry never repeats the external call or erases dependencies',async t=>{
+ const f=await fixture(t);let calls=0;
+ f.node.execution!.register({kind:'generated.m16-external',pool:'generated-m16',policy:EXECUTION_POLICIES.localProcessing,concurrency:()=>1,parseInput:value=>value as Record<string,unknown>,execute:async run=>{run.external.begin('generated-external-key');calls++;throw new ExecutionFailure('transient','generated_transport_lost',1);}});
+ const task=await f.request(f.a.token,'POST','/api/tasks',{kind:'generated.m16-external',operationId:'unknown',input:{}});assert.equal(task.statusCode,200,task.body);
+ await waitForScopedState(async()=>{const value=(await f.request(f.a.token,'GET','/api/tasks/'+task.json().id)).json();return value.state==='blocked'&&value.externalUnresolved>0;},()=> 'unknown task did not settle');
+ const deletion=await f.request(f.admin.token,'DELETE','/api/admin/accounts/'+f.a.userId,{operationId:randomUUID()});assert.equal(deletion.statusCode,200,deletion.body);const id=deletion.json().id;
+ await waitForScopedState(async()=>(await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+id)).json().state==='result_unknown',()=> 'unknown erasure was not reported');
+ await f.restart();assert.equal((await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+id)).json().state,'result_unknown');
+ for(let i=0;i<2;i++){assert.equal((await f.request(f.admin.token,'POST','/api/admin/account-deletions/'+id+'/retry',{})).statusCode,200);await waitForScopedState(async()=>(await f.request(f.admin.token,'GET','/api/admin/account-deletions/'+id)).json().state==='result_unknown',()=> 'retry invented success');}
+ assert.equal(calls,1);const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{assert.equal(db.prepare('SELECT count(*) n FROM pd_captures WHERE user_id=?').get(f.a.userId)!.n,1);assert.equal(db.prepare('SELECT revoked FROM task_authorizations WHERE task_id=?').get(task.json().id)!.revoked,1);}finally{db.close();}
+ assert.equal((await f.request(f.b.token,'GET','/api/captures')).json().items.length,1);
 });

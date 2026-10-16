@@ -1375,10 +1375,10 @@
     ]
   },
   "apps/server/src/scope/accounts.ts": {
-    "scope": "mixed",
-    "module": "M01",
-    "status": "implemented",
+    "scope": "instance",
+    "module": "M16",
     "surfaces": [
+      "table:auth_account_deletions",
       "table:auth_accounts",
       "table:auth_attempts",
       "table:auth_credentials"
@@ -1386,10 +1386,11 @@
   },
   "apps/server/src/scope/app.ts": {
     "scope": "mixed",
-    "module": "M09",
+    "module": "M16",
     "surfaces": [
       "api:get:'/api/health'",
       "extension:registerConfigurationRoutes:runtime",
+      "extension:registerLifecycleRoutes:runtime",
       "extension:registerScopedConnectors:runtime",
       "extension:registerTaskRoutes:runtime"
     ]
@@ -2228,6 +2229,31 @@
     "surfaces": [
       "api:registerUserRoute:scope:'user',service:EXECUTION_DOMAIN,method:'GET',url:'/api/work-activity'",
       "api:registerUserRoute:scope:'user',service:EXECUTION_DOMAIN,method:'GET',url:'/api/work-activity/:id'"
+    ]
+  },
+  "apps/server/src/scope/lifecycle-operations.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "surfaces": [
+      "table:lifecycle_domains",
+      "table:lifecycle_exports",
+      "table:lifecycle_metadata",
+      "table:lifecycle_operations"
+    ]
+  },
+  "apps/server/src/scope/lifecycle-routes.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/admin/accounts/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/account-deletions/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id/content'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/account-deletions/:id/retry'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/cancel'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/retry'"
     ]
   }
 }
