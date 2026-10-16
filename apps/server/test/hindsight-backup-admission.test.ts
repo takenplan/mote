@@ -34,3 +34,43 @@ test('Hindsight validates native tar before creating volume, preserving unknown 
  await assert.rejects(module.restoreHindsight({...f,execute:async(args:string[])=>{calls.push(args);assert.equal(args[0],'run');assert.equal(args[args.indexOf('--pull')+1],'never');assert.equal(args[args.indexOf('--network')+1],'none');throw Error('Generated unsafe native tar');}}),/unsafe native tar/);
  assert.equal(calls.length,1);assert.deepEqual(JSON.parse(await readFile(join(f.archiveDirectory,'provider-control.json'),'utf8')).operations,f.control.operations);assert.deepEqual(await readdir(f.root),['archive']);
 });
+
+test('Hindsight metadata publication rotates runtime identity and retains unknown facts without endpoint credentials',async t=>{
+ const f=await fixture(t),calls:string[][]=[],volumes=new Map<string,string>();
+ const result=await module.restoreHindsight({...f,execute:async(args:string[])=>{
+  calls.push(args);
+  if(args[0]==='volume'){
+   const volume=args.at(-1)!;
+   if(args[1]==='create'){volumes.set(volume,args[args.indexOf('--label')+1].split('=')[1]);return volume;}
+   if(args[1]==='inspect')return JSON.stringify([{Name:volume,Labels:{'mote.runtime.identity':volumes.get(volume)}}]);
+   throw Error('Unexpected native volume mutation');
+  }
+  assert.equal(args[0],'run');assert.equal(args[args.indexOf('--pull')+1],'never');assert.equal(args[args.indexOf('--network')+1],'none');
+  return args[args.indexOf('--entrypoint')+1]==='tar'?'.':'';
+ }});
+ assert.notEqual(result.runtime.identity,f.runtime.identity);assert.equal(result.runtime.instanceFingerprint,f.runtime.instanceFingerprint);assert.equal(result.runtime.modelFingerprint,f.runtime.modelFingerprint);assert.equal(result.automaticWork,false);assert.equal(result.credentialsRequired,true);
+ assert.deepEqual(JSON.parse(await readFile(join(f.providerDirectory,'provider-control.json'),'utf8')),f.control);
+ assert.deepEqual(await readdir(f.runtimeDirectory),['runtime-descriptor.json']);assert.equal(calls[0][0],'run');assert.equal(calls[1][0],'volume');
+});
+
+test('simultaneous Hindsight metadata restores cannot overwrite one another after empty-target admission',async t=>{
+ const a=await fixture(t),b=await fixture(t),providerDirectory=join(a.root,'shared-provider'),volumes=new Map<string,string>();
+ let arrivals=0,release!:()=>void;const together=new Promise<void>(resolve=>{release=resolve;});
+ const execute=async(args:string[])=>{
+  const volume=args.at(-1)!;
+  if(args[0]==='volume'){
+   if(args[1]==='create'){volumes.set(volume,args[args.indexOf('--label')+1].split('=')[1]);return volume;}
+   if(args[1]==='inspect')return JSON.stringify([{Name:volume,Labels:{'mote.runtime.identity':volumes.get(volume)}}]);
+   if(args[1]==='rm'){volumes.delete(volume);return volume;}
+  }
+  if(args[0]==='run'){
+   if(args[args.indexOf('--entrypoint')+1]==='tar')return '.';
+   if(args.at(-1)!.includes('archive.extractall')){if(++arrivals===2)release();await together;}
+   return '';
+  }
+  throw Error('Unexpected metadata protocol command');
+ };
+ const results=await Promise.allSettled([module.restoreHindsight({...a,providerDirectory,execute}),module.restoreHindsight({...b,providerDirectory,execute})]);
+ assert.equal(results.filter(result=>result.status==='fulfilled').length,1);assert.equal(volumes.size,1);
+ assert.deepEqual(JSON.parse(await readFile(join(providerDirectory,'provider-control.json'),'utf8')),a.control);
+});
