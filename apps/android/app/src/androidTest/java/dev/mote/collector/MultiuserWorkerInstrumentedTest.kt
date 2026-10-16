@@ -30,6 +30,18 @@ class MultiuserWorkerInstrumentedTest {
     private fun login(context: Context, name: String) { RuntimeSettings.replaceAccount(context) { Settings(context).signIn(endpoint(),token(name),2592000000) } }
     private fun get(context: Context, name: String, path: String) = HttpJson.get(endpoint()+path,token(name))
 
+    @Test fun localInventoryDoesNotRetainPreviousOwnerCounts() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        login(app,"a");QuickNotes.save(app,"Synthetic private inventory A","")
+        val repository=LocalStateRepository.get(app)
+        waitFor { repository.state.value.active?.records==1 }
+        val observed=repository.state.value.checkedAt
+        login(app,"b");assertEquals(0,app.queue().depth())
+        waitFor { repository.state.value.checkedAt>observed && repository.state.value.error==null }
+        assertEquals(0,repository.state.value.active!!.records)
+    }
+
     @Test fun offlineAThenBPreparesDurableProcessDeathCheckpoint() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app);val settings=Settings(app)
         settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false,uploadedRetentionDays=7))
@@ -51,7 +63,7 @@ class MultiuserWorkerInstrumentedTest {
     }
 
     @Test fun restartAfterActualProcessDeathRestoresOnlyBThenExplicitAResumesOriginalBytes() {
-        val app=context();val settings=Settings(app);val prefs=app.getSharedPreferences("m15-test",0)
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };val settings=Settings(app);val prefs=app.getSharedPreferences("m15-test",0)
         val aid=prefs.getString("aid",null)!!;val bid=prefs.getString("bid",null)!!
         assertEquals(prefs.getString("bowner",null),settings.read().ownerKey());assertFalse(settings.enabled)
         assertEquals(0,app.queue().pendingSync().count);assertEquals(404,get(app,"b","/api/captures/$aid").first)
