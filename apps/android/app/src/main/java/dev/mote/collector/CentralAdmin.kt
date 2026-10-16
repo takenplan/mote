@@ -64,7 +64,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             "connections" -> connections()
             "actions" -> actions()
             "settings" -> settings()
-            "statistics" -> read("/api/storage-statistics")
+            "statistics" -> read("/api/data/statistics")
             "processing" -> processing()
             "plugins", "extensions" -> plugins.show()
             "usage" -> usage()
@@ -217,17 +217,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun models(): Unit = ownedConfiguration(MoteI18n.text("模型配置"), "models", { screens.refresh() }, { models() })
-    fun fileSettings() {
-        val api = client
-        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/file-processing") }) { value ->
-            val settings = JSONObject(value.getJSONObject("settings").toString())
-            listOf("apiKeyConfigured", "localWorkerApiKeyConfigured").forEach(settings::remove)
-            val payload = JSONObject().put("revision", value.getString("revision")).put("settings", settings)
-            listOf("apiKey", "localWorkerApiKey").forEach { settings.put(it, "") }
-            if (value.optBoolean("policyConfigured")) payload.put("policy", value.getJSONObject("policy"))
-            edit(MoteI18n.text("处理设置"), "/api/file-processing", payload)
-        }
-    }
+    fun fileSettings(): Unit = ownedConfiguration(MoteI18n.text("处理设置"), "processing", { screens.refresh() }, { screens.refresh() })
     private fun ownedConfiguration(title: String, domainId: String, back: () -> Unit = { memorySettings() }, done: () -> Unit = back) {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") }) { view ->
@@ -381,7 +371,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         if (path != "/api/memory/jobs") ui.button(MoteI18n.text("停止")) { action(path + "/" + enc(id) + "/cancel") { run(path, id) } }
     }
     private fun devices() {
-        library.paged("/api/devices", ui.card()) { row, card -> values(row, card) }
+        library.paged("/api/ingress/devices", ui.card()) { row, card -> values(row, card) }
         ui.button(MoteI18n.text("生成设备连接邀请")) { invitation() }
     }
     private fun invitation() {
@@ -402,7 +392,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             } }
         }
     }
-    private fun processingSettings() = configuration(MoteI18n.text("处理设置"), "/api/processing", "/api/processing/settings") { it.getJSONObject("settings") }
+    private fun processingSettings() = fileSettings()
     private fun connections() {
         ui.button(MoteI18n.text("生成设备连接邀请")) { invitation() }
         ui.button(MoteI18n.text("创建 MCP 授权")) {
@@ -946,6 +936,10 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             "level" to listOf("debug", "info", "warn", "error", "silent"), "access" to listOf("read", "write"), "brand" to listOf("feishu", "lark"))
         fun pick(value: JSONObject, vararg keys: String) = JSONObject().apply { keys.forEach { key -> if (value.has(key)) put(key, value.get(key)) } }
         private val labels = mapOf(
+            "captures" to "原始采集记录", "materials" to "正式资料", "sources" to "来源与连接",
+            "automatic" to "自动处理", "understandingEnabled" to "内容理解", "summarize" to "生成摘要", "semanticTurns" to "语义分段",
+            "audioProcessor" to "转写处理器", "diarizationProcessor" to "说话人分离处理器", "speakerCount" to "说话人数",
+            "speakerMin" to "说话人数下限", "speakerMax" to "说话人数上限", "maxAudioMinutes" to "最长录音时长（分钟）", "timeoutMs" to "处理超时（毫秒）",
             "title" to "标题", "name" to "名称", "description" to "描述", "enabled" to "启用", "status" to "状态", "state" to "状态",
             "provider" to "服务商", "protocol" to "协议", "baseUrl" to "服务地址", "model" to "模型", "reasoningEffort" to "推理强度",
             "serviceTier" to "速度模式",

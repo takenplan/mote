@@ -8435,5 +8435,13 @@ export const english: Readonly<Record<string, string>> = {
   "仅处理所选资料的固定版本；未选配方时沿用当前记忆设置。": "Process only the pinned versions of selected materials. Leave recipes unselected to use the current Memory settings.",
   "已选择 {0} 份资料": "{0} materials selected",
   "请选择至少一份资料。": "Select at least one material.",
-  "提交所选资料": "Submit selected materials"
+  "提交所选资料": "Submit selected materials",
+  "自动处理": "Automatic processing",
+  "生成摘要": "Generate summaries",
+  "语义分段": "Semantic segments",
+  "转写处理器": "Transcription processor",
+  "说话人分离处理器": "Speaker diarization processor",
+  "说话人数": "Speaker count",
+  "最长录音时长（分钟）": "Maximum recording duration (minutes)",
+  "处理超时（毫秒）": "Processing timeout (milliseconds)"
 };
