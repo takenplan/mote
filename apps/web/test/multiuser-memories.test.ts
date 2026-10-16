@@ -7,6 +7,8 @@ import {configureLocale} from '@mote/shared/i18n';
 import {scopedMemoryFixture} from '../../server/test/fixtures/scoped-memory-host.js';
 import {ReferenceDetail} from '../src/ReferenceDetail.js';
 import {Memories} from '../src/Memories.js';
+import {MaterialDetail} from '../src/Materials.js';
+import {memoryMaterialRoute} from '../src/memory-source-route.js';
 import type {Api} from '../src/api.js';
 configureLocale(()=> 'zh-CN');
 
@@ -43,4 +45,28 @@ test('original Memories reads real M07 publication and opens its evidence throug
  for(let n=0;n<200&&!d.querySelector('.memory-detail')?.textContent?.includes('GENERATED_OWNER_CORRECTION_B');n++)await act(async()=>delay(20));assert.match(d.querySelector('.memory-detail')!.textContent!,/GENERATED_OWNER_CORRECTION_B/);
  assert.doesNotMatch((await f.request(f.a.token,'/api/memories')).body,/GENERATED_OWNER_CORRECTION_B/);
  assert.equal(calls.filter(call=>call.path.startsWith('/api/memories?')&&call.status!==200).length,0);
+});
+
+
+test('original Material detail and manual Memory selection retain canonical revision and the chosen account model through publication',async t=>{
+ const f=await scopedMemoryFixture(t),am=await f.publish(f.a,'A'),bm=await f.publish(f.b,'B');assert.equal(am.id,bm.id);
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/#/library',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>();
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
+ const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!),calls:{path:string;body:any;status:number}[]=[];
+ t.after(async()=>{await act(async()=>root.unmount());for(const [key,value]of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
+ const api={connection:{mode:'web',origin:'http://localhost',deploymentId:'generated',userId:'A',credentialId:'A',csrfToken:'generated',username:'A',administrator:false},request:async(path:string,init?:RequestInit)=>{const body=init?.body?JSON.parse(String(init.body)):undefined,r=await f.request(f.a.token,path,init?.method,body);calls.push({path,body,status:r.statusCode});if(r.statusCode!==200)throw Error(r.statusCode+' '+r.body);return r.json();}} as Api;
+ const d=dom.window.document;
+ await act(async()=>{root.render(React.createElement(MaterialDetail,{api,material:am,onOpen:()=>{}}));await delay(30);});
+ for(let n=0;n<30&&!d.querySelector('a[href*="memoryMaterial"]');n++)await act(async()=>delay(10));
+ const link=d.querySelector<HTMLAnchorElement>('a[href*="memoryMaterial"]');assert.ok(link,'original Material detail exposes the actual M07 canonical selection: '+d.body.textContent);assert.equal(link.getAttribute('href'),memoryMaterialRoute(am.ref));
+ dom.window.location.hash=link.getAttribute('href')!;
+ await act(async()=>{root.render(React.createElement(Memories,{api,range:{},onOpen:()=>{}}));await delay(30);});
+ for(let n=0;n<30&&d.querySelector<HTMLButtonElement>('.memory-actions button')?.disabled;n++)await act(async()=>delay(10));
+ const extract=d.querySelector<HTMLButtonElement>('.memory-actions button');assert.ok(extract&&!extract.disabled,'canonical Material preflight makes the existing single-source form ready: '+d.body.textContent);
+ await act(async()=>{const select=d.querySelector<HTMLSelectElement>('select[aria-label="本次模型"]')!;select.value='personal:same-model';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));});
+ await act(async()=>{extract.click();await delay(30);});
+ const admission=calls.find(call=>call.body&&call.path.includes('memory')&&call.body.materialIds);assert.ok(admission,'original form sends canonical IDs, not normalized evidence UUIDs: '+JSON.stringify(calls));assert.equal(admission.path,'/api/memory/jobs');assert.equal(admission.status,200,JSON.stringify(admission));assert.deepEqual(admission.body.materialRevisions,{[am.id]:am.revision});assert.deepEqual(admission.body.modelReference,{kind:'personal',id:'same-model'});
+ const done=await f.wait(f.a,admission.body.operationId);assert.equal(done.state,'committed');
+ for(let n=0;n<150&&!d.querySelector('.memory-progress')?.textContent?.includes('记忆提取完成');n++)await act(async()=>delay(20));assert.match(d.querySelector('.memory-progress')!.textContent!,/记忆提取完成/);
+ assert.ok(f.requests.length>=2);assert.ok(f.requests.every(r=>r.key==='GENERATED_A_KEY'&&!r.raw.includes('GENERATED_MEMORY_B')));assert.equal((await f.request(f.b.token,'/api/memories')).json().items.length,0);
 });
