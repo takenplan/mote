@@ -11,8 +11,10 @@ import {generatedScopedPluginRelease} from '../../server/test/fixtures/scoped-pl
 const directory=mkdtempSync(join(tmpdir(),'m15-kotlin-backend-'));
 const releaseFixture=process.argv.includes("--plugins")?generatedScopedPluginRelease():undefined;
 const node=await buildApp({dataDir:directory},releaseFixture?{pluginReleaseTransport:releaseFixture.transport}:undefined);
+const archiveReads:{owner:string;path:string;status:number}[]=[];
 let holdNext=false,entered=false,release:(()=>void)|undefined;
 node.app.addHook('onSend',async(request,reply,payload)=>{
+ if(request.method==='GET'&&request.url.startsWith('/api/capture-browser'))archiveReads.push({owner:request.headers.authorization==='Bearer '+a.token?'a':request.headers.authorization==='Bearer '+b.token?'b':'other',path:request.url,status:reply.statusCode});
  if(reply.statusCode>=400)process.stderr.write(JSON.stringify({method:request.method,path:request.url,status:reply.statusCode,response:payload})+'\n');
  if(holdNext&&reply.statusCode===200&&/^\/api\/ingress\/sources\/[^/]+\/captures$/.test(request.url)){holdNext=false;entered=true;await new Promise<void>(resolve=>{release=resolve;});}
  return payload;
@@ -48,7 +50,9 @@ if(!Number.isInteger(selectedPort)||selectedPort<0||selectedPort>65535)throw new
 const address=await node.app.listen({host:'127.0.0.1',port:selectedPort});
 const port=Number(new URL(address).port);
 const control=createServer((request,response)=>{void(async()=>{
- if(request.url==='/hold-next'){entered=false;holdNext=true;}
+ if(request.url==='/archive-reads/reset'){archiveReads.length=0;}
+ else if(request.url==='/archive-reads'){}
+ else if(request.url==='/hold-next'){entered=false;holdNext=true;}
  else if(request.url==='/release'){release?.();release=undefined;}
  else if(request.url==='/network/off'){node.app.server.closeAllConnections();await new Promise<void>((resolve,reject)=>node.app.server.close(error=>error?reject(error):resolve()));}
  else if(request.url==='/network/on'){await new Promise<void>((resolve,reject)=>{node.app.server.once('error',reject);node.app.server.listen(port,'127.0.0.1',()=>{node.app.server.removeListener('error',reject);resolve();});});}
@@ -59,7 +63,7 @@ const control=createServer((request,response)=>{void(async()=>{
  }
  else if(request.url==='/snapshot/expire'){const db=new DatabaseSync(join(directory,'mote.sqlite'));try{db.prepare('UPDATE ig_snapshot_inputs SET expires=?').run(Date.now()-1);}finally{db.close();}}
  else if(request.url!=='/state'){response.writeHead(404);response.end();return;}
- response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release}));
+ response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release,archiveReads}));
  })().catch(error=>{response.writeHead(500);response.end(JSON.stringify({error:String(error)}));});});
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress='http://127.0.0.1:'+(control.address() as {port:number}).port;
