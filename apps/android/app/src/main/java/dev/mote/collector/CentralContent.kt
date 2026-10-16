@@ -57,13 +57,17 @@ internal class CentralContent(
     private var screens: CentralScreens? = null
     private var restoredWorkState = state?.getBundle("workActivity")
     private val restoredWorkOrigin = state?.getString("workActivityOrigin")
+    private val restoredWorkOwner = state?.getString("workActivityOwner")
     private var pickerOrigin: String? = null
     private var pickerChat = false
     private var pickerGeneration = -1L
+    private var pickerOwner: String? = null
     private var pickerInstruction = ""
     private var downloadPath: String? = null
     private var downloadOrigin: String? = null
     private var downloadGeneration = -1L
+    private var downloadOwner: String? = null
+    private var downloadReceipt: String? = null
     private val refreshRun = Runnable { if (resumed) when (page) { "ask" -> screens?.pollAsk(); "activity" -> screens?.pollWorkActivity() } }
 
     private val refreshLogin = object : Runnable {
@@ -94,9 +98,11 @@ internal class CentralContent(
         pageHistory.addAll(state?.getStringArrayList("pageHistory").orEmpty())
         pickerOrigin = state?.getString("pickerOrigin"); pickerChat = state?.getBoolean("pickerChat") ?: false
         pickerGeneration = state?.getLong("pickerGeneration") ?: -1L
+        pickerOwner = state?.getString("pickerOwner")
         pickerInstruction = state?.getString("pickerInstruction").orEmpty()
         downloadPath = state?.getString("downloadPath"); downloadOrigin = state?.getString("downloadOrigin")
         downloadGeneration = state?.getLong("downloadGeneration") ?: -1L
+        downloadOwner = state?.getString("downloadOwner"); downloadReceipt = state?.getString("downloadReceipt")
         val shell = NativeAppShell(activity)
         root = shell
         val compactHeader = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
@@ -177,10 +183,11 @@ internal class CentralContent(
         val changed = server != endpoint
         val authenticated = client == null && selected.client != null
         if (sessionChanged) { screens?.close(); screens?.clearPrivateState() }
-        server = endpoint; client = selected.client
-        if (changed || screens == null) {
-            screens = CentralScreens(this, body, File(noBackupFilesDir, "central-native/" + SourceRules.hash(endpoint)))
-            if (endpoint == restoredWorkOrigin) restoredWorkState?.let { screens?.restoreWorkState(it) }
+        server = endpoint
+        if (changed || sessionChanged || client == null || selected.client == null) client = selected.client
+        if (changed || sessionChanged || screens == null) {
+            screens = CentralScreens(this, body, File(accountDirectory(), "central-native/" + SourceRules.hash(endpoint)))
+            if (endpoint == restoredWorkOrigin && accountOwnerKey() == restoredWorkOwner) restoredWorkState?.let { screens?.restoreWorkState(it) }
             restoredWorkState = null
         }
         if (client == null) { screens?.clearPrivateState(); login() }
@@ -197,10 +204,12 @@ internal class CentralContent(
         state.putString("browserLoginId", browserLoginId); state.putString("browserVerifier", browserVerifier); state.putLong("browserGeneration", browserGeneration)
         state.putString("centralPage", page); state.putString("pickerOrigin", pickerOrigin); state.putBoolean("pickerChat", pickerChat)
         state.putStringArrayList("pageHistory", ArrayList(pageHistory))
-        state.putLong("pickerGeneration", pickerGeneration); state.putString("downloadPath", downloadPath)
+        state.putString("pickerOwner", pickerOwner); state.putLong("pickerGeneration", pickerGeneration); state.putString("downloadPath", downloadPath)
         state.putString("pickerInstruction", pickerInstruction)
         state.putString("downloadOrigin", downloadOrigin); state.putLong("downloadGeneration", downloadGeneration)
+        state.putString("downloadOwner", downloadOwner); state.putString("downloadReceipt", downloadReceipt)
         state.putString("workActivityOrigin", server)
+        state.putString("workActivityOwner", accountOwnerKey())
         state.putBundle("workActivity", Bundle().also { screens?.saveWorkState(it) })
     }
     fun back(): Boolean {
@@ -220,8 +229,15 @@ internal class CentralContent(
         page = next; revision++; pending.clear(); handler.removeCallbacks(refreshRun); screens?.close(); body.removeAllViews()
         navigation?.select(MoteNavigation.centralTab(next)); updateCollectionBar(); updateBackButton()
         title.text = CentralScreens.pages.firstOrNull { it.first == if (next == "extensions") "plugins" else next }?.second?.let { MoteI18n.text(it) } ?: MoteI18n.text("中央资料库")
+        if (screens?.ownsSelectedAccount() == false) { resolveSelectedAccount(); return }
         if (client == null) { if (server.isBlank()) disconnected() else login(); return }
-        screens?.show(next)
+        runCatching { screens?.show(next) }.onFailure { error ->
+            if (screens?.ownsSelectedAccount() == false) resolveSelectedAccount() else requestFailure(error)
+        }
+    }
+    private fun resolveSelectedAccount() {
+        screens?.clearPrivateState(); screens = null; client = null; collectionBar.visibility = View.GONE
+        work(MoteI18n.text("正在读取本机设置…"), { CentralAccess.resolve(this) }, allowSessionChange = true) { applyAccess(it) }
     }
     internal fun openWorkDestination(page: String) {
         if (openLocalPage != null && page == "ask") localPage("ASK")
@@ -284,24 +300,26 @@ internal class CentralContent(
         revision++; body.removeAllViews(); collectionBar.visibility = View.GONE; title.text = MoteI18n.text("登录中央节点")
         navigation?.select(MoteNavigation.centralTab(page))
         text(server); text(MoteI18n.text("登录一次即可使用问答、资料库和同步等所有中央功能。"))
-        val credential = field(MoteI18n.text("中央管理令牌"), password = true)
+        val bindLocal = CheckBox(this).apply { text = MoteI18n.text("将本机未绑定资料归入此账号"); body.addView(this) }
+        val username = field(MoteI18n.text("用户名"))
+        val credential = field(MoteI18n.text("密码"), password = true)
         text(MoteI18n.text("登录会话有效期"))
         val lifetime = Spinner(this).apply {
             adapter = ArrayAdapter(this@CentralContent, android.R.layout.simple_spinner_dropdown_item,
                 listOf(MoteI18n.text("本次应用会话"), MoteI18n.text("1 天"), MoteI18n.text("7 天"), MoteI18n.text("30 天")))
         }; lifetime.setSelection(3); body.addView(lifetime)
         button(MoteI18n.text("登录并继续"), true) {
-            val token = credential.text.toString().trim()
+            val password = credential.text.toString()
+            val loginName = username.text.toString().trim()
+            val adoptLocal = bindLocal.isChecked
             val duration = listOf(0L, 86400000L, 7 * 86400000L, 30 * 86400000L)[lifetime.selectedItemPosition]
             val origin = server; val generation = accessGeneration; credential.setText("")
             work(MoteI18n.text("正在验证令牌…"), {
                 check(session.generation == generation) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
-                require(token.length in 32..8192 && token.none { it == '\r' || it == '\n' }) { MoteI18n.text("请输入有效的中央所有者令牌") }
-                CentralClient(origin, token).get("/api/configuration")
-                val config = Settings(this).read()
-                val grant = CentralClient(origin, token).post("/api/login/session", org.json.JSONObject().put("serverUrl", origin).put("deviceId", Settings(this).deviceId)
-                    .put("deviceName", config.deviceName).put("platform", "android").put("durationMs", duration))
-                session.signIn(origin, grant.getString("token"), duration, generation)
+                val (code, result) = HttpJson.post(origin + "/api/auth/login", org.json.JSONObject().put("username", loginName).put("password", password).put("mode", "client").put("durationMs", duration))
+                if (code !in 200..299 || result == null) throw CentralFailure(code, result?.optString("error").orEmpty())
+                val grant = result
+                session.signIn(origin, grant.getString("token"), duration, generation, adoptLocal)
                 CentralAccess.resolve(this)
             }, allowSessionChange = true) { selected -> applyAccess(selected) }
         }
@@ -349,7 +367,8 @@ internal class CentralContent(
         text = value; MoteUi.type(this, size.toInt()); MoteUi.textColor(this, NativeColorRole.INK); setTextIsSelectable(true); setPadding(0, moteDp(8), 0, moteDp(8))
     }.also(parent::addView)
     internal fun button(label: String, primary: Boolean = false, parent: LinearLayout = body, action: () -> Unit): Button = MoteUi.button(Button(this).apply {
-        text = label; setOnClickListener { if (!task.busy) runCatching { action(); MoteUi.styleSelects(body) }.onFailure { notice(it.message ?: MoteI18n.text("操作失败")) } }
+        val owner = client; val pageRevision = revision
+        text = label; setOnClickListener { if (client === owner && revision == pageRevision && !task.busy) runCatching { action(); MoteUi.styleSelects(body) }.onFailure { notice(it.message ?: MoteI18n.text("操作失败")) } }
     }, primary).also { parent.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(8) }) }
     internal fun field(label: String, value: String = "", multiline: Boolean = false, password: Boolean = false, parent: LinearLayout = body): EditText {
         text(label, NativeFontRole.SUPPORT, parent)
@@ -446,7 +465,7 @@ internal class CentralContent(
         }
     }
     internal fun pickAttachment(chat: Boolean = false) {
-        pickerOrigin = server; pickerChat = chat; pickerGeneration = accessGeneration
+        pickerOrigin = server; pickerChat = chat; pickerGeneration = accessGeneration; pickerOwner = accountOwnerKey()
         val picker = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType(if (chat) "image/*" else "*/*")
             .putExtra(Intent.EXTRA_MIME_TYPES, if (chat) arrayOf("image/png", "image/jpeg", "image/webp") else arrayOf("image/*", "audio/*"))
             .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
@@ -454,33 +473,49 @@ internal class CentralContent(
     }
     internal fun saveCentral(path: String, name: String, mime: String) {
         downloadPath = path; downloadOrigin = server; downloadGeneration = accessGeneration
+        downloadOwner = accountOwnerKey(); downloadReceipt = null
         @Suppress("DEPRECATION") activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
             .setType(mime).putExtra(Intent.EXTRA_TITLE, name), 72)
     }
+    internal fun savePortable(receipt: org.json.JSONObject) {
+        saveCentral(CentralPortable.PATH + "/" + receipt.getString("id") + "/content", receipt.getString("filename"), "application/json")
+        downloadReceipt = receipt.toString()
+    }
     internal fun pickImport() {
-        pickerOrigin = server; pickerGeneration = accessGeneration
+        pickerOrigin = server; pickerGeneration = accessGeneration; pickerOwner = accountOwnerKey()
         pickerInstruction = screens?.importInstruction.orEmpty()
         @Suppress("DEPRECATION") activity.startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
             .setType("*/*"), 73)
+    }
+    internal fun pickPortableImport(operationId: String? = null) {
+        operationId?.let(java.util.UUID::fromString)
+        pickerOrigin = server; pickerGeneration = accessGeneration; pickerOwner = accountOwnerKey(); pickerInstruction = operationId.orEmpty()
+        @Suppress("DEPRECATION") activity.startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/json"), 74)
     }
     fun activityResult(request: Int, result: Int, data: Intent?) {
         if (result != Activity.RESULT_OK || data == null) return
         if (!accessReady) { pendingResult = Triple(request, result, data); if (!resumed) resume(); return }
         if (request == 72) {
             val uri = data.data ?: return; val path = downloadPath ?: return
-            val origin = downloadOrigin; val generation = downloadGeneration; downloadPath = null
+            val origin = downloadOrigin; val generation = downloadGeneration; val owner = downloadOwner
+            val receipt = downloadReceipt; downloadPath = null; downloadReceipt = null; downloadOwner = null
             work(MoteI18n.text("正在导出中央资料…"), {
                 val selected = CentralAccess.resolve(this)
-                check(selected.server == origin && session.generation == generation) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
+                check(selected.server == origin && session.generation == generation && accountOwnerKey() == owner) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
                 val api = requireNotNull(selected.client)
-                requireNotNull(contentResolver.openOutputStream(uri, "wt")).use { api.download(path, it) }
+                if (receipt == null) api.downloadStaged(path, { requireNotNull(contentResolver.openOutputStream(uri, "wt")) }, File(accountDirectory(), "central-native/downloads"))
+                else CentralPortable(api).save(org.json.JSONObject(receipt), File(accountDirectory(), "central-native/downloads")) {
+                    requireNotNull(contentResolver.openOutputStream(uri, "wt"))
+                }
             }) { notice(MoteI18n.text("资料已导出")) }; return
         }
-        if (request !in setOf(71, 73)) return
-        val origin = pickerOrigin; val chat = pickerChat; pickerOrigin = null
+        if (request !in setOf(71, 73, 74)) return
+        val origin = pickerOrigin; val owner = pickerOwner; val chat = pickerChat; pickerOrigin = null; pickerOwner = null
         val uris = data.clipData?.let { clip -> (0 until clip.itemCount).map { clip.getItemAt(it).uri } } ?: listOfNotNull(data.data)
-        if (origin != server || client == null || pickerGeneration != accessGeneration) { notice(MoteI18n.text("登录会话已变更，请重新打开中央页面。")); return }
-        if (request == 73) uris.firstOrNull()?.let { screens?.importInstruction = pickerInstruction; screens?.importFile(it) }
+        if (origin != server || client == null || pickerGeneration != accessGeneration || owner != accountOwnerKey()) { notice(MoteI18n.text("登录会话已变更，请重新打开中央页面。")); return }
+        if (request == 74) uris.firstOrNull()?.let { screens?.importPortableFile(it, pickerInstruction.takeIf(String::isNotBlank)) }
+        else if (request == 73) uris.firstOrNull()?.let { screens?.importInstruction = pickerInstruction; screens?.importFile(it) }
         else screens?.addAttachments(uris, chat)
     }
 }

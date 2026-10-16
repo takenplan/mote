@@ -1,3 +1,6 @@
+import {captureOcrState} from '@mote/shared/metadata';
+import {systemEventText} from '@mote/shared';
+import {isStateExtension} from '@mote/shared/state-series';
 import {ScopedImportAttribution} from './import-attribution.js';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
@@ -5,6 +8,7 @@ import {sourceConnectionSchema,sourceItemSchema,sourceContentTime,captureSchema,
 import {materialDraftSchema,materialOwnerDeclarationBodyHash,materialOwnerStatementSchema,type MaterialDraft} from './material-model.js';
 import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
 import {storeCapture,type StoredCapture} from './capture-original.js';
+import {CaptureBrowserData} from './capture-browser-data.js';
 
 export const PRIVATE_DATA_DOMAIN='private-data';
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
@@ -23,6 +27,7 @@ const conflict=()=>new PrivateDataError('conflict',409);
  * closed until those modules implement credentials, originals and task fences. */
 export class PrivateData{
   constructor(private readonly sql:PrivateSql,private readonly cursor:PrivateCursor){this.withdrawUnfilteredCoding();}
+  captureBrowser(processing=false){return new CaptureBrowserData(this.sql,this.cursor,id=>this.capture(id),processing);}
   sources():SourceConnection[]{return this.sql.all('SELECT json FROM pd_sources WHERE user_id=$user ORDER BY id').map(r=>json<SourceConnection>(r));}
   source(id:string):SourceConnection{return json(this.sql.get('SELECT json FROM pd_sources WHERE user_id=$user AND id=?',id));}
   registerSource(raw:unknown){
@@ -76,8 +81,14 @@ export class PrivateData{
   private insertCapture(input:CaptureInput,sourceFingerprint?:string,ingressSourceId?:string){
     const at=now(),record={...storeCapture({...input,capturedAt:new Date(input.capturedAt).toISOString()}),...(ingressSourceId?{ingressSourceId}:{})},fingerprint=sourceFingerprint??hash(record);
     if(Date.parse(record.capturedAt)>Date.now()+86400000)throw new PrivateDataError('invalid_data');
-    const prior=this.sql.get('SELECT fingerprint FROM pd_captures WHERE user_id=$user AND id=?',record.id);
-    if(prior){if(prior.fingerprint!==fingerprint)throw conflict();return {id:record.id,duplicate:true};}
+    const prior=this.sql.get('SELECT fingerprint,json FROM pd_captures WHERE user_id=$user AND id=?',record.id);
+    if(prior){
+      if(sourceFingerprint===undefined&&record.stateSeries){const previous=JSON.parse(String(prior.json)) as StoredCapture;
+        if(isStateExtension(previous,record)){this.sql.run('UPDATE pd_captures SET json=?,fingerprint=? WHERE user_id=$user AND id=?',JSON.stringify(record),fingerprint,record.id);return {id:record.id,duplicate:true};}
+        if(isStateExtension(record,previous))return {id:record.id,duplicate:true};
+      }
+      if(prior.fingerprint!==fingerprint)throw conflict();return {id:record.id,duplicate:true};
+    }
     const p=record.provenance;
     this.sql.run('INSERT INTO pd_captures VALUES($user,?,?,?,?,?,?,?,?)',record.id,p?.sourceId??null,p?.externalId??null,p?.revision??null,fingerprint,new Date(sourceContentTime(record)).toISOString(),at,JSON.stringify(record));
     return {id:record.id,duplicate:false};
@@ -127,14 +138,14 @@ export class PrivateData{
     const head=this.sourceItem(sourceId,externalId);
     return this.sql.all('SELECT id FROM pd_captures WHERE user_id=$user AND source_id=? AND external_id=? ORDER BY received_at DESC,id DESC LIMIT 100',sourceId,externalId).map(r=>this.item(String(r.id),r.id===head?.captureId));
   }
-  private filter(raw:ListInput,collection:'captures'|'source-items'|'materials',sourceIds?:readonly string[]){
+  private filter(raw:ListInput,collection:'captures'|'capture-previews'|'source-items'|'materials',sourceIds?:readonly string[]){
     const args=privateListSchema.parse(raw),{cursor,limit,...filters}=args;
     if(filters.sourceId)this.source(filters.sourceId);
     const query={collection,...filters,...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}:{})},position=cursor?this.cursor.decode(cursor,query):undefined;
     return {args,query,position,limit};
   }
-  captures(raw:ListInput={},heads=false){
-    const {args,query,position,limit}=this.filter(raw,heads?'source-items':'captures');
+  captures(raw:ListInput={},heads=false,previews=false){
+    const {args,query,position,limit}=this.filter(raw,heads?'source-items':previews?'capture-previews':'captures');
     const clauses=['1'],values:(string|number)[]=[];
     if(heads)clauses.push("EXISTS(SELECT 1 FROM pd_source_heads h WHERE h.user_id=$user AND h.capture_id=c.id) AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0");
     if(args.sourceId){clauses.push('c.source_id=?');values.push(args.sourceId);}
@@ -145,7 +156,10 @@ export class PrivateData{
     if(position){clauses.push('(c.context_at<? OR(c.context_at=? AND c.id<?))');values.push(position.at,position.at,position.id);}
     const rows=this.sql.all(`SELECT c.id,c.context_at FROM pd_captures c WHERE c.user_id=$user AND ${clauses.join(' AND ')} ORDER BY c.context_at DESC,c.id DESC LIMIT ?`,...values,limit+1);
     const visible=rows.slice(0,limit),last=visible.at(-1);
-    return {items:visible.map(r=>heads?this.item(String(r.id),true):this.capture(String(r.id))),nextCursor:rows.length>limit&&last?this.cursor.encode(query,{at:String(last.context_at),id:String(last.id)}):null};
+    return {items:visible.map(r=>{
+      if(heads)return this.item(String(r.id),true);const record=this.capture(String(r.id));if(!previews)return record;
+      return {id:record.id,deviceId:record.deviceId,deviceName:record.deviceName,platform:record.platform,capturedAt:record.capturedAt,source:record.source,appId:record.appId,appName:record.appName,windowTitle:(record.windowTitle??'').slice(0,300),durationMs:record.durationMs,hasImage:Boolean(record.blobHash),ocr:captureOcrState(record),textPreview:(['notification','device_event'].includes(record.source)?systemEventText(record.metadata):record.ocrText??'').slice(0,160),...(record.stateSeries?{stateSummary:{count:record.stateSeries.samples.length,lastAt:record.stateSeries.samples.at(-1)!.at}}:{})};
+    }),nextCursor:rows.length>limit&&last?this.cursor.encode(query,{at:String(last.context_at),id:String(last.id)}):null};
   }
   publishMaterial(raw:unknown,expectedRevision?:string){
     return this.publishVersion(raw,expectedRevision);
@@ -270,6 +284,17 @@ export class PrivateData{
     if(position){clauses.push('(h.updated_at<? OR(h.updated_at=? AND h.id<?))');values.push(position.at,position.at,position.id);}
     const rows=this.sql.all(`SELECT h.id,h.updated_at FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id WHERE h.user_id=$user AND v.user_id=$user AND ${clauses.join(' AND ')} ORDER BY h.updated_at DESC,h.id DESC LIMIT ?`,...values,limit+1),last=rows.slice(0,limit).at(-1);
     return {items:rows.slice(0,limit).map(r=>this.material(String(r.id))),nextCursor:rows.length>limit&&last?this.cursor.encode(query,{at:String(last.updated_at),id:String(last.id)}):null};
+  }
+  /** Metadata projection for the existing Library UI. Content and opaque
+   * pagination still come from the same canonical, owner-bound material reader. */
+  catalog(raw:ListInput={}){
+    const page=this.materials(raw);
+    const sources=this.sql.all(`SELECT h.source_id id,COUNT(*) count,json_extract(s.json,'$.name') label
+      FROM pd_materials h LEFT JOIN pd_sources s ON s.user_id=h.user_id AND s.id=h.source_id
+      WHERE h.user_id=$user AND h.sequence>=h.min_visible_sequence GROUP BY h.source_id ORDER BY h.source_id LIMIT 201`);
+    // No scoped host presentation descriptors are installed yet. The established
+    // generic Material card/body remains usable; this does not advertise a pack.
+    return {schemaVersion:1 as const,types:[],...page,sources:sources.slice(0,200).map(source=>({id:String(source.id),label:String(source.label??source.id).slice(0,120),count:Number(source.count)})),sourcesTruncated:sources.length>200};
   }
   readMaterial(id:string,options:{revision?:string;offset?:number;length?:number}={}){
     const material=this.material(id,options.revision),offset=z.number().int().min(0).parse(options.offset??0),length=z.number().int().min(1).max(12000).parse(options.length??12000);

@@ -87,7 +87,7 @@ for(const mode of ['stop','grant-revoke','plugin-delete','ingress-delete','accou
  const f=await fixture(t),key=mode+'-'+randomUUID(),events:unknown[]=[],context=await f.node.authority.authenticate(f.alice.token);f.node.plugins!.forUser(context).subscribe(f.snapshots.a.id,event=>events.push(event));
  const task=await f.submit(f.alice.token,f.snapshots.a.id,'receiveSourceItems',['allowed-source','late-'+mode,[item('late-'+mode)]],{waitForRelease:key,emitAfterRelease:true});let entered:string|undefined;await until(()=>Boolean(entered=find(join(f.directory,'plugins','instances'),'joint-entered-'+key)),'source worker did not enter');const directory=dirname(entered!),pid=Number(readFileSync(entered!,'utf8'));
  if(mode==='stop')await f.action(f.alice.token,'stop');
- if(mode==='grant-revoke'){await f.action(f.alice.token,'pause');const instance=(await f.view(f.alice.token)).instances[0];delete instance.generation;delete instance.checked;instance.grants.sourceIds=[];await f.configure(f.alice.token,instance);}
+ if(mode==='grant-revoke'){await f.action(f.alice.token,'pause');const instance=(await f.view(f.alice.token)).instances[0];delete instance.generation;delete instance.checked;delete instance.secretStatus;delete instance.capabilities;instance.grants.sourceIds=[];await f.configure(f.alice.token,instance);}
  if(mode==='plugin-delete')assert.equal((await f.node.services.forUser(context).deleteUser('plugins','joint-delete-plugins')).status,'complete');
  if(mode==='ingress-delete')assert.equal((await f.node.services.forUser(context).deleteUser('ingress','joint-delete-ingress')).status,'complete');
  if(mode==='account-disable')await f.checked(f.admin.token,'/api/admin/accounts/'+f.a.userId,'PATCH',{disabled:true});

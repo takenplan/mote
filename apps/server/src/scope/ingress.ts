@@ -2,7 +2,7 @@ import {ScopedImportAttribution,importDeclarationSchema} from './import-attribut
 import {createHmac,timingSafeEqual,randomUUID} from 'node:crypto';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
-import {captureSchema,sourceItemSchema,sourceIdSchema,sourceConnectionSchema,fileRevisionSchema,FILE_PART_BYTES,type CaptureInput,type SourceItem} from '@mote/shared';
+import {heartbeatSchema,captureSchema,sourceItemSchema,sourceIdSchema,sourceConnectionSchema,fileRevisionSchema,FILE_PART_BYTES,type CaptureInput,type SourceItem} from '@mote/shared';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {ScopedRuntime} from './http.js';
 import {ScopeError} from './baseline.js';
@@ -37,6 +37,8 @@ export class IngressHost{
  readonly key:string;
  private readonly active=new Set<string>();
  private readonly accepted=new Set<(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void>();
+ private snapshotRecovery?:{needed:(context:UserContext,ref:string)=>boolean;restored:(context:UserContext,ref:string)=>void};
+ configureSnapshotRecovery(policy:{needed:(context:UserContext,ref:string)=>boolean;restored:(context:UserContext,ref:string)=>void}){this.snapshotRecovery=policy;}
  onAccepted(receive:(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void){this.accepted.add(receive);return ()=>{this.accepted.delete(receive);};}
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly directory:string){
   this.key=installIngress(db);
@@ -70,9 +72,11 @@ export class IngressHost{
    if(deviceId&&result.deviceId!==deviceId)throw missing();if(!result.enabled)throw conflict();return result;
   };
   const original=(ref:string)=>{assert();const result=originals.original(ref);source(result.sourceId);return result;};
+  const recoveryKey=(ref:string)=>identityHash([ref,Number(sql.get('SELECT expires FROM ig_snapshot_inputs WHERE user_id=$user AND original_id=?',ref.slice(9))?.expires??0)]);
+  const needsRecovery=(value:Original)=>{const binding=source(value.sourceId),record=data().capture(value.captureId),p=record.provenance;if(binding.retention!=='snapshot'||value.retention!=='snapshot'||value.available!==false||!p||p.layer!=='snapshot'||p.deleted||data().sourceItem(value.sourceId,p.externalId)?.captureId!==record.id)return false;if(!this.snapshotRecovery)throw new PrivateDataError('scope_unavailable',503);return this.snapshotRecovery.needed(context,value.ref);};
   const during=async<T>(work:()=>Promise<T>)=>{assert();const activity=ingressActivity(this.db,context.userId),key=identityHash([context.userId,activity.id]);this.active.add(key);try{return await work();}finally{this.active.delete(key);activity.finish();}};
   const receipt=(sourceId:string,id:string,captures:IngressReceipt['captures']):IngressReceipt=>({version:3,id:identityHash([context.deploymentId,context.userId,sourceId,id]),deploymentId:context.deploymentId,userId:context.userId,sourceId,batchId:id,state:'received',captures});
-  const checkReceipt=(value:IngressReceipt)=>{source(value.sourceId);for(const item of value.captures){data().capture(item.id);if(item.original)original(item.original.ref);}return value;};
+  const checkReceipt=(value:IngressReceipt)=>{source(value.sourceId);return {...value,captures:value.captures.map(item=>{data().capture(item.id);return {...item,...(item.original?{original:original(item.original.ref)}:{})};})};};
   const batch=(sourceId:string,id:string,payload:unknown,format:IngressOriginalFormat,write:()=>IngressReceipt,formats:(receipt:IngressReceipt)=>Readonly<Record<string,IngressOriginalFormat>>=()=>({}))=>sql.transaction(()=>{
    source(sourceId);batchId.parse(id);const digest=identityHash(payload),previous=sql.get('SELECT digest,receipt FROM ig_batches WHERE user_id=$user AND source_id=? AND batch_id=?',sourceId,id);
    if(previous){if(previous.digest!==digest)throw conflict();return checkReceipt(JSON.parse(String(previous.receipt)));}
@@ -80,7 +84,24 @@ export class IngressHost{
   });
   const service={
    registerSource:(value:unknown)=>{assert();const input=sourceConnectionSchema.parse(value);if(sourceIds&&!sourceIds.includes(input.id)||deviceId&&input.deviceId!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>data().registerSource(input));},
-   registerDevice:(value:unknown)=>{const input=z.object({id:sourceIdSchema,name:z.string().min(1).max(200),platform:z.enum(['android','macos','windows','linux','import'])}).strict().parse(value);if(sourceIds||deviceId&&input.id!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>{sql.run('INSERT INTO ig_devices VALUES($user,?,?) ON CONFLICT(user_id,id) DO UPDATE SET json=excluded.json',input.id,JSON.stringify(input));return input;});},
+   configureSource:(id:string,value:unknown)=>{source(id);const patch=z.object({name:z.string().trim().min(1).max(200).optional(),retention:z.enum(['snapshot','reference','archive']).optional(),initialSync:z.enum(['all','new_only']).optional()}).strict().parse(value);return sql.transaction(()=>{source(id);return data().updateSource(id,patch);});},
+   sourceContext:(id:string,version?:number)=>{source(id);return data().sourceContext(id,version);},
+   configureSourceContext:(id:string,value:unknown)=>{source(id);return sql.transaction(()=>{source(id);return data().updateSourceContext(id,value);});},
+   sourceHead:(id:string,externalId:unknown)=>{source(id);return {revision:data().sourceItem(id,z.string().min(1).max(1000).parse(externalId))?.revision??null};},
+   registerDevice:(value:unknown)=>{const input=z.object({id:sourceIdSchema,name:z.string().min(1).max(200),platform:z.enum(['android','macos','windows','linux','import'])}).strict().parse(value);if(sourceIds||deviceId&&input.id!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>{const prior=sql.get('SELECT json FROM ig_devices WHERE user_id=$user AND id=?',input.id),record={...(prior?JSON.parse(String(prior.json)):{}),...input};sql.run('INSERT INTO ig_devices VALUES($user,?,?) ON CONFLICT(user_id,id) DO UPDATE SET json=excluded.json',input.id,JSON.stringify(record));return input;});},
+   heartbeat:(value:unknown)=>{
+    const input=heartbeatSchema.parse(value);if(sourceIds||deviceId&&input.deviceId!==deviceId)throw new ScopeError('invalid_identity',403);
+    return sql.transaction(()=>{const prior=sql.get('SELECT json FROM ig_devices WHERE user_id=$user AND id=?',input.deviceId),heartbeat={...(prior?JSON.parse(String(prior.json)):{}),...input,id:input.deviceId,name:input.deviceName,lastSeenAt:new Date().toISOString()};sql.run('INSERT INTO ig_devices VALUES($user,?,?) ON CONFLICT(user_id,id) DO UPDATE SET json=excluded.json',input.deviceId,JSON.stringify(heartbeat));return {ok:true};});
+   },
+   reconcile:(id:string,value:unknown)=>{
+    const input=z.object({ids:z.array(z.string().uuid()).max(100)}).strict().parse(value);sourceIdSchema.parse(id);if(sourceIds||deviceId&&id!==deviceId)throw new ScopeError('invalid_identity',403);
+    const items=input.ids.map(captureId=>{
+     const row=sql.get('SELECT source_id FROM ig_capture_scopes WHERE user_id=$user AND capture_id=?',captureId);
+     let state:'present'|'unavailable'='unavailable';
+     if(row){try{const binding=source(String(row.source_id)),capture=data().capture(captureId);if(binding.deviceId===id&&capture.deviceId===id)state='present';}catch(error){if(!(error instanceof PrivateDataError)&&!(error instanceof ScopeError))throw error;}}
+     return {id:captureId,state};
+    });assert();return {checkedAt:new Date().toISOString(),items};
+   },
    devices:()=>{if(deviceId||sourceIds)throw new ScopeError('invalid_identity',403);return {items:sql.all('SELECT json FROM ig_devices WHERE user_id=$user ORDER BY id').map(row=>JSON.parse(String(row.json)))};},
    receiveCaptures:(sourceId:string,id:string,values:unknown[],importDeclaration?:unknown)=>{
     const inputs=z.array(captureSchema).min(1).max(500).parse(values);
@@ -104,8 +125,20 @@ export class IngressHost{
     * capture has one immutable descriptor. Worker RPCs never expose this seam. */
    receiveSourceItemsWithOriginals:(sourceId:string,id:string,values:unknown[],inputs:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[])=>intakeSourceItems(sourceId,id,values,inputs,formats),
    readOriginal:(ref:string,range?:{offset?:number;length?:number})=>{original(ref);const result=originals.read(ref,range);assert();return result;},
-   holdOriginal:(ref:string)=>{const value=original(ref);return originals.pin(value.hash);},
-   releaseSnapshot:(ref:string)=>sql.transaction(()=>{const value=original(ref);if(value.retention!=='snapshot')throw new ScopeError('invalid_identity',403);sql.run('DELETE FROM ig_originals WHERE user_id=$user AND id=?',ref.slice(9));}),
+   originalForCapture:(id:string)=>{data().capture(id);const row=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND capture_id=?',id);if(!row)throw missing();return original('original:'+row.id);},
+   holdOriginal:(ref:string)=>{const value=original(ref);if(value.available===false)throw new PrivateDataError('snapshot_input_expired',410);return originals.pin(value.hash,false,ref.slice(9));},
+   releaseSnapshot:(ref:string)=>sql.transaction(()=>{const value=original(ref);if(value.retention!=='snapshot')throw new ScopeError('invalid_identity',403);originals.releaseSnapshot(ref);}),
+   snapshotRecovery:(sourceId:string,after='')=>{source(sourceId);if(after&&!/^[a-f0-9]{64}$/.test(after))throw new PrivateDataError('invalid_cursor');const rows=sql.all("SELECT r.id FROM ig_originals r JOIN ig_snapshot_inputs s ON s.user_id=r.user_id AND s.original_id=r.id JOIN pd_source_heads h ON h.user_id=r.user_id AND h.capture_id=r.capture_id WHERE r.user_id=$user AND r.source_id=? AND s.expires<=? AND r.id>? ORDER BY r.id LIMIT 201",sourceId,Date.now(),after);const items=[];
+    for(const row of rows.slice(0,200)){const value=original('original:'+row.id);if(!needsRecovery(value))continue;const record=data().capture(value.captureId),p=record.provenance!;items.push({captureId:value.captureId,externalId:p.externalId,revision:p.revision,sha256:value.hash,sizeBytes:value.bytes,observedAt:record.capturedAt,recoveryId:recoveryKey(value.ref)});}return {items,nextCursor:rows.length>200?String(rows[199].id):null};
+   },
+   beginSnapshotRecovery:(sourceId:string,captureId:string,value:unknown):any=>sql.transaction(()=>{
+    source(sourceId);const input=z.object({batchId,revision:fileRevisionSchema,recoveryId:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(value),row=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,captureId);if(!row)throw missing();const descriptor=original('original:'+row.id),record=data().capture(captureId),prior=sql.get('SELECT u.id,u.receipt,r.recovery_id FROM ig_uploads u JOIN ig_upload_recoveries r ON r.user_id=u.user_id AND r.upload_id=u.id WHERE u.user_id=$user AND u.source_id=? AND u.request_key=? AND r.original_id=?',sourceId,input.batchId,String(row.id));
+    const {sourceId:canonicalSource,...provenance}=record.provenance!;const canonical=sourceItemSchema.parse({...provenance,observedAt:record.capturedAt,title:record.windowTitle,text:record.ocrText,kind:record.source});
+    if(input.revision.sourceId!==sourceId||input.revision.sha256!==descriptor.hash||input.revision.sizeBytes!==descriptor.bytes||identityHash({...sourceItemSchema.parse(input.revision.item),observedAt:new Date(input.revision.item.observedAt).toISOString()})!==identityHash(canonical))throw conflict();
+    if(prior&&prior.recovery_id!==input.recoveryId)throw conflict();
+    if(!prior?.receipt&&(!needsRecovery(descriptor)||input.recoveryId!==recoveryKey(descriptor.ref)))throw conflict();
+    const upload=service.beginUpload(sourceId,{batchId:input.batchId,revision:input.revision});sql.run('INSERT INTO ig_upload_recoveries VALUES($user,?,?,?) ON CONFLICT(user_id,upload_id) DO NOTHING',upload.id,String(row.id),input.recoveryId);return upload;
+   }),
    pageOriginals:(sourceId:string,after='',limit=50)=>{
     source(sourceId);if(after&&!/^[a-f0-9]{64}$/.test(after)||!Number.isSafeInteger(limit)||limit<1||limit>100)throw new PrivateDataError('invalid_data');
     const rows=sql.all('SELECT id FROM ig_originals WHERE user_id=$user AND source_id=? AND id>? ORDER BY id LIMIT ?',sourceId,after,limit+1),items=rows.slice(0,limit).map(row=>original('original:'+row.id));
@@ -151,15 +184,17 @@ export class IngressHost{
      if((head?.revision??null)!==manifest.previousRevision&&head?.revision!==manifest.item.revision)throw conflict();
      const ack=data().receiveSourceItems(binding.id,[manifest.item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
      const importRow=sql.get('SELECT json FROM ig_upload_imports WHERE user_id=$user AND upload_id=?',id);if(importRow&&!ack.duplicate)imports.bind(ack.id,declaration(binding.id,JSON.parse(String(importRow.json))));
-     const reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot'):undefined;
+     let reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot',manifest.item.layer==='snapshot'):undefined;
+     const recovery=sql.get('SELECT original_id FROM ig_upload_recoveries WHERE user_id=$user AND upload_id=?',id);
+     if(recovery){if(!reference||reference.ref!=='original:'+recovery.original_id||!needsRecovery(reference))throw conflict();reference=originals.restoreSnapshot(reference.ref);this.snapshotRecovery!.restored(context,reference.ref);}
      const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();for(const receive of this.accepted)receive(context,result,'file',Object.freeze({}));assert();return result;
     });received=true;return result;}finally{try{prepared?.release();}catch{/* Revoked pins expire or are removed by lifecycle. */}if(received)originals.cleanUpload(id);}
    }),
    uploadReceipt:(id:string)=>{const row=upload(id);return row.receipt?checkReceipt(JSON.parse(String(row.receipt))):{state:'pending',id,deploymentId:context.deploymentId,userId:context.userId};},
    batchReceipt:(sourceId:string,id:string)=>{source(sourceId);const row=sql.get('SELECT receipt FROM ig_batches WHERE user_id=$user AND source_id=? AND batch_id=?',sourceId,id);if(!row)throw missing();return checkReceipt(JSON.parse(String(row.receipt)));},
-   ticket:(ref:string,mode:'download'|'play'='download')=>{original(ref);if(!['download','play'].includes(mode))throw new PrivateDataError('invalid_data');const body=Buffer.from(JSON.stringify({v:3,deployment:context.deploymentId,user:context.userId,credential:context.credentialId,epoch:context.authorizationEpoch,ref,mode,expires:Date.now()+300000})).toString('base64url');return {ticket:body+'.'+createHmac('sha256',this.key).update(body).digest('base64url'),expiresIn:300};},
+   ticket:(ref:string,mode:'download'|'play'='download')=>{if(original(ref).available===false)throw new PrivateDataError('snapshot_input_expired',410);if(!['download','play'].includes(mode))throw new PrivateDataError('invalid_data');const body=Buffer.from(JSON.stringify({v:3,deployment:context.deploymentId,user:context.userId,credential:context.credentialId,epoch:context.authorizationEpoch,ref,mode,expires:Date.now()+300000})).toString('base64url');return {ticket:body+'.'+createHmac('sha256',this.key).update(body).digest('base64url'),expiresIn:300};},
    verifyTicket:(ref:string,ticket:string)=>{
-    try{const [body,signature,...extra]=ticket.split('.'),actual=Buffer.from(signature??'','base64url'),expected=createHmac('sha256',this.key).update(body??'').digest();if(extra.length||actual.length!==expected.length||!timingSafeEqual(actual,expected))throw Error();const value=JSON.parse(Buffer.from(body,'base64url').toString());if(value.v!==3||value.deployment!==context.deploymentId||value.user!==context.userId||value.credential!==context.credentialId||value.epoch!==context.authorizationEpoch||value.ref!==ref||value.expires<=Date.now())throw Error();original(ref);return value.mode as 'play'|'download';}catch{throw missing();}
+    try{const [body,signature,...extra]=ticket.split('.'),actual=Buffer.from(signature??'','base64url'),expected=createHmac('sha256',this.key).update(body??'').digest();if(extra.length||actual.length!==expected.length||!timingSafeEqual(actual,expected))throw Error();const value=JSON.parse(Buffer.from(body,'base64url').toString());if(value.v!==3||value.deployment!==context.deploymentId||value.user!==context.userId||value.credential!==context.credentialId||value.epoch!==context.authorizationEpoch||value.ref!==ref||value.expires<=Date.now())throw Error();if(original(ref).available===false)throw Error();return value.mode as 'play'|'download';}catch{throw missing();}
    },
    gc:()=>{if(sourceIds||deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>{
     if(sql.get('SELECT id FROM ig_activity WHERE user_id=$user LIMIT 1'))throw conflict();

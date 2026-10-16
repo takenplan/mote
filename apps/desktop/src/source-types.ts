@@ -10,7 +10,7 @@ export interface SourceItem {
   localOriginal?: import('./original-spool').OriginalSpool;
   localOriginalBase64?: string;
   /** Opaque server input session; never used as local file authority or sent in source metadata. */
-  snapshotRecovery?: {captureId:string;sha256:string;sizeBytes:number};
+  snapshotRecovery?: {captureId:string;sha256:string;sizeBytes:number;recoveryId?:string};
   metadata?: import('@mote/shared').SourceMetadata;
   externalId: string; revision: string; observedAt: string; modifiedAt?: string;
   title: string; text: string; uri?: string; kind: 'calendar' | 'file' | 'message';
@@ -66,7 +66,7 @@ export interface SourceStatus {
   message: string; pending: number; lastSyncAt?: string; items: number; skipped: number;
 }
 export interface CalendarChoice { id: string; title: string }
-export type SourceRequest = (path: string, body: unknown, method: 'GET' | 'POST' | 'PUT' | 'PATCH', signal?: AbortSignal) => Promise<unknown>;
+export type SourceRequest = ((path: string, body: unknown, method: 'GET' | 'POST' | 'PUT' | 'PATCH', signal?: AbortSignal) => Promise<unknown>) & {account?:import('./account').DesktopAccount};
 export const DEFAULT_SOURCE_OPTIONS: SourceOptions = {
   centralProcessingConsent: true, initialSync: 'all', retention: 'snapshot', intervalSeconds: 300, trackDeletions: false,
   extensions: ['.md', '.txt', '.json', '.csv', '.ics', '.pdf', '.docx', '.wav', '.mp3', '.m4a'], excludedPaths: [], redactLiterals: [],

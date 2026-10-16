@@ -291,8 +291,8 @@
     ]
   },
   "apps/server/src/diagnostics.ts": {
-    "scope": "legacy-quarantined",
-    "module": "M02",
+    "scope": "instance",
+    "module": "M16",
     "surfaces": [
       "directory:this.options.directory"
     ]
@@ -1375,10 +1375,10 @@
     ]
   },
   "apps/server/src/scope/accounts.ts": {
-    "scope": "mixed",
-    "module": "M01",
-    "status": "implemented",
+    "scope": "instance",
+    "module": "M16",
     "surfaces": [
+      "table:auth_account_deletions",
       "table:auth_accounts",
       "table:auth_attempts",
       "table:auth_credentials"
@@ -1386,10 +1386,11 @@
   },
   "apps/server/src/scope/app.ts": {
     "scope": "mixed",
-    "module": "M09",
+    "module": "M16",
     "surfaces": [
       "api:get:'/api/health'",
       "extension:registerConfigurationRoutes:runtime",
+      "extension:registerLifecycleRoutes:runtime",
       "extension:registerScopedConnectors:runtime",
       "extension:registerTaskRoutes:runtime"
     ]
@@ -1515,15 +1516,23 @@
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/ingress/originals/:id/content'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/ingress/host-import'",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/devices',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/head',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/originals',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/receipts/:batch',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/recovery',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/uploads/:id',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices/:id/reconcile',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices/heartbeat',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/gc',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/originals/:id/tickets',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/captures',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/items',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/recovery/:captureId/uploads',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/uploads',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/uploads/:id/commit',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/ingress/uploads/:id/parts/:part',service:INGRESS_DOMAIN"
@@ -1536,6 +1545,8 @@
       "table:ig_activity",
       "table:ig_batches",
       "table:ig_capture_scopes",
+      "table:ig_capture_update_sequences",
+      "table:ig_capture_updates",
       "table:ig_devices",
       "table:ig_meta",
       "table:ig_objects",
@@ -1543,9 +1554,11 @@
       "table:ig_parts",
       "table:ig_pins",
       "table:ig_restore",
+      "table:ig_snapshot_inputs",
       "table:ig_state",
       "table:ig_upload_imports",
       "table:ig_upload_parts",
+      "table:ig_upload_recoveries",
       "table:ig_uploads",
       "table:ig_work"
     ]
@@ -1630,6 +1643,7 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/data/search',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/data/statistics',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/layers',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/library/catalog',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials/:id',service:PRIVATE_DATA_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials/:id/members',service:PRIVATE_DATA_DOMAIN",
@@ -1855,8 +1869,8 @@
     ]
   },
   "apps/server/src/updates.ts": {
-    "scope": "legacy-quarantined",
-    "module": "M02",
+    "scope": "instance",
+    "module": "M16",
     "surfaces": [
       "api:get:'/api/software-update'",
       "api:post:'/api/software-update/check'"
@@ -1941,6 +1955,7 @@
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id/review'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/materials/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
@@ -2200,6 +2215,88 @@
     "surfaces": [
       "extension:runtime.services.registerUser:'ask-automation'",
       "task:execution.register:kind:'ask.automation'"
+    ]
+  },
+  "apps/server/src/scope/web-routes.ts": {
+    "scope": "mixed",
+    "module": "M13",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/features'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/skills'",
+      "extension:registry.install:id:'mote.scoped-http'"
+    ]
+  },
+  "apps/server/src/scope/activity.ts": {
+    "scope": "user",
+    "module": "M14",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:EXECUTION_DOMAIN,method:'GET',url:'/api/work-activity'",
+      "api:registerUserRoute:scope:'user',service:EXECUTION_DOMAIN,method:'GET',url:'/api/work-activity/:id'"
+    ]
+  },
+  "apps/server/src/scope/lifecycle-operations.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "surfaces": [
+      "table:lifecycle_domains",
+      "table:lifecycle_exports",
+      "table:lifecycle_metadata",
+      "table:lifecycle_operations"
+    ]
+  },
+  "apps/server/src/scope/lifecycle-routes.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/admin/accounts/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/account-deletions/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id/content'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports/:id'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/account-deletions/:id/retry'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/cancel'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/retry'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports/:id/cancel'"
+    ]
+  },
+  "apps/server/src/scope/management.ts": {
+    "scope": "instance",
+    "module": "M16",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/events'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/log-pages'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/logs'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/software-update'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/support-bundle'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/software-update/check'",
+      "directory:path",
+      "extension:runtime.services.registerInstance:'instance-management'"
+    ]
+  },
+  "apps/server/src/scope/ingress-lifecycle.ts": {
+    "scope": "user",
+    "module": "M16",
+    "surfaces": [
+      "directory:path"
+    ]
+  },
+  "apps/server/src/scope/capture-browser-routes.ts": {
+    "scope": "user",
+    "module": "M13",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/:id/image',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/album-images',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/albums',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/sessions',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/updates',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/devices/:id/updates',service:'ingress'"
     ]
   },
   "apps/server/src/scope/action-delivery.ts": {

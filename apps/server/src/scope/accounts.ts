@@ -18,7 +18,7 @@ const SESSION=86400000; // A session cookie still has a server-side maximum life
 type Kind='web'|'client'|'mcp-read'|'mcp-write';
 type Account={user_id:string;username:string;password_salt:string;password_hash:string;administrator:number;disabled:number;authorization_epoch:number;created_at:number};
 type Credential={id:string;user_id:string;kind:Kind;account_epoch:number;expires_at:number;revoked_at:number|null;csrf_hash:string|null;metadata:string;created_at:number;parent_id:string|null};
-export type AccountSummary={userId:string;username:string;administrator:boolean;disabled:boolean;authorizationEpoch:number;createdAt:number};
+export type AccountSummary={userId:string;username:string;administrator:boolean;disabled:boolean;authorizationEpoch:number;createdAt:number;deletionId?:string};
 const summary=(a:Account):AccountSummary=>({userId:a.user_id,username:a.username,administrator:Boolean(a.administrator),disabled:Boolean(a.disabled),authorizationEpoch:a.authorization_epoch,createdAt:a.created_at});
 function derive(password:string,salt:string){return new Promise<Buffer>((resolve,reject)=>scrypt(password,salt,64,{N:32768,r:8,p:1,maxmem:64*1024*1024},(e,result)=>e?reject(e):resolve(result)));}
 async function passwordRecord(password:string){passwordSchema.parse(password);const salt=randomBytes(16).toString('hex');return {salt,hash:(await derive(password,salt)).toString('hex')};}
@@ -38,9 +38,10 @@ export class Accounts implements IdentityVerifier {
       account_epoch INTEGER NOT NULL,token_hash TEXT NOT NULL UNIQUE,expires_at INTEGER NOT NULL,revoked_at INTEGER,
       csrf_hash TEXT,metadata TEXT NOT NULL,created_at INTEGER NOT NULL,parent_id TEXT REFERENCES auth_credentials(id));
       CREATE INDEX IF NOT EXISTS auth_credentials_user ON auth_credentials(user_id);
+      CREATE TABLE IF NOT EXISTS auth_account_deletions(user_id TEXT PRIMARY KEY REFERENCES auth_accounts(user_id),operation_id TEXT NOT NULL UNIQUE,created_at INTEGER NOT NULL);
       CREATE TABLE IF NOT EXISTS auth_attempts(attempt_key TEXT PRIMARY KEY,started_at INTEGER NOT NULL,attempts INTEGER NOT NULL);`);
   }
-  private transaction<T>(run:()=>T):T{this.db.exec('BEGIN IMMEDIATE');try{const result=run();this.db.exec('COMMIT');return result;}catch(e){this.db.exec('ROLLBACK');throw e;}}
+  private transaction<T>(run:()=>T):T{const nested=this.db.isTransaction,name='account_'+randomUUID().replaceAll('-','');this.db.exec(nested?'SAVEPOINT '+name:'BEGIN IMMEDIATE');try{const result=run();this.db.exec(nested?'RELEASE '+name:'COMMIT');return result;}catch(e){if(nested){this.db.exec('ROLLBACK TO '+name);this.db.exec('RELEASE '+name);}else this.db.exec('ROLLBACK');throw e;}}
   private account(userId:string){return this.db.prepare('SELECT * FROM auth_accounts WHERE user_id=?').get(userId) as Account|undefined;}
   private accountNamed(username:string){return this.db.prepare('SELECT * FROM auth_accounts WHERE username=?').get(username) as Account|undefined;}
   private credential(id:string){return this.db.prepare('SELECT * FROM auth_credentials WHERE id=?').get(id) as Credential|undefined;}
@@ -66,13 +67,30 @@ export class Accounts implements IdentityVerifier {
     const userId=randomUUID();this.db.prepare('INSERT INTO auth_accounts(user_id,username,password_salt,password_hash,administrator,created_at) VALUES(?,?,?,?,?,?)').run(userId,username,record.salt,record.hash,Number(administrator),this.clock());return summary(this.account(userId)!);
   }
   async createAccount(context:UserContext,authority:UserContextAuthority,input:{username:string;password:string;administrator:boolean}){authority.assertAdministrator(context);const username=usernameSchema.parse(input.username),record=await passwordRecord(input.password);return this.transaction(()=>{authority.assertAdministrator(context);return this.insertAccount(username,record,input.administrator);});}
-  listAccounts(context:UserContext,authority:UserContextAuthority){authority.assertAdministrator(context);return {items:(this.db.prepare('SELECT * FROM auth_accounts ORDER BY created_at,user_id').all() as Account[]).map(summary)};}
+  listAccounts(context:UserContext,authority:UserContextAuthority){authority.assertAdministrator(context);return {items:(this.db.prepare('SELECT * FROM auth_accounts ORDER BY created_at,user_id').all() as Account[]).map(account=>{const deletion=this.db.prepare('SELECT operation_id FROM auth_account_deletions WHERE user_id=?').get(account.user_id);return {...summary(account),...(deletion?{deletionId:String(deletion.operation_id)}:{})};})};}
   private bump(a:Account){this.db.prepare('UPDATE auth_accounts SET authorization_epoch=authorization_epoch+1 WHERE user_id=?').run(a.user_id);this.db.prepare('UPDATE auth_credentials SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(this.clock(),a.user_id);}
   disable(context:UserContext,authority:UserContextAuthority,userId:string,disabled:boolean){return this.transaction(()=>{authority.assertAdministrator(context);const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);if(a.disabled===Number(disabled))return summary(a);
+    if(!disabled&&this.db.prepare('SELECT 1 FROM auth_account_deletions WHERE user_id=?').get(userId))throw new AuthError('account_deleted',409);
     if(disabled&&a.administrator&&Number(this.db.prepare('SELECT count(*) n FROM auth_accounts WHERE administrator=1 AND disabled=0').get()!.n)<=1)throw new AuthError('last_administrator',409);
     this.bump(a);this.db.prepare('UPDATE auth_accounts SET disabled=? WHERE user_id=?').run(Number(disabled),userId);return summary(this.account(userId)!);
   });}
-  async resetPassword(context:UserContext,authority:UserContextAuthority,userId:string,password:string){authority.assertAdministrator(context);const record=await passwordRecord(password);return this.transaction(()=>{authority.assertAdministrator(context);const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);this.bump(a);this.db.prepare('UPDATE auth_accounts SET password_salt=?,password_hash=? WHERE user_id=?').run(record.salt,record.hash,userId);return {reset:true};});}
+  /** Explicit administrator deletion is the durable control-plane approval.
+   * Keep only an inaccessible identity tombstone; never reuse an old user ID. */
+  beginDeletion(context:UserContext,authority:UserContextAuthority,userId:string,operationId:string){return this.transaction(()=>{
+    authority.assertAdministrator(context);const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);
+    const prior=this.db.prepare('SELECT operation_id FROM auth_account_deletions WHERE user_id=?').get(userId);if(prior){if(prior.operation_id!==operationId)throw new AuthError('deletion_conflict',409);return;}
+    this.disable(context,authority,userId,true);this.db.prepare('INSERT INTO auth_account_deletions VALUES(?,?,?)').run(userId,operationId,this.clock());
+    this.db.prepare("UPDATE auth_accounts SET password_salt='',password_hash='' WHERE user_id=?").run(userId);
+  });}
+  /** Only the approved host erasure can retire credential rows after all
+   * provider cleanup. Revocation alone is not physical credential cleanup. */
+  finishDeletion(userId:string,operationId:string){return this.transaction(()=>{
+    const deletion=this.db.prepare('SELECT operation_id FROM auth_account_deletions WHERE user_id=?').get(userId),account=this.account(userId);
+    if(!account?.disabled||deletion?.operation_id!==operationId)throw new AuthError('deletion_conflict',409);
+    this.db.prepare('DELETE FROM auth_credentials WHERE user_id=?').run(userId);
+    this.db.prepare('DELETE FROM auth_attempts WHERE attempt_key=?').run(digest('account:'+account.username));
+  });}
+  async resetPassword(context:UserContext,authority:UserContextAuthority,userId:string,password:string){authority.assertAdministrator(context);const assertNotDeleted=()=>{if(this.db.prepare('SELECT 1 FROM auth_account_deletions WHERE user_id=?').get(userId))throw new AuthError('account_deleted',409);};assertNotDeleted();const record=await passwordRecord(password);return this.transaction(()=>{authority.assertAdministrator(context);assertNotDeleted();const a=this.account(userId);if(!a)throw new AuthError('account_not_found',404);this.bump(a);this.db.prepare('UPDATE auth_accounts SET password_salt=?,password_hash=? WHERE user_id=?').run(record.salt,record.hash,userId);return {reset:true};});}
   private reserveAttempt(username:string,ip:string){
     const keys=[{key:digest('account:'+username),limit:5},{key:digest('address:'+ip),limit:20}];
     this.transaction(()=>{const now=this.clock();this.db.prepare('DELETE FROM auth_attempts WHERE started_at<=?').run(now-WINDOW);
@@ -85,7 +103,7 @@ export class Accounts implements IdentityVerifier {
     if(this.activeHashes>=4)throw new AuthError('login_busy',429);
     this.reserveAttempt(username,ip);this.activeHashes++;
     const a=this.accountNamed(username);
-    try{const result=await derive(password,a?.password_salt??'generated-unknown-account-salt');if(!a||!timingSafeEqual(result,Buffer.from(a.password_hash,'hex'))||a.disabled)throw new AuthError('invalid_login',401);return a;}
+    try{const result=await derive(password,a?.password_salt??'generated-unknown-account-salt');if(!a||a.disabled||a.password_hash.length!==128||!timingSafeEqual(result,Buffer.from(a.password_hash,'hex')))throw new AuthError('invalid_login',401);return a;}
     finally{this.activeHashes--;}
   }
   async login(username:string,password:string,ip:string,kind:'web'|'client',durationMs:number){

@@ -30,13 +30,58 @@ internal object CentralDraftWrites {
 }
 
 internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, private val directory: File) {
-    val client get() = requireNotNull(ui.client)
+    private val ownerKey = ui.accountOwnerKey()
+    fun ownsSelectedAccount() = ui.accountOwnerKey() == ownerKey
+    val client get() = requireNotNull(ui.client).also { check(ownsSelectedAccount()) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") } }
     private val cipher = SecretBox()
     private val askStore = CentralStateFile(directory, "ask", cipher)
     private val noteStore = CentralNoteStore(directory, cipher)
     private val importStore = CentralImports(File(directory, "import-pending"), cipher)
+    private val portableImportStore = CentralImports(File(directory, "portable-import-pending"), cipher)
     private val attachmentStore = CentralStateFile(directory, "attachment-times", cipher)
     private val insightStore = CentralStateFile(directory, "insight-request", cipher)
+    private val memoryCorrectionStore = CentralStateFile(directory, "memory-correction", cipher)
+    private val memoryAdmissionStore = CentralStateFile(directory, "memory-admission", cipher)
+    fun pendingMemoryAdmission(): JSONObject? = CentralDraftWrites.barrier { memoryAdmissionStore.read().takeIf { it.has("operationId") } }
+    fun discardMemoryAdmission() = CentralDraftWrites.barrier { memoryAdmissionStore.write(JSONObject()) }
+    fun submitMemory(api: CentralClient, request: JSONObject): JSONObject {
+        val intent = CentralDraftWrites.barrier {
+            val saved = memoryAdmissionStore.read()
+            if (saved.has("operationId")) {
+                val prior = JSONObject(saved.toString()).apply { remove("operationId") }
+                check(SourceRules.canonical(prior) == SourceRules.canonical(request)) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                saved
+            } else JSONObject(request.toString()).put("operationId", UUID.randomUUID().toString()).also(memoryAdmissionStore::write)
+        }
+        return sendMemoryAdmission(api, intent)
+    }
+    fun retryMemoryAdmission(api: CentralClient) = sendMemoryAdmission(api, requireNotNull(pendingMemoryAdmission()))
+    private fun sendMemoryAdmission(api: CentralClient, intent: JSONObject): JSONObject {
+        val id = intent.getString("operationId"); UUID.fromString(id)
+        val job = api.post("/api/memory/jobs", intent)
+        require(job.getString("id") == id); job.getJSONObject("tasks"); job.getBoolean("current")
+        CentralDraftWrites.barrier { if (memoryAdmissionStore.read().optString("operationId") == id) memoryAdmissionStore.write(JSONObject()) }
+        return job
+    }
+    fun pendingMemoryCorrection(): JSONObject? = CentralDraftWrites.barrier { memoryCorrectionStore.read().takeIf { it.has("operationId") } }
+    fun correctMemory(api: CentralClient, id: String, correction: JSONObject): JSONObject {
+        val fields = JSONArray().apply { listOf("title", "statement", "uncertainty", "version", "validFrom", "validUntil").forEach { put(JSONArray().put(it).put(correction.opt(it))) } }
+        val key = id + ":" + fields.toString()
+        val intent = CentralDraftWrites.barrier {
+            val old = memoryCorrectionStore.read()
+            if (old.optString("key") == key && old.has("operationId")) old
+            else JSONObject().put("key", key).put("memoryId", id).put("operationId", UUID.randomUUID().toString()).put("correction", JSONObject(correction.toString())).also(memoryCorrectionStore::write)
+        }
+        return sendMemoryCorrection(api, intent)
+    }
+    fun retryMemoryCorrection(api: CentralClient) = sendMemoryCorrection(api, requireNotNull(pendingMemoryCorrection()))
+    private fun sendMemoryCorrection(api: CentralClient, intent: JSONObject): JSONObject {
+        val id = intent.getString("operationId"); UUID.fromString(id)
+        val job = api.post("/api/memories/" + encode(intent.getString("memoryId")) + "/correct", JSONObject().put("operationId", id).put("correction", intent.getJSONObject("correction")))
+        require(job.getString("id") == id); job.getJSONObject("tasks"); job.getBoolean("current")
+        CentralDraftWrites.barrier { if (memoryCorrectionStore.read().optString("operationId") == id) memoryCorrectionStore.write(JSONObject()) }
+        return job
+    }
     private val draftFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
     var importInstruction = ""
     private var player: android.media.MediaPlayer? = null
@@ -86,7 +131,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun pollWorkActivity() { if (currentPage == "activity") activity.poll() }
     fun saveWorkState(out: android.os.Bundle) = activity.saveState(out)
     fun restoreWorkState(value: android.os.Bundle) = activity.restoreState(value)
-    fun openWorkEvidence(ref: String) = library.evidence(CentralEvidenceReference.normalize(ref))
+    fun openWorkEvidence(ref: String) = library.queryEvidence(ref)
     fun clearPrivateState() { askState = JSONObject(); question = null; messages = null; noteText = null; noteMood = null; admin.clearPrivateState(); activity.clearPrivateState(); body.removeAllViews() }
     fun refresh() { ui.navigate(currentPage) }
     fun insightRequest(prompt: String): JSONObject = CentralDraftWrites.barrier {
@@ -143,7 +188,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 val recent = (0 until runs.length()).map { runs.getJSONObject(it) }.firstOrNull { it.optString("status") == "running" }
                 recent?.let { state.put("runId", it.getString("id")); if (it.has("conversationId")) state.put("conversationId", it.getString("conversationId")) }
             }
-            Triple(state, api.get("/api/conversations?limit=30"), api.get("/api/model-settings"))
+            Triple(state, api.get("/api/conversations?limit=30"), CentralModels.inventory(api))
         }) { (state, history, settings) ->
             askState = state; modelSettings = settings; buildAsk(history)
             val conversationId = askState.optString("conversationId")
@@ -174,7 +219,9 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             setSelection(ids.indexOf(askState.optString("modelProfileId")).coerceAtLeast(0))
             onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
                 override fun onItemSelected(parent: AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
-                    askState.put("modelProfileId", ids[position]); persistAsk()
+                    askState.put("modelProfileId", ids[position])
+                    if (CentralModels.reference(ids[position])?.optString("kind") == "shared") { askState.remove("modelOverride"); model?.setText("") }
+                    persistAsk(); controlsAsk()
                 }
                 override fun onNothingSelected(parent: AdapterView<*>?) = Unit
             }
@@ -219,7 +266,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private fun controlsAsk() {
         val busy = askState.has("pending") || askState.optString("runStatus") == "running"
         question?.isEnabled = !busy
-        preset?.isEnabled = !busy; model?.isEnabled = !busy
+        preset?.isEnabled = !busy; model?.isEnabled = !busy && CentralModels.reference(askState.optString("modelProfileId"))?.optString("kind") != "shared"
         send?.isEnabled = !busy || askState.has("pending")
         send?.text = if (askState.has("pending")) MoteI18n.text("重试同一请求") else MoteI18n.text("发送")
         stop?.visibility = if (askState.optString("runStatus") == "running") android.view.View.VISIBLE else android.view.View.GONE
@@ -230,7 +277,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val text = question?.text?.toString()?.trim().orEmpty()
             if (text.isBlank()) { ui.notice(MoteI18n.text("请输入问题（最多 8000 字）")); return }
             val input = JSONObject().put("question", text).put("timeZone", java.time.ZoneId.systemDefault().id)
-            askState.optString("modelProfileId").takeIf { it.isNotBlank() }?.let { input.put("modelProfileId", it) }
+            CentralModels.reference(askState.optString("modelProfileId"))?.let { input.put("modelReference", it) }
             askState.optString("modelOverride").trim().takeIf { it.isNotBlank() }?.let { input.put("modelOverride", it) }
             askState.optString("conversationId").takeIf { it.isNotBlank() }?.let { input.put("conversationId", it) }
             val attachments = askState.optJSONArray("attachments") ?: JSONArray()
@@ -294,7 +341,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                     for (j in 0 until citations.length()) {
                         val citation = citations.getJSONObject(j)
                         ui.text(citation.optString("excerpt"), parent = target)
-                        ui.button(MoteI18n.text("查看原文依据") + " · " + citation.optString("appName"), parent = target) { library.captureEvidence(citation.getString("id")) }
+                        ui.button(MoteI18n.text("查看原文依据") + " · " + citation.optString("appName"), parent = target) { library.queryEvidence(citation.getString("id")) }
                     }
                 }
                 turn.optJSONObject("error")?.let { ui.text(it.optString("message"), parent = target) }
@@ -313,7 +360,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private fun loadNotes() {
         val api = client
         ui.work(MoteI18n.text("正在读取随手记…"), {
-            CentralDraftWrites.barrier { draftFailure.get()?.let { throw it }; noteStore.read() } to runCatching { api.get("/api/notes?limit=30") }
+            CentralDraftWrites.barrier { draftFailure.get()?.let { throw it }; noteStore.read() } to runCatching { api.get("/api/captures?kind=note&limit=30") }
         }) { (state, history) ->
             noteDraft = state.getJSONObject("draft"); noteHistory = history.getOrDefault(JSONObject()); buildNotes(state, noteHistory)
             history.exceptionOrNull()?.let(ui::requestFailure)
@@ -360,7 +407,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         }
         next(history)?.let { cursor -> ui.button(MoteI18n.text("加载更早的随手记")) {
             val api = client
-            ui.work(MoteI18n.text("正在读取随手记…"), { api.get("/api/notes?limit=30&cursor=" + encode(cursor)) }) { noteHistory = it; buildNotes(state, it) }
+            ui.work(MoteI18n.text("正在读取随手记…"), { api.get("/api/captures?kind=note&limit=30&cursor=" + encode(cursor)) }) { noteHistory = it; buildNotes(state, it) }
         } }
     }
 
@@ -376,8 +423,8 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 val items = state.getJSONArray("pending")
                 for (i in 0 until items.length()) {
                     val note = items.getJSONObject(i)
-                    val response = api.post("/api/notes", note)
-                    CentralDraftWrites.barrier { noteStore.acknowledge(note.getString("id"), response) }
+                    val response = CentralNotes.send(api, note)
+                    CentralDraftWrites.barrier { CentralNotes.acknowledge(noteStore, api, note, response) }
                 }
             }
             CentralDraftWrites.barrier { noteStore.read() } to outcome
@@ -444,6 +491,16 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             importStore.send(api) { done, total -> progress.message = MoteI18n.text("正在上传附件 {0}/{1}", done, total) }
         }) { admin.importDetail(it.getString("id")) }
     }
+    fun importPortableFile(uri: Uri, operationId: String? = null) {
+        val api = client
+        ui.work(MoteI18n.text("正在导入文件…"), {
+            portableImportStore.stagePortable(ui, uri, operationId)
+            portableImportStore.sendPortable(api)
+        }) { admin.portableImportDetail(it.getString("id")) }
+    }
+    fun pendingPortableImport() = portableImportStore.pending()
+    fun retryPortableImport(api: CentralClient) = portableImportStore.sendPortable(api)
+    fun discardPortableImport() = portableImportStore.discard()
     fun importPending(target: LinearLayout) {
         ui.work(MoteI18n.text("正在读取…"), { importStore.pending() }) { saved ->
             if (saved.has("manifest")) {
@@ -465,7 +522,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun playAudio(path: String, target: LinearLayout) {
         close(); val api = client; val revision = ui.navigationRevision
         ui.work(MoteI18n.text("正在读取录音…"), {
-            val file = File.createTempFile("central-audio-", ".tmp", ui.cacheDir)
+            val file = File.createTempFile("central-audio-", ".tmp", directory.apply { mkdirs() })
             audioFile = file
             try {
                 file.outputStream().use { api.download(path, it, 256 * 1024 * 1024L) }
@@ -501,8 +558,9 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     }
 
     fun confirm(title: String, message: String, action: () -> Unit) {
+        val owner = client; val revision = ui.navigationRevision
         MoteDialogBuilder(ui).setTitle(title).setMessage(message).setNegativeButton(MoteI18n.text("取消"), null)
-            .setPositiveButton(MoteI18n.text("确认")) { _, _ -> action() }.show()
+            .setPositiveButton(MoteI18n.text("确认")) { _, _ -> if (ui.client === owner && ui.navigationRevision == revision) action() }.show()
     }
     companion object {
         fun encode(value: String): String = java.net.URLEncoder.encode(value, "UTF-8")

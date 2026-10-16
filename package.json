@@ -30,6 +30,7 @@
     "import:files": "node --import tsx scripts/import-files.ts",
     "reset:mvp-vault": "node scripts/reset-mvp-vault.mjs",
     "backup": "node --import tsx scripts/backup.ts",
+    "restore:instance": "node scripts/restore-instance.mjs",
     "privacy": "node --import tsx scripts/privacy-gateway.ts",
     "test:privacy": "node --import tsx scripts/test-privacy.ts",
     "mote": "node scripts/mote.mjs",

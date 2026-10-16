@@ -41,6 +41,10 @@ export interface DeletionReceipt {
  * Restore validates the envelope's user/deployment before touching domain data.
  * Exports exclude credentials; this is not a single-user point-in-time backup. */
 export interface DomainLifecycle {
+  /** Personal archive data only. A synchronous hook composes with the host's
+   * single SQLite publication transaction; false explicitly preserves current
+   * settings/operational state. Missing policy blocks personal import. */
+  importUser?:false|((context:UserContext,archive:UserExport,operationId:string)=>void|(()=>void));
   exportUser(context:UserDataSubject):Promise<UserExport>;
   deleteUser(context:UserDataSubject,operationId:string):Promise<DeletionReceipt>;
   restoreUser(context:UserDataSubject,archive:UserExport,operationId:string):Promise<void>;
