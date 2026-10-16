@@ -4,26 +4,29 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current acceptance boundary: the last full Android/production debug build remains
-runtime48a797854e96eedf57c4edbd451fa2e5c5132a73,353/353. Newer native
-Imports54ad, Lark95c, recording playback, Agent10442 and QR e8b9/806 have narrow
-real-backend/native evidence below; they do not substitute for a fresh final
-Android or affected gate on the new composition. Joint's explicitly frozen
-Imports c45fdb4a2518fef0d5072b02aafbe8f46cb5a90b and QR producer
-6a84ec6a477bb4698002234fd81bb669ce98cc06 are composed. QR parsing5/5 and
-original pairing loss/recovery2.041s, original native QR generation0.935s,
-and Agent canonical expansion0.928s pass. The additional pairing self/reauthorize
-case reached its final draft assertion but needs a fixture correction: normal
-QuickNotes.save deliberately clears a submitted draft. That failure is retained
-and is not a product RED; the corrected test is not yet compiled or rerun.
+Current acceptance boundary: fixed0c59dcd99bb73281ad34c0f5292d5a68d081c609
+(runtime a73ae69f2d7a511692429c11313c07dcbdee6588) passes the complete Android
+JVM357/357 across75XML with0failures/errors/skips and debug/fixture app/test APKs,
+35s EXIT0. The initial40s full command's one old Imports acknowledgement fixture
+failure is retained; test-only0c59 corrects its obsolete response shape, preserving
+all original lost-ACK/same-body/one-part assertions. Earlier353/353 remains exact
+historical evidence rather than the latest gate.
 
-Shared Files acoustic/review/control, image profile and Agent startup/events gaps
-remain explicit. Android does not implement duplicate backends. Final affected,
-independent final review, push and Draft PR remain pending. Physical-device,
-public HTTPS and live-provider checks remain separate. One existing-local-Codex
-connectivity check used only an authored generated prompt and exact gpt-6.1-sol;
-it is not provider-wide or model-quality acceptance. No total count closes the
-remaining capability or platform gaps.
+The real QR post-restart ACK410 P2 is now samecase GREEN2.117s; a revoked device
+credential remains pending/no-upload2.019s. Normal real duplicate ACK2.166s,
+five-field self rejection and explicit device reauthorization0.408s, held A JSON
+result retirement/new B selection0.993s, original issuer QR1.376s and original
+M04 operator-setting explanation0.851s also pass as separate single native cases.
+Agent canonical expansion passes0.980s at the same APK. These are not a final
+M15 module or full affected pass. Public Files control/complete export and original
+model copy/probe/directory/Agent preview-events contracts still need final scope
+closure; see the [finite final matrix](multiuser-android-final-matrix.md).
+
+No M15 push/Draft PR/final affected has happened. M15's parent-allocated Android
+phase is explicitly RELEASED; no long affected began. Physical-device, public
+HTTPS and live-provider checks remain separate. Existing-local-Codex connectivity
+used only an authored generated prompt and exact gpt-6.1-sol, not model quality or
+provider-wide acceptance. No test count closes missing original capabilities.
 
 | Decision | Existing capability and real chain | Required account adaptation / evidence |
 | --- | --- | --- |
@@ -920,3 +923,59 @@ next explicit allocation after the QR producer's full gate. The last native-test
 806 checkpoint is therefore not final accepted: it contains this confirmed P2.
 Pending future tests will not be reported as executed; the current source HEAD
 must not be substituted for a tested frozen consumer.
+
+### Parent-allocated current Android and QR closure phase
+
+The fresh QR RELEASE22:34:59 and actual PGID8858 absence were verified before
+M15's explicitly allocated phase. Current357-test/debug/fixture APK pass is
+`/tmp/m15-qr-final-full-android2.log/.exit/.sha` with fresh counts
+`/tmp/m15-qr-final-full-android2-counts.json`:75XML,357tests,0fail/error/skip.
+First full log/XML at `/tmp/m15-qr-final-full-android.log/.exit` and
+`/tmp/m15-qr-full-first-fixture-error.xml` remain EXIT1, not a passing gate.
+
+Original held-picker candidate12083 is now actual RED0.874s at old806 APK:
+A's own-cache FIFO holds an already admitted original JSON document read; after
+B switches and the existing periodic refresh is deliberately delayed, the old A
+capability reaches B's input. Minimal ced9 adds only an off-main settings recheck
+after the read and a current stable-owner publication check. Same native
+`/tmp/m15-native-qr-held-picker-first-green.log/.exit` passes0.993s, preserving
+ordinary A selection and a new explicit B selection. No real file or camera is
+used. QR kind corruption is valid RED0.248s at old806; strict declared client kind
+and all exact self fields pass in the corrected reauthorization case0.408s.
+
+M04's instance settings policy is established in the configuration design:
+resource admin HTTP edits only models, while other instance settings remain the
+operator's configuration contract. Old native controls still called unavailable
+global APIs. Actual original entry RED0.530s→minimal a73 explanation sameGREEN
+0.851s, `/tmp/m15-native-instance-policy-{red,first-green}.log/.exit`, proves
+zero retired requests, unchanged account processing editor and admin diagnostic
+positive200. No new singleton write API or fabricated count was introduced.
+
+The current isolated APK separately passes these real generated single cases:
+
+| Case | Seconds | Exit/log prefix under `/tmp` |
+| --- | --- | --- |
+| ACK lost then actual M01 restart; exact live credential recovery, no false ACK |2.117|0 `m15-native-qr-restart-first-green` |
+| Real credential DELETE after restart; pending retained and no A/B upload |2.019|0 `m15-native-qr-revoked-first-green` |
+| Exact five self fields; anonymous draft then unsaved A draft, explicit original device reauthorization |0.408|0 `m15-native-qr-self-first-green` |
+| Held A JSON result after B; new B selection positive |0.993|0 `m15-native-qr-held-picker-first-green` |
+| Existing instance settings show M04 operator policy without retired requests |0.851|0 `m15-native-instance-policy-first-green` |
+| No-restart loss/retry still obtains the real duplicate ACK |2.166|0 `m15-native-qr-normal-final-green` |
+| Original Devices generates locally decodable selected-device QR; old issuer retired under B |1.376|0 `m15-native-qr-issuer-final-green` |
+| Original Agent catalog/episodes canonical reader and A/B retirement |0.980|0 `m15-native-agent-final-green` |
+
+Every case also has an actual generated-backend cleanup exit0. Native tests run
+serially as individual cases; no broad instrumented suite, real data, external
+model or system permission grant is claimed. The old pre-fix APK/hash remain
+preserved for the exact REDs. Parent22:43 environment callback was checked against
+actual tool/log/PTy evidence: no connection error occurred here and no command
+was repeated because of that callback. Read-only process verification reports
+zero active Gradle wrapper/test workers. M15 explicitly RELEASED its heavy phase
+before the subsequent single-native checks; the QR full gate is next via parent.
+
+The original bounded reviewers' reports do not automatically cover these latest
+small fixes. Independent closure requests remain pending. Joint's latest message
+submission still returns an earlier-turn-not-confirmed error; M15 does not claim
+a candidate freeze was received or proxy/retry that failed delivery. The current
+capability matrix distinguishes original Android controls from Web-only widgets
+and lists genuine remaining contracts. Final affected/push/Draft PR remain open.
