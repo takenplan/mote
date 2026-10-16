@@ -11,7 +11,9 @@ export const defaultProcessingSettings=()=>processingSettingsSchema.parse({});
 const plugin=z.object({snapshotId:z.string().uuid(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 // Zero predates per-file cancellation and must keep the original serialized
 // M05 identity. A nonzero generation is still an immutable admitted fence.
-export const processingInputSchema=z.object({originalRef:z.string().regex(/^original:[a-f0-9]{64}$/),generation:z.number().int().nonnegative(),fileGeneration:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).transform(value=>value===0?undefined:value),diarizeFrom:z.string().regex(/^[a-f0-9]{64}$/).optional(),settings:processingSettingsSchema,plugin:plugin.optional(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
+// Forgotten/reimported originals likewise keep a durable M03 incarnation; zero
+// is omitted so existing task identities/caches do not change on upgrade.
+export const processingInputSchema=z.object({originalRef:z.string().regex(/^original:[a-f0-9]{64}$/),generation:z.number().int().nonnegative(),originalGeneration:z.number().int().nonnegative().safe().default(0).transform(value=>value===0?undefined:value),fileGeneration:z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0).transform(value=>value===0?undefined:value),diarizeFrom:z.string().regex(/^[a-f0-9]{64}$/).optional(),settings:processingSettingsSchema,plugin:plugin.optional(),parentTaskId:z.string().regex(/^[a-f0-9]{64}$/).optional()}).strict();
 export type ProcessingInput=z.infer<typeof processingInputSchema>;
 
 export function installProcessing(db:DatabaseSync){db.exec(`

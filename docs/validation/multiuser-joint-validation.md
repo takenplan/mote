@@ -796,3 +796,67 @@ Before closing this gap, preserve per-source/external-ID tombstones, all owned
 revisions, derived visibility retirement, late-worker/old receipt/ticket fences,
 post-commit pin-aware physical GC and personal merge/restart semantics. A simple
 DELETE alias or metadata-only hide cannot count as original capability parity.
+
+Current forget implementation0095c897078fce04ce75c687a0e1fc6abc81b479 closes the
+original503 route RED in its bounded scope. Same original user entry now passes
+with B isolation,410 resync refusal, explicit allow-again without automatic content,
+and rejection of an old signed ticket even after the deterministic original ID is
+reimported. Full personal old-archive import fails archive_conflict with no canonical
+resurrection, followed by restart; content-free tombstone Ingress-domain export/
+delete/restore retains the block. `/tmp/mote-joint-file-forget-portable-green.log/.exit`,1/1 EXIT0.
+The stronger final two-case receipt `/tmp/mote-joint-file-forget-revisions.log/.exit`
+is2/2 EXIT0: all two owned revisions retire, an old revision cannot undo the newer
+forget intent, exact held pin defers physical cleanup, independent same bytes and
+B survive. `/tmp/mote-joint-file-forget-held.log/.exit`,1/1 EXIT0, exercises a real
+held generated media transport: no late A artifact, one old call fact only, B
+processes normally, exact manual pin remains until release and existing GC then
+removes A's physical object. No live provider is involved.
+
+Parent23:03 allocated only a5–10s type window after QR's fresh release. Fixed0095
+Server and scripts noEmit ACTUAL EXIT0 in about5s:
+`/tmp/mote-joint-file-reviews-forget-types.log/.exit/.sha`. PTY23986 was read to
+terminal0, all heavy work explicitly released to QR's post-disposer final affected.
+No full suite/build/Gradle was appended to that short window. Scope AST on current
+forget source0 (`/tmp/mote-joint-file-forget-scope2.log/.exit`). Independent review
+of the new review and forget implementation remains pending; no final joint gate.
+
+Independent QR readonly review accepted the74fe review producer with its source-only
+limits (`/tmp/mote-qr-review-joint-owner-review-74fe.md`). Its0095 forget review found
+one incarnation path requiring actual proof (`/tmp/mote-qr-review-joint-forget-0095.md`).
+Joint actual automatic=true same-byte/original/receipt allow-again+restart returned
+the retired successful task: `/tmp/mote-joint-file-forget-incarnation-red.log/.exit`,1/1 EXIT1.
+A parentless old extract retry actually executed again and failed instead of being
+stale: `/tmp/mote-joint-file-forget-parentless-red.log/.exit`,1/1 EXIT1. Durable
+regressionsb024d64a;0095 is not accepted for those paths and its types do not cover
+this later fix.
+
+Fix056380c2c036f48d32241e8db3a59e8081cf5e4c binds M06 input/current/cache and review
+base to the existing M03 forgotten-original generation. This is independent of
+per-file cancel/retry generation; zero is omitted from serialized identities and
+stage fingerprints, preserving historical tasks/cache. No new table, route,
+executor, grant renewal or wire request is added. Exact two regressions plus the
+existing historical generation-zero/lost-ACK identity case pass3/3 EXIT0 in
+`/tmp/mote-joint-file-forget-incarnation-green2.log/.exit`. The first post-fix run's
+extra-call assertion incorrectly expected zero despite the actual initial decoder
+call; its failed receipt is preserved. The final fixture compares the actual
+pre-retry count and keeps the stale-before-execution assertion unchanged. Fix0563
+is submitted for bounded independent review; new noEmit/whole gates remain pending.
+
+M15's earlier36ff source-only acoustic publication concern was actually reproduced:
+real M03/M04/M05/M06 generated ASR/diarization, fixed A response held in Fastify
+onSend, then source disable or exact diarization replacement, still returned the
+captured WAV. Both cases fail in `/tmp/mote-joint-file-sample-publication-red.log/.exit`,
+2/2 EXIT1; durable8393bca1. Minimal679a175c40b9c20c3fb0b6789f089188c8ac0dd7 replaces
+the eager Buffer response with a lazy direct Readable, rechecking owner/source and
+exact current diarization before each64KiB block. Fastify observes the returned
+stream's errors; no intermediate pipe can swallow them. Same two cases and each
+B-positive WAV response pass2/2 EXIT0 in
+`/tmp/mote-joint-file-sample-publication-green.log/.exit`. This is not an execution
+of every backpressure/network/UI mode. New source types/independent delta review
+and final affected/clients remain pending;0095 types do not cover679a.
+
+M15's separate legal-large-artifact/8MiB native JSON concern is still unexecuted;
+raw full diarization arrays in detail were also part of the original legacy shape.
+No new quota, silent array truncation or invented paging framework is added from
+that source-only observation. Preserve it for bounded consumer/old-path comparison
+before deciding whether it is a regression or an existing scaling limit.
