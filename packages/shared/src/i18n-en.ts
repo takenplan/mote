@@ -8436,5 +8436,6 @@ export const english: Readonly<Record<string, string>> = {
   "留空保留已保存密钥。": "Leave blank to keep the saved secret.",
   "连接不存在，请重新读取。": "The connection no longer exists. Reload it.",
   "同步间隔不符合要求。": "The sync interval is invalid.",
-  "确认移除": "Confirm removal"
+  "确认移除": "Confirm removal",
+  "在中央网页逐条核对日程；只有已确认的建议会写入本机已有日历。连接与只读采集分别授权。": "Review each event in central web. Only confirmed suggestions are written to an existing local calendar. This connection is separate from read-only collection."
 };

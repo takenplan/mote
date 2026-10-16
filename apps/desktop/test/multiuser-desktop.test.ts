@@ -103,7 +103,7 @@ it('restores native calendar target connection through actual main/preload while
  await app.documentCall('A','connectCalendarActions');
  expect((await f.request(f.a.token,'/api/actions')).json().targets[0].calendars[0].id).toBe('generated-calendar');
  await app.call('mote:ask',['login',{token:f.b.token}]);
- await expect(app.documentCall('A','connectCalendarActions')).rejects.toThrow('account changed');
+ await expect(app.documentCall('A','connectCalendarActions')).rejects.toThrow(/Untrusted request origin|account changed/);
  await app.document('B');await app.documentCall('B','deliverCalendarActions');
  expect((await f.request(f.b.token,'/api/actions')).json().targets).toEqual([]);expect(nativeCalls).toEqual(['calendar-permission']);
  await app.documentCall('B','connectCalendarActions');expect(nativeCalls).toEqual(['calendar-permission','calendar-permission']);

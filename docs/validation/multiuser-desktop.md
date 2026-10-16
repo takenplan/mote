@@ -1,5 +1,38 @@
 # M14 Desktop validation checkpoint
 
+## Resumed native calendar consumer (current work)
+
+The parent restored this same M14 thread. Composition now includes delivered M16
+`eec967c6` (and delivered M12), tested Web `aed42550` and Android `9e824c00`.
+The pause section below is historical; PR139 is still at its earlier remote
+head until the resumed candidate passes its own final required affected.
+
+The actual Desktop calendar factory initially sends an obsolete protocol to
+real M01/M12: RED `594f75ee`, `m14-calendar-factory-red.log` exit 1. Only native
+permission I/O is substituted. The same case is GREEN at `5f0e5d33`.
+An expanded real consumer case then proves B inherits A's local `enabled` marker
+when server/device/directory match: RED `980204cf`, `calendar-owner-red.log`
+exit 1. `c91dd774` keys the existing ledger by stable account and device;
+`calendar-owner-green.log` is 9/9 exit 0 including the original algorithm suite.
+
+Permission held across retirement and replacement deployment both have actual
+RED at `f29feb28`, `calendar-retire-red.log` exit 1. `6336d50e` reuses current
+M01 self verification before native/private requests and checks captured main
+intent after awaits; the same tests plus original suite are 11/11 exit 0.
+The original account ledger retains an external fact after native completion,
+while the next request must prove current authority again.
+
+`c967138b` extends this to actual M12 fixed review/OwnerQuestions, M05 claim and
+receipt, native disk ledger, success ACK loss, backend restart, same-owner token
+rotation and late A native completion followed by B/A reconciliation. With
+the original seven algorithm cases, **13/13 exit 0**, 14.9s:
+`/tmp/m14-calendar-actual-journey-green.log/.exit`. The first sandbox command
+fails with loopback listen EPERM (exit 1); standard reviewed exact retry runs.
+Its first authorized run has a test-mock reset error (5/6), corrected only in
+fixture cleanup before the final run. No real EventKit permission/calendar,
+private data or external model is accessed. Main/preload/UI entry restoration
+and final affected checks are still pending; these results are not module final.
+
 ## Parent-directed pause and resumable boundary
 
 The parent instructed M14 to finish the running named-source repair, save a clean
