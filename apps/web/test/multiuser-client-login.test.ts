@@ -14,7 +14,7 @@ async function harness(t:TestContext){
  const f=await scopedCaptureFixture(t),dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost',pretendToBeVisual:true});
  const login=await f.request(undefined,'/api/auth/login','POST',{username:'generated-a',password:'Generated-M13-archive-only-01',mode:'web'});assert.equal(login.statusCode,200,login.body);
  const cookie=String(login.headers['set-cookie']).split(';')[0],before=new Map<string,PropertyDescriptor|undefined>();let hold:string|undefined,release:(()=>void)|undefined;
- const posts:string[]=[];let current:Api|undefined;
+ const posts:string[]=[];let current:Api|undefined,done=0,mounted=true;
  for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,IS_REACT_ACT_ENVIRONMENT:true,fetch:async(path:string,init:RequestInit={})=>{
   const headers=new Headers(init.headers);headers.set('cookie',cookie);const response=await f.host.app.inject({url:path,method:init.method as any??'GET',headers:Object.fromEntries(headers),...(init.body?{payload:String(init.body)}:{})});
   if(init.method==='POST')posts.push(path);
@@ -23,12 +23,13 @@ async function harness(t:TestContext){
  }})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
  const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!);
  const api=createApi({mode:'web',origin:'http://localhost',...login.json()},undefined,()=>current===api);current=api;
- t.after(async()=>{release?.();api.close?.();await act(async()=>root.unmount());for(const[key,value]of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
+ const unmount=async()=>{if(mounted){mounted=false;await act(async()=>root.unmount());}};
+ t.after(async()=>{release?.();api.close?.();await unmount();for(const[key,value]of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
  const request=async(name:string,purpose?:'central')=>{const verifier=randomBytes(32).toString('base64url'),result=await f.request(undefined,'/api/login/requests','POST',{serverUrl:'https://fixture.invalid',deviceId:'same-device',deviceName:name,platform:'android',challenge:createHash('sha256').update(verifier).digest('hex'),...(purpose?{purpose}:{})});assert.equal(result.statusCode,200,result.body);return result.json().id as string;};
- const render=(id:string)=>act(async()=>{root.render(React.createElement(ClientLoginApproval,{id,api,done:()=>{}}));await delay(15);});
+ const render=(id:string)=>act(async()=>{root.render(React.createElement(ClientLoginApproval,{id,api,done:()=>done++}));await delay(15);});
  const wait=async(predicate:()=>boolean)=>{for(let i=0;i<100&&!predicate();i++)await act(async()=>delay(10));assert.ok(predicate(),dom.window.document.body.textContent??'');};
  const button=()=>dom.window.document.querySelector<HTMLButtonElement>('button')!;
- return {request,render,wait,button,document:dom.window.document,posts,hold:(id:string)=>{hold='/api/login/requests/'+id;},release:()=>release?.()};
+ return {request,render,wait,button,document:dom.window.document,posts,unmount,done:()=>done,hold:(id:string)=>{hold='/api/login/requests/'+id;},holdApproval:(id:string)=>{hold='/api/login/requests/'+id+'/approve';},release:()=>release?.()};
 }
 
 test('browser approval distinguishes device collection from explicit native central access',async t=>{
@@ -43,4 +44,10 @@ test('browser approval retires the old request before the next device details re
  assert.equal(h.button().disabled,true,'new request cannot reuse the previous device description');
  await act(async()=>{old.click();await delay(10);});assert.deepEqual(h.posts,[],'a retired approval button cannot admit its old request');
  h.release();await h.wait(()=>!h.button().disabled);assert.match(h.document.body.textContent!,/Generated next/);
+});
+
+test('an already approved native grant cannot navigate a retired browser approval component',async t=>{
+ const h=await harness(t),id=await h.request('Generated central','central');await h.render(id);await h.wait(()=>!h.button().disabled);h.holdApproval(id);
+ await act(async()=>{h.button().click();await delay(10);});await h.wait(()=>h.posts.length===1);await h.unmount();
+ await act(async()=>{h.release();await delay(15);});assert.equal(h.done(),0,'late approved fact must not reopen the retired UI');
 });
