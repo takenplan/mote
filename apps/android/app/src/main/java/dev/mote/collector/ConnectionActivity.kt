@@ -20,6 +20,7 @@ class ConnectionActivity : MoteActivity() {
     private lateinit var preview: TextView
     private lateinit var currentNode: TextView
     private var parsed: ConnectionInvitation? = null
+    private var selectionOwner: CollectorConfig? = null
     private val executor = Executors.newSingleThreadExecutor()
     private val task by lazy { UiTask(this, executor, ownsExecutor = false) }
     private val refreshTask by lazy { UiTask(this, executor, ownsExecutor = false) }
@@ -86,8 +87,8 @@ class ConnectionActivity : MoteActivity() {
                 }
             }
         }
-        button(MoteI18n.text("扫描连接二维码")) { startActivityForResult(Intent(this, ConnectionScanActivity::class.java), 1) }
-        button(MoteI18n.text("选择连接 JSON 文件")) { startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain")), 2) }
+        button(MoteI18n.text("扫描连接二维码")) { selectionOwner = currentConfig; startActivityForResult(Intent(this, ConnectionScanActivity::class.java), 1) }
+        button(MoteI18n.text("选择连接 JSON 文件")) { selectionOwner = currentConfig; startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*").putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/json", "text/plain")), 2) }
         input = EditText(this).apply { hint = MoteI18n.text("粘贴 JSON 或 mote://connect…"); minLines = 3; maxLines = 7; isSaveEnabled = false; importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
             filters = arrayOf(android.text.InputFilter.LengthFilter(ConnectionInvitation.MAX_BYTES * 2)) }; root.addView(input)
         allowHttp = CheckBox(this).apply { text = MoteI18n.text("开发调试：允许本机 loopback HTTP 邀请"); isChecked = config.debugHttp; isEnabled = BuildConfig.DEBUG }; root.addView(allowHttp)
@@ -173,14 +174,14 @@ class ConnectionActivity : MoteActivity() {
     @Deprecated("Native Activity document result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
+        val expected = selectionOwner; selectionOwner = null
         if (resultCode != RESULT_OK || data == null) return
-        if (requestCode == 1) {
-            val raw = data.getStringExtra("invitation") ?: return
-            if (raw.length <= ConnectionInvitation.MAX_BYTES * 2) { input.setText(raw); runCatching { parseInput() }.onFailure(::showFailure) }
-        } else if (requestCode == 2 && data.data != null) {
+        if (expected == null) return
+        if (requestCode == 1 || requestCode == 2 && data.data != null) {
             val debugHttp = allowHttp.isChecked
             run(MoteI18n.text("正在读取所选连接文件…"), work = {
-                val bytes = contentResolver.openInputStream(data.data!!)!!.use { stream ->
+                if (Settings(applicationContext).read() != expected) throw SettingsChangedFailure()
+                val bytes = if (requestCode == 1) (data.getStringExtra("invitation") ?: throw ConnectionFailure("invitation")).toByteArray(Charsets.UTF_8) else contentResolver.openInputStream(data.data!!)!!.use { stream ->
                     val buffer = ByteArray(ConnectionInvitation.MAX_BYTES + 1); var total = 0
                     while (total < buffer.size) { val count = stream.read(buffer, total, buffer.size - total); if (count < 0) break; total += count }; buffer.copyOf(total)
                 }
@@ -189,6 +190,7 @@ class ConnectionActivity : MoteActivity() {
                 val invite = ConnectionInvitation.parse(raw, debugHttp, BuildConfig.DEBUG)
                 raw to invite
             }) { (raw, invite) ->
+                if (currentConfig != expected) return@run MoteI18n.text("连接已变化，请重新核对邀请。")
                 input.setText(raw); parsed = invite; preview.text = MoteI18n.text("将连接：{0}\n有效至：{1}\n请确认后连接。", invitationLabel(invite), invite.expiresAt)
                 MoteI18n.text("连接文件已解析，尚未联网。")
             }
