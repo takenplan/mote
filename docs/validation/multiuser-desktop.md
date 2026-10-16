@@ -1,5 +1,34 @@
 # M14 Desktop validation checkpoint
 
+## Parent-directed pause and resumable boundary
+
+The parent instructed M14 to finish the running named-source repair, save a clean
+checkpoint and release this execution slot for M12. This is not module completion.
+The last tested Desktop runtime is `ceae83a5efbe622c77a768935d426fa18abf0786`;
+subsequent changes in this checkpoint are design/validation documents only.
+Named-source **2/2** and generated native Ask/queue/death acceptance above retain
+their exact candidate boundaries; they do not replace final required affected.
+
+Remote Draft PR139 remains at `7e080c728a6eea91876d32263ef28e45b8676b9b`, targeting
+`codex/mote-multiuser-integration` at unchanged baseline `6272a9b5`. Its earlier
+required-affected success on `a43979dc` remains valid for that earlier runtime.
+No resumed runtime is pushed or relabeled as having passed the final gate.
+
+Before the next PR update, resume this same thread, review the named-source
+delta, compose the now-frozen M13 Web import `23b347c9` + `ee4bb999` and M15
+device-only updates `2ff31228` as appropriate, and use the explicitly authorized
+M12 handoff when the parent supplies it. Those later consumer commits were
+received but not composed before the pause. Then run relevant fresh Desktop
+build/native and full affected checks on the actual final combination, update
+the feature/PR and record the exact remote SHA. Current M13 raw-reader contract
+limitations and any unavailable real permissions/providers remain explicit.
+
+There are no running M14 tests, builds, synthetic providers or native fixture
+processes and no pending M14 user-input/approval request at this pause. All
+temporary native/provider profiles from completed tests are closed by their
+fixture cleanup. The repository and main/integration were not reset, merged,
+deployed or otherwise modified outside the feature.
+
 ## Explicit source identity in original/detail reads
 
 Actual RED `ace31bdf` is now executed, not merely a proposed case:
