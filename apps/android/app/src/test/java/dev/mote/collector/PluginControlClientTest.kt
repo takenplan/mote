@@ -44,30 +44,31 @@ class PluginControlClientTest {
 
     @Test fun instanceConfigurationAndEnableUseTheInstanceRevisionAndNeverBindImplicitly() {
         val configuration = JSONObject().put("serviceReference", "generated-service-reference")
-        val create = PluginControlClient.configure("generated-package", null, 3, "Generated instance", "default", configuration)
+        val grants = JSONObject().put("capabilities", JSONArray().put("processor")).put("sourceIds", JSONArray().put("owned-source")).put("history", false)
+        val create = PluginControlClient.configureOwned("generated-package", null, 3, "Generated instance", configuration, grants)
         assertEquals("/api/plugin-instances", create.path); assertEquals("POST", create.method)
-        assertEquals("generated-package", create.payload().getString("packageId")); assertEquals(3, create.payload().getLong("expectedRevision"))
-        val edit = PluginControlClient.configure("generated-package", "generated-instance", 9, "Generated instance", "default", configuration)
-        assertEquals("PATCH", edit.method); assertEquals(9, edit.payload().getLong("expectedRevision")); assertFalse(edit.payload().has("packageId"))
-        val enable = PluginControlClient.instanceAction("generated-instance", "enable", 10)
+        assertEquals("generated-package", create.payload().getJSONObject("instance").getString("packageId")); assertEquals(3, create.payload().getLong("expectedRevision"))
+        val previous = create.payload().getJSONObject("instance")
+        val edit = PluginControlClient.configureOwned("generated-package", previous, 9, "Generated instance", configuration, grants)
+        assertEquals("POST", edit.method); assertEquals(9, edit.payload().getLong("expectedRevision")); assertTrue(edit.payload().getBoolean("preserveRedactedSecrets")); assertEquals(previous.getString("id"), edit.payload().getJSONObject("instance").getString("id"))
+        val enable = PluginControlClient.ownedInstanceAction("generated-instance", "enable", 10)
         assertEquals("/api/plugin-instances/generated-instance/enable", enable.path)
-        assertEquals(10, enable.payload().getLong("expectedRevision")); assertFalse(enable.payload().has("targetPlanId"))
-        assertTrue(runCatching { PluginControlClient.instanceAction("generated-instance", "activate", 10) }.isFailure)
+        assertEquals(10, enable.payload().getLong("expectedRevision")); assertFalse(enable.payload().has("operationId"))
+        assertTrue(runCatching { PluginControlClient.ownedInstanceAction("generated-instance", "activate", 10) }.isFailure)
     }
 
     @Test fun pauseResumeStopAndPreparedActivationCarryDifferentOwnerIntentsWithoutHistoryReplay() {
-        val pause = PluginControlClient.memoryAction("pause", 4)
-        val resume = PluginControlClient.memoryAction("resume", 5)
-        val stop = PluginControlClient.memoryAction("stop", 6)
+        val pause = PluginControlClient.memoryControl("pause", 4)
+        val resume = PluginControlClient.memoryControl("resume", 5)
+        val stop = PluginControlClient.memoryControl("stop", 6)
         assertEquals(3, setOf(pause.payload().getString("operationId"), resume.payload().getString("operationId"), stop.payload().getString("operationId")).size)
         assertFalse(resume.payload().has("scope")); assertFalse(resume.payload().has("generation"))
-        assertTrue(runCatching { PluginControlClient.prepare("generated-plan", "default", 7, false) }.isFailure)
-        val prepare = PluginControlClient.prepare("generated-plan", "default", 7, true)
-        assertEquals("generated-plan", prepare.payload().getString("targetPlanId")); assertTrue(prepare.payload().getBoolean("feeAcknowledged"))
-        val activate = PluginControlClient.memoryAction("activate", 8, "generated-preparation")
-        assertEquals("generated-preparation", activate.payload().getString("preparationId"))
-        assertNotEquals("generated-preparation", activate.payload().getString("operationId"))
-        assertEquals(PluginControlClient.BINDING + "/activate", activate.path)
+        val prepare = PluginControlClient.prepareBinding("generated-owned-instance")
+        assertEquals("generated-owned-instance", prepare.payload().getString("instanceId")); assertFalse(prepare.payload().has("expectedRevision")); assertFalse(prepare.payload().has("targetPlanId"))
+        val activate = PluginControlClient.bindingControl("generated-preparation", "activate", 8)
+        assertEquals(setOf("expectedRevision"), activate.payload().keys().asSequence().toSet()); assertEquals(8, activate.payload().getLong("expectedRevision"))
+        assertEquals("/api/memory/bindings/generated-preparation/activate", activate.path)
+        assertEquals(0, PluginControlClient.bindingControl("generated-preparation", "cancel", 8).payload().length())
     }
 
     @Test fun projectionKeepsRequestedStateSeparateFromObservedStateAndDoesNotInferEngineCompatibility() {
@@ -78,10 +79,6 @@ class PluginControlClientTest {
         val parsed = PluginControlProjection.instance(instance)
         assertTrue(parsed.desired); assertEquals("unconfigured", parsed.observed); assertEquals("unknown", parsed.capabilities.single().state)
         assertEquals(setOf("configure"), parsed.allowedActions); assertFalse("enable" in parsed.allowedActions)
-        val plan = JSONObject().put("id", "hindsight-name-is-not-proof").put("name", "Generated engine")
-            .put("mode", "engine").put("available", false).put("reason", "Generated adapter has not passed its contract")
-            .put("modules", JSONArray()).put("capabilities", instance.getJSONArray("capabilities")).put("allowedActions", JSONArray())
-        assertFalse(PluginControlProjection.plan(plan).available)
     }
 
     @Test fun declarativeConfigurationRejectsMissingRequiredFieldsInvalidNumbersAndUnknownSelections() {
@@ -99,7 +96,7 @@ class PluginControlClientTest {
         var active = true; var sends = 0
         val central = CentralClient("http://127.0.0.1:47999", "generated-test-token", transport = { _, _, _, _, _ -> sends++; active = false; 200 to JSONObject() }, active = { active })
         val control = PluginControlClient(central)
-        val intent = PluginControlClient.memoryAction("pause", 1)
+        val intent = PluginControlClient.memoryControl("pause", 1)
         assertTrue(runCatching { control.execute(intent) }.isFailure)
         assertEquals(1, sends)
         assertTrue(runCatching { control.execute(intent) }.isFailure)
