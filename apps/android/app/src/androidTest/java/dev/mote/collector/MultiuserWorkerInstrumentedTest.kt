@@ -560,6 +560,35 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeBrowserLoginReturnsACentralSessionWhileDevicePairingRemainsScoped() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        for(actor in listOf("a","b"))CentralClient(endpoint(),token(actor)).post("/api/ingress/devices",JSONObject().put("id","browser-native-device").put("name","Generated browser "+actor).put("platform","android"))
+        RuntimeSettings.replaceAccount(app) { settings.signOut() }
+        val requestId=java.util.concurrent.atomic.AtomicReference<String?>()
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val monitor=object:android.app.Instrumentation.ActivityMonitor(){override fun onStartActivity(intent:android.content.Intent):android.app.Instrumentation.ActivityResult? {
+            val url=intent.data
+            if(intent.action==android.content.Intent.ACTION_VIEW&&url?.toString()?.startsWith(endpoint()+"/#/ask?loginRequest=")==true){
+                requestId.set(android.net.Uri.parse("https://fixture.invalid/?"+url.fragment!!.substringAfter('?')).getQueryParameter("loginRequest"))
+                return android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED,null)
+            }
+            return null
+        }};instrumentation.addMonitor(monitor)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try{androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","devices")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="使用浏览器登录"}.performClick()};waitFor {requestId.get()!=null}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED)
+            val id=requestId.get()!!;val approval=CentralClient(endpoint(),token("a"));val detail=approval.get("/api/login/requests/"+id)
+            approval.post("/api/login/requests/"+id+"/approve");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            waitFor { !settings.read().authSignedOut };waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
+            scenario.onActivity {activity->assertNotNull("The original browser login must return a usable native central session, not an ingestion-only device grant",activity.client)
+                val text=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()};assertTrue(text.any {it.contains("Generated browser a")});assertFalse(text.any {it.contains("Generated browser b")})}
+            assertEquals("central",detail.getString("purpose"));assertFalse(settings.read().deviceBoundCredential);assertEquals(fixture().getJSONObject("a").getString("userId"),settings.read().account()!!.userId)
+        }}finally{instrumentation.removeMonitor(monitor)}
+    }
+
     @Test fun optedInGeneratedNativeAskUsesTheVerifiedLocalCodexModelWithoutPrivateCentralData() {
         val app=context();require(fixture().optString("model")=="gpt-6.1-sol");waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
