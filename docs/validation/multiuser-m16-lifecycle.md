@@ -614,3 +614,32 @@ CLI plus root-client combination **9/9, exit 0**, including same-URL replacement
 with only self/zero private body and missing/wrong original ACK rejection;
 `/tmp/m16-cli-shared-admission-composed.log/.exit`. Independent M13 bounded review
 finds no new confirmed issue in that two-line transport delegation.
+
+## Final candidate preparation after M12 composition
+
+The actual portable import, Actions lifecycle and Actions portable suites pass
+**19/19, exit 0, no skips**, `/tmp/m16-import-actions-composed.log/.exit` (43 seconds).
+This exercises the sixth canonical Todos merge, same-input idempotency/current
+conflict/full-transaction rollback and unknown native receipt followed by physical
+A deletion while B remains unchanged. It also retains all fourteen M16 import
+cases, including the restart backfill regression.
+
+M15's four-file `8812c137` correction and its durable tests are composed as
+`7c2d3364`: queued archive reads retain the original owner before resolving a
+client, retained Actions clients cannot borrow the replacement account, the
+original central reader consumes published OCR, and import acknowledgements
+require all five original canonical domains while permitting explicitly declared
+additional domains. M15's unchanged native regressions pass individually and its
+four JVM receipt cases pass; these are peer execution evidence, not independent
+M16 native reruns. Bounded M16 and M13 reviews found no additional confirmed issue.
+
+M12's earlier 45/46 focus result remains a historical failure. Actual completed
+range diagnostics show four model batches of three records, with the complete
+54-character final Unicode record present as the third record of the last batch.
+The fake model inspected only record zero. Test-only commits `6fd208ff`,
+`59db9aec`, `725f8b97` preserve delivery/completion/Unicode/timezone assertions and
+make the responder inspect every supplied original. M12's unchanged single case
+then passes, exit 0, 32.943 seconds,
+`/tmp/m12-long-tail-grouped-fixture-green.log/.exit`. No production change or
+expanded deadline is attributed to this fixture correction. The test-only delta
+is composed as `793bdc86`, `8b022d3e`, `871c44f9` before the final required run.
