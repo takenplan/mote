@@ -1,10 +1,10 @@
 # M11 real query composition
 
-M11 core runtime `d884b4c7250136dbc2687fcdd02f0753c0ab80dd` composes accepted
+M11 core runtime `4cb0e9e8502c2b854dde9f6f72fc39415290bfd0` composes accepted
 [PR #134](https://github.com/utopiafar/mote/pull/134) full head
 `7572b573b03437ff743652c13181b9fdcf251fda`, actual M08 partial production freeze
-`8819cdde6cc426b81990c0b49a0854dd0b4432f7` and M07 read/pin/filter fixes through
-`dbc5ae46b69e010d1610c0b8414fd755e348be0e`. M07/M08 are tested interface/core
+`9cbc863bdb7c2bc337ce820f4c566d8f10ce9923` and M07 question/feedback/daily partial freeze
+`6d3661de8a7f2fa4a9633d194632f21ca77c0685` (including pin/filter/default-content fixes). M07/M08 are tested interface/core
 freezes, not final accepted modules. No final M11 acceptance or own Draft PR is
 claimed. Integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 
@@ -72,8 +72,9 @@ The [validation record](../validation/multiuser-m11-mcp.md) separates developmen
 receipts, closed independent findings and the older protocol-only full gates.
 Remaining gates are final accepted M07/M08 capability composition, final whole
 M11 independent review, actual combined/build/emitted/affected checks on that final
-code, then a Draft PR with verified remote head/base. M07 daily/feedback/owner
-question restoration and M08 final continuation/recovery checks are not replaced
-by the tested read interface. Checks/Component checks remain disabled and unrun.
+code, then a Draft PR with verified remote head/base. M07 daily/feedback/owner-question production code is now composed and independently
+reviewed within explicit bounds; final stale/proposed/import/query/recovery parity
+remains unaccepted. M08 canonical multi-block continuation/read-file evidence and
+final recovery checks are still being restored and verified. Checks/Component checks remain disabled and unrun.
 Real credentials, personal data, live external providers/models, deployments and
 physical-device validation are outside this task's authorization.

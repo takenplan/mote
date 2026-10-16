@@ -6,9 +6,70 @@ Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
 this feature. Final accepted M07/M08 real query tools remain required.
 No mock Memory, Ask, connector or processing service proves them.
 
+## Superseding real composition under validation
+
+Exact runtime/test composition `4cb0e9e8502c2b854dde9f6f72fc39415290bfd0` adds
+M07 partial parity `6d3661de8a7f2fa4a9633d194632f21ca77c0685` and M08 fix
+`9cbc863bdb7c2bc337ce820f4c566d8f10ce9923`. Types and scope guard exit0:
+`/tmp/m11-6d-9cbc-types.log/.exit`, `/tmp/m11-4cb-scope.log/.exit`. Actual
+all-scope/multiuser combination finished **447/454**,7fail,0cancel/skip,exit1,
+432930.188ms (`/tmp/m11-4cb-combined.log/.exit`). Six failures were fixture
+assumptions superseded by the real new `memory.materials` producer: actual
+canonical Material navigation, selecting a known Material, observing all produced
+context refs, a document-only candidate matrix and strict four-task rollback
+inventory. Test-only commit `d412212c2e844209238fa58c8ec616df6e1f8bfe` preserves
+the producer and passes those six targeted cases **6/6**,exit0,12829.3055ms
+(`/tmp/m11-6d-composition-repairs-waited.log/.exit`). The seventh failure is a
+production native-original pagination P2: `mote_items(limit=1)` returned two
+blocks. Its original strict limit assertion remains unchanged; upstream80cf fix
+is awaiting independent retest. The failed454 run is not relabeled as passed.
+
+At exactd412, fresh server build exits0 and actual emitted production index plus
+connector two-process smoke passes **2/2**,exit0,9535.425833ms:
+`/tmp/m11-4cb-server-build.log/.exit`, `/tmp/m11-4cb-emitted-smoke.log/.exit`.
+This retains the genuine MCP→M03→M06→reviewed Memory→Ask chain, SIGKILL, reconnect,
+A/B owner separation and subjectless Gmail Material. It does not replace final
+combined/affected gates.
+
+Previous exact composition `3beece41e537b5b074f081bca90d7c7f7be71d93` passes
+**59/59**,0fail/cancel/skip,exit0,137963.888583ms:
+`node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-mcp*.test.ts`,
+`/tmp/m11-9cbc-focused.log/.exit`. This includes the upgraded actual production
+index process: MCP→M03→M06→independently extracted/reviewed Memory→M08 query,
+A/B isolation, SIGKILL/reconnect, credential revocation and no successful-model
+replay. At prior exact604dc571ea6f7972056396472262e6d9b19acf90 fresh libs/server
+builds exit0 and emitted real M11/M10 processes **2/2**,exit0,8162.862125ms:
+`/tmp/m11-core-{libs-build,server-build,emitted-smoke}.log/.exit`. These earlier
+compiled receipts do not prove the newer4cb runtime.
+
+Artifact findings below are now CLOSED at9cbc: original two SDK probes and
+external fixture unchanged in a complete literal composition archive pass2/2,
+exit0,10515.088042ms, `/tmp/m11-review-m08-9cbc-artifact-sdk.log/.exit`.
+Persistent actual SDK regressions pass2/2,exit0,10297.252375ms,
+`/tmp/m11-artifact-persistent-sdk.log/.exit`, and are included in59 above.
+Legitimate own artifact still reads; other-source and B deny. Conversation
+DELETE200/artifact GET404 during provider await prevent old body publication.
+First complete artifact/run/conversation pins and all dependency query filters
+are rechecked in the actual reader's final request fence.
+
+M07 exact6d question/feedback subset independently passes7/7 plus two additional
+actual interpreter-await cancel/source-delete barriers2/2,exit0:
+`/tmp/m11-review-m07-6d-parity.log/.exit` and
+`/tmp/m11-review-m07-6d-late-owner.log/.exit`. M08 exact9cbc child retry/any-cancel/
+conversation-CAS/source-declaration/empty-account subset independently passes5/5,
+exit0, `/tmp/m11-review-m08-9cbc-children.log/.exit`. Reviews are bounded to those
+real scenarios, with no new confirmed actionable P0/P1/P2. M08 also independently
+reviewed the4cb app/scanner/inventory composition delta; recorded receipt
+`/tmp/mote-m11-composition-peer-review.md`. It retains accepted M10/M06 startup,
+M11 capability guards and new ownerQuestions host wiring.
+
+The core gates below remain historical as labeled. Final accepted M07/M08 heads,
+remaining parity/recovery work, final affected command and M11 Draft PR are still
+pending; neither disabled CI nor prior affected success is presented as current.
+
 ## Genuine query reader core composition (not final acceptance)
 
-Current runtime/test freeze `d884b4c7250136dbc2687fcdd02f0753c0ab80dd` composes
+Historical runtime/test freeze `d884b4c7250136dbc2687fcdd02f0753c0ab80dd` composes
 accepted PR134 plus M08 partial8819cdde6cc426b81990c0b49a0854dd0b4432f7 and
 M07 exact pin/default-content fixes through dbc5ae46b69e010d1610c0b8414fd755e348be0e.
 All20 existing read tools use real scoped readers, with no direct M02 read fallback.
@@ -67,8 +128,8 @@ Earlier account-wide source-set barrier2/2 and callback architecture4/4 passed,
 in that reviewed scope. Additional actual SDK artifact probes independently
 reproduce a deleted-conversation late-publication P1 and ignored source-filter P2:
 0/2,exit1,9761.928375ms,
-`/tmp/m11-review-m08-881-artifact-sdk-valid.log/.exit`. M08 has the exact
-reproduction and final artifact acceptance is paused pending its production fix. Final accepted M07/M08
+`/tmp/m11-review-m08-881-artifact-sdk-valid.log/.exit`. Both findings are closed by the original SDK probes unchanged at9cbc, as
+recorded in the superseding section above. Final accepted M07/M08
 capability heads, all-scope/composed build/emitted/affected on final code and the
 M11 Draft PR are still required. Historical417 full gates below do not satisfy
 those new final-code requirements. CI remains disabled and unrun.
