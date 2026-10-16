@@ -7,6 +7,9 @@ real production entry point, not Web/Android/physical-camera delivery.
 
 ## Scope and dependencies
 
+Draft PR [#144](https://github.com/utopiafar/mote/pull/144) was created and
+attached to the task. It is not merged.
+
 The local feature branch is `codex/mote-multiuser-qr-pairing`, targeting Draft PR
 base `codex/mote-multiuser-integration` (`6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`).
 The composed prerequisite snapshot is Joint `f6ac6cd1` (stable `c45fdb4a`) plus
