@@ -2386,5 +2386,16 @@
       "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'POST',url:'/api/todos'",
       "extension:runtime.services.registerUser:TODOS_DOMAIN"
     ]
+  },
+  "apps/server/src/scope/processing-files.ts": {
+    "scope": "user",
+    "module": "M06",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback'"
+    ]
   }
 }

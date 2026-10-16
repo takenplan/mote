@@ -43,4 +43,5 @@ export function registerPrivateData(runtime:ScopedRuntime,db:DatabaseSync){
   registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/layers',service:PRIVATE_DATA_DOMAIN,handle:({services})=>service(services).statistics()});
   registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/data/statistics',service:PRIVATE_DATA_DOMAIN,handle:({services})=>service(services).statistics()});
   registerUserRoute(runtime,{scope:'user',method:'GET',url:'/api/data/search',service:PRIVATE_DATA_DOMAIN,handle:({services,request})=>service(services).search(z.object({query:z.string().min(1).max(500),limit:z.coerce.number().int().min(1).max(200).optional()}).strict().parse(request.query))});
+ return key;
 }
