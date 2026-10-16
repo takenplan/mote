@@ -5,6 +5,10 @@ import {DatabaseSync} from 'node:sqlite';
 import {join} from 'node:path';
 import {buildApp} from '../src/app.js';
 import {scopedFilesFixture} from './fixtures/scoped-files.js';
+import {waitForScopedState} from './fixtures/scoped-process.js';
+import {rmSync,unlinkSync,existsSync} from 'node:fs';
+import {backupScopedInstance,restoreScopedInstance} from '../../../scripts/scoped-backup.mjs';
+import {identityHash} from '../src/scope/originals.js';
 
 // Original generic import client protocol, through actual Accounts/production
 // HTTP/SQLite/M03 originals. No unconfirmed capture or Material is published.
@@ -33,4 +37,47 @@ test('generic upload ACKs persist across restart, deduplicate exact parts and ke
   const replay=await restarted.app.inject({method:'POST',url:'/api/import-uploads',headers,payload:manifest});assert.equal(replay.statusCode,200,replay.body);assert.equal(replay.json().fileId,fileA.id);
   const content=await restarted.app.inject({url:'/api/archived-files/'+fileA.id+'/content',headers});assert.equal(content.statusCode,200,content.body);assert.deepEqual(content.rawPayload,a);
  }finally{await restarted.app.close();}
+});
+
+test('generic raw four-MiB parts survive a real host restart before commit without publishing evidence',async t=>{
+ const f=await scopedFilesFixture(t),id=randomUUID(),part=Buffer.alloc(4*1024*1024,65),tail=Buffer.from('END'),manifest={id,name:'generated-large.txt',sizeBytes:part.length+tail.length,mimeType:'text/plain'};
+ await f.checked(f.a.token,'/api/import-uploads','POST',manifest);
+ assert.equal((await f.request(f.a.token,'/api/import-uploads/'+id+'/parts/0','PUT',part,{'content-type':'application/octet-stream'})).statusCode,200);
+ await f.host.app.close();const host=await buildApp({dataDir:f.directory});
+ try{
+  const request=(url:string,method:any='GET',payload?:unknown,headers={})=>host.app.inject({url,method,headers:{authorization:'Bearer '+f.a.token,'x-mote-protocol-version':'2',...headers},...(payload===undefined?{}:{payload})});
+  const begin=await request('/api/import-uploads','POST',manifest);assert.equal(begin.statusCode,200,begin.body);assert.equal(begin.json().parts.length,1);assert.equal(begin.json().parts[0].part,0);
+  assert.equal((await request('/api/import-uploads/'+id+'/commit','POST',{})).statusCode,409);
+  const saved=await request('/api/import-uploads/'+id+'/parts/1','PUT',tail,{'content-type':'application/octet-stream'});assert.equal(saved.statusCode,200,saved.body);
+  const committed=await request('/api/import-uploads/'+id+'/commit','POST',{});assert.equal(committed.statusCode,200,committed.body);
+  const content=await request('/api/archived-files/'+committed.json().id+'/content');assert.equal(content.statusCode,200,content.body);assert.deepEqual(content.rawPayload,Buffer.concat([part,tail]));
+  const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});try{assert.equal(db.prepare('SELECT count(*) n FROM pd_captures').get()!.n,0);assert.equal(db.prepare('SELECT count(*) n FROM ig_import_parts').get()!.n,0);assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(),[]);}finally{db.close();}
+ }finally{await host.app.close();}
+});
+
+test('unconfirmed archived files participate in actual personal merge, erasure and stopped backup without renewing upload grants',async t=>{
+ const f=await scopedFilesFixture(t),bytes=Buffer.from('Generated private unconfirmed original'),manifest={id:randomUUID(),name:'generated.txt',sizeBytes:bytes.length,mimeType:'text/plain'},files=[];
+ for(const account of [f.a,f.b]){await f.checked(account.token,'/api/import-uploads','POST',manifest);const part=await f.request(account.token,'/api/import-uploads/'+manifest.id+'/parts/0','PUT',bytes,{'content-type':'application/octet-stream'});assert.equal(part.statusCode,200,part.body);files.push(await f.checked(account.token,'/api/import-uploads/'+manifest.id+'/commit','POST',{}));}
+ await f.checked(f.a.token,'/api/ingress/gc','POST',{});
+ assert.deepEqual((await f.request(f.a.token,'/api/archived-files/'+files[0].id+'/content')).rawPayload,bytes);
+ const exportId=randomUUID();await f.checked(f.a.token,'/api/portable/exports','POST',{operationId:exportId});await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/exports/'+exportId)).state==='completed',()=>'unconfirmed original export did not settle');
+ const archive=await f.checked(f.a.token,'/api/portable/exports/'+exportId+'/content'),ingress=archive.domains.find((domain:any)=>domain.domain==='ingress').payload;
+ assert.equal(ingress.originals.length,0);assert.equal(ingress.archivedFiles.length,1);assert.equal(ingress.archivedFiles[0].id,files[0].id);assert.equal(ingress.objects.length,1);
+ const imported=randomUUID();await f.checked(f.a.token,'/api/portable/imports','POST',{operationId:imported,archive});await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/portable/imports/'+imported)).state!=='working',()=>'unconfirmed archive merge did not settle');assert.equal((await f.checked(f.a.token,'/api/portable/imports/'+imported)).state,'completed');
+ const deletion=await f.checked(f.admin.token,'/api/admin/accounts/'+f.a.userId,'DELETE',{operationId:randomUUID()});await waitForScopedState(async()=>(await f.checked(f.admin.token,'/api/admin/account-deletions/'+deletion.id)).state==='completed',()=>'unconfirmed original physical erasure did not settle');
+ assert.deepEqual((await f.request(f.b.token,'/api/archived-files/'+files[1].id+'/content')).rawPayload,bytes);
+ const snapshot=f.directory+'-backup',target=f.directory+'-restore',bad=f.directory+'-bad-backup';t.after(()=>{for(const path of [snapshot,target,bad])rmSync(path,{recursive:true,force:true});});
+ await f.host.app.close();await backupScopedInstance({source:f.directory,out:snapshot});await restoreScopedInstance({from:snapshot,target,deploymentId:f.host.deploymentId});
+ const restored=await buildApp({dataDir:target});try{const b=await restored.accounts!.login('generated-b','Generated-joint-files-password','generated','client',0),headers={authorization:'Bearer '+b.token,'x-mote-protocol-version':'2'};assert.deepEqual((await restored.app.inject({url:'/api/archived-files/'+files[1].id+'/content',headers})).rawPayload,bytes);const stale=await restored.app.inject({method:'POST',url:'/api/import-uploads',headers,payload:manifest});assert.equal(stale.statusCode,409,'instance recovery never renews the earlier upload epoch');}finally{await restored.app.close();}
+ unlinkSync(join(f.directory,'originals',identityHash([f.host.deploymentId,f.b.userId]),'objects',files[1].hash,'0.plain'));
+ await assert.rejects(backupScopedInstance({source:f.directory,out:bad}));assert.equal(existsSync(bad),false,'missing unconfirmed original cannot publish an allegedly complete backup');
+});
+
+test('generic staging keeps the prior one-day cleanup and handles an explicitly empty original',async t=>{
+ const f=await scopedFilesFixture(t),id=randomUUID(),manifest={id,name:'empty.txt',sizeBytes:0,mimeType:'text/plain'};
+ await f.checked(f.a.token,'/api/import-uploads','POST',manifest);const file=await f.checked(f.a.token,'/api/import-uploads/'+id+'/commit','POST',{});
+ const content=await f.request(f.a.token,'/api/archived-files/'+file.id+'/content');assert.equal(content.statusCode,200,content.body);assert.equal(content.rawPayload.length,0);
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{db.prepare('UPDATE ig_import_uploads SET expires=0 WHERE user_id=? AND id=?').run(f.a.userId,id);}finally{db.close();}
+ await f.checked(f.a.token,'/api/import-uploads','POST',{...manifest,id:randomUUID(),name:'next.txt'});
+ assert.equal((await f.request(f.a.token,'/api/archived-files/'+file.id)).statusCode,404);
 });

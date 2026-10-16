@@ -64,6 +64,15 @@ export class Originals{
   else replaceContentFile(path,bytes);
   this.assert();
  }
+ /** Generic import starts before a whole-file hash is available. This is the
+  * same bounded worker/object layout, without any capture publication. */
+ async prepareArchive(id:string,size:number,parts:{part:number;hash:string;bytes:number}[],signal?:AbortSignal){
+  this.assert();const parent=this.area('objects'),stage=join(parent,identityHash(randomUUID())+'.'+randomUUID()+'.tmp');privateDirectory(stage);
+  try{
+   const result=await prepareAsset({directory:this.uploadPath(id),staging:stage,destinationRoot:parent,bytes:size,partBytes:FILE_PART_BYTES,parts,encryption:{enabled:false}},signal);
+   this.assert();return this.sql.transaction(()=>{const destination=join(this.area('objects'),result.hash);if(existsSync(destination))this.verifyDirectory(destination,result.hash,size,result.checksums);else{renameSync(stage,destination);sync(parent);}this.record(result.hash,size,result.checksums);return this.get(result.hash);});
+  }finally{this.cleanStage(stage);}
+ }
  /** Uses the same bounded child worker as existing large-file intake. No SQL
   * transaction or user-selected path crosses the await. Pins protect GC. */
  async prepareUpload(id:string,size:number,hash:string,signal?:AbortSignal){
@@ -125,7 +134,7 @@ export class Originals{
   if(this.sql.get('SELECT id FROM ig_activity WHERE user_id=$user LIMIT 1'))throw conflict();
   this.sql.run('DELETE FROM ig_pins WHERE user_id=$user AND expires<=?',Date.now());let removed=0;
   const parent=this.area('objects');
-  for(const row of this.sql.all("SELECT hash FROM ig_objects o WHERE o.user_id=$user AND NOT EXISTS(SELECT 1 FROM ig_originals r LEFT JOIN ig_snapshot_inputs s ON s.user_id=r.user_id AND s.original_id=r.id WHERE r.user_id=o.user_id AND r.hash=o.hash AND(r.retention='archive' OR s.original_id IS NULL OR s.expires>?)) AND NOT EXISTS(SELECT 1 FROM ig_pins p WHERE p.user_id=o.user_id AND p.hash=o.hash)",Date.now())){
+  for(const row of this.sql.all("SELECT hash FROM ig_objects o WHERE o.user_id=$user AND NOT EXISTS(SELECT 1 FROM ig_originals r LEFT JOIN ig_snapshot_inputs s ON s.user_id=r.user_id AND s.original_id=r.id WHERE r.user_id=o.user_id AND r.hash=o.hash AND(r.retention='archive' OR s.original_id IS NULL OR s.expires>?)) AND NOT EXISTS(SELECT 1 FROM ig_archive_files a WHERE a.user_id=o.user_id AND a.hash=o.hash) AND NOT EXISTS(SELECT 1 FROM ig_pins p WHERE p.user_id=o.user_id AND p.hash=o.hash)",Date.now())){
    const hash=String(row.hash);if(!digest.test(hash))throw conflict();const path=join(parent,hash);if(existsSync(path)){privateDirectory(path);rmSync(path,{recursive:true});removed++;}if(!this.sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND hash=? LIMIT 1',hash))this.sql.run('DELETE FROM ig_objects WHERE user_id=$user AND hash=?',hash);
   }
   for(const name of readdirSync(parent))if(/^[a-f0-9]{64}\.[a-f0-9-]{36}\.tmp$/.test(name)||digest.test(name)&&!this.sql.get('SELECT hash FROM ig_objects WHERE user_id=$user AND hash=?',name)){const path=join(parent,name);privateDirectory(path);rmSync(path,{recursive:true});}

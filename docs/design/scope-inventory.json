@@ -1515,6 +1515,8 @@
     "surfaces": [
       "api:registerAuthenticatedRoute:method:'GET',url:'/api/ingress/originals/:id/content'",
       "api:registerAuthenticatedRoute:method:'POST',url:'/api/ingress/host-import'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/archived-files/:id',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/archived-files/:id/content',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/devices',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/head',service:INGRESS_DOMAIN",
@@ -1524,6 +1526,8 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/uploads/:id',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/import-uploads',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/import-uploads/:id/commit',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices/:id/reconcile',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices/heartbeat',service:INGRESS_DOMAIN",
@@ -1535,6 +1539,7 @@
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/recovery/:captureId/uploads',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/uploads',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/uploads/:id/commit',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/import-uploads/:id/parts/:part',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/ingress/uploads/:id/parts/:part',service:INGRESS_DOMAIN"
     ]
   },
@@ -1543,11 +1548,14 @@
     "module": "M03",
     "surfaces": [
       "table:ig_activity",
+      "table:ig_archive_files",
       "table:ig_batches",
       "table:ig_capture_scopes",
       "table:ig_capture_update_sequences",
       "table:ig_capture_updates",
       "table:ig_devices",
+      "table:ig_import_parts",
+      "table:ig_import_uploads",
       "table:ig_meta",
       "table:ig_objects",
       "table:ig_originals",

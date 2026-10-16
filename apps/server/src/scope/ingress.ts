@@ -13,6 +13,7 @@ import {Originals,identityHash,bytesHash,type Original,type OriginalWorkspace} f
 import {installIngress,ingressActivity} from './ingress-schema.js';
 import {ingressLifecycle} from './ingress-lifecycle.js';
 import type {UserDataSubject} from './lifecycle.js';
+import {importUploadData} from './import-upload-data.js';
 
 export const INGRESS_DOMAIN='ingress';
 const batchId=z.string().min(1).max(256);
@@ -75,6 +76,7 @@ export class IngressHost{
   const recoveryKey=(ref:string)=>identityHash([ref,Number(sql.get('SELECT expires FROM ig_snapshot_inputs WHERE user_id=$user AND original_id=?',ref.slice(9))?.expires??0)]);
   const needsRecovery=(value:Original)=>{const binding=source(value.sourceId),record=data().capture(value.captureId),p=record.provenance;if(binding.retention!=='snapshot'||value.retention!=='snapshot'||value.available!==false||!p||p.layer!=='snapshot'||p.deleted||data().sourceItem(value.sourceId,p.externalId)?.captureId!==record.id)return false;if(!this.snapshotRecovery)throw new PrivateDataError('scope_unavailable',503);return this.snapshotRecovery.needed(context,value.ref);};
   const during=async<T>(work:()=>Promise<T>)=>{assert();const activity=ingressActivity(this.db,context.userId),key=identityHash([context.userId,activity.id]);this.active.add(key);try{return await work();}finally{this.active.delete(key);activity.finish();}};
+  const archive=importUploadData(sql,originals,context.authorizationEpoch,()=>{assert();if(sourceIds||deviceId||authority.isTask(context))throw new ScopeError('invalid_identity',403);},during);
   const receipt=(sourceId:string,id:string,captures:IngressReceipt['captures']):IngressReceipt=>({version:3,id:identityHash([context.deploymentId,context.userId,sourceId,id]),deploymentId:context.deploymentId,userId:context.userId,sourceId,batchId:id,state:'received',captures});
   const checkReceipt=(value:IngressReceipt)=>{source(value.sourceId);return {...value,captures:value.captures.map(item=>{data().capture(item.id);return {...item,...(item.original?{original:original(item.original.ref)}:{})};})};};
   const batch=(sourceId:string,id:string,payload:unknown,format:IngressOriginalFormat,write:()=>IngressReceipt,formats:(receipt:IngressReceipt)=>Readonly<Record<string,IngressOriginalFormat>>=()=>({}))=>sql.transaction(()=>{
@@ -190,6 +192,7 @@ export class IngressHost{
      const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();for(const receive of this.accepted)receive(context,result,'file',Object.freeze({}));assert();return result;
     });received=true;return result;}finally{try{prepared?.release();}catch{/* Revoked pins expire or are removed by lifecycle. */}if(received)originals.cleanUpload(id);}
    }),
+   beginImportUpload:archive.begin,importUploadPart:archive.part,commitImportUpload:archive.commit,archivedFile:archive.file,archivedBytes:archive.bytes,
    uploadReceipt:(id:string)=>{const row=upload(id);return row.receipt?checkReceipt(JSON.parse(String(row.receipt))):{state:'pending',id,deploymentId:context.deploymentId,userId:context.userId};},
    batchReceipt:(sourceId:string,id:string)=>{source(sourceId);const row=sql.get('SELECT receipt FROM ig_batches WHERE user_id=$user AND source_id=? AND batch_id=?',sourceId,id);if(!row)throw missing();return checkReceipt(JSON.parse(String(row.receipt)));},
    ticket:(ref:string,mode:'download'|'play'='download')=>{if(original(ref).available===false)throw new PrivateDataError('snapshot_input_expired',410);if(!['download','play'].includes(mode))throw new PrivateDataError('invalid_data');const body=Buffer.from(JSON.stringify({v:3,deployment:context.deploymentId,user:context.userId,credential:context.credentialId,epoch:context.authorizationEpoch,ref,mode,expires:Date.now()+300000})).toString('base64url');return {ticket:body+'.'+createHmac('sha256',this.key).update(body).digest('base64url'),expiresIn:300};},
