@@ -26,9 +26,13 @@ export function installActions(db:DatabaseSync){db.exec(`
  CREATE INDEX IF NOT EXISTS ac_proposal_page ON ac_proposals(user_id,created_at DESC,id DESC);
  CREATE TABLE IF NOT EXISTS ac_targets(user_id TEXT NOT NULL,device_id TEXT NOT NULL,epoch TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,device_id));
  CREATE TABLE IF NOT EXISTS ac_jobs(user_id TEXT NOT NULL,id TEXT NOT NULL,input TEXT NOT NULL,proof TEXT NOT NULL,task_id TEXT,state TEXT NOT NULL DEFAULT 'pending',PRIMARY KEY(user_id,id));
- CREATE TABLE IF NOT EXISTS ac_operations(user_id TEXT NOT NULL,id TEXT NOT NULL,action_id TEXT NOT NULL,approval_hash TEXT NOT NULL,target_epoch TEXT,authorization_revision INTEGER NOT NULL,account_epoch INTEGER NOT NULL,task_id TEXT,issuance_id TEXT,claimed INTEGER NOT NULL DEFAULT 0,ack TEXT,revoked INTEGER NOT NULL DEFAULT 0,published INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,id),FOREIGN KEY(user_id,action_id) REFERENCES ac_proposals(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS ac_operations(user_id TEXT NOT NULL,id TEXT NOT NULL,action_id TEXT NOT NULL,approval_hash TEXT NOT NULL,target_epoch TEXT,authorization_revision INTEGER NOT NULL,account_epoch INTEGER NOT NULL,native_external_id TEXT,task_id TEXT,issuance_id TEXT,claimed INTEGER NOT NULL DEFAULT 0,ack TEXT,revoked INTEGER NOT NULL DEFAULT 0,published INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,id),FOREIGN KEY(user_id,action_id) REFERENCES ac_proposals(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ac_restore(user_id TEXT NOT NULL,id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,id));
  `);
+ // Preserve the exact known native event independently of private evidence scrubbing.
+ if(!db.prepare('PRAGMA table_info(ac_operations)').all().some(row=>row.name==='native_external_id')){
+  db.exec("ALTER TABLE ac_operations ADD COLUMN native_external_id TEXT; UPDATE ac_operations SET native_external_id=(SELECT json_extract(p.json,'$.related.externalId') FROM ac_proposals p WHERE p.user_id=ac_operations.user_id AND p.id=ac_operations.action_id);");
+ }
  // Canonical Material IDs are not original IDs. Store their complete raw/source
  // closure when saving, then erase quotes synchronously even while disabled.
  for(const [table,kind] of [['pd_captures','capture'],['pd_materials','material'],['pd_sources','source']] as const){const selected=`SELECT action_id FROM ac_dependencies WHERE user_id=old.user_id AND kind='${kind}' AND id=old.id`;db.exec(`CREATE TRIGGER IF NOT EXISTS ac_${kind}_deleted BEFORE DELETE ON ${table} BEGIN
