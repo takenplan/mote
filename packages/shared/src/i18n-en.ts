@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "固定日程审批": "Fixed calendar review",
+  "核对固定内容": "Review fixed details",
+  "仅批准上方固定内容、证据、设备和日历；修改需要返回重新核对。": "Approve only the fixed details, evidence, device and calendar above. Go back to make changes and review again.",
   "Gmail 连接": "Gmail connection",
   "选择连接": "Select a connection",
   "取消导入": "Cancel import",
