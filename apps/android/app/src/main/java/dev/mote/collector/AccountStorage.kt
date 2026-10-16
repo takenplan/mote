@@ -3,15 +3,23 @@ package dev.mote.collector
 import android.content.Context
 import java.io.File
 
-/** The selected identity is fixed before opening an existing store; no token-derived paths. */
+/** Ownership metadata is not a credential. Queue validators run under storage locks
+ * and must never acquire Settings.class (which may itself be checking the queue).
+ * One preference snapshot also keeps explicit local adoption atomic with selection. */
+internal fun Context.accountOwnerKey(): String {
+    LocalDataFormat.requireCurrent(this)
+    val value = getSharedPreferences("mote", Context.MODE_PRIVATE).getString("accountBinding", "").orEmpty()
+    return if (value.isEmpty()) "local" else AccountBinding.parse(value).key
+}
 internal fun Context.accountDirectory(): File {
     LocalDataFormat.requireCurrent(this)
-    val config = Settings(this).read()
-    val key = config.ownerKey()
-    val localOwner = getSharedPreferences("mote", Context.MODE_PRIVATE).getString("localOwnerKey", "")
+    val metadata = getSharedPreferences("mote", Context.MODE_PRIVATE).all
+    val value = metadata["accountBinding"] as? String ?: ""
+    val key = if (value.isEmpty()) "local" else AccountBinding.parse(value).key
+    val localOwner = metadata["localOwnerKey"] as? String ?: ""
     return File(noBackupFilesDir, "accounts/${if (key == localOwner) "local" else key}").apply { check(isDirectory || mkdirs()) }
 }
-internal fun Context.accountPreferences(name: String) = getSharedPreferences("$name.${Settings(this).read().account()?.key ?: "local"}", Context.MODE_PRIVATE)
+internal fun Context.accountPreferences(name: String) = getSharedPreferences("$name.${accountOwnerKey()}", Context.MODE_PRIVATE)
 
 internal fun android.content.Context.ingress3(config: CollectorConfig, current: () -> Boolean = { true }): Ingress3Client {
     val settings = Settings(this)
