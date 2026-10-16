@@ -184,6 +184,10 @@ export function createApi(input: Connection, onUnauthorized?: () => void, isCurr
     const response = await raw(path, init);
     const value=await response.json() as T;
     assertCurrent();
+    if(isWebConnection(connection)&&path==='/api/auth/self'){
+      const self=value as {credentialId?:string;deploymentId?:string;userId?:string};
+      if(self.credentialId!==connection.credentialId||self.deploymentId!==connection.deploymentId||self.userId!==connection.userId){onUnauthorized?.();throw new ApiError(moteText('登录会话已改变，请重新登录。'),401,undefined,'session_changed');}
+    }
     return value;
   }
   async function raw(path: string, init: RequestInit = {}) {
@@ -200,6 +204,7 @@ export function createApi(input: Connection, onUnauthorized?: () => void, isCurr
     headers.set('Accept-Language',getLocale());
     if(init.body && !headers.has('Content-Type'))headers.set('Content-Type','application/json');
     headers.set('X-Mote-Protocol-Version','2');
+    if(path.startsWith('/api/ingress/'))headers.set('X-Mote-Ingress-Version','3');
     if(isWebConnection(connection)){
       headers.delete('Authorization');
       headers.set('X-Mote-Session-Id',connection.credentialId);
@@ -237,12 +242,16 @@ export function createApi(input: Connection, onUnauthorized?: () => void, isCurr
       } catch {
         /* response might not be JSON */
       }
-      if (response.status === 401 && (!code || ['unauthorized','connection_revoked','invalid_identity','session_binding_required'].includes(code)) && !init.signal?.aborted && isCurrentConnection()) onUnauthorized?.();
+      if ((response.status === 401 && (!code || ['unauthorized','connection_revoked','invalid_identity','session_binding_required'].includes(code)) || response.status===409&&code==='session_changed') && !init.signal?.aborted && isCurrentConnection()) onUnauthorized?.();
       assertCurrent();
       if (!requestId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestId)) requestId = undefined;
       throw new ApiError(message, response.status, requestId, code, retryAfterMs);
     }
-    return response;
+    return new Proxy(response, {get(target,key){
+      const value=Reflect.get(target,key,target);
+      if(['json','text','blob','arrayBuffer','formData','bytes'].includes(String(key))&&typeof value==='function')return async(...args:unknown[])=>{assertCurrent();const body=await value.apply(target,args);assertCurrent();return body;};
+      return typeof value==='function'?value.bind(target):value;
+    }});
   }
   return { request, raw, connection, close:()=>{closed=true;} };
 }

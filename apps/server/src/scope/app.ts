@@ -1,3 +1,4 @@
+import {registerWebAssets} from '../web-assets.js';
 import {registerAsk} from './ask-routes.js';
 import {AskError} from './ask-schema.js';
 import type {AskHost} from './ask.js';
@@ -77,7 +78,8 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
     if(execution&&memory){ask=registerAsk(runtime,storage.db,configuration,execution,ingress,memory);if(processing)ask.bindProcessing(processing);}
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
-    app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});
+    await registerWebAssets(app);
+    app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
     app.addHook('onClose',async()=>{await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await configuration?.close();accounts.close();storage.close();});
     return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,ask,ownerQuestions,deploymentId:storage.deploymentId};
   }catch(error){await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();storage.close();throw error;}
