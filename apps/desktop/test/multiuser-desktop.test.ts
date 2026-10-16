@@ -170,7 +170,16 @@ it('preserves source policy/name edits and central pause through the actual Desk
  const f=await fixture(),config=f.config(f.a),input=join(f.directory,'generated-secret.md');await writeFile(input,'Generated content must remain local after reference selection');
  const sources=new LocalSourceManager(join(f.directory,'sources-policy'),config,'/generated/no-helper',true);cleanup.push(()=>sources.close());await sources.initialize();await sources.addFiles(input,{...DEFAULT_SOURCE_OPTIONS,retention:'archive'});await sources.sync(true);await sources.flushPending(new AbortController().signal);
  const id=sources.status()[0].source.id,options={...DEFAULT_SOURCE_OPTIONS,retention:'reference' as const,enabled:true,redactLiterals:['secret']};await sources.update(id,options);await sources.sync(true);await sources.flushPending(new AbortController().signal);
- const actual=await f.request(f.a.token,'/api/sources/'+id);expect(actual.json()).toMatchObject({retention:'reference',name:'generated-[REDACTED].md'});
+ const actual=await f.request(f.a.token,'/api/sources/'+id);expect(actual.json()).toMatchObject({retention:'reference'});expect(actual.json().name).not.toContain('secret');
  expect((await f.request(f.a.token,'/api/sources/'+id,'PATCH',{enabled:false})).statusCode).toBe(200);await sources.update(id,{...options,retention:'snapshot'});await sources.sync(true);
  await expect(sources.flushPending(new AbortController().signal)).rejects.toThrow();expect((await f.request(f.a.token,'/api/sources/'+id)).json().enabled).toBe(false);
+});
+it.each(['mote:export-queue','mote:export-metadata'])('an old A save dialog cannot export B bytes through actual production IPC: %s',async channel=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);let status=await app.call('mote:get-status');await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false}]);
+ let entered=false;app.child.on('message',(message:any)=>{if(message.type==='save-dialog-entered')entered=true;});app.child.send({type:'hold-save-dialog'});
+ const exporting=app.call(channel).catch(error=>error);await vi.waitFor(()=>expect(entered).toBe(true));
+ await app.call('mote:ask',['login',{token:f.b.token}]);status=await app.call('mote:get-status');await app.call('mote:configure',[{...status.config,syncMode:'manual',metadataEnabled:false}]);
+ const draft=await app.call('mote:note-draft');await app.call('mote:note',[{...draft,text:'Generated B must never reach A export',revision:1}]);
+ const target=join(f.directory,'generated-A-selected-export.json');app.child.send({type:'release-save-dialog',path:target});await exporting;
+ await expect(readFile(target)).rejects.toMatchObject({code:'ENOENT'});expect((await app.call('mote:get-status')).queueDepth).toBe(1);
 });

@@ -6,6 +6,7 @@ const pending=new Map(),handlers=new Map();let sequence=0,mainWindow;
 const root=process.argv[2];if(!root)throw Error('Generated profile required');
 let dialogPaths=[];
 let holdCapture=false,releaseCapture;
+let holdSaveDialog=false,releaseSaveDialog;
 const app=Object.assign(new EventEmitter(),{
  isPackaged:false,getPath:()=>root,setPath:()=>{},getPreferredSystemLanguages:()=>['en'],requestSingleInstanceLock:()=>true,whenReady:()=>Promise.resolve(),getVersion:()=> '0.0.87',getSystemVersion:()=> 'generated',getLoginItemSettings:()=>({wasOpenedAtLogin:false,openAtLogin:false}),setLoginItemSettings:()=>{},relaunch:()=>{},
  quit(){const event={prevented:false,preventDefault(){this.prevented=true;}};app.emit('before-quit',event);if(!event.prevented)process.exit(0);}
@@ -20,7 +21,7 @@ const electron={app,BrowserWindow:Window,Tray,Menu:{setApplicationMenu:()=>{},bu
 const native={readPowerState:async()=>({charging:true,onBattery:false}),foregroundApplication:async()=>{if(holdCapture){process.send?.({type:'capture-entered'});await new Promise(resolve=>{releaseCapture=resolve;});holdCapture=false;}return {appId:'generated.application',appName:'Generated application',pid:1};},activeApplication:async()=>({appId:'generated.application',appName:'Generated application',pid:1,visibleAppIds:['generated.application'],unknownVisibleWindows:false}),readVisibleNotifications:async()=>[],runHelper:async()=> '{}',readInstalledApplications:async()=>[],recognizeInvitationQr:async()=>{throw Error('No QR native I/O');}};
 const originalLoad=Module._load;
 Module._load=function(request,parent,...rest){if(request==='electron')return electron;if(request==='./native'&&parent?.filename.includes('/desktop/dist/'))return native;return originalLoad.call(this,request,parent,...rest);};
-electron.dialog={showOpenDialog:async()=>({canceled:false,filePaths:dialogPaths}),showSaveDialog:async()=>({canceled:true}),showMessageBox:async options=>{process.send?.({type:'startup-error',error:options.detail});return {response:1};},showErrorBox:(_title,error)=>process.send?.({type:'startup-error',error})};
+electron.dialog={showOpenDialog:async()=>({canceled:false,filePaths:dialogPaths}),showSaveDialog:async()=>{if(!holdSaveDialog)return {canceled:true};process.send?.({type:'save-dialog-entered'});return new Promise(resolve=>{releaseSaveDialog=resolve;});},showMessageBox:async options=>{process.send?.({type:'startup-error',error:options.detail});return {response:1};},showErrorBox:(_title,error)=>process.send?.({type:'startup-error',error})};
 global.fetch=async(input,init={})=>{
  const id=++sequence,body=init.body?Buffer.from(await new Response(init.body).arrayBuffer()).toString('base64'):undefined;
  const response=new Promise((resolve,reject)=>pending.set(id,{resolve,reject}));
@@ -32,6 +33,8 @@ global.fetch=async(input,init={})=>{
 process.on('message',async message=>{
  if(message.type==='hold-capture'){holdCapture=true;return;}
  if(message.type==='release-capture'){releaseCapture?.();return;}
+ if(message.type==='hold-save-dialog'){holdSaveDialog=true;return;}
+ if(message.type==='release-save-dialog'){holdSaveDialog=false;releaseSaveDialog?.({canceled:false,filePath:message.path});return;}
  if(message.type==='fetch-response'){const request=pending.get(message.id);if(!request)return;pending.delete(message.id);if(message.error)request.reject(Error(message.error));else request.resolve(new Response(Buffer.from(message.body,'base64'),{status:message.status,headers:message.headers}));return;}
  if(message.type==='invoke'){try{dialogPaths=message.paths??dialogPaths;const fn=handlers.get(message.channel);if(!fn)throw Error('Unknown production IPC '+message.channel);const value=await fn({sender:mainWindow.webContents,senderFrame:mainWindow.webContents.mainFrame},{accountGeneration:message.generation},...(message.args??[]));process.send?.({type:'result',id:message.id,value});}catch(error){process.send?.({type:'result',id:message.id,error:error.message});}}
  if(message.type==='quit')app.quit();
