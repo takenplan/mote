@@ -34,7 +34,8 @@ export interface QueueLimits { maxQueueBytes: number; maxQueueEvents: number }
 export interface QueueStats { archiveAcknowledgment?:{at:string;origin:string}; depth: number; bytes: number; nextRetryAt?: string; oldestPendingAt?: string; lastUploadAt?: string; eligibleDepth: number; blocked: number }
 export interface QueueArchive {
   format: 'mote-desktop-queue';
-  version: 3;
+  version: typeof DESKTOP_STORAGE_VERSION;
+  binding?:import('./connection-binding').Binding;
   records: QueueRecord[];
   blobs: Record<string, string>;
 }
@@ -456,6 +457,8 @@ export class DurableQueue {
       try {
         await chmod(staging, 0o700);
         await archiveWork.run({ kind: 'archive-prepare', path, staging }, progress);
+        const archivedBinding=JSON.parse(await readFile(join(staging,'connection-binding.json'),'utf8'));
+        if(JSON.stringify(archivedBinding)!==JSON.stringify(this.binding.snapshot()))throw Error('Queue archive belongs to another account');
         const names = await readdir(join(staging, 'events'));
         const unique: QueueRecord[] = [];
         for (const name of names) {
@@ -491,7 +494,7 @@ export class DurableQueue {
       if (this.stats().bytes > 256 * 1024 * 1024) throw new Error(moteText("队列超过 256 MiB，请退出采集器后备份整个 queue 文件夹"));
       const blobs: Record<string, string> = {};
       for (const record of this.records.values()) if (record.blobHash && !blobs[record.blobHash]) blobs[record.blobHash] = (await readFile(this.blobPath(record.blobHash))).toString('base64');
-      return { format: 'mote-desktop-queue', version: DESKTOP_STORAGE_VERSION, records: structuredClone([...this.records.values()]), blobs };
+      return { format: 'mote-desktop-queue', version: DESKTOP_STORAGE_VERSION,binding:this.binding.snapshot(),records: structuredClone([...this.records.values()]), blobs };
     });
   }
   async importArchive(input: unknown): Promise<number> {
@@ -499,6 +502,7 @@ export class DurableQueue {
       this.assertReady();
       const archive = input as QueueArchive;
       if (archive?.format !== 'mote-desktop-queue' || archive.version !== DESKTOP_STORAGE_VERSION || !Array.isArray(archive.records) || archive.records.length > 1000000 || !archive.blobs || typeof archive.blobs !== 'object') throw new Error(moteText("不是 Mote 电脑端队列备份"));
+      if(JSON.stringify(archive.binding)!==JSON.stringify(this.binding.snapshot()))throw Error('Queue archive belongs to another account');
       const unique = new Map<string, QueueRecord>();
       const images = new Map<string, Buffer>();
       // Validate every record before the first write.

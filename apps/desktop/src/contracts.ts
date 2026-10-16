@@ -35,7 +35,7 @@ export interface Config {
   batteryPauseBelowPct: number;
   openAtLogin: boolean;
   token?: string;
-  credentialScope?: 'owner';
+  credentialScope?: 'owner'|'client';
   authSignedOut?: boolean;
   authExpiresAt?: number;
   authSessionOnly?: boolean;
@@ -92,7 +92,7 @@ export interface DesktopApi {
   syncHistoryContents(input: import('./sync-history').SyncHistoryContentQuery): Promise<ReturnType<import('./sync-history').SyncHistory['contents']>>;
   syncHistoryContent(runId: string, key: string, chunkOffset?: number, includeImage?:boolean): Promise<import('./sync-content').SyncContent>;
   syncHistoryPending(): Promise<{source:import('./sync-history').SyncSource;pending:number;review:number;blocked:number;retrying:number}[]>;
-  ask(command: import('./ask').AskCommand, input?: {id?: string; question?: string; conversationId?: string; token?: string; cursor?: string; durationMs?: number}): Promise<unknown>;
+  ask(command: import('./ask').AskCommand, input?: {id?: string; question?: string; conversationId?: string; token?: string; username?:string;password?:string;cursor?: string; durationMs?: number}): Promise<unknown>;
   permissionStatus(): Promise<{screen: string; accessibility: string; calendar: string; appPath?: string; bundleId?: string}>;
   permissionSettings(kind: 'screen' | 'accessibility' | 'calendar' | 'files'): Promise<void>;
   storageStatistics(): Promise<import('@mote/shared/storage-statistics').StorageStatistics>;

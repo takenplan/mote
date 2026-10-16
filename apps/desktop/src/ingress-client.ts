@@ -6,9 +6,15 @@ import {validateServerUrl} from './config';
 import {readResponseText} from './response-body';
 import {meteredBody} from './upload-meter';
 import {TransportFailure,httpFailure} from './support';
+import {testConnection} from './connection';
+import {sameAccount} from './account';
 
 export const ACCOUNT_INGRESS_HEADERS={...DESKTOP_PROTOCOL_HEADERS,'X-Mote-Ingress-Version':'3'} as const;
 export const ingressKey=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+export async function assertAccountConnection(config:Config):Promise<void>{
+ const identity=await testConnection(config);
+ if(!sameAccount(config,{...config,account:identity.account}))throw Error('Central account or deployment changed; personal bytes were not sent');
+}
 export async function ingressRequest(config:Config,path:string,body:unknown,method='POST',signal?:AbortSignal,onBytes?:(bytes:number)=>void):Promise<any>{
  if(!accountKey(config))throw Error('Account confirmation required');
  const response=await fetch(validateServerUrl(config.serverUrl)+path,{method,headers:{...ACCOUNT_INGRESS_HEADERS,Authorization:'Bearer '+requireConnectionToken(config),'Content-Type':'application/json'},credentials:'omit',redirect:'error',signal:signal?AbortSignal.any([signal,AbortSignal.timeout(30000)]):AbortSignal.timeout(30000),...(method==='GET'?{}:{body:meteredBody(JSON.stringify(body),onBytes),duplex:'half'} as object)});
@@ -21,6 +27,7 @@ export function requireAccountReceipt(value:any,config:Pick<Config,'account'>,so
  return value.captures;
 }
 export async function uploadAccountCaptures(config:Config,entries:readonly {event:CaptureEvent;image?:Buffer}[],signal?:AbortSignal,onBytes?:(bytes:number)=>void):Promise<Map<string,number>>{
+ await assertAccountConnection(config);signal?.throwIfAborted();
  const groups=new Map<string,typeof entries[number][]>();
  for(const entry of entries){const key=entry.event.deviceId+':'+entry.event.platform;groups.set(key,[...(groups.get(key)??[]),entry]);}
  const result=new Map<string,number>();

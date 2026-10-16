@@ -799,7 +799,7 @@ setInterval(() => {
 
 function renderConnection(value: import('./connection').ConnectionStatus): void {
   byId('connection-state').textContent = value.message + (value.checkedAt ? ' · ' + new Date(value.checkedAt).toLocaleTimeString(getLocale()) : '');
-  byId('connection-capabilities').textContent = value.identity ? moteText("权限：{0} · 中央 {1} · 环境 {2}", moteText("管理员"), value.identity.node.version, value.identity.node.profile) : currentStatus?.config.credentialScope === 'owner' ? moteText("登录凭据已安全保存，所有中央功能共用此登录。") : '';
+  byId('connection-capabilities').textContent = value.identity ? `${value.identity.account.username} · ${value.identity.account.userId} · ${value.identity.account.deploymentId}` : currentStatus?.config.account?.username ?? '';
 }
 function clearConnectionPreview(): void { connectionPreview = undefined; byId('connection-confirmation').hidden = true; byId<HTMLInputElement>('connection-confirm-origin').checked = false; }
 function showConnectionPreview(value: import('./connection').ConnectionPreview): void {

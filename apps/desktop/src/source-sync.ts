@@ -10,6 +10,7 @@ import type { LocalFileCheckpoint, SourceCheckpoint, SourceDefinition, SourceIte
 import { PriorityScheduler } from './priority-scheduler';
 import {UploadSlice,UploadSliceYield,requestBytes} from './upload-slice';
 import {requireIngressReceipt} from './ingress-protocol';
+import {ingressKey,requireAccountReceipt} from './ingress-client';
 
 export const sourceHash = (value: string | Buffer): string => createHash('sha256').update(value).digest('hex');
 export async function atomicSourceJson(path: string, value: unknown): Promise<void> { await sourceWork.run({ kind: 'json-write', path, value }); }
@@ -28,7 +29,7 @@ interface RejectedItem { item: SourceItem; status: number }
 interface BatchResult { acks: Record<string, unknown>[]; rejected?: RejectedItem[] }
 export interface SnapshotRecovery {captureId:string;externalId:string;revision:string;sha256:string;sizeBytes:number;observedAt:string}
 interface State {
-  version: 3;
+  version: typeof DESKTOP_STORAGE_VERSION;
   /** Distinct from the local outbox schema version; old server receipts cannot be replayed. */
   ingressVersion: 2;
   predecessors?: Record<string, string | null>;
@@ -59,7 +60,7 @@ export class SourceSync {
   private scheduler=new PriorityScheduler(16*1024*1024);
   private manifestBatch?:boolean;
   private knownItems=0;
-  private data: State = { version: 3, ingressVersion:2, adapterVersion:1, known: {}, pendingRealtime: [], pendingHistory: [] };
+  private data: State = { version: DESKTOP_STORAGE_VERSION, ingressVersion:2, adapterVersion:1, known: {}, pendingRealtime: [], pendingHistory: [] };
   private readonly limits: { maxEvents: number; maxBytes: number; batchSize: number; concurrency: number };
   constructor(private readonly path: string, limits?: Partial<{ maxEvents: number; maxBytes: number; batchSize: number; concurrency: number }>) { this.limits = { maxEvents: 4000, maxBytes: 32 * 1024 * 1024, batchSize: 100, concurrency: 4, ...limits }; }
 
@@ -197,7 +198,7 @@ export class SourceSync {
 
   async flush(source: SourceDefinition, request: SourceRequest, signal?: AbortSignal, observer?: SourceUploadObserver): Promise<'ready' | 'paused'> {
     signal?.throwIfAborted();
-    const registered = await request('/api/sources', source, 'POST', signal) as { id?: unknown; enabled?: unknown };
+    const registered = await request(request.account?'/api/ingress/sources':'/api/sources', source, 'POST', signal) as { id?: unknown; enabled?: unknown };
     if (!registered || registered.id !== source.id || typeof registered.enabled !== 'boolean') throw new Error(moteText("中央来源注册确认无效"));
     if (!registered.enabled) return 'paused';
     const scheduler = this.scheduler;
@@ -210,6 +211,7 @@ export class SourceSync {
       const batches = this.takeBatches(queue,deferred);
       let bytes=0;
       const measured:SourceRequest=(path,body,method,signal)=>{const pending=request(path,body,method,signal);bytes+=requestBytes(body);return pending;};
+      measured.account=request.account;
       const outcomes = await Promise.all(batches.map(async batch => { try { observer?.attempt(source,batch); return { batch, result: await this.sendBatch(source, batch, measured, signal, observer) }; } catch (error) { observer?.failed(source,batch,error); return { batch, error }; } }));
       let failure: unknown;
       for (const outcome of outcomes) {
@@ -231,6 +233,7 @@ export class SourceSync {
   async flushSlice(source:SourceDefinition,request:SourceRequest,signal?:AbortSignal,observer?:SourceUploadObserver){
     const slice=new UploadSlice();
     const bounded:SourceRequest=(path,body,method,requestSignal)=>{signal?.throwIfAborted();slice.admit(body);return request(path,body,method,requestSignal);};
+    bounded.account=request.account;
     try{return {state:await this.flush(source,bounded,signal,observer),bytes:slice.bytes,requests:slice.requests};}
     catch(error){if(!(error instanceof UploadSliceYield))throw error;return {state:'yielded' as const,bytes:slice.bytes,requests:slice.requests};}
   }
@@ -250,6 +253,16 @@ export class SourceSync {
   }
 
   private async sendBatch(source: SourceDefinition, batch: SourceItem[], request: SourceRequest, signal?: AbortSignal, observer?: SourceUploadObserver): Promise<BatchResult> {
+    if(request.account){
+      if(batch.some(item=>item.kind==='file'&&(item.localOriginal||item.localOriginalBase64||item.document?.fileIndex))){
+        const acks:Record<string,unknown>[]=[];
+        for(const item of batch){const ack=await this.sendAccountFile(source,item,request,signal);observer?.settle(source,[item],[ack]);acks.push(ack);}
+        return {acks};
+      }
+      const wire=batch.map(({localOriginal:_,localOriginalBase64:__,snapshotRecovery:___,...item})=>item),batchId='items-'+ingressKey(wire);
+      const result=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/items`,{batchId,items:wire},'POST',signal);
+      return {acks:requireAccountReceipt(result,{account:request.account},source.id,batchId,wire)};
+    }
     const first = batch[0]!;
     if (first.kind === 'file' && first.document?.fileIndex) {
       if(first.localOriginalBase64||first.localOriginal)return {acks:[await this.sendFile(source,first,request,signal)]};
@@ -317,6 +330,23 @@ export class SourceSync {
       if (ack.sha256 !== manifest.sha256 || ack.sizeBytes !== (localOriginal?.sizeBytes??original!.length)) throw Error('File archive acknowledgement does not match the queued original');
     } else ack = await request('/api/file-sync/v1/revisions', manifest, 'PUT', signal) as Record<string, unknown>;
     return this.validateAck(source, ack, item);
+  }
+
+  private async sendAccountFile(source:SourceDefinition,item:SourceItem,request:SourceRequest,signal?:AbortSignal):Promise<Record<string,unknown>>{
+    const {localOriginal,localOriginalBase64,snapshotRecovery:_,...wire}=item,original=localOriginalBase64?Buffer.from(localOriginalBase64,'base64'):undefined;
+    const previousRevision=this.data.delivered?.[sourceHash(item.externalId)]??null;
+    const revision={sourceId:source.id,item:wire,previousRevision,sizeBytes:localOriginal?.sizeBytes??original?.length??item.metadata?.file?.sizeBytes??0,...(localOriginal?{sha256:localOriginal.sha256}:original?{sha256:sourceHash(original)}:{})};
+    const batchId='file-'+ingressKey(revision),upload=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/uploads`,{batchId,revision},'POST',signal) as any;
+    if(!upload||upload.deploymentId!==request.account!.deploymentId||upload.userId!==request.account!.userId||upload.sourceId!==source.id||typeof upload.id!=='string'||!/^[a-f0-9-]{36}$/i.test(upload.id)||upload.partBytes!==4194304||!Array.isArray(upload.parts))throw Error('Account upload session mismatch');
+    if(!upload.receipt)for(let offset=0;offset<(localOriginal?.sizeBytes??original?.length??0);offset+=upload.partBytes){
+      const part=offset/upload.partBytes,bytes=localOriginal?Buffer.from(await sourceWork.run<Uint8Array>({kind:'original-part',spool:localOriginal,part})):original!.subarray(offset,offset+upload.partBytes),checksum=sourceHash(bytes),existing=upload.parts.find((p:any)=>p.part===part);
+      if(existing?.checksum===checksum&&existing.bytes===bytes.length)continue;
+      const ack=await request(`/api/ingress/uploads/${upload.id}/parts/${part}`,{bytes:bytes.toString('base64'),checksum},'PUT',signal) as any;
+      if(ack?.part!==part||ack.checksum!==checksum||ack.bytes!==bytes.length)throw Error('Account original part receipt mismatch');
+    }
+    const result=upload.receipt??await request(`/api/ingress/uploads/${upload.id}/commit`,{},'POST',signal),[ack]=requireAccountReceipt(result,{account:request.account},source.id,batchId,[item]);
+    if(revision.sha256&&!item.deleted&&(ack.original?.hash!==revision.sha256||ack.original?.bytes!==revision.sizeBytes))throw Error('Account original receipt mismatch');
+    return ack;
   }
 
   private validateAck(source: SourceDefinition, ack: unknown, expected: SourceItem): Record<string, unknown> {
