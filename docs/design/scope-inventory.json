@@ -1523,6 +1523,8 @@
       "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices/:id/reconcile',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices/heartbeat',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/gc',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/originals/:id/tickets',service:INGRESS_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources',service:INGRESS_DOMAIN",
