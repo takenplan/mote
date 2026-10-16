@@ -29,6 +29,7 @@ useState
 import { AnswerMarkdown } from "./AnswerMarkdown";
 import { EvidenceState,EvidenceProcessingHelp } from './EvidenceState';
 import { ReferenceDetail } from './ReferenceDetail';
+import {contextEvidenceReference} from './evidence-route';
 import { TurnUsage } from './Usage';
 import {
 ApiError,
@@ -383,6 +384,7 @@ export function EvidenceDialog({
   onDeleted: () => void;
   onOpen: (id:string) => void;
 }) {
+  const contextReference=id.startsWith('context:')&&parseEvidenceRef(id.slice(8))?.kind==='capture'?id.slice(8):undefined;
   const parsedRef=parseEvidenceRef(id),captureRef=parsedRef?.kind==='capture';
   const captureId=captureRef?parsedRef.id:undefined;
   const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
@@ -461,7 +463,7 @@ export function EvidenceDialog({
         {capture?.revisionState==='historical'&&<p role="status">{moteText('历史证据，仅用于核对当时的内容。')}</p>}
         {presentation?.nativeFile && <FileDetail api={api} id={presentation.nativeFile.captureId} startMs={presentation.nativeFile.startMs} onOpen={onOpen}/>}
         {error && <ErrorNotice text={error} />}
-        {!captureRef&&<ReferenceDetail key={id} api={api} reference={id} onOpen={onOpen}/>}
+        {!captureRef&&<ReferenceDetail key={id} api={api} reference={contextReference??id} onOpen={reference=>onOpen(contextReference?contextEvidenceReference(reference):reference)}/>}
         {captureRef && !capture && !error && (
           <div className="panel-pad">
             <Spinner />
