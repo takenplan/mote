@@ -171,3 +171,20 @@ than advancing a cursor after delivering just the first block. Expanding that
 locator retains every ready block. Search candidate text and Material catalog
 text predicates use ready blocks before candidate ordering/LIMIT, so pending
 text is absent from candidate selection as well as rendered projections.
+
+An artifact expansion now pins its complete artifact row, completed parent run
+and conversation incarnation until the final return. Deleting the conversation
+or replacing any of these rows during a later provider wait rejects the whole
+response. Explicit query scope is checked against actual dependency originals
+before disclosure and again at the final fence; matching scopes remain usable.
+Source declaration reads also persist exact current declaration identities with
+the run's dependency pins, without changing original or Memory semantic hashes.
+A declaration replaced during a provider/model wait cannot publish old context.
+
+Delegated yields retain their selected unit set and `any`/`all` wait mode in the
+actual durable fragment artifact. A parent may resume after one finished child,
+cancel an unnecessary in-flight sibling, and reject that sibling's late output.
+Failed branches can retry their own fixed model lease while successful children
+remain committed once. Optional child time/device ranges intersect the parent
+range; model owner/source authority selectors remain invalid. Concurrent answers
+against one conversation revision still admit only one appended turn.
