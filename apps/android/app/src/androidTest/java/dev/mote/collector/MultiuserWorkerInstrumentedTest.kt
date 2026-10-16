@@ -587,7 +587,7 @@ class MultiuserWorkerInstrumentedTest {
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);ready();scenario.onActivity {oldRetry.performClick()};sources();assertNull("A pending command must not appear in same-ID B",button("重试"));assertEquals(beforeB,b.get("/api/source-items").toString())
             control("/generated/release-commands");scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"a");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);sources();press("重试");ready()
             val after=control("/generated/commands").getJSONArray("commands");val retried=(0 until after.length()).map(after::getJSONObject).filter {it.getString("actor")=="a"&&it.getString("path").endsWith("/sync")};assertTrue(retried.size>before.size);assertEquals(setOf(operation),retried.map {it.getString("operationId")}.toSet());assertEquals(setOf(task),retried.map {it.getString("taskId")}.toSet())
-            assertEquals(1,a.get("/api/source-items").getJSONArray("items").length());assertEquals(beforeB,b.get("/api/source-items").toString())
+            assertThrows(IllegalStateException::class.java) { a.get("/api/source-items") };assertEquals(1,CentralAccess.requireClient(app).get("/api/source-items").getJSONArray("items").length());assertEquals(beforeB,b.get("/api/source-items").toString())
         }
     }
 
