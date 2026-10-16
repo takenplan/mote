@@ -556,11 +556,12 @@ class MultiuserWorkerInstrumentedTest {
             control("/generated/hold-document");press("立即同步");ready();waitFor {control("/generated/document-state").getBoolean("documentEntered")&&button("取消当前操作")!=null};press("取消当前操作");control("/generated/release-document");ready();waitFor {button("取消当前操作")==null}
             assertEquals(1,a.get("/api/ingress/sources/"+source.getString("id")+"/originals").getJSONArray("items").length())
             val oldSync=button("立即同步");assertNotNull(oldSync)
+            val beforeDisconnect=a.get("/api/tasks").getJSONArray("items").let {rows->(0 until rows.length()).map {rows.getJSONObject(it).getString("id")}.toSet()}
             press("断开连接");scenario.onActivity {
                 @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
                 dialogs.mapNotNull {it.get()}.single {it.isShowing}.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
             };ready()
-            waitFor {a.get("/api/tasks").getJSONArray("items").let {rows->(0 until rows.length()).map(rows::getJSONObject).any {it.optString("state")=="succeeded"&&it.optJSONObject("result")?.optBoolean("connected",true)==false}}}
+            waitFor {a.get("/api/tasks").getJSONArray("items").let {rows->(0 until rows.length()).map(rows::getJSONObject).any {it.getString("id") !in beforeDisconnect&&it.optString("state")=="succeeded"&&it.optJSONObject("result")?.optBoolean("connected",true)==false}}}
             val taskCount=a.get("/api/tasks").getJSONArray("items").length();press("检查状态");ready()
             assertEquals("An acknowledged disconnect must retire its old generation and leave the original connection controls usable",taskCount+1,a.get("/api/tasks").getJSONArray("items").length())
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldSync!!.performClick()};ready();assertEquals(beforeB,b.get("/api/source-items").toString())
