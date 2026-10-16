@@ -221,7 +221,7 @@ API401, workerfalse, zero inference, stop/rebackup. Later final271 gate EXIT2
 (script fixture types) and final2b722 EXIT1 (MCP raw-note timing fixture) are
 preserved. Deterministic fixture RED1f1897→GREEN0efc separates retired note raw
 refs from actual unprocessed M03 Unicode windows; no production change. Current
-ab7069aa2a1c59eda1a0775ae8d52c0632a70c89 required3 is ACTIVE, not passed. No
+ab7069aa2a1c59eda1a0775ae8d52c0632a70c89 required3 ended EXIT0; final723cc0b7 is doc-only thereafter, independently checked here. No
 new whole-container gate or combined Joint backup-schema acceptance is inferred. Source reviews are in
 `/tmp/mote-joint-review-container-actual-fixtures.md`; owner logs are separate.
 
@@ -246,7 +246,7 @@ Every row is **FINAL PENDING**. Owning-module history is supporting evidence onl
 | J10 account deletion | A has issued unknown external fact/held late result and shared bytes; revoke admission/publication first→durable result_unknown→exact late ACK settles only old fact→retry physically erases private metadata. A stays unreadable; B hashes/rows/credentials unchanged; missing/late hook blocks false success. | `multiuser-lifecycle.test.ts`, `multiuser-actions-lifecycle.test.ts` (actual M16 waits for calendar fact), provider deletion cases. Unknown cannot be marked physically complete or resubmitted. |
 | J11 native instance/production package | Stopped backup CLI→empty isolated target→fresh emitted server twice; preserve deployment/account IDs, originals/hash, canonical Memory/history, conversations/config/plugins/Todos and succeeded/unknown facts; all authority retired. Old epoch/corrupt/missing domain/schema/native content rejects before target writes. | `multiuser-instance-backup.test.ts`, `multiuser-backup-{capture-updates,actions}.test.ts`; use `MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1` after own fresh build. Copy-only dist is not fresh-build proof. |
 | J12 shared config/plugins/connectors/old UI | Shared model key/reference and weight/code reuse with independent personal config/usage; M04 CAS/pinned snapshot/restart/explicit failures. Generated package formal install and actual worker; A stop leaves B active. Gmail/Calendar/Lark/document/recordings native formats and long text; OAuth reversed/replayed callback and account switch; no credential/cursor sharing. | Existing config/plugin/connector process tests, original algorithms and final owned client UI. Preserve Memory binding prepare/drain/migrate/activate/cancel and source import/Files/review/export/advanced settings capabilities in the owner ledger. Missing projections/UI block this row. |
-| J13 Docker retained recovery | Disposable epoch5 Docker profile publication and stopped target recovery through production CLI; actual owned Hindsight Docker volume snapshot/restore and canonical/history re-open, without old execution authority. No deployment or existing-volume access. | **OPEN final container freeze/gate and Joint schema combination**. Owner13515436 actual generated production image restore/start/stop/restart/rebackup passes; direct offline Hindsight06fd canonical/API recovery passes. Managed Runtime/Engine.read258f787d actual same-case EXIT0 follows the preserved fixture-normalization failure; final required3ab706 is ACTIVE after two separately preserved gate failures. Immutable image built EXIT0; old daemon/build-pending states are historical. Do not move the earlier d181 required gate to newer runtime or Joint Imports tables. |
+| J13 Docker retained recovery | Disposable epoch5 Docker profile publication and stopped target recovery through production CLI; actual owned Hindsight Docker volume snapshot/restore and canonical/history re-open, without old execution authority. No deployment or existing-volume access. | **OPEN final container freeze/gate and Joint schema combination**. Owner13515436 actual generated production image restore/start/stop/restart/rebackup passes; direct offline Hindsight06fd canonical/API recovery passes. Managed Runtime/Engine.read258f787d actual same-case EXIT0 follows the preserved fixture-normalization failure; final required3ab706 ended EXIT0 after two separately preserved gate failures; local composition1a42 retains both originals and provider checks, with new narrow proofs below. Immutable image built EXIT0; old daemon/build-pending states are historical. Do not move the earlier d181 required gate to newer runtime or Joint Imports tables. |
 | J14 real-model regression and private-data boundary | User amendment `Sentinel_90402956f4b881918763a8a61d350969`: retain deterministic mocks for isolation/retry assertions. When a real-model regression is needed, first verify the exact locally available Codex model/interface for the user’s “GPE 6.1 sol” (parent interpretation: GPT-6.1 sol), then use that signed-in local entry. Do not silently substitute another model/provider or create credentials. Prefer generated data. Optional local Central reads must be copied read-only to an isolated directory outside the repository before testing. | **PARTIAL: owner M15 actual generated Native Ask1/1,11.281s EXIT0** on retained48a baseline, using the existing M01/M04/M08 plus locally signed-in Codex `gpt-6.1-sol`. CLI0.162.1 catalog and ephemeral no-turn handshake selected the exact same model; no fallback/new provider credential. This is owner execution, not Joint rerun or an Imports semantic-model claim. Final composed model entry and privacy audit remain pending. Record only identifier/interface/SHA/result, no private content. Central originals and every derivative—prompts/responses, summaries, embeddings, screenshots, exports, logs, fixtures—must stay outside Git, including add/commit/stash/branches/remotes, PR text/comments and shared attachments/logs. Audit staged diff and new files individually; gitignore alone is insufficient. If private material has entered Git, stop push and report to parent; do not rewrite history or permanently delete it. Joint has used generated data only so far. |
 
 ## Historical receipts, deliberately not independent reruns
@@ -543,3 +543,25 @@ M13's final c45 pre-transport fact review also has no new confirmed P0/P1/P2,
 /tmp/mote-m13-review-joint-unknown-c45f.md. Together with the exact narrow actual
 receipts, this permits clients to compose this thin checkpoint. It is not a new
 module-final/full affected result and does not close remaining original outcomes.
+
+Frozen container composition is now local merge
+1a42f2e9fd015e29bbf26a6e43209cc8c0440990 of declared source723cc0b7. Verified
+ab706→723cc changes only one validation document; all runtime inputs match the
+owner's final3 EXIT0. Its Server2641/Desktop492/Web505/Android352 (fresh74XML,
+zero fail/error/skip, actual unit execution/compiled inputs reused) remain owner
+evidence. Container has ended and must not be awakened. Parent restored Theme
+only for independent PR143 review; no theme source is merged here.
+
+Automatic composition retains both archived-file original completeness and
+strict Hindsight canonical provider/body verification, with Joint's extended
+schema catalog intact. Own narrow protocol run passes15/15/no skip/EXIT0 in
+/tmp/mote-joint-container-merged-protocol.log and .exit. SQL/FS/YAML staging and
+native host reopening are real; Docker transport remains substituted there.
+Own actual stopped-Import private-preview/equal-ID recovery plus partial
+first-record dedup/fresh-owner-preview recovery pass2/2/no skip/EXIT0 in
+/tmp/mote-joint-container-import-composed-restore2.log and .exit. Only model
+transport is generated. The first similarly named command matched no test
+names and produced a file-level success; it is explicitly not case evidence.
+Combined actual Docker/Managed Hindsight production and final client/affected
+proof remain pending. Content audit:
+/tmp/mote-joint-container-composition-content-audit.md.
