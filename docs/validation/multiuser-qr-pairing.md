@@ -38,8 +38,9 @@ contains its previously owned Web/native changes and retains their provenance.
   --test-concurrency=1` entry. Evidence: `/tmp/mote-qr-combined2.log`.
 - After the ingress positive/other-device negative and final retained-consent
   fence, the final narrow command adds `login-handoffs.test.ts` and
-  `scope-architecture.test.ts`: 19/19 pass, no skips, exit 0. Evidence:
-  `/tmp/mote-qr-final-narrow2.log`.
+  `scope-architecture.test.ts`: 20/20 pass, no skips, exit 0, 5.678 s, including the additional source-only
+  and ingress-only known-device regression. Evidence:
+  `/tmp/mote-qr-final-narrow3.log`.
 - `npm run typecheck -w @mote/server`: exit 0. Initial environment setup was
   missing the workspace-local mem0ai dependency directory; copying the installed
   dependency artifacts into this independent clone resolved that setup failure.
@@ -61,6 +62,15 @@ same grant polling; ACK retry tombstone and late old ACK; credential revocation
 before ACK; device ingress/self/logout positive and private API/mint/ticket
 negative; stale A tab using B cookie; explicit original-device replacement,
 label preservation, real database failure rollback and independent B survival.
+
+Independent source review accepted the producer without a new confirmed P0/P1/P2.
+The reviewer reran its seven actual Accounts/SQLite cases: 7/7, exit 0, 1.357 s,
+`/tmp/mote-qr-handoffs-final-green.log` and `.exit`. The follow-up source-only
+known-device HTTP test was added after that review and passes in the final 20.
+`node scripts/check-i18n.mjs`: 8440 bilingual messages/call sites, exit 0.
+
+Production freeze: `6a84ec6a477bb4698002234fd81bb669ce98cc06`. Later commits
+may add tests or evidence without changing these producer bytes.
 
 ## Broader checks and limits
 
