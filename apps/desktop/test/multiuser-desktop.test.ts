@@ -88,7 +88,9 @@ async function productionDesktop(f:Awaited<ReturnType<typeof fixture>>,profile=j
  await vi.waitFor(()=>{expect(error).toBe('');expect(ready).toBe(true);},{timeout:15000});
  const call=(channel:string,args:any[]=[],expected=generation,paths?:string[])=>new Promise<any>((resolve,reject)=>{const id=++nextId;results.set(id,{resolve,reject});child.send({type:'invoke',id,channel,args,generation:expected,paths});});
  const status=await call('mote:get-status');generation=status.authorizationGeneration;
- return {child,call,get generation(){return generation;},get latest(){return latest;},profile,set intercept(fn:typeof intercept){intercept=fn;},async kill(){child.kill('SIGKILL');await new Promise(r=>child.once('exit',r));}};
+ const document=(name:string)=>new Promise<any>((resolve,reject)=>{const id=++nextId;results.set(id,{resolve,reject});child.send({type:'document',id,document:name});});
+ const documentCall=(name:string,method:string,args:any[]=[])=>new Promise<any>((resolve,reject)=>{const id=++nextId;results.set(id,{resolve,reject});child.send({type:'document-invoke',id,document:name,method,args});});
+ return {child,call,document,documentCall,get generation(){return generation;},get latest(){return latest;},profile,set intercept(fn:typeof intercept){intercept=fn;},async kill(){child.kill('SIGKILL');await new Promise(r=>child.once('exit',r));}};
 }
 it('runs actual emitted main IPC: offline A queue/draft → B explicit capture → SIGKILL/restart → A resumes; retired document rejects',async()=>{
  const f=await fixture();let app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);
@@ -182,4 +184,11 @@ it.each(['mote:export-queue','mote:export-metadata'])('an old A save dialog cann
  const draft=await app.call('mote:note-draft');await app.call('mote:note',[{...draft,text:'Generated B must never reach A export',revision:1}]);
  const target=join(f.directory,'generated-A-selected-export.json');app.child.send({type:'release-save-dialog',path:target});await exporting;
  await expect(readFile(target)).rejects.toMatchObject({code:'ENOENT'});expect((await app.call('mote:get-status')).queueDepth).toBe(1);
+});
+
+it('retires the actual preload document including status bootstrap after account replacement',async()=>{
+ const f=await fixture(),app=await productionDesktop(f);await app.call('mote:ask',['login',{token:f.a.token}]);await app.document('A');
+ expect((await app.documentCall('A','status')).config.account.userId).toBe(f.a.userId);
+ await app.call('mote:ask',['login',{token:f.b.token}]);await expect(app.documentCall('A','status')).rejects.toThrow();
+ await expect(app.documentCall('A','noteDraft')).rejects.toThrow();await app.document('B');expect((await app.documentCall('B','status')).config.account.userId).toBe(f.b.userId);
 });
