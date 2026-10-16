@@ -122,7 +122,7 @@ class ConnectionClient(private val context: Context) {
         val binding = AccountBinding.self(server, body); val credential = body.getJSONObject("credential")
         if (credential.has("deviceId") && credential.optString("deviceId") != settings.deviceId) throw ConnectionFailure("identity")
         if (credentialId != null && body.getJSONObject("account").optString("credentialId") != credentialId) throw ConnectionFailure("identity")
-        if (invitation != null && (binding != AccountBinding(invitation.serverUrl, invitation.deploymentId, invitation.userId) || credential.optString("deviceId") != settings.deviceId)) throw ConnectionFailure("identity")
+        if (invitation != null && (binding != AccountBinding(invitation.serverUrl, invitation.deploymentId, invitation.userId) || credential.optString("kind") != "client" || credential.optString("deviceId") != settings.deviceId)) throw ConnectionFailure("identity")
         return body.put("scope", "client").put("binding", binding.json())
     }
     fun test(): String = ConnectionGuard.sync {

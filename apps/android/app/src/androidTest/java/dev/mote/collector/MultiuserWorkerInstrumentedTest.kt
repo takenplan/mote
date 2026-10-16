@@ -688,7 +688,7 @@ class MultiuserWorkerInstrumentedTest {
         QuickNotes.draft(app).update("GENERATED_UNBOUND_QR_DRAFT","")
         val issuer=CentralClient(endpoint(),token("a"))
         var latest:ConnectionInvitation?=null
-        for(field in listOf("owner","deployment","credential","device")) {
+        for(field in listOf("owner","deployment","credential","device","kind")) {
             control("/generated/release-pairing")
             val value=issuer.post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated bound device").put("deviceId",settings.deviceId))
             val invitation=ConnectionInvitation.parse(value.getString("uri"),true,true);latest=invitation
