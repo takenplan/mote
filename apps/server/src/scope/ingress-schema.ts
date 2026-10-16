@@ -7,6 +7,8 @@ export function installIngress(db:DatabaseSync){
  db.exec(`
  CREATE TABLE IF NOT EXISTS ig_meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1),ticket_key TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS ig_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0);
+ CREATE TABLE IF NOT EXISTS ig_capture_update_sequences(user_id TEXT NOT NULL,device_id TEXT NOT NULL,next INTEGER NOT NULL,PRIMARY KEY(user_id,device_id));
+ CREATE TABLE IF NOT EXISTS ig_capture_updates(user_id TEXT NOT NULL,device_id TEXT NOT NULL,sequence INTEGER NOT NULL,capture_id TEXT NOT NULL,artifact_id TEXT NOT NULL,PRIMARY KEY(user_id,device_id,sequence),UNIQUE(user_id,device_id,capture_id,artifact_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_objects(user_id TEXT NOT NULL,hash TEXT NOT NULL,bytes INTEGER NOT NULL,parts INTEGER NOT NULL,PRIMARY KEY(user_id,hash));
  CREATE TABLE IF NOT EXISTS ig_parts(user_id TEXT NOT NULL,hash TEXT NOT NULL,part INTEGER NOT NULL,checksum TEXT NOT NULL,PRIMARY KEY(user_id,hash,part),FOREIGN KEY(user_id,hash) REFERENCES ig_objects(user_id,hash) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_originals(user_id TEXT NOT NULL,id TEXT NOT NULL,source_id TEXT NOT NULL,capture_id TEXT NOT NULL,hash TEXT NOT NULL,mime TEXT NOT NULL,retention TEXT NOT NULL,
