@@ -26,6 +26,9 @@ export class ScopedServices {
     if(!id||this.instances.has(id)||this.users.has(id)||registration.scope!=='instance')throw new ScopeError('undeclared_scope',500);
     this.instances.set(id,registration.service);
   }
+  /** Host inventory only: callers receive no private service or lifecycle grant.
+   * Operations persist this set so a missing adapter cannot become success. */
+  lifecycleDomains(){return Object.freeze([...this.users.keys()].sort());}
   forUser(context:UserContext){
     this.authority.assert(context);
     const domain=(id:string)=>{this.authority.assert(context);const entry=this.users.get(id);if(!entry)throw new ScopeError('scope_unavailable',503);return entry;};
