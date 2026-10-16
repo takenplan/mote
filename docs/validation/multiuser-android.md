@@ -437,3 +437,25 @@ input. No inference, text rewriting or backend change is added. Its current code
 is intentionally not a tested freeze until Container explicitly releases and the
 same native case becomes GREEN. The prior652 narrow positive checkpoint does
 not cover this newly confirmed input variation.
+
+The literal-prefix native correction case is now GREEN1/1,1.567s EXIT0
+(`/tmp/m15-native-files-literal-prefix-first-green.log/.exit`) on the unchanged
+exact text assertion. Fixture app/testAPK compiled8s EXIT0
+(`/tmp/m15-native-files-literal-green-build.log/.exit`) after the Container and
+Joint windows explicitly released. This closes that input variation; it does not
+close the separate Joint export publication-point candidate.
+
+Original Google Calendar native controls have a valid RED on current real OAuth
+preconditions: missing `读取日历列表`,1/1 EXIT1,0.883s
+(`/tmp/m15-native-google-calendar-valid-red.log/.exit`). Runtime
+bde55de1bae491fea966b0693c210d732ba5befa consumes owned M10 operations and M05 task
+IDs, persists pending path/body/operation ID in the existing account-encrypted
+CentralStateFile, and stops task polling on terminal state/page retirement.
+The same original native case is GREEN1/1,2.696s EXIT0
+(`/tmp/m15-native-google-calendar-first-green.log/.exit`): generated actual OAuth,
+calendar list, explicit same-calendar selection, actual sync/M03 private event,
+A/B same connection/calendar/event IDs and detached A Sync after B switch. Fixture
+app/testAPK compiled9s EXIT0 (`/tmp/m15-native-google-calendar-green-build.log/.exit`),
+i18n/scope0. No live Google, calendar access or browser was used. The subsequent
+8f617 test-only lost-ACK/recreation/switch scenario and retained-route validation
+need their own execution; this normal positive does not prove those cases.
