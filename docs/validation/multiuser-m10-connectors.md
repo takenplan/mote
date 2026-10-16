@@ -2,7 +2,9 @@
 
 Status: M06 independently closed the task-secret P1 at `8987feb6a88729ddfa56048c145ec9a67d000c71`.
 Accepted M06 #133 is now stacked with real provider-original-to-Material integration.
-Final composed freeze, M11 independent review and final verification are pending.
+M11 approved composed freeze `41d2775307db5afecbb5b40b81b5fd8c8a0b9b9b`.
+A later emitted-code probe confirmed a subjectless-email publication edge case;
+its repair, follow-up independent review and final verification are pending.
 Baseline: PR #132 `cdc5c34c36fc5743049007ee2c76d705fde3dd7f`.
 Integration remains `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 Additional accepted dependency: Draft #133 head `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`,
@@ -52,7 +54,7 @@ HTTP/CLI I/O is substituted; source/archive/task services are real.
 | Controlled shutdown during a blocked Gmail read, original task resumes after restart | `controlled shutdown interrupts active Gmail work into waiting and restart resumes its admitted task and original cursor` |
 | Seeded durable crash activity, purpose-bound erasure reconciliation and B denial | `durable crashed-activity fixture requires a purpose-bound stopped observation before connector erasure and never settles B` |
 | Archive-retention Gmail incremental replay and immutable raw original | `snapshot-retention Gmail delta replay retains canonical normalized head and the same immutable provider original when only its provider envelope changes`; same for `archive-retention` |
-| Distinct process HTTP listener, pending OAuth recovery, A/B source/original reads, replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals through the production composition` |
+| Distinct process HTTP listener, pending OAuth recovery, A/B source/original reads, replay denial | `multiuser-connectors-process.test.ts`: `distinct real HTTP processes restore pending OAuth and publish scoped Gmail originals and decoded subjectless Material through the production composition` |
 | Configure secret never enters task/event/export storage, interrupted restart, A/B and scoped disconnect | `Lark configure encrypted task reference survives interrupted restart, isolates A/B and disconnect removes only A payloads` |
 | Provider failure prose is fixed, encrypted retry survives restart | `failed Lark configuration keeps only encrypted retry payload across restart and exposes fixed errors` |
 | Instance removal/domain erasure clears payload envelopes without changing B | `removing a configured Lark instance and deleting its connector domain erases operation payloads without erasing B` |
@@ -162,3 +164,26 @@ using literal source archives (8 core,2 image-context and8 final lineage/legacy
 cases, all exit0); report `/tmp/mote-m10-review-m06.md`.
 Final new composition is assigned to active M11 for read-only independent review;
 completed M06 must not be awakened. No additional execution conversation is created.
+
+
+## Subjectless Gmail publication repair
+
+An additional emitted-production probe at `41d2775307db5afecbb5b40b81b5fd8c8a0b9b9b`
+confirmed that a valid Gmail message without Subject extracted successfully but
+failed Material publication: its canonical empty title violated Material's nonempty
+display title schema (`processing_output_invalid`). Both the initial probe and the
+probe with explicit real M04 local extraction settings failed; neither is a pass
+(`/tmp/m10-41d-joint-emitted.log`, `/tmp/m10-41d-joint-emitted-configured.log`, exits1).
+The repair preserves empty canonical source evidence, uses the existing display
+fallback for empty titles, and retains exact nonempty titles. The existing durable
+two-process OAuth recovery smoke now explicitly enables the real local pipeline
+through M04 and asserts A/B decoded subjectless Material, display title, the actual
+Gmail processor engine, raw originals, and foreign Material/original denial.
+The first repaired assertion read title at the wrong response level; it now uses
+the real Material metadata endpoint. Final targeted process regression1/1, exit0
+(`/tmp/m10-subjectless-fixed-final.log`, `.exit`).
+
+Prior exact41d module49/49, actual combination282/282, Server/Web builds and original
+emitted smoke all exited0. The subsequent exact41d full affected was interrupted
+with exit143 when this source repair became necessary and is diagnostic only.
+Final frozen-source checks and follow-up peer review replace these receipts.

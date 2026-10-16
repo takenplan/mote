@@ -126,7 +126,9 @@ they never select a newer source head. No format selector enters source worker R
 Normalized connector snapshots, including calendars, retain serialized SourceItem
 originals for real automatic processing; reference sources retain no bytes.
 SourceItem extraction preserves bounded text chunks and available speaker/time
-metadata. Material titles use the canonical parent title. DingTalk export MIME is
+metadata. Material titles use the canonical parent title when nonempty; valid empty
+source titles (such as Gmail without Subject) retain their canonical evidence and
+use the existing `Processed original` display fallback. DingTalk export MIME is
 JSON, and a changed MIME creates a new revision while retaining old evidence.
 Gmail envelope-only changes such as `historyId` retain the canonical original of
 an unchanged semantic revision. New semantic revisions supply new provider bytes;
