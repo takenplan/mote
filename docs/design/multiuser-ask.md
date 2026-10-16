@@ -101,6 +101,15 @@ cursors bind this manifest. Exact/history reads keep the actual version's proof.
 rechecked by descendants at execution and publication, so a detached child grant
 cannot outlive cancellation. Completed windows and successful fragments are durable.
 
+Manual and automatic Insight retain the existing `InsightSnapshot` contract:
+start-of-run provenance, series/version linkage, scoped source states, processing
+and Memory coverage, and measured sampled intervals. The scoped admission stores
+the exact archive/Memory manifest with the owned run and supplies the same public
+snapshot to the Harness and completed result. Person-level interval union and
+device-duration measurement reuse the existing algorithms; missing samples never
+establish inactivity or work time. Static completed snapshot metadata survives
+export/restore, without restoring a manifest as new execution authority.
+
 ## Domain lifecycle and validation
 
 Ask exports completed conversation/turn/artifact data, excluding active grants,

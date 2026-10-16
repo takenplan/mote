@@ -24,6 +24,7 @@ M03 originals, M06 processing and real M07 provider/Memory read paths.
 | Native timeline/items limit inside multi-block Material, later-block lexical hit, distinct entity/original cursors and revision/user/scope invalidation | multiuser-ask: native original pagination…; M11 original limit1 assertion retained |
 | Existing read_file_evidence capability uses retained canonical original and requested source range, no invented excerpt citation | multiuser-ask: real Harness read_file_evidence… |
 | Measured activity/media intervals; raw screenshot/Coding UUID does not authorize source or image | multiuser-ask: real measured Activity… |
+| Existing InsightSnapshot metadata, version chain, observed interval union, boundary clipping, A/B source-state separation and actual host prompt | multiuser-ask: scoped Insight preserves the existing measured snapshot… |
 | Genuine M03 explicit image uploads → Harness pixels; same-ID A/B, conversation continuation and deletion | multiuser-ask: explicit M03 image uploads… |
 | Real model/settings/price admission snapshot survives current configuration edits; provider errors/credentials absent from user trace | multiuser-ask: model settings change…; model transport failures… |
 | Cancel, pause, logout, source/Material/conversation delete, account disable while model/SSE held; B control operates | multiuser-ask: held actual Harness… five actions; foreground progress…; actual HTTP disconnect… |
@@ -89,7 +90,8 @@ final peer review and the final combined/build/emitted/affected gates.
   exact original incarnation. Peer probes distinguish same-owner disclosure or
   availability/correctness impact from cross-user/source isolation impact.
 - Migration omissions: real Memory/query/readers, complete working spans and
-  periodic working/Insight admission. Recovery restores production seams rather
+  periodic working/Insight admission, plus the existing InsightSnapshot coverage
+  and version metadata. Recovery restores production seams rather
   than replacing them with blocked routes or neighborhood mock services.
 - Obsolete test assumptions: extra genuine memory.materials tasks/Materials;
   paging raw rows before the producer replaces them; full prompt length includes
@@ -109,3 +111,15 @@ final peer review and the final combined/build/emitted/affected gates.
 Delete/revoke/restart and scope-isolation impacts are tracked separately. No
 unsupported old-flow bug claim or blanket description of all P2s as data leaks is
 made. Old failing logs remain available in /tmp and are not counted as passes.
+
+The InsightSnapshot omission has a separate failing regression commit
+`c3e8932a8d71f4fd1167a6f7e27690a88d42ce7d`. Against literal runtime6855,
+the valid regression failed 0/1 EXIT1 because the completed report omitted the
+snapshot (`/tmp/m08-insight-coverage-before-valid.log/.exit`). The fix reuses
+the old shared snapshot shape and observed interval algorithm. Its strengthened
+regression checks clipping across the upper boundary and stable fingerprints
+only after the genuine Material producer finishes. The actual Memory→Insight
+case plus this regression passed 2/2 EXIT0,23637ms, server typecheck0
+(`/tmp/m08-insight-coverage-green.log/.exit`, `-green-types.log/.exit`).
+The complete legacy snapshot tests also passed 2/2 EXIT0. These narrow receipts
+do not replace final frozen-candidate validation or independent review.

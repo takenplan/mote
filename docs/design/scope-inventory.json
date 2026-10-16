@@ -2013,6 +2013,7 @@
       "table:ma_automations",
       "table:ma_conversations",
       "table:ma_fragments",
+      "table:ma_insight_snapshots",
       "table:ma_meta",
       "table:ma_originals",
       "table:ma_read_cursors",

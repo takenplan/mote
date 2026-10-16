@@ -1,10 +1,11 @@
+import {samples as stateSamples} from '@mote/shared/state-series';
 import {z} from 'zod';
 import type {ContextReader,ContextRange,ContextRecord} from '@mote/agent';
-import type {CaptureRecord} from '@mote/shared';
+import type {CaptureRecord,InsightSnapshot} from '@mote/shared';
 import {sourceContentTime} from '@mote/shared';
 import {materialDraftSchema} from './material-model.js';
 import {safeTextWindow} from '../text-window.js';
-import {measureActivity} from '../activity-measurement.js';
+import {measureActivity,observedIntervalCoverage} from '../activity-measurement.js';
 import {mediaActivity,type MediaActivityRange} from '../media-activity.js';
 import {CONTEXT_DIRECTORIES,contextCard,type ContextQueryInput} from '../context-query-core.js';
 import {navigationScopeSchema} from '../context-navigation.js';
@@ -14,7 +15,7 @@ import type {ConnectorSourceStatusReader} from './connectors.js';
 import type {PrivateData} from './private-data.js';
 import {PrivateSql,PrivateCursor,missing} from './private-data-sql.js';
 import {ScopedMemoryData} from './memory-data.js';
-import {askHash,type AskScope,type EvidencePin,type MaterialPin} from './ask-schema.js';
+import {askHash,type AskScope,type AskSnapshot,type EvidencePin,type MaterialPin} from './ask-schema.js';
 
 /** The same Material originals and fingerprints used by M07. Candidate SQL is
  * owner/source restricted before ordering, paging, provider calls or disclosure. */
@@ -47,9 +48,19 @@ export class AskEvidence{
  }
  snapshot(range:ContextRange={}){
   const materialRows=this.lifecycleCandidates(0,2147483647,range),materials=[...new Map(materialRows.map(row=>[String(row.id),{id:String(row.id),revision:String(row.revision)}])).values()],args:(string|number)[]=[],where=[this.captureConditions('c',args,true)];
-  if(range.deviceId){where.push("json_extract(c.json,'$.deviceId')=?");args.push(range.deviceId);}if(range.after){where.push('julianday(c.context_at)>=julianday(?)');args.push(range.after);}if(range.before){where.push('julianday(c.context_at)<julianday(?)');args.push(range.before);}
-  const captures=this.sql.all(`SELECT c.id FROM pd_captures c WHERE c.user_id=$user AND ${where.join(' AND ')} ORDER BY c.id`,...args).map(row=>({id:String(row.id),receipt:this.originalReceipt(String(row.id))}));return {materials,captures};
+  if(range.deviceId){where.push("json_extract(c.json,'$.deviceId')=?");args.push(range.deviceId);}if(range.after){where.push("(julianday(c.context_at)>=julianday(?) OR (json_extract(c.json,'$.source') IN('screen','activity') AND EXISTS(SELECT 1 FROM json_each(c.json,'$.stateSeries.samples') sample WHERE julianday(json_extract(sample.value,'$.at'))>=julianday(?))))");args.push(range.after,range.after);}if(range.before){where.push("(julianday(c.context_at)<julianday(?) OR (json_extract(c.json,'$.source') IN('screen','activity') AND (unixepoch(json_extract(c.json,'$.capturedAt'),'subsec')*1000-json_extract(c.json,'$.durationMs')<? OR EXISTS(SELECT 1 FROM json_each(c.json,'$.stateSeries.samples') sample WHERE unixepoch(json_extract(sample.value,'$.at'),'subsec')*1000-json_extract(sample.value,'$.durationMs')<?))))");args.push(range.before,Date.parse(range.before),Date.parse(range.before));}
+  const captures=this.sql.all(`SELECT c.id FROM pd_captures c WHERE c.user_id=$user AND ${where.join(' AND ')} ORDER BY c.id`,...args).map(row=>({id:String(row.id),receipt:this.originalReceipt(String(row.id))})),memories:AskSnapshot['memories']=[];let cursor:string|undefined;do{const page=this.originals.page({after:range.after,before:range.before,deviceId:range.deviceId,limit:100,...(cursor?{cursor}:{})},this.scope.sourceIds);for(const row of page.rows){const card=JSON.parse(row.json) as {id:string;version:number;fingerprint:string};memories.push({id:card.id,version:card.version,fingerprint:card.fingerprint});}cursor=page.nextCursor??undefined;}while(cursor);return {materials,captures,memories};
  }
+ /** The original Insight coverage contract, measured only from this host snapshot. */
+ insightCoverage(manifest:AskSnapshot,range:{after?:string;before?:string;deviceId?:string}){
+  const records=manifest.captures.map(pin=>{if(this.originalReceipt(pin.id)!==pin.receipt)throw missing();return this.data.capture(pin.id);}),activity=measureActivity(records,range),measured=observedIntervalCoverage(records.filter(record=>['screen','activity'].includes(record.source)).flatMap(record=>stateSamples(record).map(sample=>({at:sample.at,durationMs:sample.durationMs}))),range,activity.totalDurationMs),referenceOnlyRecords=records.filter(record=>record.provenance?.layer==='reference').length,materials=JSON.stringify(manifest.materials),captures=JSON.stringify(manifest.captures),memories=JSON.stringify(manifest.memories);
+  const pendingProcessing=Number(this.sql.get(`SELECT count(DISTINCT o.capture_id) n FROM mp_admissions a JOIN ig_originals o ON o.user_id=a.user_id AND o.id=a.original_id LEFT JOIN execution_steps e ON e.id=a.task_id AND e.user_id=a.user_id WHERE a.user_id=$user AND o.user_id=$user AND o.capture_id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND (a.task_id IS NULL OR e.state!='succeeded')`,captures)!.n)+manifest.materials.filter(pin=>this.data.material(pin.id,pin.revision).coverage.state!=='complete').length;
+  const batches=this.sql.all(`SELECT DISTINCT b.tasks FROM mm_job_batches b JOIN json_each(b.input,'$.inputs') proof JOIN mm_evidence e ON e.user_id=b.user_id AND e.id=json_extract(proof.value,'$.id') WHERE b.user_id=$user AND e.user_id=$user AND e.material_id IN(SELECT json_extract(value,'$.id') FROM json_each(?)) AND b.state NOT IN('committed','cancelled','deleted') AND NOT EXISTS(SELECT 1 FROM json_each(b.input,'$.inputs') p WHERE NOT EXISTS(SELECT 1 FROM mm_evidence proof WHERE proof.user_id=$user AND proof.id=json_extract(p.value,'$.id') AND proof.material_id IN(SELECT json_extract(value,'$.id') FROM json_each(?))))`,materials,materials),states=batches.map(row=>Object.values(JSON.parse(String(row.tasks)) as Record<string,string>).map(id=>this.sql.get('SELECT state FROM execution_steps WHERE user_id=$user AND id=?',id)?.state)),memoryCoverage={scope:'archive' as const,pendingBatches:states.filter(values=>values.some(state=>state==='waiting'||state==='running')).length,failedBatches:states.filter(values=>values.some(state=>['failed','blocked','stale'].includes(String(state)))).length,lastSavedAt:this.sql.get(`SELECT max(created_at) at FROM mm_records WHERE user_id=$user AND id IN(SELECT json_extract(value,'$.id') FROM json_each(?))`,memories)?.at as string|null??null};
+  const sourceArgs:(string|number)[]=[],sourceWhere=["json_extract(json,'$.enabled')=1"];if(this.scope.sourceIds){sourceWhere.push('id IN(SELECT value FROM json_each(?))');sourceArgs.push(JSON.stringify(this.scope.sourceIds));}if(range.deviceId){sourceWhere.push("json_extract(json,'$.deviceId')=?");sourceArgs.push(range.deviceId);}const sourceStates=this.sql.all(`SELECT id FROM pd_sources WHERE user_id=$user AND ${sourceWhere.join(' AND ')} ORDER BY id LIMIT 500`,...sourceArgs).map(row=>{const source=this.source(String(row.id));return {id:source.id,state:source.status?.state??'unknown',...(source.status?.lastSyncAt?{lastSyncAt:source.status.lastSyncAt}:{})};});
+  const limitations=['observed_samples_do_not_establish_work_time','source_registration_does_not_establish_complete_coverage',...(records.length||manifest.materials.length?[]:['no_records_in_scope']),...(referenceOnlyRecords?['reference_content_unavailable']:[]),...(pendingProcessing?['processing_incomplete']:[]),...(measured.unobservedDurationMs===null?['sampling_extent_unknown']:measured.unobservedDurationMs>0?['unobserved_sampling_intervals']:[])];
+  return {coverage:{records:records.length,materialRecords:manifest.materials.length,referenceOnlyRecords,pendingProcessing,sourceStates,measured,limitations} satisfies InsightSnapshot['coverage'],memoryCoverage,watermark:Number(this.sql.get(`SELECT coalesce(max(seq),0) n FROM ma_auto_events WHERE user_id=$user AND entity IN(SELECT json_extract(value,'$.id') FROM json_each(?))`,materials)!.n)};
+ }
+
  catalog(raw:ContextRange&{sourceId?:string;kind?:string;query?:string}={}){
   this.assert();const {cursor,...query}=z.object({after:z.string().optional(),before:z.string().optional(),deviceId:z.string().optional(),limit:z.number().int().min(1).max(200).default(30),cursor:z.string().optional(),sourceId:z.string().optional(),kind:z.string().optional(),query:z.string().max(500).optional(),source:z.string().optional(),appId:z.string().optional(),collection:z.string().optional()}).strict().parse(raw),identity={collection:'ask-materials',sources:this.scope.sourceIds??null,query},position=cursor?this.cursor.decode(cursor,identity):undefined;
   const args:(string|number)[]=[],clauses=[this.allowed('h',args),'h.sequence>=h.min_visible_sequence'];
