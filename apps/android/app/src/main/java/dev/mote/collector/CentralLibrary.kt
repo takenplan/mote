@@ -376,7 +376,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
         ui.button(MoteI18n.text("记忆设置")) { CentralAdmin(screens).memorySettings() }
         paged("/api/memories?limit=30", ui.card()) { row, card ->
             ui.text(row.getString("title"), NativeFontRole.SECTION, card)
-            ui.text(memoryStatus(row) + " · " + row.getInt("evidenceCount") + " " + MoteI18n.text("条证据"), parent = card)
+            ui.text(memoryStatus(row) + " · " + row.getJSONArray("evidenceIds").length() + " " + MoteI18n.text("条证据"), parent = card)
             ui.button(MoteI18n.text("查看详情"), parent = card) { memory(row.getString("id")) }
         }
     }
