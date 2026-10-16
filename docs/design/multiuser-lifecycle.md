@@ -59,8 +59,12 @@ replace the profile. Use that returned file explicitly when selecting the backed
 up instance configuration. External environment-secret references still require
 the operator's original secret source. Downloaded model weights/logs are excluded.
 This is an operator archive containing private configuration/key material, distinct
-from credential-free portable 3. Epoch-5 Docker profile publication is OPEN and
-rejects before staging; its old copy-into-volume path cannot promise atomic restore.
+from credential-free portable 3. The [container follow-up](../validation/multiuser-container-backup.md)
+replaces epoch-5 Docker refusal with fresh-volume staging and a single atomic
+YAML storage-pointer publication, retaining old volumes and staying stopped.
+Actual Docker volume, original Mote production startup/restart and native plus
+managed Hindsight history reopening now have separate generated-data evidence.
+Protocol tests alone do not establish those actual runtime results.
 Hindsight reuses the existing pinned owned-volume protocol; no daemon/image is
 started or downloaded automatically. This checkpoint does not declare that native
 path or the whole module accepted.
@@ -174,6 +178,13 @@ a separate gate.
 | Restoring data must not authorize previous external effects again. | Preserve successful/unknown journals, retire old credentials/task/plugin grants and pause automatic/outbound authority; operator reauthorizes explicitly. [Recovery failure contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract), [multi-user recovery boundary](../adr-multiuser-scope.md#decision-and-provenance). | Separates recovery of canonical records from execution rights and does not infer non-execution from timeout, cancellation or process death. | Actual generated external journals and restart tests, native Mem0 SDK canonical bodies; no live provider or real external action. |
 | Existing management pages contain private one-owner assumptions. | Admin finite instance metadata and signed read-only update checks; no impersonation, fake zero private queue/index metrics or HTTP update execution. [Multi-user Privacy](../adr-multiuser-scope.md#decision-and-provenance), [ConfigService responsibility/transaction](../adr-unified-configuration.md#responsibilities-and-transaction). | Retains existing settings/navigation and file configuration authority; configuration changes and deployment remain explicit operator actions. | Actual management post-await revocation RED→GREEN and Web consumer; private storage encryption/index gaps are not represented as restored. |
 | The old Docker copy-into-volume restore cannot promise atomic epoch-5 publication, and no Docker daemon is available for verification. | Keep the verified native stopped-instance path; reject unsupported Docker epoch-5 publication before mutation and report this as an OPEN retained-capability gap, not accepted removal. [Module M16 backup scope](multiuser-modules.md#模块改造与验收矩阵), [ConfigService UNKNOWN container validation](../adr-unified-configuration.md#compatibility-and-validation), [AGENTS completion rule](../../AGENTS.md). | Recommended to the parent: retain the explicit gap until atomic volume publication and real daemon recovery can be implemented/verified. No silent scope reduction, daemon start, deployment or synthetic claim of Docker acceptance. | Native source/compiled/package paths have historical positive evidence; approved read-only Docker version check reports daemon unavailable. Docker publication and native Hindsight-volume validation remain unexecuted/incomplete. |
+
+The last row records the original M16 checkpoint. The
+[container follow-up](../validation/multiuser-container-backup.md) supersedes its
+blanket Docker refusal with staged fresh-volume publication. The daemon became
+reachable and actual volume/Mote production/native-and-managed Hindsight recovery
+now pass; the linked ledger keeps exact runtime SHAs and the final current gate
+separate from historical checkpoints.
 
 The cited ADRs take precedence over a local shortcut. A conflict with these
 boundaries must be reported to the parent with a recommendation before changing
