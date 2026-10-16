@@ -384,3 +384,9 @@ New actual React timeline/Session→M01 Web cookie→M03 original backend render
 First final narrow type attempt `/tmp/m13-raw-freeze-types.log/.exit` EXIT2: new projected `ocr.status` widened to string. An explicit existing CaptureRecord return type corrects the declaration without changing behavior. Final types/scope results are retained separately. The public interface/schema and remaining limitations are in `docs/design/multiuser-capture-browser.md`.
 
 Final narrow Server/Web types `/tmp/m13-raw-freeze-types-green.log/.exit` EXIT0; exact scope inventory/import boundary `/tmp/m13-raw-freeze-scopes.log/.exit` EXIT0. Only the explicit return-type annotation changed after the six-case run; no runtime behavior change. Full affected, builds and IAB are pending the composed candidate.
+
+### Identical-image recreation fence
+
+M15 independent review of0172 confirmed a distinct P2 using identical original bytes. Its durable36a9dbc3 was applied as own47405f0d. Own unchanged case `/tmp/m13-raw-identical-incarnation-red.log/.exit` EXIT1 reproduces oldthumbnail200!=409 on the actual composed backend after delete/recreate with identical UUID, ref, hash and bytes. M13 now captures the existing M08 originalReadReceipt and rechecks it before image headers; its persistent original incarnation distinguishes the recreated record. There is no new identity table/runtime, no raw/context fallback and no intake rewrite. Complete narrow actual backend `/tmp/m13-raw-incarnation-green.log/.exit`7/7 EXIT0 also preserves prior owner/image/retention/OCR/cursor cases. Types and final combined gates are tracked separately.
+
+Identical-image fix with current M14/M16 composition Server/Web typecheck `/tmp/m13-incarnation-composed-types.log/.exit` EXIT0. The eight-second types slot is released. The M16 backup63 bounded helper review `/tmp/mote-m13-review-m16-backup-63.md` has no new confirmed finding; it does not substitute for M16's actual corruption cases.
