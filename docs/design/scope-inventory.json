@@ -1480,7 +1480,7 @@
     "module": "M01",
     "status": "implemented",
     "surfaces": [
-      "api:registerAuthenticatedRoute:{...route,handle:async(context,request)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request});}}"
+      "api:registerAuthenticatedRoute:{...route,handle:async(context,request,reply)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request,reply});}}"
     ]
   },
   "apps/server/src/scope/ingress-routes.ts": {
@@ -1962,6 +1962,7 @@
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insights'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces'",

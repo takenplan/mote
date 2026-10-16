@@ -44,7 +44,7 @@ export function registerAuthenticatedRoute(runtime:ScopedRuntime,route:Route){
     return result;
   }});
 }
-export function registerUserRoute(runtime:ScopedRuntime,route:{scope:'user';method:'GET'|'POST'|'PUT'|'PATCH'|'DELETE';url:string;bodyLimit?:number;service:string;handle:(input:{context:UserContext;services:ReturnType<ScopedServices['forUser']>;request:FastifyRequest})=>unknown|Promise<unknown>}){
+export function registerUserRoute(runtime:ScopedRuntime,route:{scope:'user';method:'GET'|'POST'|'PUT'|'PATCH'|'DELETE';url:string;bodyLimit?:number;service:string;handle:(input:{context:UserContext;services:ReturnType<ScopedServices['forUser']>;request:FastifyRequest;reply:FastifyReply})=>unknown|Promise<unknown>}){
   if(route.scope!=='user'||!route.url.startsWith('/api/')||route.url==='/api/health'||!route.service)throw new ScopeError('undeclared_scope',500);
-  registerAuthenticatedRoute(runtime,{...route,handle:async(context,request)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request});}});
+  registerAuthenticatedRoute(runtime,{...route,handle:async(context,request,reply)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request,reply});}});
 }
