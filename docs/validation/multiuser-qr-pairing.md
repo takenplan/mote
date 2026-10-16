@@ -186,7 +186,10 @@ remain. Evidence: `/tmp/mote-qr-pin-candidate-red.log`,
 `/tmp/mote-qr-held-pin-red.log`, `/tmp/mote-qr-pin-final-own-green.log` and exit
 files. Intermediate candidate runs are not substituted for that final-code result.
 Bounded independent source review accepted the exact cleanup capability and mint
-ordering without running additional tests.
+ordering without running additional tests. Joint separately reviewed exact
+`1d6d933c` across all four files, found no new confirmed issue, and accepted its
+source compatibility; that review did not execute tests. Joint will preserve its
+existing `file_forgotten` error variant when combining the patch.
 
 The complete **post-disposer** affected gate is pending fresh serial allocation.
 The completed green `489943ad` check does not cover the new disposer commit.
