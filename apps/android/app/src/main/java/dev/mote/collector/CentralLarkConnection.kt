@@ -18,6 +18,7 @@ internal class CentralLarkConnection(
     private var kind = "selection"
     var calendars: JSONArray? = null; private set
     var uncertain = false; private set
+    var disconnected = false; private set
     val polling get() = pending != null
     private fun active() { check(selected() && screens.ownsSelectedAccount() && screens.ui.client === api) { "Connection changed" } }
     private fun verify() {
@@ -33,6 +34,16 @@ internal class CentralLarkConnection(
             if (old.has(field)) current.put(field, old.get(field))
         } }
         return current
+    }
+    private fun recordDisconnect(task: JSONObject, retiredGeneration: Long) {
+        active()
+        // The original acknowledgement survives a subsequent metadata-read
+        // failure; it never grants execution in a different generation.
+        screens.rememberConnectorTask(id, retiredGeneration, task.getString("id"))
+        val rows = api.get("/api/connectors").getJSONArray("connections")
+        val current = (0 until rows.length()).map(rows::getJSONObject).singleOrNull { it.getString("id") == id }
+        check(current?.getLong("generation") == retiredGeneration) { MoteI18n.text("配置或方案已变化；请读取当前状态后重新确认。") }
+        active(); disconnected = true
     }
     fun read(): JSONObject {
         verify()
@@ -83,12 +94,18 @@ internal class CentralLarkConnection(
         val suffix = if (action in setOf("sync", "disconnect") && !body.has("document")) action else "operations"
         val payload = if (suffix == "operations") JSONObject().put("operation", if (action == "sync" && body.has("document")) "sync-document" else action).put("payload", body) else body
         val task = screens.submitConnector(api, id, generation, path + "/" + suffix, payload)
+        if (suffix == "disconnect") recordDisconnect(task, generation + 1)
         active(); pending = task.getString("id"); if (view == null) view = fresh(); apply(task)
         return JSONObject(view!!.toString())
     }
     fun delete(url: String): JSONObject { require(url == "/api/connectors/lark"); return post("/api/connectors/lark/disconnect") }
     fun retry(): JSONObject {
-        verify(); val task = screens.retryConnector(api, id); active(); pending = task.getString("id"); if (view == null) view = fresh(); apply(task); return JSONObject(view!!.toString())
+        verify()
+        val prior = screens.connectorWork().getJSONObject(id)
+        val disconnect = prior.getJSONObject("pending").getString("path") == path + "/disconnect"
+        val task = screens.retryConnector(api, id)
+        if (disconnect) recordDisconnect(task, prior.getLong("generation") + 1)
+        active(); pending = task.getString("id"); if (view == null) view = fresh(); apply(task); return JSONObject(view!!.toString())
     }
     fun clearPending() { active(); screens.clearPendingConnector(id) }
 }

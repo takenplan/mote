@@ -677,7 +677,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             val account = ui.card()
             if (api.uncertain) {
                 ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"), parent = account)
-                ui.button(MoteI18n.text("重试"), parent = account) { ui.work(MoteI18n.text("正在处理…"), { api.retry() }) { if (larkConnection === api) lark() } }
+                ui.button(MoteI18n.text("重试"), parent = account) { ui.work(MoteI18n.text("正在处理…"), { api.retry() }) { if (larkConnection === api) { if (api.disconnected) larkConnection = null; lark() } } }
                 ui.button(MoteI18n.text("清除本机待确认请求"), parent = account) {
                     if (larkConnection === api && screens.ownsSelectedAccount()) screens.confirm(MoteI18n.text("清除本机待确认请求"), MoteI18n.text("这只清除本机待确认请求，已在中央接收的任务仍会继续。")) {
                         ui.work(MoteI18n.text("正在保存…"), { api.clearPending() }) { if (larkConnection === api) lark() }
@@ -763,7 +763,9 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             ui.text(MoteI18n.text("同步归档完成后，Memory 会按现有设置继续处理；并非每篇文档都会生成精选记忆。"))
             ui.button(MoteI18n.text("查看来源与归档")) { ui.navigate("sources") }
             ui.button(MoteI18n.text("断开连接")) { screens.confirm(MoteI18n.text("断开连接"), MoteI18n.text("断开会停止读取并暂停这些来源，保留已归档资料。飞书端授权及 CLI 凭据仍保留，可在飞书中单独撤销。")) {
-                ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/lark") }) { lark() }
+                ui.work(MoteI18n.text("正在处理…"), { runCatching { api.delete("/api/connectors/lark") } }) { outcome ->
+                    if (larkConnection === api) { larkConnection = null; outcome.exceptionOrNull()?.let(ui::requestFailure); lark() }
+                }
             } }
             if (api.polling) larkHandler.postDelayed(larkPoll, 500)
         }
