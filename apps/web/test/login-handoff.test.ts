@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {loginWeb} from '../src/web-auth.js';
 import {consumeLoginTicket} from '../src/login-handoff.js';
 import {connectionStorageKey} from '../src/session.js';
 function browser(t:any,code:string){
@@ -35,4 +36,16 @@ test('a late ticket response cannot replace a newer login or logout',async t=>{
  resolve(new Response(JSON.stringify({token:'generated-old-login'.repeat(3)})));
  await assert.rejects(pending,/Login changed/);
  assert.equal(JSON.parse(b.storage.getItem(connectionStorageKey)!).token,'generated-new-login');
+});
+
+test('a ticket exchange admitted before a newer login cannot publish its old account',async t=>{
+ browser(t,'x'.repeat(43));let release!:(response:Response)=>void,owner='a';
+ globalThis.fetch=async(url)=>{
+  if(url==='/api/login/exchange')return new Promise<Response>(done=>{release=done;});
+  if(url==='/api/auth/login'){owner='b';return Response.json({deploymentId:'deployment',userId:'b',credentialId:'session-b'});}
+  return Response.json({deploymentId:'deployment',userId:owner,credentialId:'session-'+owner,username:owner,administrator:false,csrfToken:'csrf-'+owner});
+ };
+ const pending=consumeLoginTicket();await new Promise(done=>setImmediate(done));
+ const rejected=assert.rejects(pending,/Login changed/),newer=loginWeb('b','generated-only',0);
+ release(Response.json({credentialId:'session-a'}));await rejected;assert.equal((await newer).userId,'b');
 });
