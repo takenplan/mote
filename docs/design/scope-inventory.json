@@ -687,10 +687,10 @@
     "surfaces": [
       "extension:pluginScope.install:audio('audio.http')",
       "extension:pluginScope.install:audio('audio.local-dialogue',true)",
-      "extension:pluginScope.install:builtin({id:'document.generic',version:'1',name:\"\u6587\u6863\u6587\u5b57\u63d0\u53d6\",stage:'extract',mediaTypes:[...DOCUMENT_MIME_TYPES],localOnly:true,dependencies:{settings:[]},process:input=>input.decodeOriginal?input.decodeOriginal(input.file.mimeType):extractDocument(input.readOriginal(),input.file.sizeBytes,input.file.mimeType,input.signal)})",
-      "extension:pluginScope.install:builtin({id:'image.http',version:'2',name:\"\u56fe\u7247\u6587\u5b57\u63d0\u53d6\u63a5\u53e3\",stage:'extract',mediaTypes:['image/'],serviceKind:'image',awaitResponseOnCancel:true,reuseByContent:true,dependencies:{settings:['imageEndpoint','apiKey','allowRemote']},async process(input){ if(!input.settings.imageEndpoint)throw new StoreError('Image processing service is not configured',409); const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Media-Type':input.file.mimeType,...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})}; const value=isLoopback(input.settings.imageEndpoint)?await postLocalProcessor(input.settings.imageEndpoint,headers,input.readOriginal(),input.signal,false):await readProcessorJson(await fetch(input.settings.imageEndpoint,{method:'POST',headers,body:input.readOriginal() as unknown as BodyInit,duplex:'half',signal:input.signal,redirect:'error'} as RequestInit)); const transcript=transcriptSchema.parse(value);if(transcript.durationMs!==0)throw new StoreError('Image text cannot have audio duration',502);return transcript; }})",
-      "extension:pluginScope.install:builtin({id:'text.utf8',version:'3',name:\"UTF-8 \u6587\u5b57\u63d0\u53d6\",stage:'extract',mediaTypes:['text/'],localOnly:true,dependencies:{settings:[]},process:input=>input.decodeOriginal?input.decodeOriginal('text/plain'):extractUtf8(input.readOriginal(),input.file.sizeBytes,input.signal)})",
-      "extension:pluginScope.install:builtin({id:alternative?'audio.diarize-wespeaker':'audio.diarize',version:alternative?'1':'3',name:alternative?'\u672c\u5730\u8bf4\u8bdd\u4eba\u5206\u79bb \u00b7 WeSpeaker \u4e2d\u6587':'\u672c\u5730\u8bf4\u8bdd\u4eba\u5206\u79bb',stage:'diarize',mediaTypes:['audio/'],localOnly:true,managedModel:alternative?'speaker-wespeaker':'dialogue',awaitResponseOnCancel:true,dependencies:alternative?{settings:['endpoint','apiKey','speakerCount','speakerMin','speakerMax'],parameters:['speakerCount','speakerMin','speakerMax']}:{settings:['endpoint','apiKey','speakerCount'],parameters:['speakerCount']},async process(input){ if(!isLoopback(input.settings.endpoint))throw new StoreError('Diarization requires a loopback worker',409); const endpoint=new URL(input.settings.endpoint);endpoint.pathname=endpoint.pathname.replace(/\\/transcribe\\/?$/,'/diarize'); if(!endpoint.pathname.endsWith('/diarize'))throw new StoreError('Local worker URL must end with /transcribe',409); if(!alternative&&input.settings.speakerMin!==null)throw new StoreError('Speaker range requires the WeSpeaker plugin',409); const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),...(alternative?{'X-Mote-Speaker-Model':'wespeaker-zh',...(input.settings.speakerMin!==null?{'X-Mote-Speaker-Min':String(input.settings.speakerMin),'X-Mote-Speaker-Max':String(input.settings.speakerMax)}:{})}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Offline':'1','X-Mote-Max-Audio-Ms':String(input.maxAudioMs),'X-Mote-Processing-Timeout-Ms':String(input.settings.timeoutMs),'X-Mote-Speaker-Count':String(input.settings.speakerCount??0),...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})}; return diarizationSchema.parse(await postLocalProcessor(endpoint.toString(),headers,input.readOriginal(),input.signal)); }})",
+      "extension:pluginScope.install:builtin({id:'document.generic',version:'1',name:\"文档文字提取\",stage:'extract',mediaTypes:[...DOCUMENT_MIME_TYPES],localOnly:true,dependencies:{settings:[]},process:input=>input.decodeOriginal?input.decodeOriginal(input.file.mimeType):extractDocument(input.readOriginal(),input.file.sizeBytes,input.file.mimeType,input.signal)})",
+      "extension:pluginScope.install:builtin({id:'image.http',version:'2',name:\"图片文字提取接口\",stage:'extract',mediaTypes:['image/'],serviceKind:'image',awaitResponseOnCancel:true,reuseByContent:true,dependencies:{settings:['imageEndpoint','apiKey','allowRemote']},async process(input){ if(!input.settings.imageEndpoint)throw new StoreError('Image processing service is not configured',409); const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Media-Type':input.file.mimeType,...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})}; const value=isLoopback(input.settings.imageEndpoint)?await postLocalProcessor(input.settings.imageEndpoint,headers,input.readOriginal(),input.signal,false):await readProcessorJson(await fetch(input.settings.imageEndpoint,{method:'POST',headers,body:input.readOriginal() as unknown as BodyInit,duplex:'half',signal:input.signal,redirect:'error'} as RequestInit)); const transcript=transcriptSchema.parse(value);if(transcript.durationMs!==0)throw new StoreError('Image text cannot have audio duration',502);return transcript; }})",
+      "extension:pluginScope.install:builtin({id:'text.utf8',version:'3',name:\"UTF-8 文字提取\",stage:'extract',mediaTypes:['text/'],localOnly:true,dependencies:{settings:[]},process:input=>input.decodeOriginal?input.decodeOriginal('text/plain'):extractUtf8(input.readOriginal(),input.file.sizeBytes,input.signal)})",
+      "extension:pluginScope.install:builtin({id:alternative?'audio.diarize-wespeaker':'audio.diarize',version:alternative?'1':'3',name:alternative?'本地说话人分离 · WeSpeaker 中文':'本地说话人分离',stage:'diarize',mediaTypes:['audio/'],localOnly:true,managedModel:alternative?'speaker-wespeaker':'dialogue',awaitResponseOnCancel:true,dependencies:alternative?{settings:['endpoint','apiKey','speakerCount','speakerMin','speakerMax'],parameters:['speakerCount','speakerMin','speakerMax']}:{settings:['endpoint','apiKey','speakerCount'],parameters:['speakerCount']},async process(input){ if(!isLoopback(input.settings.endpoint))throw new StoreError('Diarization requires a loopback worker',409); const endpoint=new URL(input.settings.endpoint);endpoint.pathname=endpoint.pathname.replace(/\\/transcribe\\/?$/,'/diarize'); if(!endpoint.pathname.endsWith('/diarize'))throw new StoreError('Local worker URL must end with /transcribe',409); if(!alternative&&input.settings.speakerMin!==null)throw new StoreError('Speaker range requires the WeSpeaker plugin',409); const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),...(alternative?{'X-Mote-Speaker-Model':'wespeaker-zh',...(input.settings.speakerMin!==null?{'X-Mote-Speaker-Min':String(input.settings.speakerMin),'X-Mote-Speaker-Max':String(input.settings.speakerMax)}:{})}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Offline':'1','X-Mote-Max-Audio-Ms':String(input.maxAudioMs),'X-Mote-Processing-Timeout-Ms':String(input.settings.timeoutMs),'X-Mote-Speaker-Count':String(input.settings.speakerCount??0),...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})}; return diarizationSchema.parse(await postLocalProcessor(endpoint.toString(),headers,input.readOriginal(),input.signal)); }})",
       "extension:pluginScope.install:loaded.default??loaded",
       "extension:pluginScope.install:plugin",
       "extension:pluginScope.install:{name:'mote-file-capabilities',apply:ctx=>{ctx.effect(()=>installImportIntake(this.intake));ctx.effect(()=>installFileRecipes(this.recipes,this.outputs));ctx.effect(()=>installImageRecipes(this.imageRecipes));}}",
@@ -1653,6 +1653,7 @@
       "table:pd_fts",
       "table:pd_material_captures",
       "table:pd_material_contexts",
+      "table:pd_material_declarations",
       "table:pd_material_inputs",
       "table:pd_material_sources",
       "table:pd_material_versions",
@@ -1928,13 +1929,16 @@
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id/versions/:version'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/bindings/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/activate'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/cancel'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile'"
     ]
@@ -1946,19 +1950,23 @@
     "surfaces": [
       "table:mm_binding_locks",
       "table:mm_binding_preparations",
+      "table:mm_capture_intakes",
       "table:mm_commands",
       "table:mm_deletions",
       "table:mm_dependencies",
       "table:mm_evidence",
+      "table:mm_feedback",
       "table:mm_fts",
       "table:mm_images",
       "table:mm_intakes",
       "table:mm_integrated_versions",
       "table:mm_integration_windows",
       "table:mm_job_batches",
+      "table:mm_job_controls",
       "table:mm_jobs",
       "table:mm_meta",
       "table:mm_native_cleanup",
+      "table:mm_owner_cancellations",
       "table:mm_provider_config",
       "table:mm_provider_descriptors",
       "table:mm_provider_journal",
@@ -2111,6 +2119,56 @@
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/status'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/media-activity'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/context/read'"
+    ]
+  },
+  "apps/server/src/scope/memory-capture-materials.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.materials'"
+    ]
+  },
+  "apps/server/src/scope/memory-feedback.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.feedback'",
+      "task:this.execution.register:kind:'memory.feedback-admit'"
+    ]
+  },
+  "apps/server/src/scope/memory-owner-questions.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.owner-reply'"
+    ]
+  },
+  "apps/server/src/scope/owner-question-routes.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions'",
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions/:id'",
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'POST',url:'/api/owner-questions/:id/reply'"
+    ]
+  },
+  "apps/server/src/scope/owner-question-schema.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "table:oq_dependencies",
+      "table:oq_meta",
+      "table:oq_questions",
+      "table:oq_replies",
+      "table:oq_restore",
+      "table:oq_state"
+    ]
+  },
+  "apps/server/src/scope/owner-questions.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "extension:runtime.services.registerUser:OWNER_QUESTIONS_DOMAIN"
     ]
   }
 }

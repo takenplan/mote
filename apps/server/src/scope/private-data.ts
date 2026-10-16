@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {sourceConnectionSchema,sourceItemSchema,sourceContentTime,captureSchema,ownerRelationSchema,sourceContextUpdateSchema,type AttributionContext,type SourceConnection,type CaptureInput,type CaptureRecord,type SourceItemRecord} from '@mote/shared';
-import {materialDraftSchema,type MaterialDraft} from './material-model.js';
+import {materialDraftSchema,materialOwnerDeclarationBodyHash,materialOwnerStatementSchema,type MaterialDraft} from './material-model.js';
 import {PrivateSql,PrivateCursor,PrivateDataError,missing} from './private-data-sql.js';
 import {storeCapture,type StoredCapture} from './capture-original.js';
 
@@ -169,11 +169,18 @@ export class PrivateData{
       const sources=new Set<string>([draft.origin.sourceId]);
       const context=this.sourceContext(draft.origin.sourceId);
       if(context.version)pins.set(draft.origin.sourceId,{version:context.version,fingerprint:context.fingerprint!});
+      // Declarations are opened from the host repository, never accepted from
+      // a source publisher. A changed original body cannot inherit an answer.
+      const baseHash=materialOwnerDeclarationBodyHash(draft),declarations=this.sql.all('SELECT id,version,fingerprint,json FROM pd_material_declarations WHERE user_id=$user AND material_id=? AND base_hash=? ORDER BY id,version',draft.id,baseHash),latest=new Map(declarations.map(row=>[String(row.id),row])),declared=[...latest.values()].map(row=>({id:String(row.id),version:Number(row.version),fingerprint:String(row.fingerprint)})),statements=[...latest.values()].map(row=>JSON.parse(String(row.json)));
+      if(draft.attributionContext.declarations?.some(pin=>!declared.some(value=>hash(value)===hash(pin)))||draft.attributionContext.ownerStatements?.some(statement=>!statements.some(value=>hash(value)===hash(statement))))throw conflict();
+      draft.attributionContext.declarations=declared;draft.attributionContext.ownerStatements=statements;
+      for(const block of draft.blocks)if(block.kind==='text'&&block.evidenceContext?.attributionContext){block.evidenceContext.attributionContext.declarations=declared;block.evidenceContext.attributionContext.ownerStatements=statements;}
       const checkAttribution=(value:AttributionContext|undefined)=>{
         if(!value)return;
         // Those control-plane domains are deliberately unavailable until their
         // owner modules supply a scoped resolver. Never retain dangling IDs.
-        if(value.declarations?.length||value.ownerStatements?.length||value.importDeclarations?.length||value.importStatements?.length||value.materialDeclarations)throw new PrivateDataError('scope_unavailable',503);
+        if(value.importDeclarations?.length||value.importStatements?.length||value.materialDeclarations)throw new PrivateDataError('scope_unavailable',503);
+        if(value.declarations?.some(pin=>!declared.some(value=>hash(value)===hash(pin)))||value.ownerStatements?.some(statement=>!statements.some(value=>hash(value)===hash(statement))))throw conflict();
         if(value.sourceDeclaration){const pin=value.sourceDeclaration,source=this.source(pin.sourceId);if(source.ownerRelationVersion!==pin.version||(source.ownerRelation??null)!==pin.ownerRelation)throw conflict();sources.add(pin.sourceId);}
         for(const pin of value.sourceContextDeclarations??[]){
           const declared=this.sourceContext(pin.sourceId,pin.version);if(declared.fingerprint!==pin.fingerprint)throw conflict();
@@ -274,6 +281,16 @@ export class PrivateData{
     const material=this.material(id,options.revision),offset=z.number().int().min(0).parse(options.offset??0),limit=z.number().int().min(1).max(200).parse(options.limit??50);
     const draft=json<MaterialDraft>(this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',material.id,material.revision));
     return {items:draft.members.slice(offset,offset+limit),total:draft.members.length,nextOffset:offset+limit<draft.members.length?offset+limit:null};
+  }
+  /** Host-only explicit reply. M03's publisher cannot create these rows. */
+  declareMaterialContext(id:string,expectedRevision:string,input:{id:string;question:string;answer:string}){
+    const declaration=materialOwnerStatementSchema.parse(input);
+    return this.sql.transaction(()=>{const current=this.material(id);if(current.revision!==expectedRevision)throw conflict();const question=this.sql.get('SELECT json FROM oq_questions WHERE user_id=$user AND id=?',declaration.id),record=question?JSON.parse(String(question.json)):undefined;
+      if(!record||record.question.materialId!==id||record.question.materialRef!==current.ref||!['open','deferred','closed'].includes(record.question.state)||record.question.prompt!==declaration.question)throw conflict();
+      const draft=json<MaterialDraft>(this.sql.get('SELECT json FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',id,current.revision)),baseHash=materialOwnerDeclarationBodyHash(draft),prior=this.sql.get('SELECT version,fingerprint FROM pd_material_declarations WHERE user_id=$user AND material_id=? AND id=? ORDER BY version DESC LIMIT 1',id,declaration.id),fingerprint=hash(declaration);
+      if(prior?.fingerprint===fingerprint)return current;
+      this.sql.run('INSERT INTO pd_material_declarations VALUES($user,?,?,?,?,?,?)',id,declaration.id,Number(prior?.version??0)+1,baseHash,fingerprint,JSON.stringify(declaration));return this.publishVersion(draft,expectedRevision);
+    });
   }
   correctMaterialContext(id:string,expectedRevision:string,relation:unknown){
     const ownerRelation=ownerRelationSchema.nullable().parse(relation);
