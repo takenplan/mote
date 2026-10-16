@@ -52,13 +52,15 @@ export class Collector {
   private lastCaptureAt?: string;
   private lastUploadAt?: string;
   private archiveAcknowledgment?:{at:string;origin:string};
+  private readonly powerListeners:{event:string;listener:()=>void}[]=[];
   private lastUploadError?: string;
   constructor(config: Config, private readonly queue: DurableQueue, private readonly helperPath: string, private readonly tokenStorageAvailable: () => boolean, private readonly onChange: (status: Status) => void, private readonly diagnostics?: DiagnosticsRecorder, private readonly events?: EventJournal, private readonly sources?: LocalSourceManager, private readonly history?: SyncHistory) {
     this.config = config; this.lastUploadAt = this.queue.stats().lastUploadAt; this.archiveAcknowledgment=this.queue.stats().archiveAcknowledgment;
-    powerMonitor.on('lock-screen', () => { this.locked = true; this.pause(moteText("屏幕已锁定，暂停采集")); });
-    powerMonitor.on('unlock-screen', () => { this.locked = false; this.lastSample = undefined; });
-    powerMonitor.on('suspend', () => { this.sleeping = true; this.pause(moteText("电脑休眠，暂停采集")); });
-    powerMonitor.on('resume', () => { this.sleeping = false; this.lastSample = undefined; });
+    const observe=(event:string,listener:()=>void)=>{this.powerListeners.push({event,listener});powerMonitor.on(event as 'lock-screen',listener);};
+    observe('lock-screen', () => { this.locked = true; this.pause(moteText("屏幕已锁定，暂停采集")); });
+    observe('unlock-screen', () => { this.locked = false; this.lastSample = undefined; });
+    observe('suspend', () => { this.sleeping = true; this.pause(moteText("电脑休眠，暂停采集")); });
+    observe('resume', () => { this.sleeping = false; this.lastSample = undefined; });
   }
   initialize(): void {
     this.uploadTimer = setInterval(() => { if (this.uploading) this.publish(); else void this.upload(); }, 1000);
@@ -164,6 +166,7 @@ export class Collector {
     while (this.capturing) await new Promise(resolve => setTimeout(resolve, 25));
   }
   shutdown(): void {
+    for(const {event,listener} of this.powerListeners)powerMonitor.removeListener(event as 'lock-screen',listener);this.powerListeners.length=0;
     this.closed = true; this.heartbeatAbort?.abort();
     this.running = false; this.captureAbort?.abort(); this.uploadAbort?.abort();
     if (this.timer) clearTimeout(this.timer);

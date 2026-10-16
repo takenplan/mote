@@ -1,14 +1,16 @@
 import { moteText, getLocale } from '@mote/shared/i18n';
 import { randomUUID } from 'node:crypto';
 import { parseConnectionInvitation, type ConnectionInvitation } from '@mote/shared/connection';
-import { MOTE_PROTOCOL_HEADERS, ProtocolCompatibilityError, requireCompatibleProtocol, type ProtocolRange } from '@mote/shared/protocol';
+import { ProtocolCompatibilityError, requireCompatibleProtocol, type ProtocolRange } from '@mote/shared/protocol';
+import {DESKTOP_PROTOCOL_HEADERS,validateAccount,type DesktopAccount} from './account';
 import type { Config, Platform } from './contracts';
 import { validateServerUrl } from './config';
 export interface ConnectionPreview { id: string; serverUrl: string; expiresAt: string }
 export interface ConnectionIdentity {
-  credential: { id: string; scope: 'owner'; label: string; deviceId?: string; deviceName?: string; platform?: string; serverUrl?: string };
-  node: { version: string; profile: string; protocol: ProtocolRange };
-  capabilities: { ingest: boolean; ingressVersion?: number; ownSources: boolean; archiveRead: boolean };
+  account:DesktopAccount & {credentialId:string;administrator:boolean;authorizationEpoch:number};
+  credential: { id:string; scope:'client'; kind:'client'; expiresAt:number; deviceId?:string };
+  protocol:ProtocolRange;
+  capabilities: {authentication:boolean;ingest:boolean;ingressVersion:number;archiveRead:boolean};
 }
 export interface ConnectionStatus { state: 'unchecked' | 'checking' | 'connected' | 'error'; message: string; checkedAt?: string; identity?: ConnectionIdentity }
 export class ConnectionError extends Error { constructor(readonly code: string, message: string) { super(message); } }
@@ -41,18 +43,17 @@ async function request(serverUrl: string, path: string, init: RequestInit, fetch
 }
 export async function testConnection(config: Pick<Config, 'serverUrl' | 'token' | 'deviceId'>, fetcher: typeof fetch = fetch, enforceDevice = true): Promise<ConnectionIdentity> {
   if (!config.token) throw new ConnectionError('MISSING_TOKEN', moteText("请先导入连接邀请，或保存访问令牌"));
-  const result = object(await request(config.serverUrl, '/api/connections/self', { headers: { ...MOTE_PROTOCOL_HEADERS, 'Accept-Language': getLocale(), Authorization: 'Bearer ' + config.token } }, fetcher), ['credential', 'node', 'capabilities']);
-  const credential = object(result.credential, ['id', 'scope', 'label'], ['deviceId', 'deviceName', 'platform', 'serverUrl']);
-  if (credential.scope !== 'owner') throw invalid();
-  const node = object(result.node, ['version', 'profile', 'protocol']), capabilities = object(result.capabilities, ['ingest', 'ownSources', 'archiveRead'], ['ingressVersion']);
+  const result = object(await request(config.serverUrl, '/api/connections/self', { credentials:'omit',headers: { ...DESKTOP_PROTOCOL_HEADERS, 'Accept-Language': getLocale(), Authorization: 'Bearer ' + config.token } }, fetcher), ['account','credential','protocol','capabilities']);
+  const account=object(result.account,['userId','username','administrator','disabled','authorizationEpoch','createdAt','deploymentId','credentialId']);
+  const credential = object(result.credential, ['kind','expiresAt'], ['deviceId']);
+  if (credential.kind !== 'client'||account.disabled!==false||typeof account.administrator!=='boolean'||!Number.isSafeInteger(account.authorizationEpoch)||Number(account.authorizationEpoch)<0||!Number.isFinite(credential.expiresAt)||Number(credential.expiresAt)<=Date.now()) throw invalid();
+  const capabilities = object(result.capabilities, ['authentication','ingest','ingressVersion','archiveRead']);
   let protocol: ProtocolRange;
-  try { protocol = requireCompatibleProtocol(node.protocol); }
+  try { protocol = requireCompatibleProtocol(result.protocol,{min:2,max:2}); }
   catch (error) { if (error instanceof ProtocolCompatibilityError && error.code === 'incompatible_protocol') throw new ConnectionError('PROTOCOL_INCOMPATIBLE', moteText("响应不符合协议")); throw invalid(); }
-  if (['ingest', 'ownSources', 'archiveRead'].some(key => typeof capabilities[key] !== 'boolean') || (capabilities.ingressVersion !== undefined && (!Number.isInteger(capabilities.ingressVersion) || (capabilities.ingressVersion as number) < 1)) || (enforceDevice && credential.deviceId !== undefined && credential.deviceId !== config.deviceId)) throw invalid();
-  const cleanCredential: ConnectionIdentity['credential'] = { id: bounded(credential.id, 128), scope: credential.scope as 'owner', label: bounded(credential.label, 200, true) };
-  for (const key of ['deviceId', 'deviceName', 'platform', 'serverUrl'] as const) if (credential[key] !== undefined) cleanCredential[key] = bounded(credential[key], key === 'serverUrl' ? 2048 : 200);
-  if (cleanCredential.serverUrl && validateServerUrl(cleanCredential.serverUrl) !== config.serverUrl) throw invalid();
-  return { credential: cleanCredential, node: { version: bounded(node.version, 100), profile: bounded(node.profile, 100), protocol }, capabilities: capabilities as unknown as ConnectionIdentity['capabilities'] };
+  if (['authentication','ingest','archiveRead'].some(key=>typeof capabilities[key]!=='boolean')||capabilities.ingressVersion!==3||(enforceDevice&&credential.deviceId!==undefined&&credential.deviceId!==config.deviceId))throw invalid();
+  const stable=validateAccount({origin:validateServerUrl(config.serverUrl),deploymentId:bounded(account.deploymentId,200),userId:bounded(account.userId,200),username:bounded(account.username,200)},validateServerUrl(config.serverUrl));
+  return {account:{...stable,credentialId:bounded(account.credentialId,128),administrator:account.administrator as boolean,authorizationEpoch:account.authorizationEpoch as number},credential:{id:bounded(account.credentialId,128),scope:'client',kind:'client',expiresAt:Number(credential.expiresAt),...(credential.deviceId!==undefined?{deviceId:bounded(credential.deviceId,200)}:{})},protocol,capabilities:capabilities as unknown as ConnectionIdentity['capabilities']};
 }
 export class ConnectionOnboarding {
   private pending?: { preview: ConnectionPreview; invitation: ConnectionInvitation };
@@ -65,6 +66,11 @@ export class ConnectionOnboarding {
     this.pending = { preview, invitation }; return { ...preview };
   }
   clear(): void { this.pending = undefined; }
+  confirmNode(id:unknown,origin:unknown):string{
+    const pending=this.pending;
+    if(!pending||pending.preview.id!==id||pending.preview.serverUrl!==origin)throw new ConnectionError('CONFIRMATION',moteText('请先预览邀请并确认显示的中央地址'));
+    parseConnectionInvitation(JSON.stringify(pending.invitation),this.now());this.clear();return pending.preview.serverUrl;
+  }
   async redeem(id: unknown, confirmedOrigin: unknown, config: Pick<Config, 'deviceId' | 'deviceName'>, platform: Platform): Promise<{ serverUrl: string; token: string; credentialId: string; scope: 'owner' }> {
     const pending = this.pending;
     if (!pending || pending.preview.id !== id || pending.preview.serverUrl !== confirmedOrigin) throw new ConnectionError('CONFIRMATION', moteText("请先预览邀请并确认显示的中央地址"));

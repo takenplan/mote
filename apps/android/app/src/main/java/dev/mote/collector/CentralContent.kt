@@ -179,7 +179,7 @@ internal class CentralContent(
         if (sessionChanged) { screens?.close(); screens?.clearPrivateState() }
         server = endpoint; client = selected.client
         if (changed || screens == null) {
-            screens = CentralScreens(this, body, File(noBackupFilesDir, "central-native/" + SourceRules.hash(endpoint)))
+            screens = CentralScreens(this, body, File(accountDirectory(), "central-native/" + SourceRules.hash(endpoint)))
             if (endpoint == restoredWorkOrigin) restoredWorkState?.let { screens?.restoreWorkState(it) }
             restoredWorkState = null
         }
@@ -284,24 +284,26 @@ internal class CentralContent(
         revision++; body.removeAllViews(); collectionBar.visibility = View.GONE; title.text = MoteI18n.text("登录中央节点")
         navigation?.select(MoteNavigation.centralTab(page))
         text(server); text(MoteI18n.text("登录一次即可使用问答、资料库和同步等所有中央功能。"))
-        val credential = field(MoteI18n.text("中央管理令牌"), password = true)
+        val bindLocal = CheckBox(this).apply { text = MoteI18n.text("将本机未绑定资料归入此账号"); body.addView(this) }
+        val username = field(MoteI18n.text("用户名"))
+        val credential = field(MoteI18n.text("密码"), password = true)
         text(MoteI18n.text("登录会话有效期"))
         val lifetime = Spinner(this).apply {
             adapter = ArrayAdapter(this@CentralContent, android.R.layout.simple_spinner_dropdown_item,
                 listOf(MoteI18n.text("本次应用会话"), MoteI18n.text("1 天"), MoteI18n.text("7 天"), MoteI18n.text("30 天")))
         }; lifetime.setSelection(3); body.addView(lifetime)
         button(MoteI18n.text("登录并继续"), true) {
-            val token = credential.text.toString().trim()
+            val password = credential.text.toString()
+            val loginName = username.text.toString().trim()
+            val adoptLocal = bindLocal.isChecked
             val duration = listOf(0L, 86400000L, 7 * 86400000L, 30 * 86400000L)[lifetime.selectedItemPosition]
             val origin = server; val generation = accessGeneration; credential.setText("")
             work(MoteI18n.text("正在验证令牌…"), {
                 check(session.generation == generation) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
-                require(token.length in 32..8192 && token.none { it == '\r' || it == '\n' }) { MoteI18n.text("请输入有效的中央所有者令牌") }
-                CentralClient(origin, token).get("/api/configuration")
-                val config = Settings(this).read()
-                val grant = CentralClient(origin, token).post("/api/login/session", org.json.JSONObject().put("serverUrl", origin).put("deviceId", Settings(this).deviceId)
-                    .put("deviceName", config.deviceName).put("platform", "android").put("durationMs", duration))
-                session.signIn(origin, grant.getString("token"), duration, generation)
+                val (code, result) = HttpJson.post(origin + "/api/auth/login", org.json.JSONObject().put("username", loginName).put("password", password).put("mode", "client").put("durationMs", duration))
+                if (code !in 200..299 || result == null) throw CentralFailure(code, result?.optString("error").orEmpty())
+                val grant = result
+                session.signIn(origin, grant.getString("token"), duration, generation, adoptLocal)
                 CentralAccess.resolve(this)
             }, allowSessionChange = true) { selected -> applyAccess(selected) }
         }
@@ -349,7 +351,8 @@ internal class CentralContent(
         text = value; MoteUi.type(this, size.toInt()); MoteUi.textColor(this, NativeColorRole.INK); setTextIsSelectable(true); setPadding(0, moteDp(8), 0, moteDp(8))
     }.also(parent::addView)
     internal fun button(label: String, primary: Boolean = false, parent: LinearLayout = body, action: () -> Unit): Button = MoteUi.button(Button(this).apply {
-        text = label; setOnClickListener { if (!task.busy) runCatching { action(); MoteUi.styleSelects(body) }.onFailure { notice(it.message ?: MoteI18n.text("操作失败")) } }
+        val owner = client; val pageRevision = revision
+        text = label; setOnClickListener { if (client === owner && revision == pageRevision && !task.busy) runCatching { action(); MoteUi.styleSelects(body) }.onFailure { notice(it.message ?: MoteI18n.text("操作失败")) } }
     }, primary).also { parent.addView(it, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(8) }) }
     internal fun field(label: String, value: String = "", multiline: Boolean = false, password: Boolean = false, parent: LinearLayout = body): EditText {
         text(label, NativeFontRole.SUPPORT, parent)

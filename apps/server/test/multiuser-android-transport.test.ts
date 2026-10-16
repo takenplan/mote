@@ -37,7 +37,9 @@ test('actual device heartbeat and reconciliation remain account/device scoped an
  const f=await fixture(t);const a=f.devices[0].token,b=f.devices[1].token;const input=f.capture();
  assert.equal((await f.request(a,'/api/ingress/sources/same-source/captures','POST',{batchId:'first',items:[input]})).statusCode,200);
  const body={deviceId:'same-device',deviceName:'Generated A Android',platform:'android',status:'paused',queueDepth:7,sync:{mode:'manual',state:'idle',intervalMinutes:1,batchSize:100,pendingRecords:1}};
+ assert.equal((await f.request(a,'/api/ingress/devices','POST',{id:'same-device',name:'Before heartbeat',platform:'android'})).statusCode,200);
  const heartbeat=await f.request(a,'/api/ingress/devices/heartbeat','POST',body);assert.equal(heartbeat.statusCode,200,heartbeat.body);assert.equal(heartbeat.json().ok,true);
+ const afterHeartbeat=await f.request(f.users[0].token,'/api/ingress/devices');assert.equal(afterHeartbeat.json().items[0].id,'same-device');assert.equal(afterHeartbeat.json().items[0].name,body.deviceName);
  assert.equal((await f.request(a,'/api/ingress/devices/heartbeat','POST',{...body,deviceId:'other-device'})).statusCode,403);
  assert.equal((await f.request(a,'/api/ingress/devices','POST',{id:'same-device',name:'Generated renamed',platform:'android'})).statusCode,200);
  const own=await f.request(f.users[0].token,'/api/ingress/devices');assert.equal(own.json().items[0].queueDepth,7);assert.equal(own.json().items[0].name,'Generated renamed');

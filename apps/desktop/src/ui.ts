@@ -383,7 +383,7 @@ function render(status: import('./contracts').Status): void {
   setText('central-status-message', centralMessage);
   setText('central-status-origin', hasCentralConnection ? `${status.config.deviceName} · ${status.config.serverUrl}` : moteText("连接后，采集记录会按同步设置发送"));
   setText('central-status-action', hasCentralConnection ? moteText("连接详情") : moteText("连接节点"));
-  byId('settings-connection-summary').textContent = status.config.tokenConfigured ? moteText("{0} · 已保存连接", status.config.deviceName) : moteText("连接你的中央节点，让记录开始同步");
+  byId('settings-connection-summary').textContent = status.config.tokenConfigured ? moteText("{0} · 已保存连接", status.config.account?.username??status.config.deviceName) : moteText("连接你的中央节点，让记录开始同步");
   byId<HTMLInputElement>('login').disabled = status.environment?.defaultProfile === false;
   byId('login-hint').textContent = status.environment?.defaultProfile === false ? moteText("命名环境使用带 --profile 的启动命令；不会注册可能丢失环境参数的系统登录项。") : moteText("应用启动后保持停止状态，需手动开始采集；已有记录按上传策略处理。");
   setText('message', status.message);
@@ -799,7 +799,7 @@ setInterval(() => {
 
 function renderConnection(value: import('./connection').ConnectionStatus): void {
   byId('connection-state').textContent = value.message + (value.checkedAt ? ' · ' + new Date(value.checkedAt).toLocaleTimeString(getLocale()) : '');
-  byId('connection-capabilities').textContent = value.identity ? moteText("权限：{0} · 中央 {1} · 环境 {2}", moteText("管理员"), value.identity.node.version, value.identity.node.profile) : currentStatus?.config.credentialScope === 'owner' ? moteText("登录凭据已安全保存，所有中央功能共用此登录。") : '';
+  byId('connection-capabilities').textContent = value.identity ? `${value.identity.account.username} · ${value.identity.account.userId} · ${value.identity.account.deploymentId}` : currentStatus?.config.account?.username ?? '';
 }
 function clearConnectionPreview(): void { connectionPreview = undefined; byId('connection-confirmation').hidden = true; byId<HTMLInputElement>('connection-confirm-origin').checked = false; }
 function showConnectionPreview(value: import('./connection').ConnectionPreview): void {
@@ -1202,6 +1202,6 @@ byId('ask-refresh').addEventListener('click', () => void refreshAsk());
 byId('ask-more').addEventListener('click', () => void askAction(() => askHistory(true)));
 byId('ask-stop').addEventListener('click', () => void askAction(async () => { if (askRun) { askRun = await askCall('cancel', {id: askRun.id}); renderAsk(); scheduleAskPoll(); } }));
 byId('ask-new').addEventListener('click', () => { if (askBusy || askRun?.status === 'running') return; askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; renderAsk(); });
-byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'); byId<HTMLInputElement>('ask-token').value = ''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {token,durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl)); askGeneration++; askRun = undefined; askConversation = undefined; renderAsk(); await askHistory(); }); });
+byId('ask-login').addEventListener('click', () => { const token = readInput('ask-token'),username=readInput('ask-username'),password=readInput('ask-password'); byId<HTMLInputElement>('ask-token').value = '';byId<HTMLInputElement>('ask-password').value=''; void askAction(async () => { setText('ask-login-status', moteText('正在连接中央节点…')); try { await askCall('login', {...(username?{username,password}:{token}),durationMs:Number(readInput('ask-lifetime'))}); } catch (error) { setText('ask-login-status', moteText('请先登录中央节点，各页面会共用这次登录。')); throw error; } setText('ask-login-status', moteText('已登录 · {0}', currentStatus.config.serverUrl)); askGeneration++; askRun = undefined; askConversation = undefined; renderAsk(); await askHistory(); }); });
 byId('ask-browser-login').addEventListener('click',()=>void askAction(async()=>{await askCall('login-browser',{durationMs:Number(readInput('ask-lifetime'))});await askHistory();setText('ask-login-status',moteText('已登录 · {0}',currentStatus.config.serverUrl));}));
 byId('ask-logout').addEventListener('click', () => void askAction(async () => { await askCall('logout'); setText('ask-login-status', moteText('已退出中央登录')); askGeneration++; clearTimeout(askTimer); askRun = undefined; askConversation = undefined; byId('ask-history').replaceChildren(); renderAsk(); }));

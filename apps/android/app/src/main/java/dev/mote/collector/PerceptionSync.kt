@@ -4,8 +4,8 @@ import java.net.URLEncoder
 /** One bounded pull during an existing sync; no additional recurring wakeup. */
 object PerceptionSync {
  fun pull(context: Context, settings: Settings, config: CollectorConfig, queue: DurableQueue) {
-  val prefs=context.getSharedPreferences("central-perception",Context.MODE_PRIVATE)
-  val key=SourceRules.hash(config.server+"\n"+config.token+"\n"+settings.deviceId)
+  val prefs=context.accountPreferences("central-perception")
+  val key=SourceRules.hash(config.ownerKey()+"\n"+settings.deviceId)
   val cursor=prefs.getLong(key,0)
   SyncSchedule.requireConditions(context,config)
   val (code,body)=HttpJson.get("${config.server}/api/capture-browser/updates?cursor=$cursor&limit=20&deviceId=${URLEncoder.encode(settings.deviceId,"UTF-8")}",config.connectionToken())

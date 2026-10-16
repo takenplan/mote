@@ -9,6 +9,7 @@ import { readFile, mkdir, open, rename, chmod } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
 import { normalizeAppCollectionRules, normalizeCollectionMode } from './app-collection';
 import type { Config, ConfigUpdate, PublicConfig, Rectangle } from './contracts';
+import {validateAccount} from './account';
 
 export const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 export function defaultConfig(): Config {
@@ -57,7 +58,7 @@ export function validateServerUrl(value: unknown): string {
 const retiredModelKeys = ['privacyModelUrl','nsfwEnabled','reviewPolicy','reviewMaxTokens','reviewMaxSide','nsfwThreads','nsfwTimeoutMs','nsfwSource','nsfwCustomUrl'];
 export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents = 0, confirmedUnboundBacklog = false): Config {
   if(['excludedAppIds','localContentEncryption','ocrEnabled','ocrOnlyWhileCharging'].some(key=>input&&Object.hasOwn(input,key)))throw Error(RESET_REQUIRED);
-  if ((current.credentialScope!==undefined&&current.credentialScope!=='owner')||(input?.credentialScope!==undefined&&input.credentialScope!=='owner'))throw Error(RESET_REQUIRED);
+  if ((current.credentialScope!==undefined&&!['owner','client'].includes(current.credentialScope))||(input?.credentialScope!==undefined&&!['owner','client'].includes(input.credentialScope)))throw Error(RESET_REQUIRED);
   if (retiredModelKeys.some(key => input && Object.hasOwn(input,key))) throw new Error(moteText("配置包含已停用的本机模型设置，请移除后导入"));
   if (!input || typeof input !== 'object') throw new Error(moteText("配置格式不正确"));
   if (typeof input.deviceName !== 'string' || !input.deviceName.trim() || input.deviceName.length > 128) throw new Error(moteText("设备名需为 1–128 字符"));
@@ -75,6 +76,7 @@ export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents 
   if (!['realtime', 'interval', 'batch', 'manual'].includes(syncMode)) throw new Error(moteText("同步方式无效"));
   const serverUrl = input.serverUrl === '' ? '' : validateServerUrl(input.serverUrl);
   const config: Config = {
+    account:current.account&&serverUrl===current.serverUrl?validateAccount(current.account,serverUrl):undefined,
     authSourceBinding: serverUrl === current.serverUrl && current.authSourceBinding ? validSourceBinding(current.authSourceBinding) : undefined,
     authSignedOut: current.authSignedOut, authExpiresAt: current.authExpiresAt, authSessionOnly: current.authSessionOnly,
     uiPageMode:uiModeSchema.parse(input.uiPageMode??current.uiPageMode),
@@ -97,7 +99,7 @@ export function updateConfig(current: Config, input: ConfigUpdate, queuedEvents 
     pauseOnBattery: input.pauseOnBattery, batteryPauseBelowPct: integer(input.batteryPauseBelowPct, 0, 95, moteText("低电量暂停百分比")),
     token: input.token === undefined ? current.token : input.token.trim() || undefined,
   };
-  if (config.serverUrl === current.serverUrl && config.token === current.token && current.credentialScope === 'owner') config.credentialScope = current.credentialScope;
+  if (config.serverUrl === current.serverUrl && config.token === current.token) config.credentialScope = current.credentialScope;
   if ((config.serverUrl !== current.serverUrl || config.token !== current.token) && queuedEvents > 0 && !confirmedUnboundBacklog) throw new Error(moteText("还有待上传记录，不能切换节点或令牌；请先完成上传或备份处理旧队列"));
   if (config.serverUrl !== current.serverUrl) {
     if (queuedEvents > 0 && !confirmedUnboundBacklog) throw new Error(moteText("还有待上传记录，不能切换中央节点；请先完成上传，或导出并移走旧队列后重启"));
@@ -144,7 +146,7 @@ export class ConfigStore {
     }
   }
   async save(config: Config): Promise<void> {
-    if(config.credentialScope!==undefined&&config.credentialScope!=='owner')throw Error(RESET_REQUIRED);
+    if(config.credentialScope!==undefined&&!['owner','client'].includes(config.credentialScope))throw Error(RESET_REQUIRED);
     const { token, ...rest } = config;
     if (token && !this.secrets.available()) throw new Error(moteText("系统加密存储不可用，拒绝保存明文令牌"));
     const contents = JSON.stringify({ version: DESKTOP_STORAGE_VERSION, config: {...rest,authSourceBinding:config.authSessionOnly?sourceConnectionBinding(config):config.authSourceBinding}, encryptedToken: token && !config.authSessionOnly ? this.secrets.encrypt(token).toString('base64') : undefined }, null, 2);

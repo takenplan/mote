@@ -4,9 +4,9 @@ export const english: Readonly<Record<string, string>> = {
   "已删除": "Deleted",
   "生成 {0} 条记忆": "Created {0} memories",
   "已生成的批次": "Persisted batches",
-  "当前准入代次 {0}": "Current admission generation: {0}",
+  "当前准入代次 {0}": "Current admission generation {0}",
   "内置记忆方案": "Built-in memory plan",
-  "外部结果待确认 {0}": "External results awaiting confirmation: {0}",
+  "外部结果待确认 {0}": "External results awaiting confirmation {0}",
   "能力授权": "Capability grants",
   "允许历史读取": "Allow history reads",
   "仅管理员可安装或卸载插件。": "Only administrators can install or uninstall plugins.",
@@ -8368,5 +8368,13 @@ export const english: Readonly<Record<string, string>> = {
   "登录已失效，请重新登录。": "Your session has expired. Sign in again.",
   "浏览器会话": "Browser session",
   "草稿和待同步内容按当前部署和账号保存在本机，重新登录同一账号后可继续；清除本机数据会移除它们。": "Drafts and pending notes are saved locally for this deployment and account. Sign in to the same account to continue. Clearing local data removes them.",
-  "登录后访问个人资料": "Sign in to access your personal context"
+  "登录后访问个人资料": "Sign in to access your personal context",
+  "账号用户名": "Account username",
+  "账号密码": "Account password",
+  "个人登录凭据": "Personal sign-in credential",
+  "请输入有效的个人登录凭据": "Enter a valid personal sign-in credential",
+  "使用账号登录全部功能，或在浏览器中批准采集设备。": "Sign in with your account for all features, or approve a collection device in your browser.",
+  "设备授权只允许采集；请使用用户名和密码登录后打开私人资料。": "Device approval permits collection. Sign in with your username and password to open private content.",
+  "将本机未绑定资料归入此账号": "Assign unbound local records to this account",
+  "整理记忆": "Organize memories"
 };
