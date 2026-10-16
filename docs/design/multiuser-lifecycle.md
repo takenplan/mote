@@ -139,3 +139,11 @@ not rerun at every startup: otherwise a later personal archive merged into an
 earlier recovered instance could become new automatic input on restart despite
 the import publication fence. Normal producer triggers retain their existing
 notification behavior after initialization.
+
+Instance archives additionally preserve M13's per-owner/device OCR update journal
+and its separate high-water counters. Both table/column sets are mandatory.
+Pre-write validation rejects a missing counter, an event ahead of its counter,
+negative/unsafe/noninteger sequence state, or an incomplete schema. It accepts a
+counter above surviving events after capture deletion and preserves it exactly.
+Personal import still excludes this derived journal; the M13 current-artifact
+reader reconciles missing notifications without re-admitting a task.
