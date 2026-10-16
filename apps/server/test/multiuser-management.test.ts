@@ -4,6 +4,7 @@ import {mkdtempSync,rmSync,mkdirSync,writeFileSync,readFileSync,linkSync,symlink
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {buildApp} from '../src/app.js';
+import {ServerDiagnostics} from '../src/diagnostics.js';
 import {generateKeyPairSync,sign} from 'node:crypto';
 import {checkRelease,type ReleaseManifest} from '@mote/shared/release';
 const password='Generated-M16-management-password',protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
@@ -31,4 +32,12 @@ test('a held read-only release response is fenced when its original administrato
 
 test('instance diagnostic startup rejects linked log storage before touching generated external files',async t=>{
  for(const kind of ['symlink','hardlink'] as const){const directory=mkdtempSync(join(tmpdir(),'mote-m16-management-links-')),vault=join(directory,'vault'),outside=join(directory,'generated-sentinel');let node=await buildApp({dataDir:vault});await node.app.close();t.after(()=>rmSync(directory,{recursive:true,force:true}));writeFileSync(outside,'Generated unchanged private sentinel',{mode:0o640});const before=lstatSync(outside),log=join(vault,'logs','instance',kind+'.ndjson');if(kind==='symlink')symlinkSync(outside,log);else linkSync(outside,log);await assert.rejects(buildApp({dataDir:vault}));assert.equal(readFileSync(outside,'utf8'),'Generated unchanged private sentinel');assert.equal(lstatSync(outside).mode,before.mode);}
+});
+
+for(const [url,method] of [['/api/diagnostics/logs','readPage'],['/api/support-bundle','exportRange']] as const)test('a real held diagnostic file result cannot publish after administrator revocation: '+url,async t=>{
+ const directory=mkdtempSync(join(tmpdir(),'m16-management-retire-')),node=await buildApp({dataDir:directory}),password='Generated-admin-read-retirement-only';let release!:()=>void;const held=new Promise<void>(resolve=>release=resolve);t.after(async()=>{release();await node.app.close();rmSync(directory,{recursive:true,force:true});});
+ await node.accounts!.initialize('generated-admin-a',password);const a=await node.accounts!.login('generated-admin-a',password,'generated','client',0),context=await node.authority.authenticate(a.token);await node.accounts!.createAccount(context,node.authority,{username:'generated-admin-b',password,administrator:true});const b=await node.accounts!.login('generated-admin-b',password,'generated','client',0),headers=(token:string)=>({'x-mote-protocol-version':'2',authorization:'Bearer '+token});
+ const positive=await node.app.inject({url,headers:headers(a.token)});assert.equal(positive.statusCode,200,positive.body);assert.ok(positive.body.includes('server.started'));
+ let entered!:()=>void;const barrier=new Promise<void>(resolve=>entered=resolve),prototype=ServerDiagnostics.prototype as any,original=prototype[method];let armed=true;prototype[method]=async function(...args:unknown[]){const result=await original.apply(this,args);if(armed){armed=false;entered();await held;}return result;};t.after(()=>{prototype[method]=original;});
+ const pending=node.app.inject({url,headers:headers(a.token)}).then(response=>response);await barrier;const revoked=await node.app.inject({method:'PATCH',url:'/api/admin/accounts/'+a.userId,headers:headers(b.token),payload:{disabled:true}});assert.equal(revoked.statusCode,200,revoked.body);release();const response=await pending;assert.equal(response.statusCode,401,response.body);assert.ok(!response.body.includes('server.started'));assert.equal((await node.app.inject({url,headers:headers(b.token)})).statusCode,200);
 });
