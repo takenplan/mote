@@ -14,7 +14,7 @@ are in the [joint acceptance matrix](../validation/multiuser-joint-validation.md
 | KEEP separate evidence provenance | PR135 requires exact version/entry/exit and real lifecycle ordering | M16 execution at107 is historical shared evidence; new independent probes/final candidate results get their own receipts. Documentation-only deliveries do not trigger redundant full gates. |
 | KEEP native recovery and Docker recovery as distinct requirements | Original backup/recovery capability, M16 explicit limits and source guard | Native compiled/package pass does not close epoch5 Docker refusal or actual Hindsight volume recovery. Source guard and daemon availability are independently checked; no silent exclusion. |
 | EXCEPTION legacy algorithm fixtures only | Original ADR's explicit test-only boundary | Useful characterization; cannot substitute for scope, final production composition, renderer/native/worker or restored package proof. |
-| REMOVE completion inference from checkpoint or test totals | Explicit handoff and AGENTS | M13/M14/M15 remain WIP; final gate waits for all freezes and retained capabilities. All named final rows initially pending. |
+| REMOVE completion inference from checkpoint or test totals | Explicit handoff and AGENTS | M14 has delivered its explicit final module freeze; M13/M15 remain active checkpoints. Final gate waits for all freezes and retained capabilities. All named final rows initially pending. |
 | UNKNOWN actual platform/provider/deployment behavior | Explicit no real I/O/system-permission constraints and existing validation limits | No system permission change/live provider write. Unrun physical/device/permission/Docker tests stay explicit; authorization is not inferred from fixture results. |
 | CHANGE Files adaptation inside M06 only | Original recording, correction and confirmed-speaker ADRs; actual old HTTP consumers | M03 originals, M06 artifacts/publications and M05 remain authoritative. A small owner-bound annotation journal retains raw evidence and confirmation provenance; no second FileStore, scheduler or model execution path. Exact-A/B, tar, M16 merge/delete/backup/restore are narrow candidate probes. |
 | KEEP archive evidence distinct from current execution evidence | Actual older personal archive merge failed after a legitimate speaker/Material update; M07 retained-history requirement | Reuse the canonical Material projection in a restore-only method. Validate retained identity/body/hash, keep live readers/admission current-only, reject old pinned execution, and verify fresh current owner execution remains possible. |
@@ -80,3 +80,29 @@ success or model waiting unless the actual task code says so. UNKNOWN model-wait
 backoff/paused/partial-instance-restore variants still need execution. Basis:
 generated missing-model actual Import404 RED -> exact case plus selected-recipe
 batch/cancel/B-positive GREEN; no additional engine, grant, model or store.
+
+## Issued processing calls and late settlement
+
+KEEP the accepted recording-outcomes ADR: a bare 503, timeout or disconnect does
+not prove a configured worker never executed. Explicit owner replay acknowledges
+the ambiguity; it does not settle earlier external facts. CHANGE M06 transport
+admission to the existing M05 issuance ledger, using its synchronous issuance
+hook for the M06 activity row and its exact trusted completion capability for a
+validated late response. No new scheduler, grant or user settlement endpoint is
+introduced. Completed stages may admit a subsequent issuance; an old completion
+can update only its original issuance and cannot settle a newer stage. REMOVE
+the old M06 test assumption that every ProviderFailure permits automatic replay.
+EXCEPTION existing structured local never-started facts still permit bounded
+retry, and current successful ASR checkpoints still avoid retranscription.
+UNKNOWN network disconnect/timeout variants and every remaining Files control
+are not inferred from the generated bare-503 case. Final candidate types and
+composed acceptance remain separate requirements.
+
+The same guard also applies across operation IDs for one admitted original.
+A generated second operation actually reached the ASR transport while the first
+was unacknowledged unknown (RED). M06 now consults existing owner-bound M05 call
+and retry-confirmation facts both before fresh pipeline admission and atomically
+inside the existing issuance hook. The original operation's ACK retry returns
+its existing task. Previously queued parents cannot evade the I/O guard; an
+explicit retry acknowledgement still applies to its existing issuance and never
+changes an old fact to succeeded. No new per-file runtime or outcome store.

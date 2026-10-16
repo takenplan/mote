@@ -21,7 +21,7 @@ import type {ScopedRuntime} from './http.js';
 import type {UserContext} from './context.js';
 import type {UserDataSubject,DomainLifecycle} from './lifecycle.js';
 import type {Configurations} from './configuration.js';
-import type {TaskExecution,TaskRun} from './task-execution.js';
+import {TaskError,type TaskExecution,type TaskRun} from './task-execution.js';
 import type {PrivateData} from './private-data.js';
 import type {IngressHost} from './ingress.js';
 import type {ScopedPluginHost} from './plugins.js';
@@ -115,9 +115,12 @@ export class ProcessingHost {
  }
  private current(userId:string,raw:Record<string,unknown>){try{const input=processingInputSchema.parse(raw),sql=new PrivateSql(this.db,userId,()=>{}),state=this.state(sql);if(state.deleted||state.generation!==input.generation)return false;if(input.parentTaskId)this.parent(sql,input.parentTaskId);if(input.plugin)this.parent(sql,input.plugin.parentTaskId,true);return true;}catch{return false;}}
  private kind(original:Pick<Original,'mime'>){return original.mime.startsWith('image/')?'ocr':original.mime.startsWith('audio/')?'asr':'extract';}
+ private unacknowledgedCall(context:UserContext,originalRef:string,exceptTask=''){
+  return !!this.sql(context).get("SELECT c.issuance_id FROM task_external_calls c JOIN user_tasks u ON u.task_id=c.task_id AND u.user_id=c.user_id JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE c.user_id=$user AND u.user_id=$user AND e.user_id=$user AND e.kind IN ('processing.extract','processing.ocr','processing.asr','processing.analysis') AND c.task_id<>? AND c.state IN ('issued','unknown') AND json_extract(u.input,'$.originalRef')=? AND NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations a WHERE a.user_id=c.user_id AND a.issuance_id=c.issuance_id) LIMIT 1",exceptTask,originalRef);
+ }
  private submitSync(context:UserContext,originalRef:string,operationId:string,plugin?:ProcessingInput['plugin']){
   const input=processingInputSchema.parse({originalRef,...this.snapshot(context),...(plugin?{plugin}:{})});this.input(context,input);
-  const sql=this.sql(context),journal=new PrivateSql(this.db,context.userId,()=>{});sql.run("INSERT INTO mp_admissions VALUES($user,?,?,NULL,'pending') ON CONFLICT(user_id,original_id,request_key) DO UPDATE SET state='pending'",originalRef.slice(9),operationId);
+  const sql=this.sql(context),journal=new PrivateSql(this.db,context.userId,()=>{});if(!sql.get('SELECT task_id FROM mp_admissions WHERE user_id=$user AND original_id=? AND request_key=? AND task_id IS NOT NULL',originalRef.slice(9),operationId)&&this.unacknowledgedCall(context,originalRef))throw new TaskError('external_result_unknown',409);sql.run("INSERT INTO mp_admissions VALUES($user,?,?,NULL,'pending') ON CONFLICT(user_id,original_id,request_key) DO UPDATE SET state='pending'",originalRef.slice(9),operationId);
   try{const task=this.execution.forUser(context).submitSync({kind:'processing.pipeline',operationId,input});journal.run("UPDATE mp_admissions SET task_id=?,state='admitted' WHERE user_id=$user AND original_id=? AND request_key=?",task.id,originalRef.slice(9),operationId);return task;}catch(error){journal.run("UPDATE mp_admissions SET state='failed' WHERE user_id=$user AND original_id=? AND request_key=?",originalRef.slice(9),operationId);throw error;}
  }
  private async submit(context:UserContext,originalRef:string,operationId:string,plugin?:ProcessingInput['plugin']){return this.submitSync(context,originalRef,operationId,plugin);}
@@ -253,9 +256,15 @@ export class ProcessingHost {
  settleErasure(subject:UserDataSubject,id:string,outcome:'stopped'){const sql=this.deletionSql(subject);if(outcome!=='stopped'||this.active.has(identityHash([subject.userId,id])))throw new PrivateDataError('conflict',409);sql.run('DELETE FROM mp_activity WHERE user_id=$user AND id=?',id);}
  private deletionSql(subject:UserDataSubject){const assert=()=>{this.runtime.services.assertSubject(subject,PROCESSING_DOMAIN,'delete');if('credentialId' in subject)throw new ScopeError('invalid_identity',403);};const sql=new PrivateSql(this.db,subject.userId,assert);if(!sql.get('SELECT deleted FROM mp_state WHERE user_id=$user')?.deleted)throw new PrivateDataError('conflict',409);return sql;}
  private async io<T>(run:TaskRun,input:ProcessingInput,work:()=>Promise<T>){
-  const id=randomUUID(),key=identityHash([run.context.userId,id]),cleanup=new PrivateSql(this.db,run.context.userId,()=>{});run.grant.commit(()=>this.input(run.context,input).sql.run("INSERT INTO mp_activity VALUES($user,?,'active')",id));this.active.add(key);let settled=false;
-  try{const value=await work();settled=true;return value;}catch(error){settled=error instanceof ProviderFailure||error instanceof StoreError||error instanceof z.ZodError||error instanceof SyntaxError;throw error;}
-  finally{this.active.delete(key);if(settled)cleanup.run('DELETE FROM mp_activity WHERE user_id=$user AND id=?',id);else cleanup.run("UPDATE mp_activity SET state='unknown' WHERE user_id=$user AND id=?",id);}
+  const id=randomUUID(),key=identityHash([run.context.userId,id]),cleanup=new PrivateSql(this.db,run.context.userId,()=>{});let complete!:()=>unknown;
+  run.external.begin('processing:'+run.task.id+':'+id,issuance=>{if(this.unacknowledgedCall(run.context,input.originalRef,run.task.id))throw new ExecutionFailure('blocked','external_result_unknown',undefined,{executionStarted:false});this.input(run.context,input).sql.run("INSERT INTO mp_activity VALUES($user,?,'active')",id);complete=this.execution.bindExternalCompletion(run.context,run.task.id,issuance);});this.active.add(key);let settled=false;
+  // The exact transport completion may settle its issued fact after revoke;
+  // it cannot restore the task grant or publish a private artifact.
+  const finish=()=>{complete();settled=true;};
+  try{const value=await work();finish();return value;}catch(error){
+   const known=error instanceof ProviderFailure?(error.details.executionStarted===false||!['provider_timeout','provider_unavailable','provider_network'].includes(error.details.code)):error instanceof StoreError||error instanceof z.ZodError||error instanceof SyntaxError;
+   if(known)finish();throw error;
+  }finally{this.active.delete(key);if(settled)cleanup.run('DELETE FROM mp_activity WHERE user_id=$user AND id=?',id);else cleanup.run("UPDATE mp_activity SET state='unknown' WHERE user_id=$user AND id=?",id);}
  }
  private restore(subject:UserDataSubject,archive:Parameters<DomainLifecycle['restoreUser']>[1],operationId:string,merge=false){
   const sql=new PrivateSql(this.db,subject.userId,()=>this.runtime.services.assertSubject(subject,PROCESSING_DOMAIN,'restore'));

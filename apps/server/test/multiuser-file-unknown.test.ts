@@ -1,0 +1,60 @@
+import test, {type TestContext} from 'node:test';
+import {randomUUID} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
+import {existsSync} from 'node:fs';
+import {join} from 'node:path';
+import {identityHash} from '../src/scope/originals.js';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {scopedFilesFixture} from './fixtures/scoped-files.js';
+import {waitForScopedState} from './fixtures/scoped-process.js';
+import {defaultProcessingSettings} from '../src/scope/processing-schema.js';
+import {defaultModelSettings} from '../src/model-settings.js';
+
+// Original recording ADR: a bare503 does not certify never-started execution.
+// Only external ASR transport is generated; all host grants/receipts are real.
+test('a bare media503 remains unknown and cannot automatically repeat a possibly issued processing call',async t=>{
+ let aKey='',calls=0;const server=createServer((req,res)=>{void(async()=>{for await(const _ of req){}if(req.headers.authorization==='Bearer '+aKey){calls++;res.writeHead(503,{'Retry-After':'0'}).end('Generated media result unknown');return;}res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text:'Generated B successful transcript'}],coverage:'full',engine:'generated-unknown-asr'}));})().catch(()=>res.destroy());});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>new Promise<void>(resolve=>server.close(()=>resolve())));const address=server.address();assert.ok(address&&typeof address!=='string');
+ const {f,wave}=await recordingFixture(t,address.port);aKey='GENERATED_'+f.a.userId;const a=await f.uploadBytes(f.a.token,'same-unknown-recording',wave,'audio/wav'),b=await f.uploadBytes(f.b.token,'same-unknown-recording',wave,'audio/wav');
+ const at=await f.checked(f.a.token,'/api/processing','POST',{originalRef:a.original.ref,operationId:'same-unknown-processing'}),bt=await f.checked(f.b.token,'/api/processing','POST',{originalRef:b.original.ref,operationId:'same-unknown-processing'});
+ let observed:unknown;await waitForScopedState(async()=>{const a=await f.checked(f.a.token,'/api/tasks/'+at.id),b=await f.checked(f.b.token,'/api/tasks/'+bt.id);observed={calls,a,b,aTasks:await f.checked(f.a.token,'/api/tasks'),bTasks:await f.checked(f.b.token,'/api/tasks')};return ['blocked','failed'].includes(a.state)&&b.state==='succeeded';},()=>JSON.stringify(observed),15000);
+ assert.equal((await f.checked(f.b.token,'/api/files/'+b.id)).processing.indexed,true);assert.equal((await f.checked(f.a.token,'/api/files/'+a.id)).processing.indexed,false);assert.equal(calls,1,'a bare503 cannot clear the issued-call guard or authorize automatic provider replay');
+ const tasks=await f.checked(f.a.token,'/api/tasks'),child=tasks.items.find((task:any)=>task.kind==='processing.asr');assert.ok(child);assert.equal(child.state,'blocked');assert.ok(child.externalUnresolved>0);
+ assert.equal((await f.checked(f.a.token,'/api/processing','POST',{originalRef:a.original.ref,operationId:'same-unknown-processing'})).id,at.id,'an ACK retry returns the existing pipeline');
+ const replay=await f.request(f.a.token,'/api/processing','POST',{originalRef:a.original.ref,operationId:'new-operation-must-not-bypass-unknown'});if(replay.statusCode===200)await waitForScopedState(()=>calls===2,()=>'fresh operation was admitted but did not reach its actual ASR transport');assert.equal(replay.statusCode,409,'a fresh operation ID cannot bypass an unacknowledged issued call');
+});
+
+async function recordingFixture(t:TestContext,port:number){
+ const f=await scopedFilesFixture(t);for(const account of [f.a,f.b]){let view=await f.checked(account.token,'/api/configuration');await f.checked(account.token,'/api/configuration/processing','PUT',{revision:view.revision,value:{...defaultProcessingSettings(),automatic:false,summarize:false,semanticTurns:false,audioProcessor:'audio.http'}});view=await f.checked(account.token,'/api/configuration');await f.checked(account.token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[{id:'generated-asr',name:'Generated ASR',settings:{...defaultModelSettings(),provider:'custom',protocol:'mote-media',baseUrl:'http://127.0.0.1:'+port+'/transcribe',model:'generated-asr',apiKey:'GENERATED_'+account.userId}}],selections:{asr:{kind:'personal',id:'generated-asr'}}}});}
+ const wave=Buffer.alloc(48);wave.write('RIFF');wave.writeUInt32LE(40,4);wave.write('WAVEfmt ',8);wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(1,22);wave.writeUInt32LE(8000,24);wave.writeUInt32LE(16000,28);wave.writeUInt16LE(2,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(4,40);return {f,wave};
+}
+
+
+test('a valid late media ACK settles only its issued fact after account deletion and then permits physical erasure',async t=>{
+ let aKey='';const gate=()=>{let resolve!:()=>void;const promise=new Promise<void>(done=>{resolve=done;});return {promise,resolve};},entered=gate(),release=gate();
+ const server=createServer((req,res)=>{void(async()=>{for await(const _ of req){}if(req.headers.authorization==='Bearer '+aKey){entered.resolve();await release.promise;}res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text:'Generated late transcript'}],coverage:'full',engine:'generated-late-asr'}));})().catch(()=>res.destroy());});
+ await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>{release.resolve();server.closeAllConnections();return new Promise<void>(resolve=>server.close(()=>resolve()));});const address=server.address();assert.ok(address&&typeof address!=='string');
+ const {f,wave}=await recordingFixture(t,address.port);aKey='GENERATED_'+f.a.userId;
+ const a=await f.uploadBytes(f.a.token,'same-late-recording',wave,'audio/wav'),b=await f.uploadBytes(f.b.token,'same-late-recording',wave,'audio/wav');
+ await f.checked(f.a.token,'/api/processing','POST',{originalRef:a.original.ref,operationId:'same-late-processing'});const bt=await f.checked(f.b.token,'/api/processing','POST',{originalRef:b.original.ref,operationId:'same-late-processing'});await entered.promise;
+ await waitForScopedState(async()=>(await f.checked(f.b.token,'/api/tasks/'+bt.id)).state==='succeeded',()=>'B processing did not complete',15000);
+ const db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});t.after(()=>db.close());
+ const deletion=await f.checked(f.admin.token,'/api/admin/accounts/'+f.a.userId,'DELETE',{operationId:randomUUID()});
+ await waitForScopedState(async()=>(await f.checked(f.admin.token,'/api/admin/account-deletions/'+deletion.id)).state==='result_unknown',()=>'issued media call did not retain the erasure fence',15000);
+ const root=join(f.directory,'originals',identityHash([f.host.deploymentId,f.a.userId]));assert.equal(existsSync(root),true);assert.equal((await f.request(f.a.token,'/api/files/'+a.id)).statusCode,401);assert.equal((await f.checked(f.b.token,'/api/files/'+b.id)).processing.indexed,true);
+ release.resolve();await waitForScopedState(()=>Number(db.prepare("SELECT count(*) n FROM task_external_calls WHERE user_id=? AND state IN ('issued','unknown')").get(f.a.userId)!.n)===0&&Number(db.prepare('SELECT count(*) n FROM mp_activity WHERE user_id=?').get(f.a.userId)!.n)===0,()=>'late exact completion did not settle the original issuance',15000);
+ assert.equal(Number(db.prepare('SELECT count(*) n FROM mp_publications WHERE user_id=?').get(f.a.userId)!.n),0,'a late ACK cannot restore private publication authority');
+ await f.checked(f.admin.token,'/api/admin/account-deletions/'+deletion.id+'/retry','POST',{});await waitForScopedState(async()=>(await f.checked(f.admin.token,'/api/admin/account-deletions/'+deletion.id)).state==='completed',()=>'settled media fact did not permit account erasure',15000);assert.equal(existsSync(root),false);assert.equal((await f.checked(f.b.token,'/api/files/'+b.id)).processing.indexed,true);
+});
+
+
+test('already queued M05 processing operations cannot replay an unacknowledged call for the same original',async t=>{
+ let calls=0;const server=createServer((req,res)=>{void(async()=>{for await(const _ of req){}calls++;res.writeHead(503,{'Retry-After':'0'}).end('Generated queued result unknown');})().catch(()=>res.destroy());});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));t.after(()=>{server.closeAllConnections();return new Promise<void>(resolve=>server.close(()=>resolve()));});const address=server.address();assert.ok(address&&typeof address!=='string');
+ const {f,wave}=await recordingFixture(t,address.port),a=await f.uploadBytes(f.a.token,'generated-queued-recording',wave,'audio/wav'),context=await f.host.authority.authenticate(f.a.token),db=new DatabaseSync(join(f.directory,'mote.sqlite'),{readOnly:true});t.after(()=>db.close());
+ const saved=db.prepare('SELECT generation,settings FROM mp_state WHERE user_id=?').get(f.a.userId)!,input={originalRef:a.original.ref,generation:Number(saved.generation),settings:JSON.parse(String(saved.settings))},tasks=f.host.execution!.forUser(context);
+ // Both no-model parent admissions are synchronous; their real M04 child
+ // admissions remain asynchronous under the production executor.
+ const first=tasks.submitSync({kind:'processing.pipeline',operationId:'generated-first-queued',input}),second=tasks.submitSync({kind:'processing.pipeline',operationId:'generated-second-queued',input});await f.host.execution!.engine.drain([first.id,second.id]);
+ const child=(id:string)=>tasks.get(String(db.prepare("SELECT task_id FROM user_tasks WHERE user_id=? AND json_extract(input,'$.parentTaskId')=?").get(f.a.userId,id)!.task_id));assert.equal(calls,1);assert.equal(child(first.id).externalUnresolved,1);assert.equal(child(second.id).state,'blocked');assert.equal(child(second.id).failure?.code,'external_result_unknown');assert.equal(child(second.id).attempts,0,'a rejected pre-transport issuance spends no call attempt');assert.equal(child(second.id).externalUnresolved,0,'rejected issuance rolls back the second ledger entry');
+ assert.equal(Number(db.prepare('SELECT count(*) n FROM mp_activity WHERE user_id=?').get(f.a.userId)!.n),1,'only the truly issued call retains an unknown activity');assert.equal((await f.checked(f.a.token,'/api/files/'+a.id)).processing.indexed,false);
+});

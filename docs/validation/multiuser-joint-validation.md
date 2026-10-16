@@ -96,9 +96,9 @@ review and exact remote Draft PR head. Later WIP is never imported as a freeze.
 
 | Owner | Explicitly reported composable checkpoint | Remaining gate / original capability |
 | --- | --- | --- |
-| M13 Web | **PAUSED checkpoint** `72ee3d9d126f49aafd15309f1056487a711c62c7`; do not awaken | Later narrow Google, original-byte/full Files entry and Lark consumers have owner evidence; earlier fullWeb515/515 belongs to its earlier candidate. No final affected/push/PR. Shared Imports and remaining Files/other original capabilities retain their exact owner ledger gaps. Later checkpoints are not final. |
+| M13 Web | **RESTORED by parent, active CHECKPOINT**, tested short build/types `815c5fe6`; later `84e3f9b85e2a3dc2cdc5edceb878133a643b7077` remains narrow-only | Consumed declared Joint43db Imports PREP; actual renderer upload/private-preview/confirm/A-B and lost commit/admission ACK/file-slice retirement have owner narrow receipts. Lark UTF8/task-identity/large calendar inventory have actual RED/GREEN and bounded read reviews; latest types/build/full affected/IAB/push/PR remain due. Earlier fullWeb515/515 belongs to its earlier candidate. New M06 unknown candidate is not consumed. |
 | M14 Desktop | **FINAL module delivery** remote `cd46f25a030bdbe593bc138adc375577b4d032ae`; tested `45467379c5645dec62cc4b03e891b404b675193b`, later only two docs | Own independent GitHub readback confirms PR139 OPEN/Draft/base integration/exact final head (`/tmp/mote-joint-pr139-final-readback.json`). Owner required actual EXIT0: Desktop501/501, Server2626 pass/0 fail/1 existing OS opt-in skip, Web515/515, Android352/352/no failure/error/skip, types/root/shared/CLI0, Agent317+1 opt-in skip. Real generated Desktop native-calendar→M12 fixed review→M05 plus Ask/offline A/B/SIGKILL/restart passed; M13 bounded review no new confirmed finding. Handoff `/tmp/mote-m14-final-delivery-resumed.md`. No joint Files writes were in454; this is not whole joint proof. M14 ended, do not awaken. |
-| M15 Android | Tested main `48a797854e96eedf57c4edbd451fa2e5c5132a73`; checkpoint68096eee, later Lark test/code remains WIP | Owner full Android353/353 and production APK41s EXIT0 apply to48a; real native Files speaker/correction/original/literal prefix, processing/devices/statistics/MCP, Google Calendar and Gmail lost-ACK/recreate/switch pass in its recorded scope. Generated local Codex Native Ask1/1 is separately reported in J14. Lark baseline RED is confirmed; its fix is not frozen. Final affected/review/push/PR, shared Imports/remaining Files/recording/QR outcomes remain OPEN. |
+| M15 Android | Tested main `48a797854e96eedf57c4edbd451fa2e5c5132a73`; later limited Lark checkpoint `49347f929c3919a6e8471efbe458e6c0806a79fa` | Owner full Android353/353 and production APK41s EXIT0 apply to48a; real native Files speaker/correction/original/literal prefix, processing/devices/statistics/MCP, Google Calendar and Gmail lost-ACK/recreate/switch pass in its recorded scope. Generated local Codex Native Ask1/1 is separately reported in J14. Lark original entry RED→owned scope/preview/archive/source-context/A-B GREEN is a limited later checkpoint. New central browser-login purpose and recording reader changes remain untyped WIP; no full-module freeze is inferred. Final affected/review/push/PR, shared Imports/remaining Files/recording/QR outcomes remain OPEN. |
 
 Shared-page ownership remains in the owners' existing ledger
 `/tmp/mote-m13-shared-page-contract-map.md`,
@@ -214,10 +214,15 @@ ran two clean start/stop cycles and rebackup with equal capture IDs, distinct
 A/B text, original bytes, old-token401, no active old task grants and preserved
 unknown issuance. Direct offline Hindsight recovery06fd also passed with two
 canonical bodies and old-token401/workerfalse. The later production Managed
-Runtime/Engine.read seam reached health/new credentials but failed generated
-fixture digest normalization;258f787d corrects only fixture schema normalization
-and awaits same-case execution. No new whole-container gate or combined Joint
-backup-schema acceptance is inferred. Source reviews are in
+Runtime/Engine.read seam first failed generated fixture digest normalization;
+258f787d corrects only fixture schema normalization and same-case actual EXIT0
+then proves two canonical reads, wrong-model pre-refusal, fresh credential, old
+API401, workerfalse, zero inference, stop/rebackup. Later final271 gate EXIT2
+(script fixture types) and final2b722 EXIT1 (MCP raw-note timing fixture) are
+preserved. Deterministic fixture RED1f1897→GREEN0efc separates retired note raw
+refs from actual unprocessed M03 Unicode windows; no production change. Current
+ab7069aa2a1c59eda1a0775ae8d52c0632a70c89 required3 is ACTIVE, not passed. No
+new whole-container gate or combined Joint backup-schema acceptance is inferred. Source reviews are in
 `/tmp/mote-joint-review-container-actual-fixtures.md`; owner logs are separate.
 
 ## Finite final acceptance matrix
@@ -229,7 +234,7 @@ Every row is **FINAL PENDING**. Owning-module history is supporting evidence onl
 
 | ID / real entry | Required finite journey and observations | Reused evidence / blocking condition |
 | --- | --- | --- |
-| J01 Accounts/private HTTP/MCP | A/B equal business IDs and bytes; valid login→read/write; exchange ID/cursor/download/token; admin cannot browse B; logout leaves previously admitted work; disable/reset rejects late publication. Verify counts and errors do not disclose B; retain original device pairing/QR outcome against canonical M01 contract. | `multiuser-auth*.test.ts`, `private-data.test.ts`, `multiuser-ingress*.test.ts`, `multiuser-mcp*.test.ts`; real production route registration, no default owner. Canonical QR equivalence is explicitly UNKNOWN, not passed by login or MCP authorization. |
+| J01 Accounts/private HTTP/MCP | A/B equal business IDs and bytes; valid login→read/write; exchange ID/cursor/download/token; admin cannot browse B; logout leaves previously admitted work; disable/reset rejects late publication. Verify counts and errors do not disclose B; retain original device pairing/QR outcome against canonical M01 contract. | `multiuser-auth*.test.ts`, `private-data.test.ts`, `multiuser-ingress*.test.ts`, `multiuser-mcp*.test.ts`; real production route registration, no default owner. Canonical QR equivalence is explicitly UNKNOWN, not passed by login or MCP authorization; parent plans its next available implementation slot, so this is not waiting on a user decision. |
 | J02 Web renderer | A→B, old tab/API/modal/draft, slow read and held write; old A request cannot use B's cookie; B positive request succeeds. Include actual Actions/OQ revision and portable import/export UI. | M13 current IAB journey and actual host; owner-reported old hidden Electron action was denied and unexecuted, so do not retry it or count it as a pass. Final IAB receipt pending. |
 | J03 Desktop main/preload/collector | A offline queue/draft/source→B explicit start→process death/restart→late A ACK→A resumes; exact original bytes; same-account token rotation preserves owner; same URL/new deployment stops bytes; old local format refuses before mutation. | `apps/desktop/test/multiuser-desktop.test.ts`, existing headless native runner and final M14 Actions path. Settings/current status, source edits, original file scan and raw/context readers remain positive cases. |
 | J04 Android Activity/WorkManager | Same queue/switch/death/late ACK/rotation/deployment matrix; native notes/capture/source/snapshot recovery and original bytes; stale detached modal/page/CalendarWorker does not adopt B; new B note/capture positive. | Existing `MultiuserWorkerInstrumentedTest.kt`, JVM tests and isolated headless fixture APK. Actual system grant/revoke and physical-device behavior remain separately unrun; do not change system permissions. |
@@ -241,7 +246,7 @@ Every row is **FINAL PENDING**. Owning-module history is supporting evidence onl
 | J10 account deletion | A has issued unknown external fact/held late result and shared bytes; revoke admission/publication first→durable result_unknown→exact late ACK settles only old fact→retry physically erases private metadata. A stays unreadable; B hashes/rows/credentials unchanged; missing/late hook blocks false success. | `multiuser-lifecycle.test.ts`, `multiuser-actions-lifecycle.test.ts` (actual M16 waits for calendar fact), provider deletion cases. Unknown cannot be marked physically complete or resubmitted. |
 | J11 native instance/production package | Stopped backup CLI→empty isolated target→fresh emitted server twice; preserve deployment/account IDs, originals/hash, canonical Memory/history, conversations/config/plugins/Todos and succeeded/unknown facts; all authority retired. Old epoch/corrupt/missing domain/schema/native content rejects before target writes. | `multiuser-instance-backup.test.ts`, `multiuser-backup-{capture-updates,actions}.test.ts`; use `MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1` after own fresh build. Copy-only dist is not fresh-build proof. |
 | J12 shared config/plugins/connectors/old UI | Shared model key/reference and weight/code reuse with independent personal config/usage; M04 CAS/pinned snapshot/restart/explicit failures. Generated package formal install and actual worker; A stop leaves B active. Gmail/Calendar/Lark/document/recordings native formats and long text; OAuth reversed/replayed callback and account switch; no credential/cursor sharing. | Existing config/plugin/connector process tests, original algorithms and final owned client UI. Preserve Memory binding prepare/drain/migrate/activate/cancel and source import/Files/review/export/advanced settings capabilities in the owner ledger. Missing projections/UI block this row. |
-| J13 Docker retained recovery | Disposable epoch5 Docker profile publication and stopped target recovery through production CLI; actual owned Hindsight Docker volume snapshot/restore and canonical/history re-open, without old execution authority. No deployment or existing-volume access. | **OPEN final container freeze/gate and Joint schema combination**. Owner13515436 actual generated production image restore/start/stop/restart/rebackup passes; direct offline Hindsight06fd canonical/API recovery passes. New Managed Runtime/Engine.read seam is pending fixture normalization258f787d after a preserved actual failure. Immutable image built EXIT0; old daemon/build-pending states are historical. Do not move the earlier d181 required gate to newer runtime or Joint Imports tables. |
+| J13 Docker retained recovery | Disposable epoch5 Docker profile publication and stopped target recovery through production CLI; actual owned Hindsight Docker volume snapshot/restore and canonical/history re-open, without old execution authority. No deployment or existing-volume access. | **OPEN final container freeze/gate and Joint schema combination**. Owner13515436 actual generated production image restore/start/stop/restart/rebackup passes; direct offline Hindsight06fd canonical/API recovery passes. Managed Runtime/Engine.read258f787d actual same-case EXIT0 follows the preserved fixture-normalization failure; final required3ab706 is ACTIVE after two separately preserved gate failures. Immutable image built EXIT0; old daemon/build-pending states are historical. Do not move the earlier d181 required gate to newer runtime or Joint Imports tables. |
 | J14 real-model regression and private-data boundary | User amendment `Sentinel_90402956f4b881918763a8a61d350969`: retain deterministic mocks for isolation/retry assertions. When a real-model regression is needed, first verify the exact locally available Codex model/interface for the user’s “GPE 6.1 sol” (parent interpretation: GPT-6.1 sol), then use that signed-in local entry. Do not silently substitute another model/provider or create credentials. Prefer generated data. Optional local Central reads must be copied read-only to an isolated directory outside the repository before testing. | **PARTIAL: owner M15 actual generated Native Ask1/1,11.281s EXIT0** on retained48a baseline, using the existing M01/M04/M08 plus locally signed-in Codex `gpt-6.1-sol`. CLI0.162.1 catalog and ephemeral no-turn handshake selected the exact same model; no fallback/new provider credential. This is owner execution, not Joint rerun or an Imports semantic-model claim. Final composed model entry and privacy audit remain pending. Record only identifier/interface/SHA/result, no private content. Central originals and every derivative—prompts/responses, summaries, embeddings, screenshots, exports, logs, fixtures—must stay outside Git, including add/commit/stash/branches/remotes, PR text/comments and shared attachments/logs. Audit staged diff and new files individually; gitignore alone is insufficient. If private material has entered Git, stop push and report to parent; do not rewrite history or permanently delete it. Joint has used generated data only so far. |
 
 ## Historical receipts, deliberately not independent reruns
@@ -440,3 +445,101 @@ admin erasure retry completes and A physical root is absent, B bytes unchanged.
 This proves the local live-activity erasure barrier for the new generic-upload
 path; it is not an external provider unknown-result settlement assertion. No
 production change was needed, and final affected checks remain pending.
+
+M06 unknown-result repair candidate: original bare-503 fixture actually issued
+four calls rather than one (RED /tmp/mote-joint-file-unknown-red.log/.exit).
+The existing M05 issuance ledger now guards each real M06 I/O stage. Two new
+production HTTP cases pass 2/2 in
+/tmp/mote-joint-file-unknown-late-green2.log/.exit: bare503 retains unknown with
+one A call and B success; a held valid ASR ACK after account deletion settles
+only the exact old external fact, publishes no A artifact, and permits the
+existing erasure retry to remove A physical originals while B stays indexed.
+The earlier misleadingly named late-green log ran only the first case after a
+fixture rewrite failed; it is not evidence for the second case.
+
+Adjacent actual cases: ASR+diarization checkpoint restart and explicit unknown
+retry 2/2 in /tmp/mote-joint-file-unknown-explicit-adjacent2.log/.exit; media
+cancel, original M16 processing deletion, scoped summary and cancelled summary
+4/4 in /tmp/mote-joint-file-unknown-fences-adjacent.log/.exit. Explicit retries
+start a fresh attempt budget; two confirmations and four actual calls leave two
+old unknown external facts unresolved. Initial candidate nested-admission and
+fixture budget assertions failed and remain in their own logs; these are not
+baseline behavior failures. No full affected/type/compiled acceptance is inferred
+from these narrow generated transport cases, and no real provider was called.
+
+M05 adjacent issuance capability: a completed first stage permits the second
+issuance, replaying the first ACK leaves the second issued, and settling A's
+second fact never readmits its blocked task or changes B. This new case plus
+the existing unknown-effect restart/owner-confirmation case pass 2/2 in
+/tmp/mote-joint-file-unknown-m05-adjacent2.log/.exit. These are task-authority
+checks, not new client or arbitrary socket-timing coverage.
+
+Additional cross-operation characterization: a fresh operation ID was accepted
+and actually issued a second ASR request while its original remained unknown
+(1/1 RED, /tmp/mote-joint-file-unknown-new-operation-red2.log/.exit). Admission
+and issuance now check the existing owner's unacknowledged M05 calls for that
+original. Same-operation ACK retry remains idempotent. The extended bare503,
+late account-delete ACK and two synchronously queued no-model parents with real
+asynchronous M04 children pass 3/3/no skip in
+/tmp/mote-joint-file-unknown-operation-queue-green2.log/.exit. Initial queued
+fixture wrongly attempted synchronous model admission and was rejected409; it
+was corrected to genuine no-model parents, without changing production rules.
+Existing cached duplicate operation, ASR checkpoint and explicit confirmation
+recovery pass 3/3 in
+/tmp/mote-joint-file-unknown-cross-operation-adjacent.log/.exit. The new admission
+query does not turn a replay confirmation into outcome settlement. Types,
+independent review of this additional delta and final composed gate remain due.
+
+Two additional Imports→Memory projection journeys need no production change.
+A real held extraction is paused by its owner, its successful checkpoint settles,
+then host restart retains paused1/completed0; resume runs the still-pending
+independent review and completes, while equal import-ID B remains complete and
+cannot control A's job. 1/1/no skip/EXIT0,4.995s,
+/tmp/mote-joint-import-memory-paused-restart.log/.exit. A separate real429
+Retry-After60 capacity response leaves the saved Import completed but Memory
+pending1/completed0/failed0 and no spent execution attempt. Host restart/tick
+preserves that future wait without another model request; B cannot retry A;
+explicit owner job retry performs the missing work and completes.1/1/no skip/
+EXIT0,5.570s,/tmp/mote-joint-import-memory-capacity-restart.log/.exit. Only model
+transport responses are generated; actual M01/M03/M04/M05/M06/M08 receipts and
+host restart order are exercised. Missing-model intake failure remains the
+previous distinct actual stale receipt, not a fabricated waitingForModel pass.
+Unavailable snapshot recovery and additional Files/image-profile parity stay OPEN.
+
+A genuinely unavailable retained M04 snapshot now has its distinct composed
+case: after real429 capacity waiting, corrupt only the generated exact encrypted
+snapshot tag, restart, and owner retry. The actual M05 task blocks with
+model_snapshot_unavailable; GET Import remains saved/completed but reports
+Memory waitingForModel1/completed0/failed0, with zero additional A model calls
+and B still complete. Restore only the exact retained encrypted tag, restart,
+and owner retry completes through the original snapshot.1/1/no skip/EXIT0,
+5.304s,/tmp/mote-joint-import-memory-snapshot-recovery.log/.exit. Ciphertext and
+keys stay in the generated temporary fixture/in-process memory, never in Git or
+logs. This is a snapshot fault/recovery assertion, not permission to substitute
+a fresh model for a withdrawn snapshot or a real-model semantic validation.
+
+M13 bounded read-only reviews of exact1a3bf5d9 and exactce3572ce report no new
+confirmed P0/P1/P2 in /tmp/mote-m13-review-joint-unknown-{1a3b,ce357}.md. The
+reviewer did not execute the tests or compose the candidate. Existing generic
+private-preview/confirmation plus equal-ID WAV Imports→real M03/M04/M05/M06
+adjacent cases pass2/2 in
+/tmp/mote-joint-unknown-import-entry-adjacent.log/.exit on the new runtime. This
+supports the narrow candidate; fresh source types and final gates remain due.
+
+The atomic cross-operation guard rejects before transport begins. Its existing
+ExecutionFailure fact now explicitly records executionStarted:false, so the
+queued rejected task retains zero spent attempts as well as no second issuance
+or activity. The same three cases pass3/3/no skip/EXIT0 in
+/tmp/mote-joint-file-unknown-no-issuance-budget.log/.exit. This flag is a host
+pre-I/O fact, never inferred from a provider message or used to settle the older
+unknown call. ce3572 review covers the preceding query; this final one-fact delta
+is separately identifiable for the reviewer and current types remain pending.
+
+Explicit narrow release: c45fdb4a2518fef0d5072b02aafbe8f46cb5a90b Server source
+noEmit ACTUAL EXIT0, /tmp/mote-joint-unknown-current-types.log,
+/tmp/mote-joint-unknown-current-types.exit and .sha. It was a few-second idle-gap
+claim after Container final3 explicit release, with immediate Joint RELEASE.
+M13's final c45 pre-transport fact review also has no new confirmed P0/P1/P2,
+/tmp/mote-m13-review-joint-unknown-c45f.md. Together with the exact narrow actual
+receipts, this permits clients to compose this thin checkpoint. It is not a new
+module-final/full affected result and does not close remaining original outcomes.
