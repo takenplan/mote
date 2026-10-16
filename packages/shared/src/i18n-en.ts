@@ -1,5 +1,10 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "取消导入": "Cancel import",
+  "请选择原部署和原账号的 Mote portable3 归档。": "Select a Mote portable3 archive from the original deployment and account.",
+  "仅合并原部署和原账号的规范资料；当前设置、凭据和执行授权保持不变。": "Merges canonical data from the original deployment and account. Current settings, credentials and execution authority are preserved.",
+  "重试需使用同一归档和原操作；刷新后请选择原文件。": "Retry with the same archive and operation. After refreshing, select the original file.",
+
   "实例诊断与更新检查仅向当前管理员开放。": "Instance diagnostics and update checks are available only to the current administrator.",
   "实例日志与更新配置由启动 YAML 管理，网页编辑协议尚待接入。": "Instance log and update settings use the startup YAML. Web editing is awaiting integration.",
   "实例诊断响应未声明安全元数据范围，未显示内容。": "The diagnostics response does not declare its safe metadata scope. Its content was not displayed.",
