@@ -1,10 +1,49 @@
-# M11 protocol/source phase validation
+# M11 protocol, source and genuine query validation
 
 This record covers the protocol/source phase, not complete M11 acceptance.
 The initial baseline is PR133 `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56`.
 Accepted PR134 `7572b573b03437ff743652c13181b9fdcf251fda` is now composed on
 this feature. Final accepted M07/M08 real query tools remain required.
 No mock Memory, Ask, connector or processing service proves them.
+
+## Unified representative candidate
+
+`c53c199876bbfee2acfe8c38ecda7403af7f809d` includes accepted PR134, PR135,
+M07 A/C test freeze `c5661258cc24628100878b59e96c0cebcb36ee57` (runtime
+`84a405f5c52f951f05db975705c12c3bb646dd67`), M08 kind correction
+`3bda432740e2af374b71500e9ce21110de45837c` over its real Snapshot/periodic/reader
+runtime, and M11 operational-status correction `e857914db9122b096f41964dd35a306bafa39435`.
+It adds only a bounded real-publication readiness correction after initial consumer
+composition `f0729a6459bae010b904d4edc70b7086319a6968`.
+
+The same-candidate A/B/C matrix passes **13/13**,0fail/cancel/skip,EXIT0,
+92271.272458ms, `/tmp/m11-c53-unified-ABC.log/.exit`. It runs actual M03/M06/M07
+and long Coding A cases, retained current/history/dependent and three-domain
+restore with an already held reader,50-item page cost2 full-owner scans, all three
+actual provider/Harness/SDK B cases, the genuine installed-worker C cancellation/
+SIGKILL/unknown/late-file-erasure chain, fresh SDK Coding, the unchanged valid kind
+probe, and corrected legacy tombstone characterization. The C case preserves19
+succeeded task IDs/attempts and four prior model calls while allowing two fresh
+current-model calls. Physical erasure means the exact synthetic external file;
+no real vendor physical-erasure result is claimed.
+
+The first f072 A/C command is retained as6/7,EXIT1,
+`/tmp/m11-f072-independent-AC.log/.exit`: fixed six ticks had not made A's Material
+ready, causing a setup TypeError before retirement assertions. The identical failed
+case alone passes1/1,EXIT0, `/tmp/m11-f072-retained-original-retry.log/.exit`.
+Test-only c53 waits for each A/B exact original's actual indexed/materialId state,
+then selects A's precise Material; all original denial/history/restore assertions
+remain. Both retained cases pass2/2,EXIT0,
+`/tmp/m11-retained-exact-readiness.log/.exit`. This is a fixture timing correction,
+not a production defect or valid runtime RED.
+
+M08 independently ran original B3+kind+tombstone on literal c53:5/5,EXIT0,
+36713.438833ms, `/tmp/m08-unified-c53-B.log/.exit`. Its earlier f072 legacy20-tool,
+partial-nine-projection and canonical-paging subset is3/3,EXIT0; M07 independently
+ran f072 A/C7/7,EXIT0. Different checkpoints are separate receipts. M11's bounded
+M07 runtime/C review found no additional confirmed P0/P1/P2. Final focused suite,
+whole combination, fresh build/emitted process, required affected/Android and
+final remote head/base checks are still pending. CI remains disabled/unrun.
 
 ## Resumed common-contract representative B checkpoint
 
@@ -100,16 +139,18 @@ corrected characterization preserves the normal owner deleted metadata positive
 and original MCP denial. Full quote/context is retained in
 `/tmp/m11-old-tombstone-characterization.txt`.
 
-A separate valid normal-query defect remains: after real producers settle,
+A separate valid normal-query defect was confirmed: after real producers settle,
 `mote_items` filtered by its own returned canonical kind drops all matching formal
 records. It is recorded test-first at
 b9e42295749253333a58369ff8986868b49c9c6e in `multiuser-mcp-kind.test.ts`,
 0/1 EXIT1,990.844833ms, `/tmp/m11-formal-kind-red.log/.exit`. This affects query
-availability, not cross-user disclosure. M08 owns the minimal kind-selector fix;
+availability, not cross-user disclosure. M08's minimal3bda kind-selector fix is
+composed and the original SDK probe passes unchanged in the uniform c53 matrix;
 Material catalog's distinct Material.kind filter semantics stay unchanged.
 
-M07's full retained/history/restore and actual running-I/O SIGKILL A/C work remains
-pending; the public review's old search1→0 sample alone does not close those paths.
+The unified matrix above adds the retained/history/restore and actual running-I/O
+SIGKILL A/C work; the older public review's search1→0 sample alone did not prove
+those paths. Final whole-module gates remain distinct from these bounded results.
 
 ## Historical pause for the shared architecture review
 

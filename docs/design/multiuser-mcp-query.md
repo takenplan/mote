@@ -1,11 +1,14 @@
 # M11 real query composition
 
-M11 current real composition is `96f955a687279b110c17cca20251a00ae996f3b7`.
+M11 current unified consumer candidate is `c53c199876bbfee2acfe8c38ecda7403af7f809d`.
 It retains accepted [PR #134](https://github.com/utopiafar/mote/pull/134) complete
 head `7572b573b03437ff743652c13181b9fdcf251fda`, actual M08 production freeze
-`73244e11f4625f3c1e0674b1f8629d8295c05b76` and M07 owner-audit/import freeze
-`443c201a9159d77120d990a1b2d888cb2015d139`. These are precise tested capability
-freezes; their final whole-module acceptance and M11 final gates remain pending.
+`3bda432740e2af374b71500e9ce21110de45837c` and M07 A/C freeze
+`c5661258cc24628100878b59e96c0cebcb36ee57` (runtime
+`84a405f5c52f951f05db975705c12c3bb646dd67`). The candidate also contains the
+independently closed M11 operational-status correction and a test-only exact A/B
+original publication wait. These are precise capability freezes; final
+whole-module acceptance and M11 final gates remain pending.
 No final M11 acceptance or own Draft PR is claimed. Integration remains
 `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 
@@ -79,7 +82,8 @@ are composed. Audit work is `usableAsMemory:false` and cannot be obtained with
 an MCP credential or through `bindRead`; published query Memory remains the
 read capability. Independent review is bounded, with final M07 gates separate.
 M08 canonical paging, file range bridge and durable compaction are restored;
-periodic working-memory/automatic Insight lifecycle and final M08 acceptance
-remain pending. Checks/Component checks remain disabled and unrun.
+periodic working-memory/automatic Insight lifecycle and frozen InsightSnapshot
+are composed with bounded independent evidence. Final M08 acceptance remains
+separate. Checks/Component checks remain disabled and unrun.
 Real credentials, personal data, live external providers/models, deployments and
 physical-device validation are outside this task's authorization.

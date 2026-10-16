@@ -1,6 +1,6 @@
 # M11: user-bound inbound/outbound MCP
 
-This is the independently implementable protocol/source phase of M11. The
+M11 implements host-bound protocol, source and genuine query consumers. The
 feature starts at remotely verified PR #133 head
 `470516b7ed4ab7ee8b0fba344883c6b42bb7ce56` (tested M06 runtime
 `07ad9ddb17a0d2cd0004c50958670145b1457446`), including PR #132 and
@@ -13,10 +13,10 @@ remotely verified accepted M10 Draft PR134 complete head
 in `/tmp/mote-m11-review-m10.md`; its closed execution conversation is not reused.
 
 **M11 is not fully accepted.** Accepted PR134 is composed. Current M11 core
-`96f955a687279b110c17cca20251a00ae996f3b7` also composes genuine M08 partial
-production freeze `73244e11f4625f3c1e0674b1f8629d8295c05b76` and M07 closure freeze
-`443c201a9159d77120d990a1b2d888cb2015d139`. These are stable
-interface/core freezes, not final M07/M08 module acceptance. All 20 original read
+`c53c199876bbfee2acfe8c38ecda7403af7f809d` composes genuine M08 production freeze
+`3bda432740e2af374b71500e9ce21110de45837c` and M07 A/C freeze
+`c5661258cc24628100878b59e96c0cebcb36ee57`, plus PR135 public contracts.
+These are stable runtime/test freezes, not final M07/M08 module acceptance. All 20 original read
 tools now use genuine scoped readers. Logical processed history, UTF16 windows,
 partial ready-only text, navigation, context inclusion/budget/cursors, actual
 source status, file directories and exact Memory filter/pin consumption have
