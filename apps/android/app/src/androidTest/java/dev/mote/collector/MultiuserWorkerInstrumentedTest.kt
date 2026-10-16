@@ -72,6 +72,34 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun actualNativeActionsPreservesTheOpaqueSecondPageFromRealProducer() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val initial=CentralAccess.requireClient(app).get("/api/actions")
+        assertEquals(20,initial.getJSONArray("items").length());assertTrue(initial.get("nextCursor") is String)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CalendarActionsActivity>(android.content.Intent(app,CalendarActionsActivity::class.java)).use {scenario->
+            fun count():Int {var value=0;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().count {it.text.toString()=="Generated A"}};return value}
+            waitFor {count()==20}
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="更早建议"}.performClick()}
+            waitFor {var ready=false;scenario.onActivity {activity->ready=!(CalendarActionsActivity::class.java.getDeclaredField("task").apply {isAccessible=true}.get(activity) as UiTask).busy};ready}
+            assertEquals("The existing earlier-page action must preserve the server's opaque cursor",1,count())
+        }
+    }
+
+    @Test fun actualNativeActionsRetiresVisiblePrivateProposalsBeforeAnotherAccountResumes() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CalendarActionsActivity>(android.content.Intent(app,CalendarActionsActivity::class.java)).use {scenario->
+            waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="Generated A"}};shown}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            scenario.onActivity {activity->assertFalse("B must not resume A's already rendered private Actions proposals",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="Generated A"})}
+            waitFor {var shown=false;scenario.onActivity {activity->shown=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString()=="Generated B"}};shown}
+            assertEquals(21,get(app,"a","/api/actions?limit=100").second!!.getJSONArray("items").length())
+        }
+    }
+
     @Test fun calendarReviewClientRetainsItsOriginalAccountWithoutRequestingCalendarPermission() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
