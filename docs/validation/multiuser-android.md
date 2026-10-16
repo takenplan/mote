@@ -1019,3 +1019,30 @@ stopped at an invalid fixture precondition: the test searched the base64 URI for
 its plaintext code. It did not reach B/resume and is NOT a confirmed production
 RED. Test-only correction decodes through the real ConnectionInvitation parser;
 no invitation runtime change or GREEN is claimed.
+
+
+### Correct JSON DELETE and genuine unknown HTTP probes (not new APK GREEN)
+
+One generated real M01/M03/M05/M06 HTTP sequence, after stop and explicit fresh
+processing, sends DELETE JSONemptyobject:200, thenA404/B200/exactBchunks and
+cleanup complete. `/tmp/m15-file-delete-json-http.log/.exit/-result.json`, EXIT0,
+backendcleanup0. Its `unknown_explicitly_confirmed:false` is retained: that known
+completion branch is not unknown-confirmation coverage.
+
+A second generated ASR mode receives actual WAV bytes then drops its HTTP reply;
+no SQLite or task state is seeded. The real host reportsunknown. The first probe
+tried explicit fresh processing before the physical task settled and correctly
+received409 file_processing_active; `/tmp/m15-file-unknown-http.log/.exit1` is an
+ordering/guard observation, not a product RED. The corrected sequence waits for
+actual public processing tasks to leavewaiting/running, then explicitconfirm
+succeeds: JSONdelete200/A404/B200/exactBchunks, cleanup complete and
+`unknown_explicitly_confirmed:true`, `/tmp/m15-file-unknown-http2.log/.exit/
+-result.json` EXIT0/backendcleanup0. These sourcehost probes establish the request
+shape and state ordering; they do not substitute for a rebuilt native app.
+
+The native explicitunknown case is now saved but UNCOMPILED/UNRUN: original
+unknown UI opens confirmation; cancel causes no admission; explicit confirmation
+creates a fresh owned request after physical settlement, preserves old unresolved
+facts, and old A confirmation cannot sendunderB. Existing stop/delete and
+lostACK native methods remain separate. No unknown assertion was weakened into
+known completion or a manually written task journal.

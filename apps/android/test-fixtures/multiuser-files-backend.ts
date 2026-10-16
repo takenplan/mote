@@ -12,7 +12,7 @@ const cleanup:Array<()=>unknown>=[];
 const retries:Array<{actor:string;body:unknown;status:number;taskId?:string}>=[];
 let dropRetryAck=false;
 let aToken='',bToken='';
-let holdNextAsr=false,asrHeld=false,releaseAsr:(()=>void)|undefined;
+let holdNextAsr=false,dropNextAsr=false,asrHeld=false,releaseAsr:(()=>void)|undefined;
 const asrCalls:string[]=[];
 // Record only generated account labels and retry metadata. The HTTP handler has
 // already admitted the real M05 task before its successful reply is dropped.
@@ -37,6 +37,7 @@ const control=createServer((request,response)=>{void(async()=>{
  if(request.url==='/generated/drop-file-retry-ack')dropRetryAck=true;
  else if(request.url==='/generated/release-file-retry-ack')dropRetryAck=false;
  else if(request.url==='/generated/hold-next-asr')holdNextAsr=true;
+ else if(request.url==='/generated/drop-next-asr')dropNextAsr=true;
  else if(request.url==='/generated/release-asr')releaseAsr?.();
  else if(request.url!=='/generated/file-retries'){response.statusCode=404;response.end();return;}
  response.setHeader('content-type','application/json');response.end(JSON.stringify({retries,dropRetryAck,asrHeld,asrCalls}));
@@ -44,7 +45,7 @@ const control=createServer((request,response)=>{void(async()=>{
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress=control.address();if(!controlAddress||typeof controlAddress==='string')throw Error('Missing generated control address');
 cleanup.push(()=>{control.closeAllConnections();return new Promise<void>(resolve=>control.close(()=>resolve()));});
-const asr=createServer((req,res)=>{void(async()=>{for await(const _ of req){}const actor=String(req.headers.authorization).includes('GENERATED_B')?'B':'A';asrCalls.push(actor);if(actor==='A'&&holdNextAsr){holdNextAsr=false;asrHeld=true;await new Promise<void>(resolve=>{releaseAsr=resolve;});asrHeld=false;releaseAsr=undefined;}const text=(literalSpeakerPrefix?'[SPEAKER_0] ':'')+'Generated '+actor+' raw recording';res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text,speaker:'SPEAKER_0',uncertain:true,overlap:false}],coverage:'full',engine:'generated-native-files'}));})().catch(()=>res.destroy());});
+const asr=createServer((req,res)=>{void(async()=>{for await(const _ of req){}const actor=String(req.headers.authorization).includes('GENERATED_B')?'B':'A';asrCalls.push(actor);if(actor==='A'&&dropNextAsr){dropNextAsr=false;res.destroy();return;}if(actor==='A'&&holdNextAsr){holdNextAsr=false;asrHeld=true;await new Promise<void>(resolve=>{releaseAsr=resolve;});asrHeld=false;releaseAsr=undefined;}const text=(literalSpeakerPrefix?'[SPEAKER_0] ':'')+'Generated '+actor+' raw recording';res.setHeader('Content-Type','application/json');res.setHeader('X-Mote-Execution','local');res.end(JSON.stringify({durationMs:1000,segments:[{startMs:0,endMs:1000,text,speaker:'SPEAKER_0',uncertain:true,overlap:false}],coverage:'full',engine:'generated-native-files'}));})().catch(()=>res.destroy());});
 await new Promise<void>(resolve=>asr.listen(0,'127.0.0.1',resolve));
 const address=asr.address();if(!address||typeof address==='string')throw Error('Missing generated ASR address');
 const wave=Buffer.alloc(48);wave.write('RIFF');wave.writeUInt32LE(40,4);wave.write('WAVEfmt ',8);wave.writeUInt32LE(16,16);wave.writeUInt16LE(1,20);wave.writeUInt16LE(1,22);wave.writeUInt32LE(8000,24);wave.writeUInt32LE(16000,28);wave.writeUInt16LE(2,32);wave.writeUInt16LE(16,34);wave.write('data',36);wave.writeUInt32LE(4,40);

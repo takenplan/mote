@@ -952,6 +952,41 @@ class MultiuserWorkerInstrumentedTest {
         }}finally{control("/generated/release-asr")}
     }
 
+    @Test fun originalFileUnknownResultRequiresExplicitConfirmationAndPreservesUnresolvedFacts() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val id=fixture().getString("captureId");val b=CentralClient(endpoint(),token("b"));val beforeB=b.get("/api/files/"+id+"/chunks").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        fun tasks():List<JSONObject> {val rows=api.get("/api/tasks").getJSONArray("items");return (0 until rows.length()).map(rows::getJSONObject)}
+        fun dialog():android.app.AlertDialog {
+            @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+            return dialogs.mapNotNull {it.get()}.single {it.isShowing}
+        }
+        control("/generated/drop-next-asr")
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun reopen(){scenario.onActivity {it.navigate("files")};ready();press("查看详情");ready()}
+            ready();press("查看详情");ready();press("重试 · 转写");ready()
+            waitFor {api.get("/api/files/"+id).getJSONObject("cancellation").optString("wait")=="unknown"}
+            // Unknown is not proof of physical termination. Await actual public
+            // task settlement before the separate explicit retry decision.
+            waitFor {tasks().none {it.getString("kind").startsWith("processing.")&&it.getString("state") in setOf("waiting","running")}}
+            val unresolved=tasks().filter {it.optInt("externalUnresolved")>0}.map {it.getString("id")};assertTrue(unresolved.isNotEmpty())
+            val before=control("/generated/file-retries").getJSONArray("retries").length()
+            reopen();press("重试 · 转写");scenario.onActivity {dialog().getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick()}
+            assertEquals(before,control("/generated/file-retries").getJSONArray("retries").length())
+            press("重试 · 转写");lateinit var oldConfirm:android.widget.Button
+            scenario.onActivity {oldConfirm=dialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE);oldConfirm.performClick()};ready()
+            val attempts=control("/generated/file-retries").getJSONArray("retries");assertEquals(before+1,attempts.length());val fresh=attempts.getJSONObject(attempts.length()-1)
+            assertTrue(fresh.getJSONObject("body").getBoolean("confirmUnknown"));assertEquals(200,fresh.getInt("status"))
+            waitFor {api.get("/api/tasks/"+fresh.getString("taskId")).getString("state")=="succeeded"}
+            for(taskId in unresolved)assertTrue("Explicit replay consent must not invent a resolved external fact",api.get("/api/tasks/"+taskId).getInt("externalUnresolved")>0)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldConfirm.performClick()};ready()
+            assertEquals(attempts.length(),control("/generated/file-retries").getJSONArray("retries").length());assertEquals(beforeB,b.get("/api/files/"+id+"/chunks").toString())
+        }
+    }
+
     @Test fun originalNativeRecordingSavesExactAuthenticatedOriginalThroughItsDocumentResult() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
