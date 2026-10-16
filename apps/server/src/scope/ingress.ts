@@ -1,3 +1,4 @@
+import {ScopedImportAttribution,importDeclarationSchema} from './import-attribution.js';
 import {createHmac,timingSafeEqual,randomUUID} from 'node:crypto';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
@@ -63,6 +64,7 @@ export class IngressHost{
   assert();const sql=new PrivateSql(this.db,context.userId,assert),originals=new Originals(this.directory,context.deploymentId,sql,assert);
   const data=()=>this.runtime.services.forUser(context).get<PrivateData>('private-data');
   const deviceId=authority.isTask(context)?undefined:this.runtime.accounts?.credentialInfo(context,authority).deviceId;
+  const imports=new ScopedImportAttribution(sql),declaration=(sourceId:string,raw:unknown)=>{if(raw===undefined)return;if(sourceIds||deviceId||authority.isTask(context)||!['client','web'].includes(this.runtime.accounts!.credentialInfo(context,authority).kind))throw new ScopeError('invalid_identity',403);source(sourceId);return imports.freeze(sourceId,raw);};
   const source=(id:string)=>{
    assert();sourceIdSchema.parse(id);if(sourceIds&&!sourceIds.includes(id))throw missing();const result=data().source(id);
    if(deviceId&&result.deviceId!==deviceId)throw missing();if(!result.enabled)throw conflict();return result;
@@ -80,10 +82,10 @@ export class IngressHost{
    registerSource:(value:unknown)=>{assert();const input=sourceConnectionSchema.parse(value);if(sourceIds&&!sourceIds.includes(input.id)||deviceId&&input.deviceId!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>data().registerSource(input));},
    registerDevice:(value:unknown)=>{const input=z.object({id:sourceIdSchema,name:z.string().min(1).max(200),platform:z.enum(['android','macos','windows','linux','import'])}).strict().parse(value);if(sourceIds||deviceId&&input.id!==deviceId)throw new ScopeError('invalid_identity',403);return sql.transaction(()=>{sql.run('INSERT INTO ig_devices VALUES($user,?,?) ON CONFLICT(user_id,id) DO UPDATE SET json=excluded.json',input.id,JSON.stringify(input));return input;});},
    devices:()=>{if(deviceId||sourceIds)throw new ScopeError('invalid_identity',403);return {items:sql.all('SELECT json FROM ig_devices WHERE user_id=$user ORDER BY id').map(row=>JSON.parse(String(row.json)))};},
-   receiveCaptures:(sourceId:string,id:string,values:unknown[])=>{
+   receiveCaptures:(sourceId:string,id:string,values:unknown[],importDeclaration?:unknown)=>{
     const inputs=z.array(captureSchema).min(1).max(500).parse(values);
-    return batch(sourceId,id,inputs,'capture',()=>{
-     const binding=source(sourceId),images=new Map<string,string>();
+    return batch(sourceId,id,importDeclaration===undefined?inputs:{items:inputs,importDeclaration},'capture',()=>{
+     const pin=declaration(sourceId,importDeclaration),binding=source(sourceId),images=new Map<string,string>();
      if(binding.retention==='reference')throw conflict();
      for(const input of inputs){
       if(input.deviceId!==binding.deviceId||input.platform!==binding.platform||input.provenance)throw conflict();
@@ -93,13 +95,12 @@ export class IngressHost{
      const acks=data().receiveCaptures(inputs,{sourceId,verify:(input:CaptureInput)=>{if(images.get(input.id)!==bytesHash(strictBase64(input.imageBase64!)))throw conflict();}});
      const captures=acks.map((ack,index)=>{
       sql.run('INSERT INTO ig_capture_scopes VALUES($user,?,?) ON CONFLICT(user_id,capture_id) DO NOTHING',ack.id,sourceId);
-      const hash=images.get(ack.id);return {...ack,...(hash?{original:originals.attach(sourceId,ack.id,hash,inputs[index].imageMime!,binding.retention==='archive'?'archive':'snapshot')}:{})};
+      if(!ack.duplicate)imports.bind(ack.id,pin);const hash=images.get(ack.id);return {...ack,...(hash?{original:originals.attach(sourceId,ack.id,hash,inputs[index].imageMime!,binding.retention==='archive'?'archive':'snapshot')}:{})};
      });return receipt(sourceId,id,captures);
     });
    },
-   receiveSourceItems:(sourceId:string,id:string,values:unknown[])=>intakeSourceItems(sourceId,id,values),
-   /** Host adapter seam: the original is selected before publication, so one
-    * capture has one immutable descriptor. Worker RPCs never expose this seam. */
+   receiveSourceItems:(sourceId:string,id:string,values:unknown[],importDeclaration?:unknown)=>intakeSourceItems(sourceId,id,values,undefined,undefined,importDeclaration),
+   /** Host adapter seam: exact original format stays frozen before publication. */
    receiveSourceItemsWithOriginals:(sourceId:string,id:string,values:unknown[],inputs:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[])=>intakeSourceItems(sourceId,id,values,inputs,formats),
    readOriginal:(ref:string,range?:{offset?:number;length?:number})=>{original(ref);const result=originals.read(ref,range);assert();return result;},
    holdOriginal:(ref:string)=>{const value=original(ref);return originals.pin(value.hash);},
@@ -125,13 +126,13 @@ export class IngressHost{
    }),
    withWorkspace:<T>(work:(workspace:OriginalWorkspace)=>Promise<T>)=>during(()=>originals.workspace(work)),
    beginUpload:(sourceId:string,value:unknown)=>sql.transaction(()=>{
-    const input=z.object({batchId,revision:fileRevisionSchema}).strict().parse(value),binding=source(sourceId),manifest=input.revision;
+    const input=z.object({batchId,revision:fileRevisionSchema,importDeclaration:importDeclarationSchema.optional()}).strict().parse(value),binding=source(sourceId),manifest=input.revision;
     if(/^[\\/]|^[a-zA-Z]:/.test(manifest.relativePath)||manifest.relativePath.split(/[\\/]/).some(part=>part==='..'||part.includes('\0')))throw new PrivateDataError('invalid_data');
     if(manifest.sourceId!==sourceId||manifest.item.kind!=='file'||manifest.item.text||binding.retention==='reference'&&manifest.item.layer!=='reference'||binding.retention!=='reference'&&manifest.item.layer==='reference')throw conflict();
-    const digest=identityHash(manifest),previous=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND source_id=? AND request_key=?',sourceId,input.batchId);
+    declaration(sourceId,input.importDeclaration);const digest=identityHash(input.importDeclaration===undefined?manifest:{manifest,importDeclaration:input.importDeclaration}),previous=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND source_id=? AND request_key=?',sourceId,input.batchId);
     if(previous){if(previous.manifest_hash!==digest||previous.authorization_epoch!==context.authorizationEpoch||Number(previous.expires)<=Date.now())throw conflict();if(previous.receipt)checkReceipt(JSON.parse(String(previous.receipt)));return {id:String(previous.id),deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:sql.all('SELECT part,checksum,bytes FROM ig_upload_parts WHERE user_id=$user AND upload_id=? ORDER BY part',String(previous.id)),...(previous.receipt?{receipt:JSON.parse(String(previous.receipt))}:{})};}
     const id=randomUUID();sql.run('INSERT INTO ig_uploads VALUES($user,?,?,?,?,?,?,?,NULL)',id,sourceId,input.batchId,digest,JSON.stringify(manifest),context.authorizationEpoch,Date.now()+86400000);
-    return {id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[]};
+    if(input.importDeclaration)sql.run('INSERT INTO ig_upload_imports VALUES($user,?,?)',id,JSON.stringify(input.importDeclaration));return {id,deploymentId:context.deploymentId,userId:context.userId,sourceId,partBytes:FILE_PART_BYTES,parts:[]};
    }),
    uploadPart:(id:string,part:number,value:unknown)=>sql.transaction(()=>{
     const row=upload(id),manifest=fileRevisionSchema.parse(JSON.parse(String(row.manifest))),input=z.object({bytes:z.string().max(Math.ceil(FILE_PART_BYTES/3)*4),checksum:z.string().regex(/^[a-f0-9]{64}$/)}).strict().parse(value),bytes=strictBase64(input.bytes);
@@ -148,6 +149,7 @@ export class IngressHost{
      const binding=source(String(current.source_id)),head=data().sourceItem(binding.id,manifest.item.externalId);
      if((head?.revision??null)!==manifest.previousRevision&&head?.revision!==manifest.item.revision)throw conflict();
      const ack=data().receiveSourceItems(binding.id,[manifest.item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
+     const importRow=sql.get('SELECT json FROM ig_upload_imports WHERE user_id=$user AND upload_id=?',id);if(importRow&&!ack.duplicate)imports.bind(ack.id,declaration(binding.id,JSON.parse(String(importRow.json))));
      const reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot'):undefined;
      const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();for(const receive of this.accepted)receive(context,result,'file',Object.freeze({}));assert();return result;
     });received=true;return result;}finally{try{prepared?.release();}catch{/* Revoked pins expire or are removed by lifecycle. */}if(received)originals.cleanUpload(id);}
@@ -165,12 +167,12 @@ export class IngressHost{
     return originals.gc();
    });},
   };
-  function intakeSourceItems(sourceId:string,id:string,values:unknown[],inputs?:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[]){
+  function intakeSourceItems(sourceId:string,id:string,values:unknown[],inputs?:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[],importDeclaration?:unknown){
    const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
    if(inputs&&(inputs.length!==items.length||inputs.some(v=>v&&(!Buffer.isBuffer(v.bytes)||v.bytes.length>512*1024*1024||!v.mime||v.mime.length>200||v.format!==undefined&&!['source-item','file'].includes(v.format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(v.format)))))throw new PrivateDataError('invalid_data');
    if(formats&&(formats.length!==items.length||formats.some(format=>format!==undefined&&!['capture','source-item','file'].includes(format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(format))))throw new PrivateDataError('invalid_data');
-   return batch(sourceId,id,inputs?{items,formats,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime,format:v.format??'file'}:null)}:items,'source-item',()=>{
-    const binding=source(sourceId),archive=binding.retention==='archive';if(binding.retention==='reference'&&inputs?.some(Boolean))throw conflict();
+   return batch(sourceId,id,importDeclaration===undefined?(inputs?{items,formats,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime,format:v.format??'file'}:null)}:items):{items,importDeclaration},'source-item',()=>{
+    const pin=declaration(sourceId,importDeclaration),binding=source(sourceId),archive=binding.retention==='archive';if(binding.retention==='reference'&&inputs?.some(Boolean))throw conflict();
     const descriptors=items.map((item,index)=>{
      const capture=captureId(sourceId,item),prior=sql.get('SELECT id,hash,mime,retention FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,capture),input=inputs?.[index];
      if(prior){if(input&&(prior.hash!==bytesHash(input.bytes)||prior.mime!==input.mime))throw conflict();return originals.original('original:'+prior.id);}
@@ -178,7 +180,7 @@ export class IngressHost{
      const object=originals.put(input?.bytes??Buffer.from(JSON.stringify(item)));return {hash:object.hash,mime:input?.mime??'application/json'};
     });
     const acks=data().receiveSourceItems(sourceId,items,archive?{verify:item=>{if(!descriptors[items.findIndex(value=>value.externalId===item.externalId&&value.revision===item.revision)])throw conflict();}}:undefined).receipts;
-    return receipt(sourceId,id,acks.map((ack,index)=>{const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));
+    return receipt(sourceId,id,acks.map((ack,index)=>{if(!ack.duplicate)imports.bind(ack.id,pin);const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));
    },result=>Object.fromEntries(result.captures.flatMap((ack,index)=>ack.original&&(formats?.[index]||inputs?.[index])?[[ack.original.ref,formats?.[index]??inputs![index]!.format??'file']]:[])));
   }
   function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));if(row.authorization_epoch!==context.authorizationEpoch||Number(row.expires)<=Date.now())throw conflict();return row;}

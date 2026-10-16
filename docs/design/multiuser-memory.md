@@ -105,3 +105,45 @@ fences bind the host user. REMOVE: default owner and legacy Store production
 dispatch. EXCEPTION: trusted plugins are not a malicious-code sandbox. UNKNOWN:
 real provider accounts, credentials, models, devices and deployment are outside
 this task; synthetic HTTP fixtures prove the production seams exercised only.
+
+## Existing owner review, history and import responsibilities
+
+The MVP changes the old proposed/stale wire modes. The old opening reader
+consumed proposed candidates and the evidence reader opened stale historical
+cards. Proposed drafts now stay in the same M05 extraction/review checkpoints
+until independent review and the single publisher finish. Human inspection uses
+`GET /api/memory/audit?kind=proposed` and `/api/memory/jobs/:id/review`; it
+cannot publish a proposal directly. Published/invalidated history inspection
+uses `/api/memory/audit?kind=stale` and `/api/memory/audit/:id?version=N`.
+These full-owner audit responses explicitly return `usableAsMemory:false` and
+are absent from `bindRead`. An exact retained original and its visibility are
+required even for audit; current and selected history rows are pinned across
+provider awaits. External audit reads call the actual provider and verify the
+body digest. Failure never discloses an old SQL copy. Query readers continue to
+receive only reviewed, published, currently valid Memory. This supersedes the
+old opening-candidate input, while keeping owner review and retained-history
+inspection. Withdrawal/deletion of an original still withdraws that disclosure.
+
+The old `imports.ts`/`ImportAttributionStore` contract survives at fresh M03
+receipts. A full owner web/client submits optional `importDeclaration` with
+`id`, positive immutable `version` and literal `instruction` (12,000-character
+existing limit) alongside a capture/source-item batch or upload manifest.
+M03 freezes it for this source and binds only newly committed, nonduplicate
+originals before invoking existing intake subscribers. A repeated import cannot
+replace prior context. Task, device and source-bound capabilities cannot create
+owner prose. Host Material publication opens exact canonical declarations from
+its transitive originals, separately for every block. Neither a source publisher
+nor a model can inject or widen a dangling pin. Canonical private-data export,
+delete and restore include declarations/bindings; restoring prose grants no
+processing, extraction or continuation authorization. Old archives with another
+coverage contract are rejected before writes; no old data is cleared.
+
+`MemoryHost.onPublished(receive): unsubscribe` is a host-only synchronous
+same-transaction notification. Its actual M05 `TaskRun` and immutable event
+`{jobId,automatic,memoryIds,materialIds}` identify the committed publisher's
+exact inputs/results. Grant checks surround subscribers; a subscriber may
+submit its own already-authorized durable coordinator in the same transaction.
+The event grants no full-account read or periodic working/insight policy.
+Those owning domains must admit their own retained M05 policy grant from an
+explicit trusted owner context; a configuration lifecycle subject or narrowed
+MCP request cannot be promoted to such a context.

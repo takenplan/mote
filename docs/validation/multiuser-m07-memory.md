@@ -169,3 +169,58 @@ Fresh1536 Server/Web builds pass0. Rebuilt actual HTTP child processes pass2/2
 exit0, /tmp/m07-1536-compiled-process.log/.exit,36838ms, covering review and manual
 admission SIGKILL. Check:affected dry-run selects full check:local plus Android;
 it is planning evidence only. Required actual affected remains pending.
+
+## Existing-capability closure candidate after6d
+
+This section supersedes the work ledger's previously unknown stale/proposed,
+import and raw-group items; final module gates are still pending. The production
+consumers inspected were `opening-memory.ts` (proposed), `evidence-reader.ts`
+(includeStale/history), `imports.ts` and `import-attribution.ts` (literal frozen
+import prose and new-capture-only binding), and the existing organizer readers
+(fixed grouping, newest2000 / text budget). MVP wire compatibility is deliberately
+not retained; the underlying owner capabilities have safe scoped equivalents
+described in `../design/multiuser-memory.md` and the parity ledger. Query agents
+never receive unreviewed proposals or invalidated cards as valid Memory.
+
+New actual HTTP regressions: proposal inspection while its review is paused;
+builtin/external invalidated history with exact retained originals, no SQL
+fallback on actual provider failure and denial after original deletion; full
+owner M03 upload→real M06→Memory import context with equal A/B declaration IDs,
+duplicate no-replacement, tamper rejection, canonical delete/restore and no
+regrant. `/tmp/m07-audit-import.log/.exit`:4/4 exit0 before the strengthened
+lifecycle/duplicate assertions; strengthened import1/1 exit0 at
+`/tmp/m07-parity-last-matrix.log` (that run's raw-budget fixture failed the
+transport schema and is not counted as a suite pass). Corrected raw coding/UI
+budget production fixture1/1 exit0,1588ms, `/tmp/m07-raw-budget.log/.exit`;
+64 valid observations exercise the actual 4,000,000-character scoped reader
+limit and bounded original/member projection, with no model calls.
+
+Confirmed OCR policy reload P2 is fixed at
+`1d92401d0cf95702c08085d3fb8a59b74a32a2f4`; unchanged recipe refs compare
+id/version while immutable strategy fingerprints stay pinned. Per-capture
+withdrawals remain irreversible and are checked on every grouped original.
+M08 exact literal unchanged daily cases2/2 exit0,10093ms,
+`/tmp/m08-review-m07-1d-daily.log/.exit`; independent report
+`/tmp/mote-m08-review-m07-1d.md` closes this P2.
+
+Feedback complete proposal recovery retains exact durable units before SIGKILL,
+uses no repeated planner, and preserves every completed task ID/attempt count
+and B worker. M11 exact1d independent1/1 exit0,36077ms,
+`/tmp/m11-review-m07-1d-feedback-process.log/.exit`. Owner reply actual HTTP
+processes SIGKILL after durable M05 interpretation and before shared CAS (a
+first-process-only CAS fault barrier), then replay the same request UUID; the
+second process reuses the interpretation, creates one literal statement and
+one fixed-model continuation, and leaves B untouched:1/1 exit0,6564ms,
+`/tmp/m07-owner-reply-process.log/.exit`. The four-case whole process suite
+initially passed3/4: a fixed request-count assertion failed when the unfinished
+child legitimately repaired model output. The revised recovery assertion pins
+all succeeded task IDs/attempts, completed B/planner and exact new A child scope;
+focused feedback1/1 exit0. Whole final process/build/affected gates remain pending.
+
+Final closure subset6/6 exit0,19202ms,
+`/tmp/m07-closure-freeze-targeted.log/.exit`, includes actual owner retry and
+same-transaction publication notifications. Server types0, scope inventory /
+production imports / private SQL0 and diff check0. Stronger import regression
+also checks an imported and unrelated original combined in one Material:
+canonical root prose cannot enter the unrelated block; exact portable
+restoration passes. These receipts remain a subset, not final module acceptance.

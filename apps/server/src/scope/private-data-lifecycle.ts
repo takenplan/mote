@@ -1,3 +1,4 @@
+import {importDeclarationSchema} from './import-attribution.js';
 import {createHash} from 'node:crypto';
 import {z} from 'zod';
 import {sourceConnectionSchema,sourceContentTime,sourceContextUpdateSchema,sourceItemSchema,type AttributionContext} from '@mote/shared';
@@ -24,12 +25,14 @@ const inputRow=z.object({material_id:materialId,revision:digest,member_id:identi
 const contextLinkRow=z.object({material_id:materialId,revision:digest,source_id:identifier,version:sequence,fingerprint:digest}).strict();
 const sourceLinkRow=z.object({material_id:materialId,revision:digest,source_id:identifier}).strict();
 const declarationRow=z.object({material_id:materialId,id:z.string().uuid(),version:sequence,base_hash:digest,fingerprint:digest,json:z.string()}).strict();
-const canonicalTables=['material_declarations','sources','source_contexts','captures','source_heads','materials','material_versions','material_captures','material_inputs','material_contexts','material_sources'] as const;
+const importRow=z.object({id:z.string().uuid(),version:sequence,source_id:identifier,fingerprint:digest,instruction:importDeclarationSchema.shape.instruction}).strict();
+const importCaptureRow=z.object({capture_id:z.string().uuid(),id:z.string().uuid(),version:sequence}).strict();
+const canonicalTables=['import_declarations','capture_imports','material_declarations','sources','source_contexts','captures','source_heads','materials','material_versions','material_captures','material_inputs','material_contexts','material_sources'] as const;
 const coverage={canonicalTables:[...canonicalTables],excluded:['assets','credentials','other-domains'],indexes:'rebuilt-from-canonical-rows'} as const;
 const coverageSchema=z.object({canonicalTables:z.array(z.enum(canonicalTables)),excluded:z.array(z.string()),indexes:z.literal(coverage.indexes)}).strict().refine(value=>JSON.stringify(value)===JSON.stringify(coverage));
 const payloadSchema=z.object({
   format:z.literal('mote-private-data-v1'),coverage:coverageSchema,
-  material_declarations:z.array(declarationRow),sources:z.array(sourceRow),source_contexts:z.array(contextRow),captures:z.array(captureRow),source_heads:z.array(headRow),
+  import_declarations:z.array(importRow),capture_imports:z.array(importCaptureRow),material_declarations:z.array(declarationRow),sources:z.array(sourceRow),source_contexts:z.array(contextRow),captures:z.array(captureRow),source_heads:z.array(headRow),
   materials:z.array(materialRow),material_versions:z.array(versionRow),material_captures:z.array(captureLinkRow),
   material_inputs:z.array(inputRow),material_contexts:z.array(contextLinkRow),material_sources:z.array(sourceLinkRow),
 }).strict();
@@ -105,6 +108,11 @@ function validate(payload:Payload){
     }else if(hash(capture)!==row.fingerprint)invalid();
     return [row.id,capture] as const;
   }));
+  const imports=unique(payload.import_declarations,row=>key(row.id,row.version)),importCaptures=unique(payload.capture_imports,row=>row.capture_id);
+  for(const row of imports.values())if(!sources.has(row.source_id)||!row.instruction.trim()||row.fingerprint!==hash({id:row.id,version:row.version,instruction:row.instruction,sourceId:row.source_id}))invalid();
+  for(const row of importCaptures.values()){const declaration=imports.get(key(row.id,row.version)),capture=parsedCaptures.get(row.capture_id);if(!declaration||!capture||(capture.provenance?.sourceId??capture.ingressSourceId)!==declaration.source_id)invalid();}
+  const originalIds=(id:string,revision:string,seen=new Set<string>()):string[]=>{const identity=key(id,revision);if(seen.has(identity))invalid();const next=new Set([...seen,identity]);return [...new Set([...payload.material_captures.filter(row=>row.material_id===id&&row.revision===revision).map(row=>row.capture_id),...payload.material_inputs.filter(row=>row.material_id===id&&row.revision===revision).flatMap(row=>originalIds(row.input_material_id,row.input_revision,next))])];};
+  const expectedImports=(captureIds:string[])=>{const grouped=new Map<string,{id:string;version:number;fingerprint:string;instruction:string;captureIds:string[]}>();for(const captureId of [...new Set(captureIds)].sort()){const link=importCaptures.get(captureId);if(!link)continue;const declaration=imports.get(key(link.id,link.version))!,identity=key(link.id,link.version);if(!grouped.has(identity))grouped.set(identity,{id:declaration.id,version:declaration.version,fingerprint:declaration.fingerprint,instruction:declaration.instruction,captureIds:[]});grouped.get(identity)!.captureIds.push(captureId);}const values=[...grouped.values()].sort((a,b)=>a.id.localeCompare(b.id)||a.version-b.version);return {importDeclarations:values.map(({instruction:_,...pin})=>pin),importStatements:values.map(({fingerprint:_,...statement})=>statement)};};
   const latestObservation=new Map<string,number>();
   for(const row of payload.captures)if(row.source_id!==null){
     const id=key(row.source_id,row.external_id),observed=Date.parse(parsedCaptures.get(row.id)!.capturedAt);
@@ -155,9 +163,9 @@ function validate(payload:Payload){
     // All description links must match explicit immutable draft pins. Only a
     // currently visible head must pin the source's latest description; hidden
     // and historical revisions retain their original exact provenance.
-    const checkAttribution=(value:AttributionContext|undefined)=>{
-      if(!value)return;
-      if(value.importDeclarations?.length||value.importStatements?.length||value.materialDeclarations)invalid();
+    const checkAttribution=(value:AttributionContext|undefined,selected=originalIds(row.material_id,row.revision))=>{
+      const expected=expectedImports(selected);if(!value){if(expected.importDeclarations.length)invalid();return;}
+      if(value.materialDeclarations||canonical(value.importDeclarations??[])!==canonical(expected.importDeclarations)||canonical(value.importStatements??[])!==canonical(expected.importStatements))invalid();
       const declared=unique(value.declarations??[],pin=>pin.id),statements=unique(value.ownerStatements??[],statement=>statement.id);
       if(declared.size!==statements.size)invalid();
       for(const pin of declared.values()){const id=key(row.material_id,pin.id,pin.version),declaration=declarations.get(id),statement=statements.get(pin.id);if(!declaration||declaration.fingerprint!==pin.fingerprint||declaration.base_hash!==materialOwnerDeclarationBodyHash(draft)||!statement||canonical(statement)!==canonical(JSON.parse(declaration.json)))invalid();usedDeclarations.add(id);}
@@ -176,7 +184,7 @@ function validate(payload:Payload){
       }
     };
     checkAttribution(draft.attributionContext);
-    for(const block of draft.blocks)if(block.kind==='text')checkAttribution(block.evidenceContext?.attributionContext);
+    for(const block of draft.blocks)if(block.kind==='text')checkAttribution(block.evidenceContext?.attributionContext,draft.members.filter(member=>block.memberIds.includes(member.id)).flatMap(member=>{if(member.kind==='capture')return [member.ref.slice(8)];const link=inputs.get(key(row.material_id,row.revision,member.id))!;return originalIds(link.input_material_id,link.input_revision);}));
     expectedSources.set(key(row.material_id,row.revision),sourcesForVersion);inputVersions.set(key(row.material_id,row.revision),dependencies);
   }
   if(usedDeclarations.size!==declarations.size)invalid();
@@ -216,6 +224,8 @@ const tables=[
   {key:'sources',name:'pd_sources',columns:['id','json','created_at','updated_at']},
   {key:'source_contexts',name:'pd_source_contexts',columns:['source_id','version','fingerprint','description','updated_at']},
   {key:'captures',name:'pd_captures',columns:['id','source_id','external_id','revision','fingerprint','context_at','received_at','json']},
+  {key:'import_declarations',name:'pd_import_declarations',columns:['id','version','source_id','fingerprint','instruction']},
+  {key:'capture_imports',name:'pd_capture_imports',columns:['capture_id','id','version']},
   {key:'source_heads',name:'pd_source_heads',columns:['source_id','external_id','capture_id','observed_at']},
   {key:'materials',name:'pd_materials',columns:['id','source_id','external_id','revision','sequence','created_at','updated_at','min_visible_sequence']},
   {key:'material_versions',name:'pd_material_versions',columns:['material_id','revision','sequence','json','text','created_at']},
@@ -242,7 +252,7 @@ export function privateDataLifecycle(sqlFor:(subject:UserDataSubject,purpose:Lif
     deleteUser:async(subject,operationId)=>{
       const sql=sqlFor(subject,'delete');
       sql.transaction(()=>{
-        for(const table of ['pd_material_declarations','pd_material_inputs','pd_material_captures','pd_material_contexts','pd_material_sources','pd_material_versions','pd_materials','pd_source_heads','pd_captures','pd_source_contexts','pd_sources','pd_fts'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
+        for(const table of ['pd_capture_imports','pd_import_declarations','pd_material_declarations','pd_material_inputs','pd_material_captures','pd_material_contexts','pd_material_sources','pd_material_versions','pd_materials','pd_source_heads','pd_captures','pd_source_contexts','pd_sources','pd_fts'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
       });
       return {status:'complete',operationId};
     },
