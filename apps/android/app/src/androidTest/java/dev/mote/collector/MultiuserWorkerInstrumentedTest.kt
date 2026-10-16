@@ -410,8 +410,9 @@ class MultiuserWorkerInstrumentedTest {
             scenario.onActivity {activity->
                 assertTrue("MCP must select a saved owned connection instead of sending endpoint credentials in discovery",views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().any {spinner->(0 until spinner.count).any {spinner.getItemAtPosition(it).toString().contains("same-connection")}})
                 views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {spinner->(0 until spinner.count).any {spinner.getItemAtPosition(it).toString().contains("same-connection")}}.setSelection(1)
-                views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="发现 MCP 资源"}.performClick()
             }
+            InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="发现 MCP 资源"}.performClick()}
             waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().any {it.text.toString()=="GENERATED_A_RESOURCE"}};ready}
             lateinit var oldImport:android.widget.Button
             scenario.onActivity {activity->
@@ -419,8 +420,8 @@ class MultiuserWorkerInstrumentedTest {
                 oldImport=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="导入所选资源"};oldImport.performClick()
             }
             waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
-            val item=a.get("/api/sources/same-source/item?externalId=fixture%3A%2F%2Fsame")
-            assertTrue(item.toString().contains("GENERATED_A_PRIVATE_MCP_CONTENT"));assertFalse(item.toString().contains("GENERATED_B_PRIVATE_MCP_CONTENT"))
+            val imported=a.get("/api/source-items?sourceId=same-source")
+            assertTrue(imported.toString().contains("GENERATED_A_PRIVATE_MCP_CONTENT"));assertFalse(imported.toString().contains("GENERATED_B_PRIVATE_MCP_CONTENT"))
             scenario.onActivity {oldImport.performClick()};waitFor {var ready=false;scenario.onActivity {ready=!it.isWorking};ready}
             val sourceItems=a.get("/api/source-items?sourceId=same-source").getJSONArray("items");assertEquals(1,sourceItems.length())
             scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
