@@ -664,7 +664,13 @@ class MultiuserWorkerInstrumentedTest {
             scenario.recreate();ready();control("/generated/drop-ack");press("恢复中断的连接确认");ready();confirm()
             val paired=settings.read();assertEquals(invitation.getString("userId"),paired.account()!!.userId);assertEquals(invitation.getString("deploymentId"),paired.account()!!.deploymentId);assertTrue(paired.deviceBoundCredential);assertFalse(settings.enabled)
             assertEquals(endpoint(),ConnectionClient(app).pendingServer());assertEquals(403,HttpJson.get(endpoint()+"/api/captures",paired.connectionToken()).first)
-            control("/generated/release-pairing");scenario.recreate();ready();press("恢复中断的连接确认");ready();confirm();assertNull(ConnectionClient(app).pendingServer())
+            val recovery=control("/generated/release-pairing");scenario.recreate();ready();press("恢复中断的连接确认");ready();confirm()
+            if(recovery.optBoolean("revokedAfterRestart")) {
+                assertEquals(endpoint(),ConnectionClient(app).pendingServer());assertEquals(401,HttpJson.get(endpoint()+"/api/connections/self",paired.token).first)
+                assertEquals(1,app.queue().pendingSync().count);assertEquals(404,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first);assertEquals(0,browser.hits)
+                return@use
+            }
+            assertNull(ConnectionClient(app).pendingServer())
             assertEquals(paired.token,settings.read().token);val trace=control("/generated/pairing-state");val claims=trace.getJSONArray("claims");assertTrue(claims.length()>=2)
             for(index in 0 until claims.length()){val row=claims.getJSONObject(index);assertEquals(claim.getString("id"),row.getString("id"));assertEquals(claim.getString("challenge"),row.getString("challenge"));assertEquals(settings.deviceId,row.getString("deviceId"))}
             if(trace.optBoolean("restarted")) {
