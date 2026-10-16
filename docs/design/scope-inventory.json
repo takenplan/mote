@@ -783,14 +783,16 @@
     "module": "M02",
     "surfaces": [
       "directory:this.options.directory"
-    ]
+    ],
+    "status": "implemented"
   },
   "apps/server/src/hindsight-runtime.ts": {
     "scope": "legacy-quarantined",
     "module": "M02",
     "surfaces": [
       "directory:this.options.directory"
-    ]
+    ],
+    "status": "implemented"
   },
   "apps/server/src/image-inputs.ts": {
     "scope": "legacy-quarantined",
@@ -961,7 +963,8 @@
       "directory:this.config.directory",
       "table:provider_operations",
       "table:provider_records"
-    ]
+    ],
+    "status": "implemented"
   },
   "apps/server/src/memory-adapters.ts": {
     "scope": "legacy-quarantined",
@@ -1631,6 +1634,7 @@
       "table:pd_fts",
       "table:pd_material_captures",
       "table:pd_material_contexts",
+      "table:pd_material_declarations",
       "table:pd_material_inputs",
       "table:pd_material_sources",
       "table:pd_material_versions",
@@ -1873,13 +1877,16 @@
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id/versions/:version'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/bindings/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/activate'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/cancel'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile'"
     ]
@@ -1891,19 +1898,23 @@
     "surfaces": [
       "table:mm_binding_locks",
       "table:mm_binding_preparations",
+      "table:mm_capture_intakes",
       "table:mm_commands",
       "table:mm_deletions",
       "table:mm_dependencies",
       "table:mm_evidence",
+      "table:mm_feedback",
       "table:mm_fts",
       "table:mm_images",
       "table:mm_intakes",
       "table:mm_integrated_versions",
       "table:mm_integration_windows",
       "table:mm_job_batches",
+      "table:mm_job_controls",
       "table:mm_jobs",
       "table:mm_meta",
       "table:mm_native_cleanup",
+      "table:mm_owner_cancellations",
       "table:mm_provider_config",
       "table:mm_provider_descriptors",
       "table:mm_provider_journal",
@@ -2031,6 +2042,56 @@
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/status'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/media-activity'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/context/read'"
+    ]
+  },
+  "apps/server/src/scope/memory-capture-materials.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.materials'"
+    ]
+  },
+  "apps/server/src/scope/memory-feedback.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.feedback'",
+      "task:this.execution.register:kind:'memory.feedback-admit'"
+    ]
+  },
+  "apps/server/src/scope/memory-owner-questions.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.owner-reply'"
+    ]
+  },
+  "apps/server/src/scope/owner-question-routes.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions'",
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions/:id'",
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'POST',url:'/api/owner-questions/:id/reply'"
+    ]
+  },
+  "apps/server/src/scope/owner-question-schema.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "table:oq_dependencies",
+      "table:oq_meta",
+      "table:oq_questions",
+      "table:oq_replies",
+      "table:oq_restore",
+      "table:oq_state"
+    ]
+  },
+  "apps/server/src/scope/owner-questions.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "extension:runtime.services.registerUser:OWNER_QUESTIONS_DOMAIN"
     ]
   }
 }

@@ -12,9 +12,12 @@ import {MEMORY_DOMAIN} from './memory-schema.js';
 const memoryQuery=(raw:unknown)=>Object.fromEntries(Object.entries(z.record(z.unknown()).parse(raw)).map(([key,value])=>[key,['includeHistory','includeStale'].includes(key)&&['true','false'].includes(String(value))?value==='true':value]));
 const memoryReadQuery=(raw:unknown)=>{const fields=memoryQuery(raw);return Object.keys(fields).length?memoryReadFiltersSchema.parse(fields):undefined;};
 
-export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,plugins:ScopedPluginHost,providerOptions:MemoryProviderOptions={}){
- const host=new MemoryHost(runtime,db,configuration,execution,plugins,providerOptions),service=(context:Parameters<MemoryHost['forUser']>[0])=>host.forUser(context);
+export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,plugins:ScopedPluginHost,providerOptions:MemoryProviderOptions={},questions?:import('./owner-questions.js').ScopedOwnerQuestions){
+ const host=new MemoryHost(runtime,db,configuration,execution,plugins,providerOptions,undefined,questions),service=(context:Parameters<MemoryHost['forUser']>[0])=>host.forUser(context);
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory',handle:({context})=>service(context).view()});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs',handle:({context,request})=>service(context).jobs(request.query)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes',handle:({context})=>service(context).recipes()});
+ for(const kind of ['pause','resume','retry'] as const)registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind,handle:({context,request})=>service(context).jobControl((request.params as {id:string}).id,kind)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs',handle:({context,request})=>service(context).submit(request.body)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id',handle:({context,request})=>service(context).job((request.params as {id:string}).id)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel',handle:({context,request})=>service(context).cancel((request.params as {id:string}).id)});
