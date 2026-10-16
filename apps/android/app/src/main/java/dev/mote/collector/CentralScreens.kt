@@ -42,6 +42,51 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private val insightStore = CentralStateFile(directory, "insight-request", cipher)
     private val memoryCorrectionStore = CentralStateFile(directory, "memory-correction", cipher)
     private val memoryAdmissionStore = CentralStateFile(directory, "memory-admission", cipher)
+    private val fileRetries = CentralStateFile(directory, "file-retries", cipher)
+    fun pendingFileRetry(id: String): JSONObject? = CentralDraftWrites.barrier {
+        fileRetries.read().optJSONObject(id)?.also { check(it.getString("ownerKey") == ownerKey) }
+    }
+    fun submitFileRetry(api: CentralClient, id: String, originalRef: String, request: JSONObject): JSONObject {
+        check(ownsSelectedAccount() && ui.client === api)
+        UUID.fromString(id); require(Regex("original:[a-f0-9]{64}").matches(originalRef))
+        require(request.getString("stage") in setOf("transcribe", "diarize", "summary") && !request.has("operationId"))
+        val intent = CentralDraftWrites.barrier {
+            val all = fileRetries.read(); val previous = all.optJSONObject(id)
+            if (previous != null) {
+                val body = JSONObject(previous.getJSONObject("body").toString()).apply { remove("operationId") }
+                check(previous.getString("ownerKey") == ownerKey && previous.getString("originalRef") == originalRef && SourceRules.canonical(body) == SourceRules.canonical(request)) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                previous
+            } else JSONObject().put("ownerKey", ownerKey).put("originalRef", originalRef)
+                .put("body", JSONObject(request.toString()).put("operationId", UUID.randomUUID().toString())).also { all.put(id, it); fileRetries.write(all) }
+        }
+        return sendFileRetry(api, id, intent)
+    }
+    fun retryFileAdmission(api: CentralClient, id: String) = sendFileRetry(api, id, requireNotNull(pendingFileRetry(id)))
+    private fun sendFileRetry(api: CentralClient, id: String, intent: JSONObject): JSONObject {
+        check(ownsSelectedAccount() && ui.client === api && intent.getString("ownerKey") == ownerKey)
+        val account = AccountBinding.self(api.server, api.get("/api/connections/self")); check(account.key == ownerKey)
+        val request = intent.getJSONObject("body"); val operationId = request.getString("operationId"); UUID.fromString(operationId)
+        val receipt = try { api.post("/api/files/" + encode(id) + "/retry", request) }
+        catch (failure: CentralFailure) {
+            // These two M06 refusals occur before admission. They must allow
+            // the user to wait or explicitly confirm unknown work later;
+            // transport failures and unverified acknowledgements stay durable.
+            if (failure.status == 409 && failure.code in setOf("external_result_unknown", "file_processing_active")) clearFileRetry(id, operationId)
+            throw failure
+        }
+        require(receipt.getBoolean("queued") && Regex("[a-f0-9]{64}").matches(receipt.getString("taskId")))
+        val task = api.get("/api/tasks/" + receipt.getString("taskId"))
+        val operation = "file-retry:" + SourceRules.hash(JSONArray().put(intent.getString("originalRef")).put(operationId).toString())
+        require(task.getString("id") == receipt.getString("taskId") && task.getString("operationId") == "task:" + SourceRules.hash(JSONArray().put(account.userId).put(operation).toString()))
+        require(task.getString("kind") == if (request.getString("stage") == "summary") "processing.derivatives" else "processing.pipeline")
+        check(ownsSelectedAccount() && ui.client === api)
+        clearFileRetry(id, operationId)
+        return receipt
+    }
+    private fun clearFileRetry(id: String, operationId: String) = CentralDraftWrites.barrier {
+            val all = fileRetries.read()
+            if (all.optJSONObject(id)?.getJSONObject("body")?.optString("operationId") == operationId) { all.remove(id); fileRetries.write(all) }
+    }
     fun pendingMemoryAdmission(): JSONObject? = CentralDraftWrites.barrier { memoryAdmissionStore.read().takeIf { it.has("operationId") } }
     fun discardMemoryAdmission() = CentralDraftWrites.barrier { memoryAdmissionStore.write(JSONObject()) }
     fun submitMemory(api: CentralClient, request: JSONObject): JSONObject {

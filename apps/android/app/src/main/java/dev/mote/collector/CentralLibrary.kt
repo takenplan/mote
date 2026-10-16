@@ -277,7 +277,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
     }
     fun file(id: String, offset: Int = 0) {
         val api = client
-        ui.work(MoteI18n.text("正在读取文件…"), { api.get("/api/files/" + enc(id)) to api.get("/api/files/" + enc(id) + "/chunks?offset=$offset") }) { (row, chunks) ->
+        ui.work(MoteI18n.text("正在读取文件…"), { Triple(api.get("/api/files/" + enc(id)), api.get("/api/files/" + enc(id) + "/chunks?offset=$offset"), screens.pendingFileRetry(id)) }) { (row, chunks, pendingRetry) ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             val navigation = ui.navigationRevision
             fun active() = screens.ownsSelectedAccount() && ui.client === api && ui.navigationRevision == navigation
@@ -382,10 +382,16 @@ internal class CentralLibrary(private val screens: CentralScreens) {
             if (cancellation?.optBoolean("canCancel") == true) ui.button(MoteI18n.text("停止处理")) {
                 ui.work(MoteI18n.text("正在停止处理…"), { api.post("/api/files/" + enc(id) + "/cancel") }) { file(id, offset) }
             }
-            if (cancellation?.optString("wait") != "running") listOf("transcribe" to "转写", "diarize" to "说话人分离", "summary" to "摘要").forEach { (stage, label) ->
+            if (pendingRetry != null) {
+                ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"))
+                ui.button(MoteI18n.text("重试同一请求")) {
+                    if (active()) ui.work(MoteI18n.text("正在处理…"), { screens.retryFileAdmission(api, id) }) { if (active()) file(id, offset) }
+                }
+            }
+            if (pendingRetry == null && cancellation?.optString("wait") != "running") listOf("transcribe" to "转写", "diarize" to "说话人分离", "summary" to "摘要").forEach { (stage, label) ->
                 ui.button(MoteI18n.text("重试") + " · " + MoteI18n.text(label)) {
                     val retry = {
-                        ui.work(MoteI18n.text("正在处理…"), { api.post("/api/files/" + enc(id) + "/retry", JSONObject().put("stage", stage).put("confirmUnknown", cancellation?.optString("wait") == "unknown")) }) { file(id, offset) }
+                        if (active()) ui.work(MoteI18n.text("正在处理…"), { screens.submitFileRetry(api, id, originalRef, JSONObject().put("stage", stage).put("confirmUnknown", cancellation?.optString("wait") == "unknown")) }) { if (active()) file(id, offset) }
                     }
                     if (cancellation?.optString("wait") == "unknown") screens.confirm(MoteI18n.text("确认重试"), MoteI18n.text("上次处理是否结束未知，重试可能重复执行。请确认后继续。"), retry) else retry()
                 }

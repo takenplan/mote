@@ -16,7 +16,7 @@ resource files do not authorize another build.
 | Native Google/Gmail/Lark/recording connectors | Owned M10 instances, encrypted same-operation intents, source mappings, OAuth/status/cancel/retry/disconnect and real authenticated original WAV playback narrowly pass. | Obtain explicitly frozen M13 large UTF-8 result/fixed task-identity delta, then exercise the original large preview/status task result. M10 explicitly assigns pinned CLI dependency installation to the deployment administrator; the disabled native user-install entry reflects that established permission change, not a pending user-level installer API. Never add a shell fallback. |
 | Generic Imports and upload staging | Joint c45; multipart/private preview/explicit confirmation/actual lost admission ACK passes13.234s. CentralImports exact original/archive/admission checks pass3 JVM tests. | Final same-body recovery regression plus required related server tests. Explicit confirmation must still be the publication boundary; saved M03 bytes alone are insufficient. |
 | Files raw/current text, original playback, correction, confirmed names and export | Joint a10 is already consumed. Actual native generated WAV/chunks/correction/names/exact text and authenticated original playback pass. | Retain exact source/artifact/chunk/text and original hash assertions in final representative. |
-| Original Files cancel/stage-retry/delete | Joint explicitly released consumable PREP0095c897078fce04ce75c687a0e1fc6abc81b479 in its public freeze handoff; composed as13b70574. It is not whole joint acceptance. Native original retry still lacks the required stable operationId. | Test-only original retry/lost real admission ACK/recreation/A-B characterization is prepared but UNCOMPILED/UNRUN. Obtain the next parent allocation, execute RED, then adapt the existing account-encrypted intent and controls. Retain unknown/physical occupancy, diarize-only raw ASR, complete export and delete tests; no new backend. |
+| Original Files cancel/stage-retry/delete | Joint explicitly released consumable PREP0095c897078fce04ce75c687a0e1fc6abc81b479 in its public freeze handoff; composed as13b70574. It is not whole joint acceptance. Old actual native retry reaches400 without operationId. Minimal durable retry source is now prepared, UNCOMPILED/UNVERIFIED. | Obtain the next parent allocation and execute original lost-ACK/recreation/A-B GREEN against the actual shared producer. Retain unknown/physical occupancy, diarize-only raw ASR, complete export and delete tests; no new backend. |
 | Model preset copy with credentials, connection probe and provider model directory | These three controls are present in baseline98d CentralAdmin.models. Current ownedConfiguration(models) keeps CAS/secret preservation but explicitly displays that copy/probe/directory await multiuser APIs. An Ask selection test is not equivalent. | Obtain the shared M04-compatible owned/reference contract; retain private credential ownership, opaque shared resource rules, fixed original Api/revision and existing endpoint/network safeguards. TDD actual original controls; do not infer masked secrets or recreate old global model routes. |
 | QR/JSON/scan pairing and original device reauthorization | Producer6a84. Native e8b9/806 parses v2, journals PKCE before claim, checks exact self, preserves finite credential expiry and same-grant ACK recovery. Real original pairing2.041s and issuer QR0.935s pass; parser5/5. | Confirmed post-restart ACK410 P2: real ACK200→restart→self200→ACK410 leaves pending,2.109s EXIT1. Minimal c0/d3 now passes the real restart samecase2.117s; revoked credential negative2.019s, corrected five-field/self/unsaved-draft reauthorization0.408s and held-picker samecase0.993s pass. Final bounded closure review and final combined core Worker recovery remain. |
 | Agent catalog and declared canonical reading | Actual M08 Material-read succeeds; native10442 fixes the wrong old evidence path. Same original catalog/episodes/expand/A/B case passes0.928s. | `/api/agent-view/startup` and `/events?afterSeq=0` are still503 for member and admin in the current genuine host. Preserve the old new-conversation preview/no-model-call semantics and only actually recorded historical traces; await shared owner freeze, no bundle or reconstructed-prompt substitute. |
@@ -159,6 +159,25 @@ cleanup exits are retained; no static review is counted as these executions.
   terminated normally with cleanup0. Logs are
   `/tmp/m15-files-retry-fixture-startup{,-approved}.log/.exit`. This only checks
   fixture startup/cleanup, not Android compilation, RED or consumer behavior.
+  The original existing APK was then exercised through its normal Launcher→
+  More→Content→Files→detail→retry control using UI-tree-derived coordinates.
+  Actual A POST was `{stage:"transcribe",confirmUnknown:false}`, HTTP400 and
+  no task, `/tmp/m15-native-file-retry-ui-red3.log/.exit/-trace.json`, EXIT1;
+  generated backend cleanup0. Initial attempts were fixture entry failures:
+  a direct launch of the non-exported Activity was rejected; then the scroll
+  picker selected a Spinner instead of the body ScrollView. Both precede the
+  intended assertion and remain separate logs, not product RED. No export
+  attribute or system permission was changed. The old APK and SHA256 remain at
+  `/tmp/m15-before-file-retry-app.apk{,.sha256}`.
+
+  Minimal source preparation adds one encrypted file-retry journal in the
+  already account-owned central directory, durable operation/body before POST,
+  exact M05 operation/kind acknowledgement verification and a same-request
+  recovery button. Only explicit pre-admission409 `file_processing_active` or
+  `external_result_unknown` retire that unadmitted intent; ambiguous transport
+  and bad receipts retain it. Existing stop/unknown consent/stage names remain.
+  This source and the new instrumented method still require compilation and
+  actual same-case GREEN; no latest357 or older native evidence is reassigned.
 
   New public dependency RED0d60ded2 is separate from the unrun Android test:
   real A forget→allow-again→same bytes/revision re-upload (same capture UUID)
