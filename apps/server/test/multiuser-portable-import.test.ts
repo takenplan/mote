@@ -1,7 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import {readdirSync} from 'node:fs';
+import {readdirSync,mkdtempSync,rmSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {DatabaseSync} from 'node:sqlite';
+import {buildApp} from '../src/app.js';
+import {backupScopedInstance,restoreScopedInstance} from '../../../scripts/scoped-backup.mjs';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {scopedMemoryFixture} from './fixtures/scoped-memory-host.js';
@@ -96,4 +100,17 @@ test('empty-owner import receipts paginate with owner, kind, epoch and page-size
  const page=(await f.request(f.a.token,'/api/portable/imports?limit=2')).json();assert.equal(page.items.length,2);assert.ok(page.nextCursor);for(const item of page.items)assert.ok(ids.delete(item.id));const rest=(await f.request(f.a.token,'/api/portable/imports?limit=2&cursor='+encodeURIComponent(page.nextCursor))).json();assert.equal(rest.nextCursor,null);for(const item of rest.items)assert.ok(ids.delete(item.id));assert.equal(ids.size,0);
  for(const [token,path] of [[f.b.token,'imports?limit=2'],[f.a.token,'imports?limit=3'],[f.a.token,'exports?limit=2']])assert.equal((await f.request(token,'/api/portable/'+path+'&cursor='+encodeURIComponent(page.nextCursor))).statusCode,400);
  assert.deepEqual((await f.request(f.b.token,'/api/portable/imports')).json(),{items:[],nextCursor:null});
+});
+
+test('later personal data imported into an earlier stopped instance does not become new automatic input after restart',async t=>{
+ const f=await scopedMemoryFixture(t),directory=mkdtempSync(join(tmpdir(),'mote-m16-import-history-')),snapshot=join(directory,'snapshot'),target=join(directory,'restored');let restored:Awaited<ReturnType<typeof buildApp>>|undefined;
+ try{
+  await f.node.app.close();await backupScopedInstance({source:f.directory,out:snapshot});await f.restart();const material=await f.publish(f.a,'A'),saved=await archive(f);await f.node.app.close();
+  await restoreScopedInstance({from:snapshot,target});restored=await buildApp({dataDir:target});
+  const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>restored!.app.inject({url,method,headers:{'x-mote-protocol-version':'2','x-mote-ingress-version':'3',...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
+  assert.equal((await request(f.a.token,'/api/auth/self')).statusCode,401);const logged=await request(undefined,'/api/auth/login','POST',{username:'generated-a',password:'Generated-memory-password-only-01',mode:'client'});assert.equal(logged.statusCode,200,logged.body);const token=logged.json().token;assert.equal(logged.json().userId,f.a.userId);
+  const id=randomUUID(),started=await request(token,'/api/portable/imports','POST',{operationId:id,archive:saved});assert.equal(started.statusCode,200,started.body);let receipt=started.json();for(let attempt=0;receipt.state==='working'&&attempt<300;attempt++){await delay(10);receipt=(await request(token,'/api/portable/imports/'+id)).json();}assert.equal(receipt.state,'completed',JSON.stringify(receipt));
+  const events=()=>{const db=new DatabaseSync(join(target,'mote.sqlite'),{readOnly:true});try{return db.prepare("SELECT entity FROM ma_auto_events WHERE user_id=? AND kind='insights'").all(f.a.userId);}finally{db.close();}};assert.deepEqual(events(),[]);assert.equal((await request(token,'/api/materials/'+material.id)).statusCode,200);
+  await restored.app.close();restored=await buildApp({dataDir:target});assert.deepEqual(events(),[],'restart must not turn imported canonical data into a newly authorized automation notification');
+ }finally{if(restored)await restored.app.close();rmSync(directory,{recursive:true,force:true});}
 });
