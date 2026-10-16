@@ -76,6 +76,72 @@ counted as independent production failures or acceptance passes.
 - Current snapshot server TypeScript and scope inventory/import checks EXIT0:
   `/tmp/m14-snapshot-public-type.log`, `/tmp/m14-snapshot-scope.log`.
 
+## Activity and central status preservation
+
+Old `activity.test.ts` characterization: 9/9 EXIT0, including exact relationships
+before pagination, original-record deduplication, owner questions, cross-source
+work, real delegated receipts and selected-goal-only payload hydration.
+`/tmp/m14-activity-characterization.log/.exit` records the original chain.
+
+Actual M03/M06, M07 and M08 consumer assertions in539471e8 all received503
+(3/3 RED), then the same3 passed after455d1dcf. Logs:
+`/tmp/m14-activity-real-{red,green}.log/.exit`. No new executor or database was
+introduced: the projection joins existing owner-qualified receipts in SQLite,
+selects exact relationships/state before LIMIT and hydrates selected goals only.
+The Desktop account reader verifies connections/self before this private read.
+
+Expanded real Memory jobs preserve one original across two jobs, exact source
+and Material filtering before a one-item page, branch pagination, and one record
+with two evidence blocks awaiting an owner reply:2/2 EXIT0,
+`/tmp/m14-activity-expanded2.log/.exit`.
+
+M15's independent review of455d identified a legitimate unbatched owner-correction
+crash and a completed extraction masking a failed admitted image stage. Both were
+confirmed by the existing actual owner-correction and genuine-pixel-read-negative
+chains (ba0c4c67 RED2/2) and the same2 passed after using frozen unbatched inputs
+and all admitted stages of the exact original. Logs:
+`/tmp/m14-activity-review-{red,green}.log/.exit`.
+
+Source retirement initially hid its stale work from attention. The same real
+held-job/source-delete chain now retains a stale semantic receipt when live
+record mappings are gone, without inventing a zero record count. Empty-body
+Memory input is rejected400 before admission; its first empty-job fixture was
+not a valid production RED. Real durable M06-to-M07 intake waiting for its
+automatic window was separately RED in65e208da, then joined as unfinished original
+records before job assignment. Deduplication, correction, retirement and pending
+intake4/4 EXIT0: `/tmp/m14-activity-pending-green.log/.exit`.
+
+Memory branch artifacts and Ask child results were actual RED2/2 in7fa028de,
+then the same2 passed after joining persisted publication/run/task relationships
+and revalidating artifact access: `/tmp/m14-activity-branches-{red,green}.log/.exit`.
+Historical completion does not claim a current artifact grant. The original
+completed-Ask/source-delete behavior was separately RED in cb9d3ebd and restored
+in c16bfb12; the complete Ask owner/isolation and delegated-worker cases2/2 EXIT0:
+`/tmp/m14-activity-history-{red,green}.log/.exit`.
+
+Desktop's actual emitted main IPC reads this projection, changes from A to B
+without A's work, and observes an actual central OCR task that failed/staled
+instead of the immutable received pending flag. The first OCR fixture expected
+only blocked/failed before reaching its reader assertion and observed stale;
+that was not the valid reader RED. Corrected ba0c4c67 reproduces pending versus
+failed in `/tmp/m14-ocr-valid-red.log/.exit`. The same OCR case plus the actual
+source/spool/snapshot/main Activity journey2/2 EXIT0 after the fix:
+`/tmp/m14-activity-ocr-desktop-green2.log/.exit`. Initial combined GREEN attempt
+stopped at a Desktop TypeScript document-field error before0 tests; retained in
+`/tmp/m14-activity-ocr-desktop-green.log/.exit` and corrected before the pass.
+
+M13 independently reviewed exact c16bfb12 Activity/OCR, with no confirmed new
+P0/P1/P2; `/tmp/mote-m13-review-m14-c16.md`. This was bounded static review, not an
+independent rerun or final performance/native acceptance.
+
+The remaining unbatched-correction exact source relationship was RED in024eb946
+and fixed by0c5e6450's two owner-qualified metadata joins from frozen inputs to
+evidence/Material sources. The same correction and original deduplication cases
+2/2 EXIT0: `/tmp/m14-activity-correction-source-{red,green}.log/.exit`. M13 also
+reviewed that exact delta with no confirmed new finding; the same report is
+appended. M15's c16 follow-up independently closes its earlier P1/P2 statically
+in `/tmp/mote-m15-review-m14-c16.md`.
+
 ## Dependency and independent review checkpoints
 
 Composed: M11 final98d76945, M15 public Wire2 107004df, M15 ingress2b45f6ce and
@@ -95,12 +161,49 @@ independent rerun. All reviewers used existing execution conversations only.
 Standalone server-only handoffs: source/state/context fdc50cdc; snapshot
 d38372661b3628dd2442c494f02ebd8a747cbfb8 followed by image-stage fix
 63d66f175a7873a3eac4201efcadbd04d0d2177e. Android's actual consumer acceptance
-of the latter remains pending; Desktop's actual consumer is verified above.
+of the latter was subsequently reported GREEN by M15's actual provider/Worker
+test, preserving one history version and the unchanged phone original; this is
+peer evidence, not an independent rerun here. Desktop's actual consumer is
+verified above.
+
+Stable three-consumer composition4ae2ee044840b6b0939713d5908357f3340a284b contains
+Desktop c16bfb129720d7f6ac186aebfdf06dfd7d9c657d, Android
+ac0fe8d111fb7cec7d14e7af0bd19626367558ae and Web
+0cc7311af17463f17ba3b8664741bb9ac8f6b1ef. The merges preserve Activity registration,
+capture-preview imports, one union of source/head/context and heartbeat methods,
+the stronger Android heartbeat characterization and both clients' English
+messages in synchronized catalogs. No Desktop runtime differs from c16bfb12.
+Fresh shared build, composed server/Web typechecks and scope inventory EXIT0;
+logs `/tmp/m14-composed-shared-build.log`, `/tmp/m14-composed-types.log`.
+The affected dry-run EXIT0 selects check:local and the actual Android JVM suite;
+`/tmp/m14-composed-affected-plan.log` is a plan, not a gate pass. M13's later
+consumer work and M15's newly investigated native scenario are not declared
+accepted by selecting these stable composition points.
+
+The independently demonstrated Android Settings/queue lock-order fix5a0dd911
+was subsequently merged as well. M15 reports340/340 JVM, APK/testAPK, retained
+handles/process-death recovery, three source runs, snapshot recovery and late ACK
+all passing at that exact freeze. M14 bounded static review found no new
+confirmed issue (`/tmp/mote-m14-review-m15-5a0d.md`); no claim is made that it
+explains the earlier untraced cold-login timeout.
+
+The composed Desktop suite at4ae2ee04 ran59 files/484 tests:483 passed and1 failed
+because the new native fixture's explanatory comment preceded the mandatory
+first-line background-policy require. Moving only those comments preserved the
+executable order. Exact background fixture rerun2/2 EXIT0 under standard review:
+`/tmp/m14-composed-background-approved.log/.exit`. The first restricted rerun
+could not launch its generic generated Electron window and is retained in
+`/tmp/m14-composed-background-green.log/.exit`; this was an environment failure,
+not a product RED. This is the existing generic `test-background-ui.cjs`, not the
+denied M13 Web action. The initial full command remains EXIT1 and is not called
+484/484. Adding the missing authored Activity English phrase and synchronizing
+both catalogs makes8373-message i18n validation EXIT0:
+`/tmp/m14-composed-i18n-green.log/.exit` (initial failure retained separately).
 
 ## Finite remaining acceptance
 
-Original Activity aggregate and the remaining status projection are still being
-closed against real scoped domain receipts. Native M12 calendar Actions require
+Activity and the central status consumer now have the real-chain evidence above.
+Native M12 calendar Actions require
 the explicit human authorization of its denied handoff. M16 owns personal export
 and instance backup/restore/delete public orchestration; this snapshot byte
 recovery is a separate existing collector path. No replacement framework is
