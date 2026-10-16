@@ -21,6 +21,7 @@ import java.io.File
  * registry, never requests a permission and never touches the system calendar. */
 internal class GeneratedCalendarContext(base: Context, private val calendar: GeneratedCalendarProvider) : ContextWrapper(base) {
     var allowed = true
+    @Volatile var beforePermission: (() -> Unit)? = null
     private val generatedResolver = ContentResolver.wrap(calendar.apply {
         attachInfo(base, ProviderInfo().apply { authority = CalendarContract.AUTHORITY; exported = false })
     })
@@ -28,6 +29,7 @@ internal class GeneratedCalendarContext(base: Context, private val calendar: Gen
     override fun getContentResolver(): ContentResolver = generatedResolver
     override fun checkSelfPermission(permission: String): Int =
         if (permission in setOf(Manifest.permission.READ_CALENDAR, Manifest.permission.WRITE_CALENDAR)) {
+            beforePermission?.let { beforePermission = null; it() }
             if (allowed) PackageManager.PERMISSION_GRANTED else PackageManager.PERMISSION_DENIED
         } else super.checkSelfPermission(permission)
 }

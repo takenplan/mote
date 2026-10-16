@@ -139,6 +139,38 @@ class MultiuserWorkerInstrumentedTest {
         } finally {cancel(app);generated.delete()}
     }
 
+    @Test fun anOldCalendarWorkerCannotAcquireBWhileItsNativePermissionCheckIsDelayed() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        assertNotEquals(android.content.pm.PackageManager.PERMISSION_GRANTED,app.checkSelfPermission(android.Manifest.permission.WRITE_CALENDAR))
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        check(app.getSharedPreferences("mote",Context.MODE_PRIVATE).edit().putString("deviceId","same-device").commit())
+        val generated=File(app.cacheDir,"generated-calendar-worker-state.json");generated.delete()
+        val native=GeneratedCalendarProvider(generated);val device=GeneratedCalendarContext(app,native)
+        val pool=java.util.concurrent.Executors.newSingleThreadExecutor();val release=java.util.concurrent.CountDownLatch(1)
+        fun parameters(owner:String):WorkerParameters {
+            // Direct doWork boundary. These unused async progress/foreground
+            // collaborators are null; no WorkManager persistence claim is made.
+            return WorkerParameters::class.java.constructors.single().newInstance(java.util.UUID.randomUUID(),workDataOf("owner" to owner),emptyList<String>(),WorkerParameters.RuntimeExtras(),0,0,java.util.concurrent.Executor {it.run()},kotlin.coroutines.EmptyCoroutineContext,null,null,null,null) as WorkerParameters
+        }
+        try {
+            login(app,"b");val bClient=CalendarActions(device,foreground=true);bClient.connect()
+            val rows=bClient.list().getJSONArray("items");val original=(0 until rows.length()).map(rows::getJSONObject).first {it.getString("status")=="proposed"}
+            val approved=bClient.confirm(original,original.getJSONObject("event"),"7");val id=approved.getString("id")
+            login(app,"a");settings.save(settings.read().copy(syncMode="realtime",syncPaused=false))
+            val ownerA=settings.read().ownerKey();val entered=java.util.concurrent.CountDownLatch(1)
+            device.beforePermission={entered.countDown();check(release.await(20,TimeUnit.SECONDS))}
+            val old=pool.submit<androidx.work.ListenableWorker.Result> {CalendarActionWorker(device,parameters(ownerA)).doWork()}
+            assertTrue(entered.await(5,TimeUnit.SECONDS));login(app,"b")
+            // Explicit B sending policy must not legitimize an old A job.
+            settings.save(settings.read().copy(syncMode="realtime",syncPaused=false));release.countDown();old.get(20,TimeUnit.SECONDS)
+            assertEquals("The old A worker must not dispatch B's approved native operation",0,native.inserts)
+            fun bAction():JSONObject {val page=CentralAccess.requireClient(app).get("/api/actions?limit=100").getJSONArray("items");return (0 until page.length()).map(page::getJSONObject).single {it.getString("id")==id}}
+            assertEquals("approved",bAction().getString("status"))
+            val current=CalendarActionWorker(device,parameters(settings.read().ownerKey())).doWork()
+            assertEquals(androidx.work.ListenableWorker.Result.success(),current);assertEquals(1,native.inserts);assertEquals("succeeded",bAction().getString("status"))
+        } finally {release.countDown();pool.shutdownNow();cancel(app);generated.delete()}
+    }
+
     @Test fun actualNativeActionsRetiresVisiblePrivateProposalsBeforeAnotherAccountResumes() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
