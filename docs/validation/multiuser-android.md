@@ -167,3 +167,23 @@ Minimal native adaptations retain the Memory recipe checkboxes using existing /m
 Fresh narrow7/7 JVM (progress6 + portable HTTP corruption1) plus fixture app/test APK EXIT0 `/tmp/m15-settings-stage-green-build.log/.exit`,15s. Same three native cases respectively passed1/1 EXIT0: `/tmp/m15-memory-recipes-final-green.log`0.774s, `/tmp/m15-models-settings-final-green.log`0.742s, `/tmp/m15-generic-document-final-green.log`0.632s. i18n8382 EXIT0 `/tmp/m15-settings-stage-i18n.log/.exit`. M13 bounded exact667 Memory review `/tmp/mote-m13-review-m15-memory-667.md` has no new confirmed issue but no execution claim; later model/recipe/generic deltas still require bounded review and final whole-module gates.
 
 Parent explicitly resumed M14 as the fourth execution conversation; no fifth task is created. Personal portable import policy is now authorized as same-deployment/same-account merge/dedup only, with cross-deployment/account rejection; implementation remains M16-owned and native consumption awaits its freeze. M13 owns unfinished shared raw capture/session/image/OCR projection. M12 remains pending and untouched. No M15 remote push/PR or final required command is claimed at this checkpoint.
+
+
+### Composed Android runtime e6 / backend 8c92 acceptance
+
+Merged exact M16 `4731dabfaaf02d06a5a98d730525c4a3329679cb` as `8c92abd70ef7e12795a002d33387f3be849c7f1a`. This closes the inherited backup RED ancestry and includes the reviewed management retirement, backup owner-path/snapshot/pin/negative-byte corrections. No Android runtime difference from e6; M16 import remains WIP and is not consumed. M15 independently reviewed the one-line negative-byte correction in `/tmp/mote-m15-review-m16-9797.md`; this is static evidence, not an independently executed M16 test.
+
+At exact8c92, real Gradle `:app:testDebugUnitTest :app:assembleDebug` EXIT0 in38s, `/tmp/m15-e6-full-android.log/.exit`:73 XML suites,346/346 tests,0 failures/errors/skips; production debug APK emitted. The APK/testAPK runtime remains e6. Adjacent actual native regressions on e6 pass independently: portable selected-document integrity1/1 `/tmp/m15-e6-portable-regression`, account draft retirement1/1 `/tmp/m15-e6-draft-regression`, same-owner resume/save1/1 `/tmp/m15-e6-resume-regression` (each `.log/.exit`, verified EXIT0). Earlier scoped settings/Memory/generic stage six actual native GREEN cases remain separately recorded above.
+
+Started a fresh backend from8c92 using the existing actual `multiuser-backend.ts` Accounts/SQLite/single-executor/M03/M06 fixture, temporary loopback/generated A/B, no external services. Current isolated emulator `emulator-5562`:
+
+- generated capture/drain/B explicit capture1/1 EXIT0 `/tmp/m15-composed-capture.log/.exit`;
+- actual username/password native note/account switch1/1 EXIT0 `/tmp/m15-composed-login.log/.exit`;
+- late real ACK plus listener closure/recovery1/1 EXIT0 `/tmp/m15-composed-ack-network.log/.exit`;
+- same-owner token rotation/retained original intent1/1 EXIT0 `/tmp/m15-composed-token.log/.exit`;
+- actual DocumentsProvider snapshot expiry/recovery/existing Worker1/1 EXIT0 `/tmp/m15-composed-snapshot.log/.exit`;
+- actual Source Workers, equal IDs, byte spool/context, absent URI permission1/1 EXIT0 `/tmp/m15-composed-source.log/.exit`;
+- actual queue/settings-monitor regression1/1 EXIT0 `/tmp/m15-composed-lock.log/.exit`;
+- phase1 A offline/B explicit upload1/1 EXIT0 `/tmp/m15-composed-death-phase1.log/.exit`; launched only the fixture MainActivity, SIGKILL same-UID PID13624 and observed absent (`/tmp/m15-composed-sigkill.log`), then phase2 without clearing data1/1 EXIT0 `/tmp/m15-composed-death-phase2.log/.exit`. Original A directory/draft/ID/bytes survived, B remained separate, fresh explicit A alone resumed its original queue. The first immediate post-launch PID lookup found no process yet and stopped before kill; that setup race is not a failed recovery test.
+
+No system notification/accessibility/media/calendar grants, physical-device or live-provider acceptance is inferred. This is still a checkpoint: manual native Memory start remains obsolete and now has a dedicated pending RED; M13 raw-archive projection and M16 personal import freezes are awaited. Final own required affected/remote head/Draft PR remain open.
