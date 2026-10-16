@@ -72,6 +72,24 @@ class MultiuserWorkerInstrumentedTest {
             }
         } finally {watchdog.interrupt();monitor?.let(instrumentation::removeMonitor);output.delete()}
     }
+    @Test fun failedGenericSupportDownloadPreservesTheSelectedExistingDocument() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val sentinel="Generated existing support document "+java.util.UUID.randomUUID()
+        val output=File(app.cacheDir,"generated-support-result.json").apply {writeText(sentinel)}
+        val instrumentation=InstrumentationRegistry.getInstrumentation();var monitor:android.app.Instrumentation.ActivityMonitor?=null
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try {
+            androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","developer")).use {scenario->
+                waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+                monitor=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_CREATE_DOCUMENT).apply {addCategory(android.content.Intent.CATEGORY_OPENABLE);addDataType("application/json")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_OK,android.content.Intent().setData(android.net.Uri.fromFile(output))),true)
+                var clicked=false;waitFor {scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()=="导出支持包"&&it.isEnabled}?.let {it.performClick();clicked=true}};clicked}
+                waitFor {monitor!!.hits==1};waitFor {var ready=false;scenario.onActivity {activity->ready=!it.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.tag=="central-status"&&it.text.isNotBlank()&&it.text.toString()!="资料已导出"}};ready}
+                assertEquals("An unavailable or forbidden download must not truncate an existing selected document",sentinel,output.readText())
+            }
+        } finally {monitor?.let(instrumentation::removeMonitor);output.delete()}
+    }
+
     @Test fun actualNativeCentralDraftStoresRetireWhenTheSameOriginChangesAccount() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server=endpoint(),token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false),confirmCentralEndpoint=true);login(app,"a");MoteI18n.select(app,"zh-CN")
