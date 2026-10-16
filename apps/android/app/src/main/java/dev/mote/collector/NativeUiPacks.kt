@@ -37,10 +37,8 @@ internal class NativeUiPackRegistry {
     private var removalReason: String? = null
     private var notificationErrors: List<NativeUiNotificationError> = emptyList()
     @Volatile var revision = 0L; private set
-    @Synchronized fun register(provider: NativeThemeProvider) {
-        val supplied = provider.snapshot
-        val snapshot = supplied.copy(tokens = java.util.Collections.unmodifiableMap(supplied.tokens.toMap()), schemes = java.util.Collections.unmodifiableMap(supplied.schemes.mapValues { java.util.Collections.unmodifiableMap(it.value.toMap()) }))
-        require(snapshot.identity !in themes) { "Duplicate native theme provider" }
+    /** The base and both resolved variants have the same type and semantic contract. */
+    private fun validateThemeTokens(snapshot: NativeThemeSnapshot) {
         listOf("background", "surface", "sidebar", "ink", "muted", "accent", "accent-hover", "tint", "border", "control-border", "divider", "success", "warning", "danger", "success-tint", "warning-tint", "danger-tint", "primary-background", "primary-ink", "surface-raised").forEach {
             require(Regex("#[a-fA-F0-9]{6}").matches(snapshot.value(it))) { "Unsupported native color token: $it" }
         }
@@ -51,10 +49,16 @@ internal class NativeUiPackRegistry {
         require(snapshot.number("line-body").isFinite() && snapshot.number("line-body") > 0)
         require(snapshot.number("letter-title").isFinite())
         listOf("font", "font-heading").forEach { require(snapshot.value(it).isNotBlank()) }
+    }
+    @Synchronized fun register(provider: NativeThemeProvider) {
+        val supplied = provider.snapshot
+        val snapshot = supplied.copy(tokens = java.util.Collections.unmodifiableMap(supplied.tokens.toMap()), schemes = java.util.Collections.unmodifiableMap(supplied.schemes.mapValues { java.util.Collections.unmodifiableMap(it.value.toMap()) }))
+        require(snapshot.identity !in themes) { "Duplicate native theme provider" }
+        validateThemeTokens(snapshot)
         require(snapshot.schemes.isEmpty() || snapshot.schemes.keys == setOf("light", "dark")) { "Native appearance requires both color schemes" }
         snapshot.schemes.forEach { (scheme, values) ->
             require(scheme in setOf("light", "dark") && values.keys == snapshot.tokens.keys) { "Incompatible native color schemes" }
-            values.forEach { (key, value) -> if (snapshot.value(key).startsWith("#")) require(Regex("#[a-fA-F0-9]{6}").matches(value)) }
+            validateThemeTokens(snapshot.copy(tokens = values, schemes = emptyMap()))
         }
         themes[snapshot.identity] = snapshot
     }

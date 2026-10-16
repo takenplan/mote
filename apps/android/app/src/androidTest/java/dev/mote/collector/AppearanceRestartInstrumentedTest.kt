@@ -25,6 +25,13 @@ class AppearanceRestartInstrumentedTest {
         // The product Application already initialized in this new process; do not initialize it here.
         assertEquals(expected, MoteAppearance.preference())
         assertEquals(expected.value, context.getSharedPreferences("mote.appearance", 0).getString("appearance", "auto"))
+        if (Build.VERSION.SDK_INT >= 31) {
+            val systemMode = context.getSystemService(android.app.UiModeManager::class.java).nightMode
+            require(systemMode in listOf(android.app.UiModeManager.MODE_NIGHT_NO, android.app.UiModeManager.MODE_NIGHT_YES))
+            val report = assertPlatformAppearance(context, expected.dark(systemMode == android.app.UiModeManager.MODE_NIGHT_YES))
+                .put("preference", expected.value).put("systemMode", systemMode).put("sdk", Build.VERSION.SDK_INT)
+            java.io.File(context.getExternalFilesDir(null), "appearance-restart-platform.json").writeText(report.toString(2))
+        }
         ActivityScenario.launch(MainActivity::class.java).awaitMainUi().use { scenario ->
             scenario.onActivity { activity ->
                 val dark = expected.dark(MoteAppearance.systemDark())
