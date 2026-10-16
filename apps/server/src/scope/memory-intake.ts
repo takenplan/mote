@@ -25,6 +25,7 @@ export class MemoryIntake {
  private receipt(context:UserContext,id:string){const data=this.data(context),row=data.sql.get('SELECT * FROM mm_intakes WHERE user_id=$user AND id=?',id);if(!row||row.revoked||row.state==='skipped')throw new PrivateDataError('conflict',409);const receipt=intakeReceiptSchema.parse(JSON.parse(String(row.json)));if(data.state().generation!==receipt.generation||memoryHash(data.binding())!==memoryHash(receipt.binding))throw new PrivateDataError('conflict',409);data.materialEvidence(String(row.material_id),String(row.revision));return {data,row,receipt};}
  private accept(run:TaskRun,material:Readonly<{id:string;revision:string}>){
   run.grant.assert();const data=this.data(run.context),state=data.state(),settings=memorySettingsSchema.parse(JSON.parse(state.settings)),manifest=data.privateData.material(material.id,material.revision);
+  if(manifest.origin.sourceId==='mote-owner-memory-corrections')return;
   const source=data.privateData.source(manifest.origin.sourceId),refs=settings.sourceRecipes[manifest.origin.sourceId]??(isCaptureMemorySource(source.id,source.deviceId)?settings.captureRecipes:source.kind==='lark-docs'?settings.documentRecipes:settings.recipes??[settings.profile==='coding'?settings.codingRecipe:settings.recipe]),bindings=refs.map(ref=>this.strategies.resolve(ref).binding);
   for(const strategy of bindings){
    const identity=memoryHash([material.id,material.revision,strategy]),id=identity.slice(0,8)+'-'+identity.slice(8,12)+'-5'+identity.slice(13,16)+'-a'+identity.slice(17,20)+'-'+identity.slice(20,32);

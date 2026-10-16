@@ -1874,6 +1874,7 @@
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/bindings/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/activate'",
@@ -1895,7 +1896,10 @@
       "table:mm_dependencies",
       "table:mm_evidence",
       "table:mm_fts",
+      "table:mm_images",
       "table:mm_intakes",
+      "table:mm_integrated_versions",
+      "table:mm_integration_windows",
       "table:mm_job_batches",
       "table:mm_jobs",
       "table:mm_meta",
@@ -1917,6 +1921,7 @@
     "surfaces": [
       "extension:runtime.services.registerUser:MEMORY_DOMAIN",
       "task:execution.register:kind:'memory.'+stage",
+      "task:execution.register:kind:'memory.correct'",
       "task:execution.register:kind:'memory.reconcile'"
     ]
   },
@@ -1934,6 +1939,14 @@
     "status": "implemented",
     "surfaces": [
       "task:execution.register:kind:'memory.intake'"
+    ]
+  },
+  "apps/server/src/scope/memory-integration.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "task:execution.register:kind:'memory.integration-window'"
     ]
   }
 }

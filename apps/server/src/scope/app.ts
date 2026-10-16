@@ -67,7 +67,7 @@ export async function buildScopedApp(config:{dataDir:string;configuration?:{publ
       return Object.freeze({receiveCaptures,receiveSourceItems,readOriginal,pageOriginals,publishMaterial});
     });
     if(execution&&plugins){processing=registerProcessing(runtime,storage.db,configuration,execution,ingress,plugins);await processing.ready();}
-    if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});if(processing)memory.bindProcessing(processing);}
+    if(execution&&plugins){memory=registerMemory(runtime,storage.db,configuration,execution,plugins,{hindsightRuntimeFactory:options.hindsightRuntimeFactory});memory.bindIngress(ingress);if(processing)memory.bindProcessing(processing);}
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await execution.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);return reply.code(503).send({error:'scope_unavailable'});});

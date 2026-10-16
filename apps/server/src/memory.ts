@@ -1,3 +1,4 @@
+import {ownerMemoryCorrectionSchema,prepareOwnerMemoryCorrection} from './memory-owner-correction.js';
 import {randomUUID} from 'node:crypto';
 import {z} from 'zod';
 import {fileEvidenceSchema,noteCapture,type QueryResult} from '@mote/shared';
@@ -174,7 +175,7 @@ export class MemoryStore {
   }
   /** An explicit owner correction is original user evidence, never an automatic model overwrite. */
   async correct(id:string,raw:unknown,stage?: (records:Memory[],assert:()=>void)=>Promise<void>,identity?:{noteId:string;memoryId:string;at:string},committed?:()=>void){
-    const input=z.object({version:z.number().int().positive(),title:z.string().trim().min(1).max(160),statement:z.string().trim().min(1).max(6000),uncertainty:z.string().max(2000).default(''),validFrom:z.string().datetime({offset:true}).optional(),validUntil:z.string().datetime({offset:true}).optional()}).strict().parse(raw);
+    const input=ownerMemoryCorrectionSchema.parse(raw);
     const original=this.get(id);if(original.version!==input.version||original.supersededBy)throw new StoreError('Memory changed; refresh before correcting',409);
     if(input.validUntil&&Date.parse(input.validFrom??new Date().toISOString())>=Date.parse(input.validUntil))throw new StoreError('Correction validity dates are reversed',400);
     const noteId=identity?.noteId??randomUUID(),memoryId=identity?.memoryId??randomUUID(),now=identity?.at??new Date().toISOString();
@@ -183,8 +184,7 @@ export class MemoryStore {
     const apply=(persist=true)=>{
       const current=this.get(id);if(current.version!==input.version||current.supersededBy)throw new StoreError('Memory changed while saving correction',409);
       const evidence=this.readEvidence([noteId])[0];if(!evidence)throw new StoreError('Correction evidence unavailable',409);
-      saved={id:memoryId,version:1,domain:original.domain,scopeRefs:original.scopeRefs,coding:original.coding?{...original.coding,validation:'user_confirmed'}:undefined,tier:original.tier,kind:original.kind,title:input.title,statement:input.statement+' ['+noteId+']',uncertainty:input.uncertainty,validFrom:input.validFrom??now,validUntil:input.validUntil,evidenceIds:[noteId],evidence:[reference(evidence,{offset:0,length:text.length,quote:text})],createdAt:now,status:'published',model:'owner',runId:'owner-correction:'+noteId,skillVersion:'owner-correction@1',admission:{layer:original.admission.layer,reason:'Explicit owner correction',scope:original.admission.scope,attribution:'user'},fingerprint:sha256(JSON.stringify([id,current.fingerprint,input,noteId])),relations:[{kind:'supersedes',memoryId:id,fingerprint:current.fingerprint,version:current.version}],correction:{memoryId:id,fingerprint:current.fingerprint,noteId}};
-      current.supersededBy=memoryId;current.supersededAt=saved.validFrom;current.version=current.version+1;current.updatedAt=now;
+      const prepared=prepareOwnerMemoryCorrection(current,input,evidence,{memoryId,at:now,fingerprint:sha256(JSON.stringify([id,current.fingerprint,input,noteId]))});saved=prepared.saved;Object.assign(current,prepared.current);
       if(persist){
         this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(saved))+1024);this.store.db.prepare('INSERT INTO memories(id,created_at,json) VALUES(?,?,?)').run(memoryId,now,JSON.stringify(saved));this.store.db.prepare('INSERT INTO memory_dependencies(memory_id,evidence_id) VALUES(?,?)').run(memoryId,noteId);
         this.store.db.prepare('UPDATE memories SET json=? WHERE id=?').run(JSON.stringify(current),id);

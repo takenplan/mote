@@ -1,0 +1,52 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createServer} from 'node:http';
+import {spawn} from 'node:child_process';
+import {mkdtempSync,writeFileSync,rmSync} from 'node:fs';
+import {join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
+import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider.js';
+const entry=process.env.MOTE_MEMORY_PROCESS_ENTRY??fileURLToPath(new URL('../src/app.ts',import.meta.url));
+
+test('two real HTTP host processes retain successful Memory drafts and original user/model grants across SIGKILL and natural lease recovery',{timeout:90000},async t=>{
+ const root=mkdtempSync(join(tmpdir(),'mote-m07-process-')),script=join(root,'journey.mjs'),receipt=join(root,'receipt.json'),requests:{owner:string;raw:string;model:string}[]=[],pending:Array<()=>void>=[];let restarted=false;
+ const server=createServer((req,res)=>{void(async()=>{let raw='';for await(const chunk of req)raw+=chunk;const owner=String(req.headers['x-api-key']).includes('_A_')?'A':'B',body=JSON.parse(raw);requests.push({owner,raw,model:body.model});if(!restarted&&requests.filter(item=>item.owner===owner).length===2)await new Promise<void>(resolve=>pending.push(resolve));
+  const id=raw.match(/[a-f0-9]{8}-[a-f0-9]{4}-5[a-f0-9]{3}-a[a-f0-9]{3}-[a-f0-9]{12}/)![0],keys=[...new Set([...raw.matchAll(/\\?"key\\?"\s*:\s*\\?"(member_[0-9]+)/g)].map(match=>match[1]))],answer={memories:[{title:'Generated retained Memory',statement:'The generated subject prefers tea. ['+id+']',uncertainty:'Synthetic original only',admission:{layer:'memory',reason:'Explicit generated preference',scope:'Generated subject in this fixture',attribution:'third_party'},evidenceIds:[id],evidence:[{id,quote:'GENERATED_EQUAL_MEMORY_ORIGINAL: the generated subject prefers tea.'}]}],coverage:keys.map(key=>({key,state:'checked',candidateIndexes:[0]}))};
+  if(!res.destroyed)writeMessagesResponse(res,{stage:requests.length,model:'admitted-memory-model',text:JSON.stringify({answer:JSON.stringify(answer),citationIds:[id]})});
+ })().catch(()=>res.destroy());});await new Promise<void>(resolve=>server.listen(0,'127.0.0.1',resolve));const address=server.address();assert.ok(address&&typeof address!=='string');
+ const children:ReturnType<typeof spawn>[]=[];t.after(async()=>{for(const child of children)if(child.exitCode===null&&child.signalCode===null)child.kill('SIGKILL');for(const resolve of pending)resolve();server.closeAllConnections();await new Promise<void>(resolve=>server.close(()=>resolve()));rmSync(root,{recursive:true,force:true});});
+ const defaults=fileURLToPath(new URL('../src/model-settings.ts',import.meta.url)),memoryDefaults=fileURLToPath(new URL('../src/scope/memory-schema.ts',import.meta.url)),processingDefaults=fileURLToPath(new URL('../src/scope/processing-schema.ts',import.meta.url));
+ writeFileSync(script,`
+import {buildApp} from ${JSON.stringify('file://'+entry)};
+import {defaultModelSettings} from ${JSON.stringify('file://'+defaults)};
+import {defaultMemorySettings} from ${JSON.stringify('file://'+memoryDefaults)};
+import {defaultProcessingSettings} from ${JSON.stringify('file://'+processingDefaults)};
+import {createHash} from 'node:crypto';
+import {DatabaseSync} from 'node:sqlite';
+import {readFileSync,writeFileSync} from 'node:fs';
+const directory=${JSON.stringify(join(root,'vault'))},node=await buildApp({dataDir:directory}),base=await node.app.listen({host:'127.0.0.1',port:0}),db=new DatabaseSync(directory+'/mote.sqlite'),protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
+const request=async(token,url,method='GET',payload)=>{const response=await fetch(base+url,{method,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{}),...(payload===undefined?{}:{'content-type':'application/json'})},...(payload===undefined?{}:{body:JSON.stringify(payload)})});if(response.status!==200)throw Error(url+' '+response.status+' '+await response.text());return response.json();};
+const configure=async(token,domain,value)=>request(token,'/api/configuration/'+domain,'PUT',{revision:(await request(token,'/api/configuration')).revision,value});
+const model=(label,next=false)=>({profiles:[{id:'same-profile',name:'Generated fixed model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',baseUrl:${JSON.stringify('http://127.0.0.1:'+address.port+'/v1')},model:'admitted-memory-model',apiKey:'GENERATED_'+label+'_KEY'}},...(next?[{id:'next-profile',name:'Generated next model',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',baseUrl:${JSON.stringify('http://127.0.0.1:'+address.port+'/v1')},model:'current-memory-model',apiKey:'GENERATED_NEXT_'+label+'_KEY'}}]:[])],selections:{memory:{kind:'personal',id:next?'next-profile':'same-profile'}}});
+const until=async(check)=>{const end=Date.now()+65000;while(!await check()){if(Date.now()>end)throw Error('Generated Memory recovery deadline');await new Promise(resolve=>setTimeout(resolve,10));}};
+try{
+ if(process.env.GENERATED_M07_PHASE==='first'){
+  const password='Generated-process-m07-01';await node.accounts.initialize('generated-admin',password);const admin=await request(undefined,'/api/auth/login','POST',{username:'generated-admin',password,mode:'client'}),saved=[];
+  for(const label of ['A','B']){
+   const username='generated-'+label.toLowerCase(),account=await request(admin.token,'/api/admin/accounts','POST',{username,password}),login=await request(undefined,'/api/auth/login','POST',{username,password,mode:'client'}),token=login.token;await configure(token,'models',model(label));const settings=defaultMemorySettings();settings.lifecycle.extraction.minChanges=1;await configure(token,'memory',settings);await configure(token,'processing',{...defaultProcessingSettings(),automatic:true,understandingEnabled:false});
+   await request(token,'/api/ingress/sources','POST',{id:'same-source',name:'Generated source',kind:'local-files',deviceId:'same-device',platform:'import',retention:'archive'});
+   const bytes=Buffer.from('GENERATED_EQUAL_MEMORY_ORIGINAL: the generated subject prefers tea.'),hash=createHash('sha256').update(bytes).digest('hex'),upload=await request(token,'/api/ingress/sources/same-source/uploads','POST',{batchId:'same-batch',revision:{sourceId:'same-source',item:{externalId:'same-file',revision:'same-revision',observedAt:'2026-01-01T00:00:00Z',title:'Generated original',text:'',kind:'file',layer:'original',mimeType:'text/plain'},sizeBytes:bytes.length,sha256:hash,relativePath:'generated.txt'}});await request(token,'/api/ingress/uploads/'+upload.id+'/parts/0','PUT',{bytes:bytes.toString('base64'),checksum:hash});await request(token,'/api/ingress/uploads/'+upload.id+'/commit','POST',{});saved.push({token,userId:account.userId});
+  }
+  await until(()=>Number(db.prepare("SELECT count(*) n FROM mm_job_batches WHERE draft IS NOT NULL").get().n)===2&&Number(db.prepare("SELECT count(*) n FROM execution_steps WHERE kind='memory.review' AND state='running'").get().n)===2);
+  for(const item of saved)item.jobId=db.prepare('SELECT id FROM mm_jobs WHERE user_id=?').get(item.userId).id;await configure(saved[0].token,'models',model('A',true));writeFileSync(${JSON.stringify(receipt)},JSON.stringify(saved));console.log(JSON.stringify({phase:'ready',drafts:2}));await new Promise(()=>{});
+ }else{
+  const saved=JSON.parse(readFileSync(${JSON.stringify(receipt)},'utf8'));await until(async()=>{for(const item of saved){const job=await request(item.token,'/api/memory/jobs/'+item.jobId);if(job.state!=='committed')return false;}return true;});
+  const memories=[];for(const item of saved){const page=await request(item.token,'/api/memories');if(page.items.length!==1||page.items[0].model!=='admitted-memory-model')throw Error('Recovered Memory model/owner mismatch');const usage=await request(item.token,'/api/usage');if(usage.items.length!==2||usage.items.some(item=>item.model!=='admitted-memory-model'))throw Error('Original Memory model snapshots not reused');memories.push(page.items[0]);}
+  const foreign=await fetch(base+'/api/memories/'+memories[0].id,{headers:{...protocol,authorization:'Bearer '+saved[1].token}});if(foreign.status!==404||memories[0].id===memories[1].id)throw Error('Recovered Memory owner mismatch');console.log(JSON.stringify({phase:'recovered',users:2,foreign:404,evidence:memories.map(memory=>memory.evidenceIds)}));
+ }
+}finally{db.close();await node.app.close();}
+ `);
+ const launch=(phase:string)=>{const child=spawn(process.execPath,['--import','tsx',script],{env:{...process.env,GENERATED_M07_PHASE:phase},stdio:['ignore','pipe','pipe']});children.push(child);let output='',errors='';const closed=new Promise<{code:number|null;signal:NodeJS.Signals|null}>(resolve=>child.once('close',(code,signal)=>resolve({code,signal})));child.stderr!.on('data',part=>errors+=String(part).slice(0,8192));const ready=new Promise<any>((resolve,reject)=>{const timer=setTimeout(()=>{child.kill('SIGKILL');reject(Error('Generated Memory process timeout '+errors));},75000);child.once('error',reject);child.once('exit',code=>{if(code!==0){clearTimeout(timer);reject(Error('Generated Memory host exited '+code+' '+errors));}});child.stdout!.on('data',part=>{output+=part;for(const line of output.split('\n'))try{const value=JSON.parse(line);if(value.phase==='ready'||value.phase==='recovered'){clearTimeout(timer);resolve(value);}}catch{}});});return {child,closed,ready};};
+ const first=launch('first');assert.deepEqual(await first.ready,{phase:'ready',drafts:2});const sent=Date.now()+10000;while(requests.length<4){assert.ok(Date.now()<sent,'Independent review transports must actually start before the crash');await new Promise(resolve=>setTimeout(resolve,10));}assert.equal(requests.length,4);first.child.kill('SIGKILL');assert.equal((await first.closed).signal,'SIGKILL');restarted=true;for(const resolve of pending)resolve();const second=launch('second'),result=await second.ready;assert.equal(result.phase,'recovered');assert.equal(result.users,2);assert.equal(result.foreign,404);assert.equal((await second.closed).code,0);assert.equal(requests.length,6,'completed extractors never repeat; only the interrupted independent reviews restart');assert.ok(requests.every(request=>request.model==='admitted-memory-model'));for(const request of requests){const other=result.evidence[request.owner==='A'?1:0];for(const id of other)assert.ok(!request.raw.includes(id));}
+});
