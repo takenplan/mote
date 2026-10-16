@@ -102,6 +102,24 @@ class MultiuserWorkerInstrumentedTest {
         assertEquals(404,get(app,"b","/api/captures/$aid").first)
     }
 
+    @Test fun tokenRotationKeepsOriginalQueueDraftAndDirectoryButRetiresOldWorkerIntent() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        login(app,"a");val before=settings.read();val directory=app.accountDirectory().absolutePath
+        QuickNotes.save(app,"Synthetic A before token rotation","");QuickNotes.draft(app).save("Synthetic A unsent draft","")
+        val capture=app.queue().peek()!!.getString("id")
+        val (status,rotated)=HttpJson.post(endpoint()+"/api/auth/login",JSONObject().put("username","generated-a").put("password",fixture().getString("password")).put("mode","client"))
+        assertEquals(200,status);val nextToken=rotated!!.getString("token");assertNotEquals(before.token,nextToken)
+        RuntimeSettings.replaceAccount(app) {settings.signIn(endpoint(),nextToken,2592000000)}
+        assertEquals(before.ownerKey(),settings.read().ownerKey());assertEquals(directory,app.accountDirectory().absolutePath)
+        assertEquals("Synthetic A unsent draft",QuickNotes.draft(app).read().text);assertEquals(capture,app.queue().peek()!!.getString("id"))
+        val old=OneTimeWorkRequestBuilder<UploadWorker>().setInputData(workDataOf("manual" to true,"syncStamp" to SyncSchedule.stamp(before))).build()
+        WorkManager.getInstance(app).enqueue(old).result.get();waitFor {WorkManager.getInstance(app).getWorkInfoById(old.id).get()!!.state.isFinished}
+        assertEquals(1,app.queue().pendingSync().count);assertEquals(404,get(app,"a","/api/captures/$capture").first)
+        UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0}
+        assertEquals("Synthetic A before token rotation",get(app,"a","/api/captures/$capture").second!!.getString("ocrText"));assertEquals(404,get(app,"b","/api/captures/$capture").first)
+    }
+
     @Test fun expiredSnapshotUsesActualProviderDurableRecoveryAndExistingWorkerUnderAOnly() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
