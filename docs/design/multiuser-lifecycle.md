@@ -2,7 +2,8 @@
 
 This work starts at the clean M14 composition `9bc65b53d5823443ad1ecffb49d2c6eecc687927`.
 All runtime validation uses generated accounts and disposable directories. The
-M12 handoff is not authorized; its interface and final composition are pending.
+M12 handoff was unauthorized at the initial checkpoint; its later authorized
+resumption is recorded below. Its final composition is still pending.
 
 | Disposition | Original capability | M16 responsibility |
 | --- | --- | --- |
@@ -179,3 +180,39 @@ boundaries must be reported to the parent with a recommendation before changing
 product direction. Current final checks, exact SHAs and remaining gaps are listed
 in the [validation ledger](../validation/multiuser-m16-lifecycle.md); historical
 passing checkpoints do not validate later runtime changes.
+
+
+### Authorized M12 resumption after this candidate freeze
+
+After candidate `589d6ad7` was frozen and its required check started, the parent
+explicitly restored the original M12 conversation. Earlier handoff restrictions
+are historical; M16 began bounded read-only review only after that new trusted
+instruction. This does not retroactively include M12 in the running candidate.
+Its Actions unknown-result deletion correction, explicit Actions/Todos import
+policies and complete offline table/column plus authority-retirement contract
+remain owning-module prerequisites for a later combined freeze. No ended
+M14/M11 conversation is awakened, and no previously rejected operation is
+reissued through another thread.
+
+
+### M12 domain composition and stopped archive authority
+
+The authorized M12 freeze `4a0e82db` (runtime `5172f099`) is now composed.
+Its synchronous Todos hook extends personal canonical merge to six domains;
+Actions declares preserve-current explicitly. This retains the original
+`EvidenceStore.exportArchive/importArchive` JSON-v2 Todos behavior without
+inventing Actions personal historical merge. The companion tar-bundle exporter
+is `mote-data-export` v1, not that JSON-v2 format. Registry-driven coverage and
+clients must allow these explicitly declared extra domains, rather than fix the
+number of merged domains at five.
+
+The stopped archive now requires all columns of the thirteen Actions/Todos tables
+(173 core tables total). Restore disables inherited instance and actual private
+YAML Actions settings, advances SQL policy/authorization generations, clears
+review-device and policy-task authority, retires target registrations and revokes
+operations. Exact claimed/issuance/native-ID/ACK/task linkage, successful history,
+unknown external facts and manual Todo content/state remain unchanged. This is
+the same [multi-user recovery boundary](../adr-multiuser-scope.md#decision-and-provenance)
+and [unknown-result contract](../adr-task-recovery-and-execution-budgets.md#failure-handling-contract),
+not a new approval or backup framework. The operator reauthorizes future work;
+recovery never manufactures first-issuance eligibility.

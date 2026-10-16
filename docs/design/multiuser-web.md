@@ -142,7 +142,7 @@ Decision provenance: the table above implements [multi-user scope: Decision and 
 The Vault interaction keeps [UI presentation Decision / Contracts and ownership](../adr-ui-presentation-packs.md#contracts-and-ownership): page locations, local renderer and domain commands remain separate, and presentation cannot create authority. Same-original-account merge is the explicitly authorized M16 [Personal portable3 import contract](multiuser-lifecycle.md#personal-portable-3-import), preserving current configuration and operations rather than promising a personal point-in-time rollback. The stricter receipt parser keeps required five canonical domains as a subset of a unique, completely declared union; this follows the registered-domain extension boundary, accepts no implicit domain/task authorization and changes no backend policy. Current settings continue to use [ConfigService ownership and transaction](../adr-unified-configuration.md#responsibilities-and-transaction); no second configuration framework or compatibility runtime is introduced. Structural pages and numeric cursor bounds follow the [Central admission structural exception](../adr-central-request-admission.md#supersession-check), not request/backlog quotas.
 
 Actions preserves those same page/component boundaries and follows the explicit
-[M12 fixed-review HTTP contract](multiuser-actions.md#web-与原生消费者最小映射),
+[M12 fixed-review HTTP contract](multiuser-actions.md#web-最小消费映射),
 the [public identity/source/lifecycle boundary](multiuser-public-contracts.md) and
 [multi-user Clients authority](../adr-multiuser-scope.md#decision-and-provenance).
 The additional fixed-content presentation is required by that adopted contract,

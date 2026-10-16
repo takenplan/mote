@@ -184,7 +184,7 @@ internal class CentralLibrary(private val screens: CentralScreens) {
     }
     private fun capture(id: String) {
         val api = client
-        ui.work(MoteI18n.text("正在读取原文…"), { api.get("/api/captures/" + enc(id)) }) { row ->
+        ui.work(MoteI18n.text("正在读取原文…"), { api.get("/api/capture-browser/" + enc(id)) }) { row ->
             body.removeAllViews(); screens.setBack { screens.refresh() }
             ui.text(row.optString("appName"), NativeFontRole.TITLE_MOBILE); ui.text(row.optString("capturedAt")); ui.text(row.optString("ocrText"))
             val metadata = row.optJSONObject("metadata")

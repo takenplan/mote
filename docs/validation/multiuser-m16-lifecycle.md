@@ -499,3 +499,147 @@ paused automatic authority, succeeded/unknown external journals, all new device
 cursor corruption cases, and personal-import restart fences. This invocation uses
 the source host; fresh compiled/package-host verification remains a distinct final
 build step. It does not execute Docker daemon/native Hindsight recovery.
+
+
+## Final consumer candidate and compiled checkpoint
+
+Candidate `589d6ad7c4a36de21cb105a7be41a599d0fae1df` adds only the frozen
+consumer increments after the earlier source-host 37/37 checkpoint:
+
+- M13 original Web picker `23b347c9`/`ee4bb999` plus actual malformed import
+  receipt RED `e674a68f` and fix `5df66796`. The bounded M16 review initially
+  reported the completed-domain closure P2; unique complete declared coverage,
+  per-domain states, exact phase and no-artifact validation now close it. Root
+  picks are `21c834bc`, `b1f2fa33`, `1809c5d1`, `822eda00`.
+- M14 actual named-source reader RED `ace31bdf` and fix `ceae83a5`: actual
+  owned source inventory and exact original binding replace a guessed source.
+  Root picks `c5d55633`/`6c186a64`; static review found no additional confirmed
+  P0/P1/P2. M14's same actual two cases pass, including image and raw detail.
+- M15 device-only OCR RED `d83705d1` and fix `2ff31228`, plus visible archive
+  account-resume RED `ac16d97e` and fix `10a1de3d`; root picks
+  `0cef4324`/`b2adce9c` and `2108df2f`/`589d6ad7`. Bounded M16 reviews found
+  no additional confirmed issue. Native original-entry positives remain M15's
+  executed evidence; this review did not rerun an emulator or physical device.
+
+Only the incoming commits' new validation sections were appended when peer
+history differed; the existing root history and runtime adapters were retained.
+Shared/Android bilingual catalogs agree at 8421 keys, and the scope checker exits
+0. An initial manually typed nonexistent `check-scope-inventory.mjs` command
+failed MODULE_NOT_FOUND without running a checker; the actual
+`node scripts/check-scope-contracts.mjs` then passed. This is a verification-command
+correction, not a product failure or a skipped check.
+
+Fresh `npm run build:central` at this candidate exits 0,
+`/tmp/m16-final-central-build.log/.exit`. The existing Vite large-chunk advisory
+is nonfatal. Then:
+
+```
+MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1 node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-instance-backup.test.ts apps/server/test/multiuser-backup-capture-updates.test.ts
+```
+
+passes **23/23, exit 0, no skips** in 24 seconds,
+`/tmp/m16-final-compiled-backup.log/.exit`. The primary instance suite uses the
+fresh compiled production process and package CLI projection, including process
+restart, actual native Mem0 SDK canonical data, conversations, original files,
+execution retirement and successful/unknown external journals. The appended
+capture-journal suite exercises the actual source host and stopped archive helper;
+it is not mislabeled as a second compiled-host test. No real Docker daemon/volume
+or native Hindsight recovery was exercised. Required affected is a separate
+ongoing command recorded after completion.
+
+
+### Fifth required failure: duplicate CLI admission after composition
+
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration`
+with the documented installed JDK21/SDK exits **1** at runtime candidate
+`589d6ad7`; `/tmp/m16-required-affected-fifth.log/.exit`.
+Desktop 492/492, Server 2562 pass/0 fail plus the existing default macOS sandbox
+opt-in skip (2563 total), Web 505/505 and the other workspaces/root 81-case
+suite passed before the final root client suite failed 1/5. Android JVM and the
+later Central runner were not reached. This command is not a passed required
+gate. Documentation-only commit `af7d0fb8` does not alter that runtime evidence.
+
+The real composition combines M16's older outer fresh-self call with M14 c18's
+new per-request shared-transport admission. One private read therefore performs
+two identical fresh checks rather than the expected one. This is a composition
+responsibility defect, not an environmental permission failure. The production
+regression already failed `4 !== 3`; durable `8fd349ac` strengthens it to the
+exact path sequence and reproduces the extra self request in
+`/tmp/m16-cli-shared-admission-red.log`, exit 1. The fix removes only the CLI
+wrapper's duplicated handshake/import. Shared `ingressRequest` retains stable
+account validation, fresh self and pre/post-await abort checks for every actual
+private HTTP request. No startup-only authorization or weaker replay boundary is
+introduced. The unchanged sequence then passes the complete root client suite
+5/5, exit 0, `/tmp/m16-cli-shared-admission-green.log`. Actual M01/M03 CLI
+replacement-deployment/original-ACK cases and the new required run are recorded
+separately after completion.
+
+Heavy work was explicitly released when the failed command ended, before the
+queued Android narrow checks; the planned Desktop build was postponed. No
+healthy test was restarted due to the platform disconnection notification.
+
+
+## Authorized M12 archive composition
+
+Merged M12 public `4a0e82dbb28908e6ec34a6703e86fcd1229dfaf5` as `bed65864`
+after its own actual lifecycle/portable RED→GREEN and bounded review. No conflict
+or default-domain fallback was introduced. Todos uses the existing synchronous
+canonical transaction; Actions explicitly preserves its current personal state.
+This follows the original JSON-v2 `EvidenceStore.exportArchive/importArchive`
+Todos section. The companion `archive-export.ts` bundle is a different v1 format;
+its name is not evidence of the JSON-v2 version.
+
+New durable backup RED `2affb338` runs real A/B M03→M06→M12 model publication,
+approval, actual M05 issuance and succeeded/uncertain native receipts, plus manual
+Todos with different states. `/tmp/m16-backup-actions-red.log/.exit` exits 1:
+17 total, 1 already rejected by the existing foreign-key boundary and 16 failures
+(including the parent). The restored inherited instance policy remained enabled;
+fourteen incomplete table/column cases incorrectly published. These are actual
+production-path failures, not a failed fixture or skipped input.
+
+The minimal existing-helper correction adds the 13 exact required table/column
+sets and retires Actions authority in both inherited/private YAML and SQL before
+publication. No claimed flag, issuance ID, native event ID, ACK or task linkage is
+cleared to allow replay; Todos and completed model history retain exact bytes.
+The same test passes **17/17, exit 0, no skips** in 13 seconds,
+`/tmp/m16-backup-actions-green.log/.exit`: all thirteen individually dropped tables
+and two renamed mandatory columns reject before target publication, while the
+positive recovery preserves A/B canonical data and external facts, rejects old
+credentials and remains inactive through two actual source-host process restarts.
+A fresh compiled-host pass and final combined required remain necessary after
+this runtime increment.
+
+CLI responsibility correction `7fb3d4be` additionally passes the actual M01/M03
+CLI plus root-client combination **9/9, exit 0**, including same-URL replacement
+with only self/zero private body and missing/wrong original ACK rejection;
+`/tmp/m16-cli-shared-admission-composed.log/.exit`. Independent M13 bounded review
+finds no new confirmed issue in that two-line transport delegation.
+
+## Final candidate preparation after M12 composition
+
+The actual portable import, Actions lifecycle and Actions portable suites pass
+**19/19, exit 0, no skips**, `/tmp/m16-import-actions-composed.log/.exit` (43 seconds).
+This exercises the sixth canonical Todos merge, same-input idempotency/current
+conflict/full-transaction rollback and unknown native receipt followed by physical
+A deletion while B remains unchanged. It also retains all fourteen M16 import
+cases, including the restart backfill regression.
+
+M15's four-file `8812c137` correction and its durable tests are composed as
+`7c2d3364`: queued archive reads retain the original owner before resolving a
+client, retained Actions clients cannot borrow the replacement account, the
+original central reader consumes published OCR, and import acknowledgements
+require all five original canonical domains while permitting explicitly declared
+additional domains. M15's unchanged native regressions pass individually and its
+four JVM receipt cases pass; these are peer execution evidence, not independent
+M16 native reruns. Bounded M16 and M13 reviews found no additional confirmed issue.
+
+M12's earlier 45/46 focus result remains a historical failure. Actual completed
+range diagnostics show four model batches of three records, with the complete
+54-character final Unicode record present as the third record of the last batch.
+The fake model inspected only record zero. Test-only commits `6fd208ff`,
+`59db9aec`, `725f8b97` preserve delivery/completion/Unicode/timezone assertions and
+make the responder inspect every supplied original. M12's unchanged single case
+then passes, exit 0, 32.943 seconds,
+`/tmp/m12-long-tail-grouped-fixture-green.log/.exit`. No production change or
+expanded deadline is attributed to this fixture correction. The test-only delta
+is composed as `793bdc86`, `8b022d3e`, `871c44f9` before the final required run.
