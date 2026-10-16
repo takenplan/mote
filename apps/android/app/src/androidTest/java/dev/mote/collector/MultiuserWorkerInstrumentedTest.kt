@@ -519,6 +519,34 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeLarkUsesSavedOwnedConnectionAndExplicitDocumentArchive() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val beforeB=b.get("/api/source-items").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","lark")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun button(label:String):android.widget.Button? {var value:android.widget.Button?=null;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label}};return value}
+            fun press(label:String){val target=button(label);assertNotNull("Missing original Lark control: "+label,target);scenario.onActivity {target!!.performClick()}}
+            ready();scenario.onActivity {activity->
+                val choice=views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().singleOrNull {spinner->(0 until spinner.count).any {spinner.getItemAtPosition(it).toString()=="same-lark"}}
+                assertNotNull("The original Lark entry must select a saved owned connection instead of the retired global vendor route",choice)
+                choice!!.setSelection((0 until choice.count).single {choice.getItemAtPosition(it).toString()=="same-lark"})
+            };ready();press("检查状态");ready();press("扫码登录并授权只读权限");ready()
+            waitFor {button("打开授权页面")!=null};control("/generated/release-lark-login")
+            waitFor {a.get("/api/connectors/same-lark").optBoolean("connected")};press("选择文档与活动范围");ready()
+            scenario.onActivity {activity->
+                for(choice in views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>())if(choice.text.toString() in listOf("我创建的","我编辑过的","我打开过的","在后台定期同步选中内容"))choice.isChecked=false
+                views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="指定文档（每行一个）"}.setText("DocumentFixture123")
+            };press("保存同步范围");ready();press("预览文档范围");ready();waitFor {button("确认并开始归档")!=null};press("确认并开始归档");ready()
+            var original:JSONObject?=null
+            waitFor {val sources=a.get("/api/sources").getJSONArray("items");val source=(0 until sources.length()).map(sources::getJSONObject).singleOrNull {it.optString("kind")=="lark-docs"};if(source==null)false else {val rows=a.get("/api/ingress/sources/"+source.getString("id")+"/originals").getJSONArray("items");if(rows.length()==0)false else {original=rows.getJSONObject(0);true}}}
+            assertNotNull(original);assertEquals(beforeB,b.get("/api/source-items").toString())
+            val oldSync=button("立即同步");assertNotNull(oldSync)
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldSync!!.performClick()};ready();assertEquals(beforeB,b.get("/api/source-items").toString())
+        }
+    }
+
     @Test fun optedInGeneratedNativeAskUsesTheVerifiedLocalCodexModelWithoutPrivateCentralData() {
         val app=context();require(fixture().optString("model")=="gpt-6.1-sol");waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
