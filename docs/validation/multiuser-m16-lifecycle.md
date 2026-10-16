@@ -546,3 +546,34 @@ capture-journal suite exercises the actual source host and stopped archive helpe
 it is not mislabeled as a second compiled-host test. No real Docker daemon/volume
 or native Hindsight recovery was exercised. Required affected is a separate
 ongoing command recorded after completion.
+
+
+### Fifth required failure: duplicate CLI admission after composition
+
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration`
+with the documented installed JDK21/SDK exits **1** at runtime candidate
+`589d6ad7`; `/tmp/m16-required-affected-fifth.log/.exit`.
+Desktop 492/492, Server 2562 pass/0 fail plus the existing default macOS sandbox
+opt-in skip (2563 total), Web 505/505 and the other workspaces/root 81-case
+suite passed before the final root client suite failed 1/5. Android JVM and the
+later Central runner were not reached. This command is not a passed required
+gate. Documentation-only commit `af7d0fb8` does not alter that runtime evidence.
+
+The real composition combines M16's older outer fresh-self call with M14 c18's
+new per-request shared-transport admission. One private read therefore performs
+two identical fresh checks rather than the expected one. This is a composition
+responsibility defect, not an environmental permission failure. The production
+regression already failed `4 !== 3`; durable `8fd349ac` strengthens it to the
+exact path sequence and reproduces the extra self request in
+`/tmp/m16-cli-shared-admission-red.log`, exit 1. The fix removes only the CLI
+wrapper's duplicated handshake/import. Shared `ingressRequest` retains stable
+account validation, fresh self and pre/post-await abort checks for every actual
+private HTTP request. No startup-only authorization or weaker replay boundary is
+introduced. The unchanged sequence then passes the complete root client suite
+5/5, exit 0, `/tmp/m16-cli-shared-admission-green.log`. Actual M01/M03 CLI
+replacement-deployment/original-ACK cases and the new required run are recorded
+separately after completion.
+
+Heavy work was explicitly released when the failed command ended, before the
+queued Android narrow checks; the planned Desktop build was postponed. No
+healthy test was restarted due to the platform disconnection notification.
