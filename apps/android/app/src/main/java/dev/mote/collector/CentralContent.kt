@@ -487,6 +487,12 @@ internal class CentralContent(
         @Suppress("DEPRECATION") activity.startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
             .setType("*/*"), 73)
     }
+    internal fun pickPortableImport(operationId: String? = null) {
+        operationId?.let(java.util.UUID::fromString)
+        pickerOrigin = server; pickerGeneration = accessGeneration; pickerOwner = accountOwnerKey(); pickerInstruction = operationId.orEmpty()
+        @Suppress("DEPRECATION") activity.startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("application/json"), 74)
+    }
     fun activityResult(request: Int, result: Int, data: Intent?) {
         if (result != Activity.RESULT_OK || data == null) return
         if (!accessReady) { pendingResult = Triple(request, result, data); if (!resumed) resume(); return }
@@ -504,11 +510,12 @@ internal class CentralContent(
                 }
             }) { notice(MoteI18n.text("资料已导出")) }; return
         }
-        if (request !in setOf(71, 73)) return
+        if (request !in setOf(71, 73, 74)) return
         val origin = pickerOrigin; val owner = pickerOwner; val chat = pickerChat; pickerOrigin = null; pickerOwner = null
         val uris = data.clipData?.let { clip -> (0 until clip.itemCount).map { clip.getItemAt(it).uri } } ?: listOfNotNull(data.data)
         if (origin != server || client == null || pickerGeneration != accessGeneration || owner != accountOwnerKey()) { notice(MoteI18n.text("登录会话已变更，请重新打开中央页面。")); return }
-        if (request == 73) uris.firstOrNull()?.let { screens?.importInstruction = pickerInstruction; screens?.importFile(it) }
+        if (request == 74) uris.firstOrNull()?.let { screens?.importPortableFile(it, pickerInstruction.takeIf(String::isNotBlank)) }
+        else if (request == 73) uris.firstOrNull()?.let { screens?.importInstruction = pickerInstruction; screens?.importFile(it) }
         else screens?.addAttachments(uris, chat)
     }
 }

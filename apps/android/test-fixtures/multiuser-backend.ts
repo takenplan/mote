@@ -5,6 +5,8 @@ import {createServer} from 'node:http';
 import {DatabaseSync} from 'node:sqlite';
 import {randomUUID} from 'node:crypto';
 import {buildApp} from '../../server/src/app.js';
+import {defaultModelSettings} from '../../server/src/model-settings.js';
+import {defaultProcessingSettings} from '../../server/src/scope/processing-schema.js';
 import {generatedScopedPluginRelease} from '../../server/test/fixtures/scoped-plugin-release.js';
 const directory=mkdtempSync(join(tmpdir(),'m15-kotlin-backend-'));
 const releaseFixture=process.argv.includes("--plugins")?generatedScopedPluginRelease():undefined;
@@ -25,6 +27,14 @@ for(const username of ['generated-a','generated-b']){
  if(response.statusCode!==200)throw new Error(response.body);
 }
 const a=await login('generated-a'),b=await login('generated-b');
+const ocr=process.argv.includes('--ocr')?createServer(async(request,response)=>{
+ for await(const _chunk of request){}const owner=String(request.headers.authorization).includes('GENERATED_B_KEY')?'B':'A';
+ response.setHeader('Content-Type','application/json');response.setHeader('X-Mote-Execution','local');response.end(JSON.stringify({durationMs:0,segments:[{startMs:0,endMs:0,text:'GENERATED_'+owner+'_NATIVE_CENTRAL_OCR'}],coverage:'full',engine:'generated-native-http-fixture'}));
+}):undefined;
+if(ocr){await new Promise<void>(resolve=>ocr.listen(0,'127.0.0.1',resolve));const url='http://127.0.0.1:'+(ocr.address() as {port:number}).port+'/transcribe';
+ for(const [account,label] of [[a,'A'],[b,'B']] as const){for(const [domain,value] of [['processing',{...defaultProcessingSettings(),automatic:false,understandingEnabled:false,summarize:false}],['models',{profiles:[{id:'generated-ocr',name:'Generated OCR',settings:{...defaultModelSettings(),provider:'custom',protocol:'mote-media',baseUrl:url,model:'generated-ocr',apiKey:'GENERATED_'+label+'_KEY'}}],selections:{ocr:{kind:'personal',id:'generated-ocr'}}}]] as const){const auth={...headers,authorization:'Bearer '+account.token},revision=(await node.app.inject({url:'/api/configuration',headers:auth})).json().revision;const result=await node.app.inject({url:'/api/configuration/'+domain,method:'PUT',headers:auth,payload:{revision,value}});if(result.statusCode!==200)throw new Error(result.body);}}
+}
+
 let pluginPackageId:string|undefined;
 if(releaseFixture){
  const call=async(url:string,payload?:unknown)=>{const response=await node.app.inject({url,method:payload===undefined?'GET':'POST',headers:{...headers,authorization:'Bearer '+admin.token},...(payload===undefined?{}:{payload})});if(response.statusCode!==200)throw new Error(response.body);return response.json();};
@@ -42,6 +52,11 @@ const control=createServer((request,response)=>{void(async()=>{
  else if(request.url==='/release'){release?.();release=undefined;}
  else if(request.url==='/network/off'){node.app.server.closeAllConnections();await new Promise<void>((resolve,reject)=>node.app.server.close(error=>error?reject(error):resolve()));}
  else if(request.url==='/network/on'){await new Promise<void>((resolve,reject)=>{node.app.server.once('error',reject);node.app.server.listen(port,'127.0.0.1',()=>{node.app.server.removeListener('error',reject);resolve();});});}
+ else if(request.url?.startsWith('/ocr/')&&ocr){
+  const match=/^\/ocr\/(a|b)\/([a-f0-9-]{36})$/.exec(request.url);if(!match)throw Error('Invalid generated OCR request');const actor=match[1]==='a'?a:b,context=await node.authority.authenticate(actor.token),original=node.ingress.forUser(context).originalForCapture(match[2]);
+  const auth={...headers,authorization:'Bearer '+actor.token},started=await node.app.inject({url:'/api/processing',method:'POST',headers:auth,payload:{originalRef:original.ref,operationId:'generated-native-ocr:'+match[2]}});if(started.statusCode!==200)throw Error(started.body);
+  let task:any;const deadline=Date.now()+15000;do{task=(await node.app.inject({url:'/api/tasks/'+started.json().id,headers:auth})).json();if(task.state==='succeeded')break;if(['failed','blocked','stale','cancelled'].includes(task.state))throw Error(JSON.stringify(task));await new Promise(resolve=>setTimeout(resolve,5));}while(Date.now()<deadline);if(task.state!=='succeeded')throw Error('Generated OCR timeout');
+ }
  else if(request.url==='/snapshot/expire'){const db=new DatabaseSync(join(directory,'mote.sqlite'));try{db.prepare('UPDATE ig_snapshot_inputs SET expires=?').run(Date.now()-1);}finally{db.close();}}
  else if(request.url!=='/state'){response.writeHead(404);response.end();return;}
  response.setHeader('Content-Type','application/json');response.end(JSON.stringify({entered,held:!!release}));
@@ -49,5 +64,5 @@ const control=createServer((request,response)=>{void(async()=>{
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress='http://127.0.0.1:'+(control.address() as {port:number}).port;
 process.stdout.write(JSON.stringify({address,controlAddress,admin,a,b,password,pid:process.pid,pluginPackageId})+'\n');
-let closing=false;async function close(){if(closing)return;closing=true;release?.();control.closeAllConnections();await new Promise<void>(resolve=>control.close(()=>resolve()));await node.app.close();rmSync(directory,{recursive:true,force:true});process.exit(0);}
+let closing=false;async function close(){if(closing)return;closing=true;release?.();control.closeAllConnections();await new Promise<void>(resolve=>control.close(()=>resolve()));await node.app.close();if(ocr){ocr.closeAllConnections();await new Promise<void>(resolve=>ocr.close(()=>resolve()));}rmSync(directory,{recursive:true,force:true});process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());

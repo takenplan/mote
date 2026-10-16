@@ -57,6 +57,8 @@ object MoteI18n {
 open class MoteActivity : Activity() {
     private var displayedOwner = ""
     protected fun requireDisplayedAccount() { check(Settings(this).read().ownerKey() == displayedOwner) { "Account changed" } }
+    /** Call only after clearing the old account's rendered state and retiring its callbacks. */
+    protected fun acceptDisplayedAccountAfterRetirement() { displayedOwner = Settings(this).read().ownerKey() }
     private var displayedLanguage = ""
     private var displayedUiRevision = -1L
     private var uiResumed = false

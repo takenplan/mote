@@ -1,5 +1,26 @@
 # M14 Desktop validation checkpoint
 
+## Explicit source identity in original/detail reads
+
+Actual RED `ace31bdf` is now executed, not merely a proposed case:
+`/tmp/m14-explicit-source-valid-red.log/.exit`, **1 failed / 1 existing positive,
+exit 1**. Both use actual M03/M06 and emitted main/preload; a same-device source
+with an explicit non-Desktop name lists correctly but fails detail lookup.
+The first two-line attempt still fails in `explicit-source-green.log` (exit 1):
+M02 deliberately strips internal `ingressSourceId`, so assuming that field exists
+in the public record does not fix the reader. That attempt was not committed.
+
+The final adapter reuses the actual owner `/sources` inventory, selects matching
+device/platform sources, walks original pages and accepts only the exact capture
+and source-bound descriptor. Material lookup reuses that confirmed source. No
+internal field, guessed owner, new backend route/runtime or read permission is
+introduced. `/tmp/m14-explicit-source-green2.log/.exit`: **2/2 selected, exit 0**,
+4.27s, adding real original image reads and raw detail before processing. The
+unchanged central OCR/body and B same-ID isolation assertions pass. The 33
+unselected cases are not acceptance. The initially announced slot was cancelled
+before execution for Android/Web scheduling; only the later actual log above is
+the RED evidence.
+
 ## Portable import Activity
 
 M16's exact `89ddc973f0eb68262f047826d2df23c4b41df5ad` is composed. RED
@@ -437,3 +458,20 @@ feature/PR identity is reported in the final delivery note after verification.
 No merge/main/deployment is authorized. The remote integration ref remains
 6272a9b5. Physical-device, live-model, real permissions and production deployment
 checks remain unrun.
+
+## Archive list observes actual central OCR
+
+M13 pure server raw-reader freeze `0172bf14` is composed at `034555f5`, keeping
+the newer M16 import/rollback lifecycle and adding both derived tables to its
+deletion cleanup. RED `2c79cd6d` passes through real emitted main, M03 intake and
+a real M06 OCR task using a generated HTTP worker. M13's exact raw detail already
+shows the extraction, while the actual Desktop archive list still reports
+`disabled` and an empty preview (`/tmp/m14-archive-ocr-valid-red.log/.exit`,
+**0/1, exit 1**). The minimal consumer uses the existing scoped raw-preview
+reader, walks every signed page and retains the original local/session
+presentation. Immutable content intake keeps its existing `/captures` reader.
+The unchanged actual test passes **1/1, exit 0**, 3.10s,
+`/tmp/m14-archive-ocr-green.log/.exit`: list and detail show A's real published
+extraction, intake is unchanged and B's same-ID record retains its own raw state.
+The 33 unselected tests are not counted as acceptance. No raw projection, task
+runtime, classification rule or model service is added by Desktop.

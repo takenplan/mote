@@ -4,8 +4,9 @@ Base: M08 `58944f00837c89bc1d302ecd7be7a568db4abe44`, including M07
 `cd7a306cce0f6cd5fec3c9e91e6dee0761352115` and the public contract PR135.
 Final M11 PR138 `98d76945e091d7234217ebcf532ebeff3350937c` is composed.
 The parent has confirmed the M12→M13 handoff succeeded and lifted the wait.
-Stable M12 checkpoint35d661b24da32231e7c5c643530fedbcba8778a4 may be consumed
-for development; its newer lifecycle fixes and final acceptance remain pending.
+Stable M12 checkpoint4a0e82dbb28908e6ec34a6703e86fcd1229dfaf5 (runtime5172f099)
+is composed for development; its approval contract matches35d. The later
+lifecycle/backup combination and final acceptance remain pending.
 Final M13 composition and checks are separate gates.
 
 ## Capability ledger before implementation

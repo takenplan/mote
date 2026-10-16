@@ -13,9 +13,13 @@ export async function accountResponse(config:Config,path:string,body?:unknown):P
 }
 export async function accountJson(config:Config,path:string,body?:unknown):Promise<any>{return JSON.parse(await readResponseText(await accountResponse(config,path,body),4*1024*1024));}
 /** Walk the real signed server cursor; never apply a local filter after LIMIT. */
-export async function accountCaptures(config:Config,filters:Record<string,string>={}):Promise<any[]>{
+export async function accountCaptures(config:Config,filters:Record<string,string>={}):Promise<any[]>{return capturePages(config,filters,false);}
+/** The original archive presentation observes current declared extraction,
+ * while canonical intake/content readers retain their immutable capture API. */
+export async function accountCapturePreviews(config:Config,filters:Record<string,string>={}):Promise<any[]>{return capturePages(config,filters,true);}
+async function capturePages(config:Config,filters:Record<string,string>,browser:boolean):Promise<any[]>{
  const items:any[]=[],seen=new Set<string>();let cursor:string|undefined;
- do{const page=await accountJson(config,'/api/captures?'+new URLSearchParams({deviceId:config.deviceId,...filters,projection:'preview',limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items)||page.items.some((v:any)=>v.deviceId!==config.deviceId))throw Error('Private capture page mismatch');items.push(...page.items);cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated private capture cursor');seen.add(cursor);}}while(cursor);
+ do{const page=await accountJson(config,(browser?'/api/capture-browser?':'/api/captures?')+new URLSearchParams({deviceId:config.deviceId,...filters,...(browser?{limit:'60'}:{projection:'preview',limit:'200'}),...(cursor?{cursor}:{})}));if(!Array.isArray(page.items)||page.items.some((v:any)=>v.deviceId!==config.deviceId))throw Error('Private capture page mismatch');items.push(...page.items);cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated private capture cursor');seen.add(cursor);}}while(cursor);
  return items;
 }
 export function accountPagePosition(config:Config,cursor:string|undefined,query:unknown):number{
@@ -24,12 +28,19 @@ export function accountPagePosition(config:Config,cursor:string|undefined,query:
 }
 export function accountPageCursor(config:Config,query:unknown,offset:number):string{return Buffer.from(JSON.stringify({account:accountKey(config),query:ingressKey(query),offset})).toString('base64url');}
 export async function accountOriginalDescriptor(config:Config,record:any):Promise<any|undefined>{
- const sourceId=record.provenance?.sourceId??'desktop-'+ingressKey([record.deviceId,record.platform]).slice(0,40);let after:string|undefined;const seen=new Set<string>();
- do{const page=await accountJson(config,`/api/ingress/sources/${encodeURIComponent(sourceId)}/originals?`+new URLSearchParams({limit:'100',...(after?{after}:{})}));
-  if(!Array.isArray(page.items))throw Error('Invalid original page');const descriptor=page.items.find((item:any)=>item.captureId===record.id);
-  if(descriptor){if(descriptor.sourceId!==sourceId||!/^original:[a-f0-9]{64}$/.test(descriptor.ref))throw Error('Original binding mismatch');return descriptor;}
-  after=page.nextCursor??undefined;if(after){if(seen.has(after))throw Error('Repeated original cursor');seen.add(after);}
- }while(after);return;
+ // The intake reader deliberately hides its internal ingress source field.
+ // Resolve only actual owned source inventory, then the exact capture binding;
+ // an upload source name cannot be inferred from this device's identity.
+ let sourceIds:string[];
+ if(record.provenance?.sourceId)sourceIds=[record.provenance.sourceId];
+ else{const page=await accountJson(config,'/api/sources');if(!Array.isArray(page.items))throw Error('Invalid source inventory');sourceIds=page.items.filter((source:any)=>source.deviceId===record.deviceId&&source.platform===record.platform&&source.enabled!==false).map((source:any)=>{if(typeof source.id!=='string')throw Error('Invalid source identity');return source.id;});}
+ for(const sourceId of sourceIds){let after:string|undefined;const seen=new Set<string>();
+  do{const page=await accountJson(config,`/api/ingress/sources/${encodeURIComponent(sourceId)}/originals?`+new URLSearchParams({limit:'100',...(after?{after}:{})}));
+   if(!Array.isArray(page.items))throw Error('Invalid original page');const descriptor=page.items.find((item:any)=>item.captureId===record.id);
+   if(descriptor){if(descriptor.sourceId!==sourceId||!/^original:[a-f0-9]{64}$/.test(descriptor.ref))throw Error('Original binding mismatch');return descriptor;}
+   after=page.nextCursor??undefined;if(after){if(seen.has(after))throw Error('Repeated original cursor');seen.add(after);}
+  }while(after);
+ }return;
 }
 export async function accountOriginal(config:Config,record:any):Promise<{descriptor:any;response:Response}|undefined>{
  const descriptor=await accountOriginalDescriptor(config,record);if(!descriptor||descriptor.available===false)return;
@@ -48,7 +59,7 @@ export async function accountCaptureProcessing(config:Config,record:any):Promise
 /** Canonical extraction is separate from the immutable received capture. M06
  * origins need not carry a device: exact capture membership is the binding. */
 export async function accountCaptureMaterial(config:Config,record:any):Promise<any|undefined>{
- const sourceId=record.provenance?.sourceId??'desktop-'+ingressKey([record.deviceId,record.platform]).slice(0,40);
+ const sourceId=record.provenance?.sourceId??(await accountOriginalDescriptor(config,record))?.sourceId;if(!sourceId)return;
  let cursor:string|undefined;const seen=new Set<string>();
  do{const page=await accountJson(config,'/api/materials?'+new URLSearchParams({sourceId,limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items))throw Error('Invalid material page');
   for(const material of page.items){

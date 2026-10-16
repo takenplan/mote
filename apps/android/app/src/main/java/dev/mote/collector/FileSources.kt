@@ -96,7 +96,7 @@ class FileSources(private val context: Context, private val cancel: Cancellation
  * manifest immediately cannot resolve a conflict, deletion, or protocol gap. */
 internal class FileIngressRejection(val httpStatus: Int) : IllegalStateException("File ingress rejected: HTTP $httpStatus")
 
-internal class FileTransportFailure(val httpStatus: Int, message: String) : IllegalStateException(message)
+internal class FileTransportFailure(val httpStatus: Int, message: String, val code: String = "") : IllegalStateException(message)
 
 object FileUpload {
     internal fun requireAccepted(status: Int) {
