@@ -125,6 +125,7 @@ export class IngressHost{
     * capture has one immutable descriptor. Worker RPCs never expose this seam. */
    receiveSourceItemsWithOriginals:(sourceId:string,id:string,values:unknown[],inputs:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[])=>intakeSourceItems(sourceId,id,values,inputs,formats),
    readOriginal:(ref:string,range?:{offset?:number;length?:number})=>{original(ref);const result=originals.read(ref,range);assert();return result;},
+   originalForCapture:(id:string)=>{data().capture(id);const row=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND capture_id=?',id);if(!row)throw missing();return original('original:'+row.id);},
    holdOriginal:(ref:string)=>{const value=original(ref);if(value.available===false)throw new PrivateDataError('snapshot_input_expired',410);return originals.pin(value.hash,false,ref.slice(9));},
    releaseSnapshot:(ref:string)=>sql.transaction(()=>{const value=original(ref);if(value.retention!=='snapshot')throw new ScopeError('invalid_identity',403);originals.releaseSnapshot(ref);}),
    snapshotRecovery:(sourceId:string,after='')=>{source(sourceId);if(after&&!/^[a-f0-9]{64}$/.test(after))throw new PrivateDataError('invalid_cursor');const rows=sql.all("SELECT r.id FROM ig_originals r JOIN ig_snapshot_inputs s ON s.user_id=r.user_id AND s.original_id=r.id JOIN pd_source_heads h ON h.user_id=r.user_id AND h.capture_id=r.capture_id WHERE r.user_id=$user AND r.source_id=? AND s.expires<=? AND r.id>? ORDER BY r.id LIMIT 201",sourceId,Date.now(),after);const items=[];

@@ -43,6 +43,7 @@ import {registerScopedMcp,type ScopedMcp} from './mcp.js';
 import {LifecycleOperations} from './lifecycle-operations.js';
 import {registerManagement,type ManagementConfig} from './management.js';
 import {registerLifecycleRoutes} from './lifecycle-routes.js';
+import {registerCaptureBrowserReads} from './capture-browser-routes.js';
 export {registerUserRoute,requestContext} from './http.js';
 
 /** Production composition. Domains register only after their isolation adapter
@@ -80,6 +81,7 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     registerConfigurationRoutes(runtime,configuration);
     execution?.bindConfiguration(configuration);
     const ingress=registerIngress(runtime,storage.db,config.dataDir);
+    registerCaptureBrowserReads(runtime,ingress);
     const ownerQuestions=registerOwnerQuestions(runtime,storage.db);
     if(!options.verifier)mcp=registerScopedMcp(runtime,storage.db,configuration,ingress);
     plugins=execution?registerScopedPlugins(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,releaseTransport:options.pluginReleaseTransport}):undefined;
