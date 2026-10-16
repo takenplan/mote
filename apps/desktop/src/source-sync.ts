@@ -27,7 +27,7 @@ function snapshotMetadataIdentity(raw:ScannedItem):string{
 interface Known { policy?:string; contentHash: string; discoveryHash?: string; revision: string; item: ScannedItem }
 interface RejectedItem { item: SourceItem; status: number }
 interface BatchResult { acks: Record<string, unknown>[]; rejected?: RejectedItem[] }
-export interface SnapshotRecovery {captureId:string;externalId:string;revision:string;sha256:string;sizeBytes:number;observedAt:string}
+export interface SnapshotRecovery {captureId:string;externalId:string;revision:string;sha256:string;sizeBytes:number;observedAt:string;recoveryId?:string}
 interface State {
   version: typeof DESKTOP_STORAGE_VERSION;
   /** Distinct from the local outbox schema version; old server receipts cannot be replayed. */
@@ -155,7 +155,7 @@ export class SourceSync {
       if (previous?.contentHash === contentHash) return;
       const recovery=next.snapshotRecoveries?.[key],bytes=localOriginal?undefined:item.localOriginalBase64?Buffer.from(item.localOriginalBase64,'base64'):undefined;
       const recoveryMatches=recovery&&recovery.identityHash===snapshotMetadataIdentity(item)&&previous?.policy===next.policy&&item.layer==='snapshot'&&!item.deleted&&recovery.revision===previous?.revision&&(localOriginal?.sha256??(bytes?sourceHash(bytes):undefined))===recovery.sha256&&(localOriginal?.sizeBytes??bytes?.length)===recovery.sizeBytes;
-      const revision = recoveryMatches?recovery.revision:sourceHash(contentHash + ':' + (previous?.revision ?? '')), queued: SourceItem = { ...item, revision, observedAt:recoveryMatches?recovery.observedAt:observedAt,...(recoveryMatches?{snapshotRecovery:{captureId:recovery.captureId,sha256:recovery.sha256,sizeBytes:recovery.sizeBytes}}:{}) };
+      const revision = recoveryMatches?recovery.revision:sourceHash(contentHash + ':' + (previous?.revision ?? '')), queued: SourceItem = { ...item, revision, observedAt:recoveryMatches?recovery.observedAt:observedAt,...(recoveryMatches?{snapshotRecovery:{captureId:recovery.captureId,sha256:recovery.sha256,sizeBytes:recovery.sizeBytes,...(recovery.recoveryId?{recoveryId:recovery.recoveryId}:{})}}:{}) };
       if(recovery){next.snapshotRecoveries={...next.snapshotRecoveries};delete next.snapshotRecoveries[key];}
       if ((syncQueue ?? defaultQueue) === 'history') next.pendingHistory.push(queued); else next.pendingRealtime.push(queued);
       // Coding checkpoints own their append cursor and do not need a second
@@ -333,12 +333,13 @@ export class SourceSync {
   }
 
   private async sendAccountFile(source:SourceDefinition,item:SourceItem,request:SourceRequest,signal?:AbortSignal):Promise<Record<string,unknown>>{
-    const {localOriginal,localOriginalBase64,snapshotRecovery:_,...wire}=item,original=localOriginalBase64?Buffer.from(localOriginalBase64,'base64'):undefined;
+    const {localOriginal,localOriginalBase64,snapshotRecovery,...wire}=item,original=localOriginalBase64?Buffer.from(localOriginalBase64,'base64'):undefined;
     let previousRevision=Object.hasOwn(this.data.predecessors??{},item.revision)?this.data.predecessors![item.revision]??null:this.data.delivered?.[sourceHash(item.externalId)];
     if(previousRevision===undefined){const head=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/head?externalId=${encodeURIComponent(item.externalId)}`,undefined,'GET',signal) as {revision:unknown};if(head.revision!==null&&typeof head.revision!=='string')throw Error('Invalid account source head');previousRevision=head.revision;}
     await this.mutate(async()=>{if(!Object.hasOwn(this.data.predecessors??{},item.revision))await this.commit({...this.data,predecessors:{...this.data.predecessors,[item.revision]:previousRevision??null}});});
     const revision={sourceId:source.id,item:wire,previousRevision,sizeBytes:localOriginal?.sizeBytes??original?.length??item.metadata?.file?.sizeBytes??0,...(localOriginal?{sha256:localOriginal.sha256}:original?{sha256:sourceHash(original)}:{})};
-    const batchId='file-'+ingressKey(revision),upload=await request(`/api/ingress/sources/${encodeURIComponent(source.id)}/uploads`,{batchId,revision},'POST',signal) as any;
+    if(snapshotRecovery&&!/^[a-f0-9]{64}$/.test(snapshotRecovery.recoveryId??''))throw Error('Invalid account snapshot recovery identity');
+    const batchId=snapshotRecovery?'recovery-'+ingressKey([revision,snapshotRecovery.recoveryId]):'file-'+ingressKey(revision),path=`/api/ingress/sources/${encodeURIComponent(source.id)}/`+(snapshotRecovery?`recovery/${encodeURIComponent(snapshotRecovery.captureId)}/uploads`:'uploads'),upload=await request(path,{batchId,revision,...(snapshotRecovery?{recoveryId:snapshotRecovery.recoveryId}:{})},'POST',signal) as any;
     if(!upload||upload.deploymentId!==request.account!.deploymentId||upload.userId!==request.account!.userId||upload.sourceId!==source.id||typeof upload.id!=='string'||!/^[a-f0-9-]{36}$/i.test(upload.id)||upload.partBytes!==4194304||!Array.isArray(upload.parts))throw Error('Account upload session mismatch');
     if(!upload.receipt)for(let offset=0;offset<(localOriginal?.sizeBytes??original?.length??0);offset+=upload.partBytes){
       const part=offset/upload.partBytes,bytes=localOriginal?Buffer.from(await sourceWork.run<Uint8Array>({kind:'original-part',spool:localOriginal,part})):original!.subarray(offset,offset+upload.partBytes),checksum=sourceHash(bytes),existing=upload.parts.find((p:any)=>p.part===part);

@@ -278,12 +278,13 @@ export class LocalSourceManager {
   }
   /** Recovery is transport work: local-only scans never contact the central node. */
   private async recoverSnapshot(source:LocalSource,engine:SourceSync,request:SourceRequest,signal:AbortSignal):Promise<void>{
-    if(request.account)return;
     if(source.kind!=='local-files'||source.retention!=='snapshot'||source.syncContinuously===false&&source.importCompletedAt)return;
     let count=0;
-    try{const response=await request('/api/file-sync/v1/recovery?sourceId='+encodeURIComponent(source.id),undefined,'GET',signal) as {items?:import('./source-sync').SnapshotRecovery[]};
-      if(Array.isArray(response.items)&&response.items.length<=200&&response.items.every(item=>typeof item.externalId==='string'&&typeof item.revision==='string'))count=await engine.requestSnapshotRecovery(response.items);
-    }catch(error){if(signal.aborted)throw error;return;/* Older nodes can still receive ordinary revisions. */}
+    try{let after:string|undefined;const seen=new Set<string>();do{const response=await request(request.account?`/api/ingress/sources/${encodeURIComponent(source.id)}/recovery`+(after?'?after='+encodeURIComponent(after):''):'/api/file-sync/v1/recovery?sourceId='+encodeURIComponent(source.id),undefined,'GET',signal) as {items?:import('./source-sync').SnapshotRecovery[];nextCursor?:string|null};
+      if(!Array.isArray(response.items)||response.items.length>200||response.items.some(item=>typeof item.externalId!=='string'||typeof item.revision!=='string'||request.account&&!/^[a-f0-9]{64}$/.test(item.recoveryId??'')))throw Error('Invalid snapshot recovery page');count+=await engine.requestSnapshotRecovery(response.items);
+      after=request.account?response.nextCursor??undefined:undefined;if(after){if(!/^[a-f0-9]{64}$/.test(after)||seen.has(after))throw Error('Invalid snapshot recovery cursor');seen.add(after);}
+    }while(after);
+    }catch(error){if(signal.aborted||request.account)throw error;return;/* Older legacy nodes can still receive ordinary revisions. */}
     if(!count)return;
     const now=Date.now(),adapter=this.adapters.get(source.kind),scan=await this.adapters.scan({source,signal,checkpoint:engine.checkpoint(),fileCheckpoint:engine.fileCheckpoint(),priorityPaths:[],stateDirectory:this.directory,helperPath:this.helperPath,scope:{start:new Date(now-30*86400000).toISOString(),end:new Date(now+90*86400000).toISOString()}});
     try{signal.throwIfAborted();await engine.stage(scan,adapter.tracksDeletions&&source.trackDeletions,undefined,source.initialSync);}finally{await engine.discardUnqueuedOriginals(scan.items);}

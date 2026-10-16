@@ -32,26 +32,27 @@ export async function accountOriginalDescriptor(config:Config,record:any):Promis
  }while(after);return;
 }
 export async function accountOriginal(config:Config,record:any):Promise<{descriptor:any;response:Response}|undefined>{
- const descriptor=await accountOriginalDescriptor(config,record);if(!descriptor)return;
+ const descriptor=await accountOriginalDescriptor(config,record);if(!descriptor||descriptor.available===false)return;
  const id=descriptor.ref.slice(9),ticket=await accountJson(config,`/api/ingress/originals/${id}/tickets`,{mode:'download'});return {descriptor,response:await accountResponse(config,`/api/ingress/originals/${id}/content?ticket=${encodeURIComponent(ticket.ticket)}`)};
 }
 /** Canonical extraction is separate from the immutable received capture. M06
  * origins need not carry a device: exact capture membership is the binding. */
 export async function accountCaptureMaterial(config:Config,record:any):Promise<any|undefined>{
  const sourceId=record.provenance?.sourceId??'desktop-'+ingressKey([record.deviceId,record.platform]).slice(0,40);
- let cursor:string|undefined,fallback:any;const seen=new Set<string>();
+ let cursor:string|undefined;const seen=new Set<string>();
  do{const page=await accountJson(config,'/api/materials?'+new URLSearchParams({sourceId,limit:'200',...(cursor?{cursor}:{})}));if(!Array.isArray(page.items))throw Error('Invalid material page');
   for(const material of page.items){
-   // Summaries and interpretations must not replace the extracted original body.
-   if(material.kind==='summary'||material.kind==='image-interpretation')continue;
+   // Only the declared extraction is a replacement for the received body.
+   // Organized source metadata, summaries and interpretations are other products.
+   if(!material.artifacts?.some((artifact:any)=>artifact.key==='extraction'&&artifact.state==='ready'))continue;
    let offset=0,matched=false;
    while(true){const members=await accountJson(config,`/api/materials/${material.id}/members?revision=${material.revision}&offset=${offset}&limit=200`);if(!Array.isArray(members.items)||members.items.length>200)throw Error('Invalid material member page');
     if(members.items.some((member:any)=>member.kind==='capture'&&member.ref==='capture:'+record.id)){matched=true;break;}
     if(members.nextOffset===null||members.nextOffset===undefined)break;
     if(!Number.isSafeInteger(members.nextOffset)||members.nextOffset<=offset)throw Error('Invalid material member cursor');offset=members.nextOffset;
    }
-   if(matched){if(material.artifacts?.some((artifact:any)=>artifact.key==='extraction'&&artifact.state==='ready'))return material;if(!fallback||fallback.origin?.deviceId!==record.deviceId&&material.origin?.deviceId===record.deviceId)fallback=material;}
+   if(matched)return material;
   }
   cursor=page.nextCursor??undefined;if(cursor){if(seen.has(cursor))throw Error('Repeated material cursor');seen.add(cursor);}
- }while(cursor);return fallback;
+ }while(cursor);return;
 }

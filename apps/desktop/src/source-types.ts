@@ -10,7 +10,7 @@ export interface SourceItem {
   localOriginal?: import('./original-spool').OriginalSpool;
   localOriginalBase64?: string;
   /** Opaque server input session; never used as local file authority or sent in source metadata. */
-  snapshotRecovery?: {captureId:string;sha256:string;sizeBytes:number};
+  snapshotRecovery?: {captureId:string;sha256:string;sizeBytes:number;recoveryId?:string};
   metadata?: import('@mote/shared').SourceMetadata;
   externalId: string; revision: string; observedAt: string; modifiedAt?: string;
   title: string; text: string; uri?: string; kind: 'calendar' | 'file' | 'message';
