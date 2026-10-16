@@ -88,14 +88,25 @@ owner capability. This covers fresh-input query consumers, not all old-v1 retire
 The legacy20-tool/UTF16/canonical-page bounded subset also passes3/3,EXIT0,
 7305.59025ms, `/tmp/m11-ca87-legacy-query-subset.log/.exit`.
 
-Current known RED is `multiuser-mcp-tombstone.test.ts` at
-ca87afbe6ecfb208b866e3ae573cdb8feb42f51e: actual M03 source-reported deletion
-has a current deleted head; default SDK result is empty correctly, but
-`mote_items(includeDeleted:true)` omits its expected normal tombstone metadata.
-0/1,EXIT1,963.261416ms, `/tmp/m11-ca87-tombstone-red.log/.exit`.
-This is a legacy-capability migration omission, distinct from owner DELETE and
-cross-user disclosure. M08 owns the minimal host fix; this new RED is not ignored
-or labeled a whole-module pass. Its old-body exclusion assertion stays unchanged.
+The initial `multiuser-mcp-tombstone.test.ts` ca87 characterization expected a
+source-reported tombstone to be returned to MCP with includeDeleted:true. That
+expectation is **withdrawn**, not a confirmed migration defect: original base
+6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed `connectors.test.ts` explicitly asserts
+that the MCP model-read result remains empty, even with includeDeleted, while the
+owner source API can inspect the deleted head. No new MCP metadata exposure is
+introduced. The original0/1 EXIT1 remains in `/tmp/m11-ca87-tombstone-red.log/.exit`
+as an invalid characterization expectation, not valid production TDD RED. The
+corrected characterization preserves the normal owner deleted metadata positive
+and original MCP denial. Full quote/context is retained in
+`/tmp/m11-old-tombstone-characterization.txt`.
+
+A separate valid normal-query defect remains: after real producers settle,
+`mote_items` filtered by its own returned canonical kind drops all matching formal
+records. It is recorded test-first at
+b9e42295749253333a58369ff8986868b49c9c6e in `multiuser-mcp-kind.test.ts`,
+0/1 EXIT1,990.844833ms, `/tmp/m11-formal-kind-red.log/.exit`. This affects query
+availability, not cross-user disclosure. M08 owns the minimal kind-selector fix;
+Material catalog's distinct Material.kind filter semantics stay unchanged.
 
 M07's full retained/history/restore and actual running-I/O SIGKILL A/C work remains
 pending; the public review's old search1→0 sample alone does not close those paths.
