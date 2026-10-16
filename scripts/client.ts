@@ -1,27 +1,31 @@
-import { createHash } from 'node:crypto';
-import { readFileSync,existsSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { loadEnvironment } from '@mote/shared/environment';
-import {INGRESS_VERSION_HEADERS,requireIngressReceipt} from '../apps/desktop/src/ingress-protocol.js';
+import {constants,closeSync,fstatSync,openSync,readFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {loadEnvironment} from '@mote/shared/environment';
+import {accountKey} from '../apps/desktop/src/account.js';
+import {defaultConfig,validateServerUrl} from '../apps/desktop/src/config.js';
+import {testConnection} from '../apps/desktop/src/connection.js';
+import {assertAccountConnection,ingressRequest} from '../apps/desktop/src/ingress-client.js';
+import type {SourceRequest} from '../apps/desktop/src/source-types.js';
 const {env,baseDir,envFile}=loadEnvironment(fileURLToPath(new URL('../',import.meta.url)));
 export const resolvedConnection={url:(env.MOTE_URL||`http://127.0.0.1:${env.MOTE_PORT||47832}`).replace(/\/$/,''),baseDir,envFile,profileDirectory:env.MOTE_CONFIG_FILE?baseDir:undefined,profile:env.MOTE_PROFILE||'default'};
-export function apiClient() {
-  const url=resolvedConnection.url;
-  const parsed=new URL(url);
-  if(parsed.username||parsed.password||parsed.search||parsed.hash)throw new Error('Node URL cannot contain credentials, query parameters or fragments');
-  if(parsed.protocol!=='https:' && !(parsed.protocol==='http:'&&(['127.0.0.1','localhost','[::1]'].includes(parsed.hostname)||env.MOTE_ALLOW_INSECURE_HTTP==='1')))throw new Error('Remote HTTP requires MOTE_ALLOW_INSECURE_HTTP=1; prefer HTTPS');
-  const path=resolve(baseDir,env.MOTE_TOKEN_FILE||`${env.MOTE_DATA_DIR||'data'}/access-token`);
-  const token=env.MOTE_TOKEN|| (existsSync(path)?readFileSync(path,'utf8').trim():'');
-  if(!token)throw new Error('Configure server.token in mote.yaml or set an explicit device MOTE_TOKEN/MOTE_TOKEN_FILE connection');
-  return Object.assign(async function request(path:string,body?:unknown,method=body?'POST':'GET',signal?:AbortSignal) {
-    const response=await fetch(url+path,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':body instanceof Uint8Array?'application/octet-stream':'application/json',...INGRESS_VERSION_HEADERS},...(body?{body:body instanceof Uint8Array?new Uint8Array(body):JSON.stringify(body)}:{}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(180000)]):AbortSignal.timeout(180000),redirect:'error'});
-    if(!response.ok){const text=await response.text();throw Object.assign(new Error(`HTTP ${response.status}: ${text.slice(0,400)}`),{httpStatus:response.status});}
-    const result:unknown=await response.json();
-    if(method==='POST'&&(path==='/api/captures'||path==='/api/notes')){
-      const id=(body as {id?:unknown}|undefined)?.id;
-      requireIngressReceipt(result,{kind:'capture',...(typeof id==='string'?{id}:{})});
-    }
-    return result;
-  }, { binding: createHash('sha256').update(url + '\0' + token).digest('hex') });
+function configuredToken(){
+ if(env.MOTE_TOKEN)return env.MOTE_TOKEN;
+ if(!env.MOTE_TOKEN_FILE)throw Error('Configure an explicit personal client credential in the selected YAML or MOTE_TOKEN/MOTE_TOKEN_FILE');
+ const fd=openSync(resolve(baseDir,env.MOTE_TOKEN_FILE),constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+ try{const stat=fstatSync(fd);if(!stat.isFile()||stat.nlink!==1||stat.size>16384)throw Error('Client credential must be a regular private file');return readFileSync(fd,'utf8').trim();}finally{closeSync(fd);}
+}
+/** A selected credential first proves its stable M01 identity. No retired owner
+ * token, token-hash ownership or v2 fallback can claim the local outbox. */
+export async function apiClient(connection?:{url:string;token:string}){
+ const url=validateServerUrl(connection?.url??resolvedConnection.url),token=connection?.token??configuredToken();
+ const identity=await testConnection({serverUrl:url,token,deviceId:'cli'},fetch,false),account=Object.freeze({origin:identity.account.origin,deploymentId:identity.account.deploymentId,userId:identity.account.userId,username:identity.account.username});
+ const config={...defaultConfig(),serverUrl:url,token,account,authSignedOut:false,authExpiresAt:identity.credential.expiresAt,credentialScope:'client' as const,deviceId:identity.credential.deviceId??'cli'};
+ const request:SourceRequest=async(path,body,method=body===undefined?'GET':'POST',signal)=>{
+  if(method==='POST'&&['/api/captures','/api/notes'].includes(path))throw Error('Use the account-bound Ingress 3 source endpoint');
+  await assertAccountConnection(config);
+  signal?.throwIfAborted();
+  return ingressRequest(config,path,body,method,signal);
+ };
+ return Object.assign(request,{account,binding:accountKey(config)!,identity,config});
 }

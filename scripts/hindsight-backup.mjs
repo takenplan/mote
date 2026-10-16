@@ -86,3 +86,10 @@ export async function restoreHindsight({archiveDirectory,runtimeDirectory,provid
  }catch(error){await docker(['volume','rm',volume]).catch(()=>{});throw error;}
  return {runtime,volume,automaticWork:false,credentialsRequired:true};
 }
+
+/** Roll back only a fresh volume returned by restoreHindsight, never a source. */
+export async function discardRestoredHindsight(volume){
+ const match=/^mote-hindsight-([a-f0-9]{24})-data$/.exec(volume);if(!match)throw Error('Invalid restored native volume');
+ const inspection=JSON.parse(await docker(['volume','inspect',volume]))[0];if(inspection.Name!==volume||inspection.Labels?.['mote.runtime.identity']!==match[1])throw Error('Restored native volume ownership changed');
+ await docker(['volume','rm',volume]);
+}
