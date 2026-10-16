@@ -1,4 +1,4 @@
-# M16 lifecycle acceptance ledger (in progress)
+# M16 lifecycle implementation and Draft delivery ledger
 
 Baseline: M14 clean composition `9bc65b53d5823443ad1ecffb49d2c6eecc687927`.
 Independent clone: `task-20/mote`; branch `codex/mote-multiuser-m16-lifecycle`.
@@ -6,6 +6,68 @@ No original user data, deployment, integration/main or disabled CI was changed.
 The execution host reports `guangmodeMac-Studio`; other module workspaces are
 locally visible. The requested parent thread was unavailable to the app messaging
 tool (`thread not found`); no report is claimed delivered by that attempt.
+
+
+## Final verified candidate and remaining acceptance limits
+
+Runtime/test candidate: `10748005a5d007695ecc9401d0d57dc9dea94919`.
+Subsequent delivery changes are documentation only. The historical sections below
+retain their then-current failures and pending work; this receipt supersedes their
+current-status wording, not their raw evidence or the explicit limits here.
+
+| Executed command / scope | Actual result |
+| --- | --- |
+| `npm run build:central` at `6f5bdeb6` | EXIT0; fresh shared/Agent/Server/Web. |
+| M12 joint gates at literal `6f5bdeb6` | Focus46, A/C7, B5, legacy SDK3, shared seams5, old Server18, native calendar7 and compiled SIGKILL1: every command EXIT0. Logs `m12-uniform-6f5bdeb6-*`. |
+| `MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1 node --import tsx --test --test-concurrency=1 apps/server/test/multiuser-instance-backup.test.ts apps/server/test/multiuser-backup-capture-updates.test.ts apps/server/test/multiuser-backup-actions.test.ts` | 40/40 EXIT0, no skips, 34.686s at `6f5bdeb6`; `/tmp/m16-uniform-compiled-backup.log/.exit`. |
+| `npm run build -w @mote/desktop` at `6f5bdeb6` | EXIT0; `/tmp/m16-uniform-desktop-build.log/.exit`. |
+| `npm run build -w @mote/server` and the two `multiuser-actions-catalog*.test.ts` files at `10748005` | Fresh Server EXIT0; catalog4/4 EXIT0, including actual source revocation after a provider await, original sameAs/paging and full Unicode tail; `/tmp/m16-sixth-{server-build,catalog-four}.log/.exit`. |
+| `npm run check:affected -- --base origin/codex/mote-multiuser-integration` at `10748005`, with installed JDK21/Android SDK below | **EXIT0**, `/tmp/m16-required-affected-sixth-resumed.log/.exit`. Desktop492/492; Server2626 pass/0 fail/1 existing default macOS-sandbox opt-in skip; Web505/505; Agent317 pass/1 existing installed-Codex opt-in skip; Shared192; Diagnostics5; root81 and client5 all pass. |
+| Actual `:app:testDebugUnitTest` within that required command | **352/352**, 74 XML suites, zero failures/errors/skips; Kotlin and test compilation plus test task actually executed, Gradle BUILD SUCCESSFUL45s, 25 tasks/5 executed. XML reports share the current run timestamp, not an older cached receipt. |
+| `MOTE_ACTIONS_PROCESS_ENTRY=$PWD/apps/server/dist/index.js node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-actions-process.test.ts` at `10748005` | Compiled host + actual native adapter SIGKILL1/1 EXIT0, 12.804s; `/tmp/m16-sixth-actions-emitted.log/.exit`. |
+
+The required environment was `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`,
+`ANDROID_HOME=/Users/utopiafar/Library/Android/sdk` and the same `ANDROID_SDK_ROOT`,
+with that JDK's bin prepended to PATH. Server's full suite took 881.655 seconds.
+All heavy phases ended and were explicitly released before other client windows.
+
+Only `action-discovery.ts`, its new regression and documentation differ between
+`6f5bdeb6` and `10748005`: no archive schema/helper, filesystem publication,
+Desktop/Web/Android runtime or dependency changed. The original 40-case archive
+and fresh Desktop receipts therefore retain their exact earlier SHA rather than
+being mechanically rerun. The new Server runtime has fresh build, four targeted
+cases, the complete required suite and a fresh compiled process receipt.
+
+Failure classification is preserved: confirmed missing routes/authentication or
+publication/erase/schema defects have durable actual RED→GREEN; the fifth required
+EXIT1 exposed duplicate CLI admission and is fixed by the shared-transport
+correction; the Unicode catalog failure was a fake-model first-record assumption,
+not lost production input. A later independent-source catalog redisclosure was a
+real production failure, fixed by retaining the first proof/version through every
+model request and final publication. The initial sixth command was interrupted
+by the client/executor restart at 16:02:11 UTC, with no exit file and no surviving
+test processes; it is neither PASS nor an application failure. Its original log
+is retained. The exact original required stage was then restarted at the same
+clean SHA into the distinct `sixth-resumed` log; completed builds/catalog/archive
+were not repeated. The earlier coordinator EXIT1 before any sixth command was an
+intentional exact-SHA guard stop, not a failed test.
+
+Bounded independent reviews of lifecycle/credentials, original authorization,
+CLI admission/ACK, atomic import/restart, backup owner/pins/schema/retirement,
+management revocation and necessary client deltas are recorded below. Confirmed
+review findings were reproduced and fixed; the final M12 catalog fix also has
+bounded M16 review `/tmp/mote-m16-review-m12-catalog-dcad.md`. The joint gates are
+M16 executions, not falsely claimed independent M12 executions.
+
+**Still open:** Docker epoch-5 profile publication rejects before writes, and
+native Hindsight Docker-volume recovery was not executed because the daemon is
+unavailable. These are retained-capability gaps, not accepted removals or passed
+checks. Physical devices, live models/providers and real calendar writes were not
+exercised. M13/M15's later unrelated Actions/Gmail UI work is outside this fixed
+candidate. Final combined acceptance of all 17 modules remains a separate gate.
+This Draft delivery does not declare the whole module/project accepted across
+those limits. All tests use generated accounts and disposable data; no real user
+was erased, live instance overwritten, deployment performed or disabled CI enabled.
 
 ## Initial evidence
 
