@@ -336,6 +336,53 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun pausedNativeNotesRetirePrivateTextBeforeQueuedSessionResolutionOnResume() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val privateDraft="Generated A private draft before blocked resume "+java.util.UUID.randomUUID()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","notes")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {activity->ready=activity.client!=null&&!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.hint.toString()=="此刻想留下什么？"}};ready}
+            lateinit var executor:java.util.concurrent.ExecutorService
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="此刻想留下什么？"}.setText(privateDraft)
+                val content=CentralActivity::class.java.getDeclaredField("content").apply {isAccessible=true}.get(activity)
+                val task=(CentralContent::class.java.getDeclaredField("task\$delegate").apply {isAccessible=true}.get(content) as Lazy<*>).value
+                executor=UiTask::class.java.getDeclaredField("executor").apply {isAccessible=true}.get(task) as java.util.concurrent.ExecutorService
+            }
+            CentralDraftWrites.barrier {Unit}
+            val entered=java.util.concurrent.CountDownLatch(1);val release=java.util.concurrent.CountDownLatch(1)
+            executor.execute {entered.countDown();release.await(20,TimeUnit.SECONDS)};assertTrue(entered.await(5,TimeUnit.SECONDS))
+            try {
+                scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+                scenario.onActivity {activity->assertFalse("The old private draft must retire before the queued account resolver runs",views(activity.window.decorView).filterIsInstance<android.widget.TextView>().any {it.text.toString().contains(privateDraft)})}
+            } finally {release.countDown();executor.submit {}.get(15,TimeUnit.SECONDS)}
+            waitFor {var ready=false;scenario.onActivity {activity->ready=activity.client!=null&&!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.hint.toString()=="此刻想留下什么？"&&it.text.isEmpty()}};ready}
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"a");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
+            waitFor {var ready=false;scenario.onActivity {activity->ready=!activity.isWorking&&views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.text.toString()==privateDraft}};ready}
+        }
+    }
+
+    @Test fun actualNativeOverviewReadsOwnedStatisticsAndCanonicalDeviceMetadata() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val statistics=CentralAccess.requireClient(app).get("/api/data/statistics")
+        assertTrue(statistics.getLong("captures")>0)
+        val devices=CentralAccess.requireClient(app).get("/api/ingress/devices").getJSONArray("items")
+        assertTrue(devices.length()>0)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","overview")).use {scenario->
+            waitFor {var ready=false;scenario.onActivity {ready=it.client!=null&&!it.isWorking};ready}
+            scenario.onActivity {activity->
+                val text=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()}
+                assertTrue("Original native overview must display this account's actual capture count",text.contains("原始采集记录 · "+statistics.getLong("captures")))
+                assertTrue(text.contains("正式资料 · "+statistics.getLong("materials")))
+                assertTrue(text.contains("来源与连接 · "+statistics.getLong("sources")))
+                for(index in 0 until devices.length())assertTrue(text.any {it.contains(devices.getJSONObject(index).getString("name"))})
+            }
+        }
+    }
+
     @Test fun sameIdentityResumeKeepsTheNativeSaveActionUsable() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
