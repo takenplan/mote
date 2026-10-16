@@ -123,3 +123,16 @@ case plus this regression passed 2/2 EXIT0,23637ms, server typecheck0
 (`/tmp/m08-insight-coverage-green.log/.exit`, `-green-types.log/.exit`).
 The complete legacy snapshot tests also passed 2/2 EXIT0. These narrow receipts
 do not replace final frozen-candidate validation or independent review.
+
+Exact b84240f554fe2c549eb9142cc00089eea1a84e88 passed the five-case frozen
+Memory→Insight/empty-owner/periodic working/real-minute Insight/snapshot matrix,
+5/5 EXIT0,97641ms (`/tmp/m08-b842-frozen-narrow.log/.exit`), and the legacy
+snapshot tests 2/2 EXIT0. The old source-state metadata also includes paused
+sources; this separate omission was preserved in RED commit
+`b2cc49a6b7baec480c45ee6b45ff980cedd9b392`, 0/1 EXIT1 against b842
+(`/tmp/m08-b842-paused-source-before.log/.exit`). The follow-up reads only
+owned, source/device-filtered metadata before LIMIT, while original retrieval
+still rejects disabled sources. Its expanded regression checks A/B paused-source
+metadata and completed snapshot export/delete/idempotent restore/restart without
+model calls, followed by version3 linked to the restored version2: 1/1 EXIT0,
+11099ms (`/tmp/m08-insight-paused-restore-green.log/.exit`), typecheck0.
