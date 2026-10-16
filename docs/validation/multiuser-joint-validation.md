@@ -721,3 +721,67 @@ Source and tests stayed fixed throughout. All heavy work was released immediatel
 Under the parent's22:08 resource ruling QR is the next sole heavy owner; Joint
 and M15 await parent allocation afterward and do not infer another slot from old
 status files. The producer's124 and stopped superseded gate remain non-passing.
+
+## Current original Files reviews — narrow candidate evidence, not final gate
+
+After tested production36ff, the original term/calendar review workflow is being
+adapted through one existing M05 executor and personal M04 file-model leases.
+The term entry actual503 RED is committed atf5d4ff86. Test4ca9f9cd preserves its
+normal confirmation/retained-history case plus calendar/lifecycle boundaries.
+Current production changes remain a candidate pending types, bounded independent
+review and own affected/compiled/client acceptance; the53-case component gate
+above does not cover them.
+
+Actual generated-data executions:
+
+- Term proposal→explicit selected correction retains original immutable text and
+  B's equal-ID data; processing-domain export/delete/restore rejects a forged
+  source range and preserves accepted history with no task ID/model replay.
+  Calendar archived-input proposal→explicit association leaves both calendars
+  unchanged; detail/export show only A's confirmed association. Initial combined
+  two-case receipt `/tmp/mote-joint-file-review-retained-data.log/.exit`,2/2 EXIT0.
+- The archived/reference calendar confirmation history now passes actual domain
+  restore/restart with forged confirmation-reference rejection and zero new tasks;
+  source disable hides link/body, source re-enable reopens the same retained proof,
+  and real private capture DELETE removes dependent review/link data while B's
+  same event UUID remains unchanged. `/tmp/mote-joint-file-review-calendar-portable.log/.exit`,2/2 EXIT0.
+- Metadata-only reference fixture first had invalid layer/body setup, preserved as
+  non-runtime failures. Valid reference data then produced stale/zero external
+  issuance because no original exists, `/tmp/mote-joint-file-review-calendar-reference-red3.log/.exit`.
+  Minimal metadata-only projection marks bodyAvailable=false and the same case
+  passes1/1, `/tmp/mote-joint-file-review-calendar-reference-green.log/.exit`.
+- Source-context change, owner correction and file cancellation while the actual
+  generated provider response is held each prevent the late proposal publishing;
+  no retired reason is returned and old raw text remains. Three cases EXIT0 in
+  `/tmp/mote-joint-file-review-held-lifecycle.log/.exit`.
+- Before-LIMIT selection:205 newer disabled-source calendar records must not
+  displace the one allowed owner candidate. Initial setup through full Ingress
+  admitted unrelated background work and exceeded the narrow12s wait (running
+  task, not a completed functional result); that failure remains preserved.
+  The candidate-order fixture now uses the real owner-bound M02 metadata service
+  for the hidden-only rows, with actual M03 for the allowed A/B inputs. Same
+  ordering/negative-content assertions pass1/1 in
+  `/tmp/mote-joint-file-review-calendar-limit2.log/.exit`. No production change
+  was made to obtain that fixture-only timing result.
+- The original quarantined term and calendar algorithms still pass their two
+  targeted characterizations after pure prompt/schema extraction:
+  `/tmp/mote-joint-file-review-legacy-contract.log/.exit`,2/2 EXIT0.
+- Scope inventory/private-SQL/import boundary EXIT0 in
+  `/tmp/mote-joint-file-review-scope2.log/.exit`; raw validation SQL was changed
+  to the existing owner-bound PrivateSql metadata-validation pattern, without
+  granting data access. Current source noEmit has not yet run for this candidate.
+
+All data/providers/archives are generated. There was no real calendar/mail write,
+Central-content read, real-model request, new CI/deploy or remote branch change.
+
+### QR87 compatibility supplement
+
+Core expired-input preflight before external issuance is source-compatible with
+Joint's physical-call/generation guards; the previous unconditional pin-release
+statement is qualified. Generated production Ingress primitive actualRED:
+acquire exact pin→admin disables owner→invoke the exact acquired disposer throws
+invalid_identity and leaves one pin, `/tmp/mote-joint-pin-disposer-review-red.log/.exit`.
+This is not yet a composed87 held-M06-response reproduction. QR owner received the
+bounded finding and cleanup-only exact-pin recommendation; Joint has not duplicated
+or merged the fix. Account deletion, which clears pins, is a different boundary.
+No independent reviewer execution or whole QR acceptance is inferred.

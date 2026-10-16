@@ -201,3 +201,19 @@ for an accepted current speaker sample. EXCEPTION replacement/foreign acoustic
 IDs are404; an invalid sample cannot replace the last valid publication. UNKNOWN
 calendar confirmations/model review and the remaining old capability matrix are
 still open. No filesystem asset store, new model call or new executor is added.
+
+## Original file review adaptation decision
+
+KEEP the original model-proposed terms/calendar algorithms, explicit owner choice,
+exact source ranges and immutable originals. The pure prompts/value schemas are
+shared with the quarantined original tests; no keyword matching or guessed event
+association is added. CHANGE only the host: M03/M06 evidence and personal M04 leases
+are admitted through the existing single M05 executor. Private proposal/link history
+is data; personal restore never reconstructs a task/model lease. Calendar links
+confirm a planned event association and never establish attendance or write an event.
+Metadata-only references contribute only retained metadata with an unavailable-body
+marker; they never cause a speculative provider/original fetch. Exact source context,
+artifact revision and calendar hash are rechecked after awaits and on confirmation.
+Current narrow receipts are in the validation ledger. Original profile/rule routing,
+all client consumers, native/container schema combination and final whole acceptance
+remain independently tracked; these new review cases do not supersede those gaps.
