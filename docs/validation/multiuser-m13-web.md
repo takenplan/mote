@@ -402,3 +402,11 @@ First actual `/tmp/m13-portable-import-green.log/.exit`1/1 EXIT0; expanded expor
 First new i18n check lacked `取消导入`; after adding the authored English message and synchronized Android catalog, `/tmp/m13-portable-import-i18n-green.log/.exit` EXIT0 (8411 messages). Final type/build/IAB/affected and bounded review of this consumer remain separate pending checks.
 
 Import first narrow Web typecheck `/tmp/m13-portable-import-types.log/.exit` EXIT2: the new component did not explicitly narrow the Api connection union to Web before reading its account/deployment. The same existing ScopedVault Web guard and captured immutable identity fix the declaration; `/tmp/m13-portable-import-types-green.log/.exit` EXIT0. This slot is released; fresh builds/IAB/affected are still not claimed.
+
+### Import receipt closure review follow-up
+
+M16 bounded review of ee4 found a malformed same-owner receipt could claim completion with empty/unfinished domain rows or a wrong phase. This was a static candidate, not a claimed M16 producer failure. e674a68f durable RED uses an actual successful M16 admission/receipt, mutating only its presentation fields before the production parser: `/tmp/m13-import-receipt-closure-red.log/.exit` EXIT1, ten malformed cases accepted (11 failures including the parent). The parser now requires unique imported/preserved coverage, exact union with all rows, preserved/complete states, exact phase and no export artifact fields. Required five canonical domains are a subset of the complete declared union, allowing explicit registered extensions without guessing authority.
+
+`/tmp/m13-import-receipt-closure-green.log/.exit`13/13 EXIT0 includes all ten unchanged negatives and both original real import/export renderers; the additional fully declared-domain parser positive is format compatibility only, not a claim that an extra execution provider was installed. No backend policy/runtime changed. Final types/review of this small fix are separate.
+
+Strict import receipt final Web typecheck `/tmp/m13-import-receipt-types.log/.exit` EXIT0 and unchanged i18n8411 `/tmp/m13-receipt-i18n.log/.exit` EXIT0. Slot released. This is a Web parser follow-up to the independently reported malformed-response boundary, not a new server import implementation or whole-module acceptance.
