@@ -178,3 +178,29 @@ Exact `4a18aff95cff214d78ad901589c41b2a12a7a742` complete Ask/read-races:
 the composed runtime `f10b687e6094f664ad337300e973642c1e28d49a` passed server
 typecheck and scope checks. The unified A/B/C representative candidate with M11,
 fresh builds/emitted process and required affected checks remain pending.
+
+At clean `09af174dfb2a16212a4f9e84e12a8d0769247105` (runtime
+`f10b687e6094f664ad337300e973642c1e28d49a`), the 43-file actual source
+composition passed 506/506, EXIT0, zero skips/cancels/failures, 951576ms
+(`/tmp/m08-09af-combined.log/.exit`). This is a pre-fix checkpoint, not final
+same-SHA A/B/C acceptance or an affected-check result.
+
+Native source-item kind self-consistency is a confirmed migration omission:
+Material canonical originals return `CaptureRecord.source`, but the SQL filter
+previously compared their parent `Material.kind`. RED commit `7f86d514` retains
+the valid failure (one characterization pass, one regression failure, EXIT1,
+1975ms; `/tmp/m08-query-kind-characterization-red.log/.exit`). The fix selects
+the emitted native kind before candidate ordering/LIMIT; entity cards and the
+Material catalog continue filtering by their own Material kind. The enhanced
+regression checks both projections: 2/2 EXIT0,2006ms, server typecheck0 and
+scope checks0 (`/tmp/m08-query-kind-{green,types,scope}.log/.exit`). This is
+same-owner query correctness, not a cross-user disclosure finding.
+
+The initial includeDeleted 0→1 expectation was invalid: the original integration
+`connectors.test.ts` explicitly excludes tombstones even with this parameter.
+Its failed logs (`/tmp/m08-query-params-red.log/.exit` and the preliminary
+`/tmp/m08-tombstone-host-before-valid.log/.exit`) remain diagnostic evidence of
+an incorrect test expectation, not production RED or a delivered fix. Production
+tombstone logic was never changed. The durable characterization keeps the owner
+metadata head positive while both query includeDeleted values return no items
+and direct prior/current tombstoned original expansion is refused for A and B.
