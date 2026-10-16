@@ -51,6 +51,21 @@ class MultiuserIngressTest {
         assertEquals(200,request(server,b.getString("token"),"GET","/api/captures/$id",null).first)
     }
 
+    @Test fun `rotation preserves stable account and disable rejects before private upload while B remains usable`() = fixture { f ->
+        val server=f.getString("address"); val a=f.getJSONObject("a"); val b=f.getJSONObject("b"); val original=owner(server,a.getString("token"))
+        val rotated=request(server,"","POST","/api/auth/login",JSONObject().put("username","generated-a").put("password",f.getString("password")).put("mode","client"))
+        assertEquals(200,rotated.first);val token=rotated.second!!.getString("token");assertNotEquals(token,a.getString("token"));assertEquals(original,owner(server,token));assertEquals(original.key,owner(server,token).key)
+        val record=event(UUID.randomUUID().toString(),"Generated rotated ownership")
+        assertEquals(original.userId,client(server,token).captures(listOf(record)).getString("userId"))
+        assertEquals(200,request(server,f.getJSONObject("admin").getString("token"),"PATCH","/api/admin/accounts/"+a.getString("userId"),JSONObject().put("disabled",true)).first)
+        assertThrows(FileTransportFailure::class.java) { client(server,token,original).captures(listOf(event(UUID.randomUUID().toString(),"Never send after disable"))) }
+        val bob=client(server,b.getString("token"));assertEquals(b.getString("userId"),bob.captures(listOf(record)).getString("userId"))
+        assertThrows(IllegalArgumentException::class.java) { AccountBinding("https://example.test/path",original.deploymentId,original.userId) }
+        assertEquals("https://example.test",AccountBinding.normalize("HTTPS://EXAMPLE.TEST:443/"))
+        assertNotEquals(original.key,original.copy(deploymentId="same-url-new-deployment").key)
+        assertNotEquals(original.key,original.copy(userId=b.getString("userId")).key)
+    }
+
     @Test fun `real file spool commits original bytes and only complete v3 ACK clears its journal`() = fixture { f ->
         val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val client=client(server,token)
         val directory=kotlin.io.path.createTempDirectory("m15-file-spool-").toFile()

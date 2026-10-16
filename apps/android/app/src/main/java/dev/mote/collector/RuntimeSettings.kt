@@ -16,25 +16,15 @@ object RuntimeSettings {
     @Volatile var stopping = false; private set
     private val projectionConsent = ProjectionConsentHandoff()
     private var configurationObserver: (() -> Unit)? = null
-    /** Background native login reuses the existing stop/drain/write guard. New owner always starts paused. */
+    /** Native login uses the same producer pause/drain/resume path as settings. */
     internal fun replaceAccount(context: Context, bindLocal: Boolean = false, action: () -> Unit) {
         check(Looper.myLooper() != Looper.getMainLooper())
-        check(ConnectionGuard.beginReconfiguration()) { "Configuration busy" }
-        try {
-            val settings = Settings(context)
-            settings.enabled = false
-            HttpJson.cancelActive()
-            val work = WorkManager.getInstance(context)
-            listOf("mote-upload", "mote-upload-timer", "mote-upload-recovery", "mote-source-upload", "mote-source-scan", "mote-source-periodic", "mote-heartbeat", "mote-heartbeat-now", "mote-sync-recovery", "mote-capture-ocr", "mote-capture-ocr-recovery", "mote-calendar-delivery").forEach { work.cancelUniqueWork(it).result.get(10, TimeUnit.SECONDS) }
-            val deadline = SystemClock.elapsedRealtime() + 120000
-            while (ConnectionGuard.processing.get() > 0) { check(SystemClock.elapsedRealtime() < deadline); Thread.sleep(25) }
-            ConnectionGuard.reconfigure(context, "", bindLocal) { action() }
-        } finally { ConnectionGuard.endReconfiguration() }
-        context.stopService(android.content.Intent(context, ProjectionService::class.java))
-        MediaCollection.clear()
-        SyncSchedule.invalidate()
-        UploadWorker.schedule(context, Settings(context).read())
-        SourceWork.schedule(context)
+        val previous = Settings(context).read()
+        val finished = java.util.concurrent.CountDownLatch(1)
+        val outcome = java.util.concurrent.atomic.AtomicReference<kotlin.Result<Applied>>()
+        main.post { apply(context, previous, bindLocal, change = action, nextServer = "", expected = previous) { result -> outcome.set(result); finished.countDown() } }
+        check(finished.await(150, TimeUnit.SECONDS)) { "Account reconfiguration timed out" }
+        outcome.get().getOrThrow()
     }
     fun observeConfiguration(observer: (() -> Unit)?) { configurationObserver = observer }
     fun takeProjectionConsentRequest() = projectionConsent.take()
@@ -106,7 +96,7 @@ object RuntimeSettings {
                 HttpJson.cancelActive()
                 reportProgress(MoteI18n.text("正在等待后台处理结束"))
                 val work = WorkManager.getInstance(app)
-                listOf("mote-heartbeat", "mote-heartbeat-now", "mote-sync-recovery", "mote-upload", "mote-upload-timer", "mote-upload-recovery", "mote-source-upload", "mote-source-scan", "mote-source-periodic", "mote-capture-ocr", "mote-capture-ocr-recovery")
+                listOf("mote-heartbeat", "mote-heartbeat-now", "mote-sync-recovery", "mote-upload", "mote-upload-timer", "mote-upload-recovery", "mote-source-upload", "mote-source-scan", "mote-source-periodic", "mote-capture-ocr", "mote-capture-ocr-recovery", "mote-calendar-delivery", "mote-bulk-dedupe")
                     .map { work.cancelUniqueWork(it).result }.forEach { it.get(10, TimeUnit.SECONDS) }
                 SyncSchedule.invalidate()
                 val deadline = SystemClock.elapsedRealtime() + 120_000

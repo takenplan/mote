@@ -62,7 +62,8 @@ class BulkDedupeWorker(context: Context, params: WorkerParameters) : Worker(cont
             setProgressAsync(workDataOf("stage" to stage, "done" to done, "total" to total, "found" to found, "errors" to errors))
         }
     }
-    override fun doWork(): Result {
+    override fun doWork(): Result = ConnectionGuard.sync { work() } ?: Result.retry()
+    private fun work(): Result {
         if (inputData.getString("owner") != Settings(applicationContext).read().ownerKey()) return Result.success()
         val started = android.os.SystemClock.elapsedRealtime()
         SupportEvents.record(applicationContext, EventStage.DEDUPE, EventCode.STARTED)
