@@ -1,3 +1,4 @@
+import {memoryPageSchema} from './memory-data.js';
 import type {DatabaseSync} from 'node:sqlite';
 import {z} from 'zod';
 import {registerUserRoute,type ScopedRuntime} from './http.js';
@@ -15,7 +16,7 @@ export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configurati
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id',handle:({context,request})=>service(context).job((request.params as {id:string}).id)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel',handle:({context,request})=>service(context).cancel((request.params as {id:string}).id)});
  for(const kind of ['pause','resume','stop'] as const)registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind,handle:({context,request})=>service(context).control(kind,request.body)});
- registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories',handle:({context,request})=>service(context).page(z.object({query:z.string().optional(),cursor:z.string().optional(),limit:z.coerce.number().optional(),includeHistory:z.enum(['true','false']).transform(value=>value==='true').optional()}).strict().parse(request.query))});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories',handle:({context,request})=>service(context).page(memoryPageSchema.parse(Object.fromEntries(Object.entries(request.query as Record<string,unknown>).map(([key,value])=>[key,['includeHistory','includeStale'].includes(key)&&['true','false'].includes(String(value))?value==='true':value]))))});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile',handle:({context})=>service(context).reconcile()});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id/versions/:version',handle:({context,request})=>{const input=z.object({id:z.string().uuid(),version:z.coerce.number().int().positive()}).parse(request.params);return service(context).readVersion(input.id,input.version);}});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id',handle:({context,request})=>service(context).read((request.params as {id:string}).id)});
