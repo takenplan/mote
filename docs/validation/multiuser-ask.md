@@ -1,6 +1,8 @@
 # M08 multiuser Ask validation
 
-Status: implementation/review in progress. No final M08 acceptance or PR yet.
+The module Draft PR and task delivery record carry final gate outcomes and full
+head/base SHAs. Versioned historical receipts below are not silently promoted to
+final acceptance.
 Production is the scoped app; no legacy Store or fake Memory service is mounted.
 All fixtures are generated and isolated. Models/worker/network I/O use loopback
 scripted substitutes with actual Harness, transport, M04 leases, M05 executor,
@@ -70,16 +72,18 @@ P2s (060/492), and conversation-deleted artifact P1 plus explicit artifact sourc
 filter P2 (9cbc). Reports: /tmp/mote-m11-review-m08.md. These approvals are bounded
 subsets and do not substitute final whole-module review.
 
-## Pending gates and practical limits
+## Final gate contract and practical limits
 
-Real M07 through f436d7e8e3e78dcda4509731038d64183c5dcee4 is composed,
+Real M07 through c5661258cc24628100878b59e96c0cebcb36ee57 is composed,
 including ordinary owner audit/import and retained Coding projection withdrawal.
 The PR135 public contract documents are also composed. Query-visible Memory stays published-only; audit/stale/proposed bodies
-do not become model evidence. Final M07 acceptance and subsequent integration
-fixes remain dependency gates. No SQL body substitute or fake service claims parity. Final focused, all-scope/multiuser actual
-composition, fresh libraries/server build, emitted two-process HTTP and required
-npm run check:affected -- --base origin/codex/mote-multiuser-integration must run
-on the final code. Remote feature head/base and Draft PR must then be verified.
+do not become model evidence. M07 has its own independently versioned
+delivery gate. No SQL body substitute or fake service claims parity. Final focused
+Ask tests and all-scope/multiuser actual composition (including the required server
+suite), fresh libraries/server build, emitted two-process HTTP and required
+`npm run check:affected -- --base origin/codex/mote-multiuser-integration` run on
+the delivered code. The Draft PR/task record carries exact counts, exit codes,
+remote feature head/base and any incomplete gate; an unrun gate cannot pass.
 CI workflows are disabled and unrun, not passed. No deployment, real credentials,
 user data, live external model/provider or physical device check is authorized.
 Synthetic scripted responses establish execution/disclosure contracts, not live
@@ -204,3 +208,45 @@ an incorrect test expectation, not production RED or a delivered fix. Production
 tombstone logic was never changed. The durable characterization keeps the owner
 metadata head positive while both query includeDeleted values return no items
 and direct prior/current tombstoned original expansion is refused for A and B.
+
+Public representative consumer candidate
+`f0729a6459bae010b904d4edc70b7086319a6968` contains M08 kind fix3bda,
+M07 c566 and M11 e857 plus PR135. The unchanged independent literal archive
+`/tmp/m08-review-unified-f072` passed B3 + effective kind + corrected legacy
+tombstone characterization, 5/5 EXIT0,36121.87975ms
+(`/tmp/m08-unified-f072-B.log/.exit`). Actual SDK legacy all-tool, partial-ready
+projection and canonical paging cases passed 3/3 EXIT0,8322.500583ms
+(`/tmp/m08-unified-f072-legacy.log/.exit`). Only scripted external model/provider
+transport is substituted; actual Accounts, M03/M06, independently reviewed Memory,
+installed provider, Harness and SDK are exercised. This is the same-SHA B receipt;
+A/C receipt owners and final per-module gates remain separate.
+
+M07 c566 bounded independent review: original A restore/held-reader/performance
+5/5 EXIT0,7226.625875ms, long Coding A1/1 EXIT0,6775.05825ms
+(`/tmp/m08-review-m07-c566-{A,long}.log/.exit`). Full small runtime delta and exact
+ancestor/historical-target guards were read without a confirmed new finding.
+Own composition `20506aefe8f269a6c80656e2e5a74ed5d8ba9fae` retains both appended
+policy lifecycle and long Coding tests, 2/2 EXIT0,7062.811125ms
+(`/tmp/m08-20506-composition-append.log/.exit`), server typecheck0. No production
+conflict was resolved in this merge; final whole-code checks remain pending.
+
+The representative test candidate supersedes f072 with
+`c53c199876bbfee2acfe8c38ecda7403af7f809d` (test-only readiness increment).
+Its original A fixture could observe the first catalog item before processing
+finished; the correction reuses the existing bounded production-state waiter for
+A/B exact original publication and selects the associated A Material. Retirement,
+history, three-domain restore, B and original-byte assertions stay unchanged.
+Own test-only cherry-pick is `1b86e51a9e7537f8de23ff259a1f47449e59ede6`.
+Independent literal c53 B3 + kind + old tombstone characterization: 5/5 EXIT0,
+36713.438833ms (`/tmp/m08-unified-c53-B.log/.exit`); unchanged legacy all-tool,
+partial-ready and canonical paging: 3/3 EXIT0,9082.869ms
+(`/tmp/m08-unified-c53-legacy.log/.exit`). No new runtime or test framework was
+introduced by this readiness correction. Final A/C same-candidate receipts and
+per-module gates remain explicitly tracked before delivery.
+
+Representative contract closure uses that exact c53 candidate throughout:
+M07 independent A/C7/7 EXIT0,54178ms
+(`/tmp/m07-uniform-c53-AC.log/.exit`), M08 B/parameters5/5 and old-tool3/3
+above, and M11 owning13/13 EXIT0,92271ms. These independent receipts close the
+shared A/B/C representative contract only. They do not stand in for each module's
+final focused/combined/build/emitted/affected or remote-head/PR gates.
