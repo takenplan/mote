@@ -380,12 +380,22 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         if (path != "/api/memory/jobs") ui.button(MoteI18n.text("停止")) { action(path + "/" + enc(id) + "/cancel") { run(path, id) } }
     }
     private fun devices() {
-        library.paged("/api/ingress/devices", ui.card()) { row, card -> values(row, card) }
+        library.paged("/api/ingress/devices", ui.card()) { row, card ->
+            values(row, card)
+            val deviceId = row.getString("id")
+            ui.button(MoteI18n.text("为此设备重新生成邀请"), parent = card) { invitation(deviceId) }
+        }
         ui.button(MoteI18n.text("生成设备连接邀请")) { invitation() }
     }
-    private fun invitation() {
-        edit(MoteI18n.text("生成设备连接邀请"), "/api/connections/invitations",
-            JSONObject().put("serverUrl", ui.server).put("label", "Android"), "POST", completed = ::credentialResult)
+    private fun invitation(deviceId: String? = null) {
+        val api = client
+        body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("生成设备连接邀请"), NativeFontRole.TITLE_MOBILE)
+        deviceId?.let { ui.text(MoteI18n.text("绑定原设备：{0}", it)) }
+        val collect = form(JSONObject().put("serverUrl", api.server).put("label", "Android"), ui.card())
+        ui.button(MoteI18n.text("保存设置"), true) {
+            val payload = collect().apply { deviceId?.let { put("deviceId", it) } }
+            ui.work(MoteI18n.text("正在保存…"), { api.post("/api/connections/invitations", payload) }, ::credentialResult)
+        }
     }
     private fun credentialResult(value: JSONObject) {
         body.removeAllViews(); screens.setBack { screens.refresh() }

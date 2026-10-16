@@ -40,7 +40,10 @@ class ConnectionActivity : MoteActivity() {
                     val settings = Settings(applicationContext); settings.read() to settings.deviceId
                 }) { result ->
                     if (applying) return@start
-                    result.onSuccess { (config, id) -> currentConfig = config; deviceId = id; refreshCurrentNode() }
+                    result.onSuccess { (config, id) ->
+                        if (::input.isInitialized && config != currentConfig) { input.text.clear(); parsed = null; preview.text = MoteI18n.text("连接已变化，请重新核对邀请。") }
+                        currentConfig = config; deviceId = id; refreshCurrentNode()
+                    }
                         .onFailure { currentNode.text = MoteI18n.text("读取当前连接失败，请重新打开此页重试") }
                 }
             }
@@ -91,47 +94,49 @@ class ConnectionActivity : MoteActivity() {
         button(MoteI18n.text("解析并核对节点")) { parseInput() }
         preview = text(MoteI18n.text("还没有解析邀请。外部链接只填入此页，不会自动连接。"))
         button(MoteI18n.text("确认连接此节点")) {
-            val invite = parseInput()
-            MoteDialogBuilder(this).setTitle(MoteI18n.text("确认连接节点")).setMessage(MoteI18n.text("{0}\n\n将使用已有设备 ID 和当前采集设置。只获取这台设备的采集凭据；设置、队列和模型不会清空。同节点重新配对将使用新凭据继续同步本机待上传截图、笔记和来源。首次连接将把尚未绑定的本机截图、笔记与来源记录绑定到上方节点，并按已选择的同步方式发送。请确认这是你自己的档案地址。已经绑定其他节点的待同步记录不能改投此处。", invite.serverUrl))
+            val invite = parseInput(); val expected = currentConfig
+            MoteDialogBuilder(this).setTitle(MoteI18n.text("确认连接节点")).setMessage(MoteI18n.text("{0}\n\n将使用已有设备 ID 和当前采集设置。只获取这台设备的采集凭据；设置、队列和模型不会清空。同节点重新配对将使用新凭据继续同步本机待上传截图、笔记和来源。首次连接将把尚未绑定的本机截图、笔记与来源记录绑定到上方节点，并按已选择的同步方式发送。请确认这是你自己的档案地址。已经绑定其他节点的待同步记录不能改投此处。", invitationLabel(invite)))
                 .setNegativeButton(MoteI18n.text("取消"), null).setPositiveButton(MoteI18n.text("连接")) { _, _ ->
                     val chosenName = name.text.toString().trim(); val debugHttp = allowHttp.isChecked
-                    changeConnection(invite.serverUrl, MoteI18n.text("正在兑换邀请并校验设备身份…"), connected = {
+                    changeConnection(expected, invite.serverUrl, MoteI18n.text("正在兑换邀请并校验设备身份…"), connected = {
                         input.text.clear(); parsed = null; preview.text = MoteI18n.text("连接成功：{0}", invite.serverUrl)
                     }) {
                         ConnectionClient(applicationContext).connect(invite, chosenName, debugHttp, bindLocal = true)
-                        MoteI18n.text("连接成功，已自动应用新连接并恢复原采集状态。")
+                        MoteI18n.text("设备连接已校验；采集仍遵循已保存的授权和开关。")
                     }
                 }.show()
         }
         button(MoteI18n.text("恢复中断的连接确认")) {
             working = true
+            val expected = currentConfig; val debug = allowHttp.isChecked
             task.start(MoteI18n.text("正在读取待恢复连接…"), { status.text = it }, {
-                ConnectionClient(applicationContext).pendingServer() ?: throw ConnectionFailure("no_pending")
+                ConnectionClient(applicationContext).pendingInvitation(debug) ?: throw ConnectionFailure("no_pending")
             }) { result ->
                 working = false
-                result.onSuccess { server ->
-                    MoteDialogBuilder(this).setTitle(MoteI18n.text("恢复已兑换连接")).setMessage(MoteI18n.text("{0}\n\n将重新联网校验已兑换并加密保存的凭据。确认后，尚未绑定的本机记录会绑定到上方节点并按同步设置发送。", server))
+                result.onSuccess { invite ->
+                    if (currentConfig != expected) return@onSuccess
+                    MoteDialogBuilder(this).setTitle(MoteI18n.text("恢复已确认连接")).setMessage(MoteI18n.text("{0}\n\n将恢复本机加密保存的同一配对请求并核验设备身份；尚未绑定的资料仅按这次明确确认归属。", invitationLabel(invite)))
                         .setNegativeButton(MoteI18n.text("取消"), null).setPositiveButton(MoteI18n.text("恢复")) { _, _ ->
-                            val chosenName = name.text.toString().trim(); val debug = allowHttp.isChecked
-                            changeConnection(server, MoteI18n.text("正在重新校验设备连接…")) { ConnectionClient(applicationContext).resume(chosenName, debug, bindLocal = true); MoteI18n.text("中断的连接已恢复。") }
+                            val chosenName = name.text.toString().trim()
+                            changeConnection(expected, invite.serverUrl, MoteI18n.text("正在重新校验设备连接…")) { ConnectionClient(applicationContext).resume(chosenName, debug, bindLocal = true); MoteI18n.text("中断的连接已恢复。") }
                         }.show()
                 }.onFailure(::showFailure)
             }
         }
         button(MoteI18n.text("测试已保存的连接")) {
             run(MoteI18n.text("正在测试节点和设备凭据…"), work = { ConnectionClient(applicationContext).test() }) {
-                MoteI18n.text("连接正常 · {0}", MoteI18n.text("节点所有者"))
+                MoteI18n.text("连接正常 · {0}", MoteI18n.text("设备或当前账号凭据"))
             }
         }
         status = text(MoteI18n.text("{0}\n状态记录时间：{1}", message(initial.status), initial.statusAt.takeIf { it > 0 }?.let { Instant.ofEpochMilli(it) } ?: MoteI18n.text("未测试")))
-        text(MoteI18n.text("一次性码已被兑换但网络校验中断时，原配置保持不变；可重试同一邀请，或点击“恢复中断的连接确认”使用本机加密保存的兑换结果；若一次性码已消耗但未收到响应，请重新生成绑定设备的邀请。连接失败信息不会包含令牌或邀请内容。"))
+        text(MoteI18n.text("确认后会先加密保存同一配对请求。兑换或确认回执丢失时可恢复，无需另开浏览器；身份核验通过后才保存设备凭据。若最后确认回执丢失，已保存的连接和恢复记录会一同保留。恢复沿用原设备名称，之后可单独改名。连接错误不包含令牌或邀请码。"))
         MoteUi.styleTree(root)
         intent.dataString?.let { raw -> if (raw.length <= ConnectionInvitation.MAX_BYTES * 2) input.setText(raw) else status.text = message("invitation") }
     }
     private fun parseInput(): ConnectionInvitation {
         parsed = null; preview.text = MoteI18n.text("还没有解析有效邀请。")
         val invite = ConnectionInvitation.parse(input.text.toString(), allowHttp.isChecked, BuildConfig.DEBUG)
-        parsed = invite; preview.text = MoteI18n.text("将连接：{0}\n有效至：{1}\n确认前不会发送网络请求。", invite.serverUrl, invite.expiresAt)
+        parsed = invite; preview.text = MoteI18n.text("将连接：{0}\n有效至：{1}\n确认前不会发送网络请求。", invitationLabel(invite), invite.expiresAt)
         status.text = MoteI18n.text("邀请已解析，请核对节点并确认连接。当前连接尚未更改。")
         return invite
     }
@@ -147,11 +152,12 @@ class ConnectionActivity : MoteActivity() {
     }
     override fun onResume() { super.onResume(); refreshRequested = true; handler.post(refresh) }
     override fun onPause() { handler.removeCallbacks(refresh); super.onPause() }
-    private fun changeConnection(server: String, progress: String, connected: () -> Unit = {}, work: () -> String) {
+    private fun invitationLabel(invite: ConnectionInvitation) = MoteI18n.text("{0}\n实例：{1}\n账号：{2}\n用途：设备采集\n设备：{3}", invite.serverUrl, invite.deploymentId, invite.userId, invite.deviceId ?: deviceId)
+    private fun changeConnection(expected: CollectorConfig, server: String, progress: String, connected: () -> Unit = {}, work: () -> String) {
         if (working) return
         working = true; applying = true; status.text = progress
         var message = MoteI18n.text("连接已更新")
-        RuntimeSettings.apply(this, currentConfig, bindLocal = true, change = { message = work() }, nextServer = server) { result ->
+        RuntimeSettings.apply(this, expected, bindLocal = true, change = { message = work() }, nextServer = server, expected = expected) { result ->
             if (isDestroyed || isFinishing) return@apply
             connectionFinished = {
                 working = false; applying = false
@@ -183,7 +189,7 @@ class ConnectionActivity : MoteActivity() {
                 val invite = ConnectionInvitation.parse(raw, debugHttp, BuildConfig.DEBUG)
                 raw to invite
             }) { (raw, invite) ->
-                input.setText(raw); parsed = invite; preview.text = MoteI18n.text("将连接：{0}\n有效至：{1}\n请确认后连接。", invite.serverUrl, invite.expiresAt)
+                input.setText(raw); parsed = invite; preview.text = MoteI18n.text("将连接：{0}\n有效至：{1}\n请确认后连接。", invitationLabel(invite), invite.expiresAt)
                 MoteI18n.text("连接文件已解析，尚未联网。")
             }
         }
@@ -202,7 +208,7 @@ class ConnectionActivity : MoteActivity() {
             "busy" -> MoteI18n.text("另一次设置操作尚未完成，请稍候再试。")
             "authentication" -> MoteI18n.text("节点拒绝当前凭据，请生成绑定本设备的邀请。")
             "protocol_incompatible" -> MoteI18n.text("响应不符合协议")
-            "identity", "response" -> MoteI18n.text("节点响应或设备身份校验失败，未确认连接；旧配置保留。")
+            "identity", "response" -> MoteI18n.text("节点响应或设备身份校验失败；请检查当前连接和保留的恢复记录。")
             "rate_limit" -> MoteI18n.text("节点暂时限流，稍后重试。"); "network" -> MoteI18n.text("节点连接失败，请检查地址、网络与 TLS 证书后重试。")
             else -> MoteI18n.text("连接未完成，请检查邀请并重试。")
         }
