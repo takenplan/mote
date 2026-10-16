@@ -1,5 +1,10 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "查看删除进度": "View deletion progress",
+  "删除账号": "Delete account",
+  "账号访问已撤销；清除结果以此回执为准。": "Account access has been revoked. This receipt records erasure progress.",
+  "确认后立即撤销此账号访问，并按持久回执清除资料。外部结果不确定时不会显示清除完成。": "Confirmation immediately revokes this account’s access and starts durable erasure. An uncertain external outcome is not shown as completed erasure.",
+  "确认删除账号": "Confirm account deletion",
   "服务返回的操作回执与当前账号不一致。": "The operation receipt does not match the current account.",
   "等待清除确认": "Awaiting erasure confirmation",
   "外部结果待确认": "External outcome awaiting confirmation",

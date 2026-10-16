@@ -8387,5 +8387,10 @@
   "个人归档导入的合并与去重协议尚待完成，当前不能提交导入。": "The merge and deduplication contract for personal imports is pending. Imports cannot be submitted yet.",
   "实例备份与恢复由中央节点停机命令执行。": "Instance backup and restore use offline commands on the central node.",
   "当前账号的存储统计与索引管理接口尚待接入。": "Storage statistics and index management for the current account are awaiting integration.",
-  "当前支持账号归档；元数据和附件分别导出的接口尚待接入。": "Account archives are supported. Separate metadata and attachment exports are awaiting integration."
+  "当前支持账号归档；元数据和附件分别导出的接口尚待接入。": "Account archives are supported. Separate metadata and attachment exports are awaiting integration.",
+  "查看删除进度": "View deletion progress",
+  "删除账号": "Delete account",
+  "账号访问已撤销；清除结果以此回执为准。": "Account access has been revoked. This receipt records erasure progress.",
+  "确认后立即撤销此账号访问，并按持久回执清除资料。外部结果不确定时不会显示清除完成。": "Confirmation immediately revokes this account’s access and starts durable erasure. An uncertain external outcome is not shown as completed erasure.",
+  "确认删除账号": "Confirm account deletion"
 }
