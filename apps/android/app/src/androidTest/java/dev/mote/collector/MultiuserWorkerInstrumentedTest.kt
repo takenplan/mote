@@ -637,6 +637,40 @@ class MultiuserWorkerInstrumentedTest {
         }} finally {instrumentation.removeMonitor(monitor);file.delete()}
     }
 
+    @Test fun originalQrPairingRecoversItsOwnPkceClaimAndAckWithoutOpeningBrowserOrReassigningQueuedBytes() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));MoteI18n.select(app,"zh-CN")
+        val note=QuickNotes.save(app,"GENERATED_LOCAL_BEFORE_EXPLICIT_QR_PAIRING","",scheduleUpload={})
+        val issuer=CentralClient(endpoint(),token("a"));val issued=issuer.post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated Android QR"))
+        val invitation=issued.getJSONObject("invitation");assertEquals(2,invitation.getInt("version"));assertEquals("device",invitation.getString("purpose"))
+        val instrumentation=InstrumentationRegistry.getInstrumentation()
+        val browser=instrumentation.addMonitor(android.content.IntentFilter(android.content.Intent.ACTION_VIEW).apply {addDataScheme("http")},android.app.Instrumentation.ActivityResult(android.app.Activity.RESULT_CANCELED,null),true)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root)+if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
+        try {androidx.test.core.app.ActivityScenario.launch<ConnectionActivity>(android.content.Intent(app,ConnectionActivity::class.java).setData(android.net.Uri.parse(issued.getString("uri")))).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}&&!(ConnectionActivity::class.java.getDeclaredField("working").apply {isAccessible=true}.get(activity) as Boolean)};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun confirm(){scenario.onActivity {
+                @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+                dialogs.mapNotNull {it.get()}.single {it.isShowing}.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick()
+            };ready()}
+            ready();control("/generated/drop-redeem");press("确认连接此节点")
+            scenario.onActivity {
+                @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+                assertEquals("The original native confirmation must accept the actual v2 producer",1,dialogs.mapNotNull {it.get()}.count {it.isShowing})
+            }
+            confirm();assertNull(settings.read().account());assertEquals(1,app.queue().pendingSync().count)
+            assertEquals("The PKCE intent must survive even when the first real redeem reply is lost",endpoint(),ConnectionClient(app).pendingServer())
+            val first=control("/generated/pairing-state").getJSONArray("claims");assertEquals(1,first.length());val claim=first.getJSONObject(0)
+            scenario.recreate();ready();control("/generated/drop-ack");press("恢复中断的连接确认");ready();confirm()
+            val paired=settings.read();assertEquals(invitation.getString("userId"),paired.account()!!.userId);assertEquals(invitation.getString("deploymentId"),paired.account()!!.deploymentId);assertTrue(paired.deviceBoundCredential);assertFalse(settings.enabled)
+            assertEquals(endpoint(),ConnectionClient(app).pendingServer());assertEquals(403,HttpJson.get(endpoint()+"/api/captures",paired.connectionToken()).first)
+            control("/generated/release-pairing");scenario.recreate();ready();press("恢复中断的连接确认");ready();confirm();assertNull(ConnectionClient(app).pendingServer())
+            assertEquals(paired.token,settings.read().token);val trace=control("/generated/pairing-state");val claims=trace.getJSONArray("claims");assertTrue(claims.length()>=2)
+            for(index in 0 until claims.length()){val row=claims.getJSONObject(index);assertEquals(claim.getString("id"),row.getString("id"));assertEquals(claim.getString("challenge"),row.getString("challenge"));assertEquals(settings.deviceId,row.getString("deviceId"))}
+            assertEquals(2,trace.getJSONArray("acks").length());assertEquals(0,browser.hits)
+            UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};assertEquals(200,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first)
+        }} finally {instrumentation.removeMonitor(browser)}
+    }
     @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
