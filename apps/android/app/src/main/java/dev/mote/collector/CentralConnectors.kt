@@ -3,6 +3,8 @@ package dev.mote.collector
 import android.content.Intent
 import android.net.Uri
 import android.widget.*
+import android.os.Handler
+import android.os.Looper
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -13,19 +15,25 @@ internal class CentralConnectors(private val screens: CentralScreens, private va
     private val navigation = ui.navigationRevision
     private val target = ui.card()
     private var render = 0L
+    private val handler = Handler(Looper.getMainLooper())
+    private val polls = mutableSetOf<Runnable>()
+    fun close() { polls.forEach(handler::removeCallbacks); polls.clear() }
+    fun resume() { if (current()) load() }
+    private data class Snapshot(val inventory: JSONObject, val configuration: JSONObject, val plugins: JSONObject, val work: JSONObject)
     private fun current() = screens.ownsSelectedAccount() && ui.client === api && ui.navigationRevision == navigation
     private fun objects(rows: JSONArray) = (0 until rows.length()).map(rows::getJSONObject)
     private fun saved(view: JSONObject) = objects(view.getJSONArray("domains")).single { it.getString("id") == "connectorSettings" }.getJSONObject("saved").getJSONArray("connections").let(::objects)
     private fun path(id: String) = "/api/connectors/" + CentralScreens.encode(id)
     private fun load() {
         if (!current()) return
+        close()
         ui.work(MoteI18n.text("正在读取…"), {
-            Triple(api.get("/api/connectors"), api.get("/api/configuration"), api.get("/api/plugins"))
-        }) { (inventory, configuration, plugins) -> if (current()) list(inventory, configuration, plugins) }
+            Snapshot(api.get("/api/connectors"), api.get("/api/configuration"), api.get("/api/plugins"), screens.connectorWork())
+        }) { (inventory, configuration, plugins, work) -> if (current()) list(inventory, configuration, plugins, work) }
     }
     fun show() = load()
-    private fun list(inventory: JSONObject, configuration: JSONObject, plugins: JSONObject) {
-        val stamp = ++render; target.removeAllViews()
+    private fun list(inventory: JSONObject, configuration: JSONObject, plugins: JSONObject, work: JSONObject) {
+        close(); val stamp = ++render; target.removeAllViews()
         val providers = objects(inventory.getJSONArray("providers")).map { it.getString("provider") }.filter { it == "gmail" || it == "google-calendar" }
         ui.button(MoteI18n.text("新建连接"), parent = target) { if (current() && stamp == render) edit(configuration, providers, null) }
         for (connection in saved(configuration).filter { it.getString("provider") in providers }) {
@@ -34,6 +42,65 @@ internal class CentralConnectors(private val screens: CentralScreens, private va
             val instance = objects(plugins.getJSONArray("instances")).singleOrNull { it.getString("id") == "connector." + id }
             ui.text(MoteI18n.text(if (instance?.optBoolean("desired") == true) "已启用" else "已暂停"), parent = card)
             fun active() = current() && stamp == render
+            val generation = objects(inventory.getJSONArray("connections")).single { it.getString("id") == id }.getLong("generation")
+            val resultPanel = ui.card(card)
+            var taskVersion = 0L
+            fun showTask(taskId: String, commandVersion: Long = ++taskVersion, admittedGeneration: Long = generation) {
+                if (!active() || commandVersion != taskVersion) return
+                require(Regex("[a-f0-9]{64}").matches(taskId))
+                ui.work(MoteI18n.text("正在读取…"), { api.get("/api/tasks/" + taskId) }) { task ->
+                    if (!active() || commandVersion != taskVersion) return@work
+                    require(task.getString("id") == taskId)
+                    resultPanel.removeAllViews(); ui.text(task.getString("state"), parent = resultPanel)
+                    task.opt("error")?.takeIf { it != JSONObject.NULL }?.let { ui.text(it.toString(), parent = resultPanel) }
+                    if (task.getString("state") in setOf("waiting", "running")) {
+                        val poll = object : Runnable { override fun run() { polls.remove(this); if (active()) showTask(taskId, commandVersion, admittedGeneration) } }
+                        polls.add(poll); handler.postDelayed(poll, 1000)
+                    } else if (task.getString("state") == "succeeded" && admittedGeneration == generation) {
+                        val result = task.optJSONObject("result")
+                        if (result?.opt("calendars") is JSONArray) {
+                            val calendars = objects(result.getJSONArray("calendars")); val selected = linkedSetOf<String>()
+                            require(calendars.map { it.getString("id") }.toSet().size == calendars.size)
+                            for (calendar in calendars) {
+                                if (calendar.getBoolean("selected")) selected.add(calendar.getString("id"))
+                                resultPanel.addView(CheckBox(ui).apply { text = calendar.getString("summary"); isChecked = calendar.getBoolean("selected")
+                                    setOnCheckedChangeListener { _, checked -> if (active() && commandVersion == taskVersion) { if (checked) selected.add(calendar.getString("id")) else selected.remove(calendar.getString("id")) } }
+                                })
+                            }
+                            ui.button(MoteI18n.text("保存选择"), true, resultPanel) {
+                                if (!active() || commandVersion != taskVersion) return@button
+                                val request = JSONObject().put("operation", "select").put("payload", JSONObject().put("calendarIds", JSONArray(selected)))
+                                ui.work(MoteI18n.text("正在保存…"), { screens.submitConnector(api, id, generation, path(id) + "/operations", request) }) { if (active()) showTask(it.getString("id")) }
+                            }
+                        }
+                        if (result?.has("imported") == true && result.has("duplicates")) ui.text(MoteI18n.text("已同步 {0} 条新版本，{1} 条已存在。", result.getLong("imported"), result.getLong("duplicates")), parent = resultPanel)
+                        if (result?.has("selectedCalendarIds") == true) ui.text(MoteI18n.text("日历选择已保存。"), parent = resultPanel)
+                    }
+                }
+            }
+            fun command(suffix: String, payload: JSONObject = JSONObject()) {
+                if (!active()) return
+                ui.work(MoteI18n.text("正在处理…"), { runCatching { screens.submitConnector(api, id, generation, path(id) + "/" + suffix, payload) } }) { result ->
+                    if (active()) result.onSuccess { showTask(it.getString("id")) }.onFailure { ui.requestFailure(it); if (current()) load() }
+                }
+            }
+            work.optJSONObject(id)?.let { previous ->
+                if (previous.has("pending")) {
+                    ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"), parent = resultPanel)
+                    ui.button(MoteI18n.text("重试"), parent = resultPanel) {
+                        if (!active()) return@button
+                        ui.work(MoteI18n.text("正在处理…"), { screens.retryConnector(api, id) }) { if (active()) showTask(it.getString("id"), admittedGeneration = previous.getLong("generation")) }
+                    }
+                    ui.button(MoteI18n.text("清除本机待确认请求"), parent = resultPanel) {
+                        if (active()) screens.confirm(MoteI18n.text("清除本机待确认请求"), MoteI18n.text("这只清除本机待确认请求，已在中央接收的任务仍会继续。")) {
+                            if (active()) ui.work(MoteI18n.text("正在保存…"), { screens.clearPendingConnector(id) }) { if (active()) load() }
+                        }
+                    }
+                } else if (previous.has("taskId")) showTask(previous.getString("taskId"), admittedGeneration = previous.getLong("generation"))
+            }
+            if (connection.getString("provider") == "google-calendar") ui.button(MoteI18n.text("读取日历列表"), parent = card) { command("operations", JSONObject().put("operation", "calendars").put("payload", JSONObject())) }
+            ui.button(MoteI18n.text("立即同步"), true, card) { command("sync") }
+            ui.button(MoteI18n.text("断开连接"), parent = card) { command("disconnect") }
             ui.button(MoteI18n.text("编辑连接"), parent = card) { if (active()) edit(configuration, providers, connection) }
             for ((action, title) in listOf("enable" to "启用", "pause" to "暂停", "resume" to "继续", "stop" to "立即停止")) {
                 ui.button(MoteI18n.text(title), parent = card) {
@@ -49,10 +116,13 @@ internal class CentralConnectors(private val screens: CentralScreens, private va
             }
             ui.button(MoteI18n.text("连接"), parent = card) {
                 if (!active()) return@button
-                ui.work(MoteI18n.text("正在处理…"), { api.post(path(id) + "/start", JSONObject()) }) { result ->
+                ui.work(MoteI18n.text("正在处理…"), {
+                    check(screens.connectorWork().optJSONObject(id)?.has("pending") != true) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                    api.post(path(id) + "/start", JSONObject()).also { screens.rememberConnectorTask(id, generation, it.getString("taskId")) }
+                }) { result ->
                     if (!active()) return@work
                     val url = Uri.parse(result.getString("authorizationUrl"))
-                    require(url.scheme == "https" && url.host == "accounts.google.com")
+                    require(url.scheme == "https" && url.host == "accounts.google.com" && url.userInfo == null && url.port == -1)
                     ui.startActivity(Intent(Intent.ACTION_VIEW, url))
                 }
             }
@@ -66,7 +136,7 @@ internal class CentralConnectors(private val screens: CentralScreens, private va
         }
     }
     private fun edit(base: JSONObject, providers: List<String>, existing: JSONObject?) {
-        val stamp = ++render; target.removeAllViews()
+        close(); val stamp = ++render; target.removeAllViews()
         fun active() = current() && stamp == render
         ui.text(MoteI18n.text(if (existing == null) "新建连接" else "编辑连接"), NativeFontRole.SECTION, target)
         val provider = Spinner(ui).apply {

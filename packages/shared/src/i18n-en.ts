@@ -8452,5 +8452,7 @@ export const english: Readonly<Record<string, string>> = {
   "原件已保存": "Original saved",
   "正文已处理": "Content processed",
   "正文已索引": "Content indexed",
-  "定位信息": "Evidence location"
+  "定位信息": "Evidence location",
+  "日历选择已保存。": "Calendar selection saved.",
+  "读取日历列表": "Read calendar list"
 };

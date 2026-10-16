@@ -53,9 +53,10 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun enc(value: String) = CentralScreens.encode(value)
     private val library = CentralLibrary(screens)
     private val plugins = CentralPlugins(screens) { extensions() }
-    fun close() = plugins.close()
-    fun clearPrivateState() = plugins.clearPrivateState()
-    fun resume() = plugins.resume()
+    private var connectorPage: CentralConnectors? = null
+    fun close() { plugins.close(); connectorPage?.close() }
+    fun clearPrivateState() { plugins.clearPrivateState(); connectorPage?.close(); connectorPage = null }
+    fun resume() { plugins.resume(); connectorPage?.resume() }
 
     fun show(page: String) {
         ui.button(MoteI18n.text("刷新")) { screens.refresh() }
@@ -621,7 +622,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     fun connectors() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        CentralConnectors(screens) { value, target -> values(value, target) }.show()
+        connectorPage?.close(); connectorPage = CentralConnectors(screens) { value, target -> values(value, target) }.also { it.show() }
         ui.button(MoteI18n.text("录音归档")) { recordings() }
         read("/api/connectors")
         ui.button(MoteI18n.text("飞书")) { ui.navigate("lark") }

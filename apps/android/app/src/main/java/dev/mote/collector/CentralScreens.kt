@@ -82,6 +82,44 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         CentralDraftWrites.barrier { if (memoryCorrectionStore.read().optString("operationId") == id) memoryCorrectionStore.write(JSONObject()) }
         return job
     }
+    private val connectorCommands = CentralStateFile(directory, "connector-commands", cipher)
+    fun connectorWork(): JSONObject = CentralDraftWrites.barrier { connectorCommands.read() }
+    fun submitConnector(api: CentralClient, id: String, generation: Long, path: String, body: JSONObject): JSONObject {
+        require(path in setOf("sync", "disconnect", "operations").map { "/api/connectors/" + encode(id) + "/" + it })
+        val request = CentralDraftWrites.barrier {
+            val all = connectorCommands.read(); val previous = all.optJSONObject(id)?.optJSONObject("pending")
+            if (previous != null) {
+                val prior = JSONObject(previous.getJSONObject("body").toString()).apply { remove("operationId") }
+                check(previous.getString("path") == path && SourceRules.canonical(prior) == SourceRules.canonical(body)) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                previous
+            } else JSONObject().put("path", path).put("body", JSONObject(body.toString()).put("operationId", UUID.randomUUID().toString())).also {
+                all.put(id, JSONObject().put("generation", generation).put("pending", it)); connectorCommands.write(all)
+            }
+        }
+        return sendConnector(api, id, request)
+    }
+    fun retryConnector(api: CentralClient, id: String) = sendConnector(api, id, requireNotNull(connectorWork().optJSONObject(id)?.optJSONObject("pending")))
+    private fun sendConnector(api: CentralClient, id: String, request: JSONObject): JSONObject {
+        val operationId = request.getJSONObject("body").getString("operationId"); UUID.fromString(operationId)
+        val task = api.post(request.getString("path"), request.getJSONObject("body"))
+        require(Regex("[a-f0-9]{64}").matches(task.getString("id")))
+        require(task.getString("state") in setOf("waiting", "running", "blocked", "succeeded", "failed", "cancelled", "stale"))
+        CentralDraftWrites.barrier {
+            val all = connectorCommands.read(); val entry = all.optJSONObject(id)
+            if (entry?.optJSONObject("pending")?.getJSONObject("body")?.optString("operationId") == operationId) {
+                entry.remove("pending"); entry.put("taskId", task.getString("id")); connectorCommands.write(all)
+            }
+        }
+        return task
+    }
+    fun rememberConnectorTask(id: String, generation: Long, taskId: String) = CentralDraftWrites.barrier {
+        require(Regex("[a-f0-9]{64}").matches(taskId)); val all = connectorCommands.read()
+        val previous = all.optJSONObject(id); check(previous?.has("pending") != true) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+        all.put(id, JSONObject().put("generation", generation).put("taskId", taskId)); connectorCommands.write(all)
+    }
+    fun clearPendingConnector(id: String) = CentralDraftWrites.barrier {
+        val all = connectorCommands.read(); all.optJSONObject(id)?.remove("pending"); connectorCommands.write(all)
+    }
     private val draftFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
     var importInstruction = ""
     private var player: android.media.MediaPlayer? = null
