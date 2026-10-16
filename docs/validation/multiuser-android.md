@@ -29,3 +29,5 @@ first environment-only EXIT1 (wrapper cache lock denied, `/tmp/m15-initial-red.l
 standard-review authorized exact rerun 2 tests/2 assertion failures EXIT1 (`/tmp/m15-initial-red-authorized.log`).
 Same exact tests after minimal Wire2/local4 change: 2/2 EXIT0, `/tmp/m15-initial-green.log`.
 This is boundary evidence, not actual upload/worker/whole-module acceptance.
+
+Public metadata migration: source consumer RED `5d99dcb0` reports `{min:1,max:1}` against required `{min:2,max:2}`, EXIT1 `/tmp/m15-public-wire-red.log`. Final test imports emitted public module like existing shared tests (assertions unchanged). Fresh shared tsc EXIT0; public metadata+compatibility fixtures 17/17 EXIT0 `/tmp/m15-public-wire-green.log`. Real production M01 login/self→M03 capture HTTP via `app.inject` 1/1 EXIT0 `/tmp/m15-public-wire-real.log`: rejects Wire1 login/Ingress2 write, current shared headers succeed and receipt matches actual deployment/user/source/batch/captures. This in-process HTTP test is not Android or listener evidence. No scoped server auth/ingress implementation changed; only legacy fixture metadata follows shared default range2.

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {MOTE_PROTOCOL_RANGE, MOTE_PROTOCOL_HEADERS, requireCompatibleProtocol} from '../src/protocol.ts';
+import {MOTE_PROTOCOL_RANGE, MOTE_PROTOCOL_HEADERS, requireCompatibleProtocol} from '../dist/protocol.js';
 
 test('public metadata matches the real M01 Wire2 and M03 Ingress3 boundary',()=>{
  const contract=JSON.parse(readFileSync(new URL('../../../protocol/contract.json',import.meta.url)));
