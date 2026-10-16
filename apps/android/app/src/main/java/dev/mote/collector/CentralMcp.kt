@@ -48,7 +48,7 @@ internal class CentralMcp(private val screens: CentralScreens) {
                 }; selectedPanel.addView(source)
                 val discovered = ui.card(selectedPanel)
                 fun active() = current() && stamp == revision
-                fun import(request: JSONObject) {
+                fun importSelected(request: JSONObject) {
                     if (!active()) return
                     val destination = eligible.getOrNull(source.selectedItemPosition) ?: error(MoteI18n.text("请选择"))
                     val payload = JSONObject(request.toString()).put("connectionId", connection.getString("id")).put("sourceId", destination.getString("id"))
@@ -72,7 +72,7 @@ internal class CentralMcp(private val screens: CentralScreens) {
                         ui.button(MoteI18n.text("导入所选资源"), true, discovered) {
                             if (!active()) return@button
                             check(selected.isNotEmpty()) { MoteI18n.text("请选择资源") }
-                            import(JSONObject().put("resourceUris", JSONArray(selected)))
+                            importSelected(JSONObject().put("resourceUris", JSONArray(selected)))
                         }
                         for (tool in objects(catalog.getJSONArray("tools"))) {
                             val card = ui.card(discovered)
@@ -83,7 +83,7 @@ internal class CentralMcp(private val screens: CentralScreens) {
                             ui.button(MoteI18n.text("导入工具结果"), true, card) {
                                 if (!active()) return@button
                                 check(approved.isChecked) { MoteI18n.text("请确认工具只读后再执行") }
-                                import(JSONObject().put("tool", JSONObject().put("name", tool.getString("name")).put("arguments", JSONObject(args.text.toString())).put("confirmedReadOnly", true)))
+                                importSelected(JSONObject().put("tool", JSONObject().put("name", tool.getString("name")).put("arguments", JSONObject(args.text.toString())).put("confirmedReadOnly", true)))
                             }
                         }
                     }
