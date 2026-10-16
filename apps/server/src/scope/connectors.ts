@@ -250,6 +250,7 @@ export class ScopedConnectors {
    action:async(id:string,action:'enable'|'pause'|'resume'|'stop',expectedRevision:number)=>{this.row(context.userId,id);const plugin=this.options.plugins.forUser(context),view=await plugin.view();if(view.revision!==expectedRevision)throw new ConnectorError('connector_configuration_changed',409);if(action==='enable'){await plugin.check(pluginId(id));return plugin.action(pluginId(id),'enable',(await plugin.view()).revision);}const result=await plugin.action(pluginId(id),action,expectedRevision);if(action==='stop'){this.abort(context.userId,id);this.options.db.prepare("UPDATE connector_oauth SET status='revoked' WHERE user_id=? AND instance_id=? AND status IN ('pending','ready')").run(context.userId,id);}return result;},
    status:async(id:string)=>{const activity=this.activity(context,this.row(context.userId,id));try{const adapter=await activity.open(),value=await adapter.status();return adapter instanceof LarkAdapter?this.publicLarkStatus(context,id,value):value;}finally{await activity.finish();}},
    recordings:async(id:string,query:{limit:number;cursor?:string})=>{
+    this.assert(context);
     const row=this.row(context.userId,id),activity=this.activity(context,row),codec=new PrivateCursor(this.options.cursorKey,context.deploymentId,context.userId);
     let result:{sourceId?:string;items:Awaited<ReturnType<ScopedRecordingAdapter['recordingPage']>>['items'];nextCursor:string|null};
     try{
