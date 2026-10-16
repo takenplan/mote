@@ -6,6 +6,12 @@ import {StoreError} from './execution-storage.js';
 export async function stageVerifiedMemoryWrite(provider:MemoryProvider,write:MemoryProviderWrite,assertAuthority:()=>void){
  assertAuthority();const receipt=await provider.put(write);assertAuthority();
  const exact=await provider.read({namespace:write.namespace,key:write.key});assertAuthority();
- if(!exact||memoryBodyDigest(exact)!==memoryBodyDigest(write.memory))throw new StoreError('The provider did not preserve a reviewed Memory body',502);
+ assertVerifiedMemoryBody(write,exact);
  return receipt;
+}
+
+/** A transport acknowledgement can settle its journal after cancellation; it
+ * does not renew publication authority. The host checks its fence separately. */
+export function assertVerifiedMemoryBody(write:MemoryProviderWrite,exact:Awaited<ReturnType<MemoryProvider['read']>>){
+ if(!exact||memoryBodyDigest(exact)!==memoryBodyDigest(write.memory))throw new StoreError('The provider did not preserve a reviewed Memory body',502);
 }

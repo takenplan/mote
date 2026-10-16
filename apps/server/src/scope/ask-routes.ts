@@ -34,6 +34,10 @@ export function registerAsk(runtime:ScopedRuntime,db:DatabaseSync,configuration:
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs/:id/cancel',handle:({context,request})=>service(context).cancel(id(request))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insights',handle:({context,request})=>{const page=service(context).list(request.query,'insight',true);return {...page,items:page.items.map(item=>({id:item.id,...item.result as object}))};}});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-artifacts/:id',handle:({context,request})=>service(context).artifact(z.object({id:z.string().regex(/^[a-f0-9]{64}$/)}).parse(request.params).id)});
+ registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations',handle:({context,request})=>host.automations.forUser(context).admit(request.body)});
+ registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations',handle:({context})=>host.automations.forUser(context).list()});
+ registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations/:id',handle:({context,request})=>host.automations.forUser(context).get(id(request))});
+ for(const action of ['pause','resume','stop','retry'] as const)registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations/:id/'+action,handle:({context,request})=>host.automations.forUser(context)[action](id(request))});
  registerAskReadRoutes(runtime,host);
  return host;
 }

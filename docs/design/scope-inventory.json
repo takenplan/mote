@@ -150,7 +150,7 @@
     ]
   },
   "apps/server/src/connectors/lark-cli.ts": {
-    "scope": "mixed",
+    "scope": "legacy-quarantined",
     "module": "M10",
     "surfaces": [
       "directory:configDir",
@@ -2027,10 +2027,12 @@
     "scope": "user",
     "module": "M08",
     "status": "implemented",
-    "notes": "Host context, source scope, evidence and request/task publication fences; acceptance tracked separately.",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
     "surfaces": [
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'DELETE',url:'/api/conversations/:id'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-artifacts/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations/:id'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs'",
@@ -2039,6 +2041,8 @@
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations/:id/'+action",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations/:id/compact'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs'",
@@ -2054,11 +2058,18 @@
     "scope": "user",
     "module": "M08",
     "status": "implemented",
-    "notes": "Host context, source scope, evidence and request/task publication fences; acceptance tracked separately.",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
     "surfaces": [
       "table:ma_artifacts",
+      "table:ma_auto_events",
+      "table:ma_auto_restore",
+      "table:ma_auto_runs",
+      "table:ma_auto_state",
+      "table:ma_auto_windows",
+      "table:ma_automations",
       "table:ma_conversations",
       "table:ma_fragments",
+      "table:ma_insight_snapshots",
       "table:ma_meta",
       "table:ma_originals",
       "table:ma_read_cursors",
@@ -2179,6 +2190,16 @@
     "module": "M07",
     "surfaces": [
       "extension:runtime.services.registerUser:OWNER_QUESTIONS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/ask-automation.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
+    "surfaces": [
+      "extension:runtime.services.registerUser:'ask-automation'",
+      "task:execution.register:kind:'ask.automation'"
     ]
   }
 }

@@ -45,7 +45,7 @@ import {ScopedMemoryData,memoryPageSchema,memoryReadFiltersSchema,type MemoryRea
 import {installScopedMemory,ScopedMemoryError,MEMORY_DOMAIN,scopedMemoryTaskSchema,memoryBindingSchema,memorySettingsSchema,defaultMemorySettings,type ScopedMemoryTask,type ScopedMemoryBinding} from './memory-schema.js';
 
 export type MemoryPublication=Readonly<{jobId:string;automatic:boolean;memoryIds:readonly string[];materialIds:readonly string[]}>;
-export type MemoryReadScope={sourceIds?:readonly string[];assertCurrent:()=>void};
+export type MemoryReadScope={sourceIds?:readonly string[];recordPins?:readonly {id:string;version:number;fingerprint:string}[];assertCurrent:()=>void};
 type Job={input:string;draft:string|null;review:string|null;prepared:string|null;state:string;tasks:string};
 const submitSchema=z.object({operationId:z.string().uuid(),recipes:z.array(memoryStrategyRefSchema).min(1).max(10).optional(),materialIds:z.array(z.string().regex(/^mat_[a-f0-9]{64}$/)).min(1),memoryIds:z.array(z.string().uuid()).default([]),phase:z.enum(['extract','integrate']).default('extract')}).strict();
 const queryResultSchema=z.object({answer:z.string(),runId:z.string().min(1),citations:z.array(z.object({id:z.string().uuid()}).passthrough()),trace:z.array(z.unknown()).default([])}).passthrough();
@@ -110,7 +110,7 @@ export class MemoryHost {
  private readPin(context:UserContext,id:string,version?:number,scope?:MemoryReadScope,filters?:MemoryReadFilters){
   const selected=filters===undefined?undefined:memoryReadFiltersSchema.parse(filters),data=this.data(context,scope?.assertCurrent),head=data.row(id);data.assertCurrentRecord(head);
   const target=version===undefined||version===head.version?head:data.sql.get('SELECT v.json,b.binding,b.body_digest FROM mm_versions v JOIN mm_version_bindings b ON b.user_id=v.user_id AND b.id=v.id AND b.version=v.version WHERE v.user_id=$user AND b.user_id=$user AND v.id=? AND v.version=?',id,version);if(!target)throw missing();
-  const memory=memorySchema.parse(JSON.parse(String(target.json))),headHash=memoryHash(head),targetHash=memoryHash(target),assert=()=>{
+  const memory=memorySchema.parse(JSON.parse(String(target.json)));if(scope?.recordPins&&!scope.recordPins.some(pin=>pin.id===memory.id&&pin.version===memory.version&&pin.fingerprint===memory.fingerprint))throw missing();const headHash=memoryHash(head),targetHash=memoryHash(target),assert=()=>{
    scope?.assertCurrent();const current=data.row(id);data.assertCurrentRecord(current);if(memoryHash(current)!==headHash)throw new PrivateDataError('conflict',409);
    const actual=version===undefined||version===head.version?current:data.sql.get('SELECT v.json,b.binding,b.body_digest FROM mm_versions v JOIN mm_version_bindings b ON b.user_id=v.user_id AND b.id=v.id AND b.version=v.version WHERE v.user_id=$user AND b.user_id=$user AND v.id=? AND v.version=?',id,version);if(!actual||memoryHash(actual)!==targetHash)throw new PrivateDataError('conflict',409);
    data.evidence(memory.evidenceIds);if(scope?.sourceIds)data.assertSources(memory.evidenceIds,scope.sourceIds);
@@ -119,7 +119,7 @@ export class MemoryHost {
  }
  private async read(context:UserContext,id:string,scope?:MemoryReadScope,filters?:MemoryReadFilters){
   const selected=filters===undefined?undefined:memoryReadFiltersSchema.parse(filters),data=this.data(context,scope?.assertCurrent),row=data.row(id),host=data.assertCurrentRecord(row),binding=JSON.parse(row.binding) as ScopedMemoryBinding;
-  const assert=()=>{scope?.assertCurrent();const current=data.row(id);data.assertCurrentRecord(current);if(scope?.sourceIds)data.assertSources(host.evidenceIds,scope.sourceIds);if(selected&&!data.matches(host,selected,scope?.sourceIds))throw missing();if(current.body_digest!==row.body_digest||current.version!==row.version||current.binding!==row.binding)throw new PrivateDataError('conflict',409);};assert();
+  if(scope?.recordPins&&!scope.recordPins.some(pin=>pin.id===host.id&&pin.version===host.version&&pin.fingerprint===host.fingerprint))throw missing();const assert=()=>{scope?.assertCurrent();const current=data.row(id);data.assertCurrentRecord(current);if(scope?.sourceIds)data.assertSources(host.evidenceIds,scope.sourceIds);if(selected&&!data.matches(host,selected,scope?.sourceIds))throw missing();if(current.body_digest!==row.body_digest||current.version!==row.version||current.binding!==row.binding)throw new PrivateDataError('conflict',409);};assert();
   if(binding.kind==='builtin')return host;
   const descriptor=await this.providers.descriptor(context,binding);assert();data.assertSources(host.evidenceIds,descriptor.sourceIds);
   const current=()=>{assert();descriptor.assertCurrent();},provider=await this.provider(context,binding,current),value=await provider.read({namespace:this.namespace(context,binding),key:memoryProviderKey(host)});current();
@@ -139,23 +139,23 @@ export class MemoryHost {
  private async page(context:UserContext,raw:unknown,scope?:MemoryReadScope){
   const request=memoryPageSchema.parse(raw),data=this.data(context,scope?.assertCurrent),binding=data.binding(),assertScope=()=>{scope?.assertCurrent();data.state();};assertScope();
   if(!request.query||binding.kind==='builtin'){
-   const page=data.page(request,scope?.sourceIds),items:Memory[]=[],readRows:MemoryRow[]=[];for(const row of page.rows){try{items.push(await this.read(context,row.id,scope));readRows.push(row);}catch(error){assertScope();if(error instanceof PrivateDataError&&error.code==='not_found')continue;throw error;}}
+   const page=data.page(request,scope?.sourceIds,scope?.recordPins),items:Memory[]=[],readRows:MemoryRow[]=[];for(const row of page.rows){try{items.push(await this.read(context,row.id,scope));readRows.push(row);}catch(error){assertScope();if(error instanceof PrivateDataError&&error.code==='not_found')continue;throw error;}}
    // Earlier entries can retire while a later provider read is suspended. The
    // result is one capability disclosure: revalidate its complete exact catalog
    // before returning any body, not only the last entry or parent request.
    assertScope();for(const row of readRows){const current=data.row(row.id),memory=data.assertCurrentRecord(current);if(scope?.sourceIds)data.assertSources(memory.evidenceIds,scope.sourceIds);if(memoryHash(current)!==memoryHash(row))throw new PrivateDataError('conflict',409);}return {items,nextCursor:page.nextCursor};
   }
-  const rows:MemoryRow[]=[];let cursor:string|undefined;const {query:_query,cursor:_cursor,...filters}=request;do{const page=data.page({...filters,limit:100,...(cursor?{cursor}:{})},scope?.sourceIds);rows.push(...page.rows);cursor=page.nextCursor??undefined;}while(cursor);
-  if(!rows.length){const selected=data.rankedPage(request,[],scope?.sourceIds);assertScope();return {items:[],nextCursor:selected.nextCursor};}
+  const rows:MemoryRow[]=[];let cursor:string|undefined;const {query:_query,cursor:_cursor,...filters}=request;do{const page=data.page({...filters,limit:100,...(cursor?{cursor}:{})},scope?.sourceIds,scope?.recordPins);rows.push(...page.rows);cursor=page.nextCursor??undefined;}while(cursor);
+  if(!rows.length){const selected=data.rankedPage(request,[],scope?.sourceIds,scope?.recordPins);assertScope();return {items:[],nextCursor:selected.nextCursor};}
   const descriptor=await this.providers.descriptor(context,binding);assertScope();const current=rows.filter(row=>memoryHash(JSON.parse(row.binding))===memoryHash(binding)),keys=current.map(row=>{const memory=data.assertCurrentRecord(row);data.assertSources(memory.evidenceIds,descriptor.sourceIds);return memoryProviderKey(memory);}),assert=()=>{assertScope();descriptor.assertCurrent();for(const row of current){const actual=data.row(row.id),memory=data.assertCurrentRecord(actual);if(scope?.sourceIds)data.assertSources(memory.evidenceIds,scope.sourceIds);data.assertSources(memory.evidenceIds,descriptor.sourceIds);if(memoryHash([actual.id,actual.version,actual.body_digest,actual.binding,actual.json])!==memoryHash([row.id,row.version,row.body_digest,row.binding,row.json]))throw new PrivateDataError('conflict',409);}};
   const provider=await this.provider(context,binding,assert),hits=await provider.search({namespace:descriptor.namespace,query:request.query,keys,limit:Math.max(keys.length,1)});assert();
   const seen=new Set<string>();for(const hit of hits){const row=current.find(row=>row.id===hit.key.memoryId);if(!row||!keys.some(key=>memoryHash(key)===memoryHash(hit.key))||memoryBodyDigest(hit.memory)!==row.body_digest||seen.has(hit.memory.id))throw new PrivateDataError('scope_unavailable',503);seen.add(hit.memory.id);}
-  const selected=data.rankedPage(request,hits.map(hit=>hit.memory.id),scope?.sourceIds),items:Memory[]=[];for(const id of selected.ids)items.push(await this.read(context,id,scope));assert();return {items,nextCursor:selected.nextCursor};
+  const selected=data.rankedPage(request,hits.map(hit=>hit.memory.id),scope?.sourceIds,scope?.recordPins),items:Memory[]=[];for(const id of selected.ids)items.push(await this.read(context,id,scope));assert();return {items,nextCursor:selected.nextCursor};
  }
  /** Host-only narrowed read capability shared by Ask, Insight and MCP. Neither
   * user identity nor source authority may be supplied by model/client payloads. */
  bindRead(context:UserContext,options:MemoryReadScope){
-  const sourceIds=options.sourceIds===undefined?undefined:Object.freeze([...new Set(z.array(z.string().min(1).max(128)).parse(options.sourceIds))].sort()),assert=()=>{options.assertCurrent();this.runtime.authority.assert(context);if(this.closed)throw new PrivateDataError('scope_unavailable',503);},scope={sourceIds,assertCurrent:assert},data=this.data(context,assert);
+  const sourceIds=options.sourceIds===undefined?undefined:Object.freeze([...new Set(z.array(z.string().min(1).max(128)).parse(options.sourceIds))].sort()),assert=()=>{options.assertCurrent();this.runtime.authority.assert(context);if(this.closed)throw new PrivateDataError('scope_unavailable',503);},scope={sourceIds,recordPins:options.recordPins===undefined?undefined:Object.freeze(options.recordPins.map(pin=>Object.freeze({...pin}))),assertCurrent:assert},data=this.data(context,assert);
   const evidence=(ids:readonly string[])=>{assert();const records=data.evidence(ids);if(sourceIds)data.assertSources(ids,sourceIds);assert();return records;},assertEvidence=(pins:readonly {id:string;hash:string}[])=>{const records=evidence(pins.map(pin=>pin.id));for(const pin of pins)if(memoryHashEvidence(records.find(record=>record.id===pin.id)!)!==pin.hash)throw new PrivateDataError('conflict',409);};
   assert();return Object.freeze({
    assertCurrent:assert,
@@ -166,7 +166,7 @@ export class MemoryHost {
    search:(raw:unknown)=>this.page(context,raw,scope),
    evidence,assertEvidence,
    isCurrent:(pin:{id:string;hash:string})=>{assert();try{assertEvidence([pin]);return true;}catch(error){assert();if(error instanceof PrivateDataError&&['not_found','conflict'].includes(error.code))return false;throw error;}},
-   assertMemory:(pin:{id:string;version:number;fingerprint:string})=>{assert();const memory=data.assertCurrentRecord(data.row(pin.id));if(sourceIds)data.assertSources(memory.evidenceIds,sourceIds);if(memory.version!==pin.version||memory.fingerprint!==pin.fingerprint)throw new PrivateDataError('conflict',409);},
+   assertMemory:(pin:{id:string;version:number;fingerprint:string})=>{assert();if(scope.recordPins&&!scope.recordPins.some(value=>value.id===pin.id&&value.version===pin.version&&value.fingerprint===pin.fingerprint))throw missing();const memory=data.assertCurrentRecord(data.row(pin.id));if(sourceIds)data.assertSources(memory.evidenceIds,sourceIds);if(memory.version!==pin.version||memory.fingerprint!==pin.fingerprint)throw new PrivateDataError('conflict',409);},
    projectMaterial:(input:{id:string;revision:string;required?:readonly string[]})=>{assert();const parsed=z.object({id:z.string().regex(/^mat_[a-f0-9]{64}$/),revision:z.string().regex(/^[a-f0-9]{64}$/),required:z.array(z.string().min(1)).min(1).default(['material'])}).strict().parse(input),records=data.materialEvidence(parsed.id,parsed.revision,sourceIds,parsed.required),images=data.imageGrants(records.map(record=>record.id));assert();return {material:data.privateData.material(parsed.id,parsed.revision),evidence:records,pins:records.map(record=>({id:record.id,hash:memoryHashEvidence(record)})),images,processingMaterialInputs:images.map(image=>({materialId:image.materialId,required:image.required,fingerprint:image.fingerprint,evidenceIds:[image.id]}))};},
    readImage:(input:ImageReadInput)=>this.readImage(context,input,scope),
   });

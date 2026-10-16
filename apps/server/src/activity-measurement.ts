@@ -1,5 +1,5 @@
 import {samples as stateSamples} from '@mote/shared/state-series';
-import type {Activity,CaptureRecord} from '@mote/shared';
+import type {Activity,CaptureRecord,InsightSnapshot} from '@mote/shared';
 import type {Range} from './store.js';
 import {moteText} from './i18n.js';
 /** Existing observed-interval union algorithm, shared by legacy and scoped repositories. */
@@ -29,4 +29,11 @@ export function measureActivity(records:Iterable<CaptureRecord>,range:Range={},o
       apps.set(appKey,app);devices.set(c.deviceId,d);totalDurationMs+=durationMs;captures++;if(activity)activityEvents++;else contentCaptures++;
     }
     return {apps:[...apps.values()].sort((a,b)=>b.durationMs-a.durationMs),devices:[...devices.values()],totalDurationMs,captures,activityEvents,contentCaptures};
+}
+
+/** Existing Insight person-level union. Absent samples never establish inactivity. */
+export function observedIntervalCoverage(samples:Iterable<{at:string;durationMs:number}>,scope:{after?:string;before?:string},deviceDurationMs:number):InsightSnapshot['coverage']['measured']{
+ const lower=scope.after?Date.parse(scope.after):-Infinity,upper=scope.before?Date.parse(scope.before):Infinity;let end=-Infinity,observedDurationMs=0;
+ for(const sample of [...samples].sort((a,b)=>(Date.parse(a.at)-a.durationMs)-(Date.parse(b.at)-b.durationMs)||a.at.localeCompare(b.at))){const at=Date.parse(sample.at),start=Math.max(lower,at-sample.durationMs),finish=Math.min(upper,at);if(finish<=start)continue;observedDurationMs+=Math.max(0,finish-Math.max(start,end));end=Math.max(end,finish);}
+ return {observedDurationMs,deviceDurationMs,overlapDurationMs:Math.max(0,deviceDurationMs-observedDurationMs),unobservedDurationMs:Number.isFinite(lower)&&Number.isFinite(upper)?Math.max(0,upper-lower-observedDurationMs):null,accounting:'union_across_devices',coverage:'observed_intervals_only'};
 }

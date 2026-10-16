@@ -22,7 +22,7 @@ const conflict=()=>new PrivateDataError('conflict',409);
  * Intake/publication are host APIs for M03/M05/M06. Their transport routes stay
  * closed until those modules implement credentials, originals and task fences. */
 export class PrivateData{
-  constructor(private readonly sql:PrivateSql,private readonly cursor:PrivateCursor){}
+  constructor(private readonly sql:PrivateSql,private readonly cursor:PrivateCursor){this.withdrawUnfilteredCoding();}
   sources():SourceConnection[]{return this.sql.all('SELECT json FROM pd_sources WHERE user_id=$user ORDER BY id').map(r=>json<SourceConnection>(r));}
   source(id:string):SourceConnection{return json(this.sql.get('SELECT json FROM pd_sources WHERE user_id=$user AND id=?',id));}
   registerSource(raw:unknown){
@@ -250,14 +250,17 @@ export class PrivateData{
     });
   }
   material(id:string,revision?:string){
+    this.withdrawUnfilteredCoding();
     const key=ref(id);revision??=key.revision;
     const head=this.sql.get('SELECT * FROM pd_materials WHERE user_id=$user AND id=?',key.id);if(!head)throw missing();
     const version=this.sql.get('SELECT * FROM pd_material_versions WHERE user_id=$user AND material_id=? AND revision=?',key.id,revision??String(head.revision));
     if(!version||Number(version.sequence)<Number(head.min_visible_sequence))throw missing();
     const {blocks,members,...manifest}=json<MaterialDraft>(version);
+    if(!manifest.artifacts?.some(artifact=>artifact.key==='coding-dialogue'&&artifact.state==='ready'&&artifact.revision==='1')&&(manifest.kind==='mote.coding-session'||members.some(member=>member.kind==='capture'&&member.id==='original'&&manifest.origin.externalId==='processed:'+member.ref.slice(8)&&this.sql.get("SELECT id FROM pd_captures WHERE user_id=$user AND id=? AND json_type(json,'$.provenance.document.coding')='object'",member.ref.slice(8)))))throw missing();
     return {...manifest,revision:String(version!.revision),ref:`material:${key.id}@${version!.revision}`,sequence:Number(version!.sequence),createdAt:String(version!.created_at),updatedAt:String(head.updated_at),blockCount:blocks.length,memberCount:members.length,textLength:String(version!.text).length,assetCount:0,indexing:{state:'indexed'}};
   }
   materials(raw:ListInput={},sourceIds?:readonly string[]){
+    this.withdrawUnfilteredCoding();
     const {args,query,position,limit}=this.filter(raw,'materials',sourceIds),clauses=['v.material_id=h.id','v.revision=h.revision','h.sequence>=h.min_visible_sequence'],values:(string|number)[]=[];
     if(args.sourceId){clauses.push('h.source_id=?');values.push(args.sourceId);}
     if(args.deviceId){clauses.push("json_extract(v.json,'$.origin.deviceId')=?");values.push(args.deviceId);}
@@ -314,6 +317,7 @@ export class PrivateData{
    * materialized candidate CTE before ORDER/LIMIT. We deliberately do not use
    * global bm25 corpus statistics; M07 may rerank only this returned slice. */
   search(raw:{query:string;limit?:number},sourceIds?:readonly string[]){
+    this.withdrawUnfilteredCoding();
     const {query,limit}=z.object({query:z.string().trim().min(1).max(500),limit:z.number().int().min(1).max(200).default(50)}).strict().parse(raw);
     const match='"'+query.replaceAll('"','""')+'"',short=Array.from(query).length<3;
     return {items:this.sql.all(`WITH candidates AS MATERIALIZED (
@@ -331,6 +335,19 @@ export class PrivateData{
   private removeCaptureMaterials(id:string){this.removeMaterials(this.sql.all('SELECT DISTINCT material_id AS id FROM pd_material_captures WHERE user_id=$user AND capture_id=?',id).map(r=>String(r.id)));}
   /** Withdraw stale projections without discarding originals or user edits.
    * M05/M06 can rebuild using the old head's retained correction and sequence. */
+  /** Earlier scoped Coding projections predate the existing dialogue filter.
+   * Retire their visibility, including exact dependent revisions, while keeping
+   * originals, artifacts and version bodies. A read never grants reconstruction. */
+  private withdrawUnfilteredCoding(){
+    const roots=()=>this.sql.all(`SELECT h.id FROM pd_materials h JOIN pd_material_versions v ON v.user_id=h.user_id AND v.material_id=h.id AND v.revision=h.revision
+      WHERE h.user_id=$user AND v.user_id=$user AND h.sequence>=h.min_visible_sequence
+      AND NOT EXISTS(SELECT 1 FROM json_each(v.json,'$.artifacts') a WHERE json_extract(a.value,'$.key')='coding-dialogue' AND json_extract(a.value,'$.state')='ready' AND json_extract(a.value,'$.revision')='1')
+      AND(json_extract(v.json,'$.kind')='mote.coding-session' OR EXISTS(
+        SELECT 1 FROM pd_material_captures m JOIN pd_captures c ON c.user_id=m.user_id AND c.id=m.capture_id
+        WHERE m.user_id=$user AND c.user_id=$user AND m.material_id=h.id AND m.revision=h.revision AND m.member_id='original'
+        AND h.external_id='processed:'||c.id AND json_type(c.json,'$.provenance.document.coding')='object'))`);
+    if(roots().length)this.sql.transaction(()=>this.hideMaterials(roots().map(row=>String(row.id))));
+  }
   private hideMaterials(ids:string[]){
     const pending=[...ids],seen=new Set<string>();
     while(pending.length){
