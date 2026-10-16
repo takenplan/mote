@@ -63,6 +63,20 @@ M07 feedback1d actual two-process SIGKILL independently1/1exit0,36077.261291ms,
 pagination/worker/full-longturn/span pause-restart independent4/4exit0,
 `/tmp/m11-review-m08-80cf-{narrow,working}.log/.exit`.
 
+Two additional real outbound instance-lifecycle cases retain the existing
+restart-required policy contract: a saved local-access candidate leaves the
+current effective value unchanged, real host restart closes a held old SDK
+invocation, the new disabled boundary rejects before external I/O, and a later
+fresh restart can authorize B again. An unrelated instance-domain update leaves
+the held invocation usable. With three neighboring connection/policy checks,
+**5/5**,exit0,5877.503666ms, `/tmp/m11-instance-policy-real-restart.log/.exit`.
+Initial diagnostic logs `/tmp/m11-instance-policy-{before,fixed}.log/.exit` fail
+because the probe wrongly treated a saved restart candidate as an immediate
+withdrawal. That production P2 hypothesis was withdrawn, its uncommitted runtime
+experiment removed, and original `scope/mcp.ts` is byte-identical to96f. The
+correct regression uses the real configuration and app restart; no setting
+activation semantics were changed.
+
 Current whole combination, fresh compiled smoke, required affected, final accepted
 M07/M08 and M11 Draft PR are pending. Historical gates below remain as labeled;
 Checks/Component checks are disabled/unrun, and no integration/main edit or PR

@@ -110,6 +110,9 @@ command is introduced. The existing administrator-owned instance
 `connectors.allowLocalMcp` boundary governs local HTTP targets; ordinary users
 cannot enable it. The existing URL and pinned-address/DNS/redirect transport
 checks are reused. Authorization is checked both before and after DNS lookup.
+`allowLocalMcp` retains its existing restart-required setting: saving a candidate
+does not change the effective policy. Real host shutdown retires old outbound
+invocations; after restart, the saved boundary is enforced before external I/O.
 
 Every invocation constructs a fresh SDK client/headers/session for its owner and
 connection. Config publication invalidates and retires only changed connection
