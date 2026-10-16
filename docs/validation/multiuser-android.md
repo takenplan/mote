@@ -4,7 +4,16 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current acceptance boundary: runtime9e Actions paging/visible retirement/modal control has three native GREEN cases and a12s fixture build; complete results are below. Later test-only candidates are explicitly uncompiled/unrun. Own final current-composition Android/full required checks, push and Draft PR are pending. Shared old arbitrary-file Import/Files/review/media/export has no stable equivalent M06 projection (M13's current contract map); it remains an explicit KEEP gap, not a removed capability or a successful empty result. Physical-device/live-provider checks remain separate.
+Current acceptance boundary: runtime652475c9 includes the tested220c account/worker fixes,
+7eca native MCP and recent-five Overview,107f owned processing/devices/statistics,
+3a2 native Google connection configuration, Joint Filesa10 and M14 finalcd46.
+New original native recording speaker/correction and M03 ticket download journeys
+pass narrowly; detailed exact-SHA evidence follows below. Own current-composition
+full Android/required affected, independent final review, push and Draft PR remain
+pending. Shared arbitrary-file Imports/preview/review and remaining Files acoustic/
+controls are still explicit KEEP gaps awaiting the Joint backend owner. QR pairing
+has no tested replacement for the old invitation exchange. Physical-device and
+live-provider checks are separate. No total test count closes these gaps.
 
 | Decision | Existing capability and real chain | Required account adaptation / evidence |
 | --- | --- | --- |
@@ -352,3 +361,65 @@ not a product RED. This checkpoint does not supersede the full 352-test evidence
 M13 bounded review of exact 7eca found no new confirmed P0/P1/P2 and statically
 closed the prior Overview recent-five P2; the actual characterization RED/GREEN
 remains M15 evidence. Report: `/tmp/mote-m13-review-m15-mcp-7eca.md`.
+
+
+### Native owned connections and original recording checkpoint (652475c9)
+
+The original Google/Gmail connection configuration characterization9aae failed
+against220c: empty A had no new-connection control while B retained a same-ID
+connection. Runtime3a2bd36b restores native saved-connection create/edit, M04 full
+domain CAS and masked-secret preservation, explicit M09 enable/pause/stop, and
+fixed-connection status/OAuth. Its same ActivityScenario passes1/1,1.548s, EXIT0:
+`/tmp/m15-native-connectors-first-green.log/.exit`. Saving creates a disabled
+instance; A edit, enable and pause do not change B; detached A Save after switch
+cannot alter B. This is configuration/lifecycle acceptance, not sync/calendar,
+Lark/recording or complete provider parity.
+
+Joint frozen Filesa10effd109e64651e5cafe801b686238271964bf was merged as12cd554f,
+including M14 finalcd46. Only two bilingual catalog conflicts needed a same-value
+union (zero differing values); scope and i18n passed. No peer directory was edited.
+The production M03/M04/M05/M06 fixture processes actual generated WAV bytes with
+only the ASR I/O substituted. Durableab561/8bf original native tests exercise the
+existing Files page, not a new mock view.
+
+The original recording view failed1/1,0.755s because SPEAKER_0 was absent
+(`/tmp/m15-native-files-speaker-valid-red.log/.exit`). Runtime958d/027a restores
+anonymous label, timing/uncertainty, exact owner speaker confirmation and existing
+artifact/chunk/text correction. Complete speaker pages are read for explicit name
+confirmation so later-page names are not silently dropped. The identical native
+journey passes1/1,1.317s EXIT0 (`/tmp/m15-native-files-speaker-first-green.log/.exit`):
+confirmation retains raw transcript; correction creates a new artifact while the
+old raw artifact stays readable; names survive correction; detached A Save does
+not change equal-ID B.
+
+Original-save characterization initially checked a picker monitor before the
+ActivityResult download completed. Those first byte mismatches are retained as
+inconclusive fixture timing, not accepted RED/GREEN evidence. Testee4 waits for
+actual native download terminal status;302 records that status. The corrected
+case exposed actual HTTP426 on652's parent: binary CentralClient requests omitted
+Ingress3 while JSON requests already included it
+(`/tmp/m15-native-files-original-diagnostic.log/.exit`,1/1 EXIT1,0.797s).
+Direct actual fixture ticket read returned200/audio-wav/48bytes/matching SHA.
+652475c9 adds the existing Ingress3 header only to binary ingress paths. The same
+native document-result case now passes1/1,0.940s EXIT0
+(`/tmp/m15-native-files-original-ingress-first-green.log/.exit`). It writes exactly
+the generated48-byte WAV after owner-bound ticket, length/MIME/SHA validation and
+staging. M03 original readers do not supply portable ETags, so only this explicit
+original descriptor branch omits ETag; portable exports still require it.
+
+Fixture app/testAPK plus actual CentralPortableDownloadTest completed15s EXIT0
+(`/tmp/m15-native-files-ingress-green-build.log/.exit`), XML4tests/0fail/0error/0skip.
+This includes the real socket Ingress3-header/no-ETag original positive and
+wrong-hash sentinel case, and the existing portable integrity/whole-response cases.
+Earlier fixture builds12s,13s,9s and10s and their failures are retained separately.
+An emulator disappeared before the first Files execution; exact ps/adb confirmed
+it absent, the same read-only/headless AVD restarted in10.7s, and the healthy Files
+backend was not restarted. That event is an environment interruption, not product
+RED or permission-revocation evidence.
+
+Decisions implement the original recording and speaker-range ADRs through the
+frozen Joint M06 seam; no FileStore, processor, model, scheduler, permission or
+account store was added. Existing encrypted queues, scoped API and staging are
+reused. Shared cancel/retry/delete/review/acoustic and generic Imports are not
+silently replaced by raw intake or a successful export. Full current gates and
+whole-module closure remain pending.
