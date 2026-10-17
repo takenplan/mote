@@ -31,6 +31,13 @@ remain visible as historical dialogue; their summaries and frozen model snapshot
 are withdrawn. This covers replacement, eviction and recursive parent cascades.
 Exact immutable replay does not invoke that lifecycle.
 
+The lifecycle is stored as SQL, including conversation revisions, summary
+withdrawal and existing operational-product cleanup. Optional schema owners
+refresh the trigger after their tables are installed; replacement uses a
+savepoint and preserves the caller's transaction. Offline backup/update writers
+therefore inherit the same behavior without registering host JavaScript
+functions. Startup replaces the earlier connection-local callback trigger.
+
 ## Supersession check
 
 | Status | Responsibility |
