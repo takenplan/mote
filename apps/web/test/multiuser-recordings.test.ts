@@ -1,0 +1,40 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import React,{act} from 'react';
+import {JSDOM} from 'jsdom';
+import {setTimeout as delay} from 'node:timers/promises';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {join} from 'node:path';
+import {configureLocale} from '@mote/shared/i18n';
+import {scopedCaptureFixture} from '../../server/test/fixtures/scoped-capture-host.js';
+import {createApi,type Api} from '../src/api.js';
+import {RecordingsSettings} from '../src/RecordingsSettings.js';
+configureLocale(()=> 'zh-CN');
+
+test('original recording settings use the owned instance, preserve text on explicit audio resume and retire old owner controls',async t=>{
+ const calls:{user:string;kind:string}[]=[],state={audioFails:true,count:22};
+ const media=Buffer.alloc(8044);media.write('RIFF');media.writeUInt32LE(media.length-8,4);media.write('WAVEfmt ',8);media.writeUInt32LE(16,16);media.writeUInt16LE(1,20);media.writeUInt16LE(1,22);media.writeUInt32LE(8000,24);media.writeUInt32LE(16000,28);media.writeUInt16LE(2,32);media.writeUInt16LE(16,34);media.write('data',36);media.writeUInt32LE(8000,40);
+ const f=await scopedCaptureFixture(t,{connectorTransports:{lark:scope=>async(command)=>{calls.push({user:scope.userId,kind:command.kind});const root=join(scope.directory,'lark-runtime');switch(command.kind){
+  case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:true,openId:'same-account'}}});
+  case 'minutes-search':return JSON.stringify({data:{items:Array.from({length:state.count},(_,i)=>({token:'recording-'+String(i).padStart(2,'0')})),has_more:false}});
+  case 'minutes-metadata':return JSON.stringify({data:{minute:{token:command.id,title:'GENERATED_'+scope.userId+'_'+command.id,create_time:'1790812800000',duration:'500'}}});
+  case 'minutes-transcript':{const dir=join(root,command.outputDir);mkdirSync(dir,{recursive:true});writeFileSync(join(dir,'transcript.txt'),'Generated export\n\nSpeaker 00:00:00.000\nGENERATED_TEXT_'+scope.userId+'_'+command.id+'\n');return JSON.stringify({data:{minutes:[{minute_token:command.id,artifacts:{transcript_file:command.outputDir+'/transcript.txt'}}]}});}
+  case 'minutes-media':if(state.audioFails)throw Error('generated media unavailable');mkdirSync(join(root,command.output.split('/').slice(0,-1).join('/')),{recursive:true});writeFileSync(join(root,command.output),media);return '{}';
+  default:throw Error('Unexpected generated CLI '+command.kind);
+ }}}});
+ const installed=await f.request(f.admin.token,'/api/admin/connectors/feishu-recordings/install','POST',{expectedRevision:f.host.plugins!.catalog.revision(),operationId:crypto.randomUUID()});assert.equal(installed.statusCode,200,installed.body);
+ for(const account of [f.a,f.b]){const inventory=(await f.request(account.token,'/api/connectors')).json();const saved=await f.request(account.token,'/api/connectors/same-recorder','PUT',{expectedRevision:inventory.revision,connection:{provider:'feishu-recordings',autoSync:false}});assert.equal(saved.statusCode,200,saved.body);const plugins=(await f.request(account.token,'/api/plugins')).json();const enabled=await f.request(account.token,'/api/connectors/same-recorder/enable','POST',{expectedRevision:plugins.revision});assert.equal(enabled.statusCode,200,enabled.body);}
+ const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/#/connections/recordings?provider=feishu',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>();let cookie='',current:Api|undefined;const requests:{path:string;method:string;body?:string;status:number}[]=[];
+ for(const [key,value]of Object.entries({window:dom.window,document:dom.window.document,HTMLElement:dom.window.HTMLElement,Event:dom.window.Event,IS_REACT_ACT_ENVIRONMENT:true,fetch:async(path:string,init:RequestInit={})=>{const headers=new Headers(init.headers);headers.set('cookie',cookie);const r=await f.host.app.inject({url:path,method:init.method as any??'GET',headers:Object.fromEntries(headers),...(init.body?{payload:String(init.body)}:{})});requests.push({path,method:init.method??'GET',body:init.body?String(init.body):undefined,status:r.statusCode});return new Response(r.rawPayload,{status:r.statusCode,headers:r.headers as Record<string,string>});}})){before.set(key,Object.getOwnPropertyDescriptor(globalThis,key));Object.defineProperty(globalThis,key,{value,configurable:true,writable:true});}
+ const {createRoot}=await import('react-dom/client'),root=createRoot(dom.window.document.getElementById('root')!),d=dom.window.document;
+ t.after(async()=>{current?.close?.();await act(async()=>root.unmount());for(const [key,value]of before){if(value)Object.defineProperty(globalThis,key,value);else Reflect.deleteProperty(globalThis,key);}dom.window.close();});
+ const login=async(username:string)=>{const r=await f.request(undefined,'/api/auth/login','POST',{username,password:'Generated-M13-archive-only-01',mode:'web'});assert.equal(r.statusCode,200,r.body);cookie=String(r.headers['set-cookie']).split(';')[0];const api=createApi({mode:'web',origin:'http://localhost',...r.json()},undefined,()=>current===api);current?.close?.();current=api;return api;};
+ const render=async(api:Api)=>act(async()=>{root.render(React.createElement(React.StrictMode,null,React.createElement(RecordingsSettings,{api,onSources:()=>{},onOpen:()=>{}})));await delay(20);});
+ const wait=async(predicate:()=>boolean,label:string)=>{for(let n=0;n<500&&!predicate();n++)await act(async()=>delay(10));assert.ok(predicate(),label+' '+d.body.textContent);},button=(label:string)=>Array.from(d.querySelectorAll<HTMLButtonElement>('button')).find(v=>v.textContent===label),press=async(label:string)=>act(async()=>{const v=button(label);assert.ok(v,label+' '+d.body.textContent);assert.equal(v.disabled,false,label);v.click();await delay(20);});
+ const choose=async()=>act(async()=>{const select=d.querySelector<HTMLSelectElement>('select[aria-label="连接 ID"]');assert.ok(select,'original recording page must select an owned instance');select.value='same-recorder';select.dispatchEvent(new dom.window.Event('change',{bubbles:true}));await delay(20);});
+ await render(await login('generated-a'));await wait(()=>!!d.querySelector('select[aria-label="连接 ID"]'),'owned recording selection');await choose();await wait(()=>!!button('连接已授权账号')&&!button('连接已授权账号')!.disabled,'owned saved status');await press('连接已授权账号');await wait(()=>!!d.querySelector('input[type="datetime-local"]'),'connected original range controls');
+ await act(async()=>{d.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();await delay(10);});await press('保存并开始同步');await wait(()=>!!button('立即同步')&&!button('立即同步')!.disabled,'saved exact range');await press('立即同步');await wait(()=>!!button('重试失败步骤')&&!button('重试失败步骤')!.disabled,'audio failures visible');
+ assert.ok(calls.some(c=>c.kind==='minutes-transcript'));const textCalls=calls.filter(c=>c.kind==='minutes-transcript').length,discoveryCalls=calls.filter(c=>c.kind==='minutes-search').length;state.audioFails=false;await press('重试失败步骤');await wait(()=>button('重试失败步骤')?.disabled===true,'explicit resume completed');assert.equal(calls.filter(c=>c.kind==='minutes-transcript').length,textCalls,'resume must not repeat completed text');assert.equal(calls.filter(c=>c.kind==='minutes-search').length,discoveryCalls,'resume must not rediscover');
+ const retry=requests.find(r=>r.body?.includes('"resume":true'));assert.ok(retry,'original retry explicitly resumes failed phases');
+ const oldSync=button('立即同步')!;await render(await login('generated-b'));await choose();const writes=requests.filter(r=>r.method!=='GET').length;await act(async()=>{oldSync.click();await delay(20);});assert.equal(requests.filter(r=>r.method!=='GET').length,writes);assert.doesNotMatch(d.body.textContent!,new RegExp(f.a.userId));assert.ok(!requests.some(r=>/\/api\/connectors\/(status|feishu-recordings)(\/|$)/.test(r.path)),'no retired provider alias calls');assert.equal((await f.request(f.b.token,'/api/files')).json().items.length,0);
+});
