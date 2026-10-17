@@ -220,7 +220,7 @@ export class Configurations {
       models:async()=>{current();const {service}=await this.entry(context);current();this.assertResources();return {shared:this.resources.listShared(),personal:(safeView(service).domains.find(d=>d.id==='models')!.effective as UserModelConfiguration).profiles,selections:service.current<UserModelConfiguration>('models').selections};},
       copyModel:(id:string,input:unknown)=>this.copyPersonalModel(context,id,input),
       modelCatalog:(input:unknown)=>this.inspectModel(context,input,async(settings,assert)=>{
-        if(settings.protocol==='codex-app-server')return codexModels(undefined,this.instance.current<ModelDomain>('models').codex);
+        if(settings.protocol==='codex-app-server')return codexModels(undefined,this.instance.current<ModelDomain>('models').codex,assert);
         return providerModels(settings,async(...args)=>{assert();const response=await fetch(...args);try{assert();return response;}catch(error){await response.body?.cancel();throw error;}});
       }),
       probeModel:(input:unknown)=>this.inspectModel(context,input,async(settings,assert)=>{const result=await testModelConnection(settings,async(value,reader)=>createAgent({...value,reader,requestTimeoutMs:value.modelRequestTimeoutMs,agentTimeoutMs:value.agentTimeoutMs,codex:this.instance.current<ModelDomain>('models').codex,authorizeModelRequest:assert}));return {...result,message:modelTestMessage(result.code)};}),
