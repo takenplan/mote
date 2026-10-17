@@ -28,10 +28,40 @@ of IAB retry, full tar, physical speaker, account-service or restart coverage.
 The agent-created tab/host and generated directory were closed/removed.
 
 M13's independent source-only3999 review is
-`/tmp/mote-m13-review-web-recordings-3999.md`: no new confirmed P0/P1/P2; task-poll
-recovery was an unexecuted candidate, subsequently proved RED above. It did not
-run tests or accept later45db source. A bounded45db follow-up was requested;
-its result must be recorded separately, not assumed from3999.
+`/tmp/mote-m13-review-web-recordings-3999.md`. Its task-poll recovery candidate was
+subsequently proved RED. The separate bounded45db follow-up is
+`/tmp/mote-m13-review-web-recordings-45db.md`: no new confirmed P0/P1/P2; recovery
+candidate closed in the inspected source path. Neither report ran the owner's
+tests or accepted the shared history boundary.
+
+## Exact disconnect composition and retained stop RED
+
+Joint froze source `949e66b60a071406e8288f579a62e1d62439e0e9`; only the two runtime
+lines were composed as local `90493771`. Tests at `17580db6` over that runtime
+completed `/tmp/web-recordings-composed-narrow.log/.exit1`:5 tests,4 pass,1 fail,
+0 skipped/cancelled,169.68s. The failures were not waived:
+
+- Original full journey passes112.98s: restart between text success and explicit
+  audio resume, no repeated text/discovery, checkpoint20+2 signed pages,
+  cancellation/late A/B/M09, canonical24-item history20+4, disconnect retains20
+  visible cards and canonical capture navigation.
+- Both original vendor recovery journeys pass13.94s/11.33s, preserving exact root
+  and successor task operation IDs after ACK/poll loss and React remount.
+- Original FileDetail passes14.32s: original WAV load/download exact bytes;
+  current/uncorrected/raw-ASR each101 segments, RTTM/CSV/manifest/two clips; held A
+  export cannot create a B Blob/download, B independently exports its own text.
+- Original stop-intake checkbox remains RED19.09s, expected4/actual0 after the
+  actual Save settings task completes. Earlier broad timeout and draft-state exit0
+  were fixture observations, not product outcomes. The valid first RED is
+  `/tmp/web-recordings-intake-disable-ack-red.log/.exit1`16.64s, then repeated on the
+  composed runtime above. Joint owns this remaining select/source boundary.
+
+The main journey timeout was then increased120→240s to include its actual host
+restart and24-file archive work; assertions are unchanged and the112.98s pass
+precedes that test-only deadline adjustment. Additional standalone restart and
+archive-page evidence at45db is `/tmp/web-recordings-owned-restart-valid3.log`
+(the original disconnect RED remains) and
+`/tmp/web-recordings-archive-pagination.log/.exit0`1/1,0 skips,61.87s process.
 
 ## Environment and full gates
 
@@ -46,11 +76,16 @@ packaged checksums; installation alone did not launch a renderer.
 
 Current45db Web types and8478-message synchronized i18n pass. Earlier server types
 and Vite build0 cover the first presentation; they are not current45db build claims.
+Composed Server/Web types exit0 at17580db6 (`/tmp/web-recordings-composed-types.log`).
+The composed workspace's root and actual mem0 native constructors both passed
+Node24/ABI137 read/write/close (`/tmp/web-recordings-final-native-smoke.log`).
 A complete affected invocation on immutable456bd68a was started against exact
 integration6272 in the first tree, which remained unchanged while the second tree
 implemented recovery. It is not a final45db gate. Its Desktop500pass/1fail is an
 actual missing Electron dependency error before the hidden fixture could launch.
 Later phases/terminal outcome must be read from `/tmp/web-recordings-affected.log`
-and `.exit`; no running result is called passed. Final same-candidate affected,
-remaining shared archive closure, full client composition and PR delivery are
-pending at this ledger checkpoint.
+and `.exit`; no running result is called passed. A second immutable invocation atc5b28a73 is still running; Desktop60files/501tests
+passes after the official locked dependency install. The final composed candidate
+will receive its own affected invocation and Android consumer check. Terminal
+receipts, remaining stop-intake closure and PR delivery are pending at this ledger
+checkpoint; no running gate is called passed.

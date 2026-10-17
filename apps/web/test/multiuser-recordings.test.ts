@@ -10,7 +10,7 @@ import {resources} from '../src/resource-cache.js';
 import {RecordingsSettings} from '../src/RecordingsSettings.js';
 configureLocale(()=> 'zh-CN');
 
-test('original recording settings use the owned instance, preserve text on explicit audio resume and retire old owner controls',{timeout:120000},async t=>{
+test('original recording settings use the owned instance, preserve text on explicit audio resume and retire old owner controls',{timeout:240000},async t=>{
  let holdTranscript:Promise<void>|undefined,releaseTranscript:(()=>void)|undefined,enteredTranscript:(()=>void)|undefined;t.after(()=>releaseTranscript?.());
  const {f,calls,state}=await recordingFixture(t,()=>{enteredTranscript?.();return holdTranscript;}),opened:string[]=[];
  const dom=new JSDOM('<!doctype html><div id="root"></div>',{url:'http://localhost/#/connections/recordings?provider=feishu',pretendToBeVisual:true}),before=new Map<string,PropertyDescriptor|undefined>();let cookie='',current:Api|undefined,loseSelectionAck=true,holdRead=false;let releaseRead!:()=>void,enteredRead!:()=>void;const readGate=new Promise<void>(r=>releaseRead=r),readEntered=new Promise<void>(r=>enteredRead=r);t.after(()=>releaseRead());const requests:{path:string;method:string;body?:string;status:number}[]=[];

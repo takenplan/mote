@@ -55,17 +55,29 @@ Their local composition ends at `4f1caf4e`. Joint confirmed exact
 `a2cbf3aaf1ae2f2fbfe5f647cf9a4f23dfdc1695` for Files/originals/full export. No later
 arbitrary M13/M15/Joint HEAD is a dependency or an implied freeze.
 
-## Open shared boundary
+## Retained history and remaining shared boundary
 
-The actual original recording journey proves four canonical files before
-Disconnect and zero visible Files afterward. The existing shared Files projection
-and M03 original reader require an enabled source, while disconnect disables it.
-Bytes are retained, but this does not satisfy the requested human history journey.
-The expected four-item assertion remains a real failing test. Joint owns the
-shared Files/retained-reader policy; this client does not remove its enabled-source
-filter, bypass original tickets, enable a source merely to read history, or create
-another archive. Parent/Joint were notified of the concrete interface boundary;
-message delivery was uncertain and no duplicate/proxy retry was made.
+Joint froze the minimal disconnect retirement fix at
+`949e66b60a071406e8288f579a62e1d62439e0e9`. Only its two runtime lines were selected
+as local `90493771`: disconnect retires the saved association/selection/epoch
+without withdrawing accepted history, and an absent saved account is rejected
+before a provider account probe. M10 generation, sync authorization and credential
+vault retirement remain unchanged. No later Joint WIP was selected.
+
+The composed original Web journey now passes after a real host restart: 24 Files
+page20+4, remain visible after disconnect, and retained cards open their canonical
+capture references. Full FileDetail original WAV bytes/download, current/raw/
+uncorrected101-segment tar and both acoustic clips are independently exercised.
+
+A separate actual KEEP regression remains: unchecking the original “启用录音同步”
+and awaiting “保存设置” completion withdraws all four archived Files. The existing
+select path still writes source.enabled=false. This is retained as a failing
+original-UI regression, not hidden by the disconnect fix. Joint remains the sole
+owner of that source retirement boundary. The Web consumer does not bypass source
+privacy, enable a source merely to read history, or create another archive.
+The new evidence notice returned earlier-turn-unconfirmed; no duplicate or proxy
+message was attempted. Parent-readable evidence is
+`/tmp/mote-web-recordings-source-retirement-red.md`.
 
 Other providers' new capabilities, model/pipeline policies, CLI installation,
 physical playback, live accounts and deployments are outside this finite change.
