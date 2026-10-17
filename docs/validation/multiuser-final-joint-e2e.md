@@ -110,14 +110,14 @@ No main/integration merge, deployment, CI enabling, real central private data or
 
 ## Deferred Web acceptance TODOs
 
-The user has accepted keeping these items in the Draft PR for later execution. All remain unchecked; passing non-browser gates does not complete them. The historical privacy hold was released by the parent after combined review and disclosure of historical limits; all28 superseded PRs were confirmed closed unmerged at `2026-10-17T13:11:22.335443+00:00`. This does not complete these TODOs.
+The user accepted keeping these items in the Draft PR for later execution. The fresh original-page execution in [the dated Web follow-up](multiuser-web-acceptance-2026-10-17.md) now completes the groups below, including two production fixes and an explicitly human-assisted native task-cancellation confirmation. Passing non-browser gates alone did not complete them. The historical privacy hold was released by the parent after combined review and disclosure of historical limits; all 28 superseded PRs were confirmed closed unmerged at `2026-10-17T13:11:22.335443+00:00`. That closure alone did not complete these TODOs.
 
-- [ ] Complete A re-login, failed account switch, logout, revocation and disabled-account original-page journeys with B positive controls.
-- [ ] Inject lost storage notification and verify stale visible approval/poll retirement, pagination/streaming and late-response isolation through the supported browser workflow.
-- [ ] Exercise original Models copy/probe/directory and file-processing policy held-Save consumers.
-- [ ] Exercise original Memory manual/recipe/raw/evidence and Agent startup/history consumers.
-- [ ] Exercise original Files image/recording, lost-delete-ACK recovery, source replacement and owner download consumers.
-- [ ] Exercise original Operations/Queues cancellation, recheck and KEEP pending-intent clearing consumers.
-- [ ] After the supported Chrome tool restriction is resolved, the sole designated Web executor must start fresh owned hosts/tabs, observe the original page and proceed in small confirmed steps. Check uncertain prior outcomes before any retry; do not replay the old CDP injection or bypass the restriction with another control surface. Preserve actual per-case receipts and owned-resource cleanup.
+- [x] Complete A re-login, failed account switch, logout, revocation and disabled-account original-page journeys with B positive controls.
+- [x] Inject lost storage notification and verify stale visible approval/poll retirement, pagination/streaming and late-response isolation through the supported browser workflow.
+- [x] Exercise original Models copy/probe/directory and file-processing policy held-Save consumers.
+- [x] Exercise original Memory manual/recipe/raw/evidence and Agent startup/history consumers.
+- [x] Exercise original Files image/recording, lost-delete-ACK recovery, source replacement and owner download consumers.
+- [x] Exercise original Operations/Queues cancellation, recheck and KEEP pending-intent clearing consumers.
+- [x] Complete fresh execution by the sole designated Web executor through the currently supported browser workflow, with fresh owned hosts/tabs, original-page observations, small confirmed steps, per-case receipts and owned-resource cleanup. Check uncertain outcomes before any retry; do not replay old injections or bypass a current tool restriction. The dated follow-up uses supported IAB and preserves the historical Chrome restriction below; it does not claim that old Chrome session was repaired.
 
 The exact blocked action was the original Preferences account-switch button click on an owned exact-C2 Chrome page. The supported tool reported another extension UI open and requested human dismissal. The click outcome is uncertain; later actions have no success evidence. Repeated fresh-session attempts after a confirmed browser restart reached the same restriction. This is a tool-blocked, incomplete validation boundary, not a confirmed product failure.
