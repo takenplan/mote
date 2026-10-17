@@ -7,7 +7,7 @@ import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider
 import {defaultProcessingSettings} from '../src/scope/processing-schema.js';
 
 const envelope=(body:any)=>JSON.parse(typeof body.messages[0].content==='string'?body.messages[0].content:body.messages[0].content[0].text);
-const complete=async(f:Awaited<ReturnType<typeof modelFixture>>,sourceId:string)=>waitForState(async()=>f.read(db=>Boolean(db.prepare("SELECT 1 FROM ac_jobs j,json_each(j.proof,'$.sources') s WHERE j.user_id=? AND j.state='completed' AND json_extract(s.value,'$.id')=?").get(f.a.userId,sourceId))),value=>value,'actual action job for '+sourceId);
+const complete=async(f:Awaited<ReturnType<typeof modelFixture>>,sourceId:string,timeoutMs=15000)=>waitForState(async()=>f.read(db=>Boolean(db.prepare("SELECT 1 FROM ac_jobs j,json_each(j.proof,'$.sources') s WHERE j.user_id=? AND j.state='completed' AND json_extract(s.value,'$.id')=?").get(f.a.userId,sourceId))),value=>value,'actual action job for '+sourceId,timeoutMs);
 
 test('real model chooses independent same-title events and a later sameAs preserves the dismissed decision',async t=>{
  const f=await modelFixture(t);let sameAs:string|null=null;
@@ -20,7 +20,9 @@ test('real model chooses independent same-title events and a later sameAs preser
 
 test('actual model proposals paginate without gaps and the read-only catalog filters all sources before its limit',async t=>{
  const f=await modelFixture(t);let phase='allowed';f.scripts.set('A',(body,_raw,res)=>{const data=envelope(body),id=data.untrustedEvidence[0].id;writeMessagesResponse(res,{stage:1,text:JSON.stringify({answer:JSON.stringify({actions:Array.from({length:8},(_,i)=>({kind:'calendar.create',event:{...event,title:'Generated '+id+' '+i,description:phase==='hidden'?'GENERATED_HIDDEN_CATALOG_DESCRIPTION':'Generated allowed description'},uncertainty:'Generated',sameAs:null,evidence:[{id,quote:'GENERATED_A_PRIVATE_APPOINTMENT'}]}))}),citationIds:[id]})});});
- await f.ingest(f.a,'A');await f.enable(f.a);await complete(f,'same-source');phase='hidden';await f.ingest(f.a,'A','same-item','other-source');await f.ok(f.a.token,'/api/actions/retry','POST',{});await complete(f,'other-source');
+ // Allow the 15-second watcher and real model run over the existing catalog;
+ // this local completion budget makes no latency or throughput claim.
+ await f.ingest(f.a,'A');await f.enable(f.a);await complete(f,'same-source');phase='hidden';await f.ingest(f.a,'A','same-item','other-source');await f.ok(f.a.token,'/api/actions/retry','POST',{});await complete(f,'other-source',60000);
  const seen=new Set<string>();let cursor:string|undefined;do{const page=await f.ok(f.a.token,'/api/actions?limit=5'+(cursor?'&cursor='+encodeURIComponent(cursor):''));for(const a of page.items){assert.ok(!seen.has(a.id));seen.add(a.id);}cursor=page.nextCursor??undefined;}while(cursor);assert.equal(seen.size,16);
  const first=await f.ok(f.a.token,'/api/actions?limit=1');assert.equal((await f.request(f.b.token,'/api/actions?limit=1&cursor='+encodeURIComponent(first.nextCursor))).statusCode,400);
  const context=await f.node.authority.authenticate(f.a.token),catalog=f.node.actions!.discovery.catalog(context,['same-source'],{limit:1});assert.equal(catalog.items.length,1);assert.ok(!JSON.stringify(catalog).includes('GENERATED_HIDDEN_CATALOG_DESCRIPTION'));assert.equal(f.node.actions!.discovery.catalog(context,[],{limit:1}).items.length,0);

@@ -1,11 +1,11 @@
 import { moteText, getLocale } from '@mote/shared/i18n';
 import { randomUUID } from 'node:crypto';
-import { parseConnectionInvitation, type ConnectionInvitation } from '@mote/shared/connection';
+import { parseDesktopConnectionInvitation, type DesktopConnectionInvitation } from './connection-invitation';
 import { ProtocolCompatibilityError, requireCompatibleProtocol, type ProtocolRange } from '@mote/shared/protocol';
 import {DESKTOP_PROTOCOL_HEADERS,validateAccount,type DesktopAccount} from './account';
-import type { Config, Platform } from './contracts';
+import type { Config } from './contracts';
 import { validateServerUrl } from './config';
-export interface ConnectionPreview { id: string; serverUrl: string; expiresAt: string }
+export interface ConnectionPreview { id: string; serverUrl: string; expiresAt: string; deploymentId:string; userId:string; deviceId?:string }
 export interface ConnectionIdentity {
   account:DesktopAccount & {credentialId:string;administrator:boolean;authorizationEpoch:number};
   credential: { id:string; scope:'client'; kind:'client'; expiresAt:number; deviceId?:string };
@@ -13,7 +13,7 @@ export interface ConnectionIdentity {
   capabilities: {authentication:boolean;ingest:boolean;ingressVersion:number;archiveRead:boolean};
 }
 export interface ConnectionStatus { state: 'unchecked' | 'checking' | 'connected' | 'error'; message: string; checkedAt?: string; identity?: ConnectionIdentity }
-export class ConnectionError extends Error { constructor(readonly code: string, message: string) { super(message); } }
+export class ConnectionError extends Error { constructor(readonly code: string, message: string,readonly httpStatus?:number,readonly reason?:string) { super(message); } }
 const invalid = () => new ConnectionError('INVALID_RESPONSE', moteText("中央确认格式无效，原连接保持不变"));
 const object = (value: unknown, required: string[], optional: string[] = []): Record<string, unknown> => {
   if (!value || typeof value !== 'object' || Array.isArray(value) || required.some(key => !(key in value)) || Object.keys(value).some(key => ![...required, ...optional].includes(key))) throw invalid();
@@ -26,10 +26,11 @@ async function responseJson(response: Response): Promise<unknown> {
   for await (const chunk of response.body as unknown as AsyncIterable<Uint8Array>) { length += chunk.length; if (length > 16384) throw invalid(); chunks.push(chunk); }
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { throw invalid(); }
 }
-async function request(serverUrl: string, path: string, init: RequestInit, fetcher: typeof fetch): Promise<unknown> {
+export async function connectionRequest(serverUrl: string, path: string, init: RequestInit, fetcher: typeof fetch): Promise<unknown> {
   try {
     const response = await fetcher(validateServerUrl(serverUrl) + path, { ...init, redirect: 'error', signal: AbortSignal.timeout(15000) });
     if (!response.ok) {
+      if(response.status===410){let reason:string|undefined;try{const body=await responseJson(response) as {error?:unknown};if(body?.error==='login_expired')reason='login_expired';}catch{}throw new ConnectionError('INVITATION_EXPIRED',moteText('邀请无效、已使用或已过期，请在中央重新生成'),410,reason);}
       await response.body?.cancel();
       if (response.status === 409) throw new ConnectionError('DEVICE_CONFLICT', moteText("设备已在中央登记，或邀请已使用；请在中央选择此设备重新生成邀请"));
       if ([400, 410].includes(response.status)) throw new ConnectionError('INVITATION_EXPIRED', moteText("邀请无效、已使用或已过期，请在中央重新生成"));
@@ -43,7 +44,7 @@ async function request(serverUrl: string, path: string, init: RequestInit, fetch
 }
 export async function testConnection(config: Pick<Config, 'serverUrl' | 'token' | 'deviceId'>, fetcher: typeof fetch = fetch, enforceDevice = true): Promise<ConnectionIdentity> {
   if (!config.token) throw new ConnectionError('MISSING_TOKEN', moteText("请先导入连接邀请，或保存访问令牌"));
-  const result = object(await request(config.serverUrl, '/api/connections/self', { credentials:'omit',headers: { ...DESKTOP_PROTOCOL_HEADERS, 'Accept-Language': getLocale(), Authorization: 'Bearer ' + config.token } }, fetcher), ['account','credential','protocol','capabilities']);
+  const result = object(await connectionRequest(config.serverUrl, '/api/connections/self', { credentials:'omit',headers: { ...DESKTOP_PROTOCOL_HEADERS, 'Accept-Language': getLocale(), Authorization: 'Bearer ' + config.token } }, fetcher), ['account','credential','protocol','capabilities']);
   const account=object(result.account,['userId','username','administrator','disabled','authorizationEpoch','createdAt','deploymentId','credentialId']);
   const credential = object(result.credential, ['kind','expiresAt'], ['deviceId']);
   if (credential.kind !== 'client'||account.disabled!==false||typeof account.administrator!=='boolean'||!Number.isSafeInteger(account.authorizationEpoch)||Number(account.authorizationEpoch)<0||!Number.isFinite(credential.expiresAt)||Number(credential.expiresAt)<=Date.now()) throw invalid();
@@ -56,30 +57,20 @@ export async function testConnection(config: Pick<Config, 'serverUrl' | 'token' 
   return {account:{...stable,credentialId:bounded(account.credentialId,128),administrator:account.administrator as boolean,authorizationEpoch:account.authorizationEpoch as number},credential:{id:bounded(account.credentialId,128),scope:'client',kind:'client',expiresAt:Number(credential.expiresAt),...(credential.deviceId!==undefined?{deviceId:bounded(credential.deviceId,200)}:{})},protocol,capabilities:capabilities as unknown as ConnectionIdentity['capabilities']};
 }
 export class ConnectionOnboarding {
-  private pending?: { preview: ConnectionPreview; invitation: ConnectionInvitation };
+  private pending?: { preview: ConnectionPreview; invitation: DesktopConnectionInvitation };
   constructor(private fetcher: typeof fetch = fetch, private now = Date.now) {}
   preview(input: unknown): ConnectionPreview {
     this.pending = undefined;
     if (typeof input !== 'string') throw new ConnectionError('INPUT', moteText("请导入连接邀请文字"));
-    const invitation = parseConnectionInvitation(input, this.now());
-    const preview = { id: randomUUID(), serverUrl: invitation.serverUrl, expiresAt: invitation.expiresAt };
+    const invitation = parseDesktopConnectionInvitation(input, this.now());
+    const preview = { id: randomUUID(), serverUrl: invitation.serverUrl, expiresAt: invitation.expiresAt, deploymentId:invitation.deploymentId,userId:invitation.userId,...(invitation.deviceId?{deviceId:invitation.deviceId}:{}) };
     this.pending = { preview, invitation }; return { ...preview };
   }
   clear(): void { this.pending = undefined; }
-  confirmNode(id:unknown,origin:unknown):string{
+  confirm(id:unknown,origin:unknown):DesktopConnectionInvitation{
     const pending=this.pending;
     if(!pending||pending.preview.id!==id||pending.preview.serverUrl!==origin)throw new ConnectionError('CONFIRMATION',moteText('请先预览邀请并确认显示的中央地址'));
-    parseConnectionInvitation(JSON.stringify(pending.invitation),this.now());this.clear();return pending.preview.serverUrl;
-  }
-  async redeem(id: unknown, confirmedOrigin: unknown, config: Pick<Config, 'deviceId' | 'deviceName'>, platform: Platform): Promise<{ serverUrl: string; token: string; credentialId: string; scope: 'owner' }> {
-    const pending = this.pending;
-    if (!pending || pending.preview.id !== id || pending.preview.serverUrl !== confirmedOrigin) throw new ConnectionError('CONFIRMATION', moteText("请先预览邀请并确认显示的中央地址"));
-    const invitation = parseConnectionInvitation(JSON.stringify(pending.invitation), this.now());
-    const result = object(await request(invitation.serverUrl, '/api/connections/redeem', { method: 'POST', headers: { 'Accept-Language': getLocale(), 'Content-Type': 'application/json' }, body: JSON.stringify({ code: invitation.code, deviceId: config.deviceId, deviceName: config.deviceName, platform }) }, this.fetcher), ['serverUrl', 'token', 'credentialId', 'scope']);
-    const serverUrl = bounded(result.serverUrl, 2048), token = bounded(result.token, 4096), credentialId = bounded(result.credentialId, 128);
-    if (result.scope !== 'owner' || token.length < 32 || validateServerUrl(serverUrl) !== invitation.serverUrl || serverUrl !== invitation.serverUrl) throw invalid();
-    this.pending = undefined;
-    return { serverUrl, token, credentialId, scope: result.scope as 'owner' };
+    return parseDesktopConnectionInvitation(JSON.stringify(pending.invitation),this.now());
   }
 }
 export function assertConnectionChangeSafe(state: { running: boolean; inFlight: boolean; queued: number; preparedNote: boolean; sourcePending: number; sourceInFlight: boolean }, sameNodeInvitation = false): void {

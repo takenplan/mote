@@ -176,7 +176,7 @@ class MultiuserIngressTest {
         val deadline=System.currentTimeMillis()+8000;var material:JSONObject?=null
         while(material==null&&System.currentTimeMillis()<deadline) {
             val rows=api.get("/api/materials").getJSONArray("items")
-            material=(0 until rows.length()).map(rows::getJSONObject).firstOrNull {it.getJSONObject("origin").getString("externalId")==id}
+            material=(0 until rows.length()).map(rows::getJSONObject).firstOrNull {it.getJSONObject("origin").getString("externalId")==id&&it.getJSONObject("origin").getString("sourceId")==receipt.getString("sourceId")}
             if(material==null)Thread.sleep(20)
         }
         assertNotNull("Real capture organizer must publish before exercising settled evidence",material)

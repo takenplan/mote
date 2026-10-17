@@ -326,3 +326,11 @@ The later exact `7d696775` review request to Joint again returned the unconfirme
 submission error. A subsequent direct Joint handoff delivered the actual accepted
 review, and the parent confirmed fresh serial allocation. That resolved the
 review blocker before this final full gate; no blind message retry was used.
+
+
+## Subsequent separately delivered Desktop consumer
+
+Desktop Draft PR149 delivers f319513a050218230d624cf93e4154bba5649b15. Its
+independent native20 and full required evidence remain scoped to that module;
+see [Desktop pairing acceptance](multiuser-desktop-pairing.md). This does not
+erase the producer history above or assign Desktop results to Android.

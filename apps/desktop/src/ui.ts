@@ -78,6 +78,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   window.scrollTo({ top: pageScroll.get(page) || 0, behavior: 'instant' });
   if (page === 'compression') { byId<HTMLInputElement>('compression-quality').value=String(currentStatus.config.jpegQuality); const side=byId<HTMLSelectElement>('compression-side');if(!Array.from(side.options).some(o=>o.value===String(currentStatus.config.captureMaxSide)))side.add(new Option(String(currentStatus.config.captureMaxSide),String(currentStatus.config.captureMaxSide)));side.value=String(currentStatus.config.captureMaxSide); void refreshCompression(); }
   if (page === 'ask') void refreshAsk();
+  if (page === 'connection') void refreshPendingConnection();
   if (page === 'permissions') void refreshPermissions();
   if (page === 'statistics') void loadStorageStatistics();
   if (page === 'records') { void loadRecords(); void refreshContent(); }
@@ -333,6 +334,7 @@ byId('capture-directory-choose').addEventListener('click', () => void perform(as
 byId('capture-directory-default').addEventListener('click', () => { captureStorageDirectory = ''; markSettingsDirty(); renderStorage(); });
 byId('capture-directory-open').addEventListener('click', () => void perform(() => desktopApi.openCaptureDirectory()));
 let connectionPreview: import('./connection').ConnectionPreview | undefined;
+let pendingConnectionRevision=0;
 function renderOperations(jobs:NonNullable<import('./contracts').Status['operations']>):void {
   // Completed work belongs to the page where it began; active work and failures remain global.
   const operations=jobs.filter(job=>job.state!=='completed'||job.startedAt>=pageEnteredAt);
@@ -346,6 +348,7 @@ function render(status: import('./contracts').Status): void {
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
   currentStatus = status; renderStorage();
+  if(currentPage==='connection')void refreshPendingConnection();
   askConnectionState();
   updateTokenField();
   renderOperations(status.operations??[]);
@@ -404,7 +407,7 @@ function render(status: import('./contracts').Status): void {
   byId('retry').textContent = status.sync.state === 'error' ? moteText("重试上传") : moteText("立即上传");
   fields.disabled = busy;
   byId<HTMLInputElement>('device-name').disabled = busy;
-  for (const id of ['connection-preview', 'connection-json', 'connection-qr', 'connection-test']) byId<HTMLButtonElement>(id).disabled = busy;
+  for (const id of ['connection-preview', 'connection-json', 'connection-qr', 'connection-test','connection-recover']) byId<HTMLButtonElement>(id).disabled = busy;
   byId<HTMLButtonElement>('connection-cancel').disabled = busy;
   byId<HTMLTextAreaElement>('connection-input').disabled = busy;
   byId<HTMLInputElement>('connection-confirm-origin').disabled = busy;
@@ -807,8 +810,8 @@ function renderConnection(value: import('./connection').ConnectionStatus): void 
 function clearConnectionPreview(): void { connectionPreview = undefined; byId('connection-confirmation').hidden = true; byId<HTMLInputElement>('connection-confirm-origin').checked = false; }
 function showConnectionPreview(value: import('./connection').ConnectionPreview): void {
   connectionPreview = value; byId<HTMLTextAreaElement>('connection-input').value = ''; byId<HTMLInputElement>('connection-confirm-origin').checked = false;
-  byId('connection-origin').textContent = value.serverUrl; byId('connection-expiry').textContent = moteText("邀请到期：") + new Date(value.expiresAt).toLocaleString(getLocale());
-  byId('connection-resume').textContent = value.serverUrl === currentStatus?.config.serverUrl ? moteText("同一节点重新授权后，现有待传截图、随手记和来源版本将继续发往此地址。节点身份以此地址和 HTTPS 证书为准；请确认它仍由你控制。") : moteText("更换节点时，本机必须没有待传截图、随手记或来源版本；设备 ID、隐私设置和本地模型将保留。");
+  byId('connection-origin').textContent = value.serverUrl+' · '+value.userId+' · '+value.deploymentId; byId('connection-expiry').textContent = moteText("邀请到期：") + new Date(value.expiresAt).toLocaleString(getLocale());
+  byId('connection-resume').textContent = moteText('连接按中央实例和账号归属。同一账号重新授权会保留原队列；切换账号或实例会停止采集，旧队列保留在原账号，不会改投新账号。');
   byId('connection-confirmation').hidden = false; byId<HTMLButtonElement>('connection-connect').disabled = true;
 }
 byId('connection-input').addEventListener('input', () => { clearConnectionPreview(); void desktopApi.cancelConnection(); });
@@ -832,12 +835,24 @@ byId('connection-connect').addEventListener('click', () => void perform(async ()
   settingsApplying = true; wasRunningBeforeSave = currentStatus.running; render(currentStatus);
   let status: import('./contracts').Status;
   try { status = await desktopApi.confirmConnection(connectionPreview.id, connectionPreview.serverUrl, readInput('device-name')); }
-  finally { settingsApplying = false; wasRunningBeforeSave = false; }
+  finally { settingsApplying = false; wasRunningBeforeSave = false; void refreshPendingConnection(); }
   clearConnectionPreview();
   // Invitation confirmation replaces the connection page draft with the committed config.
   render(status); fillConfig(status.config);
   renderConnection(await desktopApi.connectionStatus()); feedback(moteText("连接已安全保存；原设备 ID、隐私设置和本地模型保留。"), true);
 }));
+async function refreshPendingConnection():Promise<void>{
+  const request=++pendingConnectionRevision,revision=pageRevision,generation=currentStatus?.authorizationGeneration;
+  const current=()=>request===pendingConnectionRevision&&revision===pageRevision&&generation===currentStatus?.authorizationGeneration;
+  try{const pending=await desktopApi.pendingConnection();if(!current())return;const button=byId<HTMLButtonElement>('connection-recover');button.hidden=!pending;button.title=pending?pending.serverUrl+' · '+pending.userId+' · '+pending.deploymentId:'';}
+  catch{if(current())byId('connection-recover').hidden=true;}
+}
+byId('connection-recover').addEventListener('click',()=>void perform(async()=>{
+  settingsApplying=true;
+  try{const status=await desktopApi.resumeConnection();clearConnectionPreview();render(status);fillConfig(status.config);}
+  finally{settingsApplying=false;void refreshPendingConnection();}
+}));
+void refreshPendingConnection();
 byId('connection-test').addEventListener('click', () => void perform(async () => renderConnection(await desktopApi.testConnection())));
 void desktopApi.connectionStatus().then(renderConnection).catch(() => {});
 
