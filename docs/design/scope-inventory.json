@@ -2176,6 +2176,7 @@
     "surfaces": [
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/activity'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/catalog'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/evidence'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/file-chunks'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/material-read'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/materials'",
@@ -2189,6 +2190,7 @@
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/search'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/status'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/media-activity'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/agent-view/startup'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/context/read'"
     ]
   },

@@ -8460,5 +8460,6 @@ export const english: Readonly<Record<string, string>> = {
   "中央归档已删除。": "The Central archive has been deleted.",
   "原件清理等待当前调用结束。": "Original cleanup is waiting for the current call to finish.",
   "允许再次采集": "Allow collection again",
-  "已允许再次采集": "Collection is allowed again"
+  "已允许再次采集": "Collection is allowed again",
+  "默认包含：系统规则、只读工具说明、当前问题、时间与设备范围，以及最多 8 条记忆线索。": "Includes system rules, read-only tool descriptions, the question, time and device scope, and up to 8 Memory leads, matching a new conversation."
 };
