@@ -157,8 +157,10 @@ Server reported 3,068 passes, one failure and two existing skips. Desktop 589,
 Web 583, Agent 327 plus one existing skip, Diagnostics 5 and Shared 195 passed.
 The failure was `multiuser-processing.test.ts`, “held file term review cannot
 publish after file-cancel”. Its business assertions passed; the after hook's
-directory removal returned `ENOTEMPTY` as late work created empty directories.
-This is a cleanup/lifecycle failure, not observed late-result publication. The
+directory removal returned `ENOTEMPTY`. A separate later passing trace observed
+SDK child/workspace cleanup after host close; it did not precisely reproduce
+that failed full run or identify its exact writer. This is a cleanup/lifecycle
+failure, not observed late-result publication. The
 failure is retained, and root script, Central-runner and Android stages were
 not reached in this attempt. The main task owns the remaining directory-creation
 and close-order correction and subsequent affected checks.
@@ -172,8 +174,9 @@ failed full affected check into a pass.
 
 ## Combined lifecycle correction — targeted acceptance
 
-The main task traced the remaining race to SDK child session writes and cleanup
-continuing after application close. The correction is
+The main task separately observed SDK child session writes and cleanup continuing
+after application close, confirming a shutdown-order gap without establishing
+the exact writer in the earlier failed full run. The correction is
 `6e4032e0ff7a31dbf6528d6703f5d9d8f0b1cc57` (tree
 `508a09cb70ec9202aad6225372039446023ef4ad`), a direct child of `3518706b` and a
 verified descendant of this branch's runtime freeze `9e9f112c`.
