@@ -114,6 +114,14 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         }
         return sendFileDelete(api, intent)
     }
+    fun discardFileDelete(api: CentralClient, intent: JSONObject) = CentralDraftWrites.barrier {
+        // Local abandonment never rebases or cancels an admitted central action.
+        api.assertActive(); check(ownsSelectedAccount() && ui.client === api && intent.getString("ownerKey") == ownerKey)
+        val all = fileDeletes.read(); val id = intent.getString("captureId")
+        if (all.optJSONObject(id)?.getJSONObject("body")?.optString("operationId") == intent.getJSONObject("body").getString("operationId")) {
+            all.remove(id); fileDeletes.write(all)
+        }
+    }
     fun retryFileDelete(api: CentralClient, intent: JSONObject): JSONObject = sendFileDelete(api, intent)
     private fun sendFileDelete(api: CentralClient, intent: JSONObject): JSONObject {
         check(ownsSelectedAccount() && ui.client === api && intent.getString("ownerKey") == ownerKey)

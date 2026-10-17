@@ -28,6 +28,7 @@ internal class CentralClient(
     private val unauthorized: () -> Unit = {},
     private val verify: () -> Unit = {},
 ) {
+    internal fun assertActive() = checkActive()
     fun get(path: String) = request("GET", path)
     fun post(path: String, body: JSONObject = JSONObject()) = request("POST", path, body)
     fun put(path: String, body: JSONObject) = request("PUT", path, body)

@@ -267,6 +267,11 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                 ui.button(MoteI18n.text("重试同一请求"), parent = card) {
                     if (active()) ui.work(MoteI18n.text("正在删除…"), { screens.retryFileDelete(api, intent) }) { if (active()) screens.refresh() }
                 }
+                ui.button(MoteI18n.text("清除本机待确认请求"), parent = card) {
+                    if (active()) screens.confirm(MoteI18n.text("清除本机待确认请求"), MoteI18n.text("只清除此设备的待确认请求，不撤销中央已接受的删除，也不恢复文件。")) {
+                        if (active()) ui.work(MoteI18n.text("正在保存…"), { screens.discardFileDelete(api, intent) }) { if (active()) screens.refresh() }
+                    }
+                }
             }
         }
         paged("/api/files?limit=30&query=" + enc(query), ui.card()) { row, card ->
