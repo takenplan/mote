@@ -6,8 +6,10 @@ export type RecordingTask={id:string;state:string;failure?:{code:string};result?
 const terminal=new Set(['succeeded','failed','cancelled','stale','blocked']);
 const invalid=()=>Error(moteText('服务返回的操作回执与当前账号不一致。'));
 /** Original recording form, captured owner and one M10 instance; no vendor aliases reach HTTP. */
-export function scopedRecordingApi(api:Api,id:string,provider:string,onTask:(task:RecordingTask)=>void=()=>{}):Api{
+export function scopedRecordingApi(api:Api,id:string,provider:string,generation:number,onTask:(task:RecordingTask)=>void=()=>{}):Api{
  const path='/api/connectors/'+encodeURIComponent(id),legacy='/api/connectors/'+provider+'-recordings';
+ const owner=api.connection?.mode==='web'?api.connection:undefined,storage=globalThis.localStorage??globalThis.window?.localStorage;
+ const intentKey=owner?'mote.recording-command.v1:'+JSON.stringify([owner.origin,owner.deploymentId,owner.userId,owner.credentialId,id,generation]):undefined;
  let intent:{key:string;body:string}|undefined;
  async function status(signal?:AbortSignal|null){
   const value=await api.request<any>(path,{signal});signal?.throwIfAborted();
@@ -23,9 +25,17 @@ export function scopedRecordingApi(api:Api,id:string,provider:string,onTask:(tas
   const target=operation?path+'/operations':suffix==='/sync'?path+'/sync':method==='DELETE'&&suffix===''?path+'/disconnect':undefined;
   if(!target)throw invalid();
   const payload=suffix==='/retry'?{resume:true}:init.body?JSON.parse(String(init.body)):{};
-  const key=JSON.stringify([target,operation,payload]);if(intent?.key!==key)intent={key,body:JSON.stringify({operationId:crypto.randomUUID(),...(operation?{operation,payload}:{})})};
+  const key=JSON.stringify([target,operation,payload]);
+  if(intent?.key!==key){
+   const digest=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(key))),v=>v.toString(16).padStart(2,'0')).join('');signal?.throwIfAborted();
+   const saved=intentKey?storage?.getItem(intentKey):undefined,previous=saved?JSON.parse(saved):undefined;
+   if(previous&&(!/^[a-f0-9]{64}$/.test(previous.fingerprint)||typeof previous.operationId!=='string'||!/^[a-f0-9-]{36}$/.test(previous.operationId)))throw invalid();
+   const operationId=previous?.fingerprint===digest?previous.operationId:crypto.randomUUID();
+   if(intentKey)storage?.setItem(intentKey,JSON.stringify({fingerprint:digest,operationId}));
+   intent={key,body:JSON.stringify({operationId,...(operation?{operation,payload}:{})})};
+  }
   // Keep identical operation/body after a lost admission ACK. M05 is authoritative.
-  const task=await api.request<RecordingTask>(target,{method:'POST',body:intent.body,signal});signal?.throwIfAborted();if(!/^[a-f0-9]{64}$/.test(task.id))throw invalid();intent=undefined;onTask(task);
+  const task=await api.request<RecordingTask>(target,{method:'POST',body:intent.body,signal});signal?.throwIfAborted();if(!/^[a-f0-9]{64}$/.test(task.id))throw invalid();intent=undefined;if(intentKey)storage?.removeItem(intentKey);onTask(task);
   let current=task;
   while(!terminal.has(current.state)){
    await new Promise<void>((resolve,reject)=>{const timer=setTimeout(done,100);function done(){signal?.removeEventListener('abort',abort);resolve();}function abort(){clearTimeout(timer);reject(signal?.reason);}signal?.addEventListener('abort',abort,{once:true});});signal?.throwIfAborted();

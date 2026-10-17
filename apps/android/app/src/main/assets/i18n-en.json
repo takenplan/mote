@@ -8499,5 +8499,9 @@
   "记录当前账号的 Agent 输入与读取内容": "Record Agent inputs and reads for this account",
   "模型传输事件": "Model transport event",
   "尚未上报采集与同步状态。": "Capture and sync status has not been reported yet.",
-  "这些操作使用已保存的连接；修改草稿后请先保存并应用。": "These tools use the saved connection. Save and apply draft changes first."
+  "这些操作使用已保存的连接；修改草稿后请先保存并应用。": "These tools use the saved connection. Save and apply draft changes first.",
+  "当前范围暂无录音检查点。": "There are no recording checkpoints in the current selection.",
+  "当前来源尚无归档文件。": "This source has no archived files yet.",
+  "录音归档分页": "Recording archive pages",
+  "录音来源": "Recording source"
 }

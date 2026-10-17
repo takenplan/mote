@@ -29,7 +29,6 @@ export const english: Readonly<Record<string, string>> = {
   "个人任务：执行中 {0}，排队 {1}": "Personal tasks: {0} running, {1} queued",
   "仅显示当前账号的任务；实例并发上限由管理员配置。外部结果待确认不表示调用已停止。": "Only this account's tasks are shown; instance concurrency is configured by an administrator. An unresolved external result does not mean the call has stopped.",
   "{0}：执行中 {1}，排队 {2}，受阻 {3}，失败 {4}，外部结果待确认 {5}": "{0}: {1} running, {2} queued, {3} blocked, {4} failed, {5} external outcomes unresolved",
-
   "按来源和文件类型选择处理方案。服务引用模型连接，方案保存独立参数；连接、规则和参数在同一次保存中提交。": "Choose processing profiles by source and file type. Services reference model connections, while profiles retain their own parameters. Connections, rules and parameters are submitted in one save.",
   "个人连接保留同一预设的隐藏凭据；共享连接仅引用，不复制地址或凭据。": "Personal connections preserve the same profile's hidden credentials. Shared connections are references; their endpoints and credentials are not copied.",
   "模型连接引用": "Model connection reference",
@@ -8499,7 +8498,11 @@ export const english: Readonly<Record<string, string>> = {
   "输入追踪设置": "Input trace settings",
   "仅记录之后发生的输入与工具返回，可能包含私人正文。关闭不重建历史，也不改变已保留内容的到期规则。": "Only future inputs and tool results are recorded. They may contain private text. Turning recording off does not reconstruct history or change retention for existing events.",
   "记录当前账号的 Agent 输入与读取内容": "Record Agent inputs and reads for this account",
-  "模型传输事件": "Model transport event" ,
+  "模型传输事件": "Model transport event",
   "尚未上报采集与同步状态。": "Capture and sync status has not been reported yet.",
-  "这些操作使用已保存的连接；修改草稿后请先保存并应用。": "These tools use the saved connection. Save and apply draft changes first."
+  "这些操作使用已保存的连接；修改草稿后请先保存并应用。": "These tools use the saved connection. Save and apply draft changes first.",
+  "当前范围暂无录音检查点。": "There are no recording checkpoints in the current selection.",
+  "当前来源尚无归档文件。": "This source has no archived files yet.",
+  "录音归档分页": "Recording archive pages",
+  "录音来源": "Recording source"
 };
