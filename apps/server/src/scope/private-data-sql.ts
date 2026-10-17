@@ -7,8 +7,8 @@ export class PrivateDataError extends Error{
 }
 export const missing=()=>new PrivateDataError('not_found',404);
 /** The sole private SQL gateway. Named owner binding is supplied by the host,
- * never by a caller. Ordinary operations revalidate captured authority; an exact
- * pin disposer is minted while current and only deletes its fixed row.
+ * never by a caller. Ordinary operations revalidate captured authority; the
+ * exact pin disposer is minted while current and can only delete its fixed row.
  * No connection or statement escapes through a user service. */
 export class PrivateSql{
   constructor(private readonly db:DatabaseSync,readonly userId:string,private readonly authorize:()=>void){}

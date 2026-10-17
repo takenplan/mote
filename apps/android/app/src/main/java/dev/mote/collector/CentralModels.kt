@@ -16,7 +16,7 @@ internal object CentralModels {
                     .put("name", item.getString("name")))
             }
         }
-        return JSONObject().put("profiles", profiles)
+        return JSONObject().put("profiles", profiles).also { result -> inventory.optJSONArray("features")?.let { result.put("features", JSONArray(it.toString())) } }
     }
     fun reference(value: String): JSONObject? {
         if (value.isEmpty()) return null

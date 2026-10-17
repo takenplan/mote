@@ -7,7 +7,7 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 
-internal data class CentralDownload(val bytes: Long, val sha256: String, val contentType: String)
+internal data class CentralDownload(val bytes: Long, val sha256: String, val contentType: String, val requireEtag: Boolean = true)
 
 internal class CentralFailure(val status: Int, val code: String = "", val detail: String = "") : IllegalStateException(when {
     status == 401 && code in setOf("", "unauthorized") -> MoteI18n.text("令牌无效或已失效，请检查后重新登录。")
@@ -28,11 +28,12 @@ internal class CentralClient(
     private val unauthorized: () -> Unit = {},
     private val verify: () -> Unit = {},
 ) {
+    internal fun assertActive() = checkActive()
     fun get(path: String) = request("GET", path)
     fun post(path: String, body: JSONObject = JSONObject()) = request("POST", path, body)
     fun put(path: String, body: JSONObject) = request("PUT", path, body)
     fun patch(path: String, body: JSONObject) = request("PATCH", path, body)
-    fun delete(path: String, body: JSONObject? = null) = request("DELETE", path, body)
+    fun delete(path: String, body: JSONObject? = JSONObject()) = request("DELETE", path, body)
     private fun request(method: String, path: String, body: JSONObject? = null): JSONObject =
         bytes(method, path, body?.toString()?.toByteArray(Charsets.UTF_8), "application/json")
     fun bytes(method: String, path: String, body: ByteArray?, mime: String): JSONObject {
@@ -61,6 +62,7 @@ internal class CentralClient(
         try {
             connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 120000
             ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            if (URI(path).path.startsWith("/api/ingress/")) connection.setRequestProperty("X-Mote-Ingress-Version", "3")
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
@@ -69,7 +71,7 @@ internal class CentralClient(
                 requireNotNull(value.toLongOrNull()).also { require(it >= 0 && it <= maxBytes) }
             }
             if (expected != null) {
-                require(status == 200 && connection.contentType == expected.contentType && connection.getHeaderField("ETag") == "\"${expected.sha256}\"") { "Export response does not match its receipt" }
+                require(status == 200 && connection.contentType == expected.contentType && (!expected.requireEtag || connection.getHeaderField("ETag") == "\"${expected.sha256}\"")) { "Export response does not match its receipt" }
                 require(connection.getHeaderField("Content-Length")?.toLongOrNull() == expected.bytes)
             }
             val digest = java.security.MessageDigest.getInstance("SHA-256"); var received = 0L
@@ -112,6 +114,7 @@ internal class CentralClient(
         try {
             connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 30000
             ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            if (URI(path).path.startsWith("/api/ingress/")) connection.setRequestProperty("X-Mote-Ingress-Version", "3")
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)

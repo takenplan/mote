@@ -42,6 +42,109 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     private val insightStore = CentralStateFile(directory, "insight-request", cipher)
     private val memoryCorrectionStore = CentralStateFile(directory, "memory-correction", cipher)
     private val memoryAdmissionStore = CentralStateFile(directory, "memory-admission", cipher)
+    private val fileRetries = CentralStateFile(directory, "file-retries", cipher)
+    fun pendingFileRetry(id: String): JSONObject? = CentralDraftWrites.barrier {
+        fileRetries.read().optJSONObject(id)?.also { check(it.getString("ownerKey") == ownerKey) }
+    }
+    fun submitFileRetry(api: CentralClient, id: String, originalRef: String, request: JSONObject): JSONObject {
+        check(ownsSelectedAccount() && ui.client === api)
+        UUID.fromString(id); require(Regex("original:[a-f0-9]{64}").matches(originalRef))
+        require(request.getString("stage") in setOf("transcribe", "diarize", "summary") && !request.has("operationId"))
+        val intent = CentralDraftWrites.barrier {
+            val all = fileRetries.read(); val previous = all.optJSONObject(id)
+            if (previous != null) {
+                val body = JSONObject(previous.getJSONObject("body").toString()).apply { remove("operationId") }
+                check(previous.getString("ownerKey") == ownerKey && previous.getString("originalRef") == originalRef && SourceRules.canonical(body) == SourceRules.canonical(request)) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                previous
+            } else JSONObject().put("ownerKey", ownerKey).put("originalRef", originalRef)
+                .put("body", JSONObject(request.toString()).put("operationId", UUID.randomUUID().toString())).also { all.put(id, it); fileRetries.write(all) }
+        }
+        return sendFileRetry(api, id, intent)
+    }
+    fun retryFileAdmission(api: CentralClient, id: String) = sendFileRetry(api, id, requireNotNull(pendingFileRetry(id)))
+    private fun sendFileRetry(api: CentralClient, id: String, intent: JSONObject): JSONObject {
+        check(ownsSelectedAccount() && ui.client === api && intent.getString("ownerKey") == ownerKey)
+        val account = AccountBinding.self(api.server, api.get("/api/connections/self")); check(account.key == ownerKey)
+        val request = intent.getJSONObject("body"); val operationId = request.getString("operationId"); UUID.fromString(operationId)
+        val receipt = try { api.post("/api/files/" + encode(id) + "/retry", request) }
+        catch (failure: CentralFailure) {
+            // These two M06 refusals occur before admission. They must allow
+            // the user to wait or explicitly confirm unknown work later;
+            // transport failures and unverified acknowledgements stay durable.
+            if (failure.status == 409 && failure.code in setOf("external_result_unknown", "file_processing_active")) clearFileRetry(id, operationId)
+            throw failure
+        }
+        require(receipt.getBoolean("queued") && Regex("[a-f0-9]{64}").matches(receipt.getString("taskId")))
+        val task = api.get("/api/tasks/" + receipt.getString("taskId"))
+        val operation = "file-retry:" + SourceRules.hash(JSONArray().put(intent.getString("originalRef")).put(operationId).toString())
+        require(task.getString("id") == receipt.getString("taskId") && task.getString("operationId") == "task:" + SourceRules.hash(JSONArray().put(account.userId).put(operation).toString()))
+        require(task.getString("kind") == if (request.getString("stage") == "summary") "processing.derivatives" else "processing.pipeline")
+        check(ownsSelectedAccount() && ui.client === api)
+        clearFileRetry(id, operationId)
+        return receipt
+    }
+    private fun clearFileRetry(id: String, operationId: String) = CentralDraftWrites.barrier {
+            val all = fileRetries.read()
+            if (all.optJSONObject(id)?.getJSONObject("body")?.optString("operationId") == operationId) { all.remove(id); fileRetries.write(all) }
+    }
+    private val fileDeletes = CentralStateFile(directory, "file-deletes", cipher)
+    fun pendingFileDeletes(): List<JSONObject> = CentralDraftWrites.barrier {
+        val all = fileDeletes.read()
+        all.keys().asSequence().map { id -> all.getJSONObject(id).also { check(it.getString("ownerKey") == ownerKey && it.getString("captureId") == id) } }.toList()
+    }
+    fun submitFileDelete(api: CentralClient, row: JSONObject): JSONObject {
+        check(ownsSelectedAccount() && ui.client === api)
+        val id = row.getString("captureId"); UUID.fromString(id)
+        val rawGeneration = row.get("originalGeneration")
+        require(rawGeneration is Number && rawGeneration.toDouble() >= 0 && rawGeneration.toDouble() < 9007199254740991.0 && rawGeneration.toDouble() == rawGeneration.toLong().toDouble())
+        val generation = rawGeneration.toLong()
+        val descriptor = JSONObject().put("captureId", id).put("sourceId", row.getString("sourceId"))
+            .put("externalId", row.getJSONObject("item").getString("externalId")).put("originalRef", row.getString("originalRef"))
+            .put("originalGeneration", generation)
+        require(Regex("original:[a-f0-9]{64}").matches(descriptor.getString("originalRef")))
+        val intent = CentralDraftWrites.barrier {
+            check(ownsSelectedAccount() && ui.client === api)
+            val all = fileDeletes.read(); val previous = all.optJSONObject(id)
+            if (previous != null) {
+                check(previous.getString("ownerKey") == ownerKey && SourceRules.canonical(previous.getJSONObject("descriptor")) == SourceRules.canonical(descriptor)) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                previous
+            } else JSONObject().put("ownerKey", ownerKey).put("captureId", id).put("title", row.getJSONObject("item").optString("title"))
+                .put("descriptor", descriptor).put("body", JSONObject().put("operationId", UUID.randomUUID().toString()).put("originalGeneration", generation))
+                .also { all.put(id, it); fileDeletes.write(all) }
+        }
+        return sendFileDelete(api, intent)
+    }
+    fun discardFileDelete(api: CentralClient, intent: JSONObject) = CentralDraftWrites.barrier {
+        // Local abandonment never rebases or cancels an admitted central action.
+        api.assertActive(); check(ownsSelectedAccount() && ui.client === api && intent.getString("ownerKey") == ownerKey)
+        val all = fileDeletes.read(); val id = intent.getString("captureId")
+        if (all.optJSONObject(id)?.getJSONObject("body")?.optString("operationId") == intent.getJSONObject("body").getString("operationId")) {
+            all.remove(id); fileDeletes.write(all)
+        }
+    }
+    fun retryFileDelete(api: CentralClient, intent: JSONObject): JSONObject = sendFileDelete(api, intent)
+    private fun sendFileDelete(api: CentralClient, intent: JSONObject): JSONObject {
+        check(ownsSelectedAccount() && ui.client === api && intent.getString("ownerKey") == ownerKey)
+        check(AccountBinding.self(api.server, api.get("/api/connections/self")).key == ownerKey)
+        val id = intent.getString("captureId"); UUID.fromString(id)
+        val request = JSONObject(intent.getJSONObject("body").toString()); val operation = request.getString("operationId"); UUID.fromString(operation)
+        // Recovery uses the persisted request even when GET detail is now 404.
+        // Never fetch a newer generation to rebase an unresolved deletion.
+        val receipt = api.delete("/api/files/" + encode(id), request)
+        val count = receipt.get("deleted"); require(count is Number && count.toDouble() >= 1 && count.toDouble() <= 9007199254740991.0 && count.toDouble() == count.toLong().toDouble())
+        require(receipt.getString("cleanup") in setOf("complete", "pending"))
+        val decision = receipt.getJSONObject("decision"); val descriptor = intent.getJSONObject("descriptor")
+        require(decision.getString("sourceId") == descriptor.getString("sourceId") && decision.getString("externalId") == descriptor.getString("externalId"))
+        UUID.fromString(decision.getString("decisionId"))
+        val generation = decision.get("generation"); require(generation is Number && generation.toDouble() == (request.getLong("originalGeneration") + 1).toDouble())
+        check(ownsSelectedAccount() && ui.client === api)
+        CentralDraftWrites.barrier {
+            check(ownsSelectedAccount() && ui.client === api)
+            val all = fileDeletes.read()
+            if (all.optJSONObject(id)?.getJSONObject("body")?.optString("operationId") == operation) { all.remove(id); fileDeletes.write(all) }
+        }
+        return receipt
+    }
     fun pendingMemoryAdmission(): JSONObject? = CentralDraftWrites.barrier { memoryAdmissionStore.read().takeIf { it.has("operationId") } }
     fun discardMemoryAdmission() = CentralDraftWrites.barrier { memoryAdmissionStore.write(JSONObject()) }
     fun submitMemory(api: CentralClient, request: JSONObject): JSONObject {
@@ -81,6 +184,45 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         require(job.getString("id") == id); job.getJSONObject("tasks"); job.getBoolean("current")
         CentralDraftWrites.barrier { if (memoryCorrectionStore.read().optString("operationId") == id) memoryCorrectionStore.write(JSONObject()) }
         return job
+    }
+    private val connectorCommands = CentralStateFile(directory, "connector-commands", cipher)
+    fun connectorWork(): JSONObject = CentralDraftWrites.barrier { connectorCommands.read() }
+    fun submitConnector(api: CentralClient, id: String, generation: Long, path: String, body: JSONObject): JSONObject {
+        require(path in setOf("sync", "disconnect", "operations").map { "/api/connectors/" + encode(id) + "/" + it })
+        val request = CentralDraftWrites.barrier {
+            val all = connectorCommands.read(); val previous = all.optJSONObject(id)?.optJSONObject("pending")
+            if (previous != null) {
+                val prior = JSONObject(previous.getJSONObject("body").toString()).apply { remove("operationId") }
+                check(previous.getString("path") == path && SourceRules.canonical(prior) == SourceRules.canonical(body)) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                previous
+            } else JSONObject().put("path", path).put("body", JSONObject(body.toString()).put("operationId", UUID.randomUUID().toString())).also {
+                all.put(id, JSONObject().put("generation", generation).put("pending", it)); connectorCommands.write(all)
+            }
+        }
+        return sendConnector(api, id, request)
+    }
+    fun retryConnector(api: CentralClient, id: String) = sendConnector(api, id, requireNotNull(connectorWork().optJSONObject(id)?.optJSONObject("pending")))
+    private fun sendConnector(api: CentralClient, id: String, request: JSONObject): JSONObject {
+        require(request.getString("path") in setOf("sync", "disconnect", "operations").map { "/api/connectors/" + encode(id) + "/" + it })
+        val operationId = request.getJSONObject("body").getString("operationId"); UUID.fromString(operationId)
+        val task = api.post(request.getString("path"), request.getJSONObject("body"))
+        require(Regex("[a-f0-9]{64}").matches(task.getString("id")))
+        require(task.getString("state") in setOf("waiting", "running", "blocked", "succeeded", "failed", "cancelled", "stale"))
+        CentralDraftWrites.barrier {
+            val all = connectorCommands.read(); val entry = all.optJSONObject(id)
+            if (entry?.optJSONObject("pending")?.getJSONObject("body")?.optString("operationId") == operationId) {
+                entry.remove("pending"); entry.put("taskId", task.getString("id")); connectorCommands.write(all)
+            }
+        }
+        return task
+    }
+    fun rememberConnectorTask(id: String, generation: Long, taskId: String) = CentralDraftWrites.barrier {
+        require(Regex("[a-f0-9]{64}").matches(taskId)); val all = connectorCommands.read()
+        val previous = all.optJSONObject(id); check(previous?.has("pending") != true) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+        all.put(id, JSONObject().put("generation", generation).put("taskId", taskId)); connectorCommands.write(all)
+    }
+    fun clearPendingConnector(id: String) = CentralDraftWrites.barrier {
+        val all = connectorCommands.read(); all.optJSONObject(id)?.remove("pending"); connectorCommands.write(all)
     }
     private val draftFailure = java.util.concurrent.atomic.AtomicReference<Throwable?>(null)
     var importInstruction = ""
@@ -127,7 +269,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
     fun back(): Boolean = detailBack?.let { detailBack = null; it(); true } ?: false
     fun setBack(action: () -> Unit) { ui.enterDetail(); detailBack = action; question = null; messages = null; close() }
     fun clearBack() { detailBack = null }
-    fun resume() { if (currentPage in setOf("plugins", "extensions")) admin.resume(); if (currentPage == "activity") ui.scheduleActivityPoll() }
+    fun resume() { if (currentPage in setOf("plugins", "extensions", "lark")) admin.resume() else admin.resumeConnections(); if (currentPage == "activity") ui.scheduleActivityPoll() }
     fun pollWorkActivity() { if (currentPage == "activity") activity.poll() }
     fun saveWorkState(out: android.os.Bundle) = activity.saveState(out)
     fun restoreWorkState(value: android.os.Bundle) = activity.restoreState(value)
@@ -155,7 +297,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
         val target = ui.card()
         val api = client
         ui.work(MoteI18n.text("正在连接中央节点…"), {
-            listOf(api.get("/api/data/statistics"), api.get("/api/ingress/devices"), CentralModels.inventory(api))
+            listOf(api.get("/api/data/statistics"), api.get("/api/ingress/devices"), CentralModels.inventory(api), api.get("/api/operations?limit=5"))
         }) { data ->
             val statistics = data[0]
             ui.text(MoteI18n.text("中央工作台"), NativeFontRole.TITLE_MOBILE, target)
@@ -173,6 +315,7 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
                 ui.text(device.getString("name") + " · " + device.getString("platform"), parent = target)
             }
             ui.text(MoteI18n.text("处理任务"), NativeFontRole.SECTION, target)
+            admin.items(data[3], target) { row -> admin.operation(row.getString("id")) }
             ui.button(MoteI18n.text("处理任务"), parent = target) { ui.navigate("activity") }
         }
         ui.button(MoteI18n.text("中央资料库")) { ui.navigate("archive") }
@@ -522,13 +665,13 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             }
         }
     }
-    fun playAudio(path: String, target: LinearLayout) {
+    fun playAudio(path: String, target: LinearLayout, expected: CentralDownload? = null) {
         close(); val api = client; val revision = ui.navigationRevision
         ui.work(MoteI18n.text("正在读取录音…"), {
             val file = File.createTempFile("central-audio-", ".tmp", directory.apply { mkdirs() })
             audioFile = file
             try {
-                file.outputStream().use { api.download(path, it, 256 * 1024 * 1024L) }
+                file.outputStream().use { api.download(path, it, 256 * 1024 * 1024L, expected) }
                 check(!ui.isDestroyed && !ui.isFinishing && ui.navigationRevision == revision)
                 file
             }

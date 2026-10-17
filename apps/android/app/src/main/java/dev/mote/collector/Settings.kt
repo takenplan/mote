@@ -151,7 +151,7 @@ class Settings(private val context: Context) {
             "mediaCollectionEnabled" to c.mediaCollectionEnabled, "screenCollectionEnabled" to c.screenCollectionEnabled, "batteryPauseBelowPct" to c.batteryPauseBelowPct,
             "diagnosticsEnabled" to c.diagnosticsEnabled, "diagnosticsIntervalSeconds" to c.diagnosticsIntervalSeconds)
 
-    fun save(c: CollectorConfig, expected: CollectorConfig? = null, confirmCentralEndpoint: Boolean = false) = synchronized(Settings::class.java) {
+    fun save(c: CollectorConfig, expected: CollectorConfig? = null, confirmCentralEndpoint: Boolean = false, expectedAccount: AccountBinding? = null) = synchronized(Settings::class.java) {
         if (expected != null && read() != expected) throw SettingsChangedFailure()
         c.validate()
         val previousConfig = read()
@@ -160,6 +160,7 @@ class Settings(private val context: Context) {
             val (binding, deviceBound) = verifyConnection(c.server, c.token)
             c.copy(server = binding.origin, accountBinding = binding.json().toString(), deviceBoundCredential = deviceBound)
         } else c
+        if (expectedAccount != null && verified.account() != expectedAccount) throw ConnectionFailure("identity")
         if (verified.token.isNotBlank() && !verified.authSignedOut) require(verified.account()?.origin == AccountBinding.normalize(verified.server))
 
         val origin = originAfterChange(verified)
@@ -201,9 +202,9 @@ class Settings(private val context: Context) {
         return AccountBinding.self(server, response) to response.getJSONObject("credential").has("deviceId")
     }
     fun centralEndpoint(): String = prefs.getString("centralEndpoint", "")!!
-    fun saveConnection(server: String, token: String, deviceName: String, debugHttp: Boolean, binding: AccountBinding = verifyAccount(server, token)) = synchronized(Settings::class.java) {
-        val next = read().copy(accountBinding = binding.json().toString(), server = binding.origin, token = token, deviceName = deviceName, debugHttp = debugHttp, authSignedOut = false, authExpiresAt = 0, authProcess = "")
-        next.validateConnection(); save(next, confirmCentralEndpoint = true)
+    fun saveConnection(server: String, token: String, deviceName: String, debugHttp: Boolean, binding: AccountBinding = verifyAccount(server, token), expiresAt: Long = 0) = synchronized(Settings::class.java) {
+        val next = read().copy(accountBinding = binding.json().toString(), server = binding.origin, token = token, deviceName = deviceName, debugHttp = debugHttp, authSignedOut = false, authExpiresAt = expiresAt, authProcess = "")
+        next.validateConnection(); save(next, confirmCentralEndpoint = true, expectedAccount = binding)
     }
     fun signIn(server: String, token: String, durationMs: Long) = synchronized(Settings::class.java) {
         require(durationMs in setOf(0L, 86400000L, 604800000L, 2592000000L))

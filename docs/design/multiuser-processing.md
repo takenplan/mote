@@ -40,6 +40,17 @@ snapshot before and after awaits and immediately before storage/publication.
 Changing processing settings increments only that account's generation. Model
 selection changes retain M04's established next-request snapshot semantics.
 
+An explicit extraction-child retry can resume its existing blocked pipeline in
+the same M05 retry transaction. The trusted synchronous `prepareRetry` hook is
+registered only for extract/OCR/ASR; request JSON cannot install it. Recovery
+requires the same owner, an exact pipeline extraction checkpoint pointing to
+that child, the complete original child input, current source/configuration/plugin
+authority and the parent's original durable task grant. Only a blocked parent
+is rearmed; waiting/running parents retain their state, and terminal parents are
+rejected. Normal parent admission still requires waiting/running. A failed check
+rolls back parent recovery and the child's unknown-call confirmation together.
+No grant, model lease, checkpoint or old external fact is recreated or settled.
+
 The M09 adapter exposes fixed-source `readOriginal`, `pageOriginals` and
 `processOriginal` through the actual worker RPC. The latter admits this same M05
 pipeline and validates the initiating plugin task and retained processor grant

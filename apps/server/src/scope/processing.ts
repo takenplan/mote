@@ -17,8 +17,8 @@ import {defaultFileRecipe,defaultFileOutput,TRANSCRIPT_OUTPUT} from '../file-rec
 import {alignDialogue} from '../file-dialogue.js';
 import {formatWork} from '../format-work.js';
 import {EXECUTION_POLICIES} from '../execution-policy.js';
-import type {ExecutionStep} from '../execution-engine.js';
 import {ExecutionFailure} from '../execution-engine.js';
+import type {ExecutionStep} from '../execution-engine.js';
 import {StoreError} from '../execution-storage.js';
 import {ScopeError} from './baseline.js';
 import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';

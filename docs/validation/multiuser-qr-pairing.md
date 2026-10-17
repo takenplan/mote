@@ -66,6 +66,20 @@ before ACK; device ingress/self/logout positive and private API/mint/ticket
 negative; stale A tab using B cookie; explicit original-device replacement,
 label preservation, real database failure rollback and independent B survival.
 
+## Broader checks and limits
+
+`npm run check:affected -- --base f08edd47 --dry-run` selects i18n and
+`check:central`. A full run requires the shared fresh heavy-slot protocol.
+No uncoordinated full suite, Gradle or Docker is started.
+
+An initial narrow adjacent run included all of `multiuser-auth.test.ts`: 22/23
+passed, with one existing fixture failure:
+`authentication composes with a binary private route while Cookie mutations
+still require CSRF` registers `application/octet-stream` already registered by
+composed M03. Both that test and the production Ingress parser are byte-identical
+to `f08edd47`; the failure occurs before its authentication assertions and is
+not presented as a new QR defect or a green full-M01 file.
+
 Independent source review accepted the producer without a new confirmed P0/P1/P2.
 The reviewer reran its seven actual Accounts/SQLite cases: 7/7, exit 0, 1.357 s,
 `/tmp/mote-qr-handoffs-final-green.log` and `.exit`. The follow-up source-only
@@ -312,3 +326,11 @@ The later exact `7d696775` review request to Joint again returned the unconfirme
 submission error. A subsequent direct Joint handoff delivered the actual accepted
 review, and the parent confirmed fresh serial allocation. That resolved the
 review blocker before this final full gate; no blind message retry was used.
+
+
+## Subsequent separately delivered Desktop consumer
+
+Desktop Draft PR149 delivers f319513a050218230d624cf93e4154bba5649b15. Its
+independent native20 and full required evidence remain scoped to that module;
+see [Desktop pairing acceptance](multiuser-desktop-pairing.md). This does not
+erase the producer history above or assign Desktop results to Android.

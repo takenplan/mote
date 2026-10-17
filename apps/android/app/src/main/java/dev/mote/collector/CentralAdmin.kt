@@ -53,18 +53,27 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun enc(value: String) = CentralScreens.encode(value)
     private val library = CentralLibrary(screens)
     private val plugins = CentralPlugins(screens) { extensions() }
-    fun close() = plugins.close()
-    fun clearPrivateState() = plugins.clearPrivateState()
-    fun resume() = plugins.resume()
+    private var connectorPage: CentralConnectors? = null
+    private var recordingPage: CentralRecordings? = null
+    private var larkConnection: CentralLarkConnection? = null
+    private var larkChoices = emptyList<JSONObject>()
+    private var larkCalendarMode = false
+    private val larkHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val larkPoll = Runnable { lark() }
+    fun close() { plugins.close(); connectorPage?.close(); recordingPage?.close(); larkHandler.removeCallbacks(larkPoll) }
+    fun clearPrivateState() { plugins.clearPrivateState(); connectorPage?.close(); connectorPage = null; recordingPage?.close(); recordingPage = null; larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
+    fun resume() { plugins.resume(); connectorPage?.resume(); recordingPage?.resume(); if (larkConnection != null) lark() }
+    fun resumeConnections() { connectorPage?.resume(); recordingPage?.resume() }
 
     fun show(page: String) {
+        if (page != "lark") { larkHandler.removeCallbacks(larkPoll); larkConnection = null; larkChoices = emptyList(); larkCalendarMode = false }
         ui.button(MoteI18n.text("刷新")) { screens.refresh() }
         when (page) {
             "devices" -> devices()
             "connections" -> connections()
             "actions" -> actions()
             "settings" -> settings()
-            "statistics" -> read("/api/storage-statistics")
+            "statistics" -> read("/api/data/statistics")
             "processing" -> processing()
             "plugins", "extensions" -> plugins.show()
             "usage" -> usage()
@@ -195,7 +204,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     private fun settings() {
         ui.button(MoteI18n.text("模型配置")) { models() }
-        ui.button(MoteI18n.text("并发与执行设置")) { configuration(MoteI18n.text("并发与执行设置"), "/api/execution-settings") { pick(it, "interactiveConcurrency", "agentConcurrency", "llmConcurrency", "memoryConcurrency") } }
+        ui.button(MoteI18n.text("并发与执行设置")) { instanceSettingOwnership(MoteI18n.text("并发与执行设置")) { screens.refresh() } }
         ui.button(MoteI18n.text("处理设置")) { fileSettings() }
         ui.button(MoteI18n.text("记忆设置")) { memorySettings() }
         ui.button(MoteI18n.text("来源与外部应用")) { connectors() }
@@ -216,16 +225,111 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         }
     }
-    private fun models(): Unit = ownedConfiguration(MoteI18n.text("模型配置"), "models", { screens.refresh() }, { models() })
+    private fun instanceSettingOwnership(title: String, back: () -> Unit) {
+        body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
+        ui.text(MoteI18n.text("实例级执行与诊断设置由部署操作者管理；客户端仍可修改本账号的模型和处理设置。"))
+    }
+    private fun models() {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") to CentralModels.inventory(api) }) { (view, inventory) ->
+            body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("模型配置"), NativeFontRole.TITLE_MOBILE)
+            ui.text(MoteI18n.text("请先保存修改，再检查已保存的连接。"))
+            ui.button(MoteI18n.text("功能默认模型")) { modelDefaults(api, view, inventory) }
+            val domains = view.getJSONArray("domains")
+            val configuration = (0 until domains.length()).map(domains::getJSONObject).single { it.getString("id") == "models" }.getJSONObject("saved")
+            val collect = form(configuration, ui.card(), emptySet()); val revision = view.getLong("revision")
+            ui.button(MoteI18n.text("保存设置"), true) {
+                val payload = JSONObject().put("revision", revision).put("value", collect()).put("preserveRedactedSecrets", true)
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/models", payload) }) { models() }
+            }
+            val rows = inventory.getJSONArray("profiles").let { values -> (0 until values.length()).map(values::getJSONObject) }
+                .sortedBy { CentralModels.reference(it.getString("id"))!!.getString("kind") != "personal" }
+            if (rows.isEmpty()) { ui.text(MoteI18n.text("暂无记录")); return@work }
+            val choice = Spinner(ui).apply {
+                contentDescription = MoteI18n.text("Provider 预设")
+                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, rows.map { it.getString("name") })
+            }; body.addView(choice)
+            val selected = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }; body.addView(selected)
+            val selection = java.util.concurrent.atomic.AtomicInteger()
+            fun render(position: Int) {
+                val stamp = selection.incrementAndGet(); selected.removeAllViews()
+                val row = rows[position]; val reference = CentralModels.reference(row.getString("id"))!!; val name = row.getString("name")
+                val card = ui.card(selected); ui.text(name, NativeFontRole.SECTION, card)
+                if (reference.getString("kind") == "personal") ui.button(MoteI18n.text("复制为新预设"), parent = card) {
+                    if (selection.get() != stamp) return@button
+                    edit(MoteI18n.text("复制为新预设"), "/api/models/profiles/" + enc(reference.getString("id")) + "/copy",
+                        JSONObject().put("revision", revision).put("id", "preset-" + UUID.randomUUID().toString().take(8)).put("name", name + " copy").put("includeCredentials", true),
+                        "POST", back = { models() }, completed = { models() })
+                } else ui.text(MoteI18n.text("共享连接保持只读；连接地址和凭据不能复制为个人预设。"), parent = card)
+                val output = ui.card(card)
+                fun inspect(path: String, catalog: Boolean) {
+                    if (selection.get() != stamp) return
+                    val payload = JSONObject().put("revision", revision).put("reference", JSONObject(reference.toString()))
+                    ui.work(MoteI18n.text("正在读取…"), { check(selection.get() == stamp); api.post(path, payload) }) { result ->
+                        if (selection.get() == stamp) { output.removeAllViews(); if (catalog) modelCatalogPage(result, output) else values(result, output) }
+                    }
+                }
+                ui.button(MoteI18n.text("测试连接"), parent = card) { inspect("/api/models/probe", false) }.contentDescription = MoteI18n.text("测试连接") + " · " + name
+                ui.button(MoteI18n.text("可用模型"), parent = card) { inspect("/api/models/catalog", true) }.contentDescription = MoteI18n.text("可用模型") + " · " + name
+            }
+            choice.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: AdapterView<*>?, field: android.view.View?, position: Int, id: Long) { render(position) }
+            }
+        }
+    }
+    private fun modelDefaults(api: CentralClient, view: JSONObject, inventory: JSONObject) {
+        val domains = view.getJSONArray("domains")
+        val configuration = JSONObject((0 until domains.length()).map(domains::getJSONObject).single { it.getString("id") == "models" }.getJSONObject("saved").toString())
+        val selections = configuration.getJSONObject("selections")
+        val raw = inventory.getJSONArray("features"); val features = (0 until raw.length()).map(raw::getString)
+        require(features.isNotEmpty() && features.distinct().size == features.size && features.all(String::isNotBlank))
+        body.removeAllViews(); screens.setBack { models() }; ui.text(MoteI18n.text("功能默认模型"), NativeFontRole.TITLE_MOBILE)
+        val rows = inventory.getJSONArray("profiles"); val fields = linkedMapOf<String, Pair<Spinner, List<JSONObject?>>>()
+        for (feature in features) {
+            val choices = mutableListOf<Pair<String, JSONObject?>>(MoteI18n.text("未配置") to null)
+            for (index in 0 until rows.length()) { val row = rows.getJSONObject(index); choices.add(row.getString("name") to CentralModels.reference(row.getString("id"))) }
+            val current = selections.optJSONObject(feature)
+            fun same(reference: JSONObject?) = if (current == null) reference == null else reference != null && current.getString("kind") == reference.getString("kind") && current.getString("id") == reference.getString("id")
+            var selected = choices.indexOfFirst { same(it.second) }
+            if (selected < 0) { choices.add(MoteI18n.text("不可用") + " · " + current!!.getString("kind") + ":" + current.getString("id") to JSONObject(current.toString())); selected = choices.lastIndex }
+            ui.text(label(feature), NativeFontRole.ROW)
+            val spinner = Spinner(ui).apply {
+                contentDescription = MoteI18n.text("功能默认模型") + " · " + feature
+                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, choices.map { it.first }); setSelection(selected)
+            }; body.addView(spinner); fields[feature] = spinner to choices.map { it.second }
+        }
+        ui.button(MoteI18n.text("保存设置"), true) {
+            val next = JSONObject(selections.toString())
+            for ((feature, field) in fields) { val reference = field.second[field.first.selectedItemPosition]; if (reference == null) next.remove(feature) else next.put(feature, JSONObject(reference.toString())) }
+            configuration.put("selections", next)
+            val payload = JSONObject().put("revision", view.getLong("revision")).put("value", configuration).put("preserveRedactedSecrets", true)
+            ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/models", payload) }) { models() }
+        }
+    }
+    private fun modelCatalogPage(result: JSONObject, target: LinearLayout, offset: Int = 0) {
+        target.removeAllViews(); val metadata = JSONObject(result.toString()).apply { remove("items") }; values(metadata, target)
+        val items = result.getJSONArray("items"); if (items.length() == 0) ui.text(MoteI18n.text("暂无记录"), parent = target)
+        for (index in offset until minOf(offset + 100, items.length())) values(items.getJSONObject(index), ui.card(target))
+        if (offset != 0) ui.button(MoteI18n.text("返回第一页"), parent = target) { modelCatalogPage(result, target) }
+        if (offset + 100 < items.length()) ui.button(MoteI18n.text("下一页"), parent = target) { modelCatalogPage(result, target, offset + 100) }
+    }
     fun fileSettings() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/file-processing") }) { value ->
             val settings = JSONObject(value.getJSONObject("settings").toString())
-            listOf("apiKeyConfigured", "localWorkerApiKeyConfigured").forEach(settings::remove)
-            val payload = JSONObject().put("revision", value.getString("revision")).put("settings", settings)
-            listOf("apiKey", "localWorkerApiKey").forEach { settings.put(it, "") }
-            if (value.optBoolean("policyConfigured")) payload.put("policy", value.getJSONObject("policy"))
-            edit(MoteI18n.text("处理设置"), "/api/file-processing", payload)
+            if (value.getBoolean("policyConfigured")) {
+                edit(MoteI18n.text("处理设置"), "/api/file-processing", JSONObject().put("revision", value.getString("revision"))
+                    .put("settings", settings).put("policy", JSONObject(value.getJSONObject("policy").toString())))
+                return@work
+            }
+            val revision = value.getString("revision").toLong(); require(revision in 0..9_007_199_254_740_991L)
+            body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("处理设置"), NativeFontRole.TITLE_MOBILE)
+            val collect = form(settings, ui.card())
+            ui.button(MoteI18n.text("保存设置"), true) {
+                val payload = JSONObject().put("revision", revision).put("value", collect())
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/processing", payload) }) { screens.refresh() }
+            }
         }
     }
     private fun ownedConfiguration(title: String, domainId: String, back: () -> Unit = { memorySettings() }, done: () -> Unit = back) {
@@ -234,7 +338,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             val domains = view.getJSONArray("domains")
             val value = (0 until domains.length()).map { domains.getJSONObject(it) }.single { it.getString("id") == domainId }.getJSONObject("saved")
             body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
-            if (domainId == "models") ui.text(MoteI18n.text("模型预设和默认选择保存在本人配置；复制带凭据、测试连接和模型目录尚待多用户接口。"))
+            if (domainId == "agentTrace") ui.text(MoteI18n.text("详细记录可能包含问题、上下文、模型输出和工具内容，仅对当前账号生效。关闭后停止新增详细内容，已保留记录不会自动删除。"))
             val collect = form(value, ui.card(), emptySet())
             ui.button(MoteI18n.text("保存设置"), true) {
                 val payload = JSONObject().put("revision", view.getLong("revision")).put("value", collect()).put("preserveRedactedSecrets", true)
@@ -381,12 +485,22 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         if (path != "/api/memory/jobs") ui.button(MoteI18n.text("停止")) { action(path + "/" + enc(id) + "/cancel") { run(path, id) } }
     }
     private fun devices() {
-        library.paged("/api/devices", ui.card()) { row, card -> values(row, card) }
+        library.paged("/api/ingress/devices", ui.card()) { row, card ->
+            values(row, card)
+            val deviceId = row.getString("id")
+            ui.button(MoteI18n.text("为此设备重新生成邀请"), parent = card) { invitation(deviceId) }
+        }
         ui.button(MoteI18n.text("生成设备连接邀请")) { invitation() }
     }
-    private fun invitation() {
-        edit(MoteI18n.text("生成设备连接邀请"), "/api/connections/invitations",
-            JSONObject().put("serverUrl", ui.server).put("label", "Android"), "POST", completed = ::credentialResult)
+    private fun invitation(deviceId: String? = null) {
+        val api = client
+        body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("生成设备连接邀请"), NativeFontRole.TITLE_MOBILE)
+        deviceId?.let { ui.text(MoteI18n.text("绑定原设备：{0}", it)) }
+        val collect = form(JSONObject().put("serverUrl", api.server).put("label", "Android"), ui.card())
+        ui.button(MoteI18n.text("保存设置"), true) {
+            val payload = collect().apply { deviceId?.let { put("deviceId", it) } }
+            ui.work(MoteI18n.text("正在保存…"), { api.post("/api/connections/invitations", payload) }, ::credentialResult)
+        }
     }
     private fun credentialResult(value: JSONObject) {
         body.removeAllViews(); screens.setBack { screens.refresh() }
@@ -402,11 +516,11 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             } }
         }
     }
-    private fun processingSettings() = configuration(MoteI18n.text("处理设置"), "/api/processing", "/api/processing/settings") { it.getJSONObject("settings") }
+    private fun processingSettings() = fileSettings()
     private fun connections() {
         ui.button(MoteI18n.text("生成设备连接邀请")) { invitation() }
         ui.button(MoteI18n.text("创建 MCP 授权")) {
-            edit(MoteI18n.text("创建 MCP 授权"), "/api/connections/mcp", JSONObject().put("serverUrl", ui.server).put("label", "MCP").put("access", "read"), "POST", completed = ::credentialResult)
+            edit(MoteI18n.text("创建 MCP 授权"), "/api/connections/mcp", JSONObject().put("label", "MCP").put("access", "read").put("sourceIds", JSONArray()), "POST", completed = ::credentialResult)
         }
         library.paged("/api/connections", ui.card()) { row, card ->
             values(row, card)
@@ -578,7 +692,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun diagnostics() {
-        ui.button(MoteI18n.text("诊断设置")) { configuration(MoteI18n.text("诊断设置"), "/api/diagnostics-settings") }
+        ui.button(MoteI18n.text("诊断设置")) { instanceSettingOwnership(MoteI18n.text("诊断设置")) { diagnostics() } }
         read("/api/diagnostics")
         ui.button(MoteI18n.text("查看日志")) { read("/api/diagnostics/log-pages?page=1&pageSize=100") }
         ui.button(MoteI18n.text("导出支持包")) { ui.saveCentral("/api/support-bundle", "mote-central-support.json", "application/json") }
@@ -599,30 +713,63 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 if (row.has("path")) agent(row.getString("path"))
                 else if (row.optString("expand") == "source_items") {
                     library.paged("/api/agent-view/source-items?sourceId=" + enc(row.getString("id")) + "&limit=12", card) { item, child ->
-                        ui.text(item.optString("title"), parent = child); ui.button(MoteI18n.text("查看原文"), parent = child) { library.evidence(item.getString("ref")) }
+                        ui.text(item.optString("title", item.optString("windowTitle")), parent = child)
+                        ui.button(MoteI18n.text("查看原文"), parent = child) { library.queryEvidence(item.optString("ref").takeIf(String::isNotBlank) ?: "capture:" + item.getString("id")) }
                     }
                 } else agentDetail(row, path)
             }
         }
-        ui.button(MoteI18n.text("实际读取记录")) { read("/api/agent-view/events?afterSeq=0") }
+        ui.button(MoteI18n.text("详细记录设置")) { ownedConfiguration(MoteI18n.text("详细记录设置"), "agentTrace", { agent(path) }, { agent(path) }) }
+        ui.button(MoteI18n.text("实际读取记录")) { agentTraceHistory() }
         val question = ui.field(MoteI18n.text("你的问题"), multiline = true)
         ui.button(MoteI18n.text("首次上下文"), true) { action("/api/agent-view/startup", JSONObject().put("question", question.text.toString()).put("timeZone", ZoneId.systemDefault().id)) { values(it, ui.card()) } }
     }
+    private fun agentTraceHistory(runId: String? = null) {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/agent-view/runs") }) { runs ->
+            body.removeAllViews(); screens.setBack { agent() }
+            ui.text(MoteI18n.text("实际读取记录"), NativeFontRole.TITLE_MOBILE)
+            ui.text(MoteI18n.text("仅显示实际保留的记录；关闭详细记录不会重建缺失内容，截断记录不代表完整读取。"))
+            values(runs.getJSONObject("recording"), ui.card())
+            if (runId != null) ui.button(MoteI18n.text("全部")) { agentTraceHistory() }
+            val items = runs.getJSONArray("items")
+            for (index in 0 until items.length()) {
+                val run = items.getJSONObject(index); val id = UUID.fromString(run.getString("runId")).toString()
+                ui.button(run.getString("at") + " · " + id) { agentTraceHistory(id) }
+            }
+            val path = "/api/agent-view/events?limit=12" + (runId?.let { "&runId=" + enc(it) } ?: "")
+            library.paged(path, ui.card()) { event, card -> values(event, card) }
+        }
+    }
     private fun agentDetail(row: JSONObject, path: String, offset: Int = 0) {
         val kind = row.optString("expand")
+        if (kind == "material_read") {
+            val api = client
+            ui.work(MoteI18n.text("正在读取…"), { api.get("/api/agent-view/material-read?ref=" + enc(row.getString("ref")) + "&offset=$offset&length=4000") }) { result ->
+                body.removeAllViews(); screens.setBack { agent(path) }
+                ui.text(result.getJSONObject("material").getString("title"), NativeFontRole.SECTION); ui.text(result.getString("text"))
+                val originals = result.getJSONArray("originalRefs")
+                for (index in 0 until originals.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (index + 1)) { library.queryEvidence(originals.getString(index)) }
+                val range = result.getJSONObject("textRange")
+                if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("继续展开")) { agentDetail(row, path, range.getInt("nextOffset")) }
+            }
+            return
+        }
+        if (kind !in setOf("memories", "segments")) { library.queryEvidence(row.optString("ref").takeIf(String::isNotBlank) ?: row.getString("id"), offset); return }
         val endpoint = when (kind) { "memories" -> "memories"; "segments" -> "segments"; else -> "evidence" }
         val id = if (kind == "segments") row.getString("ref") else row.optString("id", row.optString("ref"))
         val extra = if (kind == "memories") "&includeEvidence=true" else if (endpoint == "evidence") "&offset=$offset" else ""
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/agent-view/$endpoint?id=" + enc(id) + extra) }) { result ->
             body.removeAllViews(); screens.setBack { agent(path) }; values(result, ui.card())
+            result.optJSONArray("evidence")?.let { rows -> for (index in 0 until rows.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (index + 1)) { library.queryEvidence(rows.getJSONObject(index).getString("id")) } }
             val items = result.optJSONArray("items") ?: JSONArray()
             for (i in 0 until items.length()) {
                 val item = items.getJSONObject(i)
                 val evidence = item.optJSONArray("evidence") ?: JSONArray()
-                for (j in 0 until evidence.length()) ui.button(MoteI18n.text("查看原文依据")) { library.captureEvidence(evidence.getJSONObject(j).getString("id")) }
+                for (j in 0 until evidence.length()) ui.button(MoteI18n.text("查看原文依据")) { library.queryEvidence(evidence.getJSONObject(j).getString("id")) }
                 val members = item.optJSONArray("members") ?: JSONArray()
-                for (j in 0 until members.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (j + 1)) { library.captureEvidence(members.getString(j)) }
+                for (j in 0 until members.length()) ui.button(MoteI18n.text("查看原文依据") + " " + (j + 1)) { library.queryEvidence(members.getString(j)) }
                 item.optJSONObject("textRange")?.let { range ->
                     if (!range.isNull("nextOffset")) ui.button(MoteI18n.text("下一页")) { agentDetail(row, path, range.getInt("nextOffset")) }
                 }
@@ -631,76 +778,82 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     }
     fun connectors() {
         body.removeAllViews(); screens.setBack { screens.refresh() }
-        listOf("google" to "Google 日历", "gmail" to "Gmail").forEach { (provider, title) ->
-            ui.text(MoteI18n.text(title), NativeFontRole.SECTION)
-            ui.button(MoteI18n.text("连接")) { action("/api/connectors/$provider/start") { value ->
-                val url = Uri.parse(value.getString("authorizationUrl"))
-                require(url.scheme == "https" && url.host == "accounts.google.com")
-                ui.startActivity(Intent(Intent.ACTION_VIEW, url))
-            } }
-            ui.button(MoteI18n.text("立即同步"), true) { action("/api/connectors/$provider/sync") }
-            ui.button(MoteI18n.text("断开连接")) { val api = client; ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/$provider") }) { screens.refresh() } }
-        }
-        ui.button(MoteI18n.text("选择 Google 日历")) { calendarSelection(false) }
+        connectorPage?.close(); recordingPage?.close(); recordingPage = null
+        connectorPage = CentralConnectors(screens, { value, target -> values(value, target) }) { provider -> if (provider == "lark") ui.navigate("lark") else recordings() }.also { it.show() }
         ui.button(MoteI18n.text("录音归档")) { recordings() }
-        read("/api/connectors/status")
+        read("/api/connectors")
         ui.button(MoteI18n.text("飞书")) { ui.navigate("lark") }
-        val endpoint = ui.field(MoteI18n.text("MCP 地址"))
-        val token = ui.field(MoteI18n.text("访问令牌（可选）"), password = true)
-        ui.button(MoteI18n.text("发现 MCP 资源")) {
-            val payload = JSONObject().put("url", endpoint.text.toString())
-            token.text.toString().takeIf { it.isNotBlank() }?.let { payload.put("token", it) }
-            action("/api/connectors/mcp/discover", payload) { value ->
-                val resources = value.optJSONArray("resources") ?: JSONArray(); val selected = mutableListOf<String>()
-                for (i in 0 until resources.length()) {
-                    val resource = resources.getJSONObject(i); val choice = CheckBox(ui).apply { text = resource.optString("name"); setOnCheckedChangeListener { _, checked -> if (checked) selected.add(resource.getString("uri")) else selected.remove(resource.getString("uri")) } }; body.addView(choice)
-                }
-                val name = ui.field(MoteI18n.text("来源名称"), "MCP")
-                ui.button(MoteI18n.text("导入所选资源"), true) {
-                    require(selected.isNotEmpty()) { MoteI18n.text("请选择资源") }
-                    importMcp(payload, name.text.toString(), JSONObject().put("resourceUris", JSONArray(selected)))
-                }
-                val tools = value.optJSONArray("tools") ?: JSONArray()
-                for (i in 0 until tools.length()) {
-                    val tool = tools.getJSONObject(i); val card = ui.card()
-                    ui.text(tool.getString("name"), NativeFontRole.ROW, card); ui.text(tool.optString("description"), parent = card)
-                    val args = ui.field(MoteI18n.text("工具参数 JSON"), "{}", multiline = true, parent = card)
-                    val approved = CheckBox(ui).apply { text = MoteI18n.text("我确认此工具只读") }; card.addView(approved)
-                    ui.button(MoteI18n.text("导入工具结果"), true, parent = card) {
-                        require(approved.isChecked) { MoteI18n.text("请确认工具只读后再执行") }
-                        importMcp(payload, name.text.toString(), JSONObject().put("tool", JSONObject().put("name", tool.getString("name"))
-                            .put("arguments", JSONObject(args.text.toString())).put("confirmedReadOnly", true)))
-                    }
-                }
-            }
-        }
+        CentralMcp(screens).show()
     }
     private fun lark() {
-        val api = client
+        larkHandler.removeCallbacks(larkPoll)
+        val selected = larkConnection
+        if (selected == null) {
+            val api = client
+            ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors").getJSONArray("connections") }) { rows ->
+                larkChoices = (0 until rows.length()).map(rows::getJSONObject).filter { it.getString("provider") == "lark" }
+                body.removeAllViews()
+                if (larkChoices.isEmpty()) {
+                    ui.text(MoteI18n.text("暂无记录")); ui.button(MoteI18n.text("来源与外部应用")) { connectors() }
+                } else { selectLark(larkChoices.first()); lark() }
+            }
+            return
+        }
+        val api = selected
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark") to api.get("/api/sources") }) { (value, sourceList) ->
+            if (larkConnection !== api) return@work
             body.removeAllViews(); screens.setBack { screens.refresh() }
+            if (larkCalendarMode && !api.polling && api.calendars != null) {
+                larkCalendarSelection(api, value.getJSONObject("selection"), api.calendars!!)
+                return@work
+            }
+            body.addView(Spinner(ui).apply {
+                contentDescription = MoteI18n.text("连接 ID")
+                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, larkChoices.map { it.getString("id") })
+                setSelection(larkChoices.indexOfFirst { it.getString("id") == api.id })
+                onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                    override fun onNothingSelected(parent: android.widget.AdapterView<*>?) {}
+                    override fun onItemSelected(parent: android.widget.AdapterView<*>?, view: android.view.View?, position: Int, id: Long) {
+                        val next = larkChoices[position]; if (larkConnection === api && next.getString("id") != api.id) { selectLark(next); lark() }
+                    }
+                }
+            })
             ui.button(MoteI18n.text("刷新")) { lark() }
             ui.text(MoteI18n.text("飞书文档与日历"), DesignTokens.fontTitleMobile.toFloat())
             ui.text(MoteI18n.text("照常在飞书写日记、会议纪要和方案。中央节点归档文档与活动线索，供回顾、问答和 Memory 使用。"))
             ui.text(MoteI18n.text("打开、编辑等线索单独保存；打开不代表读完、认同或当时看到的版本。"))
             val account = ui.card()
+            if (api.uncertain) {
+                ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"), parent = account)
+                ui.button(MoteI18n.text("重试"), parent = account) { ui.work(MoteI18n.text("正在处理…"), { api.retry() }) { if (larkConnection === api) { if (api.disconnected) larkConnection = null; lark() } } }
+                ui.button(MoteI18n.text("清除本机待确认请求"), parent = account) {
+                    if (larkConnection === api && screens.ownsSelectedAccount()) screens.confirm(MoteI18n.text("清除本机待确认请求"), MoteI18n.text("这只清除本机待确认请求，已在中央接收的任务仍会继续。")) {
+                        ui.work(MoteI18n.text("正在保存…"), { api.clearPending() }) { if (larkConnection === api) lark() }
+                    }
+                }
+            }
             ui.text(if (value.optBoolean("connected")) MoteI18n.text("已连接") else MoteI18n.text("尚未授权"), DesignTokens.fontSection.toFloat(), account)
             if (value.optString("accountName").isNotBlank()) ui.text(value.optString("accountName"), parent = account)
-            listOf("check" to "检查状态", "install" to "安装 CLI", "setup" to "开始配置", "login" to "扫码登录并授权只读权限").forEach { (command, label) ->
-                ui.button(MoteI18n.text(label), parent = account) { action("/api/connectors/lark/$command") { lark() } }
+            if (value.optBoolean("installed")) ui.text("Lark CLI " + value.optString("version"), parent = account)
+            ui.button(MoteI18n.text("安装 CLI") + " · " + MoteI18n.text("暂不可用"), parent = account) {}.isEnabled = false
+            listOf("check" to "检查状态", "setup" to "开始配置", "login" to "扫码登录并授权只读权限").forEach { (command, label) ->
+                ui.button(MoteI18n.text(label), parent = account) { larkAction(api, command) }
             }
             ui.button(MoteI18n.text("配置应用凭据"), parent = account) {
-                edit(MoteI18n.text("配置应用凭据"), "/api/connectors/lark/configure", JSONObject().put("appId", "").put("secret", "").put("brand", "feishu"), "POST")
+                if (larkConnection !== api) return@button
+                body.removeAllViews(); screens.setBack { lark() }
+                val collect = form(JSONObject().put("appId", "").put("secret", "").put("brand", "feishu"), ui.card())
+                ui.button(MoteI18n.text("保存设置"), true) { larkAction(api, "configure", collect()) }
             }
             value.optJSONObject("job")?.let { job ->
                 ui.text(if (job.optString("state") == "completed") MoteI18n.text("已完成") else stateLabel(job.optString("state")), parent = account)
                 if (job.optString("error").isNotBlank()) ui.text(CentralLarkSelection.failure(job.getString("error")), parent = account)
-                if (job.optString("state") in listOf("waiting", "running")) ui.button(MoteI18n.text("取消当前操作"), parent = account) { action("/api/connectors/lark/cancel") { lark() } }
+                if (job.optString("state") in listOf("waiting", "running")) ui.button(MoteI18n.text("取消当前操作"), parent = account) { larkAction(api, "cancel") }
                 job.optString("authorizationUrl").takeIf(String::isNotBlank)?.let { url ->
                     val parsed = Uri.parse(url); val host = parsed.host.orEmpty()
                     if (parsed.scheme == "https" && parsed.userInfo == null && parsed.port == -1 &&
                         listOf("feishu.cn", "larksuite.com", "larkoffice.com").any { host == it || host.endsWith(".$it") })
-                        ui.button(MoteI18n.text("打开授权页面"), parent = account) { ui.startActivity(Intent(Intent.ACTION_VIEW, parsed)) }
+                        ui.button(MoteI18n.text("打开授权页面"), parent = account) { if (larkConnection === api && screens.ownsSelectedAccount()) ui.startActivity(Intent(Intent.ACTION_VIEW, parsed)) }
                 }
             }
             ui.button(MoteI18n.text("查看授权进度"), parent = account) { lark() }
@@ -711,7 +864,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             ui.text(MoteI18n.text("首次回溯 {0} 天；之后随你的新活动归档。指定文档、文件夹和知识库分支持续跟踪。", selected.optInt("firstSyncDays", 30)), parent = range)
             ui.button(MoteI18n.text("选择文档与活动范围"), parent = range) { larkSelection() }
             ui.text(MoteI18n.text("需要日历时，先单独授权日历读取，再加载并选择日历。授权本身不会开始收集日程。"), parent = range)
-            ui.button(MoteI18n.text("授权日历读取"), parent = range) { action("/api/connectors/lark/login", JSONObject().put("calendar", true)) { lark() } }
+            ui.button(MoteI18n.text("授权日历读取"), parent = range) { larkAction(api, "login", JSONObject().put("calendar", true)) }
             ui.button(MoteI18n.text("选择日历"), parent = range) { calendarSelection(true) }
             ui.button(MoteI18n.text("飞书文档默认组合"), parent = range) { recipeSettings(false, "lark-docs") }
             ui.text(MoteI18n.text("中央节点每 {0} 分钟检查；关闭页面后继续运行。", value.optInt("syncIntervalSeconds", 900) / 60), parent = range)
@@ -724,10 +877,10 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 ui.button(MoteI18n.text(if (paused) "恢复接入" else "暂停接入")) {
                     ui.work(MoteI18n.text("正在保存…"), { api.patch("/api/sources/" + enc(sourceId), JSONObject().put("enabled", paused)) }) { lark() }
                 }
-                ui.button(MoteI18n.text("资料说明（选填）")) { larkSourceDescription(sourceId) }
+                ui.button(MoteI18n.text("资料说明（选填）")) { larkSourceDescription(api, sourceId) }
             }
             if (paused) ui.text(MoteI18n.text("此文档来源已暂停；保存范围或重新授权不会恢复接入。"))
-            ui.button(MoteI18n.text("预览文档范围")) { action("/api/connectors/lark/preview") { lark() } }
+            ui.button(MoteI18n.text("预览文档范围")) { larkAction(api, "preview") }
             sync?.optJSONArray("preview")?.let { preview ->
                 val card = ui.card(); ui.text(MoteI18n.text("实际发现的文档"), DesignTokens.fontSection.toFloat(), card)
                 ui.text(MoteI18n.text("下列为可用文档标题与引用，尚未因预览读取正文。归档时保存当前版本及可获得的活动线索。"), parent = card)
@@ -737,7 +890,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 ui.text(MoteI18n.text("预览最多显示 50 篇；同步会分页处理全部选定范围。"), parent = card)
             }
             if (!paused && (sync?.optBoolean("confirmed") == true || sync?.has("preview") == true || sync == null && (selection.optJSONArray("calendarIds")?.length() ?: 0) > 0))
-                ui.button(if (sync != null && !sync.optBoolean("confirmed")) MoteI18n.text("确认并开始归档") else MoteI18n.text("立即同步"), true) { action("/api/connectors/lark/sync") { lark() } }
+                ui.button(if (sync != null && !sync.optBoolean("confirmed")) MoteI18n.text("确认并开始归档") else MoteI18n.text("立即同步"), true) { larkAction(api, "sync") }
             sync?.let {
                 ui.text(MoteI18n.text("已归档 {0} 篇文档 · {1} 条活动线索 · {2} 项待处理 · {3} 项失败", it.optInt("documents"), it.optInt("activities"), it.optInt("pending"), it.optInt("failed")))
                 val failures = it.optJSONArray("errors") ?: JSONArray()
@@ -751,19 +904,35 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                             api.patch("/api/sources/" + enc(sourceId), JSONObject().put("retention", "archive"))
                             api.post("/api/connectors/lark/sync", JSONObject().put("document", failure.getString("reference")))
                         }) { lark() }
-                        else action("/api/connectors/lark/sync", JSONObject().put("document", failure.getString("reference"))) { lark() }
+                        else larkAction(api, "sync", JSONObject().put("document", failure.getString("reference")))
                     }
                 }
             }
             ui.text(MoteI18n.text("同步归档完成后，Memory 会按现有设置继续处理；并非每篇文档都会生成精选记忆。"))
             ui.button(MoteI18n.text("查看来源与归档")) { ui.navigate("sources") }
             ui.button(MoteI18n.text("断开连接")) { screens.confirm(MoteI18n.text("断开连接"), MoteI18n.text("断开会停止读取并暂停这些来源，保留已归档资料。飞书端授权及 CLI 凭据仍保留，可在飞书中单独撤销。")) {
-                ui.work(MoteI18n.text("正在处理…"), { api.delete("/api/connectors/lark") }) { lark() }
+                ui.work(MoteI18n.text("正在处理…"), { runCatching { api.delete("/api/connectors/lark") } }) { outcome ->
+                    if (larkConnection === api) { larkConnection = null; outcome.exceptionOrNull()?.let(ui::requestFailure); lark() }
+                }
             } }
+            if (api.polling) larkHandler.postDelayed(larkPoll, 500)
         }
     }
-    private fun larkSourceDescription(sourceId: String) {
-        val api = client; val path = "/api/sources/" + enc(sourceId) + "/context"
+    private fun selectLark(row: JSONObject) {
+        larkHandler.removeCallbacks(larkPoll)
+        larkCalendarMode = false
+        lateinit var next: CentralLarkConnection
+        next = CentralLarkConnection(screens, row.getString("id"), row.getLong("generation")) { larkConnection === next }
+        larkConnection = next
+    }
+    private fun larkAction(api: CentralLarkConnection, command: String, payload: JSONObject = JSONObject()) {
+        if (larkConnection !== api || !screens.ownsSelectedAccount()) return
+        ui.work(MoteI18n.text("正在处理…"), { runCatching { api.post("/api/connectors/lark/" + command, payload) } }) { result ->
+            if (larkConnection === api) { result.exceptionOrNull()?.let { ui.requestFailure(it) }; lark() }
+        }
+    }
+    private fun larkSourceDescription(api: CentralLarkConnection, sourceId: String) {
+        val path = "/api/sources/" + enc(sourceId) + "/context"
         ui.work(MoteI18n.text("正在读取资料说明…"), { api.get(path) }) { current ->
             body.removeAllViews(); screens.setBack { lark() }
             ui.text(MoteI18n.text("资料说明（选填）"), DesignTokens.fontTitleMobile.toFloat())
@@ -777,7 +946,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun larkSelection() {
-        val api = client
+        val api = requireNotNull(larkConnection)
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/lark").getJSONObject("selection") }) { current ->
             body.removeAllViews(); screens.setBack { lark() }
             ui.text(MoteI18n.text("选择文档与活动范围"), DesignTokens.fontTitleMobile.toFloat())
@@ -806,17 +975,8 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         }
     }
-    private fun importMcp(target: JSONObject, name: String, request: JSONObject) {
-        val api = client; val sourceId = "mcp-" + UUID.randomUUID().toString()
-        ui.work(MoteI18n.text("正在导入…"), {
-            api.post("/api/sources", JSONObject().put("id", sourceId).put("name", name).put("kind", "mcp")
-                .put("deviceId", "mcp").put("platform", "import").put("retention", "snapshot").put("enabled", true))
-            val payload = JSONObject(target.toString()).put("sourceId", sourceId)
-            request.keys().forEach { payload.put(it, request.get(it)) }
-            api.post("/api/connectors/mcp/import", payload)
-        }) { values(it, ui.card()) }
-    }
     private fun calendarSelection(lark: Boolean) {
+        if (lark) { val api = requireNotNull(larkConnection); larkCalendarMode = true; larkAction(api, "calendars"); return }
         val api = client; val path = if (lark) "/api/connectors/lark" else "/api/connectors/google"
         ui.work(MoteI18n.text("正在读取…"), {
             api.get(path + "/calendars") to if (lark) api.get(path).getJSONObject("selection") else JSONObject()
@@ -839,6 +999,21 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             }
         }
     }
+    private fun larkCalendarSelection(api: CentralLarkConnection, current: JSONObject, calendars: JSONArray) {
+        screens.setBack { larkCalendarMode = false; lark() }
+        val selected = current.getJSONArray("calendarIds"); val ids = (0 until selected.length()).map(selected::getString).toSet()
+        val fields = (0 until calendars.length()).map { index ->
+            val item = calendars.getJSONObject(index); val id = item.getString("id")
+            CheckBox(ui).apply { text = item.getString("name"); isChecked = id in ids; body.addView(this) } to id
+        }
+        val collect = form(pick(current, "pastDays", "futureDays", "timeZone"), ui.card())
+        ui.button(MoteI18n.text("保存设置"), true) {
+            if (larkConnection !== api || !screens.ownsSelectedAccount()) return@button
+            val payload = JSONObject(current.toString()); val edited = collect()
+            edited.keys().forEach { payload.put(it, edited.get(it)) }; payload.put("calendarIds", JSONArray(fields.filter { it.first.isChecked }.map { it.second }))
+            larkCalendarMode = false; larkAction(api, "select", payload)
+        }
+    }
     private fun recordingSteps(path: String, cursors: List<Long?> = listOf(null)) {
         body.removeAllViews(); screens.setBack { recordings() }
         ui.text(MoteI18n.text("同步步骤与状态"), NativeFontRole.TITLE_MOBILE)
@@ -856,40 +1031,9 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         }
     }
     private fun recordings() {
-        val api = client
-        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/connectors/status") }) { registry ->
-            body.removeAllViews(); screens.setBack { screens.refresh() }
-            for (key in registry.keys()) {
-                val value = registry.optJSONObject(key) ?: continue
-                if (value.optString("category") != "recordings") continue
-                val provider = value.getString("provider"); require(Regex("^[a-z][a-z0-9-]{0,79}$").matches(provider))
-                val path = "/api/connectors/$provider-recordings"; val card = ui.card()
-                ui.text(value.optString("label", provider), NativeFontRole.SECTION, card); values(value, card)
-                val empty = value.optJSONObject("counts")?.optInt("empty") ?: 0
-                if (empty > 0) ui.text(MoteI18n.text("采集完成，暂无文字：{0} 条", empty), parent = card)
-                ui.button(MoteI18n.text("同步步骤与状态"), parent = card) { recordingSteps(path) }
-                ui.button(MoteI18n.text("连接已授权账号"), true, parent = card) { action(path + "/connect") { recordings() } }
-                ui.button(MoteI18n.text("同步范围"), parent = card) {
-                    val selection = JSONObject(value.getJSONObject("selection").toString()).put("backupAudio", true)
-                    edit(MoteI18n.text("同步范围"), path + "/selection", selection)
-                }
-                ui.button(MoteI18n.text("立即同步"), true, parent = card) { action(path + "/sync") { recordings() } }
-                ui.button(MoteI18n.text("重试失败步骤"), parent = card) { action(path + "/retry") { recordings() } }
-                ui.button(MoteI18n.text("断开连接"), parent = card) { ui.work(MoteI18n.text("正在处理…"), { api.delete(path) }) { recordings() } }
-                ui.button(MoteI18n.text("最近归档的录音"), parent = card) {
-                    library.paged(path + "/items?includeExports=true", card) { item, child ->
-                        val captureId = item.optString("captureId").takeIf { it.isNotEmpty() && it != "null" }
-                        if (captureId != null) ui.button(item.optString("title"), parent = child) { library.captureEvidence(captureId) }
-                        else ui.text(item.optString("title"), parent = child)
-                        if (item.optBoolean("empty")) ui.text(MoteI18n.text("采集完成，暂无文字"), parent = child)
-                        if (item.optBoolean("unsupported")) ui.text(MoteI18n.text("厂商转写格式尚不支持"), parent = child)
-                        item.optJSONObject("audio")?.let { audio -> ui.button(MoteI18n.text("播放录音"), parent = child) {
-                            screens.playAudio("/api/archived-files/" + enc(audio.getString("id")) + "/content", child)
-                        } }
-                    }
-                }
-            }
-        }
+        body.removeAllViews(); screens.setBack { screens.refresh() }
+        connectorPage?.close(); connectorPage = null
+        recordingPage?.close(); recordingPage = CentralRecordings(screens).also { it.show() }
     }
     private fun imports() {
         val api = client
@@ -984,14 +1128,18 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             "level" to listOf("debug", "info", "warn", "error", "silent"), "access" to listOf("read", "write"), "brand" to listOf("feishu", "lark"))
         fun pick(value: JSONObject, vararg keys: String) = JSONObject().apply { keys.forEach { key -> if (value.has(key)) put(key, value.get(key)) } }
         private val labels = mapOf(
-            "title" to "标题", "name" to "名称", "description" to "描述", "enabled" to "启用", "status" to "状态", "state" to "状态",
+            "captures" to "原始采集记录", "materials" to "正式资料", "sources" to "来源与连接",
+            "automatic" to "自动处理", "understandingEnabled" to "内容理解", "summarize" to "生成摘要", "semanticTurns" to "语义分段",
+            "audioProcessor" to "转写处理器", "diarizationProcessor" to "说话人分离处理器", "speakerCount" to "说话人数",
+            "speakerMin" to "说话人数下限", "speakerMax" to "说话人数上限", "maxAudioMinutes" to "最长录音时长（分钟）", "timeoutMs" to "处理超时（毫秒）",
+            "chat" to "问一问", "memory" to "记忆", "insight" to "洞察", "import" to "导入", "file" to "文件", "ocr" to "文字识别", "asr" to "转写", "title" to "标题", "name" to "名称", "includeCredentials" to "包含凭据", "description" to "描述", "enabled" to "启用", "status" to "状态", "state" to "状态",
             "provider" to "服务商", "protocol" to "协议", "baseUrl" to "服务地址", "model" to "模型", "reasoningEffort" to "推理强度",
             "serviceTier" to "速度模式",
             "maxTokens" to "最大生成 token", "apiKey" to "API Key（留空保留）", "modelRequestTimeoutMs" to "模型请求超时（毫秒）",
             "agentTimeoutMs" to "Agent 超时（毫秒）", "interactiveConcurrency" to "交互并发", "agentConcurrency" to "Agent 并发",
             "llmConcurrency" to "模型并发", "memoryConcurrency" to "记忆并发", "enabled" to "启用", "debug" to "调试日志",
             "traceEnabled" to "记录 Agent 读取", "level" to "日志级别",
-            "deviceId" to "设备 ID", "deviceName" to "设备名称", "platform" to "平台", "serverUrl" to "节点地址", "label" to "名称"
+            "deviceId" to "设备 ID", "deviceName" to "设备名称", "platform" to "平台", "serverUrl" to "节点地址", "label" to "名称", "sourceIds" to "来源范围"
         )
     }
 }

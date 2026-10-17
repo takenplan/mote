@@ -4,7 +4,44 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current acceptance boundary: runtime9e Actions paging/visible retirement/modal control has three native GREEN cases and a12s fixture build; complete results are below. Later test-only candidates are explicitly uncompiled/unrun. Own final current-composition Android/full required checks, push and Draft PR are pending. Shared old arbitrary-file Import/Files/review/media/export has no stable equivalent M06 projection (M13's current contract map); it remains an explicit KEEP gap, not a removed capability or a successful empty result. Physical-device/live-provider checks remain separate.
+Current native runtime6f4ac791 includes original Models copy/probe/directory and
+explicit feature defaults, Files scalar/graph mapping3bede3e2/ea1b6acd,
+Agentc706d743 and explicit local deletion recoveryda402. Public Models c4,
+Agent245+ddc and declared limited Jointa2 are composed. At ae7927e4 the actual
+full Android JVM/debug build passes358/358 across75 fresh XML,0fail/error/skip,
+82s/44tasks10executed. Fresh Central build and scope checks pass. That required attempt was controlled-incomplete143 after a native dependency
+ABI mismatch; the original Mem0 four tests pass on the supported matching Node26
+runtime. A new complete required run remains necessary.
+
+Files unconfigured scalar save now correctly selects the existing M04 processing
+CAS; the unchanged complete native case passes1/1. The earlier literal PUT400 is
+historical incorrect consumption, not a producer blocker. Original Models full
+copy/secrets/generated tool/citation probe/directory/heldA→B case passes1/1,
+5.453s. Explicit defaults bind/clear/unavailable-reference/detached A/B positive
+case passes1/1,2.109s. Public Models9/9 includes the identical actual physical
+Codex retirement regression plus B positive. Independent bounded native
+3bede/9852/cc3/6f review reports no new confirmed P0/P1/P2. Exact source/logs and
+fixture/environment distinctions remain below.
+
+Agent actual backend3/3, strengthened native history1/1 and held-query/relogin/
+opt-out1/1 pass; c706 independent bounded review has no new confirmed finding.
+Limited policy source15/15, types and scope pass. Its advanced common execution
+and recovery OPEN items remain producer-owned, not inferred from a saved graph.
+No arbitrary later producer WIP is consumed. Queue/source/SIGKILL/capture code
+is unchanged since the latest exact core native proofs below; current full
+JVM/build evidence includes the later Models UI changes.
+
+This is **not final M15 completion**. The [finite matrix](multiuser-android-final-matrix.md)
+and [remaining original shared-contract map](../design/multiuser-android-open-contracts.md)
+retain exact implemented and remaining common-policy scope. Genuine final affected
+exit, final dependency verification, feature push and Draft PR are pending. No M15 remote PR exists;
+main/integration/CI/deployment are untouched. Parent now permits independent
+workspaces/AVDs in parallel; historical serial resource notes below are superseded.
+
+Physical-device/publicHTTPS/actual special-permission/vendor-background/live-
+provider quality checks are separate. One earlier existing-local-Codex connection
+case used only an authored generated prompt and exact gpt-6.1-sol; no test count
+closes a missing original capability or proves provider/model quality.
 
 | Decision | Existing capability and real chain | Required account adaptation / evidence |
 | --- | --- | --- |
@@ -19,7 +56,38 @@ Current acceptance boundary: runtime9e Actions paging/visible retirement/modal c
 | CHANGE | Local storage format 3 without stable account binding | Format 4 rejects old marker/config before writes; no auto-migration, deletion or inferred owner. Anonymous local collection remains explicitly local until user confirms binding. |
 | REMOVE | Treating HTTP success or legacy v2 receipt as sufficient ACK; same URL as owner | New account-bound complete M03 receipt must match owner/source/batch/capture set. |
 | EXCEPTION | Shared device settings, update artifacts, bundled OCR models and encryption key | Non-private installation resources remain shared; content/cursors/drafts are account-scoped. |
-| UNKNOWN | Real phone/vendor background behavior, system calendar permissions/native writes, live providers/models | Not exercised with real data; synthetic I/O and real phone/system-permission evidence are reported separately. |
+| UNKNOWN | Real phone/vendor background behavior, system calendar permissions/native writes, live providers/model quality | No real private data or real provider account was exercised; one existing-local-Codex connectivity case used only a generated prompt. System-permission, real-device and model-quality evidence remain separate. |
+
+## Current local deletion-intent recovery boundary
+
+Test-only93d5284a adds a real pre-admission DELETE barrier followed by source
+retirement/recreation with the same bytes and capture ID. Old runtime429 fails
+1/1 at the missing explicit local-clear action (1.893s,
+`/tmp/m15-file-discard-valid-red.log`). Minimal da402 adds only local intent
+abandonment through the existing encrypted store/write barrier and captured
+client/session fences. Cancel keeps the intent; confirmed clear sends no DELETE,
+does not undo Central work, and never rebases an old request. A new deliberate
+deletion must use a new UUID and the current generation.
+
+The same actual native case passes1/1 in3.068s
+(`/tmp/m15-file-discard-green2.log`, backendEXIT0): the original operation and
+generation0 receive409 twice; only the new operation/generation1 receives200;
+B remains unchanged. Original committed-delete/lost-ACK/missing-detail recovery
+also passes1/1 in1.508s at da402
+(`/tmp/m15-da402-delete-lost-ack-neighbor-green.log`, backendEXIT0).
+Independent bounded source review reports no new confirmed P0/P1/P2 in
+`/tmp/mote-desktop-review-m15-files-discard-da402.md`; it did not run tests.
+The first GREEN attempt stopped before instrumentation because the old emulator
+was absent; it is retained as environment failure. Read-only process/port checks
+preceded one restoration of the original dedicated headless AVD; no real device,
+lock deletion, foreign process termination or system permission change occurred.
+
+At exact da402, full offline `:app:testDebugUnitTest :app:assembleDebug` passes
+EXIT0 in61s,44tasks/10executed;75XML contain358 tests,0failure/error/skip
+(`/tmp/m15-da402-current-full-android.log` and countsJSON). Fixture/test APK build
+passes19s; bilingual check8469/0. These results supersede the429 Android build
+count only, not unrelated historical native journeys or unrun final affected.
+Agent245308de is newly declared, not yet consumed or accepted by native tests.
 
 ## Evidence
 
@@ -294,6 +362,1272 @@ Current test-only follow-ups64b/ffe/2f892/4b323/f129 are UNCOMPILED/UNRUN: forma
 
 The explicitly frozen M12/M16 literal10748005 was merged as04b929d6. Conflict resolution retained the M15-only native tests/ledger and incoming M16 evidence append; no Android source/test byte changed relative to95475. `dcad6088` is an ancestor, and all Android main source is byte-identical to tested9e. New test-only candidates still need a testAPK; the future synthetic backend must start from the new combined server source. No old server process or native acceptance is relabeled as running107.
 
+### Native Central lifecycle, overview and calendar permission admission
+
+Current M12/M16 dependencies are literal10748005. The first new Actions fixture still attempted21 independent publications and timed out during setup; `/tmp/m15-actions-107-sequential-setup-timeout.log` preserves it. A subsequent fixture incorrectly returned21 proposals in one extraction, exceeding the existing M12 maximum8: `/tmp/m15-actions-batched-backend.log`. Neither reached native assertions or is a product RED. Fixtureffaaf7c9 now publishes three genuine originals of8/8/5 exact appointment quotes for A and one of2 for B; actual M03/M08/M12 produces all23, without proposal SQL, changed production limits or third-party I/O.
+
+Four valid original native failures on preserved9e APK, each1/1 EXIT1:
+
+- `/tmp/m15-native-notes-resume-valid-red.log/.exit`,0.818s: real executor barrier before account resolution, paused A draft remains visible immediately after B resumes.
+- `/tmp/m15-native-overview-valid-red.log/.exit`,0.483s: original native overview still reads legacy global status/devices/operations instead of available owner statistics/canonical device metadata.
+- `/tmp/m15-old-calendar-worker-valid-red.log/.exit`,0.289s: permission-check barrier after old A Worker admission, switch to explicitly enabled B, old worker actually inserts B's approved generated event once instead of zero.
+- `/tmp/m15-native-actions-settings-valid-red.log/.exit`,0.733s: original form strips M12 revision/authorizationRevision envelope; save leaves the real setting unchanged.
+
+Minimal220c runtime reuses existing components: CentralContent synchronously retires old private view state before queued resolution on resume; overview consumes M13 statistics/devices and actual owned model inventory, with existing Activity entry for task detail; Actions form retains original API and both M12 revisions; CalendarActionWorker captures its original config/client together under ConnectionGuard and retains that client across native permission checks. No durable content is deleted, no new runtime/permission/semantic dispatch is introduced. Storage/service/global status counters lacking an owner contract are not replaced with zeros.
+
+Build first invocation omitted existing `-Pmote.testBuildType=multiuserFixture`, failed before compilation with task-not-found3s EXIT1 `/tmp/m15-four-native-green-build.log/.exit`. Corrected existing configuration genuinely app/testAPK builds13s EXIT0 `/tmp/m15-four-native-green-build-corrected.log/.exit`. This is not yet native GREEN or whole-module acceptance.
+
+The separate calendar reconciliation control reached actual uncertain and B success but then cast the existing Unit-returning `execute()` API to JSONObject. `/tmp/m15-calendar-reconciliation-control.log/.exit` is a fixture type mismatch, not a new product failure. Test16f4 now checks the real M12 published action state instead. All native I/O uses ContentResolver.wrap of an unregistered generated Provider, with actual app system-calendar permissions denied. It is not physical-calendar or process-death evidence.
+
+Decision record: these changes implement [multiuser scope Clients/privacy](../adr-multiuser-scope.md), [original action-first collection/lifecycle](../adr-client-action-first.md) and [M12 scoped review/delivery](../design/multiuser-actions.md). The existing visible page, model selector, account drafts, explicit approved delivery, uncertain journal and marker recovery remain KEEP. Only protocol consumption and original-owner admission change. Shared generic Imports/Files/media/review/export remains KEEP and is now assigned to the joint validation thread for one shared backend seam; Android will consume that exact freeze rather than introducing a second ImportManager/projection.
+
+Identical four native GREENs on220c each1/1 EXIT0: `/tmp/m15-native-notes-resume-first-green`0.950s, `/tmp/m15-native-overview-first-green`0.575s, `/tmp/m15-old-calendar-worker-first-green`0.322s, `/tmp/m15-native-actions-settings-first-green`0.889s (each `.log/.exit`). Old A worker writes zero; explicit B worker with its own current intent succeeds once. Notes return to A retains the original draft. Corrected calendar control1/1 EXIT0,0.596s `/tmp/m15-calendar-reconciliation-corrected-control.log/.exit`: actual M12 uncertain publication, denied synthetic permission makes no native call, retained A handle rejects under B, B's separate approved write succeeds, reconstructed A client/provider reconciles the original operation marker and externalId101 without duplicate insertion. No physical calendar or OS process-death claim.
+
+Current220c complete Android JVM and production debug APK: `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/utopiafar/Library/Android/sdk apps/android/gradlew -p apps/android --no-daemon --offline :app:testDebugUnitTest :app:assembleDebug`, EXIT0,41s44tasks10executed, `/tmp/m15-220c-full-android.log/.exit`. Fresh XML totals74suites352tests0failures/errors/skips. This is an actual own run, independent from M16's107 gate; final own affected and remaining scoped consumers still pending. Later394/a253 MCP additions are test-only UNCOMPILED/UNRUN and do not change this production result.
+
+### Current native MCP and recent-work delta (waiting for a build window)
+
+M13 independent bounded220c review `/tmp/mote-m13-review-m15-220c.md` found a P2 old-capability regression: M05 already exposes the owner-scoped recent operation list, so replacing five cards with only an Activity link was unnecessary. Actual generated M12 producer yields five M05 operations. Durable d60 original Activity characterization fails5!=0,1/1 EXIT1,0.545s `/tmp/m15-overview-recent-preview-valid-red.log/.exit`; minimaldf917 restores the exact recent list/admin.items/detail entry and retains Activity navigation. GREEN and bounded closure remain pending.
+
+Original native MCP page also has valid RED1/1 EXIT1,0.599s `/tmp/m15-native-mcp-valid-red.log/.exit`: real M01/M04 saved same-connection exists, but the original page has no owned connection selection and still sends raw endpoint/token for discovery. Synthetic fixture394/a253 uses the actual MCP SDK, M01/M03/M04/M11 and same A/B IDs; no third-party MCP/model is used. Minimal2cd/e6/374 consumer keeps the original resource selection/read-only tool approval, explicitly prepares a saved M04 connection and M03 source/device, then sends only connectionId/sourceId and selected resources/tool input. Original API, page owner and local rendered-selection versions fence retired controls. Preparation preserves masked existing tokens with M04 CAS; new saved configuration never inherits a different account's identity. The added native preparation/retired-save control is UNCOMPILED/UNRUN. M14 owns its fixed454 required window; M15 starts no Gradle/build/fullsuite until explicit RELEASE. Lightweight i18n and scope checks both EXIT0; these are not runtime GREEN.
+
+Decision provenance is [M11 public MCP](../design/multiuser-mcp.md) and [M04 configuration](../design/multiuser-configuration.md), using the existing native form/navigation rather than a Web fallback or a second outbound engine. Endpoint credentials are saved only on explicit Save and apply, mirroring the shared Web consumer. Discovery/import never carries them. Generic Google/Gmail/Lark/recording connection consumers are separate remaining work; this MCP delta does not claim them complete.
+
+Additional shared pairing boundary: scoped M01 does not register the old `/api/connections/invitations` or `/redeem` routes used by the original QR/JSON invitation reader. Its supported native flow is PKCE `/login/requests`→fixed-device browser approval→`/poll`→`/ack`; device grants remain ingress/self/logout only. Existing direct username login and actual device-bound Ingress tests do not prove an equivalent QR generation/scanning journey. M13 independently confirmed no frozen canonical QR replacement. This remains an explicit KEEP/CHANGE gap for joint/parent ADR alignment; no legacy owner alias or expanded device private permission is introduced by Android.
+
+The same recent-work characterization is now GREEN1/1 EXIT0,0.610s `/tmp/m15-overview-recent-preview-first-green.log/.exit`, including real M05 detail navigation; no empty-list fixture substituted. Original MCP SDK consumer is GREEN1/1 EXIT0,1.386s `/tmp/m15-native-mcp-first-green.log/.exit`: actual A resource import, exact duplicate receipt0new/1existing, unchecked tool approval makes no import, explicit read-only tool admission publishes its own second item, immediate B retirement and detached A import leave B empty. Additional explicit M04 preparation control1/1 EXIT0,1.063s `/tmp/m15-native-mcp-preparation-control.log/.exit`: source/device+connection save, existing masked token retained and real SDK rediscovery still authorized, B same-ID configuration untouched by old A Save. Fixture app/testAPK14s EXIT0 `/tmp/m15-mcp-overview-green-build.log/.exit`. Runtime freeze7eca52d9783f875aa38860ae1ca0a78c467cbd52 (including2cd/e6 anddf917); later9aae is only additional UNRUN consumer tests/Google I/O fixture. Bounded closure review and final affected remain pending.
+
+### 107f native owned settings/readers checkpoint
+
+Runtime `107f0038fc67d5236db99a09616fbd4e3b5ca411` changes only the existing
+CentralAdmin consumers of processing settings, devices and statistics, plus eight
+synchronized labels. The original processing form now reads/writes the M04
+`processing` domain with its captured revision; the native device list consumes
+M03 canonical ingress metadata and statistics consume M02 own counts. No processor,
+speaker algorithm or configuration default was replaced.
+
+The three original native journeys that failed against the saved 220c APK now pass
+individually on 107f: processing settings 1/1 (0.785s), same-ID device inventory 1/1
+(0.545s), own statistics 1/1 (0.538s). Logs are
+`/tmp/m15-native-{processing-settings,device-inventory,statistics}-first-green.log`
+with separate `.exit` files, all 0. Fixture app and test APK compiled in 10s, EXIT0
+(`/tmp/m15-processing-device-statistics-green-build.log`). An initial sandbox adb
+listener EPERM occurred before tests; the existing emulator and backend were found
+healthy and the same commands passed standard review. It is an environment failure,
+not a product RED. This checkpoint does not supersede the full 352-test evidence on
+220c or claim whole-module acceptance.
+
+M13 bounded review of exact 7eca found no new confirmed P0/P1/P2 and statically
+closed the prior Overview recent-five P2; the actual characterization RED/GREEN
+remains M15 evidence. Report: `/tmp/mote-m13-review-m15-mcp-7eca.md`.
+
+
+### Native owned connections and original recording checkpoint (652475c9)
+
+The original Google/Gmail connection configuration characterization9aae failed
+against220c: empty A had no new-connection control while B retained a same-ID
+connection. Runtime3a2bd36b restores native saved-connection create/edit, M04 full
+domain CAS and masked-secret preservation, explicit M09 enable/pause/stop, and
+fixed-connection status/OAuth. Its same ActivityScenario passes1/1,1.548s, EXIT0:
+`/tmp/m15-native-connectors-first-green.log/.exit`. Saving creates a disabled
+instance; A edit, enable and pause do not change B; detached A Save after switch
+cannot alter B. This is configuration/lifecycle acceptance, not sync/calendar,
+Lark/recording or complete provider parity.
+
+Joint frozen Filesa10effd109e64651e5cafe801b686238271964bf was merged as12cd554f,
+including M14 finalcd46. Only two bilingual catalog conflicts needed a same-value
+union (zero differing values); scope and i18n passed. No peer directory was edited.
+The production M03/M04/M05/M06 fixture processes actual generated WAV bytes with
+only the ASR I/O substituted. Durableab561/8bf original native tests exercise the
+existing Files page, not a new mock view.
+
+The original recording view failed1/1,0.755s because SPEAKER_0 was absent
+(`/tmp/m15-native-files-speaker-valid-red.log/.exit`). Runtime958d/027a restores
+anonymous label, timing/uncertainty, exact owner speaker confirmation and existing
+artifact/chunk/text correction. Complete speaker pages are read for explicit name
+confirmation so later-page names are not silently dropped. The identical native
+journey passes1/1,1.317s EXIT0 (`/tmp/m15-native-files-speaker-first-green.log/.exit`):
+confirmation retains raw transcript; correction creates a new artifact while the
+old raw artifact stays readable; names survive correction; detached A Save does
+not change equal-ID B.
+
+Original-save characterization initially checked a picker monitor before the
+ActivityResult download completed. Those first byte mismatches are retained as
+inconclusive fixture timing, not accepted RED/GREEN evidence. Testee4 waits for
+actual native download terminal status;302 records that status. The corrected
+case exposed actual HTTP426 on652's parent: binary CentralClient requests omitted
+Ingress3 while JSON requests already included it
+(`/tmp/m15-native-files-original-diagnostic.log/.exit`,1/1 EXIT1,0.797s).
+Direct actual fixture ticket read returned200/audio-wav/48bytes/matching SHA.
+652475c9 adds the existing Ingress3 header only to binary ingress paths. The same
+native document-result case now passes1/1,0.940s EXIT0
+(`/tmp/m15-native-files-original-ingress-first-green.log/.exit`). It writes exactly
+the generated48-byte WAV after owner-bound ticket, length/MIME/SHA validation and
+staging. M03 original readers do not supply portable ETags, so only this explicit
+original descriptor branch omits ETag; portable exports still require it.
+
+Fixture app/testAPK plus actual CentralPortableDownloadTest completed15s EXIT0
+(`/tmp/m15-native-files-ingress-green-build.log/.exit`), XML4tests/0fail/0error/0skip.
+This includes the real socket Ingress3-header/no-ETag original positive and
+wrong-hash sentinel case, and the existing portable integrity/whole-response cases.
+Earlier fixture builds12s,13s,9s and10s and their failures are retained separately.
+An emulator disappeared before the first Files execution; exact ps/adb confirmed
+it absent, the same read-only/headless AVD restarted in10.7s, and the healthy Files
+backend was not restarted. That event is an environment interruption, not product
+RED or permission-revocation evidence.
+
+Decisions implement the original recording and speaker-range ADRs through the
+frozen Joint M06 seam; no FileStore, processor, model, scheduler, permission or
+account store was added. Existing encrypted queues, scoped API and staging are
+reused. Shared cancel/retry/delete/review/acoustic and generic Imports are not
+silently replaced by raw intake or a successful export. Full current gates and
+whole-module closure remain pending.
+
+### Additional exact-text regression, GREEN pending resource window
+
+While Container owns the required-check window, a single existing compiled native
+journey was repeated against a new generated ASR fixture that literally begins
+its transcript with `[SPEAKER_0] `. This is evidence text, not a presentation prefix.
+The native correction still removed it and actual M06 refused the mismatched
+originalText. Durable fixture7c4c87bb and
+`/tmp/m15-native-files-literal-prefix-valid-red.log/.exit` record1/1 EXIT1,0.987s.
+The minimal one-line fix retains exact `ocrText` when constructing correction
+input. No inference, text rewriting or backend change is added. Its current code
+is intentionally not a tested freeze until Container explicitly releases and the
+same native case becomes GREEN. The prior652 narrow positive checkpoint does
+not cover this newly confirmed input variation.
+
+The literal-prefix native correction case is now GREEN1/1,1.567s EXIT0
+(`/tmp/m15-native-files-literal-prefix-first-green.log/.exit`) on the unchanged
+exact text assertion. Fixture app/testAPK compiled8s EXIT0
+(`/tmp/m15-native-files-literal-green-build.log/.exit`) after the Container and
+Joint windows explicitly released. This closes that input variation; it does not
+close the separate Joint export publication-point candidate.
+
+Original Google Calendar native controls have a valid RED on current real OAuth
+preconditions: missing `读取日历列表`,1/1 EXIT1,0.883s
+(`/tmp/m15-native-google-calendar-valid-red.log/.exit`). Runtime
+bde55de1bae491fea966b0693c210d732ba5befa consumes owned M10 operations and M05 task
+IDs, persists pending path/body/operation ID in the existing account-encrypted
+CentralStateFile, and stops task polling on terminal state/page retirement.
+The same original native case is GREEN1/1,2.696s EXIT0
+(`/tmp/m15-native-google-calendar-first-green.log/.exit`): generated actual OAuth,
+calendar list, explicit same-calendar selection, actual sync/M03 private event,
+A/B same connection/calendar/event IDs and detached A Sync after B switch. Fixture
+app/testAPK compiled9s EXIT0 (`/tmp/m15-native-google-calendar-green-build.log/.exit`),
+i18n/scope0. No live Google, calendar access or browser was used. The subsequent
+8f617 test-only lost-ACK/recreation/switch scenario and retained-route validation
+need their own execution; this normal positive does not prove those cases.
+
+
+### Current native checkpoint:353 JVM tests and retained M10 admission
+
+Current production main48a797854e96eedf57c4edbd451fa2e5c5132a73 (
+normal Google flow is bde55de1bae491fea966b0693c210d732ba5befa) was actually rebuilt
+and tested with `:app:testDebugUnitTest :app:assembleDebug
+:app:assembleMultiuserFixtureAndroidTest`. Log
+`/tmp/m15-native-composed-48a-full-android.log/.exit`:41s EXIT0,92tasks with14
+executed. Fresh XML74suites/353tests/0failures/0errors/0skips. This is M15's own
+new run, not peer352 evidence, and it is not the final required affected command.
+
+The first Gmail lost-ACK native case traversed durable pending intent, Activity
+recreation, B isolation and A exact retry, then its last assertion incorrectly
+used the retired original A client after switching back. It is retained EXIT1 in
+`/tmp/m15-native-gmail-lostack-first.log/.exit`; no production fence was relaxed.
+Test-only00200153 uses the fresh selected A client and explicitly asserts the
+original client rejects. Same original scenario on a new generated real M10 host
+passes1/1,2.079s EXIT0 (`/tmp/m15-native-gmail-lostack-corrected.log/.exit`): dropped
+actual200 command responses, stable operationId/body/taskId, original account's
+encrypted intent after recreation, no pending A command or mutation in same-ID B,
+and original A retry without a second admission or duplicate SourceItem. This is
+Activity recreation, not a new claim of SIGKILL coverage for this command journal.
+
+M13 authored bounded readonly reports are available locally for exact107f,3a2,
+652 andbde, each with no new confirmed P0/P1/P2 in its recorded scope:
+`/tmp/mote-m13-review-m15-admin-107f.md`,
+`/tmp/mote-m13-review-m15-connectors-3a2.md`,
+`/tmp/mote-m13-review-m15-files-652.md`,
+`/tmp/mote-m13-review-m15-google-bde.md`. They are static evidence only and do not
+claim independent execution, later48 guard/lost-ACK coverage or whole acceptance.
+Their message delivery was not retried or forwarded; local reports were read as
+artifacts. M13 is now paused and is not being woken for additional review.
+
+### Live-model and private-data regression constraint
+
+The owner's later Sentinel_90402956f4b881918763a8a61d350969 instruction applies to
+real-model regression: use the existing logged-in local Codex entry and verify
+exact `gpt-6.1-sol`; never silently substitute a model/provider or create provider
+credentials. Deterministic generated I/O remains the authority for isolation,
+retry and ordering assertions. No actual local central private data has been
+read in these M15 tests. Every stored record, original byte, fixture account and
+prompt is authored/generated. Raw private content and all its derivatives must
+stay outside Git, PR bodies, shared logs and attachments; staged/new files are
+reviewed before commits rather than relying only on ignore rules.
+
+Local `codex-cli0.162.1` model/list was actually read using the existing Mote
+catalog adapter, EXIT0: exact `gpt-6.1-sol`/GPT-6.1-Sol is listed, with low as the
+default effort. Metadata stays in `/tmp/m15-local-codex-models.json`; no thread or
+inference was started by that lookup. Opt-in6809824b prepares a generated-only
+M01/M04/M08 host plus an original Native Ask test. It uses a fixed shared Codex
+profile, existing local authentication, no API key/HTTP endpoint, and disables
+automatic processing/Memory jobs. The real native inference test is still
+UNCOMPILED/UNRUN pending the current Container Docker build's explicit RELEASE.
+No live output or private-data fixture is included in Git.
+
+
+The existing Mote CodexSession provider handshake also completed EXIT0
+(`/tmp/m15-local-codex-preflight.log/.exit`): account/read succeeded and the
+read-only ephemeral thread resolved both model fields to exact `gpt-6.1-sol`.
+It submitted no inference turn, used no tools and created no execution dialog or
+provider credential. The declared fast tier was advertised by the local catalog;
+no silent model/tier fallback is implemented. This is interface preflight, not
+real-model answer validation. The prepared synthetic host is ready; Native Ask
+execution still waits for its test APK compilation after the resource window.
+
+Historical QR question (superseded by the parent's later scheduling instruction): the owner was asked whether
+to reuse M01 device PKCE/browser approval after scanning server metadata, or to
+retain a one-step exchange by adding a new account-bound invitation contract.
+The parent has since clarified that ordinary decisions are already authorized for
+the parent to resolve and that a finite public pairing task will be assigned when
+the fourth slot releases. Android does not wait for the earlier question or
+implement a competing QR backend. The existing QR capability remains open until
+that actual common contract and its consumer acceptance are delivered.
+
+### Original Lark entry characterization prepared (4b16dc20)
+
+The native page still calls the retired singleton `/api/connectors/lark` facade.
+The prepared durable native journey selects a real saved `same-lark` connection,
+checks the actual CLI probe task, observes held authorization progress, saves an
+explicit document range, previews metadata, confirms archival, and retires a
+detached A sync button after switching to B with the same connection ID. The
+fixture uses the actual M01/M04/M09/M10/M05/M03 host; only external CLI responses
+are generated. No CLI installation, real provider credentials or personal data
+are involved. The test remains UNCOMPILED/UNRUN, so no RED or GREEN is claimed.
+
+Fixture startup first failed before business assertions because a control route
+was registered after Fastify readiness. The corrected fixture uses a separate
+loopback-only control listener and reached ready successfully; its startup is
+not native acceptance. Production Android is unchanged from tested48a79785.
+
+KEEP: the existing document/activity discovery and exclusions, explicit preview
+and archive, calendars, per-document retry, source pause/context, cancellation,
+and retained archive on disconnect. CHANGE: the selected owned M10 connection,
+M05 task ID/progress and the existing encrypted same-operation command journal.
+UNKNOWN: ordinary CLI installation has no allowed scoped operation; it must not
+be replaced by a shell command or silently equated to bundled plugin install.
+Recording-provider controls, shared arbitrary-file Imports, remaining Files
+controls/review/acoustic, and the original Agent View contract remain separate
+open capability rows. The prepared Lark test does not close any of them.
+
+The test APK was subsequently compiled successfully in7s,49tasks6executed
+(`/tmp/m15-native-lark-codex-testapk-build.log/.exit`). With the preserved tested
+48a APK, the same durable Lark method executed1/1 and failed at the missing
+saved-connection selector in0.485s (`/tmp/m15-native-lark-owned-entry-valid-red.log/.exit`).
+The normal public MainActivity → Add content → Lark path also showed the missing
+record notice, while the generated A inventory actually contained `same-lark`
+and the retired singleton GET returned404. Direct shell startup of the private,
+non-exported CentralActivity was rejected by Android; no manifest, permission or
+system setting was changed. That rejected startup is not a product RED.
+The new Lark production code remains uncommitted/unaccepted pending its APK and
+the unchanged native scenario's GREEN; this paragraph supersedes UNRUN above.
+
+### Actual opted-in local Codex Native Ask (tested Android48a)
+
+The original native Ask page sent the authored generated connectivity question
+through real M01/M04/M08 and the existing logged-in local Codex. The exact selected
+model was `gpt-6.1-sol`; the actual run completed, displayed a nonempty answer in
+the native page and returned404 to B. The single instrumentation test passed in
+11.281s, EXIT0 (`/tmp/m15-native-local-codex-first.log/.exit`). This supersedes the
+prepared-only model paragraph above. No semantic answer score is asserted and no
+mock isolation/retry assertion was replaced. All records and the prompt were
+generated, the temporary host had no private central content, and no answer,
+auth material or model output was added to Git. This is one actual local-model
+connectivity regression, not real-account, provider-wide or model-quality acceptance.
+
+### First native Lark GREEN (49347f92)
+
+The first candidate app/test assembly completed EXIT0 in7s,67tasks9executed
+(`/tmp/m15-native-lark-first-green-build.log/.exit`). The expanded original native
+journey reached a real archived original, then failed at the absent source-context
+control in2.236s (`/tmp/m15-native-lark-first-green.log/.exit`1). The server was
+still returning the private adapter-local document source ID. Exact M13
+0a3f268d was consumed as3808d399; only the existing scoped connector status/task
+projection changes, mapping owner+instance+local ID through connector_sources.
+The documentation conflict kept current composed records plus that exact source
+projection evidence, rather than importing unrelated paused Web work.
+
+With a fresh generated backend and the identical already-compiled Android APK/test,
+the same method passed1/1 in3.112s, EXIT0
+(`/tmp/m15-native-lark-source-green.log/.exit`). It exercised the saved owned
+connection, actual CLI check and held authorization URL, explicit scope/preview
+and archive, exact public source-context CAS, and a detached old A sync button
+under same-ID B. The original document source and original bytes remain M03-owned;
+the client introduces no collector, scheduler, CLI installer or Web fallback.
+Only external CLI responses are generated. i18n8455 EXIT0. Full Android/required
+and independent review of this new consumer remain pending. The test-onlya924
+extension for calendars, failure retry, source pause/resume and cancellation has
+not been compiled/run and is not included in this GREEN claim.
+
+### Native browser Central-login contract repair in progress
+
+Static consumer/protocol mapping found a different existing-flow mismatch:
+CentralContent's browser login and ClientLoginApproval promise all Central
+functions, while the default M01 request produces a device-bound credential that
+UnifiedCentralSession intentionally refuses as a private Central client. Device
+isolation remains correct. New explicit-purpose server characterization eebdbe64
+failed400 at the absent purpose field (`/tmp/m15-native-browser-central-contract-red.log/.exit`).
+The minimal producer now preserves default device grants and issues an existing
+personal client only for an immutable `purpose:central` request approved by a
+current full account session. New contract test1/1 GREEN, old PKCE account-binding
+neighbor GREEN, and the independent unfiltered legacy handoff file4/4 GREEN
+(`/tmp/m15-native-browser-central-contract-green`, `/tmp/m15-browser-auth-adjacent`,
+`/tmp/m15-browser-legacy-handoffs`, each `.log/.exit`). Device private GET and
+device approval remain403; central grant private GET200/admin403, wrong verifier,
+cross-account reapproval, one-use ACK, revocation and B positive are retained.
+
+The original browser approval component also had two actual renderer failures:
+it promised all Central functions for a device request, and a replacement request
+could retain the previous device's enabled approval button before its own details
+resolved. Test-only41f25299 retains valid RED2/2 in
+`/tmp/m15-browser-approval-valid-red2.log/.exit`; unchanged assertions pass2/2 in
+`/tmp/m15-browser-approval-first-green.log/.exit`. The first attempt from repository
+root failed before business assertions because TSX used the wrong workspace JSX
+configuration (`React is not defined`); it is fixture execution setup, not a valid
+product RED. The real Web-workspace command is recorded in the valid logs.
+
+Native original browser entry test1ca774b7 is UNCOMPILED/UNRUN. It will intercept
+only the generated loopback browser Intent, use real approval/poll/ACK, and check
+the actual native device inventory under A with same-ID B. The native one-line
+purpose consumer, producer and Web repair are not claimed final until that
+unchanged native case and current types/build/review run. i18n8456 EXIT0. This
+restores the existing full-client browser login promise under the accepted M01
+boundary; it does not choose the pending QR pairing product flow or expose private
+APIs to device-bound credentials.
+
+Additional actual retirement case23e19b95 holds the successful real approval
+response, unmounts the original component, then releases it: the existing grant
+fact is retained, but old code called the retired UI's navigation callback1≠0
+(`/tmp/m15-browser-retired-approval-red.log/.exit`1). A synchronous component
+retirement fence fixes only that publication boundary; all three original
+browser approval renderer cases now pass3/3, no skip
+(`/tmp/m15-browser-approval-final-narrow.log/.exit`0). Native entry/types/build and
+independent review are still pending, so this is not a final shared freeze.
+
+### Recording checkpoint reader: narrow producer acceptance
+
+Original native recording controls still refer to the retired global registry,
+steps and item routes. Test8f8090b1 first ran actual M01/M04/M09/M10/M05/M03 for
+same-ID A/B, retaining successful transcripts while generated audio failed. The
+absent scoped checkpoint route failed503≠200 at the real HTTP read
+(`/tmp/m15-recording-reader-valid-red.log/.exit`1), not during fixture setup.
+The new existing-ledger reader passes the unchanged case1/1,no skip in2.895s
+(`/tmp/m15-recording-reader-green2.log/.exit`0), including actual audio recovery,
+unchanged transcript capture, owner/query/selection-bound pagination, no external
+I/O during reads, and disabled-A/B-positive controls. Scope inventory0.
+
+This producer adds no schema/state/runtime and reuses the existing host-provided
+PrivateCursor key. Current-selection archive/checkpoint flags are distinct from
+M06 indexed/Memory outcomes and from historical archive browsing outside that
+selection. Native recording consumers, full history, types, independent review
+and final gates are still pending; this is not a complete recording freeze.
+
+Original failed-step retry needs to continue under the admitted central task,
+including after UI closure. Test84dba2a7 retains real400
+`connector_operation_invalid` for explicit `{resume:true}` after the real
+transcript-success/audio-failure setup
+(`/tmp/m15-recording-resume-valid-red.log/.exit`1). The existing M05 operation now
+continues the existing pending-stage loop, skipping normal scan/discovery. The
+same case passes1/1 in2.225s, EXIT0
+(`/tmp/m15-recording-resume-first-green.log/.exit`): completed transcript capture
+and transcript/search call counts do not change, audio saves successfully,
+default empty retry still resets without provider I/O, and the earlier owner/
+cursor/range/revocation controls remain. No native or broad-gate acceptance is
+inferred from this additional producer test.
+
+### Native browser purpose and recording entry: actual RED checkpoint
+
+Test-only `512883a0` was compiled with offline fixture AndroidTest assembly:
+`/tmp/m15-browser-recording-testapk-build.log/.exit`, EXIT0, 6 seconds,
+49 tasks with 6 executed. The earlier existing-APK inventory action was rejected
+before CreateProcess because the recorded Container heavy window was active;
+no workaround was attempted. Container then explicitly released after its
+actual successful required gate. The same original action was reviewed once
+under that new resource fact and executed successfully: native inventory 1/1,
+0.5 seconds, `/tmp/m15-recording-original-device-precondition.log/.exit`.
+Only `emulator-5562` and the generated M15 fixture package were used.
+
+With the preserved pre-browser production fixture APK, the exact new browser
+journey reached real M01 approval/poll/ACK but returned a device grant and a null
+native private client: valid RED 1/1, 0.964 seconds, EXIT1,
+`/tmp/m15-browser-original-native-valid-red.log/.exit`. The generated browser URL
+was intercepted by instrumentation; no real browser account was used. This is
+independent native evidence for the already narrow-green server/Web purpose
+repair, not yet native GREEN.
+
+The original native recording navigation reached its existing settings card
+but could not render “connect authorized account” because it still read the
+retired global connector status. Valid RED 1/1, 0.721 seconds, EXIT1,
+`/tmp/m15-recording-native-valid-red.log/.exit`. The new regression retains
+connection, explicit range, vendor text, audio-failure status, failed-stage
+background retry without repeated text, and detached old-A command rejection
+after B resumes. Its native production adapter is currently uncompiled WIP.
+The current-selection checkpoint reader does not replace archive history:
+the native archive list must use current canonical Files by exact mapped source,
+and all playback uses authenticated original tickets and exact descriptor checks.
+Full latest Android, native GREEN, server/Web types, review and affected gates
+remain pending. Earlier 353/353 at runtime48a is retained only at that SHA.
+
+### Connection recovery and composed generic Imports tests (pending execution)
+
+After the host transport disconnected, no product test was relabeled as failed
+or successful. Parent21:20 UTC confirmed Bogon authorized/attached/connected and
+resumed this original workspace. Read-only Git and logs verified9bbb plus the
+untouched native Imports test and generated fixture. Both were audited and
+saved as test-onlyc253a93a; additional pure-JVM malformed archive/admission
+acknowledgement tests are test-only6f618976. They are not yet executed REDs.
+The prior source merge only unified the fixture's optional source-pack/options
+and before-ready callback; it calls that callback exactly once.
+
+Standard approved read-only process/adb probes confirmed old fixture PIDs72188,
+73265 and76510 were gone and no emulator was connected. Old PID97032 had been
+reused by a system guardian, so no cleanup signal was sent. Only the idle Gradle
+daemon was observed; parent-prioritized Theme's new explicit short Android
+window remains separate from M15. M15 kept all heavy work released. A fresh
+generated source-host for native Imports now listens on loopback only. No real
+Central data, model output or credentials were read or copied into Git.
+
+### Generic Imports actual native acceptance and acknowledgement repair
+
+Test-only6f618976 records two valid JVM REDs: a changed retained original
+descriptor and a wrong admission ID were both accepted and consumed local
+parts/intent. Three tests total,1 pass/2 fail, EXIT1,
+`/tmp/m15-imports-resumed-testapk-ack-red.log/.exit`; raw XML is retained at
+`/tmp/m15-imports-ack-valid-red.xml`. Production54ad0039177f17355c157f529b5598b69901ffa5
+reuses the existing encrypted parts/journal and fixed original client. It checks
+local part lengths/digest, actual received/PUT part acknowledgements, exact
+archived file ID/hash/length/path/MIME and the original admission ID/files before
+clearing staging. A wrong or missing acknowledgement preserves the original
+request and bytes. Same3/3/no skip GREEN; fixture app/test APK BUILD SUCCESSFUL
+8 seconds/91 tasks11 executed, `/tmp/m15-imports-ack-first-green-build.log/.exit`.
+
+Actual original native choose-file→private staging→preview→confirmation→saved
+workflow is now1/1/no skip/EXIT0,13.234 seconds,
+`/tmp/m15-native-imports-second.log/.exit`. The generated original exceeds4MiB,
+produces exactly two uploaded parts, and a real accepted202 response is dropped.
+Recreation retains encrypted pending bytes; B's equal-ID completed job and
+view receive no A retry. Explicit A return retries identical original/file/request
+IDs without repeating parts. No Capture is query-visible before confirmation.
+The original confirmation dialog then publishes actual canonical receipts and
+preserves the archived file's exact bytes/hash. M01/M03/M04/M05/M06 are real;
+only model HTTP returns fixed generated answers. Memory processing is explicitly
+disabled in this fixture, never counted as completed by import success.
+
+First native attempt reached A's real private preview but its B inline comparison
+failed503 because the test-only request observer assumed archivedFileIds on every
+request. `/tmp/m15-native-imports-resumed-first.log/.exit` is retained as fixture
+failure. Fixture-only909dd250 accepts inline comparison bodies; the identical
+compiled app/test APK then passed. No production code changed to hide it. The
+recovery environment had no existing emulator, so the original readonly5562 was
+restarted after Theme's explicit release; boot completed10608ms. No system
+permission expansion or physical-device access occurred. Independent54ad review
+and complete latest affected/Android/consumer gates remain pending.
+
+### Lark disconnect generation and authenticated native recording playback
+
+A further original Lark lifecycle test330564/a5a62b adds the actual original
+disconnect dialog, waits for its newly admitted successful M05 receipt, then
+uses the existing Check Status control. Valid RED1/1,6.187 seconds, EXIT1 in
+`/tmp/m15-native-lark-disconnect-valid-red.log/.exit`: no new task is admitted
+(20 remains20; the API default page bound is50). The old native adapter still
+required the generation that this same disconnect had retired. This is distinct
+from the earlier expanded6.009s passing Lark checkpoint.
+
+Production95c02560bdfeafc66c967cb4434e7c7ed29968cb retires the old page on
+both acknowledged and uncertain disconnect outcomes. The original M05 task is
+retained in the same encrypted journal at the known own-disconnect generation;
+current inventory must still match exactly. No credential is replaced and no
+new execution authority is inferred from a task. Pending bodies remain stable
+for a user retry. Test-onlyc583 adds a loopback network proxy that only drops
+the real successful HTTP ACK after actual M10 admission; it does not replace
+a route, task or result with a fabricated success.
+
+The same original journey plus actual ACK loss now passes1/1/no skip,6.174
+seconds, `/tmp/m15-native-lark-disconnect-first-green.log/.exit`: preview/archive,
+calendar choice, source pause/resume, document failure retry/cancel, exact
+operation/task replay, next explicit status work, and B retirement remain real.
+App/test APK compilation passed12 seconds,67 tasks9 executed in
+`/tmp/m15-lark-disconnect-green-build.log/.exit`. Independent two-file95c
+review is pending; this is not final Lark/Android/affected acceptance.
+
+The recording journey also reaches the canonical Files source archive and exact
+M03 authenticated play ticket, downloads verified original bytes, prepares the
+real Android MediaPlayer for a generated five-second WAV, and exercises its
+existing play/pause buttons. It then returns to a fresh recording page and
+rejects the old A retry after B resumes.1/1/no skip/EXIT0,3.053 seconds,
+`/tmp/m15-recording-native-play-first.log/.exit`. The normalized seek control is
+enabled; assigning its progress in this fixture is not a physical seek gesture
+claim. The emulator has no audio output and no real recording or runtime audio
+permission is used. Complete physical-device/background/audio-quality checks
+remain separate.
+
+M13's bounded37c/e4f reader/resume reviews are now read from
+`/tmp/mote-m13-review-m15-recordings-{37c8,e4f8}.md`: no new confirmed P0/P1/P2,
+without reviewer execution or native/current build coverage. Separate native
+recording and54ad acknowledgement reviews are still due.
+
+### Original QR pairing and declared Agent catalog expansion
+
+QR producer6a84ec6a477bb4698002234fd81bb669ce98cc06 is consumed as7a25f2ee.
+It keeps the existing invitation creation consent, fixed deployment/account/device
+purpose and original origin-confirmation journey. Android adds no browser approval
+step and no device private-read permission. Tests d090/beccf3b6 first produce valid
+RED: ConnectionAndOperations5 total2pass3fail, EXIT1, with the test APK assembled
+successfully in the same11s73-task command (`/tmp/m15-qr-jvm-testapk-red.log/.exit`).
+The real original ConnectionActivity then receives an actual v2 M01 invitation
+but cannot open its normal confirmation dialog:1/1 EXIT1,0.462s,
+`/tmp/m15-native-qr-valid-red.log/.exit`. Raw JVM XML is saved separately at
+`/tmp/m15-qr-jvm-valid-red.xml`.
+
+Production e8b9a54c retains the original encrypted recovery file. It writes the
+immutable invitation, device metadata and random PKCE verifier before the first
+claim; persists the M01 request and grant; verifies exact self account credential
+ID, deployment/user/device and Wire2/Ingress3; saves only the verified stable
+account with the actual grant expiry; then ACKs. A lost successful ACK uses the
+cached grant and duplicate ACK rather than polling a consumed request. Settings
+also checks the expected account before its final write. Invitation v1/owner or
+wrong-purpose input is rejected before networking. Original-device selection,
+local QR rendering and existing revoke control remain in the original Devices
+page. The following806fb895 fences scan/document results by their original
+configuration and keeps the original modal's expected configuration through
+RuntimeSettings pause/drain/apply.
+
+Same JVM5/5 passes, fixture app/test APK18s91tasks16executed EXIT0,
+`/tmp/m15-qr-first-green-build.log/.exit`. The identical native pairing case passes
+1/1,2.041s,`/tmp/m15-native-qr-first-green.log/.exit`: actual redeem200 reply loss,
+recreation, same PKCE/claim ID recovery, actual ACK200 reply loss, cached-grant
+recovery and successful duplicate ACK; no browser opens. Explicitly adopted local
+note uploads through the actual worker to A, B returns404, and collection remains
+stopped. Original native Devices→explicit original device→save→locally decode the
+rendered QR also passes1/1,0.935s,`/tmp/m15-native-qr-issuer-first.log/.exit`;
+the detached A issuer button after B resume creates no new invitation.
+
+Expanded app/test APK passes12s67tasks9executed EXIT0,
+`/tmp/m15-qr-expanded-build.log/.exit`. Its four-field self-corruption and same-device
+reauthorization test executes all identity-rejection assertions and credential
+rotation, then fails0.294s at its final draft assertion
+(`/tmp/m15-native-qr-self-first.log/.exit`). The fixture had submitted that draft
+with QuickNotes.save, whose normal success clears the submitted draft. Test-only
+79ca608e instead asserts anonymous draft adoption before submitting a separate
+note, then creates a fresh unsaved A draft before reauthorization. This corrected
+test has not yet been compiled or rerun; no passing reauthorization claim is made.
+
+Agent test d1a41a94 uses actual M01/M03/M06 generated canonical Materials and
+first confirms its declared M08 material-read succeeds. Old native expansion
+then incorrectly calls an unavailable old evidence endpoint:1/1 EXIT1,0.607s,
+`/tmp/m15-native-agent-valid-red.log/.exit`. Minimal10442b46 consumes each row's
+existing declared material_read or M08 context reader. Same original native
+catalog→episodes→expand→A text/B denial→old A action retired under B passes1/1,
+0.928s,`/tmp/m15-native-agent-first-green.log/.exit`. This does not replace the
+still-unavailable shared Agent startup/events contracts with fabricated results.
+
+All data and accounts are generated; corruption hooks change only declared self
+fields, and network fault hooks remove real successful replies. They never mint
+a token or fabricate an authority/receipt. Parent22:08 serial instruction takes
+priority over stale resource files: M15 keeps all heavy work released while Joint's
+already-running finite regression finishes, then QR owns its full gate. Further
+M15 build/full Android/affected slots await the parent's fresh allocation. Current
+native deltas have been requested for bounded independent review; no final M15
+remote head or Draft PR exists yet.
+
+### QR recovery after the transient handoff disappears — confirmed P2, GREEN pending
+
+The QR review identified a candidate: after a lost successful ACK, server restart
+or handoff expiry removes the transient M01 request even if the independent device
+credential remains valid. This was reproduced through the same already compiled
+native journey and a real source-host restart over the same SQLite and loopback
+port. Test-only638d/e26 closes and reopens the production host; it does not forge
+410 or a credential. `/tmp/m15-native-qr-restart-proof-red.log/.exit` is1/1 EXIT1,
+2.109s: the original recovery remains pending. Safe observation metadata records
+`restarted:true`, actual ACK statuses`[200,410]` and3 successful device self reads
+(`/tmp/m15-native-qr-restart-proof-state.json`). An earlier2.121s identical failure
+is preserved separately. This is now a confirmed recovery P2.
+
+Minimal c0c7df37 handles only the explicit M01 `410 login_expired` response by
+freshly verifying the same persisted credential's exact deployment/user,
+account.credentialId, device and required capability/protocol. Only then can the
+local recovery intent retire. It records `pairingAcknowledged:false`, rather than
+claiming an ACK that was never received. Authentication/revocation, wrong subject,
+wrong purpose/kind, malformed acknowledgement and network failures retain recovery.
+No new credential, approval or read permission is introduced. Tests226/518 add
+actual restart proof and a real post-restart credential revocation negative.
+The exact declared M01 client kind is enforced by d3a; its corruption test is
+separate from a retired owner grant.
+
+These new runtime changes and corrected79ca/new picker12083 tests have NOT been
+compiled or run GREEN. Parent22:08 keeps M15 heavy work released until the parent's
+next explicit allocation after the QR producer's full gate. The last native-tested
+806 checkpoint is therefore not final accepted: it contains this confirmed P2.
+Pending future tests will not be reported as executed; the current source HEAD
+must not be substituted for a tested frozen consumer.
+
+### Parent-allocated current Android and QR closure phase
+
+The fresh QR RELEASE22:34:59 and actual PGID8858 absence were verified before
+M15's explicitly allocated phase. Current357-test/debug/fixture APK pass is
+`/tmp/m15-qr-final-full-android2.log/.exit/.sha` with fresh counts
+`/tmp/m15-qr-final-full-android2-counts.json`:75XML,357tests,0fail/error/skip.
+First full log/XML at `/tmp/m15-qr-final-full-android.log/.exit` and
+`/tmp/m15-qr-full-first-fixture-error.xml` remain EXIT1, not a passing gate.
+
+Original held-picker candidate12083 is now actual RED0.874s at old806 APK:
+A's own-cache FIFO holds an already admitted original JSON document read; after
+B switches and the existing periodic refresh is deliberately delayed, the old A
+capability reaches B's input. Minimal ced9 adds only an off-main settings recheck
+after the read and a current stable-owner publication check. Same native
+`/tmp/m15-native-qr-held-picker-first-green.log/.exit` passes0.993s, preserving
+ordinary A selection and a new explicit B selection. No real file or camera is
+used. QR kind corruption is valid RED0.248s at old806; strict declared client kind
+and all exact self fields pass in the corrected reauthorization case0.408s.
+
+M04's instance settings policy is established in the configuration design:
+resource admin HTTP edits only models, while other instance settings remain the
+operator's configuration contract. Old native controls still called unavailable
+global APIs. Actual original entry RED0.530s→minimal a73 explanation sameGREEN
+0.851s, `/tmp/m15-native-instance-policy-{red,first-green}.log/.exit`, proves
+zero retired requests, unchanged account processing editor and admin diagnostic
+positive200. No new singleton write API or fabricated count was introduced.
+
+The current isolated APK separately passes these real generated single cases:
+
+| Case | Seconds | Exit/log prefix under `/tmp` |
+| --- | --- | --- |
+| ACK lost then actual M01 restart; exact live credential recovery, no false ACK |2.117|0 `m15-native-qr-restart-first-green` |
+| Real credential DELETE after restart; pending retained and no A/B upload |2.019|0 `m15-native-qr-revoked-first-green` |
+| Exact five self fields; anonymous draft then unsaved A draft, explicit original device reauthorization |0.408|0 `m15-native-qr-self-first-green` |
+| Held A JSON result after B; new B selection positive |0.993|0 `m15-native-qr-held-picker-first-green` |
+| Existing instance settings show M04 operator policy without retired requests |0.851|0 `m15-native-instance-policy-first-green` |
+| No-restart loss/retry still obtains the real duplicate ACK |2.166|0 `m15-native-qr-normal-final-green` |
+| Original Devices generates locally decodable selected-device QR; old issuer retired under B |1.376|0 `m15-native-qr-issuer-final-green` |
+| Original Agent catalog/episodes canonical reader and A/B retirement |0.980|0 `m15-native-agent-final-green` |
+
+Every case also has an actual generated-backend cleanup exit0. Native tests run
+serially as individual cases; no broad instrumented suite, real data, external
+model or system permission grant is claimed. The old pre-fix APK/hash remain
+preserved for the exact REDs. Parent22:43 environment callback was checked against
+actual tool/log/PTy evidence: no connection error occurred here and no command
+was repeated because of that callback. Read-only process verification reports
+zero active Gradle wrapper/test workers. M15 explicitly RELEASED its heavy phase
+before the subsequent single-native checks; the QR full gate is next via parent.
+
+The original bounded reviewers' reports do not automatically cover these latest
+small fixes. Independent closure requests remain pending. Joint's latest message
+submission still returns an earlier-turn-not-confirmed error; M15 does not claim
+a candidate freeze was received or proxy/retry that failed delivery. The current
+capability matrix distinguishes original Android controls from Web-only widgets
+and lists genuine remaining contracts. Final affected/push/Draft PR remain open.
+
+
+## Allocated Files retry phase: real GREEN and separate DELETE refusal
+
+Parent23:30 order was followed: Joint latest203997e5 types actually0 and fresh
+RELEASE preceded M15 CLAIM. Fixed combination d524140f0e93844058cb82348274b76ed7e855a7
+contains the declared public Files patch combination and Androiddc634 source.
+Offline JDK21/installedSDK command `:app:testDebugUnitTest
+:app:assembleMultiuserFixture :app:assembleMultiuserFixtureAndroidTest` actually
+exited0 in40s,91tasks14executed. Fresh75XML suites357tests,0failures/errors/skips,
+`/tmp/m15-files-short-green-build.log/.exit/.sha/-counts.json`. The test task
+executed; this is not an oldXML/up-to-date-only claim. No final affected ran.
+
+Original existingAPK Launcher→More→Content→Files retry was actualHTTP400
+without operationId (`m15-native-file-retry-ui-red3`, retained). Minimal encrypted
+same-operation fix now passes the actual sourcehost/native lostACK→recreation→
+samebody/task→B oldcallback retirement **1/1 EXIT0,1.272s**,
+`/tmp/m15-native-file-retry-first-green.log/.exit`, ownbackendcleanup0.
+
+The second original stop/consent/freshretry/delete case reached its final delete
+assertion but failed **1/1 EXIT1,1.9s**, expectedA404/actual200. Its predecessor
+assertions passed; this is not whole stop/delete acceptance. Exact response probe
+shows real cancel200 and DELETE503/error scope_unavailable. The next exact probe
+retains the original Fastify `Unsupported Media Type` stack **before** the route
+handler, so this is not a missing private route or permission expansion request.
+`/tmp/m15-native-file-stop-delete-{first-green,response-probe,stack-probe}` logs
+and exits are retained; each generatedbackend cleanup0. Native DELETE default
+previously supplied null instead of the scoped JSONemptyobject. A minimal
+CentralClient default `{}` and shared JVM regression are prepared after this real
+RED, but remain UNCOMPILED/UNVERIFIED until a new allocated short slot. Explicit
+account-delete operation fields remain supplied by the caller. No backend facade
+or global HTTP engine was changed.
+
+M15 explicitly RELEASED all heavy after the phase, before QR's next gate.
+Subsequent checks are single existingAPK/fixture-only, no Gradle/build/fullsuite.
+The already-visible invitation resume candidate first execution **0.495s EXIT1**
+stopped at an invalid fixture precondition: the test searched the base64 URI for
+its plaintext code. It did not reach B/resume and is NOT a confirmed production
+RED. Test-only correction decodes through the real ConnectionInvitation parser;
+no invitation runtime change or GREEN is claimed.
+
+
+### Correct JSON DELETE and genuine unknown HTTP probes (not new APK GREEN)
+
+One generated real M01/M03/M05/M06 HTTP sequence, after stop and explicit fresh
+processing, sends DELETE JSONemptyobject:200, thenA404/B200/exactBchunks and
+cleanup complete. `/tmp/m15-file-delete-json-http.log/.exit/-result.json`, EXIT0,
+backendcleanup0. Its `unknown_explicitly_confirmed:false` is retained: that known
+completion branch is not unknown-confirmation coverage.
+
+A second generated ASR mode receives actual WAV bytes then drops its HTTP reply;
+no SQLite or task state is seeded. The real host reportsunknown. The first probe
+tried explicit fresh processing before the physical task settled and correctly
+received409 file_processing_active; `/tmp/m15-file-unknown-http.log/.exit1` is an
+ordering/guard observation, not a product RED. The corrected sequence waits for
+actual public processing tasks to leavewaiting/running, then explicitconfirm
+succeeds: JSONdelete200/A404/B200/exactBchunks, cleanup complete and
+`unknown_explicitly_confirmed:true`, `/tmp/m15-file-unknown-http2.log/.exit/
+-result.json` EXIT0/backendcleanup0. These sourcehost probes establish the request
+shape and state ordering; they do not substitute for a rebuilt native app.
+
+The native explicitunknown case is now saved but UNCOMPILED/UNRUN: original
+unknown UI opens confirmation; cancel causes no admission; explicit confirmation
+creates a fresh owned request after physical settlement, preserves old unresolved
+facts, and old A confirmation cannot sendunderB. Existing stop/delete and
+lostACK native methods remain separate. No unknown assertion was weakened into
+known completion or a manually written task journal.
+
+
+## Original personal MCP credentials: real create RED, thin consumer preparation
+
+While QR held the full gate, a single existingAPK checked the original normal
+Launcher→Sources→Personal connections→Create MCP→Save flow. Real M01 returned
+400 invalid_request for keys serverUrl,label,access,
+`/tmp/m15-native-mcp-create-red.log/.exit/-trace.json`, backendcleanup0. This
+reached the actual strict route and is a production consumer RED, not an absent
+backend or fixture permission problem. Original central-purpose browser login
+setup remains a real1/1 positive and no external browser was opened.
+
+Minimal preparation removes serverUrl only from MCP issuance (device invitations
+retain it), keeps read/write choice and adds optional explicit sourceIds via the
+existing advanced array editor. This consumes M01's established write-source
+allowlist, rather than silently granting global writes or removing write mode.
+The existing bilingual Source scope key is reused. Native regression prepared
+for actual UI write grant over A/B same source ID/label, cancellation/revocation
+and old A confirm retirement underB; default read creation retains the original
+manual samecase. No new backend, credential recovery or runtime was added.
+These source/tests remain UNCOMPILED/UNVERIFIED pending the next parent allocation.
+
+
+### Final QR producer composition and pending native regressions
+
+Merge3a475da1888d1a738432a205c52d02c590f8980b consumes delivered QR48547e8f
+without merging Theme or changing the shared-runtime design. Conflict resolution
+retains Joint originalGeneration/fileGeneration/diarizeFrom/reviews, per-file
+settings and full immutable retry-input validation. Both UTF16 characterization
+variants and both summary503/429 checkpoint variants remain. These composition
+cases are not yet run. Pure i18n checker8468,13 TS syntax parses and diff checks
+exit0; no tsc/application gate is implied.
+
+The corrected invitation fixture39923874 parses the actual base64 URI for both
+negative owner-retirement assertions, as well as the positive precondition. The
+prior0.495s invalid positive precondition remains a fixture error. No production
+resume fix or new compiled/native pass is claimed.
+
+Current original Personal MCP400 RED is captured in
+`/tmp/m15-native-mcp-create-red.log/.exit/-trace.json`, generated host cleanup0.
+Preparedb603 fixes only the strict M01 body and explicit source allowlist form;
+its instrumented creation/revoke/A-B case and0498 default DELETE body/unit test
+await the next parent-allocated short build. Joint4be decision-CAS wire remains
+a candidate awaiting its own type/review freeze; its new required body must be
+consumed before claiming final native file deletion. M15 has released heavy
+resources; it has no final affected result or Draft PR.
+
+
+### Limited PREP8177 and independently confirmed source reset —16532eb0
+
+Parent released bounded8177 for consumers, not final acceptance. Ownmerge
+87d1834f resolves comments/history only, removes duplicate type import and retains
+QR/Joint full input fields.8468i18n/22syntax parse/diff checks0. New noEmit and
+Android builds remain pending.
+
+The original2cc regression is migrated to actual DELETE{operationId,originalGeneration}
+and returned decisionUUID, without weakening late409/upload410/B assertions.
+It isGREEN. A new true source-delete/recreate sequence confirms the independent
+old-first-send risk: capture original generation0 and stable operation before
+admission, DELETE source, register same source, upload exact same bytes/revision
+and captureUUID, get generation0 again, send frozen oldbody ->200 and A404;
+B remains200 after this deletion. Expected409/A200. Both calls use real production
+app routes; no seeded database or provider. Test-onlyb55 adds the case,165 adds
+Bpost before the failing assertion. Final2tests1pass1fail0skip2.351s EXIT1 at
+`/tmp/m15-forget-source-replacement-red2.log/.exit`; first3.486s log retained.
+Joint source owner receives this issue; no duplicate Android backend is written.
+
+During the allocated Desktop-only heavy phase, existingd524 fixture APK against
+QR485-composed host passes real WorkManager lateACK/Bexplicit/network recovery
+1/1 EXIT0,0.699s, `/tmp/m15-qr485-worker-late-ack.log/.exit`, backend0. A later
+SourceWorker command's CreateProcess transport failure is preserved; recovery
+read-only checks found zero matching process/evidence, then the same command's
+only resubmission stopped before tests because emulator5562 was gone. Backend0,
+zero instrumentation tests, environment failure, no SourceWorker product claim.
+No emulator restart/build occurred while Desktop retained the heavy window.
+
+Test-only23af adds same invitation begin lost-redeem/edited-name/same-owner-login
+regression with full claim/challenge/name correlation; no new production change
+and no compiled/native pass is claimed.
+
+
+## Invitation capability retirement and current Files delete adapter
+
+Fresh53d21cf9 offline JVM+fixture app/test APK build passed:75 XML,358/358,
+0 failure/error/skip,88s. Original MCP create/revoke from native UI passed1/1
+2.013s against real M01, including write-source allowlist, cancel, B same-label
+and a detached A confirmation under B. Logs `/tmp/m15-mcp-delete-short-build.*`
+and `/tmp/m15-native-mcp-create-first-green.*` retain their exact source.
+
+The corrected original invitation test reached a valid production RED at53d:
+A's visible confirmation remained after actual B login/resume,1/1 EXIT1,1.380s,
+`/tmp/m15-native-invitation-visible-resume-valid-red.*`. Minimal production
+fixd6da951d captures the page owner, synchronously retires visible text/dialog
+and incoming URI before resolving another identity, and fences queued callbacks.
+The original durable pairing/PKCE state remains. Its first whole JVM run had357
+passes and one citation fixture race: canonical Material publication correctly
+made the old raw query ref404. Test-onlyc47 waits for the actual Material and
+uses its declared originalRefs, retaining explicit raw404/B404/source-pause404;
+focused same test and fixture packaging passed. This is not a new full358 pass.
+
+Two invitation GREEN attempts are retained as harness failures: a background
+barrier assertion, then ActivityScenario's STARTED timeout. The pinned AndroidX
+1.6.1 observer compares its original launch URI with Activity.intent.data and
+ignored the correctly cleared capability. Test-only659a copies only that
+observer's expected Intent; it asserts the real Activity URI is still present
+before resume and is cleared by production afterward. No app mutation, timeout
+extension or privacy assertion removal. Test APK packaging EXIT0,22s. Actual
+native results at659a (productiond6da), all own backend cleanup0:
+
+- visible A capability→B resume:1/1 EXIT0,2.132s,
+  `/tmp/m15-native-invitation-visible-resume-green3.*`;
+- original QR lost-redeem/ACK and queued bytes:1/1 EXIT0,3.098s,
+  `/tmp/m15-d6da-normal-pairing-green.*`;
+- same invitation retains verifier/claimed name/account directory through same
+  owner login and lost replies:1/1 EXIT0,.218s,
+  `/tmp/m15-d6da-same-invitation-green.*`;
+- held A picker retires; explicit new B selection works:1/1 EXIT0,2.550s,
+  `/tmp/m15-d6da-held-invitation-picker-green.*`.
+
+Files delete is a separate confirmed consumer RED: exact saved53 app through
+original detail/confirmation sends no stable op/generation and gets actual409,
+1/1 EXIT1,1.639s `/tmp/m15-native-file-delete-cas-valid-red.*`. Productiona95f
+adds a thin journal using the existing account-owned encrypted CentralStateFile:
+captured descriptor+UUID operation+generation before DELETE; missing-detail
+recovery on Files list; original request only; exact decision/source/external/
+generation acknowledgement before clearing only that operation. Fixed old ACKs
+refresh current data rather than remove a same-ID replacement locally. APK
+build EXIT0,27s `/tmp/m15-file-delete-cas-green-build.*`; actual native GREEN is
+still pending. Joint owns the separate source-delete/recreate reset165 RED;
+no shared producer fix or whole Android/final affected result is claimed here.
+
+
+### Current composed source recovery and Lark large-result consumption
+
+Native sourcea95 with Joint2528/519 host: SourceUploadWorker/ScanWorker same-ID
+A/B spool/context/permission refusal1/1 EXIT0,2.455s; expired snapshot through
+actual generated DocumentsProvider and existing Worker1/1 EXIT0,4.058s; actual
+late ACK/network closure/B explicit collection1/1 EXIT0,1.706s. Prefixes are
+`/tmp/m15-a95-519-{source-worker,snapshot-worker,late-ack-network}-green.*`.
+Actual phase1 original queue/offlineA→B1/1 EXIT0,1.197s, same-UID SIGKILL own
+fixture PID7864 observed absent, phase2 without clear/reinstall restores B then
+explicit A original directory/draft/bytes1/1 EXIT0,.426s. Logs
+`/tmp/m15-a95-519-actual-process-death-*`, backend cleanup0. The full current JVM
+at a95 passed358/358,75XML/no failure/error/skip,96s
+`/tmp/m15-a95-current-jvm-full.log/.exit/-counts.json`; later Lark429 is a
+separate delta, not silently covered by that full run.
+
+Joint519 exact generation/schema/lifecycle delta was independently read in
+`/tmp/mote-m15-review-joint-source-519.md`, no new confirmed issue in that scope.
+Original M15 source-delete/recreate165 actualRED now passes2/2/no skip,4.381s,
+`/tmp/m15-source-replacement-519-green.*`. Independent Desktop reviews exactd6da
+and a95 found no new confirmed P0/P1/P2; those reviews did not run native tests.
+Their saved reports are `/tmp/mote-desktop-review-m15-connection-owner-d6da.md`
+and `/tmp/mote-desktop-review-m15-files-delete-a95f.md`.
+
+The explicit pure-Server Lark335/d259 freeze was read without waking the paused
+M13 thread. Composed as3f73/5fba; the only conflict retained both its owned-status
+reader and this branch's newer recordings reader. Actual backend2/2/no skip0,
+8.897s `/tmp/m15-lark-d259-public-composed.*`; composed Server noEmit0
+`/tmp/m15-519-d259-server-types.*`. No UI producer WIP was merged.
+
+Native218 test on the saved a95 app reached a valid new RED: real M05 calendar
+receipt succeeded with exact inventory task/count20, original selector rendered0
+instead of20,1/1 EXIT1,2.900s `/tmp/m15-lark-large-inventory-valid-red.*`. Before
+that assertion, >32KiB UTF8 status, last full title, and no document body read all
+passed. No task input was exposed: the pre-execution fixture review changed its
+state wait to public task ID differences; the unexecuted input-based version was
+not called a product RED. Test-only package build0.
+
+Minimal429c20d6 changes only CentralLarkConnection: a large inventory is accepted
+only when the receipt marker and owned status inventory both match the original
+task ID; count and unique nonblank IDs are checked. Small inline calendars remain.
+APK build0,10s `/tmp/m15-lark-inventory-green-build.*`; same native test1/1 GREEN,
+3.227s `/tmp/m15-lark-large-inventory-first-green.*`, backend0. It verifies twenty
+full labels, selecting the last calendar, B same-ID selection unchanged and old
+A Save retired under B. Independent delta review and final affected still pending;
+original model copy/probe/directory and Agent startup/history remain explicit OPEN.
+
+
+Current429 Lark original full neighbor first failed at source-context editor
+lookup before its original field assertion,1/1 EXIT1,3.850s,
+`/tmp/m15-429-d259-lark-original-neighbor-green.*`. javap of the exact compiled
+fixture identified that lambda; it was not the new big-calendar assertion.
+Test-only8a5 retained actual generated UI label diagnostics; the same full
+neighbor then passed1/1,11.051s,
+`/tmp/m15-429-lark-source-editor-diagnostic.*`. Test-onlycf435 now waits for the
+actual original source-context field instead of only observing `isWorking`
+false; the existing45s budget and all save/field/archive/partial-failure/cancel/
+small-calendar/lost-ACK/A-B assertions remain. Its test APK build0,16s; full
+neighbor passed1/1,10.216s,
+`/tmp/m15-429-lark-source-editor-state-green.*`, backend0. No production editor
+or polling change was made and no confirmed privacy/runtime regression is
+asserted from the first readiness failure. The first failure is retained.
+
+Independent exact429 calendar-inventory review is
+`/tmp/mote-desktop-review-m15-lark-inventory-429c.md`, no new confirmed P0/P1/P2
+in13 lines; no reviewer execution. Actual big-inventory GREEN remains M15's
+separate run. Latest sourcecf435 is test-only after production429.
+
+
+### Current429 full Android and final-combination representatives
+
+Currenta0529e48 (production429c20d6) offline JVM+debug APK command
+`:app:testDebugUnitTest :app:assembleDebug` actually passes EXIT0,41s,44tasks,
+8executed; fresh75XML358/358,0 failures/errors/skips. Evidence
+`/tmp/m15-429-current-full-android.log/.exit/-counts.json/-source.json`, APK hashes
+`/tmp/m15-429-current-apk-hashes.json`. This newer full pass covers429; the earlier
+a95 full pass remains historical evidence for a95.
+
+Actual current429 native app/current519+d259 host representatives, every test1/1
+and own normal backend cleanup0:
+
+- personal verified export/document result/cancelled receipt sentinel/B stale
+  control:1.307s `/tmp/m15-429-519-portable-vault-green.*`;
+- same-instance/account portable import chosen archive/config preserved/lateB
+  picker denied:1.610s `/tmp/m15-429-519-portable-import-green.*`;
+- generated CapturePipeline drainA→B/new explicit B frame:.384s
+  `/tmp/m15-429-519-generated-capture-drain-green.*`, no platform screenshot;
+- original generic Imports >4MiB/private multipart/actual lost202ACK/same op and
+  explicit-confirm publication:18.939s `/tmp/m15-429-519-generic-import-green.*`;
+- unavailable/forbidden generic support download keeps existing selected
+  document sentinel:.862s `/tmp/m15-429-519-generic-sentinel-green.*`;
+- actual pairing server restart, original ACK410 plus same-grant self verification
+  and queue recovery:2.161s `/tmp/m15-429-519-pairing-server-restart-green.*`;
+- actual post-restart revoked credential preserves pending recovery and no upload:
+  2.047s `/tmp/m15-429-519-pairing-revoked-green.*`.
+
+The Actions representative first never reached instrumentation: the temporary
+universal driver's40s startup guard was shorter than this fixture's existing
+per-account180s real-publication waits. Log
+`/tmp/m15-429-519-actions-native-ledger-green-backend.*`; child exit-15, not a
+normal cleanup0. Possible generated temporary files remain; no real user data
+was touched. The next driver changes only its Actions startup wait to420s, enough
+for both existing180s guards plus setup; no repository/model/production deadline
+or assertion changes. Ready metadata file times show67.585s setup. Then actual
+M12 generated21A/2B→M05→native unregistered CalendarProvider uncertain insert,
+permission refusal, original marker reconstruction, B positive and A no duplicate
+insert passes1/1,.606s, `/tmp/m15-429-519-actions-native-ledger-bounded-green.*`,
+backend0. The test explicitly lacks system READ/WRITE_CALENDAR permissions.
+Adapter reconstruction is not an additional claimed OS SIGKILL; actual queue
+SIGKILL evidence is recorded separately above.
+
+No current required affected or M15 remote PR is claimed. Original model-copy/
+probe/provider catalog, Agent preview/recorded history and Joint policy/profile
+contracts remain explicit shared gaps. The initial40s attempt is a fixture
+startup failure, not a product RED or a passing native check.
+
+
+### Optional Joint M04 relogin fix, independently exercised through native settings
+
+Joint explicitly permits picking80ac30ee and fda6abde alone; its policy HEAD is
+not a consumer freeze. New test-fixture2b403 uses only actual GET configuration,
+POST logout, old self401 and a fresh same-user login before exposing bootstrap.
+No proposal/database state is seeded. The unchanged429 Android processing form
+then reaches a genuine RED: Save PUT `/api/configuration/processing` returns503
+`config_prepare_failed`; native1/1 EXIT1,1.032s,
+`/tmp/m15-429-native-processing-relogin-valid-red.*`, backend0. The original
+revision/value, speaker option preservation and B/oldA controls remain asserted.
+
+Only the explicit80ac test and fda6 configuration correction are cherry-picked
+as e7b43ca7/cf2311ea. The sole conflict is a documentation append: retain current
+history and append only fda6's relogin evidence, no policy WIP. Configuration.ts
+relative2528 is exactly its6+1-line change: reuse cached factories only while
+their immutable original admission subject is current; otherwise drain/close
+before reopening with the new caller, never mutate an old subject.
+
+Identical native APK/test then passes1/1,1.304s,
+`/tmp/m15-429-native-processing-relogin-first-green.*`, backend0. Actual relogin
+plus full configuration/effective-snapshot/lifecycle neighbors19/19,no skip,
+27.976s EXIT0 `/tmp/m15-fda6-config-relogin-neighbors.*`. Server build EXIT0
+`/tmp/m15-fda6-server-build.*`. Bounded independent review
+`/tmp/mote-m15-review-joint-configuration-fda6.md` found no new confirmed issue
+in that narrow delta; its source review and the execution above are distinct.
+Android production is byte-identical to429, so its full358/debug/native evidence
+stays exact rather than mechanically repeating unchanged Kotlin. Earlier all-
+workspace types/Central/scope/i18n/13 backend proofs precede only this small
+server fix; no new final affected or whole-profile/model/Agent completion claim.
+
+## Original native Agent startup and personal recorded history
+
+Declared pure Server245308de is composed as0b17f966; the real generated startup
+and trace suites2/2/no skip pass27.688s (`/tmp/m15-agent-245-composed.log`).
+It is now explicitly held by M13 for a newly reproduced same-user relogin/
+opt-out observer defect. Do not treat this old seam as final; its successor must
+be composed and checked before final acceptance. No native workaround revives
+an old credential subject or writes global diagnostics.
+
+Durable54dd/65cb fixture/native test verifies the actual no-model startup and
+missing explicit personal opt-in: valid RED1/1,1.212s
+(`/tmp/m15-agent-original-valid-red2.log`, backend0). The earlier build omitted
+fixture testBuildType and failed before compilation; a separate first fixture
+registered a Fastify hook after startup and failed before instrumentation. Both
+setup errors are retained and are not product RED. Correct test build20s0.
+
+Minimal native c706d743 restores the original Agent controls using existing M04
+agentTrace whole-document CAS, captured client/navigation fences and actual M08
+records. Opaque nextCursor is returned unchanged by the existing pager; no
+numeric trace sequence conversion, fabricated old tool.completed event, global
+log store or reconstructed historical prompt is introduced. The same actual
+native method passes1/1,6.424s (`/tmp/m15-agent-native-first-green.log`,
+backend0), including default-disabled A/B, no extra preview model call, explicit
+A-only setting, real Harness Material read, continuation and retired A button
+after B. Fixture app/test APK14s0 and bilingual8472/0. Additional precise
+assertions for actual tool/result/source markers and a new explicit B preview
+are subsequent test strengthening, not silently assigned this earlier result.
+Final successor/relogin native proof, review and final affected remain pending.
+
+### Agent successor and bounded original Files settings consumption
+
+M13 declared successor ddc64fe9 is composed as3bd471a7 and closes the earlier
+245 HOLD only when included. Current actual startup/traces/relogin source suites
+3/3/no skip pass27.894s (`/tmp/m15-agent-ddc-composed.log`). The strengthened
+original native history/opaque cursor/tool-result markers/A→B retirement/B new
+preview case passes1/1 in7.261s (`/tmp/m15-agent-ddc-native-strengthened-green.log`,
+backend0). An additional native held-provider query→real logout/login→same owner
+and directory→original settings explicit opt-out→query completed case passes1/1
+in7.310s (`/tmp/m15-agent-ddc-native-relogin-green.log`, backend0), with no later
+payloads, old credential401 and B empty. These are M15 execution facts, separate
+from independent c706 source review with no new confirmed P0/P1/P2 in
+`/tmp/mote-desktop-review-m15-admin-agent-c706.md`. Its then-pending stronger
+execution/observer statements are superseded only by these actual later results.
+
+At Android c706, full JVM/debug APK passes144s,44tasks/10executed,358/358 across
+75XML with0failure/error/skip (`/tmp/m15-c706-ddc-full-android.log` and countsJSON).
+It started at1076b27c; the concurrent a2 backend/docs composition has zero Android
+delta, verified Android tree fba4369595cebef1f83e8c12b0368b2354849396 before/after.
+Do not assign that full build to the later ea1b Files code change.
+
+Declared limited Joint policy checkpoint a2cbf3aa is composed by b18c2ee3. The
+auth binary-route merge now uses its production parser assertion rather than
+M15's older synthetic parser replacement; no unbound global parser or skip is
+introduced. The other conflict was documentation-only union. M13 Agent observer
+and fda relogin fixes are retained. Six actual policy source files15/15/no skip
+pass52.993s (`/tmp/m15-policy-a2-composed.log`); Server/scripts types and scope
+checker pass (`/tmp/m15-a2-ddc-{server-types,script-types,scope}.log`). This is a
+limited UI-consumer checkpoint, not full policy execution/backup acceptance.
+
+Original Files→processing settings valid native RED at bb5b987a/oldc706 reaches
+missing saved named-graph controls,1/1 in2.518s
+(`/tmp/m15-policy-native-valid-red.log`, backend0). Minimal ea1b6acd restores the
+original GET/PUT settings payload, keeping decimal revision and including saved
+policy only when policyConfigured. Its configured-only independent native case
+passes1/1 in2.423s (`/tmp/m15-policy-configured-native-green.log`, backend0): A
+graph edit persists; retired A save does not change B; B edits its same-ID graph
+without modifying A. App/test APK build19s0 and later test APK15s0. Actual original
+SourceWorker equal-ID/spool/context/permission neighbor passes1/1 in2.383s at this
+composition (`/tmp/m15-ea1-a2-source-worker-neighbor.log`, backend0).
+
+**Confirmed OPEN producer mismatch:** the complete original native scalar/graph
+case is still RED because a2 PUT schema requires policy even when GET reports
+policyConfigured=false. First GREEN attempt1/1 fails1.265s with unchanged null
+speakerCount (`/tmp/m15-policy-native-first-green.log`, backend0). Durable
+source-only consumer test f8af92f5 confirms actual400 invalid_request !=200 in
+4.960s (`/tmp/m15-native-scalar-contract-red.log`). Original98d intentionally
+omits unsaved preview policy; M15 does not automatically persist that candidate
+or hide the failure by routing back to a different endpoint. Joint remains the
+unique producer owner; its exact fix is required before this full native case
+can pass. Direct peer handoff returned earlier-turn-submission unconfirmed; no
+delivery claim, proxy or new thread was used. Exact handoff is preserved at
+`/tmp/mote-m15-joint-policy-scalar-blocker.md`. Configured-only GREEN does not close
+this gap. Model copy/probe/catalog, other declared policy OPEN items, final
+required and DraftPR remain pending.
+
+### Latest current Android/core recovery and original model-control RED
+
+Exact0ff4c9d4 / nativeea1b, publica2+245/ddc: full offline
+`:app:testDebugUnitTest :app:assembleDebug` passes EXIT0 in61s,44tasks/8executed.
+The test task actually ran; fresh75XML total358/358 with0failure/error/skip
+(`/tmp/m15-ea1-a2-full-android.log` and countsJSON). Later9509 changes only a
+native instrumentation test; it does not replace this source provenance.
+Scope/Server/scripts types and8472-message bilingual checks pass. The bounded
+46-file changed-text scan finds no binary or obvious live credential-key pattern
+(`/tmp/m15-current-delta-content-audit.json`); it is not whole-repo privacy proof.
+
+Current native SourceWorker and snapshot Worker neighbors are both actual0
+(2.383s and2.018s, `/tmp/m15-ea1-a2-{source,snapshot}-worker-neighbor.log`,
+backend0). Agent admitted-query/native relogin-optout also passes on the combined
+a2+ddc host1/1 in5.920s (`/tmp/m15-ea1-a2-ddc-agent-relogin-neighbor.log`,
+backend0), preserving completion with no later detailed payload.
+
+Real current process-death driver is0:
+`/tmp/m15-ea1-a2-actual-process-death-phase1.log`1/1 in0.790s; it then launches
+only the fixture to obtain its unique PID, uses same-UID SIGKILL, observes process
+absence, and runs phase2 directly without any pm-clear/reinstall. Phase2 passes
+1/1 in0.675s (`-phase2.log`); original B isolation then explicit A original bytes/
+draft restore pass. Exact PID/absence receipt is `-sigkill.log`, backend0. No
+other process, real account/device or private source is touched.
+
+New durable test-only9509f027 preserves the original model-preset controls. It
+first verifies a real saved generated personal M04 profile, opens the actual
+original model-settings page, then fails1/1 in1.118s because copy/probe/directory
+controls remain absent (`/tmp/m15-model-original-controls-valid-red.log`,
+backend0; test APK16s0). No live model/probe was called. This is a genuine visible
+old-capability RED, not new shared HTTP schema or implemented semantics. M13
+remains the original unique shared producer owner. M04 already forbids copying
+shared secrets/endpoints; masked views cannot be used to invent credential
+inheritance. Native GREEN still requires its declared owned-reference contract.
+
+Default-scalar producer f8 RED remains open. After a read-only current Joint turn
+contained no earlier scalar handoff, one materially new actual-HTTP-RED handoff
+attempt returned the same unconfirmed-earlier-submission tool error. No further
+retry, alternate route, proxy or new conversation was used. This is unconfirmed
+message delivery, not an automatic-approval denial or a runtime-test result.
+Final affected/remote DraftPR and all known original shared-contract gaps remain
+pending; passing core recovery does not close the two actual RED journeys.
+
+
+### Original Models/default controls restored and Files scalar mapping corrected
+
+This section supersedes the earlier scalar-producer blocker and missing Models
+controls labels above; their RED logs remain historical evidence.
+
+Files3bede3e2 selects the existing M04 processing CAS for an unconfigured graph,
+using the same full revision as file-processing. Configured graph edits retain
+the original full graph endpoint. The unchanged original native complete case
+passes1/1 in2.483s (`/tmp/m15-policy-canonical-native-full-green.log`, backend0).
+The source case passes1/1 in2.462s and adds stale scalar409 after concurrent graph
+creation (`/tmp/m15-native-scalar-canonical-green.log`). No preview is auto-saved.
+
+Pure Models c4e42220 is composed as0edf6032, including71fa physical Codex RPC
+fence. Own valid generated CLI logout regression reproduced89's physical send
+following final401; the same durable case and fresh B positive now pass in the
+combined9/9/no-skip source suite (`/tmp/m15-model-c4-composed.log`,10.629s).
+Earlier wrong admin route/restart-only executable fixture errors remain distinct;
+no default CLI is used in the valid isolated RED or GREEN.
+
+Native9852/cc3 restores original personal copy/probe/directory. The original
+missing-control RED1.118s passes samecase2.003s. Complete actual generated
+provider/native copy true/false, three secret components, read-only tool-result
+and citation probe, two directory pages, no defaults/Ask/tasks, held A→B retired
+button and B positive pass1/1 in5.453s (`/tmp/m15-model-full-native-current-tool-green.log`,
+backend0). Its first full fixture used retired `search`; only the fixture was
+corrected to actual `search_context`, with unchanged success assertions. One
+permission-review timeout was known before execution; the permitted exact once
+retry succeeded, with no remaining approval pending.
+
+Original feature-default control was independently RED1/1 in0.838s when optional
+selections began empty. Public c4 exposes authoritative seven feature choices;
+native6f4ac791 restores explicit bind/clear and keeps unavailable references.
+Same native case passes1/1 in1.165s (`/tmp/m15-model-defaults-native-first-green.log`,
+backend0): Chat bind then clear, withdrawn Memory reference/presets/import default
+preserved, B unchanged, zero physical model requests. Subsequent detached A save
+and explicit B strengthening are not assigned this earlier result. Current full
+Android/build, independent bounded review and final affected still pending.
+
+Strengthened same default-selector native case also passes1/1 in2.109s, backend0
+(`/tmp/m15-model-defaults-native-retirement-green.log`): after binding/clearing A,
+its detached save is invoked following B resume and changes neither account; B
+then explicitly binds its same-ID preset, A remains exact and model requests
+stay zero. Test-only APK build15s/49tasks4executed0. The first attempted build
+used a wrong relative edit path, then lacked sandbox access to the existing
+Gradle lock; neither reached target test. Corrected path and the exact normal
+approved offline build passed. This is not a production RED.
+
+### Required environment prerequisite failure — no pass assigned
+
+Fixed ae792 required attempt used explicit Node24.21.0 and reached all types0
+and Desktop60files501/5010 (135.64s). Server continued after the Mem0 file while
+that owned child stalled. A precise in-memory load of the installed locked
+better-sqlite3 12.10.0 reproduced ERR_DLOPEN_FAILED: binary ABI147 versus Node24
+ABI137. No live embedding opt-in was set. Read-only TCP inspection of only its
+two generated processes showed the fake loopback listener and no outbound SDK
+connection. No test result is invented from that wait.
+
+The verified own root42855/checkout was gracefully TERM-stopped after confirmed
+prerequisite failure; all18 exact descendants received TERM, no KILL was needed.
+Receipt /tmp/m15-required-affected-current-env-stop.json, original log and exit143
+are retained. This is an environment-controlled incomplete gate, not EXIT0 or a
+reported business assertion failure. No foreign process/emulator was targeted.
+
+Already-installed Node26.11.1 supports the project's Node>=24 range and matches
+ABI147. The same in-memory native load passes and the original four Mem0 tests
+pass4/4,no skip,7.681s with unchanged assertions/budgets and generated loopback
+(`/tmp/m15-mem0-abi147-isolated.log`). No dependency install, binary rebuild or
+production/test edit was used for this environment repair. Required must still
+be run again; no earlier partial result substitutes for its terminal pass.
+
+### Delivered Desktop PR149 composed without changing Android/server production
+
+Parent-declared final f319513a050218230d624cf93e4154bba5649b15 is merged as
+e02e1ffa; test marker import retained by afe2f8e0. Desktop src/scripts are exact
+f319. Android Kotlin and Server production have zero diff from premerge641e;
+Models6f/c4 and Joint replaceViews are retained. Conflict resolution preserves
+the stronger source-only/ingress-known-device QR case and original PR144
+producer history, adopts canonical formal-note UTF16/B tests while retaining a
+separate raw-before-publication case, and combines atomic PID publication with
+explicit partial-marker readiness/positive-safe-PID observation. No assertion
+is skipped, timeout raised or production endpoint changed by this composition.
+
+On matching installed Node26, all seven affected source files pass42/42/no skip
+in134.734s (`/tmp/m15-desktop-final-composed-merge-regressions.log`): MCP
+canonical/raw windows and real provider awaits, plugin owner/late RPC markers,
+QR and exact Models retirement/copy/features. The complete current Android
+unit/debug build also passes358/358/75XML with0fail/error/skip,91s/44tasks5executed
+(`/tmp/m15-desktop-final-full-android.log`); the test task actually executed with
+the delivered stronger Android Material/source fixture. Bilingual8476/0.
+
+Existing native Models/defaults samecases are separately being checked against
+the matching Node26 generated host; no result is assigned before completion.
+The full required gate must run again on this final Desktop composition.
+
+### Current combined gate742: actual failure and bounded fixture corrections
+
+The fixed742961553a1eda6a2c5b8d2e1ca315935545fb23 required command naturally
+ended EXIT1 under installed Node26.11.1/ABI147. All workspace types passed;
+Desktop586/587, Server2762pass/13fail/2cancel/2skip of2779, Web516/518.
+Agent317+1 existing opt-in skip, Diagnostics5/5 and Shared192/192 passed.
+Root extra/CLI and the required Android stage were not reached. Separate actual
+current Android358/358 does not turn this gate green. Full log, exit and unchanged
+SHA receipts are `/tmp/m15-required-affected-desktop-final.*`.
+
+Four test-only proposals were independently read by M13 before application.
+The snapshot publication observation uses the adjacent finite10s instead of
+generic1s; exact original scanner/spool/backend/main assertions pass1/1
+(`/tmp/m15-reviewed-desktop-snapshot.log/.exit`,14.19s total;35 unselected cases
+are not acceptance skips). Three delegated Ask cases use the existing adjacent
+finite60s, preserving all terminal/privacy/start-count/checkpoint assertions;
+same three pass3/3,no skip,87.04s (`/tmp/m15-reviewed-ask-three.*`). The cancel
+fixture now finds the exact original/parent ASR child and requires409 for its
+cancelled parent, preserving physical-occupancy rejection and later fresh
+file-level recovery. It and both canonical UTF16 SDK neighbors pass3/3,no skip,
+19.74s (`/tmp/m15-reviewed-cancel-mcp.*`). Only the newly added redundant raw
+prepublication race case is removed; formal canonical anchors, exact UTF16
+windows/Material spans, raw UUID rejection and owner boundaries remain. No
+production task/model deadlines, thousand-original budgets/corpora or privacy
+assertions changed. These narrow results do not replace a final required pass.
+
+The other full failures remain open for exact diagnosis, including processing
+task-count expectations, malformed-original404, retired physical pin completion,
+summary unknown-result retry, image-stage observation, thousand-record and
+shutdown deadlines and two Web Actions proposal observations. Temporary metadata-
+only six-case diagnostics preserve original assertions and yield1pass/5fail,
+39.10s (`/tmp/m15-processing-original-six-diagnostic.*`); no blanket classification
+as fixture latency or runtime defect is made. The prepared diagnostic copy was
+removed after execution; only the authoritative logs remain.
+
 ### Exact unknown-summary child retry: actual RED, minimal host fix,10/10 GREEN
 
 The original bare503 summary/restart case exposed a real missing counterpart to
@@ -332,6 +1666,192 @@ Separately, the two original Web Actions files pass2/2,no skip,101.86s unchanged
 (`/tmp/m15-web-actions-original-two.log/.exit`). The old full-run proposal timeout
 failures remain. No Web observation or approval assertion was changed.
 
-Recording reader37c8ac83 consumed by Web recording feature; owner evidence and exact bounds are in multiuser-connectors.md.
+### Original-budget diagnostics and Docker-aligned native ABI repair
 
-Explicit recording retry resume79ffb50e consumed alongside reader37c8ac83; only failed phases resume, default retry remains reset-only.
+Literal769 original five-case series naturally ends EXIT1 under Node26: direct
+1000/125 cancelled at unchanged120s, while HTTP1000 passes241.36s (prefix228988ms,
+tail7858ms), daily image27.18s, snapshot pixels5.00s and180-wait shutdown/restart
+67.06s. All counts and120/300/390 budgets remain unchanged; log and unchanged
+SHA receipts `/tmp/m15-original-budget-five-769.*`. No healthy test was interrupted.
+
+After that series ended, existing local source/Node24 headers rebuilt the same
+locked better-sqlite3 12.10.0 for ABI137, matching Docker's Node24. No package
+install, requested header download, dependency/version/lockfile change or peer
+node_modules write occurred. `/tmp/m15-node24-native-alignment-result.json`
+records original/final library hashes and identical package/lock hashes; real
+root and actual Mem0 entry constructors both SELECT1 successfully, with exact
+paths in `/tmp/m15-node24-native-alignment-preflight.json`. Correct four original
+Mem0 worker/history/restart/tamper/unknown-close cases pass4/4,no skip,8.53s
+(`/tmp/m15-node24-mem0-four-correct.log/.exit`). An earlier command named the wrong
+extra Mem0 file and selected zero business cases there; its file placeholder
+is not acceptance or part of that4/4.
+
+The unchanged direct1000 case initially still hit120s under Node24; no causal
+version/performance conclusion follows. Metadata-only in-process phase diagnostics
+retain every original assertion/deadline and complete1/1 in67.45s, with temporary
+copy removed (`/tmp/m15-node24-thousand-original-observer.*`). A separate subsequent
+run uses the literal original file, no Node body/timer changes, with read-only
+metadata sampling from its verified own descendant's temporary database. This
+original case passes1/1,no skip,61.70s within120s: `/tmp/m15-node24-thousand-original-external.*`.
+All1000 source grants/checkpoints/coverage keys,125 extractions and125 independent
+reviews are unchanged and checked. The observations do not retroactively turn
+the earlier timeout cancellations into passes, establish a resource cause or
+replace the pending genuine combined gate.
+
+### Declared Joint503/b7 composition (acceptance pending)
+
+Compose only declared runtime5030430002bd9971d481c8b1ba4c235ab45b6c26 plus
+documentation tipb7a408e44292bcb4e0f93286ff6c9d02df13bec5. Independent bounded
+review is `/tmp/mote-m15-review-joint-503.md`; current M15 server types0 after
+automatic merge, and reviewed exact summary helper/registration remain identical.
+No Android production code changes. Root/attachment profile binding, image-only
+import override, saved-service local health and personal plan metadata extend
+the earlier limiteda2 wire. Native original controls consume their existing
+M04/M05/M03/M06 entries; no new Web-only widgets or alternate engine are added.
+Fresh library/central build, producer deltas, native relevant cases and final
+required are still pending on the resulting exact merge. Custom image recipes,
+instance/shared/component startup observation and final common union remain
+producer-owned OPEN; this PREP is not declared whole final acceptance.
+
+### Composed503 execution and native ABI correction
+
+At exact own8ba5cc17be41d953f68e4024cbedd112bd3c672b, freshCentral0, four public files35/35/no skip70.696s0, summary neighbors10/10/no skip51.465s0 and scope0. Five original native policy/scoped graph/portable import/sourceWorker/snapshotWorker cases each1/1 with backend0; receipts `/tmp/m15-joint503-composed-results.json` and `/tmp/m15-joint503-native-results.json`. Actual JVM358/358 across75 XML, zero failure/error/skip,47s26tasks2executed: `/tmp/m15-joint503-actual-android.*`. This replaces the earlier pending statement for these finite checks only. Custom recipes/shared component startup/final common union remain separate.
+
+The following coordinator stopped before starting full required: local Node24/ABI137 better-sqlite3 cleanup asserted during unchanged two-path native preflight (SIGABRT -6). Thus `/tmp/m15-required-joint503.log` does not exist; this is neither a full product failure nor a pass. Initial constructors/manual forced GC were insufficient. Allocation-driven1000 database stress reproduces -6 with that exact local137 binary, whereas original147 with installed Node26 exits0. No dependency/lockfile version change or peer node_modules writes. Original147 restored atomically; exact root and actual Mem0 native constructors0, allocation GC0, unchanged four Mem0 cases4/4/no skip7.864s0. Detailed hashes, commands and scope: `/tmp/mote-m15-node24-native-cleanup.md`; restore results `/tmp/m15-restored-node26-native-result.json`. This is a local compatibility result, not a general Docker/Node24 claim or timing explanation. Next full command must use Node26 and repeat actual two-path preflight.
+
+### Minimal recording disconnect composition
+
+Selected only public949e66b60a071406e8288f579a62e1d62439e0e9 into own29e9b92f9223ee77eb03384dea32273258b00ef6, plus its two characterization commits. Disconnect retires collection association and rejects later provider calls, preserving accepted source read authority. Existing M15 recordingPage/sync retry-only behavior retained; no other Joint WIP imported. Independent bounded review `/tmp/mote-m15-review-joint-recording-949.md` finds no new confirmed issue in this delta, but explicitly excludes select(enabledfalse), reconnect/account replacement history.
+
+Exact own29e server build0, source3/3/no skip38.18s0 and scope0: `/tmp/m15-disconnect949-results.json`. Both real synthetic provider disconnect journeys cover retained audio/Files/export/Material/restart/B and explicit source privacy withdrawal; third case keeps original owned journal/paging/retry reader. Original Android connection/range/vendor transcript/failed audio retry/playback/oldA-to-B journey1/1 actual6.795s0 with backend0: `/tmp/m15-disconnect949-native.*`.
+
+New Android pause-checkbox/history test303f69d6 is characterization only. Initial run stops before business at sandbox loopback EPERM. Same approved command enters UI but fails a range checkbox lookup before retention assertion; this is not a valid production RED. The test now waits for the actual range form and reenters through the existing settings path; production is unchanged. Its final result and public owner followup remain pending.
+
+The corrected exact original native case now reaches a valid RED at production retention: actual selection.enabled=false ACK is observed, both previously accepted capture IDs disappear from `/api/files` (`before` two IDs, `after=[]`),1/1 failed8.039s. `/tmp/m15-recording-pause-native-range-ready.log/.exit`; backend clean0. No fixed sleep or hand-edited state. The following explicit source-privacy/B assertions remain unreached and must run unchanged after the shared fix. This confirms the collection-checkbox regression; it is not the earlier UI fixture failure.
+
+Minimal producer pause fixab776d50c3d59679a5583c53f8cb1f55cee1b014 is selected as own3e0beaf9e2bbe785592ac4af56e0a0a6c75068d7. Same APK/method now passes1/1 actual7.22s,backend0 (`/tmp/m15-recording-pause-native-green.*`): accepted files retained after pause, explicit source withdrawal still hides them, B journal unchanged at both checks. Exact source provider neighbors pass2/2/no skip42.723s0 (`/tmp/m15-recording-pause-composed-source.*`), covering both providers, pause/resume, source-false preservation through selection save, disconnect/retained bytes/export/Material/restart/B. The regexp selects exactly2 cases; no third journal case is claimed here. Existing source-register mapping returns existing privacy unchanged. Independent review requested from existing active M13; own bounded review `/tmp/mote-m15-review-joint-recording-ab776.md`. Provider-account replacement remains outside this small fix.
+
+Next fixed candidate full required uses original locked147/Node26; successful earlier503 composition/358 JVM/native stages are not broadened into whole acceptance. Previous full742 EXIT1 and latest8ba preflight-aborted/full-unstarted attempt remain separately recorded.
+
+### Fixed c06 complete affected result and independent Android stage
+
+Literal `c06d9ee3c3da53556a36314dd0ae8180d1c53a53` runs the actual required command
+with Node26.11.1/original ABI147. Both root/actual-Mem0 constructors and natural
+allocation GC pass before the run. `npm run check:affected -- --base
+origin/codex/mote-multiuser-integration` naturally ends EXIT1 after1618.56s; source
+before/after identical. `/tmp/m15-required-final-node26.log/.exit/.result.json`.
+All types0; Desktop62files587/587; Server2817total,2814pass1fail2existingSkip,
+zero cancelled; Web518/518/no skip; Agent317pass1existingSkip; Diagnostics5/5;
+Shared192/192. Root follow-on tools/CLI/central runner and required Android stage
+are not reached because workspace tests return1.
+
+The sole Server failure is `multiuser-file-unknown.test.ts:68`, live physical
+original ACK: generic child retry returns409 `task_retry_invalid`, expected200
+before physical-occupancy assertions. This is the same remaining M06 failure
+reported by PR153 and assigned by the parent to the shared Joint owner. M15
+does not duplicate that implementation, weaken the assertion or waive the gate.
+Earlier summary769, three delegated Ask/Insight waits and proposal pagination
+all pass in this full run. Original1000/125 passes66.13s and HTTP1000 passes
+186.35s without changing counts or120/300/390 budgets.
+
+After the full command ends, the independent actual Android stage executes on
+identical c06:358/358,75XML,zero failure/error/skip,61.35s; one test task executes
+after the coordinator's result-clean. `/tmp/m15-c06-actual-android-after-gate.json`.
+Server build also passes10.22s (`/tmp/m15-c06-final-server-build.json`). Neither
+changes the failed required result into a pass.
+
+A metadata-only temporary diagnostic of the physical ACK case passes4.44s but
+adds an awaited public status read, so it perturbs scheduling. It observes the
+child cancelled/externalUnresolved1, original parent running and one physical
+activity. The literal unchanged original single separately passes5.47s. Both
+receipts are retained, original source unchanged and temporary copy removed;
+this is evidence of schedule sensitivity, not a fix or proof of its exact cause.
+`/tmp/m15-physical-ack-{readonly-observation,literal-current}.*`. Await a declared
+minimal shared successor/precise disposition, then same-case and adjacent
+authority checks before the necessary affected retry. No blanket old waiting
+cluster repetition or budget changes are planned.
+
+PR152's independent native citation404 uses its old direct raw-UUID fixture.
+M15 already has `d9a84a4e`'s stronger actual canonical Material→originalRefs→
+context reader test and explicit rawUUID404/source-withdrawal/B404 checks,
+covered by the actual358 run. No consumer fallback is added. PR152's Web entry
+and PR153's Ask optimization do not change Android DTOs and were read-only
+reviewed as separate delivered boundaries, not silently mixed into c06.
+
+Latest independent review `/tmp/mote-m13-review-m15-recording-pause-3e0.md` finds
+no new confirmed P0/P1/P2 in the minimal pause delta; this is distinct from M15
+actual native/source execution. No M15 push or DraftPR yet; required is not0.
+
+### Physical ACK fixture state premise (runtime unchanged; review pending)
+
+A deterministic metadata-only diagnostic waits for the real cancelled-child
+coordinator to settle: pipeline state=`stale`,error=`processing_child_failed`,
+extraction checkpoint retained,calls1. The original generic childretry200
+expectation then reproduces409 in1.64s. `/tmp/m15-physical-ack-settled-parent-diagnostic.*`.
+This supplies the missing state premise: production `wait()` deliberately maps
+cancelled child→stale parent, and `prepareExtractionRetry` deliberately refuses
+stale parents. Reviving this grant to satisfy the old test would weaken the
+existing authorization rule. No machine-load cause is asserted.
+
+The test-only correction saves the pipeline ID from its actual HTTP admission,
+waits for the real stale state, asserts genericretry409, then exercises the
+existing host-only `acknowledgeExternalReplay` capability after actual owner
+authentication. It explicitly rejects B acknowledgement and checks the child
+remains cancelled,parent remains stale,externalUnresolved remains1. No HTTP or
+model tool exposes that capability. The original subsequent fresh HTTP operation
+409/calls1,B success,late physical completion,new operation success/calls2 and
+B indexed assertions remain. The title now names trusted acknowledgement rather
+than implying the obsolete generic HTTP retry succeeds. Existing valid blocked
+parent HTTPretry200 positives at multiuser-processing.test.ts175/176 remain
+unchanged and passed in the fullc06 run.
+
+Complete actual unknown/lateACK file4/4,no skip13.765s0, including bare503 explicit
+file-level confirmation,late ACK after account deletion and queued-call guard:
+`/tmp/m15-physical-ack-reviewed-candidate-file.*`. Server types0. This is a fixture
+precondition migration, not a production fix, not permission to replay stale work,
+and not a waiver of the retained c06 required EXIT1. Independent bounded review
+is requested before closure and the necessary true affected retry. No production
+file/deadline/corpus or public contract changes.
+
+Independent bounded review `/tmp/mote-m13-review-m15-physical-ack-stale.md`
+accepts the fixture premise migration with no new confirmed P0/P1/P2 and
+explicitly limits its claim to trusted host acknowledgement/physical guard, not
+public generic HTTP acknowledgement success. The reviewed proposal used a
+read-only parent-ID lookup; committed33ce instead uses the original HTTP receipt
+ID and adds foreignACK404, retaining the same reviewed guard/assertions. No
+production retry relaxation is indicated. The complete committed candidate
+unknown file4/4 and Servertypes0 are M15 execution, not reviewer execution.
+A uniquely logged necessary full affected retry follows; the c06 EXIT1 stays.
+
+### Draft delivery candidate cac: terminal result and remaining red
+
+The necessary reviewed-fixture retry naturally ends EXIT1 after1895.59s on
+unchanged `cac7421396a078aaaf22f2b7176d229bd29b16ed`. Node26 actual root/Mem0
+constructor and naturalGC0; all types/i18n0; Desktop587/587; Server2814pass1fail
+2existingSkip/2817,zero cancel; Web518/518; Agent317+1existingSkip; Shared192;
+Diagnostics5. `/tmp/m15-required-final-node26-ackfixture.result.json` and complete
+log/exit/coordinator retain exact commands, source before/after and result.
+
+The corrected physical ACK case now passes4.093s in the full run. Sole remaining
+red is `multiuser-memory.test.ts:510`, raw screenshot daily OCR/pixel readiness:
+its unchanged25s shared window ends with OCR succeeded, analysis/derivatives
+running and Memory waiting `memory_image_products_pending`. It does not reach
+final recipe/body assertions. Same production c06 passed this case15.35s;
+that earlier result is preserved rather than substituted. Cause is unconfirmed;
+no budget/corpus/condition/skip change or another diagnostic rerun is applied.
+
+The failed workspace prevents root follow-on tooling and required Android stage.
+Completed independent root81/client5/runner0 on064a and actual JVM358/35875XML
+0fail/error/skip61.35s on c06 are retained with exact unchanged relevant source
+evidence. No needless re-execution is labelled fresh. Current cac/Node26 actual
+SourceWorker andsnapshotWorker each1/1/backend0, `/tmp/m15-cac-final-workers-native-results.json`.
+Android production/shared production have zero changes since8ba; server
+production differs only in the separately tested recording adapter. Native
+provenance `/tmp/m15-cac-native-provenance.json`.
+
+The parent explicitly authorizes delivery of the completed UI scope as Draft
+with remaining reds stated, rather than waiting on a released authorization or
+whole17 acceptance. Current self-contained delivery status is
+[multiuser-android-delivery.md](multiuser-android-delivery.md). Final source changes
+after testedcac are documentation only; final remote head/PR metadata are verified
+at handoff. No merge/deploy/disabledCI change or real user/provider data.

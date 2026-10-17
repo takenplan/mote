@@ -68,6 +68,7 @@ internal class CentralContent(
     private var downloadGeneration = -1L
     private var downloadOwner: String? = null
     private var downloadReceipt: String? = null
+    private var downloadExpected: String? = null
     private val refreshRun = Runnable { if (resumed) when (page) { "ask" -> screens?.pollAsk(); "activity" -> screens?.pollWorkActivity() } }
 
     private val refreshLogin = object : Runnable {
@@ -102,7 +103,7 @@ internal class CentralContent(
         pickerInstruction = state?.getString("pickerInstruction").orEmpty()
         downloadPath = state?.getString("downloadPath"); downloadOrigin = state?.getString("downloadOrigin")
         downloadGeneration = state?.getLong("downloadGeneration") ?: -1L
-        downloadOwner = state?.getString("downloadOwner"); downloadReceipt = state?.getString("downloadReceipt")
+        downloadOwner = state?.getString("downloadOwner"); downloadReceipt = state?.getString("downloadReceipt"); downloadExpected = state?.getString("downloadExpected")
         val shell = NativeAppShell(activity)
         root = shell
         val compactHeader = resources.configuration.screenWidthDp < 360 || resources.configuration.fontScale > 1.2f
@@ -213,7 +214,7 @@ internal class CentralContent(
         state.putString("pickerOwner", pickerOwner); state.putLong("pickerGeneration", pickerGeneration); state.putString("downloadPath", downloadPath)
         state.putString("pickerInstruction", pickerInstruction)
         state.putString("downloadOrigin", downloadOrigin); state.putLong("downloadGeneration", downloadGeneration)
-        state.putString("downloadOwner", downloadOwner); state.putString("downloadReceipt", downloadReceipt)
+        state.putString("downloadOwner", downloadOwner); state.putString("downloadReceipt", downloadReceipt); state.putString("downloadExpected", downloadExpected)
         state.putString("workActivityOrigin", server)
         state.putString("workActivityOwner", accountOwnerKey())
         state.putBundle("workActivity", Bundle().also { screens?.saveWorkState(it) })
@@ -339,7 +340,7 @@ internal class CentralContent(
         work(MoteI18n.text("正在连接中央节点…"), {
             val config = Settings(this).read()
             val (code, value) = HttpJson.post(origin + "/api/login/requests", org.json.JSONObject().put("serverUrl", origin).put("deviceId", Settings(this).deviceId)
-                .put("deviceName", config.deviceName).put("platform", "android").put("challenge", SourceRules.hash(verifier)).put("durationMs", durationMs))
+                .put("deviceName", config.deviceName).put("platform", "android").put("purpose", "central").put("challenge", SourceRules.hash(verifier)).put("durationMs", durationMs))
             check(code == 200); requireNotNull(value).getString("id")
         }) { id ->
             check(origin == server && expected == accessGeneration)
@@ -477,9 +478,10 @@ internal class CentralContent(
             .putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
         @Suppress("DEPRECATION") activity.startActivityForResult(picker, 71)
     }
-    internal fun saveCentral(path: String, name: String, mime: String) {
+    internal fun saveCentral(path: String, name: String, mime: String, expected: CentralDownload? = null) {
         downloadPath = path; downloadOrigin = server; downloadGeneration = accessGeneration
         downloadOwner = accountOwnerKey(); downloadReceipt = null
+        downloadExpected = expected?.let { org.json.JSONObject().put("bytes", it.bytes).put("sha256", it.sha256).put("contentType", it.contentType).put("requireEtag", it.requireEtag).toString() }
         @Suppress("DEPRECATION") activity.startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
             .setType(mime).putExtra(Intent.EXTRA_TITLE, name), 72)
     }
@@ -505,12 +507,13 @@ internal class CentralContent(
         if (request == 72) {
             val uri = data.data ?: return; val path = downloadPath ?: return
             val origin = downloadOrigin; val generation = downloadGeneration; val owner = downloadOwner
-            val receipt = downloadReceipt; downloadPath = null; downloadReceipt = null; downloadOwner = null
+            val receipt = downloadReceipt; val expected = downloadExpected?.let { org.json.JSONObject(it) }?.let { CentralDownload(it.getLong("bytes"), it.getString("sha256"), it.getString("contentType"), it.getBoolean("requireEtag")) }; downloadPath = null; downloadReceipt = null; downloadExpected = null; downloadOwner = null
             work(MoteI18n.text("正在导出中央资料…"), {
                 val selected = CentralAccess.resolve(this)
                 check(selected.server == origin && session.generation == generation && accountOwnerKey() == owner) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
                 val api = requireNotNull(selected.client)
-                if (receipt == null) api.downloadStaged(path, { requireNotNull(contentResolver.openOutputStream(uri, "wt")) }, File(accountDirectory(), "central-native/downloads"))
+                if (expected != null) api.downloadVerified(path, { requireNotNull(contentResolver.openOutputStream(uri, "wt")) }, expected, File(accountDirectory(), "central-native/downloads"))
+                else if (receipt == null) api.downloadStaged(path, { requireNotNull(contentResolver.openOutputStream(uri, "wt")) }, File(accountDirectory(), "central-native/downloads"))
                 else CentralPortable(api).save(org.json.JSONObject(receipt), File(accountDirectory(), "central-native/downloads")) {
                     requireNotNull(contentResolver.openOutputStream(uri, "wt"))
                 }

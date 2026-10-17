@@ -65,6 +65,18 @@ class CentralNativeContractTest {
         assertEquals("google_not_connected", separate.code); assertEquals("Generated connector status", separate.message)
         assertEquals(1, invalidations)
     }
+    @Test fun defaultDeleteSendsTheScopedEmptyJsonBodyAndPreservesExplicitControlFields() {
+        val bodies=mutableListOf<JSONObject>()
+        val api=CentralClient(origin,token,{method,_,bytes,_,mime->
+            assertEquals("DELETE",method);assertEquals("application/json",mime)
+            assertNotNull("Scoped DELETE must not use the Android implicit empty-body media type",bytes)
+            bodies.add(JSONObject(String(bytes!!,Charsets.UTF_8)));200 to JSONObject().put("deleted",true)
+        })
+        // MCP revocation accepts an empty JSON body. Files now has a separate CAS descriptor.
+        api.delete("/api/connections/"+UUID.randomUUID());assertEquals(0,bodies.single().length())
+        val operationId=UUID.randomUUID().toString();api.delete("/api/admin/accounts/"+UUID.randomUUID(),JSONObject().put("operationId",operationId))
+        assertEquals(operationId,bodies[1].getString("operationId"))
+    }
     @Test fun backgroundTransportPreservesNodeLoginWhenExternalAuthorizationFails() {
         val previous = HttpJson.onUnauthorized; var invalidations = 0
         HttpJson.onUnauthorized = { url, credential -> assertEquals("$origin/api/status", url); assertEquals(token, credential); invalidations++ }
@@ -125,17 +137,20 @@ class CentralNativeContractTest {
     }
     @Test fun importRetryAfterLostAdmissionResponseUsesSameArchivedFileAndRequestId() = temporary { root ->
         val cipher = encrypted(); val uploadId = UUID.randomUUID().toString(); val requestId = UUID.randomUUID().toString()
-        val fileId = UUID.randomUUID().toString(); val jobId = UUID.randomUUID().toString()
+        val fileId = UUID.randomUUID().toString(); val jobId = requestId
         CentralStateFile(root, "import", cipher).write(JSONObject().put("manifest", JSONObject().put("id", uploadId).put("name", "generated.txt").put("sizeBytes", 3))
             .put("requestId", requestId).put("instruction", "Generated instruction"))
         File(root, "part-0.enc").writeBytes(cipher.seal(byteArrayOf(1, 2, 3)))
+        val original = JSONObject().put("id", fileId).put("hash", Ingress3Client.hash(byteArrayOf(1, 2, 3))).put("sizeBytes", 3)
+            .put("relativePath", "generated.txt").put("name", "generated.txt").put("mimeType", "application/octet-stream")
         var committed = false; var attempts = 0; var partCalls = 0; val requests = mutableListOf<String>()
         val client = CentralClient(origin, token, { _, url, bytes, _, _ -> when {
             url.endsWith("/api/import-uploads") -> 200 to JSONObject().put("id", uploadId).put("partBytes", CentralImports.PART).put("parts", JSONArray()).apply { if (committed) put("fileId", fileId) }
-            url.contains("/parts/") -> { partCalls++; 200 to JSONObject() }
-            url.endsWith("/commit") -> { committed = true; 200 to JSONObject().put("id", fileId) }
+            url.contains("/parts/") -> { partCalls++; 200 to JSONObject().put("part", 0).put("bytes", bytes!!.size).put("hash", Ingress3Client.hash(bytes)) }
+            url.endsWith("/commit") -> { committed = true; 200 to original }
+            url.contains("/api/archived-files/") -> 200 to original
             else -> { requests.add(String(bytes!!)); attempts++
-                if (attempts == 1) throw java.io.IOException("Generated lost admission response") else 202 to JSONObject().put("id", jobId)
+                if (attempts == 1) throw java.io.IOException("Generated lost admission response") else 202 to JSONObject().put("id", jobId).put("status", "queued").put("files", JSONArray().put(original))
             }
         } })
         val store = CentralImports(root, cipher)
