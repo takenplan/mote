@@ -1176,3 +1176,50 @@ refresh current data rather than remove a same-ID replacement locally. APK
 build EXIT0,27s `/tmp/m15-file-delete-cas-green-build.*`; actual native GREEN is
 still pending. Joint owns the separate source-delete/recreate reset165 RED;
 no shared producer fix or whole Android/final affected result is claimed here.
+
+
+### Current composed source recovery and Lark large-result consumption
+
+Native sourcea95 with Joint2528/519 host: SourceUploadWorker/ScanWorker same-ID
+A/B spool/context/permission refusal1/1 EXIT0,2.455s; expired snapshot through
+actual generated DocumentsProvider and existing Worker1/1 EXIT0,4.058s; actual
+late ACK/network closure/B explicit collection1/1 EXIT0,1.706s. Prefixes are
+`/tmp/m15-a95-519-{source-worker,snapshot-worker,late-ack-network}-green.*`.
+Actual phase1 original queue/offlineA→B1/1 EXIT0,1.197s, same-UID SIGKILL own
+fixture PID7864 observed absent, phase2 without clear/reinstall restores B then
+explicit A original directory/draft/bytes1/1 EXIT0,.426s. Logs
+`/tmp/m15-a95-519-actual-process-death-*`, backend cleanup0. The full current JVM
+at a95 passed358/358,75XML/no failure/error/skip,96s
+`/tmp/m15-a95-current-jvm-full.log/.exit/-counts.json`; later Lark429 is a
+separate delta, not silently covered by that full run.
+
+Joint519 exact generation/schema/lifecycle delta was independently read in
+`/tmp/mote-m15-review-joint-source-519.md`, no new confirmed issue in that scope.
+Original M15 source-delete/recreate165 actualRED now passes2/2/no skip,4.381s,
+`/tmp/m15-source-replacement-519-green.*`. Independent Desktop reviews exactd6da
+and a95 found no new confirmed P0/P1/P2; those reviews did not run native tests.
+Their saved reports are `/tmp/mote-desktop-review-m15-connection-owner-d6da.md`
+and `/tmp/mote-desktop-review-m15-files-delete-a95f.md`.
+
+The explicit pure-Server Lark335/d259 freeze was read without waking the paused
+M13 thread. Composed as3f73/5fba; the only conflict retained both its owned-status
+reader and this branch's newer recordings reader. Actual backend2/2/no skip0,
+8.897s `/tmp/m15-lark-d259-public-composed.*`; composed Server noEmit0
+`/tmp/m15-519-d259-server-types.*`. No UI producer WIP was merged.
+
+Native218 test on the saved a95 app reached a valid new RED: real M05 calendar
+receipt succeeded with exact inventory task/count20, original selector rendered0
+instead of20,1/1 EXIT1,2.900s `/tmp/m15-lark-large-inventory-valid-red.*`. Before
+that assertion, >32KiB UTF8 status, last full title, and no document body read all
+passed. No task input was exposed: the pre-execution fixture review changed its
+state wait to public task ID differences; the unexecuted input-based version was
+not called a product RED. Test-only package build0.
+
+Minimal429c20d6 changes only CentralLarkConnection: a large inventory is accepted
+only when the receipt marker and owned status inventory both match the original
+task ID; count and unique nonblank IDs are checked. Small inline calendars remain.
+APK build0,10s `/tmp/m15-lark-inventory-green-build.*`; same native test1/1 GREEN,
+3.227s `/tmp/m15-lark-large-inventory-first-green.*`, backend0. It verifies twenty
+full labels, selecting the last calendar, B same-ID selection unchanged and old
+A Save retired under B. Independent delta review and final affected still pending;
+original model copy/probe/directory and Agent startup/history remain explicit OPEN.
