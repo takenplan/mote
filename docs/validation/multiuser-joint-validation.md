@@ -916,3 +916,32 @@ accepted OCR/domain data restore with old ticket/image-anchor rejection plus fre
 image navigation. Pure generated2px PNG, captions and fake loopback OCR only;
 no model inference or real user data. Full HTTP personal import, producer noEmit,
 independent review, native/client/compiled/container and full affected are pending.
+
+### Frozen QR plus current Files composition
+
+Producer PR144 head48547e8f/test672 finalrequired960s0 is read-only owner evidence;
+no completed owner thread was awakened. Joint08fa2ba1 uses exact frozen auth
+source and selective M05/M06/Originals pin/retry deltas. It retains all Joint
+incarnation, per-file cancel/retry/raw cache, owner review and attachment fields.
+Own `/tmp/mote-joint-qr-composed-narrow.log/.exit`:16/16,0skip/fail,2.823s EXIT0,
+real generated M01 QR claim/revoke/ACK/known-device/reauthorization routes, pin
+disposer and three retry-hook transaction rollback modes.
+
+Own `/tmp/mote-joint-qr-files-composed-neighbors.log/.exit` was33cases,29pass/4fail,
+EXIT1. All four were own pre-existing fixture pin-count assertions after a
+coordinator's public terminal state, while the actual media activity remained
+active. No production failure or physical pin leak was inferred from that point.
+`/tmp/mote-joint-qr-files-physical-phase.log/.exit` repeats exactly those four
+with actual media completion as the boundary:4/4,5.614s0. Diagnostics actually
+show activeMedia1 and the held pins before completion, then original no-A-artifact,
+zero provider pins/manual pin retained, eventual GC and B assertions pass. Tests
+only changed; all first failures remain. This is not a second full33-case green
+receipt or a full Server/affected gate. New source types/review remain pending.
+
+Attachment retained-object admission later4c55761f avoids copying/re-reading the
+whole already-admitted archive object; existing M03 metadata, checksum readers
+and reference-only admission remain authoritative. Six narrow cases passed in
+10.274s `/tmp/mote-joint-file-attachment-retained-object-narrow.*`; the added
+reference-only assertion passed separately1/1 in0.813s in
+`/tmp/mote-joint-file-attachment-reference-admission.*`. Scope checker0. No large
+file throughput/production performance claim follows from these generated cases.

@@ -264,3 +264,24 @@ raw OCR cache identity. Restore preserves accepted data and mints no execution o
 model lease. Current770f source needs new type/delta/full combination checks; old
 component/gate receipts are not moved. Profile/rule/service-test and import choice
 remain OPEN, as do final clients and complete composed acceptance.
+
+## Frozen QR producer composition
+
+Compose producer48547e8f04a4df76724cb286df32d44f2ecc013b (tested6726838a) as
+08fa2ba1. The three auth files use that exact frozen source, including its
+full-gate-covered central-purpose baseline. M05 synchronous retry recovery,
+M06 shared physical-input pin and exact pin disposer are applied as deltas;
+Joint originalGeneration/attachmentGeneration/fileGeneration, diarizeFrom,
+per-file settings, owner reviews and acknowledgeExternalReplay are retained.
+No peer directory, main/integration branch, deployment or CI setting is changed.
+QR's owner full gate is producer evidence, not Joint composition proof.
+
+Independent Joint QR/auth/disposer/retry-hook16/16 is actual0. The composed
+Files neighbor run initially had29pass/4fail: four own pin assertions observed
+coordinator retirement before actual media completion. Exact diagnostics show
+activeMedia1 at that point (pins1 for an attachment, pins2 for the manual-pin
+forget case). Waiting for actual media activity to finish makes all four pass,
+with unchanged no-artifact, exact physical cleanup and B-positive assertions.
+This is a fixture lifecycle correction; no production source is changed to
+release a still-needed physical pin. Full current affected/types/compiled/client
+and native/container combination remain pending.
