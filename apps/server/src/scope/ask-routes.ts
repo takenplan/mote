@@ -37,7 +37,7 @@ export function registerAsk(runtime:ScopedRuntime,db:DatabaseSync,configuration:
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations',handle:({context,request})=>host.automations.forUser(context).admit(request.body)});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations',handle:({context})=>host.automations.forUser(context).list()});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations/:id',handle:({context,request})=>host.automations.forUser(context).get(id(request))});
- for(const action of ['pause','resume','stop','retry'] as const)registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations/:id/'+action,handle:({context,request})=>host.automations.forUser(context)[action](id(request))});
+ for(const action of ['pause','resume','stop','retry'] as const)registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations/:id/'+action,handle:({context,request})=>host.automations.forUser(context)[action](id(request),z.object({expectedGeneration:z.string().uuid().optional()}).strict().parse(request.body??{}).expectedGeneration)});
  registerAskReadRoutes(runtime,host);
  return host;
 }

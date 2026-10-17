@@ -2,7 +2,7 @@ import {DatabaseSync,backup} from 'node:sqlite';
 import {scopedBackupSchema} from './scoped-backup-schema.mjs';
 import {constants,createWriteStream} from 'node:fs';
 import {open,lstat,realpath,mkdir,mkdtemp,readdir,readFile,writeFile,copyFile,chmod,rm,rename,rmdir} from 'node:fs/promises';
-import {createHash} from 'node:crypto';
+import {createHash,createDecipheriv} from 'node:crypto';
 import {pipeline} from 'node:stream/promises';
 import {join,resolve,relative,dirname,basename,isAbsolute,sep} from 'node:path';
 import {tmpdir} from 'node:os';
@@ -92,8 +92,29 @@ async function providerCompleteness(db,root,archival=false){
  }
 }
 async function originalCompleteness(db,root,deploymentId,now){
+ const partBytes=4*1024*1024,readBounded=(path,limit)=>file(path,async fd=>{if((await fd.stat()).size>limit)throw Error('Invalid original storage size');return fd.readFile();});
  const rows=db.prepare('SELECT user_id,hash,bytes,parts FROM ig_objects').all();
- for(const row of rows){const refs=db.prepare('SELECT r.id,r.retention,s.expires FROM ig_originals r LEFT JOIN ig_snapshot_inputs s ON s.user_id=r.user_id AND s.original_id=r.id WHERE r.user_id=? AND r.hash=?').all(row.user_id,row.hash);const pinned=db.prepare('SELECT 1 FROM ig_pins WHERE user_id=? AND hash=? AND expires>? LIMIT 1').get(row.user_id,row.hash,now);const archived=db.prepare('SELECT 1 FROM ig_archive_files WHERE user_id=? AND hash=? LIMIT 1').get(row.user_id,row.hash);if(!pinned&&!archived&&!refs.some(ref=>ref.retention==='archive'||ref.expires===null||Number(ref.expires)>now))continue;if(!/^[a-f0-9]{64}$/.test(row.hash)||!Number.isSafeInteger(row.parts)||row.parts<0||!Number.isSafeInteger(row.bytes)||row.bytes<0)throw Error('Invalid original metadata');const hash=createHash('sha256');let size=0;for(let part=0;part<row.parts;part++){const path=join(root,'originals',identity([deploymentId,row.user_id]),'objects',row.hash,part+'.plain');await file(path,async fd=>{for await(const bytes of fd.createReadStream({autoClose:false})){size+=bytes.length;hash.update(bytes);}});}if(size!==row.bytes||hash.digest('hex')!==row.hash)throw Error('Incomplete or corrupt original bytes');}
+ for(const row of rows){
+  const refs=db.prepare('SELECT r.id,r.retention,s.expires FROM ig_originals r LEFT JOIN ig_snapshot_inputs s ON s.user_id=r.user_id AND s.original_id=r.id WHERE r.user_id=? AND r.hash=?').all(row.user_id,row.hash),pinned=db.prepare('SELECT 1 FROM ig_pins WHERE user_id=? AND hash=? AND expires>? LIMIT 1').get(row.user_id,row.hash,now),archived=db.prepare('SELECT 1 FROM ig_archive_files WHERE user_id=? AND hash=? LIMIT 1').get(row.user_id,row.hash);
+  if(!pinned&&!archived&&!refs.some(ref=>ref.retention==='archive'||ref.expires===null||Number(ref.expires)>now))continue;
+  if(!/^[a-f0-9]{64}$/.test(row.hash)||!Number.isSafeInteger(row.parts)||row.parts<0||!Number.isSafeInteger(row.bytes)||row.bytes<0)throw Error('Invalid original metadata');
+  const owner=join(root,'originals',identity([deploymentId,row.user_id])),hash=createHash('sha256');let size=0,key;
+  for(let part=0;part<row.parts;part++){
+   const base=join(owner,'objects',row.hash,String(part)),plain=await present(base+'.plain'),sealed=await present(base+'.aes');let bytes;
+   if(plain)bytes=await readBounded(base+'.plain',partBytes);
+   if(sealed){
+    if(!key){
+     const text=(await readBounded(join(owner,'content-key'),4096)).toString('utf8').trim(),fingerprint=(await readBounded(join(owner,'content-key-id'),4096)).toString('utf8').trim();
+     if(!/^[a-f0-9]{64}$/i.test(text)||!/^[a-f0-9]{64}$/.test(fingerprint))throw Error('Invalid original encryption identity');key=Buffer.from(text,'hex');if(digest(key)!==fingerprint)throw Error('Original encryption identity mismatch');
+    }
+    const raw=await readBounded(base+'.aes',partBytes+28);if(raw.length<28)throw Error('Invalid encrypted original part');
+    const cipher=createDecipheriv('aes-256-gcm',key,raw.subarray(0,12));cipher.setAuthTag(raw.subarray(-16));const decoded=Buffer.concat([cipher.update(raw.subarray(12,-16)),cipher.final()]);
+    if(bytes&&!bytes.equals(decoded))throw Error('Conflicting original representations');bytes??=decoded;
+   }
+   if(!bytes)throw Error('Missing original bytes');const expected=db.prepare('SELECT checksum FROM ig_parts WHERE user_id=? AND hash=? AND part=?').get(row.user_id,row.hash,part);if(!expected||digest(bytes)!==expected.checksum)throw Error('Incomplete or corrupt original part');size+=bytes.length;hash.update(bytes);
+  }
+  if(size!==row.bytes||hash.digest('hex')!==row.hash)throw Error('Incomplete or corrupt original bytes');
+ }
 }
 async function inventory(root){
  const files=[],directories=[],native=[],states=[];

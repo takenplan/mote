@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import type {TestContext} from 'node:test';
+import type {InjectOptions} from 'fastify';
 import {randomUUID} from 'node:crypto';
 import {mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
@@ -14,7 +15,7 @@ export async function scopedCaptureFixture(t:TestContext,options?:Parameters<typ
  const directory=mkdtempSync(join(tmpdir(),'mote-m13-browser-'));let host=await buildApp({dataDir:directory},options);
  t.after(async()=>{await host.app.close();rmSync(directory,{recursive:true,force:true});});
  await host.accounts!.initialize('generated-admin',password);
- const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>host.app.inject({method,url,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload})});
+ const request=(token:string|undefined,url:string,method:any='GET',payload?:unknown)=>host.app.inject({method,url,headers:{...protocol,...(token?{authorization:'Bearer '+token}:{})},...(payload===undefined?{}:{payload:payload as InjectOptions['payload']})});
  const login=async(username:string)=>{const r=await request(undefined,'/api/auth/login','POST',{username,password,mode:'client'});assert.equal(r.statusCode,200,r.body);return r.json();};
  const admin=await login('generated-admin');
  for(const username of ['generated-a','generated-b']){const r=await request(admin.token,'/api/admin/accounts','POST',{username,password});assert.equal(r.statusCode,200,r.body);}

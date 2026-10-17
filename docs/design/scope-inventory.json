@@ -1822,6 +1822,7 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/:id',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/queues',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/steps',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks/:id/cancel',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks/:id/retry',service:EXECUTION_DOMAIN",
@@ -2010,7 +2011,10 @@
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id/review'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/materials/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/observations'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipe-settings'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/selection'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory-integrations'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
@@ -2020,7 +2024,8 @@
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs'",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind",
       "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel'",
-      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile'"
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'PUT',url:'/api/memory/recipe-settings'"
     ]
   },
   "apps/server/src/scope/memory-schema.ts": {
@@ -2469,6 +2474,24 @@
     "notes": "Original file review algorithms run through existing M05 file-model leases; retained proposals and exact owner confirmations are private data, with no calendar event writes.",
     "surfaces": [
       "task:execution.register:kind:'processing.review'"
+    ]
+  },
+  "apps/server/src/scope/content-storage.ts": {
+    "scope": "user",
+    "module": "M13",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/content-storage'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/storage-statistics'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/content-storage/decrypt'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/content-storage/decrypt/cancel'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/content-storage'",
+      "directory:dirname(dirname(path))",
+      "directory:dirname(path)",
+      "directory:parent",
+      "directory:path",
+      "directory:root",
+      "directory:this.directory",
+      "task:execution.register:{kind,pool:kind,concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic, parseInput:raw=>z.object({operationId:z.string().uuid()}).strict().parse(raw),resources:()=>[{scope:'user',key:kind}], authorizeInput:context=>{runtime.authority.assert(context);if(this.enabled(context.userId))throw new ConfigServiceError('config_conflict');}, execute:run=>this.decrypt(run),classify:()=>new ExecutionFailure('permanent','storage_conversion_failed')}"
     ]
   },
   "apps/server/src/scope/processing-images.ts": {

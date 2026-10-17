@@ -522,7 +522,7 @@ export function EvidenceDialog({
                 </dl>
                 {capture.metadata?.attachments?.map(id=><button className="button subtle" key={id} onClick={()=>onOpen(formatEvidenceRef('capture',id))}>{moteText("查看附件")} · {id.slice(0,8)}</button>)}
                 <Metadata stateSeries={capture.stateSeries} metadata={capture.metadata} source={capture.provenance?.metadata} modifiedAt={capture.provenance?.modifiedAt}/>
-                <SourceDocumentDetails api={api} document={capture.provenance?.document}/>
+                <SourceDocumentDetails api={api} document={capture.provenance?.document} parentId={capture.revisionState!=='historical'&&!capture.provenance?.deleted?capture.id:undefined} onOpen={onOpen}/>
                 {capture.privacy.reason && (
                   <p className="field-note">{capture.privacy.reason}</p>
                 )}

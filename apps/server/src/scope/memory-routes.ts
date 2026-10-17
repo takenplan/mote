@@ -15,11 +15,15 @@ const memoryReadQuery=(raw:unknown)=>{const fields=memoryQuery(raw);return Objec
 export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,plugins:ScopedPluginHost,providerOptions:MemoryProviderOptions={},questions?:import('./owner-questions.js').ScopedOwnerQuestions){
  const host=new MemoryHost(runtime,db,configuration,execution,plugins,providerOptions,undefined,questions),service=(context:Parameters<MemoryHost['forUser']>[0])=>host.forUser(context);
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory',handle:({context})=>service(context).view()});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/observations',handle:({context,request})=>service(context).observations(request.query)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs',handle:({context,request})=>service(context).jobs(request.query)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/materials/:id',handle:({context,request})=>service(context).materialSelection((request.params as {id:string}).id,request.query)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/selection',handle:({context,request})=>service(context).captureSelection(request.query)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipe-settings',handle:({context,request})=>service(context).recipeSettings(request.query)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'PUT',url:'/api/memory/recipe-settings',handle:({context,request})=>service(context).saveRecipeSettings(request.body)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes',handle:({context})=>service(context).recipes()});
  for(const kind of ['pause','resume','retry'] as const)registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind,handle:({context,request})=>service(context).jobControl((request.params as {id:string}).id,kind)});
- registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit',handle:({context,request})=>service(context).audit(request.query)});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit',handle:({context,request})=>service(context).audit(memoryQuery(request.query))});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id/review',handle:({context,request})=>service(context).review((request.params as {id:string}).id)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit/:id',handle:({context,request})=>service(context).auditMemory((request.params as {id:string}).id,z.object({version:z.coerce.number().int().positive().optional()}).strict().parse(request.query).version)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs',handle:({context,request})=>service(context).submit(request.body)});

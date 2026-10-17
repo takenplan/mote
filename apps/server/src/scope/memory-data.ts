@@ -135,8 +135,8 @@ export class ScopedMemoryData {
   const batch=input.batchId?this.sql.get('SELECT review FROM mm_job_batches WHERE user_id=$user AND job_id=? AND id=?',input.jobId,input.batchId):undefined,state=batch?.review&&JSON.parse(String(batch.review)).coverage?.incomplete?'awaiting_context':'committed';
   if(input.batchId)this.sql.run("UPDATE mm_job_batches SET state=? WHERE user_id=$user AND job_id=? AND id=?",state,input.jobId,input.batchId);if(!this.sql.get("SELECT 1 FROM mm_job_batches WHERE user_id=$user AND job_id=? AND state!='committed'",input.jobId))this.sql.run("UPDATE mm_jobs SET state='committed' WHERE user_id=$user AND id=?",input.jobId);else if(!this.sql.get("SELECT id FROM mm_job_batches WHERE user_id=$user AND job_id=? AND state NOT IN ('committed','awaiting_context')",input.jobId))this.sql.run("UPDATE mm_jobs SET state='awaiting_context' WHERE user_id=$user AND id=?",input.jobId);return prepared.items;
  });}
- private filters(raw:unknown,sourceIds:readonly string[]|undefined,paginate:boolean,recordPins?:readonly {id:string;version:number;fingerprint:string}[]){
-  this.state();const {cursor,...query}=memoryPageSchema.parse(raw),identity={collection:'memory',...query,...(recordPins?{recordPins:memoryHash(recordPins)}:{}),...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {})},position=cursor?this.cursor.decode(cursor,identity):undefined,conditions=["json_extract(r.json,'$.status')='published'"],args:(string|number)[]=[];
+ private filters(raw:unknown,sourceIds:readonly string[]|undefined,paginate:boolean,recordPins?:readonly {id:string;version:number;fingerprint:string}[],audit=false){
+  this.state();const {cursor,...query}=memoryPageSchema.parse(raw),identity={collection:audit?'memory-owner-filtered-audit':'memory',...query,...(recordPins?{recordPins:memoryHash(recordPins)}:{}),...(sourceIds?{sourceIds:[...new Set(sourceIds)].sort()}: {})},position=cursor?this.cursor.decode(cursor,identity):undefined,conditions=[audit?"json_extract(r.json,'$.status')='stale'":"json_extract(r.json,'$.status')='published'"],args:(string|number)[]=[];
   conditions.push("json_array_length(r.json,'$.evidenceIds')>0 AND NOT EXISTS(SELECT 1 FROM json_each(r.json,'$.evidenceIds') proof WHERE NOT EXISTS(SELECT 1 FROM mm_evidence e WHERE e.user_id=$user AND e.id=proof.value))");
   // The complete transitive source set is restricted before FTS, ordering and
   // LIMIT. An empty host allowlist grants no records. It never means all sources.
@@ -166,6 +166,12 @@ export class ScopedMemoryData {
   const {query,identity,conditions,args}=this.filters(raw,sourceIds,true,recordPins);if(recordPins){conditions.push("EXISTS(SELECT 1 FROM json_each(?) frozen WHERE json_extract(frozen.value,'$.id')=r.id AND json_extract(frozen.value,'$.version')=r.version AND json_extract(frozen.value,'$.fingerprint')=json_extract(r.json,'$.fingerprint'))");args.push(JSON.stringify(recordPins));}
   const rows=this.sql.all(`SELECT r.* FROM mm_records r WHERE r.user_id=$user AND ${conditions.join(' AND ')} ORDER BY r.created_at DESC,r.id DESC LIMIT ?`,...args,query.limit+1) as MemoryRow[],last=rows.slice(0,query.limit).at(-1);
   return {rows:rows.slice(0,query.limit),nextCursor:rows.length>query.limit&&last?this.cursor.encode(identity,{at:last.created_at,id:last.id}):null};
+ }
+ /** Human-only stale review shares the original literal filters and their
+  * complete source predicates, but never the current Memory capability. */
+ auditPage(raw:unknown){
+  const {query,identity,conditions,args}=this.filters(raw,undefined,true,undefined,true),rows=this.sql.all(`SELECT r.* FROM mm_records r WHERE r.user_id=$user AND ${conditions.join(' AND ')} ORDER BY r.created_at DESC,r.id DESC LIMIT ?`,...args,query.limit+1) as MemoryRow[],last=rows.slice(0,query.limit).at(-1);
+  return {items:rows.slice(0,query.limit).map(row=>({id:row.id,version:row.version,kind:'stale' as const,usableAsMemory:false as const})),nextCursor:rows.length>query.limit&&last?this.cursor.encode(identity,{at:last.created_at,id:last.id}):null};
  }
  /** Literal host record only. Both page and exact/history reads use these same
   * SQL predicates before any external provider is given its exact key. */

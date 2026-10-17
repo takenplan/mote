@@ -768,3 +768,244 @@ running occupancy is0; source queue and original M05 lifecycle neighbors pass
 Server/Web noEmit, scope inventory and synchronized i18n8474 pass separately.
 These are narrow consumer proofs;
 953's540 full Web predates this queue delta and is not relabeled current full.
+
+### Original stale audit controls
+
+New durable regression828af415 reaches actual source400 for the original query,
+layer/tier/time/device filters, and original React disabled search (not a fixture
+or environment failure). Logs `/tmp/m13-memory-audit-filters-{source,ui}-red.log`.
+The existing M07 literal filtering now serves an isolated retained-only audit
+page/cursor; normal published read authority and unfiltered old cursors stay
+unchanged. Original search/category/tier/time/as-of/history controls are usable.
+
+Actual filtered source2/2 no skip0 covers before-LIMIT filters, complete signed
+pages, changed-query/foreign-owner cursors, B positive, exact retained versions,
+as-of/validity/history and no new model requests
+(`/tmp/m13-memory-audit-filters-source-green3.log/.exit`). Original M07
+current/history/plugin/audit neighbors7/7 no skip0
+(`/tmp/m13-memory-audit-existing-service-neighbors.log/.exit`). Original React
+page and affected canonical selection/refresh neighbors22/22 no skip0,
+including actual literal query/category/tier/as-of/history, body retirement on
+filter change and held A→B positive
+(`/tmp/m13-memory-audit-original-ui-neighbors2.log/.exit`).
+
+First extension green2 preserved a source fixture that retired the old Material,
+although the newly corrected Memory actually depends on the separate owner note.
+It is not a production as-of failure. The validity test now retires that actual
+note via its real Material publication, then preserves the original interval
+assertions. The existing original-page correction neighbor explicitly uses its
+original history checkbox to include the superseded old stale card; all prior
+body/owner/context assertions remain. Those earlier failed logs are preserved.
+Source/Web types and synchronized i18n8475/scope checks are recorded separately.
+These local cases do not replace final whole-M13 required or actual IAB breadth.
+
+### Original Memory range/raw and recipe controls
+
+The original range/raw page produced valid failures on the retired global job
+route and absent scoped selection (source 503, original button POST
+`/api/memory-jobs`). Regression commit `884a1d3a` preserves those original cases.
+The repair reuses M02 current originals/Material membership, M03 browser scope,
+M04 exact model lease and the existing M07/M05 journal. No new Store/scheduler or
+semantic dispatch is introduced.
+
+Actual source selection/admission cases: three pass, no skips, 17.417s in
+`/tmp/m13-memory-range-source-isolated-manual.log/.exit`: capture context time
+versus newly created Material time; 66 originals across the 60-item browser
+boundary; sibling/mixed-group exclusion from an actual selected-original model
+payload; A/B same Material identity isolation; post-lease canonical retirement
+before any job write. Earlier expanded payload assertions mixed in separately
+scheduled automatic Memory work; the final fixture explicitly disables its own
+automatic Memory via M04 before bulk intake to isolate the manual command. Old
+failure logs and original budgets remain preserved, not relabeled pass.
+
+Original-page cases cover immutable admission after lost ACK/remount, rolling
+range continuity, exact installed personal recipe versions plus Coding,
+independent actual result domains/defaults unchanged, and held A preflight→B
+with zero A private POST. Multi-version fixture initially inspected
+`strategy.id` instead of the existing `strategy.recipe.id`; corrected only the
+assertion's binding location and retained the original three exact selections.
+The synthetic model does not prove live-model semantic accuracy. Existing act
+warnings from old polling helpers remain separately visible.
+
+Final direct M07 neighbor collection: 10/10 no skips/failures, 50.412s,
+`/tmp/m13-memory-range-freeze-ten.log/.exit`. Original range/recipes/held-owner
+page collection: 3/3 no skips/failures, 26.349s,
+`/tmp/m13-memory-range-final-current-ui.log/.exit`; existing Material and audit
+original-page neighbors separately 5/5, 20.019s. Web build/Server/Web types,
+scope and 8477 synchronized bilingual messages pass. This remains a finite
+Memory block, not the final whole M13 affected gate.
+
+Actual IAB original raw-A and range-B proof: `/tmp/m13-memory-range-iab-proof.json`
+and three generated screenshots. Two distinct real M07 jobs committed; each
+extract/review/publication task succeeded, A and B own distinct published cards
+with exact generated original evidence. The original account switch shows B's
+same raw UUID without A's body or selected card. A first localhost session became
+unauthorized after completion while other localhost fixtures could coexist; no
+root cause or cross-user leak is asserted. Fresh 127.0.0.1 original login and
+account-switch verification completed. No hidden Electron or live model used.
+
+
+### Original automatic source/default Memory combinations
+
+Test-only4efaac32 records the actual original scoped settings page without its
+automatic-combination controls (`/tmp/m13-memory-source-recipes-original-red.log`,
+1fail). The existing MemoryRecipeSelection is now reused in that same category,
+with finite scoped GET/PUT mapping and the existing whole M04 CAS. No new
+recipe algorithm, provider, model, scheduler or historical-work admission is
+added. Exact owned source inheritance follows the same capture/Lark/default
+rules as existing M07 intake; only its selected configuration field changes.
+
+Actual source2/2 no skips0 (`/tmp/m13-memory-source-recipes-service.log`) covers
+capture and document defaults, source override/removal, whole-configuration CAS,
+foreign source404, contradictory selectors, invalid refs and zero model/job
+replay. Original page plus unchanged legacy chooser2/2 no skips0
+(`/tmp/m13-memory-source-recipes-four-scopes-ui.log`) covers the original four
+scopes, saved exact version refs, actual M04 writes and detached A Save after B
+mounts. Server noEmit0, Webbuild0 and scope0 are recorded in
+`/tmp/m13-memory-source-recipes-final-server-types.*`,
+`/tmp/m13-memory-source-recipes-final-web-build.*` and
+`/tmp/m13-memory-source-recipes-scope.*`. Earlier failed strict-intersection
+parser attempt remains recorded; the corrected shared selector/body shape passes
+the original assertions. This is finite source/UI proof, not a new whole gate.
+
+### Original context-step / registered processor controls
+
+Test-only2c5848e3 reaches actual original WorkflowProcessing against real generated
+M03 originals and M06 tasks: the old registry response crashes at view.jobs.map
+(`/tmp/m13-workflow-original-red.log/.exit`,1fail). The component now reads the
+existing M05-owned step projection, state filters and signed cursor, displaying
+actual dependency/output metadata and retaining the original per-step controls.
+No legacy global Store/context-DAG runtime is installed. Scope/gateway checking
+first caught placing a private SQL reader in the foundation's raw-SQL module;
+the reader now lives in a dedicated owner-bound PrivateSql helper, without a new
+checker exemption.
+
+Current source plus M05 context neighbors7/7/no skips0,25.067s
+(`/tmp/m13-workflow-actual-final-source.log/.exit`): twelve genuine M06 steps
+across opaque pages, query/owner/tamper rejection, failed-state filtering, B/admin
+empty owned views, exact output locators, unknown physical facts, cancel and
+explicit existing retry authority. Original component plus queue neighbor2/2,
+no skips0,12.393s (`/tmp/m13-workflow-actual-final-ui.log/.exit`) proves actual
+failed-step retry, cancel rejection/confirmation, completed output retention,
+unknown retry refusal/explicit confirmation, original state/extension controls,
+held A read and detached old action under B. Current Server noEmit0, Webbuild0,
+scope0. This is not a new whole affected/IAB result.
+
+Intermediate retries incorrectly assumed cumulative attempt counts and selected
+a child whose failed parent cannot prepare retry; those logs are retained. The
+final fixture observes the unchanged M05 reset-to-zero response and genuine
+coordinator outcome instead of changing retry policy. A subsequent actual
+blocked-state probe exposed an incorrect presentation use of execution validate;
+removing that speculative check preserves M05's original preparation transaction.
+The same blocked/unknown case is included in the final seven greens. Earlier
+helper variable-shadowing compile/runtime failures were corrected before the
+final gate; they were not fixture or parent failures.
+
+### Declared503 composition and original saved local-service check
+
+Only Joint public runtime5030430002bd9971d481c8b1ba4c235ab45b6c26 was merged as
+eb3eee3; its declared doc-onlyb7a408e44292bcb4e0f93286ff6c9d02df13bec5 contract file
+is synchronized. No later arbitrary Joint source/recording WIP is consumed.
+Generated root/attachment/default-model/health plus new M05 context-step source
+10/10/no skips0,49.058s (`/tmp/m13-503-composed-source.log/.exit`), freshShared0,
+Server/Webtypes0 and scope0. These bounded composed proofs are not final affected.
+
+Original FileProcessingSettings then gives actual missing-control RED98293c42
+(`/tmp/m13-file-local-health-original-red.log/.exit`,1fail): a genuinely saved
+ASR service exists, but the original local check button is absent in the scoped
+branch. The original control is restored using only serviceId and the declared
+existing health endpoint. It is disabled for dirty unsaved settings; it sends no
+caller endpoint/key, upload or inference. The result's local execution and exact
+boolean health fields are validated before displaying readiness.
+
+Same original component plus existing named-settings/CAS neighbor2/2/no skips0,
+5.522s (`/tmp/m13-file-local-health-final-neighbors.log/.exit`): saved-only reload,
+actual GET/health through M04/M05, held A reply and old button retired under B,
+B same-ID positive, malformed200 body rejection and no secret in DOM. Initial
+single case1/1 9.375s is separate evidence; final strengthened case retains all
+assertions. Webbuild0. A first staging command used the Web cwd with root-relative
+paths and did not commit; absolute-path staging corrected that bookkeeping error.
+This is not live service/model quality, a complete file-policy/default/shared
+watch implementation, or a new whole Web/affected result.
+# Explicit retained attachment processing (finite consumer)
+
+Original Library detail reached its real current source parent but had no
+explicit attachment processing control. Test-onlyee386a1b records that actual
+RED (`/tmp/m13-attachment-original-ui-valid-red.log/.exit`,1fail/0skip). The
+earlier caption wait assumed raw intake displayed the source body and stopped
+before the target assertion; it is a fixture observation failure, not this RED.
+
+SourceDocumentDetails now reuses its existing attachment rows for an explicit
+current-profile choice and the declared M03 parent/archive preparation command.
+Only the immutable parent/archive IDs and selected MIME/profile options survive
+reload. Lost ACK, failed status reads and malformed receipts retain the exact
+body for explicit retry; they cannot silently replace an already bound plan.
+No operation ID, task, model lease or scheduler is invented in the browser.
+The accepted child and its exact attachmentOf relation are read before the
+pending metadata is cleared; archive-only is shown as no content processing,
+without claiming OCR/Memory completion. Historical readers expose no action.
+
+Actual original renderer + unchanged archive presentation neighbors16/16,
+0skip, EXIT0 (`/tmp/m13-attachment-original-ui-neighbors.log/.exit`,5.811s).
+The actual case covers explicit archive choice, admitted lost ACK and remount,
+same-body retry with one accepted child, exact child navigation, A held response
+and detached-button retirement under equal-parent B, wrong-parent response and
+wrong attachment-detail transport corruption, then fresh B success. Shared
+build, Web types/build and synchronized8484-message catalog checks are0. The
+initial new ref type errors were corrected and retained in the first types log.
+
+A separate real source/parent reincarnation RED is isolated as410acf78, not
+hidden by renderer response retirement. The common producer owner supplied
+b7946ede with the existing durable counter and post-await transaction fence;
+its bounded review is clean, while M13 composition verification is recorded
+separately. This finite consumer is not whole Files or final M13 acceptance.
+
+The declaredb794 producer fix is now composed as
+dd8ce83ab101c263df8b277f79553d407090bdaa. Its validation-document append conflict
+kept this candidate's existing ledger and only the new attachment section; later
+unselected image/observer/recovery provenance paragraphs were not imported as
+tested runtime. Source/parent reincarnation2/2 passed in16.270s, original file
+forget/counter4/4 in12.786s, original attachment+archive renderer16/16 in10.840s,
+all no skips and EXIT0. Logs are `/tmp/m13-attachment-incarnation-composed-source.*`,
+`/tmp/m13-attachment-file-counter-neighbors.*` and
+`/tmp/m13-attachment-composed-original-ui.*`. The first source invocation named a
+nonexistent forget-neighbor path; Node selected only the actual two incarnation
+cases. It is reported as2/2, not an executed neighbor suite; the subsequent
+explicit real decision-file invocation provides the distinct4/4 evidence.
+Server noEmit and scope inventory checks ondd8 are0. Web types/build and fresh
+Shared build are0 on the same unchanged consumer source. No same-version whole
+gate or M13 PR is claimed by these focused results.
+
+Storage KEEP recheck uses actual generated A/B M03 originals, without a model:
+both original GET `/api/content-storage` and `/api/storage-statistics` still
+return503 scope_unavailable (`/tmp/m13-storage-contract-probe2.log/.exit`,2fail,
+5.738s). The first outside-package .ts launcher failed module setup and is not
+product RED; the .mts source probe reaches both real routes. The existing
+scoped original worker explicitly writes plaintext and exposes no equivalent
+decryption/storage-report producer. `/tmp/mote-m13-storage-contract-blocker.md`
+records the exact common-producer boundary for parent assignment. Legacy global
+Store/key/whole-disk aggregation and fabricated zero reports remain forbidden.
+
+## Declared exact-parent summary recovery composition
+
+M15's independently reviewed769a30b0355608782f8e8cbfe8477c8517cdb2e0 is selected as
+9bfb3e35. It restores only the exact owned blocked derivatives coordinator inside
+the existing M05 child acknowledgement transaction. The current owner/source,
+extraction/settings, checkpoint/mode/full input and cancelled/stale-parent fences
+remain. The accompanying four fixture alignments preserve exact five task rows,
+both distinct M07 subscription events, rollback authorization/sequence checks,
+strict input errors and both physical-activity and original-pin completion waits.
+Existing stronger orphan-row assertions in this tree were retained in conflict
+resolution. Android runtime and unrelated peer ledger history were not imported.
+
+On this composition, nine selected actual processing/Files cases pass9/9,
+0skip/cancel,52.791s (`/tmp/m13-summary-769-composed-nine.log/.exit`): unknown summary
+checkpoint/M04/restart, cancel/source privacy rollback, ASR checkpoint, physical
+file cancellation and the four exact fixture boundaries. M15's additional
+capacity case is not present in this selected tree and is not counted as a tenth
+execution. The original command's `-ten` filename was preserved and an identical
+`-nine` receipt names the actual result. Server noEmit and scope checks are0.
+Original Workflow/queue/attachment controls then pass3/3,0skip/cancel,7.063s
+(`/tmp/m13-summary-769-original-controls.log/.exit`). No current final affected
+pass is inferred, and the parent-assigned Ask/Insight/Actions failure cluster
+remains with that independent owner rather than being patched here.

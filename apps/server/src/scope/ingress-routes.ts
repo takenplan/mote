@@ -1,3 +1,4 @@
+import type {ContentEncryption} from '../content-encryption.js';
 import {decodeIngressBundle} from './ingress-bundle.js';
 import {importDeclarationSchema} from './import-attribution.js';
 import type {FastifyRequest} from 'fastify';
@@ -18,12 +19,12 @@ const batch=z.object({batchId:z.string().min(1).max(256),items:z.array(z.unknown
 
 /** Restores only the version-3, account-bound ingress. Old owner transports,
  * shell execution, processor algorithms and external connectors remain closed. */
-export function registerIngress(runtime:ScopedRuntime,db:DatabaseSync,directory:string){
+export function registerIngress(runtime:ScopedRuntime,db:DatabaseSync,directory:string,contentCipher?:(userId:string)=>ContentEncryption){
  runtime.app.addContentTypeParser('application/x-ndjson+gzip',{parseAs:'buffer',bodyLimit:16*1024*1024},(request,body,done)=>{
   try{if(request.method!=='POST'||!/^\/api\/ingress\/sources\/[A-Za-z0-9_.:-]+\/captures$/.test(request.url))throw new PrivateDataError('invalid_data');done(null,decodeIngressBundle(body as Buffer,request.headers['x-mote-batch-id']));}
   catch(error){done(error as Error);}
  });
- const host=new IngressHost(runtime,db,directory);
+ const host=new IngressHost(runtime,db,directory,contentCipher);
  const service=(services:ReturnType<ScopedRuntime['services']['forUser']>)=>services.get<UserIngress>(INGRESS_DOMAIN);
  // Original generic Imports byte transport. Authentication stays Wire2; M03's
  // device-only credentials still cannot use these management endpoints.

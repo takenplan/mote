@@ -1,3 +1,4 @@
+import {registerScopedContentStorage,type ScopedContentStorage} from './content-storage.js';
 import {registerScopedTodos} from './todos.js';
 import {registerScopedActions} from './action-routes.js';
 import type {ScopedActions} from './actions.js';
@@ -54,6 +55,7 @@ export {registerUserRoute,requestContext} from './http.js';
 export async function buildScopedApp(config:ManagementConfig&{dataDir:string;maxExportBytes?:number;configuration?:ManagementConfig['configuration']&{publicUrl?:string|null;configFile?:string|null;document?:ConfigDocument}},options:{verifier?:IdentityVerifier;lifecycleAuthority?:LifecycleAuthority;pluginReleaseTransport?:PluginReleaseTransport;connectorTransports?:ConnectorTransports;connectorDefinitions?:readonly ConnectorDefinition[];hindsightRuntimeFactory?:HindsightRuntimeFactory;updateDependencies?:Parameters<typeof registerManagement>[3]}={}){
   const storage=openScopeStorage(config.dataDir);
   let configuration:Configurations|undefined;
+  let contentStorage:ScopedContentStorage|undefined;
   let plugins:ScopedPluginHost|undefined;
   let connectors:ScopedConnectors|undefined;
   let memory:MemoryHost|undefined;
@@ -84,7 +86,8 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     configuration=await Configurations.open({directory:config.dataDir,db:storage.db,authority,accounts:runtime.accounts,lifecycleAuthority,instancePath:config.configuration?.configFile??undefined,instanceDocument:config.configuration?.document});
     registerConfigurationRoutes(runtime,configuration);
     execution?.bindConfiguration(configuration);
-    const ingress=registerIngress(runtime,storage.db,config.dataDir);
+    if(execution)contentStorage=registerScopedContentStorage(runtime,storage.db,config.dataDir,configuration,execution);
+    const ingress=registerIngress(runtime,storage.db,config.dataDir,contentStorage?.cipher);
     const ownerQuestions=registerOwnerQuestions(runtime,storage.db);
     if(!options.verifier)mcp=registerScopedMcp(runtime,storage.db,configuration,ingress);
     plugins=execution?registerScopedPlugins(runtime,{db:storage.db,directory:config.dataDir,configuration,execution,releaseTransport:options.pluginReleaseTransport}):undefined;
@@ -100,13 +103,13 @@ export async function buildScopedApp(config:ManagementConfig&{dataDir:string;max
     if(execution&&ask)actions=registerScopedActions(runtime,storage.db,configuration,execution,ownerQuestions,ask,ingress);
     if(execution&&plugins)connectors=registerScopedConnectors(runtime,{db:storage.db,directory:config.dataDir,cursorKey:privateCursorKey,configuration,execution,plugins,ingress,processing,transports:options.connectorTransports,definitions:options.connectorDefinitions});
     if(connectors&&mcp){const host=mcp;connectors.registerSourceStatusReader((context,ids)=>host.forUser(context).sourceStatuses(ids));}
-    if(execution){registerTaskRoutes(runtime,execution);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await lifecycle?.close();await mcp?.close();await execution.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
+    if(execution){registerTaskRoutes(runtime,execution,privateCursorKey);app.addHook('onReady',async()=>execution.start());app.addHook('preClose',async()=>{await lifecycle?.close();await mcp?.close();await execution.close();await contentStorage?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();});}
     if(lifecycle&&ask)lifecycle.bindImportPublication((context,work)=>ask!.automations.preserveImportEvents(context,work));
     if(lifecycle){lifecycle.recover();registerLifecycleRoutes(runtime,lifecycle);management=await registerManagement(runtime,configuration,config,options.updateDependencies);}
     if(execution&&ask&&memory&&processing&&lifecycle)registerScopedActivity(runtime,storage.db,execution,{ask,memory,processing,lifecycle});
     await registerWebAssets(app);
     app.setNotFoundHandler(async(req,reply)=>{if(req.url.startsWith('/api/'))await requestContext(req,authority,runtime.accounts);else return reply.code(404).send({error:'not_found'});return reply.code(503).send({error:'scope_unavailable'});});
-    app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
-    return {...runtime,execution,configuration,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,deploymentId:storage.deploymentId};
-  }catch(error){await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await configuration?.close();await management?.close();storage.close();throw error;}
+    app.addHook('onClose',async()=>{await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();ownerQuestions.close();await contentStorage?.close();await configuration?.close();await management?.close();accounts.close();storage.close();});
+    return {...runtime,execution,configuration,contentStorage,plugins,ingress,processing,connectors,memory,mcp,ask,ownerQuestions,todos,actions,lifecycle,deploymentId:storage.deploymentId};
+  }catch(error){await lifecycle?.close();await mcp?.close();await actions?.close();await ask?.close();await connectors?.close();await memory?.close();await processing?.close();await plugins?.close();await contentStorage?.close();await configuration?.close();await management?.close();storage.close();throw error;}
 }
