@@ -66,6 +66,19 @@ internal class CentralLarkConnection(
         if (state == "succeeded") {
             val result = task.optJSONObject("result")
             result?.optJSONArray("calendars")?.let { calendars = JSONArray(it.toString()) }
+            if (result?.has("calendarInventory") == true) {
+                // A bounded M05 receipt points to the exact discovery task in
+                // the existing owned status reader; never borrow a later task.
+                require(result.getString("calendarInventory") == task.getString("id"))
+                val inventory = view!!.getJSONObject("calendarInventory")
+                require(inventory.getString("taskId") == task.getString("id"))
+                val items = inventory.getJSONArray("items")
+                val count = result.get("count")
+                require(count is Number && count.toDouble() == items.length().toDouble())
+                val ids = (0 until items.length()).map { index -> items.getJSONObject(index).also { it.getString("name") }.getString("id") }
+                require(ids.all(String::isNotBlank) && ids.toSet().size == ids.size)
+                calendars = JSONArray(items.toString())
+            }
             if (result?.has("installed") == true) {
                 if (result.optBoolean("statusInConnection")) {
                     for (field in result.keys()) if (field != "statusInConnection") view!!.put(field, result.get(field))
