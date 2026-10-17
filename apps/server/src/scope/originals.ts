@@ -27,7 +27,16 @@ export class Originals{
  root(){this.assert();return this.trustedRoot();}
  private trustedArea(kind:'objects'|'uploads'|'work'){const path=join(this.trustedRoot(),kind);privateDirectory(path);return path;}
  area(kind:'objects'|'uploads'|'work'){this.assert();return this.trustedArea(kind);}
- private cleanStage(path:string){if(dirname(path)!==this.trustedArea('objects'))throw conflict();rmSync(path,{recursive:true,force:true});}
+ private existingArea(kind:'objects'|'uploads'|'work'){
+  const root=join(this.directory,'originals'),user=join(root,identityHash([this.deploymentId,this.sql.userId])),area=join(user,kind);
+  for(const path of [this.directory,root,user,area])if(!privateDirectory(path,false))return;
+  return area;
+ }
+ private cleanStage(path:string){
+  const parent=join(this.directory,'originals',identityHash([this.deploymentId,this.sql.userId]),'objects');
+  if(dirname(path)!==parent)throw conflict();
+  if(this.existingArea('objects')&&privateDirectory(path,false))rmSync(path,{recursive:true,force:true});
+ }
  private objectPath(hash:string){if(!digest.test(hash))throw missing();const path=join(this.area('objects'),hash);privateDirectory(path);return path;}
  uploadPath(id:string){if(!uuid.test(id))throw missing();const path=join(this.area('uploads'),id);privateDirectory(path);return path;}
  private readFile(path:string){
@@ -145,8 +154,8 @@ export class Originals{
   for(const name of readdirSync(parent))if(/^[a-f0-9]{64}\.[a-f0-9-]{36}\.tmp$/.test(name)||digest.test(name)&&!this.sql.get('SELECT hash FROM ig_objects WHERE user_id=$user AND hash=?',name)){const path=join(parent,name);privateDirectory(path);rmSync(path,{recursive:true});}
   return {removed};
  });}
- cleanUpload(id:string){if(!uuid.test(id))throw missing();const path=join(this.trustedArea('uploads'),id);if(existsSync(path)){privateDirectory(path);rmSync(path,{recursive:true});}}
- cleanWork(id:string){if(!uuid.test(id))throw missing();const path=join(this.trustedArea('work'),id);if(existsSync(path)){privateDirectory(path);rmSync(path,{recursive:true});}}
+ cleanUpload(id:string){if(!uuid.test(id))throw missing();const parent=this.existingArea('uploads');if(!parent)return;const path=join(parent,id);if(privateDirectory(path,false))rmSync(path,{recursive:true});}
+ cleanWork(id:string){if(!uuid.test(id))throw missing();const parent=this.existingArea('work');if(!parent)return;const path=join(parent,id);if(privateDirectory(path,false))rmSync(path,{recursive:true});}
  async workspace<T>(work:(workspace:OriginalWorkspace)=>Promise<T>){
   const id=randomUUID(),root=this.area('work'),path=join(root,id);privateDirectory(path);
   const child=(name:string)=>{this.assert();if(!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(name)||name==='..')throw new PrivateDataError('invalid_data');privateDirectory(this.area('work'));privateDirectory(path);return join(path,name);};
