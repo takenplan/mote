@@ -61,3 +61,16 @@ and recompute assertions. Production occupancy fences are unchanged.
 Originally failing complete/recompute case1/1 EXIT0,13.320s
 (`/tmp/mote-joint-postfj-image-occupancy-green.log/.exit`). Full direct image-file
 neighbors and final successor types/build are recorded below when terminal.
+
+Additional state proof waits for the genuine retained-original
+`memory.materials` task to succeed and verifies no premature Material before
+reading raw. This explicitly rules out winning the old organizer race.
+Same UTF16 case1/1 EXIT0,3.227s
+(`/tmp/mote-joint-postfj-unicode-settled-original-green.log/.exit`).
+
+Complete image-progress direct file4/4 EXIT0,20.113s
+(`/tmp/mote-joint-postfj-image-neighbors.log/.exit`). The prior invocation from
+repository root used the wrong tsx JSX configuration and produced three
+`React is not defined` errors; retained separately as `image-neighbors-wrong-cwd`.
+The successful run uses the ordinary Web workspace working directory. This
+fixture-only correction changes no production module or provider behavior.

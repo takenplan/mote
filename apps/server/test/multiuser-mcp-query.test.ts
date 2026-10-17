@@ -9,6 +9,7 @@ import {identityHash} from '../src/scope/originals.js';
 import {navigationRef} from '../src/context-navigation.js';
 import {memoryFixture,memoryText} from './fixtures/mcp-memory.js';
 import {call,value,source,item} from './fixtures/mcp.js';
+import {waitForState} from './fixtures/scoped-query-accounts.js';
 
 const note=(id:string,text:string)=>noteCapture({id,deviceId:'same-device',deviceName:'Generated device',platform:'import',capturedAt:'2026-10-16T12:00:00Z',text});
 const okCall=async(client:Parameters<typeof call>[0],name:string,args:Record<string,unknown>={})=>{const result=await call(client,name,args);assert.equal(result.isError,undefined,JSON.stringify(result));return value(result);};
@@ -76,6 +77,7 @@ test('actual SDK read and formal Material windows preserve UTF16 characters and 
  // A snapshot item without supplied bytes is still organized asynchronously;
  // this genuine original stays unprocessed under explicit automatic:false.
  const context=await f.node.authority.authenticate(f.a.token),bound=f.node.ingress.bindSource(context,['same-source'],()=>{}),received=f.node.ingress.forUser(context).receiveSourceItemsWithOriginals('same-source','unicode-raw',[{...item(text,'unicode-raw'),kind:'file',layer:'original'}],[{bytes:Buffer.from(text),mime:'text/plain',format:'file'}]),id=received.captures[0].id;assert.ok(received.captures[0].original?.ref.startsWith('original:'));assert.equal(bound.readOriginal(received.captures[0].original!.ref).bytes.toString('utf8'),text);
+ await waitForState(async()=>((await f.ok(f.a.token,'/api/tasks?limit=100')).items as any[]).filter(task=>task.kind==='memory.materials'&&f.node.execution!.engine.get(task.id)?.input.captureId===id),tasks=>tasks.length===1&&tasks.every(task=>task.state==='succeeded'),'retained original organizer settled without a premature raw read',8000);assert.equal((await f.ok(f.a.token,'/api/materials')).items.some((m:any)=>m.origin.externalId==='unicode-raw'),false);
  const raw=await okCall(a.client,'mote_read',{refs:['capture:'+id],offset:2,length:1});assert.equal(raw.items[0].text,'😀');assert.deepEqual(raw.items[0].textRange,{offset:1,total:4,nextOffset:3});
  const material=bound.publishMaterial({id:'mat_'+identityHash(['same-source','unicode-raw']),kind:'document',schemaVersion:1,title:'Generated Unicode',origin:{sourceId:'same-source',externalId:'unicode-raw'},blocks:[{id:'block',kind:'text',format:'plain',text,memberIds:['original']}],members:[{id:'original',kind:'capture',ref:'capture:'+id}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}}),page=await okCall(a.client,'mote_material_read',{ref:material.ref,offset:2,length:1});assert.equal(page.text,'😀');assert.deepEqual(page.textRange,{offset:1,total:4,nextOffset:3});assert.ok(page.spans.every((span:any)=>span.materialRange.start>=1&&span.materialRange.end<=3));assert.equal((await call(a.client,'mote_read',{refs:['capture:'+id]})).isError,true);
 });
