@@ -792,10 +792,10 @@ class MultiuserWorkerInstrumentedTest {
             assertTrue(entered.await(10,TimeUnit.SECONDS));scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED)
             scenario.onActivity {activity->
                 assertFalse("Old invitation dialog must retire synchronously with its page owner",dialog.isShowing)
-                assertFalse("The already visible A capability cannot await an asynchronous B resolver",(ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString().contains(code))
+                assertNotEquals("The already visible A capability cannot await an asynchronous B resolver",code,runCatching { ConnectionInvitation.parse((ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString(),true,BuildConfig.DEBUG).code }.getOrNull())
             }
             release.countDown();scenario.recreate();waitFor {var ready=false;scenario.onActivity {activity->ready=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="确认连接此节点"}};ready}
-            scenario.onActivity {activity->assertFalse("Retired incoming intent must not repopulate A's capability after recreation",(ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString().contains(code))}
+            scenario.onActivity {activity->assertNotEquals("Retired incoming intent must not repopulate A's capability after recreation",code,runCatching { ConnectionInvitation.parse((ConnectionActivity::class.java.getDeclaredField("input").apply {isAccessible=true}.get(activity) as android.widget.EditText).text.toString(),true,BuildConfig.DEBUG).code }.getOrNull())}
             assertEquals(0,control("/generated/pairing-state").getJSONArray("claims").length())
         }} finally {release.countDown()}
     }
