@@ -24,3 +24,25 @@ complete both-file direct neighbors51/51 EXIT0,1.086s
 (`postfj-fw156-mock-neighbors`). No test is skipped or assertion removed. The
 remaining MCP/image occupancy cases are still open at this successor point.
 Final successor type/build checks are recorded after all residual changes.
+
+## MCP raw UTF16 state setup
+
+The old `f.put` is an ordinary message, not a retained unprocessed original.
+Waiting for its actual organizer Material makes the same old raw-success
+assertion deterministically fail with `not_found` (1/1 EXIT1,3.639s,
+`/tmp/mote-joint-postfj-unicode-settled-message-red.log/.exit`). M06 automatic
+processing was already false; disabling it again would not fix this race.
+
+The successor keeps both settled note and settled message raw rejections, then
+uses M03's existing production connector adapter with explicit generated file
+bytes under the authenticated owner. This is host-adapter admission, followed
+by real HTTP MCP SDK reads, not a claim of an HTTP upload. It checks the M03
+original receipt and exact bytes before the unchanged raw UTF16 window, manual
+formal Material range/spans and retired-raw rejection. No production change or
+raw authorization fallback. Target1/1 EXIT0,3.029s
+(`/tmp/mote-joint-postfj-unicode-real-original-green.log/.exit`).
+
+Development failures remain separate: sandbox loopback `EPERM`, an ordinary
+snapshot item lacking an original receipt, and selection of the restricted
+`bindSource` facade instead of the existing host ingress adapter. None is
+reported as a production regression or a successful check.
