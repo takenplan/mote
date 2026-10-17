@@ -1223,3 +1223,24 @@ APK build0,10s `/tmp/m15-lark-inventory-green-build.*`; same native test1/1 GREE
 full labels, selecting the last calendar, B same-ID selection unchanged and old
 A Save retired under B. Independent delta review and final affected still pending;
 original model copy/probe/directory and Agent startup/history remain explicit OPEN.
+
+
+Current429 Lark original full neighbor first failed at source-context editor
+lookup before its original field assertion,1/1 EXIT1,3.850s,
+`/tmp/m15-429-d259-lark-original-neighbor-green.*`. javap of the exact compiled
+fixture identified that lambda; it was not the new big-calendar assertion.
+Test-only8a5 retained actual generated UI label diagnostics; the same full
+neighbor then passed1/1,11.051s,
+`/tmp/m15-429-lark-source-editor-diagnostic.*`. Test-onlycf435 now waits for the
+actual original source-context field instead of only observing `isWorking`
+false; the existing45s budget and all save/field/archive/partial-failure/cancel/
+small-calendar/lost-ACK/A-B assertions remain. Its test APK build0,16s; full
+neighbor passed1/1,10.216s,
+`/tmp/m15-429-lark-source-editor-state-green.*`, backend0. No production editor
+or polling change was made and no confirmed privacy/runtime regression is
+asserted from the first readiness failure. The first failure is retained.
+
+Independent exact429 calendar-inventory review is
+`/tmp/mote-desktop-review-m15-lark-inventory-429c.md`, no new confirmed P0/P1/P2
+in13 lines; no reviewer execution. Actual big-inventory GREEN remains M15's
+separate run. Latest sourcecf435 is test-only after production429.
