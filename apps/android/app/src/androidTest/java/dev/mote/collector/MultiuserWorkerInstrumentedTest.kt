@@ -911,6 +911,27 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeConfiguredFilePolicyGraphEditingRetiresOldSaveAndKeepsOtherOwner() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralClient(endpoint(),token("a"));val b=CentralClient(endpoint(),token("b"));assertFalse(a.get("/api/file-processing").getBoolean("policyConfigured"))
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        fun policy(label:String)=JSONObject().put("version",1).put("services",org.json.JSONArray()).put("profiles",org.json.JSONArray().put(JSONObject().put("id","archive").put("name",label).put("processorId","archive").put("parameters",JSONObject()).put("diarizationProcessor","audio.diarize").put("summarize",false))).put("rules",org.json.JSONArray().put(JSONObject().put("type","*/*").put("profileId","archive")))
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun graphField(activity:CentralActivity)=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().singleOrNull {field->runCatching {val rows=org.json.JSONArray(field.text.toString());rows.length()>0&&rows.getJSONObject(0).optString("id")=="archive"}.getOrDefault(false)}
+            ready()
+            for((api,label)in listOf(a to "NATIVE_A_GRAPH",b to "NATIVE_B_GRAPH")){val view=api.get("/api/file-processing");api.put("/api/file-processing",JSONObject().put("revision",view.getString("revision")).put("settings",view.getJSONObject("settings")).put("policy",policy(label)))}
+            scenario.recreate();ready();press("处理设置");ready();lateinit var oldSave:android.widget.Button
+            scenario.onActivity {activity->val field=graphField(activity);assertNotNull("Original native advanced editor must retain the saved named policy graph",field);val profiles=org.json.JSONArray(field!!.text.toString());profiles.getJSONObject(0).put("name","NATIVE_A_GRAPH_UPDATED");field.setText(profiles.toString());oldSave=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存设置"};oldSave.performClick()};ready()
+            assertEquals("NATIVE_A_GRAPH_UPDATED",a.get("/api/file-processing").getJSONObject("policy").getJSONArray("profiles").getJSONObject(0).getString("name"));val bBefore=b.get("/api/file-processing").toString()
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldSave.performClick()};ready();assertEquals(bBefore,b.get("/api/file-processing").toString())
+            press("处理设置");ready();scenario.onActivity {activity->val field=graphField(activity)!!;val profiles=org.json.JSONArray(field.text.toString());assertEquals("NATIVE_B_GRAPH",profiles.getJSONObject(0).getString("name"));profiles.getJSONObject(0).put("name","NATIVE_B_GRAPH_UPDATED");field.setText(profiles.toString())};press("保存设置");ready()
+            assertEquals("NATIVE_B_GRAPH_UPDATED",b.get("/api/file-processing").getJSONObject("policy").getJSONArray("profiles").getJSONObject(0).getString("name"));assertEquals("NATIVE_A_GRAPH_UPDATED",a.get("/api/file-processing").getJSONObject("policy").getJSONArray("profiles").getJSONObject(0).getString("name"))
+        }
+    }
+
     @Test fun originalNativeAgentStartupAndRecordedHistoryUsePersonalOptInAndOpaqueContinuation() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
