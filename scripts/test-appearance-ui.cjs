@@ -2,7 +2,7 @@ require('./fixture-background.cjs');
 require('./fixture-language.cjs');
 // Production Web bundle + real React portal and modals, with an isolated generated central.
 const {app,BrowserWindow}=require('electron');
-const {mkdtempSync,mkdirSync,existsSync,readFileSync,writeFileSync,rmSync}=require('node:fs');
+const {mkdtempSync,mkdirSync,readFileSync,writeFileSync,rmSync}=require('node:fs');
 const {tmpdir}=require('node:os'),{join,resolve}=require('node:path'),{spawn}=require('node:child_process');
 const assert=require('node:assert/strict');
 const root=mkdtempSync(join(tmpdir(),'mote-theme-web-')),repo=resolve(__dirname,'..'),out=join(repo,'.mote/appearance/web');
@@ -13,8 +13,9 @@ async function until(fn,label){const deadline=Date.now()+25000;while(Date.now()<
 async function run(){
  await app.whenReady();const connection=join(root,'connection.json');
  server=spawn(process.execPath,[join(repo,'scripts/operations-fixture-server.mjs'),connection],{cwd:repo,env:{...process.env,ELECTRON_RUN_AS_NODE:'1'},stdio:['ignore','ignore','pipe']});let failure='';server.stderr.on('data',b=>failure+=b);
- await until(()=>{if(server.exitCode!==null)throw Error(failure);return existsSync(connection);},'generated central');
- const {url,token}=JSON.parse(readFileSync(connection,'utf8'));
+ let connectionInfo;
+ await until(()=>{if(server.exitCode!==null)throw Error(failure);try{connectionInfo=JSON.parse(readFileSync(connection,'utf8'));return typeof connectionInfo.url==='string'&&typeof connectionInfo.token==='string';}catch{return false;}},'generated central');
+ const {url,token}=connectionInfo;
  const create=async()=>{
   const window=new BrowserWindow({width:1280,height:900,show:false,webPreferences:{contextIsolation:true,sandbox:true,nodeIntegration:false,backgroundThrottling:false}});windows.push(window);
   const wc=window.webContents;wc.on('console-message',(_e,level,message)=>{if(level>=3)errors.push(message);});await window.loadURL('about:blank');wc.debugger.attach('1.3');
