@@ -91,3 +91,13 @@ Original Web/Android controls must still consume these routes, retain their
 connection/owner retirement checks and get their own UI and final affected
 validation. This document does not declare those consumers or the whole module
 complete.
+
+### Default-feature choice metadata
+
+`GET /api/models` additionally returns `features: ModelFeature[]` copied from the
+same shared `MODEL_FEATURES` registry enforced by M04. It is present when the
+personal `selections` map is empty. Consumers render feature choices from this
+metadata and save explicit personal/shared references through the existing
+whole models CAS; metadata reading neither selects a default nor grants a
+shared endpoint/credential copy. Unsupported feature keys still reject400.
+The model-tool POST contracts above are unchanged.

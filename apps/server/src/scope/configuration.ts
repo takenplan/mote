@@ -217,7 +217,7 @@ export class Configurations {
       replace:async(domain:string,value:unknown,revision:number,preserveRedactedSecrets=false)=>{current();const {service}=await this.entry(context);await (preserveRedactedSecrets?service.replaceView(domain,value,revision,current):service.replace(domain,value,revision,current));current();return safeView(service);},
       replaceViews:async(values:Record<string,unknown>,revision:number)=>{current();const {service}=await this.entry(context);await service.updateMany(values,revision,true,current,true);current();return safeView(service);},
       reload:async()=>{current();const {service}=await this.entry(context);await service.reload(current);current();return safeView(service);},
-      models:async()=>{current();const {service}=await this.entry(context);current();this.assertResources();return {shared:this.resources.listShared(),personal:(safeView(service).domains.find(d=>d.id==='models')!.effective as UserModelConfiguration).profiles,selections:service.current<UserModelConfiguration>('models').selections};},
+      models:async()=>{current();const {service}=await this.entry(context);current();this.assertResources();return {features:[...MODEL_FEATURES],shared:this.resources.listShared(),personal:(safeView(service).domains.find(d=>d.id==='models')!.effective as UserModelConfiguration).profiles,selections:service.current<UserModelConfiguration>('models').selections};},
       copyModel:(id:string,input:unknown)=>this.copyPersonalModel(context,id,input),
       modelCatalog:(input:unknown)=>this.inspectModel(context,input,async(settings,assert)=>{
         if(settings.protocol==='codex-app-server')return codexModels(undefined,this.instance.current<ModelDomain>('models').codex,assert);
