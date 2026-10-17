@@ -4,29 +4,33 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current acceptance boundary: fixed0c59dcd99bb73281ad34c0f5292d5a68d081c609
-(runtime a73ae69f2d7a511692429c11313c07dcbdee6588) passes the complete Android
-JVM357/357 across75XML with0failures/errors/skips and debug/fixture app/test APKs,
-35s EXIT0. The initial40s full command's one old Imports acknowledgement fixture
-failure is retained; test-only0c59 corrects its obsolete response shape, preserving
-all original lost-ACK/same-body/one-part assertions. Earlier353/353 remains exact
-historical evidence rather than the latest gate.
+Current bounded runtime: Android `429c20d698b216a61f603c9265d95780c7b057e2`,
+with declared Joint2528/source519, pure M13 Larkd259 and isolated M04 relogin
+fixfda6 (owncf2311ea). Full current Android JVM358/358 across75XML,0failures/
+errors/skips and debug APK pass41s. Fixture app/test APKs and original native
+invitation, Files, Lark, queue/Worker/source/snapshot/SIGKILL, import/export,
+generated capture and Actions representatives actually run as recorded below.
+The prior0c59/357 and earlier failures remain chronological evidence, not the
+latest acceptance boundary.
 
-The real QR post-restart ACK410 P2 is now samecase GREEN2.117s; a revoked device
-credential remains pending/no-upload2.019s. Normal real duplicate ACK2.166s,
-five-field self rejection and explicit device reauthorization0.408s, held A JSON
-result retirement/new B selection0.993s, original issuer QR1.376s and original
-M04 operator-setting explanation0.851s also pass as separate single native cases.
-Agent canonical expansion passes0.980s at the same APK. These are not a final
-M15 module or full affected pass. Public Files control/complete export and original
-model copy/probe/directory/Agent preview-events contracts still need final scope
-closure; see the [finite final matrix](multiuser-android-final-matrix.md).
+Central build, all-workspace/root types, scope/import boundary,8468-message
+bilingual check and13 related backend cases pass before only fda6. That final
+small server delta separately passes19 configuration/lease/lifecycle cases,
+fresh Server build and the actual original native logout/relogin settings RED→
+GREEN. Independent bounded reviews cover the changed invitation/deletion/Lark
+callers; review is never counted as execution.
 
-No M15 push/Draft PR/final affected has happened. M15's parent-allocated Android
-phase is explicitly RELEASED; no long affected began. Physical-device, public
-HTTPS and live-provider checks remain separate. Existing-local-Codex connectivity
-used only an authored generated prompt and exact gpt-6.1-sol, not model quality or
-provider-wide acceptance. No test count closes missing original capabilities.
+This is **not final M15 completion**. The [finite matrix](multiuser-android-final-matrix.md)
+and [remaining original shared-contract map](../design/multiuser-android-open-contracts.md)
+retain the exact model/Agent/policy gaps. Genuine final affected, final dependency
+verification, feature push and Draft PR are pending. No M15 remote PR exists;
+main/integration/CI/deployment are untouched. Parent now permits independent
+workspaces/AVDs in parallel; historical serial resource notes below are superseded.
+
+Physical-device/publicHTTPS/actual special-permission/vendor-background/live-
+provider quality checks are separate. One earlier existing-local-Codex connection
+case used only an authored generated prompt and exact gpt-6.1-sol; no test count
+closes a missing original capability or proves provider/model quality.
 
 | Decision | Existing capability and real chain | Required account adaptation / evidence |
 | --- | --- | --- |
