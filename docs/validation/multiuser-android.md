@@ -1781,3 +1781,34 @@ reviewed as separate delivered boundaries, not silently mixed into c06.
 Latest independent review `/tmp/mote-m13-review-m15-recording-pause-3e0.md` finds
 no new confirmed P0/P1/P2 in the minimal pause delta; this is distinct from M15
 actual native/source execution. No M15 push or DraftPR yet; required is not0.
+
+### Physical ACK fixture state premise (runtime unchanged; review pending)
+
+A deterministic metadata-only diagnostic waits for the real cancelled-child
+coordinator to settle: pipeline state=`stale`,error=`processing_child_failed`,
+extraction checkpoint retained,calls1. The original generic childretry200
+expectation then reproduces409 in1.64s. `/tmp/m15-physical-ack-settled-parent-diagnostic.*`.
+This supplies the missing state premise: production `wait()` deliberately maps
+cancelled child→stale parent, and `prepareExtractionRetry` deliberately refuses
+stale parents. Reviving this grant to satisfy the old test would weaken the
+existing authorization rule. No machine-load cause is asserted.
+
+The test-only correction saves the pipeline ID from its actual HTTP admission,
+waits for the real stale state, asserts genericretry409, then exercises the
+existing host-only `acknowledgeExternalReplay` capability after actual owner
+authentication. It explicitly rejects B acknowledgement and checks the child
+remains cancelled,parent remains stale,externalUnresolved remains1. No HTTP or
+model tool exposes that capability. The original subsequent fresh HTTP operation
+409/calls1,B success,late physical completion,new operation success/calls2 and
+B indexed assertions remain. The title now names trusted acknowledgement rather
+than implying the obsolete generic HTTP retry succeeds. Existing valid blocked
+parent HTTPretry200 positives at multiuser-processing.test.ts175/176 remain
+unchanged and passed in the fullc06 run.
+
+Complete actual unknown/lateACK file4/4,no skip13.765s0, including bare503 explicit
+file-level confirmation,late ACK after account deletion and queued-call guard:
+`/tmp/m15-physical-ack-reviewed-candidate-file.*`. Server types0. This is a fixture
+precondition migration, not a production fix, not permission to replay stale work,
+and not a waiver of the retained c06 required EXIT1. Independent bounded review
+is requested before closure and the necessary true affected retry. No production
+file/deadline/corpus or public contract changes.
