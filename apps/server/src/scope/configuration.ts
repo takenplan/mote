@@ -148,7 +148,11 @@ export class Configurations {
       try{await prior.initializing;}catch(error){if(prior.accessKey===accessKey)throw error;return this.entry(context);}
       this.assertSubject(context,'export');
       if(this.entries.get(context.userId)!==prior)return this.entry(context);
-      if(prior.accessKey===accessKey&&('credentialId' in context||prior.subject===context)){this.assertGeneration(context.userId,prior.generation);return prior;}
+      // Domain handlers retain their admission subject. A fresh session must
+      // not reuse handlers bound to a credential that has since logged out,
+      // nor mutate that subject and revive an older suspended request.
+      let priorCurrent=true;try{this.assertSubject(prior.subject,'export');}catch(error){if(!(error instanceof ScopeError))throw error;priorCurrent=false;}
+      if(priorCurrent&&prior.accessKey===accessKey&&('credentialId' in context||prior.subject===context)){this.assertGeneration(context.userId,prior.generation);return prior;}
       // Keep the retiring entry visible while its transaction queue drains.
       // A concurrent new epoch must wait for rollback before reading the YAML.
       await prior.service.close();if(this.entries.get(context.userId)===prior)this.entries.delete(context.userId);return this.entry(context);

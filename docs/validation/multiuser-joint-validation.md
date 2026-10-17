@@ -1048,3 +1048,20 @@ bytes through a fresh signed M03 ticket, rejects that ticket under B, and permit
 fresh A deletion while B remains readable. No build, compiled entry, packaged CLI,
 Docker/Hindsight provider or full J11/J13 gate was run by this case. An initial
 source-only native1/1 pass is retained separately before final cleanup/byte checks.
+
+
+### Configuration relogin admission subject
+
+Actual generated HTTP logout → same-account fresh login → processing settings
+save failed503/config_prepare_failed on the unchanged M04 cached-entry code
+(durable RED80ac30ee; `/tmp/mote-joint-configuration-relogin-red.log/.exit`,
+1/1fail,1.162s). Domain factories capture their admission subject; an entry
+keyed only by account epoch still held the logged-out credential. A current new
+caller now drains and closes that retired entry before opening domain handlers
+with its own immutable subject. The old subject is never rebound to new authority.
+Same regression passes1/1,1.096s in
+`/tmp/mote-joint-configuration-relogin-green.log/.exit`, including old-token401
+and unchanged sibling configuration. Three existing M04 suites pass18/18,8.282s
+(`/tmp/mote-joint-configuration-relogin-neighbors.log/.exit`), including admitted
+work after logout, pinned leases, reset/deletion, restore and credential fencing.
+This is a narrow source correction, not whole client/recovery acceptance.
