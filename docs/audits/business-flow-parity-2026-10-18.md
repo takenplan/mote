@@ -83,7 +83,7 @@ KEEP row with a finding is an implementation gap, not a claim of parity.
 | Stopped whole-instance restore → reopen / resume | Preserve canonical originals, accounts/history and succeeded/unknown external facts; retire invalid credentials and task publication rights. | KEEP data/reconciliation; CHANGE identity/epoch fences. UNKNOWN provenance for newly mandatory reauthorization steps beyond that requirement. | M16 deliberately pauses automation/plugins/connectors/outbound MCP and clears execution targets after restore. This is documented, but broad new user steps must be surfaced as a decision, F11. |
 | Ordinary evidence revision → retained answer / stale Memory | Exact normalized equality is a no-op; ordinary change retains historical dialogue and stale statements; true privacy deletion still erases/blocks. | CHANGE explicitly approved on main after the shared branch point. | PR160's post-fork contracts are absent from the audited scoped baseline. F12 is a separate follow-up, not a claim that M00 newly removed them. |
 
-## Confirmed gaps and decision candidates
+## Confirmed gaps and ADR-directed follow-ups
 
 ### F01 — Coding understanding and its work/event products are not restored
 
@@ -96,9 +96,11 @@ processor and returns its versioned outputs. See old
 [`app.ts:616`](https://github.com/utopiafar/mote/blob/2c2627621e2598332ae8169845bc7343be7ed63e/apps/server/src/app.ts#L616)
 and the retained equivalent `test/fixtures/legacy-app.ts:607–634`.
 The processor produces separate summary, events, work records, Memory candidates
-and action cues with exact original spans; those products are not interchangeable
-with long-term Memory cards (`conversation-understanding.ts`,
-`semantic-extraction.ts:25–38`). The system-refactor ADR preserves Coding reuse
+and an action-cues field; summary/event/work/Memory claims carry exact original
+spans and are not interchangeable with long-term Memory cards
+(`conversation-understanding.ts`, `semantic-extraction.ts:25–38`). The current
+contract requires action cues to remain empty. Restoring this producer must not
+introduce a new action-generation product. The system-refactor ADR preserves Coding reuse
 only under its exact full/unsaturated generation contract; it does not remove
 the producer when reuse is unavailable.
 
@@ -111,8 +113,9 @@ organizer and clean-dialogue coverage, not this missing product producer.
 
 KEEP the clean-dialogue protection and independent review. Restore the existing
 understanding responsibility through M05 and exact scoped input/output contracts,
-or ask the owner to explicitly choose a new unified producer that still supplies
-the work/event/action consumers. Removing the intermediate implementation is an
+preserving work/event consumers and the existing empty action-cues contract. A
+unified implementation is possible only if those responsibilities survive.
+Removing the intermediate implementation is an
 engineering choice only if its business products, exact evidence and consumer
 behavior survive. Do not silently substitute selected Memory for event/work
 history. Required regression: same-ID A/B Coding session → understanding products
@@ -169,9 +172,10 @@ previously effective logical capacity ceiling that no longer stops intake.
 Defaults `retentionDays:0` do not make the nonzero journey irrelevant.
 
 KEEP exact source deletion/Memory/answer invalidation and the distinction between
-logical capacity and physical overhead. The owner should choose whether the
-existing deployment-wide ceiling/retention is retained or replaced by explicit
-per-account policy; do not invent per-user quotas or eviction behavior. Until a
+logical capacity and physical overhead. Following the owner's direction to use
+existing ADRs, restore the existing instance-wide settings rather than inventing
+per-user quotas or eviction behavior. The admission and multi-user ADRs preserve
+that contract; no new account-level replacement policy is adopted. Until a
 supported replacement exists, unsupported configuration must be explicit rather
 than silently accepted. Validate startup + elapsed retention + late processing,
 archive/snapshot/reference modes, shared object references, active physical pins,
@@ -189,9 +193,11 @@ the lexical producer is current and hybrid/vector retry is not restored.
 
 The old unscoped index must stay removed. Its absence does not establish that
 the business semantic-retrieval capability has an authorized replacement.
-Choose between a real per-user embedding/vector producer integrated with current
-scopes, and an explicitly accepted interim lexical-only release with its recall
-limitations. Required evidence: generated synonym/paraphrase retrieval, combined
+Restore the configured embedding/vector producer within account scopes, keeping
+lexical/semantic ranking and truthful degradation. The owner permits release
+with recorded unresolved gaps; current lexical-only coverage remains an
+implementation limitation, not a replacement retrieval contract or permission
+to enable a new paid provider. Required evidence: generated synonym/paraphrase retrieval, combined
 lexical/semantic ranking, A/B identical identities, source withdrawal, model
 unavailability/degraded metadata and restart. Static source inspection cannot
 measure real semantic recall.
@@ -252,14 +258,14 @@ allows UUID references from all `job.files`, while the later path lookup
 UUID belonging to excluded media cannot survive canonical validation. A prompt
 alone cannot repair this contract.
 
-Recommended candidate: reconstruct explicit local Markdown links against the
-exact same import archive, preserve canonical parent/file relations and truthful
-archived/pending/missing facts, then use existing processing/composition. A narrow
-prompt/status fix is cheaper but leaves the relationships broken. Owner choices
-are whether to fix historical selected/all batches and whether preview should
-wait for media extraction; neither historical paid replay nor an OCR wait follows
-from correcting file existence. Path normalization, traversal, duplicates and
-safe exact matching are engineering obligations, not owner policy questions.
+Follow the existing media and source-context contracts: reconstruct explicit
+local Markdown links against the exact same import archive, preserve canonical
+parent/file relations and truthful archived/pending/missing facts, then use
+existing processing/composition. A prompt/status-only change leaves the
+relationships broken. Keep asynchronous preview and explicit selected historical
+retry/rebuild; correcting file existence authorizes neither automatic historical
+paid replay nor a new OCR wait. Path normalization, traversal, duplicates and
+safe exact matching remain engineering obligations.
 
 ### F08 — Administrator host-directory import has no production route
 
@@ -270,8 +276,8 @@ host-path access to administrators; it does not state the capability is removed
 for everyone. Ordinary uploads correctly remain safe.
 
 KEEP denial for ordinary users. Restore an explicit administrator/operator path
-within the existing import lifecycle, or obtain an explicit owner decision to
-retire this workflow and document the replacement. A normal file-upload journey
+within the existing import lifecycle, following the retained administrator
+contract. No retirement or replacement workflow is adopted. A normal file-upload journey
 does not validate server-side directory traversal/import or existing CLI callers.
 
 ### F09 — Processed Material loses time/device fields; automatic scope also needs proof
@@ -328,7 +334,7 @@ broaden model work or make a prior non-model source unreadable without a product
 decision. This matrix is required validation, not permission to restore old
 unscoped data access.
 
-### F10 — Recording phases are shared; canonical archive shape remains undecided
+### F10 — Recording phases are shared; the canonical archive contract remains incomplete
 
 The scoped adapter before correction (`scope/connector-recordings.ts:93–107`)
 publishes the raw export and individual paragraph source-items and admits the
@@ -366,18 +372,20 @@ migrate those old tasks. Current-baseline backup intake, its ordinary explicit
 processing entry point and existing unknown-result protections remain the
 validation contract. No historical processing or repair is claimed.
 
-Remaining UNKNOWN / owner decision: legacy `FileStore.transcriptRevision`
+Remaining contract gap: legacy `FileStore.transcriptRevision`
 creates one canonical transcript capture with chunks
 (`connectors/recordings.ts:117–124`). Scoped storage still writes a raw export
 and individual segment source-items, which M06 can publish as separate
 Materials (`scope/connector-recordings.ts:83–93`). The parent's generated
 two-recording journey observed four vendor/segment Materials after the
 unwanted ASR Materials were removed. This changes the downstream evidence and
-Memory input graph; it is not merely account-qualified storage. Candidate A is
-one shared canonical transcript/archive contract, retaining exact readable raw
-bytes and segment evidence. Candidate B is an explicitly accepted alternative
-archive model with downstream grouping/deduplication and complete consumer
-coverage. Do not silently delete one current input class to manufacture parity.
+Memory input graph; it is not merely account-qualified storage. The existing
+simple-context ADR requires one canonical paragraph body while retaining raw
+JSON. Follow that shared canonical transcript/archive contract, with exact raw
+bytes and segment locators serving the same body. It does not require one
+physical database row. Raw/segment storage must not create divergent complete
+semantic inputs, and evidence must not be silently deleted to manufacture parity.
+The owner's latest instruction selects the existing ADR, not a new archive model.
 
 Concrete remaining revision journey, confirmed by static trace: recording R1
 contains two segments; its next provider revision R2 contains only the first.
@@ -393,7 +401,7 @@ head; current chunk search joins that head, excluding the superseded tail
 (`files.ts:120–140,202–210,320`). This is a concrete stale-input consequence of
 the archive-shape difference, not just duplicate storage. A two-to-one segment
 revision through actual scoped sync and retrieval remains a required regression;
-the audit author did not execute it. The shared canonical archive candidate
+the audit author did not execute it. The shared canonical archive contract
 must handle segment replacement, empty/unsupported revisions and retained
 history together.
 
@@ -415,7 +423,7 @@ before its commit is verified in the eventual target.
 
 ### F11 — Whole-instance restore adds mandatory reauthorization steps
 
-Priority: owner-decision provenance unresolved. The
+Priority: whole-instance execution-continuity equivalence remains unverified. The
 [M16 design](../design/multiuser-lifecycle.md#stopped-instance-archive-checkpoint)
 states that restored Memory/processing automation, plugin instances, connector
 sync, outbound MCP and Ask automation remain paused until explicitly authorized.
@@ -426,11 +434,16 @@ blind replay are required and must remain.
 The multi-user ADR authorizes safe whole-instance recovery and continuous account
 fences; it does not by itself settle every new manual enablement step. This audit
 did not recover the earlier human conversation that may have approved M16's
-precise reauthorization policy. Classify this as documented CHANGE with UNKNOWN
-human provenance, not a proven unauthorized bug and not proof of old/new resume
-parity. Surface the concrete restart/restore checklist to the owner. Ordinary
-same-instance process restart remains a separate journey and must resume current
-authorized checkpoints without these restore-only steps.
+precise reauthorization policy. This remains a documented CHANGE with UNKNOWN
+historical provenance and unverified whole-instance resume equivalence. Following
+the owner's direction, apply the existing recovery, epoch, grant and unknown-call
+ADRs: data restoration does not mint execution authority; successful/unknown
+calls are not replayed; invalid or revoked authority is not restored. Keep the
+current fail-closed implementation while the gap is open, without adding a new
+automatic reauthorization rule or a generic manual-confirmation product. Ordinary
+same-instance restart remains separate and resumes still-valid authorized
+checkpoints after validation. M16's design record explicitly gives cited ADRs
+precedence; its current checklist is not a new independent policy decision.
 
 ### F12 — Post-fork main history/equality decisions are pending integration
 
@@ -538,12 +551,23 @@ authorize adding action products: its current `actionCues` contract is empty.
 F12 integrates already accepted post-fork decisions in its separate workstream.
 F09's wider automatic-processing matrix remains validation work.
 
-The actual owner choices concern an intentional replacement or release tradeoff:
+## ADR-directed disposition and release follow-up
 
-| Choice | Recommended baseline | Alternative requiring a decision |
+The owner subsequently directed: record unresolved issues, publish after
+validation, and use existing ADRs without further confirmation. This removes a
+pending owner-decision gate. It does not make incomplete implementations complete
+or authorize new paid processing, quotas, automatic historical repair or grants.
+
+| Finding | Existing authority | Adopted follow-up |
 | --- | --- | --- |
-| F03 policy ownership | Restore the existing instance retention and logical-capacity settings. | Define explicit per-account policies, their relationship to instance limits, and cleanup responsibility. Do not invent quotas implicitly. |
-| F04 release scope | Restore scoped semantic/vector production and hybrid ranking. | Accept a temporary lexical-only release with declared recall gaps and a follow-up scope. |
-| F07 history and latency | Repair new imports, backfill selected historical batches, and keep previews asynchronous with truthful pending states. | Backfill all history or wait for media understanding before preview. Any paid replay needs a separate explicit scope. |
-| F10 recording products | Restore one canonical transcript relationship while retaining exact raw exports and independent backup bytes. | Keep raw-export plus segment Materials and explicitly define downstream deduplication, Memory scope and consumer behavior. |
-| F11 restored execution | Preserve still-valid owner authorization after identity/dependency/external-fact checks; require action only for invalid authority and unresolved calls. | Keep M16's current per-domain manual re-enable checklist after whole-instance restore. Ordinary process restart is not this choice. |
+| F03 retention/capacity | [Request admission](../adr-central-request-admission.md), [multi-user scope](../adr-multiuser-scope.md), existing configuration contract | Restore instance retention and logical-capacity enforcement. Full capacity rejects new intake; do not invent per-user quotas or automatic eviction. |
+| F04 semantic retrieval | [Retrieval projections](../adr-plugin-center-memory-replacement.md), [account boundaries](../adr-multiuser-scope.md) | Restore configured scoped embeddings/hybrid retrieval. Disclose current lexical-only coverage; do not mount the old global index or silently enable a paid provider. |
+| F07 media/history | [Simple context](../adr-ask-evidence-quality-and-simple-context.md), [file-source context](../adr-file-source-context.md) | Repair new-input relationships and truthful asynchronous readiness. Historical retry/rebuild remains explicitly selected through existing entry points; no automatic backfill or OCR/ASR/Memory replay. |
+| F10 recording products | [Simple context](../adr-ask-evidence-quality-and-simple-context.md), [shared flows](../adr-shared-business-flows.md) | One canonical transcript relationship with preserved raw bytes and exact segment locators. Storage may have multiple records without creating different semantic producers. |
+| F11 restored execution | [Task recovery](../adr-task-recovery-and-execution-budgets.md), [multi-user scope](../adr-multiuser-scope.md), [shared flows](../adr-shared-business-flows.md) | Preserve still-valid recovery, epoch/grant fences and known external facts. Restored data does not confer authority. Keep current safe behavior while whole-instance continuity remains unverified; introduce neither automatic reauthorization nor a new generic manual checklist. |
+
+F01/F02/F05/F06/F08/F09 and the unresolved parts of F03/F04/F07/F10/F11 remain
+implementation or validation follow-ups for the release record. F12 and F13,
+and F10's stale-tail withdrawal, are handled in the separate combined integration
+candidate; its exact source and checks must be cited before claiming delivery.
+No additional owner confirmation is pending for these recorded directions.

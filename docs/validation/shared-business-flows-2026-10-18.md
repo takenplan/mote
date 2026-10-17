@@ -6,7 +6,8 @@ Branch: `codex/business-flow-parity`.
 The [accepted decision](../adr-shared-business-flows.md) and
 [broader audit](../audits/business-flow-parity-2026-10-18.md) distinguish this
 correction from remaining parity findings. Main's separate post-fork changes
-are not incorporated or validated by this branch.
+are not incorporated into this branch. Evidence for the combined integration
+candidate is identified separately below.
 
 ## Journeys and actual evidence
 
@@ -73,8 +74,12 @@ adds exactly this module to the import exception list. It accepts already-bound
 ports, constructs no legacy Store, scheduler or default owner, and declares no
 new scope surface. After the correction, `node scripts/check-scope-contracts.mjs`
 and all four `scope-architecture.test.ts` cases passed. The standalone full run
-is retained as a failure, not relabeled as a passing check.
+is retained as a failure, not relabeled as a passing check. That failure stopped
+`check:central` before the Central runner and release-tool regressions, which
+were not executed in this standalone attempt.
 
+The corrected source's dry run also selects Desktop/Android/tooling because the
+import-boundary script changed: `check:local` plus Android unit tests.
 Final combined-candidate affected checks are run by the main integration task,
 including this correction, before PR publication. Their source identity and
 actual results will be recorded here when complete.
