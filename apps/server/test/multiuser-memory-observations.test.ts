@@ -1,0 +1,27 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {setTimeout as delay} from 'node:timers/promises';
+import {scopedFilesFixture} from './fixtures/scoped-files.js';
+import {defaultMemorySettings} from '../src/scope/memory-schema.js';
+import {defaultProcessingSettings} from '../src/scope/processing-schema.js';
+
+async function setup(t:Parameters<typeof scopedFilesFixture>[0]){
+ const f=await scopedFilesFixture(t),settings=defaultMemorySettings();settings.automatic=true;settings.lifecycle.extraction.minChanges=1000;settings.lifecycle.extraction.maxWaitHours=24;settings.lifecycle.insights.enabled=true;settings.lifecycle.insights.minChanges=1000;settings.lifecycle.insights.intervalHours=24;
+ let config=await f.checked(f.a.token,'/api/configuration');await f.checked(f.a.token,'/api/configuration/memory','PUT',{revision:config.revision,value:settings});config=await f.checked(f.a.token,'/api/configuration');await f.checked(f.a.token,'/api/configuration/processing','PUT',{revision:config.revision,value:{...defaultProcessingSettings(),automatic:true,summarize:false,semanticTurns:false,understandingEnabled:false}});return f;
+}
+
+test('original Memory timing observations read real pending M03/M06/M05 windows, exact due time and owner-bound pages without issuing new work',async t=>{
+ const f=await setup(t);await f.upload(f.a.token,'generated-observation','GENERATED_MEMORY_OBSERVATION_PENDING');
+ const first=await f.request(f.a.token,'/api/memory/observations?limit=1');assert.equal(first.statusCode,200,first.body);
+ let page=first.json();for(let n=0;n<300&&!page.items.length;n++){await delay(10);page=await f.checked(f.a.token,'/api/memory/observations?limit=1');}assert.ok(page.items.length,'real publication should create a waiting Memory intake');const row=page.items[0];assert.equal(row.kind,'extraction');assert.equal(row.pendingChanges,1);assert.ok(Date.parse(row.dueAt)>Date.now());assert.match(row.task.id,/^[a-f0-9]{64}$/);assert.ok(['waiting','running'].includes(row.task.state));assert.ok(!JSON.stringify(page).includes('GENERATED_MEMORY_OBSERVATION_PENDING'));
+ const before=(await f.checked(f.a.token,'/api/tasks?limit=100')).items.map((task:any)=>task.id);for(let n=0;n<3;n++)await f.checked(f.a.token,'/api/memory/observations?limit=1');assert.deepEqual((await f.checked(f.a.token,'/api/tasks?limit=100')).items.map((task:any)=>task.id),before);
+ assert.deepEqual((await f.checked(f.b.token,'/api/memory/observations?limit=1')).items,[]);await f.upload(f.a.token,'generated-observation-second','GENERATED_MEMORY_OBSERVATION_SECOND');for(let n=0;n<300;n++){page=await f.checked(f.a.token,'/api/memory/observations?limit=1');if(page.nextCursor)break;await delay(10);}assert.ok(page.nextCursor);assert.equal((await f.request(f.b.token,'/api/memory/observations?limit=1&cursor='+encodeURIComponent(page.nextCursor))).statusCode,400);assert.equal((await f.request(f.a.token,'/api/memory/observations?limit=2&cursor='+encodeURIComponent(page.nextCursor))).statusCode,400);const next=await f.checked(f.a.token,'/api/memory/observations?limit=1&cursor='+encodeURIComponent(page.nextCursor));assert.equal(next.items.length,1);assert.notEqual(next.items[0].id,page.items[0].id);
+ const cancel=await f.checked(f.a.token,'/api/tasks/'+row.task.id+'/cancel','POST',{});assert.equal(cancel.state,'cancelled');const refreshed=await f.checked(f.a.token,'/api/memory/observations?limit=20');assert.equal(refreshed.items.find((item:any)=>item.id===row.id).task.state,'cancelled');assert.equal((await f.request(f.b.token,'/api/tasks/'+row.task.id+'/retry','POST',{})).statusCode,404);
+});
+
+test('existing Ask automation timing reports its own frozen policy and exact M05 state without reconstructing a global lifecycle',async t=>{
+ const f=await setup(t),id=randomUUID();await f.upload(f.a.token,'generated-observation-insight','GENERATED_OBSERVATION_INSIGHT');await f.checked(f.a.token,'/api/ask-automations','POST',{id,kind:'insights',sourceIds:['same-source'],includeExisting:true});
+ const policy=await f.checked(f.a.token,'/api/ask-automations/'+id);assert.equal(policy.input.kind,'insights');assert.ok(policy.observation);assert.ok(Date.parse(policy.observation.dueAt)>Date.now());assert.ok(Number.isSafeInteger(policy.observation.pendingChanges));assert.equal(policy.observation.task.id,policy.task_id);assert.equal(policy.observation.task.kind,'ask.automation');assert.ok(!JSON.stringify(policy.observation).includes('GENERATED_OBSERVATION_INSIGHT'));
+ const before=(await f.checked(f.a.token,'/api/tasks?limit=100')).items.length;await f.checked(f.a.token,'/api/ask-automations');assert.equal((await f.checked(f.a.token,'/api/tasks?limit=100')).items.length,before);assert.equal((await f.request(f.b.token,'/api/ask-automations/'+id)).statusCode,404);await f.checked(f.a.token,'/api/ask-automations/'+id+'/pause','POST',{});assert.equal((await f.checked(f.a.token,'/api/ask-automations/'+id)).state,'paused');
+});
