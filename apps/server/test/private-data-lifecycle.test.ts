@@ -254,3 +254,22 @@ test('historical revisions keep distinct creation times while the current head r
   assert.equal(a.data.material(a.parent.id).updatedAt,head.updated_at);
   assert.equal(hash(await f.lifecycle.exportUser(f.b)),bBefore);
 });
+
+test('owned asset metadata preserves exact current and historical Material revisions without granting bytes',async t=>{
+ const f=fixture(t),{data,sourceCapture}=f.seed(f.a,'synthetic A');f.seed(f.b,'synthetic B');
+ const draft={id:materialId('asset-history'),kind:'mote.document',schemaVersion:1,title:'synthetic A asset',origin:{sourceId:'same-source',externalId:'asset-history'},blocks:[{id:'attachment',kind:'asset',hash:'a'.repeat(64),mimeType:'text/plain',memberIds:['original'],evidenceIds:[sourceCapture]}],members:[{id:'original',kind:'capture',ref:'capture:'+sourceCapture,revision:'same-version'}],coverage:{state:'complete'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}};
+ const first=data.publishMaterial(draft),second=data.publishMaterial({...draft,blocks:[{...draft.blocks[0],hash:'b'.repeat(64)}]},first.revision);
+ const archive=await f.lifecycle.exportUser(f.a),bBefore=hash(await f.lifecycle.exportUser(f.b)),payload=archive.payload as any,versions=payload.material_versions.filter((row:any)=>row.material_id===second.id);
+ assert.equal(versions.length,2);assert.deepEqual(versions.map((row:any)=>JSON.parse(row.json).blocks[0].hash).sort(),['a'.repeat(64),'b'.repeat(64)]);assert.ok(versions.every((row:any)=>row.text===''));assert.deepEqual(payload.coverage.excluded,['assets','credentials','other-domains']);
+ await f.lifecycle.deleteUser(f.a,'asset-delete');await f.lifecycle.restoreUser(f.a,archive,'asset-restore');assert.deepEqual(await f.lifecycle.exportUser(f.a),archive);assert.equal(data.material(second.id).assetCount,1);assert.equal(hash(await f.lifecycle.exportUser(f.b)),bBefore);
+});
+
+test('rehashed asset archives reject unowned members, empty inputs, malformed metadata and unknown block kinds atomically',async t=>{
+ const f=fixture(t),{data,sourceCapture}=f.seed(f.a,'synthetic A');f.seed(f.b,'synthetic B');
+ f.repository(f.b).receiveCaptures([{id:bOnlyCapture,deviceId:'same-device',deviceName:'Fixture',platform:'import',capturedAt:at,durationMs:0,ocrText:'synthetic B only',source:'note'}]);
+ const asset=data.publishMaterial({id:materialId('asset-negative'),kind:'mote.document',schemaVersion:1,title:'synthetic asset',origin:{sourceId:'same-source',externalId:'asset-negative'},blocks:[{id:'attachment',kind:'asset',hash:'a'.repeat(64),mimeType:'text/plain',memberIds:['original'],evidenceIds:[sourceCapture]}],members:[{id:'original',kind:'capture',ref:'capture:'+sourceCapture,revision:'same-version'}],coverage:{state:'complete'},fidelity:{state:'derived'},retention:{original:'retained',policy:'keep'}});
+ const archive=await f.lifecycle.exportUser(f.a),bBefore=hash(await f.lifecycle.exportUser(f.b));await f.lifecycle.deleteUser(f.a,'asset-delete');const empty=hash(await f.lifecycle.exportUser(f.a));
+ const changes=[(draft:any)=>{draft.blocks[0].memberIds=[];},(draft:any)=>{draft.blocks[0].memberIds=['foreign'];},(draft:any)=>{draft.blocks[0].evidenceIds=[bOnlyCapture];},(draft:any)=>{draft.blocks[0].hash='not-a-content-digest';},(draft:any)=>{draft.blocks[0].mimeType=42;},(draft:any)=>{draft.blocks[0].kind='script';},(draft:any)=>{draft.blocks[0].url='https://example.invalid/foreign';},(draft:any,p:any)=>{draft.members[0].ref='capture:'+bOnlyCapture;p.material_captures.find((row:any)=>row.material_id===asset.id).capture_id=bOnlyCapture;}];
+ for(const mutate of changes){const bad=copy(archive),p=bad.payload as any,row=p.material_versions.find((row:any)=>row.material_id===asset.id),old=row.revision,draft=JSON.parse(row.json);mutate(draft,p);row.json=JSON.stringify(draft);row.revision=hash(draft);p.materials.find((row:any)=>row.id===asset.id).revision=row.revision;for(const table of ['material_captures','material_inputs','material_contexts','material_sources'])for(const link of p[table])if(link.material_id===asset.id&&link.revision===old)link.revision=row.revision;await assert.rejects(f.lifecycle.restoreUser(f.a,bad,'asset-invalid'),{code:'invalid_data'});assert.equal(hash(await f.lifecycle.exportUser(f.a)),empty);assert.equal(hash(await f.lifecycle.exportUser(f.b)),bBefore);}
+ await f.lifecycle.restoreUser(f.a,archive,'asset-valid-after-errors');assert.deepEqual(await f.lifecycle.exportUser(f.a),archive);
+});
