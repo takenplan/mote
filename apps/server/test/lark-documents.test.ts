@@ -115,6 +115,7 @@ test('large generated Markdown uses the existing original-file upload lifecycle 
 
 test('overlapping polls across hour boundaries do not turn one provider signal into multiple activities',async t=>{
  const f=await fixture(t);f.state.searchPages=[matches('DocumentDiary123')];await f.c.select({...selection,documentDiscovery:{created:false,edited:false,opened:true,firstSyncDays:30}});
+ // Keep new Date() observations and Date.now() validation on the same fixture clock.
  let clock=Date.parse('2026-10-15T10:13:00.000Z');t.mock.timers.enable({apis:['Date'],now:clock});
  f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
  clock+=20*60000;t.mock.timers.setTime(clock);f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
