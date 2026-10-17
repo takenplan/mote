@@ -22,6 +22,40 @@ async function importOriginal(f:Awaited<ReturnType<typeof scopedFilesFixture>>,t
  const page=await f.checked(token,'/api/ingress/sources/'+sourceId+'/originals'),original=page.items.find((item:any)=>item.captureId===captureId);assert.ok(original);const path='/api/ingress/originals/'+original.ref.slice(9),ticket=await f.checked(token,path+'/tickets','POST',{mode:'download'});return (await f.request(token,path+'/content?ticket='+encodeURIComponent(ticket.ticket))).json();
 }
 
+test('mapped imports retain empty originals without authorizing zero-length evidence ranges',async t=>{
+ const f=await scopedFilesFixture(t),bytes=Buffer.from('Generated nonempty import body.'),files=[];
+ for(const [name,body] of [['empty.txt',Buffer.alloc(0)],['content.txt',bytes]] as const){
+  const id=randomUUID();await f.checked(f.a.token,'/api/import-uploads','POST',{id,name,sizeBytes:body.length,mimeType:'text/plain'});
+  if(body.length)assert.equal((await f.request(f.a.token,'/api/import-uploads/'+id+'/parts/0','PUT',body,{'content-type':'application/octet-stream'})).statusCode,200);
+  files.push(await f.checked(f.a.token,'/api/import-uploads/'+id+'/commit','POST',{}));
+ }
+ const model=await importModel(t,f,files[1],bytes,{mapped:{summary:'Generated empty original accounted for',warnings:[],reviewDecision:{confidence:'high',ambiguous:false,reason:'Generated original bytes have explicit coverage.'},preserve:[1],dispositions:[{fileId:files[0].id,status:'excluded',reason:'The original contains no text.'},{fileId:files[1].id,status:'parsed',reason:'Exact decoded original retained.'}]}});
+ const response=await f.request(f.a.token,'/api/imports','POST',{requestId:randomUUID(),archivedFileIds:files.map(file=>file.id),processing:'preview',instruction:'Retain the supplied original text and account for the empty file.'});assert.equal(response.statusCode,202,response.body);const created=response.json();
+ await waitForScopedState(async()=>{const job=await f.checked(f.a.token,'/api/imports/'+created.id);if(['failed','needs_configuration'].includes(job.status))assert.fail(JSON.stringify(job));return job.status==='awaiting_confirmation';},()=>'mixed empty import did not reach preview',15000);
+ const job=await f.checked(f.a.token,'/api/imports/'+created.id);assert.equal(job.preview.count,1);assert.equal(job.files.length,2);assert.equal(job.dispositions.counts.excluded,1);assert.equal(job.preview.samples[0].text,bytes.toString());assert.ok(model.requests.some(raw=>raw.includes(bytes.toString())));
+ assert.equal((await f.request(f.a.token,'/api/archived-files/'+files[0].id+'/content')).rawPayload.length,0);assert.equal((await f.request(f.b.token,'/api/archived-files/'+files[0].id+'/content')).statusCode,404);
+});
+
+test('a ZIP Finder metadata member remains archived while the real import publishes only its text member',async t=>{
+ const {zipSync}=await import('fflate'),f=await scopedFilesFixture(t),metadata=Buffer.alloc(68,0xff);metadata.writeUInt32BE(1,0);metadata.write('Bud1',4,'ascii');metadata.writeUInt32BE(32,8);metadata.writeUInt32BE(32,12);metadata.writeUInt32BE(32,16);
+ const bytes=Buffer.from(zipSync({'.DS_Store':metadata,'body.txt':Buffer.from('Generated ZIP body.')}));
+ const response=await f.request(f.a.token,'/api/imports','POST',{requestId:randomUUID(),files:[{name:'generated.zip',dataBase64:bytes.toString('base64')}],processing:'automatic'});assert.equal(response.statusCode,202,response.body);const created=response.json();
+ await waitForScopedState(async()=>{const job=await f.checked(f.a.token,'/api/imports/'+created.id);if(['failed','needs_configuration'].includes(job.status))assert.fail(JSON.stringify(job));return job.status==='awaiting_confirmation';},()=>'Finder ZIP did not reach accounted preview',15000);
+ const job=await f.checked(f.a.token,'/api/imports/'+created.id);assert.equal(job.files.length,3);assert.equal(job.archive.expandedFiles,2);assert.equal(job.dispositions.counts.excluded,1);assert.equal(job.preview.count,1);
+ const member=job.files.find((file:any)=>file.relativePath.endsWith('/.DS_Store'));assert.ok(member);assert.deepEqual((await f.request(f.a.token,'/api/archived-files/'+member.id+'/content')).rawPayload,metadata);
+ assert.equal((await f.request(f.a.token,'/api/imports/'+created.id+'/confirm','POST',{})).statusCode,202);await waitForScopedState(async()=>(await f.checked(f.a.token,'/api/imports/'+created.id)).status==='completed',()=>'Finder ZIP did not publish its text member');
+ const complete=await f.checked(f.a.token,'/api/imports/'+created.id);assert.equal(complete.progress.imported,1);assert.equal((await importOriginal(f,f.a.token,complete.sourceId,complete.captureIds[0])).text,'Generated ZIP body.');
+});
+
+test('an all-empty mapped import can account for its original without creating a text seed or published capture',async t=>{
+ const f=await scopedFilesFixture(t),id=randomUUID(),bytes=Buffer.alloc(0);
+ await f.checked(f.a.token,'/api/import-uploads','POST',{id,name:'empty-only.txt',sizeBytes:0,mimeType:'text/plain'});const file=await f.checked(f.a.token,'/api/import-uploads/'+id+'/commit','POST',{});
+ await importModel(t,f,file,bytes,{mapped:{summary:'Generated empty original accounted for',warnings:[],reviewDecision:{confidence:'high',ambiguous:false,reason:'The supplied generated original has no text bytes.'},records:[],dispositions:[{fileId:file.id,status:'excluded',reason:'Empty original retained.'}]}});
+ const response=await f.request(f.a.token,'/api/imports','POST',{requestId:randomUUID(),archivedFileIds:[file.id],processing:'preview',instruction:'Account for the supplied empty original.'});assert.equal(response.statusCode,202,response.body);const job=response.json();
+ await waitForScopedState(async()=>{const current=await f.checked(f.a.token,'/api/imports/'+job.id);if(['failed','needs_configuration'].includes(current.status))assert.fail(JSON.stringify(current));return current.status==='awaiting_confirmation';},()=>'empty-only preview missing',15000);
+ const preview=await f.checked(f.a.token,'/api/imports/'+job.id);assert.equal(preview.preview.count,0);assert.equal(preview.dispositions.counts.excluded,1);assert.equal(preview.captureIds.length,0);assert.equal(preview.files.length,1);
+});
+
 test('original generic import entry keeps a durable private preview before exact confirmation and idempotent publication',async t=>{
  const f=await scopedFilesFixture(t),bytes=Buffer.from('Generated A import evidence. Literal author is not inferred.'),id=randomUUID();
  await f.checked(f.a.token,'/api/import-uploads','POST',{id,name:'generated/evidence.txt',sizeBytes:bytes.length,mimeType:'text/plain'});

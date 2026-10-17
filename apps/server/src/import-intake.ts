@@ -3,6 +3,7 @@ import type {ArchivedFile} from '@mote/shared';
 import {formatWork} from './format-work.js';
 import {StoreError} from './store.js';
 import {isAppleDouble} from './appledouble.js';
+import {isFinderStore} from './finder-store.js';
 
 export type FormatInput={file:ArchivedFile;prefix:Buffer};
 export type FormatMatch={mimeType:string;reason:string;excluded?:boolean};
@@ -48,7 +49,7 @@ export class ImportIntakeRegistry {
 export function installImportIntake(registry:ImportIntakeRegistry){
   const audio:Record<string,string>={'.mp3':'audio/mpeg','.wav':'audio/wav','.m4a':'audio/mp4','.aac':'audio/aac','.amr':'audio/amr','.ogg':'audio/ogg','.flac':'audio/flac','.opus':'audio/opus'};
   const images:Record<string,string>={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif'};
-  const dispose=[registry.registerFormat({id:'mote.appledouble-format',version:'1',priority:100,probe:({file,prefix})=>isAppleDouble(prefix,file.sizeBytes)?{mimeType:'application/applefile',excluded:true,reason:'AppleDouble filesystem metadata; original retained, excluded from content processing'}:undefined}),registry.registerFormat({id:'mote.media-format',version:'1',probe:({file,prefix})=>{
+  const dispose=[registry.registerFormat({id:'mote.finder-store-format',version:'1',priority:100,probe:({file,prefix})=>isFinderStore(prefix,file.sizeBytes)?{mimeType:'application/octet-stream',excluded:true,reason:'Finder filesystem metadata; original retained, excluded from content processing'}:undefined}),registry.registerFormat({id:'mote.appledouble-format',version:'1',priority:100,probe:({file,prefix})=>isAppleDouble(prefix,file.sizeBytes)?{mimeType:'application/applefile',excluded:true,reason:'AppleDouble filesystem metadata; original retained, excluded from content processing'}:undefined}),registry.registerFormat({id:'mote.media-format',version:'1',probe:({file,prefix})=>{
     const extension=extname(file.relativePath).toLowerCase();
     let mime=audio[extension]??images[extension];
     let basis='extension';
