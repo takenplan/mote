@@ -945,3 +945,22 @@ and reference-only admission remain authoritative. Six narrow cases passed in
 reference-only assertion passed separately1/1 in0.813s in
 `/tmp/mote-joint-file-attachment-reference-admission.*`. Scope checker0. No large
 file throughput/production performance claim follows from these generated cases.
+
+### Model-less original OCR/ASR reference
+
+Own e458bf1e durablecase gives actual M04 OCR lease scope_unavailable503 at
+/tmp/mote-joint-empty-media-reference-direct-red.log/.exit; original legal media
+service model:'' is not a language model. Earlier pipeline-only stale observation
+is retained in empty-media-reference-red and not substituted for the direct proof.
+Minimal69f8133e feature-aware check passes samecase including actual generated
+MoteMedia OCR, unchanged blank model in usage, ASR lease without execution, and
+chat/memory rejection. The full bounded ModelResources value suite plus this
+HTTPcase is16/16,2.492s0 in /tmp/mote-joint-empty-media-reference-neighbors.log/.exit,
+including shared/personal credential/locality/no-fallback/withdrawal/environment
+checks and new shared blank-media language-feature negatives. No real inference.
+NoEmit/current fullgate and independent delta review are pending.
+
+The new processing-policy-contract pure value checks3/3 in0.244s0
+/tmp/mote-joint-processing-policy-value.log/.exit only. It has no registered route,
+M04 domain, M03 intake or M05 processing behavior yet. Keep the actual public
+profile/settings/import-choice group OPEN.

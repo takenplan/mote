@@ -285,3 +285,27 @@ with unchanged no-artifact, exact physical cleanup and B-positive assertions.
 This is a fixture lifecycle correction; no production source is changed to
 release a still-needed physical pin. Full current affected/types/compiled/client
 and native/container combination remain pending.
+
+## Original media connection compatibility during profile work
+
+The original processingServiceSchema explicitly permits an empty model for OCR/
+ASR while requiring it for language-model services. M04's generic configured()
+check rejected both. A generated real M04 OCR lease is actual503 RED at e458bf1e;
+initial pipeline-only observation was stale and retained separately. Minimal69f8133e
+permits an empty model only for mote-media OCR/ASR resolution. Endpoint, credentials,
+explicit unauthenticated-local checks, complete references, account/resource
+retirement and no default fallback remain unchanged; chat/memory/file refuse that
+empty model. No fake model ID or alternative provider is introduced. Own real fake
+HTTP OCR plus M04 model-resource neighbors16/16 actual0; ASR lease resolution is
+verified separately from provider execution. New types/source review remain pending.
+
+The new pure processing-policy-contract value retains original named profiles,
+source/exact-MIME/default precedence, explicit original-only archive and recipe/
+parameter metadata while referencing complete M04 connections. It executes nothing,
+stores no endpoint/key copy and is not wired to routes/intake yet. Its three
+value-level tests are not evidence that the remaining public processing-plan
+settings, service test, incomplete-task reconciliation, preview/reprocess or import
+imageProfileId work is complete. Existing FileProcessing.completeConfiguration
+compares unfinished runtime fingerprints and requeues changed work; completed
+results remain until explicit preview/reprocess. The eventual adapter must retain
+that distinction and existing unknown-call consent, not blanket-revive work.
