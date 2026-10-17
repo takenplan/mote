@@ -1163,3 +1163,20 @@ Server noEmit0: `/tmp/mote-joint-policy-service-change-types.log/.exit`.
 Shared-instance change notification, global/default selections, processor-version
 startup reconciliation, raw-stage reuse and complete applied-plan lifecycle remain
 OPEN; this bounded personal-reference case is not whole fingerprint acceptance.
+
+
+### Independent plugin retirement discrepancy remains unresolved
+
+The cross-user owner reports two repeated10s PID-presence failures on2528 for
+source stop/delete, preserving its RED logs. Joint's unchanged plugin runtime,
+worker, scoped host and generated plugin fixture run the same two cases2/2
+EXIT0,2.776s (`/tmp/mote-joint-plugin-retirement-red.log/.exit`; the planned
+filename does not imply RED). Tightening the PID probe to accept only ESRCH as
+exit proof, propagating every other OS error, passes2/2,2.282s
+(`/tmp/mote-joint-plugin-retirement-esrch.log/.exit`). Temporarily restoring
+exact2528 configuration.ts and restoring current bytes in finally also passes
+2/2,2.459s (`/tmp/mote-joint-plugin-retirement-before-relogin.log/.exit`).
+The relogin cache correction is therefore not established as its cause/fix.
+No plugin production change or closure claim is made; failed-process PID/state
+diagnostics are requested from the independently failing workspace. These narrow
+results cannot replace that owner's required gate or whole plugin acceptance.
