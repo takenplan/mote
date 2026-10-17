@@ -126,3 +126,14 @@ This replaces the retired global context-DAG presentation source explicitly; no
 old unregistered custom processor, recipe or instance queue count is fabricated.
 The independent custom-recipe/shared-component S-POLICY gap and final whole gate
 remain separate. See `../design/multiuser-context-steps-http.md`.
+
+## Declared503 / saved-health follow-up
+
+Declared public503 (not arbitrary Joint HEAD) is composed at eb3eee3. Its root,
+Imports-image and explicit attachment default/saved-profile producer contract
+is available, with source10/10 composed proof and types/scope0; original consumer
+breadth is still separately verified. S-POLICY's original saved local-service
+button now has actual real Host/loopback original component2/2 with saved-only,
+A/B retirement and malformed-result checks, Webbuild0. Custom recipes,
+shared-component watching, explicit attachment original-page controls and the
+final whole gates remain specific work; nothing here declares all settings done.

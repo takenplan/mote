@@ -900,3 +900,30 @@ removing that speculative check preserves M05's original preparation transaction
 The same blocked/unknown case is included in the final seven greens. Earlier
 helper variable-shadowing compile/runtime failures were corrected before the
 final gate; they were not fixture or parent failures.
+
+### Declared503 composition and original saved local-service check
+
+Only Joint public runtime5030430002bd9971d481c8b1ba4c235ab45b6c26 was merged as
+eb3eee3; its declared doc-onlyb7a408e44292bcb4e0f93286ff6c9d02df13bec5 contract file
+is synchronized. No later arbitrary Joint source/recording WIP is consumed.
+Generated root/attachment/default-model/health plus new M05 context-step source
+10/10/no skips0,49.058s (`/tmp/m13-503-composed-source.log/.exit`), freshShared0,
+Server/Webtypes0 and scope0. These bounded composed proofs are not final affected.
+
+Original FileProcessingSettings then gives actual missing-control RED98293c42
+(`/tmp/m13-file-local-health-original-red.log/.exit`,1fail): a genuinely saved
+ASR service exists, but the original local check button is absent in the scoped
+branch. The original control is restored using only serviceId and the declared
+existing health endpoint. It is disabled for dirty unsaved settings; it sends no
+caller endpoint/key, upload or inference. The result's local execution and exact
+boolean health fields are validated before displaying readiness.
+
+Same original component plus existing named-settings/CAS neighbor2/2/no skips0,
+5.522s (`/tmp/m13-file-local-health-final-neighbors.log/.exit`): saved-only reload,
+actual GET/health through M04/M05, held A reply and old button retired under B,
+B same-ID positive, malformed200 body rejection and no secret in DOM. Initial
+single case1/1 9.375s is separate evidence; final strengthened case retains all
+assertions. Webbuild0. A first staging command used the Web cwd with root-relative
+paths and did not commit; absolute-path staging corrected that bookkeeping error.
+This is not live service/model quality, a complete file-policy/default/shared
+watch implementation, or a new whole Web/affected result.
