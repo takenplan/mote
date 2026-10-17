@@ -1,6 +1,7 @@
 # Evidence revisions and retained conversation history
 
-Date: 2026-10-17. Status: owner-directed implementation; independent review pending.
+Date: 2026-10-17. Status: owner-directed implementation; independently reviewed,
+awaiting merge and deployment.
 Applies to main. This does not authorize deployment or a paid historical replay.
 
 ## Decision and scope
@@ -89,5 +90,13 @@ Existing attribution, transcript correction, independent-dialogue, deletion,
 compaction-race and query-authority regressions remain required. The webpage
 regression checks stale text/citation display followed by destructive deletion;
 Agent envelope tests ensure host receipts are never serialized to the model.
+
+Independent generated journeys also cover Material revisions, two follow-up
+generations after restart, retirement/forget across all generations, late summary
+rejection after revision/deletion, and rejection of newly disclosed restricted
+result dependencies in a historical follow-up. A DingTalk pagination-only reimport
+exercises the production transcript/file path: this module preserves the old
+answer and version dependencies even when upstream transport noise still produces
+a new version. Stabilizing that upstream version identity is a separate change.
 
 Fixture checks and live model/device results are reported separately in the PR.

@@ -16,7 +16,7 @@ const result=(answer:string,ids:string[]=[])=>({answer,citations:[],trace:[],run
 
 for(const removal of ['tombstone','capture-delete'] as const)test(`ordinary revisions preserve history across restart; later ${removal} erases all derived generations`,async t=>{
  const dir=await mkdtemp(join(tmpdir(),'mote-history-preservation-')),seen:QueryInput[]=[];let evidenceIds:string[]=[];
- const agent={configured:true,close:async()=>{},query:async(input:QueryInput)=>{seen.push(input);return result(seen.length===1?'Generated first proposal; second proposal uses a paper glider.':'Generated discussion of the earlier second proposal.',evidenceIds);}};
+ const agent={configured:true,close:async()=>{},query:async(input:QueryInput)=>{seen.push(input);return {...result(seen.length===1?'Generated first proposal; second proposal uses a paper glider.':'Generated discussion of the earlier second proposal.',evidenceIds),citations:evidenceIds.length?[{id:evidenceIds[0],capturedAt:'2026-10-01T00:00:00Z',appName:'Generated history',excerpt:'Generated original evidence.'}]:[]};}};
  let node=await buildApp(config(dir),{backgroundWorker:false,agent});t.after(async()=>{await node.app.close();await rm(dir,{recursive:true,force:true});});
  node.sources.register({id:'generated-history',name:'Generated history',kind:'custom',deviceId:'generated',platform:'import'});
  const item=(revision:string,text:string,deleted=false)=>({externalId:'generated-document',revision,text,deleted,observedAt:`2026-10-${revision==='1'?'01':revision==='2'?'02':'03'}T00:00:00Z`,kind:'message',layer:'snapshot'});
