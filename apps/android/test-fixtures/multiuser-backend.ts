@@ -29,6 +29,15 @@ for(const username of ['generated-a','generated-b']){
  if(response.statusCode!==200)throw new Error(response.body);
 }
 const a=await login('generated-a'),b=await login('generated-b');
+let retiredTokenStatus:number|undefined;
+if(process.argv.includes('--relogin')){
+ const old=a.token,auth={...headers,authorization:'Bearer '+old};
+ const opened=await node.app.inject({url:'/api/configuration',headers:auth});if(opened.statusCode!==200)throw Error('Generated relogin first configuration failed');
+ const logout=await node.app.inject({url:'/api/auth/logout',method:'POST',headers:auth,payload:{}});if(logout.statusCode!==200)throw Error('Generated actual logout failed '+logout.statusCode);
+ retiredTokenStatus=(await node.app.inject({url:'/api/connections/self',headers:auth})).statusCode;if(retiredTokenStatus!==401)throw Error('Generated old credential was not retired');
+ Object.assign(a,await login('generated-a'));
+}
+
 const ocr=process.argv.includes('--ocr')?createServer(async(request,response)=>{
  for await(const _chunk of request){}const owner=String(request.headers.authorization).includes('GENERATED_B_KEY')?'B':'A';
  response.setHeader('Content-Type','application/json');response.setHeader('X-Mote-Execution','local');response.end(JSON.stringify({durationMs:0,segments:[{startMs:0,endMs:0,text:'GENERATED_'+owner+'_NATIVE_CENTRAL_OCR'}],coverage:'full',engine:'generated-native-http-fixture'}));
@@ -67,6 +76,6 @@ const control=createServer((request,response)=>{void(async()=>{
  })().catch(error=>{response.writeHead(500);response.end(JSON.stringify({error:String(error)}));});});
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress='http://127.0.0.1:'+(control.address() as {port:number}).port;
-process.stdout.write(JSON.stringify({address,controlAddress,admin,a,b,password,pid:process.pid,pluginPackageId})+'\n');
+process.stdout.write(JSON.stringify({address,controlAddress,admin,a,b,password,pid:process.pid,pluginPackageId,retiredTokenStatus})+'\n');
 let closing=false;async function close(){if(closing)return;closing=true;release?.();control.closeAllConnections();await new Promise<void>(resolve=>control.close(()=>resolve()));await node.app.close();if(ocr){ocr.closeAllConnections();await new Promise<void>(resolve=>ocr.close(()=>resolve()));}rmSync(directory,{recursive:true,force:true});process.exit(0);}
 process.on('SIGTERM',()=>void close());process.on('SIGINT',()=>void close());
