@@ -10,7 +10,8 @@ import {defaultProcessingSettings} from '../../server/src/scope/processing-schem
 const literalSpeakerPrefix=process.argv.includes('--literal-speaker-prefix');
 const cleanup:Array<()=>unknown>=[];
 const retries:Array<{actor:string;body:unknown;status:number;taskId?:string}>=[];
-let dropRetryAck=false;
+const deletes:Array<{actor:string;body:unknown;status:number}>=[];
+let dropRetryAck=false,dropDeleteAck=false;
 let aToken='',bToken='';
 let holdNextAsr=false,dropNextAsr=false,asrHeld=false,releaseAsr:(()=>void)|undefined;
 const asrCalls:string[]=[];
@@ -22,6 +23,11 @@ host.app.addHook('onSend',async(request,reply,payload)=>{
  if(request.method==='DELETE'&&/^\/api\/files\/[^/]+$/.test(request.url)||request.method==='POST'&&/^\/api\/files\/[^/]+\/cancel$/.test(request.url)){
   let error:string|undefined;try{error=JSON.parse(String(payload)).error;}catch{}
   process.stderr.write(JSON.stringify({type:'generated-file-control',method:request.method,path:request.url,status:reply.statusCode,...(error?{error}:{})})+'\n');
+ }
+ if(request.method==='DELETE'&&/^\/api\/files\/[^/]+$/.test(request.url)){
+  const actor=request.headers.authorization==='Bearer '+aToken?'a':request.headers.authorization==='Bearer '+bToken?'b':'other';
+  deletes.push({actor,body:request.body,status:reply.statusCode});
+  if(dropDeleteAck&&actor==='a'&&reply.statusCode===200)reply.raw.destroy();
  }
  if(request.method==='POST'&&/^\/api\/files\/[^/]+\/retry$/.test(request.url)){
   const actor=request.headers.authorization==='Bearer '+aToken?'a':request.headers.authorization==='Bearer '+bToken?'b':'other';
@@ -36,11 +42,13 @@ const control=createServer((request,response)=>{void(async()=>{
  for await(const _ of request){}
  if(request.url==='/generated/drop-file-retry-ack')dropRetryAck=true;
  else if(request.url==='/generated/release-file-retry-ack')dropRetryAck=false;
+ else if(request.url==='/generated/drop-file-delete-ack')dropDeleteAck=true;
+ else if(request.url==='/generated/release-file-delete-ack')dropDeleteAck=false;
  else if(request.url==='/generated/hold-next-asr')holdNextAsr=true;
  else if(request.url==='/generated/drop-next-asr')dropNextAsr=true;
  else if(request.url==='/generated/release-asr')releaseAsr?.();
  else if(request.url!=='/generated/file-retries'){response.statusCode=404;response.end();return;}
- response.setHeader('content-type','application/json');response.end(JSON.stringify({retries,dropRetryAck,asrHeld,asrCalls}));
+ response.setHeader('content-type','application/json');response.end(JSON.stringify({retries,deletes,dropRetryAck,dropDeleteAck,asrHeld,asrCalls}));
 })().catch(()=>response.destroy());});
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlAddress=control.address();if(!controlAddress||typeof controlAddress==='string')throw Error('Missing generated control address');
@@ -61,5 +69,5 @@ for(const [actor,label] of [[f.a,'A'],[f.b,'B']] as const){
 }
 const server=await f.host.app.listen({host:'127.0.0.1',port:0});
 process.stdout.write(JSON.stringify({address:server,controlAddress:'http://127.0.0.1:'+controlAddress.port,a:f.a,b:f.b,admin:f.admin,password:'Generated-joint-files-password',captureId:receipts[0].id,wave:wave.toString('base64'),pid:process.pid})+'\n');
-let closing=false;async function close(){if(closing)return;closing=true;process.stderr.write(JSON.stringify({type:'generated-file-final',asrCalls,retries:retries.map(entry=>{const body=entry.body as {stage?:string;operationId?:string;confirmUnknown?:boolean};return {actor:entry.actor,status:entry.status,taskId:entry.taskId,stage:body.stage,operationId:body.operationId,confirmUnknown:body.confirmUnknown};})})+'\n');releaseAsr?.();for(const work of cleanup.reverse())await work();asr.closeAllConnections();await new Promise<void>(resolve=>asr.close(()=>resolve()));process.exit(0);}
+let closing=false;async function close(){if(closing)return;closing=true;process.stderr.write(JSON.stringify({type:'generated-file-final',asrCalls,deletes:deletes.map(entry=>{const body=entry.body as {operationId?:string;originalGeneration?:number}|undefined;return {actor:entry.actor,status:entry.status,operationId:body?.operationId,originalGeneration:body?.originalGeneration};}),retries:retries.map(entry=>{const body=entry.body as {stage?:string;operationId?:string;confirmUnknown?:boolean};return {actor:entry.actor,status:entry.status,taskId:entry.taskId,stage:body.stage,operationId:body.operationId,confirmUnknown:body.confirmUnknown};})})+'\n');releaseAsr?.();for(const work of cleanup.reverse())await work();asr.closeAllConnections();await new Promise<void>(resolve=>asr.close(()=>resolve()));process.exit(0);}
 process.on('SIGINT',()=>void close());process.on('SIGTERM',()=>void close());
