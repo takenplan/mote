@@ -78,9 +78,7 @@ export class ProcessingHost {
    const settings=JSON.stringify(processingSettingsSchema.parse(next));let published=false;
    return {apply:()=>{},publish:()=>sql.transaction(()=>{const current=sql.get('SELECT * FROM mp_state WHERE user_id=$user') as State|undefined;if(current?.settings!==settings){sql.run('INSERT INTO mp_state VALUES($user,0,?,?) ON CONFLICT(user_id) DO UPDATE SET generation=excluded.generation,settings=excluded.settings',(current?.generation??-1)+1,settings);published=true;}}),rollback:()=>{if(published){if(before)sql.run('UPDATE mp_state SET deleted=?,generation=?,settings=? WHERE user_id=$user',before.deleted,before.generation,before.settings);else sql.run('DELETE FROM mp_state WHERE user_id=$user');}}};
   }}));
-  // Intermediate policy page: unfinished-work reconciliation is the next group;
-  // no consumer freeze is claimed for this source yet.
-  this.policies=new ProcessingPolicies(runtime,db,configuration,this.processors,context=>this.fileSettings(this.sql(context),this.state(this.sql(context))),()=>{});
+  this.policies=new ProcessingPolicies(runtime,db,configuration,this.processors,context=>this.fileSettings(this.sql(context),this.state(this.sql(context))),context=>this.reconcilePolicies(context));
   ingress.configureFileRetirement((context,refs)=>{for(const ref of refs)this.cancelFile(context,ref);});
   this.reviews=processingReviews(runtime,db,execution,{snapshot:(context,ref)=>this.fileTranscript(context,ref),read:(context,ref)=>{const input={originalRef:ref,...this.snapshot(context,ref)};if(!this.input(context,input,true).current)throw new PrivateDataError('conflict',409);},current:(userId,input)=>this.current(userId,input,true),io:(run,input,work)=>this.io(run,input,work,true),publish:(context,ref,artifactId,transcript,key)=>this.publishFileCorrection(context,ref,artifactId,transcript,key)});
   runtime.services.registerUser(PROCESSING_DOMAIN,{scope:'user',create:context=>this.forUser(context),lifecycle:this.lifecycle()});
@@ -145,15 +143,17 @@ export class ProcessingHost {
  }
  private current(userId:string,raw:Record<string,unknown>,allowCancelled=false){try{const input=processingInputSchema.parse(raw),sql=new PrivateSql(this.db,userId,()=>{}),state=this.state(sql);const control=sql.get('SELECT generation,cancelled FROM mp_file_controls WHERE user_id=$user AND original_id=?',input.originalRef.slice(9));if(state.deleted||state.generation!==input.generation||sql.get('SELECT plan_id FROM mp_file_policy_bindings WHERE user_id=$user AND original_id=?',input.originalRef.slice(9))?.plan_id!==input.policyPlanId||attachmentOriginalBinding(sql,input.originalRef)?.id!==input.attachmentGeneration||fileOriginalGeneration(sql,input.originalRef)!==(input.originalGeneration??0)||Number(control?.generation??0)!==(input.fileGeneration??0)||control?.cancelled&&!allowCancelled)return false;if(input.parentTaskId)this.parent(sql,input.parentTaskId);if(input.plugin)this.parent(sql,input.plugin.parentTaskId,true);return true;}catch{return false;}}
  private kind(original:Pick<Original,'mime'>){return original.mime.startsWith('image/')?'ocr':original.mime.startsWith('audio/')?'asr':'extract';}
- private blockedCall(context:UserContext,originalRef:string,exceptTask=''){
+ private physicalState(context:UserContext,originalRef:string,exceptTask=''){
   const calls=this.sql(context).all("SELECT a.id,NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations r WHERE r.user_id=c.user_id AND r.issuance_id=c.issuance_id) unacknowledged FROM task_external_calls c JOIN user_tasks u ON u.task_id=c.task_id AND u.user_id=c.user_id JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id LEFT JOIN mp_activity a ON a.user_id=c.user_id AND c.request_key='processing:'||c.task_id||':'||a.id WHERE c.user_id=$user AND u.user_id=$user AND e.user_id=$user AND e.kind IN ('processing.extract','processing.ocr','processing.asr','processing.analysis','processing.review') AND c.task_id<>? AND c.state IN ('issued','unknown') AND json_extract(u.input,'$.originalRef')=?",exceptTask,originalRef);
-  return calls.some(row=>row.unacknowledged||row.id&&this.active.has(identityHash([context.userId,row.id])));
+  const live=(row:Record<string,unknown>)=>Boolean(row.id&&this.active.has(identityHash([context.userId,row.id])));return {live:calls.some(live),unknown:calls.some(row=>row.unacknowledged&&!live(row))};
  }
- private submitSync(context:UserContext,originalRef:string,operationId:string,plugin?:ProcessingInput['plugin'],diarizeFrom?:string){
+ private blockedCall(context:UserContext,ref:string,exceptTask=''){const state=this.physicalState(context,ref,exceptTask);return state.live||state.unknown;}
+
+ private submitSync(context:UserContext,originalRef:string,operationId:string,plugin?:ProcessingInput['plugin'],diarizeFrom?:string,deferPhysical=false){
   this.input(context,processingInputSchema.parse({originalRef,...this.snapshot(context,originalRef),...(plugin?{plugin}:{})}));
   if(!plugin&&this.policies.bindPlan(context,originalRef)?.archiveOnly)throw new TaskError('file_processing_archive_only',409);
   const input=processingInputSchema.parse({originalRef,...this.snapshot(context,originalRef),...(plugin?{plugin}:{}),...(diarizeFrom?{diarizeFrom}:{})});this.input(context,input);
-  const sql=this.sql(context),journal=new PrivateSql(this.db,context.userId,()=>{});if(!sql.get('SELECT task_id FROM mp_admissions WHERE user_id=$user AND original_id=? AND request_key=? AND task_id IS NOT NULL',originalRef.slice(9),operationId)&&this.blockedCall(context,originalRef))throw new TaskError('external_result_unknown',409);sql.run("INSERT INTO mp_admissions VALUES($user,?,?,NULL,'pending') ON CONFLICT(user_id,original_id,request_key) DO UPDATE SET state='pending'",originalRef.slice(9),operationId);
+  const sql=this.sql(context),journal=new PrivateSql(this.db,context.userId,()=>{});if(!sql.get('SELECT task_id FROM mp_admissions WHERE user_id=$user AND original_id=? AND request_key=? AND task_id IS NOT NULL',originalRef.slice(9),operationId)&&!deferPhysical&&this.blockedCall(context,originalRef))throw new TaskError('external_result_unknown',409);sql.run("INSERT INTO mp_admissions VALUES($user,?,?,NULL,'pending') ON CONFLICT(user_id,original_id,request_key) DO UPDATE SET state='pending'",originalRef.slice(9),operationId);
   try{const task=this.execution.forUser(context).submitSync({kind:'processing.pipeline',operationId,input});journal.run("UPDATE mp_admissions SET task_id=?,state='admitted' WHERE user_id=$user AND original_id=? AND request_key=?",task.id,originalRef.slice(9),operationId);return task;}catch(error){journal.run("UPDATE mp_admissions SET state='failed' WHERE user_id=$user AND original_id=? AND request_key=?",originalRef.slice(9),operationId);throw error;}
  }
  private async submit(context:UserContext,originalRef:string,operationId:string,plugin?:ProcessingInput['plugin']){return this.submitSync(context,originalRef,operationId,plugin);}
@@ -280,6 +280,23 @@ export class ProcessingHost {
  private async wait(run:TaskRun,id:string,assert:()=>void=()=>{}){
   for(;;){run.grant.assert();assert();const task=this.execution.forUser(run.context).get(id);if(task.state==='succeeded')return resultSchema.parse(task.result);if(['blocked','failed','cancelled','stale'].includes(task.state))throw new ExecutionFailure(task.state==='stale'||task.state==='cancelled'?'stale':task.state==='blocked'?'blocked':'permanent',task.failure?.code??'processing_child_failed');await delay(20,undefined,{signal:run.signal});}
  }
+ /** A settings save is a fresh owner intent. It retires old domain grants and
+  * admits a new shared-engine coordinator; it never retries an old task/grant. */
+ private reconcilePolicies(context:UserContext){
+  const sql=this.sql(context);for(const row of sql.all('SELECT DISTINCT original_id FROM mp_admissions WHERE user_id=$user AND task_id IS NOT NULL')){
+   const ref='original:'+row.original_id,latest=sql.get("SELECT e.state,u.input FROM mp_admissions a JOIN execution_steps e ON e.user_id=a.user_id AND e.id=a.task_id JOIN user_tasks u ON u.user_id=e.user_id AND u.task_id=e.id WHERE a.user_id=$user AND e.user_id=$user AND u.user_id=$user AND a.original_id=? AND e.kind='processing.pipeline' ORDER BY e.updated_at DESC,e.id DESC LIMIT 1",row.original_id);
+   if(!latest||!['waiting','running','blocked','failed'].includes(String(latest.state))||JSON.parse(String(latest.input)).plugin||this.fileControl(context,ref).cancelled)continue;
+   try{sql.transaction(()=>{
+    this.input(context,processingInputSchema.parse({originalRef:ref,...this.snapshot(context,ref)}),true);const before=this.policies.current(context,ref),after=this.policies.bindPlan(context,ref,true);if(before?.id===after?.id)return;
+    for(const task of sql.all("SELECT e.id FROM user_tasks u JOIN execution_steps e ON e.user_id=u.user_id AND e.id=u.task_id WHERE u.user_id=$user AND e.user_id=$user AND e.kind LIKE 'processing.%' AND e.state NOT IN('succeeded','cancelled','stale') AND json_extract(u.input,'$.originalRef')=?",ref))this.execution.forUser(context).cancel(String(task.id));
+    if(after&&!after.archiveOnly&&this.snapshot(context,ref).settings.enabled)this.submitSync(context,ref,'policy-reconcile:'+randomUUID(),undefined,undefined,true);
+   });}catch(error){
+    // A source/account can retire concurrently. Its existing task stays fenced;
+    // no credential or old authorization is reconstructed to force admission.
+    if(!(error instanceof ScopeError||error instanceof PrivateDataError))throw error;
+   }
+  }
+ }
  private policyModel(context:UserContext,input:ProcessingInput,feature:'ocr'|'asr'|'file',operationId:string){
   this.input(context,input);const plan=this.policies.current(context,input.originalRef),id=feature==='file'?plan?.profile.modelServiceId:plan?.profile.serviceId,service=plan?.services.find(service=>service.id===id);
   if(plan&&feature!=='file'&&!service)throw new PrivateDataError('scope_unavailable',503);
@@ -287,6 +304,7 @@ export class ProcessingHost {
  }
  private async pipeline(run:TaskRun){
   const input=processingInputSchema.parse(run.task.input);await this.configuration.forUser(run.context).view();run.grant.assert();const {original}=this.input(run.context,input),recipe=this.policies.current(run.context,input.originalRef)?.profile.imageRecipe;if(recipe&&(recipe.id!=='mote.image'||recipe.version!=='1'))throw new ExecutionFailure('blocked','image_recipe_unavailable');
+  for(;;){run.grant.assert();this.input(run.context,input);const state=this.physicalState(run.context,input.originalRef);if(state.live){await delay(20,undefined,{signal:run.signal});continue;}if(state.unknown)throw new ExecutionFailure('blocked','external_result_unknown');break;}
   const child=await this.execution.forUser(run.context).submit({kind:'processing.'+this.kind(original),operationId:'processing:'+run.task.id,input:{...input,parentTaskId:run.task.id}});run.checkpoint.write('extraction',{taskId:child.id});return this.wait(run,child.id,()=>{this.input(run.context,input);});
  }
  private async extract(run:TaskRun,kind:'extract'|'ocr'|'asr'){

@@ -1090,3 +1090,37 @@ checker0 in `/tmp/mote-joint-policy-wip-scope4.log/.exit`. No whole affected,
 compiled/UI/native/container recovery or independent source review of this new
 policy checkpoint is claimed. All remaining implementation items are listed in
 the design checkpoint above; especially unfinished work is not yet reconciled.
+
+### Named graph reconciliation: bounded implementation evidence
+
+93dd6daa adds the unfinished-work target. Its first run waited only for `blocked`,
+while the original missing-service failure can be `failed`; the test timed out
+(cancelled1) and is not a business RED. After the fixture waits for either actual
+unfinished terminal, exact a250 runtime was restored temporarily in the own tree
+and run serially, then the saved WIP file restored in a finally block. This valid
+old-source RED is1/1fail,3.532s EXIT1:
+`/tmp/mote-joint-processing-policy-reconcile-red2.log/.exit`, processingRequired
+remains true after selecting archive. No peer tree or running build was modified.
+The same case GREEN is1/1,3.341s0; including completed/cancelled preservation,
+`/tmp/mote-joint-processing-policy-reconcile-neighbors.log/.exit` is2/2,9.608s0.
+
+New real loopback request-body acceptance followed by socket loss proves a
+physical unknown. Named service reference changes admit a new coordinator but no
+new provider request without explicit file confirmation. B's equal-ID request
+still succeeds; after confirmation exactly one new A request succeeds and the
+old issuance remains un-settled. Current actual1/1,6.915s EXIT0:
+`/tmp/mote-joint-processing-policy-reconcile-unknown3.log/.exit`. First unknown1/2
+failures were a fixture that selected only state `unknown`, while a durable
+unsettled fact may still be `issued`; the first attempted correction did not
+actually change that SQL predicate. Both failures are preserved, not claimed as
+product RED. The corrected predicate explicitly observes issued/unknown IDs and
+null settled_at before/after, without weakening byte/request-count/B assertions.
+
+The changed common coordinator guard also reran11 exact legacy extraction/ASR/
+diarization/retry/parentless scenarios,0fail/cancel/skip,67.029s EXIT0 in
+`/tmp/mote-joint-policy-reconcile-retry-neighbors.log/.exit`. These are source
+cases with generated localhost services, not a whole affected/compiled/physical
+or full runtime-fingerprint acceptance. Current types and boundary receipts are
+`/tmp/mote-joint-policy-reconcile-types2.log/.exit` and
+`/tmp/mote-joint-policy-reconcile-scope.log/.exit`; final result is checked before
+this implementation checkpoint is committed. Public consumer freeze stays2528.

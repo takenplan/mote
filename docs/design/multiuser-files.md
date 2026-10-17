@@ -361,7 +361,28 @@ This intermediate source is **not released for consumer composition**. Original
 unfinished-work fingerprint reconciliation, preview/explicit reprocess, saved
 service testing, explicit root/import/attachment profile overrides, non-default
 image recipe execution and data-only applied-plan history export/restore are still
-OPEN. The intermediate configuration-complete callback intentionally does not
-claim those behaviors. Consumers and independent tests continue using declared
+OPEN. At a250 the configuration-complete callback did not yet reconcile unfinished
+work; the later graph-change subset is recorded below. Full runtime-fingerprint
+reconciliation is still pending. Consumers and independent tests continue using declared
 2528a67d until another exact limited freeze is explicitly announced. Raw service
 credentials are rejected by the policy graph and remain solely in M04.
+
+### Named graph changes and outstanding physical work (implementation only)
+
+A changed applied graph for an unfinished ordinary pipeline now retires that
+file's old M05 tasks and admits a fresh coordinator under the current owner's
+configuration intent. It does not retry/re-authorize the old task. Completed
+results, manually cancelled files and explicit M09 processor grants retain their
+previous boundaries. Original-only selection stops unfinished processing without
+pretending to have extracted/indexed the file. Cosmetic graph edits with the same
+execution plan do not create work.
+
+The existing shared coordinator waits for old physical I/O to finish; unresolved
+issued/unknown facts block it with `external_result_unknown`. Existing explicit
+file retry confirmation can authorize a fresh request after physical completion,
+while preserving the old unresolved issuance and B's result. This is a narrow
+named-graph reconciliation subset, not full connection/runtime fingerprint
+observation: same-reference model-body changes, scalar-only settings changes,
+shared-resource notifications and unfinished derived-only jobs still need their
+original semantics wired and verified. Preview/reprocess/health/profile overrides,
+applied-plan data restore and non-default image recipes remain unreleased.
