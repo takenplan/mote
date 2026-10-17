@@ -1292,3 +1292,34 @@ No current required affected or M15 remote PR is claimed. Original model-copy/
 probe/provider catalog, Agent preview/recorded history and Joint policy/profile
 contracts remain explicit shared gaps. The initial40s attempt is a fixture
 startup failure, not a product RED or a passing native check.
+
+
+### Optional Joint M04 relogin fix, independently exercised through native settings
+
+Joint explicitly permits picking80ac30ee and fda6abde alone; its policy HEAD is
+not a consumer freeze. New test-fixture2b403 uses only actual GET configuration,
+POST logout, old self401 and a fresh same-user login before exposing bootstrap.
+No proposal/database state is seeded. The unchanged429 Android processing form
+then reaches a genuine RED: Save PUT `/api/configuration/processing` returns503
+`config_prepare_failed`; native1/1 EXIT1,1.032s,
+`/tmp/m15-429-native-processing-relogin-valid-red.*`, backend0. The original
+revision/value, speaker option preservation and B/oldA controls remain asserted.
+
+Only the explicit80ac test and fda6 configuration correction are cherry-picked
+as e7b43ca7/cf2311ea. The sole conflict is a documentation append: retain current
+history and append only fda6's relogin evidence, no policy WIP. Configuration.ts
+relative2528 is exactly its6+1-line change: reuse cached factories only while
+their immutable original admission subject is current; otherwise drain/close
+before reopening with the new caller, never mutate an old subject.
+
+Identical native APK/test then passes1/1,1.304s,
+`/tmp/m15-429-native-processing-relogin-first-green.*`, backend0. Actual relogin
+plus full configuration/effective-snapshot/lifecycle neighbors19/19,no skip,
+27.976s EXIT0 `/tmp/m15-fda6-config-relogin-neighbors.*`. Server build EXIT0
+`/tmp/m15-fda6-server-build.*`. Bounded independent review
+`/tmp/mote-m15-review-joint-configuration-fda6.md` found no new confirmed issue
+in that narrow delta; its source review and the execution above are distinct.
+Android production is byte-identical to429, so its full358/debug/native evidence
+stays exact rather than mechanically repeating unchanged Kotlin. Earlier all-
+workspace types/Central/scope/i18n/13 backend proofs precede only this small
+server fix; no new final affected or whole-profile/model/Agent completion claim.
