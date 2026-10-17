@@ -115,3 +115,25 @@ Desktop Swift/native build, complete affected checks, Draft PR and remote SHA
 verification remain open at this fixed candidate. The earlier parent app send
 returned `thread not found` and was not blindly retried; the allocation arrived
 as a new delegation. No other owner process was stopped.
+
+## Inherited delegated-test wait budget
+
+The full affected run at runtime candidate `32f8215c` encountered an inherited
+M14 Ask test failure: the default 20-second `f.wait` expired while the second
+child had validated and its parent was still advancing. Isolated original-source
+execution reproduced `Ask timeout`, exit 1:
+`/tmp/mote-desktop-v2-ask-retry-isolated.log/.exit`. A temporary same-source
+probe changed only that test's wait to 60 seconds and retained all three business
+assertions: completed parent, `{one:1,two:2}` child starts, and one stored turn.
+It passed in 25.448 seconds (27.288 overall), exit 0:
+`/tmp/mote-desktop-v2-ask-wait-probe.log/.exit`. The adjacent delegated scenario
+already uses 60 seconds; production has no 20-second cutoff for this journey.
+
+The committed correction changes only the one test's explicit finite wait to
+60 seconds, under the existing 120-second Node test bound. It does not alter
+production retries or weaken assertions. The already-failed own gate was stopped
+only after exact launcher/PGID verification; its partial output and controlled
+interruption remain `/tmp/mote-desktop-v2-affected-attempt4.*`, never a pass. The corrected repository test then passed 1/1 in 30.249 seconds
+(31.833 overall), exit 0: `/tmp/mote-desktop-v2-ask-wait-green.log/.exit`. A
+new complete affected run is required. Desktop runtime/source and the actual
+Electron 20/20 acceptance remain byte-identical to runtime candidate `32f8215c`.
