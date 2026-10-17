@@ -9,8 +9,8 @@ import {buildApp} from '../../server/src/app.js';
 import type {Config} from '../../server/src/config.js';
 
 // Generated main/wire-1 host for the real Android ASK and Activity readers.
-// Model transport alone is scripted; stored turns, operations, paging and all
-// evidence invalidation/deletion use the production application lifecycle.
+// A generated agent adapter supplies answers; stored turns, operations, paging
+// and evidence invalidation/deletion use the production application lifecycle.
 const output=resolve(process.argv[2]??join(tmpdir(),'mote-main-history-fixture.json'));
 const directory=await mkdtemp(join(tmpdir(),'mote-main-history-'));
 const token=randomBytes(32).toString('hex'),observedAt=new Date().toISOString();
