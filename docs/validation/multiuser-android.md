@@ -1125,3 +1125,54 @@ No emulator restart/build occurred while Desktop retained the heavy window.
 Test-only23af adds same invitation begin lost-redeem/edited-name/same-owner-login
 regression with full claim/challenge/name correlation; no new production change
 and no compiled/native pass is claimed.
+
+
+## Invitation capability retirement and current Files delete adapter
+
+Fresh53d21cf9 offline JVM+fixture app/test APK build passed:75 XML,358/358,
+0 failure/error/skip,88s. Original MCP create/revoke from native UI passed1/1
+2.013s against real M01, including write-source allowlist, cancel, B same-label
+and a detached A confirmation under B. Logs `/tmp/m15-mcp-delete-short-build.*`
+and `/tmp/m15-native-mcp-create-first-green.*` retain their exact source.
+
+The corrected original invitation test reached a valid production RED at53d:
+A's visible confirmation remained after actual B login/resume,1/1 EXIT1,1.380s,
+`/tmp/m15-native-invitation-visible-resume-valid-red.*`. Minimal production
+fixd6da951d captures the page owner, synchronously retires visible text/dialog
+and incoming URI before resolving another identity, and fences queued callbacks.
+The original durable pairing/PKCE state remains. Its first whole JVM run had357
+passes and one citation fixture race: canonical Material publication correctly
+made the old raw query ref404. Test-onlyc47 waits for the actual Material and
+uses its declared originalRefs, retaining explicit raw404/B404/source-pause404;
+focused same test and fixture packaging passed. This is not a new full358 pass.
+
+Two invitation GREEN attempts are retained as harness failures: a background
+barrier assertion, then ActivityScenario's STARTED timeout. The pinned AndroidX
+1.6.1 observer compares its original launch URI with Activity.intent.data and
+ignored the correctly cleared capability. Test-only659a copies only that
+observer's expected Intent; it asserts the real Activity URI is still present
+before resume and is cleared by production afterward. No app mutation, timeout
+extension or privacy assertion removal. Test APK packaging EXIT0,22s. Actual
+native results at659a (productiond6da), all own backend cleanup0:
+
+- visible A capability→B resume:1/1 EXIT0,2.132s,
+  `/tmp/m15-native-invitation-visible-resume-green3.*`;
+- original QR lost-redeem/ACK and queued bytes:1/1 EXIT0,3.098s,
+  `/tmp/m15-d6da-normal-pairing-green.*`;
+- same invitation retains verifier/claimed name/account directory through same
+  owner login and lost replies:1/1 EXIT0,.218s,
+  `/tmp/m15-d6da-same-invitation-green.*`;
+- held A picker retires; explicit new B selection works:1/1 EXIT0,2.550s,
+  `/tmp/m15-d6da-held-invitation-picker-green.*`.
+
+Files delete is a separate confirmed consumer RED: exact saved53 app through
+original detail/confirmation sends no stable op/generation and gets actual409,
+1/1 EXIT1,1.639s `/tmp/m15-native-file-delete-cas-valid-red.*`. Productiona95f
+adds a thin journal using the existing account-owned encrypted CentralStateFile:
+captured descriptor+UUID operation+generation before DELETE; missing-detail
+recovery on Files list; original request only; exact decision/source/external/
+generation acknowledgement before clearing only that operation. Fixed old ACKs
+refresh current data rather than remove a same-ID replacement locally. APK
+build EXIT0,27s `/tmp/m15-file-delete-cas-green-build.*`; actual native GREEN is
+still pending. Joint owns the separate source-delete/recreate reset165 RED;
+no shared producer fix or whole Android/final affected result is claimed here.
