@@ -8478,5 +8478,6 @@ export const english: Readonly<Record<string, string>> = {
   "当前范围暂无录音检查点。": "There are no recording checkpoints in the current selection.",
   "当前来源尚无归档文件。": "This source has no archived files yet.",
   "录音归档分页": "Recording archive pages",
-  "录音来源": "Recording source"
+  "录音来源": "Recording source",
+  "导出图片处理结果": "Export image processing results"
 };
