@@ -1,4 +1,5 @@
 import type {QueryInput} from '@mote/agent';
+import {workingMemoryPlan} from './working-memory-plan.js';
 import type {QueryResult} from '@mote/shared';
 import {Conversations,type Conversation} from './conversations.js';
 import {Store,StoreError,sha256} from './store.js';
@@ -51,31 +52,9 @@ export class WorkingMemory {
     if(!this.store.db.prepare('SELECT id FROM conversations WHERE id=?').get(id))return;
     const conversation=this.conversations.get(id),previous=this.get(conversation),start=previous?.coveredTurns??0,end=targetEnd??conversation.turns.length-settings.recentTurns;
     if(end<=start)return;
-    let count=start,characters=JSON.stringify({previousSummary:previous?.text,turns:[]}).length;const prefix:NonNullable<QueryInput['taskContext']>['turns']=[];
-    const batches:NonNullable<QueryInput['taskContext']>['turns'][]=[];
-    for(const turn of conversation.turns.slice(start,end)){
-      if(turn.status==='failed'||!turn.result){count++;continue;}
-      const contextStale=!sourceContextDependenciesCurrent(this.sourceContexts,turn.result.sourceContextDependencies);
-      const entry={turnId:turn.id,question:turn.question,answer:turn.result.answer,scope:turn.scope,createdAt:turn.createdAt,evidenceDeleted:turn.evidenceDeleted,evidenceStale:turn.evidenceStale,...(contextStale?{contextStale:true}:{})};
-      const text=JSON.stringify(entry);if(characters+text.length>60000){
-        if(prefix.length)break;
-        // One very long answer still needs complete coverage. Summarize its
-        // bounded spans in order, committing the covered-turn cursor only after
-        // every span succeeds. JSON escaping is included in each span's budget.
-        for(const field of ['question','answer'] as const){
-          const original=entry[field];let offset=0;
-          while(offset<original.length){
-            let end=Math.min(original.length,offset+6000);
-            if(end<original.length&&/[\uD800-\uDBFF]/.test(original[end-1]))end--;
-            batches.push([{turnId:turn.id,field,offset,end,total:original.length,text:original.slice(offset,end),scope:turn.scope,createdAt:turn.createdAt,evidenceDeleted:turn.evidenceDeleted,evidenceStale:turn.evidenceStale,...(contextStale?{contextStale:true}:{})}]);offset=end;
-          }
-        }
-        count++;break;
-      }
-      prefix.push(entry);characters+=text.length+1;count++;
-    }
+    const entries=conversation.turns.map(turn=>{if(turn.status==='failed'||!turn.result)return null;const contextStale=!sourceContextDependenciesCurrent(this.sourceContexts,turn.result.sourceContextDependencies);return {turnId:turn.id,question:turn.question,answer:turn.result.answer,scope:turn.scope,createdAt:turn.createdAt,evidenceDeleted:turn.evidenceDeleted,evidenceStale:turn.evidenceStale,...(contextStale?{contextStale:true}:{})};});
+    const {count,batches}=workingMemoryPlan(entries,start,end,previous?.text);
     const fingerprint=this.fingerprint(conversation,count);
-    if(prefix.length)batches.push(prefix);
     let summaryText=previous?.text??'';
     const activeTurns=conversation.turns.slice(0,count).filter(turn=>turn.result&&!turn.evidenceDeleted);
     const evidenceDependencies=combineDependencies(activeTurns.map(turn=>turn.result!.evidenceDependencies))??{version:1 as const,complete:true,ids:[]};

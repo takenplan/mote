@@ -1,0 +1,3361 @@
+{
+  "schema": 1,
+  "purpose": "Source/test/design audit and final explicitly authorized unmerged consolidation result",
+  "auditedAtClientTime": "2026-10-17T18:41:55.466341+08:00",
+  "testedCandidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
+  "candidateTree": "fcb3bce1524932978ad7133377aaa56136a3dcc1",
+  "manifestSha256": "3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a",
+  "publicationHeadAtAudit": "2bc7e3f19cbde9c825057122850d8a23f386da90",
+  "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+  "counts": {
+    "CLOSED_SUPERSEDED_UNMERGED": 28,
+    "UNRELATED_KEEP": 5,
+    "TARGET_KEEP": 1
+  },
+  "method": [
+    "Fetched all34 refs/pull/N/head and matched exact GitHub API heads",
+    "Compared each PR merge-base diff against actual tested C2 and publication tree; counted exact/evolved/absent Git blobs",
+    "Confirmed19 multiuser heads are ancestors; inspected9 selected/adapted branches by stable patch IDs, original-vs-integrated range diffs and retained file blobs",
+    "Stable patch identity is textual provenance only; evolved paths are not automatically semantic-equivalent",
+    "Excluded143/145-148 based on explicit user scope and actual source/test/ADR diffs, not titles"
+  ],
+  "prs": [
+    {
+      "number": 126,
+      "title": "M00: establish multi-user scope foundation and engineering contracts",
+      "url": "https://github.com/utopiafar/mote/pull/126",
+      "headRefName": "codex/mote-multiuser-m00-scope",
+      "headRefOid": "5031b754915d3fbba0dbe0c050b6d103a02966ef",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M00 scope foundation",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 89,
+        "test": 125,
+        "design": 5
+      },
+      "representativeCoveredPaths": [
+        "docs/adr-multiuser-scope.md",
+        "docs/design/multiuser-modules.md",
+        "apps/server/test/scope-foundation.test.ts"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 203,
+        "evolved": 16
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 203,
+        "evolved": 16
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 126,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:18Z",
+        "draft": true,
+        "head": "5031b754915d3fbba0dbe0c050b6d103a02966ef",
+        "headRef": "codex/mote-multiuser-m00-scope",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/126",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/126#issuecomment-6234232800"
+      }
+    },
+    {
+      "number": 127,
+      "title": "M01: authenticate personal accounts and separate administration",
+      "url": "https://github.com/utopiafar/mote/pull/127",
+      "headRefName": "codex/mote-multiuser-m01-auth",
+      "headRefOid": "443726d2a95ef55db9466d06aa44ea1061ca56e4",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M01 accounts/auth/admin",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 98,
+        "test": 127,
+        "design": 9
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/accounts.ts",
+        "apps/server/test/multiuser-auth.test.ts",
+        "docs/design/multiuser-auth.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 209,
+        "evolved": 25
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 209,
+        "evolved": 25
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 127,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:26Z",
+        "draft": true,
+        "head": "443726d2a95ef55db9466d06aa44ea1061ca56e4",
+        "headRef": "codex/mote-multiuser-m01-auth",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/127",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/127#issuecomment-6234234293"
+      }
+    },
+    {
+      "number": 128,
+      "title": "M02: Isolate private data access and indexes by trusted user scope",
+      "url": "https://github.com/utopiafar/mote/pull/128",
+      "headRefName": "codex/mote-multiuser-m02-data",
+      "headRefOid": "8ecccb8ecf0093cc655fadd8bbc5e1637220f9fd",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "M02 private repositories/indexes",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 96,
+        "test": 127,
+        "design": 7
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/private-data.ts",
+        "apps/server/test/private-data.test.ts",
+        "docs/design/multiuser-private-data.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "8ecccb8ecf0093cc655fadd8bbc5e1637220f9fd",
+          "subject": "Link M02 Draft PR and record final delivery boundaries",
+          "stablePatchId": "cd0032ddaec66f70bdae905021a0e5d61faf8b57",
+          "equivalentCandidateCommits": [
+            "3abd6735f84bc7ed215c2fc84eb155827a2e4e03"
+          ]
+        },
+        {
+          "sha": "5e4ef80e9f4db9ce1723194a410ec1c1dc653fbe",
+          "subject": "Record M02 isolation acceptance and independent review evidence",
+          "stablePatchId": "e68d1b1c205f93489a8a8c1bbc924fa69028299f",
+          "equivalentCandidateCommits": [
+            "5e616c4906940bf502bab635aa2796dd8a590af7"
+          ]
+        },
+        {
+          "sha": "d8aaef97104f636c541bd9ea0747da76620d16c2",
+          "subject": "Install orderly shutdown before publishing the scoped listener",
+          "stablePatchId": "0f0ca45b3341094d83bd9d066f5552388b07650b",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "1323c7e1498fb2a2dc0827eb36a81cc095b04c04",
+          "subject": "Implement M02 user-bound private data repositories and indexes",
+          "stablePatchId": "15a3c90998d7ec45a42bade9c7fc7d7870492979",
+          "equivalentCandidateCommits": []
+        }
+      ],
+      "reason": "Adapted original1323c7e1/d8aaef97 to12c1b44f/e77faca9; range-diff changes are shared auth/runtime/table-test composition, not a second repository. Private-data design and core test retained.",
+      "originalC2PathCounts": {
+        "exact": 209,
+        "evolved": 21
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 209,
+        "evolved": 21
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 128,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:37Z",
+        "draft": true,
+        "head": "8ecccb8ecf0093cc655fadd8bbc5e1637220f9fd",
+        "headRef": "codex/mote-multiuser-m02-data",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/128",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/128#issuecomment-6234235699"
+      }
+    },
+    {
+      "number": 129,
+      "title": "M04: isolate configuration, model resources, snapshots and usage",
+      "url": "https://github.com/utopiafar/mote/pull/129",
+      "headRefName": "codex/mote-multiuser-m04-config",
+      "headRefOid": "bc5323e1b5ee337c20dee58d4a8e9c25bc2adbbf",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "M04 configuration/models/snapshots/usage",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 106,
+        "test": 136,
+        "design": 14
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/configuration.ts",
+        "apps/server/src/scope/model-resources.ts",
+        "apps/server/src/scope/model-snapshots.ts",
+        "apps/server/test/multiuser-durable-model-snapshot.test.ts",
+        "docs/adr-unified-configuration.md",
+        "docs/design/multiuser-configuration.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "bc5323e1b5ee337c20dee58d4a8e9c25bc2adbbf",
+          "subject": "Record M04 acceptance and durable snapshot handoff",
+          "stablePatchId": "788f7fcf0ee98b58deee2032e8dd41b655432570",
+          "equivalentCandidateCommits": [
+            "aaf481af793d0f2758d0748d9a7c74eda00fa530"
+          ]
+        },
+        {
+          "sha": "e76f1fe6aa99d3ea733b45ea2fd1d3f49c6208f2",
+          "subject": "Persist encrypted user model snapshots with revocation-safe recovery",
+          "stablePatchId": "b6695049b3b7b27eee5f972cdf3d019776b518e0",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "ee3d34072e7aa7864f75191b8e1b806aea92a525",
+          "subject": "Fence epoch handover and pin only effective task configuration",
+          "stablePatchId": "0b14c7e0c106baa15cf27ecd56cd3ac934a497ec",
+          "equivalentCandidateCommits": [
+            "d56c7b0bd7755bd703cb37239a44a46ac9db6658"
+          ]
+        },
+        {
+          "sha": "a5e91664aaf03dd990ca7d9cf9b2183fe8a94c96",
+          "subject": "Isolate multi-user configuration, model resources and usage",
+          "stablePatchId": "298e9546ce67656374177a52c2e43c72c68f908a",
+          "equivalentCandidateCommits": []
+        }
+      ],
+      "reason": "Actual diff is multiuser M04 plus shared ConfigService authorization/rollback/model/usage helpers and ADR linkage. Originala5e91664/e76f1fe6 adapted toc4e4e8bc/463d5299; snapshot tests and multiuser configuration ADR retained. Not a separate unrelated configuration-center PR.",
+      "originalC2PathCounts": {
+        "exact": 223,
+        "evolved": 33
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 223,
+        "evolved": 33
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 129,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:46Z",
+        "draft": true,
+        "head": "bc5323e1b5ee337c20dee58d4a8e9c25bc2adbbf",
+        "headRef": "codex/mote-multiuser-m04-config",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/129",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/129#issuecomment-6234237592"
+      }
+    },
+    {
+      "number": 130,
+      "title": "M05: user-bound execution, scoped Operations and fair scheduling",
+      "url": "https://github.com/utopiafar/mote/pull/130",
+      "headRefName": "codex/mote-multiuser-m05-execution",
+      "headRefOid": "7f72e9040872dbbb351f3c9a22afa6f069aa59c8",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M05 execution/Operations/scheduler",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 122,
+        "test": 146,
+        "design": 18
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/task-execution.ts",
+        "apps/server/test/multiuser-execution.test.ts",
+        "docs/design/multiuser-execution.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 248,
+        "evolved": 38
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 248,
+        "evolved": 38
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 130,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:58Z",
+        "draft": true,
+        "head": "7f72e9040872dbbb351f3c9a22afa6f069aa59c8",
+        "headRef": "codex/mote-multiuser-m05-execution",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/130",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/130#issuecomment-6234239207"
+      }
+    },
+    {
+      "number": 131,
+      "title": "M03: isolate originals and Ingress 3 intake",
+      "url": "https://github.com/utopiafar/mote/pull/131",
+      "headRefName": "codex/mote-multiuser-m03-ingress",
+      "headRefOid": "b1f6700a7e68b60318b7b05f631a47d12fd93c24",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "M03 originals/Ingress",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 129,
+        "test": 148,
+        "design": 20
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/originals.ts",
+        "apps/server/src/scope/ingress.ts",
+        "apps/server/test/multiuser-ingress.test.ts",
+        "docs/design/multiuser-ingress.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "b1f6700a7e68b60318b7b05f631a47d12fd93c24",
+          "subject": "Record M03 Draft PR 131 publication checks",
+          "stablePatchId": "e700bfd6e39bc14f3d85b8e18835607fb66a3891",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "c8f1aa675062ef795c2487f199828c16afe4a38d",
+          "subject": "Record final M03 acceptance and independent review",
+          "stablePatchId": "b27a24f6df2f54848a3d2f857c8fdef9bfe96bcb",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "14858e862f8e36c9115af7a46d6739bb2a94eb4f",
+          "subject": "Fence original staging admission and cleanup interrupted work",
+          "stablePatchId": "d3de199f1599837e309a43f6f40d204c06190f6f",
+          "equivalentCandidateCommits": [
+            "d44963f543c55c1e8d52346d42e77ab18fde3a41"
+          ]
+        },
+        {
+          "sha": "fffe1d12d68b09744b33b364ab721e1505f0fc69",
+          "subject": "Implement account-scoped originals and Ingress 3 intake",
+          "stablePatchId": "1cca076548ed0a1f413795d032dd7a00efc262b6",
+          "equivalentCandidateCommits": []
+        }
+      ],
+      "reason": "Originalfffe1d12 adapted toc21062a1; integration retains concurrent M04/M05/M09 runtime registrations and inventory. Original staging cleanup14858e86 patch-equivalent. Source/ingress contract retained.",
+      "originalC2PathCounts": {
+        "exact": 251,
+        "evolved": 46
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 251,
+        "evolved": 46
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 131,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:07Z",
+        "draft": true,
+        "head": "b1f6700a7e68b60318b7b05f631a47d12fd93c24",
+        "headRef": "codex/mote-multiuser-m03-ingress",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/131",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/131#issuecomment-6234240803"
+      }
+    },
+    {
+      "number": 132,
+      "title": "M09: isolate plugin instances and bind real scoped Ingress",
+      "url": "https://github.com/utopiafar/mote/pull/132",
+      "headRefName": "codex/mote-multiuser-m09-plugins",
+      "headRefOid": "cdc5c34c36fc5743049007ee2c76d705fde3dd7f",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M09 scoped plugins",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 139,
+        "test": 159,
+        "design": 22
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/plugins.ts",
+        "apps/server/test/multiuser-plugin-ingress.test.ts",
+        "docs/design/multiuser-plugins.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 269,
+        "evolved": 51
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 269,
+        "evolved": 51
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 132,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:16Z",
+        "draft": true,
+        "head": "cdc5c34c36fc5743049007ee2c76d705fde3dd7f",
+        "headRef": "codex/mote-multiuser-m09-plugins",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/132",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/132#issuecomment-6234242170"
+      }
+    },
+    {
+      "number": 133,
+      "title": "M06: restore scoped OCR, ASR and file-derived pipelines",
+      "url": "https://github.com/utopiafar/mote/pull/133",
+      "headRefName": "codex/mote-multiuser-m06-processing",
+      "headRefOid": "470516b7ed4ab7ee8b0fba344883c6b42bb7ce56",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M06 OCR/ASR/derived files",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 153,
+        "test": 162,
+        "design": 24
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/processing.ts",
+        "apps/server/test/multiuser-processing.test.ts",
+        "docs/design/multiuser-processing.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 283,
+        "evolved": 56
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 283,
+        "evolved": 56
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 133,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:26Z",
+        "draft": true,
+        "head": "470516b7ed4ab7ee8b0fba344883c6b42bb7ce56",
+        "headRef": "codex/mote-multiuser-m06-processing",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/133",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/133#issuecomment-6234243535"
+      }
+    },
+    {
+      "number": 134,
+      "title": "feat(multiuser): isolate connector credentials, sync and provider intake",
+      "url": "https://github.com/utopiafar/mote/pull/134",
+      "headRefName": "codex/mote-multiuser-m10-connectors",
+      "headRefOid": "7572b573b03437ff743652c13181b9fdcf251fda",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M10 connectors/provider intake",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 170,
+        "test": 166,
+        "design": 26
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/connectors.ts",
+        "apps/server/test/multiuser-connectors.test.ts",
+        "docs/design/multiuser-connectors.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 303,
+        "evolved": 59
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 303,
+        "evolved": 59
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 134,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:36Z",
+        "draft": true,
+        "head": "7572b573b03437ff743652c13181b9fdcf251fda",
+        "headRef": "codex/mote-multiuser-m10-connectors",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/134",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/134#issuecomment-6234245329"
+      }
+    },
+    {
+      "number": 135,
+      "title": "docs(multiuser): define shared isolation and representative validation contracts",
+      "url": "https://github.com/utopiafar/mote/pull/135",
+      "headRefName": "codex/mote-multiuser-public-review",
+      "headRefOid": "094b69d0c4d623a3b478ae4c05ee249b024ba73b",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "Public isolation/validation contracts",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 170,
+        "test": 166,
+        "design": 28
+      },
+      "representativeCoveredPaths": [
+        "docs/design/multiuser-public-contracts.md",
+        "docs/validation/multiuser-public-contracts.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 305,
+        "evolved": 59
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 305,
+        "evolved": 59
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 135,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:46Z",
+        "draft": true,
+        "head": "094b69d0c4d623a3b478ae4c05ee249b024ba73b",
+        "headRef": "codex/mote-multiuser-public-review",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/135",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/135#issuecomment-6234246837"
+      }
+    },
+    {
+      "number": 136,
+      "title": "feat(memory): restore multi-user Memory pipeline (M07)",
+      "url": "https://github.com/utopiafar/mote/pull/136",
+      "headRefName": "codex/mote-multiuser-m07-memory",
+      "headRefOid": "cd7a306cce0f6cd5fec3c9e91e6dee0761352115",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M07 Memory",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 220,
+        "test": 172,
+        "design": 31
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/memory.ts",
+        "apps/server/test/multiuser-memory.test.ts",
+        "docs/design/multiuser-memory.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 354,
+        "evolved": 69
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 354,
+        "evolved": 69
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 136,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:58Z",
+        "draft": true,
+        "head": "cd7a306cce0f6cd5fec3c9e91e6dee0761352115",
+        "headRef": "codex/mote-multiuser-m07-memory",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/136",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/136#issuecomment-6234248660"
+      }
+    },
+    {
+      "number": 137,
+      "title": "feat(multiuser): restore scoped Ask, chat and Insight (M08)",
+      "url": "https://github.com/utopiafar/mote/pull/137",
+      "headRefName": "codex/mote-multiuser-m08-ask",
+      "headRefOid": "58944f00837c89bc1d302ecd7be7a568db4abe44",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M08 Ask/chat/Insight",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 245,
+        "test": 177,
+        "design": 33
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/ask.ts",
+        "apps/server/test/multiuser-ask.test.ts",
+        "docs/design/multiuser-ask.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 378,
+        "evolved": 77
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 378,
+        "evolved": 77
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 137,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:07Z",
+        "draft": true,
+        "head": "58944f00837c89bc1d302ecd7be7a568db4abe44",
+        "headRef": "codex/mote-multiuser-m08-ask",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/137",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/137#issuecomment-6234250353"
+      }
+    },
+    {
+      "number": 138,
+      "title": "feat(multiuser): bind MCP sessions and outbound connections to users",
+      "url": "https://github.com/utopiafar/mote/pull/138",
+      "headRefName": "codex/mote-multiuser-m11-mcp",
+      "headRefOid": "98d76945e091d7234217ebcf532ebeff3350937c",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M11 MCP inbound/outbound",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 253,
+        "test": 189,
+        "design": 36
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/mcp.ts",
+        "apps/server/test/multiuser-mcp.test.ts",
+        "docs/design/multiuser-mcp.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 404,
+        "evolved": 74
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 404,
+        "evolved": 74
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 138,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:20Z",
+        "draft": true,
+        "head": "98d76945e091d7234217ebcf532ebeff3350937c",
+        "headRef": "codex/mote-multiuser-m11-mcp",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/138",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/138#issuecomment-6234252331"
+      }
+    },
+    {
+      "number": 139,
+      "title": "feat(desktop): bind multiuser capture to stable accounts (M14)",
+      "url": "https://github.com/utopiafar/mote/pull/139",
+      "headRefName": "codex/mote-multiuser-m14-desktop",
+      "headRefOid": "cd46f25a030bdbe593bc138adc375577b4d032ae",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M14 Desktop account capture",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 445,
+        "test": 275,
+        "design": 48
+      },
+      "representativeCoveredPaths": [
+        "apps/desktop/src/connection.ts",
+        "apps/desktop/test/multiuser-desktop.test.ts",
+        "docs/design/multiuser-desktop.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 649,
+        "evolved": 119
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 649,
+        "evolved": 119
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 139,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:29Z",
+        "draft": true,
+        "head": "cd46f25a030bdbe593bc138adc375577b4d032ae",
+        "headRef": "codex/mote-multiuser-m14-desktop",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/139",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/139#issuecomment-6234253571"
+      }
+    },
+    {
+      "number": 140,
+      "title": "feat(multiuser): isolate Actions, todos and calendar approvals (M12)",
+      "url": "https://github.com/utopiafar/mote/pull/140",
+      "headRefName": "codex/mote-multiuser-m12-actions",
+      "headRefOid": "a50d1c88647780ebd27d7a247ec4ffbc170ab87f",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M12 Actions/todos/calendar",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 434,
+        "test": 266,
+        "design": 46
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/actions.ts",
+        "apps/server/test/multiuser-actions.test.ts",
+        "docs/design/multiuser-actions.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 622,
+        "evolved": 124
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 622,
+        "evolved": 124
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 140,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:38Z",
+        "draft": true,
+        "head": "a50d1c88647780ebd27d7a247ec4ffbc170ab87f",
+        "headRef": "codex/mote-multiuser-m12-actions",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/140",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/140#issuecomment-6234254991"
+      }
+    },
+    {
+      "number": 141,
+      "title": "feat(multiuser): add account lifecycle and portable instance recovery",
+      "url": "https://github.com/utopiafar/mote/pull/141",
+      "headRefName": "codex/mote-multiuser-m16-lifecycle",
+      "headRefOid": "eec967c66304fef78f683e3445900287e75bac21",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M16 lifecycle/portable recovery",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 434,
+        "test": 266,
+        "design": 46
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/lifecycle.ts",
+        "apps/server/test/multiuser-lifecycle.test.ts",
+        "docs/design/multiuser-lifecycle.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 621,
+        "evolved": 125
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 621,
+        "evolved": 125
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 141,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:50Z",
+        "draft": true,
+        "head": "eec967c66304fef78f683e3445900287e75bac21",
+        "headRef": "codex/mote-multiuser-m16-lifecycle",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/141",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/141#issuecomment-6234256494"
+      }
+    },
+    {
+      "number": 142,
+      "title": "Complete epoch-5 Docker and Hindsight recovery acceptance",
+      "url": "https://github.com/utopiafar/mote/pull/142",
+      "headRefName": "codex/mote-multiuser-container-validation",
+      "headRefOid": "723cc0b794fc331fc0f9e10512a6b4e45a2de4bb",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "Container/Hindsight epoch-5 validation",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 438,
+        "test": 268,
+        "design": 47
+      },
+      "representativeCoveredPaths": [
+        "Dockerfile",
+        "apps/server/test/multiuser-container-backup.test.ts",
+        "docs/validation/multiuser-container-backup.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 630,
+        "evolved": 123
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 630,
+        "evolved": 123
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 142,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:00Z",
+        "draft": true,
+        "head": "723cc0b794fc331fc0f9e10512a6b4e45a2de4bb",
+        "headRef": "codex/mote-multiuser-container-validation",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/142",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/142#issuecomment-6234258260"
+      }
+    },
+    {
+      "number": 143,
+      "title": "feat: add Light, Dark and Auto appearance across clients",
+      "url": "https://github.com/utopiafar/mote/pull/143",
+      "headRefName": "codex/mote-cross-platform-theme",
+      "headRefOid": "ce0c7e211ad1b6f8c2742c9e5862c4f496b9f7ff",
+      "baseRefName": "main",
+      "isDraft": false,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "pathCounts": {
+        "absent": 36,
+        "evolved": 45
+      },
+      "scope": "Light/Dark/Auto appearance",
+      "classification": "UNRELATED_KEEP",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "test": 10,
+        "source-or-build": 58,
+        "design": 13
+      },
+      "representativeCoveredPaths": [],
+      "absentPaths": [
+        {
+          "path": "apps/android/app/src/androidTest/java/dev/mote/collector/AppearanceInstrumentedTest.kt",
+          "category": "test",
+          "headBlob": "56ddd17f2b6bc70538c8167b571ed4b6b2afdab9",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/androidTest/java/dev/mote/collector/AppearancePlatformInstrumentedTest.kt",
+          "category": "test",
+          "headBlob": "90e334f2c95fb4483e7230578a30c4e0ea9d8487",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/androidTest/java/dev/mote/collector/AppearanceRestartInstrumentedTest.kt",
+          "category": "test",
+          "headBlob": "0dafadf4257b54632bcf91a8d37833bd34c3df6d",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/java/dev/mote/collector/AppearancePreference.kt",
+          "category": "source-or-build",
+          "headBlob": "f58539f567ad854182d2e32f0fef2ed11060565c",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/java/dev/mote/collector/MoteAppearance.kt",
+          "category": "source-or-build",
+          "headBlob": "f946f121ecba63d83d16cc14da98067067f84c9a",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/res/values-night-v29/themes.xml",
+          "category": "source-or-build",
+          "headBlob": "84a4a8823a4b4af74aefdc37acd3aa65ccfccbe7",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/res/values-night-v31/themes.xml",
+          "category": "source-or-build",
+          "headBlob": "c17889d59709b442a5bfc001d890656d31389d6d",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/res/values-night/design-tokens.xml",
+          "category": "source-or-build",
+          "headBlob": "ebea320290c934cc81b5c2be3d5ca8582f4d36d5",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/res/values-night/themes.xml",
+          "category": "source-or-build",
+          "headBlob": "ccae80a21469867eccb5f4d12f9c879a1abbc151",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/res/values-v29/themes.xml",
+          "category": "source-or-build",
+          "headBlob": "03d26353170118ac531f0230d7f099220a8daea0",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/res/values-v31/themes.xml",
+          "category": "source-or-build",
+          "headBlob": "c1f1081c3327214e438e8170f699dd3bb4d98497",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/main/res/values/themes.xml",
+          "category": "source-or-build",
+          "headBlob": "f3b415347bf02061d0c1c51de9e1ec3a8f77a419",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/android/app/src/test/java/dev/mote/collector/AppearancePreferenceTest.kt",
+          "category": "test",
+          "headBlob": "7f7eafcf1e834511ddb58d4efa214c94c4281f98",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/desktop/scripts/appearance-smoke.cjs",
+          "category": "source-or-build",
+          "headBlob": "5e7564cdab2c5f8dcafcb173a2084b0554476162",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/desktop/scripts/test-appearance.mjs",
+          "category": "source-or-build",
+          "headBlob": "16446b48c6184fdd88b18eecbff88a588ce16ffb",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/desktop/src/appearance-init.js",
+          "category": "source-or-build",
+          "headBlob": "d8708e4cd474493c754921dea9090af42a687c70",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/desktop/src/appearance.ts",
+          "category": "source-or-build",
+          "headBlob": "fdf07a1c83ae80af98f725e22f8c0a9c60ca06a3",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/web/public/appearance-init.js",
+          "category": "source-or-build",
+          "headBlob": "d8708e4cd474493c754921dea9090af42a687c70",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/web/src/AppearanceSelector.tsx",
+          "category": "source-or-build",
+          "headBlob": "987a4332e8e46d725bb6122496ed2289a09b083b",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/web/src/appearance.ts",
+          "category": "source-or-build",
+          "headBlob": "6be61f237715b86ff511c3ecc6a692f0f2e97e96",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/web/test/appearance.test.ts",
+          "category": "test",
+          "headBlob": "11dad35cdf333f51d42631675c30053de03ed3ca",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/adr-cross-platform-appearance.md",
+          "category": "design",
+          "headBlob": "d1093fff885fe054767b07b868dd02d0f49e5610",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/android-dark.png",
+          "category": "design",
+          "headBlob": "242192eff1502c1ad822627c1b076b6ed6dcb618",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/android-light.png",
+          "category": "design",
+          "headBlob": "8eaf1984a9da27ac5bbdb30cb1b59ed819704aaf",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/android-native-splash-dark.png",
+          "category": "design",
+          "headBlob": "a06ca6d463f780203d54b7cd8966cb26e047a8e7",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/android-native-splash-light.png",
+          "category": "design",
+          "headBlob": "6fc2d05c87b3d4d1bb3576274cf4c8d31a7925eb",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/android-review-evidence.json",
+          "category": "design",
+          "headBlob": "5ba061e7d44d4d5cdb701eb32fac7c0328d39e04",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/desktop-dark.png",
+          "category": "design",
+          "headBlob": "9710b6e0b7a07711ebaedc1500a85d7792ed099d",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/desktop-light.png",
+          "category": "design",
+          "headBlob": "e849a0af9cdf73e22683eb96c3f4e0bf5ba380ea",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/web-dark-phone.png",
+          "category": "design",
+          "headBlob": "62fa0a618f0d44894926d87f07533bdfb0a125a6",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/appearance/web-light.png",
+          "category": "design",
+          "headBlob": "eacbbdfa4446443971e2ac7c2ea4a4c318d4fc8c",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/cross-platform-appearance.md",
+          "category": "design",
+          "headBlob": "d7d66286481eee551b9507e4e13d37bad48f2a9b",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "packages/shared/design-tokens.light.json",
+          "category": "source-or-build",
+          "headBlob": "a2cdc0721f9e9b3ba62ccead90549f50a3f23ebb",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "packages/shared/src/appearance.ts",
+          "category": "source-or-build",
+          "headBlob": "c4c5753c49a7b8fbfdaacda294044d4355fb0c51",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "packages/shared/test/appearance.test.mjs",
+          "category": "test",
+          "headBlob": "eeb69222bc130a84c94d95d5e21f35113792cde8",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/test-appearance-ui.cjs",
+          "category": "source-or-build",
+          "headBlob": "438bb787db5b72ff499ef61e1ee80e50fa13a9c6",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Explicitly excluded by user; actual diff remains an independent main-based feature/principle review."
+    },
+    {
+      "number": 144,
+      "title": "Restore account-bound QR device pairing through M01",
+      "url": "https://github.com/utopiafar/mote/pull/144",
+      "headRefName": "codex/mote-multiuser-qr-pairing",
+      "headRefOid": "48547e8f04a4df76724cb286df32d44f2ecc013b",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M01 account-bound QR pairing",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 460,
+        "test": 288,
+        "design": 54
+      },
+      "representativeCoveredPaths": [
+        "apps/server/test/multiuser-qr-pairing.test.ts",
+        "docs/design/multiuser-qr-pairing.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 682,
+        "evolved": 120
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 682,
+        "evolved": 120
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 144,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:10Z",
+        "draft": true,
+        "head": "48547e8f04a4df76724cb286df32d44f2ecc013b",
+        "headRef": "codex/mote-multiuser-qr-pairing",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/144",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/144#issuecomment-6234259580"
+      }
+    },
+    {
+      "number": 145,
+      "title": "fix(lark): keep evidence stable across provider revision-only updates",
+      "url": "https://github.com/utopiafar/mote/pull/145",
+      "headRefName": "codex/evidence-connector-stability",
+      "headRefOid": "abf61f1b993bf3cd9e980fd5533741832bae1df8",
+      "baseRefName": "main",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "pathCounts": {
+        "evolved": 2,
+        "absent": 2
+      },
+      "scope": "Main: Lark evidence revision stability",
+      "classification": "UNRELATED_KEEP",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 1,
+        "test": 2,
+        "design": 1
+      },
+      "representativeCoveredPaths": [],
+      "absentPaths": [
+        {
+          "path": "apps/server/test/lark-document-revision-stability.test.ts",
+          "category": "test",
+          "headBlob": "246c68f24742345646f895ea705a6dd3ae3f80de",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/evidence-change-audit-2026-10-17.md",
+          "category": "design",
+          "headBlob": "896acf87732d29541825efb65c81f80b7715befe",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Explicitly excluded by user; actual diff remains an independent main-based feature/principle review."
+    },
+    {
+      "number": 146,
+      "title": "fix: preserve historical answers on ordinary evidence revisions",
+      "url": "https://github.com/utopiafar/mote/pull/146",
+      "headRefName": "codex/history-retention-main",
+      "headRefOid": "2435f44e76e48da9adbdad5e3c0774821bc564e0",
+      "baseRefName": "main",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "pathCounts": {
+        "evolved": 22,
+        "absent": 4
+      },
+      "scope": "Main: historical conversation/evidence retention",
+      "classification": "UNRELATED_KEEP",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 12,
+        "test": 10,
+        "design": 4
+      },
+      "representativeCoveredPaths": [],
+      "absentPaths": [
+        {
+          "path": "apps/server/test/conversation-history-boundaries.test.ts",
+          "category": "test",
+          "headBlob": "7d911010f26dff3152dae8cad7046ab2f37b109b",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/conversation-history-retention.test.ts",
+          "category": "test",
+          "headBlob": "4ba9bccb72f98852699753e6755a502656cefc67",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/adr-evidence-history-retention.md",
+          "category": "design",
+          "headBlob": "ae4d84a2e0780961395bad9219f4b2bc002dde7c",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/testing-evidence-history-retention.md",
+          "category": "design",
+          "headBlob": "480150b4693701687ee75fbb7f7cc41811c77246",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Explicitly excluded by user; actual diff remains an independent main-based feature/principle review."
+    },
+    {
+      "number": 147,
+      "title": "fix(gmail): retain evidence across provider counter-only replays",
+      "url": "https://github.com/utopiafar/mote/pull/147",
+      "headRefName": "codex/google-gmail-evidence-stability",
+      "headRefOid": "9dc47305f639169be94ff4b361d04fb67f3b3912",
+      "baseRefName": "main",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "pathCounts": {
+        "evolved": 4,
+        "absent": 1
+      },
+      "scope": "Main: Gmail provider-counter stability",
+      "classification": "UNRELATED_KEEP",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 1,
+        "test": 2,
+        "design": 2
+      },
+      "representativeCoveredPaths": [],
+      "absentPaths": [
+        {
+          "path": "docs/validation/google-gmail-evidence-change-2026-10-17.md",
+          "category": "design",
+          "headBlob": "dc1848c2346c45c6a621cb35efe3bd7ce3ffbcec",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Explicitly excluded by user; actual diff remains an independent main-based feature/principle review."
+    },
+    {
+      "number": 148,
+      "title": "fix: retain Memory across derived context cache invalidation",
+      "url": "https://github.com/utopiafar/mote/pull/148",
+      "headRefName": "codex/cache-memory-retention",
+      "headRefOid": "d966759d18d01c7c9a2ad179144e96849abc2caa",
+      "baseRefName": "main",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "pathCounts": {
+        "evolved": 4,
+        "absent": 2
+      },
+      "scope": "Main: Memory/cache retention",
+      "classification": "UNRELATED_KEEP",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 1,
+        "test": 3,
+        "design": 2
+      },
+      "representativeCoveredPaths": [],
+      "absentPaths": [
+        {
+          "path": "apps/server/test/context-artifact-memory-retention.test.ts",
+          "category": "test",
+          "headBlob": "7a4b540fcc6c2de9a99d39c47710631bb077413e",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/adr-cache-memory-retention.md",
+          "category": "design",
+          "headBlob": "a135a04a0a32f7a7f40bca5889317b15c2553865",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Explicitly excluded by user; actual diff remains an independent main-based feature/principle review."
+    },
+    {
+      "number": 149,
+      "title": "feat(desktop): consume v2 invitations with durable PKCE recovery",
+      "url": "https://github.com/utopiafar/mote/pull/149",
+      "headRefName": "codex/mote-desktop-v2-pairing",
+      "headRefOid": "f319513a050218230d624cf93e4154bba5649b15",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "Desktop v2 PKCE durable recovery",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 449,
+        "test": 281,
+        "design": 53
+      },
+      "representativeCoveredPaths": [
+        "apps/desktop/src/connection.ts",
+        "apps/desktop/test/multiuser-desktop.test.ts",
+        "docs/design/multiuser-desktop-pairing.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 677,
+        "evolved": 106
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 677,
+        "evolved": 106
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 149,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:20Z",
+        "draft": true,
+        "head": "f319513a050218230d624cf93e4154bba5649b15",
+        "headRef": "codex/mote-desktop-v2-pairing",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/149",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/149#issuecomment-6234261289"
+      }
+    },
+    {
+      "number": 150,
+      "title": "fix(server): preserve applied file plans in personal archives",
+      "url": "https://github.com/utopiafar/mote/pull/150",
+      "headRefName": "codex/mote-policy-personal-archive",
+      "headRefOid": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "Personal applied-policy archive/recovery",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 475,
+        "test": 309,
+        "design": 58
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/processing-policy-archive.ts",
+        "apps/server/test/multiuser-policy-personal-archive.test.ts",
+        "docs/design/multiuser-policy-personal-archive.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+          "subject": "docs: retain complete closing gate RED and bounded recovery evidence",
+          "stablePatchId": "b2470daaa8c3ca9aa2998e9b11c972454dbfe1ce",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "da11d1c4bc9aa8188d6f837dc1e3870569572fdb",
+          "subject": "docs: record fixture closure and actual compiled native joint restore",
+          "stablePatchId": "572367f2c1aadca646886183372208254a7336df",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "371bd18649a40b0ac3a9764a5223b08970266d38",
+          "subject": "test: retain successful retry checkpoints and honor restored profile ownership",
+          "stablePatchId": "dbedf9d94743a5cd8e9884b665eb1a249a94cf67",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "8cf5ecbd65332fe9a3a88ee987ea6353f29f2925",
+          "subject": "test: bind native fixture identity and isolate failed sibling retry",
+          "stablePatchId": "ba4b5c4b6e56ff1c0c26d507b0fd689122ef8e10",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "2ddfffb7b7ffe4f4bd1bee8157075074e50d57d6",
+          "subject": "test: restore stopped readback before joint backup and bound retry fixture rounds",
+          "stablePatchId": "cf5facc7be4e859b1c1ef876a72ffe0df49266d2",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "40ee6127c588c00771191d0e8a543763ce091a3f",
+          "subject": "test: send empty recovery requests without a JSON body header",
+          "stablePatchId": "8d83c923a5d4e73bf426a5152d98da120df84393",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "ef19935b0c8def28c42c83adf3e8f69400d92a18",
+          "subject": "test: exercise compiled applied-plan and native provider recovery together",
+          "stablePatchId": "4888931047e758141d02d612f5f8440c46c3058d",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "e119b8d9bbbf03ec0ffd4338df71911c8cce0bfe",
+          "subject": "test: await physical pin release and advertise scoped Imports",
+          "stablePatchId": "9a42c830ae037ba61a80cc676e1cedf37e80cfac",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "517f3ff17a0a11b7b950931f596fd06cf8cb47df",
+          "subject": "docs: record complete personal archive required gate and baseline failures",
+          "stablePatchId": "5295d0714a8e33cba95e365064a32269df46b74f",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "1170f67654c1a2fe4026c1e750de30453dc11827",
+          "subject": "docs: record independent review and preflight checker correction",
+          "stablePatchId": "0b3c2a16dc65365288ecfd64aa9bec3c4b48c4e2",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "2699d1f7eeeb12390c2b87229c11c32dc731d9ee",
+          "subject": "fix: name personal archive preflight without SQL checker collision",
+          "stablePatchId": "6ea7b36d31a99e97f0391c7c86d0e580ec80ac77",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "a606d97b4377655a5c5f8ae4ac42432f1b9cb799",
+          "subject": "docs: freeze final personal archive integrity verification",
+          "stablePatchId": "befc6047baded1ace93edd48981c5a8c07bbb4ce",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "77a2818ec45b0bac2732cd613787daf7ee6fea81",
+          "subject": "fix: reject corrupt current plan parents before personal merge",
+          "stablePatchId": "0df8db957baff3640ea4e9c06938b4d15649059a",
+          "equivalentCandidateCommits": [
+            "716bec5d954d9b3715244b009e2dab9cc4894bbb"
+          ]
+        },
+        {
+          "sha": "7242c9cef6371673844b813e151619b4a1e4fec3",
+          "subject": "test: reproduce unsafe recovery of a dangling local plan binding",
+          "stablePatchId": "5c81174dc88905e2523384d38f160f74f03ec9b4",
+          "equivalentCandidateCommits": [
+            "0f8b59086896cfa00eab2fd9ccacf42520c31d3e"
+          ]
+        },
+        {
+          "sha": "195f512c1877a4a9a2016b4fb934c8c39d5122e7",
+          "subject": "docs: record personal policy archive evidence and bounded recovery contract",
+          "stablePatchId": "e692d8557642152318c0efe5030f2289372ef83d",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "2206d33b3277c1fc44782dd9100f5f257cedf6ae",
+          "subject": "test: retain restored control generations and reject foreign plan parents",
+          "stablePatchId": "b8ecbe7ae97bbae858c6cdd02bfdde2de919ca39",
+          "equivalentCandidateCommits": [
+            "94c9dd494c240ddd4312e477c0be845121e62e6d"
+          ]
+        },
+        {
+          "sha": "decf31533a5ec03061ad7857e3173c8338f36328",
+          "subject": "feat: restore personal applied-policy history without execution authority",
+          "stablePatchId": "b340a07d701e5bae86d697cf987ccf2d310c2e40",
+          "equivalentCandidateCommits": [
+            "417bc4828a094184a48887b8fcb62d22745b7ae2"
+          ]
+        },
+        {
+          "sha": "74c0fee6fc267403fced377c8ca613cab7832e3b",
+          "subject": "test: reproduce missing personal applied-policy recovery",
+          "stablePatchId": "6e70ec97a103aaa8c34df6fa7da29b9facbf03dc",
+          "equivalentCandidateCommits": [
+            "3a08b3d65af1915f596b0845da2b1f74477e869b"
+          ]
+        },
+        {
+          "sha": "20f04d0c09ad721f42040763e62d1bf876c4e87c",
+          "subject": "test: validate frozen policy recovery and account lifecycle seams",
+          "stablePatchId": "01d93a96ce33bdfcf30b9ca159e127aa7cba1da8",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "1357b5e119fb3d2bf83deb2120e3ce458e8fe256",
+          "subject": "test: compose declared limited file-policy checkpoint for recovery validation",
+          "stablePatchId": null,
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "24f77da2af492710ae0a30c397c0e0f40732cdfd",
+          "subject": "docs: retain current-candidate file cleanup and import fence evidence",
+          "stablePatchId": "dd395d8869050541d0afbbd281d9f9ec20dbef24",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "e815c15a1b73f8ac65600ce1843f92c9dff46cb7",
+          "subject": "docs: record declared parser recovery composition and actual Docker checks",
+          "stablePatchId": "7e47b60d5800e339b4df6fb6b2f1cf147823c5de",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "f688986723bb0109f0c10b67f47d3df5cba2cc41",
+          "subject": "test: compose declared parser fix into recovery validation candidate",
+          "stablePatchId": null,
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "6b3ececf23a1bea6d54ec69c3240f8a85b5eead4",
+          "subject": "docs: record fixture diagnoses and nonzero Docker recovery evidence",
+          "stablePatchId": "4c1c1840ed61e0a37454cae87868385fa83c7c39",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "caf0551975fac56347f5e944d2a7e3b7a06f61f8",
+          "subject": "fix(ingress): share bounded binary parser across authenticated routes",
+          "stablePatchId": "a3f76179b06a4635408b69acf185e5f0165d3cb2",
+          "equivalentCandidateCommits": [
+            "41c5d4132ff57350e8ed3bb4caed31c8b8d0dc41"
+          ]
+        },
+        {
+          "sha": "69243430e8db26856b3d91c70044821e31894962",
+          "subject": "test(auth): reproduce private binary composition and preserve Imports guards",
+          "stablePatchId": "93caa9c1debc30c071adeffe83c0be52d41093b8",
+          "equivalentCandidateCommits": [
+            "192703dc7523e8522d1a1f914090c26bd391fd59"
+          ]
+        },
+        {
+          "sha": "f09e4f312285075263a1e994d31fa46e6b3be64d",
+          "subject": "test: align recovery fixtures and exercise nonzero Docker file generations",
+          "stablePatchId": "bf8609fa63c400a283813f8cb7df5905f735fc6d",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "7f9dd024ae92757bed25209db24aaeb755dfb49b",
+          "subject": "docs(validation): record recovery seams and bounded gate failures",
+          "stablePatchId": "68950e3f16c12c4b29fd65886aae6f61ab9b0857",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "dc2b0801f885a174d120478157d150d7bab439e0",
+          "subject": "test(recovery): wait for concurrent SQLite writes in read-only probes",
+          "stablePatchId": "64dd5f420a46274a7979d8a49ec03c5580c2b4c1",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "942995ef0e2ef1b0f012f461b28e317f376fc571",
+          "subject": "test(recovery): exercise issued HTTP calls across crash and data merge",
+          "stablePatchId": "02c08d088be21a05b01825777c156069276817cf",
+          "equivalentCandidateCommits": []
+        }
+      ],
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent subsequently released closing after combined review; real Web cases remain explicit unchecked TODOs.",
+      "originalC2PathCounts": {
+        "exact": 715,
+        "evolved": 118,
+        "absent": 9
+      },
+      "originalC2AbsentPaths": [
+        {
+          "path": "apps/server/test/fixtures/policy-native-recovery.ts",
+          "category": "test",
+          "headBlob": "9122b571506400ff8276c66ce375a8c2f6cd4a8a",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/fixtures/recovery-http-host.ts",
+          "category": "test",
+          "headBlob": "9774e354c7e37c041b8f384339996fcf1e20fe2e",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-http-seams.test.ts",
+          "category": "test",
+          "headBlob": "6969b9f4ed5ef63d22e1f652ea9142bbfe33e144",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-policy-lifecycle.test.ts",
+          "category": "test",
+          "headBlob": "d3445693a4e2ea149c8fa71616142040f0e0b4d2",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-portable-file.test.ts",
+          "category": "test",
+          "headBlob": "739a2e27f1fdd3fecf1ff4b03ec35ceb95c9b487",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-policy-personal-archive.md",
+          "category": "design",
+          "headBlob": "7c07a9abe8f56c4b446157e5b612cdbec8d31485",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-recovery-lifecycle-seams.md",
+          "category": "design",
+          "headBlob": "726afb666046b05bff308847956f052d84c0f57d",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/validation/recovery-file-generation-container.ts",
+          "category": "source-or-build",
+          "headBlob": "3acbd5e93c937c601264de7a84d11279e7a0b866",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/validation/recovery-policy-container.ts",
+          "category": "source-or-build",
+          "headBlob": "02bc2b00f741cbc1c1e6256f6b23c748d22eb409",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "sourceCompletionPathCounts": {
+        "exact": 723,
+        "evolved": 119
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "initialClassification": "PARTIAL_HOLD",
+      "initialReason": "Production processing-policy-archive.ts, its core test and design are byte-identical to PR150 head; seven recovery test/fixture/runner paths and two validation reports absent. Archived compiled-HTTP preparation still reads the missing task-7 source test externally. Hold for durable self-contained recovery source closure.",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 150,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:30Z",
+        "draft": true,
+        "head": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+        "headRef": "codex/mote-policy-personal-archive",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/150",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/150#issuecomment-6234262696"
+      }
+    },
+    {
+      "number": 151,
+      "title": "Restore scoped original image progress and named image products",
+      "url": "https://github.com/utopiafar/mote/pull/151",
+      "headRefName": "codex/mote-scoped-image-progress",
+      "headRefOid": "98b1ea52c4462f1e3f63dee09e3b35645389109a",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "Named/typed image progress and export",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 510,
+        "test": 347,
+        "design": 62
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/processing-images.ts",
+        "apps/web/src/ImageProgress.tsx",
+        "apps/server/test/multiuser-processing-image-recipe.test.ts",
+        "docs/validation/scoped-image-progress.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "98b1ea52c4462f1e3f63dee09e3b35645389109a",
+          "subject": "docs: record final bounded image recipe and original UI acceptance",
+          "stablePatchId": "59e9259e2e5492da5aaff7ba833a2c6bdc781ec2",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "23d00bdae786fd80581b88a3ba296251c2960be0",
+          "subject": "fix(files): distinguish default image recipe versions in export",
+          "stablePatchId": "8425b26fedd6fe0b666656b06f6682d47528b6f3",
+          "equivalentCandidateCommits": [
+            "5a6f59f127769a321508ff5763f6425ca30ac89d",
+            "73cebbc3abb0fe0f21a90e23242c65646f0620b5"
+          ]
+        },
+        {
+          "sha": "771e2900da37d5e5cb85ab9e67fabe38892c8d36",
+          "subject": "test: cover current export after a versioned default image recipe replacement",
+          "stablePatchId": "a88404863b18a669f5c10eb35883c338e6d5975a",
+          "equivalentCandidateCommits": [
+            "5d428c2983a3bc3b89ad078313a1c4c3f3ca36f4"
+          ]
+        },
+        {
+          "sha": "8e477d275bf7864657ea3b50b7adb55b0b41af77",
+          "subject": "fix(images): retain OCR graph pin and separate historical export",
+          "stablePatchId": "f9d8fc48f085791a3cffda8ed10ff9a8fe2634b7",
+          "equivalentCandidateCommits": [
+            "5b13aa768fa85cd746149535905ba9efa5b53dcc"
+          ]
+        },
+        {
+          "sha": "34998cb1a5462308909348d18fc419a3d286e546",
+          "subject": "test(images): expose late OCR pin and retired current export regressions",
+          "stablePatchId": "119dce3a599edb972c6fc527a9f727c4ad6b0242",
+          "equivalentCandidateCommits": [
+            "e0d14c073cfcd86cf05bde57f9adf35c453e2760",
+            "60f60feadc088419d95abc57e4ac14beb27667f1"
+          ]
+        },
+        {
+          "sha": "91c17e8ab3a9a212e1a49cd5597363ad0ae334a7",
+          "subject": "test: characterize delayed snapshot OCR and retired OCR export in original Files",
+          "stablePatchId": "7276a4bbdd161483c453d9028015b13281e05f2d",
+          "equivalentCandidateCommits": [
+            "910d13751206d20cac03a8a9528a579b8c7ede34"
+          ]
+        },
+        {
+          "sha": "2ed17913f1aa54278b06d660a4dc685e1d0c5312",
+          "subject": "fix(images): export typed products and retain admitted graph pixels",
+          "stablePatchId": "58116b057d00c2aeda226fba65ac1621bbcd1d91",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "70dc4c333c8cdc232f5b652e5b0ea49bac09e7a9",
+          "subject": "Record narrow image completion and consumer lifecycle acceptance",
+          "stablePatchId": "f6055bc8a3d4a0331414c887e637e4f165524b97",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "5563c30ab01da7e1b2a8819278e530fb7c0922ba",
+          "subject": "Project reused image steps from accepted current-generation receipts",
+          "stablePatchId": "ac32d828d166e6a7f01be10a426ddacddd793847",
+          "equivalentCandidateCommits": [
+            "bd403e9a62b2b1627c913fadb64c8c1d317229a5"
+          ]
+        },
+        {
+          "sha": "395247327dbf085d477dc8e10f0a1d53e2bd5028",
+          "subject": "Cover repeated failure after accepted image step reuse",
+          "stablePatchId": "7609a872eb41a934b62b7e223b31e53aa645d2e1",
+          "equivalentCandidateCommits": [
+            "2abce84ac2e46a7a9aeea7cbacf864ec5a382b74"
+          ]
+        },
+        {
+          "sha": "b288c9d23f7bd10520d8d48e958ca7057c86adf9",
+          "subject": "fix(processing): complete only missing named image recipe steps",
+          "stablePatchId": "e50aaf0bc2154bdf258da82a929c7740f83c6188",
+          "equivalentCandidateCommits": [
+            "3f5692c01a2c8ce2ba881268451045b850908b46"
+          ]
+        },
+        {
+          "sha": "47c1e69bdebcaf5d3986deb936493afbdd5ef5e6",
+          "subject": "Wait for failed image coordinator settlement before retry",
+          "stablePatchId": "70c31af2a3b671ad7f0e359e0c6ef45ccc5e9d61",
+          "equivalentCandidateCommits": [
+            "eb063a9c295640cd893e5c1fc1e2bcdf598cf5b5"
+          ]
+        },
+        {
+          "sha": "04f1cc85a70b78ac4b20199264b537270cabc65c",
+          "subject": "Refresh original Files details when image processing facts change",
+          "stablePatchId": "847281b9d307743d4c50bc2dcfaf8c23551b4c79",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "ea6b2f9f0d8bcbbc5a8258f22f147dccc865f047",
+          "subject": "Reproduce stale Files controls after manual image completion",
+          "stablePatchId": "94ff643c2553e186b7c14baddaf7d7dc99c8e10d",
+          "equivalentCandidateCommits": [
+            "ef8e2554593993b3f899402009ba98b182f65ae7"
+          ]
+        },
+        {
+          "sha": "56d3a8428af89bb94097d81aa0459b6a5ab24d23",
+          "subject": "Retire pending image exports when their transport changes",
+          "stablePatchId": "6d3b4917a9886403435108019ae7c9097f7ab25e",
+          "equivalentCandidateCommits": [
+            "1663da9456c27b6c3af4aa2af51795545b85e571"
+          ]
+        },
+        {
+          "sha": "d3134245381c33f7c4ffa9e3ca02c31cefa4b4d3",
+          "subject": "Verify complete canonical image products in Files exports",
+          "stablePatchId": "fc2cf39bbab09dbb503a36ed26189ed65662dfdc",
+          "equivalentCandidateCommits": [
+            "c32b087778f589a512f860d2f06acef150f45b65"
+          ]
+        },
+        {
+          "sha": "4c2c8621ea8238b14ef8725a528179e0a91a5080",
+          "subject": "Cover late image exports and prepare snapshot browser acceptance",
+          "stablePatchId": "63cb83a630ed35fefe24406e60bcd8ebd5fc9cfc",
+          "equivalentCandidateCommits": [
+            "cbc28fad5c36d14d60c988752cb8277624214b0b"
+          ]
+        },
+        {
+          "sha": "e33419984c8f1f896bab00a101a2a6b650a89307",
+          "subject": "Expose existing image export for typed products without OCR",
+          "stablePatchId": "46ca181222a594a90508d61efe8d1cb02bb0d37f",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "54cf93ba62e6a756cd9bb13c4482b9d6112150b2",
+          "subject": "Characterize typed image export and snapshot lifecycle in original Files UI",
+          "stablePatchId": "8b9f4c2ac3f89db52c9bc96781925e5731bfb7ae",
+          "equivalentCandidateCommits": [
+            "2dccfe2d56f8d6b0182648ad36eb0f9849024e07"
+          ]
+        },
+        {
+          "sha": "b2f4641ca90fca475d531815ca364e97341f134b",
+          "subject": "Record typed image consumer UI acceptance and producer blockers",
+          "stablePatchId": "0e90fd890fa57ace14a316689af21221e3bd394d",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "b14922465bd3f1018b123efcc611c043f90be358",
+          "subject": "Keep image projection within scoped production imports",
+          "stablePatchId": "47445f314322adfb5c4799bb5f5238a9133b70ed",
+          "equivalentCandidateCommits": [
+            "c93cdbff76a98489c5d28e157ff5db2765758bbb",
+            "0d8c8169608aacc69e0b0358056e8da73faaeac3"
+          ]
+        },
+        {
+          "sha": "9e8a910b86b5be66a24662d8b5e84683ca3b53d9",
+          "subject": "Expose named OCR separately and type scoped image progress data",
+          "stablePatchId": "5074145c259e6881e9d430723e1cc647689d356c",
+          "equivalentCandidateCommits": [
+            "4cc65eb13fc3fb49fd0eca6c838a88bbd8f20e0f"
+          ]
+        },
+        {
+          "sha": "58d39cb15d58eee62cd9b572444c2a604a212da0",
+          "subject": "test: expose named OCR derivations through the original image entry",
+          "stablePatchId": "d18e89a917a35225b34fe5a1fd3eb52c573f2714",
+          "equivalentCandidateCommits": [
+            "cd73ec7e1db560433cbe6ebe397d73daf7add574"
+          ]
+        },
+        {
+          "sha": "2a1abd268b08514d20e3a9383d5b0a733310f472",
+          "subject": "Consume named typed image products in original progress projection",
+          "stablePatchId": "c232a60b69caf3708f24c0f09d0dde15b0923077",
+          "equivalentCandidateCommits": [
+            "ddea4a58cf4659180d28316069a00eada3de0b43",
+            "9b7b09adab84b9e8eee16400e9377bf7ee876186"
+          ]
+        },
+        {
+          "sha": "d10a6a4f5e44ec41fc3d6884f2a6752364f7e0dc",
+          "subject": "test: retain successful named image stages when completing a recipe",
+          "stablePatchId": "382dd037589711f8a9486ac0c48713095d8ae0a6",
+          "equivalentCandidateCommits": [
+            "9655333994fdda1756294c32f9d28065ab676ebe"
+          ]
+        },
+        {
+          "sha": "10bd84e9c4fe8477174cc6d2246f8fd37cc35dde",
+          "subject": "Combine exact image candidates in isolated consumer probe",
+          "stablePatchId": "bf35aa1b321bbde800e884d4d3d395b1fd37da50",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "a54b5922bc419de0b57a053e6fb715f81326bfb3",
+          "subject": "test: reproduce original Files custom recipe progress and controls",
+          "stablePatchId": "005c7f1a48f3a6b11fbae16851eaa3b3412228ed",
+          "equivalentCandidateCommits": [
+            "4af7c690c12d870d6e8f662f2d340f1bf62b4e0b"
+          ]
+        },
+        {
+          "sha": "a4e8dec1763cb8c4070ab24430d6e5535d8605f0",
+          "subject": "Align retained image progress regression with scoped command proof",
+          "stablePatchId": "6debef25b2acd181d2a7911a43550906f5030709",
+          "equivalentCandidateCommits": [
+            "c6e81baac37c3bd266b3a4efc31d4b1ed86901c7",
+            "f9768dc0e8b6493b7a4bac1932102ba625289e8a"
+          ]
+        },
+        {
+          "sha": "ceb6b2c2b3526c69b0aa7d552ae603bbc05825ff",
+          "subject": "Erase image progress visibility after source withdrawal",
+          "stablePatchId": "0a6f70d530bdbb047904a9a9d7bbdf3970836b26",
+          "equivalentCandidateCommits": [
+            "704ddea9f713fcf7299cab2c337a8546b837b890",
+            "ce1d1b970893a5473e382826067076b6f2d00804"
+          ]
+        },
+        {
+          "sha": "6dcbd6f0dad8882b31964a460119bd9371c6ad09",
+          "subject": "Restore scoped original image progress and explicit image controls",
+          "stablePatchId": "4d0af0a50d7ac75d9a59479171d1c412dff06bb5",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "21e97819f275944e39025eadcdd7675e4610782d",
+          "subject": "Record bounded image acceptance and full platform gate blockers",
+          "stablePatchId": "07160d02fec17f1fc4734fa01232c8f1e13be669",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "68174ed2f62e83dc9f630ac8064b219270ef293f",
+          "subject": "Align retained image progress regression with scoped command proof",
+          "stablePatchId": "6debef25b2acd181d2a7911a43550906f5030709",
+          "equivalentCandidateCommits": [
+            "c6e81baac37c3bd266b3a4efc31d4b1ed86901c7",
+            "f9768dc0e8b6493b7a4bac1932102ba625289e8a"
+          ]
+        },
+        {
+          "sha": "4a7168f1bf42a153607bdeccd3e9412ac38ff2f7",
+          "subject": "Erase image progress visibility after source withdrawal",
+          "stablePatchId": "0a6f70d530bdbb047904a9a9d7bbdf3970836b26",
+          "equivalentCandidateCommits": [
+            "704ddea9f713fcf7299cab2c337a8546b837b890",
+            "ce1d1b970893a5473e382826067076b6f2d00804"
+          ]
+        },
+        {
+          "sha": "9b037b9e3867618cd037030f2385683e85ddf0c2",
+          "subject": "Restore scoped original image progress and explicit image controls",
+          "stablePatchId": "8a010211397016e57eabc03de01cdb24de764a2b",
+          "equivalentCandidateCommits": []
+        }
+      ],
+      "reason": "All own image source/test paths exist.24/34 unique patches match; remaining producer/UI adaptations map to341e3efd/553517c1/0880412c/a7c44e28 and later union preserves retry/recording/FJ contracts. No missing path or independent source delta found.",
+      "originalC2PathCounts": {
+        "exact": 827,
+        "evolved": 92
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 827,
+        "evolved": 92
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 151,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:42Z",
+        "draft": true,
+        "head": "98b1ea52c4462f1e3f63dee09e3b35645389109a",
+        "headRef": "codex/mote-scoped-image-progress",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/151",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/151#issuecomment-6234264192"
+      }
+    },
+    {
+      "number": 152,
+      "title": "Restore original Web recording controls and archive on owned connectors",
+      "url": "https://github.com/utopiafar/mote/pull/152",
+      "headRefName": "codex/mote-web-recordings-ready",
+      "headRefOid": "144852fe7df75c78f9fc99c6a07eb9c223501095",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "Original recording consumers",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 501,
+        "test": 340,
+        "design": 61
+      },
+      "representativeCoveredPaths": [
+        "apps/web/src/ArchivedAudio.tsx",
+        "apps/web/test/multiuser-recordings.test.ts",
+        "docs/design/multiuser-web-recordings.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 794,
+        "evolved": 108
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 794,
+        "evolved": 108
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 152,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:52Z",
+        "draft": true,
+        "head": "144852fe7df75c78f9fc99c6a07eb9c223501095",
+        "headRef": "codex/mote-web-recordings-ready",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/152",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/152#issuecomment-6234266096"
+      }
+    },
+    {
+      "number": 153,
+      "title": "Reduce Ask evidence recheck cost and coordinator lease churn",
+      "url": "https://github.com/utopiafar/mote/pull/153",
+      "headRefName": "codex/mote-ask-actions-wait-closure-final",
+      "headRefOid": "f67f6980cdab6f998f4000733f46220fc2fe76c1",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "Scoped Ask evidence/admission waiting",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 475,
+        "test": 309,
+        "design": 59
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/ask.ts",
+        "apps/server/src/scope/ask-schema.ts",
+        "apps/server/test/multiuser-ask-read-races.test.ts",
+        "docs/design/multiuser-ask.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "f67f6980cdab6f998f4000733f46220fc2fe76c1",
+          "subject": "docs: record natural final gate and inherited physical ACK blocker",
+          "stablePatchId": "277627edb16002d193825feda001923f46434bee",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "b944fafd70501bdf189b2ffa79e5300a347c0486",
+          "subject": "docs: retain first full gate and correct isolated dependency identity",
+          "stablePatchId": "4c600013a97faf4f660967f1a062f518b6675d61",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "da907f2dbb7792a981cb6d1bd28cea9ffda471b8",
+          "subject": "docs: record final admission rejection RED and frozen source proof",
+          "stablePatchId": "4c851025a24d3b8288bf0480911b63c440aa5105",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "d622a4f2fb2d187882483e92a65b642cda2572ac",
+          "subject": "fix(ask): preserve stale-input rejection while children wait at admission",
+          "stablePatchId": "f6dcdf46c940bb0ca56822ba3ab80ac2e42bb9a2",
+          "equivalentCandidateCommits": [
+            "8350242343c88f12b3986f903442c5e01427dca2",
+            "3a978dfdaf571e2181ecc47475a8b7a1d9f7a4d5"
+          ]
+        },
+        {
+          "sha": "61c09bad71103b7046151c69601f3385631b3e3b",
+          "subject": "test(ask): expose stale conversation hidden by pending-child admission",
+          "stablePatchId": "d97306f93b30f76081a0978f4f0097db2d4f1c10",
+          "equivalentCandidateCommits": [
+            "dd3c9d4e93cd8af8ffe5c2698ff057c0e1c2edee",
+            "e849540defb6c0f6dc28462ff64bde5e6836cc77"
+          ]
+        },
+        {
+          "sha": "d85aa9c1213542803593dd7c31a92001ef06c17d",
+          "subject": "docs: retain Ask wait REDs and bounded candidate evidence",
+          "stablePatchId": "42d396f417e02c3f76f4a26ccdb64b4a0ed6edaa",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "2fdcef08782d1ea504164e164f520e9f5c2acb6c",
+          "subject": "fix(ask): wait at admission and recheck complete proofs without recursive observation",
+          "stablePatchId": "798c8a692f225eb68607abf7c08604e442011461",
+          "equivalentCandidateCommits": [
+            "d165fe4d9375345a6c5dbe74c80ce9c284ebd362"
+          ]
+        },
+        {
+          "sha": "87be8907fc9f84128f244d75b08891e020d33b7f",
+          "subject": "test(ask): expose coordinator lease churn while children remain pending",
+          "stablePatchId": "4005fbe934e00f96bce69c6bdb261d3da1cfbebd",
+          "equivalentCandidateCommits": [
+            "caf37dfd6f4190559ee55d17411defb0a33fb214",
+            "8885c0f0f875934e0fa306e415676a7d9e93a815"
+          ]
+        },
+        {
+          "sha": "e53787e2edc1951e6b24474bb3a42efaadc95c66",
+          "subject": "fix(ask): bound compound evidence checks to read and publication fences",
+          "stablePatchId": "e36bda69384f9c6446e288009f461c209e2219ce",
+          "equivalentCandidateCommits": [
+            "927e161e5191d89d156b1d91ee5deb21f229eac4",
+            "8baccf163bc35e6e94a0a7b6016f528c06b265ad"
+          ]
+        },
+        {
+          "sha": "04fa9ce31aab86f50306b3817a8ffd4ed6dfb63c",
+          "subject": "fix(ask): avoid rewriting unchanged persistent evidence pins",
+          "stablePatchId": "ca98ded1d9e7654ed7a1de0c71b4bc2371969b79",
+          "equivalentCandidateCommits": [
+            "2fabfd943f58b2290a6e624465c459bfd10f4101",
+            "e33ee2716b363f6e83a8bce8696fd063e3717c14"
+          ]
+        },
+        {
+          "sha": "31a75095874a579443392342d9318e0a50fd6396",
+          "subject": "test(ask): expose repeated writes while rechecking pinned originals",
+          "stablePatchId": "ac130b82e3702f5f26e55332dcd3a81775b141dd",
+          "equivalentCandidateCommits": [
+            "9e3fa9cdfaf261f0cff3bdc68f1c32b7ad68bc97",
+            "5907c9a417ce5fcd8747f1a5ffc9503c6df9a329"
+          ]
+        },
+        {
+          "sha": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+          "subject": "docs: retain complete closing gate RED and bounded recovery evidence",
+          "stablePatchId": "b2470daaa8c3ca9aa2998e9b11c972454dbfe1ce",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "da11d1c4bc9aa8188d6f837dc1e3870569572fdb",
+          "subject": "docs: record fixture closure and actual compiled native joint restore",
+          "stablePatchId": "572367f2c1aadca646886183372208254a7336df",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "371bd18649a40b0ac3a9764a5223b08970266d38",
+          "subject": "test: retain successful retry checkpoints and honor restored profile ownership",
+          "stablePatchId": "dbedf9d94743a5cd8e9884b665eb1a249a94cf67",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "8cf5ecbd65332fe9a3a88ee987ea6353f29f2925",
+          "subject": "test: bind native fixture identity and isolate failed sibling retry",
+          "stablePatchId": "ba4b5c4b6e56ff1c0c26d507b0fd689122ef8e10",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "2ddfffb7b7ffe4f4bd1bee8157075074e50d57d6",
+          "subject": "test: restore stopped readback before joint backup and bound retry fixture rounds",
+          "stablePatchId": "cf5facc7be4e859b1c1ef876a72ffe0df49266d2",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "40ee6127c588c00771191d0e8a543763ce091a3f",
+          "subject": "test: send empty recovery requests without a JSON body header",
+          "stablePatchId": "8d83c923a5d4e73bf426a5152d98da120df84393",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "ef19935b0c8def28c42c83adf3e8f69400d92a18",
+          "subject": "test: exercise compiled applied-plan and native provider recovery together",
+          "stablePatchId": "4888931047e758141d02d612f5f8440c46c3058d",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "e119b8d9bbbf03ec0ffd4338df71911c8cce0bfe",
+          "subject": "test: await physical pin release and advertise scoped Imports",
+          "stablePatchId": "9a42c830ae037ba61a80cc676e1cedf37e80cfac",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "517f3ff17a0a11b7b950931f596fd06cf8cb47df",
+          "subject": "docs: record complete personal archive required gate and baseline failures",
+          "stablePatchId": "5295d0714a8e33cba95e365064a32269df46b74f",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "1170f67654c1a2fe4026c1e750de30453dc11827",
+          "subject": "docs: record independent review and preflight checker correction",
+          "stablePatchId": "0b3c2a16dc65365288ecfd64aa9bec3c4b48c4e2",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "2699d1f7eeeb12390c2b87229c11c32dc731d9ee",
+          "subject": "fix: name personal archive preflight without SQL checker collision",
+          "stablePatchId": "6ea7b36d31a99e97f0391c7c86d0e580ec80ac77",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "a606d97b4377655a5c5f8ae4ac42432f1b9cb799",
+          "subject": "docs: freeze final personal archive integrity verification",
+          "stablePatchId": "befc6047baded1ace93edd48981c5a8c07bbb4ce",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "77a2818ec45b0bac2732cd613787daf7ee6fea81",
+          "subject": "fix: reject corrupt current plan parents before personal merge",
+          "stablePatchId": "0df8db957baff3640ea4e9c06938b4d15649059a",
+          "equivalentCandidateCommits": [
+            "716bec5d954d9b3715244b009e2dab9cc4894bbb"
+          ]
+        },
+        {
+          "sha": "7242c9cef6371673844b813e151619b4a1e4fec3",
+          "subject": "test: reproduce unsafe recovery of a dangling local plan binding",
+          "stablePatchId": "5c81174dc88905e2523384d38f160f74f03ec9b4",
+          "equivalentCandidateCommits": [
+            "0f8b59086896cfa00eab2fd9ccacf42520c31d3e"
+          ]
+        },
+        {
+          "sha": "195f512c1877a4a9a2016b4fb934c8c39d5122e7",
+          "subject": "docs: record personal policy archive evidence and bounded recovery contract",
+          "stablePatchId": "e692d8557642152318c0efe5030f2289372ef83d",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "2206d33b3277c1fc44782dd9100f5f257cedf6ae",
+          "subject": "test: retain restored control generations and reject foreign plan parents",
+          "stablePatchId": "b8ecbe7ae97bbae858c6cdd02bfdde2de919ca39",
+          "equivalentCandidateCommits": [
+            "94c9dd494c240ddd4312e477c0be845121e62e6d"
+          ]
+        },
+        {
+          "sha": "decf31533a5ec03061ad7857e3173c8338f36328",
+          "subject": "feat: restore personal applied-policy history without execution authority",
+          "stablePatchId": "b340a07d701e5bae86d697cf987ccf2d310c2e40",
+          "equivalentCandidateCommits": [
+            "417bc4828a094184a48887b8fcb62d22745b7ae2"
+          ]
+        },
+        {
+          "sha": "74c0fee6fc267403fced377c8ca613cab7832e3b",
+          "subject": "test: reproduce missing personal applied-policy recovery",
+          "stablePatchId": "6e70ec97a103aaa8c34df6fa7da29b9facbf03dc",
+          "equivalentCandidateCommits": [
+            "3a08b3d65af1915f596b0845da2b1f74477e869b"
+          ]
+        },
+        {
+          "sha": "20f04d0c09ad721f42040763e62d1bf876c4e87c",
+          "subject": "test: validate frozen policy recovery and account lifecycle seams",
+          "stablePatchId": "01d93a96ce33bdfcf30b9ca159e127aa7cba1da8",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "1357b5e119fb3d2bf83deb2120e3ce458e8fe256",
+          "subject": "test: compose declared limited file-policy checkpoint for recovery validation",
+          "stablePatchId": null,
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "24f77da2af492710ae0a30c397c0e0f40732cdfd",
+          "subject": "docs: retain current-candidate file cleanup and import fence evidence",
+          "stablePatchId": "dd395d8869050541d0afbbd281d9f9ec20dbef24",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "e815c15a1b73f8ac65600ce1843f92c9dff46cb7",
+          "subject": "docs: record declared parser recovery composition and actual Docker checks",
+          "stablePatchId": "7e47b60d5800e339b4df6fb6b2f1cf147823c5de",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "f688986723bb0109f0c10b67f47d3df5cba2cc41",
+          "subject": "test: compose declared parser fix into recovery validation candidate",
+          "stablePatchId": null,
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "6b3ececf23a1bea6d54ec69c3240f8a85b5eead4",
+          "subject": "docs: record fixture diagnoses and nonzero Docker recovery evidence",
+          "stablePatchId": "4c1c1840ed61e0a37454cae87868385fa83c7c39",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "caf0551975fac56347f5e944d2a7e3b7a06f61f8",
+          "subject": "fix(ingress): share bounded binary parser across authenticated routes",
+          "stablePatchId": "a3f76179b06a4635408b69acf185e5f0165d3cb2",
+          "equivalentCandidateCommits": [
+            "41c5d4132ff57350e8ed3bb4caed31c8b8d0dc41"
+          ]
+        },
+        {
+          "sha": "69243430e8db26856b3d91c70044821e31894962",
+          "subject": "test(auth): reproduce private binary composition and preserve Imports guards",
+          "stablePatchId": "93caa9c1debc30c071adeffe83c0be52d41093b8",
+          "equivalentCandidateCommits": [
+            "192703dc7523e8522d1a1f914090c26bd391fd59"
+          ]
+        },
+        {
+          "sha": "f09e4f312285075263a1e994d31fa46e6b3be64d",
+          "subject": "test: align recovery fixtures and exercise nonzero Docker file generations",
+          "stablePatchId": "bf8609fa63c400a283813f8cb7df5905f735fc6d",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "7f9dd024ae92757bed25209db24aaeb755dfb49b",
+          "subject": "docs(validation): record recovery seams and bounded gate failures",
+          "stablePatchId": "68950e3f16c12c4b29fd65886aae6f61ab9b0857",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "dc2b0801f885a174d120478157d150d7bab439e0",
+          "subject": "test(recovery): wait for concurrent SQLite writes in read-only probes",
+          "stablePatchId": "64dd5f420a46274a7979d8a49ec03c5580c2b4c1",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "942995ef0e2ef1b0f012f461b28e317f376fc571",
+          "subject": "test(recovery): exercise issued HTTP calls across crash and data merge",
+          "stablePatchId": "02c08d088be21a05b01825777c156069276817cf",
+          "equivalentCandidateCommits": []
+        }
+      ],
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent subsequently released closing after combined review; real Web cases remain explicit unchecked TODOs.",
+      "originalC2PathCounts": {
+        "exact": 717,
+        "evolved": 116,
+        "absent": 10
+      },
+      "originalC2AbsentPaths": [
+        {
+          "path": "apps/server/test/fixtures/policy-native-recovery.ts",
+          "category": "test",
+          "headBlob": "9122b571506400ff8276c66ce375a8c2f6cd4a8a",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/fixtures/recovery-http-host.ts",
+          "category": "test",
+          "headBlob": "9774e354c7e37c041b8f384339996fcf1e20fe2e",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-http-seams.test.ts",
+          "category": "test",
+          "headBlob": "6969b9f4ed5ef63d22e1f652ea9142bbfe33e144",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-policy-lifecycle.test.ts",
+          "category": "test",
+          "headBlob": "d3445693a4e2ea149c8fa71616142040f0e0b4d2",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-portable-file.test.ts",
+          "category": "test",
+          "headBlob": "739a2e27f1fdd3fecf1ff4b03ec35ceb95c9b487",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/ask-actions-wait-closure.md",
+          "category": "design",
+          "headBlob": "e871a19dff74e97011ebb1627bbc0718df9feb6b",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-policy-personal-archive.md",
+          "category": "design",
+          "headBlob": "7c07a9abe8f56c4b446157e5b612cdbec8d31485",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-recovery-lifecycle-seams.md",
+          "category": "design",
+          "headBlob": "726afb666046b05bff308847956f052d84c0f57d",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/validation/recovery-file-generation-container.ts",
+          "category": "source-or-build",
+          "headBlob": "3acbd5e93c937c601264de7a84d11279e7a0b866",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/validation/recovery-policy-container.ts",
+          "category": "source-or-build",
+          "headBlob": "02bc2b00f741cbc1c1e6256f6b23c748d22eb409",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "sourceCompletionPathCounts": {
+        "exact": 726,
+        "evolved": 117
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "initialClassification": "PARTIAL_HOLD",
+      "initialReason": "Seven module source/test commits all have stable-patch equivalents in C2; ask-schema/read-races exact. Own final ask-actions-wait-closure report is absent. Full PR diff also inherits the PR150 missing recovery paths; do not whole-merge that baseline.",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 153,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:02Z",
+        "draft": true,
+        "head": "f67f6980cdab6f998f4000733f46220fc2fe76c1",
+        "headRef": "codex/mote-ask-actions-wait-closure-final",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/153",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/153#issuecomment-6234267719"
+      }
+    },
+    {
+      "number": 154,
+      "title": "test: verify Ask and bounded recheck authorization (RED prerequisites)",
+      "url": "https://github.com/utopiafar/mote/pull/154",
+      "headRefName": "codex/mote-authorization-seam-tests",
+      "headRefOid": "6010cfa97c875f40356a23d5bfdfa428e8dab8d0",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "Ask/processing await authorization tests",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "test": 1,
+        "design": 1
+      },
+      "representativeCoveredPaths": [
+        "apps/server/test/multiuser-ask-processing-authorization-seam.test.ts",
+        "docs/validation/ask-processing-authorization-seam.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "6010cfa97c875f40356a23d5bfdfa428e8dab8d0",
+          "subject": "test: validate Ask and bounded processing authority across awaits",
+          "stablePatchId": "29f83ad25419b731b217522522052324c9018871",
+          "equivalentCandidateCommits": []
+        }
+      ],
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent subsequently released closing after combined review; real Web cases remain explicit unchecked TODOs.",
+      "originalC2PathCounts": {
+        "exact": 1,
+        "evolved": 1
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 2
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "initialClassification": "PARTIAL_HOLD",
+      "initialReason": "The 102-line authorization test is byte-identical. Candidate report has older ending: publication/prerequisite ownership additions are absent and it still says no Draft was opened while RED. Hold for accurate receipt/history reconciliation, not a missing test or runtime fix.",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 154,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:11Z",
+        "draft": true,
+        "head": "6010cfa97c875f40356a23d5bfdfa428e8dab8d0",
+        "headRef": "codex/mote-authorization-seam-tests",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/154",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/154#issuecomment-6234269239"
+      }
+    },
+    {
+      "number": 155,
+      "title": "feat(android): isolate collector state and native flows by account",
+      "url": "https://github.com/utopiafar/mote/pull/155",
+      "headRefName": "codex/mote-multiuser-m15-android",
+      "headRefOid": "f1452b9876cc817302effb6b33adbc1bb47b7f99",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "M15 Android account lifecycle",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 498,
+        "test": 325,
+        "design": 64
+      },
+      "representativeCoveredPaths": [
+        "apps/android/app/src/androidTest/java/dev/mote/collector/MultiuserWorkerInstrumentedTest.kt",
+        "docs/validation/multiuser-android-final-matrix.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 810,
+        "evolved": 77
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 810,
+        "evolved": 77
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 155,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:21Z",
+        "draft": true,
+        "head": "f1452b9876cc817302effb6b33adbc1bb47b7f99",
+        "headRef": "codex/mote-multiuser-m15-android",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/155",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/155#issuecomment-6234270782"
+      }
+    },
+    {
+      "number": 156,
+      "title": "feat(web): restore account-scoped original workflows",
+      "url": "https://github.com/utopiafar/mote/pull/156",
+      "headRefName": "codex/mote-multiuser-m13-web",
+      "headRefOid": "b2802a8dbe0a21ffe2af8d26a2fbdeaa8b2c1a2e",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "M13 Web/compiled private SQL lifecycle",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 523,
+        "test": 366,
+        "design": 75
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/private-data-sql.ts",
+        "apps/server/test/private-sql-connection-lifecycle.test.ts",
+        "apps/server/test/private-sql-preparation.test.ts",
+        "docs/design/multiuser-web.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "b2802a8dbe0a21ffe2af8d26a2fbdeaa8b2c1a2e",
+          "subject": "docs: record exact statement lifecycle fix consumption",
+          "stablePatchId": "7b226a6a0888a3e5eecc6ae3cdde90a404e77fc6",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "a2f299c86891997827c16c77bfe342287b35c146",
+          "subject": "fix: retire finalized private statements after database reopen",
+          "stablePatchId": "aef18d0cc9b71009b1087c70184bcf8ab1340120",
+          "equivalentCandidateCommits": [
+            "f1be61eed018b913bfa8beb2957256676b7e2f6c"
+          ]
+        },
+        {
+          "sha": "70fc18882ad164aa670cee69e408cf0c4d9f7fbe",
+          "subject": "docs: record delivered PR158 KEEP contracts and union boundaries",
+          "stablePatchId": "77470b89a4e51b8ef75c0427f46ff6b667ccd4b6",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "b5989f75c497d7317ad35756fc5baca1b6ffbd70",
+          "subject": "docs: record bounded Coding preparation fix and preserved gate limits",
+          "stablePatchId": "d3f39e0cc12c4c5d6d984238612f6c6aed5e5170",
+          "equivalentCandidateCommits": [
+            "08b39b4be8279e52120b464bab3026d06b62db3a"
+          ]
+        },
+        {
+          "sha": "e712d051aed7f755ce938583df1dd3e025bc6107",
+          "subject": "test(scope): verify reused statements clear omitted bindings",
+          "stablePatchId": "07818213afeff5c0d7d0a67d645e048ab2f19123",
+          "equivalentCandidateCommits": [
+            "605fca90d20587e574ed13cf1fd510bcf1a8ab5c"
+          ]
+        },
+        {
+          "sha": "26c35e1554e39d7b56a36e052690c9b8c335f6e8",
+          "subject": "perf(scope): reuse compiled private SQL without reusing authority or bindings",
+          "stablePatchId": "de00b3f16c5d2bb93b6d2f38b73afbcf1da7942f",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "cb4df1d0e1ac301b0c3bb092add08391028a47d7",
+          "subject": "test(scope): expose repeated private statement preparation without relaxing fences",
+          "stablePatchId": "f8b786c11f3c3bef42e9b163113fe99027eef775",
+          "equivalentCandidateCommits": [
+            "8d722e09af7a0ac6968d01f6b59a0887ca9bfc84"
+          ]
+        },
+        {
+          "sha": "6f493fe46a9c8d5b9452e7917591cfa403f1c10f",
+          "subject": "test(processing): consume frozen stale-parent physical ACK fixture",
+          "stablePatchId": "331e8bd1b940e8105e508c4f42284823f4c3af26",
+          "equivalentCandidateCommits": [
+            "75b25b3e5e7fc49da75e2a4fd20cfe7bfe76515f"
+          ]
+        }
+      ],
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent subsequently released closing after combined review; real Web cases remain explicit unchecked TODOs.",
+      "originalC2PathCounts": {
+        "exact": 888,
+        "evolved": 75,
+        "absent": 1
+      },
+      "originalC2AbsentPaths": [
+        {
+          "path": "docs/validation/multiuser-m13-statement-lifecycle.md",
+          "category": "design",
+          "headBlob": "89c65d1b36569074e733b10190bd7e8363a9af23",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "sourceCompletionPathCounts": {
+        "exact": 889,
+        "evolved": 75
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "initialClassification": "PARTIAL_HOLD",
+      "initialReason": "Current remote head isb2802a8d, newer than manifest FWb598. The extra lifecycle fixa2f299c8 equals already-consumedacbfd/f1be, and its test is exact. C2 private SQL deliberately unions KEEP changeToken. One new lifecycle report is absent and70fc final KEEP-status doc paragraphs are older in C2. No new production/test fix to pick twice.",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 156,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:30Z",
+        "draft": true,
+        "head": "b2802a8dbe0a21ffe2af8d26a2fbdeaa8b2c1a2e",
+        "headRef": "codex/mote-multiuser-m13-web",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/156",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/156#issuecomment-6234272151"
+      }
+    },
+    {
+      "number": 157,
+      "title": "feat: compose scoped multiuser processing and joint validation [skip ci]",
+      "url": "https://github.com/utopiafar/mote/pull/157",
+      "headRefName": "codex/mote-multiuser-joint-validation",
+      "headRefOid": "8084ef359fa058a05fedeaeecc7d4b23f72138a3",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": true,
+      "scope": "Joint scoped processing/typed graph/ACK contracts",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 490,
+        "test": 331,
+        "design": 64
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/processing.ts",
+        "apps/server/test/multiuser-file-unknown.test.ts",
+        "docs/design/multiuser-file-processing-contract.md",
+        "docs/validation/multiuser-joint-fj-delivery.md"
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 793,
+        "evolved": 92
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 792,
+        "evolved": 93
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 157,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:43Z",
+        "draft": true,
+        "head": "8084ef359fa058a05fedeaeecc7d4b23f72138a3",
+        "headRef": "codex/mote-multiuser-joint-validation",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/157",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/157#issuecomment-6234273870"
+      }
+    },
+    {
+      "number": 158,
+      "title": "Restore scoped instance controls, index maintenance and split Files export",
+      "url": "https://github.com/utopiafar/mote/pull/158",
+      "headRefName": "codex/mote-keep-admin-exports",
+      "headRefOid": "1d33119b00eb91515ad9e24d356b937bbaa637bc",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "scope": "KEEP admin limits/lexical maintenance/split exports",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 527,
+        "test": 364,
+        "design": 74
+      },
+      "representativeCoveredPaths": [
+        "apps/server/src/scope/instance-controls.ts",
+        "apps/server/src/scope/index-maintenance.ts",
+        "apps/server/src/scope/file-export.ts",
+        "apps/web/src/InstanceControls.tsx",
+        "apps/web/src/IndexMaintenance.tsx",
+        "apps/web/src/FilesExport.tsx",
+        "apps/server/test/multiuser-keep-controls.test.ts",
+        "docs/design/multiuser-keep-controls.md"
+      ],
+      "uniquePatchCoverage": [
+        {
+          "sha": "1d33119b00eb91515ad9e24d356b937bbaa637bc",
+          "subject": "docs: freeze KEEP runtime acceptance and retained gate failures",
+          "stablePatchId": "58f942de5842e183d8cf3301b8e44cc354ef914a",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "e663d48d351cdc9c4c21b9039f2023ef5295021a",
+          "subject": "fix: bound Files proof reads and clear pending index intent",
+          "stablePatchId": "1a74975d26ab136c351349668d2ebefec92d9f2a",
+          "equivalentCandidateCommits": [
+            "23dabbfbf7c856cdef9b75579aaf4893913feace"
+          ]
+        },
+        {
+          "sha": "0604951c71ec3d027123a0ed0f7d9caafb68e37b",
+          "subject": "test: retain KEEP export scaling and local intent regressions",
+          "stablePatchId": "c235b2611de521c1a3f9989662c5f090f3bfcd16",
+          "equivalentCandidateCommits": [
+            "3acf1166a407afbd97cc75e9ccce540f0c21be0d"
+          ]
+        },
+        {
+          "sha": "aad77a8cf401eb4e9066e4640fd60b2d3e988d57",
+          "subject": "docs: define finite KEEP control migration and acceptance boundaries",
+          "stablePatchId": "39aedd9fb6cd79ea7a659a8e4205d4f3875988c2",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "db321f6457774b1609a76dd5e611c95f6973e8a5",
+          "subject": "feat(web): restore administrator controls and explicit split export choices",
+          "stablePatchId": "61abbc3672069b8ce68dc4470b7e1a89a77d0a90",
+          "equivalentCandidateCommits": []
+        },
+        {
+          "sha": "9314fefff7ddae1173b445e97918503260c39fac",
+          "subject": "feat(scope): restore bounded administrator controls and owner Files exports",
+          "stablePatchId": "923f38477fccc7292ef50ebd39b9108de065ceb6",
+          "equivalentCandidateCommits": [
+            "072bff38fd2722dfdbb0c58fbe002c4c5e1a5783"
+          ]
+        },
+        {
+          "sha": "00a90298a273d1c9169712f00cdf93c92341c96f",
+          "subject": "test(scope): cover missing instance controls and split Files exports",
+          "stablePatchId": "258b5a4ea2747b26b242ae915e37081dcab92fd6",
+          "equivalentCandidateCommits": [
+            "36a669f431206c2d84b53c879761a6a0fce31e91"
+          ]
+        }
+      ],
+      "reason": "Runtime/source proof reads, admin limit HTTP/UI, FTS maintenance and split exports are present; core HTTP/UI/source blobs exact. Stable patches9314feff/e663d48d selected; db321f64 UI differs only catalog insertion context. Final private SQL adds prepared cache/lifecycle while retaining host changeToken. Independent496/e896 tests also included.",
+      "originalC2PathCounts": {
+        "exact": 888,
+        "evolved": 77
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 888,
+        "evolved": 77
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 158,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:53Z",
+        "draft": true,
+        "head": "1d33119b00eb91515ad9e24d356b937bbaa637bc",
+        "headRef": "codex/mote-keep-admin-exports",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/158",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/158#issuecomment-6234275437"
+      }
+    },
+    {
+      "number": 159,
+      "title": "Compose frozen multiuser C2 and preserve joined attachments in personal archives",
+      "url": "https://github.com/utopiafar/mote/pull/159",
+      "headRefName": "codex/mote-multiuser-final-joint-e2e",
+      "headRefOid": "2bc7e3f19cbde9c825057122850d8a23f386da90",
+      "baseRefName": "codex/mote-multiuser-integration",
+      "isDraft": true,
+      "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "headIsAncestorOfCandidate": false,
+      "pathCounts": {
+        "exact": 1029,
+        "absent": 24
+      },
+      "scope": "Sole final multiuser review target",
+      "classification": "TARGET_KEEP",
+      "closeNow": false,
+      "changedPathCategoryCounts": {
+        "source-or-build": 548,
+        "test": 393,
+        "design": 112
+      },
+      "representativeCoveredPaths": [],
+      "absentPaths": [
+        {
+          "path": "docs/validation/final-c2-recovery-sources/README.md",
+          "category": "design",
+          "headBlob": "df86dc1b2b405efb08d66bf9923067514a954cee",
+          "candidateBlob": null,
+          "publicationBlob": "df86dc1b2b405efb08d66bf9923067514a954cee",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/archive-corruptions.mjs.source",
+          "category": "design",
+          "headBlob": "b2df4d5b36615902c4e4f01c71cb0f72288ba193",
+          "candidateBlob": null,
+          "publicationBlob": "b2df4d5b36615902c4e4f01c71cb0f72288ba193",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/artifact-tree.mjs.source",
+          "category": "design",
+          "headBlob": "04fcd031113958d327c37aa5e1f489ede6feba81",
+          "candidateBlob": null,
+          "publicationBlob": "04fcd031113958d327c37aa5e1f489ede6feba81",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/attachment-history.ts.source",
+          "category": "design",
+          "headBlob": "8bafcb721fcaeef50502b3660ca52a892af3cd0b",
+          "candidateBlob": null,
+          "publicationBlob": "8bafcb721fcaeef50502b3660ca52a892af3cd0b",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/build-final-image.mjs.source",
+          "category": "design",
+          "headBlob": "2ac75f42b4319ba6647fee64b796b375eed4aafb",
+          "candidateBlob": null,
+          "publicationBlob": "2ac75f42b4319ba6647fee64b796b375eed4aafb",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/compiled-http-host.mjs.source",
+          "category": "design",
+          "headBlob": "bfc4a8aff58b001ecc271caf4996614db7316903",
+          "candidateBlob": null,
+          "publicationBlob": "bfc4a8aff58b001ecc271caf4996614db7316903",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/final-c2-complete-recovery.ts.source",
+          "category": "design",
+          "headBlob": "966da96d30832f0f906ebfd055f035aa08355017",
+          "candidateBlob": null,
+          "publicationBlob": "966da96d30832f0f906ebfd055f035aa08355017",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/final-recovery-support.ts.source",
+          "category": "design",
+          "headBlob": "be64f68db55c8c33332bc0210bde2993c976ca31",
+          "candidateBlob": null,
+          "publicationBlob": "be64f68db55c8c33332bc0210bde2993c976ca31",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/generation-history-settled.ts.source",
+          "category": "design",
+          "headBlob": "7b883310f9e9cf12336f5d9fe821973c1287180f",
+          "candidateBlob": null,
+          "publicationBlob": "7b883310f9e9cf12336f5d9fe821973c1287180f",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/generation-history.ts.source",
+          "category": "design",
+          "headBlob": "b3fa16466b4fddfe44de4c8aff6c40b3dd0791be",
+          "candidateBlob": null,
+          "publicationBlob": "b3fa16466b4fddfe44de4c8aff6c40b3dd0791be",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/index.json",
+          "category": "design",
+          "headBlob": "6dc1cfaee9d1b46e373ea72fc60a99dc4b751580",
+          "candidateBlob": null,
+          "publicationBlob": "6dc1cfaee9d1b46e373ea72fc60a99dc4b751580",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/owned-cleanup.mjs.source",
+          "category": "design",
+          "headBlob": "8cc36c3ca3879d1aac5eb5da9c19db864b8d2839",
+          "candidateBlob": null,
+          "publicationBlob": "8cc36c3ca3879d1aac5eb5da9c19db864b8d2839",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/package.json.source",
+          "category": "design",
+          "headBlob": "f84528506796fb565716eaf2798e653919e3aa33",
+          "candidateBlob": null,
+          "publicationBlob": "f84528506796fb565716eaf2798e653919e3aa33",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/preflight-image.mjs.source",
+          "category": "design",
+          "headBlob": "cb28046e54cdaebd2c2719c9fb9b0168bea502f1",
+          "candidateBlob": null,
+          "publicationBlob": "cb28046e54cdaebd2c2719c9fb9b0168bea502f1",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/preflight.mjs.source",
+          "category": "design",
+          "headBlob": "60efd9836ebb1faa618e95cd6027d46edaef1c09",
+          "candidateBlob": null,
+          "publicationBlob": "60efd9836ebb1faa618e95cd6027d46edaef1c09",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/prepare-compiled-http-driver.mjs.source",
+          "category": "design",
+          "headBlob": "91269270346a923449c334bb0df90d6dee4807de",
+          "candidateBlob": null,
+          "publicationBlob": "91269270346a923449c334bb0df90d6dee4807de",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/run-c2-complete.mjs.source",
+          "category": "design",
+          "headBlob": "810ffc139a7f7868ec6eacef1899488ff30ab663",
+          "candidateBlob": null,
+          "publicationBlob": "810ffc139a7f7868ec6eacef1899488ff30ab663",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/run-c2-direct.mjs.source",
+          "category": "design",
+          "headBlob": "af3fbcddc9fd58ba5933351e8feea2c04cdd62a5",
+          "candidateBlob": null,
+          "publicationBlob": "af3fbcddc9fd58ba5933351e8feea2c04cdd62a5",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/run-final-http.mjs.source",
+          "category": "design",
+          "headBlob": "efdbb9780d2c5c386bd268f610c07377952af00e",
+          "candidateBlob": null,
+          "publicationBlob": "efdbb9780d2c5c386bd268f610c07377952af00e",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/storage-history.ts.source",
+          "category": "design",
+          "headBlob": "b648e8937fda02668c905afec9d913f5a35b7dab",
+          "candidateBlob": null,
+          "publicationBlob": "b648e8937fda02668c905afec9d913f5a35b7dab",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/final-c2-recovery-sources/synthetic-image-io.ts.source",
+          "category": "design",
+          "headBlob": "b36bcd6fb04e65d80c0141f2674fb9eaff8ccfcf",
+          "candidateBlob": null,
+          "publicationBlob": "b36bcd6fb04e65d80c0141f2674fb9eaff8ccfcf",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-final-c2-consumption.json",
+          "category": "design",
+          "headBlob": "1216a8765050443fb3b388be832aa11f8e5fca53",
+          "candidateBlob": null,
+          "publicationBlob": "1216a8765050443fb3b388be832aa11f8e5fca53",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-final-c2-receipts.json",
+          "category": "design",
+          "headBlob": "5c06db1f938e4924580ac9b7f1676c2c2d8bbfcb",
+          "candidateBlob": null,
+          "publicationBlob": "5c06db1f938e4924580ac9b7f1676c2c2d8bbfcb",
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-final-joint-e2e.md",
+          "category": "design",
+          "headBlob": "f091be7ce9277cff84c8557a1b9dca4083da1915",
+          "candidateBlob": null,
+          "publicationBlob": "f091be7ce9277cff84c8557a1b9dca4083da1915",
+          "state": "absent"
+        }
+      ],
+      "uniquePatchCoverage": [],
+      "reason": "Final review target: retain open Draft; do not close or merge."
+    }
+  ],
+  "initialAuditCounts": {
+    "REPLACE_AFTER_ACCEPTANCE": 24,
+    "UNRELATED_KEEP": 5,
+    "PARTIAL_HOLD": 4,
+    "TARGET_KEEP": 1
+  },
+  "sourceCompletion": {
+    "testDocCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+    "productionBaseC2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+    "receipt": "multiuser-recovery-source-receipt.json",
+    "receiptSha256": "cbb1579bd4244fabeb54e4854d2afffff4f97fd57e9e143a721c19ba1313608e",
+    "manifestSha256": "e67e14ed9f3b86c045e34f4dfe75711f02bed4cfd17f2f314fc3dd80a0063496",
+    "freshAffectedExit": 0,
+    "newDistinctRecoveryScenariosPass": 10,
+    "compiledHttpReplayPass": 3,
+    "missingChangedPathsAcross28PRs": 0,
+    "browserAcceptance": "INCOMPLETE_SEPARATE_TOOL_BLOCK",
+    "closeNow": false,
+    "note": "All initial source/report holds reconciled. Historical path counts/absent lists below remain explicitly attributed to the initial C2 audit; successor counts are separate. No old gate result is relabelled.",
+    "closureStatus": "28_CLOSED_UNMERGED_CONFIRMED"
+  },
+  "privacyReview": {
+    "status": "COMBINED_REVIEW_RELEASED_WITH_HISTORICAL_LIMITS_DISCLOSED",
+    "report": "multiuser-pr159-privacy-review.md",
+    "closedPRs": 28
+  },
+  "historicalClosurePrerequisitesBeforeRelease": [
+    "Keep actual Web acceptance incomplete with explicit unchecked PR TODOs; later user direction permits deferral",
+    "Parent explicitly decides closing after the combined privacy audit; currently paused",
+    "Refresh every remote PR head and rerun comparison if any drift before closure",
+    "Retain all branches/commits and exclude143/145-148; no mechanical merges"
+  ],
+  "closurePrerequisites": [],
+  "closureResult": {
+    "status": "28_CLOSED_UNMERGED_CONFIRMED",
+    "verifiedAtUTC": "2026-10-17T13:11:22.335443+00:00",
+    "receipt": "multiuser-pr159-consolidation-result.json",
+    "commentedAndClosed": 28,
+    "merged": 0,
+    "branchesDeleted": 0
+  }
+}

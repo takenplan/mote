@@ -14,7 +14,7 @@ import {FileStore} from '../src/files.js';
 import {ProcessingRuntime} from '../src/processing-runtime.js';
 import {ContentStorageService} from '../src/content-storage.js';
 import {ArchivedFileStore} from '../src/archived-files.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 const description='  Generated phone calls in which I am usually one participant.\nThe other speaker’s views are theirs; uncertain speakers stay unknown.  ';

@@ -273,13 +273,13 @@ test('Insight cancellation on a new node is not blocked or overwritten by an old
 
 
 test('image progress keeps ready OCR visible after vision failure and reports a successful empty Memory result',async t=>{
- const {root,d}=await fixture(t),writes:unknown[]=[];
- const value={wait:null,original:{state:'ready'},automatic:true,understandingEnabled:true,policy:{profile:{name:'Generated images',processorId:'image.http'}},jobs:[{name:'ocr',state:'succeeded'},{name:'understanding',state:'failed',error:'unsupported_image'}],products:[{id:'generated-ocr',name:'ocr',kind:'ocr',text:'Generated searchable text'}],materials:[{id:'generated-material',state:'indexed'}],memory:[{state:'completed',count:0}]};
- const api=apiWith((path,init)=>{if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return {queued:true};}return value;});
+ const {root,d}=await fixture(t),writes:any[]=[],proof='a'.repeat(64);
+ const value={proof,wait:null,original:{state:'ready'},automatic:true,understandingEnabled:true,policy:{profile:{name:'Generated images',processorId:'image.http'}},jobs:[{name:'ocr',state:'succeeded'},{name:'understanding',state:'failed',error:'unsupported_image'}],products:[{id:'generated-ocr',name:'ocr',kind:'ocr',text:'Generated searchable text'}],materials:[{id:'generated-material',state:'indexed'}],memory:[{state:'completed',count:0}]};
+ const api=apiWith((path,init)=>{if(init?.method==='POST'){writes.push(JSON.parse(String(init.body)));return {queued:true,taskId:'generated-admitted-image-task'};}return value;});
  await act(async()=>root.render(React.createElement(ImageProgress,{api,id:'generated-image'})));
  const state=(name:string)=>[...d.querySelectorAll('dt')].find(n=>n.textContent===name)?.nextElementSibling?.textContent;
  assert.equal(state('文字识别'),'已就绪');assert.equal(state('内容理解'),'处理失败');assert.equal(state('记忆（Memory）'),'已完成，未生成新记忆');assert.equal(writes.length,0);
- await act(async()=>button(d,'补齐未完成步骤').click());assert.deepEqual(writes,[{mode:'complete',confirmUnknown:false}]);
+ await act(async()=>button(d,'补齐未完成步骤').click());assert.equal(writes.length,1);assert.match(writes[0].operationId,/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/);assert.deepEqual(writes,[{mode:'complete',confirmUnknown:false,proof,operationId:writes[0].operationId}]);
 });
 
 test('ordinary evidence revisions preserve the visible historical answer and citation; later deletion clears both',async t=>{
@@ -294,4 +294,16 @@ test('ordinary evidence revisions preserve the visible historical answer and cit
  assert.match(d.body.textContent!,/这是历史版本，当前资料已更新/);assert.match(d.body.textContent!,/GENERATED HISTORICAL PROPOSAL.*GENERATED OLD QUOTE/);
  revision=3;await act(async()=>resources(api).invalidate(path=>path.startsWith('/api/conversations')));
  assert.match(d.body.textContent!,/相关证据已删除/);assert.doesNotMatch(d.body.textContent!,/GENERATED HISTORICAL PROPOSAL|GENERATED OLD QUOTE/);
+});
+
+test('a scoped deleted conversation turn without a result shows its deletion notice instead of a failed-answer retry',async t=>{
+ const {root,d}=await fixture(t);let answers=0;
+ const api=apiWith(path=>{
+  if(path==='/api/conversations?limit=30')return {items:[summary('generated-deleted')]};if(path==='/api/query-runs')return {items:[]};
+  if(path==='/api/conversations/generated-deleted')return {...summary('generated-deleted'),nextCursor:null,turns:[{id:'generated-erased-turn',question:'Generated question whose evidence was deleted',status:'completed',createdAt:when,evidenceDeleted:true,contextStale:true}]};
+  return {items:[]};
+ });
+ await act(async()=>root.render(React.createElement(Conversations,{api,configured:true,devices:[],renderAnswer:()=>{answers++;return 'Unexpected answer';}})));
+ await act(async()=>d.querySelector<HTMLButtonElement>('.conversation-item')!.click());
+ assert.match(d.body.textContent!,/相关证据已删除，这条历史回答已清除/);assert.doesNotMatch(d.body.textContent!,/这次回答没有完成|再次提问|Unexpected answer/);assert.equal(answers,0);
 });

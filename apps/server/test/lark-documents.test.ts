@@ -117,7 +117,7 @@ test('overlapping polls across hour boundaries do not turn one provider signal i
  const f=await fixture(t);f.state.searchPages=[matches('DocumentDiary123')];await f.c.select({...selection,documentDiscovery:{created:false,edited:false,opened:true,firstSyncDays:30}});
  // Keep new Date() observations and Date.now() validation on the same fixture clock.
  let clock=Date.parse('2026-10-15T10:13:00.000Z');t.mock.timers.enable({apis:['Date'],now:clock});
- f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
+ f.c.startSync();assert.equal((await done(f.c)).job?.state,'completed');assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
  clock+=20*60000;t.mock.timers.setTime(clock);f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
  clock+=40*60000;t.mock.timers.setTime(clock);f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
  assert.equal(f.sources.listItems({kind:'file'}).items.length,1);
@@ -154,7 +154,7 @@ test('replaying an accepted immutable activity repairs the overlap ledger after 
 });
 
 test('a generated long Feishu Markdown becomes complete readable Material and eligible automatic personal Memory through real processing',async t=>{
- const {buildApp}=await import('../src/app.js'),{materialId}=await import('../src/materials.js');
+ const {buildApp}=await import('./fixtures/legacy-app.js'),{materialId}=await import('../src/materials.js');
  const f=await fixture(t),directory=await mkdtemp(join(tmpdir(),'mote-lark-long-material-')),owner='generated-long-document-owner-token';
  const body='# Generated long Feishu document\n\n| Milestone | Status |\n| --- | --- |\n| Intake | Verified |\n\n'+Array.from({length:6500},(_,i)=>`Generated paragraph ${i}: this is synthetic evidence.\n`).join('')+'\nTAIL_GENERATED_ACCEPTANCE_MARKER: the end is preserved.\n';
  f.state.content.set('DocumentDiary123',body);let modelCalls=0;

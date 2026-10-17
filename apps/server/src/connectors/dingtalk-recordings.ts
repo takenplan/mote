@@ -1,5 +1,6 @@
 import {spawn} from 'node:child_process';
-import {resolve} from 'node:path';
+import {mkdir} from 'node:fs/promises';
+import {resolve,join} from 'node:path';
 import {z} from 'zod';
 import {FILE_MAX_BYTES,transcriptSchema} from '@mote/shared';
 import {ExecutionFailure} from '../execution-engine.js';
@@ -8,12 +9,13 @@ import type {RecordingProvider,RecordingAccount} from './recordings.js';
 import {recordingMime,splitTranscriptText} from './recording-formats.js';
 import {recordingStage,recordingFile} from './recording-staging.js';
 export const DWS_VERSION='1.0.62';
-type DwsCommand={kind:'status'|'version'}|{kind:'search';start:string;end:string;cursor?:string}|{kind:'metadata'|'transcript';id:string}|{kind:'media';id:string;output:string};
-export type DwsRunner=(command:DwsCommand,profile:string|undefined,signal?:AbortSignal)=>Promise<unknown>;
+export type DwsCommand={kind:'status'|'version'|'login'}|{kind:'search';start:string;end:string;cursor?:string}|{kind:'metadata'|'transcript';id:string}|{kind:'media';id:string;output:string};
+export type DwsRunner=(command:DwsCommand,profile:string|undefined,signal?:AbortSignal,onOutput?:(chunk:string)=>void)=>Promise<unknown>;
 const idSchema=z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 export function dwsArguments(command:DwsCommand,profile?:string):string[]{
  const prefix=profile?['--profile',profile]:[];
  switch(command.kind){
+  case 'login':return ['auth','login','--device','--no-browser','--format','json'];
   case 'version':return ['version','--format','json'];
   case 'status':return [...prefix,'auth','status','--readonly','--format','json'];
   case 'search':return [...prefix,'minutes','+search','--scope','mine','--start',command.start,'--end',command.end,'--limit','30',...(command.cursor?['--cursor',command.cursor]:[]),'--format','json'];
@@ -23,20 +25,23 @@ export function dwsArguments(command:DwsCommand,profile?:string):string[]{
  }
 }
 /** Fixed read-only commands. The exact org:user profile is pinned on connect. */
-export function createDwsRunner(root:string):DwsRunner{return async(command,profile,signal)=>{
+export function createDwsRunner(root:string,options:{isolatedHome?:boolean}={}):DwsRunner{const execute:DwsRunner=async(command,profile,signal,onOutput)=>{
+ if(options.isolatedHome&&process.platform==='win32')throw new ConnectorError('dingtalk_scoped_keychain_unsupported',503);
+ const home=join(root,'home');if(options.isolatedHome)for(const path of [home,join(root,'tmp')])await mkdir(path,{recursive:true,mode:0o700});
  return new Promise((ok,fail)=>{
   const env:NodeJS.ProcessEnv={};for(const key of ['PATH','HOME','USERPROFILE','SystemRoot','TMPDIR','LANG','HTTP_PROXY','HTTPS_PROXY','ALL_PROXY','NO_PROXY','http_proxy','https_proxy','all_proxy','no_proxy'])if(process.env[key])env[key]=process.env[key];
-  const child=spawn('dws',dwsArguments(command,profile),{cwd:root,env:{...env,NO_COLOR:'1'},shell:false,stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
-  let output='',size=0,settled=false;
+  if(options.isolatedHome)Object.assign(env,{HOME:home,USERPROFILE:home,XDG_CONFIG_HOME:join(home,'.config'),XDG_DATA_HOME:join(home,'.local','share'),XDG_CACHE_HOME:join(home,'.cache'),APPDATA:join(home,'AppData','Roaming'),LOCALAPPDATA:join(home,'AppData','Local'),TMPDIR:join(root,'tmp'),DWS_CONFIG_DIR:join(home,'.dws'),DWS_KEYCHAIN_DIR:join(root,'credentials'),DWS_DISABLE_KEYCHAIN:'1'});
+  const child=spawn('dws',dwsArguments(command,profile),{cwd:root,env:{...env,NO_COLOR:'1'},shell:false,windowsHide:true,stdio:['ignore','pipe','pipe'],detached:process.platform!=='win32'});
+  let output='',size=0,settled=false,terminal:ConnectorError|undefined;
   const stop=()=>{try{if(process.platform!=='win32'&&child.pid)process.kill(-child.pid,'SIGKILL');else child.kill('SIGKILL');}catch{}};
-  const finish=(error?:Error)=>{if(settled)return;settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);if(error)return fail(error);try{const value=JSON.parse(output);if(value.ok===false||value.success===false||value.error)throw new ConnectorError('dingtalk_response_invalid',502);ok(value);}catch{fail(new ConnectorError('dingtalk_response_invalid',502));}};
-  const abort=()=>{stop();finish(new ConnectorError('dingtalk_operation_cancelled'));},timer=setTimeout(()=>{stop();finish(new ConnectorError('dingtalk_operation_timeout',504));},300000);
+  const finish=(error?:Error)=>{if(settled)return;settled=true;clearTimeout(timer);signal?.removeEventListener('abort',abort);if(error)return fail(error);try{if(command.kind==='login'){ok({completed:true});return;}const value=JSON.parse(output);if(value.ok===false||value.success===false||value.error)throw new ConnectorError('dingtalk_response_invalid',502);ok(value);}catch{fail(new ConnectorError('dingtalk_response_invalid',502));}};
+  const abort=()=>{terminal??=new ConnectorError('dingtalk_operation_cancelled');stop();},timer=setTimeout(()=>{terminal??=new ConnectorError('dingtalk_operation_timeout',504);stop();},command.kind==='login'?610000:300000);
   signal?.addEventListener('abort',abort,{once:true});if(signal?.aborted)abort();
-  child.stdout.setEncoding('utf8');child.stdout.on('data',(chunk:string)=>{size+=Buffer.byteLength(chunk);if(size>16*1024*1024){stop();finish(new ConnectorError('dingtalk_output_too_large'));}else output+=chunk;});child.stderr.on('data',()=>{});
+  const publish=(chunk:string)=>{if(command.kind==='login'&&!terminal)try{onOutput?.(chunk);}catch{terminal=new ConnectorError('dingtalk_operation_cancelled');stop();}};child.stdout.setEncoding('utf8');child.stdout.on('data',(chunk:string)=>{if(terminal)return;size+=Buffer.byteLength(chunk);if(size>16*1024*1024){terminal=new ConnectorError('dingtalk_output_too_large');stop();}else output+=chunk;publish(chunk);});child.stderr.on('data',chunk=>{publish(String(chunk));});
   child.on('error',(error:NodeJS.ErrnoException)=>finish(new ConnectorError(error.code==='ENOENT'?'dingtalk_cli_missing':'dingtalk_process_failed',503)));
-  child.on('close',code=>finish(code?new ConnectorError('dingtalk_command_failed',502):undefined));
+  child.on('close',code=>finish(terminal??(code?new ConnectorError('dingtalk_command_failed',502):undefined)));
  });
-};}
+};let verified:Promise<void>|undefined;return async(command,profile,signal,onOutput)=>{if(options.isolatedHome&&command.kind!=='version')await(verified??=execute({kind:'version'},undefined,signal).then(value=>{const v=value as any;if((v?.version??v?.data?.version)!==DWS_VERSION)throw new ConnectorError('dingtalk_cli_version_unsupported',503);}));return execute(command,profile,signal,onOutput);};}
 function data(value:any){if(value?.ok===false||value?.success===false||value?.error)throw new ExecutionFailure('permanent','recording_provider_failed');return value?.data??value;}
 /** Preserve the vendor JSON as the original; expose its primary paragraph text
  * once. Sentence/word copies are transport detail, not additional speech. */

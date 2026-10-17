@@ -18,6 +18,14 @@ CLI 不自动初始化，已有 profile 不会被覆盖；重复 init 报错后�
 
 ## 日常开发
 
+从当前源码直接启动中央和网页：
+
+```sh
+node scripts/dev-server.mjs
+```
+
+该脚本自动创建缺失的本地 dev profile，安装变化的依赖，构建共享库、中央与网页，再以前台进程启动。空账号库首次创建管理员 `admin`，密码为 `admin`；可直接在网页或客户端登录。已有账号与修改后的密码不会被重置。按 Ctrl+C 停止本次服务及其子进程。可用 `--home /absolute/dev-profiles --profile NAME` 选择另一套本地开发环境；初始化仅允许 native、loopback、非 prod 且端口不是 47832 的配置。已有旧格式或不完整的 profile 会被拒绝，不自动迁移。
+
 已构建中央服务并配置命名 Tunnel 的本机 DEV，可用一个命令前台运行两者：
 
 ```sh
@@ -36,11 +44,9 @@ npm run dev
 # 构建完成后启动独立 Mac App，绑定独立 dev profile
 npm run build -w @mote/desktop
 npm run desktop:dev
-# 获取 dev 访问令牌，只填入自己的测试客户端
-node scripts/mote.mjs token --profile dev
 ```
 
-Mac 的命名 profile 使用独立的用户数据目录、队列、草稿和连接设置。`desktop:dev` 将所选中央 URL 与令牌交给主进程；只对新 profile 引导连接，已有设置不会被后台替换。首次开始截图仍需要用户在 App 中设置并授权；这些命令本身不会采集屏幕。未命名 App 的 default profile 使用原 Electron 用户数据路径，旧存储仍受格式 3 拒绝边界约束，详见 [电脑端说明](desktop.md)。
+Mac 的命名 profile 使用独立的用户数据目录、队列、草稿和连接设置。`desktop:dev` 为新 profile 引导所选中央连接，已有设置不会被后台替换；进入客户端后使用账号登录，旧实例 owner token 不能代替当前登录凭据。通过开发脚本初始化的空库可首次使用 `admin/admin`。首次开始截图仍需要用户在 App 中设置并授权；这些命令本身不会采集屏幕。未命名 App 的 default profile 使用原 Electron 用户数据路径，当前本机格式为 4，旧格式拒绝且不自动迁移，详见 [电脑端说明](desktop.md) 和 [更新说明](updating.md)。
 
 运行 test 环境的同一套热重载界面：
 
@@ -160,7 +166,9 @@ npm run test:e2e
 npm run test:profiles
 ```
 
-`test:profiles` 使用系统临时目录、随机 loopback 端口和生成的 2×2 PNG，实际创建两套 dev/test 中央 Node 子进程。验证跨令牌拒绝、数据库分离、文件导入各自确认、备份 SHA、加密图片恢复、升级回退、原生日志隐私及轮转、监督进程异常结束后的接管；只清理本次创建的进程与目录。不会使用正式 47832，也不调用外部模型。
+`test:profiles` 使用系统临时目录和随机 loopback 端口，实际创建两套当前 Wire-2 dev/test 中央 Node 子进程。验证首次账号初始化前的公开健康检查、隔离存储、启停和重启，以及拒绝占用端口、旧 owner token 和不属于该配置的 PID；只清理本次创建的进程与目录。不会使用正式 47832、前台 UI 或外部模型。运行前先完成 `build:central`。当前恢复矩阵见 [多用户恢复生命周期](validation/multiuser-recovery-lifecycle-seams.md)，日志与监督器由发布工具回归和 `test-central-runner.mjs` 单独验证。
+
+main 与多用户集成分支合流后的实际检查、原生与浏览器回归、来源版本和未执行范围见 [2026-10-17 合流回归记录](validation/main-multiuser-integration-2026-10-17.md)。历史报告保留当时的源码和执行结果。
 
 问答依赖或 Memory 启动/恢复变化需覆盖正式 HTTP 与应用重启顺序：宽依赖续问跨过执行租约、核对中删除、外联中删除、未激活任务重启休眠、显式启动后的恢复，以及取消/撤权拒绝。使用生成原件与 loopback 模型 fixture；测试次数、真实模型计量和部署版本分别记录。当前回归入口与执行证据见[租约与启动授权验证](validation/query-lease-and-memory-activation-2026-10-14.md)。
 

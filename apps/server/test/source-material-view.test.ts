@@ -7,7 +7,7 @@ import {randomUUID} from 'node:crypto';
 import {Store} from '../src/store.js';
 import {MaterialStore,materialId,type MaterialDraft} from '../src/materials.js';
 import {sourceMaterialView} from '../src/source-material-view.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 function fixture(t:import('node:test').TestContext){const dir=mkdtempSync(join(tmpdir(),'mote-source-view-')),store=new Store(dir),materials=new MaterialStore(store);t.after(()=>{store.close();rmSync(dir,{recursive:true,force:true});});return {store,materials};}

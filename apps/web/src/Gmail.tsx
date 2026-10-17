@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import React,{ useEffect, useState } from 'react';
+import {ScopedGmail} from './ScopedGmail';
 import { moteText } from '@mote/shared/i18n';
 import type { Api } from './api';
 import { errorMessage } from './api';
@@ -11,7 +12,9 @@ type Status = {
     hasMore: boolean;
     code?: string;
 };
-export function Gmail({ api, refresh, initiallyOpen = false }: {
+type GmailProps={api:Api;refresh:()=>Promise<void>;initiallyOpen?:boolean};
+export function Gmail(props:GmailProps){return props.api.connection?.mode==='web'?<ScopedGmail key={JSON.stringify(props.api.connection)} {...props}/>:<LegacyGmail {...props}/>;}
+function LegacyGmail({ api, refresh, initiallyOpen = false }: {
     api: Api;
     refresh: () => Promise<void>;
     initiallyOpen?: boolean;

@@ -28,6 +28,8 @@ export {skillCatalog,SKILL_VERSION} from './skills.js';
 export {createImportAgent} from './import-agent.js';
 export type {ImportAgentInput} from './import-agent.js';
 import {
+  AgentConfigurationError,
+  AgentInputError,
   AgentNotConfiguredError,
   AgentResponseError,
   AgentTimeoutError,
@@ -173,6 +175,7 @@ export function createAgent(options: AgentOptions) {
   // Clone the caller's secret-bearing objects. A settings edit must not mutate an
   // already admitted query or its destination part-way through tool retrieval.
   validateModelOptions(options);
+  if(options.protocol==='mote-media')throw new AgentConfigurationError('Media connections require the processing runtime.');
   if(options.protocol==='codex-app-server')return createCodexAgent(options);
   options = {...options, headers: options.headers && {...options.headers}, extraBody: options.extraBody && structuredClone(options.extraBody)};
   const connection = modelConnection(options);
@@ -192,8 +195,10 @@ export function createAgent(options: AgentOptions) {
     input.signal?.throwIfAborted();
     if (closed) throw new AgentClosedError();
     if (!configured) throw new AgentNotConfiguredError();
-    if (!input.question?.trim() || input.question.length > 20_000)
-      throw new Error("Question must contain 1–20000 characters");
+    // User input limits belong to external schemas. Internal requests also
+    // carry complete host policies; actual runtime capacity is classified there.
+    if (typeof input.question !== 'string' || !input.question.trim())
+      throw new AgentInputError();
     // Validate the caller's display zone before creating a Harness process.
     displayTime(new Date().toISOString(), input.timeZone);
     reportProgress(input,{stage:'starting'});
@@ -202,7 +207,7 @@ export function createAgent(options: AgentOptions) {
     const runId = randomUUID();
     const trace=(event:Parameters<typeof reportTrace>[1])=>reportTrace(input,{...event,runId});
     trace({type:'run.started',stage:'starting',payload:{model:options.model,provider:options.provider,protocol:options.protocol,skill:input.skill??null,responseMode:input.responseMode??'answer',question:input.question,traceContext:input.traceContext??null}});
-    const root = await mkdtemp(join(tmpdir(), "mote-agent-"));
+    const root = await mkdtemp(join(options.temporaryRoot??tmpdir(), "mote-agent-"));
     let bridge: Awaited<ReturnType<typeof startBridge>>;
     try {
       bridge = await startBridge(
@@ -259,7 +264,7 @@ export function createAgent(options: AgentOptions) {
         requestTimeoutMs: options.requestTimeoutMs ?? 120_000,
         env: {
           PATH: process.env.PATH,
-          TMPDIR: tmpdir(),
+          TMPDIR: root,
           HOME: join(root, "home"),
           DEEPSEEK_API_KEY: options.apiKey || "mote-local-no-auth",
           DEEPSEEK_BASE_URL: connection.baseUrl,

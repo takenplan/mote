@@ -11,7 +11,7 @@ import {EvidenceReader} from '../src/evidence-reader.js';
 import {ExecutionEngine} from '../src/execution-engine.js';
 import {MemoryPipeline} from '../src/memory-pipeline.js';
 import {memoryEvidenceFingerprint} from '../src/memory.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import type {QueryInput} from '@mote/agent';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';

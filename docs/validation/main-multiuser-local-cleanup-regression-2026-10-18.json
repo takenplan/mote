@@ -1,0 +1,81 @@
+{
+  "baselineCommit": "3518706b68ece5781fb8813d5a5ad8c8dbaa22ad",
+  "greenExecutionIdentity": "baseline plus eight uncommitted production overlays and one new regression fixture",
+  "productionFiles": {
+    "apps/server/src/scope/ask.ts": "d4ba2846d8107cd700eebf1fccc9c0793fd8675eb3863b1f004c7b07a421d735",
+    "apps/server/src/scope/memory-feedback.ts": "999d69cb3b685fb859bd8c6c69d9ac0b01e07ec6d1d0a0e3962cd1a8014c87d1",
+    "apps/server/src/scope/memory-owner-questions.ts": "8686d7faad0401d7f0ee02108d8c9f28a5ef66ab9b2081d4e697460c68fd428d",
+    "apps/server/src/scope/memory.ts": "67dd5d1996f2697d05d12b1d30f50ec9fc3e6521d073b83c9b40d76c5eacdc77",
+    "apps/server/src/scope/processing-imports.ts": "e874197b0af472848aa9d863b3eac239edd92b86364b0000afb097af94d5540e",
+    "apps/server/src/scope/processing-reviews.ts": "e6389a8894bc30fc25fa40921729d5129b5704028b4504767e59c857d2fa01c4",
+    "apps/server/src/scope/processing.ts": "c6bbc6a5c6d5fa59571a67d4a0f425653701a2f8d5b6c5eb401fd276401a9961",
+    "apps/server/src/scope/task-execution.ts": "657f56cfc57a21f61f9ac9bb492b5df40ad409bc2d40ad640cb1596034f88037"
+  },
+  "testFile": {
+    "apps/server/test/local-model-cleanup-lifecycle.test.ts": "71672c01f8f29f4c2c350a89094e622f6c1e1857348003cacf5a130e360af9de"
+  },
+  "redSource": "isolated git archive of baseline plus byte-identical test; existing dependency links, no source checkout/reset/build",
+  "isolatedBaselineTaskExecutionSha256": "40f2c449fbe8397d285344debc36f2f06ac5b0ca558bbf205e9485fffc07e530",
+  "redTestSha256": "71672c01f8f29f4c2c350a89094e622f6c1e1857348003cacf5a130e360af9de",
+  "sharedAgentDependencies": "existing unchanged compiled workspace dependencies; Server source imported through tsx",
+  "headAfter": "3518706b68ece5781fb8813d5a5ad8c8dbaa22ad",
+  "productionHashesUnchanged": true,
+  "testHashesIdenticalForFinalRedAndGreen": true,
+  "command": "node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/local-model-cleanup-lifecycle.test.ts",
+  "perCaseTimeoutMs": 8000,
+  "red": {
+    "naturalExitCode": 1,
+    "tests": 4,
+    "pass": 1,
+    "fail": 3,
+    "cancelled": 0,
+    "skipped": 0,
+    "duration_ms": 3881.148083,
+    "log": "/tmp/mote-local-cleanup-shared-lifecycle-red-http-20261018.log",
+    "logSha256": "d11b043e1b5bb874d18cbb7fc9074a0f355db8ce33317fae14f4fda64f3eed69",
+    "expectedFailures": [
+      "execution close resolves before held local finally",
+      "old-source fixture fallback permits a late callback",
+      "host-local close resolves before held cleanup"
+    ],
+    "alreadyPassingBoundary": "app close can be delayed by unrelated production module shutdown; not used as the decisive old-source rejection"
+  },
+  "green": {
+    "naturalExitCode": 0,
+    "tests": 4,
+    "pass": 4,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "duration_ms": 2709.785417,
+    "log": "/tmp/mote-local-cleanup-shared-lifecycle-green-20261018.log",
+    "logSha256": "93de84ff6f22cbd60b51c73a02a137ff2034c8f8af4d7080692bcca3b3bdffef"
+  },
+  "preliminaryRedAttempts": [
+    {
+      "log": "/tmp/mote-local-cleanup-shared-lifecycle-red-20261018.log",
+      "result": "1 pass / 3 expected failures; fixture then changed from shared vault to independent current profiles"
+    },
+    {
+      "log": "/tmp/mote-local-cleanup-shared-lifecycle-red-final-20261018.log",
+      "result": "1 pass / 3 expected failures; remote fixture then strengthened from generated held Promise to actual held loopback HTTP"
+    }
+  ],
+  "boundaries": {
+    "actualEntry": "production buildApp, accounts and task HTTP routes via Fastify inject; actual generated loopback HTTP for held external request",
+    "modelCalls": 0,
+    "personalDataUsed": false,
+    "physicalDevicesTested": false,
+    "sameVaultConcurrentDeploymentClaim": false,
+    "sleepOrRemovalRetriesAdded": false,
+    "existingTimeoutsRelaxed": false,
+    "productionFilesChangedByThisAgent": false,
+    "fullGatePerformed": false
+  },
+  "cleanup": {
+    "ownedGeneratedFixtureDirectoriesRemaining": [],
+    "isolatedRedSourceRemoved": true,
+    "matchingTestNodeProcesses": [],
+    "bothTestProcessesExitedNaturally": true
+  }
+}

@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {ProviderFailure} from '@mote/shared';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 for(const code of ['provider_timeout','provider_network','provider_unavailable'])test(`HTTP question remains available after another question's unsignalled ${code}`,async t=>{

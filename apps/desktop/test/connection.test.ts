@@ -1,72 +1,41 @@
 import { expect, it } from 'vitest';
-import { ConnectionOnboarding, testConnection, assertConnectionChangeSafe } from '../src/connection';
-import { connectionUri } from '@mote/shared/connection';
+import { ConnectionOnboarding, testConnection, assertConnectionChangeSafe, connectionRequest } from '../src/connection';
 import { defaultConfig, updateConfig } from '../src/config';
 import { readFileSync } from 'node:fs';
 const now = 1789350000000, token = 'synthetic-collector-token-' + 'a'.repeat(32);
-const invitation = { format: 'mote.connection' as const, version: 1 as const, code: 'a'.repeat(43), serverUrl: 'https://central.example', expiresAt: new Date(now + 60000).toISOString() };
-const identity = { credential: { id: 'fixture-credential', scope: 'owner', label: 'Synthetic Mac', deviceId: 'fixture-device' }, node: { version: '0.6.0', profile: 'test', protocol:{min:1,max:1} }, capabilities: { ingest: true, ingressVersion: 2, ownSources: true, archiveRead: true } };
+const invitation = { format: 'mote.connection' as const, version: 2 as const, deploymentId:'generated-deployment',userId:'generated-user',purpose:'device' as const,code: 'a'.repeat(43), serverUrl: 'https://central.example', expiresAt: new Date(now + 60000).toISOString() };
+const identity={account:{deploymentId:'generated-deployment',userId:'generated-user',username:'generated-account',administrator:false,disabled:false,authorizationEpoch:0,createdAt:0,credentialId:'fixture-credential'},credential:{kind:'client',expiresAt:Date.now()+86400000,deviceId:'fixture-device'},protocol:{min:2,max:2},capabilities:{authentication:true,ingest:true,ingressVersion:3,archiveRead:false}};
 function response(value: unknown, status = 200) { return new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } }); }
-it('previews JSON and URI without network or disclosing the invitation code, then requires the exact reviewed origin', async () => {
-  let calls = 0; const value = new ConnectionOnboarding(async () => { calls++; return response({ serverUrl: invitation.serverUrl, token, credentialId: 'fixture-credential', scope: 'owner' }); }, () => now);
-  const preview = value.preview(connectionUri(invitation, now)); expect(preview.serverUrl).toBe(invitation.serverUrl); expect(JSON.stringify(preview)).not.toContain(invitation.code); expect(calls).toBe(0);
-  await expect(value.redeem(preview.id, 'https://other.example', { deviceId: 'fixture-device', deviceName: 'Synthetic' }, 'macos')).rejects.toThrow('确认'); expect(calls).toBe(0);
-  expect(await value.redeem(preview.id, preview.serverUrl, { deviceId: 'fixture-device', deviceName: 'Synthetic' }, 'macos')).toMatchObject({ token, scope: 'owner' }); expect(calls).toBe(1);
-  await expect(value.redeem(preview.id, preview.serverUrl, { deviceId: 'fixture-device', deviceName: 'Synthetic' }, 'macos')).rejects.toThrow('确认');
+it('previews fixed v2 subject without a request or code and confirms only the exact reviewed origin',()=>{
+ const onboarding=new ConnectionOnboarding(undefined,()=>now),preview=onboarding.preview(JSON.stringify(invitation));
+ expect(preview).toMatchObject({serverUrl:invitation.serverUrl,deploymentId:invitation.deploymentId,userId:invitation.userId});
+ expect(JSON.stringify(preview)).not.toContain(invitation.code);
+ expect(()=>onboarding.confirm(preview.id,'https://other.example')).toThrow('确认');
+ expect(onboarding.confirm(preview.id,preview.serverUrl)).toEqual(invitation);
+ onboarding.clear();expect(()=>onboarding.confirm(preview.id,preview.serverUrl)).toThrow('确认');
 });
-it('rejects expired confirmation, oversized input and unsafe invitations before any request', async () => {
-  let time = now, calls = 0; const value = new ConnectionOnboarding(async () => { calls++; return response({}); }, () => time);
-  const preview = value.preview(JSON.stringify(invitation)); time += 60001;
-  await expect(value.redeem(preview.id, preview.serverUrl, { deviceId: 'fixture-device', deviceName: 'Synthetic' }, 'macos')).rejects.toThrow('过期');
-  for (const input of ['x'.repeat(8193), JSON.stringify({ ...invitation, serverUrl: 'http://remote.example' }), JSON.stringify({ ...invitation, ownerToken: token })]) expect(() => value.preview(input)).toThrow(); expect(calls).toBe(0);
+it('retires replaced previews and checks expiry again at confirmation',()=>{
+ let clock=now;const onboarding=new ConnectionOnboarding(undefined,()=>clock),old=onboarding.preview(JSON.stringify(invitation));
+ const latest=onboarding.preview(JSON.stringify({...invitation,code:'b'.repeat(43)}));
+ expect(()=>onboarding.confirm(old.id,old.serverUrl)).toThrow('确认');
+ clock+=60001;expect(()=>onboarding.confirm(latest.id,latest.serverUrl)).toThrow('过期');
 });
-it('uses the latest invitation for repeated pairing and rejects a replaced preview without exchanging it', async () => {
-  const requests: Array<{ url: string; code: string }> = [];
-  const value = new ConnectionOnboarding(async (url, init) => {
-    requests.push({ url: String(url), code: JSON.parse(String(init?.body)).code });
-    return response({ serverUrl: new URL(String(url)).origin, token: token + requests.length, credentialId: 'fixture-' + requests.length, scope: 'owner' });
-  }, () => now);
-  const device = { deviceId: 'fixture-device', deviceName: 'Synthetic' };
-  const first = value.preview(connectionUri(invitation, now));
-  expect((await value.redeem(first.id, first.serverUrl, device, 'macos')).token).toBe(token + '1');
-  const stale = value.preview(JSON.stringify({ ...invitation, code: 'b'.repeat(43) }));
-  const second = value.preview(JSON.stringify({ ...invitation, code: 'c'.repeat(43) }));
-  await expect(value.redeem(stale.id, stale.serverUrl, device, 'macos')).rejects.toThrow('确认');
-  expect((await value.redeem(second.id, second.serverUrl, device, 'macos')).token).toBe(token + '2');
-  const third = value.preview(JSON.stringify({ ...invitation, code: 'd'.repeat(43), serverUrl: 'https://second.example' }));
-  expect((await value.redeem(third.id, third.serverUrl, device, 'macos')).serverUrl).toBe('https://second.example');
-  expect(requests).toEqual([
-    { url: invitation.serverUrl + '/api/connections/redeem', code: invitation.code },
-    { url: invitation.serverUrl + '/api/connections/redeem', code: 'c'.repeat(43) },
-    { url: 'https://second.example/api/connections/redeem', code: 'd'.repeat(43) },
-  ]);
-});
-it('never sends saved credentials during redemption and rejects response origin/scope/token mismatches', async () => {
-  for (const bad of [{ serverUrl: 'https://other.example' }, { scope: 'collector' }, { scope: 'mcp' }, { scope: 'mcp-read' }, { token: 'short' }, { token: 'a'.repeat(32) + '\n' }, { ownerToken: token }]) {
-    const value = new ConnectionOnboarding(async (url, init) => { expect(url).toBe(invitation.serverUrl + '/api/connections/redeem'); expect(init?.redirect).toBe('error'); expect(init?.headers).not.toHaveProperty('Authorization'); expect(JSON.parse(String(init?.body))).toEqual({ code: invitation.code, deviceId: 'fixture-device', deviceName: 'Synthetic', platform: 'macos' }); return response({ serverUrl: invitation.serverUrl, token, credentialId: 'fixture-credential', scope: 'owner', ...bad }); }, () => now);
-    const preview = value.preview(JSON.stringify(invitation)); await expect(value.redeem(preview.id, preview.serverUrl, { deviceId: 'fixture-device', deviceName: 'Synthetic' }, 'macos')).rejects.toThrow();
-  }
-});
-it('returns fixed network/409 errors without provider body or token leakage and never follows redirects', async () => {
-  for (const code of [302, 409, 500]) {
-    let calls = 0; const value = new ConnectionOnboarding(async (_url, init) => { calls++; expect(init?.redirect).toBe('error'); return response({ secret: token }, code); }, () => now);
-    const preview = value.preview(JSON.stringify(invitation)); const failure = value.redeem(preview.id, preview.serverUrl, { deviceId: 'fixture-device', deviceName: 'Synthetic' }, 'macos');
-    await expect(failure).rejects.not.toThrow(token); if (code === 409) await expect(failure).rejects.toThrow('选择此设备'); expect(calls).toBe(1);
-  }
+it.each([302,409,500])('uses fixed errors without leaking a provider body or following redirects: %s',async status=>{
+ await expect(connectionRequest(invitation.serverUrl,'/api/connections/redeem',{method:'POST'},async(_url,init)=>{expect(init?.redirect).toBe('error');return response({secret:token},status);})).rejects.not.toThrow(token);
 });
 it('validates connection scope, device binding and bounded responses', async () => {
   const config = { serverUrl: invitation.serverUrl, token, deviceId: 'fixture-device' };
-  const result = await testConnection(config, async (_url, init) => { expect(init?.headers).toEqual({ Authorization: 'Bearer ' + token, 'Accept-Language': 'zh-CN', 'X-Mote-Protocol-Version': '1' }); expect(init?.redirect).toBe('error'); return response(identity); });
-  expect(result.credential.scope).toBe('owner'); expect(result.capabilities.ingressVersion).toBe(2); expect(JSON.stringify(result)).not.toContain(token);
+  const result = await testConnection(config, async (_url, init) => { expect(init?.headers).toEqual({ Authorization: 'Bearer ' + token, 'Accept-Language': 'zh-CN', 'X-Mote-Protocol-Version': '2' }); expect(init?.redirect).toBe('error'); return response(identity); });
+  expect(result.credential.scope).toBe('client'); expect(result.capabilities.ingressVersion).toBe(3); expect(JSON.stringify(result)).not.toContain(token);
   for (const bad of [{ ...identity, credential: { ...identity.credential, scope: 'collector' } }, { ...identity, credential: { ...identity.credential, scope: 'mcp' } }, { ...identity, credential: { ...identity.credential, deviceId: 'other' } }, { ...identity, capabilities: { ...identity.capabilities, ingressVersion: '2' } }, { ...identity, credential: { ...identity.credential, token } }]) await expect(testConnection(config, async () => response(bad))).rejects.toThrow();
   await expect(testConnection(config, async () => new Response('x'.repeat(16385)))).rejects.toThrow();
 });
 const protocolFixtures = JSON.parse(readFileSync(new URL('../../../protocol/fixtures/compatibility.json', import.meta.url), 'utf8')) as Array<{name:string;protocol?:unknown;expected?:{min:number;max:number};error?:string}>;
 it.each(protocolFixtures)('enforces generated compatibility for independent product versions: $name', async fixture => {
-  const node = { profile:identity.node.profile, version: '9.123.456', ...(Object.hasOwn(fixture, 'protocol') ? { protocol: fixture.protocol } : {}) };
-  const checked = testConnection({ serverUrl: invitation.serverUrl, token, deviceId: 'fixture-device' }, async () => response({ ...identity, node }));
+  const protocol=fixture.protocol;
+  const checked = testConnection({ serverUrl: invitation.serverUrl, token, deviceId: 'fixture-device' }, async () => response({ ...identity,protocol }));
   if (fixture.error) await expect(checked).rejects.toMatchObject({ code: fixture.error === 'incompatible_protocol' ? 'PROTOCOL_INCOMPATIBLE' : 'INVALID_RESPONSE' });
-  else expect((await checked).node.protocol).toEqual(fixture.expected);
+  else expect((await checked).protocol).toEqual(fixture.expected);
 });
 it('blocks changing node or credential for pending screenshots, prepared notes, paused source bodies or in-flight work', () => {
   const empty = { running: false, inFlight: false, queued: 0, preparedNote: false, sourcePending: 0, sourceInFlight: false };
@@ -85,8 +54,8 @@ it('allows explicitly confirmed same-node invitations to resume pending data onl
   for (const state of [{ running: true }, { inFlight: true }, { sourceInFlight: true }]) expect(() => assertConnectionChangeSafe({ ...pending, ...state }, true)).toThrow();
 });
 
-it('accepts registered owner identity and rejects retired collector or MCP credentials even with claimed owner capabilities',async()=>{
+it('accepts a registered personal client identity and rejects owner or MCP response shapes',async()=>{
  const config={serverUrl:invitation.serverUrl,token,deviceId:'fixture-device'};
- expect((await testConnection(config,async()=>response(identity))).capabilities.archiveRead).toBe(true);
+ expect((await testConnection(config,async()=>response(identity))).capabilities.ingressVersion).toBe(3);
  for(const scope of ['collector','mcp'])await expect(testConnection(config,async()=>response({...identity,credential:{...identity.credential,scope},capabilities:{...identity.capabilities,archiveRead:true}}))).rejects.toMatchObject({code:'INVALID_RESPONSE'});
 });

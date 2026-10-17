@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomBytes,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import type {Config} from '../apps/server/src/config.js';
 import {DAILY_EVENT_RECIPE} from '../apps/server/src/daily-event-memory-policy.js';
 import {dailyEventFixtures} from '../apps/server/test/fixtures/daily-events.js';

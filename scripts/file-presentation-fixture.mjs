@@ -2,7 +2,7 @@
 import {readFileSync,writeFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import assert from 'node:assert/strict';
-import {buildApp} from '../apps/server/dist/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.mjs';
 import {FileReviews} from '../apps/server/dist/file-reviews.js';
 import {materialId} from '../apps/server/dist/materials.js';
 

@@ -5,6 +5,9 @@ import type {DatabaseSync} from 'node:sqlite';
 import {privateFile} from './private-storage.js';
 
 const fingerprint=(bytes:Buffer)=>createHash('sha256').update(bytes).digest('hex');
+/** The scoped M03 adapter supplies the same key identity in its fixed private
+ * owner directory. Legacy callers continue to use their existing settings row. */
+export interface ContentKeyIdentity {read():string|undefined;write(value:string):void;clear():void}
 export function replaceContentFile(path:string,bytes:Buffer) {
   const temporary=path+'.'+randomUUID()+'.tmp';
   try {
@@ -19,13 +22,15 @@ export function replaceContentFile(path:string,bytes:Buffer) {
 export class ContentEncryption {
   key?:Buffer;
   enabled:boolean;
-  constructor(private directory:string,private db:DatabaseSync,options:{dataKey?:string;contentEncryptionEnabled?:boolean}) {
+  private readonly identity:ContentKeyIdentity;
+  constructor(private directory:string,db:DatabaseSync|undefined,options:{dataKey?:string;contentEncryptionEnabled?:boolean},identity?:ContentKeyIdentity) {
+    if(!identity&&!db)throw Error('Content encryption requires a managed key identity');
+    this.identity=identity??{read:()=>(db!.prepare('SELECT value FROM settings WHERE key=?').get('content-key-id') as {value:string}|undefined)?.value,write:value=>{db!.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('content-key-id',value);},clear:()=>{db!.prepare('DELETE FROM settings WHERE key=?').run('content-key-id');}};
     const localKey=join(directory,'content-key');
     if(options.dataKey){if(!/^[a-f0-9]{64}$/i.test(options.dataKey))throw Error('MOTE_DATA_KEY must be 64 hexadecimal characters');this.key=Buffer.from(options.dataKey,'hex');}
     else if(existsSync(localKey)){privateFile(localKey);const value=readFileSync(localKey,'utf8').trim();if(!/^[a-f0-9]{64}$/i.test(value))throw Error('Invalid stored content encryption key');this.key=Buffer.from(value,'hex');}
-    const setting=(key:string)=>(db.prepare('SELECT value FROM settings WHERE key=?').get(key) as {value:string}|undefined)?.value;
-    const identity=setting('content-key-id');
-    if(identity&&(!this.key||fingerprint(this.key)!==identity))throw Error('Vault encryption key mismatch. Restore the original MOTE_DATA_KEY or content-key; existing encrypted data is retained.');
+    const keyIdentity=this.identity.read();
+    if(keyIdentity&&(!this.key||fingerprint(this.key)!==keyIdentity))throw Error('Vault encryption key mismatch. Restore the original MOTE_DATA_KEY or content-key; existing encrypted data is retained.');
     this.enabled=options.contentEncryptionEnabled===true;
     if(this.enabled)this.ensureKey();
   }
@@ -34,10 +39,10 @@ export class ContentEncryption {
     // Reuse the managed identity created by the authoritative configuration transaction.
     const localKey=join(this.directory,'content-key');
     if(!this.key&&existsSync(localKey)){privateFile(localKey);const value=readFileSync(localKey,'utf8').trim();if(!/^[a-f0-9]{64}$/i.test(value))throw Error('Invalid stored content encryption key');this.key=Buffer.from(value,'hex');}
-    const identity=(this.db.prepare('SELECT value FROM settings WHERE key=?').get('content-key-id') as {value:string}|undefined)?.value;
+    const identity=this.identity.read();
     if(identity&&(!this.key||fingerprint(this.key)!==identity))throw Error('Vault encryption key mismatch');
     if(!this.key){this.key=randomBytes(32);replaceContentFile(join(this.directory,'content-key'),Buffer.from(this.key.toString('hex')+'\n'));}
-    this.db.prepare('INSERT OR REPLACE INTO settings(key,value) VALUES(?,?)').run('content-key-id',fingerprint(this.key));
+    this.identity.write(fingerprint(this.key));
     return this.key;
   }
   prepareEnabled(enabled:boolean){if(enabled)this.ensureKey();}
@@ -46,7 +51,7 @@ export class ContentEncryption {
     if(this.enabled)throw Error('Disable content encryption before converting stored content');
     // Retain any locally generated key for future opt-in writes, but fully decrypted
     // libraries no longer require an environment key merely to start the service.
-    this.db.prepare('DELETE FROM settings WHERE key=?').run('content-key-id');
+    this.identity.clear();
   }
   seal(bytes:Buffer):Buffer {
     const key=this.ensureKey(),iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);

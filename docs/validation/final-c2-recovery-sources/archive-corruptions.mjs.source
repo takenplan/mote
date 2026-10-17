@@ -1,0 +1,72 @@
+// Final-C runner helper: alter only copies of this run's synthetic stopped archive.
+import assert from 'node:assert/strict';
+import {cpSync, existsSync, readFileSync, realpathSync, rmSync, writeFileSync} from 'node:fs';
+import {join, relative, sep} from 'node:path';
+import {createHash} from 'node:crypto';
+
+const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
+function contained(root, child) {
+  const rel = relative(root, child);
+  assert.ok(rel && rel !== '..' && !rel.startsWith('..' + sep) && !rel.startsWith(sep), 'Fixture path must remain inside owned run');
+}
+
+export async function rejectCorruptSyntheticArchives({root, archive, ownerRoot, hash, restore}) {
+  root = realpathSync(root);
+  archive = realpathSync(archive);
+  contained(root, archive);
+  assert.match(ownerRoot, /^[a-f0-9]{64}$/);
+  assert.match(hash, /^[a-f0-9]{64}$/);
+  const original = JSON.parse(readFileSync(join(archive, 'backup-manifest.json'), 'utf8'));
+  assert.deepEqual(original.native, [], 'Run corruption rejection before allocating native providers');
+  const owner = 'originals/' + ownerRoot;
+  const key = owner + '/content-key', identity = owner + '/content-key-id';
+  const cipher = owner + '/objects/' + hash + '/0.aes';
+  assert.ok(original.checksums[key] && original.checksums[identity] && original.checksums[cipher]);
+  const cases = [
+    ['missing-key', (directory, manifest) => {
+      rmSync(join(directory, key)); delete manifest.checksums[key];
+    }],
+    ['fingerprint-mismatch', (directory, manifest) => {
+      const bytes = Buffer.from('0'.repeat(64));
+      writeFileSync(join(directory, identity), bytes, {mode: 0o600}); manifest.checksums[identity] = sha256(bytes);
+    }],
+    ['replacement-key-with-matching-fingerprint', (directory, manifest) => {
+      const bytes = Buffer.from('5'.repeat(64));
+      const fingerprint = Buffer.from(sha256(Buffer.from(bytes.toString(), 'hex')));
+      writeFileSync(join(directory, key), bytes, {mode: 0o600}); manifest.checksums[key] = sha256(bytes);
+      writeFileSync(join(directory, identity), fingerprint, {mode: 0o600}); manifest.checksums[identity] = sha256(fingerprint);
+    }],
+    ['damaged-authenticated-ciphertext', (directory, manifest) => {
+      const bytes = readFileSync(join(directory, cipher)); assert.ok(bytes.length > 29); bytes[14] ^= 128;
+      writeFileSync(join(directory, cipher), bytes, {mode: 0o600}); manifest.checksums[cipher] = sha256(bytes);
+    }],
+    ['conflicting-plain-and-cipher', (directory, manifest) => {
+      const path = cipher.replace(/\.aes$/, '.plain'), bytes = Buffer.from('HANDWRITTEN_GENERATED_CONFLICTING_PLAINTEXT');
+      assert.equal(existsSync(join(directory, path)), false);
+      writeFileSync(join(directory, path), bytes, {mode: 0o600}); manifest.checksums[path] = sha256(bytes);
+    }],
+  ];
+  const receipts = [];
+  for (const [name, mutate] of cases) {
+    const directory = join(root, 'negative-' + name), target = join(root, 'rejected-' + name);
+    contained(root, directory); contained(root, target);
+    assert.equal(existsSync(directory), false); assert.equal(existsSync(target), false);
+    cpSync(archive, directory, {recursive: true, errorOnExist: true, force: false});
+    try {
+      const manifest = structuredClone(original); mutate(directory, manifest);
+      // Re-sign the fixture's ordinary file checksums deliberately. These
+      // negatives must reach actual key/AES/original-integrity validation.
+      writeFileSync(join(directory, 'backup-manifest.json'), JSON.stringify(manifest), {mode: 0o600});
+      let failure;
+      try { await restore({from: directory, target}); }
+      catch (error) { failure = error; }
+      assert.ok(failure, 'Corrupt synthetic archive was accepted: ' + name);
+      assert.equal(existsSync(target), false, 'Corrupt archive published a target: ' + name);
+      receipts.push({name, rejected: true, targetPublished: false, error: String(failure)});
+    } finally {
+      rmSync(directory, {recursive: true, force: true});
+      // Do not erase a mistakenly published target: preserve it for diagnosis.
+    }
+  }
+  return receipts;
+}

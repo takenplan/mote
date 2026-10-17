@@ -35,7 +35,7 @@ export function WorkspaceSidebar({ layout, page, onPage, connection, verified, p
       <button className="auxiliary-nav" aria-current={page === 'featureGuide' ? 'page' : undefined} onClick={() => onPage('featureGuide')}><Grid2X2 size={16}/>{moteText('全部功能')}</button>
       <button className="settings-nav" aria-current={primaryDestination(page) === 'about' ? 'page' : undefined} onClick={() => onPage('about')}><Settings2 size={16}/>{moteText('设置')}</button>
       <LanguageSelector/>
-      <button className="node-button" onClick={() => connection ? onPage('about') : onConnect()}><span className={`node-state ${verified ? 'online' : ''}`}/><span><strong>{verified ? moteText('已登录 · {0}', profile || moteText('当前节点')) : connection ? moteText('正在验证登录') : moteText('登录 Mote')}</strong><small>{verified ? moteText('管理当前节点') : moteText('使用管理令牌访问资料')}</small></span></button>
+      <button className="node-button" onClick={() => connection ? onPage('about') : onConnect()}><span className={`node-state ${verified ? 'online' : ''}`}/><span><strong>{verified ? moteText('已登录 · {0}', connection?.mode==='web'?connection.username:profile || moteText('当前节点')) : connection ? moteText('正在验证登录') : moteText('登录 Mote')}</strong><small>{verified ? connection?.mode==='web'?moteText('当前账号'):moteText('管理当前节点') : moteText('登录后访问个人资料')}</small></span></button>
     </div>
   </aside>;
 }

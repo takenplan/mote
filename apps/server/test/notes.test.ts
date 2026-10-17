@@ -5,7 +5,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { noteCapture, noteSchema } from '@mote/shared';
-import { buildApp } from '../src/app.js';
+import { buildApp } from './fixtures/legacy-app.js';
 import type { Config } from '../src/config.js';
 
 async function fixture(t: { after(fn: () => Promise<void>): void }) {

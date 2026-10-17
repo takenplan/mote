@@ -62,7 +62,8 @@ export interface ContextReader {
   activity(args: ContextRange): Promise<unknown>;
   mediaActivity?(args: MediaContextRange): Promise<unknown>;
   devices(): Promise<unknown>;
-  readFileEvidence?(args:ContextRange & {id:string;offset:number;length:number}):Promise<{status:string;record?:ContextRecord;reason?:string}>;
+  /** An offset accompanies a full canonical original; legacy excerpts omit it. */
+  readFileEvidence?(args:ContextRange & {id:string;offset:number;length:number}):Promise<{status:string;record?:ContextRecord;offset?:number;reason?:string}>;
   fileChunks?(args:ContextRange & {id:string;offset?:number}):Promise<ContextRecord[]>;
   sourceHistory?(args:ContextRange & {id:string}): Promise<ContextRecord[]>;
   sources?(args:ContextRange & {query?:string}): Promise<unknown>;
@@ -72,6 +73,8 @@ export interface ContextReader {
 }
 
 export interface AgentOptions {
+  /** Host-only private root for grant-owned temporary runtime data. */
+  temporaryRoot?:string;
   /** Trusted benchmark arm only; no profile, HTTP or product setting. */
   contextToolMode?:'all-native'|'catalog';
   /** Host-only evidence authorization before each outbound HTTP model attempt, including SDK turns/repairs. */
@@ -297,6 +300,14 @@ export class AgentConfigurationError extends Error {
   constructor(message = 'Invalid model connection settings.') {
     super(message);
     this.name = 'AgentConfigurationError';
+  }
+}
+
+/** A host request contract failure cannot be repaired by retrying a provider. */
+export class AgentInputError extends ProviderFailure {
+  constructor() {
+    super({category:'permanent',code:'invalid_agent_input',executionStarted:false},'The agent question must contain non-whitespace text.');
+    this.name = 'AgentInputError';
   }
 }
 

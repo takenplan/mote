@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {setTimeout} from 'node:timers/promises';
 import {parseAnswer} from '@mote/agent';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 test('HTTP-imported maximum notes remain readable through native Ask and current correction fences',async t=>{

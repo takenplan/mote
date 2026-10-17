@@ -11,7 +11,7 @@ import {randomBytes,createHash} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import type {QueryInput} from '@mote/agent';
 import type {CaptureRecord,SourceItem,UsageReceipt} from '@mote/shared';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';
 import {usageTotals} from '../apps/server/src/usage.js';
@@ -23,7 +23,7 @@ const model='gpt-6.1-sol',reasoningEffort='high',sourceId='generated-coding-refa
 const token=randomBytes(32).toString('hex');
 const config:Config={dataKey:undefined,dataDir:join(output,'vault'),token,tokenPath:join(output,'token'),host:'127.0.0.1',port:0,maxStorageBytes:100_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model,modelProvider:'codex',modelProtocol:'codex-app-server',modelReasoningEffort:reasoningEffort,agentTimeoutMs:300000,modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',logLevel:'warn',diagnosticsEnabled:true,agentTraceEnabled:false,agentConcurrency:2,llmConcurrency:2,memoryConcurrency:1,codexBin:process.env.MOTE_CODEX_BIN,codexHome:process.env.MOTE_CODEX_HOME};
 const report:Record<string,any>={status:'running',startedAt:new Date(startedAt).toISOString(),purpose:'bounded actual Coding v2 candidate reuse and independent review',model,reasoningEffort,personalDataUsed:false,physicalDevicesTested:false,generatedEvidence:true,http:true,productionBackgroundWorker:true,manualDrain:false,sourceChanges:false,fixtureSettings:{sourceSettleSeconds:0,unrelatedLifecycleDisabled:true},maximumAgentCalls:3,maximumDurationMs,providerInternalRequests:'unobservable',calls:[],head:execFileSync('git',['rev-parse','HEAD'],{cwd:repositoryRoot,encoding:'utf8'}).trim(),gitStatus:execFileSync('git',['status','--short'],{cwd:repositoryRoot,encoding:'utf8'}).trim()};
-const files=['scripts/test-coding-memory-refactor-codex-live.ts','apps/server/src/app.ts','apps/server/src/source-pipelines.ts','apps/server/src/material-memory-work.ts','apps/server/src/conversation-understanding.ts','apps/server/src/memory-pipeline.ts','apps/server/src/memory-review.ts','packages/agent/dist/codex-agent.js','packages/agent/dist/task-context.js'];
+const files=['scripts/test-coding-memory-refactor-codex-live.ts','apps/server/test/fixtures/legacy-app.ts','apps/server/src/source-pipelines.ts','apps/server/src/material-memory-work.ts','apps/server/src/conversation-understanding.ts','apps/server/src/memory-pipeline.ts','apps/server/src/memory-review.ts','packages/agent/dist/codex-agent.js','packages/agent/dist/task-context.js'];
 report.codeHashes=Object.fromEntries(await Promise.all(files.map(async path=>[path,createHash('sha256').update(await readFile(join(repositoryRoot,path))).digest('hex')])));
 let node:Awaited<ReturnType<typeof buildApp>>|undefined,base='',writes=Promise.resolve();
 function save(){const text=JSON.stringify(report,null,2)+'\n';writes=writes.then(()=>writeFile(join(output,'report.json'),text,{mode:0o600}));return writes;}

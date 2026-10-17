@@ -1,5 +1,6 @@
 import type {CodingEvidence} from '@mote/shared';
-import {sha256} from './store.js';
+import {createHash} from 'node:crypto';
+const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
 
 type Project = {provider:string} & Pick<CodingEvidence,'projectKey'|'sessionId'|'projectName'|'projectIdentity'|'cwd'|'repositoryKey'|'branch'>;
 

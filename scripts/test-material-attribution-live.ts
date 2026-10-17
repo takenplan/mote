@@ -7,7 +7,7 @@ import {join,relative,resolve} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
 import {execFileSync} from 'node:child_process';
 import {z} from 'zod';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {safeError} from '../apps/server/src/diagnostics.js';
 import {AgentYieldError} from '@mote/agent';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';

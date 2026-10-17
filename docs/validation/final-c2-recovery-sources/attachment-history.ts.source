@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import {DatabaseSync} from 'node:sqlite';
+import {join} from 'node:path';
+import {jsonHash} from './final-recovery-support.ts';
+type User={token:string;userId:string};
+type Request=(token:string,url:string,method?:string,payload?:unknown)=>Promise<{status:number;json?:any;bytes?:Buffer}>;
+export type AttachmentHistory={userId:string;label:'A'|'B';file:any;parentId:string;childId:string;originalRef:string;bytes:Buffer;joined:string;retiredTicket?:string};
+async function checked(request:Request,user:User,url:string,method='GET',payload?:unknown){const response=await request(user.token,url,method,payload);assert.equal(response.status,200,JSON.stringify({url,status:response.status,error:response.json}));return response.json;}
+async function wait(work:()=>Promise<boolean>,label:string){const deadline=Date.now()+20000;while(!await work()){assert.ok(Date.now()<deadline,label);await new Promise(resolve=>setTimeout(resolve,10));}}
+
+// Seed parent/archived-file linkage through the actual M03 trusted-source API,
+// exactly as a source adapter does. Processing, reads and retirement use HTTP.
+export async function prepareAttachmentHistory({app,request,directory,users}:{app:any;request:Request;directory:string;users:User[]}){
+ const histories:AttachmentHistory[]=[],services:any[]=[],items:any[]=[];
+ const path=(parent:string,file:string)=>'/api/records/'+parent+'/attachments/'+file+'/processing';
+ for(const [index,user] of users.entries()){
+  const label=index===0?'A':'B',page=await checked(request,user,'/api/file-processing');
+  await checked(request,user,'/api/file-processing','PUT',{revision:page.revision,settings:{...page.settings,automatic:false},policy:page.policy});
+  const bytes=Buffer.from('HANDWRITTEN_GENERATED_'+label+'_ATTACHMENT_WORDS'),upload=await checked(request,user,'/api/import-uploads','POST',{id:'91f994b4-98ad-4072-b1d5-c9ee58e754dc',name:'generated-attachment.txt',sizeBytes:bytes.length,mimeType:'text/plain'});
+  await checked(request,user,'/api/import-uploads/'+upload.id+'/parts/0','PUT',bytes);const file=await checked(request,user,'/api/import-uploads/'+upload.id+'/commit','POST',{});
+  const context=await app.authority.authenticate(user.token),service=app.ingress.forUser(context),item={externalId:'same-attachment-parent',revision:'same-revision',observedAt:'2026-01-01T00:00:00Z',title:'Generated attachment parent',text:'HANDWRITTEN_GENERATED_'+label+'_PARENT_CAPTION',kind:'message',layer:'original',document:{contentRole:'authored',recordedAt:'2026-01-01T00:00:00Z',timeBasis:'recorded',attachments:[{id:file.id,name:file.name,mimeType:file.mimeType}]}};
+  const parent=service.receiveSourceItems('same-source','generated-parent',[item]).captures[0];service.attachArchivedFiles(parent.id,[file.id]);
+  const prepared=await checked(request,user,path(parent.id,file.id),'POST',{processingProfileId:'text'}),detail=await checked(request,user,'/api/files/'+prepared.captureId),job=await checked(request,user,'/api/processing','POST',{originalRef:detail.originalRef,operationId:'generated-attachment-'+label+'-first'});
+  await wait(async()=>(await checked(request,user,'/api/tasks/'+job.id)).state==='succeeded','Generated attachment text did not complete');
+  const joined='mat_'+jsonHash(['same-source','same-attachment-parent']);await wait(async()=>{const response=await request(user.token,'/api/materials/'+joined+'/read');return response.status===200&&response.json.text.includes(bytes.toString());},'Generated joined parent/child text did not publish');
+  histories.push({userId:user.userId,label,file,parentId:parent.id,childId:prepared.captureId,originalRef:detail.originalRef,bytes,joined});services.push(service);items.push(item);
+ }
+ assert.equal(histories[0].parentId,histories[1].parentId);assert.notEqual(histories[0].file.id,histories[1].file.id);
+ assert.equal((await request(users[1].token,path(histories[0].parentId,histories[0].file.id),'POST',{processingProfileId:'text'})).status,404);
+ const a=histories[0],actor=users[0],ticket=await checked(request,actor,'/api/ingress/originals/'+a.originalRef.slice(9)+'/tickets','POST',{mode:'download'});a.retiredTicket=ticket.ticket;
+ await checked(request,actor,'/api/captures/'+a.parentId,'DELETE');
+ assert.equal((await request(actor.token,'/api/files/'+a.childId)).status,404);assert.equal((await request(actor.token,'/api/materials/'+a.joined+'/read')).status,404);assert.equal((await request(actor.token,path(a.parentId,a.file.id),'POST',{processingProfileId:'text'})).status,404);
+ const recreated=services[0].receiveSourceItems('same-source','generated-parent-recreated',[items[0]]).captures[0];assert.equal(recreated.id,a.parentId);services[0].attachArchivedFiles(a.parentId,[a.file.id]);assert.equal((await request(actor.token,'/api/files/'+a.childId)).status,404,'Parent recreation alone may not revive the retired child');
+ const fresh=await checked(request,actor,path(a.parentId,a.file.id),'POST',{processingProfileId:'text'});assert.equal(fresh.captureId,a.childId);const file=await checked(request,actor,'/api/files/'+a.childId),job=await checked(request,actor,'/api/processing','POST',{originalRef:file.originalRef,operationId:'generated-attachment-A-recreated'});await wait(async()=>(await checked(request,actor,'/api/tasks/'+job.id)).state==='succeeded','Fresh attachment generation did not complete');
+ await wait(async()=>{const response=await request(actor.token,'/api/materials/'+a.joined+'/read');return response.status===200&&response.json.text.includes(a.bytes.toString());},'Recreated parent/child text did not publish');
+ await assertAttachmentHistory(request,users,histories);
+ const db=new DatabaseSync(join(directory,'mote.sqlite'),{readOnly:true});try{db.exec('PRAGMA busy_timeout=5000');for(const history of histories){await wait(async()=>Number(db.prepare('SELECT count(*) n FROM ig_pins WHERE user_id=? AND hash=?').get(history.userId,history.file.hash)!.n)===0,'Settled attachment retained its physical pin');assert.ok(db.prepare('SELECT 1 FROM ig_attachment_links WHERE user_id=? AND capture_id=? AND parent_capture_id=? AND file_id=?').get(history.userId,history.childId,history.parentId,history.file.id));}}finally{db.close();}
+ return histories;
+}
+
+export async function assertAttachmentHistory(request:Request,users:User[],histories:AttachmentHistory[]){
+ const receipts=[];
+ for(const [index,history] of histories.entries()){
+  const user=users[index],other=users[1-index];assert.equal(user.userId,history.userId);
+  const file=await checked(request,user,'/api/files/'+history.childId);assert.equal(file.processing.indexed,true);
+  const joined=await checked(request,user,'/api/materials/'+history.joined+'/read');assert.ok(joined.text.includes(history.bytes.toString()));assert.ok(joined.text.includes('HANDWRITTEN_GENERATED_'+history.label+'_PARENT_CAPTION'));assert.equal(joined.text.includes('HANDWRITTEN_GENERATED_'+(history.label==='A'?'B':'A')+'_'),false);
+  const bytes=await request(user.token,'/api/archived-files/'+history.file.id+'/content');assert.equal(bytes.status,200);assert.deepEqual(bytes.bytes,history.bytes);assert.equal((await request(other.token,'/api/archived-files/'+history.file.id+'/content')).status,404);
+  if(history.retiredTicket)assert.equal((await request(user.token,'/api/ingress/originals/'+history.originalRef.slice(9)+'/content?ticket='+encodeURIComponent(history.retiredTicket))).status,404);
+  receipts.push({owner:history.label,parentChildBound:true,joinedTextExact:true,archiveBytesExact:true,foreignDenied:true});
+ }
+ return receipts;
+}

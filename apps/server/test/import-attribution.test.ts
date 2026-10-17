@@ -15,7 +15,7 @@ import {MaterialStore,materialId,type MaterialDraft} from '../src/materials.js';
 import {ProcessingRuntime} from '../src/processing-runtime.js';
 import {memoryEvidenceFingerprint} from '../src/memory.js';
 import {ContentStorageService} from '../src/content-storage.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import type {MemoryWorkMember} from '../src/memory-work-contract.js';
 import {generatedMemoryOutput} from './fixtures/memory-planning.js';

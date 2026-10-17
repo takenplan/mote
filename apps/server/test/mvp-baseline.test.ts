@@ -7,7 +7,7 @@ import {join} from 'node:path';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
-import {buildApp,type QueryAgent} from '../src/app.js';
+import {buildApp,type QueryAgent} from './fixtures/legacy-app.js';
 import {Store} from '../src/store.js';
 import type {Config} from '../src/config.js';
 import {restoreProfile} from '../../../scripts/profile-lib.mjs';

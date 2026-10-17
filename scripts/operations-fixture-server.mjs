@@ -3,7 +3,7 @@ import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {randomBytes} from 'node:crypto';
-import {buildApp} from '../apps/server/dist/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.mjs';
 const path=process.argv[2];if(!path)throw Error('Private connection output path required');
 const directory=await mkdtemp(join(tmpdir(),'mote-operation-fixture-')),token=randomBytes(32).toString('hex');
 const {app,executor,store,sources,materials,materialMemoryWork}=await buildApp({dataDir:directory,token,tokenPath:'unused',profile:'test',host:'127.0.0.1',port:0,maxStorageBytes:64*1024*1024,maxExportBytes:16*1024*1024,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:'',connectors:{mcpEnabled:false}},{agent:{configured:false,query:async()=>{throw Error('Fixture does not run models');},close:async()=>{}}});

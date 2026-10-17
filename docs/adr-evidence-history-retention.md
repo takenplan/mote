@@ -1,7 +1,9 @@
 # Evidence revisions and retained conversation history
 
-Date: 2026-10-17. Status: owner-directed implementation; independently reviewed,
-awaiting merge and deployment.
+Date: 2026-10-17. Status: owner-directed implementation; independently reviewed
+and merged into main in [PR 160](https://github.com/utopiafar/mote/pull/160).
+The [multi-user integration decision](adr-multiuser-main-integration.md) records
+the scoped production implementation and its separate validation.
 Applies to main. This does not authorize deployment or a paid historical replay.
 
 ## Decision and scope

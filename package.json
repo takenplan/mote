@@ -30,12 +30,13 @@
     "import:files": "node --import tsx scripts/import-files.ts",
     "reset:mvp-vault": "node scripts/reset-mvp-vault.mjs",
     "backup": "node --import tsx scripts/backup.ts",
+    "restore:instance": "node scripts/restore-instance.mjs",
     "privacy": "node --import tsx scripts/privacy-gateway.ts",
     "test:privacy": "node --import tsx scripts/test-privacy.ts",
     "mote": "node scripts/mote.mjs",
     "up": "node scripts/mote.mjs run-all --profile dev",
     "dev:workspace": "concurrently -k -n server,web \"npm run dev -w @mote/server\" \"npm run dev -w @mote/web\"",
-    "test:profiles": "node scripts/test-profiles.mjs",
+    "test:profiles": "node --test scripts/validation/profile-scoped-startup.test.mjs",
     "test:profiles:container": "node scripts/test-profiles-container.mjs",
     "test:tunnel": "node scripts/test-tunnel.mjs",
     "test:tunnel:container": "node scripts/test-tunnel-container.mjs",
@@ -44,7 +45,8 @@
     "release:verify": "node scripts/release/verify-version.mjs",
     "build:central": "npm run build -w @mote/shared && npm run build -w @mote/agent && npm run build -w @mote/server && npm run build -w @mote/web",
     "check:central": "npm run build:central && npm run typecheck -w @mote/shared -w @mote/agent -w @mote/server -w @mote/web && npm run test -w @mote/shared -w @mote/agent -w @mote/server -w @mote/web && node scripts/test-central-runner.mjs && node --test scripts/release/*.test.mjs",
-    "check:desktop": "npm run build -w @mote/shared -w @mote/diagnostics && npm run typecheck -w @mote/shared -w @mote/diagnostics -w @mote/desktop && npm run test -w @mote/shared -w @mote/diagnostics -w @mote/desktop && node --test scripts/release/*.test.mjs"
+    "check:desktop": "npm run build -w @mote/shared -w @mote/diagnostics && npm run typecheck -w @mote/shared -w @mote/diagnostics -w @mote/desktop && npm run test -w @mote/shared -w @mote/diagnostics -w @mote/desktop && node --test scripts/release/*.test.mjs",
+    "auth:initialize-admin": "npm run auth:initialize-admin -w @mote/server"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

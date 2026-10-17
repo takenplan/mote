@@ -12,7 +12,7 @@ import {createHash,randomBytes} from 'node:crypto';
 import {setTimeout as delay} from 'node:timers/promises';
 import {execFileSync} from 'node:child_process';
 import {z} from 'zod';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import type {Config} from '../apps/server/src/config.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';
 import {materialId} from '../apps/server/src/materials.js';

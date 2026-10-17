@@ -1,4 +1,5 @@
-import {sha256} from './store.js';
+import {createHash} from 'node:crypto';
+const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
 
 export const uiPageCaptureSource=(deviceId:string)=>'ui-page:'+sha256(JSON.stringify(deviceId));
 /** Source identity is a transport contract, never a content classifier. */

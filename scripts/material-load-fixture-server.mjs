@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {join,resolve,relative} from 'node:path';
 import fixtureHelpers from './material-load-fixture.cjs';
 import {randomUUID} from 'node:crypto';
-import {buildApp} from '../apps/server/dist/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.mjs';
 import {Conversations} from '../apps/server/dist/conversations.js';
 const {config,fixturePath,ready,recoveryOnly}=JSON.parse(readFileSync(process.argv[2],'utf8'));
 const fixture=JSON.parse(readFileSync(fixturePath,'utf8')),interactive=fixture.profile==='interactive-400',calls=[],ticks=[];

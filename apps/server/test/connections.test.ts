@@ -8,7 +8,7 @@ import {gzipSync} from 'node:zlib';
 import {Client} from '@modelcontextprotocol/sdk/client/index.js';
 import {StreamableHTTPClientTransport} from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import {parseConnectionInvitation,MOTE_PROTOCOL_RANGE} from '@mote/shared';
-import {buildApp,type QueryAgent} from '../src/app.js';
+import {buildApp,type QueryAgent} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import {Connections,ConnectionError,type ConnectionFile} from '../src/connections.js';
 import {Store} from '../src/store.js';

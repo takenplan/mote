@@ -1,6 +1,6 @@
 import {memoryExtractionStrategySchema,memoryReviewStrategySchema,memoryRecipeSchema,memoryStrategyPin,type MemoryExtractionStrategy,type MemoryReviewStrategy,type MemoryStrategyRef,type MemoryRecipeBinding} from './memory-strategy-contract.js';
 import {freezeRecipe,recipeFingerprint} from './recipe-contract.js';
-import {MEMORY_EXTRACTION_PROMPT,MEMORY_SKILL_VERSION} from './memory.js';
+import {MEMORY_EXTRACTION_PROMPT,MEMORY_SKILL_VERSION} from './memory-contract.js';
 import {personalMemoryReviewStrategyV2} from './personal-memory-review-policy.js';
 import {PERSONAL_MEMORY_RECIPE,PERSONAL_MEMORY_RECIPE_V3,boundedPersonalExtractionStrategy,boundedPersonalReviewStrategy,contextReadingPersonalExtractionStrategy,contextReadingPersonalReviewStrategy} from './bounded-personal-memory-policy.js';
 import {codingMemoryReviewStrategyV2} from './coding-memory-review-policy.js';

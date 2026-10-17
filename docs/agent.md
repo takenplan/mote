@@ -1,5 +1,7 @@
 # Agent 配置与权限
 
+内部 Agent 请求仅校验问题非空，不再限制为 20,000 字符；Coding 的完整覆盖合约只通过任务上下文传递一次。HTTP 接口、模型真实容量与传输边界各自保持原契约，见[共用业务流程 ADR](adr-shared-business-flows.md)。多用户生产宿主尚未恢复的理解与检索责任见[路径审计](audits/business-flow-parity-2026-10-18.md)，不能由旧运行时支持推定为新入口已支持。
+
 Mote 的查询和洞察可由 DeepSeek Harness 或本机 Codex App Server 执行，二者共用任务上下文与只读证据授权；Harness 的通用模型协议通过 pi-ai 适配层接入。程序提供读取资料的能力，模型决定读什么、如何继续查询、如何解释证据。自然语言问题原样进入 Agent，不按“待办”“工作”“娱乐”等关键词分发。通用导入使用另一个具有原生文件与 shell 工具的 Harness 会话；完整流程与边界见[中央导入、记忆与洞察](central-memory.md)。
 
 ## 配置模型

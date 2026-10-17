@@ -14,7 +14,7 @@ import java.time.Instant
 fun Context.fileArchives(): FileArchiveQueue {
 
     LocalDataFormat.requireCurrent(this)
-    return FileArchiveQueue(File(noBackupFilesDir, "file-archives"), localContentCipher())
+    return FileArchiveQueue(File(accountDirectory(), "file-archives"), localContentCipher())
 }
 fun LocalSource.binaryFiles() = SourceAdapters.default.forKind(kind).queueKind == SourceQueueKind.FILE_ARCHIVE
 
@@ -96,7 +96,7 @@ class FileSources(private val context: Context, private val cancel: Cancellation
  * manifest immediately cannot resolve a conflict, deletion, or protocol gap. */
 internal class FileIngressRejection(val httpStatus: Int) : IllegalStateException("File ingress rejected: HTTP $httpStatus")
 
-internal class FileTransportFailure(val httpStatus: Int, message: String) : IllegalStateException(message)
+internal class FileTransportFailure(val httpStatus: Int, message: String, val code: String = "") : IllegalStateException(message)
 
 object FileUpload {
     internal fun requireAccepted(status: Int) {
@@ -164,36 +164,35 @@ object FileUpload {
                 observedRow?.let { queue.clearFailure(source.id, it) }
                 return request(context, stage, config, path, method, body, binary)
             }
-            queue.configure(source); val row = queue.next(source.id) ?: FileSources(context).prepare(source, onSelected = { observe(it, FileSyncPhase.PREPARING) }) { external ->
-                check(stillSelected())
-                val q = "sourceId=" + java.net.URLEncoder.encode(source.id, "UTF-8") + "&externalId=" + java.net.URLEncoder.encode(external, "UTF-8")
-                val head = send(EventStage.FILE_UPLOAD, "/api/file-sync/v1/head?$q", "GET")
-                requireCurrentHead(head)
-                check(stillSelected())
-                head.optString("revision").takeIf { head.has("revision") && !head.isNull("revision") && it.isNotEmpty() }
-            } ?: return queue.pendingCount(source.id) == 0
+            val client = context.ingress3(config, stillSelected)
+            queue.configure(source)
+            val row = queue.next(source.id) ?: FileSources(context).prepare(source, onSelected = { observe(it, FileSyncPhase.PREPARING) }, anchor = { client.head(source.id, it) }) ?: return queue.pendingCount(source.id) == 0
             selectedRow = row
             observe(row, FileSyncPhase.UPLOADING)
             fun checkSelection() { check(stillSelected()); queue.assertCurrent(source, row); SyncSchedule.requireConditions(context, config) }
             checkSelection()
-            val pending = row.getJSONObject("pending"); val manifest = pending.getJSONObject("manifest"); val item = manifest.getJSONObject("item")
-            if (!manifest.has("sha256")) {
-                val ack = send(EventStage.FILE_UPLOAD, "/api/file-sync/v1/revisions", "PUT", manifest.toString().toByteArray(Charsets.UTF_8)); checkSelection(); queue.acknowledge(source.id, row, ack); return queue.pendingCount(source.id) == 0
+            val manifest = row.getJSONObject("pending").getJSONObject("manifest")
+            client.register(source.registration(Settings(context).deviceId))
+            val pending = row.getJSONObject("pending")
+            val recoveryId = if (pending.has("recoveryCaptureId")) pending.getString("recoveryId") else null
+            val (_, begun) = if (recoveryId == null) client.begin(source.id, manifest) else client.beginRecovery(source.id, pending.getString("recoveryCaptureId"), manifest, recoveryId)
+            val uploadId = begun.getString("id")
+            begun.optJSONObject("receipt")?.let { ack ->
+                checkSelection(); queue.acknowledge(source.id, row, ack, client.binding); return queue.pendingCount(source.id) == 0
             }
-            val recoveryCaptureId = row.getJSONObject("pending").optString("recoveryCaptureId")
-            val begun = send(EventStage.FILE_UPLOAD, if (recoveryCaptureId.isNotBlank()) "/api/file-sync/v1/recovery/$recoveryCaptureId/uploads" else "/api/file-sync/v1/uploads", "POST", (if (recoveryCaptureId.isNotBlank()) "{}" else manifest.toString()).toByteArray(Charsets.UTF_8))
-            val uploadId = begun.getString("uploadId"); check(uploadId.matches(Regex("[a-fA-F0-9-]{36}"))); check(begun.getInt("partBytes") == FileArchiveQueue.PART_BYTES)
-            begun.optJSONObject("ack")?.let { ack -> checkSelection(); queue.acknowledge(source.id, row, ack); return queue.pendingCount(source.id) == 0 }
-            val parts = begun.getJSONArray("parts"); val received = (0 until parts.length()).map { parts.getJSONObject(it).getInt("part") }.toSet()
-            val total = ((manifest.getLong("sizeBytes") + FileArchiveQueue.PART_BYTES - 1) / FileArchiveQueue.PART_BYTES).toInt()
-            for (part in 0 until total) if (part !in received) {
-                if (slice.exhausted) return false
-                checkSelection(); val bytes = queue.part(source.id, part)
-                val ack = send(EventStage.FILE_PART, "/api/file-sync/v1/uploads/$uploadId/parts/$part", "PUT", bytes, true)
-                val hash = MessageDigestCompat.hash(bytes)
-                check(ack.getInt("part") == part && ack.getInt("bytes") == bytes.size && ack.getString("hash") == hash) { MoteI18n.text("文件块确认不匹配") }
+            val parts = begun.getJSONArray("parts")
+            val received = (0 until parts.length()).associate { parts.getJSONObject(it).getInt("part") to parts.getJSONObject(it) }
+            val total = if (!manifest.has("sha256")) 0 else ((manifest.getLong("sizeBytes") + FileArchiveQueue.PART_BYTES - 1) / FileArchiveQueue.PART_BYTES).toInt()
+            for (part in 0 until total) {
+                val bytes = queue.part(source.id, part)
+                val prior = received[part]
+                if (prior != null) { check(prior.getString("checksum") == Ingress3Client.hash(bytes) && prior.getInt("bytes") == bytes.size); continue }
+                if (!slice.admit(bytes.size)) return false
+                checkSelection(); client.part(uploadId, part, bytes)
             }
-            checkSelection(); val ack = send(EventStage.FILE_COMMIT, "/api/file-sync/v1/uploads/$uploadId/commit", "POST", "{}".toByteArray()); checkSelection(); queue.acknowledge(source.id, row, ack)
+            checkSelection()
+            val ack = client.commit(source.id, uploadId, manifest, recoveryId)
+            checkSelection(); queue.acknowledge(source.id, row, ack, client.binding)
             return queue.pendingCount(source.id) == 0
         } catch (error: Exception) {
             if (error !is SliceYield && error !is SyncConditionsUnavailable && stillSelected()) observedRow?.let {

@@ -1,8 +1,9 @@
+import type {StatementSync} from 'node:sqlite';
 import {ProviderFailure} from '@mote/shared';
 import {installOperationProjection,linkOperation,type OperationMembership} from './operation-projection.js';
 import {randomUUID,createHash} from 'node:crypto';
 import {setImmediate as yieldTurn} from 'node:timers/promises';
-import {StoreError,type Store} from './store.js';
+import {StoreError,type ExecutionStorage} from './execution-storage.js';
 import {withExecutionCancellation} from './execution-cancellation.js';
 import {failureContext,retainFailureContext,safeFailureContext,type FailureContext} from './execution-failures.js';
 import {EXECUTION_POLICIES,type ExecutionPolicy} from './execution-policy.js';
@@ -12,7 +13,11 @@ export type ExecutionLane='background'|'interactive';
 /** Trusted host configuration. Lane is derived from existing product identity,
  * never from model-authored input or a new persistent authority field. */
 export type ExecutionPoolAdmission={concurrency:Record<ExecutionLane,()=>number>;lane:(step:ExecutionStep)=>ExecutionLane};
-export type ExecutionStep={id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;state:ExecutionState;attempts:number;availableAt:number;error?:string};
+/** Issued and checked by the host task adapter; never accepted from task input.
+ * A session credential is deliberately absent: logout does not revoke work. */
+export type ExecutionOwnership=Readonly<{userId:string;authorizationEpoch:number;grantId?:string}>;
+export type ExecutionStep={id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;state:ExecutionState;attempts:number;availableAt:number;error?:string;ownership?:ExecutionOwnership};
+export type ExecutionEnqueueOptions=OperationMembership&{ownership?:ExecutionOwnership;id?:string;dependencies?:string[];initial?:{state:ExecutionState;attempts:number;availableAt:number;error?:string}};
 export type ExecutionFailureReceipt=FailureContext&{stepId:string;operationId:string;kind:string;state:ExecutionState;category:ExecutionFailure['category'];code:string;attempt:number;at:string;executionStarted?:false;admissionWaiting?:true;availableAt?:number};
 /** A running handler can publish incremental progress only through its current lease. */
 export interface ExecutionGrant {
@@ -20,7 +25,7 @@ export interface ExecutionGrant {
  commit<T>(write:()=>T):T;
 }
 export class ExecutionFailure extends Error {
- constructor(readonly category:'transient'|'permanent'|'blocked'|'stale'|'waiting',readonly code:string,readonly retryAfterMs?:number){super(code);}
+ constructor(readonly category:'transient'|'permanent'|'blocked'|'stale'|'waiting',readonly code:string,readonly retryAfterMs?:number,readonly facts?:{executionStarted:false}){super(code);}
 }
 export interface ExecutionHandler {
  kind:string;pool:string;concurrency:()=>number;
@@ -42,15 +47,27 @@ export interface ExecutionHandler {
  /** Trusted identities/stage only; the engine never persists arbitrary errors. */
  failureContext?:(step:ExecutionStep)=>FailureContext;
 }
-type ProgramStep<T>=OperationMembership&{id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;resourceKeys?:string[];admit?:()=>ExecutionFailure|undefined;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;initialAttempts?:number;policy?:ExecutionPolicy;timeoutMs?:number|null;maxAttempts?:number;maxRecoveryWindowMs?:number|null;classify?:(error:unknown)=>ExecutionFailure};
-type Row={id:string;operation_id:string;kind:string;pool:string;input:string;state:ExecutionState;attempts:number;available_at:number;error:string|null;fence:string|null;lease_until:number;recovery_deadline?:number};
-const view=(row:Row):ExecutionStep=>({id:row.id,operationId:row.operation_id,kind:row.kind,pool:row.pool,input:JSON.parse(row.input),state:row.state,attempts:row.attempts,availableAt:row.available_at,...(row.error?{error:row.error}:{})});
+type ProgramStep<T>=OperationMembership&{ownership?:ExecutionOwnership;id:string;operationId:string;kind:string;pool:string;input:Record<string,unknown>;signal:AbortSignal;validate:()=>boolean;resourceKeys?:string[];admit?:()=>ExecutionFailure|undefined;execute:(signal:AbortSignal)=>Promise<unknown>;commit:(result:unknown)=>void;read:()=>T|undefined;project:(step:ExecutionStep)=>void;cached?:boolean;initialAttempts?:number;policy?:ExecutionPolicy;timeoutMs?:number|null;maxAttempts?:number;maxRecoveryWindowMs?:number|null;classify?:(error:unknown)=>ExecutionFailure};
+type Row={id:string;operation_id:string;kind:string;pool:string;input:string;state:ExecutionState;attempts:number;available_at:number;error:string|null;fence:string|null;lease_until:number;recovery_deadline?:number;user_id:string;user_position:number;authorization_epoch:number|null;grant_id:string|null};
+const view=(row:Row):ExecutionStep=>({id:row.id,operationId:row.operation_id,kind:row.kind,pool:row.pool,input:JSON.parse(row.input),state:row.state,attempts:row.attempts,availableAt:row.available_at,...(row.error?{error:row.error}:{}),...(row.user_id?{ownership:Object.freeze({userId:row.user_id,authorizationEpoch:row.authorization_epoch!,...(row.grant_id?{grantId:row.grant_id}:{})})}:{})});
 const canonical=(value:unknown):unknown=>Array.isArray(value)?value.map(canonical):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).sort(([a],[b])=>a.localeCompare(b)).map(([key,v])=>[key,canonical(v)])):value;
 const hash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const interrupted=new Error('Execution interrupted');
 
 /** The host owns admission, retry, cancellation, leases and commit fences. */
 export class ExecutionEngine {
+ // Only fixed synchronous host queries use these private compiled statements.
+ // Rows, bindings and authority decisions are read again on every call.
+ private readonly validationStatements=new Map<string,StatementSync>();
+ private validationStatement(sql:string){
+  const prior=this.validationStatements.get(sql);
+  if(prior){try{void prior.sourceSQL;return prior;}catch(error){
+   if((error as NodeJS.ErrnoException).code!=='ERR_INVALID_STATE'||!this.store.db.isOpen)throw error;
+   this.validationStatements.delete(sql);
+  }}
+  const statement=this.store.db.prepare(sql);this.validationStatements.set(sql,statement);return statement;
+ }
+
  private programs=new Map<string,Promise<unknown>>();
  private handlers=new Map<string,ExecutionHandler>();
  private admissions=new Map<string,ExecutionPoolAdmission>();
@@ -60,8 +77,14 @@ export class ExecutionEngine {
  private pumpAgain=false;
  private scheduled=false;
  private failureReceiptWriteFailures=0;
- constructor(readonly store:Store,private now=Date.now){
-  store.db.exec(`CREATE TABLE IF NOT EXISTS execution_steps(id TEXT PRIMARY KEY,operation_id TEXT NOT NULL,kind TEXT NOT NULL,pool TEXT NOT NULL,input TEXT NOT NULL,state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,available_at INTEGER NOT NULL DEFAULT 0,lease_until INTEGER NOT NULL DEFAULT 0,fence TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,recovery_deadline INTEGER NOT NULL DEFAULT 0);
+ constructor(readonly store:ExecutionStorage,private now=Date.now){
+  // The epoch-5 host admits a vault before constructing the engine. Do not
+  // silently upgrade an older execution format or backfill private ownership.
+  for(const [table,required] of [['execution_steps',['user_id','user_position','authorization_epoch','grant_id']],['operation_progress',['user_id','user_position']],['operation_changes',['user_id','user_seq']]] as const){
+   const columns=store.db.prepare(`PRAGMA table_info(${table})`).all().map(row=>String(row.name));
+   if(columns.length&&required.some(column=>!columns.includes(column)))throw new StoreError('Unsupported execution schema',409);
+  }
+  store.db.exec(`CREATE TABLE IF NOT EXISTS execution_steps(id TEXT PRIMARY KEY,operation_id TEXT NOT NULL,kind TEXT NOT NULL,pool TEXT NOT NULL,input TEXT NOT NULL,state TEXT NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,available_at INTEGER NOT NULL DEFAULT 0,lease_until INTEGER NOT NULL DEFAULT 0,fence TEXT,error TEXT,created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL,recovery_deadline INTEGER NOT NULL DEFAULT 0,user_id TEXT NOT NULL DEFAULT '',user_position INTEGER NOT NULL DEFAULT 0,authorization_epoch INTEGER,grant_id TEXT);
    CREATE TABLE IF NOT EXISTS execution_resources(step_id TEXT NOT NULL REFERENCES execution_steps(id) ON DELETE CASCADE,resource_key TEXT NOT NULL,PRIMARY KEY(step_id,resource_key));
    CREATE INDEX IF NOT EXISTS execution_resource_owners ON execution_resources(resource_key,step_id);
    CREATE TABLE IF NOT EXISTS execution_dependencies(step_id TEXT NOT NULL REFERENCES execution_steps(id) ON DELETE CASCADE,dependency_id TEXT NOT NULL REFERENCES execution_steps(id),PRIMARY KEY(step_id,dependency_id));
@@ -72,7 +95,10 @@ export class ExecutionEngine {
    CREATE INDEX IF NOT EXISTS execution_ready ON execution_steps(pool,state,available_at,created_at);
    CREATE INDEX IF NOT EXISTS execution_operations ON execution_steps(operation_id,created_at);
    CREATE TABLE IF NOT EXISTS execution_sequence(pool TEXT PRIMARY KEY,next INTEGER NOT NULL);
-   CREATE TABLE IF NOT EXISTS execution_fairness(pool TEXT NOT NULL,operation_id TEXT NOT NULL,last_started INTEGER NOT NULL,PRIMARY KEY(pool,operation_id));`);
+   CREATE TABLE IF NOT EXISTS execution_fairness(pool TEXT NOT NULL,operation_id TEXT NOT NULL,last_started INTEGER NOT NULL,PRIMARY KEY(pool,operation_id));
+   CREATE TABLE IF NOT EXISTS execution_user_fairness(pool TEXT NOT NULL,user_id TEXT NOT NULL,last_started INTEGER NOT NULL,PRIMARY KEY(pool,user_id));
+   CREATE TABLE IF NOT EXISTS execution_user_sequence(user_id TEXT PRIMARY KEY,next INTEGER NOT NULL);`);
+  store.db.exec('CREATE INDEX IF NOT EXISTS execution_user_steps ON execution_steps(user_id,state,created_at); CREATE INDEX IF NOT EXISTS execution_user_position ON execution_steps(user_id,user_position)');
   store.db.exec('CREATE TABLE IF NOT EXISTS execution_failures(step_id TEXT PRIMARY KEY REFERENCES execution_steps(id) ON DELETE CASCADE,json TEXT NOT NULL)');
   store.db.exec('CREATE INDEX IF NOT EXISTS execution_recovery_deadline ON execution_steps(state,recovery_deadline)');
   installOperationProjection(store);
@@ -95,39 +121,43 @@ export class ExecutionEngine {
   return Object.fromEntries(lanes.map(lane=>[lane,{limit:this.limit(pool,lane),running:this.running(pool,lane),waiting:waiting.filter(row=>this.lane(view(row))===lane).length}]));
  }
  register(handler:ExecutionHandler){if(this.handlers.has(handler.kind))throw Error('Duplicate execution handler');this.handlers.set(handler.kind,handler);return async()=>{if(this.handlers.get(handler.kind)!==handler)return;this.handlers.delete(handler.kind);const running=[...this.active.values()].filter(value=>value.kind===handler.kind);for(const value of running)value.controller.abort(interrupted);await Promise.allSettled(running.map(value=>value.task));};}
- enqueue(operationId:string,kind:string,input:Record<string,unknown>,options:OperationMembership&{id?:string;dependencies?:string[];initial?:{state:ExecutionState;attempts:number;availableAt:number;error?:string}}={}){
+ enqueue(operationId:string,kind:string,input:Record<string,unknown>,options:ExecutionEnqueueOptions={}){
   if(this.stopping)throw new StoreError('Execution engine is closed',503);
   const handler=this.handlers.get(kind);if(!handler)throw new StoreError('Execution handler unavailable',409);
   input=canonical(input) as Record<string,unknown>;
   const json=JSON.stringify(input);if(json.length>32768)throw new StoreError('Execution input exceeds metadata limit',413);
-  const id=options.id??hash([operationId,kind,input]),now=this.now(),db=this.store.db;
+  const ownership=options.ownership;
+  if(ownership&&(!ownership.userId||!Number.isSafeInteger(ownership.authorizationEpoch)||ownership.authorizationEpoch<0||ownership.grantId!==undefined&&!ownership.grantId))throw new StoreError('Invalid execution ownership',400);
+  const id=options.id??hash([ownership?.userId??'',operationId,kind,input]),now=this.now(),db=this.store.db;
   const own=!db.isTransaction;if(own)db.exec('BEGIN IMMEDIATE');
   try{
    const existing=db.prepare('SELECT 1 FROM execution_steps WHERE id=?').get(id);
-   if(!existing){this.store.reserveMetadata(Buffer.byteLength(json)+1024);db.prepare("INSERT INTO execution_steps(id,operation_id,kind,pool,input,state,created_at,updated_at) VALUES(?,?,?,?,?,'waiting',?,?)").run(id,operationId,kind,handler.pool,json,now,now);}
-   const step=this.get(id)!;if(step.kind!==kind||JSON.stringify(step.input)!==json)throw new StoreError('Execution identity conflict',409);
+   if(!existing){this.store.reserveMetadata(Buffer.byteLength(json)+1024);const position=Number(db.prepare('INSERT INTO execution_user_sequence(user_id,next) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET next=next+1 RETURNING next').get(ownership?.userId??'')!.next);db.prepare("INSERT INTO execution_steps(id,operation_id,kind,pool,input,state,created_at,updated_at,user_id,user_position,authorization_epoch,grant_id) VALUES(?,?,?,?,?,'waiting',?,?,?,?,?,?)").run(id,operationId,kind,handler.pool,json,now,now,ownership?.userId??'',position,ownership?.authorizationEpoch??null,ownership?.grantId??null);}
+   const step=this.get(id)!;if(step.kind!==kind||JSON.stringify(step.input)!==json||step.ownership?.userId!==ownership?.userId||step.ownership?.authorizationEpoch!==ownership?.authorizationEpoch||step.ownership?.grantId!==ownership?.grantId)throw new StoreError('Execution identity conflict',409);
    if(options.initial&&!existing){const seed=options.initial;db.prepare('UPDATE execution_steps SET state=?,attempts=?,available_at=?,error=? WHERE id=?').run(seed.state==='running'?'waiting':seed.state,seed.attempts,seed.availableAt,seed.state==='running'?'interrupted':seed.error??null,id);}
    for(const key of new Set(handler.resourceKeys?.(step)??[]))if(!db.prepare('SELECT 1 FROM execution_resources WHERE step_id=? AND resource_key=?').get(id,key)){this.store.reserveMetadata(Buffer.byteLength(key)+64);db.prepare('INSERT INTO execution_resources VALUES(?,?)').run(id,key);}
-   for(const dep of options.dependencies??[])db.prepare('INSERT OR IGNORE INTO execution_dependencies VALUES(?,?)').run(id,dep);
+   for(const dep of options.dependencies??[]){const parent=this.get(dep);if(!parent||parent.ownership?.userId!==step.ownership?.userId)throw new StoreError('Execution dependency unavailable',409);if(dep===id||db.prepare('WITH RECURSIVE ancestors(id) AS (SELECT dependency_id FROM execution_dependencies WHERE step_id=? UNION SELECT d.dependency_id FROM execution_dependencies d JOIN ancestors a ON a.id=d.step_id) SELECT 1 FROM ancestors WHERE id=?').get(dep,id))throw new StoreError('Execution dependency cycle',409);db.prepare('INSERT OR IGNORE INTO execution_dependencies VALUES(?,?)').run(id,dep);}
    linkOperation(this.store,operationId,id,options);handler.project?.(this.get(id)!);if(own)db.exec('COMMIT');return id;
   }catch(error){if(own)db.exec('ROLLBACK');throw error;}
  }
- get(id:string){const row=this.store.db.prepare('SELECT * FROM execution_steps WHERE id=?').get(id) as Row|undefined;return row?view(row):undefined;}
+ get(id:string){const row=this.validationStatement('SELECT * FROM execution_steps WHERE id=?').get(id) as Row|undefined;return row?view(row):undefined;}
  failure(id:string):ExecutionFailureReceipt|undefined {const row=this.store.db.prepare('SELECT json FROM execution_failures WHERE step_id=?').get(id);return row?JSON.parse(String(row.json)):undefined;}
  failureDiagnostics(){return {writeFailures:this.failureReceiptWriteFailures};}
  private retainFailure(step:ExecutionStep,state:ExecutionState,failure:ExecutionFailure,error?:unknown){
   // One bounded receipt per retained step follows that step's existing deletion
   // lifecycle. A full disk must not turn failure reporting into another run.
   let hostContext:FailureContext={};try{hostContext=this.handlers.get(step.kind)?.failureContext?.(step)??{};}catch{/* Retired inputs cannot remove the fixed execution receipt. */}
-  try{const context={...hostContext,...failureContext(error)},receipt:ExecutionFailureReceipt={...safeFailureContext(context),stepId:step.id,operationId:step.operationId,kind:step.kind,state,category:failure.category,code:/^[a-z][a-z0-9_.:-]{0,99}$/.test(failure.code)?failure.code:'execution_failed',attempt:step.attempts,at:new Date(this.now()).toISOString(),...(error instanceof ProviderFailure&&error.details.executionStarted===false?{executionStarted:false as const}:{}),...(error instanceof ProviderFailure&&error.details.admissionWaiting===true?{admissionWaiting:true as const}:{}),...(state==='waiting'&&step.availableAt>0?{availableAt:step.availableAt}:{})},json=JSON.stringify(receipt),prior=this.store.db.prepare('SELECT length(json) bytes FROM execution_failures WHERE step_id=?').get(step.id);this.store.reserveMetadata(Math.max(0,Buffer.byteLength(json)-Number(prior?.bytes??0))+(!prior?Buffer.byteLength(step.id)+128:0));this.store.db.prepare('INSERT INTO execution_failures VALUES(?,?) ON CONFLICT(step_id) DO UPDATE SET json=excluded.json').run(step.id,json);}catch{this.failureReceiptWriteFailures++;}
+  try{const context={...hostContext,...failureContext(error)},receipt:ExecutionFailureReceipt={...safeFailureContext(context),stepId:step.id,operationId:step.operationId,kind:step.kind,state,category:failure.category,code:/^[a-z][a-z0-9_.:-]{0,99}$/.test(failure.code)?failure.code:'execution_failed',attempt:step.attempts,at:new Date(this.now()).toISOString(),...((error instanceof ProviderFailure&&error.details.executionStarted===false||error instanceof ExecutionFailure&&error.facts?.executionStarted===false)?{executionStarted:false as const}:{}),...(error instanceof ProviderFailure&&error.details.admissionWaiting===true?{admissionWaiting:true as const}:{}),...(state==='waiting'&&step.availableAt>0?{availableAt:step.availableAt}:{})},json=JSON.stringify(receipt),prior=this.store.db.prepare('SELECT length(json) bytes FROM execution_failures WHERE step_id=?').get(step.id);this.store.reserveMetadata(Math.max(0,Buffer.byteLength(json)-Number(prior?.bytes??0))+(!prior?Buffer.byteLength(step.id)+128:0));this.store.db.prepare('INSERT INTO execution_failures VALUES(?,?) ON CONFLICT(step_id) DO UPDATE SET json=excluded.json').run(step.id,json);}catch{this.failureReceiptWriteFailures++;}
  }
- list(args:{operationId?:string;kind?:string;state?:ExecutionState;cursor?:number;limit?:number}={}){
+ list(args:{userId?:string;operationId?:string;kind?:string;state?:ExecutionState;cursor?:number;limit?:number}={}){
   const clauses:string[]=[],values:(string|number)[]=[];
+  if(args.userId!==undefined){clauses.push('user_id=?');values.push(args.userId);}
   if(args.operationId){clauses.push('EXISTS(SELECT 1 FROM execution_operation_steps o WHERE o.step_id=execution_steps.id AND o.operation_id=?)');values.push(args.operationId);}
   for(const [key,column] of [['kind','kind'],['state','state']] as const)if(args[key]){clauses.push(column+'=?');values.push(args[key]!);}
-  if(args.cursor!==undefined){clauses.push('rowid<?');values.push(args.cursor);}
-  const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.store.db.prepare(`SELECT rowid,* FROM execution_steps ${clauses.length?'WHERE '+clauses.join(' AND '):''} ORDER BY rowid DESC LIMIT ?`).all(...values,limit+1) as (Row&{rowid:number})[];
-  return {items:rows.slice(0,limit).map(view),nextCursor:rows.length>limit?rows[limit-1].rowid:null};
+  const position=args.userId===undefined?'rowid':'user_position';
+  if(args.cursor!==undefined){clauses.push(position+'<?');values.push(args.cursor);}
+  const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.store.db.prepare(`SELECT rowid,* FROM execution_steps ${clauses.length?'WHERE '+clauses.join(' AND '):''} ORDER BY ${position} DESC LIMIT ?`).all(...values,limit+1) as (Row&{rowid:number})[];
+  return {items:rows.slice(0,limit).map(view),nextCursor:rows.length>limit?rows[limit-1][position]:null};
  }
  project(id:string){const step=this.get(id);if(step)this.handlers.get(step.kind)?.project?.(step);}
  /** Transactional callers may defer local abort; lease renewal observes committed revocation. */
@@ -159,9 +189,9 @@ export class ExecutionEngine {
  }
  /** Stop only this host's work after another writer revoked its durable grant. */
  abortLocal(id:string){this.active.get(id)?.controller.abort();}
- isCurrentGrant(id:string,fence:string){return Boolean(this.store.db.prepare("SELECT 1 FROM execution_steps WHERE id=? AND fence=? AND state='running' AND lease_until>?").get(id,fence,this.now()));}
+ isCurrentGrant(id:string,fence:string){return Boolean(this.validationStatement("SELECT 1 FROM execution_steps WHERE id=? AND fence=? AND state='running' AND lease_until>?").get(id,fence,this.now()));}
  /** A child publication must retain both its parent's lease and input authority. */
- isCurrentInputGrant(id:string,fence:string){const step=this.get(id),handler=step&&this.handlers.get(step.kind);return Boolean(step&&handler&&this.isCurrentGrant(id,fence)&&handler.validate(step)&&(handler.validateGrant?.(step)??true));}
+ isCurrentInputGrant(id:string,fence:string){const step=this.get(id),handler=step&&this.handlers.get(step.kind);return Boolean(!this.stopping&&!this.active.get(id)?.controller.signal.aborted&&step&&handler&&this.isCurrentGrant(id,fence)&&handler.validate(step)&&(handler.validateGrant?.(step)??true));}
  /** A queued child retains durable input authority while its parent yields a
   * worker slot. Cancellation, paused admission and changed inputs still revoke
   * it. A temporary execution lease is not the authorization for derived work. */
@@ -210,7 +240,7 @@ export class ExecutionEngine {
     for(const lane of lanes){const limit=this.limit(pool,lane);
     while([...this.active.values()].filter(a=>a.pool===pool&&a.lane===lane).length<limit){
      if(this.running(pool,lane)>=limit)break;
-     const candidates=this.store.db.prepare(`SELECT e.* FROM execution_steps e LEFT JOIN execution_fairness f ON f.pool=e.pool AND f.operation_id=e.operation_id WHERE e.pool=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded') AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN execution_resources held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>?) ORDER BY coalesce(f.last_started,0),e.created_at,e.rowid`).iterate(pool,this.now(),JSON.stringify(handlers.map(h=>h.kind)),this.now());
+     const candidates=this.store.db.prepare(`SELECT e.* FROM execution_steps e LEFT JOIN execution_user_fairness u ON u.pool=e.pool AND u.user_id=e.user_id LEFT JOIN execution_fairness f ON f.pool=e.pool AND f.operation_id=e.operation_id WHERE e.pool=? AND e.state='waiting' AND e.available_at<=? AND e.kind IN (SELECT value FROM json_each(?)) AND NOT EXISTS(SELECT 1 FROM execution_dependencies d JOIN execution_steps parent ON parent.id=d.dependency_id WHERE d.step_id=e.id AND parent.state!='succeeded') AND NOT EXISTS(SELECT 1 FROM execution_resources requested JOIN execution_resources held ON held.resource_key=requested.resource_key JOIN execution_steps owner ON owner.id=held.step_id WHERE requested.step_id=e.id AND owner.id!=e.id AND owner.state='running' AND owner.lease_until>?) ORDER BY coalesce(u.last_started,0),coalesce(f.last_started,0),e.created_at,e.rowid`).iterate(pool,this.now(),JSON.stringify(handlers.map(h=>h.kind)),this.now());
      let row:Row|undefined;for(const candidate of candidates){if(this.lane(view(candidate as Row))===lane){row=candidate as Row;break;}}
      if(!row)break;
      const handler=this.handlers.get(row.kind)!;if(!handler.validate(view(row))){this.store.db.prepare("UPDATE execution_steps SET state='stale',error='input_changed',updated_at=? WHERE id=? AND state='waiting'").run(this.now(),row.id);this.project(row.id);continue;}
@@ -242,6 +272,7 @@ export class ExecutionEngine {
    const claimed=db.prepare("UPDATE execution_steps SET state='running',attempts=attempts+1,fence=?,lease_until=?,error=NULL,updated_at=? WHERE id=? AND state='waiting'").run(fence,now+(timeout===null?30000:Math.min(timeout+10000,30000)),now,row.id).changes;
    if(!claimed){db.exec('COMMIT');return;}
    const sequence=Number(db.prepare('INSERT INTO execution_sequence(pool,next) VALUES(?,1) ON CONFLICT(pool) DO UPDATE SET next=next+1 RETURNING next').get(row.pool)!.next);
+   db.prepare('INSERT INTO execution_user_fairness(pool,user_id,last_started) VALUES(?,?,?) ON CONFLICT(pool,user_id) DO UPDATE SET last_started=excluded.last_started').run(row.pool,row.user_id,sequence);
    db.prepare('INSERT INTO execution_fairness(pool,operation_id,last_started) VALUES(?,?,?) ON CONFLICT(pool,operation_id) DO UPDATE SET last_started=excluded.last_started').run(row.pool,row.operation_id,sequence);
    this.project(row.id);db.exec('COMMIT');
   }catch(error){if(db.isTransaction)db.exec('ROLLBACK');db.prepare("UPDATE execution_steps SET state='blocked',error=?,updated_at=? WHERE id=? AND state='waiting'").run(error instanceof StoreError&&error.statusCode===507?'storage_full':'admission_failed',this.now(),row.id);this.project(row.id);return;}
@@ -254,7 +285,7 @@ export class ExecutionEngine {
    const assertGrant=()=>{
     if(signal.aborted)throw new ExecutionFailure('stale','grant_revoked');
     if(!this.isCurrentGrant(row.id,fence))throw new ExecutionFailure('stale','grant_revoked');
-    if(!handler.validate(step))throw new ExecutionFailure('stale','input_changed');
+    if(!handler.validate(step)||!(handler.validateGrant?.(step)??true))throw new ExecutionFailure('stale','input_changed');
    };
    const grant:ExecutionGrant=Object.freeze({assert:assertGrant,commit:<T>(write:()=>T):T=>{
     if(db.isTransaction)throw new Error('Execution grant commit requires its own transaction');
@@ -267,8 +298,11 @@ export class ExecutionEngine {
    db.exec('BEGIN IMMEDIATE');
    try{
     if(!this.isCurrentGrant(row.id,fence)){db.exec('ROLLBACK');return;}
-    if(!handler.validate(step))throw new ExecutionFailure('stale','input_changed');
+    if(!handler.validate(step)||!(handler.validateGrant?.(step)??true))throw new ExecutionFailure('stale','input_changed');
     handler.commit(step,result);
+    // A synchronous commit may itself revoke account/resource authority. Do not
+    // publish its writes when the same transaction invalidated the grant.
+    if(!(handler.validateGrant?.(step)??true))throw new ExecutionFailure('stale','input_changed');
     const at=this.now();
     if(!db.prepare("UPDATE execution_steps SET state='succeeded',fence=NULL,error=NULL,updated_at=? WHERE id=? AND fence=? AND state='running' AND lease_until>?").run(at,row.id,fence,at).changes){db.exec('ROLLBACK');return;}
     this.project(row.id);db.exec('COMMIT');
@@ -281,7 +315,7 @@ export class ExecutionEngine {
    const admissionWait=error instanceof ProviderFailure&&error.details.admissionWaiting===true;
    const failure=admissionWait||classified.code==='rate_limited'&&classified.category==='transient'?new ExecutionFailure('waiting',classified.code,classified.retryAfterMs):classified;
    const stopping=this.stopping||signal.reason===interrupted;
-   const capacityWait=failure.category==='waiting',attempts=Math.max(0,step.attempts-Number(capacityWait||stopping));
+   const capacityWait=failure.category==='waiting',attempts=Math.max(0,step.attempts-Number(capacityWait||stopping||failure.facts?.executionStarted===false));
    let state:ExecutionState=stopping?'waiting':failure.category==='blocked'?'blocked':failure.category==='stale'?'stale':capacityWait?'waiting':failure.category==='permanent'||attempts>=policy.maxAttempts?'failed':'waiting';
    const at=this.now(),availableAt=stopping?0:at+Math.max(capacityWait?1:0,failure.retryAfterMs??(capacityWait?1000:Math.min(3600000,1000*2**(attempts-1))));
    const recoveryDeadline=capacityWait||policy.maxRecoveryWindowMs===null?0:failure.category==='transient'&&!stopping?(Number(row.recovery_deadline)||at+Math.max(1,policy.maxRecoveryWindowMs)):Number(row.recovery_deadline)||0;
@@ -312,7 +346,7 @@ export class ExecutionEngine {
   });
   const abort=()=>{if(this.stopping||options.signal.reason===interrupted)this.active.get(options.id)?.controller.abort(interrupted);else this.cancel(options.id);};options.signal.addEventListener('abort',abort,{once:true});
   try{
-   this.enqueue(options.operationId,kind,options.input,{id:options.id,generation:options.generation,optional:options.optional,initial:{state:options.cached?'succeeded':'waiting',attempts:options.initialAttempts??0,availableAt:0}});
+   this.enqueue(options.operationId,kind,options.input,{id:options.id,ownership:options.ownership,generation:options.generation,optional:options.optional,initial:{state:options.cached?'succeeded':'waiting',attempts:options.initialAttempts??0,availableAt:0}});
    const current=this.get(options.id)!;
    // Reaching a blocked prerequisite again rechecks the current handler's
    // admission (including an issued-call guard). It never reopens cancelled,

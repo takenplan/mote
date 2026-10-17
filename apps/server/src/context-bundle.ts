@@ -1,7 +1,7 @@
 import {createHash} from 'node:crypto';
 import type {ContextReader} from '@mote/agent';
 import {StoreError} from './store.js';
-import {cardFromMemoryOverview,contextCard,type ContextCard,type ContextQueryInput} from './context-query.js';
+import {compactContextCard,cardFromMemoryOverview,contextCard,type ContextCard,type ContextQueryInput} from './context-query-core.js';
 import type {EvidenceReader} from './evidence-reader.js';
 import type {Memory} from './memory.js';
 import type {MaterialRecord} from './materials.js';
@@ -39,9 +39,7 @@ export async function contextBundle(reader:EvidenceReader,query:ContextReader,ar
     if(JSON.stringify(result).length>maximum&&returned===0){
       // The stable reference preserves expansion even if a very small package
       // cannot carry optional prose or the complete dependency list.
-      card.snippet='';card.title=card.title.slice(0,64);card.matchReasons=[];card.evidenceRefs=[];delete card.applicability;delete card.expansion;
-      card.origin={source:card.origin.source,deviceId:card.origin.deviceId,appName:'',capturedAt:card.origin.capturedAt,receivedAt:card.origin.receivedAt};
-      delete card.revision;
+      compactContextCard(card);
     }
     if(JSON.stringify(result).length>maximum){items.pop();if(!returned)throw new StoreError('Context response budget too small for one reference',413);break;}
     position=candidate;returned++;

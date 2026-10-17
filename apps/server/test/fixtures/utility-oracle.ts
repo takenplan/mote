@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {randomBytes,randomUUID} from 'node:crypto';
-import type {buildApp} from '../../src/app.js';
+import type {buildApp} from './legacy-app.js';
 
 export function generatedUtilityOracle(){
  const nonce=()=>randomBytes(12).toString('hex'),project='Generated Cedar '+nonce(),priorGate='gate_'+nonce(),releaseGate='gate_'+nonce(),artifactTag='tag_'+nonce();

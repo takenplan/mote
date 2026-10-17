@@ -1,0 +1,60 @@
+{
+  "checkedAt": "2026-10-17T19:58:23.872452+00:00",
+  "executionHead": "6e4032e0ff7a31dbf6528d6703f5d9d8f0b1cc57",
+  "executionTree": "508a09cb70ec9202aad6225372039446023ef4ad",
+  "executionIdentity": "T plus one expected-surface documentation inventory overlay; no production code or compiled changes by this correction",
+  "ownedChangedFile": "docs/design/scope-inventory.json",
+  "ownedChangedLines": {
+    "added": 1,
+    "removed": 1
+  },
+  "scope": "user",
+  "module": "M06",
+  "changedExpectedSurfaces": 1,
+  "inventoryBeforeSha256": "962b438b66786f6fa0ce958b0985b8353a62df995cabd2183fb477d9559f4665",
+  "inventoryAfterSha256": "fd919a09c3b5ca0473598bb6c7f7644435b2e80182d7725b6c6b499439c34b79",
+  "productionEightFilesMatchExecutedGreenAndCommittedT": true,
+  "checker": {
+    "command": "node scripts/check-scope-contracts.mjs",
+    "naturalExitCode": 0,
+    "summary": "Scope inventory and production import boundary passed",
+    "log": "mote-processing-imports-inventory-scope-green-20261018.log",
+    "logSha256": "0e264cc7d2195cd3b407961f5305e383f84cfd30ce0208c8ce59c95751be8dec"
+  },
+  "architecture": {
+    "command": "node --import tsx --test --test-concurrency=4 --test-timeout=120000 apps/server/test/scope-architecture.test.ts",
+    "naturalExitCode": 0,
+    "tests": 4,
+    "pass": 4,
+    "fail": 0,
+    "cancelled": 0,
+    "skipped": 0,
+    "durationMs": 1968.569875,
+    "log": "mote-processing-imports-inventory-architecture-green-20261018.log",
+    "logSha256": "3da95c85630da412143ed395766862301f525d9c84247ed7a8bd8dae77235181"
+  },
+  "patchSha256": "49d2284094c4a9ad75f1eb818c60c2d12cc5637cc88ad58aa7bb0f75a0a57f81",
+  "staticReviewReceiptSha256": "567d37c2881f12629094809eb764817346dba21b771f5a877007c7ab9ddda88e",
+  "applyInputReceiptSha256": "f1eb72f01459066aaad25747f1526a69a38ceaea5307075824390e2600427ddd",
+  "ownedFileGitDiffCheckExitCode": 0,
+  "originalFullResultPreserved": {
+    "naturalExitCode": 1,
+    "exitCodeSource": "parent confirmed full run naturally ended before applying this correction",
+    "log": "mote-main-multiuser-joint-affected-6e4032e0-20261018.log",
+    "logSha256": "92d2a8758b991d41e9b7d3f005a9dd485ead33a8b7a0272472f446ef33acf4a9",
+    "serverTotal": 3075,
+    "serverPass": 3072,
+    "serverFail": 1,
+    "serverSkip": 2,
+    "failure": "only the stale/undeclared pair for the same processing-imports inline task surface; no functional/after-hook failure"
+  },
+  "boundaries": {
+    "broadSuiteRerun": false,
+    "newBuildOrModelRun": false,
+    "checkerWeakened": false,
+    "inventoryBulkRefreshed": false,
+    "productionFileChanged": false,
+    "committedByThisAgent": false,
+    "otherAgentsConcurrentDocumentationEditsUntouched": true
+  }
+}

@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import sharp from 'sharp';
-import { buildApp } from '../apps/server/src/app.js';
+import { buildApp } from '../apps/server/test/fixtures/legacy-app.js';
 import {formatEvidenceRef} from '@mote/shared';
 import type { Config } from '../apps/server/src/config.js';
 import {writeMessagesResponse} from './fixtures/messages-provider.js';

@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {LocalSourceManager} from '../../desktop/src/source-manager.js';
 import {defaultConfig} from '../../desktop/src/config.js';
 import {DEFAULT_SOURCE_OPTIONS,type SourceOptions} from '../../desktop/src/source-types.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 // Real Desktop manual discovery/outbox/upload and Central routes/pipeline.
@@ -52,7 +52,7 @@ test('Desktop manual sync restores expired bytes under the same capture/revision
  const first=await firstUpload();expire(first.id);await node.processing.tick();assert.equal(node.files.detail(first.id).job!.state,'blocked');assert.equal(node.files.detail(first.id).job!.error,'snapshot_input_expired');
  await first.value.close();const restarted=await manager();await recover(restarted);identity(first.id,first.manifest);
  assert.ok(paths.includes('/api/file-sync/v1/recovery?sourceId='+first.sourceId));assert.ok(paths.includes('/api/file-sync/v1/recovery/'+first.id+'/uploads'));
- assert.equal(Buffer.concat([...node.files.processingBytes(first.id)]).toString(),'Generated current snapshot');await node.processing.tick();assert.equal(node.files.detail(first.id).job!.state,'succeeded');assert.equal(node.files.chunks(first.id)[0].ocrText,'Generated current snapshot');
+ assert.equal(Buffer.concat([...node.files.processingBytes(first.id)]).toString(),'Generated current snapshot');await finishPipeline(first.id);assert.equal(node.files.detail(first.id).job!.state,'succeeded');assert.equal(node.files.chunks(first.id)[0].ocrText,'Generated current snapshot');
  const completed=node.store.db.prepare('SELECT id,state,attempts FROM execution_steps WHERE operation_id=? ORDER BY id').all('file:'+first.id),recoveryCalls=paths.filter(path=>path.includes('/recovery/')&&path.endsWith('/uploads')).length;
  await restarted.sync(true);await restarted.flushPending(new AbortController().signal);await node.processing.tick();identity(first.id,first.manifest);assert.equal(restarted.pendingStats().pendingRecords,0);
  assert.equal(paths.filter(path=>path.includes('/recovery/')&&path.endsWith('/uploads')).length,recoveryCalls);assert.deepEqual(node.store.db.prepare('SELECT id,state,attempts FROM execution_steps WHERE operation_id=? ORDER BY id').all('file:'+first.id),completed);assert.equal(node.store.db.prepare('SELECT COUNT(*) n FROM file_snapshot_inputs').get()!.n,0);

@@ -5,7 +5,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {createServer} from 'node:http';
 import assert from 'node:assert/strict';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import type {Config} from '../apps/server/src/config.js';
 
 const directory=await mkdtemp(join(tmpdir(),'mote-review-retrieval-'));

@@ -4,7 +4,7 @@ import {readFileSync,mkdtempSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {uiRulesSchema,uiSnapshotSchema,extractUiPage,uiPageText} from '@mote/shared';
 import type {Config} from '../src/config.js';
 

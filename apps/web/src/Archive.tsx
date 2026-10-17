@@ -54,7 +54,7 @@ export function Archive({ api, devices, range, rangeSelectionKey, activity, revi
    <label className="library-compact-categories"><span>{moteText('资料库分类')}</span><select aria-label={moteText('资料库分类')} value={tab} onChange={event=>{clearSelection();setTab(event.target.value);}}>{(!entry||entry.id==='coding-status')&&<option value={tab} disabled>{entry?.label??moteText('此资料库分类当前不可用。请从资料库分类中选择可用入口。')}</option>}{collectionGroups.map(group=><optgroup key={group.group} label={group.label}>{group.items.map(item=><option key={item.id} value={item.id}>{item.label}</option>)}</optgroup>)}</select></label>
    <div className="library-workspace"><nav className="library-navigation" aria-label={moteText('资料库分类')}>
      {collectionGroups.map(group => <section key={group.group}><h2>{group.label}</h2>{group.items.map(item => <button key={item.id} data-collection-id={item.id} aria-current={item.id === entry?.id ? 'page' : undefined} onClick={() => { clearSelection(); setTab(item.id); }}>{item.label}</button>)}</section>)}
-   </nav><div className="library-content">{entry?.layout === 'standalone' ? content : <LibraryBrowseLayout reference={selected} api={api} onClose={clearSelection} onOpen={onOpen} supporting={entry?.layout !== 'browser'}>{content}</LibraryBrowseLayout>}</div></div>
+   </nav><div className="library-content">{entry?.layout === 'standalone' ? content : <LibraryBrowseLayout reference={selected} api={api} onClose={clearSelection} onOpen={onOpen} supporting={entry?.layout !== 'browser'} detail={selected?entry?.renderDetail?.({api,reference:selected,onOpen}):undefined}>{content}</LibraryBrowseLayout>}</div></div>
  </div>;
 }
 class LibraryCollectionBoundary extends React.Component<{
