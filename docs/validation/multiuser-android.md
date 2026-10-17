@@ -4,7 +4,7 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current bounded runtime: Android `429c20d698b216a61f603c9265d95780c7b057e2`,
+Current bounded runtime: Android `da402dd5ba9ecf6e9eccff1398f8dcbfff3f8116`,
 with declared Joint2528/source519, pure M13 Larkd259 and isolated M04 relogin
 fixfda6 (owncf2311ea). Full current Android JVM358/358 across75XML,0failures/
 errors/skips and debug APK pass41s. Fixture app/test APKs and original native
@@ -46,6 +46,37 @@ closes a missing original capability or proves provider/model quality.
 | REMOVE | Treating HTTP success or legacy v2 receipt as sufficient ACK; same URL as owner | New account-bound complete M03 receipt must match owner/source/batch/capture set. |
 | EXCEPTION | Shared device settings, update artifacts, bundled OCR models and encryption key | Non-private installation resources remain shared; content/cursors/drafts are account-scoped. |
 | UNKNOWN | Real phone/vendor background behavior, system calendar permissions/native writes, live providers/model quality | No real private data or real provider account was exercised; one existing-local-Codex connectivity case used only a generated prompt. System-permission, real-device and model-quality evidence remain separate. |
+
+## Current local deletion-intent recovery boundary
+
+Test-only93d5284a adds a real pre-admission DELETE barrier followed by source
+retirement/recreation with the same bytes and capture ID. Old runtime429 fails
+1/1 at the missing explicit local-clear action (1.893s,
+`/tmp/m15-file-discard-valid-red.log`). Minimal da402 adds only local intent
+abandonment through the existing encrypted store/write barrier and captured
+client/session fences. Cancel keeps the intent; confirmed clear sends no DELETE,
+does not undo Central work, and never rebases an old request. A new deliberate
+deletion must use a new UUID and the current generation.
+
+The same actual native case passes1/1 in3.068s
+(`/tmp/m15-file-discard-green2.log`, backendEXIT0): the original operation and
+generation0 receive409 twice; only the new operation/generation1 receives200;
+B remains unchanged. Original committed-delete/lost-ACK/missing-detail recovery
+also passes1/1 in1.508s at da402
+(`/tmp/m15-da402-delete-lost-ack-neighbor-green.log`, backendEXIT0).
+Independent bounded source review reports no new confirmed P0/P1/P2 in
+`/tmp/mote-desktop-review-m15-files-discard-da402.md`; it did not run tests.
+The first GREEN attempt stopped before instrumentation because the old emulator
+was absent; it is retained as environment failure. Read-only process/port checks
+preceded one restoration of the original dedicated headless AVD; no real device,
+lock deletion, foreign process termination or system permission change occurred.
+
+At exact da402, full offline `:app:testDebugUnitTest :app:assembleDebug` passes
+EXIT0 in61s,44tasks/10executed;75XML contain358 tests,0failure/error/skip
+(`/tmp/m15-da402-current-full-android.log` and countsJSON). Fixture/test APK build
+passes19s; bilingual check8469/0. These results supersede the429 Android build
+count only, not unrelated historical native journeys or unrun final affected.
+Agent245308de is newly declared, not yet consumed or accepted by native tests.
 
 ## Evidence
 

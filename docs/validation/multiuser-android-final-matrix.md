@@ -3,9 +3,9 @@
 This is a current checklist, not a passing gate. Historical RED/fixture errors,
 exact SHAs and logs remain in [the chronological ledger](multiuser-android.md).
 Workspace is task-19/mote, feature codex/mote-multiuser-m15-android. No M15 Draft
-PR or final required check has yet been delivered. Current native runtime includes
-invitation d6da and Files delete a95. Latest full JVM+debug APK at production429 is358/358 (75 XML, no
-failure/error/skip,41s); earlier a95 full96s is retained separately. Current actual composed M01/M03/M06 source519 native
+PR or final required check has yet been delivered. Current native runtime da402 includes
+invitation d6da, Files delete a95 and explicit local intent discard. Latest full JVM+debug APK at da402 is358/358 (75 XML, no
+failure/error/skip,61s); earlier a95 full96s is retained separately. Current actual composed M01/M03/M06 source519 native
 representatives cover SourceWorker, expired snapshot, late ACK/network recovery
 and real SIGKILL/restart. Invitation four native cases and original Files delete,
 stop/retry and unknown-consent cases pass; exact logs and limitations are in the
@@ -297,3 +297,5 @@ refresh current data rather than remove a same-ID replacement locally. APK
 build EXIT0,27s `/tmp/m15-file-delete-cas-green-build.*`; actual native GREEN is
 still pending. Joint owns the separate source-delete/recreate reset165 RED;
 no shared producer fix or whole Android/final affected result is claimed here.
+
+Latest da402 samecase local discard GREEN1/1 (3.068s) and committed-delete lost-ACK neighbor GREEN1/1 (1.508s), both backend0; independent bounded review has no new confirmed finding. New Agent245308de is declared but not yet consumed/accepted. Final affected and DraftPR remain pending.
