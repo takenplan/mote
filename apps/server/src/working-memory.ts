@@ -11,7 +11,7 @@ type Summary={text:string;coveredTurns:number;generatedAt:string;fingerprint:str
 export class WorkingMemory {
   private active=new Map<string,Promise<void>>();
   private readonly sourceContexts:SourceContextStore;
-  constructor(private store:Store,private conversations:Conversations){this.sourceContexts=new SourceContextStore(store);store.db.exec('CREATE TABLE IF NOT EXISTS working_memories(id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,json TEXT NOT NULL)');}
+  constructor(private store:Store,private conversations:Conversations){this.sourceContexts=new SourceContextStore(store);store.db.exec('CREATE TABLE IF NOT EXISTS working_memories(id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,json TEXT NOT NULL)');store.installContextHistoryInvalidation();}
   private fingerprint(conversation:Conversation,count:number){return sha256(JSON.stringify(conversation.turns.slice(0,count)));}
   get(conversation:Conversation):Summary|undefined {
     const row=this.store.db.prepare('SELECT json FROM working_memories WHERE id=?').get(conversation.id);if(!row)return;

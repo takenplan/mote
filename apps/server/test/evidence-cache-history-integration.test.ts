@@ -4,10 +4,14 @@ import {mkdtemp,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
+import {execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+import {DatabaseSync} from 'node:sqlite';
 import type {QueryInput} from '@mote/agent';
 import {buildApp} from '../src/app.js';
 import type {Config} from '../src/config.js';
 import {defaultLifecycleSettings} from '../src/memory-lifecycle.js';
+import {restoreProfile} from '../../../scripts/profile-lib.mjs';
 
 const token='generated-cache-history-owner',headers={authorization:`Bearer ${token}`,'content-type':'application/json'};
 const config=(dataDir:string):Config=>({dataDir,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:50_000_000,maxExportBytes:1_000_000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''});
@@ -54,10 +58,49 @@ for(const stage of ['model-result','summary'] as const)test(`changed context rej
 });
 
 test('startup installs the context-history lifecycle and a failed expiry rolls back the artifact and dialogue together',async t=>{
- const f=await fixture(t);f.node.store.db.exec('DROP TRIGGER context_history_invalidation');await f.restart();
+ const f=await fixture(t);f.node.store.db.exec('DROP TRIGGER context_history_invalidation; CREATE TRIGGER context_history_invalidation BEFORE DELETE ON context_artifacts BEGIN SELECT mote_context_history_invalidate(old.id); END;');await f.restart();
  const db=f.node.store.db,before=f.node.featureServices.conversations.get(f.conversationId),artifact=f.node.store.archive.get(f.artifactId);
  db.exec("CREATE TRIGGER generated_context_expiry_failure BEFORE UPDATE ON conversations BEGIN SELECT RAISE(ABORT,'Generated snapshot expiry failure'); END");
  assert.throws(()=>f.save('2'.repeat(64),'Generated corrected interpretation.'),/Generated snapshot expiry failure/);
  assert.deepEqual(f.node.featureServices.conversations.get(f.conversationId),before,'failed deletion cannot commit partial history invalidation');assert.deepEqual(f.node.store.archive.get(f.artifactId),artifact,'the previous artifact remains intact for retry');
  db.exec('DROP TRIGGER generated_context_expiry_failure');f.save('2'.repeat(64),'Generated corrected interpretation.');assert.equal(f.node.featureServices.conversations.get(f.conversationId).turns[0].evidenceStale,true);
+});
+
+for(const nested of [false,true])test(`failed context lifecycle replacement preserves the installed SQL trigger (${nested?'nested':'standalone'})`,async t=>{
+ const f=await fixture(t),db=f.node.store.db,execute=db.exec.bind(db),prior=db.prepare("SELECT sql FROM sqlite_master WHERE name='context_history_invalidation'").get()!.sql;
+ if(nested)execute('BEGIN IMMEDIATE');
+ db.exec=(sql:string)=>{if(sql.includes('CREATE TRIGGER context_history_invalidation')){execute('DROP TRIGGER context_history_invalidation');throw Error('Generated lifecycle schema failure');}execute(sql);};
+ try{assert.throws(()=>f.node.store.installContextHistoryInvalidation(),/Generated lifecycle schema failure/);}finally{db.exec=execute;}
+ assert.equal(db.isTransaction,nested);assert.equal(db.prepare("SELECT sql FROM sqlite_master WHERE name='context_history_invalidation'").get()!.sql,prior);
+ if(nested)execute('COMMIT');f.save('2'.repeat(64),'Generated corrected interpretation.');assert.equal(f.node.featureServices.conversations.get(f.conversationId).turns[0].evidenceStale,true);
+});
+
+test('real backup and restore retain conversation authority while raw SQLite cache eviction stays atomic and later original deletion erases every generation',async t=>{
+ const f=await fixture(t),directory=await mkdtemp(join(tmpdir(),'mote-context-history-backup-')),snapshot=join(directory,'snapshot'),target=join(directory,'restored');
+ let restored:Awaited<ReturnType<typeof buildApp>>|undefined;
+ t.after(async()=>{await restored?.app.close();await rm(directory,{recursive:true,force:true});});
+ const childId='c'.repeat(64);f.node.store.archive.save(childId,'generated-child','1'.repeat(64),{kind:'semantic',text:'Generated child context',metadata:{}},[],'generated','1','generated',[],[{id:f.artifactId,revision:'1'.repeat(64)}]);
+ await f.node.working.compact(f.conversationId,{...defaultLifecycleSettings,recentTurns:0},async()=>result([],'Generated retained summary.'));
+ const before=f.node.featureServices.conversations.get(f.conversationId);await f.node.app.close();
+ execFileSync(process.execPath,['--import','tsx',fileURLToPath(new URL('../../../scripts/backup.ts',import.meta.url)),'--data',f.node.store.directory,'--out',snapshot],{stdio:'pipe'});
+ await restoreProfile({meta:{runtime:'native'},dataDir:target,processFile:join(directory,'missing-process')},snapshot);
+ const seen:QueryInput[]=[],agent={configured:true,close:async()=>{},query:async(input:QueryInput)=>{seen.push(input);return result([]);}};
+ restored=await buildApp(config(target),{backgroundWorker:false,agent});
+ const ask=async()=>{const response=await restored!.app.inject({method:'POST',url:'/api/query',headers,payload:{conversationId:f.conversationId,question:'Discuss the retained generated proposal'}});assert.equal(response.statusCode,200,response.body);};
+ assert.deepEqual(restored.featureServices.conversations.get(f.conversationId),before);await ask();assert.match(seen.at(-1)!.conversation!.workingMemory!.text,/retained summary/);
+ const db=new DatabaseSync(join(target,'mote.sqlite'));
+ try{
+  db.exec('PRAGMA foreign_keys=ON; PRAGMA recursive_triggers=ON');
+  const trigger=String(db.prepare("SELECT sql FROM sqlite_master WHERE name='context_history_invalidation'").get()!.sql);assert.doesNotMatch(trigger,/mote_context_history_invalidate/,'offline writers require no connection-local history callback');
+  const turns=db.prepare('SELECT id,json FROM conversation_turns ORDER BY id').all(),revision=db.prepare('SELECT json FROM conversations WHERE id=?').get(f.conversationId)!.json;
+  db.exec("CREATE TRIGGER generated_raw_expiry_failure BEFORE UPDATE ON conversation_turns BEGIN SELECT RAISE(ABORT,'Generated raw expiry failure'); END; BEGIN IMMEDIATE");
+  assert.throws(()=>db.prepare('DELETE FROM context_artifacts WHERE id=?').run(f.artifactId),/Generated raw expiry failure/);
+  assert.equal(db.isTransaction,true);assert.deepEqual(db.prepare('SELECT id,json FROM conversation_turns ORDER BY id').all(),turns);assert.equal(db.prepare('SELECT json FROM conversations WHERE id=?').get(f.conversationId)!.json,revision);
+  assert.equal(db.prepare('SELECT count(*) n FROM context_artifacts WHERE id IN (?,?)').get(f.artifactId,childId)!.n,2);assert.ok(db.prepare('SELECT id FROM working_memories WHERE id=?').get(f.conversationId));
+  db.exec('ROLLBACK; DROP TRIGGER generated_raw_expiry_failure');db.prepare('DELETE FROM context_artifacts WHERE id=?').run(f.artifactId);
+  assert.equal(db.prepare('SELECT count(*) n FROM context_artifacts WHERE id IN (?,?)').get(f.artifactId,childId)!.n,0);assert.equal(db.prepare('SELECT id FROM working_memories WHERE id=?').get(f.conversationId),undefined);
+ }finally{db.close();}
+ const changed=restored.featureServices.conversations.get(f.conversationId);assert.ok(changed.turns.every(turn=>turn.evidenceStale&&!turn.evidenceDeleted));assert.deepEqual(changed.turns[0].result,before.turns[0].result);
+ await restored.app.close();restored=await buildApp(config(target),{backgroundWorker:false,agent});await ask();assert.equal(seen.at(-1)!.conversation!.turns[0].evidenceStale,true);
+ restored.store.delete(f.original);const erased=restored.featureServices.conversations.get(f.conversationId);assert.equal(erased.turns.length,3);assert.ok(erased.turns.every(turn=>turn.evidenceDeleted));assert.doesNotMatch(JSON.stringify(erased),/Generated answer based|Generated retained summary/);
 });

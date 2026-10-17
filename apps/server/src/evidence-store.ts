@@ -698,6 +698,31 @@ export class EvidenceStore {
       if(removed.length)this.db.exec('UPDATE source_heads SET deleted=1 WHERE capture_id NOT IN (SELECT id FROM captures)');this.db.exec('COMMIT');this.sweep();this.archive.collect();return removed.length;
     }catch(e){this.db.exec('ROLLBACK');throw e;}
   }
+  /** Persist the lifecycle in SQLite so offline snapshot writers need no host
+   * callbacks. Schema owners refresh it after installing their optional tables. */
+  installContextHistoryInvalidation() {
+    const exists=(name:string)=>Boolean(this.db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(name));
+    const affected=(path:string,table:string)=>`(coalesce(json_extract(${table}.json,'${path}.version'),0)!=1 OR coalesce(json_extract(${table}.json,'${path}.complete'),0)!=1 OR EXISTS(SELECT 1 FROM json_each(${table}.json,'${path}.ids') d WHERE d.value=old.id))`;
+    const statements:string[]=[];
+    if(exists('delegation_dependencies')){
+      const works='SELECT work_id FROM delegation_dependencies WHERE evidence_id=old.id';
+      for(const table of ['delegation_artifacts','delegation_payloads','delegation_results','delegation_events'])statements.push(`DELETE FROM ${table} WHERE work_id IN (${works});`);
+      statements.push(`UPDATE delegation_works SET json=json_set(json_remove(json,'$.private'),'$.status','stale','$.goal','','$.error','evidence_deleted') WHERE id IN (${works});`,
+        `UPDATE delegation_units SET json=json_set(json_remove(json,'$.private'),'$.status','stale','$.title','','$.goal','','$.input',json('{}'),'$.error','evidence_deleted') WHERE work_id IN (${works});`);
+    }
+    if(exists('working_memories'))statements.push(`DELETE FROM working_memories WHERE ${affected('$.evidenceDependencies','working_memories')};`);
+    if(exists('query_runs'))statements.push(`UPDATE query_runs SET json=json_set(json,'$.events',json((SELECT json_group_array(json_remove(event.value,'$.message')) FROM json_each(query_runs.json,'$.events') event))) WHERE ${affected('$.evidenceDependencies','query_runs')};`);
+    if(exists('conversation_turns')){
+      const condition=`coalesce(json_extract(json,'$.evidenceDeleted'),0)!=1 AND json_extract(json,'$.result') IS NOT NULL AND ${affected('$.result.evidenceDependencies','conversation_turns')}`;
+      statements.push(`UPDATE conversations SET json=json_set(json,'$.revision',coalesce(json_extract(json,'$.revision'),0)+1) WHERE id IN (SELECT conversation_id FROM conversation_turns WHERE ${condition});`,
+        `UPDATE conversation_turns SET json=json_set(json,'$.evidenceStale',json('true')) WHERE ${condition};`);
+    }
+    this.db.exec('SAVEPOINT context_history_lifecycle');
+    try{
+      this.db.exec(`DROP TRIGGER IF EXISTS context_history_invalidation;${statements.length?`CREATE TRIGGER context_history_invalidation BEFORE DELETE ON context_artifacts BEGIN ${statements.join('\n')} END;`:''}`);
+      this.db.exec('RELEASE context_history_lifecycle');
+    }catch(error){this.db.exec('ROLLBACK TO context_history_lifecycle; RELEASE context_history_lifecycle');throw error;}
+  }
   /** Ordinary revisions preserve dialogue. Destructive deletion/revocation
    * must opt in, including previously stale generations and their summaries. */
   invalidateConversationAnswers(evidenceIds?:string[],deleted=false) {

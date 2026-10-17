@@ -19,6 +19,7 @@ export class Conversations {
   constructor(private readonly store:Store) {
     this.sourceContexts=new SourceContextStore(store);
     store.db.exec(`CREATE TABLE IF NOT EXISTS conversation_turns(conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,idx INTEGER NOT NULL,id TEXT NOT NULL UNIQUE,json TEXT NOT NULL,PRIMARY KEY(conversation_id,idx));`);
+    store.installContextHistoryInvalidation();
     // Capture original permission roots before subsequent cache eviction can
     // remove a derived node. Do not reconstruct already-erased answer content.
     store.db.exec('SAVEPOINT conversation_history_receipts');

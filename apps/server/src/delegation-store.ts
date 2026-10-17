@@ -24,6 +24,7 @@ export class DelegationStore {
         UPDATE delegation_works SET json=json_set(json_remove(json,'$.private'),'$.status','stale','$.goal','','$.error','evidence_deleted') WHERE id IN (SELECT work_id FROM delegation_dependencies WHERE evidence_id=new.id);
         UPDATE delegation_units SET json=json_set(json_remove(json,'$.private'),'$.status','stale','$.title','','$.goal','','$.input',json('{}'),'$.error','evidence_deleted') WHERE work_id IN (SELECT work_id FROM delegation_dependencies WHERE evidence_id=new.id);
       END;`);
+    store.installContextHistoryInvalidation();
   }
   encodePrivate(value:unknown){const bytes=Buffer.from(JSON.stringify(value));return this.store.contentEncryption.enabled?'aes:'+this.store.contentEncryption.seal(bytes).toString('base64'):'json:'+bytes.toString('utf8');}
   decodePrivate<T>(value:string):T {return JSON.parse(value.startsWith('aes:')?this.store.contentEncryption.open(Buffer.from(value.slice(4),'base64')).toString('utf8'):value.slice(5)) as T;}
