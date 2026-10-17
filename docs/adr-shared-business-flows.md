@@ -61,6 +61,12 @@ a temporary provider failure. The complete Coding coverage contract is passed
 once through its existing task context, with no reduction of original evidence,
 authorized ranges or independent-review responsibility.
 
+The owner subsequently directed unresolved findings to follow existing ADRs
+without another confirmation, and permitted a validated release with the gaps
+recorded. Existing contracts remain the follow-up baseline; this does not adopt
+new quotas, lexical-only product scope, automatic historical replay or restored
+execution authority. The audit records the selected ADR and remaining work.
+
 ## Supersession
 
 | Disposition | Contract |
