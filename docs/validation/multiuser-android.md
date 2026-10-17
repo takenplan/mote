@@ -1812,3 +1812,13 @@ precondition migration, not a production fix, not permission to replay stale wor
 and not a waiver of the retained c06 required EXIT1. Independent bounded review
 is requested before closure and the necessary true affected retry. No production
 file/deadline/corpus or public contract changes.
+
+Independent bounded review `/tmp/mote-m13-review-m15-physical-ack-stale.md`
+accepts the fixture premise migration with no new confirmed P0/P1/P2 and
+explicitly limits its claim to trusted host acknowledgement/physical guard, not
+public generic HTTP acknowledgement success. The reviewed proposal used a
+read-only parent-ID lookup; committed33ce instead uses the original HTTP receipt
+ID and adds foreignACK404, retaining the same reviewed guard/assertions. No
+production retry relaxation is indicated. The complete committed candidate
+unknown file4/4 and Servertypes0 are M15 execution, not reviewer execution.
+A uniquely logged necessary full affected retry follows; the c06 EXIT1 stays.
