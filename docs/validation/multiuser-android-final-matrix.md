@@ -4,8 +4,8 @@ This is a current checklist, not a passing gate. Historical RED/fixture errors,
 exact SHAs and logs remain in [the chronological ledger](multiuser-android.md).
 Workspace is task-19/mote, feature codex/mote-multiuser-m15-android. No M15 Draft
 PR or final required check has yet been delivered. Current native runtime includes
-invitation d6da and Files delete a95. Full JVM at a95 is358/358 (75 XML, no
-failure/error/skip,96s). Current actual composed M01/M03/M06 source519 native
+invitation d6da and Files delete a95. Latest full JVM+debug APK at production429 is358/358 (75 XML, no
+failure/error/skip,41s); earlier a95 full96s is retained separately. Current actual composed M01/M03/M06 source519 native
 representatives cover SourceWorker, expired snapshot, late ACK/network recovery
 and real SIGKILL/restart. Invitation four native cases and original Files delete,
 stop/retry and unknown-consent cases pass; exact logs and limitations are in the
@@ -18,7 +18,7 @@ are composed. Shared source-reset165 now passes the original2/2 regression.
 Pure Server M13 Lark335/d259 is composed without waking its paused thread;
 composed2/2 and server types pass. Native large-calendar20-vs0 validRED is now samecase GREEN1/1 at429
 (3.227s), with complete UTF8 preview/no body reads and oldA controls under B.
-Earlier full JVM remains at a95, not silently reassigned to429.
+A fresh full JVM+debug APK41s/358 pass now covers429; exact prior a95 evidence is retained.
 
 | Original capability | Current evidence / contract | Remaining final action |
 | --- | --- | --- |

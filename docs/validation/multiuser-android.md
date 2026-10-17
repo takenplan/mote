@@ -1244,3 +1244,51 @@ Independent exact429 calendar-inventory review is
 `/tmp/mote-desktop-review-m15-lark-inventory-429c.md`, no new confirmed P0/P1/P2
 in13 lines; no reviewer execution. Actual big-inventory GREEN remains M15's
 separate run. Latest sourcecf435 is test-only after production429.
+
+
+### Current429 full Android and final-combination representatives
+
+Currenta0529e48 (production429c20d6) offline JVM+debug APK command
+`:app:testDebugUnitTest :app:assembleDebug` actually passes EXIT0,41s,44tasks,
+8executed; fresh75XML358/358,0 failures/errors/skips. Evidence
+`/tmp/m15-429-current-full-android.log/.exit/-counts.json/-source.json`, APK hashes
+`/tmp/m15-429-current-apk-hashes.json`. This newer full pass covers429; the earlier
+a95 full pass remains historical evidence for a95.
+
+Actual current429 native app/current519+d259 host representatives, every test1/1
+and own normal backend cleanup0:
+
+- personal verified export/document result/cancelled receipt sentinel/B stale
+  control:1.307s `/tmp/m15-429-519-portable-vault-green.*`;
+- same-instance/account portable import chosen archive/config preserved/lateB
+  picker denied:1.610s `/tmp/m15-429-519-portable-import-green.*`;
+- generated CapturePipeline drainA→B/new explicit B frame:.384s
+  `/tmp/m15-429-519-generated-capture-drain-green.*`, no platform screenshot;
+- original generic Imports >4MiB/private multipart/actual lost202ACK/same op and
+  explicit-confirm publication:18.939s `/tmp/m15-429-519-generic-import-green.*`;
+- unavailable/forbidden generic support download keeps existing selected
+  document sentinel:.862s `/tmp/m15-429-519-generic-sentinel-green.*`;
+- actual pairing server restart, original ACK410 plus same-grant self verification
+  and queue recovery:2.161s `/tmp/m15-429-519-pairing-server-restart-green.*`;
+- actual post-restart revoked credential preserves pending recovery and no upload:
+  2.047s `/tmp/m15-429-519-pairing-revoked-green.*`.
+
+The Actions representative first never reached instrumentation: the temporary
+universal driver's40s startup guard was shorter than this fixture's existing
+per-account180s real-publication waits. Log
+`/tmp/m15-429-519-actions-native-ledger-green-backend.*`; child exit-15, not a
+normal cleanup0. Possible generated temporary files remain; no real user data
+was touched. The next driver changes only its Actions startup wait to420s, enough
+for both existing180s guards plus setup; no repository/model/production deadline
+or assertion changes. Ready metadata file times show67.585s setup. Then actual
+M12 generated21A/2B→M05→native unregistered CalendarProvider uncertain insert,
+permission refusal, original marker reconstruction, B positive and A no duplicate
+insert passes1/1,.606s, `/tmp/m15-429-519-actions-native-ledger-bounded-green.*`,
+backend0. The test explicitly lacks system READ/WRITE_CALENDAR permissions.
+Adapter reconstruction is not an additional claimed OS SIGKILL; actual queue
+SIGKILL evidence is recorded separately above.
+
+No current required affected or M15 remote PR is claimed. Original model-copy/
+probe/provider catalog, Agent preview/recorded history and Joint policy/profile
+contracts remain explicit shared gaps. The initial40s attempt is a fixture
+startup failure, not a product RED or a passing native check.
