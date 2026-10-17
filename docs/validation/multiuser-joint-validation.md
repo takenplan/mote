@@ -1486,3 +1486,27 @@ existing shared fixture unknown-payload/Fastify overload error; the owner's
 already reviewed type-only InjectOptions payload cast was selected, and strict
 new-test noEmit2 EXIT0. No runtime fixture behavior changed. Whole affected,
 compiled client/native/UI and final same-SHA production/backup remain pending.
+
+### Next-gate native dependency admission
+
+Parent-required same-runtime constructor smoke found copied better-sqlite3 ABI147
+under Node24.21.0/ABI137 in this checkout (both server and actual mem0 resolver):
+`/tmp/mote-joint-final-native-db-smoke.*` EXIT1. Rebuilt only own locked12.10.0
+source using existing official Node24 headers and installed node-gyp, offline;
+`/tmp/mote-joint-node24-sqlite-offline-rebuild2.*` EXIT0. First launcher had a
+wrong relative working-directory path and never started compilation; retained.
+No dependency manifest/lock or peer binary changed. Same Node actual constructor,
+write/read/close smoke2 EXIT0, resolving mem0 to apps/server/node_modules/mem0ai/
+dist/oss/index.js and its native DB to own root better-sqlite3. This is required
+preflight evidence, not a complete Memory/model gate.
+
+### Confirmed remaining instance-only observation gap
+
+At503, a real admin shared-resource replacement does not resume the current
+unfinished A pipeline while B's equal-ID personal pipeline succeeds. Actual
+1/1fail11.495s `/tmp/mote-joint-processing-instance-change-red.*`; no physical
+shared retry after the replacement. Current-owner personal model saves are a
+separate passing path. Technical boundary/proposal is
+`/tmp/mote-joint-shared-observer-decision.md`: derived M04 refresh plus a genuinely
+M05-authorized continuation, never fabricated user contexts or revived old
+session/grant. This RED remains a whole-gate blocker until resolved.
