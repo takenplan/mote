@@ -137,3 +137,51 @@ interruption remain `/tmp/mote-desktop-v2-affected-attempt4.*`, never a pass. Th
 (31.833 overall), exit 0: `/tmp/mote-desktop-v2-ask-wait-green.log/.exit`. A
 new complete affected run is required. Desktop runtime/source and the actual
 Electron 20/20 acceptance remain byte-identical to runtime candidate `32f8215c`.
+
+## Complete natural run and isolated Actions completion budget
+
+The full affected command at `531b64ae547cb8bee0f8141aeca21d12eab83dcb` reached
+a natural exit 1, with identical before/after SHA. Preserved evidence:
+`/tmp/mote-desktop-v2-affected-attempt5.{log,exit,sha,after.sha,started,finished}`
+and `.result.json`. It ran from 01:23:30Z to 01:50:29Z on 2026-10-17.
+Desktop passed 587/587, Web 515/515, Agent 317 with one skip, Diagnostics 5/5,
+and Shared 192/192. Server had 2,636 passes, one failure, one skip and zero
+cancellations. The corrected Ask retry case passed in the full run (17.599 s).
+The nonzero workspace result short-circuited the root extra scripts and Android
+phase; those were not claimed as run.
+
+The one failure was the inherited Actions catalog scenario, before its pagination
+assertions: `complete(other-source)` returned false at the default 15-second
+`waitForState` deadline. The production watcher itself has a 15-second interval,
+and actual model generation is additional work. The test title's “before its
+limit” means filtering sources before applying a result-count limit, not a
+performance threshold. An isolated temporary-source probe retained all original
+assertions and observed the job move from absent through pending/running to
+completed/succeeded in 23.034 s, one attempt and no error, with 16 proposals.
+The complete scenario passed in 36.099 s (37.631 s overall), exit 0:
+`/tmp/mote-desktop-v2-action-catalog-probe.log/.exit`. Its 15-second scheduled
+sample was not dispatched before the job completed; no intermediate sample at exactly
+15 seconds is claimed. Detailed observations are in
+`/tmp/mote-desktop-v2-action-catalog-probe-result.md`.
+
+The minimal correction adds an optional timeout to the local `complete` helper,
+keeps its default 15 seconds and changes only this catalog scenario's
+`other-source` wait to 60 seconds. Shared helpers, other cases, all business
+assertions and production deadlines remain unchanged. A fresh complete affected
+run is still required. The corrected repository source case passed 1/1 in
+30.084 seconds (31.460 overall), exit 0:
+`/tmp/mote-desktop-v2-action-catalog-source-green.log/.exit`. Tested blob
+`435a4eadd6d1d887cc487112c3d8cba41a7c49b0` remained identical before and after.
+
+Timing here is uncontrolled functional evidence. Concurrent local work and
+resource snapshots are retained in
+`/tmp/mote-desktop-v2-concurrent-load-context.json` and
+`/tmp/mote-desktop-v2-current-resource-metrics.json`: 18 logical CPUs, reported
+74% available memory and approximately 228 MiB swap use at the later sample.
+The initial I/O snapshot is cumulative, not a sample at the failure. There is
+no controlled performance baseline or proof of timing causality; neither the
+wait corrections nor individual successes establish absence of a performance
+regression. No global timeout increase or production retry-policy change was
+made. The residual old-run Web paging failure separately passed its original
+single-file test in 86.07 s without changes; its cause was not inferred from
+that single success.
