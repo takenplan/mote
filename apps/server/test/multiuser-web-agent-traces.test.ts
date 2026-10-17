@@ -27,3 +27,16 @@ test('actual opted-in Agent inputs retain their owner and actual tool results, n
  const context=await f.node.authority.authenticate(f.a.token),db=new DatabaseSync(join(f.directory,'mote.sqlite'));try{const sql=new PrivateSql(db,f.a.userId,()=>f.node.authority.assert(context));for(let index=0;index<120;index++)recordAskTrace(sql,retired,{type:'generated.retention',payload:{index,text:'x'.repeat(3000)}},{traceEnabled:true,maxBytes:100*1024,maxFiles:1,maxEntries:100});const retained=db.prepare("SELECT count(*) n,sum(length(CAST(json AS BLOB))) bytes FROM ma_traces WHERE user_id=? AND json_type(json,'$.payload') IS NOT NULL").get(f.a.userId)!;assert.ok(Number(retained.n)<=100&&Number(retained.bytes)<=100*1024,'existing byte and entry retention both apply');assert.equal(db.prepare("SELECT count(*) n FROM ma_traces WHERE user_id=? AND json_type(json,'$.payload') IS NOT NULL").get(f.b.userId)!.n,0);}finally{db.close();}
  await f.ok(f.a.token,'/api/sources/same-source','PATCH',{enabled:false});assert.equal((await f.request(f.a.token,'/api/agent-view/events?runId='+runs[0])).statusCode,404,'retired original cannot disclose a saved prompt');assert.equal((await f.request(f.b.token,'/api/agent-view/events?runId='+runs[1])).statusCode,200);
 });
+
+test('an admitted query survives session relogin while the retired trace observer cannot miss the new personal opt-out',async t=>{
+ const f=await modelFixture(t);let enter!:()=>void,release!:()=>void;const entered=new Promise<void>(r=>enter=r),gate=new Promise<void>(r=>release=r);t.after(()=>release());
+ f.scripts.set('A',async(_body,_raw,res)=>{enter();await gate;writeMessagesResponse(res,{stage:1,text:JSON.stringify({answer:'GENERATED_RELOGIN_ANSWER',citationIds:[]})});});
+ let config=await f.ok(f.a.token,'/api/configuration');await f.ok(f.a.token,'/api/configuration/agentTrace','PUT',{revision:config.revision,value:{traceEnabled:true}});
+ const id=randomUUID();await f.ok(f.a.token,'/api/query-runs','POST',{id,input:{question:'GENERATED_RELOGIN_RECORDED_QUESTION'}});await entered;
+ const sequence=f.read(db=>Number(db.prepare('SELECT max(sequence) n FROM ma_traces WHERE user_id=? AND run_id=?').get(f.a.userId,id)!.n));
+ await f.ok(f.a.token,'/api/auth/logout','POST',{});const fresh=await f.ok(undefined,'/api/auth/login','POST',{username:'generated-a',password:'Generated-M11-account-password-01',mode:'client'});
+ config=await f.ok(fresh.token,'/api/configuration');await f.ok(fresh.token,'/api/configuration/agentTrace','PUT',{revision:config.revision,value:{traceEnabled:false}});release();
+ const run=await waitForState(()=>f.ok(fresh.token,'/api/query-runs/'+id),value=>value.status!=='running','admitted work after session relogin');assert.equal(run.status,'completed',JSON.stringify(run));
+ const traces=await f.ok(fresh.token,'/api/agent-view/events?runId='+id);assert.equal(traces.recording.enabled,false);assert.ok(traces.items.filter((event:any)=>Number(event.seq.split(':').at(-1))>sequence).every((event:any)=>event.trace.payload===undefined),'a retired settings entry must not record after the new account opt-out');
+ assert.equal((await f.request(f.a.token,'/api/agent-view/events?runId='+id)).statusCode,401);assert.equal((await f.ok(f.b.token,'/api/agent-view/runs')).items.length,0);
+});
