@@ -61,6 +61,13 @@ test('a running transcript does not hold the media resource',async t=>{
  await f.flush();
 });
 
+test('legacy host consumes the shared recording transitions and preserves both failed phase receipts through independent recovery',async t=>{
+ const f=await fixture(t);f.state.transcriptFails=true;f.state.mediaFails=true;await f.connect();await f.flush();
+ let status=await f.request('GET');assert.equal(status.counts.failed,2);assert.ok(status.steps.some((step:any)=>step.phase==='transcript'&&step.error==='generated_transcript_unavailable'));assert.ok(status.steps.some((step:any)=>step.phase==='media'&&step.error==='generated_media_permission'));
+ await f.restart();f.state.transcriptFails=false;await f.request('POST','/retry');await f.flush();status=await f.request('GET');assert.equal(status.counts.transcripts,1);assert.equal(status.counts.failed,1);assert.ok(status.steps.some((step:any)=>step.phase==='media'&&step.error==='generated_media_permission'));
+ const calls=f.calls.filter(call=>call.phase==='transcript').length;await f.restart();f.state.mediaFails=false;await f.request('POST','/retry');await f.flush();status=await f.request('GET');assert.equal(status.counts.audio,1);assert.equal(status.counts.failed,0);assert.equal(f.calls.filter(call=>call.phase==='transcript').length,calls);
+});
+
 test('recording intake produces complete material and Memory, bypasses ASR, preserves vendor deletion and deduplicates repeated history',async t=>{
  const f=await fixture(t);await f.connect();await f.flush();let status=await f.request('GET');assert.equal(status.counts.transcripts,1);assert.equal(status.counts.audio,1);assert.equal(status.counts.pending,0);
  const source=f.node.sources.getSource(status.sourceId),head=f.node.sources.getItem(source.id,'r1')!;

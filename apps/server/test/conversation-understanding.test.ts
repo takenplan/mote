@@ -12,6 +12,7 @@ import {MemoryStore} from '../src/memory.js';
 import {UsageLedger} from '../src/usage.js';
 import {parseSemanticProducts} from '../src/semantic-extraction.js';
 import {conversationUnderstandingProcessor,type ConversationUnderstandingOptions} from '../src/conversation-understanding.js';
+import {memoryWorkInstruction} from '../src/memory-work-contract.js';
 
 const userTime='2099-01-01T10:00:00Z',assistantTime='2099-01-01T10:06:00Z';
 const user=`## user · Recorded: ${userTime}\n\nGenerated fixture: Keep the monorepo and release each client independently.\n\n`;
@@ -127,19 +128,20 @@ test('the pinned extraction policy governs only memory candidates and retains it
 test('the version two producer retains more than eight candidates and explicit full target coverage',async t=>{
  const f=await fixture(t),pages=[f.page(0,user.length),f.page(user.length,assistant.length)],base=input(pages[0]);
  const members=[{key:'a'.repeat(64),id:f.anchor,offset:0,length:user.length,fingerprint:'c'.repeat(64),contextTime:'2026-10-01T00:00:00Z',state:'pending' as const,memoryIds:[]},{key:'b'.repeat(64),id:f.anchor,offset:user.length,length:assistant.length,fingerprint:'c'.repeat(64),contextTime:'2026-10-01T00:00:00Z',state:'pending' as const,memoryIds:[]}];
- const work={members,maxCandidates:16,instruction:'Inspect both independent ranges and preserve full coverage'},output=products(f.anchor);
+ const work={members,maxCandidates:16,instruction:memoryWorkInstruction(members,16)},output=products(f.anchor);
  output.memoryCandidates=Array.from({length:9},(_,index)=>({...output.memoryCandidates[0],title:'Generated candidate '+index}));
  const coverage=[{key:members[0].key,state:'checked',candidateIndexes:Array.from({length:9},(_,index)=>index)},{key:members[1].key,state:'no_candidates',candidateIndexes:[]}];
- const outputs=await processor(f,async request=>{assert.ok(request.taskContext?.memoryWork);return result(f.anchor,{...output,coverage,capacity:{saturated:false}});}).process({...base,materials:pages,config:{...base.config,memoryWork:work,generationContract:'d'.repeat(64)}});
+ const outputs=await processor(f,async request=>{assert.deepEqual(request.taskContext?.memoryWork,work);assert.ok(!request.question.includes(work.instruction),'The complete coverage contract travels once in taskContext');assert.match(request.question,/taskContext.memoryWork/);return result(f.anchor,{...output,coverage,capacity:{saturated:false}});}).process({...base,materials:pages,config:{...base.config,memoryWork:work,generationContract:'d'.repeat(64)}});
  const metadata=outputs[0].metadata;assert.equal(metadata.productsVersion,2);assert.equal((metadata.memoryCandidates as unknown[]).length,9);assert.deepEqual(metadata.memoryCoverage,coverage);assert.deepEqual(metadata.memoryCapacity,{saturated:false});assert.equal(metadata.runId,'generated-understanding');assert.equal(metadata.generationContract,'d'.repeat(64));
 });
 
 test('range-evaluation conversation products preserve 80 selected candidates and their contract without a semantic capacity envelope',async t=>{
  const lines=Array.from({length:80},(_,index)=>`Generated owner requires option ${index} for the project.`),originalBody=user+lines.join('\n')+'\n\n'+assistant;
  const f=await fixture(t,originalBody),base=input(f.page()),member={key:'a'.repeat(64),id:f.anchor,offset:0,length:originalBody.length,fingerprint:'c'.repeat(64),contextTime:userTime,state:'pending' as const,memoryIds:[]};
- const work={workContract:'range-evaluation@1',members:[member],instruction:'Assess this complete original and choose useful generated project context'},value=products(f.anchor);
+ const work={workContract:'range-evaluation@1',members:[member],instruction:memoryWorkInstruction([member],undefined,'range-evaluation@1')},value=products(f.anchor);
  value.memoryCandidates=lines.map((quote,index)=>({...value.memoryCandidates[0],title:'Generated selected project requirement '+index,statement:`The owner requires generated option ${index} in the project [${f.anchor}]`,evidence:[{id:f.anchor,quote}]}));
  const coverage=[{key:member.key,state:'checked',candidateIndexes:lines.map((_,index)=>index)}];
- const outputs=await processor(f,async request=>{assert.equal((request.taskContext!.memoryWork as {workContract:string}).workContract,'range-evaluation@1');return result(f.anchor,{...value,coverage});}).process({...base,config:{...base.config,memoryWork:work,generationContract:'d'.repeat(64)}});
+ const candidatePolicy={prompt:'Generated host selection policy. '.repeat(700)+' Preserve the exact policy tail.',profile:'coding',fingerprint:'b'.repeat(64)};
+ const outputs=await processor(f,async request=>{assert.deepEqual(request.taskContext!.memoryWork,work);assert.ok(request.question.length>20000,'A long host-owned policy remains complete beyond the former question bound');assert.ok(request.question.includes(candidatePolicy.prompt));assert.ok(!request.question.includes(work.instruction),'Range coverage instructions must not be duplicated in question');assert.match(request.question,/taskContext.memoryWork/);return result(f.anchor,{...value,coverage});}).process({...base,config:{...base.config,memoryWork:work,candidatePolicy,generationContract:'d'.repeat(64)}});
  const metadata=outputs[0].metadata;assert.equal(metadata.productsVersion,3);assert.equal(metadata.workContract,'range-evaluation@1');assert.equal((metadata.memoryCandidates as unknown[]).length,80);assert.deepEqual(metadata.memoryCoverage,coverage);assert.equal(metadata.memoryCapacity,undefined);assert.equal(metadata.generationContract,'d'.repeat(64));assert.equal(f.memories.list().length,0,'unreviewed shared candidates remain private products');
 });

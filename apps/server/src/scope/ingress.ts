@@ -24,8 +24,8 @@ const batchId=z.string().min(1).max(256);
 const conflict=()=>new PrivateDataError('conflict',409);
 export const strictBase64=(value:string)=>{if(value.length%4!==0||!/^[A-Za-z0-9+/]*={0,2}$/.test(value))throw new PrivateDataError('invalid_data');const bytes=Buffer.from(value,'base64');if(bytes.toString('base64')!==value)throw new PrivateDataError('invalid_data');return bytes;};
 const captureId=(sourceId:string,item:SourceItem)=>{const digest=identityHash([sourceId,item.externalId,item.revision]);return `${digest.slice(0,8)}-${digest.slice(8,12)}-5${digest.slice(13,16)}-a${digest.slice(17,20)}-${digest.slice(20,32)}`;};
-export type IngressOriginalFormat='capture'|'source-item'|'file'|`processor:${string}`;
-type SuppliedOriginal={bytes:Buffer;mime:string;format?:'source-item'|'file'|`processor:${string}`;processingProfileId?:string};
+export type IngressOriginalFormat='capture'|'source-item'|'file'|'recording-audio-backup'|`processor:${string}`;
+type SuppliedOriginal={bytes:Buffer;mime:string;format?:Exclude<IngressOriginalFormat,'capture'>;processingProfileId?:string};
 export type IngressReceipt={version:3;id:string;deploymentId:string;userId:string;sourceId:string;batchId:string;state:'received';captures:{id:string;duplicate:boolean;original?:Original}[]};
 export interface SourceCapability {
  receiveCaptures(sourceId:string,batchId:string,values:unknown[]):IngressReceipt;
@@ -259,8 +259,8 @@ export class IngressHost{
   function intakeSourceItems(sourceId:string,id:string,values:unknown[],inputs?:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[],importDeclaration?:unknown,afterWrite?:(receipt:IngressReceipt)=>void,retained?:{hash:string;mime:string;bytes:number}){
    const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
    if(retained&&(items.length!==1||!sql.get('SELECT hash FROM ig_objects WHERE user_id=$user AND hash=? AND bytes=?',retained.hash,retained.bytes)))throw conflict();
-   if(inputs&&(inputs.length!==items.length||inputs.some((v,index)=>v&&(!Buffer.isBuffer(v.bytes)||v.bytes.length>512*1024*1024||!v.mime||v.mime.length>200||v.format!==undefined&&!['source-item','file'].includes(v.format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(v.format)||v.processingProfileId!==undefined&&(!/^[a-z][a-z0-9.-]{0,99}$/.test(v.processingProfileId)||(formats?.[index]??v.format??'file')!=='file')))))throw new PrivateDataError('invalid_data');
-   if(formats&&(formats.length!==items.length||formats.some(format=>format!==undefined&&!['capture','source-item','file'].includes(format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(format))))throw new PrivateDataError('invalid_data');
+   if(inputs&&(inputs.length!==items.length||inputs.some((v,index)=>v&&(!Buffer.isBuffer(v.bytes)||v.bytes.length>512*1024*1024||!v.mime||v.mime.length>200||v.format!==undefined&&!['source-item','file','recording-audio-backup'].includes(v.format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(v.format)||v.processingProfileId!==undefined&&(!/^[a-z][a-z0-9.-]{0,99}$/.test(v.processingProfileId)||(formats?.[index]??v.format??'file')!=='file')))))throw new PrivateDataError('invalid_data');
+   if(formats&&(formats.length!==items.length||formats.some(format=>format!==undefined&&!['capture','source-item','file','recording-audio-backup'].includes(format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(format))))throw new PrivateDataError('invalid_data');
    for(const item of items)forgetting.allowed(sourceId,item);
    return batch(sourceId,id,inputs?{items,formats,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime,format:v.format??'file',...(v.processingProfileId?{processingProfileId:v.processingProfileId}:{})}:null),...(importDeclaration===undefined?{}:{importDeclaration})}:retained?{items,retained}:importDeclaration===undefined?items:{items,importDeclaration},'source-item',()=>{
     const pin=declaration(sourceId,importDeclaration),binding=source(sourceId),archive=binding.retention==='archive';if(binding.retention==='reference'&&(inputs?.some(Boolean)||retained))throw conflict();
