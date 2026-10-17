@@ -1,4 +1,3 @@
-import type {DatabaseSync} from 'node:sqlite';
 import type {EvidencePin,MaterialPin} from './ask-schema.js';
 import type {AskEvidence} from './ask-evidence.js';
 import {exactProofs} from './ask-proof.js';
@@ -8,56 +7,6 @@ type Root={kind:'capture'|'material'|'source';id:string;incarnation:string;measu
 export type HistoryRoots={version:1;roots:Root[]};
 type Proof=HistoryRoots&{pins:EvidencePin[];materials:MaterialPin[]};
 const decode=<T>(value:unknown):T=>JSON.parse(String(value));
-
-/** Persisted SQL, rather than connection-local callbacks, also protects offline
- * writers. Dependencies are owner-bound and include inherited dialogue roots. */
-export function installConversationHistory(db:DatabaseSync){
- db.exec(`CREATE TABLE IF NOT EXISTS ma_history_materials(user_id TEXT NOT NULL,id TEXT NOT NULL,incarnation TEXT NOT NULL,PRIMARY KEY(user_id,id));
- INSERT OR IGNORE INTO ma_history_materials SELECT user_id,id,lower(hex(randomblob(16))) FROM pd_materials;
- CREATE TRIGGER IF NOT EXISTS ma_history_material_created AFTER INSERT ON pd_materials BEGIN INSERT INTO ma_history_materials VALUES(new.user_id,new.id,lower(hex(randomblob(16)))) ON CONFLICT(user_id,id) DO UPDATE SET incarnation=excluded.incarnation; END;
- CREATE TRIGGER IF NOT EXISTS ma_history_material_removed AFTER DELETE ON pd_materials BEGIN DELETE FROM ma_history_materials WHERE user_id=old.user_id AND id=old.id; END;
- CREATE TABLE IF NOT EXISTS ma_history_turns(user_id TEXT NOT NULL,turn_id TEXT NOT NULL,proof TEXT NOT NULL,stale INTEGER NOT NULL DEFAULT 0,deleted INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(user_id,turn_id),FOREIGN KEY(user_id,turn_id) REFERENCES ma_turns(user_id,id) ON DELETE CASCADE);
- CREATE TABLE IF NOT EXISTS ma_history_dependencies(user_id TEXT NOT NULL,turn_id TEXT NOT NULL,kind TEXT NOT NULL,root_id TEXT NOT NULL,PRIMARY KEY(user_id,turn_id,kind,root_id),FOREIGN KEY(user_id,turn_id) REFERENCES ma_history_turns(user_id,turn_id) ON DELETE CASCADE);
- CREATE INDEX IF NOT EXISTS ma_history_root ON ma_history_dependencies(user_id,kind,root_id,turn_id);
- CREATE TABLE IF NOT EXISTS ma_history_runs(user_id TEXT NOT NULL,run_id TEXT NOT NULL,proof TEXT NOT NULL,PRIMARY KEY(user_id,run_id),FOREIGN KEY(user_id,run_id) REFERENCES ma_runs(user_id,id) ON DELETE CASCADE);
- CREATE TABLE IF NOT EXISTS ma_history_run_dependencies(user_id TEXT NOT NULL,run_id TEXT NOT NULL,kind TEXT NOT NULL,root_id TEXT NOT NULL,PRIMARY KEY(user_id,run_id,kind,root_id),FOREIGN KEY(user_id,run_id) REFERENCES ma_history_runs(user_id,run_id) ON DELETE CASCADE);
- CREATE INDEX IF NOT EXISTS ma_history_run_root ON ma_history_run_dependencies(user_id,kind,root_id,run_id);`);
- const matching=(owner:string,kind:Root['kind'],id:string)=>`SELECT t.id FROM ma_turns t WHERE t.user_id=${owner} AND (EXISTS(SELECT 1 FROM ma_history_dependencies d WHERE d.user_id=t.user_id AND d.turn_id=t.id AND d.kind='${kind}' AND d.root_id=${id}) OR NOT EXISTS(SELECT 1 FROM ma_history_turns h WHERE h.user_id=t.user_id AND h.turn_id=t.id))`;
- const matchingRuns=(owner:string,kind:Root['kind'],id:string)=>`SELECT r.id FROM ma_runs r WHERE r.user_id=${owner} AND (EXISTS(SELECT 1 FROM ma_history_run_dependencies d WHERE d.user_id=r.user_id AND d.run_id=r.id AND d.kind='${kind}' AND d.root_id=${id}) OR NOT EXISTS(SELECT 1 FROM ma_history_runs h WHERE h.user_id=r.user_id AND h.run_id=r.id))`;
- const change=(owner:string,turns:string,deleted:boolean,runs:string)=>{
-  const condition=`user_id=${owner} AND id IN (${turns})`;
-  return `UPDATE ma_conversations SET summary=NULL,revision=revision+1 WHERE user_id=${owner} AND id IN(SELECT conversation_id FROM ma_turns WHERE ${condition});
-   ${deleted?`UPDATE ma_runs SET result=NULL,context='{}',workspace=NULL,events='[]',generation=generation+1,status=CASE WHEN status='running' THEN 'failed' ELSE status END WHERE user_id=${owner} AND id IN (${runs});
-    UPDATE user_tasks SET checkpoints='{}',progress='null' WHERE user_id=${owner} AND task_id IN(SELECT task_id FROM ma_fragments WHERE user_id=${owner} AND run_id IN (${runs}) UNION SELECT task_id FROM ma_runs WHERE user_id=${owner} AND id IN (${runs}));
-    DELETE FROM ma_artifacts WHERE user_id=${owner} AND run_id IN (${runs});
-    DELETE FROM ma_traces WHERE user_id=${owner} AND run_id IN (${runs});
-    UPDATE ma_units SET input='{}' WHERE user_id=${owner} AND run_id IN (${runs});
-    UPDATE ma_turns SET result=json_object('answer','','citations',json('[]'),'trace',json('[]'),'runId',coalesce(json_extract(result,'$.runId'),'')) WHERE ${condition};`:''}
-   UPDATE ma_history_turns SET ${deleted?'deleted=1,stale=0':'stale=1'} WHERE user_id=${owner} AND turn_id IN (${turns});
-   ${deleted?`INSERT OR IGNORE INTO ma_history_turns SELECT user_id,id,'{"version":1,"roots":[],"pins":[],"materials":[]}',0,1 FROM ma_turns WHERE ${condition};`:''}`;
- };
- for(const [name,table,event,owner,kind,id,when,deleted] of [
-  ['capture_deleted','pd_captures','BEFORE DELETE','old.user_id','capture','old.id','',true],
-  ['material_deleted','pd_materials','BEFORE DELETE','old.user_id','material','old.id','',true],
-  ['source_deleted','pd_sources','BEFORE DELETE','old.user_id','source','old.id','',true],
-  ['capture_changed','pd_captures','AFTER UPDATE OF json,fingerprint','new.user_id','capture','new.id','WHEN new.json!=old.json OR new.fingerprint!=old.fingerprint',false],
-  ['material_changed','pd_materials','AFTER UPDATE OF revision,min_visible_sequence','new.user_id','material','new.id','WHEN new.revision!=old.revision OR new.min_visible_sequence!=old.min_visible_sequence',false],
-  ['source_changed','pd_sources','AFTER UPDATE OF json','new.user_id','source','new.id',"WHEN json_extract(new.json,'$.enabled') IS NOT json_extract(old.json,'$.enabled') OR json_extract(new.json,'$.retention') IS NOT json_extract(old.json,'$.retention') OR json_extract(new.json,'$.ownerRelation') IS NOT json_extract(old.json,'$.ownerRelation') OR json_extract(new.json,'$.ownerRelationVersion') IS NOT json_extract(old.json,'$.ownerRelationVersion') OR json_extract(new.json,'$.sourceContext') IS NOT json_extract(old.json,'$.sourceContext') OR json_extract(new.json,'$.name') IS NOT json_extract(old.json,'$.name')",false],
- ] as const){db.exec(`DROP TRIGGER IF EXISTS ma_history_${name};CREATE TRIGGER ma_history_${name} ${event} ON ${table} ${when} BEGIN ${change(owner,matching(owner,kind,id),deleted,matchingRuns(owner,kind,id))} END;`);}
- // M07 anchors are disposable interpretation cache. Withdraw prepared context
- // and summaries before their lineage disappears, retaining historical prose.
- db.exec(`DROP TRIGGER IF EXISTS ma_history_cache_removed;CREATE TRIGGER ma_history_cache_removed BEFORE DELETE ON mm_evidence BEGIN ${change('old.user_id',matching('old.user_id','material','old.material_id'),false,matchingRuns('old.user_id','material','old.material_id'))} END;`);
- // Ordinary cache/projection withdrawal may hide a head until rebuilding.
- // Only the explicit owner/privacy retirement event erases historical prose.
- for(const event of ['INSERT','UPDATE OF epoch'] as const){const name=event==='INSERT'?'insert':'update';db.exec(`DROP TRIGGER IF EXISTS ma_history_retire_${name};CREATE TRIGGER ma_history_retire_${name} AFTER ${event} ON pd_material_retirements BEGIN ${change('new.user_id',matching('new.user_id','material','new.material_id'),true,matchingRuns('new.user_id','material','new.material_id'))} UPDATE ma_history_materials SET incarnation=lower(hex(randomblob(16))) WHERE user_id=new.user_id AND id=new.material_id; END;`);}
- // Tombstones retract all retained versions of that source item, not merely its
- // latest capture. Later recreation must never make erased prose reappear.
- for(const event of ['INSERT','UPDATE OF capture_id'] as const){
-  const turns=`SELECT t.id FROM ma_turns t WHERE t.user_id=new.user_id AND (EXISTS(SELECT 1 FROM ma_history_dependencies d JOIN pd_captures c ON c.user_id=d.user_id AND c.id=d.root_id WHERE d.user_id=t.user_id AND d.turn_id=t.id AND d.kind='capture' AND c.source_id=new.source_id AND c.external_id=new.external_id) OR NOT EXISTS(SELECT 1 FROM ma_history_turns h WHERE h.user_id=t.user_id AND h.turn_id=t.id))`;
-  const runs=`SELECT r.id FROM ma_runs r WHERE r.user_id=new.user_id AND (EXISTS(SELECT 1 FROM ma_history_run_dependencies d JOIN pd_captures c ON c.user_id=d.user_id AND c.id=d.root_id WHERE d.user_id=r.user_id AND d.run_id=r.id AND d.kind='capture' AND c.source_id=new.source_id AND c.external_id=new.external_id) OR NOT EXISTS(SELECT 1 FROM ma_history_runs h WHERE h.user_id=r.user_id AND h.run_id=r.id))`;
-  const name=event==='INSERT'?'insert':'update';db.exec(`DROP TRIGGER IF EXISTS ma_history_tombstone_${name};CREATE TRIGGER ma_history_tombstone_${name} AFTER ${event} ON pd_source_heads WHEN coalesce((SELECT json_extract(json,'$.provenance.deleted') FROM pd_captures WHERE user_id=new.user_id AND id=new.capture_id),0)=1 BEGIN ${change('new.user_id',turns,true,runs)} END;`);
- }
-}
 
 /** Host-only receipts authorize retained dialogue, never original/tool reads or
  * citations. New evidence still uses AskEvidence.validate without relaxation. */

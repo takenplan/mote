@@ -36,7 +36,7 @@ import {safeTextWindow} from '../text-window.js';
 import {parseNavigationRef,intersectNavigationScope,navigationScope} from '../context-navigation.js';
 import {askLifecycle} from './ask-lifecycle.js';
 import {memoryPageSchema,memoryReadFiltersSchema} from './memory-data.js';
-import {ASK_DOMAIN,AskError,askHash,askInputSchema,insightInputSchema,askTaskSchema,installAsk,persistedAskChildrenPending,persistedAskRun,askUserDeleted,persistedAutomationCurrent,type AskSnapshot,type AskInput,type AskRow,type AskTask,type AskScope,type EvidencePin,type MaterialPin} from './ask-schema.js';
+import {ASK_DOMAIN,AskError,askHash,askInputSchema,insightInputSchema,askTaskSchema,installAsk,persistedAskChildrenPending,persistedAskHistoryOwners,persistedAskRun,askUserDeleted,persistedAutomationCurrent,type AskSnapshot,type AskInput,type AskRow,type AskTask,type AskScope,type EvidencePin,type MaterialPin} from './ask-schema.js';
 
 const waiting=()=>new ExecutionFailure('waiting','ask_children_waiting',100,{executionStarted:false});
 const terminal=(state:string)=>!['running','waiting'].includes(state);
@@ -72,7 +72,7 @@ export class AskHost{
  /** Upgrade canonical host rows before executors, cache retirement or ordinary
   * requests can run. This mints no session, task grant, tool or model authority. */
  private backfillHistory(){
-  const owners=this.db.prepare('SELECT DISTINCT t.user_id FROM ma_turns t LEFT JOIN ma_history_turns h ON h.user_id=t.user_id AND h.turn_id=t.id WHERE h.turn_id IS NULL UNION SELECT DISTINCT r.user_id FROM ma_runs r LEFT JOIN ma_history_runs h ON h.user_id=r.user_id AND h.run_id=r.id WHERE h.run_id IS NULL').all();
+  const owners=persistedAskHistoryOwners(this.db);
   for(const owner of owners){const userId=String(owner.user_id);if(askUserDeleted(this.db,userId))continue;
    const sql=new PrivateSql(this.db,userId,()=>{}),cursor=new PrivateCursor(this.cursorKey,this.runtime.authority.deploymentId,userId),data=new PrivateData(sql,cursor);
    sql.transaction(()=>{for(const conversation of sql.all('SELECT id,scope FROM ma_conversations WHERE user_id=$user ORDER BY id')){
