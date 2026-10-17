@@ -47,8 +47,10 @@ request count and monetary charge are unknown; a zero request counter is not
 evidence of no model invocation. The isolated runtime was cleaned.
 
 The [sanitized receipt](shared-business-flows-codex-live-2026-10-18.json) records
-the source head at execution and five Agent source hashes, which still match
-the delivered files. This validates the long-input Agent path; it does not prove
+the source head at execution and five Agent source hashes. Those match this
+corrective branch at runtime freeze `9e9f112c`; the combined integration has its
+own source identity and acceptance below. This validates the long-input Agent
+path; it does not prove
 the complete Coding product/independent Memory review journey or general recall.
 
 ## Required affected-component check
@@ -84,6 +86,90 @@ Final combined-candidate affected checks are run by the main integration task,
 including this correction, before PR publication. Their source identity and
 actual results will be recorded here when complete.
 
+## Initial combined-candidate check — failed
+
+The main integration task ran `npm run check:affected -- --base origin/main`
+on `e284df41a4e495227d01034b532aa81181cc4d42` (tree
+`b8fa7da3c2d3942831935fd4be3064865b8dfcd9`). Its second parent is this branch's
+runtime freeze `9e9f112c9bb4d26a66b14b1006226cf622137f03`; ancestry was verified.
+All five affected groups were selected. The command ended with exit code **1**:
+
+| Component | Passed | Failed | Existing skips |
+| --- | ---: | ---: | ---: |
+| Desktop | 589 | 0 | 0 |
+| Server | 3,013 | 1 | 2 |
+| Web | 583 | 0 | 0 |
+| Agent | 327 | 0 | 1 |
+| Diagnostics | 5 | 0 | 0 |
+| Shared | 195 | 0 | 0 |
+
+The failure was `multiuser-ask.test.ts`, “pending-child admission still retires a
+stale conversation before the held child settles”: its assertions passed, then
+the after hook's `rmSync` returned `ENOTEMPTY` while workspace cleanup could still
+recreate an empty work directory. The result is retained as a failure. The
+root-level script/Central-runner regressions and Android unit task were not
+executed because the workspace command failed. The main integration task owns
+the lifecycle correction and final affected rerun; this attempt does not
+establish final acceptance.
+
+Before this full attempt, the same combined source passed a fresh Central build,
+13 recording/backup/revision/decode-settlement fixture tests, and seven local
+Codex acceptance scenarios including two actual model Ask calls for separate
+users. Those are separate, source-specific observations; they do not convert
+the failed full command into a pass.
+
+## Second combined-candidate check — application suites passed, tooling failed
+
+On `bfc4cbdf05b9b8af98ae592828856efd09f1c3a3` (tree
+`8777b57d8d260c5c98c112c1a06ad3f46ce5e46f`), the same full affected command
+passed every application workspace: Desktop 589; Server 3,069 plus two existing
+skips; Web 583; Agent 327 plus one existing skip; Diagnostics 5; Shared 195.
+Server included the original pending-child case unchanged and 55 new cleanup
+regression nodes. Fresh Central build and seven real local Codex scenarios,
+including two model Ask calls, had also passed on this source.
+
+The following combined script group reported 81 passes and two failures. Both
+`dev-log-retention.test.mjs` failures were generated-service startup timeouts:
+the fixture returned only `{ok:true}`, while current CLI readiness requires the
+multi-user public health contract. This is not a capacity-preflight failure or
+evidence that startup merely needs a longer budget. Correct the generated
+response, retaining the production health check and existing capacity assertions.
+The full command remains a failure; later script stages and Android were not
+executed in this attempt. The final corrected-source results are recorded
+separately before publication.
+
+After that failure, the main task separately ran the previously truncated
+consumer stages on the same `bfc4cbdf` source: client script tests passed 5/5,
+the Central runner passed, and Android `:app:testDebugUnitTest` passed all 362
+tests with no failures, errors or skips. These are separate successful commands,
+not a relabeling of the failed affected check. The generated readiness fixture
+was then corrected in `3518706b68ece5781fb8813d5a5ad8c8dbaa22ad`; its focused
+eight release-tool tests passed. That commit changes only
+`scripts/release/dev-log-retention.test.mjs`, so application/runtime source and
+the preceding real Codex acceptance source are identical to `bfc4cbdf`.
+
+## Third combined-candidate check — late directory creation
+
+The full affected check on `3518706b68ece5781fb8813d5a5ad8c8dbaa22ad` (tree
+`892fa9868776447df26c7ea308954d7ebc46558f`) naturally exited **1** after failing
+in the workspace stage:
+Server reported 3,068 passes, one failure and two existing skips. Desktop 589,
+Web 583, Agent 327 plus one existing skip, Diagnostics 5 and Shared 195 passed.
+The failure was `multiuser-processing.test.ts`, “held file term review cannot
+publish after file-cancel”. Its business assertions passed; the after hook's
+directory removal returned `ENOTEMPTY` as late work created empty directories.
+This is a cleanup/lifecycle failure, not observed late-result publication. The
+failure is retained, and root script, Central-runner and Android stages were
+not reached in this attempt. The main task owns the remaining directory-creation
+and close-order correction and subsequent affected checks.
+
+The main task then ran the truncated stages separately on the same `3518706b`
+source: all 83 root script tests, all five client tests and the Central runner
+passed. Android's unit-test command exited successfully with its test task
+`UP-TO-DATE`; the previously executed 362-test result on `bfc4cbdf` is retained
+as the actual Android execution. These supplemental commands do not turn the
+failed full affected check into a pass.
+
 ## Preserved unsuccessful attempts
 
 - Initial affected checks were interrupted while review investigated
@@ -114,7 +200,8 @@ actual results will be recorded here when complete.
 
 No production configuration, personal archive, original screenshot, physical
 device, supplier recording account or deployed release was used. Only the real
-Codex check above used the local model login; no historical failure was retried.
+Codex checks identified above used the local model login; no historical failure
+was retried.
 Native client UI and runtime behavior were not validated
 by the server fixtures. The audit's remaining business differences are not
 closed by passing this correction's tests.
@@ -123,6 +210,7 @@ accepted MVP scope. Current-version restart and data restoration remain covered
 by the backup journeys above.
 The scoped recording archive still publishes raw-export and segment Materials,
 where the legacy archive stores one canonical transcript with chunks; audit F10
-retains that consumer/product-shape difference for a subsequent decision. Stage
+retains that consumer/product-shape difference as an implementation follow-up
+under the existing ADR. Stage
 errors are independently durable and exposed by the API, while existing native
 and Web recording settings still show the aggregate error.
