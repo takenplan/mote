@@ -24,7 +24,7 @@ decodes invitations in both negative retirement assertions; it is still uncompil
 | Native Google/Gmail/Lark/recording connectors | Owned M10 instances, encrypted same-operation intents, source mappings, OAuth/status/cancel/retry/disconnect and real authenticated original WAV playback narrowly pass. | Obtain explicitly frozen M13 large UTF-8 result/fixed task-identity delta, then exercise the original large preview/status task result. M10 explicitly assigns pinned CLI dependency installation to the deployment administrator; the disabled native user-install entry reflects that established permission change, not a pending user-level installer API. Never add a shell fallback. |
 | Generic Imports and upload staging | Joint c45; multipart/private preview/explicit confirmation/actual lost admission ACK passes13.234s. CentralImports exact original/archive/admission checks pass3 JVM tests. | Final same-body recovery regression plus required related server tests. Explicit confirmation must still be the publication boundary; saved M03 bytes alone are insufficient. |
 | Files raw/current text, original playback, correction, confirmed names and export | Joint a10 is already consumed. Actual native generated WAV/chunks/correction/names/exact text and authenticated original playback pass. | Retain exact source/artifact/chunk/text and original hash assertions in final representative. |
-| Original Files cancel/stage-retry/delete | Typed203 composed atd524. Native retry400 is fixed; actual lost-ACK/recreation/sameop/task/A-B1/1 GREEN1.272s,357JVM0. Separate stop/delete ends in real DELETE503 UnsupportedMediaType before handler. Actual HTTP unknown/later consent and JSON DELETE preserve A404/B200; these are not new native passes. | Default DELETE JSONemptyobject0498 and unknown-consent instrument test are UNCOMPILED. Joint4be candidate supersedes empty file DELETE with stable operationId plus captured originalGeneration and exact allow decisionId; await its explicit replacement freeze, adapt the original native control and repeat lost-ACK/stale-intent/A-B. A newly noted source-recreation static candidate is not confirmed. No duplicate backend. |
+| Original Files cancel/stage-retry/delete | Typed203 composed atd524. Native retry400 is fixed; actual lost-ACK/recreation/sameop/task/A-B1/1 GREEN1.272s,357JVM0. Separate stop/delete ends in real DELETE503 UnsupportedMediaType before handler. Actual HTTP unknown/later consent and JSON DELETE preserve A404/B200; these are not new native passes. | Default DELETE JSONemptyobject0498 and unknown-consent instrument test are UNCOMPILED. Joint4be candidate supersedes empty file DELETE with stable operationId plus captured originalGeneration and exact allow decisionId; await its explicit replacement freeze, adapt the original native control and repeat lost-ACK/stale-intent/A-B. Source-recreation stale first-send DELETE is now actual RED at16532eb0 (200/A404, Bpost200); Joint owns its fix. No duplicate backend. |
 | Model preset copy with credentials, connection probe and provider model directory | These three controls are present in baseline98d CentralAdmin.models. Current ownedConfiguration(models) keeps CAS/secret preservation but explicitly displays that copy/probe/directory await multiuser APIs. An Ask selection test is not equivalent. | Obtain the shared M04-compatible owned/reference contract; retain private credential ownership, opaque shared resource rules, fixed original Api/revision and existing endpoint/network safeguards. TDD actual original controls; do not infer masked secrets or recreate old global model routes. |
 | QR/JSON/scan pairing and original device reauthorization | Final producer48547e8f (PR144) merged at3a475da1, not yet rebuilt here. Native e8b9/806 parses v2, journals PKCE before claim, checks exact self, preserves finite credential expiry and same-grant ACK recovery. Earlier original pairing2.041s and issuer QR0.935s pass; parser5/5. | Confirmed post-restart ACK410 P2: real ACK200→restart→self200→ACK410 leaves pending,2.109s EXIT1. Minimal c0/d3 now passes the real restart samecase2.117s; revoked credential negative2.019s, corrected five-field/self/unsaved-draft reauthorization0.408s and held-picker samecase0.993s pass. Final bounded closure review and final combined core Worker recovery remain. |
 | Native Personal MCP create/revoke | Actual original form POST400 invalid_request sends serverUrl/label/access. Preparedb603 uses strict M01 label/access/sourceIds; explicit write-source allowlist remains available. | Compile and execute the original native creation/revocation regression including cancelled revoke, B same-label grant unchanged and detached A control retirement. The prior read/helper tests do not close this real form failure. |
@@ -217,3 +217,27 @@ cleanup exits are retained; no static review is counted as these executions.
   with the real parser and remains uncompiled/unrun. No invitation runtime fix
   or GREEN is claimed. Preserve the exact
   current APK at `/tmp/m15-before-invitation-resume-app.apk` for its future RED.
+
+
+## Current bounded Files PREP consumption and separate actual RED
+
+Parent explicitly released8177e8af4eb55410afe2e27dff5da25b85920910 for bounded
+consumer work despite pending producer types/whole gates. Ownmerge87d1834f
+retains exact final QR and attachment fields;8468i18n/22TSsyntax/diff checks0.
+No new Kotlin build, producer noEmit or final acceptance is inferred.
+
+The original2cc60 stale allow-after-forget sequence now uses the exact new
+delete and decision bodies, preserving its original expected409/upload410 and
+B positive. It passes. A separate current-source replacement test is actualRED:
+A file GETgeneration0 freezes a not-yet-admitted op; real sourceDELETE and exact
+source/bytes/revision/capture re-creation leaves generation0; sending the old
+intent returns200 and removes the replacement (GET404), while B post-check200.
+Expected409/A200. Fixed16532eb0057338f0672ec3eae430e954edd4086c,
+`/tmp/m15-forget-source-replacement-red2.log/.exit`:2tests1pass1fail0skip,
+2.351s EXIT1. Earlierb55 log is retained. No DB seeding/model/HTTP listener.
+Joint is the sole shared producer owner; this failing durable test stays visible
+until its exact fix is consumed. Generic DELETE JSON{} alone is insufficient.
+
+Test-only23af913a also prepares actual same-invitation begin recovery after lost
+redeem plus device-label/same-owner-login changes; it is uncompiled/unrun, and no
+Android production failure is claimed from Desktop's distinct implementation.

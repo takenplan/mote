@@ -1092,3 +1092,36 @@ await the next parent-allocated short build. Joint4be decision-CAS wire remains
 a candidate awaiting its own type/review freeze; its new required body must be
 consumed before claiming final native file deletion. M15 has released heavy
 resources; it has no final affected result or Draft PR.
+
+
+### Limited PREP8177 and independently confirmed source reset —16532eb0
+
+Parent released bounded8177 for consumers, not final acceptance. Ownmerge
+87d1834f resolves comments/history only, removes duplicate type import and retains
+QR/Joint full input fields.8468i18n/22syntax parse/diff checks0. New noEmit and
+Android builds remain pending.
+
+The original2cc regression is migrated to actual DELETE{operationId,originalGeneration}
+and returned decisionUUID, without weakening late409/upload410/B assertions.
+It isGREEN. A new true source-delete/recreate sequence confirms the independent
+old-first-send risk: capture original generation0 and stable operation before
+admission, DELETE source, register same source, upload exact same bytes/revision
+and captureUUID, get generation0 again, send frozen oldbody ->200 and A404;
+B remains200 after this deletion. Expected409/A200. Both calls use real production
+app routes; no seeded database or provider. Test-onlyb55 adds the case,165 adds
+Bpost before the failing assertion. Final2tests1pass1fail0skip2.351s EXIT1 at
+`/tmp/m15-forget-source-replacement-red2.log/.exit`; first3.486s log retained.
+Joint source owner receives this issue; no duplicate Android backend is written.
+
+During the allocated Desktop-only heavy phase, existingd524 fixture APK against
+QR485-composed host passes real WorkManager lateACK/Bexplicit/network recovery
+1/1 EXIT0,0.699s, `/tmp/m15-qr485-worker-late-ack.log/.exit`, backend0. A later
+SourceWorker command's CreateProcess transport failure is preserved; recovery
+read-only checks found zero matching process/evidence, then the same command's
+only resubmission stopped before tests because emulator5562 was gone. Backend0,
+zero instrumentation tests, environment failure, no SourceWorker product claim.
+No emulator restart/build occurred while Desktop retained the heavy window.
+
+Test-only23af adds same invitation begin lost-redeem/edited-name/same-owner-login
+regression with full claim/challenge/name correlation; no new production change
+and no compiled/native pass is claimed.
