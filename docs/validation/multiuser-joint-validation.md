@@ -1610,3 +1610,35 @@ failed receipts; neither is overwritten or counted as runtime acceptance.
 Final union/consumer/compiled/backup acceptance remains pending. Optional disabled
 recipe dependency behavior and all legacy custom packs are not inferred from this
 finite matrix.
+
+### Recovery owner final provenance update (parent-confirmed)
+
+PR150 final head67b992f32016ac5d31f4da265ff0e02cfb2e12bd; production
+2699d1f7eeeb12390c2b87229c11c32dc731d9ee; tested recovery fixture
+371bd18649a40b0ac3a9764a5223b08970266d38. Parent reports module27/27 and
+freshly compiled personal/native/Docker/Hindsight combined recovery1/1,
+218.249s,0modelcalls. This is the completed recovery owner's execution, not a
+Joint rerun. Its full affected gate remains EXIT1: Server2780pass/12fail/
+1cancel/2skip; Ask's original20s wait is unresolved, five REDs reproduce on
+unchanged a2, and ACK does not establish a physical-occupancy protection bypass.
+Joint retains the minimally selected policy-plan production semantics plus the
+mechanical preflight rename; no later recovery WIP or unrelated fixes are
+implicitly composed. The finite recovery green does not close Joint's final
+union gate. The completed owner is not awakened for ordinary provenance checks.
+
+### Attachment parent reincarnation, producer fix
+
+M13 test-only410acf78 was imported as a durable producer regression, independently
+reproducing the old await/preflight gap on current Joint source: retired A request
+returned200 and created a new child (`mote-joint-attachment-parent-incarnation-red`,
+EXIT1). The existing original counter now advances for retired attachment parents;
+prepareAttachment captures it before await and checks it before duplicate/admission
+inside the existing transaction. No new counter mechanism, table or client guard.
+Same-source/same-parent-UUID and retained-file reconstruction now rejects the old
+request, accepts a new explicit A request, and preserves equal-ID B:2/2,0skip,
+3.310s EXIT0 (`mote-joint-attachment-parent-incarnation-green2`). Existing real
+attachment OCR/cache, held delete/privacy/head fences, data-only restore/navigation,
+undeclared lineage and forget/allow-again/upgrade neighbors10/10,29.991s EXIT0
+(`mote-joint-attachment-incarnation-adjacent`). Generated records and transports
+only. Server and strict producer-test types pass on the composed source; final
+union/backup compiled acceptance is still pending.

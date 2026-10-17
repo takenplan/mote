@@ -16,6 +16,12 @@ export function fileOriginalGeneration(sql:PrivateSql,ref:string){
  const row=sql.get("SELECT MAX(COALESCE(g.generation,0),COALESCE(f.generation,0)) generation FROM ig_originals r JOIN pd_captures c ON c.user_id=r.user_id AND c.id=r.capture_id LEFT JOIN ig_file_forgets f ON f.user_id=c.user_id AND f.source_id=c.source_id AND f.external_id=c.external_id LEFT JOIN ig_file_generations g ON g.user_id=c.user_id AND g.source_id=c.source_id AND g.external_id=c.external_id WHERE r.user_id=$user AND c.user_id=$user AND r.id=?",ref.slice(9));if(!row)throw missing();return Number(row.generation);
 }
 
+/** The same durable original counter also fences parents that declared
+ * attachments. It survives identical source/parent UUID reconstruction. */
+export function captureIncarnationGeneration(sql:PrivateSql,captureId:string){
+ const row=sql.get('SELECT MAX(COALESCE(g.generation,0),COALESCE(f.generation,0)) generation FROM pd_captures c LEFT JOIN ig_file_forgets f ON f.user_id=c.user_id AND f.source_id=c.source_id AND f.external_id=c.external_id LEFT JOIN ig_file_generations g ON g.user_id=c.user_id AND g.source_id=c.source_id AND g.external_id=c.external_id WHERE c.user_id=$user AND c.id=?',captureId);if(!row)throw missing();return Number(row.generation);
+}
+
 /** The original per-file forget/allow-again intent. Tombstones contain identity,
  * never content, and survive removal of every original/capture revision. */
 export function fileForgetting(sql:PrivateSql,originals:Originals,data:()=>PrivateData,owner:()=>void,source:(id:string)=>unknown,retire:(refs:readonly string[])=>void){

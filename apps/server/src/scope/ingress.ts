@@ -1,5 +1,5 @@
 import {attachmentBinding,attachmentVisible} from './ingress-attachments.js';
-import {fileForgetting} from './ingress-file-forget.js';
+import {fileForgetting,captureIncarnationGeneration} from './ingress-file-forget.js';
 import {ScopedImportAttribution,importDeclarationSchema} from './import-attribution.js';
 import {createHmac,timingSafeEqual,randomUUID} from 'node:crypto';
 import type {DatabaseSync} from 'node:sqlite';
@@ -160,12 +160,12 @@ export class IngressHost{
     const parent=data().capture(parentId),p=parent.provenance;if(!p||p.deleted||parent.privacy.excluded||p.document?.attachmentOf||!p.document?.attachments?.some(a=>a.id===fileId)||data().sourceItem(p.sourceId,p.externalId)?.captureId!==parentId||!sql.get('SELECT file_id FROM ig_archive_links WHERE user_id=$user AND capture_id=? AND file_id=?',parentId,fileId))throw missing();source(p.sourceId);
     const file=archive.file(fileId),mime=options.mimeType??file.mimeType;if(mime==='application/octet-stream')throw new PrivateDataError('invalid_data');if(file.mimeType!=='application/octet-stream'&&file.mimeType!==mime)throw conflict();
     const externalId='attachment:'+identityHash([parentId,fileId]),revision=identityHash([file.hash,mime]),item=sourceItemSchema.parse({externalId,revision,observedAt:parent.capturedAt,title:file.name,text:'',kind:'file',layer:'original',mimeType:mime,document:{attachmentOf:{captureId:parentId,fileId},contentRole:'other',recordedAt:p.document?.recordedAt,timeBasis:p.document?.recordedAt?'recorded':'unknown'}}),childId=captureId(p.sourceId,item),prior=sql.get('SELECT binding_id FROM ig_attachment_links WHERE user_id=$user AND capture_id=?',childId);
-    if(prior)attachmentBinding(sql,childId);return {p,file,mime,item,childId,prior};
+    if(prior)attachmentBinding(sql,childId);return {p,file,mime,item,childId,prior,parentGeneration:captureIncarnationGeneration(sql,parentId)};
     };
     const initial=prepare();if(initial.prior)return {captureId:initial.childId,parentId,attachmentId:fileId,duplicate:true};
     if(options.processingProfileId)await this.prepareFileProfile(context,options.processingProfileId);
     return sql.transaction(()=>{
-    const {p,file,mime,item,childId,prior}=prepare();if(prior)return {captureId:childId,parentId,attachmentId:fileId,duplicate:true};
+    const current=prepare();if(current.parentGeneration!==initial.parentGeneration||current.p.sourceId!==initial.p.sourceId||current.p.externalId!==initial.p.externalId)throw conflict();const {p,file,mime,item,childId,prior}=current;if(prior)return {captureId:childId,parentId,attachmentId:fileId,duplicate:true};
     const object=sql.get('SELECT bytes FROM ig_objects WHERE user_id=$user AND hash=?',file.hash);if(!object||Number(object.bytes)!==file.sizeBytes)throw conflict();const bindingId=randomUUID();
     intakeSourceItems(p.sourceId,'attachment:'+bindingId,[item],undefined,undefined,undefined,receipt=>{const child=receipt.captures[0];if(child?.id!==childId)throw conflict();sql.run('INSERT INTO ig_attachment_links VALUES($user,?,?,?,?)',childId,parentId,fileId,bindingId);if(options.processingProfileId&&child.original&&!child.duplicate)bindProfile(child.original.ref,options.processingProfileId);},{hash:file.hash,mime,bytes:file.sizeBytes});
     attachmentBinding(sql,childId);return {captureId:childId,parentId,attachmentId:fileId,duplicate:false};

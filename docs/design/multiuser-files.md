@@ -434,3 +434,11 @@ before every cached read and publication. A downstream-only named plan change
 can reuse accepted raw bytes; a changed credential or an explicit full-transcribe
 file generation cannot. Existing policy-null stage identities remain unchanged.
 No cache record grants authority, revives an old task, or settles an unknown call.
+
+Awaited attachment-profile preparation pins the parent incarnation before M04
+preflight and checks it again inside the existing admission transaction. The
+existing `ig_file_generations` counter also advances when a parent declaring
+attachments is removed; no second generation table or route is introduced.
+Identical source IDs, parent UUIDs, attachment descriptors and retained archive
+bytes cannot revive an older unadmitted request. Re-registering a source keeps
+that metadata counter, while a new explicit current request remains valid.
