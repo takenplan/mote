@@ -1108,6 +1108,37 @@ class MultiuserWorkerInstrumentedTest {
         }}finally{control("/generated/release-file-delete-ack")}
     }
 
+    @Test fun staleFileDeletionRequiresExplicitLocalDiscardBeforeANewGenerationCanBeDeleted() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val id=fixture().getString("captureId");val before=a.get("/api/files/"+id);val bBefore=b.get("/api/files/"+id+"/chunks").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
+        fun dialog():android.app.AlertDialog {
+            @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+            return dialogs.mapNotNull {it.get()}.single {it.isShowing}
+        }
+        control("/generated/hold-file-delete-before-admission")
+        try {androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","files")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label};assertNotNull("Missing original recovery control: "+label,button);button!!.performClick()}}
+            fun confirm(which:Int){scenario.onActivity {dialog().getButton(which).performClick()}}
+            ready();press("查看详情");ready();press("删除文件");confirm(android.app.AlertDialog.BUTTON_POSITIVE)
+            waitFor {control("/generated/file-retries").getBoolean("deleteEntered")}
+            control("/generated/recreate-file-source");val replacement=a.get("/api/files/"+id);assertTrue(replacement.getLong("originalGeneration")>before.getLong("originalGeneration"))
+            control("/generated/release-file-delete-before-admission");ready();assertEquals(1,control("/generated/file-retries").getJSONArray("deletes").length())
+            assertEquals(409,control("/generated/file-retries").getJSONArray("deletes").getJSONObject(0).getInt("status"));val oldBody=control("/generated/file-retries").getJSONArray("deletes").getJSONObject(0).getJSONObject("body")
+            scenario.recreate();ready();press("重试同一请求");ready()
+            val retries=control("/generated/file-retries").getJSONArray("deletes");assertEquals(2,retries.length());assertEquals(409,retries.getJSONObject(1).getInt("status"));assertEquals(SourceRules.canonical(oldBody),SourceRules.canonical(retries.getJSONObject(1).getJSONObject("body")))
+            press("清除本机待确认请求");confirm(android.app.AlertDialog.BUTTON_NEGATIVE);scenario.recreate();ready()
+            scenario.onActivity {activity->assertTrue(views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="重试同一请求"})}
+            press("清除本机待确认请求");confirm(android.app.AlertDialog.BUTTON_POSITIVE);ready()
+            assertEquals(2,control("/generated/file-retries").getJSONArray("deletes").length());assertEquals(replacement.getLong("originalGeneration"),a.get("/api/files/"+id).getLong("originalGeneration"))
+            press("查看详情");ready();press("删除文件");confirm(android.app.AlertDialog.BUTTON_POSITIVE);ready()
+            val last=control("/generated/file-retries").getJSONArray("deletes").getJSONObject(2);assertEquals(200,last.getInt("status"));assertNotEquals(oldBody.getString("operationId"),last.getJSONObject("body").getString("operationId"));assertEquals(replacement.getLong("originalGeneration"),last.getJSONObject("body").getLong("originalGeneration"))
+            assertEquals(404,HttpJson.get(endpoint()+"/api/files/"+id,token("a")).first);assertEquals(bBefore,b.get("/api/files/"+id+"/chunks").toString())
+        }} finally {control("/generated/release-file-delete-before-admission")}
+    }
+
     @Test fun originalFileUnknownResultRequiresExplicitConfirmationAndPreservesUnresolvedFacts() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
