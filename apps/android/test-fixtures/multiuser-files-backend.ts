@@ -4,6 +4,8 @@ import {scopedFilesFixture} from '../../server/test/fixtures/scoped-files.js';
 import {waitForScopedState} from '../../server/test/fixtures/scoped-process.js';
 import {defaultModelSettings} from '../../server/src/model-settings.js';
 import {defaultProcessingSettings} from '../../server/src/scope/processing-schema.js';
+import type {FastifyRequest} from 'fastify';
+import {requestActor,type FixtureActor} from './request-actor.js';
 
 // The production M03/M04/M05/M06 host processes an actual generated WAV. Only
 // ASR transport is substituted; no real recording, model or account is accessed.
@@ -13,14 +15,17 @@ const retries:Array<{actor:string;body:unknown;status:number;taskId?:string}>=[]
 const deletes:Array<{actor:string;body:unknown;status:number}>=[];
 let dropRetryAck=false,dropDeleteAck=false,holdDelete=false,deleteEntered=false;
 let releaseDelete:(()=>void)|undefined;
-let aToken='',bToken='';
+let actors:{a:{userId:string};b:{userId:string}};
+const requestActors=new WeakMap<FastifyRequest,FixtureActor>();
 let holdNextAsr=false,dropNextAsr=false,asrHeld=false,releaseAsr:(()=>void)|undefined;
 const asrCalls:string[]=[];
 // Record only generated account labels and retry metadata. The HTTP handler has
 // already admitted the real M05 task before its successful reply is dropped.
 const f=await scopedFilesFixture({after:(callback:()=>unknown)=>cleanup.push(callback)} as unknown as TestContext,host=>{
 host.app.addHook('preHandler',async request=>{
- if(holdDelete&&request.method==='DELETE'&&/^\/api\/files\/[^/]+$/.test(request.url)&&request.headers.authorization==='Bearer '+aToken){holdDelete=false;deleteEntered=true;await new Promise<void>(resolve=>{releaseDelete=resolve;});releaseDelete=undefined;}
+ if(!/^\/api\/files\/[^/]+(?:\/(?:retry|cancel))?$/.test(request.url.split('?')[0]))return;
+ const actor=await requestActor(request,host,actors);requestActors.set(request,actor);
+ if(holdDelete&&request.method==='DELETE'&&/^\/api\/files\/[^/]+$/.test(request.url)&&actor==='a'){holdDelete=false;deleteEntered=true;await new Promise<void>(resolve=>{releaseDelete=resolve;});releaseDelete=undefined;}
 });
 host.app.addHook('onError',async(request,_reply,error)=>{if(request.method==='DELETE'&&request.url.startsWith('/api/files/'))process.stderr.write(String(error.stack)+'\n');});
 host.app.addHook('onSend',async(request,reply,payload)=>{
@@ -29,19 +34,19 @@ host.app.addHook('onSend',async(request,reply,payload)=>{
   process.stderr.write(JSON.stringify({type:'generated-file-control',method:request.method,path:request.url,status:reply.statusCode,...(error?{error}:{})})+'\n');
  }
  if(request.method==='DELETE'&&/^\/api\/files\/[^/]+$/.test(request.url)){
-  const actor=request.headers.authorization==='Bearer '+aToken?'a':request.headers.authorization==='Bearer '+bToken?'b':'other';
+  const actor=requestActors.get(request)??'other';
   deletes.push({actor,body:request.body,status:reply.statusCode});
   if(dropDeleteAck&&actor==='a'&&reply.statusCode===200)reply.raw.destroy();
  }
  if(request.method==='POST'&&/^\/api\/files\/[^/]+\/retry$/.test(request.url)){
-  const actor=request.headers.authorization==='Bearer '+aToken?'a':request.headers.authorization==='Bearer '+bToken?'b':'other';
+  const actor=requestActors.get(request)??'other';
   let taskId:string|undefined;try{taskId=JSON.parse(String(payload)).taskId;}catch{}
   retries.push({actor,body:request.body,status:reply.statusCode,...(taskId?{taskId}:{})});
   if(dropRetryAck&&actor==='a'&&reply.statusCode===200)reply.raw.destroy();
  }
  return payload;
 });});
-aToken=f.a.token;bToken=f.b.token;
+actors=f;
 const control=createServer((request,response)=>{void(async()=>{
  for await(const _ of request){}
  if(request.url==='/generated/drop-file-retry-ack')dropRetryAck=true;
