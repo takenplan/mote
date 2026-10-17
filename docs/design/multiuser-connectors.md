@@ -177,3 +177,14 @@ Gmail retains the complete provider Message response and decoded body parts;
 binary attachments remain uncollected as declared by its existing
 `attachmentsCollected:false` metadata. This does not claim a full RFC822 mailbox
 or attachment backup.
+
+### Scoped recording disconnect versus data withdrawal
+
+Recording disconnect retires the connection generation, future sync intent,
+provider credentials and saved selection. It preserves accepted archive data and
+its existing personal source read authority. General source disable/delete,
+privacy/account retirement and explicit data deletion remain their own fences.
+The scoped adapter therefore does not translate disconnect into source.enabled
+false. A disconnected recording sync rejects before querying provider identity;
+explicit connect/login is still required to acquire a new provider association.
+No credentials or collection grant are recovered from the retained archive.

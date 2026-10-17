@@ -1546,3 +1546,26 @@ with no repeated completed extraction:1/1 EXIT0 in43.887s
 calls remain generated localhost fixtures. These are independent emitted process
 checks, not an emitted final Electron/Android/Docker/client union. No whole
 project completion follows while the instance-only observer RED is outstanding.
+
+### Recording disconnect preserves accepted archive authority
+
+Actual original routes for both feishu-recordings and dingtalk-recordings:
+M10 fixed provider/CLI transports→M03 originals→M04/M05/M06 ASR/Material→
+disconnect→old original ticket returned404. Durablecd6942c0,2/2fail
+`/tmp/mote-joint-recording-disconnect-history-red.*`. Removing the adapter's
+source.enabled=false restores history without retaining connector credentials.
+The next assertion then exposed a second real transport gap: a disconnected
+manual sync called provider status before checking missing saved account.
+Actual fixed-history Feishu32!=31 calls RED is
+`/tmp/mote-joint-recording-disconnect-transport-red.*` (not inferred from code).
+A pre-provider saved-account guard now rejects that attempt as not connected.
+
+Both same original scenarios2/2 EXIT0,0skip,85.521s
+`/tmp/mote-joint-recording-disconnect-history-green2.*`: exact audio original bytes,
+Files presence/export200, six accepted Material products, independent B rows,
+disconnected sync0 provider calls, real host restart, B sync positive and explicit
+source disable still fences original reads. Export contents/native Web UI are
+separate existing/consumer checks; the nonempty200 here is not expanded into
+whole archive-tar byte verification. Account replacement in an existing recording
+connection is not covered by this disconnect-only result. New custom image recipe
+fixture separately actual1/1RED image_recipe_unavailable remains WIP.
