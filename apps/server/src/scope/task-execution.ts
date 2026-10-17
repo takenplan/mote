@@ -42,6 +42,9 @@ type TaskRow={task_id:string;user_id:string;grant_id:string;input:string;progres
 /** These capabilities are constructed by the host after resolving a durable
  * authorization. No request/model payload can supply a context or resource scope. */
 export type TaskRun={context:UserContext;services:ReturnType<ScopedServices['forUser']>;task:ExecutionStep;signal:AbortSignal;grant:ExecutionGrant;model?:TaskModelRun;
+ /** Register only abort-controlled local runtimes and their complete workspace
+  * cleanup. Remote effects and arbitrary handler promises must stay outside. */
+ localWork<T>(work:()=>Promise<T>):Promise<T>;
  checkpoint:{read<T=unknown>(key:string):T|undefined;write(key:string,value:unknown):void};
  progress(value:unknown):void;
  external:{begin(key:string,onIssued?:(issuanceId:string)=>unknown):string;complete():void};
@@ -93,6 +96,9 @@ export class TaskExecution {
  bindModelAdmission(admit:NonNullable<TaskExecution['modelAdmission']>){if(this.modelAdmission)throw new TaskError('model_host_conflict',409);this.modelAdmission=admit;}
  private readonly modelLeases=new Map<string,TaskModelLease>();
  private readonly modelRecovery=new Map<string,string>();
+ private readonly localChains=new Set<{kind:string;taskId:string;promise:Promise<unknown>}>();
+ private closing=false;
+ private closeTask:Promise<void>|undefined;
  private timer:ReturnType<typeof setInterval>|undefined;
  constructor(private readonly db:DatabaseSync,private readonly authority:UserContextAuthority,private readonly services:ScopedServices,private readonly grants:TaskAuthorization){
   db.exec(`CREATE TABLE IF NOT EXISTS user_tasks(task_id TEXT PRIMARY KEY,user_id TEXT NOT NULL,grant_id TEXT NOT NULL UNIQUE,input TEXT NOT NULL,progress TEXT NOT NULL DEFAULT 'null',checkpoints TEXT NOT NULL DEFAULT '{}',result TEXT,external_state TEXT NOT NULL DEFAULT 'none',external_key TEXT,external_issuance TEXT,model_receipt TEXT,user_position INTEGER NOT NULL,UNIQUE(user_id,user_position));
@@ -122,6 +128,19 @@ export class TaskExecution {
   this.enabled(row.user_id);if(this.grants.assert(row.grant_id,row.user_id,step.ownership.authorizationEpoch).task_id!==step.id)throw new ScopeError('invalid_identity',401);return row;
  }
  private valid(step:ExecutionStep){try{this.assertTask(step);return true;}catch{return false;}}
+ private localWork<T>(step:ExecutionStep,signal:AbortSignal,grant:ExecutionGrant,work:()=>Promise<T>):Promise<T>{
+  const current=()=>{if(this.closing)throw new ExecutionFailure('stale','grant_revoked');signal.throwIfAborted();grant.assert();};
+  try{current();}catch(error){return Promise.reject(error);}
+  // Register before invoking the callback, including its synchronous startup.
+  // Recheck at that microtask so close cannot admit a late local runtime.
+  const promise=Promise.resolve().then(()=>{current();return work();}),entry={kind:step.kind,taskId:step.id,promise};
+  this.localChains.add(entry);
+  void promise.then(()=>this.localChains.delete(entry),()=>this.localChains.delete(entry));
+  return promise;
+ }
+ private async drainLocalWork(kind?:string){
+  for(;;){const pending=[...this.localChains].filter(entry=>kind===undefined||entry.kind===kind).map(entry=>entry.promise);if(!pending.length)return;await Promise.allSettled(pending);}
+ }
  private recoveryReceipt(step:ExecutionStep,handler:UserTaskHandler){
   if(!this.modelHost)throw new TaskError('model_snapshot_unavailable',409);
   const row=this.row(step.id);if(!row?.model_receipt)throw new TaskError('model_snapshot_unavailable',409);
@@ -170,7 +189,7 @@ export class TaskExecution {
       if(!outcome.ok)throw outcome.failure;return outcome.value as T;
      }finally{grant.assert();}
     },recordUsage:(result:Parameters<TaskModelHost['recordUsage']>[1])=>grant.commit(()=>this.modelHost!.recordUsage(lease,result))}:undefined;
-    const run:TaskRun={...(model?{model}:{}),context,services:this.services.forUser(context),task:step,signal,grant,
+    const run:TaskRun={...(model?{model}:{}),context,services:this.services.forUser(context),task:step,signal,grant,localWork:work=>this.localWork(step,signal,grant,work),
      checkpoint:{read:<T>(key:string)=>{grant.assert();const values=JSON.parse(this.row(step.id)!.checkpoints);return Object.hasOwn(values,key)?values[key] as T:undefined;},write:(key,value)=>{id.parse(key);write(()=>{const checkpoints=JSON.parse(this.row(step.id)!.checkpoints);Object.defineProperty(checkpoints,key,{value,enumerable:true,writable:true,configurable:true});this.db.prepare('UPDATE user_tasks SET checkpoints=? WHERE task_id=?').run(json(checkpoints),step.id);});}},
      progress:value=>write(()=>this.db.prepare('UPDATE user_tasks SET progress=? WHERE task_id=?').run(json(value),step.id)),
      external:{begin:(key,onIssued)=>{id.parse(key);const issuanceId=randomUUID();write(()=>{const current=this.row(step.id)!;if(!['none','succeeded'].includes(current.external_state))throw new ExecutionFailure('blocked','external_result_unknown');this.db.prepare("INSERT INTO task_external_calls VALUES(?,?,?,?,'issued',?,?,?,NULL)").run(issuanceId,step.id,current.user_id,key,step.ownership!.authorizationEpoch,step.attempts,Date.now());this.db.prepare("UPDATE user_tasks SET external_state='issued',external_key=?,external_issuance=? WHERE task_id=?").run(key,issuanceId,step.id);if(onIssued){const result=onIssued(issuanceId);if(result&&typeof (result as {then?:unknown}).then==='function')throw new TaskError('asynchronous_external_admission',409);}});return issuanceId;},complete:()=>write(()=>{const current=this.row(step.id)!;if(current.external_state!=='issued'||!current.external_issuance)throw new ExecutionFailure('permanent','external_call_not_issued');this.db.prepare("UPDATE task_external_calls SET state='succeeded',settled_at=? WHERE issuance_id=? AND task_id=? AND user_id=?").run(Date.now(),current.external_issuance,step.id,current.user_id);this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=?").run(step.id);})},
@@ -181,7 +200,8 @@ export class TaskExecution {
    project:step=>{if(step.state==='succeeded')this.modelLeases.delete(step.id);},
    classify:error=>error instanceof ExecutionFailure?error:error instanceof ScopeError?new ExecutionFailure('stale','grant_revoked'):handler.classify?.(error)??new ExecutionFailure('permanent','task_failed'),
   });
-  return async()=>{await unregister();this.handlers.delete(handler.kind);};
+  let unregisterTask:Promise<void>|undefined;
+  return ()=>unregisterTask??=Promise.resolve().then(async()=>{await unregister();await this.drainLocalWork(handler.kind);this.handlers.delete(handler.kind);});
  }
  /** No route/facade exposes this fixed M06 purpose or an owner selector. */
  processingRecheckIntent(taskId:string):ExecutionStep|undefined{
@@ -289,7 +309,10 @@ export class TaskExecution {
    this.db.prepare("UPDATE user_tasks SET external_state='succeeded' WHERE task_id=? AND user_id=? AND external_issuance=?").run(taskId,owner,issuanceId);
   });
  }
- async close(){if(this.timer)clearInterval(this.timer);this.timer=undefined;await this.engine.close();this.modelLeases.clear();this.modelRecovery.clear();}
+ close(){
+  this.closing=true;
+  return this.closeTask??=Promise.resolve().then(async()=>{if(this.timer)clearInterval(this.timer);this.timer=undefined;await this.engine.close();await this.drainLocalWork();this.modelLeases.clear();this.modelRecovery.clear();});
+ }
  /** M16 observes only purpose-limited journal facts after deletion admission
   * has been fenced. No ordinary context can select or settle external calls. */
  pendingExternalForDeletion(subject:UserDataSubject){

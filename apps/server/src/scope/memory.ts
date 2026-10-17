@@ -192,10 +192,12 @@ export class MemoryHost {
  }
  private async query(run:TaskRun,input:ScopedMemoryTask,args:QueryInput):Promise<QueryResult>{
   if(!run.model)throw new PrivateDataError('scope_unavailable',503);const reader=await this.reader(run,input),started=Date.now();
-  try{return await run.model.withModel(async settings=>{
+  return run.localWork(async()=>{
+  try{return await run.model!.withModel(async settings=>{
    const agent=createAgent({...settings,reader,authorizeModelRequest:()=>{run.grant.assert();this.assertJob(run.context,input);}});
    try{let tokens:TokenUsage|undefined;const answer=await agent.query({...args,onUsage:value=>{tokens=value;args.onUsage?.(value);}});run.grant.assert();this.assertJob(run.context,input);run.model!.recordUsage({status:'completed',durationMs:Date.now()-started,tokens});return answer;}finally{await agent.close();}
-  });}catch(error){run.grant.assert();this.assertJob(run.context,input);run.model.recordUsage({status:'failed',durationMs:Date.now()-started});throw error;}
+  });}catch(error){run.grant.assert();this.assertJob(run.context,input);run.model!.recordUsage({status:'failed',durationMs:Date.now()-started});throw error;}
+  });
  }
  private async execute(run:TaskRun,stage:'extract'|'review'|'publish'){
   const input=scopedMemoryTaskSchema.parse(run.task.input),data=this.data(run.context),job=this.assertJob(run.context,input),related=await this.related(run.context,input),assert=()=>{run.grant.assert();this.assertJob(run.context,input);};
