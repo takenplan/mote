@@ -8440,5 +8440,7 @@ export const english: Readonly<Record<string, string>> = {
   "确认移除": "Confirm removal",
   "在中央网页逐条核对日程；只有已确认的建议会写入本机已有日历。连接与只读采集分别授权。": "Review each event in central web. Only confirmed suggestions are written to an existing local calendar. This connection is separate from read-only collection.",
   "每来源待传上限 4000 版本 / 32 MiB。路径与待传正文只保存在本机私有来源目录，不进入支持包。同步状态按服务器实例与账号归属；同一账号更换凭据保留原队列，切换账号不会发送原账号待传版本。": "Each source can queue 4,000 versions / 32 MiB. Paths and pending text stay in a private local source directory and are excluded from support bundles. Sync state belongs to the server deployment and account. Credential rotation within an account retains its queue; switching accounts never sends the previous account's pending versions.",
-  "连接按中央实例和账号归属。同一账号重新授权会保留原队列；切换账号或实例会停止采集，旧队列保留在原账号，不会改投新账号。": "Connections belong to a Central deployment and account. Reauthorizing the same account keeps its queue. Switching account or deployment stops collection and retains the old queue with its original account."
+  "连接按中央实例和账号归属。同一账号重新授权会保留原队列；切换账号或实例会停止采集，旧队列保留在原账号，不会改投新账号。": "Connections belong to a Central deployment and account. Reauthorizing the same account keeps its queue. Switching account or deployment stops collection and retains the old queue with its original account.",
+  "提交结果待确认；重试会使用原操作，不会重新创建任务。": "The submission is not confirmed. Retry uses the original operation without creating another task.",
+  "移除本机待确认提交": "Remove local pending submission"
 };
