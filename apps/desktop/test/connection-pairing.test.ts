@@ -253,3 +253,39 @@ it('recovers its PKCE after real ConfigStore session-only save/load omits the so
  await pairing.resume(loaded,()=>{},publish);expect(publish).toHaveBeenCalledOnce();expect(publish.mock.calls[0][0].userId).toBe(f.a.userId);
  const claims=f.trace.filter(call=>call.path==='/api/connections/redeem');expect(claims).toHaveLength(2);expect(claims[0].body).toEqual(claims[1].body);expect(claims[0].response.id).toBe(claims[1].response.id);expect(claims[1].body.challenge).toBe(createHash('sha256').update(original.verifier).digest('hex'));
 });
+
+async function lostClaim(f:Awaited<ReturnType<typeof fixture>>,source:Config,invitation:ReturnType<typeof parseDesktopConnectionInvitation>){
+ const pairing=f.pairing();await pairing.begin(invitation,source,'macos',()=>{});let dropped=false;const publish=vi.fn(async()=>{});
+ f.after=async(call,response)=>{if(!dropped&&call.path==='/api/connections/redeem'){dropped=true;throw Error('Generated response loss after production invitation claim');}return response;};
+ await expect(pairing.resume(source,()=>{},publish)).rejects.toThrow();expect(dropped).toBe(true);expect(publish).not.toHaveBeenCalled();
+ const original=await f.journal(),sealed=await readFile(pairing.path);expect(original.requestId===undefined).toBe(true);
+ return {pairing,original,sealed};
+}
+
+it('same-invitation rename preserves the sealed original claim after a real lost redeem',async()=>{
+ const f=await fixture(),invitation=await f.invite(),source=f.config,{pairing,original,sealed}=await lostClaim(f,source,invitation);
+ const calls=f.trace.length;await expect(pairing.begin(invitation,{...source,deviceName:'Generated renamed retry'},'macos',()=>{})).rejects.toThrow();
+ expect((await readFile(pairing.path)).equals(sealed)).toBe(true);expect((await f.journal()).verifier===original.verifier).toBe(true);expect(f.trace).toHaveLength(calls);
+ const publish=vi.fn(async()=>{});await f.pairing().resume(source,()=>{},publish);expect(publish).toHaveBeenCalledOnce();expect(publish.mock.calls[0][2].deviceName).toBe(source.deviceName);
+ const claims=f.trace.filter(call=>call.path==='/api/connections/redeem');expect(claims).toHaveLength(2);expect(claims[0].body.challenge===claims[1].body.challenge).toBe(true);expect(claims[0].response.id===claims[1].response.id).toBe(true);
+});
+
+it('same-invitation source sign-out preserves the sealed original-device claim instead of rotating PKCE',async()=>{
+ const f=await fixture(),old=await f.request(f.a.token,'/api/login/session','POST',{serverUrl:f.serverUrl,deviceId:f.config.deviceId,deviceName:f.config.deviceName,platform:'macos'});expect(old.status).toBe(200);
+ const source:Config={...f.config,token:old.body.token,authExpiresAt:old.body.expiresAt,authSignedOut:false,credentialScope:'client',account:{origin:f.serverUrl,deploymentId:f.a.deploymentId,userId:f.a.userId,username:'generated-qr-a'}};
+ const invitation=await f.invite({deviceId:source.deviceId}),{pairing,original,sealed}=await lostClaim(f,source,invitation);expect((await f.request(source.token,'/api/connections/self')).status).toBe(401);
+ const projected={...source,token:undefined,authSignedOut:true};await f.pairing().begin(invitation,projected,'macos',()=>{});
+ expect((await readFile(pairing.path)).equals(sealed)).toBe(true);expect((await f.journal()).verifier===original.verifier).toBe(true);
+ const publish=vi.fn(async()=>{});await f.pairing().resume(projected,()=>{},publish);expect(publish).toHaveBeenCalledOnce();
+ const claims=f.trace.filter(call=>call.path==='/api/connections/redeem');expect(claims).toHaveLength(2);expect(claims[0].body.challenge===claims[1].body.challenge).toBe(true);expect(claims[0].response.id===claims[1].response.id).toBe(true);
+});
+
+it('same-invitation B source rejects begin without replacing or borrowing A sealed claim',async()=>{
+ const f=await fixture(),sourceA:Config={...f.config,token:f.a.token,authExpiresAt:f.a.expiresAt,authSignedOut:false,account:{origin:f.serverUrl,deploymentId:f.a.deploymentId,userId:f.a.userId,username:'generated-qr-a'}};
+ const invitation=await f.invite(),{pairing,original,sealed}=await lostClaim(f,sourceA,invitation);
+ const sourceB:Config={...sourceA,token:f.b.token,authExpiresAt:f.b.expiresAt,account:{origin:f.serverUrl,deploymentId:f.b.deploymentId,userId:f.b.userId,username:'generated-qr-b'}};
+ const calls=f.trace.length;await expect(f.pairing().begin(invitation,sourceB,'macos',()=>{})).rejects.toThrow();
+ expect((await readFile(pairing.path)).equals(sealed)).toBe(true);expect((await f.journal()).verifier===original.verifier).toBe(true);expect(f.trace).toHaveLength(calls);
+ const publish=vi.fn(async()=>{});expect(await pairing.preview(sourceB)).toBeUndefined();await expect(pairing.resume(sourceB,()=>{},publish)).rejects.toThrow('another connection');expect(f.trace).toHaveLength(calls);
+ await pairing.resume(sourceA,()=>{},publish);expect(publish).toHaveBeenCalledOnce();expect(publish.mock.calls[0][0].userId).toBe(f.a.userId);
+});

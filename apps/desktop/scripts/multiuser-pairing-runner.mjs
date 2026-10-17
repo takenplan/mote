@@ -300,15 +300,51 @@ async function completedRecoveryUi(central) {
   report('completed recovery action disappears and generated confirmation preview renders before hidden capture');
 }
 
+async function sameInvitationMetadataRetry(central) {
+  const desktop = await launch(central), originalName = 'Generated fixed original Desktop name', changedName = 'Generated changed retry Desktop name';
+  const loss = desktop.fault('/api/connections/redeem', 'loss');
+  await desktop.preview(await central.invite());
+  await desktop.js(`document.querySelector('#device-name').value=${JSON.stringify(originalName)};document.querySelector('#device-name').dispatchEvent(new Event('input'));true`);
+  await desktop.confirm(); await desktop.faultHit(loss); await desktop.idle();
+  const journalPath = join(desktop.profile, 'connection-pending.enc'), originalBytes = await readFile(journalPath);
+  const original = JSON.parse(Buffer.from(originalBytes).map(v => v ^ 90).toString());
+  assert.equal(original.device.deviceName, originalName, 'the actual UI custom device name is fixed in the durable claim before redeem');
+  assert.equal(desktop.calls.filter(call => call.path === '/api/connections/redeem').length, 1);
+  assert.equal(await desktop.js('document.querySelector("#connection-confirmation").hidden'), false, 'lost response preserves the same invitation preview for retry');
+  await desktop.js(`document.querySelector('#device-name').value=${JSON.stringify(changedName)};document.querySelector('#device-name').dispatchEvent(new Event('input'));true`);
+  await desktop.confirm(); await desktop.idle();
+  const retryBytes = await readFile(journalPath), retry = JSON.parse(Buffer.from(retryBytes).map(v => v ^ 90).toString());
+  const attempts = desktop.calls.filter(call => call.path === '/api/connections/redeem');
+  console.log(JSON.stringify({sameInvitationMetadataRetry: true, encryptedJournalUnchanged: originalBytes.equals(retryBytes), verifierUnchanged: original.verifier === retry.verifier, durableNameUnchanged: retry.device.deviceName === originalName, redeemAttempts: attempts.length}));
+  assert.equal(originalBytes.equals(retryBytes), true, 'changed metadata on the same invitation must preserve the original encrypted recovery journal byte-for-byte');
+  assert.equal(retry.verifier === original.verifier, true, 'same-invitation metadata rejection must never rotate its durable PKCE verifier');
+  assert.equal(attempts.length, 1, 'same-invitation changed metadata is rejected locally before any second redeem POST');
+  const failed = await desktop.status();
+  assert.equal(failed.config.tokenConfigured, false, 'changed metadata retry cannot silently publish a connection');
+  assert.equal(failed.operations.find(operation => operation.id === 'mote:connection-confirm')?.state, 'failed', 'same-invitation metadata mismatch reports a local failure');
+  assert.equal(await desktop.js('Boolean(document.querySelector("#feedback").textContent.trim())'), true, 'the actual UI presents the fixed-claim failure');
+  assert(await desktop.pending(), 'the rejected retry leaves the original pending claim explicitly recoverable');
+  await desktop.recover();
+  const recovered = await desktop.paired('a');
+  assert.equal(recovered.config.deviceName, originalName, 'explicit recovery publishes the original durable device name');
+  const grant = desktop.calls.find(call => call.path === '/api/login/poll' && call.result?.ready).result;
+  const inventory = (await central.api(central.users.a.token, '/api/connections')).json().items;
+  assert.equal(inventory.find(item => item.id === grant.credentialId)?.deviceName, originalName, 'production credential retains the original durable device name');
+  await desktop.close();
+  report('same invitation changed-name retry fails locally without replacing encrypted PKCE, then explicit recovery publishes its original durable name');
+}
+
 try {
   const central = await host('central');
   const selectedCase = process.env.MOTE_PAIRING_CASE;
-  if (selectedCase && !['reauth-auth-timer', 'ui-cleanup'].includes(selectedCase)) throw Error('Unknown generated Desktop pairing case');
+  if (selectedCase && !['reauth-auth-timer', 'ui-cleanup', 'same-invitation-retry'].includes(selectedCase)) throw Error('Unknown generated Desktop pairing case');
   if (selectedCase === 'reauth-auth-timer') {
     await reauthorizationAcrossAuthTimer(central);
     await explicitLogoutFencesPendingSelf(central);
   } else if (selectedCase === 'ui-cleanup') {
     await completedRecoveryUi(central);
+  } else if (selectedCase === 'same-invitation-retry') {
+    await sameInvitationMetadataRetry(central);
   } else {
   // This is deliberately first: the old M14 consumer fails on production v2,
   // before any helper-only test could conceal its browser-login fallback.
@@ -469,6 +505,7 @@ try {
   await reauthorizationAcrossAuthTimer(central);
   await explicitLogoutFencesPendingSelf(central);
   await completedRecoveryUi(central);
+  await sameInvitationMetadataRetry(central);
   }
 
   console.log(JSON.stringify({ok: true, actualElectronMainPreloadRenderer: true, productionBuildAppAccountsSQLite: true, generatedExternalIOOnly: true, physicalCamera: false, realDeployment: false, scenarios: passed}));
