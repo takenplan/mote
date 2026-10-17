@@ -1412,6 +1412,15 @@ processor contracts are not fabricated from incomplete historical metadata.
 
 Own composed personal-plan archive suite27 plus current profile-entry4 cases:
 31/31 EXIT0,0skip,63.227s `/tmp/mote-joint-policy-archive-composed.log/.exit`.
-Server noEmit and scope checker EXIT0. Owner final27/related9/minimal-a2-5 remain
+Server noEmit EXIT0. Initial composed scope checker EXIT1: the conservative
+AST check treats the archive helper `.prepare` call as raw SQL. This is a
+composition check failure, not a passing boundary check. Owner final27/related9/minimal-a2-5 remain
 separate peer evidence. This does not move the earlier failed owner full gates
 or claim final client/container/native union acceptance.
+
+The archive preflight helper was mechanically renamed prepare→preflight in its
+export and single M06 caller. Existing boundary checker now EXIT0
+(`/tmp/mote-joint-policy-archive-scope2.*`), Server noEmit0, selected actual
+merge/restart and corrupt-local-parent cases2/2 EXIT0 in5.602s
+(`/tmp/mote-joint-policy-archive-preflight-rename.*`). No checker exemption,
+execution or data semantics changed. Initial scope failure stays retained.
