@@ -405,6 +405,8 @@ else {
       } catch { throw new Error(moteText("无法读取有效邀请，请检查 JSON/二维码格式、有效期和文件大小；原连接未变动")); }
     }));
     const consumePairing=async(confirmation?:{id:unknown;origin:unknown;deviceName:unknown})=>{
+      pairingWork++;
+      try{
       const requested=settings,generation=accountGeneration,login=++loginGeneration;
       const assertCurrent=()=>{if(quitting||accountTransition||settings!==requested||generation!==accountGeneration||login!==loginGeneration)throw Error('Desktop account changed; reload the window');};
       let named=requested;
@@ -421,6 +423,7 @@ else {
       loginGeneration++;updateUi(clientStatus());
       if(requested.token&&requested.token!==settings.token)await loginRequest(requested,'/api/auth/logout',{},requested.token).catch(()=>{});
       return clientStatus();
+      }finally{pairingWork--;}
     };
     handle('mote:connection-confirm', (id,origin,deviceName)=>consumePairing({id,origin,deviceName}));
     handle('mote:connection-resume', ()=>consumePairing());
@@ -591,7 +594,7 @@ else {
     handle('mote:review-approve', async (id:unknown) => { if(typeof id!=='string')throw Error('Invalid review ID');await queue!.approveReview(id); });
     handle('mote:retry', async () => { const scan = localSources!.sync(true); await collector.retry(); await scan; await collector.retry(); return clientStatus(); });
     const askClient = new AskClient(config=>config.serverUrl===settings.serverUrl&&config.token===settings.token&&config.authSignedOut===settings.authSignedOut&&config.authExpiresAt===settings.authExpiresAt);
-    let loginGeneration=0;
+    let loginGeneration=0,pairingWork=0;
     const endLogin=()=>serialize(async()=>{
       loginGeneration++;
       const token=connectionToken(settings);
@@ -635,8 +638,11 @@ else {
     };
     let authCheck:Promise<unknown>|undefined;let nextAuthCheck=0;
     const authTimer=setInterval(()=>{
-      if(connectionToken(settings)&&Date.now()>=nextAuthCheck&&!authCheck){const selected=settings;nextAuthCheck=Date.now()+15000;authCheck=testConnection(selected).catch(error=>{if(settings===selected&&error instanceof ConnectionError&&error.code==='AUTH')return endLogin();}).finally(()=>{authCheck=undefined;});}
-      if(settings.token&&!settings.authSignedOut&&settings.authExpiresAt&&settings.authExpiresAt<=Date.now())void endLogin().catch(()=>{});
+      // Original-device redemption revokes the old credential before the new
+      // one is published. Keep automatic checks from retiring this deliberate
+      // replacement; explicit logout/account changes still fence it normally.
+      if(!pairingWork&&connectionToken(settings)&&Date.now()>=nextAuthCheck&&!authCheck){const selected=settings;nextAuthCheck=Date.now()+15000;authCheck=testConnection(selected).catch(error=>{if(!pairingWork&&settings===selected&&error instanceof ConnectionError&&error.code==='AUTH')return endLogin();}).finally(()=>{authCheck=undefined;});}
+      if(!pairingWork&&settings.token&&!settings.authSignedOut&&settings.authExpiresAt&&settings.authExpiresAt<=Date.now())void endLogin().catch(()=>{});
     },1000);authTimer.unref();app.once('before-quit',()=>clearInterval(authTimer));
     handle('mote:ask', async (command,input) => {
       if(command==='login'){const value=input as {token?:string;username?:string;password?:string;durationMs?:number};if(value?.username!==undefined){const requested=settings;const grant=await loginRequest(requested,'/api/auth/login',{username:value.username,password:value.password,mode:'client',durationMs:value.durationMs??0});if(settings!==requested)throw Error('Desktop account changed');await installLogin(grant.token,value.durationMs);return {};} if(typeof value?.token!=='string'||value.token.length<32||value.token.length>8192||/[\r\n]/.test(value.token))throw Error(moteText('请输入有效的个人登录凭据'));await installLogin(value.token.trim(),value.durationMs);return {};}

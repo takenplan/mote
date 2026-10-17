@@ -8,7 +8,7 @@ import {pathToFileURL,fileURLToPath} from 'node:url';
 import {DatabaseSync} from 'node:sqlite';
 import {DesktopPairing} from '../src/connection-pairing';
 import {parseDesktopConnectionInvitation} from '../src/connection-invitation';
-import {defaultConfig} from '../src/config';
+import {ConfigStore,defaultConfig} from '../src/config';
 import type {Config} from '../src/contracts';
 
 const repository=fileURLToPath(new URL('../../../',import.meta.url));
@@ -220,4 +220,36 @@ it('publishes the durably claimed device name after restart while the active con
  await f.pairing().resume(f.config,()=>{},publish);
  expect(f.trace.find(call=>call.path==='/api/connections/redeem')!.body.deviceName).toBe(named.deviceName);
  expect(publish.mock.calls[0][2]).toEqual({deviceId:named.deviceId,deviceName:named.deviceName,platform:'macos'});
+});
+
+it('recovers original-device replacement after its old source credential is signed out, while rejecting signed-out B',async()=>{
+ const f=await fixture(),old=await f.request(f.a.token,'/api/login/session','POST',{serverUrl:f.serverUrl,deviceId:f.config.deviceId,deviceName:f.config.deviceName,platform:'macos'});expect(old.status).toBe(200);
+ const source:Config={...f.config,token:old.body.token,authExpiresAt:old.body.expiresAt,authSignedOut:false,credentialScope:'client',account:{origin:f.serverUrl,deploymentId:f.a.deploymentId,userId:f.a.userId,username:'generated-qr-a'}};
+ let pairing=f.pairing();await pairing.begin(await f.invite({deviceId:source.deviceId}),source,'macos',()=>{});let dropped=false;const publish=vi.fn(async()=>{});
+ f.after=async(call,response)=>{if(!dropped&&call.path==='/api/connections/redeem'){dropped=true;throw Error('Generated loss after replacement revoked old source credential');}return response;};
+ await expect(pairing.resume(source,()=>{},publish)).rejects.toThrow();expect(dropped).toBe(true);expect((await f.request(source.token,'/api/connections/self')).status).toBe(401);const original=await f.journal();
+ // This is exactly endLogin's configuration transformation. The account and
+ // original expiry remain; only the old usable token is retired.
+ const signedOutA={...source,token:undefined,authSignedOut:true};
+ const signedOutB={...signedOutA,account:{origin:f.serverUrl,deploymentId:f.b.deploymentId,userId:f.b.userId,username:'generated-qr-b'}};
+ pairing=f.pairing();const before=f.trace.length;expect(await pairing.preview(signedOutB)).toBeUndefined();await expect(pairing.resume(signedOutB,()=>{},publish)).rejects.toThrow('another connection');expect(f.trace).toHaveLength(before);
+ expect((await pairing.preview(signedOutA))?.userId).toBe(f.a.userId);
+ await pairing.resume(signedOutA,()=>{},publish);expect(publish).toHaveBeenCalledOnce();expect(publish.mock.calls[0][0].userId).toBe(f.a.userId);expect(publish.mock.calls[0][0].token).not.toBe(source.token);
+ const claims=f.trace.filter(call=>call.path==='/api/connections/redeem');expect(claims).toHaveLength(2);expect(claims[0].body).toEqual(claims[1].body);expect(claims[0].response.id).toBe(claims[1].response.id);expect(claims[1].body.challenge).toBe(createHash('sha256').update(original.verifier).digest('hex'));
+});
+
+it('recovers its PKCE after real ConfigStore session-only save/load omits the source token without flipping authSignedOut',async()=>{
+ const f=await fixture(),deviceId=defaultConfig().deviceId,old=await f.request(f.a.token,'/api/login/session','POST',{serverUrl:f.serverUrl,deviceId,deviceName:f.config.deviceName,platform:'macos',durationMs:0});expect(old.status).toBe(200);
+ const source:Config={...f.config,deviceId,token:old.body.token,authExpiresAt:old.body.expiresAt,authSignedOut:false,authSessionOnly:true,credentialScope:'client',account:{origin:f.serverUrl,deploymentId:f.a.deploymentId,userId:f.a.userId,username:'generated-qr-a'}};
+ const store=new ConfigStore(join(f.directory,'saved-profile-a'),secrets);await store.save(source);
+ const persisted=JSON.parse(await readFile(join(f.directory,'saved-profile-a','config.json'),'utf8'));expect(persisted).not.toHaveProperty('encryptedToken');expect(persisted.config.authSignedOut).toBe(false);expect(persisted.config.authSessionOnly).toBe(true);
+ let pairing=f.pairing();await pairing.begin(await f.invite({deviceId}),source,'macos',()=>{});let dropped=false;const publish=vi.fn(async()=>{});
+ f.after=async(call,response)=>{if(!dropped&&call.path==='/api/connections/redeem'){dropped=true;throw Error('Generated lost redeem before local session-only restart');}return response;};
+ await expect(pairing.resume(source,()=>{},publish)).rejects.toThrow();expect(dropped).toBe(true);expect((await f.request(source.token,'/api/connections/self')).status).toBe(401);const original=await f.journal();
+ const loaded=await store.load();expect(loaded.token).toBeUndefined();expect(loaded.authSignedOut).toBe(false);expect(loaded.authSessionOnly).toBe(true);expect(loaded.account?.userId).toBe(f.a.userId);
+ const storeB=new ConfigStore(join(f.directory,'saved-profile-b'),secrets);await storeB.save({...source,token:f.b.token,account:{origin:f.serverUrl,deploymentId:f.b.deploymentId,userId:f.b.userId,username:'generated-qr-b'}});const loadedB=await storeB.load();expect(loadedB.token).toBeUndefined();expect(loadedB.authSignedOut).toBe(false);
+ pairing=f.pairing();const before=f.trace.length;expect(await pairing.preview(loadedB)).toBeUndefined();await expect(pairing.resume(loadedB,()=>{},publish)).rejects.toThrow('another connection');expect(f.trace).toHaveLength(before);
+ expect((await pairing.preview(loaded))?.userId).toBe(f.a.userId);
+ await pairing.resume(loaded,()=>{},publish);expect(publish).toHaveBeenCalledOnce();expect(publish.mock.calls[0][0].userId).toBe(f.a.userId);
+ const claims=f.trace.filter(call=>call.path==='/api/connections/redeem');expect(claims).toHaveLength(2);expect(claims[0].body).toEqual(claims[1].body);expect(claims[0].response.id).toBe(claims[1].response.id);expect(claims[1].body.challenge).toBe(createHash('sha256').update(original.verifier).digest('hex'));
 });

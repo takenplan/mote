@@ -17,7 +17,12 @@ Desktop has no v1 fallback.
 It retains a single encrypted M01 recovery checkpoint in the profile root:
 invitation, fixed device metadata, verifier, starting connection fingerprint,
 request ID/deadline and grant when received. The fingerprint binds the original
-credential/account/device, and is never an account authority. No queue or second
+credential/account/device, and is never an account authority. A second exact
+fingerprint captures that same configuration with its token removed and signed
+out, preserving recovery after original-device replacement revokes the old
+credential. A process-only login restored by `ConfigStore` without a token is
+treated as that same signed-out projection, even if its stored flag is false.
+It never accepts a different account, deployment or device. No queue or second
 credential inventory is created. Checkpoints stay outside support exports.
 
 The order is persist PKCE → redeem → persist ID → poll → persist grant → fresh
@@ -26,6 +31,9 @@ must match the invitation; fresh self matches `account.credentialId`, stable
 account/deployment/origin, device and expiry, with required protocol/capabilities.
 Self does not expose a purpose field. Current main settings, document/account
 generation and login generation are checked after network and before publication.
+Automatic 401/expiry sign-out waits while pairing is active: redeem can revoke
+the original device credential before its replacement is published. Explicit
+logout and account switching still retire the captured operation immediately.
 Changing account retires old documents before private stores change, preserving
 M14's original queue, draft, source and calendar algorithms.
 
