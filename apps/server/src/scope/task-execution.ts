@@ -200,6 +200,7 @@ export class TaskExecution {
     return admit(prepared,modelLease,onAdmitted);
    },
    get:(taskId:string)=>this.view(owned(taskId)),
+   observe:(taskId:string)=>{const row=owned(taskId),task=this.view(row),step=this.engine.get(taskId)!,hasAuthority=this.valid(step)&&this.handlers.has(task.kind);return {id:task.id,kind:task.kind,state:task.state,attempts:task.attempts,availableAt:task.availableAt,reason:task.failure?.code??task.error,externalUnresolved:task.externalUnresolved,confirmUnknownRequired:['issued','unknown'].includes(task.externalState),allowedActions:[...(hasAuthority&&['failed','blocked','cancelled'].includes(task.state)?['retry' as const]:[]),...(!['succeeded','cancelled','stale'].includes(task.state)?['cancel' as const]:[])]};},
    contextSteps:(key:string,raw:unknown)=>contextStepPage(this.db,context,key,raw,assert,row=>{
     const task=this.view(row as TaskRow),step=this.engine.get(task.id)!,handler=this.handlers.get(task.kind);return {task,hasAuthority:this.valid(step)&&!!handler};
    }),

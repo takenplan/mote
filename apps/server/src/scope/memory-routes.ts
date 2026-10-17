@@ -15,6 +15,7 @@ const memoryReadQuery=(raw:unknown)=>{const fields=memoryQuery(raw);return Objec
 export function registerMemory(runtime:ScopedRuntime,db:DatabaseSync,configuration:Configurations,execution:TaskExecution,plugins:ScopedPluginHost,providerOptions:MemoryProviderOptions={},questions?:import('./owner-questions.js').ScopedOwnerQuestions){
  const host=new MemoryHost(runtime,db,configuration,execution,plugins,providerOptions,undefined,questions),service=(context:Parameters<MemoryHost['forUser']>[0])=>host.forUser(context);
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory',handle:({context})=>service(context).view()});
+ registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/observations',handle:({context,request})=>service(context).observations(request.query)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs',handle:({context,request})=>service(context).jobs(request.query)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/materials/:id',handle:({context,request})=>service(context).materialSelection((request.params as {id:string}).id,request.query)});
  registerUserRoute(runtime,{scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/selection',handle:({context,request})=>service(context).captureSelection(request.query)});

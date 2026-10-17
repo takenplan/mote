@@ -1,3 +1,4 @@
+import {memoryObservationPage} from './memory-observations.js';
 import {memoryCaptureSelection,memorySelectionSchema} from './memory-selection.js';
 import {MemoryFeedback,type ScopedMemoryFeedbackPayload} from './memory-feedback.js';
 import type {MemoryFeedbackGroup} from '../memory-feedback.js';
@@ -330,6 +331,7 @@ export class MemoryHost {
 
  forUser(context:UserContext){this.data(context).state();return Object.freeze({
   view:()=>{const data=this.data(context),state=data.state();return {revision:state.revision,generation:state.generation,desired:Boolean(state.desired),binding:data.binding(),settings:JSON.parse(state.settings),...(data.sql.get('SELECT operation_id FROM mm_binding_locks WHERE user_id=$user')?{bindingPreparation:String(data.sql.get('SELECT operation_id FROM mm_binding_locks WHERE user_id=$user')!.operation_id)}:{}),pendingExternal:Number(data.sql.get("SELECT count(*) n FROM mm_provider_journal WHERE user_id=$user AND state IN ('submitted','erase_submitted','erase_pending')")!.n)};},
+  observations:(raw:unknown)=>memoryObservationPage(this.data(context),context,this.execution,this.cursorKey,raw),
   submit:(raw:unknown)=>this.submit(context,raw),
   integrate:(raw:unknown)=>this.manualIntegration(context,raw),
   materialSelection:(id:string,raw:unknown)=>this.materialSelection(context,id,raw),
