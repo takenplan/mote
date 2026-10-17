@@ -1946,3 +1946,29 @@ M05 grants nor disconnect behavior is loosened. Its final run is separately
 recorded in `recordings152-exact-disconnect-ack` with all original assertions
 and unchanged240s overall timeout. Current Server/Web types and bilingual
 catalog checks are independent receipts. Whole current gate remains pending.
+
+### Final delivered PR151 thin image consumer
+
+Parent supplied final PR151 head98b1ea52/runtime23d00bda and
+`/tmp/mote-image-e2e-input.json`. Fetched those exact local Git objects and
+composed only the declared image projection, original Files presentation/export,
+image fixtures and browser fixture. Existing Joint producer73ce/34650/f555/dcac
+are retained; shared B/attachment/processing code is not replaced by the peer's
+older base. FileReview/Files retain the recording prerequisites above; the
+unrelated later FileForgetting consumer is not inferred composed.
+
+Current Joint original seven image journeys passed7/7,0skip,95.340s EXIT0
+(`/tmp/mote-joint-image151-final-original7.log/.exit`):OCR+typed, noOCR,
+snapshot, OCR-only, late OCR after snapshot expiry, retired OCR history, and
+same default recipe ID with a different version. Test assertions are byte-for-
+byte the delivered version. Exact image projection and ImageProgress source
+match23d00bda; current Joint's owner/stream/graph producers retain their own
+superset source. Image complete/recompute fixture uses the delivered explicit
+original-coordinator terminal assertion, superseding the earlier equivalent
+Joint wait helper without changing its operation or provider-count assertions.
+Web/Server/scripts types, scope and bilingual catalogs0 (`image151-final-*`,
+`recordings-image-final-scope`); the first i18n check identified the delivered
+export label omitted from the thin selection, then the exact shared/Android
+translation was added and the second check passed. No completed IAB download,
+live-model or physical-device evidence is inferred from these renderer tests.
+Earlier failed whole gates remain failed; current affected gate is next.
