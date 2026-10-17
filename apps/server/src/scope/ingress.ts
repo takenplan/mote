@@ -44,6 +44,10 @@ export class IngressHost{
  private readonly accepted=new Set<(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void>();
  private fileRetirement?:(context:UserContext,refs:readonly string[])=>void;
  configureFileRetirement(retire:(context:UserContext,refs:readonly string[])=>void){this.fileRetirement=retire;}
+ private fileProfiles?:{prepare:(context:UserContext,id:string)=>Promise<void>;bind:(context:UserContext,ref:string,id:string)=>void};
+ configureFileProfiles(profiles:{prepare:(context:UserContext,id:string)=>Promise<void>;bind:(context:UserContext,ref:string,id:string)=>void}){this.fileProfiles=profiles;}
+ async prepareFileProfile(context:UserContext,id:string){this.runtime.authority.assert(context);z.string().regex(/^[a-z][a-z0-9.-]{0,99}$/).parse(id);if(!this.fileProfiles)throw new PrivateDataError('scope_unavailable',503);await this.fileProfiles.prepare(context,id);this.runtime.authority.assert(context);}
+ private bindFileProfile(context:UserContext,ref:string,id:string){this.runtime.authority.assert(context);if(!this.fileProfiles)throw new PrivateDataError('scope_unavailable',503);this.fileProfiles.bind(context,ref,id);this.runtime.authority.assert(context);}
  private snapshotRecovery?:{needed:(context:UserContext,ref:string)=>boolean;restored:(context:UserContext,ref:string)=>void};
  configureSnapshotRecovery(policy:{needed:(context:UserContext,ref:string)=>boolean;restored:(context:UserContext,ref:string)=>void}){this.snapshotRecovery=policy;}
  onAccepted(receive:(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void){this.accepted.add(receive);return ()=>{this.accepted.delete(receive);};}
@@ -212,6 +216,7 @@ export class IngressHost{
    commitUpload:async(id:string)=>during(async()=>{
     const row=upload(id);if(row.receipt)return checkReceipt(JSON.parse(String(row.receipt)));
     const manifest=fileRevisionSchema.parse(JSON.parse(String(row.manifest))),hasBytes=!!manifest.sha256&&!manifest.item.deleted;
+    if(hasBytes&&manifest.processingProfileId)await this.prepareFileProfile(context,manifest.processingProfileId);
     const prepared=hasBytes?await originals.prepareUpload(id,manifest.sizeBytes,manifest.sha256!):undefined;
     let received=false;try{const result=sql.transaction(()=>{
      const current=upload(id);if(current.receipt)return checkReceipt(JSON.parse(String(current.receipt)));
@@ -220,6 +225,7 @@ export class IngressHost{
      const ack=data().receiveSourceItems(binding.id,[manifest.item],binding.retention==='archive'?{verify:()=>{if(hasBytes&&!prepared)throw conflict();}}:undefined).receipts[0];
      const importRow=sql.get('SELECT json FROM ig_upload_imports WHERE user_id=$user AND upload_id=?',id);if(importRow&&!ack.duplicate)imports.bind(ack.id,declaration(binding.id,JSON.parse(String(importRow.json))));
      let reference=prepared?originals.attach(binding.id,ack.id,prepared.hash,manifest.item.mimeType??'application/octet-stream',binding.retention==='archive'?'archive':'snapshot',manifest.item.layer==='snapshot'):undefined;
+     if(reference&&!ack.duplicate&&manifest.processingProfileId)this.bindFileProfile(context,reference.ref,manifest.processingProfileId);
      const recovery=sql.get('SELECT original_id FROM ig_upload_recoveries WHERE user_id=$user AND upload_id=?',id);
      if(recovery){if(!reference||reference.ref!=='original:'+recovery.original_id||!needsRecovery(reference))throw conflict();reference=originals.restoreSnapshot(reference.ref);this.snapshotRecovery!.restored(context,reference.ref);}
      const result=receipt(binding.id,String(current.request_key),[{...ack,...(reference?{original:reference}:{})}]);sql.run('UPDATE ig_uploads SET receipt=? WHERE user_id=$user AND id=?',JSON.stringify(result),id);assert();for(const receive of this.accepted)receive(context,result,'file',Object.freeze({}));assert();return result;

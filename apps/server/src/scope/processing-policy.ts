@@ -46,6 +46,7 @@ export class ProcessingPolicies {
   }}));
  }
  private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>this.runtime.authority.assert(context));}
+ async prepareOverride(context:UserContext,id:string){processingProfileSchema.shape.id.parse(id);await this.configuration.forUser(context).view();const policy=this.policy(context);if(!policy)throw new PrivateDataError('scope_unavailable',503);if(!policy.profiles.some(profile=>profile.id===id))throw new PrivateDataError('conflict',409);}
  policy(context:UserContext):ScopedFilePolicy|null{const row=this.sql(context).get('SELECT json FROM mp_file_policies WHERE user_id=$user');return row?effectiveValueSchema.parse(JSON.parse(String(row.json))).policy:null;}
  current(context:UserContext,ref:string):FilePolicyPlan|undefined{const row=this.sql(context).get('SELECT p.id,p.json FROM mp_file_policy_bindings b JOIN mp_file_plans p ON p.user_id=b.user_id AND p.id=b.plan_id WHERE b.user_id=$user AND p.user_id=$user AND b.original_id=?',ref.slice(9));return row?{...JSON.parse(String(row.json)),id:String(row.id)}:undefined;}
  /** Called by trusted admission, never a presentation GET. A completed file keeps

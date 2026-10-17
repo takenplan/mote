@@ -1336,3 +1336,21 @@ Do not trigger repeated whole recovery gates for this partial delivery; final
 same-SHA client/runtime closure remains required. The recovered test owner has
 ended; its116-case/actual recovery receipts remain separately versioned, and
 Joint does not wake it merely for another source review.
+
+
+### Explicit root profile: narrow implementation checkpoint
+
+The first fixture used a text processor as the universal fallback and correctly
+failed original policy validation400; that setup failure is retained. Valid
+text/* plus archive fallback produces durable9efd3eb6 RED: a root upload's
+existing processingProfileId=archive was ignored and bound the text rule
+(1/1fail5.310s `/tmp/mote-joint-profile-root-red2.*`). The M03 commit now awaits
+the trusted M06 profile preflight outside its SQLite transaction, then binds
+that same current owner's profile metadata after original attachment and before
+ordinary acceptance listeners/admission. Rechecks follow the awaited preflight;
+no endpoint/key or context is supplied by the request. An unknown profile rejects
+without publishing captures, and a cached commit receipt is replayed first.
+Same root/ACK/unknown/B-positive case1/1,8.086s0 is
+`/tmp/mote-joint-profile-root-green1.log/.exit`; Server noEmit0.
+This checkpoint supports saved named graphs only; unsaved defaults, Imports and
+attachment overrides remain OPEN and are not added to the a2cb client freeze.
