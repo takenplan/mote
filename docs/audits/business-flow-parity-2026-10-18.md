@@ -352,6 +352,19 @@ author did not independently execute their tests. The companion validation
 record owns generated single-/dual-owner, phase-failure, paging, metadata,
 backup, authority and restore results and the final affected-component gate.
 
+Startup correction now runs before the executor starts. A historical ordinary
+file is relabelled as backup only when the connector mapping, successful media
+checkpoint, authenticated host head, exact capture/item and original body hash
+agree (`scope/processing-origins.ts:50–70`). Missing or mismatched proof leaves
+the format unchanged. New automatic/owner/plugin origins are private host
+records. Automatic derivatives inherit origin separately from the live-parent
+processing contract, so a successful producer does not invalidate its
+derivatives. Known automatic backup trees are retired and fenced at admission
+and I/O; issued/unknown physical facts remain intact. A trusted explicit retry
+can restore its exact policy-retired safe tree; background retry cannot promote
+owner intent. These are source-level review conclusions, with executed results
+in the companion validation record.
+
 Supersession review also found that preventing new admission alone does not stop
 pre-existing automatic backup pipelines or their queued children. The companion
 change adds private host admission-origin records and recovery checks. Historical
@@ -363,6 +376,9 @@ pause until an explicit processing request, or retain their prior execution whil
 the new no-automatic-ASR boundary applies prospectively. Neither choice permits
 clearing issued/unknown physical calls or deleting completed results. Final
 implemented policy and validation belong to the companion record.
+At the frozen corrective source, ambiguous old roots retain their prior
+behavior and may still perform ASR. No-automatic-admission coverage for new
+trusted backups must not be described as complete historical suppression.
 
 Remaining UNKNOWN / owner decision: legacy `FileStore.transcriptRevision`
 creates one canonical transcript capture with chunks
@@ -376,6 +392,25 @@ one shared canonical transcript/archive contract, retaining exact readable raw
 bytes and segment evidence. Candidate B is an explicitly accepted alternative
 archive model with downstream grouping/deduplication and complete consumer
 coverage. Do not silently delete one current input class to manufacture parity.
+
+Concrete remaining revision journey, confirmed by static trace: recording R1
+contains two segments; its next provider revision R2 contains only the first.
+The expected current transcript has one segment, with the removed tail retained
+only as history. The scoped adapter updates `:export` and `:segment:0` but never
+withdraws `:segment:1` (`scope/connector-recordings.ts:105–108`). The latter keeps
+its independent current source head. `PrivateData.receiveSourceItems` hides
+predecessor Materials only when that same external ID is revised
+(`scope/private-data.ts:115–118`), so an already processed tail Material remains
+visible and eligible for Ask retrieval (`scope/ask-evidence.ts:109–126`). Legacy
+`transcriptRevision` publishes one canonical file revision and moves its file
+head; current chunk search joins that head, excluding the superseded tail
+(`files.ts:120–140,202–210,320`). This is a concrete stale-input consequence of
+the archive-shape difference, not just duplicate storage. A two-to-one segment
+revision through actual scoped sync and retrieval remains a required regression;
+the audit author did not execute it. The shared canonical archive candidate
+must handle segment replacement, empty/unsupported revisions and retained
+history together.
+
 Web/Android currently consume mainly the aggregate recording error; exposing
 per-phase state in the server does not prove that users can inspect independent
 failures through those clients.
@@ -480,13 +515,23 @@ source-level evidence only; native/UI behavior was not re-executed. Server
 recording orchestration was a distinct parallel implementation and is the
 specific flow being consolidated in this change.
 
-No full application/test suite, generated database journey, external model,
+No full application/test suite or product database journey, external model,
 physical-device test, private screenshot, real provider, paid replay, import retry,
 deployment or production write was run by the audit author. Existing module
 reports remain evidence only for their exact SHA/scope. F13 records a generated
 failure executed by the parent during the current turn, with independent static
 verification of its type/settlement chain here. This is not a statement
 that all 17 modules are complete or that every unlisted behavior is equivalent.
+Focused in-memory SQLite checks reproduced an explicit same-key derivative
+origin-claim defect and verified its correction: the claimed coordinator and
+its analysis child become owner-origin work while the producer and an
+unrequested sibling remain automatic. These are helper checks, not product
+startup, provider or migration tests. The companion validation record owns the
+actual API regression and final source checks.
+An in-memory `EXPLAIN QUERY PLAN` and prefix check also verified that the final
+startup task-to-format join uses both `(user_id, original_id)` primary-key
+columns and rejects a non-`original:` reference. This is an indexed-query check,
+not a production-size performance benchmark.
 
 The following remain explicitly outside the completed static coverage:
 

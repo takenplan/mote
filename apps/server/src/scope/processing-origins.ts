@@ -12,15 +12,18 @@ export class ProcessingOrigins {
  constructor(private db:DatabaseSync){}
  record(user:string,task:string,original:string,origin:ProcessingOrigin,root=task){
   this.db.prepare(`INSERT INTO mp_admission_origins VALUES(?,?,?,?,?) ON CONFLICT(user_id,task_id)
-   DO UPDATE SET origin=CASE WHEN excluded.origin='owner' AND mp_admission_origins.origin<>'plugin' THEN 'owner' ELSE mp_admission_origins.origin END`).run(user,task,original.replace(/^original:/,''),origin,root);
+   DO UPDATE SET origin=CASE WHEN excluded.origin='owner' AND mp_admission_origins.origin<>'plugin' THEN 'owner' ELSE mp_admission_origins.origin END,
+   root_task_id=CASE WHEN excluded.origin='owner' AND mp_admission_origins.origin<>'plugin' THEN excluded.root_task_id ELSE mp_admission_origins.root_task_id END`).run(user,task,original.replace(/^original:/,''),origin,root);
  }
  private task(user:string,id:string){return this.db.prepare('SELECT task_id,user_id,input FROM user_tasks WHERE user_id=? AND task_id=?').get(user,id) as Task|undefined;}
  root(user:string,task:string):{id:string;origin:ProcessingOrigin}|undefined {
   const seen=new Set<string>();let id=task;
   while(!seen.has(id)){
-   seen.add(id);const known=this.db.prepare('SELECT origin,root_task_id FROM mp_admission_origins WHERE user_id=? AND task_id=?').get(user,id);
-   if(known){const root=this.db.prepare('SELECT origin FROM mp_admission_origins WHERE user_id=? AND task_id=?').get(user,known.root_task_id);return {id:String(known.root_task_id),origin:String(root?.origin??known.origin) as ProcessingOrigin};}
-   const row=this.task(user,id);if(!row)return;const input=JSON.parse(row.input);
+   seen.add(id);const known=this.db.prepare('SELECT origin,root_task_id FROM mp_admission_origins WHERE user_id=? AND task_id=?').get(user,id),row=this.task(user,id);if(!row)return;const input=JSON.parse(row.input);
+   // An explicit derive may claim one coordinator independently of its already
+   // successful automatic producer. Its analysis children follow that exact
+   // live orchestrator, including receipts inherited before the owner claim.
+   if(known){if(known.root_task_id!==id&&typeof input.parentTaskId==='string'){id=input.parentTaskId;continue;}const root=this.db.prepare('SELECT origin FROM mp_admission_origins WHERE user_id=? AND task_id=?').get(user,known.root_task_id);return {id:String(known.root_task_id),origin:String(root?.origin??known.origin) as ProcessingOrigin};}
    if(input.plugin)return {id,origin:'plugin'};
    const parent=typeof input.parentTaskId==='string'?input.parentTaskId:typeof input.intentTaskId==='string'?input.intentTaskId:typeof input.intentId==='string'?input.intentId:undefined;
    if(!parent)return {id,origin:'unknown'};id=parent;
@@ -75,7 +78,7 @@ export class ProcessingOrigins {
   try{
    this.repairFormats(directory,deploymentId);
    const tasks=db.prepare(`SELECT u.task_id,u.user_id,u.input FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id
-    JOIN mp_original_formats f ON f.user_id=u.user_id AND 'original:'||f.original_id=json_extract(u.input,'$.originalRef') AND f.format='recording-audio-backup'
+    JOIN mp_original_formats f ON f.user_id=u.user_id AND f.original_id=substr(json_extract(u.input,'$.originalRef'),10) AND substr(json_extract(u.input,'$.originalRef'),1,9)='original:' AND f.format='recording-audio-backup'
     WHERE e.kind LIKE 'processing.%'`).all() as Task[];
    for(const task of tasks){const input=JSON.parse(task.input),root=this.root(task.user_id,task.task_id);if(root)this.record(task.user_id,task.task_id,input.originalRef,root.origin,root.id);}
    const retire:string[]=[];
