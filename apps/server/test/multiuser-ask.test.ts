@@ -337,3 +337,29 @@ test('explicit request model reference and personal model ID preserve own fixed 
  assert.equal((await f.request(f.a.token,'/api/query-runs','POST',{id:randomUUID(),input:{question:'Generated forged endpoint',modelReference:{kind:'personal',id:'request-only',baseUrl:'https://external.invalid'}}})).statusCode,400);
  assert.equal(f.requests.length,prior);
 });
+
+
+test('rechecking disclosed originals keeps the persistent Ask pin journal read-only',async t=>{
+ const f=await fixture(t);await f.publish(f.a,'A');
+ // A generated audit trigger observes writes through the real Harness. It does
+ // not replace account, task, source or receipt validation.
+ f.read(db=>db.exec("CREATE TABLE generated_pin_updates(changed INTEGER NOT NULL); CREATE TRIGGER generated_pin_update AFTER UPDATE OF pins,materials ON ma_runs BEGIN INSERT INTO generated_pin_updates VALUES(OLD.pins!=NEW.pins OR OLD.materials!=NEW.materials); END"));
+ const id=randomUUID();await f.checked(f.a.token,'/api/query-runs','POST',{id,input:{question:'Generated persistent receipt recheck'}});const result=await f.wait(f.a,id);assert.equal(result.status,'completed',JSON.stringify(result));
+ const writes=f.read(db=>db.prepare('SELECT changed,count(*) n FROM generated_pin_updates GROUP BY changed ORDER BY changed').all());
+ assert.ok(writes.some(row=>row.changed===1),'first genuine original/material observations must persist');
+ assert.equal(writes.filter(row=>row.changed===0).reduce((n,row)=>n+Number(row.n),0),0,'revalidating a retained original must not rewrite identical persistent pins');
+ assert.equal(result.result.citations.length,1);assert.equal((await f.request(f.b.token,'/api/query-runs/'+id)).statusCode,404);
+});
+
+test('a coordinator waiting for an unchanged real child does not repeatedly claim execution leases',async t=>{
+ const f=await delegated(t,{holdSecond:true});f.read(db=>db.exec("CREATE TABLE generated_coordinator_claims(task_id TEXT NOT NULL); CREATE TRIGGER generated_coordinator_claim AFTER UPDATE OF state ON execution_steps WHEN NEW.kind='ask.coordinate' AND NEW.state='running' AND OLD.state!='running' BEGIN INSERT INTO generated_coordinator_claims VALUES(NEW.id); END"));
+ const id=randomUUID();await f.checked(f.a.token,'/api/query-runs','POST',{id,input:{question:'Generated unchanged child admission'}});await f.entered.promise;const taskId=f.read(db=>String(db.prepare('SELECT task_id FROM ma_runs WHERE user_id=? AND id=?').get(f.a.userId,id)!.task_id)),claims=()=>f.read(db=>Number(db.prepare('SELECT count(*) n FROM generated_coordinator_claims WHERE task_id=?').get(taskId)!.n)),deadline=Date.now()+5000;
+ try{while((await f.checked(f.a.token,'/api/tasks/'+taskId)).state!=='waiting'){assert.ok(Date.now()<deadline,'coordinator did not yield its execution slot');await delay(10);}const before=claims();await delay(400);assert.equal(claims(),before,'an unchanged pending child is admission waiting, not fresh coordinator execution');}finally{f.gate.resolve();}
+ const result=await f.wait(f.a,id);assert.equal(result.status,'completed',JSON.stringify(result));assert.deepEqual(f.childStarts,{one:1,two:1});assert.equal(result.result.citations[0].id,f.canonical);
+});
+
+test('pending-child admission still retires a stale conversation before the held child settles',async t=>{
+ const f=await delegated(t,{holdSecond:true}),id=randomUUID(),next=randomUUID(),script=f.scripts.get('A')!;await f.checked(f.a.token,'/api/query-runs','POST',{id,input:{question:'Generated pending conversation'}});await f.entered.promise;
+ f.scripts.set('A',(body,raw,res,owner)=>{const request=JSON.parse(typeof body.messages[0].content==='string'?body.messages[0].content:body.messages[0].content[0].text).request;if(request==='Generated competing turn')return writeMessagesResponse(res,{stage:1,text:JSON.stringify({answer:'Generated competing answer',citationIds:[]})});return script(body,raw,res,owner);});
+ try{await f.checked(f.a.token,'/api/query-runs','POST',{id:next,input:{question:'Generated competing turn',conversationId:id}});assert.equal((await f.wait(f.a,next)).status,'completed');const old=await f.wait(f.a,id);assert.equal(old.status,'failed',JSON.stringify(old));assert.equal(f.read(db=>String(db.prepare("SELECT e.state FROM ma_units u JOIN execution_steps e ON e.user_id=u.user_id AND e.id=u.task_id WHERE u.user_id=? AND u.run_id=? AND u.id='two'").get(f.a.userId,id)!.state)),'running','the pending child has not settled to wake its parent');const conversation=await f.checked(f.a.token,'/api/conversations/'+id);assert.equal(conversation.turns.length,1);assert.equal(conversation.turns[0].result.answer,'Generated competing answer');}finally{f.gate.resolve();}
+});
