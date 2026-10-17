@@ -1240,3 +1240,16 @@ publication, pause/drain, stop, grant revoke, plugin/ingress delete, account dis
 and restart. These are Joint execution receipts; the independent cross-user
 owner must still confirm its originally failing workspace. No production plugin
 change was made to obtain this result.
+
+
+Settings-only named work: the first target accidentally increased the default
+maximum timeout beyond its schema limit and returned400; it is retained as a
+fixture error, not product RED. Corrected in-range timeout change with the policy
+unchanged produces valid RED84cd5df1: no fresh admission under the new processing
+generation (1/1fail4.807s `/tmp/mote-joint-policy-settings-change-red2.log/.exit`).
+The existing processing-domain completion now calls the same named-policy
+reconciliation after publication; unchanged plan ID is insufficient to skip a
+changed processing generation. Same case1/1,6.671s0 is
+`/tmp/mote-joint-policy-settings-change-green1.log/.exit`, Server types0. This
+does not yet close disable/resume, global-policy-null legacy work, derived phases
+or raw-extraction reuse after downstream-only changes.
