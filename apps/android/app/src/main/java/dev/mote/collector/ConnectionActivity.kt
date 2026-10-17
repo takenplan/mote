@@ -20,6 +20,9 @@ class ConnectionActivity : MoteActivity() {
     private lateinit var preview: TextView
     private lateinit var currentNode: TextView
     private var parsed: ConnectionInvitation? = null
+    private var pageOwner = ""
+    private var accountRetired = false
+    private var confirmation: AlertDialog? = null
     private var selectionOwner: CollectorConfig? = null
     private val executor = Executors.newSingleThreadExecutor()
     private val task by lazy { UiTask(this, executor, ownsExecutor = false) }
@@ -33,6 +36,7 @@ class ConnectionActivity : MoteActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val refresh = object : Runnable {
         override fun run() {
+            if (accountRetired || !applying && retireIfOwnerChanged()) return
             if (applying && ::status.isInitialized) status.text = RuntimeSettings.progressLabel()
             connectionFinished?.let { complete -> connectionFinished = null; complete() }
             if (refreshRequested && ::currentNode.isInitialized && !working && !task.busy && !refreshTask.busy) {
@@ -40,8 +44,9 @@ class ConnectionActivity : MoteActivity() {
                 refreshTask.start(MoteI18n.text("正在刷新已保存连接…"), { currentNode.text = it }, {
                     val settings = Settings(applicationContext); settings.read() to settings.deviceId
                 }) { result ->
-                    if (applying) return@start
+                    if (applying || retireIfOwnerChanged()) return@start
                     result.onSuccess { (config, id) ->
+                        if (config.ownerKey() != pageOwner) { refreshRequested = true; return@onSuccess }
                         if (::input.isInitialized && config != currentConfig) { input.text.clear(); parsed = null; preview.text = MoteI18n.text("连接已变化，请重新核对邀请。") }
                         currentConfig = config; deviceId = id; refreshCurrentNode()
                     }
@@ -53,13 +58,17 @@ class ConnectionActivity : MoteActivity() {
     }
     private data class InitialConnection(val config: CollectorConfig, val deviceId: String, val status: String, val statusAt: Long)
     override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        super.onCreate(savedInstanceState); pageOwner = applicationContext.accountOwnerKey(); window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         val loading = moteDetailPage(title = MoteI18n.text("连接中央节点")); val label = TextView(this); loading.addView(label)
         task.start(MoteI18n.text("正在读取已保存连接…"), { label.text = it }, {
             val settings = Settings(applicationContext); val client = ConnectionClient(applicationContext)
             InitialConnection(settings.read(), settings.deviceId, client.status(), client.statusAt())
         }) { result ->
-            result.onSuccess { initial -> currentConfig = initial.config; deviceId = initial.deviceId; buildUi(initial) }
+            if (retireIfOwnerChanged()) return@start
+            result.onSuccess { initial ->
+                if (initial.config.ownerKey() != pageOwner) { recreate(); return@onSuccess }
+                currentConfig = initial.config; deviceId = initial.deviceId; buildUi(initial)
+            }
                 .onFailure { label.text = MoteI18n.text("无法读取已保存连接，请检查本机存储后重试") }
         }
     }
@@ -67,7 +76,7 @@ class ConnectionActivity : MoteActivity() {
         val config = initial.config
         val root = moteDetailPage(title = MoteI18n.text("连接中央节点"))
         fun text(value: String, size: Float = MoteTheme.fontBody.toFloat()) = TextView(this).apply { text = value; MoteUi.type(this, size.toInt()); setPadding(0, moteDp(MoteTheme.spaceInline), 0, moteDp(MoteTheme.spaceInline)) }.also(root::addView)
-        fun button(label: String, primary: Boolean = false, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { if (!working && !task.busy) runCatching(action).onFailure { showFailure(it) } } }, primary).also(root::addView)
+        fun button(label: String, primary: Boolean = false, action: () -> Unit) = MoteUi.button(Button(this).apply { text = label; setOnClickListener { if (!working && !task.busy && !retireIfOwnerChanged()) runCatching(action).onFailure { showFailure(it) } } }, primary).also(root::addView)
         text(MoteI18n.text("先在中央网页生成一次性邀请。扫码、选择 JSON 文件或粘贴邀请后，核对节点再确认连接；不会自动开始截图。邀请有效期 10 分钟，请勿分享。"))
         currentNode = text(""); refreshCurrentNode()
         button(MoteI18n.text("复制本设备 ID")) { getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("Mote device ID", deviceId)); Toast.makeText(this, MoteI18n.text("已复制设备 ID，不含凭据"), Toast.LENGTH_SHORT).show() }
@@ -80,7 +89,9 @@ class ConnectionActivity : MoteActivity() {
             val expected = currentConfig
             working = true; applying = true
             RuntimeSettings.apply(this, expected.copy(deviceName = chosen), expected = expected) { result ->
-                connectionFinished = {
+                if (retireIfOwnerChanged()) return@apply
+                connectionFinished = completion@ {
+                    if (retireIfOwnerChanged()) return@completion
                     working = false; applying = false
                     RuntimeSettings.currentConfiguration?.let { currentConfig = it }; refreshCurrentNode()
                     result.onSuccess { status.text = MoteI18n.text("设备名称已保存") }.onFailure(::showFailure)
@@ -96,7 +107,7 @@ class ConnectionActivity : MoteActivity() {
         preview = text(MoteI18n.text("还没有解析邀请。外部链接只填入此页，不会自动连接。"))
         button(MoteI18n.text("确认连接此节点")) {
             val invite = parseInput(); val expected = currentConfig
-            MoteDialogBuilder(this).setTitle(MoteI18n.text("确认连接节点")).setMessage(MoteI18n.text("{0}\n\n将使用已有设备 ID 和当前采集设置。只获取这台设备的采集凭据；设置、队列和模型不会清空。同节点重新配对将使用新凭据继续同步本机待上传截图、笔记和来源。首次连接将把尚未绑定的本机截图、笔记与来源记录绑定到上方节点，并按已选择的同步方式发送。请确认这是你自己的档案地址。已经绑定其他节点的待同步记录不能改投此处。", invitationLabel(invite)))
+            confirmation = MoteDialogBuilder(this).setTitle(MoteI18n.text("确认连接节点")).setMessage(MoteI18n.text("{0}\n\n将使用已有设备 ID 和当前采集设置。只获取这台设备的采集凭据；设置、队列和模型不会清空。同节点重新配对将使用新凭据继续同步本机待上传截图、笔记和来源。首次连接将把尚未绑定的本机截图、笔记与来源记录绑定到上方节点，并按已选择的同步方式发送。请确认这是你自己的档案地址。已经绑定其他节点的待同步记录不能改投此处。", invitationLabel(invite)))
                 .setNegativeButton(MoteI18n.text("取消"), null).setPositiveButton(MoteI18n.text("连接")) { _, _ ->
                     val chosenName = name.text.toString().trim(); val debugHttp = allowHttp.isChecked
                     changeConnection(expected, invite.serverUrl, MoteI18n.text("正在兑换邀请并校验设备身份…"), connected = {
@@ -111,12 +122,14 @@ class ConnectionActivity : MoteActivity() {
             working = true
             val expected = currentConfig; val debug = allowHttp.isChecked
             task.start(MoteI18n.text("正在读取待恢复连接…"), { status.text = it }, {
+                if (applicationContext.accountOwnerKey() != expected.ownerKey()) throw SettingsChangedFailure()
                 ConnectionClient(applicationContext).pendingInvitation(debug) ?: throw ConnectionFailure("no_pending")
             }) { result ->
+                if (retireIfOwnerChanged()) return@start
                 working = false
                 result.onSuccess { invite ->
                     if (currentConfig != expected) return@onSuccess
-                    MoteDialogBuilder(this).setTitle(MoteI18n.text("恢复已确认连接")).setMessage(MoteI18n.text("{0}\n\n将恢复本机加密保存的同一配对请求并核验设备身份；尚未绑定的资料仅按这次明确确认归属。", invitationLabel(invite)))
+                    confirmation = MoteDialogBuilder(this).setTitle(MoteI18n.text("恢复已确认连接")).setMessage(MoteI18n.text("{0}\n\n将恢复本机加密保存的同一配对请求并核验设备身份；尚未绑定的资料仅按这次明确确认归属。", invitationLabel(invite)))
                         .setNegativeButton(MoteI18n.text("取消"), null).setPositiveButton(MoteI18n.text("恢复")) { _, _ ->
                             val chosenName = name.text.toString().trim()
                             changeConnection(expected, invite.serverUrl, MoteI18n.text("正在重新校验设备连接…")) { ConnectionClient(applicationContext).resume(chosenName, debug, bindLocal = true); MoteI18n.text("中断的连接已恢复。") }
@@ -142,27 +155,52 @@ class ConnectionActivity : MoteActivity() {
         return invite
     }
     private fun <T> run(progress: String, work: () -> T, completed: (T) -> String) {
-        if (working || task.busy) return
+        if (working || task.busy || retireIfOwnerChanged()) return
+        val owner = pageOwner
         working = true; status.text = progress
-        task.start(progress, { status.text = it }, { work() }) { result ->
+        task.start(progress, { status.text = it }, { if (applicationContext.accountOwnerKey() != owner) throw SettingsChangedFailure(); work() }) { result ->
+            if (retireIfOwnerChanged()) return@start
             working = false; result.onSuccess { status.text = completed(it) }.onFailure(::showFailure)
         }
     }
     private fun refreshCurrentNode() {
         currentNode.text = MoteI18n.text("当前节点：{0}\n设备 ID：{1}\n已有设备请让中央生成绑定此设备 ID 的邀请；设备身份不会重置。", currentConfig.server.ifBlank { MoteI18n.text("尚未配置") }, deviceId)
     }
-    override fun onResume() { super.onResume(); refreshRequested = true; handler.post(refresh) }
+    private fun clearInvitationPresentation() {
+        confirmation?.dismiss(); confirmation = null; parsed = null; selectionOwner = null
+        intent = Intent(intent).setData(null)
+        if (::input.isInitialized) input.text.clear()
+        if (::name.isInitialized) name.text.clear()
+        if (::currentNode.isInitialized) currentNode.text = ""
+        if (::preview.isInitialized) preview.text = MoteI18n.text("连接已变化，请重新核对邀请。")
+        if (::status.isInitialized) status.text = MoteI18n.text("连接已变化，请重新核对邀请。")
+    }
+    private fun retireIfOwnerChanged(): Boolean {
+        if (accountRetired) return true
+        if (applicationContext.accountOwnerKey() == pageOwner) return false
+        accountRetired = true; connectionFinished = null; handler.removeCallbacks(refresh)
+        clearInvitationPresentation(); recreate()
+        return true
+    }
+    override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean =
+        if (retireIfOwnerChanged()) true else super.dispatchTouchEvent(event)
+    override fun onResume() { super.onResume(); if (retireIfOwnerChanged()) return; refreshRequested = true; handler.post(refresh) }
     override fun onPause() { handler.removeCallbacks(refresh); super.onPause() }
     private fun invitationLabel(invite: ConnectionInvitation) = MoteI18n.text("{0}\n实例：{1}\n账号：{2}\n用途：设备采集\n设备：{3}", invite.serverUrl, invite.deploymentId, invite.userId, invite.deviceId ?: deviceId)
     private fun changeConnection(expected: CollectorConfig, server: String, progress: String, connected: () -> Unit = {}, work: () -> String) {
-        if (working) return
+        if (working || retireIfOwnerChanged()) return
         working = true; applying = true; status.text = progress
         var message = MoteI18n.text("连接已更新")
-        RuntimeSettings.apply(this, expected, bindLocal = true, change = { message = work() }, nextServer = server, expected = expected) { result ->
-            if (isDestroyed || isFinishing) return@apply
-            connectionFinished = {
+        var completedOwner = pageOwner
+        RuntimeSettings.apply(this, expected, bindLocal = true, change = { try { message = work() } finally { completedOwner = applicationContext.accountOwnerKey() } }, nextServer = server, expected = expected) { result ->
+            if (accountRetired || isDestroyed || isFinishing) return@apply
+            connectionFinished = completion@ {
+                if (applicationContext.accountOwnerKey() != completedOwner) { retireIfOwnerChanged(); return@completion }
+                val ownerChanged = pageOwner != completedOwner
+                if (ownerChanged) { clearInvitationPresentation(); pageOwner = completedOwner; acceptDisplayedAccountAfterRetirement() }
                 working = false; applying = false
                 RuntimeSettings.currentConfiguration?.let { currentConfig = it }; refreshCurrentNode()
+                if (ownerChanged) name.setText(currentConfig.deviceName)
                 result.onSuccess {
                     connected(); status.text = message
                     if (it.projectionConsentRequired) startActivity(Intent(this, MainActivity::class.java))
@@ -175,7 +213,7 @@ class ConnectionActivity : MoteActivity() {
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
         val expected = selectionOwner; selectionOwner = null
-        if (resultCode != RESULT_OK || data == null) return
+        if (accountRetired || resultCode != RESULT_OK || data == null) return
         if (expected == null) return
         if (requestCode == 1 || requestCode == 2 && data.data != null) {
             val debugHttp = allowHttp.isChecked
