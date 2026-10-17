@@ -52,7 +52,11 @@ test('semantic memory input is bounded to selected spans, with original exact-qu
  store.archive.save(artifact,artifact,revision,{kind:'semantic',text:'A generated decision summary',metadata:{evidenceRanges:[{id:record.id,offset:start,length:19}]}},[{id:record.id,fingerprint:store.archive.fingerprint(record.id)!}],'fixture','1','fixture');
  const memories=new MemoryStore(store),seen:any[]=[],pipeline=fixtureMemoryPipeline({store,memories,configured:()=>true,model:()=> 'fixture',query:async input=>{seen.push(input);return {answer:JSON.stringify({memories:[{title:'Selected decision',statement:`Keep this decision [${record.id}]`,uncertainty:'Generated fixture',evidenceIds:[record.id],evidence:[{id:record.id,quote:record.ocrText.slice(start,start+19)}]}]}),citations:[{id:record.id,capturedAt:record.capturedAt,appName:'Fixture',excerpt:record.ocrText.slice(start,start+19)}],trace:[],runId:randomUUID()};}});t.after(()=>pipeline.close());
  const job=pipeline.createFromArtifacts([artifact],'fixture-semantic')!;await pipeline.run(job.id);assert.equal(seen.length,1);assert.deepEqual(seen[0].evidenceRanges,[{id:record.id,offset:start,length:19}]);assert.deepEqual(JSON.parse(seen[0].taskContext.untrustedInterpretations),[{id:artifact,summary:'A generated decision summary'}]);assert.ok(!seen[0].question.includes('A generated decision summary'));assert.equal(memories.page().items.length,1);
- store.db.prepare("UPDATE captures SET json=json_set(json,'$.ocrText','Changed generated decision') WHERE id=?").run(record.id);assert.equal(memories.page({includeStale:true}).items.length,0);
+ const prior=memories.get(memories.page({includeStale:true}).items[0].id);
+ store.db.prepare("UPDATE captures SET json=json_set(json,'$.ocrText','Changed generated decision') WHERE id=?").run(record.id);
+ assert.equal(memories.page().items.length,0);
+ const retained=memories.page({includeStale:true}).items;assert.equal(retained.length,1);assert.equal(retained[0].status,'stale');assert.equal(memories.get(retained[0].id).statement,prior.statement);
+ store.delete(record.id);assert.equal(memories.page({includeStale:true}).items.length,0);
 });
 test('query embedding has a short deadline and lexical evidence remains usable',async t=>{
  const store=fixture(t),record=note('Generated retrieval phrase');await store.ingest(record);const indexer=new Indexer(store,{embeddingModel:'fixture',embeddingBaseUrl:'http://127.0.0.1:1',embeddingApiKey:''});t.after(()=>indexer.close());
