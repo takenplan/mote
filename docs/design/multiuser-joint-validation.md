@@ -106,3 +106,223 @@ inside the existing issuance hook. The original operation's ACK retry returns
 its existing task. Previously queued parents cannot evade the I/O guard; an
 explicit retry acknowledgement still applies to its existing issuance and never
 changes an old fact to succeeded. No new per-file runtime or outcome store.
+
+## Original per-file cancellation
+
+KEEP the original file cancel journey: revoke unfinished file processing, retain
+completed raw/canonical results and originals, report a running/unknown external
+wait honestly, and allow explicit owner evidence correction. CHANGE the missing
+scoped endpoint to M05 cancellation plus one owner/original cancellation generation
+inside M06. This fences late stage/plugin publication and stops automatic intake
+from reopening that original; unrelated A files and equal-ID B remain independent.
+The small canonical intent table is included in M06 portable merge/deletion and
+the existing stopped-backup catalog. Portable merge does not replace an existing
+local control, and it never restores an M05 task/model authorization. REMOVE the
+scope_unavailable response for this established endpoint, not the old outcome.
+EXCEPTION exact late transport completion may settle its fact; cancellation and
+replay acknowledgement never certify unknown remote execution as stopped.
+UNKNOWN file retry/reprocess, selected diarization/acoustic overrides, reviews,
+image-profile and complete recording parity still require their own implementation
+and acceptance. This candidate does not introduce a second executor or generic
+control framework. Native archives predating this new required table are not
+claimed compatible; older personal payloads default missing controls to empty.
+
+## Original explicit file reprocessing candidate
+
+KEEP explicit owner reprocessing and its unknown-outcome acknowledgement; a
+physically active call still blocks even after another owner task endpoint has
+recorded acknowledgement. Originals, successful artifacts and old outcome facts
+remain retained. CHANGE the replacement admission to a fresh per-original
+nonzero generation and a new M05 task. Zero-generation canonical input stays
+byte-compatible with the historical identity formula. REMOVE replay through an
+obsolete cancelled input/grant. EXCEPTION a host-only M05 acknowledgement records
+consent for exact owned unresolved calls without changing their outcomes or
+requeuing old work. UNKNOWN diarization-only retry/overrides, complete image
+policies/reviews/acoustic assets and full compiled/client gates remain pending.
+
+The narrow retry candidate accepts POST `/api/files/:id/retry` with a stable
+client-generated `operationId` (1–128 characters), `stage: transcribe|summary`
+(default transcribe) and optional `confirmUnknown` (default false). It returns
+`{queued:true,taskId}`; the same exact operation/body returns the original task,
+including after completion, and body conflicts return409. The consumer persists
+this request identity through lost ACK rather than requiring another user step.
+Running work returns409; an unacknowledged unknown also returns409 until explicit
+confirmation. All confirmations/control-generation/admission/receipt writes share
+one transaction. The original owner/source/file checks precede lookup. Summary
+reprocessing keeps raw extraction and uses fresh summary stages; transcribe uses
+fresh extraction fingerprints. Portable archives retain the per-file control
+intent but exclude retry/admission history and execution grants. The native backup
+catalog covers the new owner-keyed `mp_file_retries` journal. This is still WIP,
+not a replacement consumer freeze or complete Files acceptance.
+
+## Exact raw extraction and diarization-only candidate
+
+KEEP accepted raw ASR separately from aligned dialogue and explicit per-file
+speaker options. CHANGE the missing raw locator to M06 canonical stage-output
+references, written under the existing M05 grant after validated stage output.
+`mp_file_steps` stores only owner/original/generation/role/artifact references;
+`mp_file_diarization` stores the original exact-count/range/processor option.
+Neither table schedules work or carries model endpoints/credentials. Diarize
+retry selects the current accepted raw extraction, checks an optional supplied
+artifact ID exactly, then reuses that immutable artifact in the existing audio
+recipe. The new file generation fences all obsolete jobs. The override persists
+for this original only; explicit null removes it and restores inherited settings.
+REMOVE repeated ASR as a side effect of retrying diarization. EXCEPTION a failed
+diarizer leaves validated raw extraction readable but does not claim a complete
+indexed pipeline. UNKNOWN acoustic sample/assets, model reviews, image profiles,
+calendar associations and full native/production acceptance remain open.
+
+The candidate expands retry stage to `transcribe|diarize|summary`. Optional
+`diarization:{artifactId,options}` is valid only for diarize; options use the
+existing FileDiarizationOptions contract or null. Old UUID artifact assumptions
+are replaced by the M06 64-hex identifier; no new user confirmation is added.
+GET Files detail exposes `rawArtifactId` even when later diarization failed.
+Portable export/merge includes canonical stage references and per-file options,
+validates owner/original/artifact/type/generation links before any writes and
+never restores execution rights. Existing destination intent wins on merge.
+Native backup lists both tables. Historical M06 artifacts without a recorded
+stage reference are not guessed into raw ASR based on an engine-name string.
+
+## Acoustic previews and recording-export candidate
+
+KEEP anonymous sample audition, private WAV delivery and the full raw/unaltered/
+corrected recording export distinction. CHANGE the unavailable assets endpoint to
+read only the exact current owner-bound diarization stage, with the original
+WAV header/size checks before that stage can be accepted. Detail exposes sample
+metadata without base64 bytes; file-list rows do not materialize acoustic bodies.
+The existing private assets route delivers validated WAV bytes with no-store.
+Original raw ASR/extraction, aligned/uncorrected/corrected transcript, diarization
+JSON/RTTM/CSV, sample WAVs and confirmed names remain distinct export entries.
+A partial pipeline can export accepted raw evidence without claiming indexing or
+complete processing in its manifest. Stream proof includes source/file, current
+Material revision and metadata-only raw/diarization stage IDs; it is checked at
+consumption and while yielding existing gzip chunks. REMOVE false missing assets
+for an accepted current speaker sample. EXCEPTION replacement/foreign acoustic
+IDs are404; an invalid sample cannot replace the last valid publication. UNKNOWN
+calendar confirmations/model review and the remaining old capability matrix are
+still open. No filesystem asset store, new model call or new executor is added.
+
+## Original file review adaptation decision
+
+KEEP the original model-proposed terms/calendar algorithms, explicit owner choice,
+exact source ranges and immutable originals. The pure prompts/value schemas are
+shared with the quarantined original tests; no keyword matching or guessed event
+association is added. CHANGE only the host: M03/M06 evidence and personal M04 leases
+are admitted through the existing single M05 executor. Private proposal/link history
+is data; personal restore never reconstructs a task/model lease. Calendar links
+confirm a planned event association and never establish attendance or write an event.
+Metadata-only references contribute only retained metadata with an unavailable-body
+marker; they never cause a speculative provider/original fetch. Exact source context,
+artifact revision and calendar hash are rechecked after awaits and on confirmation.
+Current narrow receipts are in the validation ledger. Original profile/rule routing,
+all client consumers, native/container schema combination and final whole acceptance
+remain independently tracked; these new review cases do not supersede those gaps.
+
+KEEP the original per-source/external-ID forgotten-file policy and explicit
+allow-again, including410 before any stale upload/batch replay. The shared M03
+owner tombstone survives removal of all revisions; its generation retires signed
+original tickets without changing account credentials. M06 cancels owned file
+work before canonical removal; physical GC follows SQL commit and remains pin-aware.
+No account-wide task/config reset, per-user runtime or real user deletion is used.
+Current deletion intent rejects conflicting older personal content atomically; this
+is explicitly validated with archive_conflict and unchanged target/B state. Additions
+are specific to the original Files policy, not a general deletion framework.
+
+
+## Exact forget decision and lost deletion acknowledgement
+
+Independent M15 actual same-capture stale allow-again200/upload200 was reproduced
+locally, alongside lost DELETE acknowledgement404 (durable9360ca56; both actual
+RED). Fix4be0cb4c binds allow-again to a fresh opaque decision UUID and DELETE to
+its captured original generation plus stable operation ID. Fixed owner-only
+receipts survive canonical deletion and replay without acting on a later import.
+This is transport/lifecycle metadata for the existing owner actions, not another
+approval or new deletion policy. Missing expected metadata returns409 instead of
+silently targeting the latest state. Consumers must preserve exact request bodies
+across delays/restarts and may only choose a newer decision by a new explicit
+owner action. Personal data restore mints new decision IDs and excludes operation
+receipts, retaining the existing no-authority-restoration boundary. Native schema
+admission includes the new metadata column/journal. Actual narrow10/10 is recorded
+separately; previous types/full gates do not cover this change.
+
+## Attachment relationship and restored image authority
+
+KEEP the original parent-caption/image relationship, original byte retention,
+explicit preparation and accepted OCR reuse. CHANGE only admission/publication
+through existing M03/M06/M07 services and one executor. A declared parent ID is
+insufficient: actual owned archive lineage and current parent/head/source must
+match. Binding metadata is specific to this retained relationship; no generic
+nonce framework, new runtime or permission step is introduced. M02's existing
+asset value shape can retain metadata once M03 is present; byte access remains
+M03, and existing canonical members drive transitive retirement. Legacy organizer
+chunk evidence IDs are adapted to M02 capture IDs while preserving exact locators.
+
+Actual settled-publication testing exposed old image navigation revival after
+same-ID reattachment and again after data-only restore. Immutable Material lineage
+and fresh per-binding Memory image evidence IDs prevent these independently of
+raw OCR cache identity. Restore preserves accepted data and mints no execution or
+model lease. Current770f source needs new type/delta/full combination checks; old
+component/gate receipts are not moved. Profile/rule/service-test and import choice
+remain OPEN, as do final clients and complete composed acceptance.
+
+## Frozen QR producer composition
+
+Compose producer48547e8f04a4df76724cb286df32d44f2ecc013b (tested6726838a) as
+08fa2ba1. The three auth files use that exact frozen source, including its
+full-gate-covered central-purpose baseline. M05 synchronous retry recovery,
+M06 shared physical-input pin and exact pin disposer are applied as deltas;
+Joint originalGeneration/attachmentGeneration/fileGeneration, diarizeFrom,
+per-file settings, owner reviews and acknowledgeExternalReplay are retained.
+No peer directory, main/integration branch, deployment or CI setting is changed.
+QR's owner full gate is producer evidence, not Joint composition proof.
+
+Independent Joint QR/auth/disposer/retry-hook16/16 is actual0. The composed
+Files neighbor run initially had29pass/4fail: four own pin assertions observed
+coordinator retirement before actual media completion. Exact diagnostics show
+activeMedia1 at that point (pins1 for an attachment, pins2 for the manual-pin
+forget case). Waiting for actual media activity to finish makes all four pass,
+with unchanged no-artifact, exact physical cleanup and B-positive assertions.
+This is a fixture lifecycle correction; no production source is changed to
+release a still-needed physical pin. Full current affected/types/compiled/client
+and native/container combination remain pending.
+
+## Original media connection compatibility during profile work
+
+The original processingServiceSchema explicitly permits an empty model for OCR/
+ASR while requiring it for language-model services. M04's generic configured()
+check rejected both. A generated real M04 OCR lease is actual503 RED at e458bf1e;
+initial pipeline-only observation was stale and retained separately. Minimal69f8133e
+permits an empty model only for mote-media OCR/ASR resolution. Endpoint, credentials,
+explicit unauthenticated-local checks, complete references, account/resource
+retirement and no default fallback remain unchanged; chat/memory/file refuse that
+empty model. No fake model ID or alternative provider is introduced. Own real fake
+HTTP OCR plus M04 model-resource neighbors16/16 actual0; ASR lease resolution is
+verified separately from provider execution. New types/source review remain pending.
+
+The new pure processing-policy-contract value retains original named profiles,
+source/exact-MIME/default precedence, explicit original-only archive and recipe/
+parameter metadata while referencing complete M04 connections. It executes nothing,
+stores no endpoint/key copy and is not wired to routes/intake yet. Its three
+value-level tests are not evidence that the remaining public processing-plan
+settings, service test, incomplete-task reconciliation, preview/reprocess or import
+imageProfileId work is complete. Existing FileProcessing.completeConfiguration
+compares unfinished runtime fingerprints and requeues changed work; completed
+results remain until explicit preview/reprocess. The eventual adapter must retain
+that distinction and existing unknown-call consent, not blanket-revive work.
+
+
+## Bounded PREP release before final gates
+
+Parent's explicit client-coordination instruction is to publish stable usable
+sub-contracts rather than wait for every module's final candidate. Source8177e8af
+is therefore released as limited consumer PREP with its pending noEmit, independent
+review, full affected/production/client and current native/container schema checks
+visible. No final or compiled-safe claim follows. DELETE/allow bodies are fixed;
+consumer callbacks must bind late receipt/UI effects to the captured original
+generation and complete credential. Profiles/rules/import image-choice execution
+remains a specific OPEN group; pure values do not count as implementation.
+
+M13's already-declared be6 Library original marker is composed without waking its
+paused turn. An actual post-parent-delete raw-detail200 failure is retained;8177
+filters the same exact relation before browser count/paging and passes the original
+case and all six attachment cases. Metadata-only M02 remains data, not a byte grant.

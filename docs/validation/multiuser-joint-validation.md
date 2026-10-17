@@ -124,10 +124,16 @@ original-byte reader17fd and raw Library entrybe6e; M15new7eca/107f work.
 The exact17fd original-byte delta was independently source
 reviewed here with no new confirmed P0/P1/P2; report
 `/tmp/mote-joint-review-m13-file-original-17fd.md`, no test/build rerun. Its3/3
-runtime result belongs to M13. Original invitation/QR pairing remains a shared
-UNKNOWN: M01 PKCE approve/poll/ACK is implemented; no frozen canonical equivalent
-for old invitation redemption/scan was delivered. Username login and MCP QR do
-not close that retained outcome.
+runtime result belongs to M13. The earlier no-frozen-QR state is superseded by
+producer6a84ec6a477bb4698002234fd81bb669ce98cc06 in Draft PR144, contract
+`docs/design/multiuser-qr-pairing.md` in the independent task-4 checkout. It retains
+Generate invitation consent, origin confirmation and device-only PKCE/poll/ACK;
+no additional browser confirmation. Owner20/20 narrow and Server types are not a
+full gate: its complete affected timed out124 and remains pending repaired rerun.
+Web/Android consumer acceptance is separate, and the producer explicitly leaves
+Desktop v2 import unimplemented/unverified. Prior M14 final139 cannot close that
+newly frozen consumer contract. Username login and MCP QR are not substitutes.
+All final joint QR outcomes remain OPEN until actual composed client execution.
 
 ## Independent preparation probes: narrow scope only
 
@@ -221,7 +227,7 @@ API401, workerfalse, zero inference, stop/rebackup. Later final271 gate EXIT2
 (script fixture types) and final2b722 EXIT1 (MCP raw-note timing fixture) are
 preserved. Deterministic fixture RED1f1897→GREEN0efc separates retired note raw
 refs from actual unprocessed M03 Unicode windows; no production change. Current
-ab7069aa2a1c59eda1a0775ae8d52c0632a70c89 required3 is ACTIVE, not passed. No
+ab7069aa2a1c59eda1a0775ae8d52c0632a70c89 required3 ended EXIT0; final723cc0b7 is doc-only thereafter, independently checked here. No
 new whole-container gate or combined Joint backup-schema acceptance is inferred. Source reviews are in
 `/tmp/mote-joint-review-container-actual-fixtures.md`; owner logs are separate.
 
@@ -246,7 +252,7 @@ Every row is **FINAL PENDING**. Owning-module history is supporting evidence onl
 | J10 account deletion | A has issued unknown external fact/held late result and shared bytes; revoke admission/publication first→durable result_unknown→exact late ACK settles only old fact→retry physically erases private metadata. A stays unreadable; B hashes/rows/credentials unchanged; missing/late hook blocks false success. | `multiuser-lifecycle.test.ts`, `multiuser-actions-lifecycle.test.ts` (actual M16 waits for calendar fact), provider deletion cases. Unknown cannot be marked physically complete or resubmitted. |
 | J11 native instance/production package | Stopped backup CLI→empty isolated target→fresh emitted server twice; preserve deployment/account IDs, originals/hash, canonical Memory/history, conversations/config/plugins/Todos and succeeded/unknown facts; all authority retired. Old epoch/corrupt/missing domain/schema/native content rejects before target writes. | `multiuser-instance-backup.test.ts`, `multiuser-backup-{capture-updates,actions}.test.ts`; use `MOTE_M16_COMPILED_HOST=1 MOTE_M16_PACKAGED_BACKUP=1` after own fresh build. Copy-only dist is not fresh-build proof. |
 | J12 shared config/plugins/connectors/old UI | Shared model key/reference and weight/code reuse with independent personal config/usage; M04 CAS/pinned snapshot/restart/explicit failures. Generated package formal install and actual worker; A stop leaves B active. Gmail/Calendar/Lark/document/recordings native formats and long text; OAuth reversed/replayed callback and account switch; no credential/cursor sharing. | Existing config/plugin/connector process tests, original algorithms and final owned client UI. Preserve Memory binding prepare/drain/migrate/activate/cancel and source import/Files/review/export/advanced settings capabilities in the owner ledger. Missing projections/UI block this row. |
-| J13 Docker retained recovery | Disposable epoch5 Docker profile publication and stopped target recovery through production CLI; actual owned Hindsight Docker volume snapshot/restore and canonical/history re-open, without old execution authority. No deployment or existing-volume access. | **OPEN final container freeze/gate and Joint schema combination**. Owner13515436 actual generated production image restore/start/stop/restart/rebackup passes; direct offline Hindsight06fd canonical/API recovery passes. Managed Runtime/Engine.read258f787d actual same-case EXIT0 follows the preserved fixture-normalization failure; final required3ab706 is ACTIVE after two separately preserved gate failures. Immutable image built EXIT0; old daemon/build-pending states are historical. Do not move the earlier d181 required gate to newer runtime or Joint Imports tables. |
+| J13 Docker retained recovery | Disposable epoch5 Docker profile publication and stopped target recovery through production CLI; actual owned Hindsight Docker volume snapshot/restore and canonical/history re-open, without old execution authority. No deployment or existing-volume access. | **OPEN final container freeze/gate and Joint schema combination**. Owner13515436 actual generated production image restore/start/stop/restart/rebackup passes; direct offline Hindsight06fd canonical/API recovery passes. Managed Runtime/Engine.read258f787d actual same-case EXIT0 follows the preserved fixture-normalization failure; final required3ab706 ended EXIT0 after two separately preserved gate failures; local composition1a42 retains both originals and provider checks, with new narrow proofs below. Immutable image built EXIT0; old daemon/build-pending states are historical. Do not move the earlier d181 required gate to newer runtime or Joint Imports tables. |
 | J14 real-model regression and private-data boundary | User amendment `Sentinel_90402956f4b881918763a8a61d350969`: retain deterministic mocks for isolation/retry assertions. When a real-model regression is needed, first verify the exact locally available Codex model/interface for the user’s “GPE 6.1 sol” (parent interpretation: GPT-6.1 sol), then use that signed-in local entry. Do not silently substitute another model/provider or create credentials. Prefer generated data. Optional local Central reads must be copied read-only to an isolated directory outside the repository before testing. | **PARTIAL: owner M15 actual generated Native Ask1/1,11.281s EXIT0** on retained48a baseline, using the existing M01/M04/M08 plus locally signed-in Codex `gpt-6.1-sol`. CLI0.162.1 catalog and ephemeral no-turn handshake selected the exact same model; no fallback/new provider credential. This is owner execution, not Joint rerun or an Imports semantic-model claim. Final composed model entry and privacy audit remain pending. Record only identifier/interface/SHA/result, no private content. Central originals and every derivative—prompts/responses, summaries, embeddings, screenshots, exports, logs, fixtures—must stay outside Git, including add/commit/stash/branches/remotes, PR text/comments and shared attachments/logs. Audit staged diff and new files individually; gitignore alone is insufficient. If private material has entered Git, stop push and report to parent; do not rewrite history or permanently delete it. Joint has used generated data only so far. |
 
 ## Historical receipts, deliberately not independent reruns
@@ -543,3 +549,481 @@ M13's final c45 pre-transport fact review also has no new confirmed P0/P1/P2,
 /tmp/mote-m13-review-joint-unknown-c45f.md. Together with the exact narrow actual
 receipts, this permits clients to compose this thin checkpoint. It is not a new
 module-final/full affected result and does not close remaining original outcomes.
+
+Frozen container composition is now local merge
+1a42f2e9fd015e29bbf26a6e43209cc8c0440990 of declared source723cc0b7. Verified
+ab706→723cc changes only one validation document; all runtime inputs match the
+owner's final3 EXIT0. Its Server2641/Desktop492/Web505/Android352 (fresh74XML,
+zero fail/error/skip, actual unit execution/compiled inputs reused) remain owner
+evidence. Container has ended and must not be awakened. Parent restored Theme
+only for independent PR143 review; no theme source is merged here.
+
+Automatic composition retains both archived-file original completeness and
+strict Hindsight canonical provider/body verification, with Joint's extended
+schema catalog intact. Own narrow protocol run passes15/15/no skip/EXIT0 in
+/tmp/mote-joint-container-merged-protocol.log and .exit. SQL/FS/YAML staging and
+native host reopening are real; Docker transport remains substituted there.
+Own actual stopped-Import private-preview/equal-ID recovery plus partial
+first-record dedup/fresh-owner-preview recovery pass2/2/no skip/EXIT0 in
+/tmp/mote-joint-container-import-composed-restore2.log and .exit. Only model
+transport is generated. The first similarly named command matched no test
+names and produced a file-level success; it is explicitly not case evidence.
+Combined actual Docker/Managed Hindsight production and final client/affected
+proof remain pending. Content audit:
+/tmp/mote-joint-container-composition-content-audit.md.
+
+Files cancellation candidate after host recovery: baseline original endpoint
+returns503 scope_unavailable (actual RED,
+/tmp/mote-joint-file-cancel-entry-red.log and .exit). The pre-disconnect same-case
+GREEN session57818 had an unknown outcome until recovery. On restored Bogon,
+its saved log/exit proves1/1/EXIT0; scoped process inventory confirms no old test
+is still running. Transport disconnect/ps sandbox denial are environment facts,
+not code failures. The five original uncommitted files were preserved.
+
+The extended actual cancel case now includes held A ASR, unaffected other A file,
+equal-ID B, missing B original404, valid late completion/no A publication,
+retained original, sticky cancel across ordinary restart, private portable export/
+merge, corrupt original-control link rejection, and stopped-instance restoration
+with old token401/no resumed cancelled work.1/1/no skip/EXIT0 in
+/tmp/mote-joint-file-cancel-lifecycle.log and .exit. Latest missing-owner check plus
+unknown503 cancellation pass2/2/no skip/EXIT0 in
+/tmp/mote-joint-file-cancel-unknown-isolation.log and .exit: wait remains unknown,
+old external fact remains unresolved and B is still indexed. A separate real
+language-agent cancellation retains the completed raw Material, rejects the held
+late summary and allows exact owner text correction;1/1/EXIT0,
+/tmp/mote-joint-file-cancel-owner-edit.log and .exit. All transports/content are
+generated; M01/M03/M04/M05/M06/M16 and restart/backup/portable entries are real.
+Types, independent bounded review and current affected/compiled/client gates are
+pending for this candidate. c45 remains the previously declared thin consumer
+freeze until a new one is explicitly released; file retry is not implemented here.
+
+The pre-existing multi-page summary recovery fixture assumed automatic replay
+after a bare503. That expectation conflicts with the original issued-call guard:
+the actual old expectation fails in
+/tmp/mote-joint-summary-unknown-original-expectation.log (EXIT1). The fixture now
+uses the existing owner retry confirmation, verifies no unconfirmed replay,
+keeps the successful first-page checkpoint and original model snapshot, and
+checks that acknowledging replay does not settle the old external fact.
+/tmp/mote-joint-summary-unknown-explicit-recovery2.log and .exit pass1/1/EXIT0.
+The first updated driver only polled SQLite after restart and never triggered
+Fastify startup; its EXIT1 is retained separately in the unnumbered recovery log.
+The successful driver uses an actual owner task GET to start the restored host.
+No production behavior was weakened. Exact3dd Server and scripts noEmit are
+also EXIT0 in /tmp/mote-joint-file-cancel-types.log/.exit/.sha. Independent
+exact3dd bounded review reports no new confirmed P0/P1/P2 in
+/tmp/mote-theme-review-joint-file-cancel-3ddfd60d.md; old-input ACK identity remains
+a separate upgrade acceptance gap. Theme has ended and is not being reawakened.
+
+The generation-zero identity caveat has now produced a durable actual RED in
+a0afd5d9: real owner admission differs from the historical M05 identity formula
+when the default zero field is serialized. The narrow fix normalizes only zero
+to the historical absent field; nonzero cancellation generations remain admitted
+inputs. /tmp/mote-joint-file-generation-identity-green.log/.exit pass2/2/EXIT0:
+the independently evaluated old identity, persisted zero-format parent/child
+inputs, restart/lost-ACK lookup with no extra tasks, and the real held-summary
+cancellation fence. This is not an execution of an old production binary or a
+general historical archive migration claim. The original RED remains preserved.
+
+Files explicit reprocessing candidate (not a consumer freeze): the original
+POST retry route first returns503, /tmp/mote-joint-file-retry-entry-red.log/.exit.
+Fresh owner transcribe after cancellation/stopped restore succeeds and same
+operation returns its one durable task. The additional actual owner-task
+confirmUnknown-before-transport-return case reveals200 instead of409 in
+/tmp/mote-joint-file-retry-physical-ack-red.log/.exit. The fix checks physical
+activity independently from replay acknowledgements. The same case plus bare503
+unknown/required confirmation/foreign owner rejection/new task/old fact intact/B
+positive pass2/2/EXIT0 in /tmp/mote-joint-file-retry-physical-ack-green.log/.exit.
+Summary explicit reprocess preserves raw/current evidence and old summaries,
+reruns both requested pages under the current selected model, and repeats ACK
+without extra calls;1/1/EXIT0 in
+/tmp/mote-joint-file-summary-reprocess-green.log/.exit. All inputs/transports are
+generated; no Central original or derivative was read or staged. Diarization-only
+retry/overrides, acoustic assets/reviews and broader Files outcomes remain OPEN.
+
+Diarization-only candidate: actual initial partial pipeline has accepted raw ASR
+but no exposed exact raw locator;1/1 EXIT1 in
+/tmp/mote-joint-file-diarize-only-red.log/.exit (durable test a060e73f).
+After adding canonical stage references, the first implementation attempt's
+misplaced code block returned503; /tmp/mote-joint-file-diarize-only-green.log/.exit
+is retained as a failure, not a fixture/environment reclassification. Corrected
+same case passes1/1/EXIT0 in the green2 log. Latest extended case passes1/1/EXIT0
+in /tmp/mote-joint-file-diarize-portable-green.log/.exit: invalid raw ID409,
+no repeated ASR during diarize-only, stable ACK, file-specific speaker count,
+restart retention, fresh full transcription with sticky policy, explicit null
+reset, B default policy/foreign raw rejection, personal export/merge without task
+IDs, future-generation proof rejection and retained valid raw reference.
+Adjacent cancel/unknown/zero-identity/diarize cases pass4/4/EXIT0 in
+/tmp/mote-joint-file-retry-diarize-adjacent-green.log/.exit. Current AST inventory
+and transitive production boundary pass in
+/tmp/mote-joint-file-controls-scope.log/.exit; declarations add only the four
+owner-keyed M06 tables and original cancel/retry endpoints. No Central data or
+real media/model input was read; all artifacts and fixtures are generated.
+This candidate still awaits types, independent review and the affected/compiled/
+client gates; the declared consumer freeze remains c45.
+
+A separate original Task cancel→confirmUnknown→fresh Processing operation
+combination actually issued a second held provider call before the first ended:
+/tmp/mote-joint-processing-physical-ack-red.log/.exit,1/1 EXIT1, durable c2403df1.
+The shared M06 admission and pre-I/O guard now both inspect physical activity
+independently of replay acknowledgement, not only the Files retry endpoint.
+The corrected same case is recorded separately; no acknowledgement marks a fact
+succeeded or frees a live worker. This extends the earlier endpoint-local fix,
+not a new confirmation policy or executor.
+
+Acoustic export: original accepted diarization has no preview artifact in the
+first actual RED /tmp/mote-joint-file-acoustic-export-red.log/.exit (c3e1007b).
+New private WAV asset/metadata and complete archive same-case GREEN1/1 are in
+/tmp/mote-joint-file-acoustic-export-green.log/.exit. Current adjacent3/3/EXIT0
+/tmp/mote-joint-file-acoustic-export-adjacent.log/.exit covers that case, actual
+HTTP onSend source-retirement/B-positive and child-process gzip error settlement.
+The later precise RTTM newline/CSV CRLF plus invalid WAV/last-good-retention test
+passes1/1/EXIT0 in /tmp/mote-joint-file-acoustic-export-newlines-red.log/.exit:
+that filename was provisional; the run is GREEN and does not establish a format
+bug. Metadata-only lookups keep export stream fences from reparsing large raw or
+acoustic bodies on every gzip chunk. Generated fake transport only; actual host
+storage/authorization/executor/archive stream are used. The broader M06 physical
+occupancy fix51d same case is1/1/EXIT0 in
+/tmp/mote-joint-processing-physical-ack-green.log/.exit. Current types and bounded
+review remain pending, and these outcomes do not close model reviews/calendar
+associations, image-policy/attachment parity, forget/allowagain or final gates.
+
+Exact36ffde5c Server source and scripts noEmit ACTUAL EXIT0:
+/tmp/mote-joint-file-current-types.log/.exit/.sha. Source stayed fixed throughout;
+parent fresh QR EXIT124/RELEASE followed by M15 short Gradle terminal/RELEASE
+preceded the claim. Joint released all heavy work immediately afterward. The
+subsequent stronger partial-export test adds no production change and passes2/2
+with the zero-identity case in
+/tmp/mote-joint-file-current-partial-export-green.log/.exit: partial manifest
+explicitly processed=false/indexed=false/current raw artifact, exact bad-WAV
+failure code, retained previous publication and B-positive. Types and these narrow
+runs do not replace an independent bounded review or own final affected/compiled/
+client acceptance. QR's full affected timeout124 is not a passing gate here.
+
+The existing export child-process fixture was root-CWD dependent: the actual npm
+Server workspace entry fails ERR_MODULE_NOT_FOUND in
+/tmp/mote-joint-export-workspace-entry-red.log/.exit. Its test-only fix resolves
+the module relative to import.meta.url. Same fixture now passes1/1 both in the
+Server workspace and repository root, respectively
+/tmp/mote-joint-export-workspace-entry-green.log/.exit and
+/tmp/mote-joint-export-root-entry-green.log/.exit. No runtime source changed;
+QR's parallel prerequisite-fixture repair remains its own work/evidence.
+
+
+Current bounded M06/Files component regression naturally terminates EXIT0,
+53/53 pass,0failure/cancel/skip,69.462s, fixed test HEAD
+e2d3b1b20a80287161212e09ce994cadc659eebf (production36ffde5c):
+/tmp/mote-joint-file-component-current.log/.exit/.sha. The six files are
+multiuser-processing, multiuser-file-controls, multiuser-file-unknown,
+multiuser-files-stream, file-export-stream and scope-architecture. Actual
+M01/M03/M04/M05/M06/M09/M16 paths, generated external transports, no skipped
+case; this is neither full Server nor affected/compiled/client joint proof.
+Source and tests stayed fixed throughout. All heavy work was released immediately.
+Under the parent's22:08 resource ruling QR is the next sole heavy owner; Joint
+and M15 await parent allocation afterward and do not infer another slot from old
+status files. The producer's124 and stopped superseded gate remain non-passing.
+
+## Current original Files reviews — narrow candidate evidence, not final gate
+
+After tested production36ff, the original term/calendar review workflow is being
+adapted through one existing M05 executor and personal M04 file-model leases.
+The term entry actual503 RED is committed atf5d4ff86. Test4ca9f9cd preserves its
+normal confirmation/retained-history case plus calendar/lifecycle boundaries.
+Current production changes remain a candidate pending types, bounded independent
+review and own affected/compiled/client acceptance; the53-case component gate
+above does not cover them.
+
+Actual generated-data executions:
+
+- Term proposal→explicit selected correction retains original immutable text and
+  B's equal-ID data; processing-domain export/delete/restore rejects a forged
+  source range and preserves accepted history with no task ID/model replay.
+  Calendar archived-input proposal→explicit association leaves both calendars
+  unchanged; detail/export show only A's confirmed association. Initial combined
+  two-case receipt `/tmp/mote-joint-file-review-retained-data.log/.exit`,2/2 EXIT0.
+- The archived/reference calendar confirmation history now passes actual domain
+  restore/restart with forged confirmation-reference rejection and zero new tasks;
+  source disable hides link/body, source re-enable reopens the same retained proof,
+  and real private capture DELETE removes dependent review/link data while B's
+  same event UUID remains unchanged. `/tmp/mote-joint-file-review-calendar-portable.log/.exit`,2/2 EXIT0.
+- Metadata-only reference fixture first had invalid layer/body setup, preserved as
+  non-runtime failures. Valid reference data then produced stale/zero external
+  issuance because no original exists, `/tmp/mote-joint-file-review-calendar-reference-red3.log/.exit`.
+  Minimal metadata-only projection marks bodyAvailable=false and the same case
+  passes1/1, `/tmp/mote-joint-file-review-calendar-reference-green.log/.exit`.
+- Source-context change, owner correction and file cancellation while the actual
+  generated provider response is held each prevent the late proposal publishing;
+  no retired reason is returned and old raw text remains. Three cases EXIT0 in
+  `/tmp/mote-joint-file-review-held-lifecycle.log/.exit`.
+- Before-LIMIT selection:205 newer disabled-source calendar records must not
+  displace the one allowed owner candidate. Initial setup through full Ingress
+  admitted unrelated background work and exceeded the narrow12s wait (running
+  task, not a completed functional result); that failure remains preserved.
+  The candidate-order fixture now uses the real owner-bound M02 metadata service
+  for the hidden-only rows, with actual M03 for the allowed A/B inputs. Same
+  ordering/negative-content assertions pass1/1 in
+  `/tmp/mote-joint-file-review-calendar-limit2.log/.exit`. No production change
+  was made to obtain that fixture-only timing result.
+- The original quarantined term and calendar algorithms still pass their two
+  targeted characterizations after pure prompt/schema extraction:
+  `/tmp/mote-joint-file-review-legacy-contract.log/.exit`,2/2 EXIT0.
+- Scope inventory/private-SQL/import boundary EXIT0 in
+  `/tmp/mote-joint-file-review-scope2.log/.exit`; raw validation SQL was changed
+  to the existing owner-bound PrivateSql metadata-validation pattern, without
+  granting data access. Current source noEmit has not yet run for this candidate.
+
+All data/providers/archives are generated. There was no real calendar/mail write,
+Central-content read, real-model request, new CI/deploy or remote branch change.
+
+### QR87 compatibility supplement
+
+Core expired-input preflight before external issuance is source-compatible with
+Joint's physical-call/generation guards; the previous unconditional pin-release
+statement is qualified. Generated production Ingress primitive actualRED:
+acquire exact pin→admin disables owner→invoke the exact acquired disposer throws
+invalid_identity and leaves one pin, `/tmp/mote-joint-pin-disposer-review-red.log/.exit`.
+This is not yet a composed87 held-M06-response reproduction. QR owner received the
+bounded finding and cleanup-only exact-pin recommendation; Joint has not duplicated
+or merged the fix. Account deletion, which clears pins, is a different boundary.
+No independent reviewer execution or whole QR acceptance is inferred.
+
+Original Files forget/allow-again is still an actual capability gap, not merely a
+source suspicion: generated same-capture-ID A/B file DELETE currently returns
+scope_unavailable503 in `/tmp/mote-joint-file-forget-entry-red.log/.exit`,1/1 EXIT1.
+The durable test retains the old410 forgotten-resync guard and explicit allow-again
+outcome as its target; assertions after the first failure are not executed evidence.
+The current74fe review implementation does not claim to implement file forgetting.
+Before closing this gap, preserve per-source/external-ID tombstones, all owned
+revisions, derived visibility retirement, late-worker/old receipt/ticket fences,
+post-commit pin-aware physical GC and personal merge/restart semantics. A simple
+DELETE alias or metadata-only hide cannot count as original capability parity.
+
+Current forget implementation0095c897078fce04ce75c687a0e1fc6abc81b479 closes the
+original503 route RED in its bounded scope. Same original user entry now passes
+with B isolation,410 resync refusal, explicit allow-again without automatic content,
+and rejection of an old signed ticket even after the deterministic original ID is
+reimported. Full personal old-archive import fails archive_conflict with no canonical
+resurrection, followed by restart; content-free tombstone Ingress-domain export/
+delete/restore retains the block. `/tmp/mote-joint-file-forget-portable-green.log/.exit`,1/1 EXIT0.
+The stronger final two-case receipt `/tmp/mote-joint-file-forget-revisions.log/.exit`
+is2/2 EXIT0: all two owned revisions retire, an old revision cannot undo the newer
+forget intent, exact held pin defers physical cleanup, independent same bytes and
+B survive. `/tmp/mote-joint-file-forget-held.log/.exit`,1/1 EXIT0, exercises a real
+held generated media transport: no late A artifact, one old call fact only, B
+processes normally, exact manual pin remains until release and existing GC then
+removes A's physical object. No live provider is involved.
+
+Parent23:03 allocated only a5–10s type window after QR's fresh release. Fixed0095
+Server and scripts noEmit ACTUAL EXIT0 in about5s:
+`/tmp/mote-joint-file-reviews-forget-types.log/.exit/.sha`. PTY23986 was read to
+terminal0, all heavy work explicitly released to QR's post-disposer final affected.
+No full suite/build/Gradle was appended to that short window. Scope AST on current
+forget source0 (`/tmp/mote-joint-file-forget-scope2.log/.exit`). Independent review
+of the new review and forget implementation remains pending; no final joint gate.
+
+Independent QR readonly review accepted the74fe review producer with its source-only
+limits (`/tmp/mote-qr-review-joint-owner-review-74fe.md`). Its0095 forget review found
+one incarnation path requiring actual proof (`/tmp/mote-qr-review-joint-forget-0095.md`).
+Joint actual automatic=true same-byte/original/receipt allow-again+restart returned
+the retired successful task: `/tmp/mote-joint-file-forget-incarnation-red.log/.exit`,1/1 EXIT1.
+A parentless old extract retry actually executed again and failed instead of being
+stale: `/tmp/mote-joint-file-forget-parentless-red.log/.exit`,1/1 EXIT1. Durable
+regressionsb024d64a;0095 is not accepted for those paths and its types do not cover
+this later fix.
+
+Fix056380c2c036f48d32241e8db3a59e8081cf5e4c binds M06 input/current/cache and review
+base to the existing M03 forgotten-original generation. This is independent of
+per-file cancel/retry generation; zero is omitted from serialized identities and
+stage fingerprints, preserving historical tasks/cache. No new table, route,
+executor, grant renewal or wire request is added. Exact two regressions plus the
+existing historical generation-zero/lost-ACK identity case pass3/3 EXIT0 in
+`/tmp/mote-joint-file-forget-incarnation-green2.log/.exit`. The first post-fix run's
+extra-call assertion incorrectly expected zero despite the actual initial decoder
+call; its failed receipt is preserved. The final fixture compares the actual
+pre-retry count and keeps the stale-before-execution assertion unchanged. Fix0563
+is submitted for bounded independent review; new noEmit/whole gates remain pending.
+
+M15's earlier36ff source-only acoustic publication concern was actually reproduced:
+real M03/M04/M05/M06 generated ASR/diarization, fixed A response held in Fastify
+onSend, then source disable or exact diarization replacement, still returned the
+captured WAV. Both cases fail in `/tmp/mote-joint-file-sample-publication-red.log/.exit`,
+2/2 EXIT1; durable8393bca1. Minimal679a175c40b9c20c3fb0b6789f089188c8ac0dd7 replaces
+the eager Buffer response with a lazy direct Readable, rechecking owner/source and
+exact current diarization before each64KiB block. Fastify observes the returned
+stream's errors; no intermediate pipe can swallow them. Same two cases and each
+B-positive WAV response pass2/2 EXIT0 in
+`/tmp/mote-joint-file-sample-publication-green.log/.exit`. This is not an execution
+of every backpressure/network/UI mode. New source types/independent delta review
+and final affected/clients remain pending;0095 types do not cover679a.
+
+M15's separate legal-large-artifact/8MiB native JSON concern is still unexecuted;
+raw full diarization arrays in detail were also part of the original legacy shape.
+No new quota, silent array truncation or invented paging framework is added from
+that source-only observation. Preserve it for bounded consumer/old-path comparison
+before deciding whether it is a regression or an existing scaling limit.
+
+
+### Exact delete decisions —4be0cb4c
+
+M15's independent same-capture replay report is /tmp/mote-m15-review-joint-files-0095.md;
+its2cc60c20 actual execution remains M15 evidence. Own durable9360ca56 reproduces
+two failures at real M01/M03/M06 HTTP entry: stale first allow-again after a second
+forget returns200 and permits upload200 (expected409/410), and lost DELETE ACK
+retry returns404 (expected fixed200 receipt). Own /tmp/mote-joint-file-forget-decision-red.log/.exit
+is2/2fail EXIT1. This is separate from0563's already-fixed task incarnation issue.
+
+Minimal4be0cb4c adds exact decision CAS, expected original generation and stable
+owner operation receipts. /tmp/mote-joint-file-forget-cas-final-narrow.log/.exit is
+10/10pass, 0skip/fail,8.397s EXIT0: two original same-path fixes, missing/stale
+metadata, old independent delete intent, actual app restart before ACK replay,
+schema/partial-upgrade initialization, historical-zero task identity, older archive
+conflict+data-only tombstone restore/old decision rejection, all revisions/shared
+bytes/pin, held fake transport+B, automatic same-byte reimport and parentless old
+retry. No real provider or personal content was used. Scope inventory0 in
+/tmp/mote-joint-file-forget-cas-scope.log/.exit. Earlier intermediate green2 is3/3;
+prior neighbors6/6 selected only by name, and is not a complete file suite.
+
+Current4be0cb4c noEmit/independent source review/affected/compiled/native/client/
+Docker schema combination are pending. Previous203997 types cover0563/679a but
+not this changed wire. Profiles/rules and parent-bound imported image preparation
+remain OPEN; the new attachment target test has no production implementation and
+its first503 denial is not a positive attachment/Memory proof.
+
+### Exact retained attachments —3d2cad43/770f548c
+
+Original positive HTTP preparation entry was actual503 RED1/1 at46d1d9f8,
+`/tmp/mote-joint-file-attachment-entry-red2.log/.exit` (earlier first foreign-denial
+failure is not positive entry proof). New3d2cad43 implements actual parent/archive
+relation, current binding, same M06 executor and M07 pure organizer. Initial child
+OCR/parent retirement passed, but the added joined-caption assertion exposed
+M02 asset quarantine, legacy chunk UUID evidence adaptation and the archived source
+caption being omitted. Those intermediate failures remain in attachment-joined
+logs; only later unwrapped real handler execution is used as GREEN.
+
+Waiting for the actual rebuilt joined Material and re-projecting its image anchor
+then confirmed old navigation revival (settled-red EXIT1); Material binding lineage
+fix passes. Data-only Ingress+Processing restore separately reproduced the same
+old-anchor problem at e3913d26 in attachment-restore-anchor-red EXIT1. First image-ID
+fix collided with old unique evidence block identity (final-narrow EXIT1), retained.
+Minimal770f binds both block and image ID to the new M03 relation; non-attachment
+image identities remain unchanged.
+
+`/tmp/mote-joint-file-attachment-final-narrow2.log/.exit` is5/5pass,0skip/fail,
+8.221s EXIT0: original preparation/actual OCR and joined original parent caption,
+real Memory read_image, same-parent UUID retirement/recreation/new task and Material
+revision with exact raw OCR reuse, held A provider response across parent deletion/
+source disable/head replacement with B processing and no A artifact/pin, and
+accepted OCR/domain data restore with old ticket/image-anchor rejection plus fresh
+image navigation. Pure generated2px PNG, captions and fake loopback OCR only;
+no model inference or real user data. Full HTTP personal import, producer noEmit,
+independent review, native/client/compiled/container and full affected are pending.
+
+### Frozen QR plus current Files composition
+
+Producer PR144 head48547e8f/test672 finalrequired960s0 is read-only owner evidence;
+no completed owner thread was awakened. Joint08fa2ba1 uses exact frozen auth
+source and selective M05/M06/Originals pin/retry deltas. It retains all Joint
+incarnation, per-file cancel/retry/raw cache, owner review and attachment fields.
+Own `/tmp/mote-joint-qr-composed-narrow.log/.exit`:16/16,0skip/fail,2.823s EXIT0,
+real generated M01 QR claim/revoke/ACK/known-device/reauthorization routes, pin
+disposer and three retry-hook transaction rollback modes.
+
+Own `/tmp/mote-joint-qr-files-composed-neighbors.log/.exit` was33cases,29pass/4fail,
+EXIT1. All four were own pre-existing fixture pin-count assertions after a
+coordinator's public terminal state, while the actual media activity remained
+active. No production failure or physical pin leak was inferred from that point.
+`/tmp/mote-joint-qr-files-physical-phase.log/.exit` repeats exactly those four
+with actual media completion as the boundary:4/4,5.614s0. Diagnostics actually
+show activeMedia1 and the held pins before completion, then original no-A-artifact,
+zero provider pins/manual pin retained, eventual GC and B assertions pass. Tests
+only changed; all first failures remain. This is not a second full33-case green
+receipt or a full Server/affected gate. New source types/review remain pending.
+
+Attachment retained-object admission later4c55761f avoids copying/re-reading the
+whole already-admitted archive object; existing M03 metadata, checksum readers
+and reference-only admission remain authoritative. Six narrow cases passed in
+10.274s `/tmp/mote-joint-file-attachment-retained-object-narrow.*`; the added
+reference-only assertion passed separately1/1 in0.813s in
+`/tmp/mote-joint-file-attachment-reference-admission.*`. Scope checker0. No large
+file throughput/production performance claim follows from these generated cases.
+
+### Model-less original OCR/ASR reference
+
+Own e458bf1e durablecase gives actual M04 OCR lease scope_unavailable503 at
+/tmp/mote-joint-empty-media-reference-direct-red.log/.exit; original legal media
+service model:'' is not a language model. Earlier pipeline-only stale observation
+is retained in empty-media-reference-red and not substituted for the direct proof.
+Minimal69f8133e feature-aware check passes samecase including actual generated
+MoteMedia OCR, unchanged blank model in usage, ASR lease without execution, and
+chat/memory rejection. The full bounded ModelResources value suite plus this
+HTTPcase is16/16,2.492s0 in /tmp/mote-joint-empty-media-reference-neighbors.log/.exit,
+including shared/personal credential/locality/no-fallback/withdrawal/environment
+checks and new shared blank-media language-feature negatives. No real inference.
+NoEmit/current fullgate and independent delta review are pending.
+
+The new processing-policy-contract pure value checks3/3 in0.244s0
+/tmp/mote-joint-processing-policy-value.log/.exit only. It has no registered route,
+M04 domain, M03 intake or M05 processing behavior yet. Keep the actual public
+profile/settings/import-choice group OPEN.
+
+
+### Library entry and explicit limited PREP8177
+
+After composing M13 declaredbe6 source slice, own actual Library record has the
+real fileArchive proof. Parent deletion still returned raw-detail200 (expected404)
+in `/tmp/mote-joint-attachment-capture-browser-red.log/.exit`,1/1 EXIT1,0692552c.
+8177's common relationship predicate is applied before count/LIMIT; actual raw
+positive, retired404/count0, forged declaration404/count0 and the other attachment
+flows pass6/6,0skip/fail,11.647s EXIT0 in
+`/tmp/mote-joint-attachment-capture-browser-green.log/.exit`. Source head lookup
+uses the existing owner/source/external primary key. This is source/presentation
+adaptation, not another file projection or Material processor. Scope checker0 in
+`/tmp/mote-joint-current-public-prep-scope.log/.exit`; policy values after final
+parser/error refinement3/3 in processing-policy-value2 EXIT0.
+
+Explicit consumer PREP source8177 is now released with current noEmit, source
+reviews, full affected/compiled/native/clients and current portable/container
+combination PENDING. Historical203997 types do not cover it. This permits consumers
+to implement the fixed API bodies now, not to mark final acceptance. Parent has
+allocated Desktop QR soleheavy; no Joint build/fullsuite/Gradle/Docker was started.
+There is no pending user approval or policy denial; M15's message routing returned
+earlierturnunconfirmed, not an approval request or confirmed delivery. Exact shared
+handoff `/tmp/mote-joint-files-public-freeze.md` is available for parent relay.
+
+### Source recreation DELETE CAS — new confirmed gap and repair
+
+Independent M15 reproduction16532 and Desktop bounded4be review identified an
+unadmitted old generation-zero DELETE accepted after source/capture recreation.
+Those are peer evidence. Own durable50527b80 uses the actual source DELETE,
+registration and multipart intake: same captureUUID, before0/after0, late DELETE200
+and replacement404 instead of409/200. Actual1/1fail EXIT1 in
+`/tmp/mote-joint-file-source-incarnation-red.log/.exit` (2.009s). This is a new
+boundary beyond the previous forget-cycle/lost-ACK regression, not that old bug.
+
+The repair preserves request bodies and keeps a private monotonic incarnation
+counter across canonical file/source retirement. Initial green1 retained the same
+failure because the source FK cascade may remove original rows before the Capture
+trigger; that trigger now uses the canonical file identity, not the presence of a
+child original row. green2 is5/5. green3 is6pass/1fixturefail because the existing
+SQL error mapping returns503, not the fixture's500; the explicit fault and rollback
+assertions remain. Current green4 is **8/8,0fail/cancel/skip,7.163s EXIT0** in
+`/tmp/mote-joint-file-source-incarnation-green4.log/.exit`. It includes actual
+restart after source recreation, old signed ticket404/new ticket exact bytes,
+Capture-only retirement, prior forget/allow plus source retirement, shared-SQL
+fault rollback, actual M16 account erasure and unchanged B, and the original four
+exact-decision/schema-upgrade regressions. All data is generated.
+
+Scope inventory/production boundary and diff whitespace checks passed:
+`/tmp/mote-joint-file-source-incarnation-scope.log/.exit`. The six selected M06
+neighbors first returned5pass/1environmentfail (`listen EPERM`, no provider request)
+in `/tmp/mote-joint-file-source-incarnation-processing-neighbors.log/.exit`.
+Only the held localhost-provider case is rerun under the standard approved local
+execution; its separate terminal receipt is recorded without relabeling that first
+run. Current source noEmit, independent repair review, full affected, rendered
+clients and native/container restore remain pending. No PR or whole acceptance.
+
+Attachment3d/770/4c independent bounded review has now been read from
+`/tmp/mote-m15-review-joint-attachments-3d-770-4c.md`: no new confirmed P0/P1/P2
+within its stated source scope. It did not rerun owner tests or review this new
+source-incarnation repair. M13 exact84e3 large Lark calendar inventory received a
+separate Joint source-only bounded review with no new confirmed finding:
+`/tmp/mote-joint-review-m13-lark-calendar-84e3.md`. No M13 runtime was composed.

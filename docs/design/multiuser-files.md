@@ -7,6 +7,23 @@ The [original recording ADR](../adr-recording-outcomes-runtime.md),
 [file source ADR](../adr-file-source-context.md) keep their semantic requirements.
 The [joint matrix](../validation/multiuser-joint-validation.md) remains pending.
 
+## Current limited consumer PREP:8177e8af
+
+Source `8177e8af4eb55410afe2e27dff5da25b85920910` is explicitly consumable for
+client implementation and narrow combination now. This replaces the historical
+0095 request bodies; the exact delete decision contract below is mandatory.
+Current source noEmit, independent reviews, affected/compiled/client and current
+native/container gates are pending. Releasing this stable limited contract does
+not declare a module or whole integration complete, and old checks are not moved.
+
+Included are owned Files/originals, controls/reviews, exact delete/allow decisions,
+parent-bound archived attachment preparation, joined caption/OCR and Memory image
+reading, plus frozen QR production deltas. The actual Library capture entry uses
+M13's declared be6 original marker; attachment retirement/forgery filters run before
+its count and paging. New processing-plan/profile/rule/service-test/preview/
+reprocess/import-image-choice behavior is still OPEN; its pure value schema is not
+an API or execution implementation. Consumers must not infer support from it.
+
 ## Read checkpoint: implemented, narrow validation only
 
 The existing M06 registrar installs `scope/processing-files.ts`. It reads current
@@ -162,3 +179,167 @@ publication authority. The pre-transport rejected queued task spends zero call
 attempts. New file controls, image profiles, model reviews, acoustics and complete
 recording outcomes listed above remain OPEN. This checkpoint has no whole-module,
 compiled-production/client, final affected or joint acceptance claim.
+
+## Original file reviews — current implementation candidate, not consumer freeze
+
+The retained terms/calendar prompts and value validators are extracted to the
+pure `file-review-contract.ts`; quarantined legacy fixtures and scoped M06 use
+the same contract. Scoped `processing-reviews.ts` registers one `processing.review`
+kind in M05, using the admitted personal file-model lease and real read-only Agent.
+It creates no executor, per-user runtime or calendar-write capability.
+
+| Entry | Current candidate contract |
+| --- | --- |
+| POST `/:id/reviews` | `{operationId,kind:'terms'|'calendar',offset?,after?,before?}` proposes against the exact current transcript/Material revision. Stable operation/body returns the same task/review; changed body conflicts. Returns `{queued:true,taskId,reviewId}`. The client retains its existing proposal/owner-confirm flow while awaiting the task. |
+| GET `/:id/reviews` | Owner-only `{items}` retains proposal/decision history. Preparing work exposes its actual task status. Retired source context/calendar inputs hide the proposal payload and report stale. |
+| POST `/:id/reviews/:reviewId` | `{action:'accept'|'reject',selected?:suggestionUUID[],replacements?:{suggestionUUID:text}}`. Terms acceptance validates exact UTF-16 source ranges/current artifact before publishing a corrected transcript and preserving original text/speaker provenance. Calendar acceptance confirms a proposed owned event association only; it never edits a calendar event. |
+| Detail/export | An available confirmed association is `calendarLink` on file detail and `confirmed-calendar.json` in the existing tar export. Original/source and exact calendar proof are checked during streaming. Calendar withdrawal hides the association; deleting its input removes dependent retained proposal bodies. |
+
+Calendar owner/source/current-head/privacy filters run before the existing
+200-candidate bound. A metadata-only reference supplies only its already retained
+title/time/provenance and explicitly marks the body unavailable. It does not fetch
+or invent an original. Archived calendar originals use their exact M03 body.
+Both calendar and file source-context versions and exact calendar hashes are
+revalidated across model awaits and owner confirmation.
+
+Personal/native backup schema includes the three private review/link/dependency
+tables. Personal data export excludes execution input, task IDs, model leases and
+preparing work. Restore validates exact text ranges, owned artifacts/calendar
+parents and accepted confirmation references, keeps existing local rows, and
+cannot resume old model work. This candidate has narrow actual journey evidence
+in the joint validation ledger; source types, independent review, complete affected
+and final composed client/compiled/container gates remain pending. It is not yet
+an explicitly consumable replacement for the previous public thin checkpoint.
+
+## Original file forgetting — current typed candidate
+
+Current source4be0cb4c supersedes0095's delete/allow-again bodies. Files detail
+adds `originalGeneration` (zero for an original never forgotten). A new explicit
+DELETE `/:captureId` sends `{operationId,originalGeneration}`; preserve that exact
+body and operation ID across lost ACK/restart. Missing/stale generation or a
+changed body under an existing operation ID returns409. Never fetch a newer
+generation automatically to rebase a delayed delete intent.
+
+The response is `{deleted,cleanup:'complete'|'pending',decision:{sourceId,
+externalId,decisionId,generation}}`. M03 keeps a fixed owner-only deletion receipt;
+a repeated operation returns it even after the file has been explicitly reimported,
+and cannot delete that newer incarnation. Only the owner can remove all revisions
+at the exact source/external ID. M06 retires existing work; M03 commits the
+content-free tombstone, canonical removal and receipt before existing pin-aware
+physical GC. An I/O fault or held physical reader reports pending and does not
+roll SQL back to point at missing bytes. Other owned files and B remain independent.
+
+POST `/:captureId/allow-again` sends the returned `decision` object. Its opaque
+`decisionId` binds the exact delete decision, even when an identical capture UUID
+is reused. The same current decision is idempotent; missing/older decision IDs
+return409 and cannot unblock upload410. This action recreates no data or task.
+GET `/:captureId/forgotten` returns `{captureId,decision,blocked}` for owner reload
+or explicit recovery of the current decision, with no additional approval step.
+A client must not silently replace an old failed allow request with this newer
+response: applying the newer decision remains a new explicit owner action.
+
+The generation separately fences old original tickets and M06 task inputs.
+Personal import rejects an older forgotten original atomically; local tombstone
+intent wins. Data-only personal export retains tombstone identity/generation/blocked
+state, excludes operation receipts and decision UUIDs, and restore mints a fresh
+UUID so a pre-restore decision cannot revive. Native metadata includes the exact
+journal/decision fields; whole-instance identity retirement remains M16's contract.
+Older optional tombstone payloads still parse. Existing shared databases receive
+one UUID per historical tombstone on schema installation, including recovery of
+an interrupted nullable-column upgrade, without rotating an existing decision.
+
+This source has10/10 narrow actual cases (decision replay, lost DELETE ACK across
+actual app restart, stale independent operation, schema upgrade, historical-zero
+identity, portable restore, revisions/pins, held worker, automatic reimport and
+old parentless retry). Types for203997 cover earlier0563/679a only. New4be0cb4c
+noEmit, independent delta review, full affected/compiled/client/schema combination
+remain pending; this is not whole Files/Imports acceptance.
+
+Independent review then confirmed0095 missed the original automatic reimport
+incarnation. Actual same-ID/bytes allow-again must receive a new task; a parentless
+old retry must become stale before execution. Fix056380c2 adds the existing M03
+forget generation to M06's immutable input/cache proof, independently of cancel/
+retry generation. Zero stays omitted for historical identity compatibility. That0563 patch preserved the wire; later4be0cb4c separately changes the decision
+contract above. The0563/679a noEmit and bounded delta reviews passed at203997;
+do not move those checks to4be0cb4c or treat0095's failed reimport paths as accepted.
+
+The historical consumer PREP source0095c897078fce04ce75c687a0e1fc6abc81b479
+must use0563 for task incarnation,679a for late sample publication, and4be0cb4c
+for delete/allow decision correctness. 8177 now explicitly releases the bounded replacement contract for consumer
+implementation while noEmit and source reviews are pending; it is not a final gate
+or permission to consume later WIP.
+Remaining image work is finite: retain original named profile/source-MIME
+rules and original-only archive choice, then exact parent/archive attachment
+preparation and transitive retirement. Existing host leaseModel/leaseReference and
+M03/M06 algorithms are the intended seams; no second secret store, private runtime,
+permission flow or guessed profile-to-model mapping is introduced.
+
+## Retained image attachment preparation —770f candidate
+
+POST `/api/records/:id/attachments/:attachmentId/processing {mimeType?}` now
+adapts the original explicit attachment action. It resolves the owned current
+parent, original declaration, actual archive link and exact hash/size/MIME before
+admitting the same M03 original/M06 pipeline. The response retains captureId,
+parentId, attachmentId, duplicate and processing job. A supplied processingProfileId
+still blocks explicitly until the separate original processing-plan work is ready;
+this candidate does not invent a profile/model mapping or change defaults.
+
+A specific M03 `ig_attachment_links` relation carries an opaque binding ID, with
+canonical parent/archive FKs. Parent deletion/unlink removes the relation; merely
+recreating the same parent UUID cannot reauthorize it. Source/head/declaration/
+retained-byte metadata proofs gate original reads, tickets, bounded original pages
+and Files SQL before LIMIT. M06 immutable input includes that binding, rechecks it
+after waits, and publishes the parent as a real M02 dependency. A new explicit
+preparation obtains a fresh task/Material lineage and signed ticket while accepted
+raw OCR may be reused. JSON attachmentOf alone is not a capability.
+
+M07 reuses the original pure source-item organizer for parent caption plus actual
+attachment products/readiness. Archived parent captions are read through M03;
+canonical originals remain unchanged. Asset blocks store only typed hash/MIME/
+member metadata in M02, which performs no asset I/O and issues no byte grant.
+M03 remains the sole reader; original image navigation uses existing M07/Memory
+image anchors. Fine-grained M06 chunk UUIDs stay in locators; M02 evidenceIds retain
+canonical capture semantics. Binding lineage changes the resulting Material
+revision. Data-only Ingress restore mints a fresh relation; image evidence block/ID
+also binds it, so accepted data can remain readable without reviving old image
+navigation grants. Ordinary image/zero-generation identity is unchanged.
+
+Current narrow5/5 verifies real routes, generated HTTP OCR, joined caption/Material,
+Memory read_image, parent deletion/source disable/new head during held A response,
+B positive, same-ID recreation/raw cache reuse, ticket retirement and Ingress+
+Processing domain data restore. It does not establish a full personal HTTP import,
+model understanding/Memory extraction/Ask, native UI, production or container gate.
+Source noEmit and independent bounded review are pending. Named processing plans,
+source/MIME rules, original-only archive choice and selected import image profile
+remain the next finite public capability group, not complete through this entry.
+
+
+The later raw Library entry check actually found a retired child still returning200
+through capture-browser after parent deletion (0692552c reproduction with M13be6
+marker composed). Minimal8177 applies the same exact relationship predicate before
+browser count/LIMIT when M06 presentation is enabled. Ordinary standalone M02
+metadata reads retain their original behavior. Same test plus six attachment cases
+is6/6 actual0, including count0 and forged-declaration404; no new projection is
+created. The parent head join uses its existing owner/source/external primary key.
+
+### Source and Capture retirement keep the file incarnation (2026-10-17)
+
+KEEP source deletion/re-registration, canonical capture IDs, the numeric
+`originalGeneration` field and exact DELETE operation bodies. A source FK cascade
+must not reset an unadmitted old deletion action to generation zero. M03 now keeps
+`ig_file_generations` keyed by account/source/external ID without a source FK.
+Canonical file Capture retirement advances it in the same SQLite transaction;
+explicit forget advances it once before removing all revisions. The existing
+blocked tombstone skips the redundant retirement bump during that forget. A
+failed deletion rolls the counter back with the canonical data. Removing one
+revision also retires old group-bound actions/tickets/tasks; a fresh read obtains
+the current generation. No client may silently refresh and replay an old intent.
+
+The counter stores identity metadata, no original content, credentials or grants.
+It does not change the existing forgotten-file block/allow behavior. It is not
+included in personal data exports or accepted from import payloads. Whole-instance
+native backup preserves it; account-domain erasure removes it. Generation zero
+remains the historical representation for a never-retired original. Tickets and
+M06 already read the same helper, so recreating the source or Capture cannot
+re-enable an old signed ticket or processing input. Current native/container
+schema composition remains a separate pending gate.

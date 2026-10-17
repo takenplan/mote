@@ -91,7 +91,7 @@ export class Originals{
     this.record(hash,size,result.checksums);
    });
    return {hash,bytes:size,parts:parts.length,release};
-  }catch(error){try{release?.();}catch{/* Revoked pins expire or are removed by lifecycle. */}throw error;}
+  }catch(error){try{release?.();}catch{/* Failed database cleanup is reconciled by lifecycle/recovery. */}throw error;}
   finally{this.cleanStage(stage);}
  }
  attach(sourceId:string,captureId:string,hash:string,mime:string,retention:'snapshot'|'archive',snapshotInput=false):Original{
@@ -127,8 +127,8 @@ export class Originals{
   // Preparing pins may precede metadata; reserve the object row so a single
   // shared-DB owner reference protects it throughout worker execution.
   if(preparing&&!this.sql.get('SELECT hash FROM ig_objects WHERE user_id=$user AND hash=?',hash))this.sql.run('INSERT INTO ig_objects VALUES($user,?,-1,0)',hash);
-  const id=randomUUID();this.sql.run('INSERT INTO ig_pins(user_id,id,hash,expires,original_id) VALUES($user,?,?,?,?)',id,hash,Date.now()+86400000,originalId??null);
-  return ()=>{this.sql.run('DELETE FROM ig_pins WHERE user_id=$user AND id=?',id);};
+  const id=randomUUID(),release=this.sql.pinDisposer(id);this.sql.run('INSERT INTO ig_pins(user_id,id,hash,expires,original_id) VALUES($user,?,?,?,?)',id,hash,Date.now()+86400000,originalId??null);
+  return release;
  }
  gc(){return this.sql.transaction(()=>{
   if(this.sql.get('SELECT id FROM ig_activity WHERE user_id=$user LIMIT 1'))throw conflict();

@@ -52,6 +52,10 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
  parseInput:(input:unknown)=>Record<string,unknown>;
  /** Domain authorization at admission and again after any model hydration. */
  authorizeInput?:(context:UserContext,input:Record<string,unknown>)=>void;
+ /** Trusted synchronous domain recovery inside the existing retry transaction.
+  * No I/O or new grant/lease belongs here. Failure rolls back prerequisite
+  * changes and any unknown-call confirmation. */
+ prepareRetry?:(context:UserContext,task:ExecutionStep)=>unknown;
  resources?:(input:Record<string,unknown>)=>{scope:'user'|'shared';key:string}[];
  validate?:(task:ExecutionStep)=>boolean;
  admit?:(task:ExecutionStep)=>ExecutionFailure|undefined;
@@ -197,13 +201,21 @@ export class TaskExecution {
    get:(taskId:string)=>this.view(owned(taskId)),
    list:(args:{cursor?:number;limit?:number}={})=>{assert();const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.db.prepare('SELECT user_position,* FROM user_tasks WHERE user_id=? AND user_position>? ORDER BY user_position LIMIT ?').all(context.userId,args.cursor??0,limit+1) as (TaskRow&{user_position:number})[];return {items:rows.slice(0,limit).map(row=>this.view(row)),nextCursor:rows.length>limit?rows[limit-1].user_position:null};},
    cancel:(taskId:string)=>this.transaction(()=>{owned(taskId);this.engine.cancel(taskId);return this.view(this.row(taskId)!);}),
-   retry:(taskId:string,options:{confirmUnknown?:boolean}={})=>this.transaction(()=>{const row=owned(taskId),step=this.engine.get(taskId)!;this.assertTask(step);if(step.state==='succeeded'||step.state==='running')throw new TaskError('task_retry_invalid',409);if(['issued','unknown'].includes(row.external_state)){if(!options.confirmUnknown)throw new TaskError('external_result_unknown',409);if(row.external_issuance){this.db.prepare("UPDATE task_external_calls SET state='unknown' WHERE issuance_id=? AND user_id=? AND state='issued'").run(row.external_issuance,context.userId);this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),row.external_issuance,context.userId,context.authorizationEpoch,Date.now());}this.db.prepare("UPDATE user_tasks SET external_state='none',external_key=NULL,external_issuance=NULL WHERE task_id=?").run(taskId);}this.engine.retry(taskId);return this.view(this.row(taskId)!);}),
+   retry:(taskId:string,options:{confirmUnknown?:boolean}={})=>this.transaction(()=>{const row=owned(taskId),step=this.engine.get(taskId)!;this.assertTask(step);if(step.state==='succeeded'||step.state==='running')throw new TaskError('task_retry_invalid',409);if(['issued','unknown'].includes(row.external_state)){if(!options.confirmUnknown)throw new TaskError('external_result_unknown',409);if(row.external_issuance){this.db.prepare("UPDATE task_external_calls SET state='unknown' WHERE issuance_id=? AND user_id=? AND state='issued'").run(row.external_issuance,context.userId);this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),row.external_issuance,context.userId,context.authorizationEpoch,Date.now());}this.db.prepare("UPDATE user_tasks SET external_state='none',external_key=NULL,external_issuance=NULL WHERE task_id=?").run(taskId);}const prepared=this.handlers.get(step.kind)?.prepareRetry?.(context,step);if(prepared&&typeof (prepared as {then?:unknown}).then==='function'){void Promise.resolve(prepared).catch(()=>{});throw new TaskError('asynchronous_task_retry',409);}assert();this.assertTask(step);this.engine.retry(taskId);return this.view(this.row(taskId)!);}),
    operations:()=>{assert();const operations=new Operations(this.storage,context.userId);return {page:(args:Parameters<Operations['page']>[0])=>{assert();return operations.page(args);},detail:(taskId:string,cursor?:number,limit?:number)=>{assert();return operations.detail(taskId,cursor,limit);},changes:(since:number)=>{assert();return operations.changes(since);}};},
   });
  }
  private view(row:TaskRow){const step=this.engine.get(row.task_id)!;const failure:ExecutionFailureReceipt|undefined=this.engine.failure(step.id);return {...step,input:undefined,ownership:undefined,progress:JSON.parse(row.progress),checkpoints:Object.keys(JSON.parse(row.checkpoints)),result:row.result===null?undefined:JSON.parse(row.result),externalState:row.external_state,externalUnresolved:Math.max(Number(this.db.prepare("SELECT count(*) n FROM task_external_calls WHERE task_id=? AND user_id=? AND state IN ('issued','unknown')").get(row.task_id,row.user_id)!.n),['issued','unknown'].includes(row.external_state)?1:0),...(failure?{failure}:{})};}
  tick(){return this.engine.tick();}
  start(){if(this.timer)return;this.timer=setInterval(()=>{void this.tick().catch(()=>{});},100);this.timer.unref();void this.tick().catch(()=>{});}
+ /** Host domain's explicit replacement operation may acknowledge old unknown
+  * facts without requeuing an obsolete input or reviving its task grant. No HTTP
+  * or model tool exposes this capability. Facts themselves remain unresolved. */
+ acknowledgeExternalReplay(context:UserContext,taskId:string){
+  return this.transaction(()=>{this.authority.assert(context);this.enabled(context.userId);const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);
+   for(const call of this.db.prepare("SELECT issuance_id FROM task_external_calls c WHERE c.task_id=? AND c.user_id=? AND c.state IN ('issued','unknown') AND NOT EXISTS(SELECT 1 FROM task_external_retry_confirmations a WHERE a.user_id=c.user_id AND a.issuance_id=c.issuance_id)").all(taskId,context.userId))this.db.prepare('INSERT INTO task_external_retry_confirmations VALUES(?,?,?,?,?)').run(randomUUID(),String(call.issuance_id),context.userId,context.authorizationEpoch,Date.now());
+  });
+ }
  /** Trusted transport adapters bind an exact issuance while its owner is
   * authenticated. A late, validated ACK may settle only that external fact;
   * this closure never restores task, account or private publication authority.
