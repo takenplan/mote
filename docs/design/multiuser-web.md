@@ -208,3 +208,25 @@ these measured personal facts explicitly. Global Agent/Harness limit fractions
 belong to instance administration and are not inferred from personal task counts.
 An unresolved external result does not assert physical completion. Bearer
 characterization retains the original execution-settings queue API.
+
+## Original owner audit filters
+
+The original Memories search, content layer, tier, time/device scope, historical
+switch and as-of controls also apply to the human-only stale audit branch.
+Explicit filtered `GET /api/memory/audit?kind=stale` requests reuse M07's existing
+literal Memory/source predicates before ordering/LIMIT. Their opaque cursor
+binds the complete filters, deployment and owner in a separate audit collection.
+The old unfiltered URL/cursor shape and proposed-job review remain unchanged.
+
+Results continue to be metadata with `usableAsMemory:false`; opening the chosen
+ID/version uses the existing retained audit body/provider proof. The filtered
+list adds no model, plugin, context or current Memory read authority. Historical
+and as-of choices retain the original validity interval semantics. A source
+change can invalidate an older superseded memory while an explicit newer owner
+correction still depends only on its separately saved statement. The history
+control selects the older version; no inference marks the newer statement stale.
+
+Changing filters withdraws the previous page cursor and selected audit body
+before issuing a new read. Credential replacement retains the existing per-Api
+resource retirement. Original normal Memory reads and their published-only
+capability are unchanged.

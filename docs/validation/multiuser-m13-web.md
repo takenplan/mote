@@ -768,3 +768,33 @@ running occupancy is0; source queue and original M05 lifecycle neighbors pass
 Server/Web noEmit, scope inventory and synchronized i18n8474 pass separately.
 These are narrow consumer proofs;
 953's540 full Web predates this queue delta and is not relabeled current full.
+
+### Original stale audit controls
+
+New durable regression828af415 reaches actual source400 for the original query,
+layer/tier/time/device filters, and original React disabled search (not a fixture
+or environment failure). Logs `/tmp/m13-memory-audit-filters-{source,ui}-red.log`.
+The existing M07 literal filtering now serves an isolated retained-only audit
+page/cursor; normal published read authority and unfiltered old cursors stay
+unchanged. Original search/category/tier/time/as-of/history controls are usable.
+
+Actual filtered source2/2 no skip0 covers before-LIMIT filters, complete signed
+pages, changed-query/foreign-owner cursors, B positive, exact retained versions,
+as-of/validity/history and no new model requests
+(`/tmp/m13-memory-audit-filters-source-green3.log/.exit`). Original M07
+current/history/plugin/audit neighbors7/7 no skip0
+(`/tmp/m13-memory-audit-existing-service-neighbors.log/.exit`). Original React
+page and affected canonical selection/refresh neighbors22/22 no skip0,
+including actual literal query/category/tier/as-of/history, body retirement on
+filter change and held A→B positive
+(`/tmp/m13-memory-audit-original-ui-neighbors2.log/.exit`).
+
+First extension green2 preserved a source fixture that retired the old Material,
+although the newly corrected Memory actually depends on the separate owner note.
+It is not a production as-of failure. The validity test now retires that actual
+note via its real Material publication, then preserves the original interval
+assertions. The existing original-page correction neighbor explicitly uses its
+original history checkbox to include the superseded old stale card; all prior
+body/owner/context assertions remain. Those earlier failed logs are preserved.
+Source/Web types and synchronized i18n8475/scope checks are recorded separately.
+These local cases do not replace final whole-M13 required or actual IAB breadth.
