@@ -12,13 +12,16 @@ conversation. Replacing its interpretation retained the old answer but left
 `evidenceStale` absent, so the history view could present it without the required
 historical-answer notice. The new assertion failed on the combined PR heads.
 
-The archive now invokes the existing conversation invalidation lifecycle from a
-SQLite `BEFORE DELETE` trigger while the artifact lineage still exists. This
-marks dependent answers historical, withdraws summaries and expires frozen
-conversation snapshots. It covers replacement, explicit cache eviction and
-recursive parent invalidation. Exact immutable replay performs no delete and
-therefore does not falsely invalidate dialogue. Original deletion retains its
-separate destructive cascade.
+The initial integration fix invoked the existing conversation invalidation
+lifecycle from a SQLite `BEFORE DELETE` trigger while the artifact lineage still
+existed. That callback implementation was subsequently replaced by a persistent
+SQL lifecycle after the full backup consumer gate exposed its connection-local
+dependency; see the [offline-writer regression](context-history-sqlite-portability-2026-10-17.md).
+The final behavior marks dependent answers historical, withdraws summaries and
+expires frozen conversation snapshots. It covers replacement, explicit cache
+eviction and recursive parent invalidation. Exact immutable replay performs no
+delete and therefore does not falsely invalidate dialogue. Original deletion
+retains its separate destructive cascade.
 
 ## Performed validation
 
@@ -35,7 +38,8 @@ screenshot, real provider account, live model or physical device was used.
   conversation-update failure rolls back the artifact removal, turn and revision
   together; removing the fault permits a successful retry.
 - Server TypeScript typecheck passed. The final affected-component gate is run
-  separately on the root integration branch and must be reported from that run.
+  separately on the root integration branch; its actual results are recorded in
+  the [final joint receipt](main-pr-integration-regression-2026-10-17.md).
 
 Focused rerun from the repository root:
 

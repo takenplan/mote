@@ -102,3 +102,27 @@ original-file documents, connector restart, duplicate ACKs, complete changed byt
 and genuine corrections. Separate storage restart tests cover immutable history and
 absence of supersede events. No live model, real account, deployment or merge is
 part of this change.
+
+## Joint main resolution — 2026-10-17
+
+The preceding findings describe the original `6272a9b5` audit. The joint main
+candidate contains all five original PR heads plus the cross-module lifecycle
+correction. It does not port these changes to the independent multiuser branch.
+
+| Original finding | Implemented resolution |
+| --- | --- |
+| Historical Ask answers | PR #146 retains ordinary historical answers, pins current permission roots and rejects stale model/summarization work. Explicit original deletion still erases every affected generation. |
+| Context artifact → Memory | PR #148 retains stale statements and makes exact immutable replay a no-op. The joint lifecycle correction also expires dependent conversation snapshots and summaries before cache lineage disappears. |
+| Lark provider revision noise | PR #145 preserves exact evidence and immutable metadata across counter-only replay through both intake variants and restart. |
+| Google/Gmail | PR #147 fixes Gmail counter/key-order replay and absent optional MIME. Google noise/state regressions confirm its existing conservative boundary; meaningful labels, timestamps and other evidence remain versioned. |
+
+The first joint history callback exposed a backup-consumer failure. It was
+replaced with [portable SQLite lifecycle SQL](context-history-sqlite-portability-2026-10-17.md),
+including atomic replacement and raw-writer rollback. The
+[joint regression receipt](main-pr-integration-regression-2026-10-17.md) records
+the final full gate, actual interface checks and limits. Independent source
+review found no remaining blocking finding in these changes.
+
+The other investigation rows above remain scoped findings or future design work;
+this resolution does not assert semantic equivalence for untested upstream
+fields, change raw-capture equality or authorize new historical processing.

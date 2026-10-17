@@ -62,3 +62,13 @@ not a model's semantic ability to distinguish old discussion from current facts.
 Already overwritten historical answers cannot be restored. This PR does not
 stabilize all upstream version noise, alter Memory/cache invalidation, introduce
 semantic-equivalence classification, or implement the separate multi-user work.
+
+
+## Joint consumer regression — 2026-10-17
+
+The [main integration receipt](validation/main-pr-integration-regression-2026-10-17.md)
+records the complete affected gate and the portable SQLite lifecycle regression.
+The [Android follow-up](validation/android-history-notice-2026-10-17.md) covers
+both actual history readers, current/stale/deleted states, 21-turn paging,
+Activity recreation and a new process with retained application data. Generated
+agent adapters establish lifecycle/UI behavior, not live-model answer quality.

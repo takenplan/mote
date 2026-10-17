@@ -39,7 +39,8 @@ previous working SQL lifecycle and caller transaction boundary.
 Performed validation: the five-file focused group passed 28 tests with no
 failures, skips or cancellations; server TypeScript typechecking passed. The
 root integration lane runs the required full affected-component gate separately
-after this fix. Focused command:
+after this fix; see the [final joint receipt](main-pr-integration-regression-2026-10-17.md)
+for its actual completion. Focused command:
 
 ```sh
 node --import tsx --test --test-concurrency=2 --test-timeout=120000 \
