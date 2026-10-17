@@ -1,0 +1,60 @@
+import {z} from 'zod';
+import type {DatabaseSync} from 'node:sqlite';
+import {processingProfileSchema} from '@mote/shared';
+import {DOCUMENT_MIME_TYPES} from '@mote/shared/document-decoder';
+import {validateProcessingProfiles} from '../file-policy-validation.js';
+import type {FileProcessorRuntime} from '../file-processors.js';
+import {processorContract} from '../file-configuration.js';
+import {ConfigServiceError} from '../config-service.js';
+import {effectiveProcessorParameters} from '../processor-parameters.js';
+import type {Configurations} from './configuration.js';
+import type {UserContext} from './context.js';
+import type {ScopedRuntime} from './http.js';
+import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
+import {processingSettingsSchema,type ProcessingSettings} from './processing-schema.js';
+import {scopedFilePolicySchema,selectScopedFilePolicy,type ScopedFilePolicy} from './processing-policy-contract.js';
+import {identityHash} from './originals.js';
+
+const domain='filePolicy',valueSchema=z.object({policy:scopedFilePolicySchema.nullable()}).strict();
+export type FilePolicyPlan=ReturnType<typeof selectScopedFilePolicy>&{id:string};
+/** Existing M04 YAML transaction and M06 immutable metadata only. Endpoint/key
+ * ownership remains exclusively in the complete personal/shared M04 reference. */
+export class ProcessingPolicies {
+ constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly processors:FileProcessorRuntime,private readonly settings:(context:UserContext)=>ProcessingSettings,changed:(context:UserContext)=>void){
+  configuration.registerDomain(domain,subject=>({id:domain,schema:valueSchema.superRefine((next,issues)=>{
+   if(!next.policy)return;const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user');
+   try{validateProcessingProfiles(next.policy,before?valueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry);}catch{issues.addIssue({code:'custom',message:'Invalid saved processor profile'});}
+  }),defaultValue:{policy:null},resolve:raw=>raw,fields:[{path:'policy',effect:'next-request'}],prepare:raw=>{
+   const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),next=valueSchema.parse(raw);
+   if(next.policy)validateProcessingProfiles(next.policy,before?valueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry,{error:()=>new ConfigServiceError('config_invalid')});
+   const json=JSON.stringify(next);let published=false;
+   return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_file_policies VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_file_policies SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_file_policies WHERE user_id=$user');}},complete:()=>{if('credentialId' in subject&&next.policy&&before?.json!==json)changed(subject);}};
+  }}));
+ }
+ private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>this.runtime.authority.assert(context));}
+ policy(context:UserContext):ScopedFilePolicy|null{const row=this.sql(context).get('SELECT json FROM mp_file_policies WHERE user_id=$user');return row?valueSchema.parse(JSON.parse(String(row.json))).policy:null;}
+ current(context:UserContext,ref:string):FilePolicyPlan|undefined{const row=this.sql(context).get('SELECT p.id,p.json FROM mp_file_policy_bindings b JOIN mp_file_plans p ON p.user_id=b.user_id AND p.id=b.plan_id WHERE b.user_id=$user AND p.user_id=$user AND b.original_id=?',ref.slice(9));return row?{...JSON.parse(String(row.json)),id:String(row.id)}:undefined;}
+ /** Called by trusted admission, never a presentation GET. A completed file keeps
+  * its applied plan until explicit reprocessing chooses a replacement. */
+ bindPlan(context:UserContext,ref:string,replace=false,override?:string){
+  const prior=this.current(context,ref);if(prior&&!replace)return prior;const policy=this.policy(context);if(!policy)return prior;
+  const sql=this.sql(context);if(!replace&&!prior&&(sql.get('SELECT task_id FROM mp_admissions WHERE user_id=$user AND original_id=? AND task_id IS NOT NULL LIMIT 1',ref.slice(9))||sql.get('SELECT artifact_id FROM mp_publications WHERE user_id=$user AND original_id=?',ref.slice(9))))return undefined;
+  const row=sql.get('SELECT r.source_id,r.mime,f.format FROM ig_originals r JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id WHERE r.user_id=$user AND f.user_id=$user AND r.id=?',ref.slice(9));if(!row)throw missing();
+  if(row.format==='source-item'||String(row.format).startsWith('processor:'))return prior;
+  const selected=selectScopedFilePolicy(policy,String(row.source_id),String(row.mime),override);
+  if(!selected.archiveOnly){const processor=this.processors.registry.list().find(processor=>processor.id===selected.profile.processorId);if(processor)selected.profile.parameters=effectiveProcessorParameters(processor,selected.profile.parameters);
+  }
+  const id=identityHash({original:ref,fingerprint:selected.fingerprint,processor:selected.archiveOnly?'archive':this.processors.registry.list().filter(processor=>processor.id===selected.profile.processorId).map(processorContract),parameters:selected.profile.parameters}),json=JSON.stringify(selected);
+  sql.run('INSERT INTO mp_file_plans VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',id,ref.slice(9),json);sql.run('INSERT INTO mp_file_policy_bindings VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO UPDATE SET plan_id=excluded.plan_id',ref.slice(9),id);return this.current(context,ref)!;
+ }
+ effective(base:ProcessingSettings,plan?:FilePolicyPlan){if(!plan)return base;const p=plan.profile,parameters=p.parameters;return processingSettingsSchema.parse({...base,audioProcessor:p.processorId.startsWith('audio.')?p.processorId:base.audioProcessor,diarizationProcessor:p.diarizationProcessor,summarize:p.summarize,speakerCount:parameters.speakerCount??null,speakerMin:parameters.speakerMin??null,speakerMax:parameters.speakerMax??null,semanticTurns:parameters.semanticTurns===true});}
+ private async previewPolicy(context:UserContext){
+  const saved=this.policy(context);if(saved)return saved;const selected=(await this.configuration.forUser(context).models()).selections,settings=this.settings(context),services:ScopedFilePolicy['services']=[];
+  for(const [feature,kind]of [['ocr','image'],['asr','asr'],['file','model']] as const){const reference=selected[feature];if(reference)services.push({id:'service.'+feature,name:'service.'+feature,kind,reference});}
+  const profile=(id:string,processorId:string,serviceId?:string)=>processingProfileSchema.parse({id,name:id,processorId,parameters:{},summarize:false,...(services.some(service=>service.id===serviceId)?{serviceId}:{})});
+  return scopedFilePolicySchema.parse({version:1,services,profiles:[profile('image','image.http','service.ocr'),profile('audio',settings.audioProcessor,'service.asr'),profile('text','text.utf8'),profile('document','document.generic'),profile('archive','archive')],rules:[{type:'image/*',profileId:'image'},{type:'audio/*',profileId:'audio'},{type:'text/*',profileId:'text'},...DOCUMENT_MIME_TYPES.map(type=>({type,profileId:'document'})),{type:'*/*',profileId:'archive'}]});
+ }
+ async view(context:UserContext){const view=await this.configuration.forUser(context).view();return {revision:String(view.revision),settings:this.settings(context),policy:await this.previewPolicy(context),policyConfigured:!!this.policy(context),execution:'central',runtime:'cordis',processors:this.processors.registry.list(),capabilities:{intake:this.processors.intake.list(),...this.processors.recipes.list(),outputs:this.processors.outputs.list(),image:this.processors.imageRecipes.list()}};}
+ async save(context:UserContext,raw:unknown){const input=z.object({revision:z.string().regex(/^(0|[1-9][0-9]*)$/),settings:processingSettingsSchema,policy:scopedFilePolicySchema}).strict().parse(raw),revision=Number(input.revision);if(!Number.isSafeInteger(revision))throw new PrivateDataError('conflict',409);validateProcessingProfiles(input.policy,(await this.previewPolicy(context)).profiles,this.processors.registry,{error:()=>new PrivateDataError('invalid_data',400)});await this.configuration.forUser(context).update({processing:input.settings,[domain]:{policy:input.policy}},revision);return this.view(context);}
+ async match(context:UserContext,raw:unknown){const input=z.object({sourceId:z.string().min(1).max(128),mimeType:z.string().max(200)}).strict().parse(raw);await this.configuration.forUser(context).view();return selectScopedFilePolicy(await this.previewPolicy(context),input.sourceId,input.mimeType);}
+}

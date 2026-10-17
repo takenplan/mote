@@ -1048,3 +1048,45 @@ bytes through a fresh signed M03 ticket, rejects that ticket under B, and permit
 fresh A deletion while B remains readable. No build, compiled entry, packaged CLI,
 Docker/Hindsight provider or full J11/J13 gate was run by this case. An initial
 source-only native1/1 pass is retained separately before final cleanup/byte checks.
+
+### Original processing policy page: implementation checkpoint, NOT release
+
+The existing source consumer freeze2528a67d now has actual Server/scripts noEmit
+EXIT0: `/tmp/mote-joint-current-types.log/.exit/.sha`. Parent subsequently removed
+the blanket heavy serialization constraint for isolated resources; this check did
+not use Desktop's dist, Gradle, port, database, simulator or container. New E2E and
+recovery owners received exact2528 and remaining gaps, not subsequent WIP.
+
+Own durablee3b7c030 characterizes the original settings page GET503, actual1/1fail
+EXIT1 `/tmp/mote-joint-processing-policy-page-red.log/.exit`. Current intermediate
+implementation restores read/save/match, M04 reference graph, original shared
+profile/parameter validation, immutable M06 plan metadata, original-only/new-file
+processing and fixed personal/shared model reference hydration. It is not a full
+policy-page/old capability acceptance or a declared consumer freeze.
+
+`/tmp/mote-joint-processing-policy-page-green5.log/.exit`:4/4,0fail/cancel/skip,
+12.630s EXIT0. Real original routes/SQLite/M04/M05 cover source/exact-MIME/wildcard/
+default matching, stale save CAS, invalid parameter and embedded-key rejection
+without partial multi-domain writes, A archive-only with zero fake tasks versus
+same-ID B text processing, deletion of bound plan metadata with B unaffected,
+and same-ID named image services using different complete private endpoint/key
+references while global OCR selection remains empty. Only a generated loopback
+OCR responder was substituted; no real inference/provider data. Earlier green3/4
+failures retain a fixture's400 expectation versus generic configuration
+prepare503; moving original profile validation into the existing M04 schema phase
+restores a real invalid-config400 and atomic rejection. No global ConfigService
+failure handling was relaxed.
+
+Original unscoped algorithm characterization after extracting its pure validator:
+`/tmp/mote-joint-processing-policy-original-validator.log/.exit`16/16,27.784s0,
+no skip. That remains legacy algorithm evidence, not new scoped lifecycle proof.
+Current scoped legacy neighbors `/tmp/mote-joint-policy-legacy-processing-neighbors.log/.exit`
+3/3,9.805s0 cover actual text→Material, exact historical generation-zero/lost ACK,
+and real M09 bounded processor entry. A final view-only refinement keeps file
+recipes instead of overwriting them with image recipes; its explicit capability
+assertions pass1/1,2.522s0 in `/tmp/mote-joint-policy-capability-view.log/.exit`.
+Server/scripts noEmit is0 in `/tmp/mote-joint-policy-wip-types4.log/.exit`, boundary
+checker0 in `/tmp/mote-joint-policy-wip-scope4.log/.exit`. No whole affected,
+compiled/UI/native/container recovery or independent source review of this new
+policy checkpoint is claimed. All remaining implementation items are listed in
+the design checkpoint above; especially unfinished work is not yet reconciled.

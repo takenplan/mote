@@ -343,3 +343,25 @@ remains the historical representation for a never-retired original. Tickets and
 M06 already read the same helper, so recreating the source or Capture cannot
 re-enable an old signed ticket or processing input. Current native/container
 schema composition remains a separate pending gate.
+
+### Processing-policy implementation checkpoint (not a consumer freeze)
+
+The original GET/PUT `/api/file-processing` and POST `/match` are being restored
+through the same M04 revision/atomic multi-domain transaction. Services contain
+complete `{kind:personal|shared,id}` references instead of endpoint/key copies.
+A private M06 plan ID keeps the selected profile/rule/parameters out of M05's
+bounded task metadata. Named original-only plans retain bytes without admitting a
+fake successful extraction; new text/media files use the shared registry and
+existing M05 handlers. Named OCR/ASR references are pinned by M04 without changing
+the user's global feature selection. Existing file recipe capabilities and image
+recipe capabilities remain separate. Untouched legacy files keep their historical
+input identity and applied results; a late old operation cannot adopt a new plan.
+
+This intermediate source is **not released for consumer composition**. Original
+unfinished-work fingerprint reconciliation, preview/explicit reprocess, saved
+service testing, explicit root/import/attachment profile overrides, non-default
+image recipe execution and data-only applied-plan history export/restore are still
+OPEN. The intermediate configuration-complete callback intentionally does not
+claim those behaviors. Consumers and independent tests continue using declared
+2528a67d until another exact limited freeze is explicitly announced. Raw service
+credentials are rejected by the policy graph and remain solely in M04.
