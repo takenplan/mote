@@ -32,21 +32,12 @@ Install **Node.js 24** and npm, then run:
 ```sh
 git clone https://github.com/utopiafar/mote.git
 cd mote
-npm ci
-npm run build:central
-
-node scripts/mote.mjs init --profile dev
-node scripts/mote.mjs start --profile dev
-node scripts/mote.mjs status --profile dev
+node scripts/dev-server.mjs
 ```
 
-Open [http://127.0.0.1:47842](http://127.0.0.1:47842). To sign in, select **Sign in to Mote** and enter the owner token shown by:
+The launcher installs changed dependencies, builds the current checkout, and starts a local trial at [http://127.0.0.1:47842](http://127.0.0.1:47842). It creates a missing development profile under `.mote/profiles/dev/` and, only when its account database is empty, creates **username `admin`, password `admin`**. Select **Sign in to Mote** and use that account. Existing accounts and passwords are preserved; the default is not reapplied on restart. Press **Ctrl+C** in the terminal to stop the development server and its children.
 
-```sh
-node scripts/mote.mjs token --profile dev
-```
-
-This creates a local trial environment, with configuration, data, and logs under `.mote/profiles/dev/`. Keep the token private: it grants full archive access. To stop this environment, run `node scripts/mote.mjs stop --profile dev`.
+This fixed account is for the local development launcher. A production deployment uses an explicitly initialized administrator and account login; retired owner tokens do not authenticate to the current server. Current clients require Wire 2 and Ingress 3. Follow the [upgrade guide](docs/updating.md) before opening older storage with this version.
 
 Central prepares its local OCR and audio worker runtime in the background. Those workers need **Python 3.9+** and network access for their first installation; audio processing also needs **FFmpeg**. Install OCR/transcription models explicitly in settings when you need them. Originals remain archived while processing waits for its runtime or models. See the [media setup guide](docs/ocr-asr-implementation-plan.md).
 
@@ -63,9 +54,9 @@ To collect from your devices, download the matching app from [Releases](https://
 | macOS 13.3+ | Download the Mac DEV ZIP for your architecture, unzip, and move the app to Applications. | Import an invitation as JSON, text, or a QR image. See the [Mac guide](docs/desktop.md) for first-open and permission steps. |
 | Android 10+ | Install the Android DEV APK. | Scan the invitation QR code or import JSON. See the [Android guide](docs/android.md) for permissions and background settings. |
 
-In Central, open **Collection & devices → Connect device**, enter a server address that the device can reach, and generate an invitation. On the device, import it, verify the address, and confirm. Invitations expire after 10 minutes and can be used once. Each app receives its own revocable credential with full owner access; only pair devices you trust.
+After signing in to Central, open **Collection & devices → Connect device**, enter a server address that the device can reach, and generate an invitation. On the device, import it, verify the address, account, and device identity, and confirm. Invitations expire after 10 minutes and can be used once. Each paired app receives a separately revocable device credential for that account's collection; it does not grant private archive browsing or administration. Sign in separately to use Central pages and Ask. See the [account-bound invitation contract](docs/design/multiuser-qr-pairing.md).
 
-A phone's `127.0.0.1` points to the phone itself. Cross-device use needs a reachable **HTTPS** address and a strong access token; generating a QR code does not create a tunnel. See [connection setup](docs/connections.md).
+A phone's `127.0.0.1` points to the phone itself. Cross-device use needs a reachable **HTTPS** address and the account or device credentials issued for that deployment. Use a production account for remote access; generating a QR code does not create a tunnel. See [connection setup](docs/connections.md).
 
 Choose which apps and content to record, configure privacy filters, grant the required system permissions, and explicitly start collection. You can collect locally before connecting Central, and choose real-time, scheduled, batched, or manual uploads. See [collection and sync](docs/collection-and-sync.md).
 
@@ -101,7 +92,7 @@ flowchart LR
 
 The apps collect independently and keep persistent offline queues. Central preserves originals and source versions, prepares searchable material, and builds memories in the background. Queries can read available material without waiting for memory extraction. Models choose retrieval tools and interpret evidence; captured content is treated as untrusted evidence, and query agents receive only read-only context tools.
 
-The implementation uses Electron/TypeScript with Swift helpers on macOS, Kotlin on Android, and Node.js/Fastify, SQLite, and React for Central. Central is a single-owner archive with one writer instance. Read the [architecture](docs/architecture.md) and [protocol](docs/protocol.md) for the technical boundaries.
+The implementation uses Electron/TypeScript with Swift helpers on macOS, Kotlin on Android, and Node.js/Fastify, SQLite, and React for Central. One Central writer instance hosts isolated account archives, credentials, and tasks. Read the [multi-user architecture](docs/adr-multiuser-scope.md) and [protocol contract](protocol/contract.json) for the technical boundaries.
 
 ## Guides and support
 
