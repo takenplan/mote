@@ -1,3 +1,4 @@
+import {attachmentVisible} from './ingress-attachments.js';
 import {z} from 'zod';
 import {sourceSchema,systemEventText,transcriptSchema,type CapturePreview,type CaptureRecord} from '@mote/shared';
 import {captureOcrState} from '@mote/shared/metadata';
@@ -30,7 +31,7 @@ export class CaptureBrowserData{
   json_extract(c.json,'$.capturedAt') captured_at,json_extract(c.json,'$.source') source,
   json_extract(c.json,'$.originalImage.hash') IS NOT NULL has_image,
   CASE WHEN json_extract(c.json,'$.source')!='screen' THEN 'not_applicable' WHEN x.payload IS NOT NULL THEN 'completed' ELSE COALESCE(json_extract(c.json,'$.ocr.status'),'unknown') END ocr_status
-  FROM pd_captures c LEFT JOIN extraction x ON x.capture_id=c.id WHERE c.user_id=$user AND (c.source_id IS NULL OR EXISTS(SELECT 1 FROM pd_source_heads h WHERE h.user_id=$user AND h.capture_id=c.id AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0)))`;}
+  FROM pd_captures c LEFT JOIN extraction x ON x.capture_id=c.id WHERE c.user_id=$user AND ${this.processing?attachmentVisible():'1'} AND (c.source_id IS NULL OR EXISTS(SELECT 1 FROM pd_source_heads h WHERE h.user_id=$user AND h.capture_id=c.id AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0)))`;}
  private scope(raw:z.infer<typeof captureBrowseSchema>,screens=false){
   const clauses=screens?["source='screen'"]:['1'],args:(string|number)[]=[];
   if(raw.after){clauses.push("COALESCE(json_extract(json,'$.stateSeries.samples[#-1].at'),context_at)>=?");args.push(new Date(raw.after).toISOString());}
@@ -44,10 +45,12 @@ export class CaptureBrowserData{
   return {where:clauses.join(' AND '),args};
  }
  private pageCursor(query:unknown,value:string|undefined){return value?positionSchema.parse(this.cursor.decodeCompact(value,query)):undefined;}
- record(id:string,raw:unknown={}):CaptureRecord{
+ record(id:string,raw:unknown={}):CaptureRecord&{fileArchive?:{captureId:string}}{
   z.string().uuid().parse(id);const filters=captureBrowseSchema.parse(raw),{where,args}=this.scope(filters);
   const row=this.sql.get(`${this.base} SELECT * FROM browser WHERE user_id=$user AND ${where} AND id=?`,...args,id);if(!row)throw missing();
-  const record=this.capture(id);if(record.source!=='screen'||!row.extraction_payload)return record;
+  const record=this.capture(id);
+  if(record.source==='file'&&this.processing&&this.sql.get("SELECT r.id FROM ig_originals r JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id JOIN pd_sources s ON s.user_id=r.user_id AND s.id=r.source_id WHERE r.user_id=$user AND f.user_id=$user AND s.user_id=$user AND (f.format='file' OR f.format GLOB 'processor:*') AND r.capture_id=? AND COALESCE(json_extract(s.json,'$.enabled'),1)=1",id))return {...record,fileArchive:{captureId:id}};
+  if(record.source!=='screen'||!row.extraction_payload)return record;
   const transcript=transcriptSchema.parse(JSON.parse(String(row.extraction_payload)));
   return {...record,ocrText:transcript.segments.map(s=>s.text).join('\n'),ocr:{status:'completed',updatedAt:String(row.extraction_at)}};
  }

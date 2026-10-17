@@ -6,13 +6,15 @@ import {randomBytes,randomUUID} from 'node:crypto';
 export function installIngress(db:DatabaseSync){
  db.exec(`
  CREATE TABLE IF NOT EXISTS ig_meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1),ticket_key TEXT NOT NULL);
- CREATE TABLE IF NOT EXISTS ig_file_forgets(user_id TEXT NOT NULL,source_id TEXT NOT NULL,external_id TEXT NOT NULL,capture_id TEXT NOT NULL,generation INTEGER NOT NULL,blocked INTEGER NOT NULL,PRIMARY KEY(user_id,source_id,external_id),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS ig_file_forgets(user_id TEXT NOT NULL,source_id TEXT NOT NULL,external_id TEXT NOT NULL,capture_id TEXT NOT NULL,generation INTEGER NOT NULL,blocked INTEGER NOT NULL,decision_id TEXT NOT NULL,PRIMARY KEY(user_id,source_id,external_id),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
+ CREATE TABLE IF NOT EXISTS ig_file_forget_operations(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
  CREATE TABLE IF NOT EXISTS ig_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE IF NOT EXISTS ig_capture_update_sequences(user_id TEXT NOT NULL,device_id TEXT NOT NULL,next INTEGER NOT NULL,PRIMARY KEY(user_id,device_id));
  CREATE TABLE IF NOT EXISTS ig_capture_updates(user_id TEXT NOT NULL,device_id TEXT NOT NULL,sequence INTEGER NOT NULL,capture_id TEXT NOT NULL,artifact_id TEXT NOT NULL,PRIMARY KEY(user_id,device_id,sequence),UNIQUE(user_id,device_id,capture_id,artifact_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_objects(user_id TEXT NOT NULL,hash TEXT NOT NULL,bytes INTEGER NOT NULL,parts INTEGER NOT NULL,PRIMARY KEY(user_id,hash));
  CREATE TABLE IF NOT EXISTS ig_archive_files(user_id TEXT NOT NULL,id TEXT NOT NULL,hash TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,id),FOREIGN KEY(user_id,hash) REFERENCES ig_objects(user_id,hash));
  CREATE TABLE IF NOT EXISTS ig_archive_links(user_id TEXT NOT NULL,capture_id TEXT NOT NULL,file_id TEXT NOT NULL,PRIMARY KEY(user_id,capture_id,file_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,file_id) REFERENCES ig_archive_files(user_id,id));
+ CREATE TABLE IF NOT EXISTS ig_attachment_links(user_id TEXT NOT NULL,capture_id TEXT NOT NULL,parent_capture_id TEXT NOT NULL,file_id TEXT NOT NULL,binding_id TEXT NOT NULL,PRIMARY KEY(user_id,capture_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE,FOREIGN KEY(user_id,parent_capture_id,file_id) REFERENCES ig_archive_links(user_id,capture_id,file_id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_import_uploads(user_id TEXT NOT NULL,id TEXT NOT NULL,stage_id TEXT NOT NULL,manifest TEXT NOT NULL,epoch INTEGER NOT NULL,expires INTEGER NOT NULL,file_id TEXT,PRIMARY KEY(user_id,id),FOREIGN KEY(user_id,file_id) REFERENCES ig_archive_files(user_id,id));
  CREATE TABLE IF NOT EXISTS ig_import_parts(user_id TEXT NOT NULL,upload_id TEXT NOT NULL,part INTEGER NOT NULL,checksum TEXT NOT NULL,bytes INTEGER NOT NULL,PRIMARY KEY(user_id,upload_id,part),FOREIGN KEY(user_id,upload_id) REFERENCES ig_import_uploads(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_parts(user_id TEXT NOT NULL,hash TEXT NOT NULL,part INTEGER NOT NULL,checksum TEXT NOT NULL,PRIMARY KEY(user_id,hash,part),FOREIGN KEY(user_id,hash) REFERENCES ig_objects(user_id,hash) ON DELETE CASCADE);
@@ -32,6 +34,11 @@ export function installIngress(db:DatabaseSync){
  CREATE TABLE IF NOT EXISTS ig_activity(user_id TEXT NOT NULL,id TEXT NOT NULL,PRIMARY KEY(user_id,id));
  CREATE TABLE IF NOT EXISTS ig_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
  `);
+ if(!db.prepare('PRAGMA table_info(ig_file_forgets)').all().some(row=>row.name==='decision_id')){
+  db.exec('ALTER TABLE ig_file_forgets ADD COLUMN decision_id TEXT');
+ }
+ // Resume an interrupted schema upgrade without rotating an existing decision.
+ for(const row of db.prepare('SELECT user_id,source_id,external_id FROM ig_file_forgets WHERE decision_id IS NULL').all())db.prepare('UPDATE ig_file_forgets SET decision_id=? WHERE user_id=? AND source_id=? AND external_id=? AND decision_id IS NULL').run(randomUUID(),String(row.user_id),String(row.source_id),String(row.external_id));
  if(!db.prepare('PRAGMA table_info(ig_pins)').all().some(row=>row.name==='original_id'))db.exec('ALTER TABLE ig_pins ADD COLUMN original_id TEXT');
  // Existing admitted snapshot references receive their initial recovery window
  // once. Restart and receipt replay never extend an existing window.

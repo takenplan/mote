@@ -227,3 +227,85 @@ No account-wide task/config reset, per-user runtime or real user deletion is use
 Current deletion intent rejects conflicting older personal content atomically; this
 is explicitly validated with archive_conflict and unchanged target/B state. Additions
 are specific to the original Files policy, not a general deletion framework.
+
+
+## Exact forget decision and lost deletion acknowledgement
+
+Independent M15 actual same-capture stale allow-again200/upload200 was reproduced
+locally, alongside lost DELETE acknowledgement404 (durable9360ca56; both actual
+RED). Fix4be0cb4c binds allow-again to a fresh opaque decision UUID and DELETE to
+its captured original generation plus stable operation ID. Fixed owner-only
+receipts survive canonical deletion and replay without acting on a later import.
+This is transport/lifecycle metadata for the existing owner actions, not another
+approval or new deletion policy. Missing expected metadata returns409 instead of
+silently targeting the latest state. Consumers must preserve exact request bodies
+across delays/restarts and may only choose a newer decision by a new explicit
+owner action. Personal data restore mints new decision IDs and excludes operation
+receipts, retaining the existing no-authority-restoration boundary. Native schema
+admission includes the new metadata column/journal. Actual narrow10/10 is recorded
+separately; previous types/full gates do not cover this change.
+
+## Attachment relationship and restored image authority
+
+KEEP the original parent-caption/image relationship, original byte retention,
+explicit preparation and accepted OCR reuse. CHANGE only admission/publication
+through existing M03/M06/M07 services and one executor. A declared parent ID is
+insufficient: actual owned archive lineage and current parent/head/source must
+match. Binding metadata is specific to this retained relationship; no generic
+nonce framework, new runtime or permission step is introduced. M02's existing
+asset value shape can retain metadata once M03 is present; byte access remains
+M03, and existing canonical members drive transitive retirement. Legacy organizer
+chunk evidence IDs are adapted to M02 capture IDs while preserving exact locators.
+
+Actual settled-publication testing exposed old image navigation revival after
+same-ID reattachment and again after data-only restore. Immutable Material lineage
+and fresh per-binding Memory image evidence IDs prevent these independently of
+raw OCR cache identity. Restore preserves accepted data and mints no execution or
+model lease. Current770f source needs new type/delta/full combination checks; old
+component/gate receipts are not moved. Profile/rule/service-test and import choice
+remain OPEN, as do final clients and complete composed acceptance.
+
+## Frozen QR producer composition
+
+Compose producer48547e8f04a4df76724cb286df32d44f2ecc013b (tested6726838a) as
+08fa2ba1. The three auth files use that exact frozen source, including its
+full-gate-covered central-purpose baseline. M05 synchronous retry recovery,
+M06 shared physical-input pin and exact pin disposer are applied as deltas;
+Joint originalGeneration/attachmentGeneration/fileGeneration, diarizeFrom,
+per-file settings, owner reviews and acknowledgeExternalReplay are retained.
+No peer directory, main/integration branch, deployment or CI setting is changed.
+QR's owner full gate is producer evidence, not Joint composition proof.
+
+Independent Joint QR/auth/disposer/retry-hook16/16 is actual0. The composed
+Files neighbor run initially had29pass/4fail: four own pin assertions observed
+coordinator retirement before actual media completion. Exact diagnostics show
+activeMedia1 at that point (pins1 for an attachment, pins2 for the manual-pin
+forget case). Waiting for actual media activity to finish makes all four pass,
+with unchanged no-artifact, exact physical cleanup and B-positive assertions.
+This is a fixture lifecycle correction; no production source is changed to
+release a still-needed physical pin. Full current affected/types/compiled/client
+and native/container combination remain pending.
+
+## Original media connection compatibility during profile work
+
+The original processingServiceSchema explicitly permits an empty model for OCR/
+ASR while requiring it for language-model services. M04's generic configured()
+check rejected both. A generated real M04 OCR lease is actual503 RED at e458bf1e;
+initial pipeline-only observation was stale and retained separately. Minimal69f8133e
+permits an empty model only for mote-media OCR/ASR resolution. Endpoint, credentials,
+explicit unauthenticated-local checks, complete references, account/resource
+retirement and no default fallback remain unchanged; chat/memory/file refuse that
+empty model. No fake model ID or alternative provider is introduced. Own real fake
+HTTP OCR plus M04 model-resource neighbors16/16 actual0; ASR lease resolution is
+verified separately from provider execution. New types/source review remain pending.
+
+The new pure processing-policy-contract value retains original named profiles,
+source/exact-MIME/default precedence, explicit original-only archive and recipe/
+parameter metadata while referencing complete M04 connections. It executes nothing,
+stores no endpoint/key copy and is not wired to routes/intake yet. Its three
+value-level tests are not evidence that the remaining public processing-plan
+settings, service test, incomplete-task reconciliation, preview/reprocess or import
+imageProfileId work is complete. Existing FileProcessing.completeConfiguration
+compares unfinished runtime fingerprints and requeues changed work; completed
+results remain until explicit preview/reprocess. The eventual adapter must retain
+that distinction and existing unknown-call consent, not blanket-revive work.

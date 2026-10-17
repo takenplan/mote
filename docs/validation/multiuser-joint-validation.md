@@ -860,3 +860,107 @@ raw full diarization arrays in detail were also part of the original legacy shap
 No new quota, silent array truncation or invented paging framework is added from
 that source-only observation. Preserve it for bounded consumer/old-path comparison
 before deciding whether it is a regression or an existing scaling limit.
+
+
+### Exact delete decisions —4be0cb4c
+
+M15's independent same-capture replay report is /tmp/mote-m15-review-joint-files-0095.md;
+its2cc60c20 actual execution remains M15 evidence. Own durable9360ca56 reproduces
+two failures at real M01/M03/M06 HTTP entry: stale first allow-again after a second
+forget returns200 and permits upload200 (expected409/410), and lost DELETE ACK
+retry returns404 (expected fixed200 receipt). Own /tmp/mote-joint-file-forget-decision-red.log/.exit
+is2/2fail EXIT1. This is separate from0563's already-fixed task incarnation issue.
+
+Minimal4be0cb4c adds exact decision CAS, expected original generation and stable
+owner operation receipts. /tmp/mote-joint-file-forget-cas-final-narrow.log/.exit is
+10/10pass, 0skip/fail,8.397s EXIT0: two original same-path fixes, missing/stale
+metadata, old independent delete intent, actual app restart before ACK replay,
+schema/partial-upgrade initialization, historical-zero task identity, older archive
+conflict+data-only tombstone restore/old decision rejection, all revisions/shared
+bytes/pin, held fake transport+B, automatic same-byte reimport and parentless old
+retry. No real provider or personal content was used. Scope inventory0 in
+/tmp/mote-joint-file-forget-cas-scope.log/.exit. Earlier intermediate green2 is3/3;
+prior neighbors6/6 selected only by name, and is not a complete file suite.
+
+Current4be0cb4c noEmit/independent source review/affected/compiled/native/client/
+Docker schema combination are pending. Previous203997 types cover0563/679a but
+not this changed wire. Profiles/rules and parent-bound imported image preparation
+remain OPEN; the new attachment target test has no production implementation and
+its first503 denial is not a positive attachment/Memory proof.
+
+### Exact retained attachments —3d2cad43/770f548c
+
+Original positive HTTP preparation entry was actual503 RED1/1 at46d1d9f8,
+`/tmp/mote-joint-file-attachment-entry-red2.log/.exit` (earlier first foreign-denial
+failure is not positive entry proof). New3d2cad43 implements actual parent/archive
+relation, current binding, same M06 executor and M07 pure organizer. Initial child
+OCR/parent retirement passed, but the added joined-caption assertion exposed
+M02 asset quarantine, legacy chunk UUID evidence adaptation and the archived source
+caption being omitted. Those intermediate failures remain in attachment-joined
+logs; only later unwrapped real handler execution is used as GREEN.
+
+Waiting for the actual rebuilt joined Material and re-projecting its image anchor
+then confirmed old navigation revival (settled-red EXIT1); Material binding lineage
+fix passes. Data-only Ingress+Processing restore separately reproduced the same
+old-anchor problem at e3913d26 in attachment-restore-anchor-red EXIT1. First image-ID
+fix collided with old unique evidence block identity (final-narrow EXIT1), retained.
+Minimal770f binds both block and image ID to the new M03 relation; non-attachment
+image identities remain unchanged.
+
+`/tmp/mote-joint-file-attachment-final-narrow2.log/.exit` is5/5pass,0skip/fail,
+8.221s EXIT0: original preparation/actual OCR and joined original parent caption,
+real Memory read_image, same-parent UUID retirement/recreation/new task and Material
+revision with exact raw OCR reuse, held A provider response across parent deletion/
+source disable/head replacement with B processing and no A artifact/pin, and
+accepted OCR/domain data restore with old ticket/image-anchor rejection plus fresh
+image navigation. Pure generated2px PNG, captions and fake loopback OCR only;
+no model inference or real user data. Full HTTP personal import, producer noEmit,
+independent review, native/client/compiled/container and full affected are pending.
+
+### Frozen QR plus current Files composition
+
+Producer PR144 head48547e8f/test672 finalrequired960s0 is read-only owner evidence;
+no completed owner thread was awakened. Joint08fa2ba1 uses exact frozen auth
+source and selective M05/M06/Originals pin/retry deltas. It retains all Joint
+incarnation, per-file cancel/retry/raw cache, owner review and attachment fields.
+Own `/tmp/mote-joint-qr-composed-narrow.log/.exit`:16/16,0skip/fail,2.823s EXIT0,
+real generated M01 QR claim/revoke/ACK/known-device/reauthorization routes, pin
+disposer and three retry-hook transaction rollback modes.
+
+Own `/tmp/mote-joint-qr-files-composed-neighbors.log/.exit` was33cases,29pass/4fail,
+EXIT1. All four were own pre-existing fixture pin-count assertions after a
+coordinator's public terminal state, while the actual media activity remained
+active. No production failure or physical pin leak was inferred from that point.
+`/tmp/mote-joint-qr-files-physical-phase.log/.exit` repeats exactly those four
+with actual media completion as the boundary:4/4,5.614s0. Diagnostics actually
+show activeMedia1 and the held pins before completion, then original no-A-artifact,
+zero provider pins/manual pin retained, eventual GC and B assertions pass. Tests
+only changed; all first failures remain. This is not a second full33-case green
+receipt or a full Server/affected gate. New source types/review remain pending.
+
+Attachment retained-object admission later4c55761f avoids copying/re-reading the
+whole already-admitted archive object; existing M03 metadata, checksum readers
+and reference-only admission remain authoritative. Six narrow cases passed in
+10.274s `/tmp/mote-joint-file-attachment-retained-object-narrow.*`; the added
+reference-only assertion passed separately1/1 in0.813s in
+`/tmp/mote-joint-file-attachment-reference-admission.*`. Scope checker0. No large
+file throughput/production performance claim follows from these generated cases.
+
+### Model-less original OCR/ASR reference
+
+Own e458bf1e durablecase gives actual M04 OCR lease scope_unavailable503 at
+/tmp/mote-joint-empty-media-reference-direct-red.log/.exit; original legal media
+service model:'' is not a language model. Earlier pipeline-only stale observation
+is retained in empty-media-reference-red and not substituted for the direct proof.
+Minimal69f8133e feature-aware check passes samecase including actual generated
+MoteMedia OCR, unchanged blank model in usage, ASR lease without execution, and
+chat/memory rejection. The full bounded ModelResources value suite plus this
+HTTPcase is16/16,2.492s0 in /tmp/mote-joint-empty-media-reference-neighbors.log/.exit,
+including shared/personal credential/locality/no-fallback/withdrawal/environment
+checks and new shared blank-media language-feature negatives. No real inference.
+NoEmit/current fullgate and independent delta review are pending.
+
+The new processing-policy-contract pure value checks3/3 in0.244s0
+/tmp/mote-joint-processing-policy-value.log/.exit only. It has no registered route,
+M04 domain, M03 intake or M05 processing behavior yet. Keep the actual public
+profile/settings/import-choice group OPEN.

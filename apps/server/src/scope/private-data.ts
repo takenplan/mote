@@ -166,7 +166,9 @@ export class PrivateData{
   }
   private publishVersion(raw:unknown,expectedRevision?:string,correctionOverride?:NonNullable<AttributionContext['correction']>){
     let draft=materialDraftSchema.parse(raw);
-    if(draft.blocks.some(b=>b.kind==='asset'))throw new PrivateDataError('scope_unavailable',503);
+    // Asset blocks retain typed content-addressed metadata only. They grant no
+    // bytes: M03's owned original/attachment readers remain the sole byte gate.
+    if(draft.blocks.some(b=>b.kind==='asset'&&!b.memberIds.length))throw new PrivateDataError('invalid_data');
     if(draft.id!==materialId(draft.origin.sourceId,draft.origin.externalId))throw new PrivateDataError('invalid_data');
     if(new Set(draft.blocks.map(b=>b.id)).size!==draft.blocks.length||new Set(draft.members.map(m=>m.id)).size!==draft.members.length||draft.blocks.some(b=>b.memberIds.some(id=>!draft.members.some(m=>m.id===id))))throw new PrivateDataError('invalid_data');
     return this.sql.transaction(()=>{
@@ -270,7 +272,7 @@ export class PrivateData{
     if(!version||Number(version.sequence)<Number(head.min_visible_sequence))throw missing();
     const {blocks,members,...manifest}=json<MaterialDraft>(version);
     if(!manifest.artifacts?.some(artifact=>artifact.key==='coding-dialogue'&&artifact.state==='ready'&&artifact.revision==='1')&&(manifest.kind==='mote.coding-session'||members.some(member=>member.kind==='capture'&&member.id==='original'&&manifest.origin.externalId==='processed:'+member.ref.slice(8)&&this.sql.get("SELECT id FROM pd_captures WHERE user_id=$user AND id=? AND json_type(json,'$.provenance.document.coding')='object'",member.ref.slice(8)))))throw missing();
-    return {...manifest,revision:String(version!.revision),ref:`material:${key.id}@${version!.revision}`,sequence:Number(version!.sequence),createdAt:String(version!.created_at),updatedAt:String(head.updated_at),blockCount:blocks.length,memberCount:members.length,textLength:String(version!.text).length,assetCount:0,indexing:{state:'indexed'}};
+    return {...manifest,revision:String(version!.revision),ref:`material:${key.id}@${version!.revision}`,sequence:Number(version!.sequence),createdAt:String(version!.created_at),updatedAt:String(head.updated_at),blockCount:blocks.length,memberCount:members.length,textLength:String(version!.text).length,assetCount:blocks.filter(block=>block.kind==='asset').length,indexing:{state:'indexed'}};
   }
   materials(raw:ListInput={},sourceIds?:readonly string[]){
     this.withdrawUnfilteredCoding();

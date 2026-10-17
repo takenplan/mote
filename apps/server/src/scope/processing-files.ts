@@ -1,3 +1,5 @@
+import {attachmentVisible} from './ingress-attachments.js';
+import {fileOriginalGeneration} from './ingress-file-forget.js';
 import {Readable} from 'node:stream';
 import {z} from 'zod';
 import {exportTar,transcriptMarkdown,transcriptCsv,csvCell} from '../file-export-tar.js';
@@ -22,7 +24,7 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
   const bind=(context:UserContext)=>{
     const assert=()=>runtime.authority.assert(context),sql=new PrivateSql(db,context.userId,assert),cursor=new PrivateCursor(key,context.deploymentId,context.userId),originals=ingress.forUser(context),service=processing.forUser(context);
     const base=`FROM ig_originals r JOIN pd_captures c ON c.user_id=r.user_id AND c.id=r.capture_id JOIN pd_sources s ON s.user_id=r.user_id AND s.id=r.source_id JOIN pd_source_heads h ON h.user_id=r.user_id AND h.capture_id=c.id JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id
-      WHERE r.user_id=$user AND c.user_id=$user AND s.user_id=$user AND h.user_id=$user AND f.user_id=$user AND (f.format='file' OR instr(f.format,'processor:')=1) AND COALESCE(json_extract(s.json,'$.enabled'),1)=1 AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0 AND json_extract(c.json,'$.source')='file'`;
+      WHERE r.user_id=$user AND c.user_id=$user AND s.user_id=$user AND h.user_id=$user AND f.user_id=$user AND (f.format='file' OR instr(f.format,'processor:')=1) AND COALESCE(json_extract(s.json,'$.enabled'),1)=1 AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0 AND json_extract(c.json,'$.source')='file' AND ${attachmentVisible()}`;
     const owned=(id:string)=>{
       z.string().uuid().parse(id); const row=sql.get(`SELECT r.*,c.json capture ${base} AND r.user_id=$user AND c.id=?`,id); if(!row)throw missing();
       const ref='original:'+row.id,info=originals.readOriginal(ref,{length:0}),capture=JSON.parse(String(row.capture)),status=service.status(ref);
@@ -31,7 +33,7 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
     const detail=(id:string,includeAcoustics=true)=>{
       const {row,ref,info,capture,status}=owned(id),taskRow=sql.get('SELECT a.task_id FROM mp_admissions a JOIN execution_steps e ON e.user_id=a.user_id AND e.id=a.task_id WHERE a.user_id=$user AND e.user_id=$user AND a.original_id=? ORDER BY e.updated_at DESC,e.id LIMIT 1',String(row.id));
       const task=taskRow?execution.forUser(context).get(String(taskRow.task_id)):undefined,diarization=includeAcoustics?service.fileDiarization(ref):undefined;
-      return {captureId:id,sourceId:info.sourceId,originalRef:ref,sizeBytes:info.totalBytes,sha256:info.hash,hasOriginal:info.available!==false,originMissing:!status.current,
+      return {captureId:id,originalGeneration:fileOriginalGeneration(sql,ref),sourceId:info.sourceId,originalRef:ref,sizeBytes:info.totalBytes,sha256:info.hash,hasOriginal:info.available!==false,originMissing:!status.current,
         rawArtifactId:service.fileStageIds(ref).raw,cancellation:service.cancellation(ref),calendarLink:service.fileCalendar(ref),item:{...capture.provenance,title:capture.windowTitle,observedAt:capture.capturedAt,mimeType:info.mime},processing:status,
         job:task?{state:task.state,stage:task.kind,attempts:task.attempts,error:task.failure?.code??null,execution:executionEnvelope({state:task.state,attempts:task.attempts,errorCode:task.failure?.code})}:null,
         artifacts:[...(diarization?[{...diarization,kind:'diarization',complete:true}]:[]),...(status.artifactId?[{id:status.artifactId,kind:'transcript',complete:true}]:[]),...status.derivations.map(x=>({id:x.artifactId,kind:x.kind==='turns'?'dialogue':x.kind,complete:true}))]};
@@ -72,12 +74,14 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
       },
     };
   };
+  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/records/:id/attachments/:attachmentId/processing',handle:({context,request})=>{const input=z.object({id:z.string().uuid(),attachmentId:z.string().uuid()}).parse(request.params);const result=ingress.forUser(context).prepareAttachment(input.id,input.attachmentId,request.body);return {...result,processing:bind(context).detail(result.captureId,false).job};}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files',handle:({context,request})=>bind(context).list(request.query)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id',handle:({context,request})=>bind(context).detail(z.object({id:z.string().uuid()}).parse(request.params).id)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks',handle:({context,request})=>bind(context).chunks(z.object({id:z.string().uuid()}).parse(request.params).id,request.query)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback',handle:({context,request})=>{z.object({}).strict().parse(request.body??{});return bind(context).playback(z.object({id:z.string().uuid()}).parse(request.params).id);}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export',handle:({context,request,reply})=>reply.type('application/gzip').header('Cache-Control','no-store').header('Content-Disposition','attachment; filename="mote-recording.tar.gz"').send(bind(context).export(z.object({id:z.string().uuid()}).parse(request.params).id))});
-  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'DELETE',url:'/api/files/:id',handle:({context,request})=>{z.object({}).strict().parse(request.body??{});const file=bind(context).owned(z.object({id:z.string().uuid()}).parse(request.params).id);return ingress.forUser(context).forgetFile(file.capture.id);}});
+  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'DELETE',url:'/api/files/:id',handle:({context,request})=>{const id=z.object({id:z.string().uuid()}).parse(request.params).id,service=ingress.forUser(context),receipt=service.fileForgetReceipt(id,request.body);if(receipt)return receipt;const file=bind(context).owned(id);return service.forgetFile(file.capture.id,request.body);}});
+  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/forgotten',handle:({context,request})=>ingress.forUser(context).forgottenFile(z.object({id:z.string().uuid()}).parse(request.params).id)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/allow-again',handle:({context,request})=>ingress.forUser(context).allowFileAgain(z.object({id:z.string().uuid()}).parse(request.params).id,request.body)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/reviews',handle:({context,request})=>{const file=bind(context).owned(z.object({id:z.string().uuid()}).parse(request.params).id);return processing.forUser(context).fileReviews(file.ref);}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/reviews',handle:({context,request})=>{const file=bind(context).owned(z.object({id:z.string().uuid()}).parse(request.params).id);return processing.forUser(context).reviewFile(file.ref,request.body);}});

@@ -1555,11 +1555,13 @@
       "table:ig_activity",
       "table:ig_archive_files",
       "table:ig_archive_links",
+      "table:ig_attachment_links",
       "table:ig_batches",
       "table:ig_capture_scopes",
       "table:ig_capture_update_sequences",
       "table:ig_capture_updates",
       "table:ig_devices",
+      "table:ig_file_forget_operations",
       "table:ig_file_forgets",
       "table:ig_import_parts",
       "table:ig_import_uploads",
@@ -2416,6 +2418,7 @@
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/assets'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/forgotten'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/reviews'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/allow-again'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/cancel'",
@@ -2424,7 +2427,8 @@
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/retry'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/reviews'",
       "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/reviews/:reviewId'",
-      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/speakers'"
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/speakers'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/records/:id/attachments/:attachmentId/processing'"
     ]
   },
   "apps/server/src/scope/processing-imports.ts": {
