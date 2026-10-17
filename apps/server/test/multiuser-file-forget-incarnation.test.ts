@@ -37,6 +37,7 @@ test('an unsent file delete cannot target an identical file after its source is 
  const replacement=await f.upload(f.a.token,'same-source-replacement',body);assert.equal(replacement.id,a.id);
  const next=await f.checked(f.a.token,path);assert.equal((await f.request(f.b.token,'/api/files/'+b.id)).statusCode,200);
  const late=await f.request(f.a.token,path,'DELETE',intent),retained=await f.request(f.a.token,path);
+ assert.equal((await f.request(f.b.token,'/api/files/'+b.id)).statusCode,200,'B stays readable after the stale A intent');
  assert.deepEqual({lateDelete:late.statusCode,replacement:retained.statusCode},{lateDelete:409,replacement:200},'a stale first-send intent must not delete a replacement source/capture; captured generations '+JSON.stringify({before:prior.originalGeneration,after:next.originalGeneration}));
  const fresh=await f.checked(f.a.token,path,'DELETE',{operationId:randomUUID(),originalGeneration:next.originalGeneration});assert.equal(fresh.deleted,1);
  assert.equal((await f.request(f.b.token,'/api/files/'+b.id)).statusCode,200);
