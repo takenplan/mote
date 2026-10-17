@@ -816,6 +816,42 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativePersonalMcpCreationAndRevocationUseM01FieldsAndRetireOldAccountControls() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val label="Generated M15 scoped MCP";val sourceId="same-native-grant-source"
+        for(actor in listOf(api,b))actor.post("/api/ingress/sources",JSONObject().put("id",sourceId).put("name","Generated MCP grant source").put("kind","mcp").put("deviceId","generated-grant-device").put("platform","import").put("retention","archive"))
+        val bGrant=b.post("/api/connections/mcp",JSONObject().put("label",label).put("access","write").put("sourceIds",org.json.JSONArray().put(sourceId)));val bId=bGrant.getString("credentialId")
+        fun credential(client:CentralClient,id:String):JSONObject {val items=client.get("/api/connections").getJSONArray("items");return (0 until items.length()).map(items::getJSONObject).single {it.getString("id")==id}}
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        fun dialog():android.app.AlertDialog {
+            @Suppress("UNCHECKED_CAST") val dialogs=MoteDialogBuilder::class.java.getDeclaredField("dialogs").apply {isAccessible=true}.get(null) as List<java.lang.ref.WeakReference<android.app.AlertDialog>>
+            return dialogs.mapNotNull {it.get()}.single {it.isShowing}
+        }
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","connections")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            ready();press("创建 MCP 授权")
+            scenario.onActivity {activity->
+                val all=views(activity.window.decorView)
+                all.filterIsInstance<android.widget.EditText>().single {it.contentDescription=="名称"}.setText(label)
+                all.filterIsInstance<android.widget.EditText>().single {it.contentDescription=="来源范围 · 高级 JSON"}.setText(org.json.JSONArray().put(sourceId).toString())
+                val access=all.filterIsInstance<android.widget.Spinner>().single {it.adapter.count==2&&it.adapter.getItem(0).toString()=="read"&&it.adapter.getItem(1).toString()=="write"};access.setSelection(1)
+            }
+            press("保存设置");ready()
+            val items=api.get("/api/connections").getJSONArray("items");val issued=(0 until items.length()).map(items::getJSONObject).singleOrNull {it.optString("label")==label}
+            assertNotNull("The original native creation must use the strict real M01 body",issued);val id=issued!!.getString("id");assertEquals("mcp-write",issued.getString("kind"));assertEquals(org.json.JSONArray().put(sourceId).toString(),issued.getJSONArray("sourceIds").toString())
+            scenario.onActivity {it.navigate("connections")};ready()
+            fun revoke(){scenario.onActivity {activity->val field=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().single {it.text.toString().endsWith(" · "+label)};val card=field.parent as android.view.ViewGroup;views(card).filterIsInstance<android.widget.Button>().single {it.text.toString()=="撤销授权"}.performClick()}}
+            revoke();scenario.onActivity {dialog().getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick()};assertTrue(credential(api,id).isNull("revokedAt"))
+            revoke();lateinit var oldConfirm:android.widget.Button
+            scenario.onActivity {oldConfirm=dialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE);oldConfirm.performClick()};ready()
+            assertTrue("Default native DELETE must reach real M01 revocation",credential(api,id).getLong("revokedAt")>0);assertTrue(credential(b,bId).isNull("revokedAt"))
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {oldConfirm.performClick()};ready()
+            assertTrue(credential(b,bId).isNull("revokedAt"))
+        }
+    }
+
     @Test fun originalNativeBrowserLoginReturnsACentralSessionWhileDevicePairingRemainsScoped() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")

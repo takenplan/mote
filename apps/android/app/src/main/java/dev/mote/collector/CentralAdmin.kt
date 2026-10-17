@@ -419,7 +419,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     private fun connections() {
         ui.button(MoteI18n.text("生成设备连接邀请")) { invitation() }
         ui.button(MoteI18n.text("创建 MCP 授权")) {
-            edit(MoteI18n.text("创建 MCP 授权"), "/api/connections/mcp", JSONObject().put("serverUrl", ui.server).put("label", "MCP").put("access", "read"), "POST", completed = ::credentialResult)
+            edit(MoteI18n.text("创建 MCP 授权"), "/api/connections/mcp", JSONObject().put("label", "MCP").put("access", "read").put("sourceIds", JSONArray()), "POST", completed = ::credentialResult)
         }
         library.paged("/api/connections", ui.card()) { row, card ->
             values(row, card)
@@ -1020,7 +1020,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             "agentTimeoutMs" to "Agent 超时（毫秒）", "interactiveConcurrency" to "交互并发", "agentConcurrency" to "Agent 并发",
             "llmConcurrency" to "模型并发", "memoryConcurrency" to "记忆并发", "enabled" to "启用", "debug" to "调试日志",
             "traceEnabled" to "记录 Agent 读取", "level" to "日志级别",
-            "deviceId" to "设备 ID", "deviceName" to "设备名称", "platform" to "平台", "serverUrl" to "节点地址", "label" to "名称"
+            "deviceId" to "设备 ID", "deviceName" to "设备名称", "platform" to "平台", "serverUrl" to "节点地址", "label" to "名称", "sourceIds" to "来源范围"
         )
     }
 }

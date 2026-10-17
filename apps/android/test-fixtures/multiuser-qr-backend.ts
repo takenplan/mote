@@ -12,6 +12,10 @@ let dropRedeem=false,dropAck=false,badSelf='';
 const revokeAfterRestart=process.argv.includes('--revoke-after-restart'),restartAfterAck=revokeAfterRestart||process.argv.includes('--restart-after-ack');let restarted=false,revokedAfterRestart=false;
 function observe(host:Awaited<ReturnType<typeof buildApp>>){
  host.app.addHook('onSend',async(request,reply,payload)=>{
+  if(request.method==='POST'&&request.url==='/api/connections/mcp'){
+   let error:string|undefined;try{error=JSON.parse(String(payload)).error;}catch{}
+   process.stderr.write(JSON.stringify({type:'generated-mcp-create',status:reply.statusCode,bodyKeys:Object.keys(request.body as object),...(error?{error}:{})})+'\n');
+  }
   if(['/api/execution-settings','/api/diagnostics-settings'].includes(request.url))retiredConfigurationRequests.push(request.url);
   if(request.method==='POST'&&request.url==='/api/login/ack')ackStatuses.push(reply.statusCode);
   if(request.method==='GET'&&request.url==='/api/connections/self'&&reply.statusCode===200&&JSON.parse(String(payload)).credential.deviceId)verifiedDeviceReads++;

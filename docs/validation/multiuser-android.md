@@ -1046,3 +1046,24 @@ creates a fresh owned request after physical settlement, preserves old unresolve
 facts, and old A confirmation cannot sendunderB. Existing stop/delete and
 lostACK native methods remain separate. No unknown assertion was weakened into
 known completion or a manually written task journal.
+
+
+## Original personal MCP credentials: real create RED, thin consumer preparation
+
+While QR held the full gate, a single existingAPK checked the original normal
+Launcher→Sources→Personal connections→Create MCP→Save flow. Real M01 returned
+400 invalid_request for keys serverUrl,label,access,
+`/tmp/m15-native-mcp-create-red.log/.exit/-trace.json`, backendcleanup0. This
+reached the actual strict route and is a production consumer RED, not an absent
+backend or fixture permission problem. Original central-purpose browser login
+setup remains a real1/1 positive and no external browser was opened.
+
+Minimal preparation removes serverUrl only from MCP issuance (device invitations
+retain it), keeps read/write choice and adds optional explicit sourceIds via the
+existing advanced array editor. This consumes M01's established write-source
+allowlist, rather than silently granting global writes or removing write mode.
+The existing bilingual Source scope key is reused. Native regression prepared
+for actual UI write grant over A/B same source ID/label, cancellation/revocation
+and old A confirm retirement underB; default read creation retains the original
+manual samecase. No new backend, credential recovery or runtime was added.
+These source/tests remain UNCOMPILED/UNVERIFIED pending the next parent allocation.
