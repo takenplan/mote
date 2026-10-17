@@ -1,0 +1,217 @@
+{
+  "status": "passed",
+  "startedAt": "2026-10-17T19:34:46.595Z",
+  "command": "MOTE_MULTIUSER_CODEX_LIVE=1 MOTE_CODEX_BIN=/opt/homebrew/bin/codex MOTE_TEST_CODEX_MODEL=gpt-6.1-sol node --import tsx scripts/test-multiuser-codex-live.ts",
+  "head": "6e4032e0ff7a31dbf6528d6703f5d9d8f0b1cc57",
+  "scriptSha256": "da0a6bca29034263c417aaead7ea921aa07c058f5726ce6dd28a8a6fe7d3c051",
+  "source": {
+    "files": 706,
+    "sha256": "72f77a8bb1aebaf8075d93b269f0ac26830218ac7ad77f9afb29c37ac9f40459"
+  },
+  "wireProtocol": 2,
+  "storageEpoch": 5,
+  "provider": "codex",
+  "protocol": "codex-app-server",
+  "requestedModel": "gpt-6.1-sol",
+  "reasoningEffort": "low",
+  "serviceTier": "default",
+  "personalDataUsed": false,
+  "physicalDevicesTested": false,
+  "providerInternalRequestCount": "unobservable",
+  "cases": [
+    {
+      "name": "current_host_and_local_model_catalog",
+      "status": "passed",
+      "availableModels": 7,
+      "requestedModelAvailable": true
+    },
+    {
+      "name": "real_http_file_upload_and_background_index",
+      "status": "passed",
+      "sameSourceAndExternalId": true,
+      "modelCallsDuringIndexing": 0
+    },
+    {
+      "name": "real_model_original_read_and_isolation_A",
+      "status": "passed",
+      "owner": "A",
+      "completed": true,
+      "elapsedMs": 18405,
+      "selectedModel": "gpt-6.1-sol",
+      "modelTurns": 1,
+      "tools": [
+        "search_context",
+        "material_catalog",
+        "material_read"
+      ],
+      "canonicalReadTools": [
+        "search_context",
+        "material_read"
+      ],
+      "citations": 1,
+      "answerSha256": "dbae8b8cb2ef2d8231bc67992c925c403be1f65ba860c61fdbadd7b1e67458c6",
+      "usage": {
+        "provider": "codex",
+        "model": "gpt-6.1-sol",
+        "operation": "chat",
+        "status": "completed",
+        "durationMs": 18062,
+        "tokens": {
+          "measurement": "thread_cumulative",
+          "complete": true,
+          "requests": 0,
+          "reportedRequests": 0,
+          "inputTokens": 42087,
+          "outputTokens": 270,
+          "totalTokens": 42357,
+          "cacheReadTokens": 26624,
+          "cacheWriteTokens": 0,
+          "reasoningTokens": 0
+        }
+      }
+    },
+    {
+      "name": "real_model_original_read_and_isolation_B",
+      "status": "passed",
+      "owner": "B",
+      "completed": true,
+      "elapsedMs": 15854,
+      "selectedModel": "gpt-6.1-sol",
+      "modelTurns": 1,
+      "tools": [
+        "search_context",
+        "material_catalog",
+        "material_read"
+      ],
+      "canonicalReadTools": [
+        "search_context",
+        "material_read"
+      ],
+      "citations": 1,
+      "answerSha256": "9d5c4980788d7e75e1c42bbae7c428bd349f686816323601e7e7f055fd22c1a7",
+      "usage": {
+        "provider": "codex",
+        "model": "gpt-6.1-sol",
+        "operation": "chat",
+        "status": "completed",
+        "durationMs": 15573,
+        "tokens": {
+          "measurement": "thread_cumulative",
+          "complete": true,
+          "requests": 0,
+          "reportedRequests": 0,
+          "inputTokens": 42105,
+          "outputTokens": 274,
+          "totalTokens": 42379,
+          "cacheReadTokens": 39424,
+          "cacheWriteTokens": 0,
+          "reasoningTokens": 0
+        }
+      }
+    },
+    {
+      "name": "restart_retains_both_owner_histories",
+      "status": "passed",
+      "sameConversationRunAndTurnIds": true
+    },
+    {
+      "name": "ordinary_revision_retains_stale_answer_and_saved_work_link",
+      "status": "passed",
+      "strictCurrentResultWithdrawn": true,
+      "staleSurvivesRestart": true,
+      "bUnaffected": true
+    },
+    {
+      "name": "deletion_erases_saved_answer_with_b_positive_control",
+      "status": "passed",
+      "erasureSurvivesRestart": true,
+      "historyModelReplays": 0,
+      "totalRealAskRuns": 2
+    }
+  ],
+  "models": [
+    {
+      "owner": "A",
+      "completed": true,
+      "elapsedMs": 18405,
+      "selectedModel": "gpt-6.1-sol",
+      "modelTurns": 1,
+      "tools": [
+        "search_context",
+        "material_catalog",
+        "material_read"
+      ],
+      "canonicalReadTools": [
+        "search_context",
+        "material_read"
+      ],
+      "citations": 1,
+      "answerSha256": "dbae8b8cb2ef2d8231bc67992c925c403be1f65ba860c61fdbadd7b1e67458c6",
+      "usage": {
+        "provider": "codex",
+        "model": "gpt-6.1-sol",
+        "operation": "chat",
+        "status": "completed",
+        "durationMs": 18062,
+        "tokens": {
+          "measurement": "thread_cumulative",
+          "complete": true,
+          "requests": 0,
+          "reportedRequests": 0,
+          "inputTokens": 42087,
+          "outputTokens": 270,
+          "totalTokens": 42357,
+          "cacheReadTokens": 26624,
+          "cacheWriteTokens": 0,
+          "reasoningTokens": 0
+        }
+      }
+    },
+    {
+      "owner": "B",
+      "completed": true,
+      "elapsedMs": 15854,
+      "selectedModel": "gpt-6.1-sol",
+      "modelTurns": 1,
+      "tools": [
+        "search_context",
+        "material_catalog",
+        "material_read"
+      ],
+      "canonicalReadTools": [
+        "search_context",
+        "material_read"
+      ],
+      "citations": 1,
+      "answerSha256": "9d5c4980788d7e75e1c42bbae7c428bd349f686816323601e7e7f055fd22c1a7",
+      "usage": {
+        "provider": "codex",
+        "model": "gpt-6.1-sol",
+        "operation": "chat",
+        "status": "completed",
+        "durationMs": 15573,
+        "tokens": {
+          "measurement": "thread_cumulative",
+          "complete": true,
+          "requests": 0,
+          "reportedRequests": 0,
+          "inputTokens": 42105,
+          "outputTokens": 274,
+          "totalTokens": 42379,
+          "cacheReadTokens": 39424,
+          "cacheWriteTokens": 0,
+          "reasoningTokens": 0
+        }
+      }
+    }
+  ],
+  "findings": [],
+  "cleanup": {
+    "hostsOpened": 5,
+    "hostsClosed": 5,
+    "allListenersClosed": true,
+    "generatedVaultRemoved": true
+  },
+  "finishedAt": "2026-10-17T19:35:25.579Z",
+  "durationMs": 38984
+}

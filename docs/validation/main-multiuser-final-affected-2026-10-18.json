@@ -1,0 +1,218 @@
+{
+  "schemaVersion": 1,
+  "purpose": "Independent log extraction of the naturally failed T complete affected gate, preserving inventory-only failure and separate successful follow-up evidence",
+  "reviewedAtUtc": "2026-10-17T19:59:22.175981+00:00",
+  "executionHead": "6e4032e0ff7a31dbf6528d6703f5d9d8f0b1cc57",
+  "executionTree": "508a09cb70ec9202aad6225372039446023ef4ad",
+  "command": "npm run check:affected -- --base origin/main",
+  "sessionId": 11078,
+  "naturalExitCode": 1,
+  "naturalExitCodeSource": "Root observed session completion; not inferred from successful workspace counters",
+  "log": "mote-main-multiuser-joint-affected-6e4032e0-20261018.log",
+  "logSha256": "92d2a8758b991d41e9b7d3f005a9dd485ead33a8b7a0272472f446ef33acf4a9",
+  "logBytes": 486776,
+  "logLines": 4737,
+  "i18n": {
+    "bilingualMessagesAndCallSites": 8554,
+    "status": "passed"
+  },
+  "libraryBuilds": {
+    "components": [
+      "shared",
+      "agent",
+      "diagnostics"
+    ],
+    "status": "passed"
+  },
+  "typecheck": {
+    "workspaces": [
+      "desktop",
+      "server",
+      "web",
+      "agent",
+      "diagnostics",
+      "shared"
+    ],
+    "rootScripts": "tsc -p tsconfig.scripts.json",
+    "status": "passed",
+    "evidence": "The following && npm test stage executed after both workspace and root-script typechecks."
+  },
+  "components": [
+    {
+      "component": "desktop",
+      "version": "0.0.88",
+      "testFiles": 62,
+      "tests": 589,
+      "pass": 589,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 78790.0
+    },
+    {
+      "component": "server",
+      "version": "0.0.90",
+      "tests": 3075,
+      "suites": 0,
+      "pass": 3072,
+      "fail": 1,
+      "cancelled": 0,
+      "skipped": 2,
+      "todo": 0,
+      "durationMs": 917907.75025
+    },
+    {
+      "component": "web",
+      "version": "0.0.90",
+      "tests": 583,
+      "suites": 0,
+      "pass": 583,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "durationMs": 100198.65725
+    },
+    {
+      "component": "agent",
+      "version": "0.1.0",
+      "tests": 328,
+      "suites": 0,
+      "pass": 327,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 1,
+      "todo": 0,
+      "durationMs": 30992.581084
+    },
+    {
+      "component": "diagnostics",
+      "version": "0.1.0",
+      "testFiles": 1,
+      "tests": 5,
+      "pass": 5,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 303.0
+    },
+    {
+      "component": "shared",
+      "version": "0.1.0",
+      "tests": 195,
+      "suites": 0,
+      "pass": 195,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "todo": 0,
+      "durationMs": 355.534125
+    }
+  ],
+  "aggregateWorkspaceTests": {
+    "tests": 4775,
+    "pass": 4771,
+    "fail": 1,
+    "cancelled": 0,
+    "skipped": 3
+  },
+  "uniqueFailure": {
+    "test": "production scope inventory and transitive composition boundary are declared",
+    "file": "apps/server/test/scope-architecture.test.ts",
+    "sourceLine": 10,
+    "reportedRunnerLocation": "test/scope-architecture.test.ts:1:358",
+    "durationMs": 937.0725,
+    "errorCode": "ERR_ASSERTION",
+    "category": "expected scope inventory metadata drift",
+    "surface": "apps/server/src/scope/processing-imports.ts: task:execution.register",
+    "mismatches": [
+      "undeclared current localWork-wrapped surface",
+      "stale prior surface for the same registration"
+    ],
+    "functionalOrAfterHookFailure": false
+  },
+  "skipCases": [
+    "\ufe63 only a configured pinned Python Source Pack can map a private import, and changed code cannot publish (0.078083ms) # SKIP",
+    "\ufe63 macOS sandbox permits staged input but denies files and network outside it (0.078417ms) # SKIP",
+    "\ufe63 installed Codex speaks to a synthetic local Responses fixture with Mote evidence tools and ephemeral planning only (0.072042ms) # SKIP"
+  ],
+  "cleanupFailureAbsence": {
+    "ENOTEMPTY": 0,
+    "hookFailed": 0,
+    "afterHookFailureMarkers": 0
+  },
+  "cancelledTests": 0,
+  "historicalAndNewLifecycleCasesPassed": [
+    "owner cancellation is terminal before local cleanup, while execution close waits for that cleanup (714.422167ms)",
+    "real app close drains its local workspace finally before the generated vault is removed (649.6425ms)",
+    "unregistered remote work does not delay close or clear its issued outcome, and late local work cannot start (989.485125ms)",
+    "local cleanup drains belong to their host while another owner completes normally on the second host (1506.702ms)",
+    "failed real child retries only its own model branch while successful checkpoints remain single-use (10455.885375ms)",
+    "pending-child admission still retires a stale conversation before the held child settles (5080.459ms)",
+    "held file term review cannot publish after file-cancel (1798.528958ms)"
+  ],
+  "notExecutedByThisDriver": [
+    "root release/media/security/reset/proxy fixtures",
+    "scripts/client.test.ts",
+    "scripts/test-central-runner.mjs",
+    "Android :app:testDebugUnitTest"
+  ],
+  "separateFollowup": {
+    "inventoryCorrection": {
+      "receiptSha256": "092739bd3d3a5d613817577aff6b9c03826b4dff1ebfbf9d225d85f1aa4db647",
+      "checkerNaturalExitCode": 0,
+      "architectureNaturalExitCode": 0,
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "cancelled": 0,
+      "skipped": 0,
+      "durationMs": 1968.569875,
+      "productionInputChanged": false
+    },
+    "truncatedStages": {
+      "receiptSha256": "3ed9bf6eb4eb782fc92e24d3648ad29612c48c2abf41a0ded8c3ac829d52b7b1",
+      "rootTests": 83,
+      "clientTests": 5,
+      "centralRunner": "passed; no TAP count",
+      "android": "25/25 tasks UP-TO-DATE; no new 362-test execution",
+      "allNaturalExitCode": 0,
+      "actualExecutionHead": "6e4032e0ff7a31dbf6528d6703f5d9d8f0b1cc57",
+      "startedCleanT": true,
+      "laterDocumentationOverlaysRecordedInOriginalReceipt": true
+    }
+  },
+  "buildAndLiveReverified": {
+    "buildNaturalExitCode": 0,
+    "buildLogSha256": "15c7a9b05c684b3bbbe2f443cea7ef462b5ab927e8d18810bc56a52dbf911a15",
+    "liveNaturalExitCode": 0,
+    "liveReportSha256": "38fba2b5d6a14ec54ebdd0aee118c567e4166625f77bb01284142322877fec72",
+    "liveLogSha256": "a470bd2ba96c4b72912b6a67892aad5444119ab8ccd5e7860ecac89a76fc27f2",
+    "scriptSha256": "da0a6bca29034263c417aaead7ea921aa07c058f5726ce6dd28a8a6fe7d3c051",
+    "casesPassed": 7,
+    "realAskRuns": 2,
+    "durationMs": 38984,
+    "sourceBefore": {
+      "files": 706,
+      "sha256": "72f77a8bb1aebaf8075d93b269f0ac26830218ac7ad77f9afb29c37ac9f40459"
+    },
+    "sourceAfter": {
+      "files": 706,
+      "sha256": "72f77a8bb1aebaf8075d93b269f0ac26830218ac7ad77f9afb29c37ac9f40459"
+    },
+    "cleanup": {
+      "hostsOpened": 5,
+      "hostsClosed": 5,
+      "allListenersClosed": true,
+      "generatedVaultRemoved": true
+    }
+  },
+  "boundaries": {
+    "thisReviewStartedNoRuntime": true,
+    "thisReviewRanNoTests": true,
+    "thisReviewModifiedNoRepositoryFiles": true,
+    "fullGateReclassifiedAsPass": false,
+    "physicalDevices": false,
+    "realPersonalCapture": false
+  }
+}

@@ -1,8 +1,13 @@
 # Main and multi-user integration regression
 
 Run started 2026-10-17 and continued 2026-10-18 (Asia/Shanghai).
-Status: awaiting the joint integration candidate. The final affected-component
-gate, complete local-Codex acceptance, merge to `main` and new release are pending.
+Current status: the joint runtime is frozen at `6e4032e0` (T). Its fresh Central
+build and local Codex acceptance passed. The complete affected-component command
+finished with one stale architecture-inventory declaration; the functional tests
+passed. The [final joint report](main-multiuser-joint-final-2026-10-18.md) records
+that original failure, its precise declaration correction and the independently
+completed stages. GitHub merge and release readback belong to the delivery PR;
+this premerge report does not declare publication complete.
 
 The owner requested merging `codex/mote-multiuser-integration` into `main`,
 resolving conflicts, completing related acceptance work and repeating the full
@@ -212,10 +217,15 @@ not establish the final combined gate or live-model acceptance.
 | Interrupted J: `mote-main-multiuser-check-affected-final-J.log` | `c4571f7ccf99f68d4939a00a7ac55ac67682b78e93da126bee79487f69ee7acf` |
 | Targeted P: `mote-main-multiuser-consolidated-focused-P-20261018.log` | `cbba1a3f1ecf6b595c6ac42271ab25d2c3aa58dd1c7f0cb02089f39e695520f7` |
 
-The final joint source has not yet been frozen. Its complete local-Codex
-acceptance, affected-component gate, GitHub merge readback and release-version
-verification remain pending while the related task finishes. No earlier passing
-fixture, native or container lane establishes those later outcomes.
+The later joint runtime T includes the related task's frozen `9e9f112c` input
+and the independently demonstrated local cleanup corrections. T's own fresh
+build and real local Codex run passed seven scenarios and two Ask runs; the
+706-file runtime/compiled manifest was identical before and after. Its complete
+affected command naturally exited 1 solely on the outdated inline import-task
+inventory declaration. That test-only documentation was corrected without
+changing runtime inputs. The final report separates the failed driver attempt,
+targeted architecture checks and independently completed later stages. Earlier
+native and container lanes retain their actual source attribution.
 
 ## Current MVP gaps
 
@@ -259,8 +269,8 @@ All automated captures, documents, images, audio, accounts and providers are
 generated fixtures. Browser and native UI checks use hidden windows or headless
 emulators. No real personal screenshots were collected. Physical devices and
 operating-system permission dialogs were not validated. Live-model checks need
-separate source-bound receipts; complete acceptance using the local Codex server
-for the final joint candidate remains pending. The Hindsight recovery check is a
+separate source-bound receipts; T's actual local Codex acceptance is recorded in
+the final joint report. The Hindsight recovery check is a
 storage and restart check with zero model calls, not a semantic quality evaluation.
 
 The repository's Checks and Component checks workflows were manually disabled

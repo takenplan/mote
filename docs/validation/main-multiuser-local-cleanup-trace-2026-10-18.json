@@ -1,0 +1,93 @@
+{
+  "executionBase": "3518706b68ece5781fb8813d5a5ad8c8dbaa22ad",
+  "executionIdentity": "3518706b base plus these exact uncommitted production overlays; not a claim the base commit contains the fix",
+  "inputManifestSha256": "b01a49c6dadf317838b94623aa8871dc2dd65d04ae8702e6439535724f9a09ab",
+  "sourceFilesUnchangedAfterTrace": true,
+  "originalTestAssertionsAndBudgetsRetained": true,
+  "test": {
+    "naturalExitCode": 0,
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "durationMs": 3494.605916,
+    "transport": "generated loopback fixture; no real-model call"
+  },
+  "traceEventCount": 374,
+  "orderedBoundaries": [
+    {
+      "at": "2026-10-17T19:32:14.086Z",
+      "pid": 54316,
+      "ppid": 54315,
+      "nodeThreadId": 0,
+      "seq": 284,
+      "event": "child.exit",
+      "childPid": 54323
+    },
+    {
+      "at": "2026-10-17T19:32:14.090Z",
+      "pid": 54316,
+      "ppid": 54315,
+      "nodeThreadId": 0,
+      "seq": 340,
+      "event": "workspace.end",
+      "id": 131,
+      "errorCode": null
+    },
+    {
+      "at": "2026-10-17T19:32:14.091Z",
+      "pid": 54316,
+      "ppid": 54315,
+      "nodeThreadId": 0,
+      "seq": 341,
+      "event": "handler.end",
+      "id": 130,
+      "kind": "processing.review",
+      "errorCode": "grant_revoked"
+    },
+    {
+      "at": "2026-10-17T19:32:14.091Z",
+      "pid": 54316,
+      "ppid": 54315,
+      "nodeThreadId": 0,
+      "seq": 342,
+      "event": "host.close.end",
+      "host": "TaskExecution"
+    },
+    {
+      "at": "2026-10-17T19:32:14.094Z",
+      "pid": 54316,
+      "ppid": 54315,
+      "nodeThreadId": 0,
+      "seq": 349,
+      "event": "storage.db-close.begin"
+    },
+    {
+      "at": "2026-10-17T19:32:14.097Z",
+      "pid": 54316,
+      "ppid": 54315,
+      "nodeThreadId": 0,
+      "seq": 352,
+      "event": "fixture.root-rm.enter",
+      "id": 168
+    }
+  ],
+  "closedResourcesAtTaskExecutionCloseAndDbClose": true,
+  "fixtureRootRmOnlyPendingOwnRm": true,
+  "filesystemCallsAfterDbCloseExcludingFixtureDeletion": 0,
+  "genericEngineAbortSemanticsRetained": "Engine.close returns before raw local chains; TaskExecution.close then drains only registered localWork",
+  "nodeThreadIds": [
+    0
+  ],
+  "nativeLibuvThreadIdObserved": false,
+  "artifacts": {
+    "green-input-manifest.json": "b01a49c6dadf317838b94623aa8871dc2dd65d04ae8702e6439535724f9a09ab",
+    "preload-green.cjs": "0d1e7ece080d1dd8bcf2fddcf2fddfbcf73b834156342dbea778765471c2eaaa",
+    "run.mts": "9c689b9b6059c2275e27ef31349e11d08d62dfaeee97dfe1677a67a6d8667702",
+    "green-test.log": "78fefa566b0acca4cc5710ce4ac5479847c85a6f1f73a12d08a58838dcc15f7a",
+    "green-events.ndjson": "413fcbdb16fc2a86b2391c5a13f8203ebb5edbef0e5819ffb1f60fa24764ed11"
+  },
+  "cleanup": {
+    "generatedVaultRemoved": true,
+    "traceRunProcessesExitedNaturally": true
+  }
+}
