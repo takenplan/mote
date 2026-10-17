@@ -462,6 +462,35 @@ function googleFixture(ctx:ConnectorContext,handle:(url:URL)=>Response|Promise<R
 const calendar={id:'synthetic-calendar',summary:'Synthetic calendar',timeZone:'America/New_York',primary:true};
 const googleEvent=(id:string,summary:string)=>({id,etag:summary,summary,start:{dateTime:new Date(Date.now()+86400000).toISOString()},end:{dateTime:new Date(Date.now()+90000000).toISOString()},status:'confirmed'});
 
+test('Google provider counters and page order retain evidence across restart while meaningful times and status stay versioned',async t=>{
+  const {ctx,sources,store}=await fixture(t);
+  const first={...googleEvent('stable-first','Generated stable event'),created:'2025-01-01T00:00:00Z',updated:'2026-09-01T00:00:00Z'};
+  let events=[first,{...googleEvent('stable-second','Generated second event')}],reverse=false;
+  const deps=googleFixture(ctx,url=>{
+    if(url.pathname.endsWith('/calendarList'))return Response.json({items:[calendar]});
+    const ordered=reverse?[...events].reverse():events;
+    return url.searchParams.has('pageToken')?Response.json({items:[ordered[1]],nextSyncToken:'generated-sync'}):Response.json({items:[ordered[0]],nextPageToken:reverse?'different-page-token':'generated-page'});
+  });
+  let connector=deps.connector;t.after(()=>connector.close());await connector.init();await deps.authorize();await connector.select({calendarIds:[calendar.id]});
+  assert.equal((await connector.sync()).imported,2);const source=sources.listSources().find(s=>s.kind==='google-calendar')!,initial=sources.getItem(source.id,first.id)!;
+  reverse=true;events=events.map(e=>({...e,etag:'different-provider-counter'}));
+  assert.deepEqual(await connector.sync(),{imported:0,duplicates:2,calendars:1});assert.deepEqual(sources.getItem(source.id,first.id),initial);
+  assert.equal(store.db.prepare("SELECT count(*) n FROM changes WHERE operation='supersede'").get()!.n,0);
+  // Recreate the connector using the persisted OAuth/checkpoint state and the same fixture transport.
+  await connector.close();const restarted=googleFixture(ctx,url=>{
+    if(url.pathname.endsWith('/calendarList'))return Response.json({items:[calendar]});
+    return Response.json({items:events,nextSyncToken:'generated-next-sync'});
+  });connector=restarted.connector;await connector.init();
+  assert.equal((await connector.sync()).imported,0);
+  let prior=sources.getItem(source.id,first.id)!;
+  for(const patch of [{updated:'2026-09-02T00:00:00Z'},{created:'2025-01-02T00:00:00Z'},{status:'tentative'},{summary:'Generated changed title'},{description:'Generated changed body'},{start:{dateTime:new Date(Date.parse(first.start.dateTime)+60000).toISOString()}},{htmlLink:'https://calendar.google.com/generated-event'},{status:'cancelled'}]){
+    events[0]={...events[0],...patch};assert.equal((await connector.sync()).imported,1);
+    const next=sources.getItem(source.id,first.id)!;assert.notEqual(next.revision,prior.revision);assert.notEqual(next.captureId,prior.captureId);
+    assert.equal((await connector.sync()).imported,0);prior=next;
+  }
+  events[0]=first;await connector.sync();assert.notEqual(sources.getItem(source.id,first.id)!.revision,initial.revision);
+});
+
 test('Google OAuth state/PKCE, private refresh persistence, calendar selection and disconnect isolation',async t=>{
   const {ctx,directory,sources}=await fixture(t);
   const {connector,authorize,counts}=googleFixture(ctx,()=>Response.json({items:[calendar]}));await connector.init();t.after(()=>connector.close());

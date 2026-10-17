@@ -10,10 +10,18 @@ import {Store} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
 import type {ConnectorContext} from '../src/connectors/types.js';
 import type {GoogleDependencies} from '../src/connectors/google.js';
+import {MaterialStore,materialId} from '../src/materials.js';
+import {MaterialOrganizerRuntime} from '../src/material-organizers.js';
+import {MemoryInputAuthorization} from '../src/memory-input-authorization.js';
+import {memoryEvidenceFingerprint} from '../src/memory.js';
+import {EvidenceReader} from '../src/evidence-reader.js';
+import {ServerDiagnostics} from '../src/diagnostics.js';
 
 const message=(id:string,text=`Generated mail ${id}`,day=0)=>({id,threadId:`thread-${id}`,internalDate:String(Date.UTC(2024,0,1)+day*86400000),labelIds:['INBOX'],payload:{mimeType:'text/plain',headers:[{name:'Subject',value:`Generated ${id}`},{name:'From',value:'fixture@example.invalid'},{name:'Date',value:new Date(Date.UTC(2024,0,1)+day*86400000).toUTCString()}],body:{data:Buffer.from(text).toString('base64url')}}});
 async function fixture(t:any,handle:(url:URL,init?:RequestInit)=>Promise<Response>|Response){
-  const directory=await mkdtemp(join(tmpdir(),'mote-gmail-')),store=new Store(join(directory,'vault')),sources=new SourceStore(store);
+  const directory=await mkdtemp(join(tmpdir(),'mote-gmail-'));
+  const sourceStore=(store:Store)=>new SourceStore(store,undefined,new MemoryInputAuthorization(store,()=>true));
+  let store=new Store(join(directory,'vault')),sources=sourceStore(store);
   const ctx:ConnectorContext={store,sources,config:{dataDir:directory,token:'generated-owner-token-1234567890',allowedOrigins:[],connectors:{directory:join(directory,'credentials'),googleClientId:'generated-client',googleClientSecret:'generated-secret',googleRedirectUri:'http://127.0.0.1/oauth/google/callback'}}};
   const oauth=new OAuth2Client({clientId:'generated-client',redirectUri:ctx.config.connectors!.googleRedirectUri});
   oauth.getToken=(async()=>({tokens:{refresh_token:'generated-refresh-secret',access_token:'generated-access-secret',scope:gmailScope}})) as any;
@@ -22,8 +30,89 @@ async function fixture(t:any,handle:(url:URL,init?:RequestInit)=>Promise<Respons
   let connector=new GmailConnector(ctx,deps);await connector.init();
   t.after(async()=>{await connector.close();store.close();await rm(directory,{recursive:true,force:true});});
   const authorize=async()=>{const url=new URL((await connector.start()).authorizationUrl);assert.equal(url.searchParams.get('scope'),gmailScope);assert.equal(url.searchParams.get('code_challenge_method'),'S256');const state=url.searchParams.get('state')!;await connector.callback(state,'generated-code');return state;};
-  return {ctx,sources,store,directory,oauth,authorize,get connector(){return connector;},restart:async()=>{await connector.close();connector=new GmailConnector(ctx,deps);await connector.init();}};
+  return {ctx,get sources(){return sources;},get store(){return store;},directory,oauth,authorize,get connector(){return connector;},restart:async(reopen=false)=>{await connector.close();if(reopen){store.close();store=new Store(join(directory,'vault'));sources=sourceStore(store);ctx.store=store;ctx.sources=sources;}connector=new GmailConnector(ctx,deps);await connector.init();}};
 }
+
+test('Gmail history counter and JSON key order replays preserve immutable sources, original assets and Material across storage restart',async t=>{
+  let runtime:MaterialOrganizerRuntime;t.after(()=>runtime?.close());
+  let current:any={...message('stable','Generated long mail. '.repeat(2000)),historyId:'100',sizeEstimate:42000};
+  const f=await fixture(t,url=>{
+    const path=url.pathname.split('/me/')[1];
+    if(path==='profile')return Response.json({emailAddress:'generated@example.invalid',historyId:'100'});
+    if(path==='messages')return Response.json({messages:[{id:current.id}]});
+    if(path==='history')return Response.json({history:[{messages:[{id:current.id},{id:current.id}]}],historyId:current.historyId});
+    return Response.json(current);
+  });
+  await f.authorize();assert.equal((await f.connector.sync()).imported,2);
+  const source=f.sources.listSources()[0],initial=f.sources.getItem(source.id,'stable:0')!,initialTail=f.sources.getItem(source.id,'stable:1')!;
+  const archived=new ArchivedFileStore(f.store),original=archived.read(initial.document!.fileId!);
+  const fingerprint=memoryEvidenceFingerprint(f.store.evidence([initial.captureId])[0]);
+  const grants=f.store.db.prepare('SELECT * FROM memory_input_authorizations ORDER BY input_key').all();assert.equal(grants.length,2);
+  let materials=new MaterialStore(f.store);runtime=new MaterialOrganizerRuntime(f.store,materials);
+  const material=async()=>{for(let i=0;i<20;i++){await runtime.tick();const value=materials.get(materialId(source.id,'stable:0'));if(value)return value;}throw Error('Generated Material did not publish');};
+  const first=await material(),firstRead=materials.read(first.ref);
+  const diagnostics=new ServerDiagnostics({enabled:false,directory:join(f.directory,'diagnostics')});
+  const modelRead=()=>new EvidenceReader(f.store,f.sources,undefined,undefined,undefined,materials).agent({diagnostics}).evidence({ids:materials.evidenceIds(first.ref).slice(0,1)});
+  const firstModelRead=await modelRead();assert.equal(firstModelRead.length,1);
+  assert.deepEqual(firstModelRead[0].provenance?.document?.originalMetadata?.labels,['INBOX']);
+  const check=async()=>{
+    assert.deepEqual(await f.connector.sync(),{imported:0,duplicates:2,hasMore:false});
+    assert.deepEqual(f.sources.getItem(source.id,'stable:0'),initial);
+    assert.deepEqual(f.sources.getItem(source.id,'stable:1'),initialTail);
+    assert.equal(f.sources.history(source.id,'stable:0').length,1);
+    assert.equal(f.store.db.prepare("SELECT count(*) n FROM changes WHERE operation='supersede'").get()!.n,0);
+    assert.equal(f.store.db.prepare('SELECT count(*) n FROM archived_files').get()!.n,1);
+    assert.deepEqual(f.store.db.prepare('SELECT * FROM memory_input_authorizations ORDER BY input_key').all(),grants);
+    assert.equal(memoryEvidenceFingerprint(f.store.evidence([initial.captureId])[0]),fingerprint);
+    assert.deepEqual(new ArchivedFileStore(f.store).read(initial.document!.fileId!),original);
+    assert.equal((await material()).ref,first.ref);
+    assert.deepEqual(materials.read(first.ref),firstRead);
+    assert.deepEqual(await modelRead(),firstModelRead);
+  };
+  current.historyId='101';await check();await check();
+  const reverse=(value:any):any=>Array.isArray(value)?value.map(reverse):value&&typeof value==='object'?Object.fromEntries(Object.entries(value).reverse().map(([k,v])=>[k,reverse(v)])):value;
+  current=reverse(current);await check();
+  await runtime.close();await f.restart(true);materials=new MaterialStore(f.store);runtime=new MaterialOrganizerRuntime(f.store,materials);
+  current.historyId='102';await check();
+});
+
+test('Gmail keeps genuine state, time, authorship, body and raw attachment changes observable and never revives an old revision',async t=>{
+  const base:any={...message('changes'),historyId:'100'};let current=structuredClone(base);
+  const f=await fixture(t,url=>{
+    const path=url.pathname.split('/me/')[1];
+    if(path==='profile')return Response.json({emailAddress:'generated@example.invalid',historyId:'100'});
+    if(path==='messages')return Response.json({messages:[{id:current.id}]});
+    if(path==='history')return Response.json({history:[{labelsAdded:[{message:{id:current.id}}]}],historyId:'200'});
+    return Response.json(current);
+  });await f.authorize();await f.connector.sync();
+  const source=f.sources.listSources()[0],original=f.sources.getItem(source.id,'changes:0')!;
+  const variants:[string,(m:any)=>void][]=[
+    ['labels',m=>{m.labelIds=['INBOX','UNREAD'];}],
+    ['thread',m=>{m.threadId='another-generated-thread';}],
+    ['received time',m=>{m.internalDate=String(Number(m.internalDate)+1000);}],
+    ...['Subject','From','To','Cc','Date'].map(name=>[name,(m:any)=>{m.payload.headers=m.payload.headers.filter((h:any)=>h.name!==name);m.payload.headers.push({name,value:name==='Date'?'Tue, 02 Jan 2024 00:00:00 GMT':`Changed ${name}`});}] as [string,(m:any)=>void]),
+    ['body',m=>{m.payload.body.data=Buffer.from('Generated changed body').toString('base64url');}],
+    ['unprojected header',m=>{m.payload.headers.push({name:'Reply-To',value:'generated-reply@example.invalid'});}],
+    ['attachment',m=>{m.payload={mimeType:'multipart/mixed',headers:m.payload.headers,parts:[m.payload,{filename:'generated.pdf',mimeType:'application/pdf',body:{attachmentId:'generated-asset-a',size:100}}]};}],
+    ['attachment locator',m=>{m.payload.parts[1].body.attachmentId='generated-asset-b';}],
+    ['attachment MIME absent',m=>{delete m.payload.parts[1].mimeType;}],
+    ['unknown provider evidence',m=>{m.classificationLabelValues=[{labelId:'generated-policy'}];}],
+  ];
+  let prior=original;
+  for(const [name,change]of variants){
+    change(current);current.historyId=String(Number(current.historyId)+1);
+    assert.equal((await f.connector.sync()).imported,1,name);
+    const next=f.sources.getItem(source.id,'changes:0')!;assert.notEqual(next.revision,prior.revision,name);assert.notEqual(next.captureId,prior.captureId,name);
+    assert.deepEqual(JSON.parse(new ArchivedFileStore(f.store).read(next.document!.fileId!).toString()),current,name);
+    assert.deepEqual((await f.connector.sync()),{imported:0,duplicates:1,hasMore:false},`${name} duplicate ACK`);
+    prior=next;
+  }
+  current=structuredClone(base);await f.connector.sync();const reverted=f.sources.getItem(source.id,'changes:0')!;
+  assert.notEqual(reverted.revision,original.revision);assert.notEqual(reverted.captureId,original.captureId);
+  assert.equal(reverted.document!.fileId,original.document!.fileId);
+  assert.equal(f.sources.history(source.id,'changes:0').length,variants.length+2);
+  assert.equal(f.store.evidence([original.captureId])[0].ocrText,original.text);
+});
 
 test('480 generated Gmail messages over 480 days: restart paging, dedupe, delta edits/deletes and expired history rescan',async t=>{
   let history=100,expired=false,failSecond=false;const messages=new Map(Array.from({length:480},(_,i)=>[String(i),message(String(i),undefined,i)]));

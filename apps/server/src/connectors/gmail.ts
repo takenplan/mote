@@ -15,6 +15,11 @@ type Message={id:string;threadId?:string;historyId?:string;internalDate?:string;
 type State={version:1;tokens:Credentials;account?:string;historyId?:string;full?:{epoch:string;anchor:string;pageToken?:string};deltaPage?:string};
 type History={messages?:{id:string}[];messagesAdded?:{message:{id:string}}[];messagesDeleted?:{message:{id:string}}[];labelsAdded?:{message:{id:string}}[];labelsRemoved?:{message:{id:string}}[]};
 
+// The history record ID is a sync counter, not mail evidence. Compare the rest
+// of the complete response, including headers, labels and attachment locators.
+// Structural equality also ignores JSON object key order; arrays stay ordered.
+function messageEvidence(message:Message){const {historyId:_,...evidence}=message;return evidence;}
+
 /** MIME structure is transport metadata. Message text remains untrusted evidence, never instructions. */
 export function gmailItems(message:Message,observedAt:string,reference=false):SourceItem[] {
   if(!/^[a-zA-Z0-9_-]{1,200}$/.test(message.id))throw new ConnectorError('gmail_message_invalid',502);
@@ -24,7 +29,7 @@ export function gmailItems(message:Message,observedAt:string,reference=false):So
   let nodes=0;
   const visit=(part:Part,depth:number):void=>{
     if(++nodes>1000||depth>20)throw new ConnectorError('gmail_mime_limit',413);
-    if(part.filename){if(attachments.length<100)attachments.push({name:part.filename.slice(0,1000),mimeType:part.mimeType?.slice(0,200)});return;}
+    if(part.filename){if(attachments.length<100)attachments.push({name:part.filename.slice(0,1000),...(part.mimeType===undefined?{}:{mimeType:part.mimeType.slice(0,200)})});return;}
     if(part.mimeType==='multipart/alternative'){
       const chosen=part.parts?.find(p=>p.mimeType==='text/plain')??part.parts?.find(p=>p.mimeType==='text/html');
       if(chosen){visit(chosen,depth+1);return;}
@@ -121,7 +126,12 @@ export class GmailConnector {
     if(message.id!==id)throw new ConnectorError('gmail_message_identity_mismatch',502);
     const source=this.ctx.sources.getSource(this.sourceId);if(!source.enabled)throw new ConnectorError('gmail_source_paused',409);
     const items=gmailItems(message,new Date(this.clock()).toISOString(),source.retention==='reference');
-    const original=source.retention==='reference'?undefined:this.archives.put({name:`gmail-${id}.json`,mimeType:'application/json',bytes:Buffer.from(JSON.stringify(message))});
+    const priorFileId=this.ctx.sources.getItem(this.sourceId,`${id}:0`)?.document?.fileId;
+    // Equal evidence retains the complete immutable original, including its old
+    // counter. Substituting a new file ID would change both source hashes and
+    // Material assets even when all extracted text and effective context agree.
+    const original=source.retention==='reference'?undefined:priorFileId&&isDeepStrictEqual(messageEvidence(JSON.parse(this.archives.read(priorFileId).toString('utf8'))),messageEvidence(message))
+      ?this.archives.get(priorFileId):this.archives.put({name:`gmail-${id}.json`,mimeType:'application/json',bytes:Buffer.from(JSON.stringify(message))});
     if(original)for(const item of items)item.document={...item.document,fileId:original.id};
     for(const item of items){const prior=this.ctx.sources.getItem(this.sourceId,item.externalId);const semantic=(v:SourceItem)=>({title:v.title,text:v.text,layer:v.layer,deleted:v.deleted,document:v.document,uri:v.uri});item.revision=prior&&isDeepStrictEqual(semantic(prior),semantic(item))?prior.revision:hash(`${item.revision}:${prior?.revision??''}`);}
     const result=await this.ctx.sources.upsertBatch(this.sourceId,items,()=>{this.check();if(!this.ctx.sources.getSource(this.sourceId).enabled)throw new ConnectorError('gmail_source_paused',409);},receipt=>{if(original)this.archives.attach(receipt.id,[original.id]);});
