@@ -9,6 +9,8 @@ import {generatedWebProvider} from './multiuser-provider.js';
 import {defaultModelSettings} from '../../../server/src/model-settings.js';
 import {generatedScopedPluginRelease} from '../../../server/test/fixtures/scoped-plugin-release.js';
 
+const fixtureHostname=process.env.MOTE_WEB_FIXTURE_HOSTNAME??'localhost';
+assert.match(fixtureHostname,/^(?:localhost|[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.localhost)$/,'Generated browser fixture must stay loopback-only');
 const root=mkdtempSync(join(tmpdir(),'mote-m13-renderer-host-')),password='Generated-M13-account-password-01';
 const pluginRelease=generatedScopedPluginRelease();
 const host=await buildApp({dataDir:root},{pluginReleaseTransport:pluginRelease.transport});
@@ -37,7 +39,7 @@ for(const owner of ['a','b']){
  await call(token,'/api/ingress/sources/same-source/captures','POST',{batchId:'same-batch',items:[noteCapture({id:'6d477b3e-fb43-4657-818d-c143ad76430f',deviceId:'same-device',deviceName:'Generated device',platform:'import',client:'web',capturedAt:'2026-10-15T12:00:00Z',text:'GENERATED_PRIVATE_'+owner.toUpperCase()})]});
 }
 await host.app.listen({host:'127.0.0.1',port:0});const port=(host.app.server.address() as {port:number}).port;
-process.send?.({event:'ready',url:'http://localhost:'+port,users:Object.fromEntries(Object.entries(users).map(([id,value])=>[id,{userId:value.userId,username:id==='admin'?'generated-admin':'generated-'+id}])),password});
+process.send?.({event:'ready',url:'http://'+fixtureHostname+':'+port,users:Object.fromEntries(Object.entries(users).map(([id,value])=>[id,{userId:value.userId,username:id==='admin'?'generated-admin':'generated-'+id}])),password});
 process.on('message',async(message:any)=>{
  try{
   let result:unknown;
@@ -56,7 +58,7 @@ process.on('message',async(message:any)=>{
   else if(message.command==='provider-requests')result=provider?.requests;
   else if(message.command==='model-selection')result=await call(users[message.owner].token,'/api/models/selection/'+(message.feature??'chat'));
   else if(message.command==='ticket')result=await call(users[message.owner].token,'/api/login/ticket','POST',{});
-  else if(message.command==='handoff')result=await call(undefined,'/api/login/requests','POST',{serverUrl:'http://localhost:'+port,deviceId:'same-approval-device',deviceName:'Generated approval device',platform:'other',challenge:createHash('sha256').update('x'.repeat(43)).digest('hex')});
+  else if(message.command==='handoff')result=await call(undefined,'/api/login/requests','POST',{serverUrl:'http://'+fixtureHostname+':'+port,deviceId:'same-approval-device',deviceName:'Generated approval device',platform:'other',challenge:createHash('sha256').update('x'.repeat(43)).digest('hex')});
   else if(message.command==='poll')result=await call(undefined,'/api/login/poll','POST',{id:message.requestId,verifier:'x'.repeat(43)});
   else if(message.command==='data')result=await call(users[message.owner].token,'/api/captures?limit=200');
   else if(message.command==='disable')result=await call(admin.token,'/api/admin/accounts/'+users[message.owner].userId,'PATCH',{disabled:message.disabled});
