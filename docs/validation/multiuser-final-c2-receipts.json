@@ -1,0 +1,806 @@
+{
+  "testedSource": "8ad99089ead559d6656a269fdca7ccb884953c07",
+  "tree": "fcb3bce1524932978ad7133377aaa56136a3dcc1",
+  "consumptionManifestSha256": "3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a",
+  "status": "REQUIRED_GATE_AND_ELECTRON_ANDROID_RECOVERY_PASS_REAL_BROWSER_C2_PENDING",
+  "receipts": {
+    "required-gate-receipt.json": {
+      "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+      "sourceTree": "fcb3bce1524932978ad7133377aaa56136a3dcc1",
+      "manifestSha256": "3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a",
+      "command": "npm run check:affected -- --base origin/codex/mote-multiuser-integration",
+      "JAVA_HOME": "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home",
+      "exit": 0,
+      "log": "/tmp/mote-final-C2-required.log",
+      "logSha256": "e6b00a65978b48ef2df51babda6badc2bd8d322262e3504efdf569b0e11e50c5",
+      "sourceClean": true,
+      "postGateCompiledArtifactHashesUnchanged": 1584,
+      "components": {
+        "Desktop": {
+          "pass": 587,
+          "fail": 0
+        },
+        "Server": {
+          "tests": 2935,
+          "pass": 2933,
+          "fail": 0,
+          "skip": 2
+        },
+        "Web": {
+          "pass": 574,
+          "fail": 0,
+          "skip": 0
+        },
+        "Agent": {
+          "tests": 318,
+          "pass": 317,
+          "fail": 0,
+          "skip": 1
+        },
+        "Diagnostics": {
+          "pass": 5,
+          "fail": 0
+        },
+        "Shared": {
+          "pass": 192,
+          "fail": 0,
+          "skip": 0
+        },
+        "rootScripts": {
+          "pass": 81,
+          "fail": 0,
+          "skip": 0
+        },
+        "client": {
+          "pass": 5,
+          "fail": 0,
+          "skip": 0
+        },
+        "CentralRunner": {
+          "status": "passed"
+        },
+        "AndroidJVM": {
+          "tests": 358,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      },
+      "conditionalSkips": [
+        "configured pinned Python Source Pack private import mapping",
+        "macOS sandbox staged input outside-files/network case",
+        "Agent installed Codex local synthetic Responses fixture"
+      ],
+      "androidXml": [
+        {
+          "file": "TEST-dev.mote.collector.ActionFirstJourneysTest.xml",
+          "sha256": "75e076baadbf18983cf0cea45e8e3ff1fd1709b11377eac25a661d2ab352113b",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.AppNameTest.xml",
+          "sha256": "010beb353a3b72d300ec8e0128e6e1af375ce05fd9f6d6ef740786a2e2522be8",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.AppPageSetupTest.xml",
+          "sha256": "c0501309dcb7705d108346a122860c93294e19bfdd2969b768cb704de1e94123",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.AppPolicyAndActivityTest.xml",
+          "sha256": "9901f61daf3da509051c723a70f1e8547acdd0b0172776790e781931a47c0bc5",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.AppReleaseTest.xml",
+          "sha256": "8c0d5738eed7ad87c9657829398d0d2edae542ec4354137b8b02ee88eb073e95",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.BulkDedupePerformanceTest.xml",
+          "sha256": "698e0368002f120091e18b7211e31bbf41f8137a7ad3dfcd0b00285783929184",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.BulkDedupeQueueTest.xml",
+          "sha256": "1db3a789eba87d7973797a142db0b6b9c4987e175ef90f3c7d29ab712c9def56",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CalendarActionRulesTest.xml",
+          "sha256": "fbe062f3ac856c69e699116e017089a349b288e6830e4e17147cc4d374849448",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CaptureAlbumsTest.xml",
+          "sha256": "e89eb99a274d9a839643281d5e300cbfc07b8c48ff517be3d46041a0dcf3fc1d",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CaptureJourneyTest.xml",
+          "sha256": "ed746406d177450fc9b047ce404343b7633ba9a878eb0666a698f44f40512d68",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CaptureReconfigurationTest.xml",
+          "sha256": "740aa6570feb77af665f81322232e47e455aebd0d7e7bbefe85b88ba7f2bdef4",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CaptureSessionsTest.xml",
+          "sha256": "b439fb3f6bc103ede2a89eec203d25c8845fcfcecd92b5f24b9c706a0d7cb4e2",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CaptureStageDurabilityTest.xml",
+          "sha256": "7f27aa2d568b581abc13f763c095fd982e2e4dd76218232fc6bdf16114ef2a6e",
+          "tests": 11,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralCatalogDescriptorTest.xml",
+          "sha256": "f994cb9a9475ba684cd8d78bd733c2a2bbef568144c6b13f3ed8a11f420af0df",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralEvidenceReferenceTest.xml",
+          "sha256": "a09c9e723d13aea7f8a577d244fddb3debe2e42124c372fa6b61b296a4544272",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralImportsAckTest.xml",
+          "sha256": "3867d53dd7a617185b0c96ebd8dd98fae20ce9c3b08b28310e0756aaab5fc6dc",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralLarkSelectionTest.xml",
+          "sha256": "57ba6c09a4399710baf5c2a0a3f37abf47cadf890852d3be06d47fa7a7844014",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralMemoryJobPresentationTest.xml",
+          "sha256": "3683ab6515a73920d7bcb80210189380a927bc27aeb08b079a51a013c759c7e2",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralNativeContractTest.xml",
+          "sha256": "a451b84427f985aaaa3a5b35492f8d91eb06a4d47fb8112d1c683d951fb28ab0",
+          "tests": 10,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralPortableDownloadTest.xml",
+          "sha256": "5fd715f453c39e004359d25f07c429d48686d531ed80b011fa407c1687d22fe4",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralPortableImportTest.xml",
+          "sha256": "43002f0dbcf08c9c156f66980746ee2cf97b05f812606fd9c9638dbe6832f331",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CentralProcessingPresentationTest.xml",
+          "sha256": "de1c023def7f57cd5a20fa51415a085e3a47af24e3712faaa51f27a32ad9a49a",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.CoalescingDispatcherTest.xml",
+          "sha256": "8ce3346f7aaeda4fd171437962d8cf2fd39d860d1e29052bd3d42db69f8211b2",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ComplexNoteRoundTripTest.xml",
+          "sha256": "6f861921984b52fb90924ec41fec2ad79dab813620c7db7e7cc478d3998bd48c",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ConfigurationArchiveTest.xml",
+          "sha256": "470c7296918c18158efbcf0d4e23abde400cc5f29e4a83fe05d521c4ae6c7bdb",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ConnectionAndOperationsTest.xml",
+          "sha256": "1e05fa8afe0b5132dfce4d3027118f53071466b32573cab1cfa85727e97c00c9",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.DurableQueueTest.xml",
+          "sha256": "163de20904d4f90e0af4d1ddd65e35fe0aa21dea212dc2d099ea7d3a033878e6",
+          "tests": 9,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.EventJournalTest.xml",
+          "sha256": "d5db41c6dfa50079250bbe5898456fb2e2db70287055506694a8fe524b0b49e0",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ExtensionPipelineTest.xml",
+          "sha256": "75dc124d6e0b581be1120382791f9466375bf0a39a6559f4ba1a2660d0e2db9f",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.FileArchiveQueueTest.xml",
+          "sha256": "ea9fa0d4c14df3e167fca0e131655a2b947dafcd512ba82b101ee6ee24c5d015",
+          "tests": 18,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.FileSnapshotRecoveryTest.xml",
+          "sha256": "1b689ccb0d44980402a7756b7a4b20228b2bd6692da2d14cb984a6f1f2d7c752",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.FileSyncProgressTest.xml",
+          "sha256": "7a7a192f1312885ac89d34825376b10c25246efc3c5c380bd1380495293a4aa4",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.FramePixelsTest.xml",
+          "sha256": "99f6640672ac052db3544cc886ecb25750448349a5368ee05085c33d7ed9ec64",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ImageDedupeDiagnosticsDetailsTest.xml",
+          "sha256": "9137e5301bc961e788915a6faaba6be9a5bdeb6f9109807767a4a6d9917b64c1",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ImageDedupeDiagnosticsStoreTest.xml",
+          "sha256": "8ba21a9f6ddef817d7f416c7b1195675e808f9b81be6f857eb5fe6298e604113",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.IngressV2ProtocolTest.xml",
+          "sha256": "8e79fb4e11e1e45e341cf5de766f9cf3232b47d8c78bc87ed1645b3e1ca973b8",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.IssueOneRegressionTest.xml",
+          "sha256": "1945dee94304d33e7448c69bdf120961f7dfaef7a3422b3f45586f63ffbb62ff",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.LatestWriterTest.xml",
+          "sha256": "32679c3d6fc24f4dc35b2856edc5e3f3239650c5cf49f584e5d454a182b37063",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.LibraryBrowseTest.xml",
+          "sha256": "75a86a828481ef9feaac3ce4c465232b58a6d5b7b4b97265b727aa46904e56df",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.LocalContentCipherTest.xml",
+          "sha256": "e0b02fe6593703b9ac103892b2474d48d4dc62a70722d8820f3cf088e2e675d6",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.LocalInventoryTest.xml",
+          "sha256": "b582abd0511866eadf1477c4be53b8c2d92995f142507601f0d6d24a068903f9",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.LocalSourcesTest.xml",
+          "sha256": "f93e8fc3ec32ba50f4acff801ef5abe37b824f64b73e180efb21941eb5d39e37",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.MediaObservationTest.xml",
+          "sha256": "182053a9700eb322db455317ba0bc9d45476f2895d6c121163566d58e726d7ae",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.MultiuserBoundaryTest.xml",
+          "sha256": "9bc914c4519f9bb1d822c3a22e46cb1d254a948dab448ceb4ad7e479eacaf5e1",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.MultiuserIngressTest.xml",
+          "sha256": "beae728184ee505b7c3936c31ef0137d2c67b336cbbe5b71e0225e3017d89a0c",
+          "tests": 11,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.NativeStatusTest.xml",
+          "sha256": "6cdf5b55aec500189285453cb95a2d6d15fb234115e88ebd6c189514492b2fa9",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.NativeUiPackTest.xml",
+          "sha256": "951327c4dd960d1c7da18b2fe46148975ad2a831c0c6e5cfae22c07eabd904ff",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.NoteDraftStoreTest.xml",
+          "sha256": "f7e6152adb8b3104410105895df055bec4287ddffb7c608c547ef4a3d5da9f38",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.NoteMediaPresentationTest.xml",
+          "sha256": "fae2a5f7e0b06cbdd60bad75a7a60d828aa7e46040115ee406dda20444d07bd2",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.NotificationObservationsTest.xml",
+          "sha256": "aa0b269088eee1f3b78c67cd71ecf355e863afc66d288503a751400abade3f25",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.PluginControlClientTest.xml",
+          "sha256": "59598a7fa965bc0a96be7d437e885cd1fb5df71ad19e15c5522d8f4251566751",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.PowerOptimizationTest.xml",
+          "sha256": "f752f714ef9cccedafcb502ee6163f2aa0ae26e0f9f215cfdefea3411ea6f14b",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.PrimaryNavigationTest.xml",
+          "sha256": "b2c02125e561b452dd83e1a7e93fd4045ca23ca8df2cd1b45b802953133057a3",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.PrivacyRulesTest.xml",
+          "sha256": "52f604d7d1f6796715a79572b8810ec087d1c37c30eba30b4d0d716cd2174958",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ProtectedCaptureTest.xml",
+          "sha256": "e606cc271663efc2c11ff3371a41c7bfcc18e977eab980dbcb63cee82cd1274d",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ProtocolCompatibilityTest.xml",
+          "sha256": "77467b9b869b684850e158aebb991ca826439f62cf3b4024eed673dd4bddd98f",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.QueueLocationStoreTest.xml",
+          "sha256": "2c7bfc1eeef677bb1d3acfe3c74c882a508f8c9ee848efe3aedbe0c5a6bdc4fb",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.QueuePerformanceTest.xml",
+          "sha256": "e40bce95ff529db7a2176368bf7749c43e58a9044e77243fcd563c18f8925885",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.QueueStatsTest.xml",
+          "sha256": "16dcd9676bb12ae88d7f0d4ba9f44171594f8fbb3ea15173192f762e6634ce30",
+          "tests": 5,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.RetainedOriginTest.xml",
+          "sha256": "b9074748dff056893033f502c65efe760196c9c5a31c05d577ddfe9c4406ebfa",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ReviewResponseTest.xml",
+          "sha256": "8cb32dd5ed66b70ca80fb922100f24c55b286185f72998d4acee0e2d4b32447e",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.ScreenshotDedupeTest.xml",
+          "sha256": "0fbef53448a9eeec28684f6198c6184bcd71a0e54c545369dbece2588c5fb98c",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.SourceContextSyncTest.xml",
+          "sha256": "9787d1b9b63040a06c3b82a44e4c12affa2de4b1c708c4d8b18276c526d3eb32",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.StateSeriesTest.xml",
+          "sha256": "bb9cfa764a9f96ef7c34a6784f7afe40112352835ae222298482b7a2b0352a2b",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.StorageDirectoryTest.xml",
+          "sha256": "41ed803e2c821cba89ece45126803de2ad25a6100b5cfedbeb911ff9ca580255",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.SyncConditionsTest.xml",
+          "sha256": "a5571f8845972218aa78a026fa7060938b1b74766fdf679eaa83ab346cccf7b9",
+          "tests": 8,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.SyncPolicyTest.xml",
+          "sha256": "e19693f9cfc9228bba69ec1230115787ef51c74d9dcf8ff2425cd9ff818969fb",
+          "tests": 7,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.SyncRecoveryTest.xml",
+          "sha256": "38a857d7f306092a6b139e414027289eb95f94fd7c0322776250785f4a1aa5ee",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.SystemEventRulesTest.xml",
+          "sha256": "e8ea5b42c7672db2c0760ee77e7b1b36b3bfe6b340dae433f875841e236a4716",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.UiPageCaptureTest.xml",
+          "sha256": "215448454a81bec0fdf5e328a2302bf703ab959488f3e87655fd7a0bf3f027ec",
+          "tests": 11,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.UiPageRulesTest.xml",
+          "sha256": "29a74a95a57a424b1a8deba7b60efd6323079abb2864fd631d3cceef67e9b373",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.UploadGateTest.xml",
+          "sha256": "f954424b8609d1ed9b9af80e7347cc24c20220bb4a5bca32013ed77e05c3d6a8",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.UploadMeterTest.xml",
+          "sha256": "4664efd42e8b66d05b62d978eea3cb67adcf95c484c7136b608aaaba7e56c9b2",
+          "tests": 1,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.UploadNegotiationTest.xml",
+          "sha256": "bb981a1ac8740c40b2486b8f5dd760ad19a2dfa2aaf8a802bf40fa7a3f56b1ca",
+          "tests": 2,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        },
+        {
+          "file": "TEST-dev.mote.collector.UploadSliceTest.xml",
+          "sha256": "b002c231bf557df91625a5941cc54ae288459f86a1accd80f95647af74913429",
+          "tests": 3,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0
+        }
+      ],
+      "boundary": "Complete required gate passed. This is not by itself real browser UI/physical device/full native inventory acceptance; separate receipts retain scope."
+    },
+    "actual-asset-pipeline-receipt.json": {
+      "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+      "manifestSha256": "3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a",
+      "command": "MOTE_FINAL_RECOVERY_WORKSPACE=/tmp/mote-final-joint-c2 node --import tsx --test scripts/validation/final-e2e-attachment-personal-export.test.ts",
+      "pass": 1,
+      "fail": 0,
+      "skip": 0,
+      "exit": 0,
+      "log": "/tmp/mote-final-C2-personal-asset.log",
+      "logSha256": "783baa2a19a9000f3fcfc41f560ffeb355cc486e967fabc1ec38b8ac3131881f",
+      "priorRed": "C1 f1be:0/1 EXIT1, /tmp/mote-final-C-personal-asset-red.log"
+    },
+    "electron-receipt.json": {
+      "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+      "manifestSha256": "3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a",
+      "scenarios": 20,
+      "exit": 0,
+      "log": "/tmp/mote-final-C2-electron.log",
+      "logSha256": "db59138cafd8d9d319d596263f2a0ec218a8e12a6aa6f3a9f29934da2b25c02d",
+      "actualEmittedMainPreloadRenderer": true,
+      "scopedHostAccountsSqlite": true,
+      "generatedTransportAndDataOnly": true,
+      "physicalCamera": false
+    },
+    "recovery-reference.json": {
+      "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+      "receipt": "/tmp/mote-final-recovery7-acdb4897-fa15-4bff-af58-05302e734c02/final-c2-recovery-receipt.json",
+      "sha256": "f6061ef593fbe773f2afc2ebc12d6b2097326fe6e27eaa39e7f003020326f452",
+      "sourceClean": true,
+      "adjacent": {
+        "pass": 60,
+        "fail": 0,
+        "skip": 0,
+        "exit": 0
+      },
+      "compiledAsset": {
+        "pass": 1,
+        "exit": 0
+      },
+      "compiledHTTP": {
+        "pass": 3,
+        "exit": 0
+      },
+      "combinedPersonalNativeDockerPGHindsight": {
+        "pass": 1,
+        "exit": 0,
+        "durationSeconds": 214.983,
+        "cycles": 2
+      },
+      "image": "sha256:b2d240f829829c000cde8e786617ebe03de4840cfc91b5bbe0006cdcec3d58b9",
+      "runtimeInputHash": "f005204eb552642f98cc24c27134758a721bbcf5219354c95d6b6e9bb9663552",
+      "cleanup": "24 container records and12 volumes removed; independent36 audit absent; ownUUID resources empty",
+      "scope": "Only this recovery lane, no whole-project/Android/Desktop/live claim"
+    },
+    "android-native-reference.json": {
+      "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+      "receipt": "/Users/utopiafar/Documents/Codex/2026-10-17/task-20/evidence-c2/FINAL-RECEIPT.json",
+      "sha256": "ace62b61b5753ac3efcfa0c64e505617615bf716ff23166a5c44c380f48062be",
+      "nativeMethodsPassed": 21,
+      "fail": 0,
+      "skip": 0,
+      "unrun": 57,
+      "freshBackendAndAPKsExit": 0,
+      "liveModel": "existing local gpt-6.1-sol actual native TextView complete/nonempty and B same run404; no content retained",
+      "twoPhaseDeath": "Owned PID6144 actually killed and absent, samehost/data phase2, no clear/reinstall",
+      "cleanup": "20 owned hosts/runner/AVD natural exit0,37 relevant ports no listener, allPIDs absent,reverseempty,resourcesremoved",
+      "screenshot": "No screenshot performed onC2; C1denied action remains stopped, no retry"
+    },
+    "impact-analysis.json": {
+      "C1": "f1be61eed018b913bfa8beb2957256676b7e2f6c",
+      "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+      "buildArtifactComparison": {
+        "apps/desktop/dist/": {
+          "files": 83,
+          "different": []
+        },
+        "apps/web/dist/": {
+          "files": 31,
+          "different": []
+        },
+        "packages/agent/dist/": {
+          "files": 53,
+          "different": []
+        },
+        "packages/shared/dist/": {
+          "files": 141,
+          "different": []
+        },
+        "packages/diagnostics/dist/": {
+          "files": 3,
+          "different": []
+        },
+        "apps/server/dist/": {
+          "files": 1273,
+          "different": [
+            "apps/server/dist/scope/private-data-lifecycle.js",
+            "apps/server/dist/scope/private-data-lifecycle.js.map"
+          ]
+        }
+      },
+      "rule": "Byte equivalence supports scope analysis. Actual C1 execution retains C1; no claiming a new C2 UI/live execution from this comparison."
+    },
+    "publish-file-audit.json": {
+      "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+      "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+      "changedAddedOrModified": 1029,
+      "artifactPathCandidates": [],
+      "check": "Filename audit only; no private files added by this lane, receipts/logs outside Git; final docs contain hashes/status only."
+    }
+  },
+  "Web": {
+    "owner": "01a14920-04fa-73ae-9308-af49d021c008",
+    "actualC2": "NOT_CONFIRMED",
+    "actualC1": "Only A original login/Note/draft reload/two tabs confirmed;规范handoff request200 after initialfixture400",
+    "lastEvidenceUtc": "2026-10-17T09:14:04Z",
+    "threadReadState": "Active/inProgress, no attention flag, but returned items end at initialization and are older than confirmed direct messages",
+    "approvalD588": "Parent reports pending user approval; action/owner not proven by available thread state; do not infer, proxy or retry",
+    "overallJourneyAcceptance": "NOT_CLAIMED"
+  },
+  "priorC1": {
+    "source": "f1be61eed018b913bfa8beb2957256676b7e2f6c",
+    "fullGateExit": 1,
+    "reason": "Android Studio JBR25 configuration; all applications/root passed; separate JDK21 JVM358/358 pass",
+    "personalAsset": "Actual production0/1 RED independently repeated; fixed only inC2, no relabel",
+    "native": "Original21 receipt5011f retained unchanged; C2 has independent new21receiptace62",
+    "generationRace": "Original over-strong fixture failed during issued/unknown; guard409 correct. Controlled2/2 five rounds each passed; no unknown settled."
+  },
+  "publication": "All changes after tested source8ad are documentation/archival source copies only; no claim that the later publication head itself ran the gate."
+}
