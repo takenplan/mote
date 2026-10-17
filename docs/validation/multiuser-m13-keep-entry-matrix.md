@@ -84,3 +84,22 @@ turn. Independent final C must wait for explicitly declared final candidates;
 do not add PR/module results into one same-version result. M13's denied hidden
 Web Electron action is known not executed and was not retried/proxied. Permitted
 IAB proof is separate. This document adds no production behavior beyond9565.
+
+## Follow-up at `70068fb2` (finite, not final)
+
+M-AUDIT original search/category/tier/time/as-of/history controls now use owner-filtered stale audit before LIMIT. Actual new source 2/2, original M07 neighbors 7/7, original UI plus refresh neighbors 22/22, Server/Web types and scope pass. The historical row above describes the earlier 15ec checkpoint, not this later state. Selected integration plus filtered audit is independently frozen server-only as `454532ee9ea4a391db9a97c9b4cc00ad97384de6`; see `docs/design/multiuser-memory-manual-http.md`. Range/raw and remaining recipe original-page journeys are still in progress.
+
+Parent assigned R-CONNECT/R-ARCHIVE Web recording consumer and actual scoped UI acceptance to existing task-13 owner `01a14820-803f-701e-b59a-3a87f2e2f02f`. M13 does not edit that block in parallel. Bounded local handoff: `/tmp/mote-m13-recording-owner-handoff.md`. Sending the new direct handoff message was automatically rejected before sending; no workaround or retry was attempted. The new pure Memory handoff message to M15 was likewise rejected before sending; its complete local handoff is `/tmp/mote-m13-memory-public-freeze.md`.
+
+## Range/raw follow-up after `884a1d3a` RED
+
+M-RANGE now reuses read-only complete raw context/device selection and exact
+M07 normalized evidence pins, with canonical currentness repeated after awaited
+lease hydration. The original range/raw buttons preserve immutable input and
+operation across ACK loss/remount/rolling shell polls; a held A preflight sends
+no POST after B mounts. Source 3/3 and direct M07 neighbors 10/10, original UI
+range/recipes/held-owner 3/3, and actual IAB raw-A→range-B all pass. Original
+manual controls submit two installed personal recipe versions and a Coding
+recipe, display actual personal/Coding results and retain configuration defaults.
+The remaining automatic-source recipe chooser and final whole gate are separate
+work; no promise of live-model semantic quality is made.

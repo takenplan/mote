@@ -1,5 +1,7 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "当前范围没有可提取的正式证据。": "No canonical evidence is available for extraction in this range.",
+  "所选原始记录的正式证据尚未准备好，请稍后重试。": "Canonical evidence for the selected original is not ready yet. Try again later.",
   "个人任务：执行中 {0}，排队 {1}": "Personal tasks: {0} running, {1} queued",
   "仅显示当前账号的任务；实例并发上限由管理员配置。外部结果待确认不表示调用已停止。": "Only this account's tasks are shown; instance concurrency is configured by an administrator. An unresolved external result does not mean the call has stopped.",
   "{0}：执行中 {1}，排队 {2}，受阻 {3}，失败 {4}，外部结果待确认 {5}": "{0}: {1} running, {2} queued, {3} blocked, {4} failed, {5} external outcomes unresolved",

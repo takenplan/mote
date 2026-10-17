@@ -798,3 +798,48 @@ original history checkbox to include the superseded old stale card; all prior
 body/owner/context assertions remain. Those earlier failed logs are preserved.
 Source/Web types and synchronized i18n8475/scope checks are recorded separately.
 These local cases do not replace final whole-M13 required or actual IAB breadth.
+
+### Original Memory range/raw and recipe controls
+
+The original range/raw page produced valid failures on the retired global job
+route and absent scoped selection (source 503, original button POST
+`/api/memory-jobs`). Regression commit `884a1d3a` preserves those original cases.
+The repair reuses M02 current originals/Material membership, M03 browser scope,
+M04 exact model lease and the existing M07/M05 journal. No new Store/scheduler or
+semantic dispatch is introduced.
+
+Actual source selection/admission cases: three pass, no skips, 17.417s in
+`/tmp/m13-memory-range-source-isolated-manual.log/.exit`: capture context time
+versus newly created Material time; 66 originals across the 60-item browser
+boundary; sibling/mixed-group exclusion from an actual selected-original model
+payload; A/B same Material identity isolation; post-lease canonical retirement
+before any job write. Earlier expanded payload assertions mixed in separately
+scheduled automatic Memory work; the final fixture explicitly disables its own
+automatic Memory via M04 before bulk intake to isolate the manual command. Old
+failure logs and original budgets remain preserved, not relabeled pass.
+
+Original-page cases cover immutable admission after lost ACK/remount, rolling
+range continuity, exact installed personal recipe versions plus Coding,
+independent actual result domains/defaults unchanged, and held A preflight→B
+with zero A private POST. Multi-version fixture initially inspected
+`strategy.id` instead of the existing `strategy.recipe.id`; corrected only the
+assertion's binding location and retained the original three exact selections.
+The synthetic model does not prove live-model semantic accuracy. Existing act
+warnings from old polling helpers remain separately visible.
+
+Final direct M07 neighbor collection: 10/10 no skips/failures, 50.412s,
+`/tmp/m13-memory-range-freeze-ten.log/.exit`. Original range/recipes/held-owner
+page collection: 3/3 no skips/failures, 26.349s,
+`/tmp/m13-memory-range-final-current-ui.log/.exit`; existing Material and audit
+original-page neighbors separately 5/5, 20.019s. Web build/Server/Web types,
+scope and 8477 synchronized bilingual messages pass. This remains a finite
+Memory block, not the final whole M13 affected gate.
+
+Actual IAB original raw-A and range-B proof: `/tmp/m13-memory-range-iab-proof.json`
+and three generated screenshots. Two distinct real M07 jobs committed; each
+extract/review/publication task succeeded, A and B own distinct published cards
+with exact generated original evidence. The original account switch shows B's
+same raw UUID without A's body or selected card. A first localhost session became
+unauthorized after completion while other localhost fixtures could coexist; no
+root cause or cross-user leak is asserted. Fresh 127.0.0.1 original login and
+account-switch verification completed. No hidden Electron or live model used.

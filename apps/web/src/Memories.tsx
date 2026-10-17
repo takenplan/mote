@@ -1,3 +1,4 @@
+import {readExtractionIntent,saveExtractionIntent,clearExtractionIntent} from './memory-extraction-intent';
 import {formatEvidenceRef} from '@mote/shared';
 import {currentMemoryMaterial,currentMemorySource,memoryMaterialId,memorySourceId,subscribeMemorySource} from './memory-source-route';
 import {memoryMaterialSelectionPath,type MemoryMaterialSelection} from './memory-material-selection';
@@ -70,6 +71,8 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
   // selection. Exact callers still fence changes to either range endpoint.
   const selectionScope=JSON.stringify([rangeSelectionKey??[range.after,range.before],range.deviceId]);
   const [modelProfileId,setModelProfileId]=useState('');
+  const extractionChoice=JSON.stringify([requestedSource,explicitSource?null:selectionScope,recipes,modelProfileId]),extractionChoiceRef=useRef(extractionChoice),extractionMounted=useRef(false);extractionChoiceRef.current=extractionChoice;
+  useEffect(()=>{extractionMounted.current=true;return()=>{extractionMounted.current=false;};},[api]);
   const [selectedId,setSelectedId]=useState<string|null>(null),[selectedReadScope,setSelectedReadScope]=useState(''),[mutationError,setError]=useState(''),[mutationNotice,setMutationNotice]=useState(''),[busy,setBusy]=useState(false),[filter,setFilter]=useState('all'),[confirmDelete,setConfirmDelete]=useState(false);
   const auditing=scoped&&filter==='stale';
   const [search,setSearch]=useState(''),[query,setQuery]=useState(''),[tier,setTier]=useState(''),[layer,setLayer]=useState('memory'),[cursor,setCursor]=useState<string>();
@@ -108,7 +111,15 @@ export function Memories({api,range,rangeSelectionKey,onOpen,refreshVersion=0,em
     const owner=api;
     setBusy(true);setError('');
     try{
-      if(scoped&&explicitMaterial){
+      if(scoped&&!explicitMaterial){
+        const choice=extractionChoice,live=()=>extractionMounted.current&&selectionApi.current===owner&&extractionChoiceRef.current===choice,prior=readExtractionIntent(owner);let intent=prior?.selection===choice?prior:undefined;
+        if(!intent){const params=new URLSearchParams({...(!explicitSource?range:{captureId:sourceId!}),...(recipes.length?{recipes:JSON.stringify(recipes)}:{})}),selection=await owner.request<{status:'ready'|'empty'|'waiting';materialRevisions:Record<string,string>;evidencePins:{id:string;hash:string}[];recipes:MemoryRecipeRef[]}>('/api/memory/selection?'+params);
+          if(!live())return;if(selection.status!=='ready'){setMutationNotice(selection.status==='empty'?moteText('当前范围没有可提取的正式证据。'):moteText('所选原始记录的正式证据尚未准备好，请稍后重试。'));return;}
+          intent={selection:choice,request:{operationId:crypto.randomUUID(),materialIds:Object.keys(selection.materialRevisions),materialRevisions:selection.materialRevisions,evidencePins:selection.evidencePins,recipes:selection.recipes,...requestModelSelection(true,modelProfileId)}};saveExtractionIntent(owner,intent);
+        }
+        if(!live())return;const result=await owner.request<ScopedMemoryJob>('/api/memory/jobs',{method:'POST',body:JSON.stringify(intent.request)});
+        if(!live())return;if(result.id!==intent.request.operationId)throw Error('Invalid Memory extraction receipt');setJobId(result.id);clearExtractionIntent(owner,intent.request.operationId);
+      }else if(scoped&&explicitMaterial){
         const selection=materialSelection.data!,value={materialIds:[selection.materialId],materialRevisions:{[selection.materialId]:selection.revision},...(recipes.length?{recipes}:{}),...requestModelSelection(true,modelProfileId)},body=JSON.stringify(value),previous=extractionIntent.current;
         const intent=previous?.owner===owner&&previous.body===body?previous:{owner,body,id:crypto.randomUUID()};extractionIntent.current=intent;
         const result=await owner.request<ScopedMemoryJob>('/api/memory/jobs',{method:'POST',body:JSON.stringify({operationId:intent.id,...value})});
