@@ -1510,3 +1510,25 @@ separate passing path. Technical boundary/proposal is
 `/tmp/mote-joint-shared-observer-decision.md`: derived M04 refresh plus a genuinely
 M05-authorized continuation, never fabricated user contexts or revived old
 session/grant. This RED remains a whole-gate blocker until resolved.
+
+### Desktop final PR149 selected into current Joint feature
+
+Delivered Desktop f319513a / owner tested0a32aeeb was selected through its five
+Desktop production/test commits, ending Joint239e2428. Existing Joint M01/QR
+sources already exactly match that final; unrelated owner inherited triage patches
+were not imported. `git diff HEAD f319513a -- apps/desktop` is empty. The sole
+catalog conflict retained all8439 prior Android values and added the one Desktop
+message from the merged shared source; checker now8440 messages/EXIT0.
+Official final module validation document copied from deliveredf319, keeping
+its26m34 full gate and cached-versus-actual Android provenance as owner evidence.
+
+Own composed consumers3files109/109 EXIT0 in64.83s
+(`/tmp/mote-joint-desktop-final-consumer.*`), fresh Shared/Server builds and Desktop
+noEmit0, i18n0. This is source consumer verification, not another emitted Electron
+20-case run or whole final union. Completed Desktop owner was not awakened.
+Runtime/output final-CI acceptance remains the later same-SHA combined step.
+
+Exact current terminal log hashes and version/provenance boundaries are also in
+`/tmp/mote-joint-current-evidence.json`. Whole affected is deliberately not called
+successful while the committed instance-change RED still exists and M13/M15
+final candidates remain outstanding.
