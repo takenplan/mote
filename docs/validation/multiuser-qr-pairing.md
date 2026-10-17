@@ -244,8 +244,41 @@ running the required preparation. Evidence:
 `/tmp/mote-qr-retry-hook-baseline-red.log` and `.exit`.
 Independent bounded review accepted exact production `7d696775`, read the new
 tests and actual RED/GREEN receipts, and found no new confirmed issue; it ran no
-tests. Joint's cross-module source review and a new complete affected gate remain
-pending; neither is inferred from the earlier green snapshots.
+tests. Joint separately accepted the exact cross-module seam and read the 12/12
+receipt. Combination must retain its newer `originalGeneration`,
+`fileGeneration`, `diarizeFrom` and fixed per-file settings; apply the small delta
+rather than replacing its whole processing host. That review is source evidence,
+not acceptance of a composed Joint runtime.
+
+The new complete command `npm run check:affected -- --base f08edd47` then ran on
+the fixed clean snapshot **`6726838a4d654b3f7e16c507179012337ddf49ef`**, reaching
+its natural terminal **EXIT 0 in 960 seconds**. No production/test bytes changed
+during the run; later delivery changes only update this evidence document.
+
+| Check | Actual final result |
+| --- | --- |
+| i18n | 8440 bilingual messages/call sites, exit 0 |
+| Shared/Agent/Server/Web builds and four typechecks | All pass |
+| Shared | 192/192, no skip/failure/cancellation |
+| Agent | 317 pass, 1 existing optional skip, no failure/cancellation |
+| Server | 2691 total, 2689 pass, 2 existing skips, no failure/cancellation; 832.966 s |
+| Web | 515/515, no skip/failure/cancellation; 65.000 s |
+| Central runner | Passed, including bounded logs and shutdown behavior |
+| Release tools | 52/52, no skip/failure/cancellation |
+
+The full run includes all three retry-hook rollback modes, eight retirement and
+identity negatives, the original media transport recovery, the exact-pin primitive,
+all eight held-response retirement/pin cases and the QR production handoffs. The
+existing skips are the installed-Codex synthetic local Responses adapter test,
+the configured pinned Python Source Pack private import test, and the macOS
+sandbox staged-input isolation test. None was newly skipped or counted as run.
+
+Evidence is generated-only and local: `/tmp/mote-qr-atomic-retry-final-affected.log`,
+`.exit`, `/tmp/mote-qr-atomic-retry-final-gate-process.json` and
+`/tmp/mote-qr-atomic-retry-final-release-check.json`. Session 59519 reached terminal
+0; owned PGID 56247 had no remaining processes and the log had no writers before
+explicit RELEASE of all heavy resources. No database, raw log or attachment is
+included in Git/PR. The earlier failed and partial runs remain unchanged evidence.
 
 Still unverified here: Web QR rendering/navigation retirement, Android scanner
 and pending journal/account-switch lifecycle, Desktop v2 import, physical camera,
@@ -275,3 +308,7 @@ producer freeze `6a84ec6a`, and M15 combined it while retaining consumer ownersh
 The parent reports M13 remains stuck in its old turn; Web integration is not
 claimed. Commentary supplied the actual CLAIM/RELEASE and interface summary when
 native message delivery could not be confirmed.
+The later exact `7d696775` review request to Joint again returned the unconfirmed
+submission error. A subsequent direct Joint handoff delivered the actual accepted
+review, and the parent confirmed fresh serial allocation. That resolved the
+review blocker before this final full gate; no blind message retry was used.
