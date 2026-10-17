@@ -33,8 +33,10 @@ Prefix commands with: node scripts/mote.mjs
 No command installs launchd, publishes images, deletes old volumes or changes a legacy configuration or archive automatically.
 Tunnel tokens are accepted only through private files, never argument values or environment.
 Native tunnel-run is foreground; generated launchd services are never installed automatically.
-Only token intentionally prints a central credential. Backups exclude credentials and encryption keys.
-When encryption has been used, preserve storage.dataKey or the vault content-key file separately for restore.`;
+Only token prints the configured profile secret; it is not an account login credential.
+Epoch-5 instance backups contain private identity and encryption keys. Keep them private.
+Personal portable exports exclude active login credentials and execution grants.
+Preserve keys referenced outside the profile separately for restore.`;
 const split = process.argv.indexOf('--');
 const raw = process.argv.slice(2, split < 0 ? undefined : split);
 const tail = split < 0 ? [] : process.argv.slice(split + 1);
