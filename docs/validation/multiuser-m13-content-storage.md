@@ -68,7 +68,18 @@ IAB tool result. The temporary tab was closed. Initial sandbox listen EPERM was
 resolved by standard approval of the same generated loopback Node fixture; no
 hidden Web Electron or alternative browser path was invoked.
 
-Bounded independent review and final same-candidate affected gates remain
-separate, pending steps.
+A separate current fresh compiled host also passes actual HTTP/M03 account
+flows with controlled SIGKILL and restart. The encrypted A original is read
+before the first M04 view after restart, preserving exact bytes/cipher; explicit
+disable/decrypt converts1 with0 failures and removes AES, while equal-ID B
+statistics remain unchanged/idle and A's task is404 under B. Generated directory
+cleanup and final close complete normally. Receipt:
+`/tmp/m13-compiled-storage-smoke.log/.exit` (EXIT0). No simulated restart or
+borrowed peer process result is substituted.
+
+The current complete affected result is recorded in
+[the composition receipt](multiuser-m13-current-composition.md): it exits1 with
+two Server failures, despite storage and current whole Web passing. These finite
+storage proofs are not whole-platform acceptance.
 Shared SQLite/index/capacity, model/external-volume space, legacy separate export
 modes and runtime instance editing are not provided by this finite contract.

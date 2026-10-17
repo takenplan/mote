@@ -1,51 +1,130 @@
-# Current M13 finite composition before the required gate
+# M13 Web delivery candidate and actual gate results
 
-Production checkpoint553517c1769d5d317299f5b59204f815c8f67311 combines own
-storage1c45915a, original Memory observations3034aa4f, delivered recording PR152,
-Ask PR153's exact seven source/test commits and the original PR1519b/4a/681 thin
-image block. Only the declared04f1 two-file image consumer publication-refresh
-fix is selected from the image probe, after an actual same original-page RED.
-No later custom image pipeline, typed export/snapshot fixes, observer/recheck or
-arbitrary peer HEAD is selected. The runtime is not final joint acceptance.
+The immutable runtime/test candidate is
+`5a6f59f127769a321508ff5763f6425ca30ac89d`. Later delivery documentation does
+not change application, package, script, protocol or test source. This is a
+reviewable Draft delivery, not successful whole-platform or joint acceptance.
 
-- Image151 source/read-state31/31,0skip/cancel,19.872s exit0:
-  `/tmp/m13-image151-composed-ui-approved.log/.exit`. Initial sandbox attempt
-  retained actual loopback EPERM; approval reran the same generated fixture paths.
-- Existing file forget4 and attachment-incarnation2 pass6/6,13.405s:
-  `/tmp/m13-image151-counter-union.log/.exit`. Composition keeps both existing
-  attachment-parent/source-external counter and PR151 raw `@capture` counter;
-  it does not remove M13's fixed generation/decision delete semantics.
-- Original FileDetail was actually held before real OCR publication. OCR became
-  ready but its outer FileDetail had no export control, durable RED e9923564:
-  `/tmp/m13-image-filedetail-refresh-red.log/.exit`,1fail/0skip,14.593s. The
-  existing image-owner04f1 optional change callback fixes that original entry,
-  without a new store/route/poller. Same case plus image/raw/forget neighbors
-  pass6/6,0skip/cancel,20.139s:
-  `/tmp/m13-image-filedetail-refresh-green.log/.exit`.
-- Original recording five cases pass5/5 and Ask three delivered regressions3/3;
-  precise source bounds, owner failures and receipts are in
-  [the composition ledger](multiuser-m13-recording-ask-composition.md).
-- Current fresh Central build exits0:
-  `/tmp/m13-storage-memory-recording-image-build.log/.exit`. Server/Web noEmit,
-  scope and bilingual catalogs8505 exit0. The two image pending-submission
-  translations exist in both synchronized catalogs; the independent task15
-  catalog omission does not occur on this candidate.
+## Declared composition
 
-Later custom-image probe2ed17913/f555 has two actual producer REDs, separately
-owned by Joint and image owner: admitted graph pin cannot currently carry a late
-OCR after ticket expiry; OCR→noOCR export can misclassify retained historical raw
-as current transcript. Test91c17e8a and their own exact log0/2 retain those facts.
-M13 does not consume that producer or claim its closure. Detailed parent-readable
-local record: `/tmp/mote-m13-image-custom-complete-blocker.md`.
+The candidate contains own account storage `1c45915a` and original Memory
+operational observations `3034aa4f`, exact delivered recording PR152
+(`144852fe` / runtime `0304fd66`), Ask PR153's seven declared commits (runtime
+`d622a4f2`), and the finite final image PR151 chain (`98b1ea52`, runtime/test
+`23d00bda`). Image producers include the declared custom recipe, accepted-step
+reuse, typed export, graph-pin lineage and versioned current/history fixes
+2349/dcac/f555/34650/73ce. Arbitrary peer HEAD and observer/recheck WIP are not
+selected. The separately frozen769 summary exact-parent analysis retry remains;
+stale/cancelled parent authorization is not relaxed.
 
-Original global writable execution/diagnostics, shared index maintenance and
-separate metadata/attachment export modes still have no accepted scoped producer
-mapping here. Existing M16 records writable instance configuration as startup
-YAML; M13 has not silently changed that contract, exposed private traces, or used
-personal queues/statistics/portable3 as a false equivalent. A direct scope
-clarification is pending while independent validation continues.
+The seven image consumer/producer files listed in the local composition receipt
+have zero source diff against final PR151. Existing M13 file-delete intent and
+original-generation fencing remain, as do the attachment-parent/source-external
+counter and raw `@capture` retirement counter. No second processing store,
+scheduler, task or synthesized successful result is introduced.
 
-Final required affected result is recorded only after the fixed candidate's
-actual terminal status. Earlier750 whole failures remain; isolated owner gates
-and focused passes cannot be added into a whole17 same-version pass. No own M13
-PR, remote push, merge, deployment or CI operation has happened at this point.
+## Complete affected check: EXIT1
+
+Actual command on the clean candidate, using Node24.21.0:
+
+```sh
+npm run check:affected -- --base origin/codex/mote-multiuser-integration
+```
+
+Terminal receipts are `/tmp/m13-required-image-final.{log,exit,sha,runtime}`.
+The command naturally exited1; it was not stopped or relabeled as a pass.
+
+| Component | Actual result |
+| --- | --- |
+| Desktop | 60 files,501/501 passed |
+| Server | 2845 total:2841 passed,2 failed,2 existing opt-in skips,0 cancelled |
+| Web | 571/571 passed,0 skipped/cancelled |
+| Agent | 317 passed,1 existing opt-in skip |
+| Shared / Diagnostics / workspace types | 192 /5 /all passed |
+| Root-extra / Android within this command | Not reached after workspace test failure; separate remainder receipts below |
+
+The Server failures are preserved:
+
+1. `multiuser-file-unknown.test.ts:68`: physical ACK fixture expects generic
+   child retry200, but the actual parent has become stale and returns
+   `409 task_retry_invalid` (1.714s). The existing guard must keep rejecting
+   stale parents. A read-only review of M15's separately delivered fixture-only
+   `33ce7b0b4111fcbbb1ce8a011e2a5e31ea181220` confirms its explicit stale409 and
+   authenticated host-only acknowledgement preserve physical occupancy, foreign
+   rejection and eventual new-operation assertions. That later fixture is not
+   silently substituted into this checked candidate. Report:
+   `/tmp/mote-m13-review-m15-physical-ack-stale.md`.
+2. `multiuser-ingress.test.ts:114`: the real equal-A/B Coding→M06→Memory
+   original case exceeds its original15s observation deadline (20.298s actual).
+   The observed session already has6 members/6 blocks and complete indexed
+   status, but its pending-work condition has not cleared. Subsequent body,
+   foreign-owner and retained-original assertions are not counted as reached.
+   Cause is unconfirmed. No deadline, corpus, assertion or skip was changed.
+
+The original4ac affected EXIT1 is also retained: Desktop501/501,
+Server2834 pass/1 fail/2 skips, Web559 pass/1 fail. Its Hindsight503 and original
+recording disconnect wait failures are not erased by later isolated passes.
+The current5a full command passes those original cases, including Hindsight
+(8.887s) and the recording journeys; that does not establish a cause for the
+older failure. Temporary provider diagnostics were restored byte-for-byte before
+this clean current gate, with no diagnostic production change committed.
+
+## Direct checks and skipped-stage remainder
+
+- Fresh Central build, scope inventory and synchronized8506-message catalogs
+  exit0. `/tmp/m13-image-final-composed-build.log/.exit` and corresponding scope
+  and i18n receipts record the exact candidate.
+- Image producer8/8, no skip/cancel,43.823s:
+  `/tmp/m13-image-final-producer.log/.exit`.
+- Original Files typed/no-OCR/versioned export, snapshot and progress/recipe
+  journeys15/15, no skip/cancel,148.576s:
+  `/tmp/m13-image-final-original-ui.log/.exit`.
+- The separately completed root remainder exits0:81 script cases,5 CLI cases
+  and actual runner checks. `/tmp/m13-image-final-root-extra.log/.exit`.
+- Android remainder exits0 on the same source with the installed JDK21:
+  actual compile, unit tests and production assembleDebug,80s,44 tasks executed.
+  Fresh74 XML suites report352/352,0 failures/errors/skips.
+  `/tmp/m13-image-final-android-jdk21.log/.exit` and
+  `/tmp/m13-image-final-android-counts.json`. Initial attempts did not enter
+  compilation: missing Java, sandbox Gradle-cache lock, then incompatible JBR25.
+  No source/dependency/ABI changes or emulator/permission actions were made.
+
+Own original storage source5/UI12, Memory observation source2/UI1 and related
+original-page13, recording original-page5 and Ask3 receipts remain distinct
+finite proofs. They are not summed into a same-candidate whole pass. Details:
+[storage](multiuser-m13-content-storage.md),
+[Memory observations](multiuser-m13-memory-observations.md), and
+[recording/Ask](multiuser-m13-recording-ask-composition.md).
+
+## Actual supported browser and process evidence
+
+Allowed generated-only IAB covers original storage encryption/decryption and
+same-ID A/B physical statistics. A fresh compiled real HTTP host also passes
+controlled SIGKILL/restart, encrypted-original reading before the first M04 view,
+explicit decrypt and B isolation: `/tmp/m13-compiled-storage-smoke.log/.exit`.
+
+Original Memory settings on dedicated `m13-memory.localhost` pass A/B cancel
+and exact same-task retry, with108 observation/automation poll responses all200
+over6+minutes. The older parallel127.0.0.1 session replacement was a shared test
+cookie domain collision, diagnosed without modifying product authentication.
+Proof: `/tmp/m13-memory-iab-isolated-proof.json`. Generated tabs/hosts closed
+normally. The denied hidden Web Electron action was not executed, retried or
+proxied. Live personal content, permissions, vendor behavior and model accuracy
+are not claimed.
+
+## Remaining acceptance and ownership
+
+The parent assigned three preserved KEEP controls to an independent owner:
+administrator instance concurrency/safe diagnostic write controls, administrator
+safe shared-index maintenance, and separate owner metadata/data-and-attachment
+export modes. Its finite PREP `db321f64` / docs `aad77a8c` reports30 direct and5
+original-UI checks; its complete gate has no final receipt at this handoff.
+Those source commits are not mixed into this immutable M13 candidate. The local
+`/tmp/mote-m13-three-keep-controls-handoff.md` records exact original paths and
+contracts. Personal queues/statistics and portable3 are not equivalents.
+
+Final shared/default-component observation, advanced shared processing and
+same-SHA cross-client/whole17 acceptance remain separate. M15's final Draft155
+is a precise downstream delivery, not an implicit replacement of this source.
+No ordinary user input is pending. This Draft does not merge, deploy, change
+real administrator settings or enable CI.

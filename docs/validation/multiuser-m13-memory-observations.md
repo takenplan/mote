@@ -66,3 +66,25 @@ corrected in latest source and the renderer; the browser subsequently observed
 the actual scheduled timestamp. No new model request was made. Temporary tab15
 and exact owned fixture PID22869 closed normally, fixture cleanup exit0.
 Screenshots are in CUA results only, not claimed as local image files.
+
+## Supported IAB isolated-origin follow-up
+
+The earlier unexplained A session replacement is now diagnosed as parallel
+loopback test-cookie replacement: its current cookie digest was not recognized
+by that generated Host, while the actual A credential remained unrevoked and
+unexpired at the same epoch. No product authentication change was made.
+
+A fresh dedicated `m13-memory.localhost` origin exercises the original login,
+Models/services and expanded Memory operations. A cancels then retries the exact
+same task; explicit original account switch to B shows its own waiting window
+and B also cancels/retries its exact task. Over6+minutes all108 observation and
+automation poll responses are200. Model/provider calls remain0. Proof:
+`/tmp/m13-memory-iab-isolated-proof.json`; sanitized method/path/status-only log:
+`/tmp/m13-memory-iab-isolated-network.jsonl`. Generated tabs and Host close
+normally and the temporary data directory is removed. Initial127.0.0.17 binding
+was unavailable on this Mac; no host alias or system setting was changed.
+
+The actual full current candidate is recorded in
+[the composition receipt](multiuser-m13-current-composition.md). Its two Server
+failures remain; the IAB result is original-entry evidence, not a replacement
+for complete or same-version cross-client acceptance.
