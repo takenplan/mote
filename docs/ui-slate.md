@@ -1,5 +1,7 @@
 # Slate UI 与开发版发布
 
+2026-10-17：Central Web、macOS 与 Android 在现有设置中提供浅色／深色／跟随系统，新安装默认跟随系统；配色和原生控件一起切换，导航与输入状态保留。保持既有 Linear 结构与风格，见[外观决定](adr-cross-platform-appearance.md)与[本次验证](validation/cross-platform-appearance.md)。
+
 2026-10-15：所有者已选择全局结构 A 与 Design Lab A · Linear，取代第五轮配色、容器及旧主导航基础。当前默认为资料库／内容、问一问、来源、活动，今天／首页辅助；视觉为暖石墨暗色、紫强调与暖白主动作。主题／布局通过可信平台展示包消费，权限、数据、任务和原生交互保持原有责任。见 [新 ADR](adr-ui-presentation-packs.md) 与[执行台账](design/ui-presentation-rollout-2026-10-15.md)。以下日期记录保留历史依据，不再限制新导航和视觉。
 
 Slate 提供视觉 token、原生组件和中央工作台的历史设计基线。2026-10-11 的 [行动优先 ADR](adr-client-action-first.md) 当时取代原生客户端的旧入口组织，保留权限与中央处理边界；2026-10-13 用户再次反馈后的 [五轮共同美术风格候选](design/ui-art-direction-five-rounds.md) 是上一轮配色、纸页及容器取舍的历史依据。讨论原型中的演示数字、进度与权限回调不作为产品运行数据。

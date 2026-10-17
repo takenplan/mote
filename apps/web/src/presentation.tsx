@@ -1,4 +1,5 @@
-import { UiPresentationHost, defaultUiLayout, linearUiTheme, type UiLayoutProfile } from '@mote/shared';
+import {webAppearance} from './appearance';
+import { UiPresentationHost, applyAppearanceTheme, defaultUiLayout, linearUiTheme, type UiLayoutProfile } from '@mote/shared';
 import React, { useLayoutEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { revealWorkspaceFocus } from './workspace-focus';
@@ -51,6 +52,7 @@ export function PresentationSurface({ navigation, toolbar, footer, children, hos
   children: ReactNode;
   host?: UiPresentationHost<WebShellRenderer>;
 }) {
+  const appearance = useSyncExternalStore(webAppearance.subscribe,webAppearance.getSnapshot,webAppearance.getSnapshot);
   const restore = useRef<{ focus: HTMLElement | null; x: number; y: number } | undefined>(undefined);
   const snapshot = useSyncExternalStore(listener => host.subscribe(() => {
     restore.current = { focus: document.activeElement as HTMLElement | null, x: window.scrollX, y: window.scrollY };
@@ -59,12 +61,7 @@ export function PresentationSurface({ navigation, toolbar, footer, children, hos
   const [container] = useState(() => document.createElement('div'));
   useLayoutEffect(() => {
     const root = document.documentElement;
-    const names = Object.keys(snapshot.theme.tokens).map(key => '--mote-' + key);
-    for (const [key, value] of Object.entries(snapshot.theme.tokens)) root.style.setProperty('--mote-' + key, value);
-    const background=snapshot.theme.tokens.background;
-    const channels=[1,3,5].map(index=>Number.parseInt(background.slice(index,index+2),16));
-    const previousScheme=root.style.colorScheme;
-    root.style.colorScheme=(channels[0]*299+channels[1]*587+channels[2]*114)/1000<128?'dark':'light';
+    const restoreTheme=applyAppearanceTheme(root,snapshot.theme,appearance.scheme);
     root.dataset.uiTheme = snapshot.theme.id;
     root.dataset.uiLayout = snapshot.layout.id;
     const saved = restore.current;
@@ -73,8 +70,8 @@ export function PresentationSurface({ navigation, toolbar, footer, children, hos
       window.scrollTo(saved.x, saved.y);
       restore.current = undefined;
     }
-    return () => { for (const name of names) root.style.removeProperty(name);root.style.colorScheme=previousScheme; };
-  }, [snapshot]);
+    return restoreTheme;
+  }, [snapshot,appearance]);
   return <>
     <ShellBoundary key={snapshot.layout.id+'@'+snapshot.layout.version} renderer={snapshot.layout.implementation} slots={{layout:snapshot.layout,navigation:navigation(snapshot.layout),toolbar,footer,content:<ContentOutlet container={container}/>}}/>
     {createPortal(children, container)}

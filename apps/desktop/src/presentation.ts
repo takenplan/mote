@@ -1,4 +1,4 @@
-import {UiPresentationHost,defaultUiLayout,linearUiTheme,type UiDestination,type UiLayoutProfile} from '@mote/shared';
+import {UiPresentationHost,applyAppearanceTheme,type AppearanceStore,defaultUiLayout,linearUiTheme,type UiDestination,type UiLayoutProfile} from '@mote/shared';
 import {moteText} from '@mote/shared/i18n';
 import type {DesktopPage,DesktopSection} from './navigation';
 
@@ -79,7 +79,7 @@ function retainShell(root:HTMLElement){
   };
 }
 
-export function createDesktopPresentation(slots:DesktopShellSlots){
+export function createDesktopPresentation(slots:DesktopShellSlots,appearance?:AppearanceStore){
   const host=new UiPresentationHost<DesktopLayoutRenderer>({theme:linearUiTheme,layout:{...defaultUiLayout,implementation:defaultDesktopRenderer}});
   type Mounted={resources:ReturnType<typeof createPresentationScope>;handle?:ReturnType<DesktopLayoutRenderer['mount']>};
   let model:DesktopShellModel={section:'records'},mounted:Mounted|undefined,layout:unknown,restoreTheme:(()=>void)|undefined,disposed=false;
@@ -112,9 +112,10 @@ export function createDesktopPresentation(slots:DesktopShellSlots){
     const snapshot=host.getSnapshot();
     restoreTheme?.();
     const old=Object.keys(snapshot.theme.tokens).map(key=>{const name='--mote-'+key;return {name,value:slots.root.style.getPropertyValue(name),priority:slots.root.style.getPropertyPriority(name)};});
-    for(const [key,value] of Object.entries(snapshot.theme.tokens))slots.root.style.setProperty('--mote-'+key,value);
+    const restoreRoot=appearance?applyAppearanceTheme(slots.root.ownerDocument.documentElement,snapshot.theme,appearance.getSnapshot().scheme):undefined;
+    for(const [key,value] of Object.entries(appearance?snapshot.theme.schemes?.[appearance.getSnapshot().scheme]??snapshot.theme.tokens:snapshot.theme.tokens))slots.root.style.setProperty('--mote-'+key,value);
     slots.root.dataset.theme=snapshot.theme.id;
-    restoreTheme=()=>{for(const {name,value,priority} of old){if(value)slots.root.style.setProperty(name,value,priority);else slots.root.style.removeProperty(name);}};
+    restoreTheme=()=>{restoreRoot?.();for(const {name,value,priority} of old){if(value)slots.root.style.setProperty(name,value,priority);else slots.root.style.removeProperty(name);}};
     if(layout!==snapshot.layout){
       const focus=retainFocus(slots.root);
       layout=snapshot.layout;
@@ -125,6 +126,6 @@ export function createDesktopPresentation(slots:DesktopShellSlots){
       finally{focus();}
     }else update();
   };
-  const unsubscribe=host.subscribe(render);render();
-  return {host,update(next:DesktopShellModel){if(disposed)return;model=next;update();},dispose(){if(disposed)return;disposed=true;unsubscribe();try{stop();}finally{restoreTheme?.();notice.remove();delete slots.root.dataset.theme;delete slots.root.dataset.presentationFallback;}}};
+  const unsubscribe=host.subscribe(render),stopAppearance=appearance?.subscribe(render);render();
+  return {host,update(next:DesktopShellModel){if(disposed)return;model=next;update();},dispose(){if(disposed)return;disposed=true;unsubscribe();stopAppearance?.();try{stop();}finally{restoreTheme?.();notice.remove();delete slots.root.dataset.theme;delete slots.root.dataset.presentationFallback;}}};
 }

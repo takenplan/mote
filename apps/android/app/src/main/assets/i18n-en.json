@@ -8319,5 +8319,10 @@
   "此来源当前不保留完整原件。确认后，此来源的后续归档也会保留文档正文原件；图片和附件仍只保留引用。": "This source currently does not retain complete originals. Confirming also retains original document bodies in future archives from this source. Images and attachments remain references.",
   "为此来源保留完整正文并重试": "Retain full bodies for this source and retry",
   "授权日历读取": "Authorize calendar reading",
-  "需要日历时，先单独授权日历读取，再加载并选择日历。授权本身不会开始收集日程。": "To use calendars, authorize calendar reading separately, then load and select calendars. Authorization alone does not start collecting events."
+  "需要日历时，先单独授权日历读取，再加载并选择日历。授权本身不会开始收集日程。": "To use calendars, authorize calendar reading separately, then load and select calendars. Authorization alone does not start collecting events.",
+  "外观": "Appearance",
+  "浅色": "Light",
+  "深色": "Dark",
+  "无法保存外观偏好，已跟随系统。": "Could not save appearance preference. Following the system.",
+  "无法保存外观偏好，请重试。": "Could not save appearance preference. Please retry."
 }

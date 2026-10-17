@@ -1,3 +1,4 @@
+import {desktopAppearance} from './appearance';
 import {createContentLibraryUi} from './content-library-ui';
 import {createSyncHistoryUi} from './sync-history-ui';
 import {createDesktopPresentation} from './presentation';
@@ -32,7 +33,7 @@ const libraryUi=createContentLibraryUi(desktopApi);
 function refreshContent():Promise<void>{return libraryUi.refresh();}
 const syncHistoryUi = createSyncHistoryUi(desktopApi, page => showPage(page));
 const workActivityUi=createWorkActivityUi(desktopApi,page=>showPage(page));
-const presentation=createDesktopPresentation({root:document.body,sidebar:document.querySelector<HTMLElement>('.sidebar')!,toolbar:document.querySelector<HTMLElement>('.workspace-toolbar')!,main:byId('main-content'),navigate:page=>{showPage(page);}});
+const presentation=createDesktopPresentation({root:document.body,sidebar:document.querySelector<HTMLElement>('.sidebar')!,toolbar:document.querySelector<HTMLElement>('.workspace-toolbar')!,main:byId('main-content'),navigate:page=>{showPage(page);}},desktopAppearance);
 window.addEventListener('beforeunload',()=>{workActivityUi.dispose();presentation.dispose();},{once:true});
 let setupReviewed = false;
 try { setupReviewed = localStorage.getItem('mote-desktop-collection-reviewed') === '1'; } catch { /* Collection remains usable without local storage. */ }

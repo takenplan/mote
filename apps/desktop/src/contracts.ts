@@ -85,6 +85,9 @@ export interface Status {
   diagnostics?: import('@mote/diagnostics').DiagnosticsStatus;
 }
 export interface DesktopApi {
+  initialAppearance: import('@mote/shared').AppearanceSnapshot;
+  setAppearance(preference: import('@mote/shared').AppearancePreference): Promise<import('@mote/shared').AppearanceSnapshot>;
+  onAppearance(callback: (value: import('@mote/shared').AppearanceSnapshot) => void): () => void;
   workActivity(input?:import('./work-activity').WorkActivityQuery):Promise<import('@mote/shared').WorkActivityPage>;
   openWorkActivity(workId:string):Promise<void>;
   syncHistory(input: import('./sync-history').SyncHistoryQuery): Promise<import('./sync-history').SyncHistoryPage>;

@@ -3,6 +3,7 @@ import test from 'node:test';
 import React, { act, useEffect, useState } from 'react';
 import { JSDOM } from 'jsdom';
 import { UiPresentationHost, defaultUiLayout, linearUiTheme } from '@mote/shared';
+import {webAppearance} from '../src/appearance';
 import { PresentationSurface, WorkspaceShell, type WebShellProps, type WebShellRenderer } from '../src/presentation';
 
 test('a real shell and theme replacement preserves the mounted draft, selection, focus and lifecycle', async t => {
@@ -23,12 +24,16 @@ test('a real shell and theme replacement preserves the mounted draft, selection,
   function OtherShell({ navigation, toolbar, content, footer }: WebShellProps) {
     return React.createElement('section', { 'data-replacement-shell': true }, toolbar, navigation, React.createElement('article', null, content), footer);
   }
-  const theme = { ...linearUiTheme, id: 'fixture.alternate', tokens: { ...linearUiTheme.tokens, accent: '#abcdef' } };
+  const theme = { ...linearUiTheme, id: 'fixture.alternate', schemes:undefined, tokens: { ...linearUiTheme.tokens, accent: '#abcdef' } };
   const removeTheme = host.registerTheme(theme), removeLayout = host.registerLayout({ ...defaultUiLayout, id: 'fixture.top', navigation: 'top', detail: 'stack', implementation: OtherShell });
   t.after(async () => { await act(async () => root.unmount()); removeLayout(); removeTheme(); for (const [key, value] of previous) { if (value) Object.defineProperty(globalThis, key, value); else Reflect.deleteProperty(globalThis, key); } dom.window.close(); });
   await act(async () => root.render(React.createElement(PresentationSurface, { host, navigation: () => 'Generated navigation', toolbar: 'Generated toolbar', footer: 'Generated footer' }, React.createElement(Draft))));
   const field = dom.window.document.querySelector('textarea')!;
   field.focus(); field.setSelectionRange(4, 12); const hash = dom.window.location.hash;
+  for(const preference of ['dark','light','auto'] as const){
+    await act(async()=>webAppearance.select(preference));
+    assert.equal(dom.window.document.querySelector('textarea'),field);assert.equal(field.selectionStart,4);assert.equal(dom.window.document.activeElement,field);assert.equal(dom.window.location.hash,hash);assert.equal(starts,1);assert.equal(stops,0);
+  }
   await act(async () => host.activate({ theme, layout: { id: 'fixture.top', version: '1' } }));
   assert.ok(dom.window.document.querySelector('[data-replacement-shell] article textarea'));
   assert.equal(dom.window.document.querySelector('textarea'), field, 'the draft subtree is moved rather than reconstructed');
@@ -39,7 +44,7 @@ test('a real shell and theme replacement preserves the mounted draft, selection,
   await act(async () => removeLayout());
   assert.ok(dom.window.document.querySelector('.app-shell textarea')); assert.equal(dom.window.document.querySelector('textarea'), field);
   await act(async () => removeTheme());
-  assert.equal(dom.window.document.documentElement.style.getPropertyValue('--mote-accent'), linearUiTheme.tokens.accent);
+  assert.equal(dom.window.document.documentElement.style.getPropertyValue('--mote-accent'), linearUiTheme.schemes!.light.accent);
   assert.throws(() => host.activate({ theme: { id: 'missing.theme', version: '1' }, layout: defaultUiLayout }), /unavailable/);
   assert.equal(dom.window.document.querySelector('textarea'), field); assert.equal(stops, 0);
 });

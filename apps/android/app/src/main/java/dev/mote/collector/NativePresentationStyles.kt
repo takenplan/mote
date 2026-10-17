@@ -41,6 +41,14 @@ internal object NativePresentationStyles {
         }
         tree.filterIsInstance<NativeAppShell>().forEach { it.refreshLayout() }
     }
+    /** Spinner menus and other app-owned popups are separate Windows from Activity decor. */
+    fun refreshOwnedWindows(activity: android.app.Activity) {
+        android.view.inspector.WindowInspector.getGlobalWindowViews().forEach { root ->
+            var owner: android.content.Context = root.context
+            while (owner is android.content.ContextWrapper && owner !is android.app.Activity && owner.baseContext !== owner) owner = owner.baseContext
+            if (owner === activity) refresh(root)
+        }
+    }
     private fun refreshDrawable(drawable: Drawable?) {
         when (drawable) {
             is NativeThemeShape -> drawable.refresh()

@@ -5,10 +5,15 @@ import java.util.concurrent.Executors
 
 class MoteApplication : Application() {
     companion object { @Volatile var visibleActivities = 0; private set }
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        MoteAppearance.refresh()
+    }
     override fun onCreate() {
         super.onCreate()
         MoteI18n.initialize(this)
         NativeUiPacks.initialize(this)
+        MoteAppearance.initialize(this)
         if (getProcessName() != packageName) return
         try { LocalDataFormat.requireCurrent(this) } catch (error: Exception) {
             QueueStorage.recoveryFailure = error.message

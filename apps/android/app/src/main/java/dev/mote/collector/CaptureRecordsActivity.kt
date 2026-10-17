@@ -205,10 +205,10 @@ class CaptureRecordsActivity : MoteActivity() {
             val placeholders = row(list)
             repeat(2) { text(placeholders, MoteI18n.text("加载预览…"), MoteTheme.fontSupport.toFloat()).apply {
                 layoutParams = LinearLayout.LayoutParams(0, moteDp(188), 1f).apply { marginEnd = moteDp(6) }
-                gravity = Gravity.CENTER; setBackgroundColor(0xffeeeeee.toInt())
+                gravity = Gravity.CENTER; MoteUi.backgroundColor(this, NativeColorRole.SURFACE_RAISED)
             } }
         } else if (!backgroundRefresh) repeat(6) { text(list, MoteI18n.text("正在读取 App 与时间…"), MoteTheme.fontBody.toFloat()).apply {
-            minHeight = moteDp(88); gravity = Gravity.CENTER_VERTICAL; setBackgroundColor(0xffeeeeee.toInt())
+            minHeight = moteDp(88); gravity = Gravity.CENTER_VERTICAL; MoteUi.backgroundColor(this, NativeColorRole.SURFACE_RAISED)
         } }
         executor.queue.clear() // Switching dates/pages keeps only the newest pending query.
         executor.execute {
@@ -391,7 +391,7 @@ class CaptureRecordsActivity : MoteActivity() {
             setOnClickListener { detail(item.getString("id"), remote, client, stamp) }
         }
         parent.addView(row, if (grid) LinearLayout.LayoutParams(0, -2, 1f).apply { marginEnd = moteDp(6) } else LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = moteDp(10) })
-        val preview = FrameLayout(this).apply { setBackgroundColor(0xffeeeeee.toInt()); if (item.optString("source") != "screen") visibility = View.GONE }
+        val preview = FrameLayout(this).apply { MoteUi.backgroundColor(this, NativeColorRole.SURFACE_RAISED); if (item.optString("source") != "screen") visibility = View.GONE }
         val image = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_INSIDE; contentDescription = MoteI18n.text("采集图片缩略图") }
         preview.addView(image, FrameLayout.LayoutParams(-1, -1))
         preview.addView(TextView(this).apply {

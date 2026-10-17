@@ -1,6 +1,6 @@
 /* Linear presentation: semantic roles and one definition per component. */
 @import "./design-tokens.css";
-:root { font-synthesis: none; -webkit-font-smoothing: antialiased; font: var(--mote-font-body)/1.5 var(--mote-font); font-family: var(--mote-font); font-size: var(--mote-font-body); color: var(--mote-ink); background: var(--mote-background); color-scheme: dark; --green: var(--mote-accent); --green-hover: var(--mote-accent-hover); --green-soft: var(--mote-tint); --muted: var(--mote-muted); --line: var(--mote-border); --panel: var(--mote-surface); --ink: var(--mote-ink); --soft: var(--mote-surface-hover); --sidebar-width: var(--mote-sidebar-width); }
+:root { font-synthesis: none; -webkit-font-smoothing: antialiased; font: var(--mote-font-body)/1.5 var(--mote-font); font-family: var(--mote-font); font-size: var(--mote-font-body); color: var(--mote-ink); background: var(--mote-background); --green: var(--mote-accent); --green-hover: var(--mote-accent-hover); --green-soft: var(--mote-tint); --muted: var(--mote-muted); --line: var(--mote-border); --panel: var(--mote-surface); --ink: var(--mote-ink); --soft: var(--mote-surface-hover); --sidebar-width: var(--mote-sidebar-width); }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
 button:disabled { cursor: not-allowed; opacity: .42; }
@@ -852,4 +852,12 @@ body[data-detail=stack] .records-browser { display: block; }
  .metrics>div+div { border-left: 0; border-top: 1px solid var(--mote-divider); padding: var(--mote-space-item) 0 0; }
  .status-heading { flex-wrap: wrap; }
  .permission { margin-left: 0; }
+}
+
+::selection { background:var(--mote-accent); color:var(--mote-on-accent); }
+:root { scrollbar-color:var(--mote-control-border) var(--mote-background); }
+input,select,textarea { accent-color:var(--mote-accent); }
+
+@media (prefers-contrast: more) {
+  :root, body { --mote-muted:var(--mote-ink) !important; --mote-control-border:var(--mote-ink) !important; --mote-border:var(--mote-ink) !important; }
 }

@@ -2,6 +2,13 @@ import { contextBridge, ipcRenderer } from 'electron';
 import type { DesktopApi, Status } from './contracts';
 
 const api: DesktopApi = {
+  initialAppearance: ipcRenderer.sendSync('mote:appearance-initial'),
+  setAppearance: preference => ipcRenderer.invoke('mote:set-appearance',preference),
+  onAppearance: callback => {
+    const handler=(_event: Electron.IpcRendererEvent,value: DesktopApi['initialAppearance'])=>callback(value);
+    ipcRenderer.on('mote:appearance',handler);
+    return ()=>ipcRenderer.removeListener('mote:appearance',handler);
+  },
   workActivity: input => ipcRenderer.invoke('mote:work-activity',input),
   openWorkActivity: workId => ipcRenderer.invoke('mote:central-work',workId),
   syncHistory: input => ipcRenderer.invoke('mote:sync-history',input),
