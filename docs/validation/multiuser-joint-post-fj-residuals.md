@@ -46,3 +46,18 @@ Development failures remain separate: sandbox loopback `EPERM`, an ordinary
 snapshot item lacking an original receipt, and selection of the restricted
 `bindSource` facade instead of the existing host ingress adapter. None is
 reported as a production regression or a successful check.
+
+## Image complete/recompute occupancy
+
+Frozen full-gate image retry failed with `409 file_processing_active` after
+waiting only for the original coordinator. That coordinator's terminal state
+is not proof that every derivative coordinator and physical call has ended.
+The fixture now waits for the actual same-original M05 processing tasks to
+leave waiting/running and for the public physical wait to leave running before
+each new retry. It retains the root-terminal assertion, the existing bounded
+poll budget, every provider count, preserved OCR/understanding, complete no-op,
+and recompute assertions. Production occupancy fences are unchanged.
+
+Originally failing complete/recompute case1/1 EXIT0,13.320s
+(`/tmp/mote-joint-postfj-image-occupancy-green.log/.exit`). Full direct image-file
+neighbors and final successor types/build are recorded below when terminal.
