@@ -86,6 +86,7 @@ test('production text decoder processes equal bytes/IDs per user and publishes s
  const page=await f.checked(f.alice.token,'/api/work-activity?state=completed&sourceId=same-source&limit=1'),work=page.items[0];assert.equal(work.kind,'file');assert.deepEqual(work.progress,{mode:'determinate',unit:'records',total:1,completed:1,failed:0,needsInput:0,excluded:0});assert.ok(work.artifacts.some((item:any)=>item.kind==='result'));assert.equal((await f.checked(f.admin.token,'/api/work-activity')).items.length,0);const detail=await f.checked(f.alice.token,'/api/work-activity/'+encodeURIComponent(work.id));assert.ok(detail.branches.length);assert.equal((await f.request(f.bob.token,'/api/work-activity/'+encodeURIComponent(work.id))).statusCode,404);
 });
 
+// M07 admits both the ingress intake event and the subsequent M06 publication.
 test('real M03 intake automatically admits a durable pipeline while its receipt still attests only reception',async t=>{
  const f=await fixture(t,true),receipt=await f.upload(f.alice.token,Buffer.from('Generated automatic text'));assert.equal(receipt.state,'received');const ref=receipt.captures[0].original.ref;await until(()=>f.read(db=>!!db.prepare('SELECT 1 FROM mp_publications WHERE user_id=?').get(f.a.userId)),'automatic original never published');assert.equal((await f.status(f.alice.token,ref)).indexed,true);publishedIntakeTasks(f);
 });

@@ -188,3 +188,77 @@ The scoped adapter therefore does not translate disconnect into source.enabled
 false. A disconnected recording sync rejects before querying provider identity;
 explicit connect/login is still required to acquire a new provider association.
 No credentials or collection grant are recovered from the retained archive.
+
+### Lark Web presentation increment (M13 checkpoint, not final acceptance)
+
+Lark's document source ID in owned status and successful task results is the exact
+public M03 source resolved through `(user_id, instance_id, local_id)` in
+`connector_sources`. Consumers must not use adapter-local `lark-docs-*` IDs as
+public source identities. No source is created by this projection.
+
+The Lark task-result budget uses actual UTF-8 bytes, including a check on the
+compact metadata. For an oversized Lark status-shaped result, M10 retains the
+actual CLI probe/job fields and returns `statusInConnection:true`
+in place of `selection` and `documentSync`. The same credential-bound
+`GET /api/connectors/:id` provides those complete durable fields. Its newly opened
+adapter has not probed CLI environment: consumers preserve the task's actual
+probe fields when combining the result, and recheck their captured Api after each
+await. Failed tasks retain their M05 failure; a status read supplies the current
+persisted document errors for explicit per-document retry. There is no implicit
+new model/provider job or permission.
+
+This increment does not add ordinary CLI installation, new vendor aliases,
+oversized-calendar result storage or a second connector runtime. Broader
+recording/Lark capabilities and current final validation remain open.
+
+### Lark calendar inventory beyond task metadata
+
+An explicit Lark `calendars` operation whose full UTF-8 result exceeds the
+existing task metadata budget retains the complete inventory in the existing
+connector encrypted vault, under its deployment/user/connection/storage and
+authorization epoch. The stored proof also pins the connection generation and
+actual admitted task ID. Its small successful task result is
+`{calendarInventory:taskId,count}`. The existing owned `GET /api/connectors/:id`
+exposes `calendarInventory:{taskId,items}` only for that same current generation.
+The original Lark consumer requires the exact task ID, count, unique IDs and
+calendar field types before replacing its choices; an intervening discovery or
+configuration change rejects rather than adopting a different result. No title
+or list is truncated. Small inventory results keep their original shape. This
+adds no route, table, scheduler, provider call or new execution authority.
+Disconnect uses the existing vault retirement; lifecycle export/deletion and
+instance backup already cover the same encrypted state. The inventory is a
+read-only discovery receipt and never grants calendar write or source admission.
+## Current-selection recording checkpoints
+
+`GET /api/connectors/:id/recordings?limit=1..100&cursor=opaque` is a private M10
+read of the existing recording adapter's current-selection journal. It admits
+no task and does not call the external account/CLI. The host reuses the existing
+M02 `PrivateCursor` key supplied by scoped bootstrap, binding deployment, user,
+connection ID/generation, saved selection epoch and complete page query. A cursor
+from another account, query limit or selection is invalid. No new table, executor,
+timer, provider runtime or lifecycle state is introduced.
+
+The response is `{sourceId?,items,nextCursor}`. `sourceId` is the canonical M03
+source mapped by owner+connection+local source ID, never an adapter-local path.
+Each item keeps its provider recording `id`, optional actual metadata title/time,
+`transcript:{archived,blocked,attempts,nextAttemptAt?}` and
+`audio:{required,archived,blocked,attempts,nextAttemptAt?}`. Optional `error` is the
+existing sanitized ledger code; `transcriptCaptureId`/`audioCaptureId` identify
+the exact current canonical source heads. Known raw-export `empty`/`unsupported`
+markers are preserved without inferring processing, indexing or Memory success.
+Account/connection retirement is rechecked after adapter cleanup.
+
+This is the current-selection checkpoint reader, not a replacement for canonical
+archive history outside that selection, M06 processing, or the original native
+recording controls. Those consumer/history acceptance rows remain open until
+their actual entry tests pass. Existing archived bytes stay under M03 and all
+original/file reads still require their normal current authority and receipts.
+
+For the original “retry failed steps” user action, the existing recording
+`retry` operation accepts optional `{resume:true}`. Its single existing M05 task
+resets the existing failed checkpoint budget and continues only unfinished
+transcript/media stages, without rediscovering the range or fetching completed
+text. It continues when the client closes. The default empty payload retains
+its previous budget-reset-only behavior. Source/account/device authorization,
+original publication, five-attempt budget and normal explicit Sync's discovery
+algorithm remain unchanged; this adds no second job coordinator.

@@ -41,20 +41,40 @@ export class ScopedRecordingAdapter {
  private sourceId(){if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);return this.provider.id+'-recordings-'+hash(this.saved.account.id).slice(0,24);}
  private async fence(){this.assert();if(!this.saved.account)throw new ConnectorError('recording_not_connected',409);if(this.signal.aborted)throw new ConnectorError('recording_cancelled',409);const current=await this.provider.account(this.signal);this.assert();if(current.id!==this.saved.account.id)throw new ConnectorError('recording_account_changed',409);}
  async status(){await this.init();return {provider:this.provider.id,connected:Boolean(this.saved.account),selection:this.saved.selection,counts:{pending:this.ledger.rows<Work>(this.saved.epoch,'work:').filter(r=>!r.value.transcript||this.saved.selection.backupAudio&&!r.value.media).length,failed:this.ledger.rows<Work>(this.saved.epoch,'work:',-1,true).length}};}
+ /** Read the existing current-selection journal; no provider probe or task is
+  * admitted. Archived files outside this selection remain in canonical M03. */
+ async recordingPage(limit:number,position:(epoch:string)=>string|undefined){
+  await this.init();const epoch=this.saved.epoch,after=position(epoch),rows=this.ledger.rows<Work>(epoch,'work:');
+  const index=after===undefined?-1:rows.findIndex(row=>row.key===after);if(after!==undefined&&index<0)throw new ConnectorError('invalid_cursor',400);
+  const page=rows.slice(index+1,index+limit+2),visible=page.slice(0,limit),sourceId=this.saved.account?this.sourceId():undefined;
+  const items=visible.map(({value:work})=>{
+   const transcript=sourceId?this.ctx.sources.getItem(sourceId,work.id+':export'):undefined,audio=sourceId?this.ctx.sources.getItem(sourceId,work.id+':audio'):undefined,metadata=transcript?.document?.originalMetadata;
+   return {id:work.id,...(work.metadata?{title:work.metadata.title.slice(0,2000),...(work.metadata.recordedAt?{recordedAt:work.metadata.recordedAt}:{})}:{}),
+    transcript:{archived:Boolean(work.transcript),blocked:Boolean(work.transcriptBlocked),attempts:work.transcriptAttempts??0,...(work.transcriptNextAt?{nextAttemptAt:work.transcriptNextAt}:{})},
+    audio:{required:this.saved.selection.backupAudio,archived:Boolean(work.media),blocked:Boolean(work.mediaBlocked),attempts:work.mediaAttempts??0,...(work.mediaNextAt?{nextAttemptAt:work.mediaNextAt}:{})},
+    ...(work.error?{error:work.error}:{}),...(transcript?{transcriptCaptureId:transcript.captureId}:{}),...(audio?{audioCaptureId:audio.captureId}:{}),
+    ...(typeof metadata?.formatError==='string'&&metadata.formatError?{unsupported:true}:typeof metadata?.empty==='boolean'?{empty:metadata.empty}:{}),
+   };
+  });
+  const latest=await this.file.read();this.assert();if(latest?latest.epoch!==epoch:Boolean(this.saved.account))throw new ConnectorError('recording_state_changed',409);
+  return {epoch,sourceId,items,nextKey:page.length>limit?visible.at(-1)!.key:undefined};
+ }
  async login(progress:(value:unknown)=>void){await this.init();await this.authorize!(progress);return this.connect();}
  async connect(){await this.init();const account=await this.provider.account(this.signal);this.assert();if(this.saved.account?.id!==account.id){if(this.saved.account)this.ctx.sources.update(this.sourceId(),{enabled:false});this.saved={...this.saved,account,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};}await this.file.write(this.saved);this.ctx.sources.register({id:this.sourceId(),name:this.provider.id+' recordings',kind:this.provider.id+'.recordings',deviceId:this.sourceId(),platform:'import',retention:'archive',enabled:true});return this.status();}
  async select(value:unknown){await this.init();const selection=recordingSelectionSchema.parse(value);await this.fence();if(JSON.stringify(selection)!==JSON.stringify(this.saved.selection))this.saved={...this.saved,epoch:randomUUID(),selection};await this.file.write(this.saved);return this.status();}
  async disconnect(){await this.init();this.saved={...this.saved,account:undefined,epoch:randomUUID(),selection:{...this.saved.selection,enabled:false}};await this.file.write(this.saved);return this.status();}
- async sync(automatic=false){
+ async sync(automatic=false,retryOnly=false){
   await this.init();await this.fence();if(!this.saved.selection.enabled)throw new ConnectorError('recording_selection_required',409);
   const source=this.sourceId(),selection=this.saved.selection,epoch=this.saved.epoch;
+  let imported=0,duplicates=0,failed=0;
+  const publish=async(item:SourceItem,bytes:Buffer,mime:string,format?:`processor:${string}`)=>{await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex'),prior=this.ctx.sources.getItem(source,item.externalId);item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};item.revision=prior?.document?.originalMetadata?.bodyHash===contentHash&&prior.mimeType===item.mimeType?prior.revision:hash([contentHash,item.mimeType,prior?.revision??'']);const receipt=await this.ctx.publishFile(source,item,bytes,()=>{this.assert();if(!this.ctx.sources.getSource(source).enabled)throw new ConnectorError('recording_paused',409);},this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
+  // A retry resumes existing failed checkpoints. Normal Sync still discovers
+  // the selected range, advancing scan receipts only after durable work.
+  if(!retryOnly){
   const previous=this.ledger.get<{until:number;fullAt:number}>(epoch,'scan-complete'),at=Date.now(),full=!automatic||!previous||at-previous.fullAt>86400000;
   let scan=this.ledger.get<{start:number;end:number;from:number;full:boolean}>(epoch,'scan-active');
   if(!scan){const end=Date.parse(selection.end??new Date(at).toISOString()),start=full?Date.parse(selection.start):Math.max(Date.parse(selection.start),previous!.until-7*86400000);scan={start,end,from:start,full};this.ledger.set(epoch,'scan-active',scan);}
   const lower=scan.start,end=scan.end,windows=Math.ceil((end-lower)/(27*86400000));if(windows>240)throw new ConnectorError('recording_range_too_large',413);
-  let imported=0,duplicates=0,failed=0;
-  const publish=async(item:SourceItem,bytes:Buffer,mime:string,format?:`processor:${string}`)=>{await this.fence();const contentHash=createHash('sha256').update(bytes).digest('hex'),prior=this.ctx.sources.getItem(source,item.externalId);item.document={...item.document,originalMetadata:{...item.document?.originalMetadata,bodyHash:contentHash}};item.revision=prior?.document?.originalMetadata?.bodyHash===contentHash&&prior.mimeType===item.mimeType?prior.revision:hash([contentHash,item.mimeType,prior?.revision??'']);const receipt=await this.ctx.publishFile(source,item,bytes,()=>{this.assert();if(!this.ctx.sources.getSource(source).enabled)throw new ConnectorError('recording_paused',409);},this.signal,format);receipt.duplicate?duplicates++:imported++;return receipt;};
-  // Window and page receipts advance only after all discovered work is durable.
   for(let from=scan.from;from<end;from+=27*86400000){const to=Math.min(end,from+27*86400000),window=hash([from,to]);let cursor=this.ledger.get<string>(epoch,'cursor:'+window),seen=new Set(this.ledger.get<string[]>(epoch,'seen:'+window)??[]);
    for(let page=0;page<10000;page++){
     await this.fence();const result=await this.provider.discover(this.saved.account!,{start:new Date(from).toISOString(),end:new Date(to).toISOString(),...(cursor?{cursor}:{})},this.signal);await this.fence();
@@ -64,6 +84,7 @@ export class ScopedRecordingAdapter {
    }
   }
   this.ledger.set(epoch,'scan-complete',{until:end,fullAt:scan.full?at:previous?.fullAt??0});this.ledger.drop(epoch,'scan-active');
+  }
   for(const row of this.ledger.rows<Work>(epoch,'work:')){
    const work=row.value;
    if(!work.transcript&&!work.transcriptBlocked&&(work.transcriptNextAt??0)<=Date.now())try{
