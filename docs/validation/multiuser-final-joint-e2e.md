@@ -2,6 +2,17 @@
 
 The complete required gate, compiled Electron journey, actual Android representative journeys and fresh compiled recovery passed on source **`8ad99089ead559d6656a269fdca7ccb884953c07`**. **The real-browser C2 receipt is still missing; this report does not claim all eight journeys are accepted.**
 
+The later authorized recovery-source completion executed test/document candidate
+`0cfe78d6afd7143ed3e5be855925928eb23f76a9`, with production inputs unchanged
+from C2. It restores seven original executable inputs, four historical reports
+and PR154 attribution, and removes the compiled-HTTP preparer's external task-7
+dependency. Its required affected check naturally exited0 (Server2940pass,
+2existing skips), all10 distinct restored recovery scenarios passed, and the
+compiled HTTP replay passed3/3. Its [separate receipt and repeat instructions](multiuser-recovery-source-completion.md)
+retain the new SHA/manifest/image and original C2 results without relabelling.
+All28 multiuser PRs now have source/test/design coverage; actual Web acceptance
+and the parent's explicit release remain prerequisites to any PR closing.
+
 The tested tree is `fcb3bce1524932978ad7133377aaa56136a3dcc1`, based on integration/main `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`, verified again remotely before publication. The later publication commits contain documentation and archival driver source only. They do not replace the tested SHA.
 
 - [Immutable consumption manifest](multiuser-final-c2-consumption.json): SHA256 `3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a`, covering all 2,823 tested tracked files and build inputs.

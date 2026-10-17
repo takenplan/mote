@@ -8,17 +8,15 @@
   "publicationHeadAtAudit": "2bc7e3f19cbde9c825057122850d8a23f386da90",
   "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
   "counts": {
-    "REPLACE_AFTER_ACCEPTANCE": 24,
+    "REPLACE_AFTER_ACCEPTANCE": 28,
     "UNRELATED_KEEP": 5,
-    "PARTIAL_HOLD": 4,
     "TARGET_KEEP": 1
   },
   "closurePrerequisites": [
-    "Complete actual Web C2 acceptance and handle remaining gaps; no all-eight acceptance yet",
-    "Reconcile missing durable PR150 recovery sources and dependent PR153 lineage",
-    "Retain or link final PR153/154/156 receipt/document additions accurately",
+    "Complete actual Web acceptance; no all-eight acceptance yet",
     "Parent explicitly releases closing only after successful validation",
-    "Refresh every remote PR head and rerun this comparison if any drift before closure"
+    "Refresh every remote PR head and rerun comparison if any drift before closure",
+    "Retain all branches/commits and exclude143/145-148; no mechanical merges"
   ],
   "method": [
     "Fetched all34 refs/pull/N/head and matched exact GitHub API heads",
@@ -38,10 +36,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 203,
-        "evolved": 16
-      },
       "scope": "M00 scope foundation",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -55,9 +49,19 @@
         "docs/design/multiuser-modules.md",
         "apps/server/test/scope-foundation.test.ts"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 203,
+        "evolved": 16
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 203,
+        "evolved": 16
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 127,
@@ -69,10 +73,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 209,
-        "evolved": 25
-      },
       "scope": "M01 accounts/auth/admin",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -86,9 +86,19 @@
         "apps/server/test/multiuser-auth.test.ts",
         "docs/design/multiuser-auth.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 209,
+        "evolved": 25
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 209,
+        "evolved": 25
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 128,
@@ -100,10 +110,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 209,
-        "evolved": 21
-      },
       "scope": "M02 private repositories/indexes",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -117,7 +123,6 @@
         "apps/server/test/private-data.test.ts",
         "docs/design/multiuser-private-data.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [
         {
           "sha": "8ecccb8ecf0093cc655fadd8bbc5e1637220f9fd",
@@ -148,7 +153,18 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "Adapted original1323c7e1/d8aaef97 to12c1b44f/e77faca9; range-diff changes are shared auth/runtime/table-test composition, not a second repository. Private-data design and core test retained."
+      "reason": "Adapted original1323c7e1/d8aaef97 to12c1b44f/e77faca9; range-diff changes are shared auth/runtime/table-test composition, not a second repository. Private-data design and core test retained.",
+      "originalC2PathCounts": {
+        "exact": 209,
+        "evolved": 21
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 209,
+        "evolved": 21
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 129,
@@ -160,10 +176,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 223,
-        "evolved": 33
-      },
       "scope": "M04 configuration/models/snapshots/usage",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -180,7 +192,6 @@
         "docs/adr-unified-configuration.md",
         "docs/design/multiuser-configuration.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [
         {
           "sha": "bc5323e1b5ee337c20dee58d4a8e9c25bc2adbbf",
@@ -211,7 +222,18 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "Actual diff is multiuser M04 plus shared ConfigService authorization/rollback/model/usage helpers and ADR linkage. Originala5e91664/e76f1fe6 adapted toc4e4e8bc/463d5299; snapshot tests and multiuser configuration ADR retained. Not a separate unrelated configuration-center PR."
+      "reason": "Actual diff is multiuser M04 plus shared ConfigService authorization/rollback/model/usage helpers and ADR linkage. Originala5e91664/e76f1fe6 adapted toc4e4e8bc/463d5299; snapshot tests and multiuser configuration ADR retained. Not a separate unrelated configuration-center PR.",
+      "originalC2PathCounts": {
+        "exact": 223,
+        "evolved": 33
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 223,
+        "evolved": 33
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 130,
@@ -223,10 +245,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 248,
-        "evolved": 38
-      },
       "scope": "M05 execution/Operations/scheduler",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -240,9 +258,19 @@
         "apps/server/test/multiuser-execution.test.ts",
         "docs/design/multiuser-execution.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 248,
+        "evolved": 38
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 248,
+        "evolved": 38
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 131,
@@ -254,10 +282,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 251,
-        "evolved": 46
-      },
       "scope": "M03 originals/Ingress",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -272,7 +296,6 @@
         "apps/server/test/multiuser-ingress.test.ts",
         "docs/design/multiuser-ingress.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [
         {
           "sha": "b1f6700a7e68b60318b7b05f631a47d12fd93c24",
@@ -301,7 +324,18 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "Originalfffe1d12 adapted toc21062a1; integration retains concurrent M04/M05/M09 runtime registrations and inventory. Original staging cleanup14858e86 patch-equivalent. Source/ingress contract retained."
+      "reason": "Originalfffe1d12 adapted toc21062a1; integration retains concurrent M04/M05/M09 runtime registrations and inventory. Original staging cleanup14858e86 patch-equivalent. Source/ingress contract retained.",
+      "originalC2PathCounts": {
+        "exact": 251,
+        "evolved": 46
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 251,
+        "evolved": 46
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 132,
@@ -313,10 +347,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 269,
-        "evolved": 51
-      },
       "scope": "M09 scoped plugins",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -330,9 +360,19 @@
         "apps/server/test/multiuser-plugin-ingress.test.ts",
         "docs/design/multiuser-plugins.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 269,
+        "evolved": 51
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 269,
+        "evolved": 51
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 133,
@@ -344,10 +384,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 283,
-        "evolved": 56
-      },
       "scope": "M06 OCR/ASR/derived files",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -361,9 +397,19 @@
         "apps/server/test/multiuser-processing.test.ts",
         "docs/design/multiuser-processing.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 283,
+        "evolved": 56
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 283,
+        "evolved": 56
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 134,
@@ -375,10 +421,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 303,
-        "evolved": 59
-      },
       "scope": "M10 connectors/provider intake",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -392,9 +434,19 @@
         "apps/server/test/multiuser-connectors.test.ts",
         "docs/design/multiuser-connectors.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 303,
+        "evolved": 59
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 303,
+        "evolved": 59
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 135,
@@ -406,10 +458,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 305,
-        "evolved": 59
-      },
       "scope": "Public isolation/validation contracts",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -422,9 +470,19 @@
         "docs/design/multiuser-public-contracts.md",
         "docs/validation/multiuser-public-contracts.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 305,
+        "evolved": 59
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 305,
+        "evolved": 59
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 136,
@@ -436,10 +494,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 354,
-        "evolved": 69
-      },
       "scope": "M07 Memory",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -453,9 +507,19 @@
         "apps/server/test/multiuser-memory.test.ts",
         "docs/design/multiuser-memory.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 354,
+        "evolved": 69
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 354,
+        "evolved": 69
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 137,
@@ -467,10 +531,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 378,
-        "evolved": 77
-      },
       "scope": "M08 Ask/chat/Insight",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -484,9 +544,19 @@
         "apps/server/test/multiuser-ask.test.ts",
         "docs/design/multiuser-ask.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 378,
+        "evolved": 77
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 378,
+        "evolved": 77
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 138,
@@ -498,10 +568,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 404,
-        "evolved": 74
-      },
       "scope": "M11 MCP inbound/outbound",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -515,9 +581,19 @@
         "apps/server/test/multiuser-mcp.test.ts",
         "docs/design/multiuser-mcp.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 404,
+        "evolved": 74
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 404,
+        "evolved": 74
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 139,
@@ -529,10 +605,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 649,
-        "evolved": 119
-      },
       "scope": "M14 Desktop account capture",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -546,9 +618,19 @@
         "apps/desktop/test/multiuser-desktop.test.ts",
         "docs/design/multiuser-desktop.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 649,
+        "evolved": 119
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 649,
+        "evolved": 119
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 140,
@@ -560,10 +642,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 622,
-        "evolved": 124
-      },
       "scope": "M12 Actions/todos/calendar",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -577,9 +655,19 @@
         "apps/server/test/multiuser-actions.test.ts",
         "docs/design/multiuser-actions.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 622,
+        "evolved": 124
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 622,
+        "evolved": 124
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 141,
@@ -591,10 +679,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 621,
-        "evolved": 125
-      },
       "scope": "M16 lifecycle/portable recovery",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -608,9 +692,19 @@
         "apps/server/test/multiuser-lifecycle.test.ts",
         "docs/design/multiuser-lifecycle.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 621,
+        "evolved": 125
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 621,
+        "evolved": 125
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 142,
@@ -622,10 +716,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 630,
-        "evolved": 123
-      },
       "scope": "Container/Hindsight epoch-5 validation",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -639,9 +729,19 @@
         "apps/server/test/multiuser-container-backup.test.ts",
         "docs/validation/multiuser-container-backup.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 630,
+        "evolved": 123
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 630,
+        "evolved": 123
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 143,
@@ -969,10 +1069,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 682,
-        "evolved": 120
-      },
       "scope": "M01 account-bound QR pairing",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -985,9 +1081,19 @@
         "apps/server/test/multiuser-qr-pairing.test.ts",
         "docs/design/multiuser-qr-pairing.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 682,
+        "evolved": 120
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 682,
+        "evolved": 120
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 145,
@@ -1183,10 +1289,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 677,
-        "evolved": 106
-      },
       "scope": "Desktop v2 PKCE durable recovery",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -1200,9 +1302,19 @@
         "apps/desktop/test/multiuser-desktop.test.ts",
         "docs/design/multiuser-desktop-pairing.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 677,
+        "evolved": 106
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 677,
+        "evolved": 106
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 150,
@@ -1214,13 +1326,8 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 715,
-        "evolved": 118,
-        "absent": 9
-      },
       "scope": "Personal applied-policy archive/recovery",
-      "classification": "PARTIAL_HOLD",
+      "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 475,
@@ -1231,80 +1338,6 @@
         "apps/server/src/scope/processing-policy-archive.ts",
         "apps/server/test/multiuser-policy-personal-archive.test.ts",
         "docs/design/multiuser-policy-personal-archive.md"
-      ],
-      "absentPaths": [
-        {
-          "path": "apps/server/test/fixtures/policy-native-recovery.ts",
-          "category": "test",
-          "headBlob": "9122b571506400ff8276c66ce375a8c2f6cd4a8a",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "apps/server/test/fixtures/recovery-http-host.ts",
-          "category": "test",
-          "headBlob": "9774e354c7e37c041b8f384339996fcf1e20fe2e",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "apps/server/test/multiuser-recovery-http-seams.test.ts",
-          "category": "test",
-          "headBlob": "6969b9f4ed5ef63d22e1f652ea9142bbfe33e144",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "apps/server/test/multiuser-recovery-policy-lifecycle.test.ts",
-          "category": "test",
-          "headBlob": "d3445693a4e2ea149c8fa71616142040f0e0b4d2",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "apps/server/test/multiuser-recovery-portable-file.test.ts",
-          "category": "test",
-          "headBlob": "739a2e27f1fdd3fecf1ff4b03ec35ceb95c9b487",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "docs/validation/multiuser-policy-personal-archive.md",
-          "category": "design",
-          "headBlob": "7c07a9abe8f56c4b446157e5b612cdbec8d31485",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "docs/validation/multiuser-recovery-lifecycle-seams.md",
-          "category": "design",
-          "headBlob": "726afb666046b05bff308847956f052d84c0f57d",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "scripts/validation/recovery-file-generation-container.ts",
-          "category": "source-or-build",
-          "headBlob": "3acbd5e93c937c601264de7a84d11279e7a0b866",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "scripts/validation/recovery-policy-container.ts",
-          "category": "source-or-build",
-          "headBlob": "02bc2b00f741cbc1c1e6256f6b23c748d22eb409",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        }
       ],
       "uniquePatchCoverage": [
         {
@@ -1502,7 +1535,94 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "Production processing-policy-archive.ts, its core test and design are byte-identical to PR150 head; seven recovery test/fixture/runner paths and two validation reports absent. Archived compiled-HTTP preparation still reads the missing task-7 source test externally. Hold for durable self-contained recovery source closure."
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent and actual Web acceptance still required before closing.",
+      "originalC2PathCounts": {
+        "exact": 715,
+        "evolved": 118,
+        "absent": 9
+      },
+      "originalC2AbsentPaths": [
+        {
+          "path": "apps/server/test/fixtures/policy-native-recovery.ts",
+          "category": "test",
+          "headBlob": "9122b571506400ff8276c66ce375a8c2f6cd4a8a",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/fixtures/recovery-http-host.ts",
+          "category": "test",
+          "headBlob": "9774e354c7e37c041b8f384339996fcf1e20fe2e",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-http-seams.test.ts",
+          "category": "test",
+          "headBlob": "6969b9f4ed5ef63d22e1f652ea9142bbfe33e144",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-policy-lifecycle.test.ts",
+          "category": "test",
+          "headBlob": "d3445693a4e2ea149c8fa71616142040f0e0b4d2",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-portable-file.test.ts",
+          "category": "test",
+          "headBlob": "739a2e27f1fdd3fecf1ff4b03ec35ceb95c9b487",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-policy-personal-archive.md",
+          "category": "design",
+          "headBlob": "7c07a9abe8f56c4b446157e5b612cdbec8d31485",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-recovery-lifecycle-seams.md",
+          "category": "design",
+          "headBlob": "726afb666046b05bff308847956f052d84c0f57d",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/validation/recovery-file-generation-container.ts",
+          "category": "source-or-build",
+          "headBlob": "3acbd5e93c937c601264de7a84d11279e7a0b866",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/validation/recovery-policy-container.ts",
+          "category": "source-or-build",
+          "headBlob": "02bc2b00f741cbc1c1e6256f6b23c748d22eb409",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "sourceCompletionPathCounts": {
+        "exact": 723,
+        "evolved": 119
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "initialClassification": "PARTIAL_HOLD",
+      "initialReason": "Production processing-policy-archive.ts, its core test and design are byte-identical to PR150 head; seven recovery test/fixture/runner paths and two validation reports absent. Archived compiled-HTTP preparation still reads the missing task-7 source test externally. Hold for durable self-contained recovery source closure."
     },
     {
       "number": 151,
@@ -1514,10 +1634,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 827,
-        "evolved": 92
-      },
       "scope": "Named/typed image progress and export",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -1532,7 +1648,6 @@
         "apps/server/test/multiuser-processing-image-recipe.test.ts",
         "docs/validation/scoped-image-progress.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [
         {
           "sha": "98b1ea52c4462f1e3f63dee09e3b35645389109a",
@@ -1795,7 +1910,18 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "All own image source/test paths exist.24/34 unique patches match; remaining producer/UI adaptations map to341e3efd/553517c1/0880412c/a7c44e28 and later union preserves retry/recording/FJ contracts. No missing path or independent source delta found."
+      "reason": "All own image source/test paths exist.24/34 unique patches match; remaining producer/UI adaptations map to341e3efd/553517c1/0880412c/a7c44e28 and later union preserves retry/recording/FJ contracts. No missing path or independent source delta found.",
+      "originalC2PathCounts": {
+        "exact": 827,
+        "evolved": 92
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 827,
+        "evolved": 92
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 152,
@@ -1807,10 +1933,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 794,
-        "evolved": 108
-      },
       "scope": "Original recording consumers",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -1824,9 +1946,19 @@
         "apps/web/test/multiuser-recordings.test.ts",
         "docs/design/multiuser-web-recordings.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 794,
+        "evolved": 108
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 794,
+        "evolved": 108
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 153,
@@ -1838,13 +1970,8 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 717,
-        "evolved": 116,
-        "absent": 10
-      },
       "scope": "Scoped Ask evidence/admission waiting",
-      "classification": "PARTIAL_HOLD",
+      "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 475,
@@ -1856,88 +1983,6 @@
         "apps/server/src/scope/ask-schema.ts",
         "apps/server/test/multiuser-ask-read-races.test.ts",
         "docs/design/multiuser-ask.md"
-      ],
-      "absentPaths": [
-        {
-          "path": "apps/server/test/fixtures/policy-native-recovery.ts",
-          "category": "test",
-          "headBlob": "9122b571506400ff8276c66ce375a8c2f6cd4a8a",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "apps/server/test/fixtures/recovery-http-host.ts",
-          "category": "test",
-          "headBlob": "9774e354c7e37c041b8f384339996fcf1e20fe2e",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "apps/server/test/multiuser-recovery-http-seams.test.ts",
-          "category": "test",
-          "headBlob": "6969b9f4ed5ef63d22e1f652ea9142bbfe33e144",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "apps/server/test/multiuser-recovery-policy-lifecycle.test.ts",
-          "category": "test",
-          "headBlob": "d3445693a4e2ea149c8fa71616142040f0e0b4d2",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "apps/server/test/multiuser-recovery-portable-file.test.ts",
-          "category": "test",
-          "headBlob": "739a2e27f1fdd3fecf1ff4b03ec35ceb95c9b487",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "docs/validation/ask-actions-wait-closure.md",
-          "category": "design",
-          "headBlob": "e871a19dff74e97011ebb1627bbc0718df9feb6b",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "docs/validation/multiuser-policy-personal-archive.md",
-          "category": "design",
-          "headBlob": "7c07a9abe8f56c4b446157e5b612cdbec8d31485",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "docs/validation/multiuser-recovery-lifecycle-seams.md",
-          "category": "design",
-          "headBlob": "726afb666046b05bff308847956f052d84c0f57d",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "scripts/validation/recovery-file-generation-container.ts",
-          "category": "source-or-build",
-          "headBlob": "3acbd5e93c937c601264de7a84d11279e7a0b866",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        },
-        {
-          "path": "scripts/validation/recovery-policy-container.ts",
-          "category": "source-or-build",
-          "headBlob": "02bc2b00f741cbc1c1e6256f6b23c748d22eb409",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        }
       ],
       "uniquePatchCoverage": [
         {
@@ -2221,7 +2266,102 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "Seven module source/test commits all have stable-patch equivalents in C2; ask-schema/read-races exact. Own final ask-actions-wait-closure report is absent. Full PR diff also inherits the PR150 missing recovery paths; do not whole-merge that baseline."
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent and actual Web acceptance still required before closing.",
+      "originalC2PathCounts": {
+        "exact": 717,
+        "evolved": 116,
+        "absent": 10
+      },
+      "originalC2AbsentPaths": [
+        {
+          "path": "apps/server/test/fixtures/policy-native-recovery.ts",
+          "category": "test",
+          "headBlob": "9122b571506400ff8276c66ce375a8c2f6cd4a8a",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/fixtures/recovery-http-host.ts",
+          "category": "test",
+          "headBlob": "9774e354c7e37c041b8f384339996fcf1e20fe2e",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-http-seams.test.ts",
+          "category": "test",
+          "headBlob": "6969b9f4ed5ef63d22e1f652ea9142bbfe33e144",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-policy-lifecycle.test.ts",
+          "category": "test",
+          "headBlob": "d3445693a4e2ea149c8fa71616142040f0e0b4d2",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "apps/server/test/multiuser-recovery-portable-file.test.ts",
+          "category": "test",
+          "headBlob": "739a2e27f1fdd3fecf1ff4b03ec35ceb95c9b487",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/ask-actions-wait-closure.md",
+          "category": "design",
+          "headBlob": "e871a19dff74e97011ebb1627bbc0718df9feb6b",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-policy-personal-archive.md",
+          "category": "design",
+          "headBlob": "7c07a9abe8f56c4b446157e5b612cdbec8d31485",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "docs/validation/multiuser-recovery-lifecycle-seams.md",
+          "category": "design",
+          "headBlob": "726afb666046b05bff308847956f052d84c0f57d",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/validation/recovery-file-generation-container.ts",
+          "category": "source-or-build",
+          "headBlob": "3acbd5e93c937c601264de7a84d11279e7a0b866",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        },
+        {
+          "path": "scripts/validation/recovery-policy-container.ts",
+          "category": "source-or-build",
+          "headBlob": "02bc2b00f741cbc1c1e6256f6b23c748d22eb409",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "sourceCompletionPathCounts": {
+        "exact": 726,
+        "evolved": 117
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "initialClassification": "PARTIAL_HOLD",
+      "initialReason": "Seven module source/test commits all have stable-patch equivalents in C2; ask-schema/read-races exact. Own final ask-actions-wait-closure report is absent. Full PR diff also inherits the PR150 missing recovery paths; do not whole-merge that baseline."
     },
     {
       "number": 154,
@@ -2233,12 +2373,8 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 1,
-        "evolved": 1
-      },
       "scope": "Ask/processing await authorization tests",
-      "classification": "PARTIAL_HOLD",
+      "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "test": 1,
@@ -2248,7 +2384,6 @@
         "apps/server/test/multiuser-ask-processing-authorization-seam.test.ts",
         "docs/validation/ask-processing-authorization-seam.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [
         {
           "sha": "6010cfa97c875f40356a23d5bfdfa428e8dab8d0",
@@ -2257,7 +2392,19 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "The 102-line authorization test is byte-identical. Candidate report has older ending: publication/prerequisite ownership additions are absent and it still says no Draft was opened while RED. Hold for accurate receipt/history reconciliation, not a missing test or runtime fix."
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent and actual Web acceptance still required before closing.",
+      "originalC2PathCounts": {
+        "exact": 1,
+        "evolved": 1
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 2
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "initialClassification": "PARTIAL_HOLD",
+      "initialReason": "The 102-line authorization test is byte-identical. Candidate report has older ending: publication/prerequisite ownership additions are absent and it still says no Draft was opened while RED. Hold for accurate receipt/history reconciliation, not a missing test or runtime fix."
     },
     {
       "number": 155,
@@ -2269,10 +2416,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 810,
-        "evolved": 77
-      },
       "scope": "M15 Android account lifecycle",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -2285,9 +2428,19 @@
         "apps/android/app/src/androidTest/java/dev/mote/collector/MultiuserWorkerInstrumentedTest.kt",
         "docs/validation/multiuser-android-final-matrix.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 810,
+        "evolved": 77
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 810,
+        "evolved": 77
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 156,
@@ -2299,13 +2452,8 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 888,
-        "evolved": 75,
-        "absent": 1
-      },
       "scope": "M13 Web/compiled private SQL lifecycle",
-      "classification": "PARTIAL_HOLD",
+      "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 523,
@@ -2317,16 +2465,6 @@
         "apps/server/test/private-sql-connection-lifecycle.test.ts",
         "apps/server/test/private-sql-preparation.test.ts",
         "docs/design/multiuser-web.md"
-      ],
-      "absentPaths": [
-        {
-          "path": "docs/validation/multiuser-m13-statement-lifecycle.md",
-          "category": "design",
-          "headBlob": "89c65d1b36569074e733b10190bd7e8363a9af23",
-          "candidateBlob": null,
-          "publicationBlob": null,
-          "state": "absent"
-        }
       ],
       "uniquePatchCoverage": [
         {
@@ -2388,7 +2526,30 @@
           ]
         }
       ],
-      "reason": "Current remote head isb2802a8d, newer than manifest FWb598. The extra lifecycle fixa2f299c8 equals already-consumedacbfd/f1be, and its test is exact. C2 private SQL deliberately unions KEEP changeToken. One new lifecycle report is absent and70fc final KEEP-status doc paragraphs are older in C2. No new production/test fix to pick twice."
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent and actual Web acceptance still required before closing.",
+      "originalC2PathCounts": {
+        "exact": 888,
+        "evolved": 75,
+        "absent": 1
+      },
+      "originalC2AbsentPaths": [
+        {
+          "path": "docs/validation/multiuser-m13-statement-lifecycle.md",
+          "category": "design",
+          "headBlob": "89c65d1b36569074e733b10190bd7e8363a9af23",
+          "candidateBlob": null,
+          "publicationBlob": null,
+          "state": "absent"
+        }
+      ],
+      "sourceCompletionPathCounts": {
+        "exact": 889,
+        "evolved": 75
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "initialClassification": "PARTIAL_HOLD",
+      "initialReason": "Current remote head isb2802a8d, newer than manifest FWb598. The extra lifecycle fixa2f299c8 equals already-consumedacbfd/f1be, and its test is exact. C2 private SQL deliberately unions KEEP changeToken. One new lifecycle report is absent and70fc final KEEP-status doc paragraphs are older in C2. No new production/test fix to pick twice."
     },
     {
       "number": 157,
@@ -2400,10 +2561,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
-      "pathCounts": {
-        "exact": 793,
-        "evolved": 92
-      },
       "scope": "Joint scoped processing/typed graph/ACK contracts",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -2418,9 +2575,19 @@
         "docs/design/multiuser-file-processing-contract.md",
         "docs/validation/multiuser-joint-fj-delivery.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [],
-      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim."
+      "reason": "Exact head is an ancestor of C2; all PR changed paths remain present (exact or later evolved), including source, tests and design/validation records. This is provenance coverage, not a new semantic or UI acceptance claim.",
+      "originalC2PathCounts": {
+        "exact": 793,
+        "evolved": 92
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 792,
+        "evolved": 93
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 158,
@@ -2432,10 +2599,6 @@
       "isDraft": true,
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
-      "pathCounts": {
-        "exact": 888,
-        "evolved": 77
-      },
       "scope": "KEEP admin limits/lexical maintenance/split exports",
       "classification": "REPLACE_AFTER_ACCEPTANCE",
       "closeNow": false,
@@ -2454,7 +2617,6 @@
         "apps/server/test/multiuser-keep-controls.test.ts",
         "docs/design/multiuser-keep-controls.md"
       ],
-      "absentPaths": [],
       "uniquePatchCoverage": [
         {
           "sha": "1d33119b00eb91515ad9e24d356b937bbaa637bc",
@@ -2507,7 +2669,18 @@
           ]
         }
       ],
-      "reason": "Runtime/source proof reads, admin limit HTTP/UI, FTS maintenance and split exports are present; core HTTP/UI/source blobs exact. Stable patches9314feff/e663d48d selected; db321f64 UI differs only catalog insertion context. Final private SQL adds prepared cache/lifecycle while retaining host changeToken. Independent496/e896 tests also included."
+      "reason": "Runtime/source proof reads, admin limit HTTP/UI, FTS maintenance and split exports are present; core HTTP/UI/source blobs exact. Stable patches9314feff/e663d48d selected; db321f64 UI differs only catalog insertion context. Final private SQL adds prepared cache/lifecycle while retaining host changeToken. Independent496/e896 tests also included.",
+      "originalC2PathCounts": {
+        "exact": 888,
+        "evolved": 77
+      },
+      "originalC2AbsentPaths": [],
+      "sourceCompletionPathCounts": {
+        "exact": 888,
+        "evolved": 77
+      },
+      "absentPaths": [],
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
     },
     {
       "number": 159,
@@ -2729,5 +2902,25 @@
       "uniquePatchCoverage": [],
       "reason": "Final review target: retain open Draft; do not close or merge."
     }
-  ]
+  ],
+  "initialAuditCounts": {
+    "REPLACE_AFTER_ACCEPTANCE": 24,
+    "UNRELATED_KEEP": 5,
+    "PARTIAL_HOLD": 4,
+    "TARGET_KEEP": 1
+  },
+  "sourceCompletion": {
+    "testDocCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+    "productionBaseC2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+    "receipt": "multiuser-recovery-source-receipt.json",
+    "receiptSha256": "cbb1579bd4244fabeb54e4854d2afffff4f97fd57e9e143a721c19ba1313608e",
+    "manifestSha256": "e67e14ed9f3b86c045e34f4dfe75711f02bed4cfd17f2f314fc3dd80a0063496",
+    "freshAffectedExit": 0,
+    "newDistinctRecoveryScenariosPass": 10,
+    "compiledHttpReplayPass": 3,
+    "missingChangedPathsAcross28PRs": 0,
+    "browserAcceptance": "INCOMPLETE_SEPARATE_TOOL_BLOCK",
+    "closeNow": false,
+    "note": "All initial source/report holds reconciled. Historical path counts/absent lists below remain explicitly attributed to the initial C2 audit; successor counts are separate. No old gate result is relabelled."
+  }
 }

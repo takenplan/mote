@@ -45,16 +45,75 @@ executed C2 preparer hash is preserved alongside the new hash in its archive
 index. Repeat commands are in the archive README; another task's working tree
 is no longer an input.
 
-## Required fresh evidence
+## Fresh execution
 
-The test/document commit must be frozen separately from the old tested C2.
-Fresh isolated execution will include the three added test files (seven cases),
-the two opt-in production-container runners, the native/Hindsight/compiled
-fixture, repo-local compiled-HTTP preparation/execution, new builds and the
-required affected checks. Each result must name the actual commit/image/runner
-hash, and every original failure remains attached to its original SHA. This
-initial record deliberately claims no fresh tests passed yet.
+Executed test/document candidate: `0cfe78d6afd7143ed3e5be855925928eb23f76a9`.
+Its [immutable consumption manifest](multiuser-recovery-source-consumption.json)
+has SHA256 `e67e14ed9f3b86c045e34f4dfe75711f02bed4cfd17f2f314fc3dd80a0063496`.
+All2,862 tracked hashes and the clean checkout were rechecked after execution.
+The manifest was derived from C2: inherited history/created-time fields still
+describe the original template; actual successor freeze time, candidate and
+results are distinguished in [the execution receipt](multiuser-recovery-source-receipt.json).
+Later receipt/audit commits are documentation only and were not the executed SHA.
 
-The final all28-PR coverage decision remains conditional on these results and
-the separate full Web acceptance. No test-only gap closure authorizes closing
-PRs before the parent's explicit post-acceptance release.
+| Actual command/scope | Result |
+| --- | --- |
+| Three original added recovery test files | 7/7, EXIT0,0 skip/cancel,8.080s |
+| Repo-local preparation and compiled HTTP replay | Preparation0;3/3, EXIT0,0 skip/cancel,4.536s |
+| Original generation-container runner | 1/1, EXIT0,0 skip/cancel;0→1→2 restored→3, two startup cycles, old tickets/intent rejected, exact bytes/B preserved |
+| Original policy-container runner | 1/1, EXIT0,0 skip/cancel; nonempty policy/plan/binding rows, two startup/stopped readbacks, owner-isolated account erasure |
+| Original compiled native/Hindsight fixture | 1/1, EXIT0,0 skip/cancel,189.434s; two providers, four actual Managed canonical reads, unknown preserved, old grants/tokens retired, model calls0 |
+| Fresh `npm run build` | Same-source permitted execution EXIT0; initial sandbox Desktop iconutil failure1 remains recorded |
+| Strict added source group / compiled fixture group | EXIT0 / EXIT0; initial combined source+dist declaration-identity failure2 remains recorded, with no code fix or relaxed rule |
+| Required `npm run check:affected -- --base 5cfe3a399568c6be705b472bbc8a022d46a19e17` | Natural EXIT0; no stage restarted |
+
+The affected scope conservatively includes all consumers because the two
+`scripts/validation` additions are root inputs. Its actual counts are
+Desktop587; Server2940 pass/2 existing skips; Web574; Agent317 pass/1 existing
+skip; Diagnostics5; Shared192; root81; client5; Central runner passed; Android
+JVM XML358 tests,0 failure/error/skip,25 tasks executed with installed JDK21.
+All workspace/script typechecks and8,549-message i18n checks passed. The old
+C2 results remain attributed to8ad; none is relabelled as this execution.
+
+The fresh isolated image is
+`sha256:3cd9b3d8588d4b76a249c8df9946a84e215544c14134d2296c9b0d2525a7e782`,
+labelled with0cfe. Its1,799 input artifact hash is
+`ad0d57754325c17afd96e7c7352e42bfb4fea25624045cc485322f8bbfa62468`.
+Only already-installed locked dependency images were used; no pulls or live
+model calls occurred. Host Node26/ABI147 and image Node24/ABI137 each passed
+actual root and Mem0 SQLite write/read/close and workspace identity checks.
+Dependencies were reused read-only from a matching-lock install; all `@mote`
+links and freshly emitted product modules belonged to this isolated checkout.
+
+Production/build inputs are unchanged from C2. The compiled libraries/Server/Web
+match C2 byte-for-byte; Desktop's bundle differs only in20 verified relative
+dependency-location strings caused by the deeper checkout, with normalized
+bytes otherwise exact. Raw hashes and this distinction remain in the receipt.
+The source was not edited to make output hashes match.
+
+Recovery cleanup passed28 independent exact-name/label resource checks. Generated
+fixture directories were removed, and all six completed owned temp/cache roots
+were subsequently removed. No owned-source-namespace process remained in a
+read-only check. Validation images/build evidence remain for reproducibility;
+no other run's resource was stopped or removed.
+
+## Repeat and consolidation
+
+Use a clean checkout of the recorded0cfe SHA with locked dependencies and fresh
+builds. Run the three test files with the checkout's Node/tsx and the unchanged
+120s server test limit. Run each opt-in container/native file with
+`MOTE_CONTAINER_VALIDATION_IMAGE` naming a fresh image labelled
+`dev.mote.runtime-source=<that exact checkout SHA>` and
+`MOTE_RECOVERY_CANDIDATE=<that SHA>`; the native fixture rejects a mismatch.
+The image can be built from the repository Dockerfile with that explicit label
+and the pinned dependencies available. Existing unrelated containers are not
+inputs. Compiled-HTTP staging commands and namespace checks are in the
+[archive README](final-c2-recovery-sources/README.md). Use a new owned TMPDIR,
+scrub inherited MOTE/provider credential variables, and preserve failures and
+cleanup for the new run rather than copying these results.
+
+All28 multiuser PRs now have a source/test/design replacement mapping with no
+missing paths. The original audit gaps and historical failing gates remain
+recorded. Separate real Web acceptance is still incomplete; PR143/145–148 stay
+independent. No source-completion result authorizes closing any PR before the
+parent's explicit post-acceptance release.

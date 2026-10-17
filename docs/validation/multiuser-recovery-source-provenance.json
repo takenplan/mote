@@ -1,5 +1,5 @@
 {
-  "status": "ADOPTED_TESTS_PENDING_ACTUAL_EXECUTION",
+  "status": "TESTED_SOURCE_COMPLETION_PASS_WEB_STILL_PENDING",
   "baseCandidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
   "patchSha256": "643e5477295a44400ccfffb4d49e3a559d5afbf169d8237ffb28faad3933dccd",
   "files": [
@@ -140,5 +140,9 @@
     "Strict current Git HEAD/image label instead of historical2699 label",
     "Unique owned progress path instead of shared /tmp filename"
   ],
-  "httpArchiveAdaptation": "Resolve retained test from exact repository checkout; preserve origin67b and old executed preparer hash"
+  "httpArchiveAdaptation": "Resolve retained test from exact repository checkout; preserve origin67b and old executed preparer hash",
+  "executedTestDocCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+  "executionManifestSha256": "e67e14ed9f3b86c045e34f4dfe75711f02bed4cfd17f2f314fc3dd80a0063496",
+  "executionReceiptSha256": "cbb1579bd4244fabeb54e4854d2afffff4f97fd57e9e143a721c19ba1313608e",
+  "newResultNotRelabelledFromOldC2": true
 }

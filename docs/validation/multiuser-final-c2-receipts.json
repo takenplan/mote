@@ -1093,5 +1093,25 @@
     "native": "Original21 receipt5011f retained unchanged; C2 has independent new21receiptace62",
     "generationRace": "Original over-strong fixture failed during issued/unknown; guard409 correct. Controlled2/2 five rounds each passed; no unknown settled."
   },
-  "publication": "All changes after tested source8ad are documentation/archival source copies only; no claim that the later publication head itself ran the gate."
+  "publication": "All changes after tested source8ad are documentation/archival source copies only; no claim that the later publication head itself ran the gate.",
+  "recoverySourceCompletion": {
+    "executedTestDocCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+    "productionBaseC2": "8ad99089ead559d6656a269fdca7ccb884953c07",
+    "manifestSha256": "e67e14ed9f3b86c045e34f4dfe75711f02bed4cfd17f2f314fc3dd80a0063496",
+    "receipt": "multiuser-recovery-source-receipt.json",
+    "receiptSha256": "cbb1579bd4244fabeb54e4854d2afffff4f97fd57e9e143a721c19ba1313608e",
+    "freshAffectedExit": 0,
+    "sourceTests": {
+      "focused": 7,
+      "compiledHttpReplay": 3,
+      "containerRunners": 2,
+      "nativeCompiled": 1,
+      "distinctRestoredScenarios": 10,
+      "newSkipped": 0
+    },
+    "all28MultiuserPRPathsCovered": true,
+    "PRCloseActions": 0,
+    "overallWebAcceptance": "INCOMPLETE",
+    "oldC2ResultsNotRelabelled": true
+  }
 }

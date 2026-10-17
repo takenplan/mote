@@ -1,19 +1,19 @@
 # PR159 consolidation audit: no closing performed
 
-This is a read-only source/test/design inventory, not permission to close PRs now. The final actual Web acceptance is incomplete. The parent will explicitly release any closing only after the remaining validation and gaps are handled. This lane used shell/GitHub API only; it did not connect to Chrome, claim a session, or run browser actions.
+The initial source/test/design inventory was read-only; the later explicitly authorized test/document completion is recorded below. Neither phase permits closing PRs now. The final actual Web acceptance is incomplete. The parent will explicitly release any closing only after the remaining validation and gaps are handled. This lane used shell/GitHub API only; it did not connect to Chrome, claim a session, or run browser actions.
 
 Tested product candidate: `8ad99089ead559d6656a269fdca7ccb884953c07`, tree `fcb3bce1524932978ad7133377aaa56136a3dcc1`. Immutable manifest SHA256: `3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a`. Publication head at the start of this audit: `2bc7e3f19cbde9c825057122850d8a23f386da90`; later audit commits are documentation only. All34 heads were fetched and matched the GitHub API snapshot. The base is `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
 
 ## Decision
 
-- 24 multiuser PRs have source/test/design coverage sufficient to be replacement candidates after final acceptance. This does not mark their historical gates green or authorize closing now.
-- Four PRs (150,153,154,156) need durable-test or receipt/document reconciliation before a blanket replacement claim. Their already-selected production fixes are not proposed for duplicate merging.
+- All28 multiuser PRs now have source/test/design replacement coverage after the authorized source completion. Closing still requires final actual Web acceptance and the parent's explicit release; historical failed gates are unchanged.
+- The initial four holds (150,153,154,156) are reconciled by tested successor `0cfe78d6afd7143ed3e5be855925928eb23f76a9`: seven original executable inputs, four historical reports and PR154 attribution are retained; repo-local compiled-HTTP preparation and all new recovery scenarios pass. No production fix was merged twice.
 - Five independent PRs (143,145,146,147,148) must remain open and outside consolidation.
 - PR159 remains the single final Draft review target. No PR was closed, commented on, merged, retargeted or deleted by this audit; no branch was deleted and CI settings were not changed.
 
 ## Per-PR mapping
 
-`A` means the exact PR head is an ancestor of C2 and every changed path remains present. `P` means selected/adapted patches and resulting files were checked; it does not imply branch ancestry. Counts are exact/evolved/absent Git blobs across the whole PR diff, including inherited modules. Evolved files were not mechanically declared semantically equal. Full40-character heads, source/test/design examples, path counts, absent paths and patch matches are in [the machine mapping](multiuser-pr159-consolidation-audit.json).
+`A` means the exact PR head is an ancestor of C2 and every changed path remains present. `P` means selected/adapted patches and resulting files were checked; it does not imply branch ancestry. Counts below are from the initial C2 audit, including inherited modules. The source-completion JSON separately records successor counts with zero absent paths for all28. Evolved files were not mechanically declared semantically equal. Full40-character heads, source/test/design examples, path counts, absent paths and patch matches are in [the machine mapping](multiuser-pr159-consolidation-audit.json).
 
 | PR | Actual diff scope | Frozen head | Evidence | Recommendation |
 | --- | --- | --- | --- | --- |
@@ -41,16 +41,22 @@ Tested product candidate: `8ad99089ead559d6656a269fdca7ccb884953c07`, tree `fcb3
 | [147](https://github.com/utopiafar/mote/pull/147) | Main: Gmail provider-counter stability | `9dc47305f639` | Independent actual diff | Keep independent; never close in this cleanup |
 | [148](https://github.com/utopiafar/mote/pull/148) | Main: Memory/cache retention | `d966759d18d0` | Independent actual diff | Keep independent; never close in this cleanup |
 | [149](https://github.com/utopiafar/mote/pull/149) | Desktop v2 PKCE durable recovery | `f319513a0502` | A; 677/106/0 | Eligible after final acceptance; no close now |
-| [150](https://github.com/utopiafar/mote/pull/150) | Personal applied-policy archive/recovery | `67b992f32016` | P; 715/118/9 | Hold: reconcile gap below |
+| [150](https://github.com/utopiafar/mote/pull/150) | Personal applied-policy archive/recovery | `67b992f32016` | P; 715/118/9 | Initial hold resolved by0cfe; wait for Web/release |
 | [151](https://github.com/utopiafar/mote/pull/151) | Named/typed image progress and export | `98b1ea52c446` | P; 827/92/0 | Eligible after final acceptance; no close now |
 | [152](https://github.com/utopiafar/mote/pull/152) | Original recording consumers | `144852fe7df7` | A; 794/108/0 | Eligible after final acceptance; no close now |
-| [153](https://github.com/utopiafar/mote/pull/153) | Scoped Ask evidence/admission waiting | `f67f6980cdab` | P; 717/116/10 | Hold: reconcile gap below |
-| [154](https://github.com/utopiafar/mote/pull/154) | Ask/processing await authorization tests | `6010cfa97c87` | P; 1/1/0 | Hold: reconcile gap below |
+| [153](https://github.com/utopiafar/mote/pull/153) | Scoped Ask evidence/admission waiting | `f67f6980cdab` | P; 717/116/10 | Initial hold resolved by0cfe; wait for Web/release |
+| [154](https://github.com/utopiafar/mote/pull/154) | Ask/processing await authorization tests | `6010cfa97c87` | P; 1/1/0 | Initial hold resolved by0cfe; wait for Web/release |
 | [155](https://github.com/utopiafar/mote/pull/155) | M15 Android account lifecycle | `f1452b9876cc` | A; 810/77/0 | Eligible after final acceptance; no close now |
-| [156](https://github.com/utopiafar/mote/pull/156) | M13 Web/compiled private SQL lifecycle | `b2802a8dbe0a` | P; 888/75/1 | Hold: reconcile gap below |
+| [156](https://github.com/utopiafar/mote/pull/156) | M13 Web/compiled private SQL lifecycle | `b2802a8dbe0a` | P; 888/75/1 | Initial hold resolved by0cfe; wait for Web/release |
 | [157](https://github.com/utopiafar/mote/pull/157) | Joint scoped processing/typed graph/ACK contracts | `8084ef359fa0` | A; 793/92/0 | Eligible after final acceptance; no close now |
 | [158](https://github.com/utopiafar/mote/pull/158) | KEEP admin limits/lexical maintenance/split exports | `1d33119b00eb` | P; 888/77/0 | Eligible after final acceptance; no close now |
 | [159](https://github.com/utopiafar/mote/pull/159) | Sole final multiuser review target | `2bc7e3f19cbd` | Final publication target | Keep sole final Draft target |
+
+## Source-completion result
+
+The initial gap analysis below remains historical. The parent subsequently authorized restoring the exact missing inputs and accurate receipt attribution. [The completion record](multiuser-recovery-source-completion.md), [actual receipt](multiuser-recovery-source-receipt.json) and [matching successor manifest](multiuser-recovery-source-consumption.json) distinguish executed test/document commit0cfe from production-base C2/8ad. Focused7, compiledHTTP3, two original container cases and original native/Hindsight1 pass with no new skips; the required affected check naturally exits0 (Server2940pass/2existing skips, all other components and Android358 pass). All28 PR diffs now have zero absent paths. The few earlier M13 KEEP-status paragraphs remain earlier checkpoint records; the retained final lifecycle report, exact original PR156 head and final union receipts supply their later attribution without overwriting newer union source.
+
+No actual Web completion is inferred from these checks. The other five PRs remain independent, every branch/commit is retained and no close is authorized yet.
 
 ## Actual selected-patch checks
 
@@ -62,11 +68,11 @@ Tested product candidate: `8ad99089ead559d6656a269fdca7ccb884953c07`, tree `fcb3
 - Web PR156 remote head is now `b2802a8dbe0a21ffe2af8d26a2fbdeaa8b2c1a2e`, newer than manifest FW `b5989f75`. Its new `a2f299c8` is the same narrow Statement lifecycle fix already selected as `acbfd7f1`/`f1be61ee`; the lifecycle/preparation tests are present and exact. C2 intentionally retains KEEP `changeToken` alongside the prepared cache. Do not replay the same fix or replace the union with the PR156 file wholesale.
 - KEEP PR158 is multiuser scope, not unrelated settings work. Instance limit/control routes, private management, shared lexical `pd_fts` maintenance, owner split TAR/current-history exports, UI and contract are retained. Core `instance-controls.ts`, `index-maintenance.ts`, `file-export.ts`, `file-export-tar.ts` and UI files are exact. `db321f64` differs in catalog insertion context; independent `496cae8d` and `e8962fb8` tests are included. Later task recheck authority and Statement lifecycle additions must remain.
 
-## Gaps that must be reconciled before blanket closing
+## Initial gaps, subsequently reconciled by0cfe
 
 ### PR150 recovery source reproducibility; inherited by PR153
 
-Production `apps/server/src/scope/processing-policy-archive.ts`, `apps/server/test/multiuser-policy-personal-archive.test.ts` and `docs/design/multiuser-policy-personal-archive.md` are byte-identical to PR150. Its dangling-parent rejection and preflight name are also selected. No new missing production fix was found. However, these paths from PR150 are absent in C2 and the audited PR159 publication:
+Production `apps/server/src/scope/processing-policy-archive.ts`, `apps/server/test/multiuser-policy-personal-archive.test.ts` and `docs/design/multiuser-policy-personal-archive.md` are byte-identical to PR150. Its dangling-parent rejection and preflight name are also selected. No new missing production fix was found. At the initial audit, these paths from PR150 were absent in C2 and the publication snapshot; all are now restored by0cfe:
 
 - `apps/server/test/fixtures/policy-native-recovery.ts`
 - `apps/server/test/fixtures/recovery-http-host.ts`
@@ -80,9 +86,9 @@ Production `apps/server/src/scope/processing-policy-archive.ts`, `apps/server/te
 
 Seven are test/fixture/runner sources and two are validation reports. The three test files cover actual issued-HTTP SIGKILL/unknown consent, same-account plan/erasure/relogin/disable boundaries and current incarnation/ticket/delete-intent recovery. These cannot be counted as a full original suite included in PR159. The new C2 complete-recovery driver and its passing receipts exercise overlapping boundaries but do not automatically substitute every old assertion.
 
-Concrete self-contained-source gap: `docs/validation/final-c2-recovery-sources/prepare-compiled-http-driver.mjs.source:14` reads `/Users/utopiafar/Documents/Codex/2026-10-17/task-7/mote/apps/server/test/multiuser-recovery-http-seams.test.ts`. That input test body is not in PR159. The snapshot README permits path-only adaptation but does not supply the missing body. Recommend retaining the exact prerequisite test source/fixtures (or a reviewed self-contained successor and explicit mapping), updating repeat instructions to owned checkout paths, and running the affected test list on the resulting candidate. This audit does not import tests or rerun recovery.
+Initial self-contained-source gap (now fixed by the repo-local preparer): `docs/validation/final-c2-recovery-sources/prepare-compiled-http-driver.mjs.source:14` reads `/Users/utopiafar/Documents/Codex/2026-10-17/task-7/mote/apps/server/test/multiuser-recovery-http-seams.test.ts`. That input test body was missing at the initial snapshot and is now retained in the repository. The snapshot README permits path-only adaptation but does not supply the missing body. Recommend retaining the exact prerequisite test source/fixtures (or a reviewed self-contained successor and explicit mapping), updating repeat instructions to owned checkout paths, and running the affected test list on the resulting candidate. The subsequent authorized completion imported the sources and ran the original recovery cases; see its separate exact-SHA receipt.
 
-PR153 inherits those nine absent paths from PR150. Its own `docs/validation/ask-actions-wait-closure.md` is additionally absent. Preserve the exact seven-commit manifest, historical full-gate failures, independent52-case release receipt and source fingerprints via a durable document or explicit immutable link. Do not whole-merge PR153 to obtain that report and accidentally overwrite newer union contracts.
+PR153 inherited those nine absent paths from PR150, plus its own `docs/validation/ask-actions-wait-closure.md`. The successor retains all ten. Preserve the exact seven-commit manifest, historical full-gate failures, independent52-case release receipt and source fingerprints via a durable document or explicit immutable link. Do not whole-merge PR153 to obtain that report and accidentally overwrite newer union contracts.
 
 ### PR154 publication receipt
 
@@ -90,7 +96,7 @@ The authorization test body is exact. `docs/validation/ask-processing-authorizat
 
 ### PR156 newer documentation
 
-`docs/validation/multiuser-m13-statement-lifecycle.md` is absent. Later `70fc1888` updates in the Coding/current-composition/KEEP matrix documentation are also older in C2. Retain or explicitly link the exact lifecycle-fix consumption and final KEEP-gate receipt before closing PR156. The production lifecycle fix and exact tests are already selected, so this is a traceability/document gap, not a second runtime bug.
+`docs/validation/multiuser-m13-statement-lifecycle.md` was absent and is now retained exactly. Later `70fc1888` updates in the Coding/current-composition/KEEP matrix documentation are also older in C2. Retain or explicitly link the exact lifecycle-fix consumption and final KEEP-gate receipt before closing PR156. The production lifecycle fix and exact tests are already selected, so this is a traceability/document gap, not a second runtime bug.
 
 ## Independent PRs to retain
 
@@ -102,9 +108,9 @@ The authorization test body is exact. `docs/validation/ask-processing-authorizat
 
 ## Safe close sequence after a later explicit release
 
-1. Finish actual Web journeys and resolve the stated gaps without rewriting historical source/results. If production or executable-test inputs change, freeze a successor manifest and rerun affected consumers; documentation-only reconciliation needs documentation review.
+1. Finish actual Web journeys without rewriting historical source/results. The source/test/report gaps below are resolved in0cfe. If production or executable-test inputs change, freeze a successor manifest and rerun affected consumers; documentation-only reconciliation needs documentation review.
 2. Refresh every open PR head and target before any close. A moved head invalidates this row until its new delta is checked. Confirm the final PR contains all necessary code, tests and design as one independent review.
 3. Wait for the parent's explicit post-acceptance release. Close only mapped, fully covered multiuser PRs as superseded by159; retain branches and commit history. Do not merge them one by one, merge main/integration, delete branches or enable CI.
 4. Use a short factual closing note linking PR159, the exact consumed head/mapping and final accepted candidate/receipt. Explain that the module is consolidated and that historical failed gates remain attached to their original SHA. PR143/145-148 remain open; PR159 remains the review target.
 
-No closing note was posted in this preparation. Current status remains `AUDIT_ONLY_NOT_AUTHORIZED_TO_CLOSE`.
+No closing note was posted in this preparation. Current status is `SOURCE_COMPLETION_PASS_NOT_AUTHORIZED_TO_CLOSE`: all28 are conditional replacement candidates, with no closing performed.
