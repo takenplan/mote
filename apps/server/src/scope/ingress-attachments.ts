@@ -4,7 +4,7 @@ import {missing,type PrivateSql} from './private-data-sql.js';
  * A JSON declaration alone is never a byte capability. No caller SQL is used. */
 export const attachmentVisible=(capture='c',live=true)=>`(json_type(${capture}.json,'$.provenance.document.attachmentOf') IS NULL OR EXISTS(
  SELECT 1 FROM ig_attachment_links l JOIN pd_captures p ON p.user_id=l.user_id AND p.id=l.parent_capture_id
- LEFT JOIN pd_source_heads ph ON ph.user_id=p.user_id AND ph.capture_id=p.id
+ LEFT JOIN pd_source_heads ph ON ph.user_id=p.user_id AND ph.source_id=p.source_id AND ph.external_id=p.external_id AND ph.capture_id=p.id
  JOIN pd_sources ps ON ps.user_id=p.user_id AND ps.id=p.source_id
  JOIN ig_archive_links a ON a.user_id=l.user_id AND a.capture_id=p.id AND a.file_id=l.file_id
  JOIN ig_archive_files f ON f.user_id=a.user_id AND f.id=a.file_id

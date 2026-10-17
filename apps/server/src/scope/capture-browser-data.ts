@@ -1,3 +1,4 @@
+import {attachmentVisible} from './ingress-attachments.js';
 import {z} from 'zod';
 import {sourceSchema,systemEventText,transcriptSchema,type CapturePreview,type CaptureRecord} from '@mote/shared';
 import {captureOcrState} from '@mote/shared/metadata';
@@ -30,7 +31,7 @@ export class CaptureBrowserData{
   json_extract(c.json,'$.capturedAt') captured_at,json_extract(c.json,'$.source') source,
   json_extract(c.json,'$.originalImage.hash') IS NOT NULL has_image,
   CASE WHEN json_extract(c.json,'$.source')!='screen' THEN 'not_applicable' WHEN x.payload IS NOT NULL THEN 'completed' ELSE COALESCE(json_extract(c.json,'$.ocr.status'),'unknown') END ocr_status
-  FROM pd_captures c LEFT JOIN extraction x ON x.capture_id=c.id WHERE c.user_id=$user AND (c.source_id IS NULL OR EXISTS(SELECT 1 FROM pd_source_heads h WHERE h.user_id=$user AND h.capture_id=c.id AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0)))`;}
+  FROM pd_captures c LEFT JOIN extraction x ON x.capture_id=c.id WHERE c.user_id=$user AND ${this.processing?attachmentVisible():'1'} AND (c.source_id IS NULL OR EXISTS(SELECT 1 FROM pd_source_heads h WHERE h.user_id=$user AND h.capture_id=c.id AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0)))`;}
  private scope(raw:z.infer<typeof captureBrowseSchema>,screens=false){
   const clauses=screens?["source='screen'"]:['1'],args:(string|number)[]=[];
   if(raw.after){clauses.push("COALESCE(json_extract(json,'$.stateSeries.samples[#-1].at'),context_at)>=?");args.push(new Date(raw.after).toISOString());}
