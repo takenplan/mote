@@ -1424,3 +1424,21 @@ export and single M06 caller. Existing boundary checker now EXIT0
 merge/restart and corrupt-local-parent cases2/2 EXIT0 in5.602s
 (`/tmp/mote-joint-policy-archive-preflight-rename.*`). No checker exemption,
 execution or data semantics changed. Initial scope failure stays retained.
+
+### Unsaved default profile selection
+
+Durable cbfc27a5 demonstrates the advertised default archive profile returning503
+unless the user first saves a named graph:1/1fail (`/tmp/mote-joint-profile-default-red.*`).
+The existing M04 effective file-policy mirror now derives the displayed default
+reference graph from current personal/shared selections, retaining references and
+fingerprints only. Explicit overrides may bind it without saving a raw policy.
+The finite original default IDs remain explicit aliases to their original
+processor choices, without duplicating editor profile rows or borrowing instance
+credentials. Automatic legacy files still keep their original no-plan path.
+Own six entry cases6/6 EXIT0 in25.610s include legacy profile.audio.http through
+actual generated A/B ASR using equal capture IDs/different private keys, plus
+unsaved default archive/restart and saved root/import/attachment cases
+(`/tmp/mote-joint-profile-default-composed.*`). Existing named policy editor,
+service change/settings/preview/reprocess seven cases7/7 EXIT0 in28.710s;
+Server types and scope checker0. Default missing-connection reconciliation is
+separately being characterized; this increment is not yet a consumer freeze.
