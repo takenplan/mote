@@ -78,7 +78,7 @@ test('pagination-only recording reimports preserve old answer and original versi
  const after=node.featureServices.conversations.get(conversationId).turns[0];assert.equal(after.evidenceDeleted,undefined);assert.deepEqual(after.result,before.result);assert.ok(after.result!.evidenceDependencies!.ids.includes(first.id),'old locators are not retargeted by a transport-only import');
 });
 
-test('legacy history receipt backfill rolls back both the turn and quota metadata on failure',async t=>{
+for(const nested of [false,true])test(`legacy history receipt backfill rolls back both the turn and quota metadata on failure (${nested?'nested':'standalone'})`,async t=>{
  const dir=await mkdtemp(join(tmpdir(),'mote-history-backfill-')),node=await buildApp(config(dir),{backgroundWorker:false});
  t.after(async()=>{await node.app.close();await rm(dir,{recursive:true,force:true});});
  const saved=node.featureServices.conversations.append(undefined,{question:'Generated legacy request'},{answer:'Generated legacy answer.',citations:[],trace:[],runId:randomUUID(),evidenceDependencies:{version:1,complete:true,ids:[]}}),db=node.store.db;
@@ -86,9 +86,12 @@ test('legacy history receipt backfill rolls back both the turn and quota metadat
  db.prepare("UPDATE conversations SET json=json_set(json,'$.bytes',(SELECT sum(length(CAST(json AS BLOB))) FROM conversation_turns WHERE conversation_id=?)) WHERE id=?").run(saved.conversationId,saved.conversationId);
  const before=db.prepare('SELECT json FROM conversation_turns WHERE id=?').get(saved.turnId)!.json;
  db.exec("CREATE TRIGGER generated_backfill_failure BEFORE UPDATE OF json ON conversations BEGIN SELECT RAISE(ABORT,'Generated quota write failure'); END");
+ if(nested)db.exec('BEGIN IMMEDIATE');
  assert.throws(()=>new Conversations(node.store),/Generated quota write failure/);
+ assert.equal(db.isTransaction,nested,'migration failure preserves the caller transaction boundary');
  assert.equal(db.prepare('SELECT json FROM conversation_turns WHERE id=?').get(saved.turnId)!.json,before,'failed migration cannot commit a receipt without its quota metadata');
  db.exec('DROP TRIGGER generated_backfill_failure');new Conversations(node.store);
  assert.ok(node.featureServices.conversations.get(saved.conversationId).turns[0].historyEvidenceDependencies);
  assert.equal(db.prepare("SELECT json_extract(json,'$.bytes') n FROM conversations WHERE id=?").get(saved.conversationId)!.n,db.prepare('SELECT sum(length(CAST(json AS BLOB))) n FROM conversation_turns WHERE conversation_id=?').get(saved.conversationId)!.n);
+ if(nested)db.exec('COMMIT');
 });
