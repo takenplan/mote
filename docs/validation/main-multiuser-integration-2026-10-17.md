@@ -198,6 +198,15 @@ consumer/history assertions. It records A/B controls, original-byte retention,
 media reuse and the automatic-ASR admission limitation. Integration with the
 related recording-flow work and final joint checks remain pending.
 
+The local original-decoder F13 correction subsequently passed its independent
+two-case regression (2/2, no skips; 4.528 s) on `ea66efa6` plus exact source/test
+overlays, later committed as `722f40e2791a1474bac3afce7cdbac8c2f549a45`.
+The [decoder settlement report](main-multiuser-local-decoder-failure-2026-10-18.md)
+records the pre-fix RED, fixture corrections and hashes. It distinguishes
+Fastify route injection and owner-bound module lifecycle ports from the actual
+loopback HTTP ASR contrast and host-rebuild restart. This narrow result does
+not establish the final combined gate or live-model acceptance.
+
 | Retained local log | SHA256 |
 | --- | --- |
 | Interrupted J: `mote-main-multiuser-check-affected-final-J.log` | `c4571f7ccf99f68d4939a00a7ac55ac67682b78e93da126bee79487f69ee7acf` |
