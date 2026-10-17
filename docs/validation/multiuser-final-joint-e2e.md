@@ -1,4 +1,30 @@
-# Frozen multiuser C2: joint validation and remaining browser boundary
+# Multiuser acceptance: current evidence and historical C2
+
+## 2026-10-17 current acceptance
+
+PR159 targets `codex/mote-multiuser-integration`. The current finite acceptance
+is supported by these dated follow-ups:
+
+- [Final full gate and independent security/recovery regression](pr159-merge-security-regression-2026-10-17.md): frozen candidate `73485575ef62536a355a526be225cddc51b20a7b`, complete affected check naturally exited 0. Its exact-a5 recovery evidence remains separately attributed.
+- [Original Web acceptance](multiuser-web-acceptance-2026-10-17.md): all seven deferred groups completed, including the two Library fixes; Operations cancellation includes an explicitly human-confirmed native prompt. Final Web production freeze is `41a420bc0539f263fff67dbd8851202729d6fb13`.
+- [Android acceptance](multiuser-pr159-android-regression-2026-10-17.md): 77 unique non-live methods plus three variants, closing the earlier 57-method gap. Product source is `a5f3bf46`; the receipt distinguishes the original test APK and test-only `70c45087` successor.
+
+The original seven Web TODO groups and 57 unrun non-live Android methods now have
+explicit follow-up receipts. Three standard conditional skips remain unperformed,
+as listed in the final gate report. Physical devices, real private accounts,
+public deployment and live-model quality are outside this generated-data run.
+The earlier live-model connection result retains its original C2 attribution.
+
+The section below preserves the C2 report and its original failures, missing
+receipt statements and UNRUN counts under their `8ad99089` / `0cfe78d6` provenance;
+the checked TODO ledger at its end records the later dated closures. Those old
+statements do not describe the current follow-up disposition. The historical
+Chrome restriction was not repaired or relabelled: current Web acceptance used
+the separately supported IAB workflow.
+
+## Historical C2 report
+
+### Frozen multiuser C2: joint validation and remaining browser boundary
 
 The complete required gate, compiled Electron journey, actual Android representative journeys and fresh compiled recovery passed on source **`8ad99089ead559d6656a269fdca7ccb884953c07`**. **The real-browser C2 receipt is still missing; this report does not claim all eight journeys are accepted.**
 
@@ -18,7 +44,7 @@ The tested tree is `fcb3bce1524932978ad7133377aaa56136a3dcc1`, based on integrat
 - [Machine receipts and boundaries](multiuser-final-c2-receipts.json): component counts, command/log hashes, artifact identity, independent owner receipts and historical failures.
 - [Recovery driver source archive](final-c2-recovery-sources/README.md): verbatim executed drivers, per-file hashes, fresh-build and owned-namespace repeat requirements. No runtime data is committed.
 
-## Source composition
+### Source composition
 
 The manifest preserves exact source references, finite integration order, file hashes and conflict decisions. No generic peer HEAD or undeclared WIP was consumed. Theme PR143 is excluded.
 
@@ -34,7 +60,7 @@ The manifest preserves exact source references, finite integration order, file h
 
 Conflicts retain the FJ processing host/schema, the later declared Models/Agent/Files/Lark consumers, selected-child physical ACK semantics, stronger canonical/retained-original MCP assertions and unchanged original wait budgets. The cache combines fresh authorization/bindings on every access, KEEP invalidation tokens and finalized-statement re-preparation; it caches neither authorization nor returned data.
 
-## Actual C2 commands and results
+### Actual C2 commands and results
 
 Host Node is 26.11.1 / ABI147. Root and actual Mem0 SQLite constructors/write/read/close and workspace Agent/Shared identity were verified. Android uses existing JDK21 at `/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`.
 
@@ -67,7 +93,7 @@ Recovery covers exact original/typed/attachment bytes, current applied-plan/cont
 
 Android independently released its 37 ports, host processes, reverse mappings and AVD; recovery removed and re-audited all 24 recorded containers and 12 volumes. Only each lane's labelled resources were touched.
 
-## Eight-journey matrix
+### Eight-journey matrix
 
 All production data was generated A/B data, deliberately colliding logical IDs. HTTP/SQLite/host/executor and applicable original client flows are real; only external provider/capture IO is generated. Broad unit tests are not described as if every case were an end-to-end execution.
 
@@ -82,7 +108,7 @@ All production data was generated A/B data, deliberately colliding logical IDs. 
 | E7 connectors/actions/MCP | Real SDK/scoped sessions, generated external actions through original native Calendar/Lark and production connector/worker tests | No real private external calendar permissions or supplier data |
 | E8 issued/unknown retirement and restore | Actual provider-worker revoke/SIGKILL/no replay, socketHTTP parent/child/late ACK, complete fresh C2 personal/native/Docker/PG/Hindsight cycles | No unknown-result automatic settlement |
 
-## Confirmed defects and preserved history
+### Confirmed defects and preserved history
 
 C1 `f1be61ee` failed real joined-attachment personal export: a legitimate Material containing an `asset` block was rejected by the lifecycle validator's old text-only check. Recovery reproduced it in Docker and restored Node; this lane independently reproduced it without Docker/images/SQL seed. [The durable compiled test](../../scripts/validation/final-e2e-attachment-personal-export.test.ts) is part of C2 and now passes. C2 retains strict text/asset schema, nonempty owned asset members and all reference/revision/hash/history checks; M03 remains the only original-byte gate.
 
@@ -90,7 +116,7 @@ The earlier prepared-statement same-DatabaseSync close/open RED was fixed narrow
 
 C1's application/root gate passed but its overall command exited1 at Java25 Android configuration; independent JDK21 JVM358 passed. C2 reran the complete correct-JDK gate to0. Initial native NAT/proxy EOF fixtures passed only after owned adb reverse with the same C1 APK; those failures remain preserved. The Web random-hostname handoff400 was a fixture URL violation, not a product fault; a real request with normative loopback serverUrl returned200. Initial generation-race expectations were too strong during an issued/unknown external call; controlled2/2 with five rounds each passed, without changing backend guards or settling unknown calls. Old PREP/owner full-gate failures retain their original SHA and logs.
 
-## Remaining real-browser boundary
+### Remaining real-browser boundary
 
 The Web lane freshly built clean C2 in `/tmp/mote-final-web-task19-c2-8ad990/source` and confirmed original Chrome A username/password login, private Note/draft reload/two pages, canonical loopback handoff200, a held A GET released after A-to-B switching, B-only Note save/synchronization, and retirement of the old handoff page through normal storage notification. Evidence01-07 and `browser-steps.json` are under that lane's `evidence/` directory, through10:09:58UTC. These are partial C2 results, not a final browser receipt or proof of lost-storage-notification injection.
 
@@ -108,7 +134,7 @@ On Android C1, `adb -s emulator-5574 emu screenrecord screenshot .../evidence/em
 
 No main/integration merge, deployment, CI enabling, real central private data or real OS permissions were used. The branch is delivered as a Draft; real-browser completion remains explicit.
 
-## Deferred Web acceptance TODOs
+### Deferred Web acceptance TODOs
 
 The user accepted keeping these items in the Draft PR for later execution. The fresh original-page execution in [the dated Web follow-up](multiuser-web-acceptance-2026-10-17.md) now completes the groups below, including two production fixes and an explicitly human-assisted native task-cancellation confirmation. Passing non-browser gates alone did not complete them. The historical privacy hold was released by the parent after combined review and disclosure of historical limits; all 28 superseded PRs were confirmed closed unmerged at `2026-10-17T13:11:22.335443+00:00`. That closure alone did not complete these TODOs.
 
