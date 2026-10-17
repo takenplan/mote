@@ -787,10 +787,10 @@
   },
   "Web": {
     "owner": "01a14920-04fa-73ae-9308-af49d021c008",
-    "actualC2": "PARTIAL_CORE_CONFIRMED_FINAL_RECEIPT_PENDING",
+    "actualC2": "BOUNDED_TERMINAL_PARTIAL_NOT_WEB_GROUP_PASS",
     "actualC1": "Only A original login/Note/draft reload/two tabs confirmed;规范handoff request200 after initialfixture400",
     "lastEvidenceUtc": "2026-10-17T10:09:58.474Z",
-    "threadReadState": "Active/inProgress, no attention flag, but returned items end at initialization and are older than confirmed direct messages",
+    "threadReadState": "Direct final bounded receipt supersedes stale thread snapshots; lane has ended without full Web acceptance",
     "approvalD588": "No approval ID returned for the known C1 tool failure; no evidence links d588 to that failure or the current extension-UI block",
     "overallJourneyAcceptance": "NOT_CLAIMED",
     "actualC2Source": "/tmp/mote-final-web-task19-c2-8ad990/source",
@@ -801,7 +801,7 @@
       "target": "Owned Chrome tab2046608609 at synthetic C2 origin",
       "reason": "Chrome reports another extension UI open and requires human dismissal before automation continues",
       "outcome": "First navigation uncertain; no later success evidence",
-      "state": "HUMAN_DISMISSAL_REQUESTED_BROWSER_ACTIONS_STOPPED",
+      "state": "HUMAN_DISMISSAL_NOT_RECEIVED_BOUNDED_LANE_ENDED_HOSTS_CLOSED",
       "alternateToolOrRetry": false
     },
     "priorToolOutcome": {
@@ -816,7 +816,7 @@
     "remainingScope": "Final actual-browser receipt, remaining original consumers, and lost-storage-notification injection are not accepted",
     "boundedReceipt": {
       "path": "/tmp/mote-final-web-task19-c2-8ad990/evidence/bounded-receipt.json",
-      "sha256": "20f740fc5148333df5ab98f36871365710bda230c173a00564c285986bfd0c6f",
+      "sha256": "fc4e315dbf934fdbbdf9ce414c8fdcbd02d068dd92f370d918a462919cc374a6",
       "contents": {
         "candidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
         "manifestSha256": "3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a",
@@ -861,7 +861,54 @@
         "memoryPrepared": {
           "url": "http://mote-e2e6-memory-143be783.localhost:64287",
           "status": "ready only, no browser journey claimed"
-        }
+        },
+        "overall": "BLOCKED_PARTIAL_NOT_WEB_GROUP_PASS",
+        "cleanup": "cleanup.json",
+        "browserCases": [
+          {
+            "journey": "Preferences/Note/two pages/account switch and delayed GET",
+            "status": "unrun",
+            "partialPass": [
+              "original Preferences A username/password login",
+              "same-ID A private Note with no B content",
+              "A draft persists through actual reload",
+              "second original page restores same A web session",
+              "canonical 127.0.0.1 handoff creation then original A approval page visible",
+              "host confirms held real GET:/api/captures? entered before switch",
+              "A to B remount clears A draft and shows only B Note",
+              "held successful A GET release cannot populate B",
+              "normal storage notification retires old A handoff; poll remains ready false",
+              "B positive original Note save synchronizes through ingress and only B data changes"
+            ],
+            "remaining": [
+              "A re-login owner draft",
+              "failed login/logout",
+              "revocation/disable",
+              "lost storage event injection and stale-visible approve click"
+            ]
+          },
+          {
+            "journey": "Models and file-processing",
+            "status": "unrun"
+          },
+          {
+            "journey": "Memory manual extract/recipe/raw/evidence",
+            "status": "unrun",
+            "preparationOnly": true
+          },
+          {
+            "journey": "Agent startup/history",
+            "status": "unrun"
+          },
+          {
+            "journey": "Files image/recording/late deleteACK/rebuild/original download",
+            "status": "unrun"
+          },
+          {
+            "journey": "M05 Queues and KEEP pending clear",
+            "status": "unrun"
+          }
+        ]
       }
     },
     "blockerReceipt": {
@@ -886,7 +933,55 @@
       "independentHashMismatches": 0,
       "tree": "fcb3bce1524932978ad7133377aaa56136a3dcc1",
       "gitStatus": ""
-    }
+    },
+    "boundedReceiptPreviousSha256": "20f740fc5148333df5ab98f36871365710bda230c173a00564c285986bfd0c6f",
+    "cleanupReceipt": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/evidence/cleanup.json",
+      "sha256": "c103d2cafe3f671b2e6029196761f6621bf703319be18864d298104d20cc16a3",
+      "contents": {
+        "ownedCoreHost": {
+          "session": 76688,
+          "command": "close",
+          "childExitCode": 0,
+          "signal": null,
+          "pipelineExitCode": 0,
+          "bridgeExitNotDirectlyCaptured": "stdout piped through tee; child close0 and no C2 command errors observed"
+        },
+        "ownedMemoryHost": {
+          "session": 39319,
+          "command": "close",
+          "driverExitCode": 0,
+          "directoryRemoved": true
+        },
+        "ownedPorts": {
+          "62788": {
+            "errno": 61,
+            "name": "ECONNREFUSED",
+            "status": "closed"
+          },
+          "64287": {
+            "errno": 61,
+            "name": "ECONNREFUSED",
+            "status": "closed"
+          },
+          "64152": {
+            "errno": 61,
+            "name": "ECONNREFUSED",
+            "status": "closed"
+          }
+        },
+        "sourceClean": true,
+        "browserTabs": "No further operation attempted after Chrome requested human dismissal. Ephemeral tool cleanup on turn end is not independently confirmed.",
+        "c1": "closed child0; bridge message-error retained. Pipeline status0 is tee status and does not directly prove bridge natural exit; bridge source sets exitCode1 on fixture400."
+      }
+    },
+    "evidenceIndex": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/evidence/evidence-sha256.json",
+      "sha256": "8a569c53433c30a1e83d57abc958fa70364f30a9119d2c4317442bad9de75f2c",
+      "files": 36,
+      "independentHashMismatches": 0
+    },
+    "resumeRequirement": "After human dismissal, start fresh owned hosts in a new turn and inspect current supported session/page before any new action; never replay the uncertain old batch"
   },
   "priorC1": {
     "source": "f1be61eed018b913bfa8beb2957256676b7e2f6c",
