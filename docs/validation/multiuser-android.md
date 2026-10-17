@@ -1822,3 +1822,36 @@ ID and adds foreignACK404, retaining the same reviewed guard/assertions. No
 production retry relaxation is indicated. The complete committed candidate
 unknown file4/4 and Servertypes0 are M15 execution, not reviewer execution.
 A uniquely logged necessary full affected retry follows; the c06 EXIT1 stays.
+
+### Draft delivery candidate cac: terminal result and remaining red
+
+The necessary reviewed-fixture retry naturally ends EXIT1 after1895.59s on
+unchanged `cac7421396a078aaaf22f2b7176d229bd29b16ed`. Node26 actual root/Mem0
+constructor and naturalGC0; all types/i18n0; Desktop587/587; Server2814pass1fail
+2existingSkip/2817,zero cancel; Web518/518; Agent317+1existingSkip; Shared192;
+Diagnostics5. `/tmp/m15-required-final-node26-ackfixture.result.json` and complete
+log/exit/coordinator retain exact commands, source before/after and result.
+
+The corrected physical ACK case now passes4.093s in the full run. Sole remaining
+red is `multiuser-memory.test.ts:510`, raw screenshot daily OCR/pixel readiness:
+its unchanged25s shared window ends with OCR succeeded, analysis/derivatives
+running and Memory waiting `memory_image_products_pending`. It does not reach
+final recipe/body assertions. Same production c06 passed this case15.35s;
+that earlier result is preserved rather than substituted. Cause is unconfirmed;
+no budget/corpus/condition/skip change or another diagnostic rerun is applied.
+
+The failed workspace prevents root follow-on tooling and required Android stage.
+Completed independent root81/client5/runner0 on064a and actual JVM358/35875XML
+0fail/error/skip61.35s on c06 are retained with exact unchanged relevant source
+evidence. No needless re-execution is labelled fresh. Current cac/Node26 actual
+SourceWorker andsnapshotWorker each1/1/backend0, `/tmp/m15-cac-final-workers-native-results.json`.
+Android production/shared production have zero changes since8ba; server
+production differs only in the separately tested recording adapter. Native
+provenance `/tmp/m15-cac-native-provenance.json`.
+
+The parent explicitly authorizes delivery of the completed UI scope as Draft
+with remaining reds stated, rather than waiting on a released authorization or
+whole17 acceptance. Current self-contained delivery status is
+[multiuser-android-delivery.md](multiuser-android-delivery.md). Final source changes
+after testedcac are documentation only; final remote head/PR metadata are verified
+at handoff. No merge/deploy/disabledCI change or real user/provider data.

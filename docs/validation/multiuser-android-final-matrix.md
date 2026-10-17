@@ -1,4 +1,9 @@
-# M15 finite final acceptance matrix
+# M15 finite acceptance matrix
+
+Latest Draft delivery and its explicit shared readiness red are recorded in
+[the delivery report](multiuser-android-delivery.md). The chronological matrix
+below preserves earlier finite checkpoints; its older pending-stage notes are
+superseded only by that exact report, not by an assertion of whole17 acceptance.
 
 This is the current checklist, not whole-module acceptance. Chronological RED,
 fixture/environment errors, exact SHAs and logs are preserved in
