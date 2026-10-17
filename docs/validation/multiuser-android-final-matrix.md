@@ -91,3 +91,15 @@ fallback. Current APK/JVM proof after that fixture and translation merge is
 Joint503/b7 composition8ba has freshCentral0, public35/35, summary10/10,scope0 and five relevant original native cases each1/1/backend0. Full debug JVM358/35875XML0fail/error/skip47s; the subsequent coordinator stopped on local137/Node24 native cleanup preflight before full required, never a gate pass. Original147/Node26 restored; actual root+Mem0 constructors/allocationGC/originalMem0four0.
 
 New original recording checkbox journey has durable actualRED35ab (acceptedFiles2→0 afterfalseACK) and sameAPK GREEN3e0 (1/1,7.22s, sourceprivacy/B included), consuming only producerab776 over949. Real source providers2/2,no skip42.723s0. New regression is fixture-only Kotlin; no queue/collector/worker production changes. Whole required/Draft PR and the stated shared advanced-processing boundary remain pending.
+
+## Latest exact gate disposition: c06
+
+Complete affected is **EXIT1**, not accepted: Desktop587/587,Server2814pass1fail
+2existingSkip,Web518/518,alltypes0. Sole remaining failure is shared M06 live
+physical ACK childretry `task_retry_invalid`; no skip/assertion waiver. Root
+follow-on tooling and required Android are not reached. Independent identical
+source Android actually executes358/35875XML0fail/error/skip61.35s; Serverbuild0.
+Prior three Ask waits/summary/catalog/1000-input clusters pass in this same full
+run. Exact receipts and source ownership are in the ledger's latest section.
+No M15 remote/DraftPR until required genuinely passes; the shared ACK successor
+and existing advanced common-processing boundaries are not falsely closed.

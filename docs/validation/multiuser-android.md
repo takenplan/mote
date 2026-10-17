@@ -1732,3 +1732,52 @@ The corrected exact original native case now reaches a valid RED at production r
 Minimal producer pause fixab776d50c3d59679a5583c53f8cb1f55cee1b014 is selected as own3e0beaf9e2bbe785592ac4af56e0a0a6c75068d7. Same APK/method now passes1/1 actual7.22s,backend0 (`/tmp/m15-recording-pause-native-green.*`): accepted files retained after pause, explicit source withdrawal still hides them, B journal unchanged at both checks. Exact source provider neighbors pass2/2/no skip42.723s0 (`/tmp/m15-recording-pause-composed-source.*`), covering both providers, pause/resume, source-false preservation through selection save, disconnect/retained bytes/export/Material/restart/B. The regexp selects exactly2 cases; no third journal case is claimed here. Existing source-register mapping returns existing privacy unchanged. Independent review requested from existing active M13; own bounded review `/tmp/mote-m15-review-joint-recording-ab776.md`. Provider-account replacement remains outside this small fix.
 
 Next fixed candidate full required uses original locked147/Node26; successful earlier503 composition/358 JVM/native stages are not broadened into whole acceptance. Previous full742 EXIT1 and latest8ba preflight-aborted/full-unstarted attempt remain separately recorded.
+
+### Fixed c06 complete affected result and independent Android stage
+
+Literal `c06d9ee3c3da53556a36314dd0ae8180d1c53a53` runs the actual required command
+with Node26.11.1/original ABI147. Both root/actual-Mem0 constructors and natural
+allocation GC pass before the run. `npm run check:affected -- --base
+origin/codex/mote-multiuser-integration` naturally ends EXIT1 after1618.56s; source
+before/after identical. `/tmp/m15-required-final-node26.log/.exit/.result.json`.
+All types0; Desktop62files587/587; Server2817total,2814pass1fail2existingSkip,
+zero cancelled; Web518/518/no skip; Agent317pass1existingSkip; Diagnostics5/5;
+Shared192/192. Root follow-on tools/CLI/central runner and required Android stage
+are not reached because workspace tests return1.
+
+The sole Server failure is `multiuser-file-unknown.test.ts:68`, live physical
+original ACK: generic child retry returns409 `task_retry_invalid`, expected200
+before physical-occupancy assertions. This is the same remaining M06 failure
+reported by PR153 and assigned by the parent to the shared Joint owner. M15
+does not duplicate that implementation, weaken the assertion or waive the gate.
+Earlier summary769, three delegated Ask/Insight waits and proposal pagination
+all pass in this full run. Original1000/125 passes66.13s and HTTP1000 passes
+186.35s without changing counts or120/300/390 budgets.
+
+After the full command ends, the independent actual Android stage executes on
+identical c06:358/358,75XML,zero failure/error/skip,61.35s; one test task executes
+after the coordinator's result-clean. `/tmp/m15-c06-actual-android-after-gate.json`.
+Server build also passes10.22s (`/tmp/m15-c06-final-server-build.json`). Neither
+changes the failed required result into a pass.
+
+A metadata-only temporary diagnostic of the physical ACK case passes4.44s but
+adds an awaited public status read, so it perturbs scheduling. It observes the
+child cancelled/externalUnresolved1, original parent running and one physical
+activity. The literal unchanged original single separately passes5.47s. Both
+receipts are retained, original source unchanged and temporary copy removed;
+this is evidence of schedule sensitivity, not a fix or proof of its exact cause.
+`/tmp/m15-physical-ack-{readonly-observation,literal-current}.*`. Await a declared
+minimal shared successor/precise disposition, then same-case and adjacent
+authority checks before the necessary affected retry. No blanket old waiting
+cluster repetition or budget changes are planned.
+
+PR152's independent native citation404 uses its old direct raw-UUID fixture.
+M15 already has `d9a84a4e`'s stronger actual canonical Material→originalRefs→
+context reader test and explicit rawUUID404/source-withdrawal/B404 checks,
+covered by the actual358 run. No consumer fallback is added. PR152's Web entry
+and PR153's Ask optimization do not change Android DTOs and were read-only
+reviewed as separate delivered boundaries, not silently mixed into c06.
+
+Latest independent review `/tmp/mote-m13-review-m15-recording-pause-3e0.md` finds
+no new confirmed P0/P1/P2 in the minimal pause delta; this is distinct from M15
+actual native/source execution. No M15 push or DraftPR yet; required is not0.
