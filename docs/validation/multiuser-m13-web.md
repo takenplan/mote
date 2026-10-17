@@ -985,3 +985,27 @@ scoped original worker explicitly writes plaintext and exposes no equivalent
 decryption/storage-report producer. `/tmp/mote-m13-storage-contract-blocker.md`
 records the exact common-producer boundary for parent assignment. Legacy global
 Store/key/whole-disk aggregation and fabricated zero reports remain forbidden.
+
+## Declared exact-parent summary recovery composition
+
+M15's independently reviewed769a30b0355608782f8e8cbfe8477c8517cdb2e0 is selected as
+9bfb3e35. It restores only the exact owned blocked derivatives coordinator inside
+the existing M05 child acknowledgement transaction. The current owner/source,
+extraction/settings, checkpoint/mode/full input and cancelled/stale-parent fences
+remain. The accompanying four fixture alignments preserve exact five task rows,
+both distinct M07 subscription events, rollback authorization/sequence checks,
+strict input errors and both physical-activity and original-pin completion waits.
+Existing stronger orphan-row assertions in this tree were retained in conflict
+resolution. Android runtime and unrelated peer ledger history were not imported.
+
+On this composition, nine selected actual processing/Files cases pass9/9,
+0skip/cancel,52.791s (`/tmp/m13-summary-769-composed-nine.log/.exit`): unknown summary
+checkpoint/M04/restart, cancel/source privacy rollback, ASR checkpoint, physical
+file cancellation and the four exact fixture boundaries. M15's additional
+capacity case is not present in this selected tree and is not counted as a tenth
+execution. The original command's `-ten` filename was preserved and an identical
+`-nine` receipt names the actual result. Server noEmit and scope checks are0.
+Original Workflow/queue/attachment controls then pass3/3,0skip/cancel,7.063s
+(`/tmp/m13-summary-769-original-controls.log/.exit`). No current final affected
+pass is inferred, and the parent-assigned Ask/Insight/Actions failure cluster
+remains with that independent owner rather than being patched here.
