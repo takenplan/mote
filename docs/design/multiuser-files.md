@@ -321,3 +321,25 @@ browser count/LIMIT when M06 presentation is enabled. Ordinary standalone M02
 metadata reads retain their original behavior. Same test plus six attachment cases
 is6/6 actual0, including count0 and forged-declaration404; no new projection is
 created. The parent head join uses its existing owner/source/external primary key.
+
+### Source and Capture retirement keep the file incarnation (2026-10-17)
+
+KEEP source deletion/re-registration, canonical capture IDs, the numeric
+`originalGeneration` field and exact DELETE operation bodies. A source FK cascade
+must not reset an unadmitted old deletion action to generation zero. M03 now keeps
+`ig_file_generations` keyed by account/source/external ID without a source FK.
+Canonical file Capture retirement advances it in the same SQLite transaction;
+explicit forget advances it once before removing all revisions. The existing
+blocked tombstone skips the redundant retirement bump during that forget. A
+failed deletion rolls the counter back with the canonical data. Removing one
+revision also retires old group-bound actions/tickets/tasks; a fresh read obtains
+the current generation. No client may silently refresh and replay an old intent.
+
+The counter stores identity metadata, no original content, credentials or grants.
+It does not change the existing forgotten-file block/allow behavior. It is not
+included in personal data exports or accepted from import payloads. Whole-instance
+native backup preserves it; account-domain erasure removes it. Generation zero
+remains the historical representation for a never-retired original. Tickets and
+M06 already read the same helper, so recreating the source or Capture cannot
+re-enable an old signed ticket or processing input. Current native/container
+schema composition remains a separate pending gate.

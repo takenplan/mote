@@ -988,3 +988,42 @@ allocated Desktop QR soleheavy; no Joint build/fullsuite/Gradle/Docker was start
 There is no pending user approval or policy denial; M15's message routing returned
 earlierturnunconfirmed, not an approval request or confirmed delivery. Exact shared
 handoff `/tmp/mote-joint-files-public-freeze.md` is available for parent relay.
+
+### Source recreation DELETE CAS — new confirmed gap and repair
+
+Independent M15 reproduction16532 and Desktop bounded4be review identified an
+unadmitted old generation-zero DELETE accepted after source/capture recreation.
+Those are peer evidence. Own durable50527b80 uses the actual source DELETE,
+registration and multipart intake: same captureUUID, before0/after0, late DELETE200
+and replacement404 instead of409/200. Actual1/1fail EXIT1 in
+`/tmp/mote-joint-file-source-incarnation-red.log/.exit` (2.009s). This is a new
+boundary beyond the previous forget-cycle/lost-ACK regression, not that old bug.
+
+The repair preserves request bodies and keeps a private monotonic incarnation
+counter across canonical file/source retirement. Initial green1 retained the same
+failure because the source FK cascade may remove original rows before the Capture
+trigger; that trigger now uses the canonical file identity, not the presence of a
+child original row. green2 is5/5. green3 is6pass/1fixturefail because the existing
+SQL error mapping returns503, not the fixture's500; the explicit fault and rollback
+assertions remain. Current green4 is **8/8,0fail/cancel/skip,7.163s EXIT0** in
+`/tmp/mote-joint-file-source-incarnation-green4.log/.exit`. It includes actual
+restart after source recreation, old signed ticket404/new ticket exact bytes,
+Capture-only retirement, prior forget/allow plus source retirement, shared-SQL
+fault rollback, actual M16 account erasure and unchanged B, and the original four
+exact-decision/schema-upgrade regressions. All data is generated.
+
+Scope inventory/production boundary and diff whitespace checks passed:
+`/tmp/mote-joint-file-source-incarnation-scope.log/.exit`. The six selected M06
+neighbors first returned5pass/1environmentfail (`listen EPERM`, no provider request)
+in `/tmp/mote-joint-file-source-incarnation-processing-neighbors.log/.exit`.
+Only the held localhost-provider case is rerun under the standard approved local
+execution; its separate terminal receipt is recorded without relabeling that first
+run. Current source noEmit, independent repair review, full affected, rendered
+clients and native/container restore remain pending. No PR or whole acceptance.
+
+Attachment3d/770/4c independent bounded review has now been read from
+`/tmp/mote-m15-review-joint-attachments-3d-770-4c.md`: no new confirmed P0/P1/P2
+within its stated source scope. It did not rerun owner tests or review this new
+source-incarnation repair. M13 exact84e3 large Lark calendar inventory received a
+separate Joint source-only bounded review with no new confirmed finding:
+`/tmp/mote-joint-review-m13-lark-calendar-84e3.md`. No M13 runtime was composed.
