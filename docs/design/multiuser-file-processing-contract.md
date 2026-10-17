@@ -1,13 +1,14 @@
 # Scoped file-processing page: limited interface checkpoint
 
-Declared limited client-implementation checkpoint:
-`a2cbf3aaf1ae2f2fbfe5f647cf9a4f23dfdc1695`. Wire shapes were first pinned at
-`277068047bae5e21c533f528ea3d512d4f098e74`; a2cb adds stage reuse without
-changing them. This is PREP for the explicitly listed routes, not a whole M06 or
-final joint runtime freeze. The prior Files/Imports checkpoint was2528;
-configuration relogin fix fda6 and parser producer692→caf are independently
-composable. Do not use a later arbitrary HEAD as a final test dependency.
-
+Declared limited backend/consumer checkpoint:
+`5030430002bd9971d481c8b1ba4c235ab45b6c26`. This extends prior
+`a2cbf3aaf1ae2f2fbfe5f647cf9a4f23dfdc1695` with saved/default explicit profile
+entry points, saved local health and the minimal reviewed applied-plan personal
+archive module. Own18 bounded profile/health/direct-consumer checks, account
+physical-deletion health journey, Server/scripts/scope and strict selected test
+noEmit passed. Independent bounded review of the new profile/health delta is
+pending. This is PREP for listed routes, not a whole M06/final joint freeze.
+Do not use a later arbitrary HEAD as a test dependency.
 The original file-processing page, names, source/MIME rules, explicit preview
 and explicit reprocessing are retained. The same M04 configuration transaction,
 M03 originals, shared processor registries and M05 executor remain authoritative.
@@ -84,19 +85,68 @@ disabled work stays genuinely blocked with `processing_disabled` and zero
 attempts, including newly accepted automatic originals; restart/enable does not
 revive per-file cancellation. No model child executes while disabled.
 
-These retained capabilities are still OPEN and must not be represented as ready:
+## Explicit profile selections
 
-- Saved-service `test-local` health endpoint; arbitrary endpoint/key request
-  bodies are not a replacement.
-- Explicit root/source/import image/attachment profile overrides. Imports with
-  imageProfileId and attachment processingProfileId remain unavailable; clients
-  must not treat a root override as an implemented selection.
-- Non-default image-recipe execution, shared-instance/default-model change
-  observation and component-version startup reconciliation.
-- Complete downstream-only stage reuse and applied-plan personal export/merge/
-  restore. Current policy metadata needs its own native/container recovery tests.
-- Whole affected gate, current three-client UI/native journeys, compiled final
-  chain, final same-SHA backup/Hindsight and final joint PR.
+The existing root upload revision `processingProfileId`, Imports
+`imageProfileId`, and POST `/api/records/:id/attachments/:attachmentId/processing`
+`{processingProfileId?,mimeType?}` now bind the selected profile before ordinary
+automatic admission. Preflight uses current M04 outside SQLite; owner, source,
+head, retained parent/archive/object and profile binding are rechecked before
+publication. Root commit and attachment duplicate ACKs preserve their existing
+plan. Missing parent404, unknown profile409 and reference-only conflict remain
+failures, without publishing a new capture or task.
+
+Profiles may come from the saved named graph or the displayed unsaved current
+M04 defaults. Selecting a default does not silently save a policy or borrow a
+shared/person B connection. Original default IDs `central-image`,
+`profile.audio.local-dialogue`, `profile.audio.http`, `profile.text.utf8` and
+`profile.document.generic` remain explicit aliases to those processor choices;
+`archive` remains itself. Editor rows are not duplicated for aliases. An
+unfinished explicit default plan can resume under a fresh coordinator when its
+current connection becomes available. Completed/cancelled files stay retained.
+
+Imports override only signature-confirmed image media. Audio in the same batch
+keeps its own MIME rule. Preview remains private and unprocessed until explicit
+confirmation. Archive-only media reports `processing.required:false`,
+`state:'skipped'`, `stage:'archive'`, with no fabricated successful OCR, searchable
+text or Memory completion. Media progress `required` is optional for older data.
+
+## Saved local service health
+
+POST `/api/file-processing/test-local` accepts only `{serviceId?:string}` and
+returns the original `{version:number,execution:'local',asr:boolean,
+diarization:boolean,wespeaker?:boolean}`. An explicit service must be a saved ASR
+service pointing at a complete current M04 connection. With no serviceId it uses
+the current ASR selection; unsaved default `asr-local`/`asr-api` refer to that same
+selection. Endpoint/key request fields are rejected. Only a mote-media loopback
+connection is probed, with GET `/health`, the existing10s/4096-byte bounds and no
+inference/upload. Nonloopback configuration rejects400 before any transport.
+
+One existing-executor `processing.health` control task records the physical
+issuance and M06 activity. A response held across logout cannot return to the
+retired request. Account deletion waits on actual pending physical work; its
+exact late completion may settle that issuance before physical cleanup, without
+restoring any task grant or returning a retired result.
+
+## Personal applied-plan archive and remaining limits
+
+The optional processing-v1 `policyPlans` section retains immutable plan history
+and bindings for same-instance/original-account data merge. Current target
+settings, binding and controls win; no task/grant/preview/unknown fact is imported
+or settled. See [the module contract](multiuser-policy-personal-archive.md).
+Reviewed owner production77 plus its mechanical prepare→preflight naming fix are
+composed; Joint's own27 archive plus4 then-current profile cases passed31/31.
+New defaults/health have separate checks and are not retroactively assigned to
+that31-case receipt.
+
+These retained capabilities remain OPEN:
+
+- Non-default installed image-recipe execution.
+- Shared-instance/default-model change observation and component-version startup
+  reconciliation beyond explicit current-owner M04 saves.
+- Complete downstream-only stage reuse beyond the verified raw ASR/speaker case.
+- Final same-SHA compiled/client/native/backup/Hindsight union, whole affected
+  gate and final joint PR.
 
 a2cb verifies raw-stage reuse for downstream-only speaker changes, connection
 change invalidation and explicit full reprocessing. Those execution receipts
