@@ -229,7 +229,61 @@ internal class CentralAdmin(private val screens: CentralScreens) {
         body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
         ui.text(MoteI18n.text("实例级执行与诊断设置由部署操作者管理；客户端仍可修改本账号的模型和处理设置。"))
     }
-    private fun models(): Unit = ownedConfiguration(MoteI18n.text("模型配置"), "models", { screens.refresh() }, { models() })
+    private fun models() {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/configuration") to CentralModels.inventory(api) }) { (view, inventory) ->
+            body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("模型配置"), NativeFontRole.TITLE_MOBILE)
+            ui.text(MoteI18n.text("请先保存修改，再检查已保存的连接。"))
+            val domains = view.getJSONArray("domains")
+            val configuration = (0 until domains.length()).map(domains::getJSONObject).single { it.getString("id") == "models" }.getJSONObject("saved")
+            val collect = form(configuration, ui.card(), emptySet()); val revision = view.getLong("revision")
+            ui.button(MoteI18n.text("保存设置"), true) {
+                val payload = JSONObject().put("revision", revision).put("value", collect()).put("preserveRedactedSecrets", true)
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/models", payload) }) { models() }
+            }
+            val rows = inventory.getJSONArray("profiles").let { values -> (0 until values.length()).map(values::getJSONObject) }
+                .sortedBy { CentralModels.reference(it.getString("id"))!!.getString("kind") != "personal" }
+            if (rows.isEmpty()) { ui.text(MoteI18n.text("暂无记录")); return@work }
+            val choice = Spinner(ui).apply {
+                contentDescription = MoteI18n.text("Provider 预设")
+                adapter = ArrayAdapter(ui, android.R.layout.simple_spinner_dropdown_item, rows.map { it.getString("name") })
+            }; body.addView(choice)
+            val selected = LinearLayout(ui).apply { orientation = LinearLayout.VERTICAL }; body.addView(selected)
+            val selection = java.util.concurrent.atomic.AtomicInteger()
+            fun render(position: Int) {
+                val stamp = selection.incrementAndGet(); selected.removeAllViews()
+                val row = rows[position]; val reference = CentralModels.reference(row.getString("id"))!!; val name = row.getString("name")
+                val card = ui.card(selected); ui.text(name, NativeFontRole.SECTION, card)
+                if (reference.getString("kind") == "personal") ui.button(MoteI18n.text("复制为新预设"), parent = card) {
+                    if (selection.get() != stamp) return@button
+                    edit(MoteI18n.text("复制为新预设"), "/api/models/profiles/" + enc(reference.getString("id")) + "/copy",
+                        JSONObject().put("revision", revision).put("id", "preset-" + UUID.randomUUID().toString().take(8)).put("name", name + " copy").put("includeCredentials", true),
+                        "POST", back = { models() }, completed = { models() })
+                } else ui.text(MoteI18n.text("共享连接保持只读；连接地址和凭据不能复制为个人预设。"), parent = card)
+                val output = ui.card(card)
+                fun inspect(path: String, catalog: Boolean) {
+                    if (selection.get() != stamp) return
+                    val payload = JSONObject().put("revision", revision).put("reference", JSONObject(reference.toString()))
+                    ui.work(MoteI18n.text("正在读取…"), { check(selection.get() == stamp); api.post(path, payload) }) { result ->
+                        if (selection.get() == stamp) { output.removeAllViews(); if (catalog) modelCatalogPage(result, output) else values(result, output) }
+                    }
+                }
+                ui.button(MoteI18n.text("测试连接"), parent = card) { inspect("/api/models/probe", false) }.contentDescription = MoteI18n.text("测试连接") + " · " + name
+                ui.button(MoteI18n.text("可用模型"), parent = card) { inspect("/api/models/catalog", true) }.contentDescription = MoteI18n.text("可用模型") + " · " + name
+            }
+            choice.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+                override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+                override fun onItemSelected(parent: AdapterView<*>?, field: android.view.View?, position: Int, id: Long) { render(position) }
+            }
+        }
+    }
+    private fun modelCatalogPage(result: JSONObject, target: LinearLayout, offset: Int = 0) {
+        target.removeAllViews(); val metadata = JSONObject(result.toString()).apply { remove("items") }; values(metadata, target)
+        val items = result.getJSONArray("items"); if (items.length() == 0) ui.text(MoteI18n.text("暂无记录"), parent = target)
+        for (index in offset until minOf(offset + 100, items.length())) values(items.getJSONObject(index), ui.card(target))
+        if (offset != 0) ui.button(MoteI18n.text("返回第一页"), parent = target) { modelCatalogPage(result, target) }
+        if (offset + 100 < items.length()) ui.button(MoteI18n.text("下一页"), parent = target) { modelCatalogPage(result, target, offset + 100) }
+    }
     fun fileSettings() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/file-processing") }) { value ->
@@ -255,7 +309,6 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             val value = (0 until domains.length()).map { domains.getJSONObject(it) }.single { it.getString("id") == domainId }.getJSONObject("saved")
             body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
             if (domainId == "agentTrace") ui.text(MoteI18n.text("详细记录可能包含问题、上下文、模型输出和工具内容，仅对当前账号生效。关闭后停止新增详细内容，已保留记录不会自动删除。"))
-            if (domainId == "models") ui.text(MoteI18n.text("模型预设和默认选择保存在本人配置；复制带凭据、测试连接和模型目录尚待多用户接口。"))
             val collect = form(value, ui.card(), emptySet())
             ui.button(MoteI18n.text("保存设置"), true) {
                 val payload = JSONObject().put("revision", view.getLong("revision")).put("value", collect()).put("preserveRedactedSecrets", true)

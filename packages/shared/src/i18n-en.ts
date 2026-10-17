@@ -8471,5 +8471,7 @@ export const english: Readonly<Record<string, string>> = {
   "只清除此设备的待确认请求，不撤销中央已接受的删除，也不恢复文件。": "This only clears the pending request on this device. It does not undo a deletion accepted by the central node or restore the file.",
   "详细记录设置": "Detailed recording settings",
   "详细记录可能包含问题、上下文、模型输出和工具内容，仅对当前账号生效。关闭后停止新增详细内容，已保留记录不会自动删除。": "Detailed recordings may contain questions, context, model output and tool content. This setting applies only to this account. Turning it off stops new detailed content; retained recordings are not automatically deleted.",
-  "仅显示实际保留的记录；关闭详细记录不会重建缺失内容，截断记录不代表完整读取。": "Only retained recordings are shown. Disabling detailed recording does not reconstruct missing content, and truncated records do not prove a complete read."
+  "仅显示实际保留的记录；关闭详细记录不会重建缺失内容，截断记录不代表完整读取。": "Only retained recordings are shown. Disabling detailed recording does not reconstruct missing content, and truncated records do not prove a complete read.",
+  "请先保存修改，再检查已保存的连接。": "Save your changes before inspecting a saved connection.",
+  "共享连接保持只读；连接地址和凭据不能复制为个人预设。": "Shared connections stay read-only. Their connection addresses and credentials cannot be copied into a personal preset."
 };
