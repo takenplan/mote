@@ -1,3 +1,4 @@
+import type {ContentEncryption} from '../content-encryption.js';
 import {attachmentBinding,attachmentVisible} from './ingress-attachments.js';
 import {fileForgetting,captureIncarnationGeneration} from './ingress-file-forget.js';
 import {ScopedImportAttribution,importDeclarationSchema} from './import-attribution.js';
@@ -51,9 +52,9 @@ export class IngressHost{
  private snapshotRecovery?:{needed:(context:UserContext,ref:string)=>boolean;restored:(context:UserContext,ref:string)=>void};
  configureSnapshotRecovery(policy:{needed:(context:UserContext,ref:string)=>boolean;restored:(context:UserContext,ref:string)=>void}){this.snapshotRecovery=policy;}
  onAccepted(receive:(context:UserContext,receipt:IngressReceipt,format:IngressOriginalFormat,formats:Readonly<Record<string,IngressOriginalFormat>>)=>void){this.accepted.add(receive);return ()=>{this.accepted.delete(receive);};}
- constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly directory:string){
+ constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly directory:string,private readonly contentCipher?:(userId:string)=>ContentEncryption){
   this.key=installIngress(db);
-  runtime.services.registerUser(INGRESS_DOMAIN,{scope:'user',create:context=>this.forUser(context),lifecycle:ingressLifecycle(runtime,db,directory)});
+  runtime.services.registerUser(INGRESS_DOMAIN,{scope:'user',create:context=>this.forUser(context),lifecycle:ingressLifecycle(runtime,db,directory,contentCipher)});
  }
  private deletionSql(subject:UserDataSubject){
   const assert=()=>{this.runtime.services.assertSubject(subject,INGRESS_DOMAIN,'delete');if('credentialId' in subject)throw new ScopeError('invalid_identity',403);};
@@ -76,7 +77,7 @@ export class IngressHost{
   * existing task context fences M03's shared worker before/after its await. */
  async retainArchive(context:UserContext,name:string,bytes:Buffer,mimeType?:string,signal?:AbortSignal){
   archiveRelativePath(name);if(bytes.length>MAX_FILE_BYTES)throw new PrivateDataError('invalid_data',413);
-  const assert=()=>{this.runtime.authority.assert(context);signal?.throwIfAborted();},sql=new PrivateSql(this.db,context.userId,assert),originals=new Originals(this.directory,context.deploymentId,sql,assert),id=randomUUID();
+  const assert=()=>{this.runtime.authority.assert(context);signal?.throwIfAborted();},sql=new PrivateSql(this.db,context.userId,assert),originals=new Originals(this.directory,context.deploymentId,sql,assert,this.contentCipher?()=>this.contentCipher!(context.userId):undefined),id=randomUUID();
   assert();if(sql.get('SELECT deleted FROM ig_state WHERE user_id=$user')?.deleted)throw conflict();
   const activity=ingressActivity(this.db,context.userId),key=identityHash([context.userId,activity.id]);this.active.add(key);
   try{
@@ -87,7 +88,7 @@ export class IngressHost{
  forUser(context:UserContext,sourceIds?:readonly string[],assertCurrent:()=>void=()=>{}){
   const authority:UserContextAuthority=this.runtime.authority;const base=()=>{authority.assert(context);assertCurrent();},state=new PrivateSql(this.db,context.userId,base);
   const assert=()=>{base();if(state.get('SELECT deleted FROM ig_state WHERE user_id=$user')?.deleted)throw new ScopeError('invalid_identity',401);};
-  assert();const sql=new PrivateSql(this.db,context.userId,assert),originals=new Originals(this.directory,context.deploymentId,sql,assert);
+  assert();const sql=new PrivateSql(this.db,context.userId,assert),originals=new Originals(this.directory,context.deploymentId,sql,assert,this.contentCipher?()=>this.contentCipher!(context.userId):undefined);
   const data=()=>this.runtime.services.forUser(context).get<PrivateData>('private-data');
   const bindProfile=(ref:string,id:string)=>this.bindFileProfile(context,ref,id);
   const deviceId=authority.isTask(context)?undefined:this.runtime.accounts?.credentialInfo(context,authority).deviceId;

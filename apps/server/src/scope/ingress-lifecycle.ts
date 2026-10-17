@@ -1,3 +1,4 @@
+import type {ContentEncryption} from '../content-encryption.js';
 import {attachmentBinding} from './ingress-attachments.js';
 import {randomUUID} from 'node:crypto';
 import {forgottenFileSchema} from './ingress-file-forget.js';
@@ -25,10 +26,10 @@ const invalid=()=>new PrivateDataError('invalid_data');
 /** M16 composes this with private-data and execution. Physical failure is
  * retryable uncertainty, never a successful empty deletion/export. Portable
  * restore does not renew an account epoch or resume an upload authorization. */
-export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory:string):DomainLifecycle{
+export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory:string,contentCipher?:(userId:string)=>ContentEncryption):DomainLifecycle{
  const bound=(subject:UserDataSubject,purpose:LifecyclePurpose)=>{
   const assert=()=>runtime.services.assertSubject(subject,domain,purpose),sql=new PrivateSql(db,subject.userId,assert);
-  return {sql,assert,originals:new Originals(directory,subject.deploymentId,sql,assert)};
+  return {sql,assert,originals:new Originals(directory,subject.deploymentId,sql,assert,contentCipher?()=>contentCipher(subject.userId):undefined)};
  };
  const restore=(subject:UserDataSubject,archive:UserExport,operationId:string,merge=false)=>{
    const {sql,originals}=bound(subject,'restore');

@@ -3,7 +3,7 @@ import {constants,existsSync,lstatSync,openSync,closeSync,fstatSync,readFileSync
 import {join,dirname} from 'node:path';
 import {FILE_PART_BYTES,FILE_MAX_BYTES} from '@mote/shared';
 import {privateDirectory} from '../private-storage.js';
-import {replaceContentFile} from '../content-encryption.js';
+import {replaceContentFile,type ContentEncryption} from '../content-encryption.js';
 import {prepareAsset} from '../asset-work.js';
 import {PrivateDataError,missing,type PrivateSql} from './private-data-sql.js';
 
@@ -22,7 +22,7 @@ export type Original={ref:string;sourceId:string;captureId:string;hash:string;by
  * Paths are host generated and every ancestor below the admitted vault is checked.
  */
 export class Originals{
- constructor(private readonly directory:string,private readonly deploymentId:string,private readonly sql:PrivateSql,private readonly assert:()=>void){}
+ constructor(private readonly directory:string,private readonly deploymentId:string,private readonly sql:PrivateSql,private readonly assert:()=>void,private readonly encryption?:()=>ContentEncryption){}
  private trustedRoot(){privateDirectory(this.directory);const root=join(this.directory,'originals');privateDirectory(root);const user=join(root,identityHash([this.deploymentId,this.sql.userId]));privateDirectory(user);return user;}
  root(){this.assert();return this.trustedRoot();}
  private trustedArea(kind:'objects'|'uploads'|'work'){const path=join(this.trustedRoot(),kind);privateDirectory(path);return path;}
@@ -34,6 +34,9 @@ export class Originals{
   this.assert();const fd=openSync(path,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
   try{const info=fstatSync(fd);if(!info.isFile()||info.nlink!==1||process.getuid&&info.uid!==process.getuid())throw conflict();const bytes=readFileSync(fd);this.assert();return bytes;}finally{closeSync(fd);}
  }
+ private contentRead(path:string){const cipher=this.encryption?.(),plain=existsSync(path+'.plain'),bytes=this.readFile(path+(plain?'.plain':'.aes'));return plain?bytes:cipher?cipher.open(bytes):(()=>{throw conflict();})();}
+ private contentWrite(path:string,bytes:Buffer){this.assert();const cipher=this.encryption?.();if(cipher)cipher.write(path,bytes);else replaceContentFile(path+'.plain',bytes);this.assert();}
+ private workerEncryption(){const cipher=this.encryption?.();return {enabled:cipher?.enabled??false,...(cipher?.key?{key:cipher.key.toString('hex')}:{})};}
  private get(hash:string):ObjectRow{const row=this.sql.get('SELECT hash,bytes,parts FROM ig_objects WHERE user_id=$user AND hash=?',hash);if(!row||Number(row.bytes)<0)throw missing();return row as ObjectRow;}
  put(bytes:Buffer){
   this.assert();if(bytes.length>FILE_MAX_BYTES)throw new PrivateDataError('invalid_data',413);
@@ -42,7 +45,7 @@ export class Originals{
   const parent=this.area('objects'),stage=join(parent,hash+'.'+randomUUID()+'.tmp');privateDirectory(stage);
   const checksums:string[]=[];
   try{
-   for(let offset=0;offset<bytes.length;offset+=FILE_PART_BYTES){const part=bytes.subarray(offset,offset+FILE_PART_BYTES);checksums.push(bytesHash(part));replaceContentFile(join(stage,String(checksums.length-1))+'.plain',part);}
+   for(let offset=0;offset<bytes.length;offset+=FILE_PART_BYTES){const part=bytes.subarray(offset,offset+FILE_PART_BYTES);checksums.push(bytesHash(part));this.contentWrite(join(stage,String(checksums.length-1)),part);}
    sync(stage);this.assert();const destination=join(parent,hash);
    if(existsSync(destination)){this.verifyDirectory(destination,hash,bytes.length,checksums);}
    else {renameSync(stage,destination);sync(parent);}
@@ -51,7 +54,7 @@ export class Originals{
  }
  private verifyDirectory(path:string,hash:string,size:number,checksums:string[]){
   privateDirectory(path);const sum=createHash('sha256');let total=0;
-  for(const [index,checksum] of checksums.entries()){const bytes=this.readFile(join(path,String(index)+'.plain'));if(bytesHash(bytes)!==checksum)throw conflict();sum.update(bytes);total+=bytes.length;}
+  for(const [index,checksum] of checksums.entries()){const bytes=this.contentRead(join(path,String(index)));if(bytesHash(bytes)!==checksum)throw conflict();sum.update(bytes);total+=bytes.length;}
   if(total!==size||sum.digest('hex')!==hash)throw conflict();
  }
  private record(hash:string,size:number,checksums:string[]){
@@ -59,9 +62,9 @@ export class Originals{
   for(const [index,checksum] of checksums.entries())this.sql.run('INSERT INTO ig_parts VALUES($user,?,?,?) ON CONFLICT(user_id,hash,part) DO NOTHING',hash,index,checksum);
  }
  writePart(id:string,part:number,bytes:Buffer){
-  const path=join(this.uploadPath(id),String(part)+'.plain');
-  if(existsSync(path)){if(!this.readFile(path).equals(bytes))throw conflict();}
-  else replaceContentFile(path,bytes);
+  const path=join(this.uploadPath(id),String(part));
+  if(existsSync(path+'.plain')||existsSync(path+'.aes')){if(!this.contentRead(path).equals(bytes))throw conflict();}
+  else this.contentWrite(path,bytes);
   this.assert();
  }
  /** Generic import starts before a whole-file hash is available. This is the
@@ -69,8 +72,9 @@ export class Originals{
  async prepareArchive(id:string,size:number,parts:{part:number;hash:string;bytes:number}[],signal?:AbortSignal){
   this.assert();const parent=this.area('objects'),stage=join(parent,identityHash(randomUUID())+'.'+randomUUID()+'.tmp');privateDirectory(stage);
   try{
-   const result=await prepareAsset({directory:this.uploadPath(id),staging:stage,destinationRoot:parent,bytes:size,partBytes:FILE_PART_BYTES,parts,encryption:{enabled:false}},signal);
-   this.assert();return this.sql.transaction(()=>{const destination=join(this.area('objects'),result.hash);if(existsSync(destination))this.verifyDirectory(destination,result.hash,size,result.checksums);else{renameSync(stage,destination);sync(parent);}this.record(result.hash,size,result.checksums);return this.get(result.hash);});
+   const encryption=this.workerEncryption();
+   const result=await prepareAsset({directory:this.uploadPath(id),staging:stage,destinationRoot:parent,bytes:size,partBytes:FILE_PART_BYTES,parts,encryption},signal);
+   this.assert();if(JSON.stringify(encryption)!==JSON.stringify(this.workerEncryption()))throw conflict();return this.sql.transaction(()=>{const destination=join(this.area('objects'),result.hash);if(existsSync(destination))this.verifyDirectory(destination,result.hash,size,result.checksums);else{renameSync(stage,destination);sync(parent);}this.record(result.hash,size,result.checksums);return this.get(result.hash);});
   }finally{this.cleanStage(stage);}
  }
  /** Uses the same bounded child worker as existing large-file intake. No SQL
@@ -82,8 +86,9 @@ export class Originals{
    release=this.pin(hash,true);
    const parts=this.sql.all('SELECT part,checksum,bytes FROM ig_upload_parts WHERE user_id=$user AND upload_id=? ORDER BY part',id).map(row=>({part:Number(row.part),hash:String(row.checksum),bytes:Number(row.bytes)}));
    if(parts.length!==Math.ceil(size/FILE_PART_BYTES))throw conflict();
-   const result=await prepareAsset({directory:this.uploadPath(id),staging:stage,destinationRoot:parent,hash,bytes:size,partBytes:FILE_PART_BYTES,parts,encryption:{enabled:false}},signal);
-   this.assert();if(result.hash!==hash)throw conflict();
+   const encryption=this.workerEncryption();
+   const result=await prepareAsset({directory:this.uploadPath(id),staging:stage,destinationRoot:parent,hash,bytes:size,partBytes:FILE_PART_BYTES,parts,encryption},signal);
+   this.assert();if(JSON.stringify(encryption)!==JSON.stringify(this.workerEncryption()))throw conflict();if(result.hash!==hash)throw conflict();
    this.sql.transaction(()=>{
     this.assert();const destination=join(this.area('objects'),hash);
     if(existsSync(destination))this.verifyDirectory(destination,hash,size,result.checksums);
@@ -119,7 +124,7 @@ export class Originals{
  }
  private readPart(hash:string,index:number){
   const object=this.get(hash),row=this.sql.get('SELECT checksum FROM ig_parts WHERE user_id=$user AND hash=? AND part=?',hash,index);
-  if(!row)throw missing();const bytes=this.readFile(join(this.objectPath(hash),String(index)+'.plain'));
+  if(!row)throw missing();const bytes=this.contentRead(join(this.objectPath(hash),String(index)));
   if(bytes.length!==Math.min(FILE_PART_BYTES,object.bytes-index*FILE_PART_BYTES)||bytesHash(bytes)!==row.checksum)throw conflict();return bytes;
  }
  readObject(hash:string){const object=this.get(hash),bytes=Buffer.concat(Array.from({length:object.parts},(_,index)=>this.readPart(hash,index)));if(bytesHash(bytes)!==hash)throw conflict();return bytes;}

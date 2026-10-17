@@ -2469,5 +2469,23 @@
     "surfaces": [
       "task:execution.register:kind:'processing.review'"
     ]
+  },
+  "apps/server/src/scope/content-storage.ts": {
+    "scope": "user",
+    "module": "M13",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/content-storage'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/storage-statistics'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/content-storage/decrypt'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/content-storage/decrypt/cancel'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/content-storage'",
+      "directory:dirname(dirname(path))",
+      "directory:dirname(path)",
+      "directory:parent",
+      "directory:path",
+      "directory:root",
+      "directory:this.directory",
+      "task:execution.register:{kind,pool:kind,concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic, parseInput:raw=>z.object({operationId:z.string().uuid()}).strict().parse(raw),resources:()=>[{scope:'user',key:kind}], authorizeInput:context=>{runtime.authority.assert(context);if(this.enabled(context.userId))throw new ConfigServiceError('config_conflict');}, execute:run=>this.decrypt(run),classify:()=>new ExecutionFailure('permanent','storage_conversion_failed')}"
+    ]
   }
 }

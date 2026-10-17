@@ -1,4 +1,7 @@
 {
+  "当前账号的索引管理接口尚待接入。": "Index management for the current account is awaiting integration.",
+  "当前账号 · 默认明文保存": "Current account · plaintext by default",
+  "本账号的原件、上传分片、个人配置和受管服务目录。共享数据库与索引、模型和外部服务卷不计入此视图。": "This account's originals, upload parts, personal configuration and managed provider directories. Shared databases and indexes, models and external provider volumes are excluded.",
   "处理附件": "Process attachment",
   "附件处理方案": "Attachment processing plan",
   "附件 MIME 类型": "Attachment MIME type",

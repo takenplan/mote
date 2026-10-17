@@ -65,7 +65,7 @@ final whole-consumer gate.
 | R-ARCHIVE | Recording card “最近归档的录音”, original Files acoustic/sample/playback/tar/export controls | Current transcript/correction/names/authenticated original/tar narrow journeys are verified. Complete samples/acoustic artifact pagination/playback and full recording archive/export outcome breadth need actual scoped original-page proof, including text saved/audio failed, disconnect/history retained and A/B/restart. | Remaining UI/contract breadth, not a claim that normal Files is wholly missing. `scripts/recordings-browser-fixture.ts` and `recording-outcomes-fixture-server.mjs` import **legacy-app**; their success is characterization only. |
 | S-POLICY | Original Models/services → images / file-and-voice / per-source policy controls | Named graphs/rules/match/preview/reprocess/single-M04 Save remain. Declared503 explicit saved/displayed-default root/Imports/attachment producer is composed; original saved local-service controlc948 real route/worker/UI2/2 passed, with dirty/late-owner/corrupt-body boundaries. Custom image recipes2349 and shared/default-model/component observation are not yet composed/finally accepted here. | Consume only declared finite Joint contracts and original controls. A clean2349 bounded review does not freeze or execute it; no silent preview-policy save or whole-policy claim. |
 | S-MEMORY | Original “高级：记忆、洞察与自动处理节奏” / `MemorySettings.tsx` | Lifecycle values and the original versioned automatic recipe chooser are restored: cc6 exercises default/capture/Lark-docs/source overrides with whole-M04 CAS, exact refs/unavailable choices and inheritance. Original extension pending/due/failure/retry observations are still not proved by raw JSON/lifecycle fields or plugin binding receipts. | Recipe editor source2/UI2 passed; remaining extension observation mapping is separate from the now-closed manual range/raw/integration paths. |
-| S-STORAGE | `#/system/storage` → `ContentStorage.tsx`; `#/system` → `StorageStatistics.tsx` | ContentStorage still uses `/api/content-storage` PUT and decrypt/cancel; stats use `/api/storage-statistics`. Encryption/decryption job, real per-owner space/index/detail/runtime coverage are not provided by the existing portable receipt. Preserve exact scope rather than render fake zeros/admin private aggregation. | Shared contract absent/consumer OPEN. Portable3 import/export and administrator deletion are implemented; instance backup stays offline CLI, not an online private backup substitute. |
+| S-STORAGE | `#/system/storage` → `ContentStorage.tsx`; `#/system` → `StorageStatistics.tsx` | Restored real personal M04 encryption policy and existing M03 `.plain`/`.aes` format, exact M05 decrypt/cancel with durable operation and progress, mixed/restarted reads, portable plaintext without keys, and stopped backup verification. Physical owner file/type/day totals cover originals, upload/work files, personal configuration and fixed managed provider directories. Source5/5 and original-page/configuration12/12 passed. | Finite personal storage controls implemented; shared SQLite/index bytes, model weights, instance capacity and external provider volumes are explicitly excluded. Index management and separate legacy export modes remain OPEN, not fabricated zeros or administrator private aggregation. Contract: `../design/multiuser-content-storage.md`. |
 | S-RUNTIME | Original runtime/concurrency/diagnostic preferences and full effective deployment controls | Web models route deliberately selects `ScopedConfiguration`; original `ServerSettings` advanced `RuntimeSettings` is not simply reachable as its prior UI. M16 provides safe admin diagnostics and readonly signed update checks, and says writable instance config remains startup YAML. New queue metadata does not implement editable execution limits. | Explicit old-control/contract gap; do not report an unvisited Web page503, infer instance capacity, or silently open admin/private settings. Personal trace opt-in and saved model tools are already implemented. |
 
 Broad nonempty Memory-provider migration and provider fault/restart/real permission
@@ -84,7 +84,7 @@ No current build/fullsuite/native/backend remains running in this inventory
 turn. Independent final C must wait for explicitly declared final candidates;
 do not add PR/module results into one same-version result. M13's denied hidden
 Web Electron action is known not executed and was not retried/proxied. Permitted
-IAB proof is separate. This document adds no production behavior beyond9565.
+IAB proof is separate. The storage follow-up below is a later finite increment; the earlier whole-Web and failed whole-gate results do not apply to that increment.
 
 ## Follow-up at `70068fb2` (finite, not final)
 
@@ -138,3 +138,22 @@ button now has actual real Host/loopback original component2/2 with saved-only,
 A/B retirement and malformed-result checks, Webbuild0. Custom recipes,
 shared-component watching, explicit attachment original-page controls and the
 final whole gates remain specific work; nothing here declares all settings done.
+
+
+## Original account storage follow-up
+
+The durable real-endpoint two503 regression is0a17fa98. The scoped adapter reuses
+the existing cipher, M03 object/part layout and worker, M04 configuration, M05
+execution and offline backup validator. It does not mount legacy Store or add
+a private database, scheduler or key HTTP API. Current source5/5 and original
+ContentStorage/StorageStatistics plus legacy configuration UI12/12 pass with
+no skips; actual cancel/withdrawal, restart, pending upload, corrupted AES,
+portable export and stopped backup/restore are exercised. The malformed stats
+transport cannot render fictional successful totals. Mixed representation and
+original ingress/configuration neighbors45/45 passed before the final owner-SQL
+and configuration-publication fence; current source5/UI12 repeat after it.
+
+The account physical report explicitly excludes shared SQLite/index, shared
+model files, other accounts and external provider volumes. Those areas and
+index management remain distinct, with no per-user allocation estimate. Final
+whole-candidate gates and original IAB follow-up remain separately recorded.
