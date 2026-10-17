@@ -1,0 +1,25 @@
+// Usage from the owned exact-C checkout: node --import tsx <this> workspace outputDir C manifest sha256
+import assert from 'node:assert/strict';
+import {readFileSync, realpathSync, writeFileSync, existsSync} from 'node:fs';
+import {join, relative, sep, dirname, basename} from 'node:path';
+import {tmpdir} from 'node:os';
+import {fileURLToPath} from 'node:url';
+import {assertFinalFreeze, sha256} from './final-recovery-support.ts';
+
+const [workspace, requestedOutput, candidate, manifest, hash] = process.argv.slice(2);
+const freeze = assertFinalFreeze(workspace, candidate, manifest, hash);
+const output = realpathSync(requestedOutput), rel = relative(realpathSync('/tmp'), output);
+assert.ok(rel && rel !== '..' && !rel.startsWith('..' + sep) && !rel.startsWith(sep));
+assert.match(basename(output), /^mote-final-recovery7-[a-f0-9-]{36}(?:-.+)?$/, 'Driver output must use this lane\'s unique namespace');
+const sourcePath = '/Users/utopiafar/Documents/Codex/2026-10-17/task-7/mote/apps/server/test/multiuser-recovery-http-seams.test.ts';
+const original = readFileSync(sourcePath, 'utf8');
+const needle = "fileURLToPath(new URL('./fixtures/recovery-http-host.ts',import.meta.url))";
+assert.equal(original.split(needle).length, 2, 'Review changed final-C fixture binding before adapting');
+const host = join(dirname(fileURLToPath(import.meta.url)), 'compiled-http-host.mjs');
+const adapted = original.replace(needle, JSON.stringify(host));
+const target = join(output, 'compiled-recovery-http.test.ts');
+assert.equal(existsSync(target), false);
+writeFileSync(target, adapted, {mode: 0o600, flag: 'wx'});
+const receipt = {...freeze, sourceTest: sourcePath, sourceTestCommit: "67b992f32016ac5d31f4da265ff0e02cfb2e12bd", sourceTestSha256: sha256(original), adaptedTest: target, adaptedTestSha256: sha256(adapted), host, hostSha256: sha256(readFileSync(host)), changes: ['one spawned fixture-host path; all original test bodies, assertions and waits retained'], executed: false};
+writeFileSync(join(output, 'compiled-http-driver.json'), JSON.stringify(receipt, null, 2) + '\n', {mode: 0o600, flag: 'wx'});
+console.log(JSON.stringify({candidate, target, executed: false}));
