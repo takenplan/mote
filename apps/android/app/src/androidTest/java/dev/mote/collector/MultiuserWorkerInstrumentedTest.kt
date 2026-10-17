@@ -889,6 +889,18 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals(0,control("/generated/pairing-state").getJSONArray("claims").length())
         }} finally {release.countDown()}
     }
+    @Test fun originalNativePersonalModelProfileStillOffersCopyProbeAndDirectory() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val api=CentralAccess.requireClient(app);val domains=api.get("/api/configuration").getJSONArray("domains");val model=(0 until domains.length()).map(domains::getJSONObject).single {it.getString("id")=="models"}.getJSONObject("saved");assertTrue("Generated fixture must contain a real saved personal preset",model.getJSONArray("profiles").length()>0)
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="模型配置"}.performClick()};ready()
+            scenario.onActivity {activity->val controls=views(activity.window.decorView).filterIsInstance<android.widget.Button>().map {it.text.toString()};assertTrue("Original personal model controls must remain visible: copy, saved connection probe and provider directory",listOf("复制为新预设","测试连接","可用模型").all(controls::contains))}
+        }
+    }
+
     @Test fun originalNativeFileProcessingEditorKeepsNamedGraphAndDoesNotSaveAnUnconfiguredPreview() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
