@@ -15,6 +15,7 @@ import {PrivateSql,PrivateDataError,missing} from './private-data-sql.js';
 import {processingSettingsSchema,defaultProcessingSettings,type ProcessingSettings} from './processing-schema.js';
 import {scopedFilePolicySchema,selectScopedFilePolicy,type ScopedFilePolicy} from './processing-policy-contract.js';
 import {identityHash} from './originals.js';
+import {DEFAULT_IMAGE_RECIPE} from '../image-recipes.js';
 import type {registerProcessingFiles} from './processing-files.js';
 
 const domain='filePolicy',valueSchema=z.object({policy:scopedFilePolicySchema.nullable()}).strict();
@@ -26,7 +27,7 @@ function defaultPolicy(selected:Partial<Record<'ocr'|'asr'|'file',{kind:'persona
  const profile=(id:string,processorId:string,serviceId?:string)=>processingProfileSchema.parse({id,name:id,processorId,parameters:{},summarize:false,...(services.some(service=>service.id===serviceId)?{serviceId}:{})});
  return scopedFilePolicySchema.parse({version:1,services,profiles:[profile('image','image.http','service.ocr'),profile('audio',settings.audioProcessor,'service.asr'),profile('text','text.utf8'),profile('document','document.generic'),profile('archive','archive')],rules:[{type:'image/*',profileId:'image'},{type:'audio/*',profileId:'audio'},{type:'text/*',profileId:'text'},...DOCUMENT_MIME_TYPES.map(type=>({type,profileId:'document'})),{type:'*/*',profileId:'archive'}]});
 }
-export type FilePolicyPlan=ReturnType<typeof selectScopedFilePolicy>&{id:string;connections?:{reference:{kind:'shared'|'personal';id:string};fingerprint?:string}[]};
+export type FilePolicyPlan=ReturnType<typeof selectScopedFilePolicy>&{id:string;fileModelReference?:{kind:'shared'|'personal';id:string};connections?:{reference:{kind:'shared'|'personal';id:string};fingerprint?:string}[]};
 /** Existing M04 YAML transaction and M06 immutable metadata only. Endpoint/key
  * ownership remains exclusively in the complete personal/shared M04 reference. */
 export class ProcessingPolicies {
@@ -40,7 +41,7 @@ export class ProcessingPolicies {
    {const policy=next.policy??defaults;
     // Derive only fingerprints from M04's complete connection. Raw YAML keeps
     // references; endpoint/key material is never copied into a second store.
-    for(const service of policy.services){const reference=service.reference;connections[connectionKey(reference)]=reference.kind==='shared'?canonicalHash({generation:configuration.resources.generation(reference.id)}):canonicalHash(models.profiles.find(profile=>profile.id===reference.id)?.settings??null);}
+    for(const service of [...policy.services,...defaults.services.filter(service=>service.id==='service.file')]){const reference=service.reference;connections[connectionKey(reference)]=reference.kind==='shared'?canonicalHash({generation:configuration.resources.generation(reference.id)}):canonicalHash(models.profiles.find(profile=>profile.id===reference.id)?.settings??null);}
    }
    return {...next,defaults,connections};
   },fields:[{path:'policy',effect:'next-request'}],prepare:raw=>{
@@ -75,8 +76,13 @@ export class ProcessingPolicies {
   const selected=selectScopedFilePolicy(policy,String(row.source_id),String(row.mime),saved?override:defaultOverride);
   if(!selected.archiveOnly){const processor=this.processors.registry.list().find(processor=>processor.id===selected.profile.processorId);if(processor)selected.profile.parameters=effectiveProcessorParameters(processor,selected.profile.parameters);
   }
-  const stored=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),connections=stored?effectiveValueSchema.parse(JSON.parse(String(stored.json))).connections:{},selectedConnections=selected.services.map(service=>({reference:service.reference,fingerprint:service.reference.kind==='shared'?canonicalHash({generation:this.configuration.resources.generation(service.reference.id)}):connections[connectionKey(service.reference)]})).sort((a,b)=>connectionKey(a.reference).localeCompare(connectionKey(b.reference)));
-  const id=identityHash({original:ref,fingerprint:selected.fingerprint,connections:selectedConnections,processor:selected.archiveOnly?'archive':this.processors.registry.list().filter(processor=>processor.id===selected.profile.processorId).map(processorContract),parameters:selected.profile.parameters}),json=JSON.stringify({...selected,connections:selectedConnections});
+  const stored=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),effective=stored?effectiveValueSchema.parse(JSON.parse(String(stored.json))):undefined,connections=effective?.connections??{};
+  // An omitted profile modelServiceId keeps the owner's declared M04 file selection.
+  // Pin only references/fingerprints in the existing plan, never credentials.
+  const fileModelNeeded=!selected.archiveOnly&&(selected.profile.summarize||selected.profile.parameters.semanticTurns===true||String(row.mime).startsWith('image/')&&this.processors.imageRecipes.resolve(selected.profile.imageRecipe??DEFAULT_IMAGE_RECIPE,this.settings(context).understandingEnabled).steps.some(step=>step.kind==='understanding'));
+  const fileModelReference=!selected.profile.modelServiceId&&fileModelNeeded?effective?.defaults?.services.find(service=>service.id==='service.file')?.reference:undefined;
+  const references=[...selected.services.map(service=>service.reference),...(fileModelReference?[fileModelReference]:[])],selectedConnections=[...new Map(references.map(reference=>[connectionKey(reference),{reference,fingerprint:reference.kind==='shared'?canonicalHash({generation:this.configuration.resources.generation(reference.id)}):connections[connectionKey(reference)]}])).values()].sort((a,b)=>connectionKey(a.reference).localeCompare(connectionKey(b.reference)));
+  const id=identityHash({original:ref,fingerprint:selected.fingerprint,connections:selectedConnections,processor:selected.archiveOnly?'archive':this.processors.registry.list().filter(processor=>processor.id===selected.profile.processorId).map(processorContract),parameters:selected.profile.parameters}),json=JSON.stringify({...selected,...(fileModelReference?{fileModelReference}:{}),connections:selectedConnections});
   sql.run('INSERT INTO mp_file_plans VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',id,ref.slice(9),json);sql.run('INSERT INTO mp_file_policy_bindings VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO UPDATE SET plan_id=excluded.plan_id',ref.slice(9),id);return this.current(context,ref)!;
  }
  effective(base:ProcessingSettings,plan?:FilePolicyPlan){if(!plan)return base;const p=plan.profile,parameters=p.parameters;return processingSettingsSchema.parse({...base,audioProcessor:p.processorId.startsWith('audio.')?p.processorId:base.audioProcessor,diarizationProcessor:p.diarizationProcessor,summarize:p.summarize,speakerCount:parameters.speakerCount??null,speakerMin:parameters.speakerMin??null,speakerMax:parameters.speakerMax??null,semanticTurns:parameters.semanticTurns===true});}

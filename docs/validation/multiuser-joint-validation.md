@@ -1882,3 +1882,31 @@ the real diagnostics entry event inside the unchanged15s overall test budget.
 Same actual main/preload journey1/1 EXIT0,3.66s (`desktop-retirement-ack-green`),
 35 unrelated cases filtered. Product cancellation/occupancy/session guards are
 unchanged. These narrow results do not relabel the earlier failed full gate.
+
+### Declared M04 feature selection without profile modelServiceId
+
+An additional actual RED used an explicit text processing policy with summary
+work, no profile `modelServiceId`, and an existing user-owned M04 `file`
+selection pointing at shared `env:deployment`. After logout/restart and an
+administrator connection change, extraction remained accepted but the unfinished
+summary never resumed (`observer-implicit-characterization`,1/1 RED15.062s).
+The selected M04 file reference was used for the call but absent from the M06
+applied plan's dependency fingerprints.
+
+The existing applied plan now includes that declared file reference when its
+configured summary/semantic-turn or known image-understanding steps require it.
+It stores only the reference and existing complete-connection fingerprint;
+endpoint/key ownership remains in M04. Model lease acquisition pins that same
+reference and checks its generation before/after acquisition. The existing B
+handoff, fixed-purpose recheck grant, original/owner/current-plan checks and
+fresh ordinary child admission are reused. Completed extraction is never
+replayed, and absent M04 selections still fail rather than inventing a default.
+No new route, table, generic owner-context issuer or model runtime was added.
+
+Declared-feature matrix7/7 plus named-profile matrix7/7 actual EXIT0,55.073s,
+0skip (`/tmp/mote-joint-observer-feature-default-green.log/.exit`); Server
+types0 (`feature-default-types`). Both variants preserve unchanged settings,
+cancelled intent, source withdrawal, disabled account, unknown call and already
+complete work; resume checks exact A/B isolation, immutable accepted extraction,
+new grant, old grant refusal and restart idempotence. This does not claim that
+all historical no-plan admissions have been upgraded to a new plan.

@@ -388,7 +388,7 @@ export class ProcessingHost {
  private async policyModel(context:UserContext,input:ProcessingInput,feature:'ocr'|'asr'|'file',operationId:string){
   this.input(context,input);const plan=this.policies.current(context,input.originalRef),id=feature==='file'?plan?.profile.modelServiceId:plan?.profile.serviceId,service=plan?.services.find(service=>service.id===id);
   if(plan&&feature!=='file'&&!service)throw new PrivateDataError('scope_unavailable',503);
-  const reference=service?.reference,expected=reference?plan?.connections?.find(connection=>identityHash(connection.reference)===identityHash(reference))?.fingerprint:undefined;
+  const reference=service?.reference??(feature==='file'?plan?.fileModelReference:undefined),expected=reference?plan?.connections?.find(connection=>identityHash(connection.reference)===identityHash(reference))?.fingerprint:undefined;
   const current=()=>{this.input(context,input);if(reference?.kind==='shared'&&expected!==identityHash({generation:this.configuration.resources.generation(reference.id)}))throw new ExecutionFailure('stale','processing_model_changed');};
   current();const lease=await this.configuration.leaseReference(context,feature,operationId,reference);current();return lease;
  }
