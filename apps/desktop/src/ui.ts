@@ -78,6 +78,7 @@ function showPage(page: Page, focus = true, preserveSettingsDraft = false): bool
   window.scrollTo({ top: pageScroll.get(page) || 0, behavior: 'instant' });
   if (page === 'compression') { byId<HTMLInputElement>('compression-quality').value=String(currentStatus.config.jpegQuality); const side=byId<HTMLSelectElement>('compression-side');if(!Array.from(side.options).some(o=>o.value===String(currentStatus.config.captureMaxSide)))side.add(new Option(String(currentStatus.config.captureMaxSide),String(currentStatus.config.captureMaxSide)));side.value=String(currentStatus.config.captureMaxSide); void refreshCompression(); }
   if (page === 'ask') void refreshAsk();
+  if (page === 'connection') void refreshPendingConnection();
   if (page === 'permissions') void refreshPermissions();
   if (page === 'statistics') void loadStorageStatistics();
   if (page === 'records') { void loadRecords(); void refreshContent(); }
@@ -333,6 +334,7 @@ byId('capture-directory-choose').addEventListener('click', () => void perform(as
 byId('capture-directory-default').addEventListener('click', () => { captureStorageDirectory = ''; markSettingsDirty(); renderStorage(); });
 byId('capture-directory-open').addEventListener('click', () => void perform(() => desktopApi.openCaptureDirectory()));
 let connectionPreview: import('./connection').ConnectionPreview | undefined;
+let pendingConnectionRevision=0;
 function renderOperations(jobs:NonNullable<import('./contracts').Status['operations']>):void {
   // Completed work belongs to the page where it began; active work and failures remain global.
   const operations=jobs.filter(job=>job.state!=='completed'||job.startedAt>=pageEnteredAt);
@@ -346,6 +348,7 @@ function render(status: import('./contracts').Status): void {
     askGeneration++;clearTimeout(askTimer);askRun=undefined;askConversation=undefined;askPendingInput=undefined;byId('ask-history').replaceChildren();renderAsk();setText('ask-login-status','');
   }
   currentStatus = status; renderStorage();
+  if(currentPage==='connection')void refreshPendingConnection();
   askConnectionState();
   updateTokenField();
   renderOperations(status.operations??[]);
@@ -839,9 +842,10 @@ byId('connection-connect').addEventListener('click', () => void perform(async ()
   renderConnection(await desktopApi.connectionStatus()); feedback(moteText("连接已安全保存；原设备 ID、隐私设置和本地模型保留。"), true);
 }));
 async function refreshPendingConnection():Promise<void>{
-  const revision=pageRevision;
-  try{const pending=await desktopApi.pendingConnection();if(revision!==pageRevision)return;const button=byId<HTMLButtonElement>('connection-recover');button.hidden=!pending;button.title=pending?pending.serverUrl+' · '+pending.userId+' · '+pending.deploymentId:'';}
-  catch{byId('connection-recover').hidden=true;}
+  const request=++pendingConnectionRevision,revision=pageRevision,generation=currentStatus?.authorizationGeneration;
+  const current=()=>request===pendingConnectionRevision&&revision===pageRevision&&generation===currentStatus?.authorizationGeneration;
+  try{const pending=await desktopApi.pendingConnection();if(!current())return;const button=byId<HTMLButtonElement>('connection-recover');button.hidden=!pending;button.title=pending?pending.serverUrl+' · '+pending.userId+' · '+pending.deploymentId:'';}
+  catch{if(current())byId('connection-recover').hidden=true;}
 }
 byId('connection-recover').addEventListener('click',()=>void perform(async()=>{
   settingsApplying=true;

@@ -4,7 +4,7 @@ require('../../../scripts/fixture-background.cjs');
 const electron = require('electron');
 const Module = require('node:module');
 const {EventEmitter} = require('node:events');
-const {mkdirSync} = require('node:fs');
+const {mkdirSync, writeFileSync} = require('node:fs');
 const {join} = require('node:path');
 const {createHash} = require('node:crypto');
 const profile = process.argv[2];
@@ -73,6 +73,7 @@ electron.app.on('browser-window-created', (_event, window) => {
   mainWindow = window;
   window.webContents.on('did-finish-load', () => process.send?.({type: 'loaded'}));
 });
+process.on('disconnect', () => electron.app.exit(1));
 process.on('message', async message => {
   if (message.type === 'fetch-response') {
     const task = pending.get(message.id);
@@ -91,6 +92,14 @@ process.on('message', async message => {
     try {
       const value = await mainWindow.webContents.executeJavaScript(message.code);
       process.send?.({type: 'result', id: message.id, value});
+    } catch (error) {process.send?.({type: 'result', id: message.id, error: error.message});}
+  }
+  if (message.type === 'capture') {
+    try {
+      if (message.path !== '/tmp/mote-desktop-v2-connection-ui.png') throw Error('Only the generated connection preview screenshot is allowed');
+      const captured = await mainWindow.webContents.capturePage(undefined, {stayHidden: true});
+      writeFileSync(message.path, captured.toPNG(), {mode: 0o600});
+      process.send?.({type: 'result', id: message.id, value: message.path});
     } catch (error) {process.send?.({type: 'result', id: message.id, error: error.message});}
   }
   if (message.type === 'quit') electron.app.quit();

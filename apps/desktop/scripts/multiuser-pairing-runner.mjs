@@ -102,7 +102,7 @@ async function launch(initialHost, profile = join(directory, 'profile-' + (++fix
         assert(objectContaining(saved, item => item.code === body.code && item.deploymentId === body.expected.deploymentId && item.userId === body.expected.userId), 'immutable invitation is durable before redeem');
         assert(Object.hasOwn(saved, 'sourceBinding'), 'original configuration binding is durable before redeem');
       }
-      const currentFault = fault?.path === call.path && !fault.hit ? fault : undefined;
+      const currentFault = fault?.path === call.path && !fault.hit && (!fault.match || fault.match(call)) ? fault : undefined;
       if (currentFault) {currentFault.hit = true; currentFault.call = call;}
       const response = await selectedHost.node.app.inject({url: url.pathname + url.search, method: message.method, headers: message.headers, ...(message.body ? {payload: Buffer.from(message.body, 'base64')} : {})});
       call.status = response.statusCode;
@@ -111,7 +111,9 @@ async function launch(initialHost, profile = join(directory, 'profile-' + (++fix
       }
       if (currentFault?.mode === 'loss') {send({type: 'fetch-response', id: message.id, error: 'Generated lost ' + call.path + ' response'}); return;}
       if (currentFault?.mode === 'hold') {
-        currentFault.release = () => {holds.delete(currentFault); answer(message, response);};
+        let settled = false;
+        currentFault.release = () => {if (settled) return; settled = true; holds.delete(currentFault); answer(message, response);};
+        currentFault.reject = () => {if (settled) return; settled = true; holds.delete(currentFault); send({type: 'fetch-response', id: message.id, error: 'Generated lost held ' + call.path + ' response'});};
         holds.add(currentFault); return;
       }
       if (currentFault?.mode === 'alter') {
@@ -145,7 +147,7 @@ async function launch(initialHost, profile = join(directory, 'profile-' + (++fix
     status: () => js('window.mote.status()'),
     pending: () => js('window.mote.pendingConnection()'),
     pointTo(value) {selectedHost = value;},
-    fault(path, mode, alter) {fault = {path, mode, alter, hit: false}; return fault;},
+    fault(path, mode, alter, match) {fault = {path, mode, alter, match, hit: false}; return fault;},
     async faultHit(value) {return until(() => Promise.resolve(value.hit && (value.mode !== 'hold' || value.release)), Boolean, 'generated ' + value.path + ' fault reached');},
     async connectionPage() {
       await js('document.querySelector("[data-nav=connection]").click();true');
@@ -176,16 +178,21 @@ async function launch(initialHost, profile = join(directory, 'profile-' + (++fix
       await js('document.querySelector("#connection-connect").click();true');
     },
     async paired(owner, expectedHost = selectedHost) {
-      const status = await until(desktop.status, value => value.config.account?.userId === expectedHost.users[owner].userId && value.config.account?.deploymentId === expectedHost.node.deploymentId, 'verified ' + owner + ' account publication');
+      const published = value => value.config.tokenConfigured && value.config.account?.userId === expectedHost.users[owner].userId && value.config.account?.deploymentId === expectedHost.node.deploymentId;
+      const status = await until(desktop.status, published, 'verified ' + owner + ' account publication');
       assert.equal(status.running, false, 'pairing never enables collection');
       assert.equal(opened.length, 0, 'creation consent avoids additional browser approval');
       await until(desktop.pending, value => !value, 'completed pending recovery cleanup');
-      return status;
+      return until(desktop.status, published, 'fresh committed ' + owner + ' account after pending cleanup');
     },
     async recover() {
       await desktop.connectionPage();
       await until(() => js('Boolean(document.querySelector("#connection-recover")&&!document.querySelector("#connection-recover").hidden&&!document.querySelector("#connection-recover").disabled)'), Boolean, 'explicit recovery UI');
       await js('document.querySelector("#connection-recover").click();true');
+    },
+    async captureConnection() {
+      await js('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve(true))))');
+      return rpc('capture', {path: '/tmp/mote-desktop-v2-connection-ui.png'});
     },
     async idle() {await until(() => js('!document.querySelector("#connection-preview").disabled'), Boolean, 'connection UI operation settled');},
     async login(owner) {
@@ -213,8 +220,96 @@ async function queuedNote(desktop, text) {
   return desktop.js(`(async()=>{const d=await window.mote.noteDraft();await window.mote.saveNote({...d,text:${JSON.stringify(text)},revision:1});return d.id;})()`);
 }
 
+async function reauthorizationAcrossAuthTimer(central) {
+  let desktop = await launch(central);
+  await desktop.preview(await central.invite()); await desktop.confirm(); await desktop.paired('a');
+  const originalGrant = desktop.calls.find(call => call.path === '/api/login/poll' && call.result?.ready).result;
+  const deviceId = (await desktop.status()).config.deviceId;
+  const note = await queuedNote(desktop, 'Generated A queue before delayed original-device reauthorization');
+  assert.equal((await desktop.status()).queueDepth, 1, 'generated note starts durably queued before original-device replacement');
+  const held = desktop.fault('/api/login/poll', 'hold');
+  await desktop.preview(await central.invite('a', deviceId)); await desktop.confirm(); await desktop.faultHit(held);
+  assert.equal((await central.api(originalGrant.token, '/api/connections/self')).statusCode, 401, 'real producer revokes the previous device credential during original-device replacement');
+  // The real main timer checks authentication every 15 seconds. Do not replace
+  // that timer or synthesize its 401: wait across its actual lifecycle ordering.
+  await delay(16000);
+  const during = await desktop.status();
+  const oldSelf401 = desktop.calls.filter(call => call.path === '/api/connections/self' && call.headers.authorization === 'Bearer ' + originalGrant.token && call.status === 401).length;
+  console.log(JSON.stringify({reauthorizationAuthTimer: true, oldSelf401, locallySignedOutDuringPairing: !during.config.tokenConfigured, pendingVisibleDuringPairing: Boolean(await desktop.pending())}));
+  assert(await desktop.pending(), 'automatic old-token authentication failure must not hide the original-device pairing recovery journal');
+  held.reject();
+  await desktop.idle();
+  await desktop.until(desktop.status, value => !value.config.tokenConfigured && !value.operations?.some(operation => operation.id === 'mote:connection-confirm' && operation.state === 'running'), 'automatic logout after the held pairing request loses its response');
+  assert(await desktop.pending(), 'automatic signed-out state retains explicit recovery for its original exact source configuration');
+  const profile = desktop.profile; await desktop.kill();
+  desktop = await launch(central, profile);
+  assert.equal((await desktop.status()).config.tokenConfigured, false, 'restart does not silently publish the pending replacement');
+  assert(await desktop.pending(), 'automatic signed-out restart retains the same original-device pending claim');
+  await desktop.recover();
+  const recovered = await desktop.paired('a');
+  console.log(JSON.stringify({reauthorizationRecovery: true, queueDepth: recovered.queueDepth, syncMode: recovered.config.syncMode, capturedNoteStatus: (await central.api(central.users.a.token, '/api/captures/' + note)).statusCode, ingressWrites: desktop.calls.filter(call => call.path.startsWith('/api/ingress/') && call.method === 'POST').map(call => ({path: call.path, status: call.status}))}));
+  assert.equal(recovered.queueDepth, 1, 'recovered original-device authorization reopens the exact original account queue');
+  assert.equal(recovered.config.deviceId, deviceId);
+  await desktop.preview(await central.invite('a', deviceId));
+  await desktop.captureConnection();
+  await desktop.close();
+  report('original-device replacement crosses the real auth timer, lost response and automatic signed-out restart without hiding recovery');
+}
+
+async function explicitLogoutFencesPendingSelf(central) {
+  const desktop = await launch(central);
+  await desktop.preview(await central.invite()); await desktop.confirm(); await desktop.paired('a');
+  const originalGrant = desktop.calls.find(call => call.path === '/api/login/poll' && call.result?.ready).result;
+  const deviceId = (await desktop.status()).config.deviceId;
+  await queuedNote(desktop, 'Generated A queue before explicit logout with delayed new self');
+  const priorAcks = desktop.calls.filter(call => call.path === '/api/login/ack').length;
+  const held = desktop.fault('/api/connections/self', 'hold', undefined, call => call.headers.authorization !== 'Bearer ' + originalGrant.token);
+  await desktop.preview(await central.invite('a', deviceId)); await desktop.confirm(); await desktop.faultHit(held);
+  // Use the production preload/IPC logout action while the pairing document is
+  // busy, rather than calling main internals or fabricating a generation.
+  await desktop.js('void window.mote.ask("logout").catch(()=>{});true');
+  await desktop.until(desktop.status, value => !value.config.tokenConfigured, 'explicit logout retires the current generation immediately');
+  assert(await desktop.pending(), 'the original exact pending connection remains available only for an explicit recovery action');
+  held.release();
+  await desktop.until(desktop.status, value => !value.operations?.some(operation => operation.id === 'mote:connection-confirm' && operation.state === 'running'), 'retired held self callback settles');
+  assert.equal((await desktop.status()).config.tokenConfigured, false, 'old self callback cannot undo explicit logout');
+  assert.equal(desktop.calls.filter(call => call.path === '/api/login/ack').length, priorAcks, 'old self callback cannot ACK after explicit logout');
+  await desktop.recover();
+  assert.equal((await desktop.paired('a')).queueDepth, 1, 'explicit recovery restores the original exact A queue');
+  await desktop.close();
+  report('explicit preload logout during held new self fences its callback until explicit recovery');
+}
+
+async function completedRecoveryUi(central) {
+  const desktop = await launch(central);
+  await desktop.preview(await central.invite()); await desktop.confirm(); await desktop.paired('a');
+  await desktop.connectionPage();
+  const readCleanup = () => desktop.js('(async()=>({pending:Boolean(await window.mote.pendingConnection()),recoverHidden:document.querySelector("#connection-recover").hidden,confirmationHidden:document.querySelector("#connection-confirmation").hidden}))()');
+  console.log(JSON.stringify({completedRecoveryInitialDom: await readCleanup()}));
+  const cleanup = await desktop.until(readCleanup, value => !value.pending && value.recoverHidden, 'completed recovery action refreshes after pending journal cleanup');
+  console.log(JSON.stringify({completedRecoveryDom: cleanup}));
+  const deviceId = (await desktop.status()).config.deviceId;
+  await desktop.preview(await central.invite('a', deviceId));
+  await desktop.captureConnection();
+  const preview = await desktop.js('({confirmationHidden:document.querySelector("#connection-confirmation").hidden,origin:document.querySelector("#connection-origin").textContent})');
+  console.log(JSON.stringify({generatedConnectionPreviewDom: preview}));
+  assert.equal(cleanup.pending, false, 'completed pairing has no durable pending journal');
+  assert.equal(cleanup.recoverHidden, true, 'completed pairing removes the stale recovery action from the actual DOM');
+  assert.equal(preview.confirmationHidden, false, 'captured generated preview has its actual confirmation panel visible');
+  await desktop.close();
+  report('completed recovery action disappears and generated confirmation preview renders before hidden capture');
+}
+
 try {
   const central = await host('central');
+  const selectedCase = process.env.MOTE_PAIRING_CASE;
+  if (selectedCase && !['reauth-auth-timer', 'ui-cleanup'].includes(selectedCase)) throw Error('Unknown generated Desktop pairing case');
+  if (selectedCase === 'reauth-auth-timer') {
+    await reauthorizationAcrossAuthTimer(central);
+    await explicitLogoutFencesPendingSelf(central);
+  } else if (selectedCase === 'ui-cleanup') {
+    await completedRecoveryUi(central);
+  } else {
   // This is deliberately first: the old M14 consumer fails on production v2,
   // before any helper-only test could conceal its browser-login fallback.
   let desktop = await launch(central);
@@ -370,6 +465,11 @@ try {
   assert.equal((await desktop.paired('a', central)).queueDepth, 1, 'returning to exact old deployment restores its own queue');
   await desktop.close();
   report('same URL replacement deployment keeps local queues isolated');
+
+  await reauthorizationAcrossAuthTimer(central);
+  await explicitLogoutFencesPendingSelf(central);
+  await completedRecoveryUi(central);
+  }
 
   console.log(JSON.stringify({ok: true, actualElectronMainPreloadRenderer: true, productionBuildAppAccountsSQLite: true, generatedExternalIOOnly: true, physicalCamera: false, realDeployment: false, scenarios: passed}));
 } finally {

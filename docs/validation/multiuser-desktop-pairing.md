@@ -16,8 +16,9 @@ was read, attached, stashed or committed.
   `/tmp/mote-desktop-pairing-native-red-authorized.log/.exit`. An earlier
   sandbox startup exit happened before product assertions and is not this RED.
 - Production host narrow tests use real Fastify TCP, Accounts and SQLite, not a
-  helper-only self response. The exact current count and native GREEN results
-  will be filled after the final source is fixed.
+  helper-only self response. Latest parser 55 + host 28 = **83/83**, exit 0,
+  with actual ConfigStore session-only save/load and unchanged source hashes:
+  `/tmp/mote-desktop-v2-session-only-green.log/.exit`.
 - Translation catalog and Desktop noEmit checks passed during implementation.
   The full `check:affected` dry-run correctly selects all TypeScript consumers
   and Android; a dry-run is not a gate pass.
@@ -50,6 +51,29 @@ then passed all 83 parser/host tests. RED:
 `/tmp/mote-desktop-v2-session-only-red.log/.exit`; GREEN:
 `/tmp/mote-desktop-v2-session-only-green.log/.exit`.
 
+## Final bounded native snapshot
+
+The final hidden Electron runner passed **19/19**, exit 0:
+`/tmp/mote-desktop-pairing-native-final.log/.exit`. It exercises actual
+main/preload/renderer and the production host, including URI/JSON/generated QR,
+pre-POST PKCE persistence, real device 403 capability checks, original-device
+replacement, A/B queues and actual ingress, three lost responses/SIGKILL recovery,
+Central restart/ACK410, revoked/expired credentials, exact self/poll mismatches,
+late A callback after B login, same-URL deployment replacement, real auth timer,
+explicit logout and recovery-button cleanup. External native/network I/O only is
+substituted.
+
+The source/compiled-output/script manifests before and after are byte-identical:
+`/tmp/mote-desktop-pairing-final-{before,after}.sha256`, manifest SHA-256
+`a4516a9a084d129b0f8b3a876ebd789468191c5fbb134cf9b7f187c89b366025`.
+Runtime base `5574ba45` plus the now-committed UI/test delta is the tested source.
+Generated hidden-window screenshot was visually inspected at
+`/tmp/mote-desktop-v2-connection-ui.png`; the final DOM proves no pending
+checkpoint and hidden recover button, and a visible origin-confirmation preview.
+The earlier actual DOM stale-button RED remains
+`/tmp/mote-desktop-pairing-ui-cleanup.log/.exit`; its focused GREEN is
+`/tmp/mote-desktop-pairing-ui-cleanup-green.log/.exit`.
+
 ## Environment and pending work
 
 The first loopback fixture bind returned sandbox EPERM; the original narrow
@@ -58,8 +82,11 @@ Electron startup also ended before document load; its original command was
 reviewed and then reached the real product RED. No approval rejection was
 bypassed. Native fixtures remain hidden, with generated external-I/O substitutes.
 
-Full Desktop Swift/native build, complete affected checks, final native GREEN,
-independent source review, Draft PR and remote SHA verification remain open at
-this checkpoint. Parent resource allocation was requested once; the app send
-returned `thread not found`, so the request is also recorded in commentary and
-`/tmp/mote-desktop-v2-resource-status.md`, with no blind message retry.
+The independent source review identified and then followed up the original-device
+P2; no new P0/P1/P2 remained in the reviewed fix. Parent allocated the next
+heavy window at 00:27. A fresh reviewed process inventory found no active
+heavy candidates (`/tmp/mote-desktop-v2-fresh-resource-check.json`). Full
+Desktop Swift/native build, complete affected checks, Draft PR and remote SHA
+verification remain open at this fixed candidate. The earlier parent app send
+returned `thread not found` and was not blindly retried; the allocation arrived
+as a new delegation. No other owner process was stopped.
