@@ -661,6 +661,31 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeRecordingCollectionPauseRetainsArchivedFilesAndExplicitPrivacyStillWithdrawsThem() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));val beforeB=b.get("/api/connectors/same-recordings/recordings?limit=1").toString();control("/generated/recover-recording-audio")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->val button=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()==label};assertNotNull("Missing original recording control: "+label,button);button!!.performClick()}}
+            fun ids(page:JSONObject):Set<String> {val items=page.getJSONArray("items");return (0 until items.length()).map {items.getJSONObject(it).getString("captureId")}.toSet()}
+            ready();press("来源与外部应用");ready();press("录音归档");ready();press("连接已授权账号");ready();waitFor {a.get("/api/connectors/same-recordings").getBoolean("connected")};press("同步范围");ready()
+            scenario.onActivity {activity->
+                views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="启用"}.isChecked=true
+                views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="自动同步"}.isChecked=false
+                views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="开始时间"}.setText("2026-10-16T00:00:00.000Z")
+                views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.hint.toString()=="结束时间"}.setText("2026-10-17T00:00:00.000Z")
+            };press("保存设置");ready();waitFor {a.get("/api/connectors/same-recordings").getJSONObject("selection").getBoolean("enabled")};press("立即同步");ready()
+            var journal:JSONObject?=null;waitFor {journal=a.get("/api/connectors/same-recordings/recordings?limit=20");val rows=journal!!.getJSONArray("items");rows.length()>0&&(0 until rows.length()).all {rows.getJSONObject(it).getJSONObject("audio").getBoolean("archived")}}
+            val source=journal!!.getString("sourceId");val accepted=ids(a.get("/api/files"));assertTrue("Real accepted recording files are required before pause",accepted.isNotEmpty())
+            press("同步范围");ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="启用"}.isChecked=false};press("保存设置");ready()
+            waitFor {!a.get("/api/connectors/same-recordings").getJSONObject("selection").getBoolean("enabled")}
+            val retained=ids(a.get("/api/files"));assertTrue("Stopping collection must preserve every accepted personal recording: before="+accepted+" after="+retained,retained.containsAll(accepted));assertEquals(beforeB,b.get("/api/connectors/same-recordings/recordings?limit=1").toString())
+            a.patch("/api/sources/"+android.net.Uri.encode(source),JSONObject().put("enabled",false));assertTrue("Explicit privacy withdrawal must still fence retained recordings",ids(a.get("/api/files")).intersect(accepted).isEmpty());assertEquals(beforeB,b.get("/api/connectors/same-recordings/recordings?limit=1").toString())
+        }
+    }
+
     @Test fun originalNativeGenericImportRetainsMultipartPrivatePreviewAndLostAckUntilExplicitOwnerConfirmation() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
