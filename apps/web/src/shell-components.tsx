@@ -29,7 +29,7 @@ useState
 import { AnswerMarkdown } from "./AnswerMarkdown";
 import { EvidenceState,EvidenceProcessingHelp } from './EvidenceState';
 import { ReferenceDetail } from './ReferenceDetail';
-import {contextEvidenceReference} from './evidence-route';
+import {contextEvidenceReference,contextReaderReference} from './evidence-route';
 import { TurnUsage } from './Usage';
 import {
 ApiError,
@@ -384,7 +384,7 @@ export function EvidenceDialog({
   onDeleted: () => void;
   onOpen: (id:string) => void;
 }) {
-  const contextReference=id.startsWith('context:')&&parseEvidenceRef(id.slice(8))?.kind==='capture'?id.slice(8):undefined;
+  const contextReference=contextReaderReference(id);
   const parsedRef=parseEvidenceRef(id),captureRef=parsedRef?.kind==='capture';
   const captureId=captureRef?parsedRef.id:undefined;
   const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/${api.connection?.mode==='web'?'captures':'capture-browser'}/${encodeURIComponent(captureId!)}`:null);

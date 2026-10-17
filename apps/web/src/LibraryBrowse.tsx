@@ -9,6 +9,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { type Api, type Capture, ApiError, dateTime, duration, errorMessage } from './api';
 import { evidencePresentation, ocrPresentation } from './capture-presentation';
 import { EvidenceState } from './EvidenceState';
+import { contextReaderReference } from './evidence-route';
 import { FileDetail } from './Files';
 import { type Material } from './Materials';
 import { MediaSnapshot } from './Media';
@@ -46,7 +47,7 @@ function LibraryReference({ api, reference, onOpen }: {
     onOpen: (ref: string) => void;
 }) {
     const capture = parseEvidenceRef(reference)?.kind === 'capture';
-    return capture ? <LibraryCaptureDetail api={api} reference={reference} onOpen={onOpen}/> : <ReferenceDetail api={api} reference={reference} onOpen={onOpen}/>;
+    return capture ? <LibraryCaptureDetail api={api} reference={reference} onOpen={onOpen}/> : <ReferenceDetail api={api} reference={contextReaderReference(reference)??reference} onOpen={onOpen}/>;
 }
 /** The same authenticated original and provenance shown by the full evidence reader. */
 function LibraryCaptureDetail({ api, reference, onOpen }: {

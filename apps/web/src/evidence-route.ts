@@ -15,6 +15,10 @@ export function contextEvidenceReference(value:string):string{
  const parsed=parseEvidenceRef(value);
  return parsed?.kind==='capture'?'context:'+formatEvidenceRef(parsed.kind,parsed.id):value;
 }
+/** Strip UI routing metadata only when it encloses a typed context capture. */
+export function contextReaderReference(value:string):string|undefined{
+ return value.startsWith('context:')&&parseEvidenceRef(value.slice(8))?.kind==='capture'?value.slice(8):undefined;
+}
 export function readEvidenceRoute(hash:string):string|null {
  const value=new URLSearchParams(hash.split('?')[1]??'').get('evidence');
  return value?normalizePublicReference(value):null;

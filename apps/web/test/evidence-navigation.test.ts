@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {JSDOM} from 'jsdom';
-import {changeEvidenceRoute,evidenceRoute,readEvidenceRoute} from '../src/evidence-route.js';
+import {changeEvidenceRoute,contextReaderReference,evidenceRoute,readEvidenceRoute} from '../src/evidence-route.js';
 import {containDialogFocus} from '../src/dialog-focus.js';
 const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 test('detail history preserves the exact origin filters, replaces nested evidence and closes with one back',async()=>{
@@ -30,4 +30,6 @@ test('query-visible capture references keep their reader boundary through reload
  assert.equal(readEvidenceRoute(hash),reference);assert.match(hash,/conversation=generated/);
  assert.equal(readEvidenceRoute('#/ask?evidence=context%3A'+id),null);
  assert.equal(readEvidenceRoute('#/ask?evidence=context%3Acontext%3Acapture%3A'+id),null);
+ assert.equal(contextReaderReference(reference),'capture:'+id);
+ for(const value of ['capture:'+id,'context:memory:'+id,'context:'+id,'context:context:capture:'+id])assert.equal(contextReaderReference(value),undefined);
 });
