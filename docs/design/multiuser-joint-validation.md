@@ -244,3 +244,23 @@ owner action. Personal data restore mints new decision IDs and excludes operatio
 receipts, retaining the existing no-authority-restoration boundary. Native schema
 admission includes the new metadata column/journal. Actual narrow10/10 is recorded
 separately; previous types/full gates do not cover this change.
+
+## Attachment relationship and restored image authority
+
+KEEP the original parent-caption/image relationship, original byte retention,
+explicit preparation and accepted OCR reuse. CHANGE only admission/publication
+through existing M03/M06/M07 services and one executor. A declared parent ID is
+insufficient: actual owned archive lineage and current parent/head/source must
+match. Binding metadata is specific to this retained relationship; no generic
+nonce framework, new runtime or permission step is introduced. M02's existing
+asset value shape can retain metadata once M03 is present; byte access remains
+M03, and existing canonical members drive transitive retirement. Legacy organizer
+chunk evidence IDs are adapted to M02 capture IDs while preserving exact locators.
+
+Actual settled-publication testing exposed old image navigation revival after
+same-ID reattachment and again after data-only restore. Immutable Material lineage
+and fresh per-binding Memory image evidence IDs prevent these independently of
+raw OCR cache identity. Restore preserves accepted data and mints no execution or
+model lease. Current770f source needs new type/delta/full combination checks; old
+component/gate receipts are not moved. Profile/rule/service-test and import choice
+remain OPEN, as do final clients and complete composed acceptance.

@@ -887,3 +887,32 @@ Docker schema combination are pending. Previous203997 types cover0563/679a but
 not this changed wire. Profiles/rules and parent-bound imported image preparation
 remain OPEN; the new attachment target test has no production implementation and
 its first503 denial is not a positive attachment/Memory proof.
+
+### Exact retained attachments —3d2cad43/770f548c
+
+Original positive HTTP preparation entry was actual503 RED1/1 at46d1d9f8,
+`/tmp/mote-joint-file-attachment-entry-red2.log/.exit` (earlier first foreign-denial
+failure is not positive entry proof). New3d2cad43 implements actual parent/archive
+relation, current binding, same M06 executor and M07 pure organizer. Initial child
+OCR/parent retirement passed, but the added joined-caption assertion exposed
+M02 asset quarantine, legacy chunk UUID evidence adaptation and the archived source
+caption being omitted. Those intermediate failures remain in attachment-joined
+logs; only later unwrapped real handler execution is used as GREEN.
+
+Waiting for the actual rebuilt joined Material and re-projecting its image anchor
+then confirmed old navigation revival (settled-red EXIT1); Material binding lineage
+fix passes. Data-only Ingress+Processing restore separately reproduced the same
+old-anchor problem at e3913d26 in attachment-restore-anchor-red EXIT1. First image-ID
+fix collided with old unique evidence block identity (final-narrow EXIT1), retained.
+Minimal770f binds both block and image ID to the new M03 relation; non-attachment
+image identities remain unchanged.
+
+`/tmp/mote-joint-file-attachment-final-narrow2.log/.exit` is5/5pass,0skip/fail,
+8.221s EXIT0: original preparation/actual OCR and joined original parent caption,
+real Memory read_image, same-parent UUID retirement/recreation/new task and Material
+revision with exact raw OCR reuse, held A provider response across parent deletion/
+source disable/head replacement with B processing and no A artifact/pin, and
+accepted OCR/domain data restore with old ticket/image-anchor rejection plus fresh
+image navigation. Pure generated2px PNG, captions and fake loopback OCR only;
+no model inference or real user data. Full HTTP personal import, producer noEmit,
+independent review, native/client/compiled/container and full affected are pending.

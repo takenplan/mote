@@ -255,3 +255,42 @@ rules and original-only archive choice, then exact parent/archive attachment
 preparation and transitive retirement. Existing host leaseModel/leaseReference and
 M03/M06 algorithms are the intended seams; no second secret store, private runtime,
 permission flow or guessed profile-to-model mapping is introduced.
+
+## Retained image attachment preparation —770f candidate
+
+POST `/api/records/:id/attachments/:attachmentId/processing {mimeType?}` now
+adapts the original explicit attachment action. It resolves the owned current
+parent, original declaration, actual archive link and exact hash/size/MIME before
+admitting the same M03 original/M06 pipeline. The response retains captureId,
+parentId, attachmentId, duplicate and processing job. A supplied processingProfileId
+still blocks explicitly until the separate original processing-plan work is ready;
+this candidate does not invent a profile/model mapping or change defaults.
+
+A specific M03 `ig_attachment_links` relation carries an opaque binding ID, with
+canonical parent/archive FKs. Parent deletion/unlink removes the relation; merely
+recreating the same parent UUID cannot reauthorize it. Source/head/declaration/
+retained-byte metadata proofs gate original reads, tickets, bounded original pages
+and Files SQL before LIMIT. M06 immutable input includes that binding, rechecks it
+after waits, and publishes the parent as a real M02 dependency. A new explicit
+preparation obtains a fresh task/Material lineage and signed ticket while accepted
+raw OCR may be reused. JSON attachmentOf alone is not a capability.
+
+M07 reuses the original pure source-item organizer for parent caption plus actual
+attachment products/readiness. Archived parent captions are read through M03;
+canonical originals remain unchanged. Asset blocks store only typed hash/MIME/
+member metadata in M02, which performs no asset I/O and issues no byte grant.
+M03 remains the sole reader; original image navigation uses existing M07/Memory
+image anchors. Fine-grained M06 chunk UUIDs stay in locators; M02 evidenceIds retain
+canonical capture semantics. Binding lineage changes the resulting Material
+revision. Data-only Ingress restore mints a fresh relation; image evidence block/ID
+also binds it, so accepted data can remain readable without reviving old image
+navigation grants. Ordinary image/zero-generation identity is unchanged.
+
+Current narrow5/5 verifies real routes, generated HTTP OCR, joined caption/Material,
+Memory read_image, parent deletion/source disable/new head during held A response,
+B positive, same-ID recreation/raw cache reuse, ticket retirement and Ingress+
+Processing domain data restore. It does not establish a full personal HTTP import,
+model understanding/Memory extraction/Ask, native UI, production or container gate.
+Source noEmit and independent bounded review are pending. Named processing plans,
+source/MIME rules, original-only archive choice and selected import image profile
+remain the next finite public capability group, not complete through this entry.
