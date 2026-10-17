@@ -1,3 +1,4 @@
+import {attachmentVisible} from './ingress-attachments.js';
 import {fileOriginalGeneration} from './ingress-file-forget.js';
 import {Readable} from 'node:stream';
 import {z} from 'zod';
@@ -23,7 +24,7 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
   const bind=(context:UserContext)=>{
     const assert=()=>runtime.authority.assert(context),sql=new PrivateSql(db,context.userId,assert),cursor=new PrivateCursor(key,context.deploymentId,context.userId),originals=ingress.forUser(context),service=processing.forUser(context);
     const base=`FROM ig_originals r JOIN pd_captures c ON c.user_id=r.user_id AND c.id=r.capture_id JOIN pd_sources s ON s.user_id=r.user_id AND s.id=r.source_id JOIN pd_source_heads h ON h.user_id=r.user_id AND h.capture_id=c.id JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id
-      WHERE r.user_id=$user AND c.user_id=$user AND s.user_id=$user AND h.user_id=$user AND f.user_id=$user AND (f.format='file' OR instr(f.format,'processor:')=1) AND COALESCE(json_extract(s.json,'$.enabled'),1)=1 AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0 AND json_extract(c.json,'$.source')='file'`;
+      WHERE r.user_id=$user AND c.user_id=$user AND s.user_id=$user AND h.user_id=$user AND f.user_id=$user AND (f.format='file' OR instr(f.format,'processor:')=1) AND COALESCE(json_extract(s.json,'$.enabled'),1)=1 AND COALESCE(json_extract(c.json,'$.provenance.deleted'),0)=0 AND json_extract(c.json,'$.source')='file' AND ${attachmentVisible()}`;
     const owned=(id:string)=>{
       z.string().uuid().parse(id); const row=sql.get(`SELECT r.*,c.json capture ${base} AND r.user_id=$user AND c.id=?`,id); if(!row)throw missing();
       const ref='original:'+row.id,info=originals.readOriginal(ref,{length:0}),capture=JSON.parse(String(row.capture)),status=service.status(ref);
@@ -73,6 +74,7 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
       },
     };
   };
+  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/records/:id/attachments/:attachmentId/processing',handle:({context,request})=>{const input=z.object({id:z.string().uuid(),attachmentId:z.string().uuid()}).parse(request.params);const result=ingress.forUser(context).prepareAttachment(input.id,input.attachmentId,request.body);return {...result,processing:bind(context).detail(result.captureId,false).job};}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files',handle:({context,request})=>bind(context).list(request.query)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id',handle:({context,request})=>bind(context).detail(z.object({id:z.string().uuid()}).parse(request.params).id)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks',handle:({context,request})=>bind(context).chunks(z.object({id:z.string().uuid()}).parse(request.params).id,request.query)});
