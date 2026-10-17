@@ -21,7 +21,7 @@ export class TaskAuthorization implements DurableIdentityVerifier {
  /** Fixed host-only M06 handoff. The old intent supplies account authority,
   * never a running context. Only the new task's real lease can restore one. */
  issueProcessingRecheck(intentId:string,taskId:string){
-  const source=this.db.prepare("SELECT a.grant_id FROM task_authorizations a JOIN execution_steps e ON e.id=a.task_id WHERE a.task_id=? AND e.user_id=a.user_id AND e.kind='processing.pipeline' AND e.state IN('blocked','failed','stale')").get(intentId);
+  const source=this.db.prepare("SELECT a.grant_id FROM task_authorizations a JOIN execution_steps e ON e.id=a.task_id WHERE a.task_id=? AND e.user_id=a.user_id AND e.kind IN('processing.pipeline','processing.derivatives') AND e.state IN('blocked','failed','stale')").get(intentId);
   if(!source)throw new ScopeError('invalid_identity',401);const row=this.assert(String(source.grant_id)),grantId=randomUUID();
   this.db.prepare('INSERT INTO task_authorizations VALUES(?,?,?,?,0)').run(grantId,taskId,row.user_id,row.authorization_epoch);
   return {grantId,userId:String(row.user_id),authorizationEpoch:Number(row.authorization_epoch)};

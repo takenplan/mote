@@ -175,7 +175,7 @@ export class TaskExecution {
    while(next){
     if(seen.has(next))return;seen.add(next);
     const step=this.engine.get(next);
-    if(!step||step.kind!=='processing.pipeline'||!['blocked','failed','stale'].includes(step.state))return;
+    if(!step||!['processing.pipeline','processing.derivatives'].includes(step.kind)||!['blocked','failed','stale'].includes(step.state))return;
     this.assertTask(step);first??=step;
     if(step.ownership!.userId!==first.ownership!.userId)return;
     next=typeof step.input.intentTaskId==='string'?step.input.intentTaskId:'';
@@ -192,7 +192,7 @@ export class TaskExecution {
   if(!Number.isSafeInteger(stamp)||stamp<0)throw new TaskError('task_metadata_invalid');
   const handler=this.handlers.get('processing.recheck');
   if(!handler||handler.modelFeature)throw new TaskError('task_handler_unavailable',503);
-  for(const row of this.db.prepare("SELECT u.task_id FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE e.kind='processing.pipeline' AND e.state IN('blocked','failed','stale')").all()){
+  for(const row of this.db.prepare("SELECT u.task_id FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE e.kind IN('processing.pipeline','processing.derivatives') AND e.state IN('blocked','failed','stale')").all()){
    this.transaction(()=>{
     const intent=this.processingRecheckIntent(String(row.task_id));
     if(!intent||!eligible(intent))return;

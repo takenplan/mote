@@ -1751,3 +1751,51 @@ The original Files export-only button is separately owned by the image consumer.
 Its latest consumer/runtime56d3 has not yet been composed into Joint; the producer
 freeze does not claim that UI or whole affected acceptance. Independent bounded
 review and final combined check:affected/recovery remain pending. CI is disabled.
+
+
+### Named image producer/consumer composition
+
+Producer `f555103132f1a66e2d42acc57c4adc821372e6a1` was combined with
+read-only image consumer `56d3a8428af89bb94097d81aa0459b6a5ab24d23` in a
+generated fixture. Only frontend import paths, matching consumer React/ReactDOM
+and locale, and the cross-worktree classic JSX runtime were adapted; assertions
+were unchanged. Four original Files journeys passed4/4,0skip,76.717s EXIT0:
+OCR+typed export, no-OCR export, complete snapshot graph, and legacy OCR-only
+export, including held A response/owner switch/equal-ID B URL retirement.
+`/tmp/mote-joint-image-products-composed4.log/.exit` and
+`/tmp/mote-joint-image-products-composition.json` record the boundary. Earlier
+composed/composed2 failed before product assertions with missing JSX React;
+composed3 exposed duplicate React copies. Those environment failures are retained.
+The peer advanced04f1 after imports; no claim is made for that later UI change.
+No peer files were edited or wholesale UI prerequisites merged.
+
+### Approved B: unfinished derivative after successful extraction
+
+An actual generated text extraction succeeded, its named-profile shared-model
+summary failed, then the user logged out and the server restarted. Updating only
+the instance shared model left the summary failed on the pre-fix producer:
+`/tmp/mote-joint-observer-derived-red.log/.exit`1/1 RED.
+The same fixed M06 processing.recheck purpose now accepts an unfinished
+processing.derivatives coordinator as authority provenance, alongside the
+already-supported unfinished root. It receives a new normal M05 grant and real
+lease. It verifies current extraction artifact/Material revision, source/head,
+original incarnation, file controls, latest coordinator and issued/unknown
+barriers. After an actual plan dependency change, it admits only missing
+derivation modes; it does not rerun successful extraction or restore old grants.
+
+Original root/fence/queued matrix15/15 passed on this production delta. The first
+combined run had one fixture error: after disabling A it expected A logout200
+instead of the correct401; retained `observer-derived-matrix` EXIT1. The final
+derivative matrix7/7,0skip,44.020s EXIT0 (`observer-derived-final7`) adds same-ID
+B private-model positive/unchanged output, distinct new grants, old stopped-grant
+restore rejection, zero model/external calls in the recheck, logout/restart
+dedup, cancel, source withdrawal, account disable, unknown issuance, completed
+derivative and unchanged reference. Server noEmit, strict producer tests and
+scope checks0 (`observer-derived-types`, `observer-derived-strict`,
+`observer-derived-scope`).
+
+This supersedes the earlier completed-extraction/failed-derivative OPEN only for
+these tested named profiles with explicit shared modelServiceId. Implicit legacy
+selections without an applied reference-bearing plan remain uncharacterized.
+Independent bounded review and own final affected/compiled recovery are pending;
+no whole-project acceptance is claimed.
