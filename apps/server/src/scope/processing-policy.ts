@@ -16,23 +16,34 @@ import {scopedFilePolicySchema,selectScopedFilePolicy,type ScopedFilePolicy} fro
 import {identityHash} from './originals.js';
 
 const domain='filePolicy',valueSchema=z.object({policy:scopedFilePolicySchema.nullable()}).strict();
+const effectiveValueSchema=valueSchema.extend({connections:z.record(z.string().regex(/^[0-9a-f]{64}$/)).default({})});
+const connectionKey=(reference:{kind:string;id:string})=>identityHash(reference);
+const canonicalHash=(value:unknown)=>identityHash(JSON.parse(JSON.stringify(value,(_key,child)=>child&&typeof child==='object'&&!Array.isArray(child)?Object.fromEntries(Object.keys(child).sort().map(key=>[key,child[key]])):child)));
 export type FilePolicyPlan=ReturnType<typeof selectScopedFilePolicy>&{id:string};
 /** Existing M04 YAML transaction and M06 immutable metadata only. Endpoint/key
  * ownership remains exclusively in the complete personal/shared M04 reference. */
 export class ProcessingPolicies {
  constructor(private readonly runtime:ScopedRuntime,private readonly db:DatabaseSync,private readonly configuration:Configurations,private readonly processors:FileProcessorRuntime,private readonly settings:(context:UserContext)=>ProcessingSettings,changed:(context:UserContext)=>void){
-  configuration.registerDomain(domain,subject=>({id:domain,schema:valueSchema.superRefine((next,issues)=>{
+  configuration.registerDomain(domain,subject=>({id:domain,schema:effectiveValueSchema.superRefine((next,issues)=>{
    if(!next.policy)return;const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user');
-   try{validateProcessingProfiles(next.policy,before?valueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry);}catch{issues.addIssue({code:'custom',message:'Invalid saved processor profile'});}
-  }),defaultValue:{policy:null},resolve:raw=>raw,fields:[{path:'policy',effect:'next-request'}],prepare:raw=>{
-   const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),next=valueSchema.parse(raw);
-   if(next.policy)validateProcessingProfiles(next.policy,before?valueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry,{error:()=>new ConfigServiceError('config_invalid')});
+   try{validateProcessingProfiles(next.policy,before?effectiveValueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry);}catch{issues.addIssue({code:'custom',message:'Invalid saved processor profile'});}
+  }),defaultValue:{policy:null},resolve:(raw,document)=>{
+   const next=valueSchema.parse(raw),connections:Record<string,string>={};
+   if(next.policy){const models=configuration.resources.schema().parse(document?.models??{profiles:[],selections:{}});
+    // Derive only fingerprints from M04's complete connection. Raw YAML keeps
+    // references; endpoint/key material is never copied into a second store.
+    for(const service of next.policy.services){const reference=service.reference;connections[connectionKey(reference)]=reference.kind==='shared'?canonicalHash({generation:configuration.resources.generation(reference.id)}):canonicalHash(models.profiles.find(profile=>profile.id===reference.id)?.settings??null);}
+   }
+   return {...next,connections};
+  },fields:[{path:'policy',effect:'next-request'}],prepare:raw=>{
+   const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),next=effectiveValueSchema.parse(raw);
+   if(next.policy)validateProcessingProfiles(next.policy,before?effectiveValueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry,{error:()=>new ConfigServiceError('config_invalid')});
    const json=JSON.stringify(next);let published=false;
    return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_file_policies VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_file_policies SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_file_policies WHERE user_id=$user');}},complete:()=>{if('credentialId' in subject&&next.policy&&before?.json!==json)changed(subject);}};
   }}));
  }
  private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>this.runtime.authority.assert(context));}
- policy(context:UserContext):ScopedFilePolicy|null{const row=this.sql(context).get('SELECT json FROM mp_file_policies WHERE user_id=$user');return row?valueSchema.parse(JSON.parse(String(row.json))).policy:null;}
+ policy(context:UserContext):ScopedFilePolicy|null{const row=this.sql(context).get('SELECT json FROM mp_file_policies WHERE user_id=$user');return row?effectiveValueSchema.parse(JSON.parse(String(row.json))).policy:null;}
  current(context:UserContext,ref:string):FilePolicyPlan|undefined{const row=this.sql(context).get('SELECT p.id,p.json FROM mp_file_policy_bindings b JOIN mp_file_plans p ON p.user_id=b.user_id AND p.id=b.plan_id WHERE b.user_id=$user AND p.user_id=$user AND b.original_id=?',ref.slice(9));return row?{...JSON.parse(String(row.json)),id:String(row.id)}:undefined;}
  /** Called by trusted admission, never a presentation GET. A completed file keeps
   * its applied plan until explicit reprocessing chooses a replacement. */
@@ -44,7 +55,8 @@ export class ProcessingPolicies {
   const selected=selectScopedFilePolicy(policy,String(row.source_id),String(row.mime),override);
   if(!selected.archiveOnly){const processor=this.processors.registry.list().find(processor=>processor.id===selected.profile.processorId);if(processor)selected.profile.parameters=effectiveProcessorParameters(processor,selected.profile.parameters);
   }
-  const id=identityHash({original:ref,fingerprint:selected.fingerprint,processor:selected.archiveOnly?'archive':this.processors.registry.list().filter(processor=>processor.id===selected.profile.processorId).map(processorContract),parameters:selected.profile.parameters}),json=JSON.stringify(selected);
+  const stored=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),connections=stored?effectiveValueSchema.parse(JSON.parse(String(stored.json))).connections:{},selectedConnections=selected.services.map(service=>({reference:service.reference,fingerprint:connections[connectionKey(service.reference)]})).sort((a,b)=>connectionKey(a.reference).localeCompare(connectionKey(b.reference)));
+  const id=identityHash({original:ref,fingerprint:selected.fingerprint,connections:selectedConnections,processor:selected.archiveOnly?'archive':this.processors.registry.list().filter(processor=>processor.id===selected.profile.processorId).map(processorContract),parameters:selected.profile.parameters}),json=JSON.stringify({...selected,connections:selectedConnections});
   sql.run('INSERT INTO mp_file_plans VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',id,ref.slice(9),json);sql.run('INSERT INTO mp_file_policy_bindings VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO UPDATE SET plan_id=excluded.plan_id',ref.slice(9),id);return this.current(context,ref)!;
  }
  effective(base:ProcessingSettings,plan?:FilePolicyPlan){if(!plan)return base;const p=plan.profile,parameters=p.parameters;return processingSettingsSchema.parse({...base,audioProcessor:p.processorId.startsWith('audio.')?p.processorId:base.audioProcessor,diarizationProcessor:p.diarizationProcessor,summarize:p.summarize,speakerCount:parameters.speakerCount??null,speakerMin:parameters.speakerMin??null,speakerMax:parameters.speakerMax??null,semanticTurns:parameters.semanticTurns===true});}

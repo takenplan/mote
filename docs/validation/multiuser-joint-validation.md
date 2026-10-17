@@ -1141,3 +1141,25 @@ and unchanged sibling configuration. Three existing M04 suites pass18/18,8.282s
 (`/tmp/mote-joint-configuration-relogin-neighbors.log/.exit`), including admitted
 work after logout, pinned leases, reset/deletion, restore and credential fencing.
 This is a narrow source correction, not whole client/recovery acceptance.
+
+
+### Named reference publication checkpoint (not consumer freeze)
+
+Durable f45af053 exercises absent `same-media` → blocked original → publish
+complete personal M04 connection with the same ID and unchanged policy. Sandbox
+listen EPERM occurred before product execution and is retained. The authorized
+localhost run actually failed to resume within6s (EXIT1,7.438s),
+`/tmp/mote-joint-policy-service-change-red-approved.log/.exit`. M04's existing
+domain resolve now derives only canonical referenced-connection fingerprints;
+its ordinary effective-change transaction triggers the existing unfinished-plan
+reconciliation. YAML and applied-plan metadata keep references/hashes, never a
+second endpoint/key store. Only the selected profile's connection hashes enter
+the immutable plan identity. Same-case GREEN1/1,2.472s EXIT0 is
+`/tmp/mote-joint-policy-service-change-green2.log/.exit`; green1 reached processing
+success but compared the raw input policy to canonical defaults, so its final
+fixture assertion failed and is retained. Green2 compares the actual saved policy
+without weakening request-count, output, plan-change or sibling assertions.
+Server noEmit0: `/tmp/mote-joint-policy-service-change-types.log/.exit`.
+Shared-instance change notification, global/default selections, processor-version
+startup reconciliation, raw-stage reuse and complete applied-plan lifecycle remain
+OPEN; this bounded personal-reference case is not whole fingerprint acceptance.
