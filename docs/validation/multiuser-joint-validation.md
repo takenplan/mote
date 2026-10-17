@@ -1180,3 +1180,22 @@ The relogin cache correction is therefore not established as its cause/fix.
 No plugin production change or closure claim is made; failed-process PID/state
 diagnostics are requested from the independently failing workspace. These narrow
 results cannot replace that owner's required gate or whole plugin acceptance.
+
+
+### Original settings-page atomic connection edit
+
+The old processing page saved service configuration and policy in one action.
+Durable57691558 shows the new route rejected its personal M04 connection edit
+400 (1/1fail,2.672s `/tmp/mote-joint-policy-atomic-editor-red.log/.exit`).
+The scoped page now accepts optional complete personal `models` beside settings
+and reference-only policy; all domains use the existing M04 `updateMany` replace
+transaction and existing stable-ID masked-secret handling at one CAS revision.
+There is no shared-resource write, second secret store, or second user step.
+The route returns redacted personal connections and shared read-only metadata.
+Same-case GREEN1/1,1.282s0 (`/tmp/mote-joint-policy-atomic-editor-green.log/.exit`)
+checks revision+1, secret redaction/retention, invalid-profile atomic rejection,
+stale409 and sibling unchanged. Current four-file policy/relogin combination
+10/10,22.742s0 is `/tmp/mote-joint-policy-atomic-editor-neighbors.log/.exit`;
+Server types and scope checker both0 in corresponding `-types`/`-scope` receipts.
+These backend entry checks do not establish client page integration or whole
+policy/final joint acceptance. Public limited consumer candidate remains2528.

@@ -386,3 +386,12 @@ observation: same-reference model-body changes, scalar-only settings changes,
 shared-resource notifications and unfinished derived-only jobs still need their
 original semantics wired and verified. Preview/reprocess/health/profile overrides,
 applied-plan data restore and non-default image recipes remain unreleased.
+
+
+Policy-page WIP refinement: optional `models:{profiles,selections}` in the same
+PUT `/api/file-processing` preserves the original one-action connection/policy
+save. These are complete personal M04 connections, validated and redacted by the
+existing models domain and stable-ID masked-secret rules; policy services remain
+opaque `{kind,id}` references. Processing, filePolicy and optional models replace
+together at one revision. Shared instance connections remain read-only metadata.
+No client-consumer freeze is declared for this refinement yet.
