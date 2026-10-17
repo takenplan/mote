@@ -40,7 +40,7 @@ const providerBound=provider.address();assert.ok(providerBound&&typeof providerB
 const node=await buildApp({dataDir:directory});assert.ok(node.accounts);await node.accounts.initialize('generated-admin',password);
 const upstream=await node.app.listen({host:'127.0.0.1',port:0});
 async function request(token:string|undefined,path:string,method='GET',body?:unknown){
- const response=await fetch(upstream+path,{method,headers:{...protocol,'content-type':'application/json',...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
+ const response=await fetch(upstream+path,{method,headers:{...protocol,...(body===undefined?{}:{'content-type':'application/json'}),...(token?{authorization:'Bearer '+token}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});
  const value=await response.json() as any;assert.equal(response.status,200,JSON.stringify({path,status:response.status,error:value.error}));return value;
 }
 const admin=await request(undefined,'/api/auth/login','POST',{username:'generated-admin',password,mode:'client'});

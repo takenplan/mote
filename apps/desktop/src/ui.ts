@@ -4,7 +4,7 @@ import {createSyncHistoryUi} from './sync-history-ui';
 import {createDesktopPresentation} from './presentation';
 import {createWorkActivityUi} from './work-activity-ui';
 import {nativeStatusSummary} from './native-status';
-import { renderAskAnswer, renderAskCitation } from './ask-presentation';
+import { renderAskTurn } from './ask-presentation';
 import { moteText, getLocale } from '@mote/shared/i18n';
 import {builtinUiRules} from '@mote/shared';
 import { DesktopNavigation, desktopPages, needsCollectionSetup, type DesktopPage } from './navigation';
@@ -1131,14 +1131,10 @@ function askControls(): void {
 function renderAsk(): void {
   const messages = byId('ask-messages'); messages.replaceChildren();
   for (const turn of askConversation?.turns ?? []) {
-    const article = document.createElement('article'), question = document.createElement('h3');
-    question.textContent = turn.question;
     const openEvidence = (id: string) => void askAction(() => desktopApi.openCentral('ask', 'context:'+id));
-    article.append(question, renderAskAnswer(document, turn.result?.answer ?? turn.error?.message ?? moteText('回答未完成'), turn.result?.citations ?? [], openEvidence));
-    for (const citation of turn.result?.citations ?? []) article.append(renderAskCitation(document, citation, openEvidence));
-    messages.append(article);
+    messages.append(renderAskTurn(document, turn, openEvidence));
   }
-  if (askConversation?.turns.some(turn => turn.result?.citations?.length)) {
+  if (askConversation?.turns.some(turn => !turn.evidenceDeleted && turn.result?.citations?.length)) {
     const hint = document.createElement('p'); hint.className = 'helper';
     hint.textContent = moteText('中央仓库将在浏览器中打开，并接续客户端的登录。');
     messages.append(hint);
