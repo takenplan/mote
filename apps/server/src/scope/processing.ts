@@ -1,5 +1,6 @@
 import {attachmentOriginalBinding,attachmentBinding} from './ingress-attachments.js';
 import {fileOriginalGeneration} from './ingress-file-forget.js';
+import {connectorOriginalProcessors} from '../connectors/original-processors.js';
 import {conversationRecords} from '../coding-dialogue-projection.js';
 import {randomUUID} from 'node:crypto';
 import {AgentTimeoutError,AgentResponseError,AgentConfigurationError} from '@mote/agent';
@@ -500,9 +501,15 @@ export class ProcessingHost {
     if(original.bytes>64*1024*1024)throw new StoreError('Document decoding limit',413);const parts:Buffer[]=[];for await(const chunk of bytes(this))parts.push(chunk);workspace.write('original',Buffer.concat(parts));return workspace.withFile('original',path=>formatWork({kind:'document',path,mimeType},run.signal));
    })};
    const output=defaultFileOutput(processor),recipe=input.diarizeFrom&&original.mime.startsWith('audio/')?{id:'mote.audio-dialogue',version:'2'}:defaultFileRecipe(processor),plan=this.processors.recipes.resolve(recipe,{semanticTurns:false}),artifacts=new Map<string,unknown>();
+   // These fixed original decoders read admitted bytes and return in-process.
+   // A returned format rejection is physical completion, not model success.
+   // localOnly also describes HTTP workers and cannot establish this fact.
+   const completedDecodeFailure=format==='processor:'+processor.id&&connectorOriginalProcessors.includes(processor)
+    ?(error:unknown)=>error instanceof ExecutionFailure&&error.category==='permanent'&&['recording_transcript_format_unsupported','recording_timeline_invalid'].includes(error.code)
+    :undefined;
    const store=async(key:string,work:()=>Promise<unknown>,parse:(value:unknown)=>unknown,role?:'extract'|'diarize',dependencies:Record<string,string>={})=>{const dependencyProcessor=input.policyPlanId&&role==='diarize'?this.processors.registry.get(settings.diarizationProcessor):processor,revision=identityHash([key,plan.fingerprint,processorContract(dependencyProcessor),processorSettingsFingerprint(dependencyProcessor,settings,request.parameters??{}),request.sourceItem,...(input.policyPlanId?[dependencies]:[])]),reused=role==='extract'&&input.diarizeFrom?this.artifact(run.context,input.diarizeFrom):undefined,result=reused?{artifactId:reused.id,payload:parse(reused.payload)}:await this.stage(run,input,original,revision,work,parse,undefined,!!input.policyPlanId);run.grant.commit(()=>{const {sql}=this.input(run.context,input);if(role)sql.run('INSERT INTO mp_file_steps VALUES($user,?,?,?,?) ON CONFLICT(user_id,original_id,generation,stage) DO UPDATE SET artifact_id=excluded.artifact_id',original.ref.slice(9),input.fileGeneration??0,role,result.artifactId);});artifacts.set(result.artifactId,result.payload);return result.artifactId;};
    const final=await this.processors.recipes.run(recipe,{semanticTurns:false},(step,dependencies)=>({input:request,dependencies,readArtifact:id=>{if(!artifacts.has(id))throw new ExecutionFailure('stale','processing_checkpoint_unavailable');return artifacts.get(id);},transform:(type,execute)=>store(step.name,()=>execute(request.signal),value=>this.processors.outputs.decode(type,value).transcript,undefined,dependencies),builtin:async operation=>{
-    if(operation==='extract')return store(step.name,()=>{holdOriginal();mediaCalled ||= kind!=='extract';return this.io(run,input,()=>processor.process(request));},value=>this.processors.outputs.decode(output,value).transcript,'extract',dependencies);
+    if(operation==='extract')return store(step.name,()=>{holdOriginal();mediaCalled ||= kind!=='extract';return this.io(run,input,()=>processor.process(request),false,completedDecodeFailure);},value=>this.processors.outputs.decode(output,value).transcript,'extract',dependencies);
     if(operation==='diarize')return store(step.name,()=>{holdOriginal();mediaCalled=true;return this.io(run,input,()=>this.processors.registry.get(settings.diarizationProcessor).process(request));},value=>{const parsed=diarizationSchema.parse(value);for(const sample of parsed.samples){if(!/^SPEAKER_[0-9]{1,5}$/.test(sample.speaker))throw new ExecutionFailure('permanent','processing_sample_invalid');this.sampleBytes(sample.wavBase64);}return parsed;},'diarize',dependencies);
     if(operation==='align'){const raw=artifacts.get(dependencies.extract),diarization=artifacts.get(dependencies.diarize);return store(step.name,async()=>alignDialogue(transcriptSchema.parse(raw),diarizationSchema.parse(diarization)),value=>transcriptSchema.parse(value),undefined,dependencies);}
     throw new ExecutionFailure('blocked','processing_stage_unavailable');
@@ -554,14 +561,14 @@ export class ProcessingHost {
  pendingErasure(subject:UserDataSubject){const sql=this.deletionSql(subject);return sql.all('SELECT id,state FROM mp_activity WHERE user_id=$user ORDER BY id').map(row=>({id:String(row.id),state:String(row.state),live:this.active.has(identityHash([subject.userId,row.id]))}));}
  settleErasure(subject:UserDataSubject,id:string,outcome:'stopped'){const sql=this.deletionSql(subject);if(outcome!=='stopped'||this.active.has(identityHash([subject.userId,id])))throw new PrivateDataError('conflict',409);sql.run('DELETE FROM mp_activity WHERE user_id=$user AND id=?',id);}
  private deletionSql(subject:UserDataSubject){const assert=()=>{this.runtime.services.assertSubject(subject,PROCESSING_DOMAIN,'delete');if('credentialId' in subject)throw new ScopeError('invalid_identity',403);};const sql=new PrivateSql(this.db,subject.userId,assert);if(!sql.get('SELECT deleted FROM mp_state WHERE user_id=$user')?.deleted)throw new PrivateDataError('conflict',409);return sql;}
- private async io<T>(run:TaskRun,input:ProcessingInput,work:()=>Promise<T>,ownerReview=false){
+ private async io<T>(run:TaskRun,input:ProcessingInput,work:()=>Promise<T>,ownerReview=false,completedDecodeFailure?:(error:unknown)=>boolean){
   const id=randomUUID(),key=identityHash([run.context.userId,id]),cleanup=new PrivateSql(this.db,run.context.userId,()=>{});let complete!:()=>unknown;
   run.external.begin('processing:'+run.task.id+':'+id,issuance=>{if(this.blockedCall(run.context,input.originalRef,run.task.id))throw new ExecutionFailure('blocked','external_result_unknown',undefined,{executionStarted:false});this.input(run.context,input,ownerReview).sql.run("INSERT INTO mp_activity VALUES($user,?,'active')",id);complete=this.execution.bindExternalCompletion(run.context,run.task.id,issuance);});this.active.add(key);let settled=false;
   // The exact transport completion may settle its issued fact after revoke;
   // it cannot restore the task grant or publish a private artifact.
   const finish=()=>{complete();settled=true;};
   try{const value=await work();finish();return value;}catch(error){
-   const known=error instanceof ProviderFailure?(error.details.executionStarted===false||!['provider_timeout','provider_unavailable','provider_network'].includes(error.details.code)):error instanceof StoreError||error instanceof z.ZodError||error instanceof SyntaxError;
+   const known=error instanceof ProviderFailure?(error.details.executionStarted===false||!['provider_timeout','provider_unavailable','provider_network'].includes(error.details.code)):error instanceof StoreError||error instanceof z.ZodError||error instanceof SyntaxError||completedDecodeFailure?.(error)===true;
    if(known)finish();throw error;
   }finally{this.active.delete(key);if(settled)cleanup.run('DELETE FROM mp_activity WHERE user_id=$user AND id=?',id);else cleanup.run("UPDATE mp_activity SET state='unknown' WHERE user_id=$user AND id=?",id);}
  }
