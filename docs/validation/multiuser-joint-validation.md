@@ -1642,3 +1642,32 @@ undeclared lineage and forget/allow-again/upgrade neighbors10/10,29.991s EXIT0
 (`mote-joint-attachment-incarnation-adjacent`). Generated records and transports
 only. Server and strict producer-test types pass on the composed source; final
 union/backup compiled acceptance is still pending.
+
+### Shared-instance dependency recheck, approved B bounded implementation
+
+The parent approved B in4c0770d3. A new generated logout/restart regression against
+pre-observer2349a341 is actual RED1/1,13.450s (old pipeline/OCR remain failed,
+no private configuration save), recorded in
+`/tmp/mote-joint-processing-observer-logout-baseline-red.log/.exit`.
+The five own observer source files were saved separately, substituted only for
+that command and restored in Python finally; no peer directory was changed.
+
+Fresh source matrix14/14,0skip,52.125s EXIT0
+(`/tmp/mote-joint-processing-observer-matrix2.log/.exit`) covers live-session and
+logout+restart recovery, same-ID B personal positive, original YAML/policy
+unchanged, duplicate notifications/restart, cancel/source privacy/forget/account
+retirement before and during actual M04 refresh, direct original-intent cancel,
+unknown no-replay, completed and unchanged shared-reference negatives. Final
+same-owner source-join audit2/2,9.450s EXIT0
+(`mote-joint-processing-observer-authority`) additionally asserts new distinct
+recheck grants, old stopped grant restore refusal, zero recheck model receipt and
+external calls, and direct HTTP task admission rejection. M05/M04/model recovery/
+policy/relogin neighbors26/26,69.943s EXIT0 (`observer-adjacent`); Server noEmit,
+strict producer tests and scope checks0. Earlier type and effective-view comparison
+fixture failures remain separately recorded; the private raw YAML bytes, rather
+than a derived dependency hash, are the unchanged-save assertion.
+
+No real account, provider credential or system permission was modified. No full
+union gate, compiled final recovery, independent review or failed separate
+post-extraction derivative recovery is inferred from this bounded root-pipeline
+freeze. The latter seam remains open for actual characterization next.

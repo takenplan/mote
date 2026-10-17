@@ -182,3 +182,24 @@ actual pixels. Data-only recovery validates typed body hashes, original hashes,
 plan ownership and accepted Material dependencies; it restores no old task grant.
 This candidate still requires bounded independent review, affected consumer
 checks and the final composed gate before whole capability acceptance.
+
+## Shared dependency recheck (owner-approved B, bounded pipeline scope)
+
+The shared M05 host may derive a fresh `processing.recheck` control grant only
+from an actual, same-owner, nonrevoked unfinished `processing.pipeline` intent.
+The old grant is never restored into a context. The recheck's ordinary running
+M05 lease supplies its new non-administrator TaskRun context; the normal user task
+submission API explicitly rejects this kind. There is no userId/context mint API.
+
+Admission compares the applied plan's actual shared-resource generation hash,
+then checks account epoch, current original/head/source, per-file/original and
+attachment incarnation, cancellation, and unresolved physical issuances. Identical
+notifications dedup by intent and instance revision, including after restart.
+Fresh M04 dependency resolution binds its callbacks to that genuine recheck
+context. The control task performs no provider/model call or model lease; any new
+processing coordinator obtains its own fresh M04/M05 admission. `intentTaskId`
+retains the original intent's cancellation/revocation chain for the new work.
+Completed units, unknown calls, privacy withdrawals, deleted files/accounts and
+unchanged references do not replay. This finite freeze covers unfinished root
+pipelines; already completed extraction followed by a separately failed derivative
+is not claimed closed by this matrix and remains an explicit next acceptance seam.

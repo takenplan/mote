@@ -1771,7 +1771,8 @@
       "task:execution.register:kind:'processing.health'",
       "task:execution.register:kind:'processing.image-stage'",
       "task:execution.register:kind:'processing.image-understanding'",
-      "task:execution.register:kind:'processing.pipeline'"
+      "task:execution.register:kind:'processing.pipeline'",
+      "task:execution.register:kind:'processing.recheck'"
     ]
   },
   "apps/server/src/scope/storage.ts": {
@@ -1801,6 +1802,7 @@
       "table:task_lifecycle_state",
       "table:task_restore_journal",
       "table:user_tasks",
+      "task:this.engine.enqueue:'task:'+hash([grant.userId,operation])",
       "task:this.engine.enqueue:operationId",
       "task:this.engine.register:kind:handler.kind"
     ]

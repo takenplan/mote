@@ -168,11 +168,48 @@ export class TaskExecution {
   });
   return async()=>{await unregister();this.handlers.delete(handler.kind);};
  }
+ /** No route/facade exposes this fixed M06 purpose or an owner selector. */
+ processingRecheckIntent(taskId:string):ExecutionStep|undefined{
+  try{
+   const seen=new Set<string>();let next=taskId,first:ExecutionStep|undefined;
+   while(next){
+    if(seen.has(next))return;seen.add(next);
+    const step=this.engine.get(next);
+    if(!step||step.kind!=='processing.pipeline'||!['blocked','failed','stale'].includes(step.state))return;
+    this.assertTask(step);first??=step;
+    if(step.ownership!.userId!==first.ownership!.userId)return;
+    next=typeof step.input.intentTaskId==='string'?step.input.intentTaskId:'';
+   }
+   return first;
+  }catch{return;}
+ }
+ isProcessingRecheckContext(context:UserContext){
+  this.authority.assert(context);if(!this.authority.isTask(context))return false;
+  const grantId=context.credentialId.split(':')[0];
+  return Boolean(this.db.prepare("SELECT 1 FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.grant_id=? AND u.user_id=? AND e.kind='processing.recheck'").get(grantId,context.userId));
+ }
+ handoffProcessingRechecks(stamp:number,eligible:(intent:ExecutionStep)=>boolean){
+  if(!Number.isSafeInteger(stamp)||stamp<0)throw new TaskError('task_metadata_invalid');
+  const handler=this.handlers.get('processing.recheck');
+  if(!handler||handler.modelFeature)throw new TaskError('task_handler_unavailable',503);
+  for(const row of this.db.prepare("SELECT u.task_id FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE e.kind='processing.pipeline' AND e.state IN('blocked','failed','stale')").all()){
+   this.transaction(()=>{
+    const intent=this.processingRecheckIntent(String(row.task_id));
+    if(!intent||!eligible(intent))return;
+    const owner=intent.ownership!,input=canonical(handler.parseInput({intentId:intent.id,stamp})) as Record<string,unknown>;
+    const operation='processing-recheck:'+intent.id+':'+stamp,taskId=hash([owner.userId,operation,handler.kind,input]);
+    if(this.row(taskId))return;
+    const grant=this.grants.issueProcessingRecheck(intent.id,taskId);this.enabled(grant.userId);
+    this.db.prepare('INSERT INTO user_tasks(task_id,user_id,grant_id,input,user_position) SELECT ?,?,?,?,coalesce(max(user_position),0)+1 FROM user_tasks WHERE user_id=?').run(taskId,grant.userId,grant.grantId,json(input),grant.userId);
+    this.engine.enqueue('task:'+hash([grant.userId,operation]),handler.kind,input,{id:taskId,ownership:grant});
+   });
+  }
+ }
  forUser(context:UserContext){
   const assert=()=>{this.authority.assert(context);this.enabled(context.userId);};
   const owned=(taskId:string)=>{assert();const row=this.row(taskId);if(!row||row.user_id!==context.userId)throw new TaskError('task_not_found',404);return row;};
   const prepare=(value:unknown,allowModels=true)=>{
-    assert();const request=submitSchema.parse(value),handler=this.handlers.get(request.kind);if(!handler)throw new TaskError('task_handler_unavailable',503);if(!allowModels&&handler.modelFeature)throw new TaskError('synchronous_model_admission_forbidden',409);
+    assert();const request=submitSchema.parse(value);if(request.kind==='processing.recheck')throw new TaskError('task_handler_unavailable',503);const handler=this.handlers.get(request.kind);if(!handler)throw new TaskError('task_handler_unavailable',503);if(!allowModels&&handler.modelFeature)throw new TaskError('synchronous_model_admission_forbidden',409);
     const input=canonical(handler.parseInput(request.input)) as Record<string,unknown>,encoded=json(input),operationId='task:'+hash([context.userId,request.operationId]),taskId=hash([context.userId,request.operationId,request.kind,input]);
     handler.authorizeInput?.(context,input);
     return {request,handler,input,encoded,operationId,taskId};

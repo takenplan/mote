@@ -141,23 +141,23 @@ export class Configurations {
       }catch(error){this.options.db.exec('ROLLBACK');throw error;}
     }catch(error){if(error instanceof ScopeError)throw error;this.credentialsUnavailable.add(userId);throw new ConfigServiceError('config_unavailable');}
   }
-  private async entry(context:UserDataSubject):Promise<Entry>{
+  private async entry(context:UserDataSubject,bindSubject=false):Promise<Entry>{
     this.assertSubject(context,'export');const state=this.state(context.userId);this.assertGeneration(context.userId,state.generation);
     const accessKey='credentialId' in context?'account:'+context.authorizationEpoch:'lifecycle:'+context.operationId;
     const prior=this.entries.get(context.userId);if(prior){
-      try{await prior.initializing;}catch(error){if(prior.accessKey===accessKey)throw error;return this.entry(context);}
+      try{await prior.initializing;}catch(error){if(prior.accessKey===accessKey)throw error;return this.entry(context,bindSubject);}
       this.assertSubject(context,'export');
-      if(this.entries.get(context.userId)!==prior)return this.entry(context);
+      if(this.entries.get(context.userId)!==prior)return this.entry(context,bindSubject);
       // Domain handlers retain their admission subject. A fresh session must
       // not reuse handlers bound to a credential that has since logged out,
       // nor mutate that subject and revive an older suspended request.
       let priorCurrent=true;try{this.assertSubject(prior.subject,'export');}catch(error){if(!(error instanceof ScopeError))throw error;priorCurrent=false;}
-      if(priorCurrent&&prior.accessKey===accessKey&&('credentialId' in context||prior.subject===context)){this.assertGeneration(context.userId,prior.generation);return prior;}
+      if(priorCurrent&&prior.accessKey===accessKey&&('credentialId' in context||prior.subject===context)&&(!bindSubject||prior.subject===context)){this.assertGeneration(context.userId,prior.generation);return prior;}
       // Keep the retiring entry visible while its transaction queue drains.
       // A concurrent new epoch must wait for rollback before reading the YAML.
-      await prior.service.close();if(this.entries.get(context.userId)===prior)this.entries.delete(context.userId);return this.entry(context);
+      await prior.service.close();if(this.entries.get(context.userId)===prior)this.entries.delete(context.userId);return this.entry(context,bindSubject);
     }
-    const pending=this.opening.get(context.userId);if(pending){await pending.catch(()=>{});return this.entry(context);}
+    const pending=this.opening.get(context.userId);if(pending){await pending.catch(()=>{});return this.entry(context,bindSubject);}
     const create=async()=>{
       this.assertGeneration(context.userId,state.generation);this.accountFence(context);
       for(const path of [join(this.options.directory,'configuration'),join(this.options.directory,'configuration','users'),this.path(context.userId)])privateDirectory(path);
@@ -177,6 +177,8 @@ export class Configurations {
     const result=create();this.opening.set(context.userId,result);
     try{return await result;}finally{if(this.opening.get(context.userId)===result)this.opening.delete(context.userId);}
   }
+  /** M06 host-only dependency refresh under its new genuine M05 context. */
+  async refreshProcessingDependencies(context:UserContext){this.options.authority.assert(context);if(!this.options.authority.isTask(context))throw new ScopeError('invalid_identity',403);await this.entry(context,true);this.options.authority.assert(context);this.assertResources();}
   forUser(context:UserContext){
     this.options.authority.assert(context);
     const current=()=>this.options.authority.assert(context);
