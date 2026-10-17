@@ -26,7 +26,7 @@ function defaultPolicy(selected:Partial<Record<'ocr'|'asr'|'file',{kind:'persona
  const profile=(id:string,processorId:string,serviceId?:string)=>processingProfileSchema.parse({id,name:id,processorId,parameters:{},summarize:false,...(services.some(service=>service.id===serviceId)?{serviceId}:{})});
  return scopedFilePolicySchema.parse({version:1,services,profiles:[profile('image','image.http','service.ocr'),profile('audio',settings.audioProcessor,'service.asr'),profile('text','text.utf8'),profile('document','document.generic'),profile('archive','archive')],rules:[{type:'image/*',profileId:'image'},{type:'audio/*',profileId:'audio'},{type:'text/*',profileId:'text'},...DOCUMENT_MIME_TYPES.map(type=>({type,profileId:'document'})),{type:'*/*',profileId:'archive'}]});
 }
-export type FilePolicyPlan=ReturnType<typeof selectScopedFilePolicy>&{id:string};
+export type FilePolicyPlan=ReturnType<typeof selectScopedFilePolicy>&{id:string;connections?:{reference:{kind:'shared'|'personal';id:string};fingerprint?:string}[]};
 /** Existing M04 YAML transaction and M06 immutable metadata only. Endpoint/key
  * ownership remains exclusively in the complete personal/shared M04 reference. */
 export class ProcessingPolicies {
@@ -75,7 +75,7 @@ export class ProcessingPolicies {
   const selected=selectScopedFilePolicy(policy,String(row.source_id),String(row.mime),saved?override:defaultOverride);
   if(!selected.archiveOnly){const processor=this.processors.registry.list().find(processor=>processor.id===selected.profile.processorId);if(processor)selected.profile.parameters=effectiveProcessorParameters(processor,selected.profile.parameters);
   }
-  const stored=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),connections=stored?effectiveValueSchema.parse(JSON.parse(String(stored.json))).connections:{},selectedConnections=selected.services.map(service=>({reference:service.reference,fingerprint:connections[connectionKey(service.reference)]})).sort((a,b)=>connectionKey(a.reference).localeCompare(connectionKey(b.reference)));
+  const stored=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),connections=stored?effectiveValueSchema.parse(JSON.parse(String(stored.json))).connections:{},selectedConnections=selected.services.map(service=>({reference:service.reference,fingerprint:service.reference.kind==='shared'?canonicalHash({generation:this.configuration.resources.generation(service.reference.id)}):connections[connectionKey(service.reference)]})).sort((a,b)=>connectionKey(a.reference).localeCompare(connectionKey(b.reference)));
   const id=identityHash({original:ref,fingerprint:selected.fingerprint,connections:selectedConnections,processor:selected.archiveOnly?'archive':this.processors.registry.list().filter(processor=>processor.id===selected.profile.processorId).map(processorContract),parameters:selected.profile.parameters}),json=JSON.stringify({...selected,connections:selectedConnections});
   sql.run('INSERT INTO mp_file_plans VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',id,ref.slice(9),json);sql.run('INSERT INTO mp_file_policy_bindings VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO UPDATE SET plan_id=excluded.plan_id',ref.slice(9),id);return this.current(context,ref)!;
  }

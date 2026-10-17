@@ -1671,3 +1671,19 @@ No real account, provider credential or system permission was modified. No full
 union gate, compiled final recovery, independent review or failed separate
 post-extraction derivative recovery is inferred from this bounded root-pipeline
 freeze. The latter seam remains open for actual characterization next.
+
+### Queued recheck supersession: independent candidate confirmed and fixed
+
+M13's static candidate was not dismissed by the earlier14 cases. Two actual M04
+barriers force an old second recheck to remain queued/held while the first fresh
+continuation completes and the shared connection changes again. Current source
+then made a third provider call on generation4, re-admitting the now-completed
+unit:1/1 actual RED,6.560s (`mote-joint-processing-observer-queued-red`). Runtime
+entry, post-await and transaction admission now require the original source to
+remain the latest processing intent. Plan binding reads the actual shared
+resource generation, and fresh model admission checks it before/after M04 lease
+acquisition. No old grant is restored and no task/model/user deadline is changed.
+The exact same barrier is1/1 GREEN4.859s (`observer-queued-green`), and the
+complete now15-case observer matrix is15/15,0skip,42.038s EXIT0
+(`mote-joint-processing-observer-final15`). The broad final union remains pending;
+this receipt supersedes the earlier14-case scope only for the stated scenarios.

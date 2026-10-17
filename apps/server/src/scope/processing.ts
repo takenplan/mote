@@ -353,10 +353,14 @@ export class ProcessingHost {
   }catch{return false;}
  }
  private fileControlFromSql(sql:PrivateSql,ref:string){const row=sql.get('SELECT generation,cancelled FROM mp_file_controls WHERE user_id=$user AND original_id=?',ref.slice(9));return {generation:Number(row?.generation??0),cancelled:Boolean(row?.cancelled)};}
+ private latestProcessingIntent(intent:ExecutionStep){
+  if(!intent.ownership)return false;const input=processingInputSchema.parse(intent.input),sql=new PrivateSql(this.db,intent.ownership.userId,()=>{});
+  return sql.get('SELECT a.task_id FROM mp_admissions a JOIN user_tasks u ON u.user_id=a.user_id AND u.task_id=a.task_id WHERE a.user_id=$user AND u.user_id=$user AND a.original_id=? ORDER BY u.user_position DESC LIMIT 1',input.originalRef.slice(9))?.task_id===intent.id;
+ }
  private async recheck(run:TaskRun){
-  const intent=this.execution.processingRecheckIntent(String(run.task.input.intentId));if(!intent||!this.recheckCurrent(run.task))throw new ExecutionFailure('stale','processing_intent_retired');const input=processingInputSchema.parse(intent.input),before=this.policies.current(run.context,input.originalRef);
-  await this.configuration.refreshProcessingDependencies(run.context);run.grant.assert();if(!this.recheckCurrent(run.task))throw new ExecutionFailure('stale','processing_intent_retired');
-  return this.sql(run.context).transaction(()=>{run.grant.assert();const after=this.policies.bindPlan(run.context,input.originalRef,true);if(before?.id===after?.id)return {changed:false};if(after?.archiveOnly)return {changed:true,archiveOnly:true};const child=this.submitSync(run.context,input.originalRef,'shared-dependency:'+intent.id+':'+run.task.input.stamp,undefined,undefined,false,intent.id);return {changed:true,taskId:child.id};});
+  const intent=this.execution.processingRecheckIntent(String(run.task.input.intentId));if(!intent||!this.recheckCurrent(run.task)||!this.latestProcessingIntent(intent))throw new ExecutionFailure('stale','processing_intent_retired');const input=processingInputSchema.parse(intent.input),before=this.policies.current(run.context,input.originalRef);
+  await this.configuration.refreshProcessingDependencies(run.context);run.grant.assert();if(!this.recheckCurrent(run.task)||!this.latestProcessingIntent(intent))throw new ExecutionFailure('stale','processing_intent_retired');
+  return this.sql(run.context).transaction(()=>{run.grant.assert();if(!this.latestProcessingIntent(intent))throw new ExecutionFailure('stale','processing_intent_retired');const after=this.policies.bindPlan(run.context,input.originalRef,true);if(before?.id===after?.id)return {changed:false};if(after?.archiveOnly)return {changed:true,archiveOnly:true};const child=this.submitSync(run.context,input.originalRef,'shared-dependency:'+intent.id+':'+run.task.input.stamp,undefined,undefined,false,intent.id);return {changed:true,taskId:child.id};});
  }
  private reconcilePolicies(context:UserContext){
   if(this.execution.isProcessingRecheckContext(context))return;
@@ -374,10 +378,12 @@ export class ProcessingHost {
    }
   }
  }
- private policyModel(context:UserContext,input:ProcessingInput,feature:'ocr'|'asr'|'file',operationId:string){
+ private async policyModel(context:UserContext,input:ProcessingInput,feature:'ocr'|'asr'|'file',operationId:string){
   this.input(context,input);const plan=this.policies.current(context,input.originalRef),id=feature==='file'?plan?.profile.modelServiceId:plan?.profile.serviceId,service=plan?.services.find(service=>service.id===id);
   if(plan&&feature!=='file'&&!service)throw new PrivateDataError('scope_unavailable',503);
-  return this.configuration.leaseReference(context,feature,operationId,service?.reference);
+  const reference=service?.reference,expected=reference?plan?.connections?.find(connection=>identityHash(connection.reference)===identityHash(reference))?.fingerprint:undefined;
+  const current=()=>{this.input(context,input);if(reference?.kind==='shared'&&expected!==identityHash({generation:this.configuration.resources.generation(reference.id)}))throw new ExecutionFailure('stale','processing_model_changed');};
+  current();const lease=await this.configuration.leaseReference(context,feature,operationId,reference);current();return lease;
  }
  private imageStep(context:UserContext,input:ImageRecipeInput){
   const base=baseInput(input),bound=this.input(context,base),plan=this.policies.current(context,input.originalRef),selected=plan?.profile.imageRecipe??DEFAULT_IMAGE_RECIPE;
