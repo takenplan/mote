@@ -1027,3 +1027,13 @@ within its stated source scope. It did not rerun owner tests or review this new
 source-incarnation repair. M13 exact84e3 large Lark calendar inventory received a
 separate Joint source-only bounded review with no new confirmed finding:
 `/tmp/mote-joint-review-m13-lark-calendar-84e3.md`. No M13 runtime was composed.
+
+The approved exact held-provider rerun is1/1,0skip,3.026s EXIT0 in
+`/tmp/mote-joint-file-source-incarnation-held-approved.log/.exit`; it observes
+coordinator retirement while activeMedia1/pins2, then waits actual completion.
+Together with the five successful selected neighbors, this covers six distinct
+cases across two executions; it is not a six-case green rerun or whole suite.
+A test-only refinement additionally restores a live nonzero-generation file before
+source retirement, verifies exactly one increment for explicit forget and a further
+increment for source deletion:1/1,1.611s EXIT0 in
+`/tmp/mote-joint-file-source-incarnation-nonzero.log/.exit`. Runtime remains519dc3f5.
