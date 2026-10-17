@@ -130,7 +130,9 @@ function validate(payload:Payload){
     const material=materials.get(row.material_id),draft=decode(materialDraftSchema,row.json);
     if(!material||draft.id!==row.material_id||draft.origin.sourceId!==material.source_id||draft.origin.externalId!==material.external_id||
       draft.id!=='mat_'+hash([draft.origin.sourceId,draft.origin.externalId])||hash(draft)!==row.revision||!sources.has(draft.origin.sourceId)||
-      draft.blocks.some(block=>block.kind!=='text')||draft.blocks.flatMap(block=>block.kind==='text'?[block.text]:[]).join('\n')!==row.text)invalid();
+      draft.blocks.some(block=>block.kind==='asset'&&!block.memberIds.length)||draft.blocks.flatMap(block=>block.kind==='text'?[block.text]:[]).join('\n')!==row.text)invalid();
+    // Match publication: the strict Material schema admits only text and asset
+    // metadata. Assets require owned input members; bytes remain gated by M03.
     const visible=material.revision===row.revision&&material.sequence>=material.min_visible_sequence;
     if(visible)visibleVersions.add(key(row.material_id,row.revision));
     const members=unique(draft.members,member=>member.id);unique(draft.blocks,block=>block.id);
