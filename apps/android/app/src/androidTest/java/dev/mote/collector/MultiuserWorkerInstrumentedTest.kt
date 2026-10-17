@@ -594,17 +594,19 @@ class MultiuserWorkerInstrumentedTest {
         androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","lark")).use {scenario->
             fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
             fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
-            fun completed(kind:String):JSONObject? {val rows=a.get("/api/tasks").getJSONArray("items");return (0 until rows.length()).map(rows::getJSONObject).firstOrNull {it.optString("state")=="succeeded"&&it.optJSONObject("input")?.optString("operation")==kind}}
+            fun tasks():List<JSONObject> {val rows=a.get("/api/tasks").getJSONArray("items");return (0 until rows.length()).map(rows::getJSONObject)}
+            var beforeTaskIds=tasks().map {it.getString("id")}.toSet()
+            fun completed():JSONObject? = tasks().singleOrNull {it.getString("id") !in beforeTaskIds && it.optString("state")=="succeeded"}
             ready();press("预览文档范围");ready()
             waitFor {a.get("/api/connectors/same-lark").optJSONObject("documentSync")?.optJSONArray("preview")?.length()==20}
             // The real M05 task must finish before checking the native reader;
             // a bounded task receipt must not silently drop durable UTF8 status.
-            waitFor {completed("preview")!=null};press("刷新");ready()
+            waitFor {completed()!=null};press("刷新");ready()
             val status=a.get("/api/connectors/same-lark");assertTrue(status.toString().toByteArray().size>32768)
             scenario.onActivity {activity->val labels=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()};assertTrue(labels.contains("GENERATED_PREVIEW_19_"+"汉".repeat(600)))}
             assertEquals(0,control("/generated/document-state").getJSONArray("documentReads").length())
-            press("选择日历");ready();waitFor {completed("calendars")!=null}
-            val task=completed("calendars")!!;assertEquals(task.getString("id"),task.getJSONObject("result").getString("calendarInventory"));assertEquals(20,task.getJSONObject("result").getInt("count"))
+            beforeTaskIds=tasks().map {it.getString("id")}.toSet();press("选择日历");ready();waitFor {completed()!=null}
+            val task=completed()!!;assertEquals(task.getString("id"),task.getJSONObject("result").getString("calendarInventory"));assertEquals(20,task.getJSONObject("result").getInt("count"))
             // Refresh is available while the previous calendar task is pending.
             // If polling already rendered it, its twenty controls are enough.
             scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()=="刷新"}?.performClick()};ready()
