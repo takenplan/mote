@@ -21,7 +21,7 @@ const directory=await mkdtemp(join(tmpdir(),'mote-main-history-'+process.pid+'-'
 await writeFile(output+'.setup.json',JSON.stringify({pid:process.pid,directory,generatedOnly:true}),{mode:0o600});
 const password='Generated-history-Only-01',protocol={'x-mote-protocol-version':'2','x-mote-ingress-version':'3'};
 let generation=0,modelCalls=0,conversationId='',workId='',closing=false,baseline:Record<string,unknown>={};
-let armRead=false,readHeld=false,heldReadCompleted=0,releaseRead:(()=>void)|undefined;
+let armRead=false,readHeld=false,heldReadCompleted=0,heldReadCancelled=0,heldReadEpoch=0,releaseRead:(()=>void)|undefined;
 const provider=createServer((req,res)=>{void(async()=>{
  let raw='';for await(const part of req)raw+=part;const body=JSON.parse(raw);modelCalls++;
  assert.ok(['GENERATED_A_HISTORY_KEY','GENERATED_B_HISTORY_KEY'].includes(String(req.headers['x-api-key'])));
@@ -56,10 +56,10 @@ let material:any,materialDraft:any,sourceId='';
 let publisher:ReturnType<typeof node.ingress.bindSource>;
 async function metadata(){
  const current=await history(),work=await request(a.token,'/api/work-activity/'+encodeURIComponent(workId));
- return {...baseline,address,webAddress:upstream,controlAddress,a,b,password,conversationId,workId,evidenceStale:current.turns.at(-1)?.evidenceStale===true,evidenceDeleted:current.turns.at(-1)?.evidenceDeleted===true,turnCount:current.turnCount,workArtifacts:work.artifacts.length,modelCalls,readHeld,heldReadCompleted};
+ return {...baseline,address,webAddress:upstream,controlAddress,a,b,password,conversationId,workId,evidenceStale:current.turns.at(-1)?.evidenceStale===true,evidenceDeleted:current.turns.at(-1)?.evidenceDeleted===true,turnCount:current.turnCount,workArtifacts:work.artifacts.length,modelCalls,readHeld,heldReadCompleted,heldReadCancelled,heldReadSettled:heldReadCompleted+heldReadCancelled};
 }
 async function reset(){
- releaseRead?.();releaseRead=undefined;armRead=false;readHeld=false;heldReadCompleted=0;
+ heldReadEpoch++;releaseRead?.();releaseRead=undefined;armRead=false;readHeld=false;heldReadCompleted=0;heldReadCancelled=0;
  // Retire the previous generated originals through their respective owners,
  // so the scripted provider's real catalog contains only this generation.
  if(sourceId)for(const user of [a,b]){const response=await fetch(upstream+'/api/sources/'+sourceId,{method:'DELETE',headers:{...protocol,authorization:'Bearer '+user.token}});await response.arrayBuffer();assert.ok([200,404].includes(response.status));}
@@ -81,11 +81,21 @@ async function reset(){
  const value=await metadata();assert.equal(value.turnCount,21);assert.ok(value.workArtifacts>0);await writeFile(output,JSON.stringify(value,null,2),{mode:0o600});return value;
 }
 const proxy=createServer((req,res)=>{void(async()=>{
- const url=new URL(req.url??'/',upstream);let held=false;
- if(armRead&&req.method==='GET'&&url.pathname==='/api/conversations/'+conversationId&&!url.searchParams.has('cursor')&&req.headers.authorization?.startsWith('Bearer ')&&(await node.authority.authenticate(req.headers.authorization.slice(7))).userId===a.userId){armRead=false;readHeld=true;held=true;await new Promise<void>(done=>{releaseRead=done;});readHeld=false;}
+ const url=new URL(req.url??'/',upstream);let held=false,cancelled=false,settled=false;const requestEpoch=heldReadEpoch;
+ // Account replacement deliberately cancels native HTTP connections. Record the
+ // actual transport terminal event rather than requiring a retired response body.
+ function settle(wasCancelled:boolean){
+  if(!held||settled)return;settled=true;cancelled=wasCancelled;
+  if(requestEpoch===heldReadEpoch){if(wasCancelled)heldReadCancelled++;else heldReadCompleted++;}
+ }
+ req.once('aborted',()=>settle(true));
+ req.once('error',()=>{if(req.aborted)settle(true);});
+ res.once('close',()=>{if(!res.writableFinished)settle(true);});
+ res.once('finish',()=>settle(false));
+ if(armRead&&req.method==='GET'&&url.pathname==='/api/conversations/'+conversationId&&!url.searchParams.has('cursor')&&req.headers.authorization?.startsWith('Bearer ')&&(await node.authority.authenticate(req.headers.authorization.slice(7))).userId===a.userId){armRead=false;readHeld=true;held=true;await new Promise<void>(done=>{releaseRead=done;});readHeld=false;if(req.aborted||res.destroyed)settle(true);if(cancelled)return;}
  const chunks:Buffer[]=[];for await(const part of req)chunks.push(Buffer.from(part));
  const headers=Object.fromEntries(Object.entries(req.headers).filter(([name])=>!['host','connection','content-length'].includes(name))) as Record<string,string>;
- const response=await fetch(url,{method:req.method,headers,...(chunks.length?{body:Buffer.concat(chunks)}:{})});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));if(held)heldReadCompleted++;
+ const response=await fetch(url,{method:req.method,headers,...(chunks.length?{body:Buffer.concat(chunks)}:{})});res.writeHead(response.status,Object.fromEntries(response.headers));res.end(Buffer.from(await response.arrayBuffer()));
 })().catch(error=>{process.stderr.write(String(error)+'\n');res.writeHead(500).end();});});
 await new Promise<void>(done=>proxy.listen(0,'127.0.0.1',done));const proxyBound=proxy.address();assert.ok(proxyBound&&typeof proxyBound!=='string');const address='http://127.0.0.1:'+proxyBound.port;
 const control=createServer((req,res)=>{void(async()=>{
