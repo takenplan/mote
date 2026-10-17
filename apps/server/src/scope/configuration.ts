@@ -182,7 +182,9 @@ export class Configurations {
    * exposing global diagnostics or a host directory. */
   async observeAgentTrace(context:UserContext){
     const entry=await this.entry(context);
-    return ()=>{this.options.authority.assert(context);this.assertGeneration(context.userId,entry.generation);const {traceEnabled}=z.object({traceEnabled:z.boolean()}).strict().parse(entry.service.current('agentTrace')),{maxBytes,maxFiles,maxEntries}=diagnosticsConfigSchema.parse(this.instance.current('diagnostics'));return {traceEnabled,maxBytes,maxFiles,maxEntries};};
+    // An admitted task may outlive its login. Retiring this settings entry
+    // stops payload recording without borrowing a fresh session's authority.
+    return ()=>{this.options.authority.assert(context);this.assertGeneration(context.userId,entry.generation);const traceEnabled=this.entries.get(context.userId)===entry&&z.object({traceEnabled:z.boolean()}).strict().parse(entry.service.current('agentTrace')).traceEnabled,{maxBytes,maxFiles,maxEntries}=diagnosticsConfigSchema.parse(this.instance.current('diagnostics'));return {traceEnabled,maxBytes,maxFiles,maxEntries};};
   }
   forUser(context:UserContext){
     this.options.authority.assert(context);
