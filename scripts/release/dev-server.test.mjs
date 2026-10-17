@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn,execFile} from 'node:child_process';
 import {promisify} from 'node:util';
-import {mkdtemp,mkdir,readFile,writeFile,readdir,copyFile,symlink,rm,stat} from 'node:fs/promises';
+import {mkdtemp,mkdir,readFile,writeFile,readdir,copyFile,symlink,rm,stat,realpath} from 'node:fs/promises';
 import {join,dirname} from 'node:path';
 import {tmpdir} from 'node:os';
 import {setTimeout as delay} from 'node:timers/promises';
@@ -34,7 +34,13 @@ async function checkout(directory){
   const target=join(root,'apps/server/dist',name);await mkdir(dirname(target),{recursive:true});await copyFile(join(repository,'apps/server/src',name),target);
  }
  const bin=join(root,'generated-bin');await mkdir(bin);
- await writeFile(join(bin,'npm.cjs'),`#!${process.execPath}\nconst fs=require('node:fs');fs.appendFileSync('generated-npm-calls.jsonl',JSON.stringify(process.argv.slice(2))+'\\n');if(fs.existsSync('generated-build-failure'))process.exit(23);if(process.argv[2]==='ci')fs.writeFileSync('node_modules/.package-lock.json','{}');\n`,{mode:0o700});
+ await writeFile(join(bin,'npm.cjs'),[
+  '#!'+process.execPath,
+  "const fs=require('node:fs');",
+  "fs.appendFileSync('generated-npm-calls.jsonl',JSON.stringify(process.argv.slice(2))+String.fromCharCode(10));",
+  "if(fs.existsSync('generated-build-failure'))process.exit(23);",
+  "if(process.argv[2]==='ci')fs.writeFileSync('node_modules/.package-lock.json','{}');",
+ ].join('\n')+'\n',{mode:0o700});
  await symlink('npm.cjs',join(bin,'npm'));
  assert.equal(await readFile(join(root,'scripts/dev-server.mjs'),'utf8'),await readFile(join(repository,'scripts/dev-server.mjs'),'utf8'));
  return {root,bin,runs:[]};
@@ -65,16 +71,22 @@ async function isolatedProfile(home,name='dev'){
 }
 
 test('development launcher creates one fixed local admin on first start, preserves passwords and fails without stray processes',{timeout:180000,skip:process.platform==='win32'},async t=>{
- const directory=await mkdtemp(join(tmpdir(),'mote-dev-launcher-'));let active,fixture;
+ // Node resolves ESM module URLs to physical paths. Use the same canonical
+ // temp root for argv so the unmodified launcher's direct-entry guard runs.
+ const directory=await mkdtemp(join(await realpath(tmpdir()),'mote-dev-launcher-'));let active,fixture;
  t.after(async()=>{try{for(const run of fixture?.runs??[])if(run.child.exitCode===null&&run.child.signalCode===null)await stop(run);}finally{await rm(directory,{recursive:true,force:true});}});
  fixture=await checkout(directory);
  const home=join(directory,'profiles');
  await writeFile(join(fixture.root,'generated-build-failure'),'generated first build failure');
- const firstAttempt=await launch(fixture,{home}).done;assert.notEqual(firstAttempt.code,0);
+ const firstAttempt=await launch(fixture,{home}).done;assert.notEqual(firstAttempt.code,0,firstAttempt.output);
  let p=await loadProfile(profilePaths('dev',home));assert.match(firstAttempt.output,/Created isolated native dev profile/);assert.equal(await exists(join(p.dataDir,'mote.sqlite')),false);
- await rm(join(fixture.root,'generated-build-failure'));
  const port=await freePort();await updateProfileConfiguration(p,document=>{document.server.port=port;document.media.workerToken='';});p=await loadProfile(profilePaths('dev',home));
  assert.equal(p.profile,'dev');assert.equal(p.meta.runtime,'native');assert.equal(p.env.MOTE_HOST,'127.0.0.1');assert.equal(await exists(join(p.dataDir,'mote.sqlite')),false,'creating a profile does not initialize an account database');
+ // The first default port can already belong to the user's dev server. Prove
+ // build-failure propagation again on this fixture's random owned port.
+ const failedEmpty=await launch(fixture,p).done;assert.notEqual(failedEmpty.code,0,failedEmpty.output);assert.match(failedEmpty.output,/npm ci .* failed; no server was started/);assert.equal(await exists(join(p.dataDir,'mote.sqlite')),false);
+ const calls=await readFile(join(fixture.root,'generated-npm-calls.jsonl'),'utf8');assert.ok(calls.trim().split('\n').map(line=>JSON.parse(line)).some(args=>args[0]==='ci'),'the actual launcher must execute the generated npm command');
+ await rm(join(fixture.root,'generated-build-failure'));
  active=launch(fixture,p);await ready(active);assert.match(active.output(),/Created local development account: admin \/ admin/);
  const initial=accounts(p);assert.equal(initial.length,1);assert.equal(initial[0].username,'admin');assert.equal(initial[0].administrator,1);assert.notEqual(initial[0].password_hash,'admin');
  const login=await request(p,'/api/auth/login',{username:'admin',password:'admin',mode:'client'});assert.equal(login.status,200);
@@ -83,7 +95,7 @@ test('development launcher creates one fixed local admin on first start, preserv
  assert.equal((await request(p,'/api/admin/accounts/'+login.value.userId+'/password',{password:'admin'},login.value.token)).status,400,'administrator password resets keep their strong-password rule');
  const web=await request(p,'/api/auth/login',{username:'admin',password:'admin',mode:'web'});assert.equal(web.status,200);assert.equal(web.value.token,undefined);
  const cookie=web.headers.get('set-cookie').split(';')[0],self=await fetch(p.url+'/api/auth/self',{headers:{...protocol,cookie}}),identity=await self.json();assert.equal(self.status,200);assert.equal(identity.username,'admin');assert.equal(identity.administrator,true);assert.equal(typeof identity.csrfToken,'string');
- const logout=await fetch(p.url+'/api/auth/logout',{method:'POST',headers:{...protocol,cookie,'x-mote-csrf':identity.csrfToken,'content-type':'application/json'},body:'{}'});assert.equal(logout.status,200);await logout.body?.cancel();
+ const logout=await fetch(p.url+'/api/auth/logout',{method:'POST',headers:{...protocol,cookie,'x-mote-session-id':identity.credentialId,'x-mote-csrf':identity.csrfToken,'content-type':'application/json'},body:'{}'});assert.equal(logout.status,200);await logout.body?.cancel();
  const password='Generated-development-replacement-01';assert.equal((await request(p,'/api/auth/password',{currentPassword:'admin',password},login.value.token)).status,200);const changed=accounts(p);
  await stop(active);active=undefined;assert.equal(await exists(p.processFile),false);assert.equal(await exists(join(p.dataDir,'server.pid')),false);
  active=launch(fixture,p);await ready(active);assert.match(active.output(),/Existing accounts preserved/);assert.ok(!active.output().includes('admin / admin'));assert.deepEqual(accounts(p),changed,'restart must not reset the existing password or account identity');
