@@ -578,6 +578,45 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeLarkKeepsAllUtf8PreviewTitlesAndExactLargeCalendarTaskInventory() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"));control("/generated/large-lark-discovery");control("/generated/release-lark-login")
+        fun operation(name:String,payload:JSONObject=JSONObject()):JSONObject {
+            val task=a.post("/api/connectors/same-lark/operations",JSONObject().put("operationId",java.util.UUID.randomUUID().toString()).put("operation",name).put("payload",payload))
+            waitFor {a.get("/api/tasks/"+task.getString("id")).getString("state") !in listOf("waiting","running")}
+            return a.get("/api/tasks/"+task.getString("id")).also {assertEquals("succeeded",it.getString("state"))}
+        }
+        operation("check");operation("login");operation("select",JSONObject().put("documents",org.json.JSONArray()).put("calendarIds",org.json.JSONArray()).put("pastDays",30).put("futureDays",90).put("timeZone","UTC").put("autoSync",false)
+            .put("documentDiscovery",JSONObject().put("created",false).put("edited",true).put("opened",false).put("firstSyncDays",30)))
+        val beforeB=b.get("/api/connectors/same-lark").getJSONObject("selection").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap {views(root.getChildAt(it))} else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","lark")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun completed(kind:String):JSONObject? {val rows=a.get("/api/tasks").getJSONArray("items");return (0 until rows.length()).map(rows::getJSONObject).firstOrNull {it.optString("state")=="succeeded"&&it.optJSONObject("input")?.optString("operation")==kind}}
+            ready();press("预览文档范围");ready()
+            waitFor {a.get("/api/connectors/same-lark").optJSONObject("documentSync")?.optJSONArray("preview")?.length()==20}
+            // The real M05 task must finish before checking the native reader;
+            // a bounded task receipt must not silently drop durable UTF8 status.
+            waitFor {completed("preview")!=null};press("刷新");ready()
+            val status=a.get("/api/connectors/same-lark");assertTrue(status.toString().toByteArray().size>32768)
+            scenario.onActivity {activity->val labels=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().map {it.text.toString()};assertTrue(labels.contains("GENERATED_PREVIEW_19_"+"汉".repeat(600)))}
+            assertEquals(0,control("/generated/document-state").getJSONArray("documentReads").length())
+            press("选择日历");ready();waitFor {completed("calendars")!=null}
+            val task=completed("calendars")!!;assertEquals(task.getString("id"),task.getJSONObject("result").getString("calendarInventory"));assertEquals(20,task.getJSONObject("result").getInt("count"))
+            // Refresh is available while the previous calendar task is pending.
+            // If polling already rendered it, its twenty controls are enough.
+            scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().firstOrNull {it.text.toString()=="刷新"}?.performClick()};ready()
+            lateinit var oldSave:android.widget.Button
+            scenario.onActivity {activity->val fields=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().filter {it.text.toString().startsWith("GENERATED_CALENDAR_")};assertEquals("Original native selector must resolve the exact task-backed full inventory",20,fields.size);fields.last().isChecked=true;oldSave=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="保存设置"};oldSave.performClick()};ready()
+            waitFor {a.get("/api/connectors/same-lark").getJSONObject("selection").getJSONArray("calendarIds").let {it.length()==1&&it.getString(0)=="same-calendar-19"}}
+            assertEquals(beforeB,b.get("/api/connectors/same-lark").getJSONObject("selection").toString())
+            scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);ready();scenario.onActivity {oldSave.performClick()};ready()
+            assertEquals(beforeB,b.get("/api/connectors/same-lark").getJSONObject("selection").toString());assertFalse(b.get("/api/connectors/same-lark").has("calendarInventory"))
+        }
+    }
+
     @Test fun originalNativeRecordingConnectionRetainsScopeVendorTextAndFailedAudioRetryUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")

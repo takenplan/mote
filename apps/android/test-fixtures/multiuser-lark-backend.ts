@@ -10,7 +10,8 @@ const logged=new Set<string>();
 let complete!:()=>void;
 const heldLogin=new Promise<void>(resolve=>complete=resolve);
 let failDocument=false,holdDocument=false,documentEntered=false,releaseDocument:(()=>void)|undefined;
-let dropDisconnect=false;
+let dropDisconnect=false,largeDiscovery=false;
+const documentReads:string[]=[];
 const disconnectCommands:Array<{operationId:string;taskId:string}>=[];
 const f=await scopedCaptureFixture({after:(work:()=>unknown)=>cleanup.push(work)} as unknown as TestContext,{
  connectorTransports:{lark:scope=>async(command,options)=>{
@@ -19,8 +20,9 @@ const f=await scopedCaptureFixture({after:(work:()=>unknown)=>cleanup.push(work)
    case 'status':return JSON.stringify({appId:'cli_generated',identities:{user:{available:logged.has(scope.userId),openId:'same-open-id',userName:'GENERATED_LARK_'+scope.userId,scope:'docx:document:readonly wiki:wiki:readonly search:docs:read space:document:retrieve calendar:calendar:readonly'}}});
    case 'login':return JSON.stringify({verification_url:'https://accounts.feishu.cn/generated/'+scope.userId,device_code:'GENERATED_'+scope.userId,expires_in:600});
    case 'complete':await heldLogin;if(options?.signal?.aborted)throw Error('Generated authorization retired');logged.add(scope.userId);return '{}';
+   case 'documents-search':return JSON.stringify({results:Array.from({length:largeDiscovery?20:1},(_,i)=>({title:'GENERATED_PREVIEW_'+i+'_'+'汉'.repeat(600),result_meta:{token:'GeneratedDocument'+i}})),has_more:false});
    case 'document':
-    documentEntered=true;
+    documentReads.push(scope.userId);documentEntered=true;
     if(holdDocument)await new Promise<void>((resolve,reject)=>{
      const aborted=()=>{options?.signal?.removeEventListener('abort',aborted);reject(Error('Generated document cancelled'));};
      releaseDocument=()=>{options?.signal?.removeEventListener('abort',aborted);resolve();};
@@ -29,7 +31,7 @@ const f=await scopedCaptureFixture({after:(work:()=>unknown)=>cleanup.push(work)
     if(options?.signal?.aborted)throw Error('Generated document cancelled');
     if(failDocument)throw Error('GENERATED_PROVIDER_PRIVATE_FAILURE');
     return JSON.stringify({data:{document:{document_id:'DocumentFixture123',revision_id:1,title:'GENERATED_DOC_'+scope.userId,content:'GENERATED_LARK_BODY_'+scope.userId}}});
-   case 'calendars':return JSON.stringify({data:{calendar_list:[{calendar_id:'same-calendar',summary:'GENERATED_CALENDAR_'+scope.userId,role:'owner'}],has_more:false}});
+   case 'calendars':return JSON.stringify({data:{calendar_list:largeDiscovery?Array.from({length:20},(_,i)=>({calendar_id:'same-calendar-'+i,summary:'GENERATED_CALENDAR_'+scope.userId+'_'+i+'_'+'历'.repeat(600),role:'owner'})):[{calendar_id:'same-calendar',summary:'GENERATED_CALENDAR_'+scope.userId,role:'owner'}],has_more:false}});
    case 'events':return JSON.stringify({data:{items:[]}});
    default:throw Error('Unexpected generated Lark I/O '+command.kind);
   }
@@ -46,6 +48,7 @@ for(const account of [f.a,f.b]){
 const control=createServer((request,response)=>{
  if(request.method!=='POST'){response.statusCode=404;response.end();return;}
  if(request.url==='/generated/release-lark-login')complete();
+ else if(request.url==='/generated/large-lark-discovery')largeDiscovery=true;
  else if(request.url==='/generated/fail-document')failDocument=true;
  else if(request.url==='/generated/retry-document')failDocument=false;
  else if(request.url==='/generated/hold-document'){holdDocument=true;documentEntered=false;}
@@ -53,7 +56,7 @@ const control=createServer((request,response)=>{
  else if(request.url==='/generated/drop-disconnect-ack')dropDisconnect=true;
  else if(request.url==='/generated/release-disconnect-ack')dropDisconnect=false;
  else if(request.url!=='/generated/document-state'){response.statusCode=404;response.end();return;}
- response.setHeader('content-type','application/json');response.end(JSON.stringify({released:true,documentEntered,failDocument,holdDocument,disconnectCommands}));
+ response.setHeader('content-type','application/json');response.end(JSON.stringify({released:true,documentEntered,failDocument,holdDocument,disconnectCommands,documentReads}));
 });
 await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));
 const controlPort=control.address();if(!controlPort||typeof controlPort==='string')throw Error('Missing generated control listener');
