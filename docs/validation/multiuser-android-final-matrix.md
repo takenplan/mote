@@ -85,3 +85,9 @@ from641e; Desktop src/scripts match delivered f319 exactly. Its shared Android
 test uses the stronger canonical source/Material contract, not an old raw UUID
 fallback. Current APK/JVM proof after that fixture and translation merge is
 `/tmp/m15-desktop-final-full-android.log` and countsJSON (91s,358/358,75XML).
+
+## Current bounded completion before final Node26 gate
+
+Joint503/b7 composition8ba has freshCentral0, public35/35, summary10/10,scope0 and five relevant original native cases each1/1/backend0. Full debug JVM358/35875XML0fail/error/skip47s; the subsequent coordinator stopped on local137/Node24 native cleanup preflight before full required, never a gate pass. Original147/Node26 restored; actual root+Mem0 constructors/allocationGC/originalMem0four0.
+
+New original recording checkbox journey has durable actualRED35ab (acceptedFiles2→0 afterfalseACK) and sameAPK GREEN3e0 (1/1,7.22s, sourceprivacy/B included), consuming only producerab776 over949. Real source providers2/2,no skip42.723s0. New regression is fixture-only Kotlin; no queue/collector/worker production changes. Whole required/Draft PR and the stated shared advanced-processing boundary remain pending.
