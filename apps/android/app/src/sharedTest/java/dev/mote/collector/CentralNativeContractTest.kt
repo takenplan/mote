@@ -72,7 +72,8 @@ class CentralNativeContractTest {
             assertNotNull("Scoped DELETE must not use the Android implicit empty-body media type",bytes)
             bodies.add(JSONObject(String(bytes!!,Charsets.UTF_8)));200 to JSONObject().put("deleted",true)
         })
-        api.delete("/api/files/"+UUID.randomUUID());assertEquals(0,bodies.single().length())
+        // MCP revocation accepts an empty JSON body. Files now has a separate CAS descriptor.
+        api.delete("/api/connections/"+UUID.randomUUID());assertEquals(0,bodies.single().length())
         val operationId=UUID.randomUUID().toString();api.delete("/api/admin/accounts/"+UUID.randomUUID(),JSONObject().put("operationId",operationId))
         assertEquals(operationId,bodies[1].getString("operationId"))
     }
