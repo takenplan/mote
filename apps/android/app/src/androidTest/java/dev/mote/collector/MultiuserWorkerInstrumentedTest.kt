@@ -889,6 +889,33 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals(0,control("/generated/pairing-state").getJSONArray("claims").length())
         }} finally {release.countDown()}
     }
+    @Test fun originalNativeAgentStartupAndRecordedHistoryUsePersonalOptInAndOpaqueContinuation() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralAccess.requireClient(app);val b=CentralClient(endpoint(),token("b"))
+        fun trace(client:CentralClient):JSONObject {val rows=client.get("/api/configuration").getJSONArray("domains");return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")=="agentTrace"}.getJSONObject("effective")}
+        fun state()=control("/generated/agent-state")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        assertFalse(trace(a).getBoolean("traceEnabled"));assertFalse(trace(b).getBoolean("traceEnabled"));val before=state().getJSONObject("calls").toString()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","agentView")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun text():String {var value="";scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().joinToString("\n") {it.text.toString()}};return value}
+            ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.EditText>().single {it.contentDescription=="你的问题"}.setText("Generated native startup A")};press("首次上下文");ready()
+            assertTrue(text().contains("new_conversation_preview"));assertTrue(text().contains("Generated native startup A"));assertEquals(before,state().getJSONObject("calls").toString())
+            scenario.onActivity {activity->assertTrue("Original Agent detailed recording must be an explicit personal opt-in",views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="详细记录设置"})}
+            press("详细记录设置");ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single().isChecked=true};press("保存设置");ready();assertTrue(trace(a).getBoolean("traceEnabled"));assertFalse(trace(b).getBoolean("traceEnabled"))
+            val run=java.util.UUID.randomUUID().toString();a.post("/api/query-runs",JSONObject().put("id",run).put("input",JSONObject().put("question","Generated native trace A")))
+            waitFor {a.get("/api/query-runs/"+run).getString("status")!="running"};assertEquals("completed",a.get("/api/query-runs/"+run).getString("status"))
+            val first=a.get("/api/agent-view/events?limit=12");assertTrue(first.getJSONArray("items").length()>0);assertFalse(first.isNull("nextCursor"));val cursor=first.getString("nextCursor")
+            press("实际读取记录");ready();var found=text().contains("GENERATED_AGENT_A_VISIBLE_TEXT");var pages=0;var next:android.widget.Button?=null;var retainedNext:android.widget.Button?=null
+            while(true){scenario.onActivity {activity->next=views(activity.window.decorView).filterIsInstance<android.widget.Button>().singleOrNull {it.text.toString()=="下一页"}};if(next==null)break;if(retainedNext==null)retainedNext=next;scenario.onActivity {next!!.performClick()};ready();found=found||text().contains("GENERATED_AGENT_A_VISIBLE_TEXT");pages++;assertTrue(pages<20)}
+            assertTrue("Actual Harness result payload must remain readable without fabricating legacy tool.completed",found);assertTrue(pages>0);assertFalse(text().contains("GENERATED_AGENT_B_VISIBLE_TEXT"))
+            val reads=state().getJSONArray("reads");assertTrue((0 until reads.length()).map(reads::getJSONObject).any {it.getString("actor")=="a"&&it.optString("cursor")==cursor})
+            val old=retainedNext;assertNotNull(old);scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);scenario.onActivity {old?.performClick()};ready();assertFalse(text().contains("Generated native trace A"));assertFalse(text().contains("GENERATED_AGENT_A_VISIBLE_TEXT"));assertFalse(trace(b).getBoolean("traceEnabled"))
+        }
+    }
+
     @Test fun originalNativeAgentCatalogExpandsTheActualCanonicalMaterialUnderItsOwner() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")

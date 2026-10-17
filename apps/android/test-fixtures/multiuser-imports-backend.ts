@@ -20,9 +20,13 @@ const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} 
   return payload;
  });
 });actors=f;
+const agent=process.argv.includes('--agent');
 const calls=new Map<string,number>();
+const agentReads:Array<{actor:string;cursor:string|null}>=[];
+f.host.app.addHook('onRequest',async request=>{if(request.url.startsWith('/api/agent-view/events'))agentReads.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':'b',cursor:new URL(request.url,'http://fixture').searchParams.get('cursor')});});
 const model=createServer((request,response)=>{void(async()=>{
- for await(const _ of request){}const actor=String(request.headers.authorization).includes('GENERATED_B')?'b':'a',stage=(calls.get(actor)??0)+1;calls.set(actor,stage);
+ let raw='';for await(const part of request)raw+=String(part);const actor=String(request.headers.authorization).includes('GENERATED_B')?'b':'a',stage=(calls.get(actor)??0)+1;calls.set(actor,stage);
+ if(agent&&raw.includes('Generated native trace')){const body=JSON.parse(raw),uses=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_use'):[]);if(!uses.some((u:any)=>u.name==='material_catalog'))return writeMessagesResponse(response,{stage,tool:{name:'material_catalog',args:{limit:12}}});const ref=raw.match(/material:mat_[a-f0-9]{64}@[a-f0-9]{64}/)?.[0];if(!ref)throw Error('Missing actual native Material reference');if(!uses.some((u:any)=>u.name==='material_read'))return writeMessagesResponse(response,{stage,tool:{name:'material_read',args:{ref,length:4000}}});writeMessagesResponse(response,{stage,text:JSON.stringify({answer:'Generated native traced answer',citationIds:[]})});return;}
  if(stage===1){writeMessagesResponse(response,{stage,tool:{name:'timeline',args:{limit:100}}});return;}
  writeMessagesResponse(response,{stage,text:JSON.stringify({answer:JSON.stringify({summary:'Generated native private import preview',warnings:[],reviewDecision:{confidence:'high',ambiguous:false,reason:'Generated deterministic fixture preserves supplied originals.'},preserveAll:true}),citationIds:[]})});
  })().catch(()=>response.destroy());});
@@ -30,7 +34,7 @@ await new Promise<void>(resolve=>model.listen(0,'127.0.0.1',resolve));const mode
 for(const[actor,label]of [[f.a,'A'],[f.b,'B']] as const){
  let view=await f.checked(actor.token,'/api/configuration');const memory=view.domains.find((domain:any)=>domain.id==='memory').effective;
  await f.checked(actor.token,'/api/configuration/memory','PUT',{revision:view.revision,value:{...memory,automatic:false,integration:false,lifecycle:{...memory.lifecycle,insights:{...memory.lifecycle.insights,enabled:false},working:{...memory.lifecycle.working,enabled:false},consolidation:{...memory.lifecycle.consolidation,enabled:false}}}});
- view=await f.checked(actor.token,'/api/configuration');await f.checked(actor.token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[{id:'generated-import',name:'Generated import mapper',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-native-import',baseUrl:'http://127.0.0.1:'+modelAddress.port+'/v1',apiKey:'GENERATED_'+label}}],selections:{import:{kind:'personal',id:'generated-import'}}}});
+ view=await f.checked(actor.token,'/api/configuration');await f.checked(actor.token,'/api/configuration/models','PUT',{revision:view.revision,value:{profiles:[{id:'generated-import',name:'Generated import mapper',settings:{...defaultModelSettings(),provider:'custom',protocol:'anthropic-messages',model:'generated-native-import',baseUrl:'http://127.0.0.1:'+modelAddress.port+'/v1',apiKey:'GENERATED_'+label}}],selections:{import:{kind:'personal',id:'generated-import'},...(agent?{chat:{kind:'personal',id:'generated-import'}}:{})}}});
 }
 if(process.argv.includes('--agent'))for(const[actor,label]of [[f.a,'A'],[f.b,'B']] as const){
  const created=await f.request(actor.token,'/api/imports','POST',{requestId:'10000000-0000-4000-8000-000000000001',processing:'automatic',files:[{name:'generated-agent.txt',mimeType:'text/plain',dataBase64:Buffer.from('GENERATED_AGENT_'+label+'_VISIBLE_TEXT').toString('base64')}]});
@@ -42,6 +46,7 @@ const control=createServer((request,response)=>{
  if(request.method!=='POST'){response.statusCode=404;response.end();return;}
  if(request.url==='/generated/drop-import-ack')dropping=true;
  else if(request.url==='/generated/release-import-ack')dropping=false;
+ else if(request.url==='/generated/agent-state'){response.setHeader('content-type','application/json');response.end(JSON.stringify({calls:Object.fromEntries(calls),reads:agentReads}));return;}
  else if(request.url!=='/generated/import-commands'){response.statusCode=404;response.end();return;}
  response.setHeader('content-type','application/json');response.end(JSON.stringify({dropping,commands}));
 });await new Promise<void>(resolve=>control.listen(0,'127.0.0.1',resolve));const controlAddress=control.address();if(!controlAddress||typeof controlAddress==='string')throw Error('Missing generated import control');
