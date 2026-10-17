@@ -303,9 +303,9 @@ export class ProcessingHost {
  private reconcilePolicies(context:UserContext){
   const sql=this.sql(context);for(const row of sql.all('SELECT DISTINCT original_id FROM mp_admissions WHERE user_id=$user AND task_id IS NOT NULL')){
    const ref='original:'+row.original_id,latest=sql.get("SELECT e.state,u.input FROM mp_admissions a JOIN execution_steps e ON e.user_id=a.user_id AND e.id=a.task_id JOIN user_tasks u ON u.user_id=e.user_id AND u.task_id=e.id WHERE a.user_id=$user AND e.user_id=$user AND u.user_id=$user AND a.original_id=? AND e.kind='processing.pipeline' ORDER BY e.updated_at DESC,e.id DESC LIMIT 1",row.original_id);
-   if(!latest||!['waiting','running','blocked','failed'].includes(String(latest.state))||JSON.parse(String(latest.input)).plugin||this.fileControl(context,ref).cancelled)continue;
+   if(!latest||!['waiting','running','blocked','failed','stale'].includes(String(latest.state))||JSON.parse(String(latest.input)).plugin||this.fileControl(context,ref).cancelled)continue;
    try{sql.transaction(()=>{
-    this.input(context,processingInputSchema.parse({originalRef:ref,...this.snapshot(context,ref)}),true);const before=this.policies.current(context,ref),after=this.policies.bindPlan(context,ref,true);if(before?.id===after?.id&&this.current(context.userId,JSON.parse(String(latest.input))))return;
+    if(!this.input(context,processingInputSchema.parse({originalRef:ref,...this.snapshot(context,ref)}),true).current)return;const before=this.policies.current(context,ref),after=this.policies.bindPlan(context,ref,true);if(before?.id===after?.id&&this.current(context.userId,JSON.parse(String(latest.input))))return;
     for(const task of sql.all("SELECT e.id FROM user_tasks u JOIN execution_steps e ON e.user_id=u.user_id AND e.id=u.task_id WHERE u.user_id=$user AND e.user_id=$user AND e.kind LIKE 'processing.%' AND e.state NOT IN('succeeded','cancelled','stale') AND json_extract(u.input,'$.originalRef')=?",ref))this.execution.forUser(context).cancel(String(task.id));
     if(!after?.archiveOnly)this.submitSync(context,ref,'policy-reconcile:'+randomUUID(),undefined,undefined,true);
    });}catch(error){

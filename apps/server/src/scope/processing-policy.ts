@@ -47,7 +47,7 @@ export class ProcessingPolicies {
    const sql=new PrivateSql(db,subject.userId,()=>{'credentialId' in subject?runtime.authority.assert(subject):runtime.services.assertSubject(subject,'configuration',subject.purpose);}),before=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),next=effectiveValueSchema.parse(raw);
    if(next.policy)validateProcessingProfiles(next.policy,before?effectiveValueSchema.parse(JSON.parse(String(before.json))).policy?.profiles??[]:next.policy.profiles,processors.registry,{error:()=>new ConfigServiceError('config_invalid')});
    const json=JSON.stringify(next);let published=false;
-   return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_file_policies VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_file_policies SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_file_policies WHERE user_id=$user');}},complete:()=>{if('credentialId' in subject&&next.policy&&before?.json!==json)changed(subject);}};
+   return {apply:()=>{},publish:()=>{sql.run('INSERT INTO mp_file_policies VALUES($user,?) ON CONFLICT(user_id) DO UPDATE SET json=excluded.json',json);published=true;},rollback:()=>{if(published){if(before)sql.run('UPDATE mp_file_policies SET json=? WHERE user_id=$user',before.json);else sql.run('DELETE FROM mp_file_policies WHERE user_id=$user');}},complete:()=>{if('credentialId' in subject&&before?.json!==json&&(next.policy||sql.get('SELECT original_id FROM mp_file_policy_bindings WHERE user_id=$user LIMIT 1')))changed(subject);}};
   }}));
  }
  private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>this.runtime.authority.assert(context));}
@@ -64,11 +64,11 @@ export class ProcessingPolicies {
  /** Called by trusted admission, never a presentation GET. A completed file keeps
   * its applied plan until explicit reprocessing chooses a replacement. */
  bindPlan(context:UserContext,ref:string,replace=false,override?:string){
-  const prior=this.current(context,ref);if(prior&&!replace)return prior;const policy=this.policy(context)??(override?this.overridePolicy(context,override):null);if(!policy)return prior;
+  const prior=this.current(context,ref);if(prior&&!replace)return prior;const saved=this.policy(context),defaultOverride=override??(!saved&&replace?prior?.profile.id:undefined),policy=saved??(defaultOverride?this.overridePolicy(context,defaultOverride):null);if(!policy)return prior;
   const sql=this.sql(context);if(!replace&&!prior&&(sql.get('SELECT task_id FROM mp_admissions WHERE user_id=$user AND original_id=? AND task_id IS NOT NULL LIMIT 1',ref.slice(9))||sql.get('SELECT artifact_id FROM mp_publications WHERE user_id=$user AND original_id=?',ref.slice(9))))return undefined;
   const row=sql.get('SELECT r.source_id,r.mime,f.format FROM ig_originals r JOIN mp_original_formats f ON f.user_id=r.user_id AND f.original_id=r.id WHERE r.user_id=$user AND f.user_id=$user AND r.id=?',ref.slice(9));if(!row)throw missing();
   if(row.format==='source-item'||String(row.format).startsWith('processor:'))return prior;
-  const selected=selectScopedFilePolicy(policy,String(row.source_id),String(row.mime),override);
+  const selected=selectScopedFilePolicy(policy,String(row.source_id),String(row.mime),saved?override:defaultOverride);
   if(!selected.archiveOnly){const processor=this.processors.registry.list().find(processor=>processor.id===selected.profile.processorId);if(processor)selected.profile.parameters=effectiveProcessorParameters(processor,selected.profile.parameters);
   }
   const stored=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user'),connections=stored?effectiveValueSchema.parse(JSON.parse(String(stored.json))).connections:{},selectedConnections=selected.services.map(service=>({reference:service.reference,fingerprint:connections[connectionKey(service.reference)]})).sort((a,b)=>connectionKey(a.reference).localeCompare(connectionKey(b.reference)));

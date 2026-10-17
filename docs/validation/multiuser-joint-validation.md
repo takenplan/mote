@@ -1442,3 +1442,20 @@ unsaved default archive/restart and saved root/import/attachment cases
 service change/settings/preview/reprocess seven cases7/7 EXIT0 in28.710s;
 Server types and scope checker0. Default missing-connection reconciliation is
 separately being characterized; this increment is not yet a consumer freeze.
+
+Default connection recovery characterization first stalled before the M04 save:
+the original missing-service coordinator can already be stale, so accepting only
+blocked/failed was a fixture error (all initial red/green1/green2 logs retained,
+not used as post-save proof). With the actual retired state admitted as the
+initial observation, original017e production still remains unindexed after the
+real M04 save: `/tmp/mote-joint-profile-default-resume-valid-red.*` EXIT1.
+The repair uses the same effective-M04 completion callback and reconciliation:
+explicit default bindings retain their chosen profile when reselected, changed
+default reference graphs trigger fresh reconciliation, and stale unfinished work
+is eligible only after rechecking current original/head/source and cancellation.
+Completed and manually cancelled work remain outside that path. No old grant is
+retried or resurrected. Same case now confirms a different actual M05 admission
+ID, new plan and one generated OCR call, B unchanged, no saved policy:
+1/1 EXIT0 in5.592s `/tmp/mote-joint-profile-default-resume-valid-green2.*`.
+The preceding runtime reached indexing but an assertion used job.id on the
+public state-only job projection (undefined); it is retained as a fixture error.
