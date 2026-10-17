@@ -901,6 +901,35 @@ class MultiuserWorkerInstrumentedTest {
         }
     }
 
+    @Test fun originalNativeModelsCopySavedSecretsProbeAndReadFullDirectoryWithoutCrossingAccounts() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralClient(endpoint(),token("a"));val b=CentralClient(endpoint(),token("b"))
+        fun models(api:CentralClient):JSONObject {val rows=api.get("/api/configuration").getJSONArray("domains");return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")=="models"}.getJSONObject("saved")}
+        fun profile(api:CentralClient,id:String):JSONObject {val rows=models(api).getJSONArray("profiles");return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")==id}}
+        fun state()=control("/generated/model-state")
+        val beforeB=b.get("/api/configuration").toString();val defaults=models(a).getJSONObject("selections").toString()
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        try {androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            fun text():String {var value="";scenario.onActivity {activity->value=views(activity.window.decorView).filterIsInstance<android.widget.TextView>().joinToString("\n") {it.text.toString()}};return value}
+            fun select(name:String){scenario.onActivity {activity->val spinner=views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {it.contentDescription=="Provider 预设"};val at=(0 until spinner.count).single {spinner.getItemAtPosition(it).toString()==name};spinner.setSelection(at)};waitFor {var rendered=false;scenario.onActivity {activity->rendered=views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.contentDescription=="测试连接 · "+name}};rendered}}
+            fun copy(id:String,name:String,credentials:Boolean){press("复制为新预设");ready();scenario.onActivity {activity->val fields=views(activity.window.decorView).filterIsInstance<android.widget.EditText>();fields.single {it.text.toString().startsWith("preset-")}.setText(id);fields.single {it.contentDescription=="名称"}.setText(name);val flag=views(activity.window.decorView).filterIsInstance<android.widget.CheckBox>().single {it.text.toString()=="包含凭据"};assertTrue(flag.isChecked);flag.isChecked=credentials};press("保存设置");ready();select(name)}
+            ready();press("模型配置");ready();copy("generated-native-copy-a","Generated native copy A",true)
+            val kept=profile(a,"generated-native-copy-a").getJSONObject("settings");for(key in listOf("apiKey","headers","extraBody"))assertTrue(key,kept.getBoolean(key));assertEquals(defaults,models(a).getJSONObject("selections").toString());assertEquals(beforeB,b.get("/api/configuration").toString())
+            press("测试连接");ready();assertTrue("Actual native probe must display success from the synthetic reader round-trip",text().lineSequence().any {it.endsWith(" · ok")})
+            var events=state();val operations=events.getJSONArray("operations");assertTrue((0 until operations.length()).map(operations::getJSONObject).any {it.optJSONObject("reference")?.optString("id")=="generated-native-copy-a"&&it.getString("path")=="/api/models/probe"&&it.getBoolean("ok")})
+            val requests=events.getJSONArray("requests");val posts=(0 until requests.length()).map(requests::getJSONObject).filter {it.getString("method")=="POST"};assertTrue(posts.size>=3);assertTrue(posts.all {it.getString("owner")=="a"&&it.getBoolean("hasPrivateHeader")&&it.getDouble("temperature")==0.37&&!it.getBoolean("hasPrivateArchive")})
+            press("可用模型");ready();assertTrue(text().contains("generated-a-one"));assertTrue(text().contains("generated-a-two"));assertFalse(text().contains("generated-b-one"));assertEquals(0,a.get("/api/query-runs").getJSONArray("items").length());assertEquals(0,a.get("/api/tasks").getJSONArray("items").length())
+            copy("generated-native-empty-a","Generated native empty A",false);val cleared=profile(a,"generated-native-empty-a").getJSONObject("settings");for(key in listOf("apiKey","headers","extraBody"))assertFalse(key,cleared.getBoolean(key));assertEquals(defaults,models(a).getJSONObject("selections").toString());assertEquals(beforeB,b.get("/api/configuration").toString())
+            select("Generated native copy A");lateinit var oldProbe:android.widget.Button;scenario.onActivity {activity->oldProbe=views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()=="测试连接"}}
+            control("/generated/hold-model-catalog");press("可用模型");waitFor {state().getBoolean("modelEntered")};scenario.moveToState(androidx.lifecycle.Lifecycle.State.CREATED);login(app,"b");scenario.moveToState(androidx.lifecycle.Lifecycle.State.RESUMED);control("/generated/release-model-catalog");ready()
+            assertFalse(text().contains("generated-a-one"));assertFalse(text().contains("Generated native copy A"));events=state();val count=events.getJSONArray("requests").length();scenario.onActivity {oldProbe.performClick()};ready();assertEquals(count,state().getJSONArray("requests").length())
+            press("模型配置");ready();select("Generated import mapper");press("可用模型");ready();assertTrue(text().contains("generated-b-one"));assertTrue(text().contains("generated-b-two"));assertFalse(text().contains("generated-a-one"));press("测试连接");ready();assertTrue(text().lineSequence().any {it.endsWith(" · ok")});assertEquals(beforeB,b.get("/api/configuration").toString());assertEquals("Generated native copy A",profile(a,"generated-native-copy-a").getString("name"))
+        }} finally {control("/generated/release-model-catalog")}
+    }
+
     @Test fun originalNativeFileProcessingEditorKeepsNamedGraphAndDoesNotSaveAnUnconfiguredPreview() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
