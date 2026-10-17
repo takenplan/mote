@@ -233,10 +233,19 @@ internal class CentralAdmin(private val screens: CentralScreens) {
     fun fileSettings() {
         val api = client
         ui.work(MoteI18n.text("正在读取…"), { api.get("/api/file-processing") }) { value ->
-            val payload = JSONObject().put("revision", value.getString("revision"))
-                .put("settings", JSONObject(value.getJSONObject("settings").toString()))
-            if (value.getBoolean("policyConfigured")) payload.put("policy", JSONObject(value.getJSONObject("policy").toString()))
-            edit(MoteI18n.text("处理设置"), "/api/file-processing", payload)
+            val settings = JSONObject(value.getJSONObject("settings").toString())
+            if (value.getBoolean("policyConfigured")) {
+                edit(MoteI18n.text("处理设置"), "/api/file-processing", JSONObject().put("revision", value.getString("revision"))
+                    .put("settings", settings).put("policy", JSONObject(value.getJSONObject("policy").toString())))
+                return@work
+            }
+            val revision = value.getString("revision").toLong(); require(revision in 0..9_007_199_254_740_991L)
+            body.removeAllViews(); screens.setBack { screens.refresh() }; ui.text(MoteI18n.text("处理设置"), NativeFontRole.TITLE_MOBILE)
+            val collect = form(settings, ui.card())
+            ui.button(MoteI18n.text("保存设置"), true) {
+                val payload = JSONObject().put("revision", revision).put("value", collect())
+                ui.work(MoteI18n.text("正在保存…"), { api.put("/api/configuration/processing", payload) }) { screens.refresh() }
+            }
         }
     }
     private fun ownedConfiguration(title: String, domainId: String, back: () -> Unit = { memorySettings() }, done: () -> Unit = back) {
