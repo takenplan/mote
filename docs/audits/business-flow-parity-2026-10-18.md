@@ -5,6 +5,11 @@ follow existing ADRs and remain implementation or validation work. This report
 does not authorize personal
 data access, historical model processing or removal of an existing capability.
 
+Current disposition: F01–F11 retain implementation or validation follow-ups;
+F10 is partially corrected. F12, F13 and F10's stale-tail withdrawal are verified
+in the combined candidate, as identified in the final readback below. They were
+not present in the audited baseline or implemented by this corrective PR alone.
+
 ## Baselines and evidence rules
 
 - Previous single-owner code baseline, fetched `origin/main` snapshot at
@@ -572,3 +577,21 @@ implementation or validation follow-ups for the release record. F12 and F13,
 and F10's stale-tail withdrawal, are handled in the separate combined integration
 candidate; its exact source and checks must be cited before claiming delivery.
 No additional owner confirmation is pending for these recorded directions.
+
+## Combined candidate readback
+
+The combined runtime is `6e4032e0ff7a31dbf6528d6703f5d9d8f0b1cc57` (tree
+`508a09cb70ec9202aad6225372039446023ef4ad`), a verified descendant of the
+corrective branch's runtime freeze `9e9f112c`. Other integration work incorporates
+F12's approved history/equality/cache behavior, F13's precise deterministic
+decoder settlement, and F10's stale-tail withdrawal while preserving history.
+Their source-bound validation, two real Codex Ask runs and declaration-only
+correction are identified in the [validation record](../validation/shared-business-flows-2026-10-18.md).
+That record retains the full affected command's nonzero result and separately
+identifies the passing corrected declaration and supplemental consumer checks.
+
+F01–F11 remain release follow-ups to the extent described above; the shared
+recording phases, backup disposition and stale-tail repair do not close F10's
+canonical archive/Memory graph or client status gap. This candidate readback is
+not a claim about an installed deployment. Commit presence in the actual release
+must be verified separately before reporting delivery.

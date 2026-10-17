@@ -82,9 +82,9 @@ were not executed in this standalone attempt.
 
 The corrected source's dry run also selects Desktop/Android/tooling because the
 import-boundary script changed: `check:local` plus Android unit tests.
-Final combined-candidate affected checks are run by the main integration task,
-including this correction, before PR publication. Their source identity and
-actual results will be recorded here when complete.
+Final combined-candidate acceptance is owned by the main integration task and
+includes this correction. Its source identity and
+actual results, including unsuccessful attempts, are recorded below.
 
 ## Initial combined-candidate check — failed
 
@@ -169,6 +169,82 @@ passed. Android's unit-test command exited successfully with its test task
 `UP-TO-DATE`; the previously executed 362-test result on `bfc4cbdf` is retained
 as the actual Android execution. These supplemental commands do not turn the
 failed full affected check into a pass.
+
+## Combined lifecycle correction — targeted acceptance
+
+The main task traced the remaining race to SDK child session writes and cleanup
+continuing after application close. The correction is
+`6e4032e0ff7a31dbf6528d6703f5d9d8f0b1cc57` (tree
+`508a09cb70ec9202aad6225372039446023ef4ad`), a direct child of `3518706b` and a
+verified descendant of this branch's runtime freeze `9e9f112c`.
+
+`TaskRun.localWork` registers abort-controlled local Agent chains before startup,
+including workspace cleanup, activity settlement and original pin release.
+Close revokes execution first, then drains those registered chains before
+database shutdown. Arbitrary remote handler promises are not registered; issued
+and unknown external facts retain their existing protections. The main task
+checked all ten task-bound Agent creation points, preserving paths that already
+had independent cleanup waits. An independent static review found no blocker;
+that review did not execute tests or models.
+
+Four new controlled lifecycle tests produced one pass and three failures on the
+old implementation, then four passes on the correction. Twelve related consumer
+cases passed, including the original Ask pending-child and retry cases. A fresh
+actual SDK trace showed child exit, workspace cleanup and original handler
+completion before database/application close. A fresh Central build passed.
+The same frozen source then passed seven local Codex acceptance scenarios,
+including two actual model Ask calls; isolated test instances were cleaned.
+These are source-specific targeted and live-model results, not a passing complete
+affected check. The complete affected attempt and declaration-only reconciliation
+follow.
+
+## Corrected-runtime full check — stale scope declaration
+
+The full affected attempt on `6e4032e0` reported Server 3,072 passes, one failure
+and two existing skips (3,075 total). Desktop 589, Web 583, Agent 327 plus one
+existing skip, Diagnostics 5 and Shared 195 passed. Both original cleanup
+failures passed unchanged: Ask pending-child admission took 5.080 seconds and
+file term-review cancellation took 1.799 seconds. All four new lifecycle tests
+also passed within this full run.
+
+The sole failure was the scope-architecture declaration check. The import task's
+registered `execute` function now wraps its prepare phase in `run.localWork`,
+while `docs/design/scope-inventory.json` still describes the old function body.
+Kind, policy, model selection, authorization and resource fields were unchanged.
+Across all application workspaces, this was 4,771 passes, one inventory failure,
+three existing skips and zero cancellations (4,775 total).
+The full command naturally exited **1** and is retained as a failure; successful
+runtime tests do not
+override the missing declaration. Its root script, Central-runner and Android
+stages were truncated. The main task owns the exact declaration synchronization
+and subsequent verification.
+
+## Declaration-only correction and final verification
+
+The remaining correction changes exactly one declaration in
+`docs/design/scope-inventory.json`, which is consumed by the checker rather than
+production execution. The corrected Git blob is
+`f95e1afc2628d19eb41c7ffa79fd3b60dd3e4660`. Application, package, protocol and
+script sources are unchanged from `6e4032e0`; this was independently verified.
+The corrected registration retains its kind, policy, authorization, model and
+resource boundaries. It describes the already-tested cleanup wrapper.
+
+An independent `node --import tsx --test
+apps/server/test/scope-architecture.test.ts` run then exited **0**, with all four
+architecture cases passing. `npm run check:affected -- --base
+6e4032e0ff7a31dbf6528d6703f5d9d8f0b1cc57` exited **0** with a documentation-only
+empty check plan; this is not a replacement claim that the earlier full wrapper
+exited zero. Only the checker declaration changed, so the unchanged runtime's
+successful suites and real Codex acceptance above remain applicable.
+
+The main task separately completed the stages truncated by that full wrapper:
+83/83 root script tests, 5/5 client tests and the Central runner passed.
+Android's command reported `BUILD SUCCESSFUL` with all 25 tasks up-to-date,
+including `:app:testDebugUnitTest`; the fresh 362-test execution on `bfc4cbdf`
+is retained separately. Android source did not change between that source and
+the final runtime. These supplemental commands and corrected declaration checks
+close the verification failures while preserving every original failed command
+as failed. They do not close the remaining business gaps in the audit.
 
 ## Preserved unsuccessful attempts
 
