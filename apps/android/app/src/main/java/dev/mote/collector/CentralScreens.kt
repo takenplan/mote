@@ -87,6 +87,56 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             val all = fileRetries.read()
             if (all.optJSONObject(id)?.getJSONObject("body")?.optString("operationId") == operationId) { all.remove(id); fileRetries.write(all) }
     }
+    private val fileDeletes = CentralStateFile(directory, "file-deletes", cipher)
+    fun pendingFileDeletes(): List<JSONObject> = CentralDraftWrites.barrier {
+        val all = fileDeletes.read()
+        all.keys().asSequence().map { id -> all.getJSONObject(id).also { check(it.getString("ownerKey") == ownerKey && it.getString("captureId") == id) } }.toList()
+    }
+    fun submitFileDelete(api: CentralClient, row: JSONObject): JSONObject {
+        check(ownsSelectedAccount() && ui.client === api)
+        val id = row.getString("captureId"); UUID.fromString(id)
+        val rawGeneration = row.get("originalGeneration")
+        require(rawGeneration is Number && rawGeneration.toDouble() >= 0 && rawGeneration.toDouble() < 9007199254740991.0 && rawGeneration.toDouble() == rawGeneration.toLong().toDouble())
+        val generation = rawGeneration.toLong()
+        val descriptor = JSONObject().put("captureId", id).put("sourceId", row.getString("sourceId"))
+            .put("externalId", row.getJSONObject("item").getString("externalId")).put("originalRef", row.getString("originalRef"))
+            .put("originalGeneration", generation)
+        require(Regex("original:[a-f0-9]{64}").matches(descriptor.getString("originalRef")))
+        val intent = CentralDraftWrites.barrier {
+            check(ownsSelectedAccount() && ui.client === api)
+            val all = fileDeletes.read(); val previous = all.optJSONObject(id)
+            if (previous != null) {
+                check(previous.getString("ownerKey") == ownerKey && SourceRules.canonical(previous.getJSONObject("descriptor")) == SourceRules.canonical(descriptor)) { MoteI18n.text("请求结果尚未确认，请重试同一请求。") }
+                previous
+            } else JSONObject().put("ownerKey", ownerKey).put("captureId", id).put("title", row.getJSONObject("item").optString("title"))
+                .put("descriptor", descriptor).put("body", JSONObject().put("operationId", UUID.randomUUID().toString()).put("originalGeneration", generation))
+                .also { all.put(id, it); fileDeletes.write(all) }
+        }
+        return sendFileDelete(api, intent)
+    }
+    fun retryFileDelete(api: CentralClient, intent: JSONObject): JSONObject = sendFileDelete(api, intent)
+    private fun sendFileDelete(api: CentralClient, intent: JSONObject): JSONObject {
+        check(ownsSelectedAccount() && ui.client === api && intent.getString("ownerKey") == ownerKey)
+        check(AccountBinding.self(api.server, api.get("/api/connections/self")).key == ownerKey)
+        val id = intent.getString("captureId"); UUID.fromString(id)
+        val request = JSONObject(intent.getJSONObject("body").toString()); val operation = request.getString("operationId"); UUID.fromString(operation)
+        // Recovery uses the persisted request even when GET detail is now 404.
+        // Never fetch a newer generation to rebase an unresolved deletion.
+        val receipt = api.delete("/api/files/" + encode(id), request)
+        val count = receipt.get("deleted"); require(count is Number && count.toDouble() >= 1 && count.toDouble() <= 9007199254740991.0 && count.toDouble() == count.toLong().toDouble())
+        require(receipt.getString("cleanup") in setOf("complete", "pending"))
+        val decision = receipt.getJSONObject("decision"); val descriptor = intent.getJSONObject("descriptor")
+        require(decision.getString("sourceId") == descriptor.getString("sourceId") && decision.getString("externalId") == descriptor.getString("externalId"))
+        UUID.fromString(decision.getString("decisionId"))
+        val generation = decision.get("generation"); require(generation is Number && generation.toDouble() == (request.getLong("originalGeneration") + 1).toDouble())
+        check(ownsSelectedAccount() && ui.client === api)
+        CentralDraftWrites.barrier {
+            check(ownsSelectedAccount() && ui.client === api)
+            val all = fileDeletes.read()
+            if (all.optJSONObject(id)?.getJSONObject("body")?.optString("operationId") == operation) { all.remove(id); fileDeletes.write(all) }
+        }
+        return receipt
+    }
     fun pendingMemoryAdmission(): JSONObject? = CentralDraftWrites.barrier { memoryAdmissionStore.read().takeIf { it.has("operationId") } }
     fun discardMemoryAdmission() = CentralDraftWrites.barrier { memoryAdmissionStore.write(JSONObject()) }
     fun submitMemory(api: CentralClient, request: JSONObject): JSONObject {

@@ -256,6 +256,19 @@ internal class CentralLibrary(private val screens: CentralScreens) {
     private fun files() {
         val search = ui.field(MoteI18n.text("文件名"), query)
         ui.button(MoteI18n.text("搜索")) { query = search.text.toString(); screens.refresh() }
+        val api = client; val navigation = ui.navigationRevision
+        fun active() = screens.ownsSelectedAccount() && ui.client === api && ui.navigationRevision == navigation
+        val pending = ui.card()
+        ui.work(MoteI18n.text("正在读取…"), { screens.pendingFileDeletes() }) { intents ->
+            if (active()) for (intent in intents) {
+                val card = ui.card(pending)
+                ui.text(intent.getString("title"), NativeFontRole.SECTION, card)
+                ui.text(MoteI18n.text("请求结果尚未确认，请重试同一请求。"), parent = card)
+                ui.button(MoteI18n.text("重试同一请求"), parent = card) {
+                    if (active()) ui.work(MoteI18n.text("正在删除…"), { screens.retryFileDelete(api, intent) }) { if (active()) screens.refresh() }
+                }
+            }
+        }
         paged("/api/files?limit=30&query=" + enc(query), ui.card()) { row, card ->
             ui.text(row.getJSONObject("item").optString("title"), NativeFontRole.SECTION, card)
             ui.text(row.optJSONObject("job")?.optString("state").orEmpty(), parent = card)
@@ -396,9 +409,11 @@ internal class CentralLibrary(private val screens: CentralScreens) {
                     if (cancellation?.optString("wait") == "unknown") screens.confirm(MoteI18n.text("确认重试"), MoteI18n.text("上次处理是否结束未知，重试可能重复执行。请确认后继续。"), retry) else retry()
                 }
             }
-            ui.button(MoteI18n.text("删除文件")) { screens.confirm(MoteI18n.text("删除文件"), MoteI18n.text("删除后无法恢复。")) {
-                ui.work(MoteI18n.text("正在删除…"), { api.delete("/api/files/" + enc(id)) }) { screens.refresh() }
-            } }
+            ui.button(MoteI18n.text("删除文件")) {
+                if (active()) screens.confirm(MoteI18n.text("删除文件"), MoteI18n.text("删除后无法恢复。")) {
+                    if (active()) ui.work(MoteI18n.text("正在删除…"), { screens.submitFileDelete(api, row) }) { if (active()) screens.refresh() }
+                }
+            }
         }
     }
     private fun processingState(state: String, reason: String = "", notScheduled: Boolean = false): String {
