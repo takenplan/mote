@@ -718,3 +718,29 @@ Original Web settings entry actualRED68fb5c1d (`/tmp/m13-file-settings-red.log/.
 Actual original account page → named settings → service reference + source rule + max-audio edit → one successful M04 Save with saved boolean secret → real owner-only preview/reprocess1 → held A successful Save across B and detached A button passes1/1/no skips0,4.22s (`/tmp/m13-file-settings-green3.log/.exit`). B's complete generated YAML is byte-identical; A's synthetic secret is retained internally and never appears in the DOM. Initial green invocation used the root cwd and did not find the Web test; green2's entry lookup lacked an accessible category name and is preserved. The test now uses that explicit accessible name; its exact dynamic preview action and actual default120-minute B setting replace fixture assumptions, without changing transaction or isolation assertions. Server/Web types0 and scope0 are recorded separately.
 
 Agent runtime ddc64fe9a4eeb57b763669c324d9afd099aa97c3 (docs successor19c5592f) supersedes245 for the relogin observer defect; isolated traces2/2+startup1/1,no skips0,types0,scope0. Own M04 effective snapshot neighbors4/4/no skips0 (`/tmp/m13-agent-effective-adjacent.log/.exit`). M15 separately reports composed server3/3 and strengthened original native Agent1/1 plus bounded nofinding review; those are peer evidence, not owner executions or wholeM13 acceptance.
+
+### Selected-card Memory integration original journey
+
+Durable source RED `0bc87b03`: actual M01/M03/M04/M05/M07 selected Memory and
+recipe POST returned503, including the stale-pin case. First restricted run
+failed loopback EPERM and is not product evidence; the same command through
+normal approval reached the real503. `/tmp/m13-memory-integration-valid-red.log/.exit`.
+Original-page RED `8c118c60`: legacy global settings aliases returned503 and
+left its start button disabled, `/tmp/m13-memory-integration-ui-valid-red.log`.
+
+New actual source8/8 no skip0 `/tmp/m13-memory-integration-server-final.log/.exit`
+includes the original three manual-Material/model neighbors, recipe pin,
+operation idempotence, A/B same Material identities, stale version, model-lease
+await then actual completed correction, explicit cancel, and separate selected
+personal/Coding domains while the global default stays personal. An earlier
+race fixture released the lease immediately after *admitting* correction; it
+was corrected to await its actual successful task and assert the retired pin
+before release. That earlier200 is not attributed to a production failure.
+
+Original-page lost committed ACK/remount (no second POST/model replay), honest
+zero output, held later A ACK, detached A controls/B positive and original bearer
+page neighbors passed51/51 no skip0
+`/tmp/m13-memory-integration-ui-neighbors.log/.exit`. This command ran the two
+existing files it found; an accidentally supplied nonexistent third filename is
+not additional coverage. Web and Server types/scope/i18n checks are recorded
+separately; no new IAB or whole affected acceptance is inferred here.

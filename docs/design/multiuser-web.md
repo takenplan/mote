@@ -162,3 +162,32 @@ Resumed checkpoint: Joint declared43db PREP is composed, along with its M14final
 Latest consumer composition includes declared Joint2528 production519 (8177 plus mandatory source-incarnation repair), QR producer final485's selected production lineage, completed Container723cc and M14finalcd46. Web QR v2 now restores the original local invitation/JSON/cancel/re-authorization panel, with original Devices navigation, exact M01 account/deployment/device-purpose/URI validation, source-only device inventory and credential-keyed retirement. Actual renderer M01/M03 grant/private403/PKCE/ACK, cancel410, original-device selection and held-A/B/malformed-success matrix2/2 passes with the existing MCP credential consumer. This closes the missing Web pairing entry; built IAB, independent review and current final gates remain separate obligations. No pending Joint processing-profile implementation or Theme code is consumed.
 
 Agent historical inputs now use the existing per-owner M08 trace journal. CHANGE: the original detailed-trace opt-in becomes an explicit personal M04 `agentTrace.traceEnabled` setting (default false); the instance retains its existing byte/file/entry limits. This follows the multi-user private-content boundary: an administrator or instance diagnostics switch cannot opt another user into private prompt retention. KEEP: actual events, compaction/truncation, explicit recording state, retained-only history and no reconstruction from current data. Reads revalidate current original/Material/Memory proofs. No new store or trace runtime is created. Actual provider messages preserve their native typed protocol. Narrow server/renderer evidence is recorded separately from current full gates and remaining original-page work.
+
+## Explicit selected-Memory integration through the original detail page
+
+The original `整理所选记忆` section now uses the owner M07 integration path in Web
+mode. Bearer consumers retain the original lifecycle transport. Web reads the
+existing `/api/memory`, `/api/memory/recipes` (`integrations`) and `/api/models`;
+it never probes the absent global Memory/model settings aliases.
+
+`POST /api/memory-integrations` takes `{operationId,recipe:{id,version},inputs:[{id,version,fingerprint}]}`.
+The owner service resolves each exact current Memory dependency to its retained
+canonical Material revision, then uses the existing M07 admission, M04 lease,
+M05 children, independent review and publication validators. Personal/Coding
+selections keep separate batches and related-card pins, regardless of the global
+profile. No new scheduler, table, model default, automatic-enable change or old
+execution grant is introduced. Selection is rechecked in the admission
+transaction after asynchronous provider/model preparation. Unknown recipe,
+retired pin or changed same-operation body rejects; another owner's card is404.
+The existing Memory-job receipt adds its persisted `phase` and `automatic` flags
+when its retained input is available; physical domain erasure does not recreate
+those fields from guesses.
+
+The browser retains only explicit operation/recipe/selection identities under
+origin+deployment+user. After reload it reads the exact existing M07 job; a404
+permits an explicit same-body retry, never automatic readmission. Confirmed
+completion with no new memories is shown honestly. Cancel/pause/resume/retry use
+the original M07 job controls. Credential/Api replacement aborts and retires the
+old callbacks; selecting another card never rewrites an admitted input.
+This closes the selected-card/manual-recipe journey. Broad time-range/raw
+selection and the remaining KEEP ledger are separate unfinished work.
