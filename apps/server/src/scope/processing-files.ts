@@ -32,10 +32,10 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
     };
     const detail=(id:string,includeAcoustics=true)=>{
       const {row,ref,info,capture,status}=owned(id),taskRow=sql.get('SELECT a.task_id FROM mp_admissions a JOIN execution_steps e ON e.user_id=a.user_id AND e.id=a.task_id WHERE a.user_id=$user AND e.user_id=$user AND a.original_id=? ORDER BY e.updated_at DESC,e.id LIMIT 1',String(row.id));
-      const task=taskRow?execution.forUser(context).get(String(taskRow.task_id)):undefined,diarization=includeAcoustics?service.fileDiarization(ref):undefined;
+      const task=taskRow?execution.forUser(context).get(String(taskRow.task_id)):undefined,diarization=includeAcoustics?service.fileDiarization(ref):undefined,error=task?.failure?.code??task?.error??null;
       return {captureId:id,originalGeneration:fileOriginalGeneration(sql,ref),sourceId:info.sourceId,originalRef:ref,sizeBytes:info.totalBytes,sha256:info.hash,hasOriginal:info.available!==false,originMissing:!status.current,
         rawArtifactId:service.fileStageIds(ref).raw,cancellation:service.cancellation(ref),calendarLink:service.fileCalendar(ref),item:{...capture.provenance,title:capture.windowTitle,observedAt:capture.capturedAt,mimeType:info.mime},processing:status,
-        job:task?{state:task.state,stage:task.kind,attempts:task.attempts,error:task.failure?.code??null,execution:executionEnvelope({state:task.state,attempts:task.attempts,errorCode:task.failure?.code})}:null,
+        job:task?{state:task.state,stage:task.kind,attempts:task.attempts,error,execution:executionEnvelope({state:task.state,attempts:task.attempts,errorCode:error})}:null,
         artifacts:[...(diarization?[{...diarization,kind:'diarization',complete:true}]:[]),...(status.artifactId?[{id:status.artifactId,kind:'transcript',complete:true}]:[]),...status.derivations.map(x=>({id:x.artifactId,kind:x.kind==='turns'?'dialogue':x.kind,complete:true}))]};
     };
     return {owned,detail,

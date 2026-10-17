@@ -412,3 +412,14 @@ external facts. Failed batches roll back all admissions and retain the preview;
 success consumes it. Preview tokens are not portable data and are retired with
 the M06 account domain. Whole preview bounds/expiry/unknown/UI acceptance remains
 to be run; this WIP has not been declared a consumer freeze.
+
+
+Disabled processing preserves ordinary owned work as a genuine M05 blocked
+coordinator (`processing_disabled`, zero attempts), including new automatic
+originals accepted while disabled. No child/model is admitted by this state.
+The host-only pipeline admission permits only the exact current original/head,
+settings generation and non-cancelled file; execution still requires enabled
+settings. Enabling processing uses a fresh coordinator/grant for unfinished work,
+while completed results and explicit per-file cancellation remain intact. This
+uses the existing executor/journal, with no synthetic task state or new queue.
+Files now preserves M05's actual admission error when no attempt failure exists.

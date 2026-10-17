@@ -1272,3 +1272,23 @@ new policy-table restore proof. Own full affected/final clients remain pending.
 The independent cross-user original stop/delete cases also pass2/2,6.552s after
 the fixture-only PID patch (peer e88e1727, `/tmp/mote-crossuser-plugin-marker-green.*`).
 Old failure logs remain preserved; no production plugin fix was inferred.
+
+
+### Disabled processing and fresh resume checkpoint
+
+Durable a2409841 shows disabling named processing cancels the old root and loses
+its resumable state (actual1/1fail9.507s, `/tmp/mote-joint-policy-pause-resume-red.*`).
+The first fix produced a genuine blocked M05 root, but Files ignored the actual
+M05 admission error when no attempt failure receipt existed; green1 retains that
+missing projection failure. The projection now reads the actual task error.
+The original-policy-null intake is separately RED-characterized against exact
+190ff2ab processing.ts/processing-files.ts, temporarily restored and returned in
+finally: job remained null while disabled,1/1fail7.492s
+(`/tmp/mote-joint-processing-legacy-pause-red.*`, test69696080).
+Current scalar/named/global-default cases3/3,9.147s0 are
+`/tmp/mote-joint-policy-pause-resume-green3.log/.exit`: zero-attempt disabled root,
+new intake while disabled, restart, fresh enabled admission, explicit file cancel
+not revived, equal-ID B's successful artifact unchanged. No policy is invented
+for legacy data. Source hashes are in `/tmp/mote-joint-policy-pause-source-manifest.json`.
+Full retry/policy neighbor and types reruns for this checkpoint are pending;
+these results alone are not a consumer freeze or whole final acceptance.
