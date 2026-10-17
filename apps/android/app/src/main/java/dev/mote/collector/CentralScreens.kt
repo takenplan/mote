@@ -288,7 +288,9 @@ internal class CentralScreens(val ui: CentralContent, val body: LinearLayout, pr
             for (i in 0 until turns.length()) {
                 val turn = turns.getJSONObject(i)
                 ui.text(turn.getString("question"), NativeFontRole.SECTION, target)
-                turn.optJSONObject("result")?.let { answer ->
+                val presentation = CentralConversationPresentation.read(turn)
+                presentation.notice?.let { ui.text(it, parent = target) }
+                presentation.result?.let { answer ->
                     ui.text(answer.optString("answer"), parent = target)
                     val citations = answer.optJSONArray("citations") ?: JSONArray()
                     for (j in 0 until citations.length()) {

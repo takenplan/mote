@@ -193,7 +193,9 @@ internal class CentralWorkActivity(private val screens: CentralScreens) {
             val turns = value.getJSONArray("turns")
             for (index in 0 until turns.length()) turns.getJSONObject(index).let { turn ->
                 text(turn.optString("question"), NativeFontRole.SECTION)
-                turn.optJSONObject("result")?.let { answer ->
+                val presentation = CentralConversationPresentation.read(turn)
+                presentation.notice?.let { text(it) }
+                presentation.result?.let { answer ->
                     text(answer.optString("answer"))
                     val refs = answer.optJSONArray("citations") ?: JSONArray()
                     for (citation in 0 until refs.length()) refs.getJSONObject(citation).let { ref ->

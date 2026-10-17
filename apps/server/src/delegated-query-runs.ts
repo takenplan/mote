@@ -36,6 +36,7 @@ export class DelegatedQueryRuns {
   private interrupted=false;
   constructor(private store:Store,readonly runtime:DelegationRuntime,private callbacks:QueryCallbacks){
     store.db.exec('CREATE TABLE IF NOT EXISTS query_runs(id TEXT PRIMARY KEY,request_hash TEXT NOT NULL,json TEXT NOT NULL)');
+    store.installContextHistoryInvalidation();
     registerQueryDelegation(runtime,{
       timeoutMs:input=>(input as SavedInput).executionTimeoutMs??null,
       prepare:async(work,saved,signal)=>{

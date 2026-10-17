@@ -1,10 +1,10 @@
 import {FeatureRegistry} from './feature-packs.js';
-import {linearThemeTokens} from './ui-theme.generated.js';
+import {linearThemeTokens,linearLightThemeTokens} from './ui-theme.generated.js';
 
 /** Presentation identities describe explicit owner-selected UI, never captured content. */
 export type UiDestination='library'|'ask'|'sources'|'activity';
 export type UiReference={id:string;version:string};
-export type UiThemePack=UiReference & {tokens:Readonly<Record<string,string>>};
+export type UiThemePack=UiReference & {tokens:Readonly<Record<string,string>>;schemes?:Readonly<Record<'light'|'dark',Readonly<Record<string,string>>>>};
 export type UiLayoutProfile=UiReference & {
   primary:readonly UiDestination[];
   initial:UiDestination;
@@ -13,7 +13,7 @@ export type UiLayoutProfile=UiReference & {
 };
 export type UiLayoutPack<T>=UiLayoutProfile & {implementation:T};
 export type UiPresentationSnapshot<T>={theme:UiThemePack;layout:UiLayoutPack<T>;fallbackReason?:'theme_removed'|'layout_removed'};
-export const linearUiTheme:UiThemePack=Object.freeze({id:'mote.linear',version:'1',tokens:Object.freeze({...linearThemeTokens})});
+export const linearUiTheme:UiThemePack=Object.freeze({id:'mote.linear',version:'1',tokens:Object.freeze({...linearThemeTokens}),schemes:Object.freeze({light:Object.freeze({...linearLightThemeTokens}),dark:Object.freeze({...linearThemeTokens})})});
 export const defaultUiLayout:UiLayoutProfile=Object.freeze({id:'mote.workspace',version:'1',primary:Object.freeze(['library','ask','sources','activity'] as UiDestination[]),initial:'library',navigation:'adaptive',detail:'split'});
 
 function reference(value:UiReference){if(!/^[a-z][a-z0-9.-]*$/.test(value.id)||!/^\d+(?:\.\d+)*$/.test(value.version))throw Error('Invalid presentation identity');return value.id+'@'+value.version;}
@@ -29,7 +29,8 @@ export function validateUiTheme(pack:UiThemePack):UiThemePack {
     if(/^\d+px$/.test(base)&&!/^\d+(?:\.\d+)?px$/.test(value))throw Error('Invalid theme dimension: '+key);
     if(/^\d+(?:\.\d+)?$/.test(base)&&!/^\d+(?:\.\d+)?$/.test(value))throw Error('Invalid theme number: '+key);
   }
-  return Object.freeze({id:pack.id,version:pack.version,tokens:Object.freeze({...pack.tokens})});
+  const schemes=pack.schemes ? Object.freeze({light:validateUiTheme({id:pack.id,version:pack.version,tokens:pack.schemes.light}).tokens,dark:validateUiTheme({id:pack.id,version:pack.version,tokens:pack.schemes.dark}).tokens}) : undefined;
+  return Object.freeze({id:pack.id,version:pack.version,tokens:Object.freeze({...pack.tokens}),...(schemes?{schemes}:{})});
 }
 function layout<T>(pack:UiLayoutPack<T>):UiLayoutPack<T>{
   reference(pack);
@@ -80,4 +81,25 @@ export class UiPresentationHost<T> {
     if(!theme||!selected)throw Error('Presentation provider unavailable');
     return this.publish({theme,layout:selected});
   }
+}
+
+/** Applies colors in place. Business nodes, focus, dialogs and navigation remain mounted. */
+export function applyAppearanceTheme(root:HTMLElement,theme:UiThemePack,scheme:'light'|'dark') {
+  const tokens=theme.schemes?.[scheme]??theme.tokens;
+  const names=[...Object.keys(tokens).map(key=>'--mote-'+key),'color-scheme','background-color'];
+  const previous=names.map(name=>({name,value:root.style.getPropertyValue(name),priority:root.style.getPropertyPriority(name)}));
+  const previousScheme=root.dataset.colorScheme;
+  const meta=root.ownerDocument.querySelector<HTMLMetaElement>('meta[name="theme-color"]'),previousMeta=meta?.content;
+  for(const [key,value] of Object.entries(tokens))root.style.setProperty('--mote-'+key,value);
+  const channels=[1,3,5].map(index=>Number.parseInt(tokens.background.slice(index,index+2),16));
+  const nativeScheme=theme.schemes?scheme:(channels[0]*299+channels[1]*587+channels[2]*114)/1000<128?'dark':'light';
+  root.dataset.colorScheme=nativeScheme;
+  root.style.colorScheme=nativeScheme;
+  root.style.backgroundColor=tokens.background;
+  if(meta)meta.content=tokens.background;
+  return ()=>{
+    for(const {name,value,priority} of previous){if(value)root.style.setProperty(name,value,priority);else root.style.removeProperty(name);}
+    if(previousScheme===undefined)delete root.dataset.colorScheme;else root.dataset.colorScheme=previousScheme;
+    if(meta&&previousMeta!==undefined)meta.content=previousMeta;
+  };
 }

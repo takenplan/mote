@@ -53,6 +53,51 @@ class NativeUiPackTest {
         assertEquals(-0.025, value.number("letter-title"), 0.00001)
         assertFalse(layout().snapshot.usesDetailPane(360)); assertTrue(layout().snapshot.usesDetailPane(840))
     }
+    @Test fun eachAppearanceSchemeRejectsTheSameInvalidTokensAsTheBaseBeforePublishing() {
+        val invalid = listOf(
+            "font-body" to "broken", "font-body" to "0px", "radius-control" to "-1px",
+            "control-height-mobile" to "-1px", "control-height-mobile" to "47px",
+            "control-height-mobile" to "NaNpx", "control-height-mobile" to "Infinitypx",
+            "weight-body" to "99", "weight-title" to "901", "weight-section" to "NaN",
+            "line-body" to "0", "line-body" to "NaN", "letter-title" to "Infinityem",
+            "font" to "  ", "font-heading" to "", "ink" to "not-a-color",
+        )
+        for (scheme in listOf("light", "dark")) for ((key, value) in invalid) {
+            val registry = NativeUiPackRegistry(); registry.register(theme()); registry.register(layout())
+            registry.setBuiltin(NativeUiBinding(themeId, layoutId))
+            val original = registry.theme(); val revision = registry.revision
+            var notifications = 0; registry.observe { notifications++ }
+            val valid = theme("variant").snapshot
+            val badTokens = valid.tokens + (key to value)
+            val baseError = assertThrows(IllegalArgumentException::class.java) {
+                registry.register(object : NativeThemeProvider { override val snapshot = valid.copy(tokens = badTokens) })
+            }
+            val error = assertThrows("$scheme $key=$value", IllegalArgumentException::class.java) {
+                registry.register(object : NativeThemeProvider {
+                    override val snapshot = valid.copy(schemes = mapOf("light" to valid.tokens, "dark" to valid.tokens) + (scheme to badTokens))
+                })
+            }
+            assertEquals(baseError.javaClass, error.javaClass); assertEquals(baseError.message, error.message)
+            assertEquals(original, registry.theme()); assertEquals(revision, registry.revision); assertEquals(0, notifications)
+            // A rejected variant must not reserve its identity or replace a committed binding.
+            registry.register(object : NativeThemeProvider {
+                override val snapshot = valid.copy(schemes = mapOf("light" to valid.tokens, "dark" to valid.tokens))
+            })
+        }
+    }
+    @Test fun validAppearanceSchemesKeepFractionalTypographyAndPinnedSnapshots() {
+        val registry = NativeUiPackRegistry(); val base = theme().snapshot
+        val light = (base.tokens + mapOf("background" to "#f7f5f1", "font-body" to "16.5px", "control-height-mobile" to "52px")).toMutableMap()
+        val dark = (base.tokens + mapOf("font-body" to "20.5px", "weight-body" to "500")).toMutableMap()
+        registry.register(object : NativeThemeProvider { override val snapshot = base.copy(schemes = mapOf("light" to light, "dark" to dark)) })
+        registry.register(layout()); registry.setBuiltin(NativeUiBinding(themeId, layoutId))
+        light["font-body"] = "broken"; dark["control-height-mobile"] = "-1px"
+        registry.colorScheme("light"); assertEquals(16.5, registry.theme().number("font-body"), 0.00001)
+        assertEquals(17, registry.theme().dimension("font-body")); assertEquals(52, registry.theme().dimension("control-height-mobile"))
+        registry.colorScheme("dark"); assertEquals(20.5, registry.theme().number("font-body"), 0.00001)
+        assertEquals(500.0, registry.theme().number("weight-body"), 0.00001)
+        assertEquals(48, registry.theme().dimension("control-height-mobile"))
+    }
     @Test fun oneBrokenWindowObserverCannotPreventOtherWindowsFromReceivingTheCommittedBinding() {
         val registry = NativeUiPackRegistry(); registry.register(theme()); registry.register(theme("2")); registry.register(layout())
         registry.setBuiltin(NativeUiBinding(themeId, layoutId))

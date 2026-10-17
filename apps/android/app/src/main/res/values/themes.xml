@@ -1,0 +1,31 @@
+<resources>
+    <style name="AppThemeLight" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">@color/mote_accent</item>
+        <item name="android:textColorPrimary">@color/mote_ink</item>
+        <item name="android:textColorSecondary">@color/mote_muted</item>
+        <item name="android:colorBackground">@color/mote_background</item>
+        <item name="android:windowBackground">@color/mote_background</item>
+        <item name="android:statusBarColor">@color/mote_background</item>
+        <item name="android:navigationBarColor">@color/mote_background</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+    <style name="AppThemeDark" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="android:colorAccent">@color/mote_accent</item>
+        <item name="android:textColorPrimary">@color/mote_ink</item>
+        <item name="android:textColorSecondary">@color/mote_muted</item>
+        <item name="android:colorBackground">@color/mote_background</item>
+        <item name="android:windowBackground">@color/mote_background</item>
+        <item name="android:statusBarColor">@color/mote_background</item>
+        <item name="android:navigationBarColor">@color/mote_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:windowLightNavigationBar">false</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+    <style name="AppTheme" parent="AppThemeLight" />
+</resources>

@@ -17,7 +17,7 @@ async function done(c:LarkConnector){for(let n=0;n<500;n++){if(!['running','wait
 async function fixture(t:any){
  const dir=await mkdtemp(join(tmpdir(),'mote-lark-docs-')),store=new Store(join(dir,'vault')),sources=new SourceStore(store),files=new FileStore(store,sources);
  const ctx:ConnectorContext={store,sources,files,config:{dataDir:dir,token:'fixture-owner-token-12345678901234567890',allowedOrigins:[]}},calls:LarkCommand[]=[];
- const state={account:'fixture-user',content:new Map([['DocumentDiary123','# Generated diary\nI prepared an outline and felt calmer.'],['DocumentMeeting123','# Generated meeting\nTeam agreed on read-only sync.']]),fail:new Set<string>(),searchPages:[] as Array<{results:Array<any>;has_more:boolean;page_token?:string}>,searchFailureToken:undefined as string|undefined,afterFetch:undefined as (()=>void)|undefined};
+ const state={account:'fixture-user',documentRevision:1,content:new Map([['DocumentDiary123','# Generated diary\nI prepared an outline and felt calmer.'],['DocumentMeeting123','# Generated meeting\nTeam agreed on read-only sync.']]),fail:new Set<string>(),searchPages:[] as Array<{results:Array<any>;has_more:boolean;page_token?:string}>,searchFailureToken:undefined as string|undefined,afterFetch:undefined as (()=>void)|undefined};
  const runner:LarkRunner=async command=>{
   calls.push(command);
   switch(command.kind){
@@ -28,7 +28,7 @@ async function fixture(t:any){
    case 'calendars':return json({data:{calendar_list:[{calendar_id:'GeneratedCalendar123',role:'owner'}],has_more:false}});
    case 'events':return json({data:{items:[]}});
    case 'documents-search':if(command.pageToken&&state.searchFailureToken===command.pageToken)throw new ConnectorError('lark_command_failed');return json(state.searchPages[command.pageToken?Number(command.pageToken):0]??{results:[],has_more:false});
-   case 'document':{const id=command.document.split('/').at(-1)!;if(state.fail.has(id))throw new ConnectorError('lark_permission_required');state.afterFetch?.();return json({data:{document:{document_id:id,revision_id:1,title:id,content:state.content.get(id)??'Generated fixture body'}}});}
+   case 'document':{const id=command.document.split('/').at(-1)!;if(state.fail.has(id))throw new ConnectorError('lark_permission_required');state.afterFetch?.();return json({data:{document:{document_id:id,revision_id:state.documentRevision,title:id,content:state.content.get(id)??'Generated fixture body'}}});}
    case 'folder-list':return json({data:{files:[{token:'DocumentDiary123',type:'docx',name:'Generated diary'},{token:'OtherSheet123',type:'sheet',name:'Referenced sheet'}],has_more:false}});
    case 'wiki-node':return json({data:{node:{node_token:'WikiRootFixture123',obj_type:'docx',obj_token:'DocumentDiary123',space_id:'fixture-space',has_child:false}}});
    default:return '{}';
@@ -115,10 +115,11 @@ test('large generated Markdown uses the existing original-file upload lifecycle 
 
 test('overlapping polls across hour boundaries do not turn one provider signal into multiple activities',async t=>{
  const f=await fixture(t);f.state.searchPages=[matches('DocumentDiary123')];await f.c.select({...selection,documentDiscovery:{created:false,edited:false,opened:true,firstSyncDays:30}});
- const actualNow=Date.now;let clock=Date.parse('2026-10-15T10:13:00.000Z');Date.now=()=>clock;t.after(()=>{Date.now=actualNow;});
+ // Keep new Date() observations and Date.now() validation on the same fixture clock.
+ let clock=Date.parse('2026-10-15T10:13:00.000Z');t.mock.timers.enable({apis:['Date'],now:clock});
  f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
- clock+=20*60000;f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
- clock+=40*60000;f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
+ clock+=20*60000;t.mock.timers.setTime(clock);f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
+ clock+=40*60000;t.mock.timers.setTime(clock);f.c.startSync();await done(f.c);assert.equal(f.sources.listItems({kind:'event'}).items.length,1);
  assert.equal(f.sources.listItems({kind:'file'}).items.length,1);
  // Polls still fetch current body, without keeping a once-opened document pinned forever.
  assert.equal(f.calls.filter(c=>c.kind==='document').length,3);
@@ -185,4 +186,22 @@ test('explicit calendar authorization bootstraps native calendar discovery witho
  };
  const c=new LarkConnector(f.ctx,runner);await c.init();t.after(()=>c.close());c.login();assert.equal((await done(c)).job?.state,'completed');assert.ok(!requested.includes('calendar:calendar:readonly'));await assert.rejects(()=>c.calendars(),/lark_permission_required/);assert.equal(c.status().selection.calendarIds.length,0);
  c.login(true);assert.equal((await done(c)).job?.state,'completed');assert.ok(requested.includes('calendar:calendar:readonly'));assert.equal((await c.calendars()).calendars[0].id,'generated-calendar');assert.equal(c.status().selection.calendarIds.length,0);assert.equal(f.sources.listSources().length,0,'granting calendar read never selects or collects a calendar');
+});
+
+for(const large of [false,true])test(`provider revision-only changes preserve Lark ${large?'original-file':'snapshot'} intake across connector restart`,async t=>{
+ const f=await fixture(t),id='DocumentDiary123',body=large?'Generated large body\n'.repeat(6000):'Generated snapshot body';
+ f.state.content.set(id,body);await f.c.select({...selection,documentDiscovery:undefined,documents:[url(id)]});
+ f.c.startSync();assert.equal((await done(f.c)).job?.state,'completed');
+ const source=f.sources.listSources()[0],first=f.sources.getItem(source.id,id)!,deletionRevision=f.store.deletionRevision();
+ await f.c.close();const restarted=new LarkConnector(f.ctx,f.runner);await restarted.init();t.after(()=>restarted.close());
+ f.state.documentRevision=2;restarted.startSync();let status=await done(restarted);
+ assert.equal(status.job?.state,'completed');assert.equal(status.job?.result?.duplicates,1);
+ const same=f.sources.getItem(source.id,id)!;
+ assert.equal(same.captureId,first.captureId);assert.equal(same.document?.originalMetadata?.revisionId,1);
+ assert.equal(f.sources.history(source.id,id).length,1);assert.equal(f.store.deletionRevision(),deletionRevision);
+ f.state.documentRevision=3;f.state.content.set(id,body+'\nGenerated correction');restarted.startSync();status=await done(restarted);
+ assert.equal(status.job?.state,'completed');assert.equal(status.job?.result?.imported,1);
+ const changed=f.sources.getItem(source.id,id)!;assert.notEqual(changed.captureId,first.captureId);
+ assert.equal(changed.document?.originalMetadata?.revisionId,3);assert.equal(f.sources.history(source.id,id).length,2);
+ if(large){const row=f.store.db.prepare('SELECT object_hash FROM file_versions WHERE capture_id=?').get(changed.captureId)!;assert.equal(f.store.assets.read(String(row.object_hash)).toString(),body+'\nGenerated correction');}
 });

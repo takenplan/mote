@@ -40,7 +40,7 @@ class MaskEditorView(context: Context, private val changed: (List<Mask>) -> Unit
         for (row in 1..7) canvas.drawLine(area.left + 10, area.top + area.height() * row / 8, area.right - 10, area.top + area.height() * row / 8, paint)
         fun draw(mask: Mask, selected: Boolean) {
             val rect = RectF(area.left + mask.left * area.width(), area.top + mask.top * area.height(), area.left + mask.right * area.width(), area.top + mask.bottom * area.height())
-            paint.style = Paint.Style.FILL; paint.color = Color.argb(if (selected) 150 else 95, 28, 103, 84); canvas.drawRect(rect, paint)
+            paint.style = Paint.Style.FILL; paint.color = Color.argb(if (selected) 150 else 95, Color.red(MoteUi.accent), Color.green(MoteUi.accent), Color.blue(MoteUi.accent)); canvas.drawRect(rect, paint)
             paint.style = Paint.Style.STROKE; paint.strokeWidth = if (selected) 4f else 2f; paint.color = MoteUi.accent; canvas.drawRect(rect, paint)
         }
         masks.forEachIndexed { index, mask -> draw(mask, selectedIndex == index) }

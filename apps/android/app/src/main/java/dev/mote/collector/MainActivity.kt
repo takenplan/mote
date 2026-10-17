@@ -440,7 +440,7 @@ class MainActivity : MoteActivity() {
                 orientation = LinearLayout.VERTICAL
                 addView(TextView(this@MainActivity).apply { text = title; MoteUi.type(this, NativeFontRole.ROW); MoteUi.textColor(this, NativeColorRole.INK); typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL) })
                 if (provenance.isNotBlank()) addView(TextView(this@MainActivity).apply { text = provenance; MoteUi.type(this, NativeFontRole.META); MoteUi.textColor(this, NativeColorRole.MUTED); setPadding(0, dp(5), 0, 0) })
-                addView(TextView(this@MainActivity).apply { text = detail; MoteUi.type(this, NativeFontRole.SUPPORT); maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; setTextColor(if (identity.startsWith("library-record:")) MoteUi.ink else MoteUi.muted); setPadding(0, dp(9), 0, 0); setLineSpacing(0f, 1.25f) })
+                addView(TextView(this@MainActivity).apply { text = detail; MoteUi.type(this, NativeFontRole.SUPPORT); maxLines = if (identity.startsWith("source:")) Int.MAX_VALUE else 3; MoteUi.textColor(this, if (identity.startsWith("library-record:")) NativeColorRole.INK else NativeColorRole.MUTED); setPadding(0, dp(9), 0, 0); setLineSpacing(0f, 1.25f) })
             }, LinearLayout.LayoutParams(0, -2, 1f))
             addView(TextView(this@MainActivity).apply { text = "›"; textSize = 22f; MoteUi.textColor(this, NativeColorRole.ACCENT); importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO }, LinearLayout.LayoutParams(dp(16), -2).apply { marginStart = dp(8) })
             setOnClickListener { action() }
@@ -541,6 +541,14 @@ class MainActivity : MoteActivity() {
                     .setSingleChoiceItems(choices, values.indexOf(MoteI18n.preference())) { dialog, index ->
                         MoteI18n.select(this, values[index]); dialog.dismiss(); recreate()
                     }.setNegativeButton(android.R.string.cancel, null).show()
+            }
+            menu(MoteI18n.text("外观"), MoteI18n.text("浅色") + " / " + MoteI18n.text("深色") + " / " + MoteI18n.text("跟随系统"), "settings") {
+                val values = AppearancePreference.entries
+                val labels = arrayOf(MoteI18n.text("浅色"), MoteI18n.text("深色"), MoteI18n.text("跟随系统"))
+                MoteDialogBuilder(this).setTitle(MoteI18n.text("外观"))
+                    .setSingleChoiceItems(labels, values.indexOf(MoteAppearance.preference())) { _, index ->
+                        runCatching { MoteAppearance.select(this, values[index]) }.onFailure { Toast.makeText(this, MoteI18n.text("无法保存外观偏好，请重试。"), Toast.LENGTH_LONG).show() }
+                    }.setNegativeButton(android.R.string.ok, null).show()
             }
             menu(MoteI18n.text("插件"), MoteI18n.text("安装、运行与记忆方案"), "plugin") { openCentral("plugins") }
             menu(MoteI18n.text("关于与更新"), MoteI18n.text("版本信息、应用更新与开发者选项"), "info") { showPage(Page.ABOUT) }

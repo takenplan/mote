@@ -11,7 +11,7 @@ internal data class NativeUiIdentity(val id: String, val version: String) {
 }
 internal data class NativeUiBinding(val theme: NativeUiIdentity, val layout: NativeUiIdentity)
 internal data class NativeUiNotificationError(val observer: Int, val code: String = "observer-failed")
-internal data class NativeThemeSnapshot(val identity: NativeUiIdentity, val tokens: Map<String, String>) {
+internal data class NativeThemeSnapshot(val identity: NativeUiIdentity, val tokens: Map<String, String>, val schemes: Map<String, Map<String, String>> = emptyMap()) {
     fun value(key: String): String = requireNotNull(tokens[key]) { "Missing native theme token: $key" }
     fun number(key: String): Double = value(key).removeSuffix("px").removeSuffix("em").toDouble()
     fun dimension(key: String): Int = number(key).roundToInt()
@@ -31,15 +31,14 @@ internal class NativeUiPackRegistry {
     private val themes = linkedMapOf<NativeUiIdentity, NativeThemeSnapshot>()
     private val layouts = linkedMapOf<NativeUiIdentity, NativeLayoutSnapshot>()
     private val observers = java.util.concurrent.CopyOnWriteArrayList<(Long) -> Unit>()
+    private var colorScheme = "dark"
     private var binding: NativeUiBinding? = null
     private var builtin: NativeUiBinding? = null
     private var removalReason: String? = null
     private var notificationErrors: List<NativeUiNotificationError> = emptyList()
     @Volatile var revision = 0L; private set
-    @Synchronized fun register(provider: NativeThemeProvider) {
-        val supplied = provider.snapshot
-        val snapshot = supplied.copy(tokens = java.util.Collections.unmodifiableMap(supplied.tokens.toMap()))
-        require(snapshot.identity !in themes) { "Duplicate native theme provider" }
+    /** The base and both resolved variants have the same type and semantic contract. */
+    private fun validateThemeTokens(snapshot: NativeThemeSnapshot) {
         listOf("background", "surface", "sidebar", "ink", "muted", "accent", "accent-hover", "tint", "border", "control-border", "divider", "success", "warning", "danger", "success-tint", "warning-tint", "danger-tint", "primary-background", "primary-ink", "surface-raised").forEach {
             require(Regex("#[a-fA-F0-9]{6}").matches(snapshot.value(it))) { "Unsupported native color token: $it" }
         }
@@ -50,6 +49,17 @@ internal class NativeUiPackRegistry {
         require(snapshot.number("line-body").isFinite() && snapshot.number("line-body") > 0)
         require(snapshot.number("letter-title").isFinite())
         listOf("font", "font-heading").forEach { require(snapshot.value(it).isNotBlank()) }
+    }
+    @Synchronized fun register(provider: NativeThemeProvider) {
+        val supplied = provider.snapshot
+        val snapshot = supplied.copy(tokens = java.util.Collections.unmodifiableMap(supplied.tokens.toMap()), schemes = java.util.Collections.unmodifiableMap(supplied.schemes.mapValues { java.util.Collections.unmodifiableMap(it.value.toMap()) }))
+        require(snapshot.identity !in themes) { "Duplicate native theme provider" }
+        validateThemeTokens(snapshot)
+        require(snapshot.schemes.isEmpty() || snapshot.schemes.keys == setOf("light", "dark")) { "Native appearance requires both color schemes" }
+        snapshot.schemes.forEach { (scheme, values) ->
+            require(scheme in setOf("light", "dark") && values.keys == snapshot.tokens.keys) { "Incompatible native color schemes" }
+            validateThemeTokens(snapshot.copy(tokens = values, schemes = emptyMap()))
+        }
         themes[snapshot.identity] = snapshot
     }
     @Synchronized fun register(provider: NativeLayoutProvider) {
@@ -87,7 +97,18 @@ internal class NativeUiPackRegistry {
     @Synchronized fun fallbackReason(): String? = removalReason
     @Synchronized fun getNotificationErrors(): List<NativeUiNotificationError> = notificationErrors
     @Synchronized fun activeBinding(): NativeUiBinding = requireNotNull(binding) { "Native UI has no active binding" }
-    @Synchronized fun theme(): NativeThemeSnapshot = themes.getValue(activeBinding().theme)
+    @Synchronized fun colorScheme(value: String) {
+        require(value in setOf("light", "dark"))
+        if (colorScheme == value) return
+        colorScheme = value; revision++
+        val failures = mutableListOf<NativeUiNotificationError>()
+        observers.forEachIndexed { index, observer -> try { observer(revision) } catch (_: Throwable) { failures.add(NativeUiNotificationError(index)) } }
+        notificationErrors = java.util.Collections.unmodifiableList(failures)
+    }
+    @Synchronized fun theme(): NativeThemeSnapshot {
+        val snapshot = themes.getValue(activeBinding().theme)
+        return snapshot.schemes[colorScheme]?.let { snapshot.copy(tokens = it) } ?: snapshot
+    }
     @Synchronized fun layout(): NativeLayoutSnapshot = layouts.getValue(activeBinding().layout)
 }
 
@@ -101,7 +122,12 @@ internal object NativeUiPacks {
         fun identity(value: JSONObject) = NativeUiIdentity(value.getString("id"), value.getString("version"))
         val tokenJson = theme.getJSONObject("tokens")
         val tokens = tokenJson.keys().asSequence().associateWith { tokenJson.getString(it) }
-        val snapshot = NativeThemeSnapshot(identity(theme), tokens)
+        val schemes = theme.optJSONObject("schemes")
+        val variants = schemes?.keys()?.asSequence()?.associateWith { scheme ->
+            val values = schemes.getJSONObject(scheme)
+            values.keys().asSequence().associateWith { values.getString(it) }
+        } ?: emptyMap()
+        val snapshot = NativeThemeSnapshot(identity(theme), tokens, variants)
         // Validate every core role before the first native window is created.
         listOf("background", "surface", "ink", "muted", "accent", "primary-background", "primary-ink", "surface-raised", "success-tint", "warning-tint", "danger-tint").forEach { Color.parseColor(snapshot.value(it)) }
         listOf("font-body", "space-page", "control-height-mobile", "radius-control").forEach { require(snapshot.number(it) > 0) }

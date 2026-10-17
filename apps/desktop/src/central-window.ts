@@ -1,7 +1,8 @@
+import {linearUiTheme} from '@mote/shared';
 import {connectionToken,requireConnectionToken} from './login-session';
 import { moteText } from '@mote/shared/i18n';
 import {nativeCalendarActions} from './calendar-actions';
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme, session, shell } from 'electron';
 import { githubFeedbackUrl } from '@mote/shared/feedback';
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
@@ -35,8 +36,12 @@ export async function openCentralWindow(config: Config): Promise<BrowserWindow> 
     item.setSaveDialogOptions({ title: moteText("保存中央仓库导出（包含个人资料）") });
   };
   isolated.on('will-download', downloadListener);
-  const central = new BrowserWindow({ width: 1280, height: 850, minWidth: 820, minHeight: 600, title: moteText("Mote · 中央仓库"),
+  const appearanceBackground=()=>linearUiTheme.schemes![nativeTheme.shouldUseDarkColors?'dark':'light'].background;
+  const central = new BrowserWindow({ backgroundColor:appearanceBackground(), width: 1280, height: 850, minWidth: 820, minHeight: 600, title: moteText("Mote · 中央仓库"),
     webPreferences: { session: isolated, preload: join(__dirname, 'central-preload.js'), sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false } });
+  const updateAppearance=()=>{if(!central.isDestroyed())central.setBackgroundColor(appearanceBackground());};
+  nativeTheme.on('updated',updateAppearance);
+  central.once('closed',()=>nativeTheme.removeListener('updated',updateAppearance));
   const closeSession = (event: Electron.IpcMainEvent) => {
     if (!central.isDestroyed() && event.sender === central.webContents && event.senderFrame === central.webContents.mainFrame) central.close();
   };

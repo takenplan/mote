@@ -60,11 +60,11 @@ open class MoteActivity : Activity() {
     private var uiResumed = false
     private var stopUiObservation: (() -> Unit)? = null
     private val uiHandler = android.os.Handler(android.os.Looper.getMainLooper())
-    override fun attachBaseContext(newBase: Context) { super.attachBaseContext(MoteI18n.wrap(newBase)) }
+    override fun attachBaseContext(newBase: Context) { super.attachBaseContext(MoteAppearance.wrap(MoteI18n.wrap(newBase))) }
     override fun onCreate(savedInstanceState: Bundle?) {
         displayedLanguage = MoteI18n.language()
         displayedUiRevision = NativeUiPacks.registry.revision
-        setTheme(if (lightSurface()) R.style.AppThemeLight else R.style.AppTheme)
+        setTheme(if (lightSurface()) R.style.AppThemeLight else R.style.AppThemeDark)
         super.onCreate(savedInstanceState)
         stopUiObservation = NativeUiPacks.registry.observe { uiHandler.post { applyUiRevision() } }
         window.decorView.layoutDirection = android.view.View.LAYOUT_DIRECTION_LTR
@@ -76,7 +76,12 @@ open class MoteActivity : Activity() {
     }
     private fun applyWindowPresentation() {
         val light = lightSurface()
-        setTheme(if (light) R.style.AppThemeLight else R.style.AppTheme)
+        val appearanceConfig = Configuration(resources.configuration)
+        appearanceConfig.uiMode = (appearanceConfig.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or
+            if (light) Configuration.UI_MODE_NIGHT_NO else Configuration.UI_MODE_NIGHT_YES
+        @Suppress("DEPRECATION")
+        resources.updateConfiguration(appearanceConfig, resources.displayMetrics)
+        setTheme(if (light) R.style.AppThemeLight else R.style.AppThemeDark)
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(MoteTheme.background))
         @Suppress("DEPRECATION")
         window.statusBarColor = MoteTheme.background
@@ -105,8 +110,17 @@ open class MoteActivity : Activity() {
         }
         return super.dispatchTouchEvent(event)
     }
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        MoteAppearance.refresh()
+        // Handle uiMode in place: editors, open sheets and navigation keep their identity.
+        applyWindowPresentation()
+        NativePresentationStyles.refreshOwnedWindows(this)
+        MoteDialogBuilder.refreshOwned(this)
+    }
     override fun onResume() {
         super.onResume()
+        MoteAppearance.refresh()
         uiResumed = true
         if (displayedLanguage != MoteI18n.language()) recreate() else applyUiRevision()
     }
@@ -114,7 +128,7 @@ open class MoteActivity : Activity() {
         if (uiResumed && !isFinishing && !isDestroyed && displayedUiRevision != NativeUiPacks.registry.revision) {
             displayedUiRevision = NativeUiPacks.registry.revision
             applyWindowPresentation()
-            NativePresentationStyles.refresh(window.decorView)
+            NativePresentationStyles.refreshOwnedWindows(this)
             MoteDialogBuilder.refreshOwned(this)
         }
     }

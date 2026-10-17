@@ -1,3 +1,4 @@
+import {appearancePreference,resolveColorScheme,linearUiTheme,type AppearancePreference} from '@mote/shared';
 import { connectionToken, loginRequest, loginVerifier } from './login-session';
 import { SyncHistory, type SyncHistoryQuery, type SyncHistoryContentQuery } from './sync-history';
 import { localContentPage, localContentDetail, centralContentPage } from './content-library';
@@ -11,7 +12,7 @@ import {discoverCodingAgents} from './coding-agents';
 import {nativeCalendarActions} from './calendar-actions';
 import {previewWork} from './background';
 import { collectRecordMetadata } from './record-metadata';
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, net, safeStorage, session, shell, systemPreferences, Tray } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, net, safeStorage, session, shell, systemPreferences, Tray } from 'electron';
 import type { IpcMainInvokeEvent } from 'electron';
 import { DiagnosticsRecorder } from '@mote/diagnostics';
 import { githubFeedbackUrl } from '@mote/shared/feedback';
@@ -52,6 +53,12 @@ if (!profile.defaultProfile) {
   mkdirSync(sessionDirectory, { recursive: true, mode: 0o700 });
   app.setPath('userData', profile.dataDirectory); app.setPath('sessionData', sessionDirectory);
 }
+const appearanceFile=join(profile.dataDirectory,'appearance.json');
+let preferredAppearance:AppearancePreference='auto';
+try { preferredAppearance=appearancePreference(JSON.parse(readFileSync(appearanceFile,'utf8'))); } catch { /* New/invalid preferences follow the OS. */ }
+nativeTheme.themeSource=preferredAppearance==='auto'?'system':preferredAppearance;
+function appearanceState(){return {preference:preferredAppearance,scheme:resolveColorScheme(preferredAppearance,nativeTheme.shouldUseDarkColors)};}
+function appearanceBackground(){return linearUiTheme.schemes![appearanceState().scheme].background;}
 const languageFile = join(profile.dataDirectory, 'language.json');
 let preferredLanguage: LanguagePreference = 'system';
 try { preferredLanguage = languagePreference(JSON.parse(readFileSync(languageFile, 'utf8'))); } catch { /* Missing or invalid preference follows the system. */ }
@@ -207,9 +214,12 @@ else {
     await configureDiagnostics();
     const pageUrl = pathToFileURL(join(__dirname, 'index.html')).href;
     window = new BrowserWindow({
-      width: 1140, height: 840, minWidth: 820, minHeight: 620, title: `Mote [${profileLabel}]`, backgroundColor: '#f7f8f5',
+      width: 1140, height: 840, minWidth: 820, minHeight: 620, title: `Mote [${profileLabel}]`, backgroundColor: appearanceBackground(),
       webPreferences: { preload: join(__dirname, 'preload.js'), contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true, devTools: !app.isPackaged || developmentBuild },
     });
+    const broadcastAppearance=()=>{window?.setBackgroundColor(appearanceBackground());window?.webContents.send('mote:appearance',appearanceState());};
+    nativeTheme.on('updated',broadcastAppearance);
+    window.once('closed',()=>nativeTheme.removeListener('updated',broadcastAppearance));
     refreshApplicationMenu();
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.on('will-navigate', event => event.preventDefault());
@@ -219,6 +229,15 @@ else {
     const trusted = (event: IpcMainInvokeEvent) => {
       if (!window || event.sender !== window.webContents || event.senderFrame?.url !== pageUrl || event.senderFrame !== window.webContents.mainFrame) throw new Error(moteText("请求来源不受信任"));
     };
+    ipcMain.on('mote:appearance-initial',(event)=>{trusted(event);event.returnValue=appearanceState();});
+    ipcMain.handle('mote:set-appearance',(event,raw:unknown)=>{
+      trusted(event);
+      if(raw!=='auto'&&raw!=='light'&&raw!=='dark')throw Error('Invalid appearance');
+      writeFileSync(appearanceFile+'.tmp',JSON.stringify(raw),{mode:0o600});
+      renameSync(appearanceFile+'.tmp',appearanceFile);
+      preferredAppearance=raw;nativeTheme.themeSource=raw==='auto'?'system':raw;
+      broadcastAppearance();return appearanceState();
+    });
       ipcMain.handle('mote:language', event => { trusted(event); return languageState(); });
     ipcMain.handle('mote:set-language', async (event, raw: unknown) => {
       trusted(event);

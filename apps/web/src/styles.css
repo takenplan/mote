@@ -4057,3 +4057,11 @@ button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,te
 @media(max-width:700px){.activity-card{padding:16px;gap:10px}.activity-card-heading{flex-wrap:wrap;gap:8px}.work-overview-grid{grid-template-columns:1fr}.work-evidence{grid-template-columns:repeat(2,minmax(0,1fr))}.work-branch{padding:14px}.work-branch header{flex-wrap:wrap}.activity-detail .section-tabs{flex-wrap:wrap}.work-events li{gap:10px}.activity-card .badge{white-space:normal}.activity-centre .section-tabs{overflow-x:auto}}
 
 .config-builder>form>fieldset{border:0;padding:0;margin:0;min-width:0}.advanced-config-group pre{max-width:100%;overflow:auto;font-size:12px}.advanced-config-group>div>small{display:block;color:var(--muted)}
+
+::selection { background:var(--mote-accent); color:var(--mote-on-accent); }
+:root { scrollbar-color:var(--mote-control-border) var(--mote-background); }
+input,select,textarea { accent-color:var(--mote-accent); }
+
+@media (prefers-contrast: more) {
+  :root { --mote-muted:var(--mote-ink) !important; --mote-control-border:var(--mote-ink) !important; --mote-border:var(--mote-ink) !important; }
+}
