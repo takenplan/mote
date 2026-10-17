@@ -8451,5 +8451,13 @@
   "提交结果待确认；重试会使用原操作，不会重新创建任务。": "The submission is not confirmed. Retry uses the original operation without creating another task.",
   "移除本机待确认提交": "Remove local pending submission",
   "移除本机提交不会取消已经准入的中央任务；可在活动中查看。": "Removing the local submission does not cancel an admitted Central task. Check Activity for its status.",
-  "试听": "Listen to sample"
+  "试听": "Listen to sample",
+  "删除中央归档": "Delete Central archive",
+  "删除此文件的中央原件与处理成果，并阻止此来源再次采集该文件。设备上的原件保留。": "Delete this file’s Central original and processed results, and prevent this source from collecting it again. The device original is kept.",
+  "确认删除归档": "Confirm archive deletion",
+  "重试删除提交": "Retry deletion submission",
+  "中央归档已删除。": "The Central archive has been deleted.",
+  "原件清理等待当前调用结束。": "Original cleanup is waiting for the current call to finish.",
+  "允许再次采集": "Allow collection again",
+  "已允许再次采集": "Collection is allowed again"
 }
