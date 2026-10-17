@@ -78,6 +78,13 @@ Original reception, readable Materials, existing Memory and read-only queries re
 
 Source revisions invalidate dependent memories and working summaries. Privacy deletion removes dependent text memories, their indexes, insights and working summaries. All consolidated memories carry direct original-evidence dependencies; derived memories never become independent sources. Conversation deletion cascades to its summary. No keyword router decides memory type, topic, importance or insight.
 
+Derived context cache invalidation retains dependent Memory statements as stale
+and withdraws their extraction checkpoints. Default discovery excludes these
+cards. Exact immutable artifact replay preserves the existing graph after current
+evidence validation; it does not repeat model work or reactivate a stale card.
+Original evidence deletion retains its destructive cascade. See the
+[cache retention decision](adr-cache-memory-retention.md).
+
 ## Extension boundary
 
 `MemoryLifecycle.register()` accepts an extension ID, version, input stream and asynchronous `run(window, checkpoint)` callback. `registerMemoryExtensions()` supplies the four built-ins. Hosts can inject `buildApp(..., {memoryExtensions})` replacements without editing scheduler code; `replace()` refuses to replace a handler with an active window. Resumed windows require the same extension version. The host owns durable admission, read authorization, validation and writes.

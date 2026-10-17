@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {isDeepStrictEqual} from 'node:util';
 import {z} from 'zod';
 import type {CaptureRecord} from '@mote/shared';
 import type {Store,Range} from './store.js';
@@ -57,9 +58,10 @@ export class EvidenceArchive {
       CREATE TABLE IF NOT EXISTS artifact_dependencies(artifact_id TEXT NOT NULL REFERENCES context_artifacts(id) ON DELETE CASCADE,parent_id TEXT NOT NULL REFERENCES context_artifacts(id) ON DELETE CASCADE,revision TEXT NOT NULL,PRIMARY KEY(artifact_id,parent_id));
       CREATE TABLE IF NOT EXISTS memory_artifact_dependencies(memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,artifact_id TEXT NOT NULL REFERENCES context_artifacts(id) ON DELETE CASCADE,PRIMARY KEY(memory_id,artifact_id));
       CREATE INDEX IF NOT EXISTS memory_artifact_parent ON memory_artifact_dependencies(artifact_id);
-      CREATE TRIGGER IF NOT EXISTS artifact_memory_invalidation BEFORE DELETE ON context_artifacts BEGIN
+      DROP TRIGGER IF EXISTS artifact_memory_invalidation;
+      CREATE TRIGGER artifact_memory_invalidation BEFORE DELETE ON context_artifacts BEGIN
         DELETE FROM memory_checkpoints WHERE evidence_id IN (SELECT evidence_id FROM memory_dependencies WHERE memory_id IN (SELECT memory_id FROM memory_artifact_dependencies WHERE artifact_id=old.id));
-        DELETE FROM memories WHERE id IN (SELECT memory_id FROM memory_artifact_dependencies WHERE artifact_id=old.id);
+        UPDATE memories SET json=json_set(json,'$.status','stale','$.staleReason','evidence_changed') WHERE id IN (SELECT memory_id FROM memory_artifact_dependencies WHERE artifact_id=old.id);
       END;
       CREATE INDEX IF NOT EXISTS artifact_parent ON artifact_dependencies(parent_id);
       CREATE TRIGGER IF NOT EXISTS artifact_invalidate_descendants BEFORE DELETE ON context_artifacts BEGIN DELETE FROM context_artifacts WHERE id IN (SELECT artifact_id FROM artifact_dependencies WHERE parent_id=old.id); END;
@@ -172,6 +174,16 @@ export class EvidenceArchive {
     if((!records.length&&!parents.length&&!materialHeads.length)||parents.some((ref,i)=>upstream[i]?.revision!==ref.revision)||inputs.some(i=>this.fingerprint(i.id)!==i.fingerprint))throw new Error('evidence_changed');
     const scopeRecords=[...records,...upstream.flatMap(a=>a?[{capturedAt:a.firstAt,deviceId:a.deviceId,appId:a.appId,source:a.source},{capturedAt:a.lastAt,deviceId:a.deviceId,appId:a.appId,source:a.source}]:[]),...materialHeads.flatMap(({head,scope})=>[{capturedAt:head.first_at??head.created_at,...scope},{capturedAt:head.last_at??head.created_at,...scope}])],times=scopeRecords.map(r=>r.capturedAt).sort(),contentHash=hash(output.text);
     const artifact:Artifact={id,revision,kind:output.kind,processor,processorVersion:version,configFingerprint,generatedAt:new Date().toISOString(),firstAt:times[0],lastAt:times.at(-1)!,deviceId:scopeRecords.every(r=>r.deviceId===scopeRecords[0].deviceId)?scopeRecords[0].deviceId:'',appId:scopeRecords.every(r=>r.appId===scopeRecords[0].appId)?scopeRecords[0].appId:'',source:scopeRecords.every(r=>r.source===scopeRecords[0].source)?scopeRecords[0].source:'',members:inputs.map(i=>i.id),representatives,contentHash,metadata:output.metadata,parents,...(materialInputs.length?{materialInputs}:{} )};
+    // Replaying an immutable result must not evict its descendants or withdraw
+    // Memory checkpoints. Validate all current inputs above before reusing it.
+    const existing=this.get(id),existingGroup=db.prepare('SELECT group_key FROM context_artifacts WHERE id=?').get(id)?.group_key;
+    if(existing&&existingGroup===group){
+      const {generatedAt:priorGeneratedAt,text:priorText,...prior}=existing,{generatedAt:nextGeneratedAt,...next}=artifact;
+      const priorInputs=db.prepare('SELECT observation_id AS id,fingerprint FROM artifact_inputs WHERE artifact_id=? ORDER BY observation_id').all(id).map(row=>({id:String(row.id),fingerprint:String(row.fingerprint)}));
+      if(priorText===output.text&&isDeepStrictEqual(prior,JSON.parse(JSON.stringify(next)))&&isDeepStrictEqual(priorInputs,[...inputs].sort((a,b)=>a.id.localeCompare(b.id)))){
+        const {text,...retained}=existing;return retained;
+      }
+    }
     this.store.reserveMetadata(Buffer.byteLength(JSON.stringify(artifact))+Buffer.byteLength(output.text)+4096);
     db.prepare('INSERT OR IGNORE INTO context_contents VALUES(?,?)').run(contentHash,JSON.stringify({text:output.text}));
     db.prepare('DELETE FROM context_artifacts WHERE id=?').run(id);
