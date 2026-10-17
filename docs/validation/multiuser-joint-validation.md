@@ -1849,3 +1849,160 @@ no additional OCR call. A prior sandbox loopback EPERM is retained separately
 in `image-version-green`; it did not execute the intended journey. This narrow
 closure does not supersede the still-failed combined gate or establish whole
 module acceptance.
+
+### Retired child retry versus logical ACK and physical occupancy
+
+The failed combined gate exposed an obsolete expectation that a generic M05
+retry could revive an extraction child after its coordinator was cancelled or
+retired. Exact-original/parent selection reproduces409 in both scenarios
+(`/tmp/mote-joint-physical-ack-exact-fixture-red.log/.exit`). KEEP the existing
+`task_retry_invalid` fence; no production authorization check was loosened.
+The scenarios now verify rejected generic retry rolls back its confirmation,
+foreign-owner acknowledgement is rejected, and the existing trusted host-only
+logical acknowledgement records exactly one confirmation without settling the
+issued fact. They then execute the original HTTP fresh-operation/retry checks:
+physical occupancy still409, calls remain1, other A/equal-ID B succeed, late
+settlement permits a genuinely new operation, and cancelled work does not revive
+through restart, portable import or native restore. Target pair2/2,8.852s; full
+both-file matrix5/5,18.709s EXIT0 (`physical-ack-contract-green`,
+`physical-ack-contract-neighbors`). This supersedes only the obsolete200 setup,
+not any required occupancy assertion.
+
+### Combined-gate fixture ordering and restored Imports
+
+Web metadata now requires the restored scoped Imports route and resolves its
+owned empty list; the old assertion that Imports must be absent was superseded
+by this feature's original Imports restoration. Library canonical membership
+and A/B assertions are retained. Image complete/recompute waits for its exact
+original's real M05 coordinators to leave waiting/running before submitting the
+next operation; publication or a failed child alone is not physical completion.
+Both actual journeys2/2 EXIT0,8.206s (`gate-fixtures-scoped-green`). Desktop
+retirement now receives an explicit fixture IPC arm acknowledgement and awaits
+the real diagnostics entry event inside the unchanged15s overall test budget.
+Same actual main/preload journey1/1 EXIT0,3.66s (`desktop-retirement-ack-green`),
+35 unrelated cases filtered. Product cancellation/occupancy/session guards are
+unchanged. These narrow results do not relabel the earlier failed full gate.
+
+### Declared M04 feature selection without profile modelServiceId
+
+An additional actual RED used an explicit text processing policy with summary
+work, no profile `modelServiceId`, and an existing user-owned M04 `file`
+selection pointing at shared `env:deployment`. After logout/restart and an
+administrator connection change, extraction remained accepted but the unfinished
+summary never resumed (`observer-implicit-characterization`,1/1 RED15.062s).
+The selected M04 file reference was used for the call but absent from the M06
+applied plan's dependency fingerprints.
+
+The existing applied plan now includes that declared file reference when its
+configured summary/semantic-turn or known image-understanding steps require it.
+It stores only the reference and existing complete-connection fingerprint;
+endpoint/key ownership remains in M04. Model lease acquisition pins that same
+reference and checks its generation before/after acquisition. The existing B
+handoff, fixed-purpose recheck grant, original/owner/current-plan checks and
+fresh ordinary child admission are reused. Completed extraction is never
+replayed, and absent M04 selections still fail rather than inventing a default.
+No new route, table, generic owner-context issuer or model runtime was added.
+
+Declared-feature matrix7/7 plus named-profile matrix7/7 actual EXIT0,55.073s,
+0skip (`/tmp/mote-joint-observer-feature-default-green.log/.exit`); Server
+types0 (`feature-default-types`). Both variants preserve unchanged settings,
+cancelled intent, source withdrawal, disabled account, unknown call and already
+complete work; resume checks exact A/B isolation, immutable accepted extraction,
+new grant, old grant refusal and restart idempotence. This does not claim that
+all historical no-plan admissions have been upgraded to a new plan.
+
+### Delivered PR152 recording consumer composition
+
+Selected PR152 runtime0304fd66/test17648069 as a thin original recording UI
+slice, retaining Joint's backend archive-preserving disconnect/pause fixes.
+The declared delivery's prerequisite baseline also required M15 e8ef5d05,
+00044fb5,4f1caf4e checkpoint reads/retry-only resume and M13 original Files
+17fd6617/95718720/1fed4105/9d892272/081d06e1/2081fd7f. These exact source
+pieces are composed with the existing app registrar and scope inventory; no
+whole peer branch or later WIP was merged. Translation union keeps all Joint
+keys and adds only the delivered recording/sample labels. New routes use the
+existing ledger, signed owner/generation/epoch cursor and current activity
+assertions; no provider/task is admitted by the read.
+
+The initial root-invoked run failed (5/5): an archive JSX loader environment
+error plus the deliberately incomplete checkpoint-read prerequisites. The Web
+JSX-configured archive run then exposed absent FileReview prerequisites; these
+failed receipts remain `recordings152-composed` and
+`recordings152-archive-configured`. After adding the declared dependencies,
+original correction/original bytes, both providers' lost-poll/reload and stop
+cases passed; archive and one long disconnect UI wait still failed in
+`recordings152-dependencies-green` (5/7,not aggregate acceptance).
+
+With2081's actual original sample/review controls composed, both remaining
+original journeys passed2/2 EXIT0,110.115s
+(`recordings152-review-prereq-green`):101 segments, complete speaker map,
+explicit clip read, exact original/tar bytes, delayed A export retired for B,
+checkpoint/archive paging, selection ACK loss, retry-only audio resume,
+pause/stop/enable/disconnect and historical archive retention.
+The long scenario additionally records its exact disconnect task ID and waits
+for that real terminal receipt before checking its UI, rather than interpreting
+a transient waiting task as completed. This is fixture ordering only; neither
+M05 grants nor disconnect behavior is loosened. Its final run is separately
+recorded in `recordings152-exact-disconnect-ack` with all original assertions
+and unchanged240s overall timeout. Current Server/Web types and bilingual
+catalog checks are independent receipts. Whole current gate remains pending.
+
+### Final delivered PR151 thin image consumer
+
+Parent supplied final PR151 head98b1ea52/runtime23d00bda and
+`/tmp/mote-image-e2e-input.json`. Fetched those exact local Git objects and
+composed only the declared image projection, original Files presentation/export,
+image fixtures and browser fixture. Existing Joint producer73ce/34650/f555/dcac
+are retained; shared B/attachment/processing code is not replaced by the peer's
+older base. FileReview/Files retain the recording prerequisites above; the
+unrelated later FileForgetting consumer is not inferred composed.
+
+Current Joint original seven image journeys passed7/7,0skip,95.340s EXIT0
+(`/tmp/mote-joint-image151-final-original7.log/.exit`):OCR+typed, noOCR,
+snapshot, OCR-only, late OCR after snapshot expiry, retired OCR history, and
+same default recipe ID with a different version. Test assertions are byte-for-
+byte the delivered version. Exact image projection and ImageProgress source
+match23d00bda; current Joint's owner/stream/graph producers retain their own
+superset source. Image complete/recompute fixture uses the delivered explicit
+original-coordinator terminal assertion, superseding the earlier equivalent
+Joint wait helper without changing its operation or provider-count assertions.
+Web/Server/scripts types, scope and bilingual catalogs0 (`image151-final-*`,
+`recordings-image-final-scope`); the first i18n check identified the delivered
+export label omitted from the thin selection, then the exact shared/Android
+translation was added and the second check passed. No completed IAB download,
+live-model or physical-device evidence is inferred from these renderer tests.
+Earlier failed whole gates remain failed; current affected gate is next.
+
+### Legacy no-plan feature-default shared file dependency
+
+The explicit remaining no-applied-plan boundary was separately characterized
+through the original M04 models/processing endpoints (no file-policy save).
+Same generated resume journey RED1/1,14.183s
+(`/tmp/mote-joint-observer-no-plan-red.log/.exit`):accepted extraction persisted,
+B private summary succeeded, A's unfinished summary did not observe the shared
+connection update after logout/restart. This is distinct from the applied-plan
+fallback closed in4ae51b3c.
+
+New legacy admissions now record only their declared M04 file-model reference
+and existing complete-connection fingerprint in optional fixed M06 input
+metadata when their configured file-model steps need it. Existing input/lease
+fences require the same current declared reference; the normal shared generation
+check rejects obsolete leases. The existing fixed-purpose B handoff compares
+that metadata when no plan exists, refreshes the owned M04 entry, and submits
+fresh ordinary work for unfinished units. It does not create an applied plan,
+copy endpoints/credentials, reconstruct old contexts/grants, change the global
+scheduler, or backfill unrecorded historical task authority. Missing selections
+still fail. No HTTP/tool capability, table or generic metadata framework is added.
+
+Named/applied-default/no-plan matrices21/21 actual EXIT0,138.832s,0skip
+(`observer-no-plan-green`); Server types0 (`observer-no-plan-types`). Each path
+retains unknown/issued-call refusal, disabled owner, cancelled/source-withdrawn
+intent and completed/unchanged no-op behavior. Successful extraction and B's
+same-ID private result remain unchanged, old grants stay refused and rechecks
+have zero external/model calls. A final branch assertion additionally checks
+that no applied policy binding is invented. Frozen current affected gate and
+fresh compiled/native recovery follow; no earlier aggregate gate is relabelled.
+Final no-plan branch assertion1/1 EXIT0,10.801s
+(`/tmp/mote-joint-observer-no-plan-branch-proof.log/.exit`); applied-plan binding
+count stays zero through the legacy admission. All production differences are
+fixed M06 metadata/selection fences described above.
