@@ -1398,3 +1398,20 @@ inline idempotency and partial publication/restart consumers3/3 EXIT0 in9.960s
 checker EXIT0. First scope launcher used a nonexistent filename and exited1;
 correct existing check-scope-contracts.mjs exited0, both logs retained. No new
 full gate, compiled client or provider acceptance is assigned to this increment.
+
+### Independent applied-plan archive final77 composed
+
+Joint bounded read-only review of owner77a2818e is recorded in
+`/tmp/mote-joint-review-policy-archive-77a2818e.md`: no new confirmed P0/P1/P2.
+Only five declared module commits were selected on top of Joint's saved-profile
+entry fixes, ending at716bec5d. Production helper and lifecycle hunk match the
+owner final; no earlier recovery lane or peer WIP was included. Existing target
+policy/binding/control wins, missing controls receive a fresh generation fence,
+and corrupt local plan parents reject rather than reactivating old input. Old
+processor contracts are not fabricated from incomplete historical metadata.
+
+Own composed personal-plan archive suite27 plus current profile-entry4 cases:
+31/31 EXIT0,0skip,63.227s `/tmp/mote-joint-policy-archive-composed.log/.exit`.
+Server noEmit and scope checker EXIT0. Owner final27/related9/minimal-a2-5 remain
+separate peer evidence. This does not move the earlier failed owner full gates
+or claim final client/container/native union acceptance.
