@@ -12,6 +12,7 @@ import {FileReview} from './FileReview';
 import {FileForgetting} from './FileForgetting';
 import {AnswerMarkdown} from './AnswerMarkdown';
 import {FileProcessingControls} from './FileProcessingControls';
+import {FileArtifactContents} from './FileArtifactContents';
 
 type FileRow={originalGeneration?:number;cancellation?:{canCancel:boolean;wait:'running'|'unknown'|null};processingPolicy?:{capabilities?:{dialogue:boolean;summary:boolean};applied:any;current:any};captureId:string;sourceId:string;originalRef?:string;sha256?:string;sizeBytes:number;hasOriginal:boolean;originMissing:boolean;item:{externalId?:string;document?:{fileIndex?:import('@mote/shared').FileIndex};text?:string;title:string;layer:string;observedAt:string;mimeType?:string};job:null|import('@mote/shared').FileProcessingJobView;steps?:{step:string;state:string;attempts:number;execution?:import('@mote/shared').ExecutionEnvelope}[];artifacts:{id:string;kind:string;complete?:boolean;sections?:{answer:string;citationIds:string[]}[]}[]};
 const errors:Record<string,string>={snapshot_input_expired:moteText("快照的临时输入已清理，请重新同步来源文件后重试。"),archive_only:moteText("仅归档原件"),model_missing:moteText("等待安装本地模型"),processor_not_configured:moteText("处理插件或本地模型尚未配置"),not_configured:moteText("请配置中央处理服务"),unsupported_format:moteText("此格式仅归档原件"),provider_failed:moteText("转写服务未完成，请检查服务后重试"),processing_limit:moteText("超过处理大小或单文件时长限制"),summary_failed:moteText("摘要生成失败，可单独重试")};
@@ -37,7 +38,7 @@ export function Files({api,onOpen}:{api:Api;onOpen:(id:string)=>void}){
 function SegmentCorrection({api,id,chunk,onSaved}:{api:Api;id:string;chunk:Capture;onSaved:()=>void}){
  const [editing,setEditing]=useState(false),[text,setText]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
  const evidence=chunk.fileEvidence;
- const originalText=transcriptChunkText(chunk);
+ const originalText=api.connection?.mode==='web'?chunk.ocrText:transcriptChunkText(chunk);
  const alive=useRef(true);
  useEffect(()=>{alive.current=true;return()=>{alive.current=false;};},[]);
  if(!evidence)return null;
@@ -82,7 +83,8 @@ function FileDetailContents({api,id,startMs=0,onOpen}:{api:Api;id:string;startMs
  }
  const chunkRequest=useRef<AbortController|null>(null),chunkGeneration=useRef(0);
  const [chunksLoading,setChunksLoading]=useState(false);
- const textArtifact=file?.artifacts.find(a=>a.kind==='corrected-dialogue')??file?.artifacts.find(a=>a.kind==='dialogue')??file?.artifacts.find(a=>['transcript','text','image-text'].includes(a.kind));
+ const web=api.connection?.mode==='web';
+ const textArtifact=web?file?.artifacts.find(a=>['transcript','text','image-text'].includes(a.kind)):file?.artifacts.find(a=>a.kind==='corrected-dialogue')??file?.artifacts.find(a=>a.kind==='dialogue')??file?.artifacts.find(a=>['transcript','text','image-text'].includes(a.kind));
  const rawTranscript=api.connection?.mode!=='web'&&textArtifact?.kind==='transcript';
  const summaryDisabled=file?.processingPolicy?.capabilities?.summary===false||(file?.processingPolicy?.applied??file?.processingPolicy?.current)?.profile?.summarize===false;
  const processingError=file?.job?.error&&['failed','blocked'].includes(file.job.state);
@@ -119,9 +121,9 @@ function FileDetailContents({api,id,startMs=0,onOpen}:{api:Api;id:string;startMs
  {file.processingPolicy&&<details className="source-item"><summary>{moteText("处理策略与匹配原因")}</summary>{file.processingPolicy.applied?<><p>{moteText("实际使用：")}{getLocale()==='en'?' ':''}{file.processingPolicy.applied.profile.name} · {file.processingPolicy.applied.profile.processorId}</p><p>{moteText("命中")}{getLocale()==='en'?' ':''}{file.processingPolicy.applied.rule.sourceId?moteText("来源覆盖"):moteText("全局类型规则")}：{file.processingPolicy.applied.rule.type}</p><p>{moteText("配置版本：")}{getLocale()==='en'?' ':''}{file.processingPolicy.applied.revision}</p><pre>{JSON.stringify(file.processingPolicy.applied.profile.parameters,null,2)}</pre></>:<p>{moteText("尚未执行内容处理。")}</p>}<p>{moteText("按当前设置重新处理将使用：")}{getLocale()==='en'?' ':''}{file.processingPolicy.current.profile.name}（{file.processingPolicy.current.rule.type}）</p></details>}
  {file.steps?.map(s=><p key={s.step}>{{extract:moteText("转写 / 提取"),diarize:moteText("说话人分离"),align:moteText("时间对齐"),turns:moteText("语义分组")}[s.step]??s.step}：{states[s.state]??s.state}{' '}{moteText("· 尝试")}{' '}{s.attempts}{' '}{moteText("次")}</p>)}
  {file.artifacts.some(a=>['transcript','text','image-text'].includes(a.kind))&&<FileReview key={JSON.stringify([id,file.artifacts.map(a=>a.id)])} api={api} id={id} artifacts={file.artifacts} onChanged={async()=>{resetChunks();await load();}}/>}
- {file.artifacts.filter(a=>a.kind==='summary').map(a=><div key={a.id}><h4>{moteText("模型摘要")}</h4>{a.sections?.map((s,i)=><AnswerMarkdown key={i} onOpen={onOpen} answer={{answer:s.answer,runId:a.id,trace:[],citations:s.citationIds.map(id=>({id,capturedAt:file.item.observedAt,appName:file.item.title,excerpt:''}))}}/>)}</div>)}
+ {file.artifacts.filter(a=>web?['summary','dialogue','image'].includes(a.kind):a.kind==='summary').map(a=>web&&file.originalRef?<FileArtifactContents key={JSON.stringify([api.connection,a.id])} api={api} id={a.id} originalRef={file.originalRef} kind={a.kind as 'summary'|'dialogue'|'image'}/>:<div key={a.id}><h4>{moteText("模型摘要")}</h4>{a.sections?.map((s,i)=><AnswerMarkdown key={i} onOpen={onOpen} answer={{answer:s.answer,runId:a.id,trace:[],citations:s.citationIds.map(id=>({id,capturedAt:file.item.observedAt,appName:file.item.title,excerpt:''}))}}/>)}</div>)}
  {rawTranscript&&<p>{moteText("原始转写已保留，尚未校正；说话人分离与对话整理的结果另行生成。")}</p>}
- {chunks.length>0&&<h4>{rawTranscript?moteText("原始转写 · 未校正"):moteText("转写 / 提取片段")}</h4>}{dialogueGroups(chunks).map(group=>group.length===1?renderChunk(group[0]):<div key={group[0].id} className="source-item"><p>{group[0].fileEvidence?.speakerAttribution?.name??group[0].fileEvidence?.speaker} · {filePosition(group[0].fileEvidence!.startMs!)}{group.some(c=>c.fileEvidence?.uncertain)&&` · ${moteText('含不确定片段')}`}{group[0].fileEvidence?.overlap&&` · ${moteText('重叠说话')}`}</p><p className="file-text">{group.map(transcriptChunkText).join('')}</p><details><summary>{moteText('展开 {0} 个原始片段',group.length)}</summary>{group.map(renderChunk)}</details></div>)}
+ {chunks.length>0&&<h4>{rawTranscript?moteText("原始转写 · 未校正"):moteText("转写 / 提取片段")}</h4>}{dialogueGroups(chunks).map(group=>group.length===1?renderChunk(group[0]):<div key={group[0].id} className="source-item"><p>{group[0].fileEvidence?.speakerAttribution?.name??group[0].fileEvidence?.speaker} · {filePosition(group[0].fileEvidence!.startMs!)}{group.some(c=>c.fileEvidence?.uncertain)&&` · ${moteText('含不确定片段')}`}{group[0].fileEvidence?.overlap&&` · ${moteText('重叠说话')}`}</p><p className="file-text">{group.map(chunk=>web?chunk.ocrText:transcriptChunkText(chunk)).join('')}</p><details><summary>{moteText('展开 {0} 个原始片段',group.length)}</summary>{group.map(renderChunk)}</details></div>)}
  {offset!==null&&textArtifact&&<button className="button" disabled={chunksLoading} onClick={()=>void loadChunks()}>{chunks.length?moteText("继续展开"):rawTranscript?moteText("展开原始转写（未校正）"):moteText("展开转写 / 原文片段")}</button>}
  {error&&<p role="alert" className="error-banner">{error}</p>}</section>;
 }
