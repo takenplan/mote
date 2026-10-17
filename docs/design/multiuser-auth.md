@@ -135,9 +135,9 @@ device grant. KEEP the existing explicit full-client browser login intent and
 consent, and KEEP device isolation. CHANGE only the purpose carried by the native
 Central login and its grant publication. No new user step, default full access,
 alternate provider, QR invitation or device-private API exemption is introduced.
-The separate QR pairing contract is owned by the parent's forthcoming finite
-common task; it is not awaiting a user decision here. Pairing and physical-device
-acceptance remain open. Exact tests and native execution status live in
+QR v2 pairing now has the finite production contract in
+[multiuser QR pairing](multiuser-qr-pairing.md) and delivered Draft PR144.
+Physical-device and current client acceptance remain separately recorded in
 [the Android ledger](../validation/multiuser-android.md).
 
 ## Authentication protection

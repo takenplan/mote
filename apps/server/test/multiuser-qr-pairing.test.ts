@@ -95,3 +95,16 @@ test('QR reauthorization selects the original device, preserves invitation label
  assert.equal((await f.call('GET','/api/connections/self',undefined,headers(grant.token))).statusCode,401);
  assert.equal((await f.call('GET','/api/connections/self',undefined,headers(oldb.token))).statusCode,200);
 });
+
+test('known device selection includes account-owned sources and ingress records before a credential or heartbeat exists',async t=>{
+ const f=await fixture(t),ingress=(token:string)=>({...headers(token),'x-mote-ingress-version':'3'});
+ assert.equal((await f.call('POST','/api/sources',{id:'source-only',name:'Generated source',kind:'mcp',deviceId:'source-device',platform:'import'},headers(f.a.token))).statusCode,200);
+ assert.equal((await f.call('POST','/api/ingress/devices',{id:'ingress-only',name:'Generated device',platform:'android'},ingress(f.a.token))).statusCode,200);
+ for(const deviceId of ['source-device','ingress-only']){
+  const c=f.client((await f.invite()).invitation,{deviceId});assert.equal((await f.call('POST','/api/connections/redeem',c.input)).statusCode,409);
+  const bound=f.client((await f.invite(f.a.token,{deviceId})).invitation,{deviceId});assert.equal((await f.call('POST','/api/connections/redeem',bound.input)).statusCode,200);
+ }
+ assert.equal((await f.call('POST','/api/sources',{id:'b-only-source',name:'Generated B source',kind:'mcp',deviceId:'b-only-device',platform:'import'},headers(f.b.token))).statusCode,200);
+ const c=f.client((await f.invite()).invitation,{deviceId:'b-only-device'});assert.equal((await f.call('POST','/api/connections/redeem',c.input)).statusCode,200,'B source identity does not block A');
+ assert.equal((await f.call('GET','/api/sources',undefined,headers(f.b.token))).json().items.length,1);
+});
