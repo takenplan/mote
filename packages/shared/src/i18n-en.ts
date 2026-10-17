@@ -1,5 +1,8 @@
 /* Authored interface messages only; never translate captured content. */
 export const english: Readonly<Record<string, string>> = {
+  "按来源和文件类型选择处理方案。服务引用模型连接，方案保存独立参数；连接、规则和参数在同一次保存中提交。": "Choose processing profiles by source and file type. Services reference model connections, while profiles retain their own parameters. Connections, rules and parameters are submitted in one save.",
+  "个人连接保留同一预设的隐藏凭据；共享连接仅引用，不复制地址或凭据。": "Personal connections preserve the same profile's hidden credentials. Shared connections are references; their endpoints and credentials are not copied.",
+  "模型连接引用": "Model connection reference",
   "Google Calendar 连接": "Google Calendar connection",
   "读取日历列表": "Read calendar list",
   "日历选择已保存。": "Calendar selection saved.",

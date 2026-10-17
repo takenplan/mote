@@ -7,6 +7,9 @@ import {errorMessage,type Api} from './api';
 import {useResource} from './useResource';
 import {resources} from './resource-cache';
 import {useUnsavedChanges} from './unsaved';
+import {FileProcessingSettings} from './FileProcessingSettings';
+import {useHashChoice} from './useHashChoice';
+import {settingsCategoryFromHash} from './route-query';
 
 /** Reuse the existing registry/saved/effective layout and M04 schema/CAS. */
 function DomainEditor({api,domain,view,administrator=false}:{api:Api;domain:ConfigDomainView;view:ConfigServiceView;administrator?:boolean}){
@@ -28,9 +31,13 @@ function DomainEditor({api,domain,view,administrator=false}:{api:Api;domain:Conf
   </form><details><summary>{moteText('当前生效值')}</summary><pre>{JSON.stringify(domain.effective,null,2)}</pre></details>
  </details>;
 }
-export function ScopedConfiguration({api,administrator=false}:{api:Api;administrator?:boolean}){
+export function ScopedConfiguration(props:{api:Api;administrator?:boolean}){return <ScopedConfigurationContents key={JSON.stringify([props.api.connection,props.administrator])} {...props}/>;}
+function ScopedConfigurationContents({api,administrator=false}:{api:Api;administrator?:boolean}){
+ const [category,setCategory]=useHashChoice('category',settingsCategoryFromHash);
  const read=useResource<ConfigServiceView>(api,administrator?'/api/admin/configuration/models':'/api/configuration');
+ if(!administrator&&category==='file-processing')return <section className="server-settings"><button className="back-link" onClick={()=>setCategory(null)}>{moteText('返回上级')}</button><div className="page-heading settings-heading"><h1>{moteText('文件与语音')}</h1></div><FileProcessingSettings api={api}/></section>;
  return <section className="server-settings"><div className="page-heading settings-heading"><h1>{administrator?moteText('共享模型资源'):moteText('模型与服务')}</h1><button className="button subtle" onClick={read.refresh}>{moteText('刷新生效配置')}</button></div>
+  {!administrator&&<button className="preference-menu-row" aria-label={moteText('文件与语音')} onClick={()=>setCategory('file-processing')}><span><strong>{moteText('文件与语音')}</strong><small>{moteText('本地语音模型、转写与文件处理策略')}</small></span></button>}
   {read.error!==undefined&&<p role="alert">{errorMessage(read.error)}</p>}{!read.data&&read.loading&&<p role="status">{moteText('正在读取节点设置…')}</p>}
   {read.data?.domains.map(domain=><DomainEditor key={domain.id} api={api} domain={domain} view={read.data!} administrator={administrator}/>)}
  </section>;
