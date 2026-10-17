@@ -1443,3 +1443,46 @@ delivery claim, proxy or new thread was used. Exact handoff is preserved at
 `/tmp/mote-m15-joint-policy-scalar-blocker.md`. Configured-only GREEN does not close
 this gap. Model copy/probe/catalog, other declared policy OPEN items, final
 required and DraftPR remain pending.
+
+### Latest current Android/core recovery and original model-control RED
+
+Exact0ff4c9d4 / nativeea1b, publica2+245/ddc: full offline
+`:app:testDebugUnitTest :app:assembleDebug` passes EXIT0 in61s,44tasks/8executed.
+The test task actually ran; fresh75XML total358/358 with0failure/error/skip
+(`/tmp/m15-ea1-a2-full-android.log` and countsJSON). Later9509 changes only a
+native instrumentation test; it does not replace this source provenance.
+Scope/Server/scripts types and8472-message bilingual checks pass. The bounded
+46-file changed-text scan finds no binary or obvious live credential-key pattern
+(`/tmp/m15-current-delta-content-audit.json`); it is not whole-repo privacy proof.
+
+Current native SourceWorker and snapshot Worker neighbors are both actual0
+(2.383s and2.018s, `/tmp/m15-ea1-a2-{source,snapshot}-worker-neighbor.log`,
+backend0). Agent admitted-query/native relogin-optout also passes on the combined
+a2+ddc host1/1 in5.920s (`/tmp/m15-ea1-a2-ddc-agent-relogin-neighbor.log`,
+backend0), preserving completion with no later detailed payload.
+
+Real current process-death driver is0:
+`/tmp/m15-ea1-a2-actual-process-death-phase1.log`1/1 in0.790s; it then launches
+only the fixture to obtain its unique PID, uses same-UID SIGKILL, observes process
+absence, and runs phase2 directly without any pm-clear/reinstall. Phase2 passes
+1/1 in0.675s (`-phase2.log`); original B isolation then explicit A original bytes/
+draft restore pass. Exact PID/absence receipt is `-sigkill.log`, backend0. No
+other process, real account/device or private source is touched.
+
+New durable test-only9509f027 preserves the original model-preset controls. It
+first verifies a real saved generated personal M04 profile, opens the actual
+original model-settings page, then fails1/1 in1.118s because copy/probe/directory
+controls remain absent (`/tmp/m15-model-original-controls-valid-red.log`,
+backend0; test APK16s0). No live model/probe was called. This is a genuine visible
+old-capability RED, not new shared HTTP schema or implemented semantics. M13
+remains the original unique shared producer owner. M04 already forbids copying
+shared secrets/endpoints; masked views cannot be used to invent credential
+inheritance. Native GREEN still requires its declared owned-reference contract.
+
+Default-scalar producer f8 RED remains open. After a read-only current Joint turn
+contained no earlier scalar handoff, one materially new actual-HTTP-RED handoff
+attempt returned the same unconfirmed-earlier-submission tool error. No further
+retry, alternate route, proxy or new conversation was used. This is unconfirmed
+message delivery, not an automatic-approval denial or a runtime-test result.
+Final affected/remote DraftPR and all known original shared-contract gaps remain
+pending; passing core recovery does not close the two actual RED journeys.
