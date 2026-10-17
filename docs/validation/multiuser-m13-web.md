@@ -959,3 +959,29 @@ hidden by renderer response retirement. The common producer owner supplied
 b7946ede with the existing durable counter and post-await transaction fence;
 its bounded review is clean, while M13 composition verification is recorded
 separately. This finite consumer is not whole Files or final M13 acceptance.
+
+The declaredb794 producer fix is now composed as
+dd8ce83ab101c263df8b277f79553d407090bdaa. Its validation-document append conflict
+kept this candidate's existing ledger and only the new attachment section; later
+unselected image/observer/recovery provenance paragraphs were not imported as
+tested runtime. Source/parent reincarnation2/2 passed in16.270s, original file
+forget/counter4/4 in12.786s, original attachment+archive renderer16/16 in10.840s,
+all no skips and EXIT0. Logs are `/tmp/m13-attachment-incarnation-composed-source.*`,
+`/tmp/m13-attachment-file-counter-neighbors.*` and
+`/tmp/m13-attachment-composed-original-ui.*`. The first source invocation named a
+nonexistent forget-neighbor path; Node selected only the actual two incarnation
+cases. It is reported as2/2, not an executed neighbor suite; the subsequent
+explicit real decision-file invocation provides the distinct4/4 evidence.
+Server noEmit and scope inventory checks ondd8 are0. Web types/build and fresh
+Shared build are0 on the same unchanged consumer source. No same-version whole
+gate or M13 PR is claimed by these focused results.
+
+Storage KEEP recheck uses actual generated A/B M03 originals, without a model:
+both original GET `/api/content-storage` and `/api/storage-statistics` still
+return503 scope_unavailable (`/tmp/m13-storage-contract-probe2.log/.exit`,2fail,
+5.738s). The first outside-package .ts launcher failed module setup and is not
+product RED; the .mts source probe reaches both real routes. The existing
+scoped original worker explicitly writes plaintext and exposes no equivalent
+decryption/storage-report producer. `/tmp/mote-m13-storage-contract-blocker.md`
+records the exact common-producer boundary for parent assignment. Legacy global
+Store/key/whole-disk aggregation and fabricated zero reports remain forbidden.
