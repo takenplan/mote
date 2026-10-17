@@ -867,3 +867,36 @@ mounts. Server noEmit0, Webbuild0 and scope0 are recorded in
 `/tmp/m13-memory-source-recipes-scope.*`. Earlier failed strict-intersection
 parser attempt remains recorded; the corrected shared selector/body shape passes
 the original assertions. This is finite source/UI proof, not a new whole gate.
+
+### Original context-step / registered processor controls
+
+Test-only2c5848e3 reaches actual original WorkflowProcessing against real generated
+M03 originals and M06 tasks: the old registry response crashes at view.jobs.map
+(`/tmp/m13-workflow-original-red.log/.exit`,1fail). The component now reads the
+existing M05-owned step projection, state filters and signed cursor, displaying
+actual dependency/output metadata and retaining the original per-step controls.
+No legacy global Store/context-DAG runtime is installed. Scope/gateway checking
+first caught placing a private SQL reader in the foundation's raw-SQL module;
+the reader now lives in a dedicated owner-bound PrivateSql helper, without a new
+checker exemption.
+
+Current source plus M05 context neighbors7/7/no skips0,25.067s
+(`/tmp/m13-workflow-actual-final-source.log/.exit`): twelve genuine M06 steps
+across opaque pages, query/owner/tamper rejection, failed-state filtering, B/admin
+empty owned views, exact output locators, unknown physical facts, cancel and
+explicit existing retry authority. Original component plus queue neighbor2/2,
+no skips0,12.393s (`/tmp/m13-workflow-actual-final-ui.log/.exit`) proves actual
+failed-step retry, cancel rejection/confirmation, completed output retention,
+unknown retry refusal/explicit confirmation, original state/extension controls,
+held A read and detached old action under B. Current Server noEmit0, Webbuild0,
+scope0. This is not a new whole affected/IAB result.
+
+Intermediate retries incorrectly assumed cumulative attempt counts and selected
+a child whose failed parent cannot prepare retry; those logs are retained. The
+final fixture observes the unchanged M05 reset-to-zero response and genuine
+coordinator outcome instead of changing retry policy. A subsequent actual
+blocked-state probe exposed an incorrect presentation use of execution validate;
+removing that speculative check preserves M05's original preparation transaction.
+The same blocked/unknown case is included in the final seven greens. Earlier
+helper variable-shadowing compile/runtime failures were corrected before the
+final gate; they were not fixture or parent failures.

@@ -12,6 +12,7 @@ import {linkOperation} from '../operation-projection.js';
 import {Operations} from '../operations.js';
 import type {ExecutionStorage} from '../execution-storage.js';
 import {ScopeError} from './baseline.js';
+import {contextStepPage} from './task-steps.js';
 import type {UserContext,UserContextAuthority} from './context.js';
 import type {ScopedServices} from './services.js';
 import {TaskAuthorization} from './task-authorization.js';
@@ -199,6 +200,9 @@ export class TaskExecution {
     return admit(prepared,modelLease,onAdmitted);
    },
    get:(taskId:string)=>this.view(owned(taskId)),
+   contextSteps:(key:string,raw:unknown)=>contextStepPage(this.db,context,key,raw,assert,row=>{
+    const task=this.view(row as TaskRow),step=this.engine.get(task.id)!,handler=this.handlers.get(task.kind);return {task,hasAuthority:this.valid(step)&&!!handler};
+   }),
    queues:()=>{assert();return {scope:'account' as const,pools:this.db.prepare("SELECT e.pool id,sum(e.state='running') running,sum(e.state='waiting') waiting,sum(e.state='blocked') blocked,sum(e.state='failed') failed,sum(CASE WHEN u.external_state IN ('issued','unknown') OR EXISTS(SELECT 1 FROM task_external_calls c WHERE c.task_id=u.task_id AND c.user_id=u.user_id AND c.state IN ('issued','unknown')) THEN 1 ELSE 0 END) unresolvedExternal FROM user_tasks u JOIN execution_steps e ON e.id=u.task_id AND e.user_id=u.user_id WHERE u.user_id=? AND e.user_id=? GROUP BY e.pool ORDER BY e.pool").all(context.userId,context.userId).map(row=>({id:String(row.id),running:Number(row.running),waiting:Number(row.waiting),blocked:Number(row.blocked),failed:Number(row.failed),unresolvedExternal:Number(row.unresolvedExternal)}))};},
    list:(args:{cursor?:number;limit?:number}={})=>{assert();const limit=Math.max(1,Math.min(args.limit??50,100)),rows=this.db.prepare('SELECT user_position,* FROM user_tasks WHERE user_id=? AND user_position>? ORDER BY user_position LIMIT ?').all(context.userId,args.cursor??0,limit+1) as (TaskRow&{user_position:number})[];return {items:rows.slice(0,limit).map(row=>this.view(row)),nextCursor:rows.length>limit?rows[limit-1].user_position:null};},
    cancel:(taskId:string)=>this.transaction(()=>{owned(taskId);this.engine.cancel(taskId);return this.view(this.row(taskId)!);}),

@@ -1815,6 +1815,7 @@
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/:id',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/queues',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/steps',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks/:id/cancel',service:EXECUTION_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks/:id/retry',service:EXECUTION_DOMAIN",

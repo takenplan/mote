@@ -115,3 +115,14 @@ proof, Servertypes/Webbuild/scope0. Together with f615's installed multi-version
 personal/Coding original-page cases, this closes the specific M-RECIPE control
 and coverage gaps above. It does not change the independent pending/due/failure
 observations or replace final same-candidate whole acceptance.
+
+## Original context-step follow-up
+
+P-STEPS now reads the actual owned M05/M06 steps through `/api/tasks/steps`,
+with server state filtering, opaque account/query pagination, real dependency and
+committed-output metadata and existing M05 controls. The original component and
+extension registry have actual source7/7 and UI/queue2/2 proof, types/build/scope0.
+This replaces the retired global context-DAG presentation source explicitly; no
+old unregistered custom processor, recipe or instance queue count is fabricated.
+The independent custom-recipe/shared-component S-POLICY gap and final whole gate
+remain separate. See `../design/multiuser-context-steps-http.md`.
