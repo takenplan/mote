@@ -1718,6 +1718,7 @@
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/file-processing/match',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/file-processing/preview',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/file-processing/reprocess',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/file-processing/test-local',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing/derivations',service:PROCESSING_DOMAIN",
       "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/file-processing',service:PROCESSING_DOMAIN",
@@ -1771,6 +1772,7 @@
       "task:execution.register:kind:'processing.'+kind",
       "task:execution.register:kind:'processing.analysis'",
       "task:execution.register:kind:'processing.derivatives'",
+      "task:execution.register:kind:'processing.health'",
       "task:execution.register:kind:'processing.pipeline'"
     ]
   },

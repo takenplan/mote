@@ -84,3 +84,10 @@ M15 保留原处理设置和 Import 入口；共同 schema/路由及实际执行
 Web-only acoustic/term-review 控件不是98d原 Android UI，但其现有导出内容和共同
 执行合同仍应保留。原 native 的 cancel/retry/delete/play/save/correction/speaker/
 export 已有当前实际验收，不能因这些通过而把方案缺口标为完成。
+
+当前有限共同消费点已扩展到 Joint runtime `50304300` / 文档 `b7a408e4`，
+原 wire 不变：root/attachment 允许已保存或显示默认处理 profile；Import 的
+imageProfile 只作用于已确认图像；local health 只接已保存 serviceId 并 GET/health，
+个人方案历史只恢复数据、不恢复任务或授权。M15 已只读复审并组合，相关构建、
+原生入口和最终 affected 另验。已安装自定义 image recipe、instance/shared/component
+启动观察和最终公共组合仍 OPEN；此点仍是有限 PREP，不能据配置保存宣布闭合。

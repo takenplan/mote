@@ -349,3 +349,24 @@ original admission subject still current. Retired handlers drain before a fresh
 login opens the same YAML; no old suspended request borrows new credentials.
 Actual same-account logout/relogin save503 RED and fixed same-case GREEN, plus
 18 existing lease/lifecycle cases, are recorded in the validation ledger.
+
+## Explicit profile and local-health restoration
+
+KEEP original upload/attachment/image-import selections and current M04 complete
+connections. CHANGE only their scoped handoff: await profile preflight outside
+SQLite, recheck current owner/head/source/parent afterward, then bind metadata
+before existing acceptance/admission. Lost ACKs retain the previously accepted
+plan. Derive unsaved defaults in the existing M04 effective mirror; keep only
+references and hashes, with finite original default-ID compatibility. A fresh
+configuration save can reconcile stale unfinished input only after current
+source/head/cancellation checks, under a new M05 grant. Completed/cancelled data
+is not reprocessed implicitly.
+
+KEEP old local-worker health GET, timeout/response bound and typed booleans.
+CHANGE its authority path to the existing M04/M05/M06 ledger: a saved service or
+current ASR selection, never caller endpoint/key, loopback only, no inference.
+EXCEPTION transport may complete after retirement solely to settle its exact
+physical issuance; it cannot return/publish a retired request result. UNKNOWN
+custom image-recipe execution, instance/shared/component startup observation and
+final consumer/runtime gates remain open. Actual source-entry and account
+physical-deletion evidence is in the validation ledger.

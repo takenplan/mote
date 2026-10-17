@@ -76,7 +76,7 @@ export function registerProcessingFiles(runtime:ScopedRuntime,db:DatabaseSync,pr
       },
     };
   };
-  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/records/:id/attachments/:attachmentId/processing',handle:({context,request})=>{const input=z.object({id:z.string().uuid(),attachmentId:z.string().uuid()}).parse(request.params);const result=ingress.forUser(context).prepareAttachment(input.id,input.attachmentId,request.body);return {...result,processing:bind(context).detail(result.captureId,false).job};}});
+  registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/records/:id/attachments/:attachmentId/processing',handle:async({context,request})=>{const input=z.object({id:z.string().uuid(),attachmentId:z.string().uuid()}).parse(request.params);const result=await ingress.forUser(context).prepareAttachment(input.id,input.attachmentId,request.body);return {...result,processing:bind(context).detail(result.captureId,false).job};}});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files',handle:({context,request})=>bind(context).list(request.query)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id',handle:({context,request})=>bind(context).detail(z.object({id:z.string().uuid()}).parse(request.params).id)});
   registerUserRoute(runtime,{scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks',handle:({context,request})=>bind(context).chunks(z.object({id:z.string().uuid()}).parse(request.params).id,request.query)});

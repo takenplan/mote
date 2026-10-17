@@ -1665,3 +1665,50 @@ reviewer execution or final required acceptance.
 Separately, the two original Web Actions files pass2/2,no skip,101.86s unchanged
 (`/tmp/m15-web-actions-original-two.log/.exit`). The old full-run proposal timeout
 failures remain. No Web observation or approval assertion was changed.
+
+### Original-budget diagnostics and Docker-aligned native ABI repair
+
+Literal769 original five-case series naturally ends EXIT1 under Node26: direct
+1000/125 cancelled at unchanged120s, while HTTP1000 passes241.36s (prefix228988ms,
+tail7858ms), daily image27.18s, snapshot pixels5.00s and180-wait shutdown/restart
+67.06s. All counts and120/300/390 budgets remain unchanged; log and unchanged
+SHA receipts `/tmp/m15-original-budget-five-769.*`. No healthy test was interrupted.
+
+After that series ended, existing local source/Node24 headers rebuilt the same
+locked better-sqlite3 12.10.0 for ABI137, matching Docker's Node24. No package
+install, requested header download, dependency/version/lockfile change or peer
+node_modules write occurred. `/tmp/m15-node24-native-alignment-result.json`
+records original/final library hashes and identical package/lock hashes; real
+root and actual Mem0 entry constructors both SELECT1 successfully, with exact
+paths in `/tmp/m15-node24-native-alignment-preflight.json`. Correct four original
+Mem0 worker/history/restart/tamper/unknown-close cases pass4/4,no skip,8.53s
+(`/tmp/m15-node24-mem0-four-correct.log/.exit`). An earlier command named the wrong
+extra Mem0 file and selected zero business cases there; its file placeholder
+is not acceptance or part of that4/4.
+
+The unchanged direct1000 case initially still hit120s under Node24; no causal
+version/performance conclusion follows. Metadata-only in-process phase diagnostics
+retain every original assertion/deadline and complete1/1 in67.45s, with temporary
+copy removed (`/tmp/m15-node24-thousand-original-observer.*`). A separate subsequent
+run uses the literal original file, no Node body/timer changes, with read-only
+metadata sampling from its verified own descendant's temporary database. This
+original case passes1/1,no skip,61.70s within120s: `/tmp/m15-node24-thousand-original-external.*`.
+All1000 source grants/checkpoints/coverage keys,125 extractions and125 independent
+reviews are unchanged and checked. The observations do not retroactively turn
+the earlier timeout cancellations into passes, establish a resource cause or
+replace the pending genuine combined gate.
+
+### Declared Joint503/b7 composition (acceptance pending)
+
+Compose only declared runtime5030430002bd9971d481c8b1ba4c235ab45b6c26 plus
+documentation tipb7a408e44292bcb4e0f93286ff6c9d02df13bec5. Independent bounded
+review is `/tmp/mote-m15-review-joint-503.md`; current M15 server types0 after
+automatic merge, and reviewed exact summary helper/registration remain identical.
+No Android production code changes. Root/attachment profile binding, image-only
+import override, saved-service local health and personal plan metadata extend
+the earlier limiteda2 wire. Native original controls consume their existing
+M04/M05/M03/M06 entries; no new Web-only widgets or alternate engine are added.
+Fresh library/central build, producer deltas, native relevant cases and final
+required are still pending on the resulting exact merge. Custom image recipes,
+instance/shared/component startup observation and final common union remain
+producer-owned OPEN; this PREP is not declared whole final acceptance.
