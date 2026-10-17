@@ -52,6 +52,10 @@ export class ProcessingPolicies {
  }
  private sql(context:UserContext){return new PrivateSql(this.db,context.userId,()=>this.runtime.authority.assert(context));}
  async prepareOverride(context:UserContext,id:string){processingProfileSchema.shape.id.parse(id);await this.configuration.forUser(context).view();const policy=this.overridePolicy(context,id);if(!policy.profiles.some(profile=>profile.id===id))throw new PrivateDataError('conflict',409);}
+ async localServiceReference(context:UserContext,id?:string){
+  await this.configuration.forUser(context).view();if(!id)return (await this.configuration.forUser(context).selection('asr')).reference;
+  const saved=this.policy(context),policy=saved??this.overridePolicy(context,'audio'),service=policy.services.find(service=>service.id===(!saved&&['asr-local','asr-api'].includes(id)?'service.asr':id));if(!service||service.kind!=='asr')throw new PrivateDataError('invalid_data');return service.reference;
+ }
  private overridePolicy(context:UserContext,id:string){
   const saved=this.policy(context);if(saved)return saved;const row=this.sql(context).get('SELECT json FROM mp_file_policies WHERE user_id=$user'),defaults=row?effectiveValueSchema.parse(JSON.parse(String(row.json))).defaults:undefined;if(!defaults)throw new PrivateDataError('scope_unavailable',503);
   // The old default profile IDs remain valid explicit selections. They resolve

@@ -1459,3 +1459,30 @@ ID, new plan and one generated OCR call, B unchanged, no saved policy:
 1/1 EXIT0 in5.592s `/tmp/mote-joint-profile-default-resume-valid-green2.*`.
 The preceding runtime reached indexing but an assertion used job.id on the
 public state-only job projection (undefined); it is retained as a fixture error.
+
+### Saved local worker health through the shared authority ledger
+
+Original POST /api/file-processing/test-local returned503 at6e87b1bc's durable
+case (`/tmp/mote-joint-processing-health-red.*`). It now resolves only a saved
+ASR service's complete current M04 reference (or the current ASR selection when
+no serviceId is supplied), checks mote-media plus loopback, and sends the old
+bounded GET /health:10s/4096bytes/schema unchanged. Caller endpoint/key fields
+reject before transport. The existing executor runs one processing.health control
+step, with existing M04 lease and M05 external issuance/M06 physical activity.
+No model inference, file processing artifact, separate runtime or new table is
+introduced. Late exact completion can settle its issuance without publishing an
+old health result; the old request remains retired.
+
+Own first same-case1/1 EXIT0 in3.048s; current18 bounded profile/default/health
+and direct policy consumers18/18 EXIT0 in65.381s
+(`/tmp/mote-joint-profile-health-composed.*`). Extended same original route proves
+A logout response refusal while its transport is still held, independent B
+positive, fresh A login, actual M16 account deletion result_unknown with one
+active transport, late exact settlement then retry/physical cleanup of A's
+policy/task/external rows, B positive, and nonloopback refusal with no request:
+1/1 EXIT0 in3.013s `/tmp/mote-joint-processing-health-account-delete.*`.
+Server/scripts/scope0. Strict targeted new-test noEmit initially exposed the
+existing shared fixture unknown-payload/Fastify overload error; the owner's
+already reviewed type-only InjectOptions payload cast was selected, and strict
+new-test noEmit2 EXIT0. No runtime fixture behavior changed. Whole affected,
+compiled client/native/UI and final same-SHA production/backup remain pending.
