@@ -1292,3 +1292,31 @@ not revived, equal-ID B's successful artifact unchanged. No policy is invented
 for legacy data. Source hashes are in `/tmp/mote-joint-policy-pause-source-manifest.json`.
 Full retry/policy neighbor and types reruns for this checkpoint are pending;
 these results alone are not a consumer freeze or whole final acceptance.
+
+
+Exact27706804 policy/relogin/preview/pause combination15/15,52.932s0 and distinct
+legacy ASR/retry authority neighbors11/11,53.046s0 are recorded separately in
+`/tmp/mote-joint-policy-pause-composed.*` and `-pause-retry-neighbors.*`.
+Server+scripts types and boundary checker0. Those26 tests precede the next
+stage-dependency source change and are not its full regression receipt.
+
+Named-stage reuse: first target supplied a server root instead of the original
+ASR `/transcribe` endpoint, so both accounts failed before the intended assertion;
+that fixture error remains in `stage-reuse-red`. Corrected durableab9d6117
+reaches real accepted raw ASR, changes a complete private connection, then changes
+only downstream speakerCount. It fails with an extra raw request2!=1,1/1fail
+7.151s in `/tmp/mote-joint-policy-stage-reuse-red2.log/.exit`. The implementation
+uses the original per-processor dependency fingerprint instead of the entire
+named plan/settings generation for raw stage cache identity; diarization and
+alignment keep their own dependency inputs. Legacy policy-null keys are unchanged.
+Same case1/1,5.234s0 (`-stage-reuse-green1`); adding explicit full-transcribe plus
+fixed repeated receipt passes1/1,7.143s0 (`-stage-reuse-green2`). Tests prove changed
+credentials do not reuse old raw, speaker-only change does, explicit force does
+execute again, and equal-ID B retains its own result/call count. Server types0.
+The new stage source still needs selected consumer/legacy neighbor verification.
+
+Recovery of this execution turn: HEADab9d6117 and its2dirtyfiles+1newMD were
+verified and preserved as `/tmp/mote-joint-recovered-dirty.patch` and a separate
+contract copy. Existing8 terminal receipts were read rather than rerun; lsof
+read-only cwd inspection returned no Node process in the Joint checkout. This
+proves preservation/current resources, not the reason the earlier turn failed.

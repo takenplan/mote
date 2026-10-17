@@ -423,3 +423,14 @@ settings. Enabling processing uses a fresh coordinator/grant for unfinished work
 while completed results and explicit per-file cancellation remain intact. This
 uses the existing executor/journal, with no synthetic task state or new queue.
 Files now preserves M05's actual admission error when no attempt failure exists.
+
+
+Named stage reuse uses the existing processor contract and declared settings/
+parameter dependencies. Raw extraction depends on its actual ASR/OCR connection;
+diarization uses the diarizer's own descriptor and speaker parameters, and
+alignment includes its input artifact IDs. Current complete task input, head,
+source, file/original generations and model authorization are still checked
+before every cached read and publication. A downstream-only named plan change
+can reuse accepted raw bytes; a changed credential or an explicit full-transcribe
+file generation cannot. Existing policy-null stage identities remain unchanged.
+No cache record grants authority, revives an old task, or settles an unknown call.
