@@ -8,9 +8,11 @@ import {waitForScopedState} from '../../server/test/fixtures/scoped-process.js';
 // Actual M01/M03/M04/M05/M06 private preview and confirmation. Only model HTTP
 // responses are generated. No live model, real documents or external account.
 const cleanup:Array<()=>unknown>=[],commands:Array<{actor:string;path:string;requestId?:string;uploadId?:string;fileId?:string}> = [];
+const agentReads:Array<{actor:string;cursor:string|null}>=[];
 let dropping=false;
 let actors:{a:{token:string};b:{token:string}};
 const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} as unknown as TestContext,host=>{
+ host.app.addHook('onRequest',async request=>{if(request.url.startsWith('/api/agent-view/events'))agentReads.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':'b',cursor:new URL(request.url,'http://fixture').searchParams.get('cursor')});});
  host.app.addHook('onSend',async(request,reply,payload)=>{
   if(request.method==='POST'&&request.url==='/api/imports'&&reply.statusCode===202){
    const body=request.body as {requestId:string;archivedFileIds?:string[]};commands.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':request.headers.authorization==='Bearer '+actors.b.token?'b':'other',path:request.url,requestId:body.requestId,...(body.archivedFileIds?{fileId:body.archivedFileIds[0]}:{})});
@@ -22,8 +24,6 @@ const f=await scopedFilesFixture({after:(work:()=>unknown)=>cleanup.push(work)} 
 });actors=f;
 const agent=process.argv.includes('--agent');
 const calls=new Map<string,number>();
-const agentReads:Array<{actor:string;cursor:string|null}>=[];
-f.host.app.addHook('onRequest',async request=>{if(request.url.startsWith('/api/agent-view/events'))agentReads.push({actor:request.headers.authorization==='Bearer '+actors.a.token?'a':'b',cursor:new URL(request.url,'http://fixture').searchParams.get('cursor')});});
 const model=createServer((request,response)=>{void(async()=>{
  let raw='';for await(const part of request)raw+=String(part);const actor=String(request.headers.authorization).includes('GENERATED_B')?'b':'a',stage=(calls.get(actor)??0)+1;calls.set(actor,stage);
  if(agent&&raw.includes('Generated native trace')){const body=JSON.parse(raw),uses=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_use'):[]);if(!uses.some((u:any)=>u.name==='material_catalog'))return writeMessagesResponse(response,{stage,tool:{name:'material_catalog',args:{limit:12}}});const ref=raw.match(/material:mat_[a-f0-9]{64}@[a-f0-9]{64}/)?.[0];if(!ref)throw Error('Missing actual native Material reference');if(!uses.some((u:any)=>u.name==='material_read'))return writeMessagesResponse(response,{stage,tool:{name:'material_read',args:{ref,length:4000}}});writeMessagesResponse(response,{stage,text:JSON.stringify({answer:'Generated native traced answer',citationIds:[]})});return;}
