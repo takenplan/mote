@@ -8,6 +8,7 @@ export function installIngress(db:DatabaseSync){
  CREATE TABLE IF NOT EXISTS ig_meta(singleton INTEGER PRIMARY KEY CHECK(singleton=1),ticket_key TEXT NOT NULL);
  CREATE TABLE IF NOT EXISTS ig_file_forgets(user_id TEXT NOT NULL,source_id TEXT NOT NULL,external_id TEXT NOT NULL,capture_id TEXT NOT NULL,generation INTEGER NOT NULL,blocked INTEGER NOT NULL,decision_id TEXT NOT NULL,PRIMARY KEY(user_id,source_id,external_id),FOREIGN KEY(user_id,source_id) REFERENCES pd_sources(user_id,id) ON DELETE CASCADE);
  CREATE TABLE IF NOT EXISTS ig_file_forget_operations(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,digest TEXT NOT NULL,json TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
+ CREATE TABLE IF NOT EXISTS ig_file_generations(user_id TEXT NOT NULL,source_id TEXT NOT NULL,external_id TEXT NOT NULL,generation INTEGER NOT NULL CHECK(typeof(generation)='integer' AND generation>=0 AND generation<=9007199254740991),PRIMARY KEY(user_id,source_id,external_id));
  CREATE TABLE IF NOT EXISTS ig_state(user_id TEXT PRIMARY KEY,deleted INTEGER NOT NULL DEFAULT 0);
  CREATE TABLE IF NOT EXISTS ig_capture_update_sequences(user_id TEXT NOT NULL,device_id TEXT NOT NULL,next INTEGER NOT NULL,PRIMARY KEY(user_id,device_id));
  CREATE TABLE IF NOT EXISTS ig_capture_updates(user_id TEXT NOT NULL,device_id TEXT NOT NULL,sequence INTEGER NOT NULL,capture_id TEXT NOT NULL,artifact_id TEXT NOT NULL,PRIMARY KEY(user_id,device_id,sequence),UNIQUE(user_id,device_id,capture_id,artifact_id),FOREIGN KEY(user_id,capture_id) REFERENCES pd_captures(user_id,id) ON DELETE CASCADE);
@@ -39,6 +40,18 @@ export function installIngress(db:DatabaseSync){
  }
  // Resume an interrupted schema upgrade without rotating an existing decision.
  for(const row of db.prepare('SELECT user_id,source_id,external_id FROM ig_file_forgets WHERE decision_id IS NULL').all())db.prepare('UPDATE ig_file_forgets SET decision_id=? WHERE user_id=? AND source_id=? AND external_id=? AND decision_id IS NULL').run(randomUUID(),String(row.user_id),String(row.source_id),String(row.external_id));
+ // A source's FK cascade must not reset an old page, ticket or task to zero.
+ // This authorization counter survives source/capture removal, contains no
+ // content or executable grant, and is erased by the account lifecycle.
+ db.exec(`INSERT INTO ig_file_generations SELECT user_id,source_id,external_id,generation FROM ig_file_forgets WHERE true ON CONFLICT(user_id,source_id,external_id) DO UPDATE SET generation=MAX(ig_file_generations.generation,excluded.generation);
+ CREATE TRIGGER IF NOT EXISTS ig_file_capture_retired BEFORE DELETE ON pd_captures
+ WHEN old.source_id IS NOT NULL AND old.external_id IS NOT NULL AND json_extract(old.json,'$.source')='file'
+ AND COALESCE((SELECT deleted FROM ig_state WHERE user_id=old.user_id),0)=0
+ AND NOT EXISTS(SELECT 1 FROM ig_file_forgets f WHERE f.user_id=old.user_id AND f.source_id=old.source_id AND f.external_id=old.external_id AND f.blocked=1)
+ BEGIN
+ INSERT INTO ig_file_generations VALUES(old.user_id,old.source_id,old.external_id,COALESCE((SELECT generation FROM ig_file_forgets WHERE user_id=old.user_id AND source_id=old.source_id AND external_id=old.external_id),0)+1)
+ ON CONFLICT(user_id,source_id,external_id) DO UPDATE SET generation=MAX(ig_file_generations.generation+1,excluded.generation);
+ END;`);
  if(!db.prepare('PRAGMA table_info(ig_pins)').all().some(row=>row.name==='original_id'))db.exec('ALTER TABLE ig_pins ADD COLUMN original_id TEXT');
  // Existing admitted snapshot references receive their initial recovery window
  // once. Restart and receipt replay never extend an existing window.

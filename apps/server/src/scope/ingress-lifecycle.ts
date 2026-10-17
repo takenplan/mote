@@ -92,7 +92,7 @@ export function ingressLifecycle(runtime:ScopedRuntime,db:DatabaseSync,directory
   deleteUser:async(subject,operationId)=>{
    const {sql,originals,assert}=bound(subject,'delete');sql.transaction(()=>{
     sql.run('INSERT INTO ig_state(user_id,deleted) VALUES($user,1) ON CONFLICT(user_id) DO UPDATE SET deleted=1');
-    for(const table of ['ig_attachment_links','ig_file_forget_operations','ig_file_forgets','ig_capture_updates','ig_capture_update_sequences','ig_import_uploads','ig_archive_links','ig_archive_files','ig_originals','ig_capture_scopes','ig_uploads','ig_batches','ig_devices','ig_pins','ig_work'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
+    for(const table of ['ig_attachment_links','ig_file_forget_operations','ig_file_forgets','ig_file_generations','ig_capture_updates','ig_capture_update_sequences','ig_import_uploads','ig_archive_links','ig_archive_files','ig_originals','ig_capture_scopes','ig_uploads','ig_batches','ig_devices','ig_pins','ig_work'])sql.run(`DELETE FROM ${table} WHERE user_id=$user`);
    });
    // A live or interrupted child can still own filesystem work. A crashed
    // activity requires M16 reconciliation; elapsed time is not erasure proof.

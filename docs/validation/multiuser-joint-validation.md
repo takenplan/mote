@@ -1,6 +1,6 @@
 # Final multi-user joint acceptance: fixed scope and preparation ledger
 
-Status: **PREPARATION; NOT final acceptance**, updated 2026-10-16 UTC. All final-gate
+Status: **PREPARATION; NOT final acceptance**, updated 2026-10-17 UTC. All final-gate
 rows below are pending unless an actual execution receipt explicitly says otherwise.
 The 15 delivered modules (including resumed M14) and architecture review are
 dependencies, not proof that all17 modules work together. M13/M15 remain
@@ -96,9 +96,10 @@ review and exact remote Draft PR head. Later WIP is never imported as a freeze.
 
 | Owner | Explicitly reported composable checkpoint | Remaining gate / original capability |
 | --- | --- | --- |
-| M13 Web | **RESTORED by parent, active CHECKPOINT**, tested short build/types `815c5fe6`; later `84e3f9b85e2a3dc2cdc5edceb878133a643b7077` remains narrow-only | Consumed declared Joint43db Imports PREP; actual renderer upload/private-preview/confirm/A-B and lost commit/admission ACK/file-slice retirement have owner narrow receipts. Lark UTF8/task-identity/large calendar inventory have actual RED/GREEN and bounded read reviews; latest types/build/full affected/IAB/push/PR remain due. Earlier fullWeb515/515 belongs to its earlier candidate. New M06 unknown candidate is not consumed. |
+| M13 Web | **CHECKPOINT; later parent reports turn recovery pending**, tested short build/types `815c5fe6`; later `84e3f9b85e2a3dc2cdc5edceb878133a643b7077` remains narrow-only | Consumed declared Joint43db Imports PREP; actual renderer upload/private-preview/confirm/A-B and lost commit/admission ACK/file-slice retirement have owner narrow receipts. Lark UTF8/task-identity/large calendar inventory have actual RED/GREEN and bounded read reviews; latest types/build/full affected/IAB/push/PR remain due. Earlier fullWeb515/515 belongs to its earlier candidate. New M06 unknown candidate is not consumed. |
 | M14 Desktop | **FINAL module delivery** remote `cd46f25a030bdbe593bc138adc375577b4d032ae`; tested `45467379c5645dec62cc4b03e891b404b675193b`, later only two docs | Own independent GitHub readback confirms PR139 OPEN/Draft/base integration/exact final head (`/tmp/mote-joint-pr139-final-readback.json`). Owner required actual EXIT0: Desktop501/501, Server2626 pass/0 fail/1 existing OS opt-in skip, Web515/515, Android352/352/no failure/error/skip, types/root/shared/CLI0, Agent317+1 opt-in skip. Real generated Desktop native-calendar→M12 fixed review→M05 plus Ask/offline A/B/SIGKILL/restart passed; M13 bounded review no new confirmed finding. Handoff `/tmp/mote-m14-final-delivery-resumed.md`. No joint Files writes were in454; this is not whole joint proof. M14 ended, do not awaken. |
-| M15 Android | Tested main `48a797854e96eedf57c4edbd451fa2e5c5132a73`; later limited Lark checkpoint `49347f929c3919a6e8471efbe458e6c0806a79fa` | Owner full Android353/353 and production APK41s EXIT0 apply to48a; real native Files speaker/correction/original/literal prefix, processing/devices/statistics/MCP, Google Calendar and Gmail lost-ACK/recreate/switch pass in its recorded scope. Generated local Codex Native Ask1/1 is separately reported in J14. Lark original entry RED→owned scope/preview/archive/source-context/A-B GREEN is a limited later checkpoint. New central browser-login purpose and recording reader changes remain untyped WIP; no full-module freeze is inferred. Final affected/review/push/PR, shared Imports/remaining Files/recording/QR outcomes remain OPEN. |
+| M15 Android | Latest owner-tested composed `d524140f0e93844058cb82348274b76ed7e855a7` plus file-retry runtime `dc6345699991a7968e27f660585d88437d258be3`; later7589 checkpoint is explicitly uncompiled | Owner fresh JVM357/357 and fixture app/testAPK40s EXIT0 apply to d524, not current Kotlin WIP; production debugAPK353/353 evidence remains earlier48a. Native file retry/lost admission ACK1/1 passes within that boundary. New default DELETE body, Personal MCP writer and invitation/delete recovery cases remain uncompiled/unrun; emulator recovery/short build waits parent allocation after Desktop→Joint types. Joint8177 was composed for source-only HTTP; M15's source-recreation DELETE RED is independently reproduced and repaired here519. This is no M15 final freeze, final affected, push or PR. Generated local Codex Ask is peer evidence separately in J14. |
+| Desktop v2 QR consumer | New independent slot fixed runtime `32f8215cd9caad6296ec624936889683fb897c67`; current full affected running, not final | Parent-authorized successor to completed producer PR144. Own Desktop/Swift build0, parser+production HTTP86/86 and hidden Electron same-invitation RED→GREEN are owner evidence. M14 PR139 does not close this newly added QR consumer. Await final affected/native receipt, explicit final tested SHA and Draft PR; do not compose running WIP. Theme PR143 stays separate. |
 
 Shared-page ownership remains in the owners' existing ledger
 `/tmp/mote-m13-shared-page-contract-map.md`,
@@ -240,7 +241,7 @@ Every row is **FINAL PENDING**. Owning-module history is supporting evidence onl
 
 | ID / real entry | Required finite journey and observations | Reused evidence / blocking condition |
 | --- | --- | --- |
-| J01 Accounts/private HTTP/MCP | A/B equal business IDs and bytes; valid login→read/write; exchange ID/cursor/download/token; admin cannot browse B; logout leaves previously admitted work; disable/reset rejects late publication. Verify counts and errors do not disclose B; retain original device pairing/QR outcome against canonical M01 contract. | `multiuser-auth*.test.ts`, `private-data.test.ts`, `multiuser-ingress*.test.ts`, `multiuser-mcp*.test.ts`; real production route registration, no default owner. Canonical QR equivalence is explicitly UNKNOWN, not passed by login or MCP authorization; parent plans its next available implementation slot, so this is not waiting on a user decision. |
+| J01 Accounts/private HTTP/MCP | A/B equal business IDs and bytes; valid login→read/write; exchange ID/cursor/download/token; admin cannot browse B; logout leaves previously admitted work; disable/reset rejects late publication. Verify counts and errors do not disclose B; retain original device pairing/QR outcome against canonical M01 contract. | `multiuser-auth*.test.ts`, `private-data.test.ts`, `multiuser-ingress*.test.ts`, `multiuser-mcp*.test.ts`; real production route registration, no default owner. Canonical device QR producer final PR144/485 is delivered and its auth contract is composed here08fa (own bounded16/16); final Web/Android/new Desktop consumer equivalence remains OPEN. Username login and MCP authorization are not substitutes. |
 | J02 Web renderer | A→B, old tab/API/modal/draft, slow read and held write; old A request cannot use B's cookie; B positive request succeeds. Include actual Actions/OQ revision and portable import/export UI. | M13 current IAB journey and actual host; owner-reported old hidden Electron action was denied and unexecuted, so do not retry it or count it as a pass. Final IAB receipt pending. |
 | J03 Desktop main/preload/collector | A offline queue/draft/source→B explicit start→process death/restart→late A ACK→A resumes; exact original bytes; same-account token rotation preserves owner; same URL/new deployment stops bytes; old local format refuses before mutation. | `apps/desktop/test/multiuser-desktop.test.ts`, existing headless native runner and final M14 Actions path. Settings/current status, source edits, original file scan and raw/context readers remain positive cases. |
 | J04 Android Activity/WorkManager | Same queue/switch/death/late ACK/rotation/deployment matrix; native notes/capture/source/snapshot recovery and original bytes; stale detached modal/page/CalendarWorker does not adopt B; new B note/capture positive. | Existing `MultiuserWorkerInstrumentedTest.kt`, JVM tests and isolated headless fixture APK. Actual system grant/revoke and physical-device behavior remain separately unrun; do not change system permissions. |
@@ -964,3 +965,86 @@ The new processing-policy-contract pure value checks3/3 in0.244s0
 /tmp/mote-joint-processing-policy-value.log/.exit only. It has no registered route,
 M04 domain, M03 intake or M05 processing behavior yet. Keep the actual public
 profile/settings/import-choice group OPEN.
+
+
+### Library entry and explicit limited PREP8177
+
+After composing M13 declaredbe6 source slice, own actual Library record has the
+real fileArchive proof. Parent deletion still returned raw-detail200 (expected404)
+in `/tmp/mote-joint-attachment-capture-browser-red.log/.exit`,1/1 EXIT1,0692552c.
+8177's common relationship predicate is applied before count/LIMIT; actual raw
+positive, retired404/count0, forged declaration404/count0 and the other attachment
+flows pass6/6,0skip/fail,11.647s EXIT0 in
+`/tmp/mote-joint-attachment-capture-browser-green.log/.exit`. Source head lookup
+uses the existing owner/source/external primary key. This is source/presentation
+adaptation, not another file projection or Material processor. Scope checker0 in
+`/tmp/mote-joint-current-public-prep-scope.log/.exit`; policy values after final
+parser/error refinement3/3 in processing-policy-value2 EXIT0.
+
+Explicit consumer PREP source8177 is now released with current noEmit, source
+reviews, full affected/compiled/native/clients and current portable/container
+combination PENDING. Historical203997 types do not cover it. This permits consumers
+to implement the fixed API bodies now, not to mark final acceptance. Parent has
+allocated Desktop QR soleheavy; no Joint build/fullsuite/Gradle/Docker was started.
+There is no pending user approval or policy denial; M15's message routing returned
+earlierturnunconfirmed, not an approval request or confirmed delivery. Exact shared
+handoff `/tmp/mote-joint-files-public-freeze.md` is available for parent relay.
+
+### Source recreation DELETE CAS — new confirmed gap and repair
+
+Independent M15 reproduction16532 and Desktop bounded4be review identified an
+unadmitted old generation-zero DELETE accepted after source/capture recreation.
+Those are peer evidence. Own durable50527b80 uses the actual source DELETE,
+registration and multipart intake: same captureUUID, before0/after0, late DELETE200
+and replacement404 instead of409/200. Actual1/1fail EXIT1 in
+`/tmp/mote-joint-file-source-incarnation-red.log/.exit` (2.009s). This is a new
+boundary beyond the previous forget-cycle/lost-ACK regression, not that old bug.
+
+The repair preserves request bodies and keeps a private monotonic incarnation
+counter across canonical file/source retirement. Initial green1 retained the same
+failure because the source FK cascade may remove original rows before the Capture
+trigger; that trigger now uses the canonical file identity, not the presence of a
+child original row. green2 is5/5. green3 is6pass/1fixturefail because the existing
+SQL error mapping returns503, not the fixture's500; the explicit fault and rollback
+assertions remain. Current green4 is **8/8,0fail/cancel/skip,7.163s EXIT0** in
+`/tmp/mote-joint-file-source-incarnation-green4.log/.exit`. It includes actual
+restart after source recreation, old signed ticket404/new ticket exact bytes,
+Capture-only retirement, prior forget/allow plus source retirement, shared-SQL
+fault rollback, actual M16 account erasure and unchanged B, and the original four
+exact-decision/schema-upgrade regressions. All data is generated.
+
+Scope inventory/production boundary and diff whitespace checks passed:
+`/tmp/mote-joint-file-source-incarnation-scope.log/.exit`. The six selected M06
+neighbors first returned5pass/1environmentfail (`listen EPERM`, no provider request)
+in `/tmp/mote-joint-file-source-incarnation-processing-neighbors.log/.exit`.
+Only the held localhost-provider case is rerun under the standard approved local
+execution; its separate terminal receipt is recorded without relabeling that first
+run. Current source noEmit, independent repair review, full affected, rendered
+clients and native/container restore remain pending. No PR or whole acceptance.
+
+Attachment3d/770/4c independent bounded review has now been read from
+`/tmp/mote-m15-review-joint-attachments-3d-770-4c.md`: no new confirmed P0/P1/P2
+within its stated source scope. It did not rerun owner tests or review this new
+source-incarnation repair. M13 exact84e3 large Lark calendar inventory received a
+separate Joint source-only bounded review with no new confirmed finding:
+`/tmp/mote-joint-review-m13-lark-calendar-84e3.md`. No M13 runtime was composed.
+
+The approved exact held-provider rerun is1/1,0skip,3.026s EXIT0 in
+`/tmp/mote-joint-file-source-incarnation-held-approved.log/.exit`; it observes
+coordinator retirement while activeMedia1/pins2, then waits actual completion.
+Together with the five successful selected neighbors, this covers six distinct
+cases across two executions; it is not a six-case green rerun or whole suite.
+A test-only refinement additionally restores a live nonzero-generation file before
+source retirement, verifies exactly one increment for explicit forget and a further
+increment for source deletion:1/1,1.611s EXIT0 in
+`/tmp/mote-joint-file-source-incarnation-nonzero.log/.exit`. Runtime remains519dc3f5.
+
+A new generated source-only native recovery check covers the519 counter specifically:
+`/tmp/mote-joint-file-source-incarnation-native2.log/.exit`,1/1,1.467s EXIT0.
+Actual stopped backupScopedInstance→restoreScopedInstance→production buildApp
+reopen retains exact generation and identity, retires old credentials, refuses an
+old unadmitted DELETE with a newly authenticated same owner, reads exact original
+bytes through a fresh signed M03 ticket, rejects that ticket under B, and permits
+fresh A deletion while B remains readable. No build, compiled entry, packaged CLI,
+Docker/Hindsight provider or full J11/J13 gate was run by this case. An initial
+source-only native1/1 pass is retained separately before final cleanup/byte checks.

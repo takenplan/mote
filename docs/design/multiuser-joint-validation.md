@@ -18,7 +18,7 @@ are in the [joint acceptance matrix](../validation/multiuser-joint-validation.md
 | UNKNOWN actual platform/provider/deployment behavior | Explicit no real I/O/system-permission constraints and existing validation limits | No system permission change/live provider write. Unrun physical/device/permission/Docker tests stay explicit; authorization is not inferred from fixture results. |
 | CHANGE Files adaptation inside M06 only | Original recording, correction and confirmed-speaker ADRs; actual old HTTP consumers | M03 originals, M06 artifacts/publications and M05 remain authoritative. A small owner-bound annotation journal retains raw evidence and confirmation provenance; no second FileStore, scheduler or model execution path. Exact-A/B, tar, M16 merge/delete/backup/restore are narrow candidate probes. |
 | KEEP archive evidence distinct from current execution evidence | Actual older personal archive merge failed after a legitimate speaker/Material update; M07 retained-history requirement | Reuse the canonical Material projection in a restore-only method. Validate retained identity/body/hash, keep live readers/admission current-only, reject old pinned execution, and verify fresh current owner execution remains possible. |
-| UNKNOWN canonical QR pairing equivalence | M13/M15 report old invitation redemption consumers but no frozen scoped equivalent | Existing M01 PKCE approval/poll/ACK is evidence for that flow only. Do not invent a QR payload, restore an owner alias, or count username login/MCP authorization QR as device pairing equivalence. Resolve against M01's original contract/ADR. |
+| CHANGE earlier UNKNOWN QR producer state to delivered canonical contract; consumers still OPEN | Parent-provided PR144 final485/test672 full affected0; Joint08fa exact source composition and bounded16/16 | Preserve original invitation consent/origin/device-only PKCE/self/ACK. No extra browser confirmation, owner alias or inferred full private API authority. New Desktop consumer32f is still running its final gate; M13/M15 consumer acceptance is separate. |
 
 No new domain policy, semantic heuristic, quota, automatic migration, data reset,
 shared secret exposure or user-facing approval step is proposed here. Technical
@@ -309,3 +309,35 @@ imageProfileId work is complete. Existing FileProcessing.completeConfiguration
 compares unfinished runtime fingerprints and requeues changed work; completed
 results remain until explicit preview/reprocess. The eventual adapter must retain
 that distinction and existing unknown-call consent, not blanket-revive work.
+
+
+## Bounded PREP release before final gates
+
+Parent's explicit client-coordination instruction is to publish stable usable
+sub-contracts rather than wait for every module's final candidate. Source8177e8af
+is therefore released as limited consumer PREP with its pending noEmit, independent
+review, full affected/production/client and current native/container schema checks
+visible. No final or compiled-safe claim follows. DELETE/allow bodies are fixed;
+consumer callbacks must bind late receipt/UI effects to the captured original
+generation and complete credential. Profiles/rules/import image-choice execution
+remains a specific OPEN group; pure values do not count as implementation.
+
+M13's already-declared be6 Library original marker is composed without waking its
+paused turn. An actual post-parent-delete raw-detail200 failure is retained;8177
+filters the same exact relation before browser count/paging and passes the original
+case and all six attachment cases. Metadata-only M02 remains data, not a byte grant.
+
+## Source-recreation deletion authority correction
+
+KEEP source and Capture removal/re-registration, deterministic canonical IDs,
+old zero-generation task identities for untouched originals, existing forget/allow
+intent and fixed ACK receipts. CHANGE retirement bookkeeping only: an owner-bound
+identity counter survives source/capture removal so a previously unsent deletion,
+signed original ticket or M06 task cannot regain authority when IDs are reused.
+The canonical DELETE and counter update share the existing SQLite transaction;
+failed source removal rolls both back. No new user confirmation or auto-rebase is
+introduced. Counter metadata is not personal-data payload authority; account
+erasure removes it, native backup preserves it. Evidence: own50527 actualRED,
+519 repair8/8 plus nonzero1/1 and source native recovery1/1. Current type, independent
+repair review and final compiled/container/client gates remain pending. Ordinary
+engineering work is authorized; no user approval is pending in this slot.

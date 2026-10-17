@@ -7,6 +7,23 @@ The [original recording ADR](../adr-recording-outcomes-runtime.md),
 [file source ADR](../adr-file-source-context.md) keep their semantic requirements.
 The [joint matrix](../validation/multiuser-joint-validation.md) remains pending.
 
+## Current limited consumer PREP:8177e8af
+
+Source `8177e8af4eb55410afe2e27dff5da25b85920910` is explicitly consumable for
+client implementation and narrow combination now. This replaces the historical
+0095 request bodies; the exact delete decision contract below is mandatory.
+Current source noEmit, independent reviews, affected/compiled/client and current
+native/container gates are pending. Releasing this stable limited contract does
+not declare a module or whole integration complete, and old checks are not moved.
+
+Included are owned Files/originals, controls/reviews, exact delete/allow decisions,
+parent-bound archived attachment preparation, joined caption/OCR and Memory image
+reading, plus frozen QR production deltas. The actual Library capture entry uses
+M13's declared be6 original marker; attachment retirement/forgery filters run before
+its count and paging. New processing-plan/profile/rule/service-test/preview/
+reprocess/import-image-choice behavior is still OPEN; its pure value schema is not
+an API or execution implementation. Consumers must not infer support from it.
+
 ## Read checkpoint: implemented, narrow validation only
 
 The existing M06 registrar installs `scope/processing-files.ts`. It reads current
@@ -248,8 +265,9 @@ do not move those checks to4be0cb4c or treat0095's failed reimport paths as acce
 
 The historical consumer PREP source0095c897078fce04ce75c687a0e1fc6abc81b479
 must use0563 for task incarnation,679a for late sample publication, and4be0cb4c
-for delete/allow decision correctness. The4be replacement will be explicitly
-released after its own noEmit and bounded review; no WIP consumer freeze is implied.
+for delete/allow decision correctness. 8177 now explicitly releases the bounded replacement contract for consumer
+implementation while noEmit and source reviews are pending; it is not a final gate
+or permission to consume later WIP.
 Remaining image work is finite: retain original named profile/source-MIME
 rules and original-only archive choice, then exact parent/archive attachment
 preparation and transitive retirement. Existing host leaseModel/leaseReference and
@@ -294,3 +312,34 @@ model understanding/Memory extraction/Ask, native UI, production or container ga
 Source noEmit and independent bounded review are pending. Named processing plans,
 source/MIME rules, original-only archive choice and selected import image profile
 remain the next finite public capability group, not complete through this entry.
+
+
+The later raw Library entry check actually found a retired child still returning200
+through capture-browser after parent deletion (0692552c reproduction with M13be6
+marker composed). Minimal8177 applies the same exact relationship predicate before
+browser count/LIMIT when M06 presentation is enabled. Ordinary standalone M02
+metadata reads retain their original behavior. Same test plus six attachment cases
+is6/6 actual0, including count0 and forged-declaration404; no new projection is
+created. The parent head join uses its existing owner/source/external primary key.
+
+### Source and Capture retirement keep the file incarnation (2026-10-17)
+
+KEEP source deletion/re-registration, canonical capture IDs, the numeric
+`originalGeneration` field and exact DELETE operation bodies. A source FK cascade
+must not reset an unadmitted old deletion action to generation zero. M03 now keeps
+`ig_file_generations` keyed by account/source/external ID without a source FK.
+Canonical file Capture retirement advances it in the same SQLite transaction;
+explicit forget advances it once before removing all revisions. The existing
+blocked tombstone skips the redundant retirement bump during that forget. A
+failed deletion rolls the counter back with the canonical data. Removing one
+revision also retires old group-bound actions/tickets/tasks; a fresh read obtains
+the current generation. No client may silently refresh and replay an old intent.
+
+The counter stores identity metadata, no original content, credentials or grants.
+It does not change the existing forgotten-file block/allow behavior. It is not
+included in personal data exports or accepted from import payloads. Whole-instance
+native backup preserves it; account-domain erasure removes it. Generation zero
+remains the historical representation for a never-retired original. Tickets and
+M06 already read the same helper, so recreating the source or Capture cannot
+re-enable an old signed ticket or processing input. Current native/container
+schema composition remains a separate pending gate.
