@@ -44,8 +44,9 @@ export function installIngress(db:DatabaseSync){
  // This authorization counter survives source/capture removal, contains no
  // content or executable grant, and is erased by the account lifecycle.
  db.exec(`INSERT INTO ig_file_generations SELECT user_id,source_id,external_id,generation FROM ig_file_forgets WHERE true ON CONFLICT(user_id,source_id,external_id) DO UPDATE SET generation=MAX(ig_file_generations.generation,excluded.generation);
- CREATE TRIGGER IF NOT EXISTS ig_file_capture_retired BEFORE DELETE ON pd_captures
- WHEN old.source_id IS NOT NULL AND old.external_id IS NOT NULL AND json_extract(old.json,'$.source')='file'
+ DROP TRIGGER IF EXISTS ig_file_capture_retired;
+ CREATE TRIGGER ig_file_capture_retired BEFORE DELETE ON pd_captures
+ WHEN old.source_id IS NOT NULL AND old.external_id IS NOT NULL AND (json_extract(old.json,'$.source')='file' OR json_type(old.json,'$.provenance.document.attachments')='array')
  AND COALESCE((SELECT deleted FROM ig_state WHERE user_id=old.user_id),0)=0
  AND NOT EXISTS(SELECT 1 FROM ig_file_forgets f WHERE f.user_id=old.user_id AND f.source_id=old.source_id AND f.external_id=old.external_id AND f.blocked=1)
  BEGIN

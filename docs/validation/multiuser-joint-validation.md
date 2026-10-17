@@ -1486,3 +1486,20 @@ existing shared fixture unknown-payload/Fastify overload error; the owner's
 already reviewed type-only InjectOptions payload cast was selected, and strict
 new-test noEmit2 EXIT0. No runtime fixture behavior changed. Whole affected,
 compiled client/native/UI and final same-SHA production/backup remain pending.
+
+### Attachment parent reincarnation, producer fix
+
+M13 test-only410acf78 was imported as a durable producer regression, independently
+reproducing the old await/preflight gap on current Joint source: retired A request
+returned200 and created a new child (`mote-joint-attachment-parent-incarnation-red`,
+EXIT1). The existing original counter now advances for retired attachment parents;
+prepareAttachment captures it before await and checks it before duplicate/admission
+inside the existing transaction. No new counter mechanism, table or client guard.
+Same-source/same-parent-UUID and retained-file reconstruction now rejects the old
+request, accepts a new explicit A request, and preserves equal-ID B:2/2,0skip,
+3.310s EXIT0 (`mote-joint-attachment-parent-incarnation-green2`). Existing real
+attachment OCR/cache, held delete/privacy/head fences, data-only restore/navigation,
+undeclared lineage and forget/allow-again/upgrade neighbors10/10,29.991s EXIT0
+(`mote-joint-attachment-incarnation-adjacent`). Generated records and transports
+only. Server and strict producer-test types pass on the composed source; final
+union/backup compiled acceptance is still pending.
