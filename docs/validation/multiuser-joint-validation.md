@@ -1569,3 +1569,19 @@ separate existing/consumer checks; the nonempty200 here is not expanded into
 whole archive-tar byte verification. Account replacement in an existing recording
 connection is not covered by this disconnect-only result. New custom image recipe
 fixture separately actual1/1RED image_recipe_unavailable remains WIP.
+
+### Recording collection pause versus source privacy (2026-10-17)
+
+The parent's new actual renderer pause4→0 report was independently reproduced
+through the existing generated Feishu M10→M03→M04/M05/M06 journey: unchecking
+collection and completing the real select task hid accepted archived files
+(`/tmp/mote-joint-recording-pause-history-red.log/.exit`,31.80s,EXIT1).
+The adapter now registers new recording archives readable and never rewrites
+Source.enabled from collection selection. The existing registration path preserves
+an existing source's privacy choice. This does not migrate or alter real data.
+Both Feishu/Dingtalk exact backend journeys pass2/2,0skip,64.71s
+(`/tmp/mote-joint-recording-pause-history-green.log/.exit`): pause/resume and
+saved enabled selection preserve history, explicit source withdrawal remains
+false through selection saves, disconnect preserves audio bytes/Files/Material/
+export, B remains unchanged, restart and explicit final read withdrawal are valid.
+Full renderer/export contents remain the recording consumer owner's evidence.
