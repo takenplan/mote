@@ -889,6 +889,25 @@ class MultiuserWorkerInstrumentedTest {
             assertEquals(0,control("/generated/pairing-state").getJSONArray("claims").length())
         }} finally {release.countDown()}
     }
+    @Test fun originalNativeFeatureDefaultsCanBindAndClearUnconfiguredChatWithoutDroppingUnavailableReferences() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
+        val a=CentralClient(endpoint(),token("a"));val b=CentralClient(endpoint(),token("b"))
+        fun models():JSONObject {val rows=a.get("/api/configuration").getJSONArray("domains");return (0 until rows.length()).map(rows::getJSONObject).single {it.getString("id")=="models"}.getJSONObject("saved")}
+        val view=a.get("/api/configuration");val value=models();assertFalse(value.getJSONObject("selections").has("chat"));val missing=JSONObject().put("kind","shared").put("id","generated-withdrawn-memory");value.getJSONObject("selections").put("memory",missing)
+        a.put("/api/configuration/models",JSONObject().put("revision",view.getLong("revision")).put("value",value).put("preserveRedactedSecrets",true));val before=models();val bBefore=b.get("/api/configuration").toString()
+        fun state()=control("/generated/model-state")
+        fun views(root:android.view.View):List<android.view.View> = listOf(root) + if(root is android.view.ViewGroup)(0 until root.childCount).flatMap { views(root.getChildAt(it)) } else emptyList()
+        androidx.test.core.app.ActivityScenario.launch<CentralActivity>(android.content.Intent(app,CentralActivity::class.java).putExtra("page","settings")).use {scenario->
+            fun ready(){waitFor {var value=false;scenario.onActivity {value=it.client!=null&&!it.isWorking};value}}
+            fun press(label:String){scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Button>().single {it.text.toString()==label}.performClick()}}
+            ready();press("模型配置");ready();scenario.onActivity {activity->assertTrue("Original feature defaults must not disappear when optional M04 selections starts empty",views(activity.window.decorView).filterIsInstance<android.widget.Button>().any {it.text.toString()=="功能默认模型"})}
+            press("功能默认模型");ready();scenario.onActivity {activity->val fields=views(activity.window.decorView).filterIsInstance<android.widget.Spinner>();val chat=fields.single {it.contentDescription=="功能默认模型 · chat"};assertEquals(0,chat.selectedItemPosition);chat.setSelection((0 until chat.count).single {chat.getItemAtPosition(it).toString()=="Generated import mapper"});val memory=fields.single {it.contentDescription=="功能默认模型 · memory"};assertTrue("A withdrawn reference must remain explicit instead of silently selecting another connection",memory.selectedItem.toString().contains("generated-withdrawn-memory"))};press("保存设置");ready()
+            val selected=a.get("/api/models/selection/chat").getJSONObject("reference");assertEquals("personal",selected.getString("kind"));assertEquals("generated-import",selected.getString("id"));val after=models();assertEquals(before.getJSONArray("profiles").toString(),after.getJSONArray("profiles").toString());assertEquals(missing.toString(),after.getJSONObject("selections").getJSONObject("memory").toString());assertEquals(before.getJSONObject("selections").getJSONObject("import").toString(),after.getJSONObject("selections").getJSONObject("import").toString());assertEquals(bBefore,b.get("/api/configuration").toString());assertEquals(0,state().getJSONArray("requests").length())
+            press("功能默认模型");ready();scenario.onActivity {activity->views(activity.window.decorView).filterIsInstance<android.widget.Spinner>().single {it.contentDescription=="功能默认模型 · chat"}.setSelection(0)};press("保存设置");ready();assertFalse(models().getJSONObject("selections").has("chat"));assertEquals(missing.toString(),models().getJSONObject("selections").getJSONObject("memory").toString());assertEquals(before.getJSONArray("profiles").toString(),models().getJSONArray("profiles").toString());assertEquals(bBefore,b.get("/api/configuration").toString())
+        }
+    }
+
     @Test fun originalNativePersonalModelProfileStillOffersCopyProbeAndDirectory() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false));login(app,"a");MoteI18n.select(app,"zh-CN")
