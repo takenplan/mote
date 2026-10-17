@@ -3,6 +3,7 @@ import {moteText} from '@mote/shared/i18n';
 import {errorMessage,dateTime,type Api} from './api';
 import {useResource} from './useResource';
 import {resources} from './resource-cache';
+import {DevicePairing} from './DevicePairing';
 
 type Credential={id:string;kind:'web'|'client'|'mcp-read'|'mcp-write';label?:string;createdAt:number;expiresAt:number;revokedAt:number|null};
 export function PersonalConnections({api}:{api:Api}){
@@ -21,5 +22,5 @@ export function PersonalConnections({api}:{api:Api}){
   </form>
   {secret&&<div className="connection-mcp"><h3>{moteText('保存此 MCP 配置')}</h3><textarea aria-label="MCP JSON" readOnly value={JSON.stringify(secret.config,null,2)}/><button className="button subtle" onClick={()=>setSecret(undefined)}>{moteText('已保存，隐藏凭据')}</button></div>}
   <h2>{moteText('已授权的连接')}</h2><ul className="connection-list">{inventory.data?.items.map(item=><li key={item.id}><div><strong>{item.label??item.kind}</strong><p>{item.kind} · {dateTime(new Date(item.createdAt).toISOString())}</p>{item.revokedAt!==null&&<span className="badge muted">{moteText('已撤销')}</span>}</div>{item.revokedAt===null&&(revoking===item.id?<div><button className="button danger" disabled={busy} onClick={()=>void run(async()=>{await api.request('/api/connections/'+encodeURIComponent(item.id),{method:'DELETE'});if(secret?.id===item.id)setSecret(undefined);setRevoking('');})}>{moteText('确认撤销')}</button><button className="button" onClick={()=>setRevoking('')}>{moteText('取消')}</button></div>:<button className="button subtle" onClick={()=>setRevoking(item.id)}>{moteText('撤销')}</button>)}</li>)}</ul>
- </section>;
+ <DevicePairing api={api}/></section>;
 }

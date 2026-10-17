@@ -11,9 +11,9 @@ export function ScopedOverview({api,onPage}:{api:Api;onPage:(page:Page)=>void}){
   <div className="processing-actions"><button className="button" onClick={()=>onPage('notes')}>{moteText('随手记')}</button><button className="button" onClick={()=>onPage('ask')}>{moteText('问一问')}</button><button className="button" onClick={()=>onPage('activity')}>{moteText('处理任务')}</button></div>
  </section>;
 }
-export function ScopedDevices({api}:{api:Api}){
+export function ScopedDevices({api,onConnect}:{api:Api;onConnect?:()=>void}){
  const read=useResource<{items:{id:string;name:string;platform:string}[]}>(api,'/api/ingress/devices');
- return <section className="panel panel-pad"><h1>{moteText('采集与设备')}</h1>{read.error!==undefined&&<p role="alert">{errorMessage(read.error)}</p>}<ul className="connection-list">{read.data?.items.map(device=><li key={device.id}><strong>{device.name}</strong><p>{device.platform}</p></li>)}</ul></section>;
+ return <section className="panel panel-pad"><div className="section-heading"><h1>{moteText('采集与设备')}</h1>{onConnect&&<button className="button" onClick={onConnect}>{moteText('生成设备二维码')}</button>}</div>{read.error!==undefined&&<p role="alert">{errorMessage(read.error)}</p>}<ul className="connection-list">{read.data?.items.map(device=><li key={device.id}><strong>{device.name}</strong><p>{device.platform}</p></li>)}</ul></section>;
 }
 export function ScopedUsage({api}:{api:Api}){
  const read=useResource<{items:UsageReceipt[]}>(api,'/api/usage');
