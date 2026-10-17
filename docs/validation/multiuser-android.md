@@ -1067,3 +1067,28 @@ for actual UI write grant over A/B same source ID/label, cancellation/revocation
 and old A confirm retirement underB; default read creation retains the original
 manual samecase. No new backend, credential recovery or runtime was added.
 These source/tests remain UNCOMPILED/UNVERIFIED pending the next parent allocation.
+
+
+### Final QR producer composition and pending native regressions
+
+Merge3a475da1888d1a738432a205c52d02c590f8980b consumes delivered QR48547e8f
+without merging Theme or changing the shared-runtime design. Conflict resolution
+retains Joint originalGeneration/fileGeneration/diarizeFrom/reviews, per-file
+settings and full immutable retry-input validation. Both UTF16 characterization
+variants and both summary503/429 checkpoint variants remain. These composition
+cases are not yet run. Pure i18n checker8468,13 TS syntax parses and diff checks
+exit0; no tsc/application gate is implied.
+
+The corrected invitation fixture39923874 parses the actual base64 URI for both
+negative owner-retirement assertions, as well as the positive precondition. The
+prior0.495s invalid positive precondition remains a fixture error. No production
+resume fix or new compiled/native pass is claimed.
+
+Current original Personal MCP400 RED is captured in
+`/tmp/m15-native-mcp-create-red.log/.exit/-trace.json`, generated host cleanup0.
+Preparedb603 fixes only the strict M01 body and explicit source allowlist form;
+its instrumented creation/revoke/A-B case and0498 default DELETE body/unit test
+await the next parent-allocated short build. Joint4be decision-CAS wire remains
+a candidate awaiting its own type/review freeze; its new required body must be
+consumed before claiming final native file deletion. M15 has released heavy
+resources; it has no final affected result or Draft PR.
