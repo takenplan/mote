@@ -152,17 +152,24 @@ export class IngressHost{
    /** Host adapter seam: the original is selected before publication, so one
     * capture has one immutable descriptor. Worker RPCs never expose this seam. */
    receiveSourceItemsWithOriginals:(sourceId:string,id:string,values:unknown[],inputs:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[])=>intakeSourceItems(sourceId,id,values,inputs,formats),
-   prepareAttachment:(parentId:string,fileId:string,raw:unknown)=>sql.transaction(()=>{
+   prepareAttachment:async(parentId:string,fileId:string,raw:unknown)=>{
     assert();if(sourceIds||deviceId||authority.isTask(context))throw new ScopeError('invalid_identity',403);z.string().uuid().parse(parentId);z.string().uuid().parse(fileId);
-    const options=z.object({mimeType:z.string().regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/).max(200).optional(),processingProfileId:z.string().max(100).optional()}).strict().parse(raw??{});if(options.processingProfileId)throw new PrivateDataError('scope_unavailable',503);
+    const options=z.object({mimeType:z.string().regex(/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/).max(200).optional(),processingProfileId:z.string().regex(/^[a-z][a-z0-9.-]{0,99}$/).optional()}).strict().parse(raw??{});
+    const prepare=()=>{
+    assert();
     const parent=data().capture(parentId),p=parent.provenance;if(!p||p.deleted||parent.privacy.excluded||p.document?.attachmentOf||!p.document?.attachments?.some(a=>a.id===fileId)||data().sourceItem(p.sourceId,p.externalId)?.captureId!==parentId||!sql.get('SELECT file_id FROM ig_archive_links WHERE user_id=$user AND capture_id=? AND file_id=?',parentId,fileId))throw missing();source(p.sourceId);
     const file=archive.file(fileId),mime=options.mimeType??file.mimeType;if(mime==='application/octet-stream')throw new PrivateDataError('invalid_data');if(file.mimeType!=='application/octet-stream'&&file.mimeType!==mime)throw conflict();
     const externalId='attachment:'+identityHash([parentId,fileId]),revision=identityHash([file.hash,mime]),item=sourceItemSchema.parse({externalId,revision,observedAt:parent.capturedAt,title:file.name,text:'',kind:'file',layer:'original',mimeType:mime,document:{attachmentOf:{captureId:parentId,fileId},contentRole:'other',recordedAt:p.document?.recordedAt,timeBasis:p.document?.recordedAt?'recorded':'unknown'}}),childId=captureId(p.sourceId,item),prior=sql.get('SELECT binding_id FROM ig_attachment_links WHERE user_id=$user AND capture_id=?',childId);
-    if(prior){attachmentBinding(sql,childId);return {captureId:childId,parentId,attachmentId:fileId,duplicate:true};}
+    if(prior)attachmentBinding(sql,childId);return {p,file,mime,item,childId,prior};
+    };
+    const initial=prepare();if(initial.prior)return {captureId:initial.childId,parentId,attachmentId:fileId,duplicate:true};
+    if(options.processingProfileId)await this.prepareFileProfile(context,options.processingProfileId);
+    return sql.transaction(()=>{
+    const {p,file,mime,item,childId,prior}=prepare();if(prior)return {captureId:childId,parentId,attachmentId:fileId,duplicate:true};
     const object=sql.get('SELECT bytes FROM ig_objects WHERE user_id=$user AND hash=?',file.hash);if(!object||Number(object.bytes)!==file.sizeBytes)throw conflict();const bindingId=randomUUID();
-    intakeSourceItems(p.sourceId,'attachment:'+bindingId,[item],undefined,undefined,undefined,receipt=>{if(receipt.captures[0]?.id!==childId)throw conflict();sql.run('INSERT INTO ig_attachment_links VALUES($user,?,?,?,?)',childId,parentId,fileId,bindingId);},{hash:file.hash,mime,bytes:file.sizeBytes});
+    intakeSourceItems(p.sourceId,'attachment:'+bindingId,[item],undefined,undefined,undefined,receipt=>{const child=receipt.captures[0];if(child?.id!==childId)throw conflict();sql.run('INSERT INTO ig_attachment_links VALUES($user,?,?,?,?)',childId,parentId,fileId,bindingId);if(options.processingProfileId&&child.original&&!child.duplicate)bindProfile(child.original.ref,options.processingProfileId);},{hash:file.hash,mime,bytes:file.sizeBytes});
     attachmentBinding(sql,childId);return {captureId:childId,parentId,attachmentId:fileId,duplicate:false};
-   }),
+   });},
    forgetFile:forgetting.forget,fileForgetReceipt:forgetting.receipt,forgottenFile:forgetting.forgotten,allowFileAgain:forgetting.allowAgain,
    readOriginal:(ref:string,range?:{offset?:number;length?:number})=>{original(ref);const result=originals.read(ref,range);assert();return result;},
    originalForCapture:(id:string)=>{data().capture(id);const row=sql.get('SELECT id FROM ig_originals WHERE user_id=$user AND capture_id=?',id);if(!row)throw missing();return original('original:'+row.id);},

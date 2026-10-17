@@ -1376,3 +1376,25 @@ Server/scripts noEmit, fresh shared build and scope checker EXIT0. This is a
 limited saved-graph increment, not a replacement client freeze or full gate.
 Attachment overrides, unsaved default graph, health probe and custom recipes
 remain OPEN.
+
+### Saved attachment profile: lineage rechecked after preflight
+
+Durable b103822e reproduces original attachment processingProfileId503 instead
+of200 (1/1fail1.540s `/tmp/mote-joint-profile-attachment-red.*`). The existing
+attachment entry now preflights its saved M06 profile before opening the SQLite
+transaction. It re-resolves the owned parent/head, archive link, MIME and retained
+object after that await; binding publication still occurs in the existing intake
+transaction after the exact attachment relation and before admission listeners.
+An existing attachment ACK wins over a later profile body, preserving the old
+plan until explicit reprocessing. No new original or permission store is added.
+
+The same case GREEN plus held-preflight parent deletion/B positive and the root,
+image-only and mixed-media cases all4/4 EXIT0 in13.573s
+(`/tmp/mote-joint-profile-all-entry-green.*`). Existing real generated OCR
+attachment lineage/cache/recreation/late completion/data restore suite6/6 EXIT0
+in12.629s (`/tmp/mote-joint-profile-attachment-neighbors.*`). Original media,
+inline idempotency and partial publication/restart consumers3/3 EXIT0 in9.960s
+(`/tmp/mote-joint-profile-import-neighbors.*`). Server/scripts noEmit and scope
+checker EXIT0. First scope launcher used a nonexistent filename and exited1;
+correct existing check-scope-contracts.mjs exited0, both logs retained. No new
+full gate, compiled client or provider acceptance is assigned to this increment.
