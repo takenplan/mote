@@ -52,3 +52,12 @@ for(const stage of ['model-result','summary'] as const)test(`changed context rej
  }else await assert.rejects(f.node.working.compact(f.conversationId,{...defaultLifecycleSettings,recentTurns:0},async()=>{change();return result([],'Generated late summary.');}),/Conversation changed/);
  const conversation=f.node.featureServices.conversations.get(f.conversationId);assert.equal(conversation.turns.filter(turn=>turn.result).length,1);assert.equal(conversation.turns[0].evidenceStale,true);assert.equal(f.node.working.get(conversation),undefined);
 });
+
+test('startup installs the context-history lifecycle and a failed expiry rolls back the artifact and dialogue together',async t=>{
+ const f=await fixture(t);f.node.store.db.exec('DROP TRIGGER context_history_invalidation');await f.restart();
+ const db=f.node.store.db,before=f.node.featureServices.conversations.get(f.conversationId),artifact=f.node.store.archive.get(f.artifactId);
+ db.exec("CREATE TRIGGER generated_context_expiry_failure BEFORE UPDATE ON conversations BEGIN SELECT RAISE(ABORT,'Generated snapshot expiry failure'); END");
+ assert.throws(()=>f.save('2'.repeat(64),'Generated corrected interpretation.'),/Generated snapshot expiry failure/);
+ assert.deepEqual(f.node.featureServices.conversations.get(f.conversationId),before,'failed deletion cannot commit partial history invalidation');assert.deepEqual(f.node.store.archive.get(f.artifactId),artifact,'the previous artifact remains intact for retry');
+ db.exec('DROP TRIGGER generated_context_expiry_failure');f.save('2'.repeat(64),'Generated corrected interpretation.');assert.equal(f.node.featureServices.conversations.get(f.conversationId).turns[0].evidenceStale,true);
+});
