@@ -797,8 +797,8 @@
     "actualC2Evidence": "/tmp/mote-final-web-task19-c2-8ad990/evidence",
     "actualC2Scope": "Fresh libs/server/web build0; Chrome original A login/Note/draft reload/two pages; canonical handoff200; held A GET released after A-to-B switch remains isolated; B-only Note save/sync; normal storage notification retires old handoff page",
     "currentBlock": {
-      "action": "Next original browser batch, beginning with navigation for A relogin/failed-switch checks",
-      "target": "Owned Chrome C2 tabs2046608609/2046608610",
+      "action": "goto C2 preferences; click switch; A re-login; later wrong B password (batch aborted)",
+      "target": "Owned Chrome tab2046608609 at synthetic C2 origin",
       "reason": "Chrome reports another extension UI open and requires human dismissal before automation continues",
       "outcome": "First navigation uncertain; no later success evidence",
       "state": "HUMAN_DISMISSAL_REQUESTED_BROWSER_ACTIONS_STOPPED",
@@ -813,7 +813,80 @@
       "followingRefresh": "NOT_EXECUTED",
       "retry": false
     },
-    "remainingScope": "Final actual-browser receipt, remaining original consumers, and lost-storage-notification injection are not accepted"
+    "remainingScope": "Final actual-browser receipt, remaining original consumers, and lost-storage-notification injection are not accepted",
+    "boundedReceipt": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/evidence/bounded-receipt.json",
+      "sha256": "20f740fc5148333df5ab98f36871365710bda230c173a00564c285986bfd0c6f",
+      "contents": {
+        "candidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
+        "manifestSha256": "3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a",
+        "actualBrowser": "Chrome extension, dedicated session, tabs 2046608609 and 2046608610",
+        "buildExit": {
+          "libs": 0,
+          "server": 0,
+          "web": 0
+        },
+        "passed": [
+          "original Preferences A username/password login",
+          "same-ID A private Note with no B content",
+          "A draft persists through actual reload",
+          "second original page restores same A web session",
+          "canonical 127.0.0.1 handoff creation then original A approval page visible",
+          "host confirms held real GET:/api/captures? entered before switch",
+          "A to B remount clears A draft and shows only B Note",
+          "held successful A GET release cannot populate B",
+          "normal storage notification retires old A handoff; poll remains ready false",
+          "B positive original Note save synchronizes through ingress and only B data changes"
+        ],
+        "unrun": [
+          "lost storage notification fault injection (CDP terminal error, no retry)",
+          "A re-login owner draft after switch",
+          "failed login and logout",
+          "credential revoke and account disable",
+          "Models copy/probe/full directory",
+          "file-processing Save and held save retirement",
+          "Memory manual extract/recipe/raw/evidence",
+          "Agent startup/history",
+          "Files image/recording/late delete ACK plus rebuild/download",
+          "Queues actual M05 facts and KEEP pending clear"
+        ],
+        "blocker": "browser-blocker.json",
+        "stepCount": 7,
+        "productRed": [],
+        "fixtureGaps": [
+          "C1 original handoff IPC used random HTTP hostname rejected by canonical serverURL validation, corrected only synthetic client request serverUrl to literal loopback in C2",
+          "external Memory driver initial .ts CommonJS top-level-await failure; renamed .mts",
+          "external Memory driver sourceId conflict409; separate memory publication sourceId fixes generated setup; no production source changed"
+        ],
+        "memoryPrepared": {
+          "url": "http://mote-e2e6-memory-143be783.localhost:64287",
+          "status": "ready only, no browser journey claimed"
+        }
+      }
+    },
+    "blockerReceipt": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/evidence/browser-blocker.json",
+      "sha256": "483898d225b147cec66c3c0fbbb2f1079eec3cee8198e792b444ab46afc454fc",
+      "contents": {
+        "tool": "mcp__cua_repl.js",
+        "action": "goto C2 preferences; click switch; A re-login; later wrong B password (batch aborted)",
+        "targetTab": "2046608609",
+        "targetOrigin": "http://mote-e2e6-e274f1dd.localhost:62788",
+        "result": "Google Chrome is blocking automation because another extension UI is open on this page. Complete or dismiss that extension UI in Google Chrome, then ask me to continue.",
+        "execution": "uncertain first goto; no later success evidence; browser paused pending human dismiss",
+        "approvalId": "not provided; d588 ownership unconfirmed; previous CDP call already returned terminal failure",
+        "userInputRequested": true,
+        "sourceChanged": false
+      }
+    },
+    "fingerprint": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/evidence/fingerprint.json",
+      "sha256": "c8b0d2f33a429e2573439ab1a7da3c056ce646ede726f185e03baca5ca6320b0",
+      "artifactFiles": 1501,
+      "independentHashMismatches": 0,
+      "tree": "fcb3bce1524932978ad7133377aaa56136a3dcc1",
+      "gitStatus": ""
+    }
   },
   "priorC1": {
     "source": "f1be61eed018b913bfa8beb2957256676b7e2f6c",
