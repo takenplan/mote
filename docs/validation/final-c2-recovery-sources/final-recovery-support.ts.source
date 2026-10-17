@@ -1,0 +1,56 @@
+import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
+import {deflateSync} from 'node:zlib';
+import {readFileSync,existsSync} from 'node:fs';
+import {join} from 'node:path';
+import {execFileSync} from 'node:child_process';
+import type {DatabaseSync} from 'node:sqlite';
+
+export const originalPartBytes=4*1024*1024;
+export const sha256=(bytes:string|Uint8Array)=>createHash('sha256').update(bytes).digest('hex');
+export const jsonHash=(value:unknown)=>sha256(JSON.stringify(value));
+const crc32=(bytes:Buffer)=>{let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;};
+const chunk=(name:string,body:Buffer)=>{const tag=Buffer.from(name),size=Buffer.alloc(4),crc=Buffer.alloc(4);size.writeUInt32BE(body.length);crc.writeUInt32BE(crc32(Buffer.concat([tag,body])));return Buffer.concat([size,tag,body,crc]);};
+export function syntheticPng(){
+ const header=Buffer.alloc(13);header.writeUInt32BE(2);header.writeUInt32BE(2,4);header[8]=8;header[9]=2;
+ return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',header),chunk('IDAT',deflateSync(Buffer.from([0,12,34,56,78,90,123,0,145,167,189,210,232,254]))),chunk('IEND',Buffer.alloc(0))]);
+}
+export function syntheticOwner(label:'A'|'B'){
+ const plain=Buffer.from('HANDWRITTEN_GENERATED_'+label+'_PLAIN_😀\n');
+ const multipart=Buffer.alloc(originalPartBytes+37,label==='A'?65:66);
+ Buffer.from('HANDWRITTEN_GENERATED_'+label+'_ENCRYPTED_PARTS\n').copy(multipart);
+ const pending=Buffer.alloc(originalPartBytes+17,label==='A'?97:98);
+ Buffer.from('HANDWRITTEN_GENERATED_'+label+'_PENDING_IMPORT\n').copy(pending);
+ return {label,plain,multipart,pending,png:syntheticPng(),sourceId:'same-source',externalId:'same-external',deviceId:'same-device',batchId:'same-batch',revision:'same-revision'};
+}
+export function splitOriginal(bytes:Buffer){const parts:Buffer[]=[];for(let offset=0;offset<bytes.length;offset+=originalPartBytes)parts.push(bytes.subarray(offset,offset+originalPartBytes));return parts;}
+
+// A final run must fail closed before any service starts if C is not frozen.
+export function assertFinalFreeze(workspace:string,candidate:string,manifestPath:string,manifestHash:string){
+ assert.match(candidate,/^[a-f0-9]{40}$/);assert.match(manifestHash,/^[a-f0-9]{64}$/);
+ const bytes=readFileSync(manifestPath);assert.equal(sha256(bytes),manifestHash,'Unified manifest changed before recovery');
+ const manifest=JSON.parse(bytes.toString());
+ assert.equal(manifest.candidate,candidate,'Recovery must use the E2E owner\'s unique C');
+ for(const key of ['FJ','FW','FA','Image','StatementLifecycleFix'])assert.match(manifest.sources?.[key]??'',/^[a-f0-9]{40}$/,'Final source missing: '+key);
+ for(const [path,hash] of Object.entries(manifest.trackedFileSha256 as Record<string,string>))assert.equal(sha256(readFileSync(join(workspace,path))),hash,'Frozen input changed: '+path);
+ execFileSync('git',['cat-file','-e',candidate+'^{commit}'],{cwd:workspace});
+ const sourceHead=execFileSync('git',['rev-parse','HEAD'],{cwd:workspace,encoding:'utf8'}).trim();
+ assert.equal(sourceHead,candidate,'Use a fresh owned exact-C checkout; runners stay outside its tracked source');
+ execFileSync('git',['diff','--exit-code',candidate,'--'],{cwd:workspace,stdio:'pipe'});
+ // Cover Dockerfile, workspace package manifests, compiler options and hidden
+ // build inputs too. A src-only comparison would miss these production inputs.
+ const untracked=execFileSync('git',['ls-files','--others','--exclude-standard'],{cwd:workspace,encoding:'utf8'}).trim();assert.equal(untracked,'','Untracked input in exact candidate tree');
+ return {candidate,manifestHash,finalSources:manifest.sources,sourceTree:manifest.tree,trackedFiles:Object.keys(manifest.trackedFileSha256).length,sourceHead};
+}
+
+export const retainedTables=['ig_objects','ig_parts','ig_originals','ig_archive_files','ig_archive_links','ig_attachment_links','ig_file_generations','ig_uploads','ig_upload_parts','ig_import_uploads','ig_import_parts','mp_file_plans','mp_file_policy_bindings','mp_file_controls','mp_artifacts','mp_file_steps','mp_publications','mp_derivations','mm_evidence','mm_records','mm_versions','mm_version_bindings'] as const;
+export function snapshotOwnedRows(db:DatabaseSync,owners:string[]){
+ const result:Record<string,unknown[]>={};
+ for(const table of retainedTables){assert.ok(db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(table),'Candidate schema lacks '+table);const rows=db.prepare('SELECT * FROM '+table+' WHERE user_id IN ('+owners.map(()=>'?').join(',')+')').all(...owners);result[table]=rows.sort((a,b)=>{const left=JSON.stringify(a),right=JSON.stringify(b);return left<right?-1:left>right?1:0;});}
+ return result;
+}
+export function assertSameData(actual:unknown,expected:unknown,message:string){assert.equal(jsonHash(actual),jsonHash(expected),message);}
+export function representation(directory:string,ownerRoot:string,hash:string,part:number){
+ const root=join(directory,'originals',ownerRoot),base=join(root,'objects',hash,String(part));
+ return {plain:existsSync(base+'.plain'),aes:existsSync(base+'.aes'),plainHash:existsSync(base+'.plain')?sha256(readFileSync(base+'.plain')):null,cipherHash:existsSync(base+'.aes')?sha256(readFileSync(base+'.aes')):null,keyExists:existsSync(join(root,'content-key')),keyIdentityExists:existsSync(join(root,'content-key-id'))};
+}

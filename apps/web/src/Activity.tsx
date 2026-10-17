@@ -11,6 +11,7 @@ import type { Page } from './navigation';
 import { FeaturePanels } from './features/runtime';
 import { WorkIssueNotice } from './WorkIssueNotice';
 import { CodingReceiptPanel } from './CodingReceiptPanel';
+import { contextEvidenceReference } from './evidence-route';
 const tabs = [['overview', "概览"], ['work', "工作分支"], ['results', "成果"], ['evidence', "证据"], ['technical', "技术详情"]] as const;
 function WorkDetail({ api, id, onBack, onNavigate, onOpen }: {
     api: Api;
@@ -24,6 +25,11 @@ function WorkDetail({ api, id, onBack, onNavigate, onOpen }: {
     useEffect(() => { document.querySelector<HTMLHeadingElement>('.activity-detail h1')?.focus(); }, [id, Boolean(work)]);
     const inspector = () => { const runId = work?.evidence.runId ?? work?.technical.runId; onNavigate('agentView'); if (runId)
         window.location.hash = '#/agent?runId=' + encodeURIComponent(runId); };
+    const openEvidence = (ref: string) => {
+        const reference = parseEvidenceId(ref) ? formatEvidenceRef('capture', ref) : ref;
+        // These producers expose M08 context evidence, while ingestion work links raw captures.
+        onOpen(api.connection?.mode === 'web' && work && ['memory', 'query', 'insight'].includes(work.kind) ? contextEvidenceReference(reference) : reference);
+    };
     return <div className="activity-detail"><button className="back-link" onClick={onBack}><ArrowLeft size={16}/>{moteText('返回活动')}</button>
   {error !== undefined && <p role="alert">{errorMessage(error)} <button className="text-button" onClick={refresh}>{moteText('重试')}</button></p>}{loading && !work && <p role="status">{moteText('正在读取…')}</p>}
   {work && <><div className="page-heading"><div className="eyebrow">MOTE / <ActivityIcon size={14}/></div><h1 tabIndex={-1}>{work.goal}</h1><WorkStateBadge state={work.state}/><WorkProgress progress={work.progress}/></div>
@@ -36,7 +42,7 @@ function WorkDetail({ api, id, onBack, onNavigate, onOpen }: {
    </section>}
    {tab === 'work' && <section className="panel panel-pad"><h2>{moteText('工作分支')}</h2><p>{moteText('每个分支按自己的输入范围推进；完成状态由实际执行记录确认。')}</p><div className="work-branches">{work.branches.map(branch => <article className="work-branch" key={branch.id}><header><h3>{branch.title}</h3><WorkStateBadge state={branch.state}/></header>{branch.progress && <WorkProgress progress={branch.progress}/>} {branch.artifactIds.length > 0 && <p className="fine-print">{moteText('{0} 项已保存成果', branch.artifactIds.length)}</p>}</article>)}</div>{!work.branchCounts?.total && <p className="empty">{moteText('这项工作直接推进，目前没有独立分支。')}</p>} {!!work.branchCounts?.total && <ListPagination label={moteText('工作分支分页')} paging={paging} nextCursor={work.branchesNextCursor} count={work.branches.length} loading={loading}/>}</section>}
    {tab === 'results' && <section className="panel panel-pad"><h2>{moteText('成果')}</h2>{work.artifacts.map(artifact => <article className="work-artifact" key={artifact.id}><FileCheck2 size={20}/><div><h3>{artifact.title}</h3>{artifact.summary && <p>{artifact.summary}</p>}{artifact.href ? <a className="text-button" href={artifact.href}>{moteText('查看成果')}<ArrowRight size={15}/></a> : <button className="text-button" onClick={() => onNavigate(work.destination)}>{moteText('查看成果')}<ArrowRight size={15}/></button>}</div></article>)}{!work.artifacts.length && <p className="empty">{moteText('成果确认保存后会出现在这里。')}</p>}</section>}
-   {tab === 'evidence' && <section className="panel panel-pad"><h2>{moteText('证据')}</h2><p>{moteText('共 {0} 条来源资料。展开原文或查看 Agent 实际读取的内容。', work.evidence.count)}</p><button className="button subtle" onClick={inspector}><Eye size={16}/>{moteText(work.evidence.runId ?? work.technical.runId ? '查看 Agent 实际输入' : '查看 Agent 可访问范围')}</button><div className="work-evidence">{work.evidence.refs.map((ref, index) => <button className="text-button" key={ref} onClick={() => onOpen(parseEvidenceId(ref) ? formatEvidenceRef('capture', ref) : ref)}>{moteText('来源资料 {0}', index + 1)}<ArrowRight size={15}/></button>)}</div>{work.evidence.count > work.evidence.refs.length && <p className="fine-print">{moteText('这里只列出前 {0} 条资料；完整范围可在相关资料中查看。', work.evidence.refs.length)}</p>}</section>}
+   {tab === 'evidence' && <section className="panel panel-pad"><h2>{moteText('证据')}</h2><p>{moteText('共 {0} 条来源资料。展开原文或查看 Agent 实际读取的内容。', work.evidence.count)}</p><button className="button subtle" onClick={inspector}><Eye size={16}/>{moteText(work.evidence.runId ?? work.technical.runId ? '查看 Agent 实际输入' : '查看 Agent 可访问范围')}</button><div className="work-evidence">{work.evidence.refs.map((ref, index) => <button className="text-button" key={ref} onClick={() => openEvidence(ref)}>{moteText('来源资料 {0}', index + 1)}<ArrowRight size={15}/></button>)}</div>{work.evidence.count > work.evidence.refs.length && <p className="fine-print">{moteText('这里只列出前 {0} 条资料；完整范围可在相关资料中查看。', work.evidence.refs.length)}</p>}</section>}
    {tab === 'technical' && <section className="panel panel-pad"><h2>{moteText('技术详情')}</h2><p className="fine-print">{moteText('技术执行记录、尝试次数与依赖用于排查问题。')}</p><div className="processing-actions"><button className="button" onClick={() => onNavigate('processing')}>{moteText('技术执行记录')}</button><button className="button subtle" onClick={inspector}>{moteText('Agent 读取轨迹')}</button></div><details><summary>{moteText('原始 Operation')}</summary>{work.technical.operationIds.map(operationId => <p className="operation-id" key={operationId}><code>{operationId}</code></p>)}</details></section>}
   </>}
  </div>;

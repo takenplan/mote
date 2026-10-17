@@ -2,7 +2,7 @@
 
 日期：2026-10-10。状态：**方案已确认，进入实现与验证**。所有者已授权按模块启动 `gpt-6.1-sol / high` subagent，使用本地 Codex server 做真实链路回归并发布。D1-A、D2-C、D3-A、D4-B、D5-B是本轮实施范围。
 
-依据：聊天 [Review Mote architecture and latency](codex://threads/01a12118-b81c-7e80-9399-b2893ec7bc8b) 的完整审查建议，以及本工作树 `8de27162` 的架构、ADR、代码和测试。当前 Central/server/web 与 macOS 为 0.0.84，Android 为 0.0.82；Central epoch 4、客户端格式 3、wire 1、Ingress 2、便携归档 2 各自独立。
+依据：聊天 Review Mote architecture and latency (internal discussion reference redacted) 的完整审查建议，以及本工作树 `8de27162` 的架构、ADR、代码和测试。当前 Central/server/web 与 macOS 为 0.0.84，Android 为 0.0.82；Central epoch 4、客户端格式 3、wire 1、Ingress 2、便携归档 2 各自独立。
 
 本文件保存批准时的设计，不把拟议收益当作实测。实现与验证使用独立生成资料库，不读取或升级本机私人资料库，不采集个人截图。决定见 [ADR](../adr-system-refactor.md)，实际验证另行记录。
 

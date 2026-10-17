@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AgentProviderError,type QueryInput} from '@mote/agent';
-import {buildApp,type QueryAgent} from '../src/app.js';
+import {buildApp,type QueryAgent} from './fixtures/legacy-app.js';
 import {InsightRuns} from '../src/insight-runs.js';
 import type {Config} from '../src/config.js';
 const headers={authorization:'Bearer generated-insight-runs-owner-token'};

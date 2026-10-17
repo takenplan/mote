@@ -4,7 +4,7 @@ import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {buildApp, type QueryAgent} from '../src/app.js';
+import {buildApp, type QueryAgent} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import {sha256} from '../src/store.js';
 

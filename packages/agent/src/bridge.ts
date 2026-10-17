@@ -765,8 +765,9 @@ export async function startBridge(
         if(typeof args.id!=='string'||!records.has(args.id))throw hostError('Discover the file before requesting evidence');
         const offset=args.offset??0,length=args.length??8000;if(!Number.isSafeInteger(offset)||Number(offset)<0||Number(offset)>10000000||!Number.isSafeInteger(length)||Number(length)<1||Number(length)>16000)throw hostError('Invalid text range');
         const result=await reader.readFileEvidence?.({...range({},bounds),id:args.id,offset:Number(offset),length:Number(length)})??{status:'unavailable'};
-        const record=result.record?project(result.record,0,Number(length),bounds.timeZone):undefined;
-        value={...result,record};if(record)memoryEvidence.push(record);
+        const {offset:sourceOffset,...publicResult}=result;if(sourceOffset!==undefined&&(!Number.isSafeInteger(sourceOffset)||sourceOffset<0))throw hostError('Invalid original text offset');
+        const record=result.record?project(result.record,sourceOffset??0,Number(length),bounds.timeZone):undefined;
+        value={...publicResult,record};if(record)memoryEvidence.push(record);
       }
       else if(tool==='file_chunks'){
         if(typeof args.id!=='string'||!records.has(args.id))throw hostError('Discover the file before reading its chunks');

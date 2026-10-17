@@ -1,0 +1,63 @@
+{
+  "runtimeAndTests": "5a6f59f127769a321508ff5763f6425ca30ac89d",
+  "completeAffected": {
+    "exit": 1,
+    "desktop": {
+      "pass": 501,
+      "fail": 0
+    },
+    "server": {
+      "total": 2845,
+      "pass": 2841,
+      "fail": 2,
+      "skip": 2,
+      "cancel": 0
+    },
+    "web": {
+      "pass": 571,
+      "fail": 0,
+      "skip": 0
+    },
+    "agent": {
+      "pass": 317,
+      "skip": 1
+    },
+    "shared": 192,
+    "diagnostics": 5,
+    "log": "/tmp/m13-required-image-final.log"
+  },
+  "separateSameSourceRemainder": {
+    "root": 81,
+    "client": 5,
+    "runnerExit": 0,
+    "android": {
+      "tests": 352,
+      "suites": 74,
+      "fail": 0,
+      "skip": 0,
+      "actualTasksExecuted": 44,
+      "buildExit": 0
+    }
+  },
+  "browser": {
+    "supportedIAB": true,
+    "generatedOnly": true,
+    "memoryPolls200": 108,
+    "storageAB": true
+  },
+  "compiledStorageSigkillRestart": true,
+  "wholePlatformGatePassed": false,
+  "jointAcceptance": false,
+  "remaining": [
+    "separate KEEP controls PREP db321/aad not selected",
+    "Coding completion observation cause unconfirmed",
+    "physical ACK fixture-only33ce not selected",
+    "shared advanced processing and same-SHA final union"
+  ],
+  "deniedHiddenWebElectronExecuted": false,
+  "latestSourceAndTests": "e712d051aed7f755ce938583df1dd3e025bc6107",
+  "latestRuntimeOptimization": "26c35e1554e39d7b56a36e052690c9b8c335f6e8",
+  "codingFollowup": "docs/validation/multiuser-m13-coding-followup.md",
+  "newWholeGateExecuted": false,
+  "oldCompleteAffectedReceiptPreserved": true
+}

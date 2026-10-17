@@ -7,6 +7,8 @@ import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URL
 
+internal data class CentralDownload(val bytes: Long, val sha256: String, val contentType: String, val requireEtag: Boolean = true)
+
 internal class CentralFailure(val status: Int, val code: String = "", val detail: String = "") : IllegalStateException(when {
     status == 401 && code in setOf("", "unauthorized") -> MoteI18n.text("令牌无效或已失效，请检查后重新登录。")
     status == 403 && code in setOf("", "connection_scope_denied") -> MoteI18n.text("此凭据不具备客户端权限，请升级中央节点或重新登录。")
@@ -24,20 +26,28 @@ internal class CentralClient(
     },
     private val active: () -> Boolean = { true },
     private val unauthorized: () -> Unit = {},
+    private val verify: () -> Unit = {},
 ) {
+    internal fun assertActive() = checkActive()
     fun get(path: String) = request("GET", path)
     fun post(path: String, body: JSONObject = JSONObject()) = request("POST", path, body)
     fun put(path: String, body: JSONObject) = request("PUT", path, body)
     fun patch(path: String, body: JSONObject) = request("PATCH", path, body)
-    fun delete(path: String, body: JSONObject? = null) = request("DELETE", path, body)
+    fun delete(path: String, body: JSONObject? = JSONObject()) = request("DELETE", path, body)
     private fun request(method: String, path: String, body: JSONObject? = null): JSONObject =
         bytes(method, path, body?.toString()?.toByteArray(Charsets.UTF_8), "application/json")
     fun bytes(method: String, path: String, body: ByteArray?, mime: String): JSONObject {
-        checkActive()
+        checkActive(); verify(); checkActive()
         val (status, value) = transport(method, destination(path), body, token, mime)
         checkActive()
         if (status !in 200..299) fail(status, value)
         return value ?: if (status == 204) JSONObject() else throw IllegalStateException(MoteI18n.text("中央响应格式无效，请刷新后重试。"))
+    }
+    fun ingress(deviceId: String, deviceName: String = "Android"): Ingress3Client {
+        val binding = AccountBinding.self(server, get("/api/connections/self"))
+        return Ingress3Client(binding, deviceId, deviceName, { method, path, body ->
+            200 to request(method, path, body)
+        }, current = active)
     }
     internal fun destination(path: String): String {
         val uri = URI(path)
@@ -46,29 +56,65 @@ internal class CentralClient(
             !uri.path.contains("/./") && path.none { it.code < 32 })
         return server.trimEnd('/') + path
     }
-    fun download(path: String, output: java.io.OutputStream, maxBytes: Long = Long.MAX_VALUE) {
-        checkActive()
+    fun download(path: String, output: java.io.OutputStream, maxBytes: Long = Long.MAX_VALUE, expected: CentralDownload? = null) {
+        checkActive(); verify(); checkActive()
         val connection = URL(destination(path)).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 120000
+            ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            if (URI(path).path.startsWith("/api/ingress/")) connection.setRequestProperty("X-Mote-Ingress-Version", "3")
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
+            require(status == 200) { "Whole download requires a complete response" }
+            val declaredBytes = connection.getHeaderField("Content-Length")?.let { value ->
+                requireNotNull(value.toLongOrNull()).also { require(it >= 0 && it <= maxBytes) }
+            }
+            if (expected != null) {
+                require(status == 200 && connection.contentType == expected.contentType && (!expected.requireEtag || connection.getHeaderField("ETag") == "\"${expected.sha256}\"")) { "Export response does not match its receipt" }
+                require(connection.getHeaderField("Content-Length")?.toLongOrNull() == expected.bytes)
+            }
+            val digest = java.security.MessageDigest.getInstance("SHA-256"); var received = 0L
             connection.inputStream.use { input ->
                 val buffer = ByteArray(65536); var total = 0L
                 while (true) {
                     checkActive(); val count = input.read(buffer); if (count < 0) break
-                    total += count; require(total <= maxBytes) { MoteI18n.text("响应超过大小限制") }; output.write(buffer, 0, count)
+                    total += count; require(total <= maxBytes) { MoteI18n.text("响应超过大小限制") }; digest.update(buffer, 0, count); received += count; output.write(buffer, 0, count)
                 }
             }
             checkActive()
+            if (declaredBytes != null) require(received == declaredBytes) { "Incomplete download response" }
+            if (expected != null) require(received == expected.bytes && digest.digest().joinToString("") { "%02x".format(it) } == expected.sha256) { "Export bytes do not match their receipt" }
         } finally { connection.disconnect() }
     }
+    fun downloadVerified(path: String, openOutput: () -> java.io.OutputStream, expected: CentralDownload, directory: File) = stagedDownload(path, openOutput, directory, expected)
+    /** Generic metadata downloads have no portable integrity receipt. Stage the successful response before opening the selected document. */
+    fun downloadStaged(path: String, openOutput: () -> java.io.OutputStream, directory: File) = stagedDownload(path, openOutput, directory, null)
+    private fun stagedDownload(path: String, openOutput: () -> java.io.OutputStream, directory: File, expected: CentralDownload?) {
+        directory.mkdirs()
+        val staged = File.createTempFile("portable-", ".part", directory)
+        try {
+            staged.outputStream().use { download(path, it, expected?.bytes ?: Long.MAX_VALUE, expected) }
+            checkActive(); verify(); checkActive()
+            openOutput().use { output ->
+                staged.inputStream().use { input ->
+                    val buffer = ByteArray(65536)
+                    while (true) {
+                        checkActive(); val count = input.read(buffer); if (count < 0) break
+                        output.write(buffer, 0, count)
+                    }
+                }
+            }
+            checkActive()
+        } finally { staged.delete() }
+    }
     fun image(path: String): ByteArray {
-        checkActive()
+        checkActive(); verify(); checkActive()
         val connection = URL(destination(path)).openConnection() as HttpURLConnection
         try {
             connection.instanceFollowRedirects = false; connection.connectTimeout = 15000; connection.readTimeout = 30000
+            ProtocolCompatibility.headers.forEach { (name, value) -> connection.setRequestProperty(name, value) }
+            if (URI(path).path.startsWith("/api/ingress/")) connection.setRequestProperty("X-Mote-Ingress-Version", "3")
             connection.setRequestProperty("Authorization", "Bearer $token")
             val status = connection.responseCode
             if (status !in 200..299) fail(status)
@@ -98,7 +144,7 @@ internal class UnifiedCentralSession(private val context: Context) {
     private val settings get() = Settings(context.applicationContext)
     @Synchronized private fun refresh(): CollectorConfig {
         val config = settings.read()
-        val next = SourceRules.hash(listOf(config.server, config.token, config.authSignedOut.toString(), config.authExpiresAt.toString(), config.authProcess).joinToString("\u0000"))
+        val next = SourceRules.hash(listOf(config.server, config.token, config.authSignedOut.toString(), config.authExpiresAt.toString(), config.authProcess, config.ownerKey()).joinToString("\u0000"))
         if (next != stamp) { stamp = next; version++ }
         return config
     }
@@ -106,21 +152,24 @@ internal class UnifiedCentralSession(private val context: Context) {
     @Synchronized fun select(server: String) { if (selected != server) { selected = server; version++ }; refresh() }
     @Synchronized fun client(server: String): CentralClient? {
         val config = refresh(); val token = config.connectionToken()
-        if (server != config.server.trim().trimEnd('/') || server != settings.centralEndpoint().trim().trimEnd('/') || token.isBlank()) return null
+        if (server != config.server.trim().trimEnd('/') || server != settings.centralEndpoint().trim().trimEnd('/') || token.isBlank() || config.deviceBoundCredential) return null
         val expected = generation
-        return CentralClient(server, token, active = { generation == expected && settings.read().connectionToken() == token }, unauthorized = { signOut(expected) })
+        return CentralClient(server, token, active = { generation == expected && settings.read().connectionToken() == token }, unauthorized = { signOut(expected) }, verify = { check(settings.verifyAccount(server, token) == config.account()) { "Deployment or account changed" } })
     }
-    @Synchronized fun signIn(server: String, token: String, durationMs: Long = 2592000000L, expectedGeneration: Long? = null) {
+    @Synchronized fun signIn(server: String, token: String, durationMs: Long = 2592000000L, expectedGeneration: Long? = null, bindLocal: Boolean = false) {
         check(expectedGeneration == null || generation == expectedGeneration) { MoteI18n.text("登录会话已变更，请重新打开中央页面。") }
         val config = refresh()
         check(server == config.server.trim().trimEnd('/'))
-        settings.signIn(server, token, durationMs); refresh()
+        val binding = settings.verifyAccount(server, token)
+        check(generation == expectedGeneration || expectedGeneration == null)
+        RuntimeSettings.replaceAccount(context, bindLocal) { settings.signIn(binding.origin, token, durationMs) }
+        refresh()
     }
     @Synchronized fun signOut(expectedGeneration: Long? = null) {
         if (expectedGeneration != null && generation != expectedGeneration) return
         val config = refresh(); val token = config.connectionToken()
         settings.signOut(); refresh()
-        if (token.isNotBlank()) runCatching { HttpJson.post(config.server + "/api/login/logout", JSONObject(), token) }
+        if (token.isNotBlank()) runCatching { HttpJson.post(config.server + "/api/auth/logout", JSONObject(), token) }
     }
 }
 internal object CentralSession {

@@ -3,6 +3,7 @@ import { previewWork, sourceWork } from './background';
 import type { DurableQueue } from './queue';
 import type { LocalSourceManager } from './source-manager';
 import type { SyncSource } from './sync-history';
+import {accountCaptures,accountPagePosition,accountPageCursor} from './account-reader';
 export interface ContentItem { key:string;source:SyncSource;title:string;observedAt:string;preview:string;sourceName?:string;error?:string; }
 export interface LocalContentPage {items:ContentItem[];total:number;nextOffset?:number;}
 export interface ContentDetail {text:string;sourceName:string;metadata:string;hasImage?:boolean;image?:string;metadataOnly?:boolean;retainsOriginal?:boolean;truncated?:boolean;}
@@ -33,6 +34,10 @@ export async function localContentDetail(queue:DurableQueue,sources:LocalSourceM
 }
 export interface CentralContentPage {items:ContentItem[];total:number;nextCursor?:string;authorizationDenied?:true;}
 export async function centralContentPage(config:import('./contracts').Config,cursor?:string):Promise<CentralContentPage>{
+  if(config.account){
+    const query={deviceId:config.deviceId},offset=accountPagePosition(config,cursor,query),rows=await accountCaptures(config),page=rows.slice(offset,offset+30);
+    return {items:page.map(row=>({key:`capture:${row.id}`,source:row.source==='message'?'coding':row.source,title:String(row.windowTitle||row.appName||'').slice(0,200),observedAt:row.capturedAt,preview:String(row.textPreview??row.ocrText??'').slice(0,160),sourceName:row.deviceName})),total:rows.length,...(offset+30<rows.length?{nextCursor:accountPageCursor(config,query,offset+30)}:{})};
+  }
   const {requireConnectionToken}=await import('./login-session.js');const {validateServerUrl}=await import('./config.js');const {readResponseText}=await import('./response-body.js');
   if(cursor!==undefined&&(typeof cursor!=='string'||cursor.length>512))throw Error(moteText('分页参数无效'));
   const query=new URLSearchParams({deviceId:config.deviceId,limit:'30',...(cursor?{cursor}:{})});

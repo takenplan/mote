@@ -7,7 +7,7 @@ import {randomUUID} from 'node:crypto';
 import sharp from 'sharp';
 import {parseAnswer,type QueryInput} from '@mote/agent';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import type {ModelAgentFactory} from '../src/model-agent.js';
 import {StoreError,sha256} from '../src/store.js';

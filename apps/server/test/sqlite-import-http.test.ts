@@ -4,7 +4,7 @@ import {mkdtempSync,rmSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {setTimeout as delay} from 'node:timers/promises';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 
 test('HTTP import survives FTS cleanup, records parser failure, retries, confirms and restarts',{timeout:30_000},async t=>{

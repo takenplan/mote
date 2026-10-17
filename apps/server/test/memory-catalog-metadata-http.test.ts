@@ -5,7 +5,7 @@ import {mkdtempSync,rmSync,writeFileSync,existsSync,readFileSync} from 'node:fs'
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {createModelAgent} from '../src/model-agent.js';
 import {materialId,type MaterialDraft,type MaterialRecord} from '../src/materials.js';
 import {EvidenceExposurePolicy} from '../src/evidence-exposure.js';

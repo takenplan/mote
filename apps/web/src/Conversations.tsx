@@ -3,6 +3,7 @@ import {useOperationUpdates} from './useOperationUpdates';
 import {readResource,resources} from './resource-cache';
 import {failureMessage} from './failure-message';
 import {ModelSelector} from './ModelSelector';
+import {requestModelSelection} from './ask-model-selection';
 import { moteText } from '@mote/shared/i18n';
 import {QueryProgress,type QueryRun} from './QueryProgress';
 import {uploadChatImage} from './note-attachments';
@@ -36,14 +37,22 @@ interface Conversation extends ConversationSummary {turns: ConversationTurn[];re
 interface OlderTurns {api:Api;id:string;revision?:number;turns:ConversationTurn[];nextCursor:string|null}
 interface HistoryPage {items: ConversationSummary[]; nextCursor?: string | null}
 
-export function Conversations({api, configured, devices, renderAnswer,onOpen=()=>{}}: {
+type ConversationProps={
   api: Api;
   configured: boolean;
-  devices: Device[];
+  onModelSelectionChange?:(selected:boolean)=>void;
+  devices: Pick<Device,'deviceId'|'deviceName'>[];
   renderAnswer: (answer: Answer) => ReactNode;
   onOpen?: (ref:string)=>void;
-}) {
+};
+export function Conversations(props:ConversationProps){
+ const connection=props.api.connection;
+ return <ConversationSession key={connection?.mode==='web'?JSON.stringify([connection.origin,connection.deploymentId,connection.userId,connection.credentialId,connection.viewScope]):'legacy'} {...props}/>;
+}
+function ConversationSession({api,configured,devices,renderAnswer,onOpen=()=>{},onModelSelectionChange}:ConversationProps){
   const [modelProfileId,setModelProfileId]=useState(''),[modelOverride,setModelOverride]=useState('');
+  const modelReady=configured||api.connection?.mode==='web'&&Boolean(modelProfileId);
+  useEffect(()=>{onModelSelectionChange?.(Boolean(modelProfileId));},[api,modelProfileId,onModelSelectionChange]);
   const [items, setItems] = useState<ConversationSummary[]>([]), [cursor, setCursor] = useState<string | null>(null);
   const [selectedId,setSelectedId]=useState<string|null>(null),[older,setOlder]=useState<OlderTurns|null>(null),[pageRevoked,setPageRevoked]=useState(false);
   const [selectedOwnerQuestion,setSelectedOwnerQuestion]=useState<string|null>(()=>readOwnerQuestion(window.location.hash));
@@ -85,7 +94,7 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
     } catch (e) { if (!controller.signal.aborted) setHistoryError(errorMessage(e)); }
     finally { if (!controller.signal.aborted) setLoadingPage(false); }
   }
-  useEffect(()=>{selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion('');setAttachments([]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
+  useEffect(()=>{setModelProfileId('');setModelOverride('');selectionMade.current=false;setSelectedId(null);setOlder(null);setItems([]);setCursor(null);setRun(null);setBusy(false);setQuestion('');setAttachments([]);setUploading(false);setPendingQuestion('');setError('');setHistoryError('');setLoadingOlder(false);setLoadingPage(false);
     return()=>{operation.current?.abort();attachmentRequest.current?.abort();historyRequest.current?.abort();olderRequest.current?.abort();};},[api]);
   useEffect(()=>{const changed=()=>{const questionId=readOwnerQuestion(window.location.hash);setSelectedOwnerQuestion(questionId);if(questionId)selectionMade.current=true;const next=new URLSearchParams(window.location.hash.split('?')[1]).get('conversation');if(next){selectionMade.current=true;setSelectedId(next);setRun(null);}};changed();window.addEventListener('hashchange',changed);return()=>window.removeEventListener('hashchange',changed);},[api]);
   const detailRevoked=detail.error instanceof ApiError&&[401,403,404,410].includes(detail.error.status);
@@ -158,13 +167,13 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
   async function submit(event?: {preventDefault(): void}, sample?: string) {
     event?.preventDefault();
     const text = (sample ?? question).trim();
-    if (!text || busy || uploading || opening || operation.current || !configured) return;
+    if (!text || busy || uploading || opening || operation.current || !modelReady) return;
     selectionMade.current=true;
     const controller = new AbortController(); operation.current = controller;
     setRun(null);setBusy(true); setError(''); setConfirmDelete(false); setPendingQuestion(text);
     try {
       const id=crypto.randomUUID();
-      const body=JSON.stringify({id,input:{question:text,modelProfileId:modelProfileId||undefined,modelOverride:modelOverride||undefined,...(conversation?{conversationId:conversation.id}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
+      const body=JSON.stringify({id,input:{question:text,...requestModelSelection(api.connection?.mode==='web',modelProfileId,modelOverride),...(conversation?{conversationId:conversation.id}:{}),attachmentIds:attachments.map(attachment=>attachment.id),timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone}});
       let accepted:QueryRun;
       try{accepted=await api.request<QueryRun>('/api/query-runs',{method:'POST',signal:controller.signal,body});}
       catch(e){
@@ -242,9 +251,9 @@ export function Conversations({api, configured, devices, renderAnswer,onOpen=()=
       <div className="filter-bar"><ModelSelector api={api} feature="chat" value={modelProfileId} onChange={setModelProfileId} model={modelOverride} onModelChange={setModelOverride} disabled={busy||opening}/></div>
       <ConversationComposer label={moteText('向 Mote 提问')} placeholder={conversation?moteText('接着问，Mote 会结合前面的对话。'):moteText('比如，我最近都在忙什么？')} value={question} onChange={setQuestion} onSubmit={()=>void submit()} disabled={busy||opening} hintId="composer-hint">
         {Boolean(attachments.length)&&<div className="chat-attachment-list">{attachments.map(attachment=><span key={attachment.id} className="chat-attachment"><ImagePlus size={14}/><span>{attachment.name}</span><button type="button" disabled={busy||uploading} aria-label={moteText("移除图片 {0}",attachment.name)} onClick={()=>setAttachments(current=>current.filter(item=>item.id!==attachment.id))}><X size={13}/></button></span>)}</div>}
-        <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || opening || !question.trim() || !configured} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
+        <div><span><ShieldCheck size={14}/>{moteText("只读查询 · 回答附带原始证据")}</span><input ref={attachmentInput} type="file" accept="image/png,image/jpeg,image/webp" multiple hidden onChange={event=>void addImages(event.target.files)}/><button className="chat-image-button" type="button" aria-label={moteText("添加图片")} title={moteText("聊天图片最多 4 张，每张不超过 8 MiB，支持 PNG、JPEG、WebP。") } disabled={busy||uploading||opening||attachments.length>=4} onClick={()=>attachmentInput.current?.click()}>{uploading?<LoaderCircle className="spin" size={17}/>:<ImagePlus size={17}/>}</button><span id="composer-hint" className="composer-hint">{moteText("Enter 发送 · Shift+Enter 换行")}</span><button className="send-button" type="submit" disabled={busy || uploading || opening || !question.trim() || !modelReady} aria-label={moteText("发送问题")}>{busy ? <LoaderCircle className="spin" size={19}/> : <ArrowUp size={19}/>}</button></div>
       </ConversationComposer>
-      {!conversation && !busy && !opening && <div className="suggestions"><span>{moteText("从一个小问题开始")}</span>{[moteText("我最近都做了些什么？"), moteText("这周的时间主要花在了哪里？"), moteText("最近有哪些值得接着做的事情？")].map(sample => <button key={sample} disabled={!configured} onClick={() => void submit(undefined, sample)}>{sample}<ArrowRight size={14}/></button>)}</div>}
+      {!conversation && !busy && !opening && <div className="suggestions"><span>{moteText("从一个小问题开始")}</span>{[moteText("我最近都做了些什么？"), moteText("这周的时间主要花在了哪里？"), moteText("最近有哪些值得接着做的事情？")].map(sample => <button key={sample} disabled={!modelReady} onClick={() => void submit(undefined, sample)}>{sample}<ArrowRight size={14}/></button>)}</div>}
     </section>}
   </div>;
 }

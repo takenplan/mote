@@ -1790,8 +1790,8 @@
       }
     },
     "android": {
-      "lastCompletedCommand": "JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' ANDROID_HOME='/Users/utopiafar/Library/Android/sdk' ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug",
-      "workingDirectory": "/Users/utopiafar/.codex/worktrees/ee23/mote/apps/android",
+      "lastCompletedCommand": "JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' ANDROID_HOME='<redacted-personal-path>' ./gradlew :app:testDebugUnitTest :app:compileDebugAndroidTestKotlin :app:assembleDebug",
+      "workingDirectory": "<redacted-personal-path>",
       "lastCompleted": "Final post-origin/main merge build after generated-result metadata correction: 54 suites, 245 JVM tests, 0 failed/error/skipped; instrumented Kotlin compilation and debug assemble passed.",
       "finalVerification": "Final Kotlin and bilingual-catalog source: all three Gradle targets passed; catalog assets/debugAPK rebuilt. Latest JVM XML remains54 suites/245 tests/0 failure/error/skip.",
       "instrumentedDeviceTests": "not run; Kotlin sources compiled only",
@@ -1809,7 +1809,7 @@
       "instrumentedSources": ":app:compileDebugAndroidTestKotlin passed on final source after ownerAdminAllowed result-key correction. No device execution.",
       "debugAssembly": ":app:assembleDebug passed on final source; fixed llama.cpp native library built.",
       "apkPaths": [
-        "/Users/utopiafar/.codex/worktrees/ee23/mote/apps/android/app/build/outputs/apk/debug/app-debug.apk"
+        "<redacted-personal-path>"
       ],
       "durationSeconds": 1,
       "verificationRuns": [

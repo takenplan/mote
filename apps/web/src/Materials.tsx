@@ -7,6 +7,7 @@ import { FeatureActions, FeaturePanels, FeatureView } from './features/runtime';
 import { AnswerMarkdown } from './AnswerMarkdown';
 import { AttributionEditor, AttributionSummary, type AttributionContext } from './AttributionContext';
 import { memoryMaterialRoute } from './memory-source-route';
+import { memoryMaterialSelectionPath, type MemoryMaterialSelection } from './memory-material-selection';
 import { artifactDisplay, materialKind, materialState, sourceDisplay } from './material-presentation';
 export type Material = {
     id: string;
@@ -85,11 +86,12 @@ export function MaterialDetail({ api, material, onOpen, agent = false, scope = {
             name: string;
         }[];
     }>(api, !agent && tab === 'origin' ? '/api/sources' : null);
-    const presentation = useResource<LibraryCatalogDescriptor>(api, agent ? null : '/api/library/descriptor', 5000);
+    const presentation = useResource<LibraryCatalogDescriptor>(api, agent || api.connection?.mode==='web' ? null : '/api/library/descriptor', 5000);
     const selected = current.error === undefined && current.data?.revision === material.revision ? current.data : read.error === undefined ? read.data?.material ?? material : material;
     const rebuilding = selected.coverage.reason === 'source_evidence_changed' || read.error instanceof ApiError && read.error.status === 409;
     const historical = current.error === undefined && current.data && current.data.revision !== material.revision;
-    const memorySource = !agent && !historical && current.error === undefined && current.data?.ref === material.ref ? current.data.memorySource : undefined;
+    const scopedMemory=useResource<MemoryMaterialSelection>(api,!agent&&!historical&&api.connection?.mode==='web'&&current.error===undefined&&current.data?.ref===material.ref?memoryMaterialSelectionPath(material.ref):null,5000);
+    const memorySource = !agent && !historical && current.error === undefined && current.data?.ref === material.ref ? api.connection?.mode==='web' ? scopedMemory.error===undefined&&scopedMemory.data?.ref===material.ref?scopedMemory.data:undefined : current.data.memorySource : undefined;
     const catalog = (presentation.data?.schemaVersion === 1 && Array.isArray(presentation.data.types) ? presentation.data.types : []).find(type => type.kind === selected.kind && type.schemaVersion === selected.schemaVersion);
     const retry = () => { read.refresh(); current.refresh(); };
     const retryIndex = async () => { setIndexBusy(true); setIndexError(''); try {
@@ -109,6 +111,7 @@ export function MaterialDetail({ api, material, onOpen, agent = false, scope = {
     {historical && <p role="status">{moteText('这是历史版本，当前资料已更新。')} <button className="button" onClick={() => onOpen(current.data!.ref)}>{moteText('查看当前版本')}</button></p>}
     {memorySource?.status === 'ready' && <a className="button" href={memoryMaterialRoute(selected.ref)}>{moteText('仅从这份正式资料提取记忆')}</a>}
     {memorySource && memorySource.status !== 'ready' && <p role="status">{moteText('这份正式资料暂不能单独提取记忆，请查看来源与处理状态。')}</p>}
+    {scopedMemory.error!==undefined&&<p role="alert">{errorMessage(scopedMemory.error)}</p>}
     <nav className="section-tabs">{[['body', moteText('正文')], ['origin', moteText('来源与处理')]].map(([id, label]) => <button key={id} aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); setOffset(0); }}>{label}</button>)}</nav>
     {rebuilding ? <p role="status">{moteText('来源已更正，正在重新整理资料。完成后可继续查看。')} <button onClick={retry}>{moteText('刷新')}</button></p> : read.error !== undefined && <p role="alert">{errorMessage(read.error)} <button onClick={retry}>{moteText('重试')}</button></p>}
     {current.error !== undefined && <p role="alert">{errorMessage(current.error)} <button onClick={retry}>{moteText('重试')}</button></p>}

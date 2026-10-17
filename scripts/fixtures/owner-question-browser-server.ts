@@ -1,6 +1,6 @@
 /** Generated source -> real Memory review -> owner control-plane browser fixture. */
 import assert from 'node:assert/strict';
-import {buildApp} from '../../apps/server/src/app.js';
+import {buildApp} from '../../apps/server/test/fixtures/legacy-app.js';
 import type {Config} from '../../apps/server/src/config.js';
 import type {QueryInput} from '@mote/agent';
 import type {QueryResult} from '@mote/shared';

@@ -1,0 +1,100 @@
+# Desktop v2 pairing validation
+
+All accounts, invitations, device metadata, source content and credentials in these checks are generated. No personal Central database, content, derived data or real Central credential was read, attached, stashed or committed. External native/network I/O is substituted where stated; the Electron and production HTTP checks use actual application entry points.
+
+## Delivery and current gate
+
+Draft PR: https://github.com/utopiafar/mote/pull/149 . Target: `codex/mote-multiuser-integration`. Main and integration have not been merged. The final tested commit, natural required exit and remaining blockers are recorded below; separate component successes are never combined into a complete gate pass.
+
+The single final required command, `npm run check:affected -- --base origin/codex/mote-multiuser-integration`, naturally exited **0** on `0a32aeeb950c64a9a9bdf198f61340e946ce9f22`, with identical before/after SHA and no reported failures or cancellations. It ran on2026-10-17 from03:58:59.283Z to04:25:33.624Z (26m34.341s). The executable snapshot includes exact E2E commits `2ea720ac` and `174cec67`; production/native code remains from `32f8215c`. This subsequent edit records the outcome and changes documentation only.
+
+| Final required phase | Actual result |
+| --- | --- |
+| Desktop | 62 files,587/587 passed,131.03s |
+| Server | 2638 passed,1 existing skip,0 failed/cancelled,1298.037s |
+| Web | 515/515 passed,73.608s |
+| Agent | 317 passed,1 existing skip,0 failed,33.386s |
+| Diagnostics / Shared | 5/5 and192/192 passed |
+| Root extras / CLI / Central runner | 81/81;5/5;custom runner exit0 |
+| Android | Gradle exit0 in5s;25 tasks up-to-date,including `testDebugUnitTest`. Retained XML352 tests/74 suites/0 failure/error/skip agrees with the earlier actual same-source352/352 execution. This final phase was cached, not a fresh JVM rerun. |
+
+Complete terminal evidence: `/tmp/mote-desktop-v2-affected-attempt9.{log,exit,sha,after.sha,started,finished}` and `.result.json`. Earlier actual nonzero, controlled and uncertain outcomes remain recorded below. There is no remaining Desktop implementation/gate blocker in this candidate; physical/deployment/live-model and combined Joint acceptance limits remain explicit below.
+
+## Desktop feature acceptance
+
+- Existing shared-v1 parser against the new contract: actual RED, 5 failed / 50 passed, exit 1. The Desktop v2 parser passed 55/55. `/tmp/mote-desktop-v2-parser-{red,green}.log/.exit`.
+- Existing M14 Electron main/preload/renderer received a production-generated v2 invitation through the actual connection page/IPC and failed with its v1-required error. Product RED exit 1: `/tmp/mote-desktop-pairing-native-red-authorized.log/.exit`. Earlier startup errors before product assertions are not this RED.
+- Latest parser plus production TCP host: **86/86, exit 0**, actual Fastify, Accounts, SQLite and ConfigStore. `/tmp/mote-desktop-v2-same-invitation-green.log/.exit`.
+- Final emitted Electron main/preload/renderer plus production host: **20/20, exit 0**, runtime `32f8215cd9caad6296ec624936889683fb897c67`. `/tmp/mote-desktop-pairing-native-final20.log/.exit`. All 1,335 source/output/script entries matched before and after, manifest SHA-256 `e2efdc0d0ca67fc176b07afb90ad534756fa3e7515d6fcefde4ed6c421c6398a`. The same listed runtime/output/script manifest (excluding tests/docs/Android) matched final required candidate `0a32aeeb950c64a9a9bdf198f61340e946ce9f22` exactly both before and after the complete check. `/tmp/mote-desktop-pairing-final20-after-required-result.json`. The earlier incomplete background run is not counted as a pass.
+- The 20 actual Electron journeys cover URI/JSON/generated QR; existing origin consent before POST; durable pre-POST PKCE; limited device authority with actual private-API 403; original-device replacement; A/B queues and actual ingress; lost redeem/poll/ACK plus SIGKILL recovery; saved grant after Central restart/ACK410; expiry/revocation; exact self account/credential/device/schema and poll-purpose mismatches; late A callback after B login; same-URL instance replacement; auth-timer and explicit-logout fences; recovery-button cleanup; and immutable same-invitation metadata.
+- Full libraries plus Desktop/native Swift build: **exit 0**, `/tmp/mote-desktop-v2-build3.log/.exit`. Production and native-harness bytes have not changed since runtime `32f8215c`.
+- QR/M01 production contract checks: **15/15, exit 0**, `/tmp/mote-desktop-v2-qr-contract2.log/.exit`. Scope/i18n/types run in required acceptance; dry-run selection alone is not a pass.
+- Generated connection-page PNG was visually inspected using the supported image tool. It shows origin confirmation; actual DOM assertions verify no remaining checkpoint and a hidden recover button after commit. `/tmp/mote-desktop-v2-connection-ui.png`.
+
+## Confirmed client regressions repaired
+
+1. Redeem retires the original device token. Actual Electron held poll across the real 16-second auth timer and observed old-token 401, automatic local logout and hidden recovery. `/tmp/mote-desktop-pairing-auth-timer-red.log/.exit`. The fix defers only automatic sign-out while pairing is active and accepts only the exact original signed-out source projection. Both the timer/lost-poll/SIGKILL recovery and explicit preload logout with held new self passed. Explicit logout caused no late ACK/publication; the original A queue recovered. `/tmp/mote-desktop-pairing-auth-timer-green4.log/.exit`.
+2. Actual ConfigStore session-only restart stores `token:undefined` with `authSignedOut:false`. Original recovery was hidden while B remained correctly denied. The exact projection fix passed 83 parser/host tests. `/tmp/mote-desktop-v2-session-only-{red,green}.log/.exit`.
+3. Actual connection-page DOM retained a recover button after checkpoint cleanup. RED and focused GREEN: `/tmp/mote-desktop-pairing-ui-cleanup{,-green}.log/.exit`; final native20 includes it.
+4. Reconfirming the same invitation with changed device metadata overwrote the sole encrypted verifier before the immutable server claim failed. Three production-host cases and actual Electron reproduced this RED. `/tmp/mote-desktop-v2-same-invitation-red.log/.exit`, `/tmp/mote-desktop-pairing-same-invitation-red.log/.exit`. The minimum fix rejects changed metadata/source without rewriting the journal and reuses the original verifier for its exact signed-out source. Host86 and actual Electron GREEN verify one redeem before explicit recovery, unchanged verifier/name and publication of the original durable device name. `/tmp/mote-desktop-pairing-same-invitation-green.log/.exit`.
+
+Fresh self exposes `account.credentialId`, not an independent purpose field. Purpose is validated in the immutable device grant; strict self schema and actual device API authority are separately checked. No invented API field or browser approval is used.
+
+## Retained complete-run history
+
+All completed runs retain before/after commit, UTC start/finish and natural exit markers in `/tmp/mote-desktop-v2-affected-attemptN.*`. Controlled interruptions and uncertain environment outcomes are recorded separately.
+
+| Attempt | Candidate | Outcome and scope |
+| --- | --- | --- |
+| 1 | initial composition | Natural exit 2, missing installed locked dependency; corrected by offline `npm ci`, inventory then reported no problems. |
+| 2 | `cb368d67` | Controlled exit 143 to repair the confirmed immutable-claim P2; partial results are not a gate pass. |
+| 3 | `32f8215c` | Tool session disappeared without exit/finish markers; no own heavy process remained. Environment interruption has uncertain outcome. |
+| 4 | `32f8215c` | Controlled interruption after reproduced inherited Ask timeout; exact own process group verified before termination. Its 74 cancelled tests are not business failures. Original Web paging case subsequently passed unchanged in 86.07 s; cause remains unknown. |
+| 5 | `531b64ae` | Natural exit 1; Desktop587, Server2636 pass/1 fail/1 skip/0 cancelled, Web515, Agent317+1 skip, Diagnostics5, Shared192. Only Actions completion observation failed. |
+| 6 | `fa13a8c6` | Natural exit 1; same component counts as attempt5. Only plugin-delete PID assertion failed; historical marker contents were not captured. |
+| 7 | `27fc85e2` | Natural exit 1; Desktop587, Server2634 pass/3 fail/1 skip/0 cancelled, Web515, Agent317+1 skip, Diagnostics5, Shared192. Ordered Ask/Insight completion observations and SDK raw-reference assumption failed. |
+| 8 | `d9a84a4e` | Natural exit1; Desktop587, Server2634 pass/2 fail/1 timeout-cancel/1 skip, Web515, Agent317+1 skip, Diagnostics5, Shared192. Two thousand-original deadlines and feedback SIGKILL were unsuccessful; root/Android short-circuited. |
+| 9 | `0a32aeeb` | Natural exit0 after finite triage and independent review; all selected workspace/root/Android phases completed. Exact counts and Android cache boundary are listed above. |
+
+A nonzero workspace result short-circuits root extra scripts and Android in that command. Separately, the exact root commands passed **81/81**, CLI **5/5**, Central runner exit 0 on unchanged `27fc85e2`: `/tmp/mote-desktop-v2-root-extras-result.json`. They are not a full-gate pass.
+
+## Bounded inherited-fixture corrections
+
+The production retry/deadline policies, business/security assertions, shared wait defaults and corpus sizes are unchanged. Four explicit finite completion observations changed; no global timeout increased.
+
+- Failed-child Ask retry: original isolated 20-second observation failed after the second child validated and parent continued. A one-call 60-second probe retained completed parent, `{one:1,two:2}` starts and one stored turn, and passed in 25.448 s. Corrected repository case passed in 30.249 s under the original Node120-second bound. `/tmp/mote-desktop-v2-ask-retry-isolated.log/.exit`, `/tmp/mote-desktop-v2-ask-wait-{probe,green}.log/.exit`.
+- Actions catalog: the original 15-second `other-source` observation expired before pagination assertions. Production watcher interval is itself 15 seconds. A same-source probe observed absent/pending/running then completed in 23.034 s, one attempt/no error/16 proposals, with all original filtering-before-LIMIT, cursor, empty and owner-isolation assertions. Its exact15-second sample was not dispatched before completion; no exact intermediate state is claimed. Only that call now uses60 seconds; local default remains15. Repository case passed in30.084 s. `/tmp/mote-desktop-v2-action-catalog-{probe,source-green}.log/.exit`.
+- Ordered Ask and automatic Insight: full7 recorded 20-second expiry at parent validation and at A/B windows running without task error. Original ordered isolation passed18.107 s; diagnostic 60-second probes retained all assertions and did not reproduce a wait greater than20 s. Only the two specific completion observations use60 seconds. The real61-second Insight interval, initial zero calls, frozen model/snapshot, exact citations/counts/deduplication, B isolation, stop/revocation and no replay remain. Corrected source2/2 passed102.149 s overall (20.269 s /80.625 s). `/tmp/mote-desktop-v2-ask-observation-source-green.log/.exit`.
+- PID marker: an async write can create an empty marker before publishing digits; `Number('')` is0 and `kill(0,0)` observes the process group. A real-entry partial-write probe captured empty bytes/PID0 after the true worker exited, then failed the unchanged10-second exit assertion. Historical full6 PID contents remain unknown. A durable200 ms partial-write regression failed with the old observer, then passed the whole9-case file when readiness required a positive safe-integer PID under the original10-second budget. Exit10 seconds, stale/null result/no events/no A publication/B usable assertions remain. `/tmp/mote-desktop-v2-plugin-pid-{race-red,source-red,source-green}.log/.exit`.
+- Canonical evidence: once a visible Material references the raw capture, a raw capture reference is intentionally rejected. Actual SDK forced-publication old-raw RED passed after consuming the organizer's declared canonical reference. Repository1/1 retains exact UTF-16 emoji offsets, nonempty spans, complete Material metadata length and raw/B refusal. `/tmp/mote-desktop-v2-mcp-canonical-{red,green,source-green}.log/.exit`. Evidence authority was not widened.
+- Android: the original full JVM task had351/352, exit1, from that first obsolete raw read. Only that test follows M15 `c47a0a4c`, additionally matching sourceId to the receipt. It waits for actual visible Material and canonical publication, checks raw404, source-disabled canonical404 and B404. Full rerun **352/352 across74 suites**, no failure/error/skip, exit0,1m33s; compile/unit tasks executed,23 others up-to-date. `/tmp/mote-desktop-v2-android-unit-{red-result,green-result}.json` and `-green.log/.exit`. This is JVM/shared-contract validation, not emulator/instrumentation/APK or physical acceptance.
+
+A subsequent independent fault injection showed the old PID observer falsely accepted `EPERM` as proof of exit. The reused E2E test-only commit `2ea720ac21df5f2339819ffd241dec9d5fffcb5c` accepts only `ESRCH` and rethrows other errors. The same `EPERM` fault then failed explicitly; removing the fault passed all five actual source-retirement scenarios,16.995 s, retaining the partial-PID regression window and every owner/publication assertion. No production shutdown or timeout changed.
+
+## Thousand-original diagnosis and timing limits
+
+Complete attempt8 retained the original 1,000/125 corpus and all budgets. Direct processing hit its120-second outer test bound (Node cancellation). HTTP import reached999 imported/815 checkpoints/106 completed independent reviews at304.846 seconds of its300-second first phase; no execution error, failure-receipt error or storage overflow was recorded. Event-loop maximum was25.065 seconds and mean750 ms. These are diagnostic state observations, not established resource causality.
+
+On exact candidate `d9a84a4e`, the three original-budget cases then ran serially with source hashes identical before/after: **3/3, exit0**, direct70.222 s; HTTP194.167 s (prefix183.594/tail7.887); scoped feedback SIGKILL45.127 s. `/tmp/mote-desktop-v2-original-controls-candidate.{log,exit,result.json,resources.json}`.
+
+An independent complete tracked M14 archive at `cd46f25a` reused the same locked external dependencies read-only, including nested agent/server versions. Its shared/agent libraries were built locally and `@mote/*` resolution verified archive-local. No source-resolution environment overrides were present; Node26.11.1, lock SHA-256 `6cb27ab7fc9ec5ce28da66b6c31051cd23f7c2b3269eda217b4d39a55e0bdae9` matched. This isolates workspace code but is not an independent clean-install reproduction.
+
+The M14 original-budget arm naturally exited1 with **2/3**: direct112.780 s, HTTP147.183 s (prefix136.646/tail8.880) passed; feedback76.711 s failed after fresh extraction `provider_network`, with dependent review/publish blocked. `/tmp/mote-desktop-v2-original-controls-m14-summary.json`. Full8 had a fresh review failure in the same class; independent E2E pristine-candidate feedback also failed75.914 s. The candidate3/3 does not close this intermittent failure or establish its cause.
+
+Independent E2E observation confirmed a generated-provider fixture failure mechanism: four second-host A reads raised SQLite `errcode5 / database is locked`, and the old catch silently destroyed the model response. The instrumented case could still pass (55.574 s), so this does not retroactively attribute every prior `provider_network` error. A real child process holding `BEGIN EXCLUSIVE` for200 ms reproduced the old default-zero-lock-wait reader failure; a read-only reader with5000 ms lock wait returned the committed value after218 ms, rejected writes and still propagated bad SQL.
+
+Reused E2E commit `174cec6778772d923555035ad8b64338124b2c2e` changes only the two generated-provider connections to a read-only helper with the same existing5-second lock wait as the host. It adds the real child-writer regression and error metadata (first/second phase, A/B label, error name/code/SQLite code and local source frame), excluding request bodies, headers, tokens and content. It retains response destruction on error, all original journey assertions, and65/75/90-second waits. Production transactions, retry policies and thousand-original budgets are untouched.
+
+The durable old-reader lock regression was RED with SQLite5. After the correction, real lock regression plus original review and feedback SIGKILL cases passed **3/3, exit0**,79.136 s overall; review36.406 s, feedback42.009 s, no generated-provider failure diagnostic. `/tmp/mote-crossuser-desktop-provider-fixture-green.log/.exit`. The200 ms lock regression does not guarantee overlap on every schedule; its recorded RED and characterization are actual observations. Server, targeted helper/test types and scope checks also passed in the E2E workspace. These results belong to E2E's exact source snapshot, independently reviewed and reused here; this slot does not claim to have rerun them. The subsequent single final required run exercised the composed candidate successfully: real lock regression0.323s; review/admission/feedback/owner-reply SIGKILL36.959/8.512/48.132/12.953s, with zero generated-provider failure diagnostics. Both unchanged-budget thousand cases passed in that full run (direct71.722s, HTTP190.055s). Automatic Insight passed82.923s, ordered subtasks15.746s and failed-child retry29.510s. No timing causality or performance-regression absence is inferred from these successes.
+
+Resources were sampled every15 seconds during both arms; fixed order, archive/cache warmth, random IDs and other-task scheduling remain uncontrolled. Candidate one-minute load ranged4.27–10.66 on18 logical CPUs. A later full8 snapshot showed73% available memory and228 MiB swap, but was collected after the failures. No claim of resource exhaustion or performance causality follows from these samples.
+
+All timings are uncontrolled functional observations. Available resource snapshots do not prove failure causality or absence of a performance regression. No corpus reduction, automatic budget expansion or unrelated production change is justified by individual green runs.
+
+## Review and unverified boundaries
+
+Independent production review followed both confirmed client P2 fixes and found no new P0/P1/P2 in runtime32. Separate bounded source reviews checked later fixture corrections and retained business/security assertions. Review evidence is distinct from runtime execution.
+
+An initial loopback bind returned sandbox EPERM; the same narrow command proceeded through the standard approval path. Earlier Electron startup ended before document load and was not counted as product RED. No approval rejection was bypassed, no other owner's process was stopped, and no new real provider credentials or system permissions were added.
+
+Physical QR/camera, real Keychain, system permissions, public HTTPS/deployed lifecycle and live models remain unverified. Native external I/O substitutes do not establish these. Final cross-module joint acceptance belongs to the parent/Joint combined candidate. Theme143 and later Joint whole-file fields were not composed into this branch.

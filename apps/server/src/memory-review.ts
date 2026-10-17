@@ -1,7 +1,10 @@
 import {extractionSeedScopeValid,type QueryInput} from '@mote/agent';
 import type {QueryResult} from '@mote/shared';
-import {MemoryOutputValidationError,MEMORY_ADMISSION_PROMPT} from './memory.js';
-import {StoreError,sha256} from './store.js';
+import {MemoryOutputValidationError} from './memory-errors.js';
+import {MEMORY_ADMISSION_PROMPT} from './memory-contract.js';
+import {StoreError} from './execution-storage.js';
+import {createHash} from 'node:crypto';
+const sha256=(value:string)=>createHash('sha256').update(value).digest('hex');
 import type {MemoryReviewReceipt} from './memory-schema.js';
 import type {MemoryDeletions} from './memory-deletions.js';
 import type {MemoryReviewCache} from './memory-review-cache.js';
@@ -15,7 +18,7 @@ const receipts=new WeakMap<QueryResult,MemoryReviewReceipt>();
 export function memoryReviewReceipt(result:QueryResult){return receipts.get(result);}
 /** Set only by the host that invoked the native engine, never by captured content. */
 export type MemoryDraftOrigin='mote'|'native-engine';
-type ReviewOptions={draftOrigin?:MemoryDraftOrigin;deletions?:MemoryDeletions;authorizeDeletionEvidence?:(ids:string[])=>void;cache?:MemoryReviewCache;snapshot?:()=>string;strategy?:MemoryReviewStrategy;taskInstructions?:string};
+type ReviewOptions={draftOrigin?:MemoryDraftOrigin;deletions?:Pick<MemoryDeletions,'snapshot'|'review'>;authorizeDeletionEvidence?:(ids:string[])=>void;cache?:MemoryReviewCache;snapshot?:()=>string;strategy?:MemoryReviewStrategy;taskInstructions?:string};
 
 /** A separate read-only model pass. The host still validates exact evidence after review. */
 export async function reviewMemory(input:QueryInput&{memoryReviewQuestion?:string;memoryReviewRepair?:string},draft:QueryResult,query:(input:QueryInput)=>Promise<QueryResult>,options?:ReviewOptions):Promise<QueryResult> {

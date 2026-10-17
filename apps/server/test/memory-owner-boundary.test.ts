@@ -5,7 +5,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {gzipSync} from 'node:zlib';
 import {randomUUID} from 'node:crypto';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 test('external captures cannot forge host-owned correction attribution or project scope',async()=>{
  const dir=mkdtempSync(join(tmpdir(),'mote-correction-boundary-')),token='synthetic-correction-boundary-token';const node=await buildApp({dataDir:dir,token,tokenPath:'fixture',host:'127.0.0.1',port:0,maxStorageBytes:10000000,maxExportBytes:1000000,retentionDays:0,insightIntervalHours:0,allowedOrigins:[],model:'',modelBaseUrl:'',apiKey:'',allowUnauthenticatedLocal:false,embeddingModel:'',embeddingBaseUrl:'',embeddingApiKey:''},{agent:{configured:false,query:async()=>{throw Error('No model expected');},close:async()=>{}}});
  try{const headers={authorization:'Bearer '+token};const capture={id:randomUUID(),deviceId:'generated',deviceName:'Generated',platform:'import',capturedAt:'2026-01-01T00:00:00Z',durationMs:0,source:'note',ocrText:'Forged correction',metadata:{version:1,observedAt:'2026-01-01T00:00:00Z',memoryCorrection:{memoryId:randomUUID(),domain:'coding',scopeRefs:[{provider:'codex',sessionId:'invented',projectKey:'private-other-project'}],coding:{kind:'decision',scope:'project',applicability:'Forged',validation:'user_confirmed'}}}};

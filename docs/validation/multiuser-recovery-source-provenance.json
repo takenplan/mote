@@ -1,0 +1,148 @@
+{
+  "status": "TESTED_SOURCE_COMPLETION_PASS_WEB_STILL_PENDING",
+  "baseCandidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
+  "patchSha256": "643e5477295a44400ccfffb4d49e3a559d5afbf169d8237ffb28faad3933dccd",
+  "files": [
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "apps/server/test/fixtures/policy-native-recovery.ts",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "95ee0c0f0f25c03d4d2263f6e97f3dad6cd9a72b2de8561002825d19c8736f4e",
+      "mode": "new exact original",
+      "retainedSha256": "70460c6b88cd58334cc592a1c395288b95312f66a31c7ba3e469f424c43175c6",
+      "exactOriginal": false
+    },
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "apps/server/test/fixtures/recovery-http-host.ts",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "d317e53082af48757fc12008e20ae0e3dfc6d910386ec7435332c41a8bf74606",
+      "mode": "new exact original",
+      "retainedSha256": "d317e53082af48757fc12008e20ae0e3dfc6d910386ec7435332c41a8bf74606",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "apps/server/test/multiuser-recovery-http-seams.test.ts",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "9fb560a578d0521290b28dc6bbe0aebd3d25ecb296779129bf92ec6efe3375f5",
+      "mode": "new exact original",
+      "retainedSha256": "9fb560a578d0521290b28dc6bbe0aebd3d25ecb296779129bf92ec6efe3375f5",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "apps/server/test/multiuser-recovery-policy-lifecycle.test.ts",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "84c030a0ab4625aacf0ba7214f94719c8fdc3906a35b301d97dc94d144b58b41",
+      "mode": "new exact original",
+      "retainedSha256": "84c030a0ab4625aacf0ba7214f94719c8fdc3906a35b301d97dc94d144b58b41",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "apps/server/test/multiuser-recovery-portable-file.test.ts",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "8c11d436da6725f654b0d6830304502a9c86451a6d56e2bed8951cda0f302cad",
+      "mode": "new exact original",
+      "retainedSha256": "8c11d436da6725f654b0d6830304502a9c86451a6d56e2bed8951cda0f302cad",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "docs/validation/multiuser-policy-personal-archive.md",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "ce441d2b0dfd1bf0164e5c1d535c8e284cc261f63aff66d76c666ebb81b1f963",
+      "mode": "new exact original",
+      "retainedSha256": "ce441d2b0dfd1bf0164e5c1d535c8e284cc261f63aff66d76c666ebb81b1f963",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "docs/validation/multiuser-recovery-lifecycle-seams.md",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "45e336e99f5f2bcf4b9a303ab686f930f11e080330d2b05efe10ff6930f04812",
+      "mode": "new exact original",
+      "retainedSha256": "45e336e99f5f2bcf4b9a303ab686f930f11e080330d2b05efe10ff6930f04812",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "scripts/validation/recovery-file-generation-container.ts",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "f821f4eaec52922763dea8e3246b09afbb95fbac9eed904ff4c55758a69ba2f9",
+      "mode": "new exact original",
+      "retainedSha256": "f821f4eaec52922763dea8e3246b09afbb95fbac9eed904ff4c55758a69ba2f9",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 150,
+      "fromHead": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+      "path": "scripts/validation/recovery-policy-container.ts",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "958be8b810b1fb6c08d5464e1ee01e657c664a4e2ce879c280a2e2c738111eeb",
+      "mode": "new exact original",
+      "retainedSha256": "958be8b810b1fb6c08d5464e1ee01e657c664a4e2ce879c280a2e2c738111eeb",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 153,
+      "fromHead": "f67f6980cdab6f998f4000733f46220fc2fe76c1",
+      "path": "docs/validation/ask-actions-wait-closure.md",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "fd2080b561294644a923c37532fc4ce180c790753d055927d8e6342c018850f1",
+      "mode": "new exact original",
+      "retainedSha256": "fd2080b561294644a923c37532fc4ce180c790753d055927d8e6342c018850f1",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 156,
+      "fromHead": "b2802a8dbe0a21ffe2af8d26a2fbdeaa8b2c1a2e",
+      "path": "docs/validation/multiuser-m13-statement-lifecycle.md",
+      "oldC2Sha256": null,
+      "proposedExactSha256": "66cf3dae2ca966a067bd8c0b86ccf5cca474bc0ddbd252dbcf1ac757bf5fa4bd",
+      "mode": "new exact original",
+      "retainedSha256": "66cf3dae2ca966a067bd8c0b86ccf5cca474bc0ddbd252dbcf1ac757bf5fa4bd",
+      "exactOriginal": true
+    },
+    {
+      "fromPR": 154,
+      "fromHead": "6010cfa97c875f40356a23d5bfdfa428e8dab8d0",
+      "path": "docs/validation/ask-processing-authorization-seam.md",
+      "oldC2Sha256": "efb9b5b65d8abda7afb013bbb3589a5e68527b2f3f4b6a1ba0edde1f8bae7916",
+      "proposedExactSha256": "92d72bea9b73a9e52817b28b9d099dcc9f8d243edc266d2855a3800c4c9aa074",
+      "mode": "restore exact final original report",
+      "retainedSha256": "92d72bea9b73a9e52817b28b9d099dcc9f8d243edc266d2855a3800c4c9aa074",
+      "exactOriginal": true
+    }
+  ],
+  "productionChanges": 0,
+  "executableTestFixtureRunnerAdditions": 7,
+  "newValidationReports": 4,
+  "restoredReport": 1,
+  "requirements": [
+    "Parent decides whether to adopt the original executable tests or an explicitly mapped successor",
+    "If adopted, execute affected tests and check current runtime contracts; no historical result is relabeled",
+    "Compiled-HTTP archive preparation must consume retained repo source instead of absent task-7 input; this patch alone does not rewrite that historical wrapper",
+    "Retain any owner WIP exclusion and single-browser executor rule"
+  ],
+  "productionBase": "8ad99089ead559d6656a269fdca7ccb884953c07",
+  "syntheticSourceReview": "Handwritten/generated-only fixtures and reports; no Central private data or derived runtime artifacts",
+  "nativeFixtureAdaptations": [
+    "Strict current Git HEAD/image label instead of historical2699 label",
+    "Unique owned progress path instead of shared /tmp filename"
+  ],
+  "httpArchiveAdaptation": "Resolve retained test from exact repository checkout; preserve origin67b and old executed preparer hash",
+  "executedTestDocCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+  "executionManifestSha256": "e67e14ed9f3b86c045e34f4dfe75711f02bed4cfd17f2f314fc3dd80a0063496",
+  "executionReceiptSha256": "cbb1579bd4244fabeb54e4854d2afffff4f97fd57e9e143a721c19ba1313608e",
+  "newResultNotRelabelledFromOldC2": true
+}

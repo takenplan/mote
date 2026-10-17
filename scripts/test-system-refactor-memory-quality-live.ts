@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {randomBytes} from 'node:crypto';
 import {execFileSync} from 'node:child_process';
 import {setTimeout as delay} from 'node:timers/promises';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 
 const output=await mkdtemp(join(tmpdir(),'mote-refactor-memory-quality-')),directory=join(output,'vault'),token=randomBytes(32).toString('hex');

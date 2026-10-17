@@ -1,3 +1,4 @@
+import {observedIntervalCoverage} from './activity-measurement.js';
 import type {EvidenceReader} from './evidence-reader.js';
 import {createHash} from 'node:crypto';
 import type {InsightSnapshot} from '@mote/shared';
@@ -43,9 +44,7 @@ function measuredCoverage(store:Store,scope:Scope):InsightSnapshot['coverage']['
   SELECT coalesce(json_extract(s.value,'$.at'),c.captured_at) at,coalesce(json_extract(s.value,'$.durationMs'),json_extract(c.json,'$.durationMs'),0) duration
   FROM captures c LEFT JOIN json_each(c.json,'$.stateSeries.samples') s WHERE ${where.join(' AND ')})
   SELECT at,duration FROM samples ORDER BY unixepoch(at,'subsec')*1000-duration,at`).iterate(...args);
- const lower=scope.after?Date.parse(scope.after):-Infinity,upper=scope.before?Date.parse(scope.before):Infinity;let end=-Infinity,observedDurationMs=0;
- for(const row of rows){const at=Date.parse(String(row.at)),start=Math.max(lower,at-Number(row.duration)),finish=Math.min(upper,at);if(finish<=start)continue;observedDurationMs+=Math.max(0,finish-Math.max(start,end));end=Math.max(end,finish);}
- return {observedDurationMs,deviceDurationMs:activity.totalDurationMs,overlapDurationMs:Math.max(0,activity.totalDurationMs-observedDurationMs),unobservedDurationMs:Number.isFinite(lower)&&Number.isFinite(upper)?Math.max(0,upper-lower-observedDurationMs):null,accounting:'union_across_devices',coverage:'observed_intervals_only'};
+ return observedIntervalCoverage([...rows].map(row=>({at:String(row.at),durationMs:Number(row.duration)})),scope,activity.totalDurationMs);
 }
 export function createInsightSnapshot(store:Store,id:string,input:Scope&{prompt?:string},reader?:Pick<EvidenceReader,'materialCatalog'>):InsightSnapshot{
  const asOf=new Date().toISOString(),scope={...(input.after?{after:new Date(input.after).toISOString()}:{}),before:input.before?new Date(input.before).toISOString():asOf,...(input.deviceId?{deviceId:input.deviceId}:{}),timeZone:input.timeZone??'UTC'};

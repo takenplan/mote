@@ -8,7 +8,7 @@ import {join} from 'node:path';
 import Fastify from 'fastify';
 import {Context} from '@deepseek-ai/cordis';
 import {ServerFeatureHost,ServerFeatureScope} from '../src/feature-host.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {createInsightSnapshot} from '../src/insight-snapshots.js';
 import {contextBundle} from '../src/context-bundle.js';
 import type {Config} from '../src/config.js';

@@ -8,12 +8,8 @@ export const artifactOutput=z.object({kind:z.string().min(1).max(80),text:z.stri
 export type ArtifactOutput=z.infer<typeof artifactOutput>;
 export type ArtifactMaterialInput={ref:string;offset:number;length:number};
 export type Artifact={id:string;revision:string;kind:string;processor:string;processorVersion:string;configFingerprint:string;generatedAt:string;firstAt:string;lastAt:string;deviceId:string;appId:string;source:string;members:string[];representatives:string[];contentHash:string;metadata:Record<string,unknown>;parents?:{id:string;revision:string}[];materialInputs?:ArtifactMaterialInput[]};
-export function observationKey(record:{id:string;deviceId:string;capturedAt:string;source:string;appId?:string;windowTitle?:string;provenance?:CaptureRecord['provenance']}){
-  // Mechanical boundaries, not an assertion that an app/window is one human task.
-  // Only screen/UI samples can coalesce. Authored records keep their own identity.
-  return hash([record.deviceId,record.source,record.appId,record.windowTitle,record.provenance?.sourceId,
-    record.source==='screen'||record.source==='ui_page'?Math.floor(Date.parse(record.capturedAt)/300000):record.id]);
-}
+import {observationKey} from './observation-key.js';
+export {observationKey} from './observation-key.js';
 export class EvidenceArchive {
   constructor(readonly store:Store){
     const db=store.db;

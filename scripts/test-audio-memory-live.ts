@@ -7,7 +7,7 @@ import {parseArgs} from 'node:util';
 import {execFileSync} from 'node:child_process';
 import {z} from 'zod';
 import {fileEvidenceSchema} from '@mote/shared';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import {repositoryRoot,type Config} from '../apps/server/src/config.js';
 import {codexModels} from '../apps/server/src/model-catalog.js';
 import {sha256} from '../apps/server/src/store.js';
@@ -51,7 +51,7 @@ const report:Record<string,any>={status:'running',startedAt:new Date().toISOStri
  personalDataUsed:false,generatedOwnerConfirmation:true,humanSpeakerIdentityVerified:false,browserTested:false,physicalDevicesTested:false,acousticProcessingRepeated:false,memoriesRepublished:false,
  model:'gpt-6-sol',reasoningEffort:'max',agentDeadlineMs:300000,priority:['functionality','performance','cost'],semanticQualityAccepted:false,fixture,fixtureHash:sha256(fixtureBytes),stages:[],usageByVault:[],
  head:execFileSync('git',['rev-parse','HEAD'],{cwd:repositoryRoot,encoding:'utf8'}).trim()};
-const paths=['scripts/test-audio-memory-live.ts','scripts/context-journey-judgment.ts','apps/server/src/files.ts','apps/server/src/file-reviews.ts','apps/server/src/file-speaker-attribution.ts','apps/server/src/material-organizers.ts','apps/server/src/materials.ts','apps/server/src/memory.ts','apps/server/src/memory-policy.ts','apps/server/src/memory-review.ts','apps/server/src/memory-pipeline.ts','apps/server/src/evidence-reader.ts','apps/server/src/evidence-exposure.ts','apps/server/src/app.ts','packages/shared/dist/files.js','packages/agent/dist/bridge.js','packages/agent/dist/instructions.js'];
+const paths=['scripts/test-audio-memory-live.ts','scripts/context-journey-judgment.ts','apps/server/src/files.ts','apps/server/src/file-reviews.ts','apps/server/src/file-speaker-attribution.ts','apps/server/src/material-organizers.ts','apps/server/src/materials.ts','apps/server/src/memory.ts','apps/server/src/memory-policy.ts','apps/server/src/memory-review.ts','apps/server/src/memory-pipeline.ts','apps/server/src/evidence-reader.ts','apps/server/src/evidence-exposure.ts','apps/server/test/fixtures/legacy-app.ts','packages/shared/dist/files.js','packages/agent/dist/bridge.js','packages/agent/dist/instructions.js'];
 report.codeHashes=Object.fromEntries(await Promise.all(paths.map(async path=>[path,sha256(await readFile(join(repositoryRoot,path)))])));
 let node:Awaited<ReturnType<typeof buildApp>>|undefined,currentVault='';
 async function save(){if(node)report.activeUsage=node.featureServices.usageLedger.summary('2020-01-01','2100-01-01','UTC',{},'skill',1,200);await writeFile(join(directory,'report.json'),JSON.stringify(report,null,2)+'\n',{mode:0o600});}

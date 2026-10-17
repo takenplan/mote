@@ -9,6 +9,7 @@ import { ApiError, errorMessage, type Api } from './api';
 import { createModelDraft, modelDraftChanged, modelSettingsRequest, retainedCredentialsNeedConfirmation, type CredentialAction, type ModelSettingsDraft } from './model-settings-form';
 import { codexReasoningChoices, type CatalogModel } from './model-reasoning';
 const protocolNames: Record<ModelSettingsDraft['protocol'], string> = {
+    'mote-media': 'Mote Media',
     'codex-app-server': "本机 Codex App Server",
     deepseek: "DeepSeek 原生",
     'openai-completions': "OpenAI Chat Completions 兼容",

@@ -43,7 +43,8 @@ export function createUpdateService(context: UpdateContext, dependencies: { chec
     previousAttempt = clock(); pending = perform().finally(() => { pending = undefined; }); return pending;
   }, close: async () => { closed = true; controller.abort(); await pending; } };
 }
-/** Register beneath the central owner's existing /api authentication hook. No updater process is spawned here. */
+/** Legacy fixture registrar. Production uses the scoped administrator routes
+ * with this same read-only service. No updater process is spawned here. */
 export function registerUpdateRoutes(app: FastifyInstance, service: ReturnType<typeof createUpdateService>) {
   app.get('/api/software-update', async () => service.status());
   app.post('/api/software-update/check', async (request, reply) => {

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { buildApp, type QueryAgent } from '../src/app.js';
+import { buildApp, type QueryAgent } from './fixtures/legacy-app.js';
 import type { Config } from '../src/config.js';
 
 const inactive: QueryAgent = { configured: false, query: async () => { throw new Error('No model calls in synthetic heartbeat fixtures'); }, close: async () => {} };

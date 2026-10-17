@@ -1,3 +1,4 @@
+import {safeTextWindow} from '../text-window.js';
 import {contextBundle} from '../context-bundle.js';
 import {MAX_CONTEXT_REF_LENGTH} from '../context-navigation.js';
 import {EvidenceReader} from '../evidence-reader.js';
@@ -69,7 +70,7 @@ export function createMoteMcp(ctx:ConnectorContext,write=false,track?:<T>(work:P
       limit=Math.max(1,Math.floor(limit/2));
     }
   };
-  const evidence=(r:CaptureRecord,offset=0,length=2000)=>{let start=Math.min(offset,r.ocrText.length),end=Math.min(start+length,r.ocrText.length);const split=(at:number)=>at>0&&at<r.ocrText.length&&/[\uD800-\uDBFF]/.test(r.ocrText[at-1])&&/[\uDC00-\uDFFF]/.test(r.ocrText[at]);if(split(start))start--;if(split(end))end--;if(end<=start&&start<r.ocrText.length)end=Math.min(start+2,r.ocrText.length);return {...('fileEvidence' in r?{fileEvidence:r.fileEvidence}:{}),id:r.id,ref:formatEvidenceRef('capture',r.id),capturedAt:r.capturedAt,appName:r.appName,text:r.ocrText.slice(start,end),textRange:{offset:start,total:r.ocrText.length,nextOffset:end<r.ocrText.length?end:null},source:r.source,provenance:r.provenance,mood:r.mood,appId:r.appId,deviceId:r.deviceId,durationMs:r.durationMs,receivedAt:r.receivedAt,privacy:r.privacy,metadata:r.metadata};};
+  const evidence=(r:CaptureRecord,offset=0,length=2000)=>{const window=safeTextWindow(r.ocrText,offset,length);return {...('fileEvidence' in r?{fileEvidence:r.fileEvidence}:{}),id:r.id,ref:formatEvidenceRef('capture',r.id),capturedAt:r.capturedAt,appName:r.appName,...window,source:r.source,provenance:r.provenance,mood:r.mood,appId:r.appId,deviceId:r.deviceId,durationMs:r.durationMs,receivedAt:r.receivedAt,privacy:r.privacy,metadata:r.metadata};};
   const captureRef=z.string().max(64).refine(value=>Boolean(evidenceRefId(value,'capture')),'Invalid capture reference');
   const memoryRef=z.string().max(64).refine(value=>Boolean(evidenceRefId(value,'memory')),'Invalid memory reference');
   const timeRange={after:z.string().datetime({offset:true}).optional(),before:z.string().datetime({offset:true}).optional(),deviceId:z.string().max(128).optional(),limit:z.number().int().min(1).max(100).default(30)};

@@ -6,7 +6,7 @@ import {join} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {AgentYieldError,originalEvidenceReceipt,parseAnswer,type QueryInput} from '@mote/agent';
 import {ProviderFailure,type QueryResult} from '@mote/shared';
-import {buildApp,type QueryAgent} from '../src/app.js';
+import {buildApp,type QueryAgent} from './fixtures/legacy-app.js';
 import type {Config} from '../src/config.js';
 import {startBridge} from '../../../packages/agent/dist/bridge.js';
 

@@ -1,0 +1,2534 @@
+{
+  "apps/server/src/actions.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M12",
+    "surfaces": [
+      "api:get:'/api/actions'",
+      "api:get:'/api/actions/deliveries'",
+      "api:post:'/api/actions/:id/claim'",
+      "api:post:'/api/actions/:id/confirm'",
+      "api:post:'/api/actions/:id/dismiss'",
+      "api:post:'/api/actions/:id/receipt'",
+      "api:post:'/api/actions/retry'",
+      "api:post:'/api/actions/targets'",
+      "api:put:'/api/actions/settings'",
+      "table:action_chunk_changes",
+      "table:action_jobs",
+      "table:action_meta",
+      "table:action_proposals",
+      "table:action_semantic_checkpoints",
+      "table:action_targets",
+      "task:this.engine.enqueue:'workflow:actions:'+key",
+      "task:this.engine.register:kind:'actions.extract'"
+    ]
+  },
+  "apps/server/src/activity-memory-index.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:activity_memory_batches",
+      "table:activity_memory_continuations",
+      "table:activity_memory_coverage",
+      "table:activity_memory_items",
+      "table:activity_memory_jobs",
+      "table:activity_memory_outputs",
+      "table:activity_memory_source_links",
+      "table:activity_memory_source_nodes",
+      "table:activity_memory_sources"
+    ]
+  },
+  "apps/server/src/activity.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/work-activity'",
+      "api:get:'/api/work-activity/:id'"
+    ]
+  },
+  "apps/server/src/agent-feature-host.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M09",
+    "surfaces": [
+      "extension:registry.install:id:featureId",
+      "extension:root.plugin:(ctx:Context)=>{ ctx.effect(()=>registry.install({id:featureId,version:'1',components:keys.map(key=>({id:'agent:'+key,version:'1',surface:'agent'}))})); for(const key of keys){const fn=implementation[key];if(!fn)continue; ctx.effect(()=>registry.register(featureId,{id:'agent:'+key,version:'1',surface:'agent'},fn)); Object.defineProperty(reader,key,{enumerable:true,value:(...args:unknown[])=>{const active=registry.get('agent:'+key);if(!active)throw new StoreError('Agent capability unavailable',503);return active(...args);}}); } }",
+      "extension:root.plugin:(ctx:Context)=>{for(const tool of contributions)ctx.effect(()=>tools.register(tool));}"
+    ]
+  },
+  "apps/server/src/archive-export.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/export-bundle'"
+    ]
+  },
+  "apps/server/src/archived-files.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "directory:this.directory",
+      "table:archived_files",
+      "table:capture_files",
+      "table:file_blobs"
+    ]
+  },
+  "apps/server/src/asset-worker.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "directory:destinationPath",
+      "directory:task.directory",
+      "directory:task.staging"
+    ]
+  },
+  "apps/server/src/assets.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "directory:join(this.store.directory,'files')",
+      "directory:parent",
+      "directory:root",
+      "directory:staging",
+      "directory:this.directory",
+      "directory:this.store.directory",
+      "table:asset_parts",
+      "table:asset_pins",
+      "table:asset_references",
+      "table:assets"
+    ]
+  },
+  "apps/server/src/backend-plugin-scope.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M09",
+    "surfaces": [
+      "extension:this.context.plugin:plugin",
+      "extension:this.context.provide:name"
+    ]
+  },
+  "apps/server/src/capture-browser.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/capture-browser'",
+      "api:get:'/api/capture-browser/:id'",
+      "api:get:'/api/capture-browser/:id/image'",
+      "api:get:'/api/capture-browser/sessions'",
+      "api:get:'/api/capture-browser/updates'",
+      "api:get:`/api/capture-browser/${mode}`",
+      "api:post:'/api/capture-browser/:id/ocr'",
+      "api:post:'/api/capture-browser/reconcile'"
+    ]
+  },
+  "apps/server/src/config-service.ts": {
+    "scope": "mixed",
+    "module": "M04",
+    "surfaces": [
+      "directory:dirname(this.path)"
+    ],
+    "status": "implemented"
+  },
+  "apps/server/src/config.ts": {
+    "scope": "mixed",
+    "module": "M04",
+    "surfaces": [
+      "directory:dataDir"
+    ],
+    "status": "partial",
+    "notes": "M04 reuses schemas and instance file startup without owner initialization; legacy credential generation remains quarantined."
+  },
+  "apps/server/src/connectors/dingtalk-recordings.ts": {
+    "scope": "mixed",
+    "module": "M10",
+    "surfaces": [
+      "directory:path"
+    ]
+  },
+  "apps/server/src/connectors/gmail.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M10",
+    "surfaces": [
+      "table:gmail_sync_members"
+    ]
+  },
+  "apps/server/src/connectors/lark-cli.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M10",
+    "surfaces": [
+      "directory:configDir",
+      "directory:home",
+      "directory:join(root,'tmp')",
+      "directory:storage"
+    ]
+  },
+  "apps/server/src/connectors/lark-legacy.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M10",
+    "surfaces": [
+      "table:lark_document_sync"
+    ]
+  },
+  "apps/server/src/connectors/mcp.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M10",
+    "surfaces": [
+      "api:all:'/mcp'",
+      "mcp:registerResource:'source-catalog':'mote://sources'",
+      "mcp:registerTool:'mote_activity'",
+      "mcp:registerTool:'mote_browse'",
+      "mcp:registerTool:'mote_context'",
+      "mcp:registerTool:'mote_evidence'",
+      "mcp:registerTool:'mote_file_catalog'",
+      "mcp:registerTool:'mote_file_chunks'",
+      "mcp:registerTool:'mote_history'",
+      "mcp:registerTool:'mote_items'",
+      "mcp:registerTool:'mote_material'",
+      "mcp:registerTool:'mote_material_read'",
+      "mcp:registerTool:'mote_materials'",
+      "mcp:registerTool:'mote_media_activity'",
+      "mcp:registerTool:'mote_memories'",
+      "mcp:registerTool:'mote_put_item'",
+      "mcp:registerTool:'mote_read'",
+      "mcp:registerTool:'mote_retrieve'",
+      "mcp:registerTool:'mote_search'",
+      "mcp:registerTool:'mote_segments'",
+      "mcp:registerTool:'mote_sources'",
+      "mcp:registerTool:'mote_status'",
+      "mcp:registerTool:'mote_timeline'",
+      "table:mcp_import_manifests"
+    ]
+  },
+  "apps/server/src/connectors/private-file.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M10",
+    "surfaces": [
+      "directory:this.directory"
+    ]
+  },
+  "apps/server/src/connectors/recording-staging.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M10",
+    "surfaces": [
+      "directory:resolve(root,'recording-')",
+      "directory:root"
+    ]
+  },
+  "apps/server/src/connectors/recordings.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M10",
+    "surfaces": [
+      "table:recording_cursors",
+      "table:recording_exports",
+      "table:recording_media",
+      "task:this.engine.enqueue:operationId",
+      "task:this.engine.register:kind:this.kind(phase)"
+    ]
+  },
+  "apps/server/src/connectors/registry.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M10",
+    "surfaces": [
+      "api:get:'/api/connectors/status'"
+    ]
+  },
+  "apps/server/src/content-storage.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/content-storage'",
+      "api:post:'/api/content-storage/decrypt'",
+      "api:post:'/api/content-storage/decrypt/cancel'",
+      "api:put:'/api/content-storage'",
+      "directory:importUploads",
+      "directory:path",
+      "directory:this.store.directory"
+    ]
+  },
+  "apps/server/src/context-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/context/browse'",
+      "api:get:'/api/context/bundle'",
+      "api:get:'/api/context/retrieve'",
+      "api:get:'/api/context/search'",
+      "api:post:'/api/context/read'"
+    ]
+  },
+  "apps/server/src/conversations.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M08",
+    "surfaces": [
+      "table:conversation_turns"
+    ]
+  },
+  "apps/server/src/delegated-query-runs.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M08",
+    "surfaces": [
+      "table:query_runs"
+    ]
+  },
+  "apps/server/src/delegation-runtime.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M05",
+    "surfaces": [
+      "table:delegation_source_context_dependencies",
+      "task:this.engine.enqueue:work.operationId",
+      "task:this.engine.register:kind:`delegation.coordinator.${profile.id}`",
+      "task:this.engine.register:kind:`delegation.unit.${entry.id}`"
+    ]
+  },
+  "apps/server/src/delegation-store.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:delegation_artifacts",
+      "table:delegation_dependencies",
+      "table:delegation_events",
+      "table:delegation_payloads",
+      "table:delegation_results",
+      "table:delegation_units",
+      "table:delegation_works"
+    ]
+  },
+  "apps/server/src/diagnostics.ts": {
+    "scope": "instance",
+    "module": "M16",
+    "surfaces": [
+      "directory:this.options.directory"
+    ]
+  },
+  "apps/server/src/evidence-archive.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:artifact_dependencies",
+      "table:artifact_events",
+      "table:artifact_inputs",
+      "table:artifact_material_inputs",
+      "table:artifacts_fts",
+      "table:context_artifacts",
+      "table:context_contents",
+      "table:context_dirty",
+      "table:context_observations",
+      "table:memory_artifact_dependencies"
+    ]
+  },
+  "apps/server/src/evidence-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/captures/:id'",
+      "api:get:'/api/captures/:id/image'",
+      "api:get:'/api/memories'",
+      "api:get:'/api/memories/:id'",
+      "api:get:'/api/memories/:id/evidence'",
+      "api:get:'/api/memories/:id/text'",
+      "api:get:'/api/notes/:id'"
+    ]
+  },
+  "apps/server/src/evidence-store.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "directory:directory",
+      "table:blobs",
+      "table:capture_gallery",
+      "table:capture_ocr_receipts",
+      "table:captures",
+      "table:captures_fts",
+      "table:captures_trigram",
+      "table:changes",
+      "table:conversations",
+      "table:devices",
+      "table:file_evidence_links",
+      "table:insights",
+      "table:memories",
+      "table:memory_batch_dependencies",
+      "table:memory_batches",
+      "table:memory_checkpoints",
+      "table:memory_dependencies",
+      "table:memory_jobs",
+      "table:memory_provider_evidence_revocations",
+      "table:perception_jobs",
+      "table:perception_results",
+      "table:settings",
+      "table:source_connections",
+      "table:source_heads",
+      "table:source_versions"
+    ]
+  },
+  "apps/server/src/execution-engine.ts": {
+    "scope": "mixed",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "table:execution_cancellation_aliases",
+      "table:execution_dependencies",
+      "table:execution_failures",
+      "table:execution_fairness",
+      "table:execution_operation_steps",
+      "table:execution_resources",
+      "table:execution_sequence",
+      "table:execution_steps",
+      "table:execution_user_fairness",
+      "table:execution_user_sequence"
+    ]
+  },
+  "apps/server/src/execution-settings-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M05",
+    "surfaces": [
+      "api:get:'/api/diagnostics-settings'",
+      "api:get:'/api/execution-settings'",
+      "api:put:'/api/diagnostics-settings'",
+      "api:put:'/api/execution-settings'"
+    ]
+  },
+  "apps/server/src/feature-host.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M09",
+    "surfaces": [
+      "extension:registry.install:manifest",
+      "extension:this.root.plugin:(ctx:Context)=>{ ctx.effect(()=>registry.install(manifest,{completeTrustedTopology:manifest.components.length===0})); const scope=new ServerFeatureScope(onError);ctx.effect(()=>{this.scopes.add(scope);return()=>{this.scopes.delete(scope);return scope.close();};}); app.register(async child=>{ child.addHook('onRequest',async(_req,reply)=>{if(!scope.active)return reply.code(503).send({error:'feature_unavailable'});}); child.addHook('onRoute',route=>{ for(const method of [route.method].flat()){ const surface:FeatureSurface=collectorIngressWrite(method,route.url)?(route.url.startsWith('/api/file-sync/')?'upload':'ingress'):method==='GET'||method==='HEAD'?'data':'command'; ctx.effect(()=>registry.register(manifest.id,{id:`http:${method}:${route.url}`,version:'1',surface},{method,path:route.url})); } }); entry(child,scope); }); }"
+    ]
+  },
+  "apps/server/src/features/actions.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M12",
+    "surfaces": [
+      "extension:registerTodoRoutes:app"
+    ]
+  },
+  "apps/server/src/features/agent-view.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/agent-view/catalog'",
+      "api:get:'/api/agent-view/events'",
+      "api:get:'/api/agent-view/evidence'",
+      "api:get:'/api/agent-view/material-read'",
+      "api:get:'/api/agent-view/materials'",
+      "api:get:'/api/agent-view/memories'",
+      "api:get:'/api/agent-view/runs'",
+      "api:get:'/api/agent-view/segments'",
+      "api:get:'/api/agent-view/source-items'",
+      "api:post:'/api/agent-view/read'",
+      "api:post:'/api/agent-view/startup'"
+    ]
+  },
+  "apps/server/src/features/ask.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:delete:'/api/conversations/:id'",
+      "api:get:'/api/conversations'",
+      "api:get:'/api/conversations/:id'",
+      "api:get:'/api/query-runs'",
+      "api:get:'/api/query-runs/:id'",
+      "api:post:'/api/query'",
+      "api:post:'/api/query-runs'",
+      "api:post:'/api/query-runs/:id/cancel'"
+    ]
+  },
+  "apps/server/src/features/capture.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:delete:'/api/captures/:id'",
+      "api:get:'/api/activity'",
+      "api:get:'/api/captures'",
+      "api:post:'/api/captures'",
+      "api:post:'/api/captures/batch'",
+      "api:post:'/api/captures/bundle'"
+    ]
+  },
+  "apps/server/src/features/coding.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:delete:'/api/source-pipelines/:sourceId'",
+      "api:get:'/api/coding/uploads'",
+      "api:get:'/api/source-pipelines'",
+      "api:get:'/api/source-pipelines/:sourceId'",
+      "api:put:'/api/source-pipelines/:sourceId'"
+    ]
+  },
+  "apps/server/src/features/connections.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M01",
+    "surfaces": [
+      "api:delete:'/api/connections/:id'",
+      "api:get:'/api/connections'",
+      "api:get:'/api/connections/self'",
+      "api:get:'/api/login/requests/:id'",
+      "api:post:'/api/connections/invitations'",
+      "api:post:'/api/connections/invitations/revoke'",
+      "api:post:'/api/connections/mcp'",
+      "api:post:'/api/connections/redeem'",
+      "api:post:'/api/login/ack'",
+      "api:post:'/api/login/exchange'",
+      "api:post:'/api/login/logout'",
+      "api:post:'/api/login/poll'",
+      "api:post:'/api/login/requests'",
+      "api:post:'/api/login/requests/:id/approve'",
+      "api:post:'/api/login/session'",
+      "api:post:'/api/login/ticket'"
+    ]
+  },
+  "apps/server/src/features/context.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/context-index'",
+      "api:get:'/api/context/segments'",
+      "api:get:'/api/skills'",
+      "extension:registerContextRoutes:app",
+      "extension:registerEvidenceRoutes:app"
+    ]
+  },
+  "apps/server/src/features/devices.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/devices'",
+      "api:post:'/api/devices/heartbeat'"
+    ]
+  },
+  "apps/server/src/features/diagnostics.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/diagnostics'",
+      "api:get:'/api/diagnostics/events'",
+      "api:get:'/api/diagnostics/log-pages'",
+      "api:get:'/api/diagnostics/logs'",
+      "api:get:'/api/support-bundle'"
+    ]
+  },
+  "apps/server/src/features/files.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "extension:registerFileRoutes:app"
+    ]
+  },
+  "apps/server/src/features/imports.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "api:delete:'/api/imports/:id'",
+      "api:get:'/api/archived-files/:id'",
+      "api:get:'/api/archived-files/:id/content'",
+      "api:get:'/api/captures/:id/archived-files'",
+      "api:get:'/api/import-capabilities'",
+      "api:get:'/api/import-source-packs'",
+      "api:get:'/api/imports'",
+      "api:get:'/api/imports/:id'",
+      "api:post:'/api/imports'",
+      "api:post:'/api/imports/:id/cancel'",
+      "api:post:'/api/imports/:id/confirm'",
+      "api:post:'/api/imports/:id/prepare'",
+      "api:post:'/api/imports/:id/retry'"
+    ]
+  },
+  "apps/server/src/features/index.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/features'",
+      "extension:host.install:id:'mote.actions'",
+      "extension:host.install:id:'mote.activity'",
+      "extension:host.install:id:'mote.agent-view'",
+      "extension:host.install:id:'mote.ask'",
+      "extension:host.install:id:'mote.capture'",
+      "extension:host.install:id:'mote.coding'",
+      "extension:host.install:id:'mote.connections'",
+      "extension:host.install:id:'mote.context'",
+      "extension:host.install:id:'mote.devices'",
+      "extension:host.install:id:'mote.diagnostics'",
+      "extension:host.install:id:'mote.features'",
+      "extension:host.install:id:'mote.files'",
+      "extension:host.install:id:'mote.imports'",
+      "extension:host.install:id:'mote.insights'",
+      "extension:host.install:id:'mote.materials'",
+      "extension:host.install:id:'mote.media'",
+      "extension:host.install:id:'mote.memory'",
+      "extension:host.install:id:'mote.models'",
+      "extension:host.install:id:'mote.notes'",
+      "extension:host.install:id:'mote.owner-questions'",
+      "extension:host.install:id:'mote.processing'",
+      "extension:host.install:id:'mote.sources'",
+      "extension:host.install:id:'mote.storage'",
+      "extension:host.install:id:'mote.system'",
+      "extension:host.install:id:'mote.usage'"
+    ]
+  },
+  "apps/server/src/features/insights.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M08",
+    "surfaces": [
+      "api:get:'/api/insight-runs'",
+      "api:get:'/api/insight-runs/:id'",
+      "api:get:'/api/insights'",
+      "api:post:'/api/insight-runs'",
+      "api:post:'/api/insight-runs/:id/cancel'",
+      "api:post:'/api/insights'"
+    ]
+  },
+  "apps/server/src/features/materials.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "extension:registerMaterialRoutes:app"
+    ]
+  },
+  "apps/server/src/features/media.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/media-activity'"
+    ]
+  },
+  "apps/server/src/features/memory.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "extension:registerMemoryRoutes:app"
+    ]
+  },
+  "apps/server/src/features/models.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/configuration'",
+      "api:put:'/api/configuration/:id'",
+      "extension:registerExecutionSettingsRoutes:app",
+      "extension:registerModelSettingsRoutes:app"
+    ]
+  },
+  "apps/server/src/features/notes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:delete:'/api/notes/:id'",
+      "api:get:'/api/notes'",
+      "api:post:'/api/notes'"
+    ]
+  },
+  "apps/server/src/features/owner-questions.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/owner-questions'",
+      "api:get:'/api/owner-questions/:id'",
+      "api:post:'/api/owner-questions/:id/reply'"
+    ]
+  },
+  "apps/server/src/features/processing.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M06",
+    "surfaces": [
+      "extension:registerProcessingRoutes:app"
+    ]
+  },
+  "apps/server/src/features/sources.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "extension:registerSourceRoutes:app"
+    ]
+  },
+  "apps/server/src/features/storage.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/export'",
+      "api:get:'/api/storage-statistics'",
+      "api:post:'/api/import'",
+      "api:post:'/api/index/retry'"
+    ]
+  },
+  "apps/server/src/features/system.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/build-info'",
+      "api:get:'/api/health'",
+      "api:get:'/api/status'",
+      "api:get:'/api/updates'",
+      "extension:registerUpdateRoutes:app"
+    ]
+  },
+  "apps/server/src/features/usage.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M04",
+    "surfaces": [
+      "api:get:'/api/usage'",
+      "api:put:'/api/usage/prices'"
+    ]
+  },
+  "apps/server/src/file-processing.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "table:file_configuration_snapshots",
+      "table:file_diarization_overrides",
+      "table:file_processor_waits",
+      "table:file_semantic_calls",
+      "table:file_semantic_withdrawals",
+      "table:file_summary_pages",
+      "task:this.engine.enqueue:'file:'+id",
+      "task:this.engine.register:kind:'files.'+phase"
+    ]
+  },
+  "apps/server/src/file-processors.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "extension:pluginScope.install:audio('audio.http')",
+      "extension:pluginScope.install:audio('audio.local-dialogue',true)",
+      "extension:pluginScope.install:builtin({id:'document.generic',version:'1',name:\"文档文字提取\",stage:'extract',mediaTypes:[...DOCUMENT_MIME_TYPES],localOnly:true,dependencies:{settings:[]},process:input=>input.decodeOriginal?input.decodeOriginal(input.file.mimeType):extractDocument(input.readOriginal(),input.file.sizeBytes,input.file.mimeType,input.signal)})",
+      "extension:pluginScope.install:builtin({id:'image.http',version:'2',name:\"图片文字提取接口\",stage:'extract',mediaTypes:['image/'],serviceKind:'image',awaitResponseOnCancel:true,reuseByContent:true,dependencies:{settings:['imageEndpoint','apiKey','allowRemote']},async process(input){ if(!input.settings.imageEndpoint)throw new StoreError('Image processing service is not configured',409); const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Media-Type':input.file.mimeType,...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})}; const value=isLoopback(input.settings.imageEndpoint)?await postLocalProcessor(input.settings.imageEndpoint,headers,input.readOriginal(),input.signal,false):await readProcessorJson(await fetch(input.settings.imageEndpoint,{method:'POST',headers,body:input.readOriginal() as unknown as BodyInit,duplex:'half',signal:input.signal,redirect:'error'} as RequestInit)); const transcript=transcriptSchema.parse(value);if(transcript.durationMs!==0)throw new StoreError('Image text cannot have audio duration',502);return transcript; }})",
+      "extension:pluginScope.install:builtin({id:'text.utf8',version:'3',name:\"UTF-8 文字提取\",stage:'extract',mediaTypes:['text/'],localOnly:true,dependencies:{settings:[]},process:input=>input.decodeOriginal?input.decodeOriginal('text/plain'):extractUtf8(input.readOriginal(),input.file.sizeBytes,input.signal)})",
+      "extension:pluginScope.install:builtin({id:alternative?'audio.diarize-wespeaker':'audio.diarize',version:alternative?'1':'3',name:alternative?'本地说话人分离 · WeSpeaker 中文':'本地说话人分离',stage:'diarize',mediaTypes:['audio/'],localOnly:true,managedModel:alternative?'speaker-wespeaker':'dialogue',awaitResponseOnCancel:true,dependencies:alternative?{settings:['endpoint','apiKey','speakerCount','speakerMin','speakerMax'],parameters:['speakerCount','speakerMin','speakerMax']}:{settings:['endpoint','apiKey','speakerCount'],parameters:['speakerCount']},async process(input){ if(!isLoopback(input.settings.endpoint))throw new StoreError('Diarization requires a loopback worker',409); const endpoint=new URL(input.settings.endpoint);endpoint.pathname=endpoint.pathname.replace(/\\/transcribe\\/?$/,'/diarize'); if(!endpoint.pathname.endsWith('/diarize'))throw new StoreError('Local worker URL must end with /transcribe',409); if(!alternative&&input.settings.speakerMin!==null)throw new StoreError('Speaker range requires the WeSpeaker plugin',409); const headers={...(input.requestScope?{'X-Mote-Request-Scope':input.requestScope}:{}),...(alternative?{'X-Mote-Speaker-Model':'wespeaker-zh',...(input.settings.speakerMin!==null?{'X-Mote-Speaker-Min':String(input.settings.speakerMin),'X-Mote-Speaker-Max':String(input.settings.speakerMax)}:{})}:{}),'Content-Type':'application/octet-stream','Content-Length':String(input.file.sizeBytes),'X-Mote-Offline':'1','X-Mote-Max-Audio-Ms':String(input.maxAudioMs),'X-Mote-Processing-Timeout-Ms':String(input.settings.timeoutMs),'X-Mote-Speaker-Count':String(input.settings.speakerCount??0),...(input.settings.apiKey?{Authorization:`Bearer ${input.settings.apiKey}`}:{})}; return diarizationSchema.parse(await postLocalProcessor(endpoint.toString(),headers,input.readOriginal(),input.signal)); }})",
+      "extension:pluginScope.install:loaded.default??loaded",
+      "extension:pluginScope.install:plugin",
+      "extension:pluginScope.install:{name:'mote-file-capabilities',apply:ctx=>{ctx.effect(()=>installImportIntake(this.intake));ctx.effect(()=>installFileRecipes(this.recipes,this.outputs));ctx.effect(()=>installImageRecipes(this.imageRecipes));}}",
+      "extension:this.epochs.install:processor.id",
+      "extension:this.pluginScope.provide:'moteContextProcessors'",
+      "extension:this.pluginScope.provide:'moteFileOutputs'",
+      "extension:this.pluginScope.provide:'moteFileProcessors'",
+      "extension:this.pluginScope.provide:'moteFileRecipes'",
+      "extension:this.pluginScope.provide:'moteImageInputs'",
+      "extension:this.pluginScope.provide:'moteImageRecipes'",
+      "extension:this.pluginScope.provide:'moteImportIntake'"
+    ]
+  },
+  "apps/server/src/file-recipes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "extension:this.epochs.install:key"
+    ]
+  },
+  "apps/server/src/file-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "api:delete:'/api/files/:id'",
+      "api:get:'/api/file-processing'",
+      "api:get:'/api/file-sync/v1/capabilities'",
+      "api:get:'/api/file-sync/v1/head'",
+      "api:get:'/api/file-sync/v1/recovery'",
+      "api:get:'/api/file-sync/v1/uploads/:id'",
+      "api:get:'/api/files'",
+      "api:get:'/api/files/:id'",
+      "api:get:'/api/files/:id/assets'",
+      "api:get:'/api/files/:id/chunks'",
+      "api:get:'/api/files/:id/content'",
+      "api:get:'/api/files/:id/export'",
+      "api:get:'/api/files/:id/reviews'",
+      "api:post:'/api/file-processing/match'",
+      "api:post:'/api/file-processing/preview'",
+      "api:post:'/api/file-processing/reprocess'",
+      "api:post:'/api/file-processing/test-local'",
+      "api:post:'/api/file-sync/v1/manifests'",
+      "api:post:'/api/file-sync/v1/recovery/:id/uploads'",
+      "api:post:'/api/file-sync/v1/uploads'",
+      "api:post:'/api/file-sync/v1/uploads/:id/commit'",
+      "api:post:'/api/files/:id/allow-again'",
+      "api:post:'/api/files/:id/cancel'",
+      "api:post:'/api/files/:id/corrections'",
+      "api:post:'/api/files/:id/playback'",
+      "api:post:'/api/files/:id/retry'",
+      "api:post:'/api/files/:id/reviews'",
+      "api:post:'/api/files/:id/reviews/:reviewId'",
+      "api:post:'/api/files/:id/speakers'",
+      "api:post:'/api/records/:id/attachments/:attachmentId/processing'",
+      "api:put:'/api/file-processing'",
+      "api:put:'/api/file-sync/v1/revisions'",
+      "api:put:'/api/file-sync/v1/uploads/:id/parts/:part'"
+    ]
+  },
+  "apps/server/src/file-schema.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "table:file_artifacts",
+      "table:file_assets",
+      "table:file_chunks",
+      "table:file_chunks_fts",
+      "table:file_chunks_trigram",
+      "table:file_forgotten",
+      "table:file_heads",
+      "table:file_jobs",
+      "table:file_objects",
+      "table:file_parts",
+      "table:file_reviews",
+      "table:file_snapshot_index",
+      "table:file_snapshot_inputs",
+      "table:file_snapshot_text",
+      "table:file_steps",
+      "table:file_uploads",
+      "table:file_usage",
+      "table:file_versions"
+    ]
+  },
+  "apps/server/src/files.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "directory:join(this.uploads,id)",
+      "directory:join(this.uploads,old.id)",
+      "directory:root",
+      "directory:this.objects",
+      "directory:this.uploads"
+    ]
+  },
+  "apps/server/src/format-work.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "directory:join(tmpdir(),'mote-text-decode-')"
+    ]
+  },
+  "apps/server/src/format-worker.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "directory:dirname(path)",
+      "directory:task.output"
+    ]
+  },
+  "apps/server/src/hindsight-engine.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "directory:this.options.directory"
+    ],
+    "status": "implemented"
+  },
+  "apps/server/src/hindsight-runtime.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "directory:this.options.directory"
+    ],
+    "status": "implemented"
+  },
+  "apps/server/src/image-inputs.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M06",
+    "surfaces": [
+      "table:image_attachment_intents",
+      "table:image_inputs",
+      "table:image_intake_overrides",
+      "table:image_products"
+    ]
+  },
+  "apps/server/src/image-processing.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M06",
+    "surfaces": [
+      "table:image_backfills",
+      "table:image_exclusions",
+      "task:engine.register:kind:'images.'+kind",
+      "task:engine.register:kind:'images.excluded'",
+      "task:this.engine.enqueue:'image:'+row.capture_id"
+    ]
+  },
+  "apps/server/src/import-attribution.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "table:capture_import_declarations",
+      "table:import_owner_declarations"
+    ]
+  },
+  "apps/server/src/import-uploads.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "api:post:'/api/import-uploads'",
+      "api:post:'/api/import-uploads/:id/commit'",
+      "api:put:'/api/import-uploads/:id/parts/:part'",
+      "directory:directory",
+      "directory:this.directory",
+      "table:import_upload_parts",
+      "table:import_uploads"
+    ]
+  },
+  "apps/server/src/imports.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "directory:directory",
+      "directory:dirname(input.path)",
+      "directory:join(workspace,'inputs')",
+      "directory:parent",
+      "directory:workspace",
+      "table:image_intake_overrides",
+      "table:import_create_requests",
+      "table:import_jobs",
+      "task:this.executor.enqueue:`import:${job.id}`",
+      "task:this.executor.register:kind:`imports.${phase}`"
+    ]
+  },
+  "apps/server/src/indexer.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "task:this.engine.enqueue:(kind==='file'?'file:':'capture:')+captureId",
+      "task:this.engine.register:kind:'embedding.'+kind"
+    ]
+  },
+  "apps/server/src/insight-runs.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M08",
+    "surfaces": [
+      "table:insight_runs"
+    ]
+  },
+  "apps/server/src/material-catalog.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:material_catalog_generation"
+    ]
+  },
+  "apps/server/src/material-consumers.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "extension:this.epochs.install:value.id"
+    ]
+  },
+  "apps/server/src/material-index.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "task:engine.register:kind:KIND",
+      "task:this.engine.enqueue:operation(row.material_id)"
+    ]
+  },
+  "apps/server/src/material-memory-work.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:material_memory_requests",
+      "table:material_memory_revocations"
+    ]
+  },
+  "apps/server/src/material-organizers.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:material_organizer_backfills",
+      "table:material_organizer_groups",
+      "table:material_organizer_inputs",
+      "task:this.executor.enqueue:`material-organizer:${item.key}`",
+      "task:this.executor.register:kind:ORGANIZER_STEP"
+    ]
+  },
+  "apps/server/src/material-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/library/catalog'",
+      "api:get:'/api/library/descriptor'",
+      "api:get:'/api/materials'",
+      "api:get:'/api/materials/:id'",
+      "api:get:'/api/materials/:id/members'",
+      "api:get:'/api/materials/:id/read'",
+      "api:get:'/api/materials/:id/revisions/:revision'",
+      "api:get:'/api/materials/status'",
+      "api:patch:'/api/materials/:id/context'",
+      "api:post:'/api/materials/:id/index/retry'"
+    ]
+  },
+  "apps/server/src/materials.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:material_block_payloads",
+      "table:material_block_versions",
+      "table:material_blocks",
+      "table:material_coding_snapshots",
+      "table:material_evidence",
+      "table:material_evidence_context",
+      "table:material_evidence_dependencies",
+      "table:material_fts",
+      "table:material_fts_blocks",
+      "table:material_heads",
+      "table:material_index_garbage",
+      "table:material_index_requests",
+      "table:material_members",
+      "table:material_owner_declarations",
+      "table:material_revisions",
+      "table:material_searchable"
+    ]
+  },
+  "apps/server/src/media-assets.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M03",
+    "surfaces": [
+      "directory:cache",
+      "directory:dirname(output)",
+      "directory:root",
+      "directory:staging"
+    ]
+  },
+  "apps/server/src/mem0-memory-runtime.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "directory:this.config.directory",
+      "table:provider_operations",
+      "table:provider_records"
+    ],
+    "status": "implemented"
+  },
+  "apps/server/src/memory-adapters.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_provider_configurations",
+      "table:memory_provider_model_snapshots"
+    ]
+  },
+  "apps/server/src/memory-automation.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_automation",
+      "table:memory_control_commands"
+    ]
+  },
+  "apps/server/src/memory-bindings.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_binding_commands",
+      "table:memory_plan_binding",
+      "table:memory_preparation",
+      "table:memory_provider_receipts",
+      "task:executor.register:kind:'memory.prepare'",
+      "task:this.executor.enqueue:input.operationId"
+    ]
+  },
+  "apps/server/src/memory-delegation.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "task:runtime.engine.enqueue:'memory:'+job.id",
+      "task:runtime.engine.register:kind:'memory.package-status'"
+    ]
+  },
+  "apps/server/src/memory-deletions.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_deletion_dependencies",
+      "table:memory_deletions"
+    ]
+  },
+  "apps/server/src/memory-extraction-drafts.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_extraction_drafts"
+    ]
+  },
+  "apps/server/src/memory-feedback-planner.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_feedback_plans",
+      "task:runtime.engine.enqueue:plan.workId"
+    ]
+  },
+  "apps/server/src/memory-feedback-status.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "task:runtime.engine.register:kind:'memory.feedback-status'"
+    ]
+  },
+  "apps/server/src/memory-input-authorization.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_input_authorizations"
+    ]
+  },
+  "apps/server/src/memory-input-plans.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_input_plans"
+    ]
+  },
+  "apps/server/src/memory-integration.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_integration_deliveries"
+    ]
+  },
+  "apps/server/src/memory-lifecycle.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_events",
+      "table:memory_lifecycle_effective",
+      "table:memory_lifecycle_state"
+    ]
+  },
+  "apps/server/src/memory-pipeline.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_engine_stage_cleanups",
+      "table:memory_engine_stage_drafts",
+      "table:memory_job_counts",
+      "task:this.engine.enqueue:'memory:'+id",
+      "task:this.engine.enqueue:'memory:'+job.id",
+      "task:this.engine.enqueue:operationId",
+      "task:this.engine.register:kind:'memory.batch'",
+      "task:this.engine.register:kind:'memory.engine-stage-cleanup'",
+      "task:this.engine.register:kind:'memory.input'"
+    ]
+  },
+  "apps/server/src/memory-private-storage.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_job_dependencies",
+      "table:memory_publication_dependencies",
+      "table:memory_publication_retirements"
+    ]
+  },
+  "apps/server/src/memory-publication.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_owner_mutations",
+      "table:memory_provider_erases",
+      "table:memory_provider_evidence_revocations",
+      "table:memory_provider_writes",
+      "table:memory_publication_outputs",
+      "table:memory_publications",
+      "task:executor.register:kind:'memory.provider-reconcile'",
+      "task:this.executor.enqueue:id"
+    ]
+  },
+  "apps/server/src/memory-recipe-settings.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memory_recipe_default_upgrades",
+      "table:memory_recipe_legacy_exclusions",
+      "table:memory_recipe_legacy_scopes",
+      "table:memory_recipe_settings"
+    ]
+  },
+  "apps/server/src/memory-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "api:delete:'/api/memories/:id'",
+      "api:get:'/api/memory-integration-recipes'",
+      "api:get:'/api/memory-integration-settings'",
+      "api:get:'/api/memory-jobs'",
+      "api:get:'/api/memory-jobs/:id'",
+      "api:get:'/api/memory-recipe-settings'",
+      "api:get:'/api/memory-recipes'",
+      "api:get:'/api/memory-settings'",
+      "api:post:'/api/memories/:id/correct'",
+      "api:post:'/api/memories/:id/publish'",
+      "api:post:'/api/memories/extract'",
+      "api:post:'/api/memory-integrations'",
+      "api:post:'/api/memory-integrations/:id/cancel'",
+      "api:post:'/api/memory-integrations/:id/retry'",
+      "api:post:'/api/memory-jobs'",
+      "api:post:'/api/memory-jobs/:id/cancel'",
+      "api:post:'/api/memory-jobs/:id/pause'",
+      "api:post:'/api/memory-jobs/:id/resume'",
+      "api:post:'/api/memory-jobs/:id/retry'",
+      "api:post:'/api/memory-settings/extraction/:id/retry'",
+      "api:put:'/api/memory-integration-settings'",
+      "api:put:'/api/memory-recipe-settings'",
+      "api:put:'/api/memory-settings'"
+    ]
+  },
+  "apps/server/src/memory-strategies.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "extension:this.install:'extraction'",
+      "extension:this.install:'integration'",
+      "extension:this.install:'integration-recipe'",
+      "extension:this.install:'recipe'",
+      "extension:this.install:'review'"
+    ]
+  },
+  "apps/server/src/memory.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:memories_fts",
+      "table:memory_catalog",
+      "table:memory_scopes"
+    ]
+  },
+  "apps/server/src/model-settings-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M04",
+    "surfaces": [
+      "api:delete:'/api/model-settings'",
+      "api:delete:'/api/model-settings/profiles/:id'",
+      "api:get:'/api/model-settings'",
+      "api:get:'/api/model-settings/codex-models'",
+      "api:get:'/api/model-settings/profiles/:id/models'",
+      "api:post:'/api/model-settings/models'",
+      "api:post:'/api/model-settings/profiles/:id/copy'",
+      "api:post:'/api/model-settings/profiles/:id/models'",
+      "api:post:'/api/model-settings/profiles/:id/test'",
+      "api:post:'/api/model-settings/test'",
+      "api:put:'/api/model-settings'",
+      "api:put:'/api/model-settings/defaults'",
+      "api:put:'/api/model-settings/profiles/:id'"
+    ]
+  },
+  "apps/server/src/operation-projection.ts": {
+    "scope": "user",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "table:execution_projection_meta",
+      "table:operation_changes",
+      "table:operation_generations",
+      "table:operation_parents",
+      "table:operation_progress",
+      "table:operation_user_sequences"
+    ]
+  },
+  "apps/server/src/operations.ts": {
+    "scope": "mixed",
+    "module": "M05",
+    "status": "scoped production reader; legacy route registration remains quarantined",
+    "surfaces": [
+      "api:get:'/api/operations'",
+      "api:get:'/api/operations/:id'",
+      "api:get:'/api/operations/changes'"
+    ]
+  },
+  "apps/server/src/owner-questions.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:owner_question_dependencies",
+      "table:owner_question_replies",
+      "table:owner_questions"
+    ]
+  },
+  "apps/server/src/perception.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "task:this.engine.enqueue:'capture:'+captureId",
+      "task:this.engine.register:kind:'perception.ocr'"
+    ]
+  },
+  "apps/server/src/plugin-center.ts": {
+    "scope": "mixed",
+    "module": "M09",
+    "surfaces": [
+      "extension:releases.install:value",
+      "table:plugin_center",
+      "table:plugin_commands",
+      "table:plugin_instances",
+      "table:plugin_packages",
+      "table:plugin_release_previews",
+      "table:plugin_retired_instances",
+      "table:plugin_retired_packages",
+      "task:executor.register:kind:'plugin.check'",
+      "task:executor.register:kind:'plugin.install'",
+      "task:this.executor.enqueue:input.operationId"
+    ]
+  },
+  "apps/server/src/plugin-release.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M09",
+    "surfaces": [
+      "directory:join(target,'..')",
+      "directory:temporary",
+      "directory:this.directory"
+    ]
+  },
+  "apps/server/src/plugin-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M09",
+    "surfaces": [
+      "api:get:'/api/memory-spaces/default/binding'",
+      "api:get:'/api/plugins'",
+      "api:patch:'/api/plugin-instances/:id'",
+      "api:post:'/api/memory-spaces/default/binding/'+action",
+      "api:post:'/api/memory-spaces/default/binding/prepare'",
+      "api:post:'/api/plugin-instances'",
+      "api:post:'/api/plugin-instances/:id/'+action",
+      "api:post:'/api/plugins/:id/uninstall'",
+      "api:post:'/api/plugins/install'",
+      "api:post:'/api/plugins/resolve'",
+      "extension:plugins.install:request.body"
+    ]
+  },
+  "apps/server/src/private-storage.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "directory:directory"
+    ]
+  },
+  "apps/server/src/processing-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M06",
+    "surfaces": [
+      "api:get:'/api/images/:id'",
+      "api:get:'/api/media-models'",
+      "api:get:'/api/perception'",
+      "api:get:'/api/processing'",
+      "api:post:'/api/images/:id/cancel'",
+      "api:post:'/api/images/:id/retry'",
+      "api:post:'/api/media-models/:role/install'",
+      "api:post:'/api/perception/:id/retry'",
+      "api:post:'/api/perception/ocr/historical-preview'",
+      "api:post:'/api/perception/ocr/historical-process'",
+      "api:post:'/api/processing/:id/cancel'",
+      "api:post:'/api/processing/:id/retry'",
+      "api:post:'/api/processing/workflows'",
+      "api:put:'/api/perception'",
+      "api:put:'/api/processing/settings'",
+      "extension:mediaAssets.install:role"
+    ]
+  },
+  "apps/server/src/processing-runtime.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M06",
+    "surfaces": [
+      "extension:pluginScope.install:plugin",
+      "extension:this.epochs.install:processor.id",
+      "extension:this.pluginScope.provide:'moteContextProcessors'",
+      "extension:this.pluginScope.provide:'moteMaterialConsumers'",
+      "table:processing_dependencies",
+      "table:processing_jobs",
+      "task:this.engine.enqueue:'workflow:material:'+material.id",
+      "task:this.engine.enqueue:operationId",
+      "task:this.engine.register:kind:'context-dag.'+lane",
+      "task:this.engine.register:kind:'material-consumer.plan'"
+    ]
+  },
+  "apps/server/src/processor-admission.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:processor_cooldowns"
+    ]
+  },
+  "apps/server/src/provider-admission.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:provider_cooldowns"
+    ]
+  },
+  "apps/server/src/python-source-pack-executor.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "directory:join(tmpdir(),'mote-python-pack-')"
+    ]
+  },
+  "apps/server/src/read-models.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:blob_counts",
+      "table:capture_counts"
+    ]
+  },
+  "apps/server/src/recipe-registry.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "extension:this.epochs.install:component.id",
+      "extension:this.epochs.install:id"
+    ]
+  },
+  "apps/server/src/run-execution.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M05",
+    "surfaces": [
+      "table:run_execution_owners",
+      "task:this.engine.enqueue:this.id(id)",
+      "task:this.engine.register:kind:`${kind}.run.${this.ownerId}`"
+    ]
+  },
+  "apps/server/src/scope/accounts.ts": {
+    "scope": "instance",
+    "module": "M16",
+    "surfaces": [
+      "table:auth_account_deletions",
+      "table:auth_accounts",
+      "table:auth_attempts",
+      "table:auth_credentials"
+    ]
+  },
+  "apps/server/src/scope/app.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "surfaces": [
+      "api:get:'/api/health'",
+      "extension:registerConfigurationRoutes:runtime",
+      "extension:registerLifecycleRoutes:runtime",
+      "extension:registerScopedConnectors:runtime",
+      "extension:registerTaskRoutes:runtime"
+    ]
+  },
+  "apps/server/src/scope/auth-routes.ts": {
+    "scope": "mixed",
+    "module": "M01",
+    "status": "implemented",
+    "surfaces": [
+      "api:post:'/api/auth/login'",
+      "api:post:'/api/connections/redeem'",
+      "api:post:'/api/login/ack'",
+      "api:post:'/api/login/exchange'",
+      "api:post:'/api/login/poll'",
+      "api:post:'/api/login/requests'",
+      "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/connections/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/accounts'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/auth/self'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/connections'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/connections/self'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/login/requests/:id'",
+      "api:registerAuthenticatedRoute:method:'PATCH',url:'/api/admin/accounts/:id'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/accounts'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/accounts/:id/password'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/auth/logout'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/auth/password'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/connections/invitations'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/connections/invitations/revoke'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/connections/mcp'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/requests/:id/approve'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/session'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/login/ticket'"
+    ]
+  },
+  "apps/server/src/scope/configuration-routes.ts": {
+    "scope": "mixed",
+    "module": "M04",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/configuration/models'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/admin/configuration/models'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/configuration',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/models',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/profiles/:id/copy',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/catalog',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/models/probe',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/models/selection/:feature',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/usage',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/configuration',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/configuration/reload',service:'configuration'",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/configuration/:domain',service:'configuration'",
+      "extension:runtime.services.registerInstance:'model-resources'",
+      "extension:runtime.services.registerUser:'configuration'"
+    ]
+  },
+  "apps/server/src/scope/configuration.ts": {
+    "scope": "mixed",
+    "module": "M04",
+    "status": "implemented",
+    "surfaces": [
+      "directory:path",
+      "table:model_resource_generations",
+      "table:model_resource_revision",
+      "table:user_configuration_restore_journal",
+      "table:user_configuration_state",
+      "table:user_model_credential_generations",
+      "table:user_model_snapshot_revision",
+      "table:user_model_usage"
+    ]
+  },
+  "apps/server/src/scope/connector-routes.ts": {
+    "scope": "user",
+    "module": "M10",
+    "surfaces": [
+      "api:get:'/oauth/google/callback'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/connectors'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/connectors/:provider/install'",
+      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/connectors/:id',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/connectors',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/connectors/:id',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/connectors/:id/recordings',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/'+action,service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/disconnect',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/forget',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/operations',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/start',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/:id/sync',service:'connectors'",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/connectors/:id',service:'connectors'",
+      "extension:host.install:context"
+    ]
+  },
+  "apps/server/src/scope/connector-vault.ts": {
+    "scope": "user",
+    "module": "M10",
+    "surfaces": [
+      "directory:path"
+    ]
+  },
+  "apps/server/src/scope/connectors.ts": {
+    "scope": "user",
+    "module": "M10",
+    "surfaces": [
+      "extension:runtime.services.registerUser:DOMAIN",
+      "table:connector_activity",
+      "table:connector_commands",
+      "table:connector_connections",
+      "table:connector_domain_state",
+      "table:connector_jobs",
+      "table:connector_ledger",
+      "table:connector_oauth",
+      "table:connector_restore",
+      "table:connector_secrets",
+      "table:connector_sources",
+      "table:connector_timers",
+      "task:execution.register:kind:TASK"
+    ]
+  },
+  "apps/server/src/scope/http.ts": {
+    "scope": "mixed",
+    "module": "M01",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:{...route,handle:async(context,request,reply)=>{const services=runtime.services.forUser(context);services.require(route.service);return route.handle({context,services,request,reply});}}"
+    ],
+    "status": "implemented"
+  },
+  "apps/server/src/scope/ingress-routes.ts": {
+    "scope": "user",
+    "module": "M03",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/ingress/originals/:id/content'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/ingress/host-import'",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/archived-files/:id',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/archived-files/:id/content',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/captures/:id/archived-files',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/devices',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/head',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/originals',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/receipts/:batch',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/sources/:id/recovery',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/uploads/:id',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/ingress/sources/:id/context',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/import-uploads',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/import-uploads/:id/commit',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices/:id/reconcile',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/devices/heartbeat',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/gc',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/originals/:id/tickets',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/captures',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/items',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/recovery/:captureId/uploads',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/sources/:id/uploads',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/ingress/uploads/:id/commit',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/import-uploads/:id/parts/:part',service:INGRESS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/ingress/uploads/:id/parts/:part',service:INGRESS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/ingress-schema.ts": {
+    "scope": "mixed",
+    "module": "M03",
+    "surfaces": [
+      "table:ig_activity",
+      "table:ig_archive_files",
+      "table:ig_archive_links",
+      "table:ig_attachment_links",
+      "table:ig_batches",
+      "table:ig_capture_scopes",
+      "table:ig_capture_update_sequences",
+      "table:ig_capture_updates",
+      "table:ig_devices",
+      "table:ig_file_forget_operations",
+      "table:ig_file_generations",
+      "table:ig_file_forgets",
+      "table:ig_import_parts",
+      "table:ig_import_uploads",
+      "table:ig_meta",
+      "table:ig_objects",
+      "table:ig_originals",
+      "table:ig_parts",
+      "table:ig_pins",
+      "table:ig_restore",
+      "table:ig_snapshot_inputs",
+      "table:ig_state",
+      "table:ig_upload_imports",
+      "table:ig_upload_parts",
+      "table:ig_upload_recoveries",
+      "table:ig_uploads",
+      "table:ig_work"
+    ]
+  },
+  "apps/server/src/scope/ingress.ts": {
+    "scope": "user",
+    "module": "M03",
+    "surfaces": [
+      "extension:runtime.services.registerUser:INGRESS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/model-snapshots.ts": {
+    "scope": "user",
+    "module": "M04",
+    "status": "implemented",
+    "surfaces": [
+      "directory:path",
+      "table:user_model_snapshots"
+    ]
+  },
+  "apps/server/src/scope/originals.ts": {
+    "scope": "user",
+    "module": "M03",
+    "surfaces": [
+      "directory:path",
+      "directory:root",
+      "directory:stage",
+      "directory:this.area('work')",
+      "directory:this.directory",
+      "directory:user"
+    ]
+  },
+  "apps/server/src/scope/plugin-routes.ts": {
+    "scope": "mixed",
+    "module": "M09",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/plugins'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/:id/uninstall'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/install'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/plugins/resolve'",
+      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/plugin-snapshots/:id',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugin-events',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/plugins',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/'+action,service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/check',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-instances/:id/snapshots',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-snapshots/:id/invoke',service:PLUGINS_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/plugin-snapshots/:id/read',service:PLUGINS_DOMAIN",
+      "extension:plugins.forAdministrator(context).install:request.body"
+    ]
+  },
+  "apps/server/src/scope/plugins.ts": {
+    "scope": "mixed",
+    "module": "M09",
+    "surfaces": [
+      "directory:directory",
+      "directory:path",
+      "directory:probeRoot",
+      "extension:options.services.registerInstance:'plugin-catalog'",
+      "extension:options.services.registerUser:PLUGINS_DOMAIN",
+      "extension:registry.install:id:pkg.manifest.id",
+      "extension:scope.install:ctx=>{ctx.effect(()=>()=>worker.close());ctx.effect(()=>registry.install({id:pkg.manifest.id,version:fixed.version,components:fixed.components}));for(const component of actual.components)ctx.effect(()=>registry.register(pkg.manifest.id,component,(input,hostCall,signal)=>worker.call('invoke',{componentId:component.id,input},signal,hostCall)));}",
+      "extension:this.catalog.install:input",
+      "table:plugin_user_events",
+      "table:plugin_user_instances",
+      "table:plugin_user_restore",
+      "table:plugin_user_snapshots",
+      "table:plugin_user_state",
+      "task:this.options.execution.register:{kind,pool:'plugin-user',concurrency:()=>4,policy:modelFeature?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.control,...(modelFeature?{modelFeature}:{}), parseInput:input=>invokeSchema.parse(input),authorizeInput:(context,input)=>{const value=this.authorized(context,String(input.snapshotId),String(input.componentId));if(this.adapter(value.component.capability).modelFeature!==modelFeature)throw new StoreError('Use the domain model task admission',403);}, validate:task=>{try{const snapshot=this.snapshot(String(task.input.snapshotId));return snapshot.user_id===task.ownership?.userId&&this.currentSnapshot(snapshot);}catch{return false;}}, execute:run=>this.execute(run),commit:(run,value)=>{const invocation=this.invocations.get(run);if(!invocation)throw new ScopeError('invalid_identity',401);invocation.assertCurrent();this.adapter(invocation.component.capability).commit?.(value,invocation);invocation.assertCurrent();}, classify:error=>error instanceof ScopeError?new ExecutionFailure('stale','plugin_authority_revoked'):new ExecutionFailure('blocked','plugin_operation_requires_attention'), }"
+    ]
+  },
+  "apps/server/src/scope/private-data-routes.ts": {
+    "scope": "user",
+    "module": "M02",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/captures/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/materials/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'DELETE',url:'/api/sources/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/captures',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/captures/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/data/search',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/data/statistics',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/layers',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/library/catalog',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials/:id/members',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials/:id/read',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/materials/:id/revisions/:revision',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/source-items',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/sources',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/sources/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/sources/:id/context',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/sources/:id/history',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/sources/:id/item',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/sources/:id/items',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/materials/:id/context',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/sources/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PATCH',url:'/api/sources/:id/context',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/sources',service:PRIVATE_DATA_DOMAIN",
+      "extension:runtime.services.registerUser:PRIVATE_DATA_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/private-data-schema.ts": {
+    "scope": "mixed",
+    "module": "M02",
+    "surfaces": [
+      "table:pd_capture_imports",
+      "table:pd_captures",
+      "table:pd_fts",
+      "table:pd_import_declarations",
+      "table:pd_material_captures",
+      "table:pd_material_contexts",
+      "table:pd_material_declarations",
+      "table:pd_material_inputs",
+      "table:pd_material_sources",
+      "table:pd_material_versions",
+      "table:pd_materials",
+      "table:pd_meta",
+      "table:pd_source_contexts",
+      "table:pd_source_heads",
+      "table:pd_sources"
+    ]
+  },
+  "apps/server/src/scope/processing-routes.ts": {
+    "module": "M06",
+    "scope": "user",
+    "status": "implemented",
+    "notes": "Shared processor algorithms receive bounded user-owned originals, configuration and M05 grants; no legacy Store is constructed.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/file-processing',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/processing',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/processing/artifacts/:id',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/processing/originals/:id',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/file-processing/match',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/file-processing/preview',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/file-processing/reprocess',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/file-processing/test-local',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/processing/derivations',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'PUT',url:'/api/file-processing',service:PROCESSING_DOMAIN",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'DELETE',url:'/api/imports/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/import-capabilities'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/import-source-packs'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/imports'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/imports/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/imports/:id/'+action"
+    ]
+  },
+  "apps/server/src/scope/processing-schema.ts": {
+    "module": "M06",
+    "scope": "user",
+    "status": "implemented",
+    "notes": "Shared processor algorithms receive bounded user-owned originals, configuration and M05 grants; no legacy Store is constructed.",
+    "surfaces": [
+      "table:mp_activity",
+      "table:mp_admissions",
+      "table:mp_artifact_usage",
+      "table:mp_artifacts",
+      "table:mp_derivations",
+      "table:mp_file_annotations",
+      "table:mp_file_calendar",
+      "table:mp_file_controls",
+      "table:mp_file_diarization",
+      "table:mp_file_plans",
+      "table:mp_file_policies",
+      "table:mp_file_policy_bindings",
+      "table:mp_file_retries",
+      "table:mp_file_review_inputs",
+      "table:mp_file_reviews",
+      "table:mp_file_steps",
+      "table:mp_import_files",
+      "table:mp_import_jobs",
+      "table:mp_import_records",
+      "table:mp_original_formats",
+      "table:mp_publications",
+      "table:mp_restore",
+      "table:mp_state"
+    ]
+  },
+  "apps/server/src/scope/processing.ts": {
+    "module": "M06",
+    "scope": "user",
+    "status": "implemented",
+    "notes": "Shared processor algorithms receive bounded user-owned originals, configuration and M05 grants; no legacy Store is constructed.",
+    "surfaces": [
+      "extension:runtime.services.registerUser:PROCESSING_DOMAIN",
+      "task:execution.register:kind:'processing.'+kind",
+      "task:execution.register:kind:'processing.analysis'",
+      "task:execution.register:kind:'processing.derivatives'",
+      "task:execution.register:kind:'processing.health'",
+      "task:execution.register:kind:'processing.image-stage'",
+      "task:execution.register:kind:'processing.image-understanding'",
+      "task:execution.register:kind:'processing.pipeline'",
+      "task:execution.register:kind:'processing.recheck'"
+    ]
+  },
+  "apps/server/src/scope/storage.ts": {
+    "scope": "mixed",
+    "module": "M00",
+    "surfaces": [
+      "directory:directory",
+      "directory:join(tmpdir(),'mote-scope-preflight-')",
+      "table:scope_meta"
+    ]
+  },
+  "apps/server/src/scope/task-authorization.ts": {
+    "scope": "user",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "table:task_authorizations"
+    ]
+  },
+  "apps/server/src/scope/task-execution.ts": {
+    "scope": "user",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "table:task_external_calls",
+      "table:task_external_retry_confirmations",
+      "table:task_lifecycle_state",
+      "table:task_restore_journal",
+      "table:user_tasks",
+      "task:this.engine.enqueue:'task:'+hash([grant.userId,operation])",
+      "task:this.engine.enqueue:operationId",
+      "task:this.engine.register:kind:handler.kind"
+    ]
+  },
+  "apps/server/src/scope/task-routes.ts": {
+    "scope": "user",
+    "module": "M05",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/operations',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/operations/:id',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/operations/changes',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/:id',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/queues',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/tasks/steps',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks/:id/cancel',service:EXECUTION_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/tasks/:id/retry',service:EXECUTION_DOMAIN",
+      "extension:runtime.services.registerUser:EXECUTION_DOMAIN"
+    ]
+  },
+  "apps/server/src/source-archive.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "directory:join(store.directory,'source-archive')",
+      "directory:path",
+      "table:source_archive_batches",
+      "table:source_archive_groups",
+      "table:source_archive_heads",
+      "table:source_archive_indexed_sources",
+      "table:source_archive_recovery_groups",
+      "table:source_archive_sizes",
+      "table:source_archive_versions"
+    ]
+  },
+  "apps/server/src/source-catalog.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:source_catalog"
+    ]
+  },
+  "apps/server/src/source-context.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:source_context_declarations"
+    ]
+  },
+  "apps/server/src/source-material-view.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/materials/:id/source-view'"
+    ]
+  },
+  "apps/server/src/source-pipelines.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "extension:pluginScope.install:plugin",
+      "extension:this.epochs.install:pipeline.id",
+      "extension:this.pluginScope.provide:'moteMaterialCatalog'",
+      "extension:this.pluginScope.provide:'moteSourcePipelines'",
+      "extension:this.pluginScope.provide:'moteSourceRecipes'",
+      "table:source_pipeline_bindings",
+      "table:source_pipeline_config",
+      "table:source_pipeline_work",
+      "task:this.engine.enqueue:`source:${row.source_id}:${row.id}`",
+      "task:this.engine.register:kind:STEP_KIND"
+    ]
+  },
+  "apps/server/src/source-routes.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "api:get:'/api/layers'",
+      "api:get:'/api/source-items'",
+      "api:get:'/api/sources'",
+      "api:get:'/api/sources/:id/catalog'",
+      "api:get:'/api/sources/:id/context'",
+      "api:get:'/api/sources/:id/history'",
+      "api:get:'/api/sources/:id/item'",
+      "api:get:'/api/sources/:id/items'",
+      "api:patch:'/api/sources/:id'",
+      "api:patch:'/api/sources/:id/context'",
+      "api:post:'/api/sources'",
+      "api:post:'/api/sources/:id/items/batch'",
+      "api:put:'/api/sources/:id/items'"
+    ]
+  },
+  "apps/server/src/storage-ledger.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M02",
+    "surfaces": [
+      "table:storage_ledger"
+    ]
+  },
+  "apps/server/src/todo-schema.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M12",
+    "surfaces": [
+      "table:todos"
+    ]
+  },
+  "apps/server/src/todos.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M12",
+    "surfaces": [
+      "api:get:'/api/todos'",
+      "api:patch:'/api/todos/:id'",
+      "api:post:'/api/todos'"
+    ]
+  },
+  "apps/server/src/updates.ts": {
+    "scope": "instance",
+    "module": "M16",
+    "surfaces": [
+      "api:get:'/api/software-update'",
+      "api:post:'/api/software-update/check'"
+    ]
+  },
+  "apps/server/src/usage.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M04",
+    "surfaces": [
+      "table:model_prices",
+      "table:model_usage"
+    ]
+  },
+  "apps/server/src/working-memory.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M07",
+    "surfaces": [
+      "table:working_memories"
+    ]
+  },
+  "apps/server/test/fixtures/legacy-app.ts": {
+    "scope": "legacy-quarantined",
+    "module": "M09",
+    "surfaces": [
+      "extension:backendContext.provide:'moteConfig'",
+      "extension:backendContext.provide:'moteExecution'",
+      "extension:backendContext.provide:'moteMaterialOrganizers'",
+      "extension:backendContext.provide:'moteMaterials'",
+      "extension:backendContext.provide:'moteMemoryStrategies'",
+      "extension:backendContext.provide:'moteOwnerQuestions'",
+      "extension:registerMemoryExtensions:{integrationSettings:memoryIntegrationSettings,semanticArtifacts,providerCooldownCheck:()=>providerAdmission.check(modelSettings.select('memory').settings),insights:insightRuns,insightTimeout:()=>modelSettings.select('insight').settings.agentTimeoutMs,lifecycle,store,files,memories,pipeline:memoryPipeline,working,query:(input,module)=>queryAgent(input,input.skill==='personal-insight'?'insight':'query',module),model:()=>modelSettings.select('memory').settings.model}",
+      "extension:registerPluginRoutes:app"
+    ]
+  },
+  "apps/server/src/scope/mcp-inbound.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-query-core-phase",
+    "surfaces": [
+      "api:all:'/mcp'",
+      "mcp:registerResource:'memory-catalog':'mote://memories'",
+      "mcp:registerResource:'source-catalog':'mote://sources'",
+      "mcp:registerTool:'mote_memories'",
+      "mcp:registerTool:'mote_put_item'",
+      "mcp:registerTool:'mote_sources'"
+    ]
+  },
+  "apps/server/src/scope/mcp-schema.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "table:mc_manifests",
+      "table:mc_source_epochs",
+      "table:mc_source_status",
+      "table:mc_state"
+    ]
+  },
+  "apps/server/src/scope/mcp.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-protocol-source-phase",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/discover',service:MCP_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'POST',url:'/api/connectors/mcp/import',service:MCP_DOMAIN",
+      "extension:runtime.services.registerUser:MCP_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/memory-routes.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'DELETE',url:'/api/memories/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memories/:id/versions/:version'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/audit/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/bindings/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/jobs/:id/review'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/materials/:id'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/observations'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipe-settings'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/recipes'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'GET',url:'/api/memory/selection'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memories/:id/correct'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory-integrations'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/'+kind",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/activate'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/bindings/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/'+kind",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/jobs/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'POST',url:'/api/memory/reconcile'",
+      "api:registerUserRoute:scope:'user',service:MEMORY_DOMAIN,method:'PUT',url:'/api/memory/recipe-settings'"
+    ]
+  },
+  "apps/server/src/scope/memory-schema.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "table:mm_binding_locks",
+      "table:mm_binding_preparations",
+      "table:mm_capture_intakes",
+      "table:mm_commands",
+      "table:mm_deletions",
+      "table:mm_dependencies",
+      "table:mm_evidence",
+      "table:mm_feedback",
+      "table:mm_fts",
+      "table:mm_images",
+      "table:mm_intakes",
+      "table:mm_integrated_versions",
+      "table:mm_integration_windows",
+      "table:mm_job_batches",
+      "table:mm_job_controls",
+      "table:mm_jobs",
+      "table:mm_meta",
+      "table:mm_native_cleanup",
+      "table:mm_owner_cancellations",
+      "table:mm_provider_config",
+      "table:mm_provider_descriptors",
+      "table:mm_provider_journal",
+      "table:mm_records",
+      "table:mm_restore",
+      "table:mm_state",
+      "table:mm_version_bindings",
+      "table:mm_versions"
+    ]
+  },
+  "apps/server/src/scope/memory.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "extension:runtime.services.registerUser:MEMORY_DOMAIN",
+      "task:execution.register:kind:'memory.'+stage",
+      "task:execution.register:kind:'memory.admit'",
+      "task:execution.register:kind:'memory.correct'",
+      "task:execution.register:kind:'memory.reconcile'"
+    ]
+  },
+  "apps/server/src/scope/memory-bindings.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "task:execution.register:kind:'memory.binding'"
+    ]
+  },
+  "apps/server/src/scope/memory-intake.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "task:execution.register:kind:'memory.intake'"
+    ]
+  },
+  "apps/server/src/scope/memory-integration.ts": {
+    "scope": "user",
+    "module": "M07",
+    "status": "implemented",
+    "surfaces": [
+      "task:execution.register:kind:'memory.integration-window'"
+    ]
+  },
+  "apps/server/src/scope/ask-routes.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'DELETE',url:'/api/conversations/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-artifacts/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/ask-automations/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/conversations/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insight-runs/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/insights'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/query-runs/:id/traces'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/ask-automations/:id/'+action",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/conversations/:id/compact'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insight-runs/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/insights'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/query-runs/:id/'+action",
+      "extension:registerAskReadRoutes:runtime"
+    ]
+  },
+  "apps/server/src/scope/ask-schema.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
+    "surfaces": [
+      "table:ma_artifacts",
+      "table:ma_auto_events",
+      "table:ma_auto_restore",
+      "table:ma_auto_runs",
+      "table:ma_auto_state",
+      "table:ma_auto_windows",
+      "table:ma_automations",
+      "table:ma_conversations",
+      "table:ma_fragments",
+      "table:ma_insight_snapshots",
+      "table:ma_meta",
+      "table:ma_originals",
+      "table:ma_read_cursors",
+      "table:ma_restore",
+      "table:ma_runs",
+      "table:ma_sources",
+      "table:ma_state",
+      "table:ma_traces",
+      "table:ma_turns",
+      "table:ma_units"
+    ]
+  },
+  "apps/server/src/scope/ask.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host context, source scope, evidence and request/task publication fences; acceptance tracked separately.",
+    "surfaces": [
+      "extension:runtime.services.registerUser:ASK_DOMAIN",
+      "task:execution.register:kind:'ask.'+mode",
+      "task:execution.register:kind:'ask.coordinate'"
+    ]
+  },
+  "apps/server/src/scope/mcp-query.ts": {
+    "scope": "user",
+    "module": "M11",
+    "status": "implemented-query-core-phase",
+    "surfaces": [
+      "mcp:registerTool:'mote_activity'",
+      "mcp:registerTool:'mote_browse'",
+      "mcp:registerTool:'mote_context'",
+      "mcp:registerTool:'mote_evidence'",
+      "mcp:registerTool:'mote_file_catalog'",
+      "mcp:registerTool:'mote_file_chunks'",
+      "mcp:registerTool:'mote_history'",
+      "mcp:registerTool:'mote_items'",
+      "mcp:registerTool:'mote_material'",
+      "mcp:registerTool:'mote_material_read'",
+      "mcp:registerTool:'mote_materials'",
+      "mcp:registerTool:'mote_media_activity'",
+      "mcp:registerTool:'mote_read'",
+      "mcp:registerTool:'mote_retrieve'",
+      "mcp:registerTool:'mote_search'",
+      "mcp:registerTool:'mote_segments'",
+      "mcp:registerTool:'mote_status'",
+      "mcp:registerTool:'mote_timeline'"
+    ]
+  },
+  "apps/server/src/scope/ask-read-routes.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Shared host-bound query facade; final acceptance tracked separately.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/activity'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/catalog'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/events'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/evidence'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/file-chunks'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/material-read'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/materials'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/memories'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/runs'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/segments'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-history'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-items'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/browse'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/bundle'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/retrieve'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/search'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/status'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/media-activity'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/agent-view/startup'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/context/read'"
+    ]
+  },
+  "apps/server/src/scope/memory-capture-materials.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.materials'"
+    ]
+  },
+  "apps/server/src/scope/memory-feedback.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.feedback'",
+      "task:this.execution.register:kind:'memory.feedback-admit'"
+    ]
+  },
+  "apps/server/src/scope/memory-owner-questions.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "task:execution.register:kind:'memory.owner-reply'"
+    ]
+  },
+  "apps/server/src/scope/owner-question-routes.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions'",
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'GET',url:'/api/owner-questions/:id'",
+      "api:registerUserRoute:scope:'user',service:OWNER_QUESTIONS_DOMAIN,method:'POST',url:'/api/owner-questions/:id/reply'"
+    ]
+  },
+  "apps/server/src/scope/owner-question-schema.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "table:oq_dependencies",
+      "table:oq_meta",
+      "table:oq_questions",
+      "table:oq_replies",
+      "table:oq_restore",
+      "table:oq_state"
+    ]
+  },
+  "apps/server/src/scope/owner-questions.ts": {
+    "scope": "user",
+    "module": "M07",
+    "surfaces": [
+      "extension:runtime.services.registerUser:OWNER_QUESTIONS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/ask-automation.ts": {
+    "scope": "user",
+    "module": "M08",
+    "status": "implemented",
+    "notes": "Host owner policy grants; immutable scoped lifecycle windows; acceptance tracked separately.",
+    "surfaces": [
+      "extension:runtime.services.registerUser:'ask-automation'",
+      "task:execution.register:kind:'ask.automation'"
+    ]
+  },
+  "apps/server/src/scope/web-routes.ts": {
+    "scope": "mixed",
+    "module": "M13",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/features'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/skills'",
+      "extension:registry.install:id:'mote.scoped-http'"
+    ]
+  },
+  "apps/server/src/scope/activity.ts": {
+    "scope": "user",
+    "module": "M14",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:EXECUTION_DOMAIN,method:'GET',url:'/api/work-activity'",
+      "api:registerUserRoute:scope:'user',service:EXECUTION_DOMAIN,method:'GET',url:'/api/work-activity/:id'"
+    ]
+  },
+  "apps/server/src/scope/lifecycle-operations.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "surfaces": [
+      "table:lifecycle_domains",
+      "table:lifecycle_exports",
+      "table:lifecycle_metadata",
+      "table:lifecycle_operations"
+    ]
+  },
+  "apps/server/src/scope/lifecycle-routes.ts": {
+    "scope": "mixed",
+    "module": "M16",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'DELETE',url:'/api/admin/accounts/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/account-deletions/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/exports/:id/content'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/portable/imports/:id'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/account-deletions/:id/retry'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/cancel'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/exports/:id/retry'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/portable/imports/:id/cancel'"
+    ]
+  },
+  "apps/server/src/scope/management.ts": {
+    "scope": "instance",
+    "module": "M16",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/events'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/log-pages'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/diagnostics/logs'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/software-update'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/support-bundle'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/software-update/check'",
+      "directory:path",
+      "extension:runtime.services.registerInstance:'instance-management'"
+    ]
+  },
+  "apps/server/src/scope/capture-browser-routes.ts": {
+    "scope": "user",
+    "module": "M13",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/:id',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/:id/image',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/album-images',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/albums',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/sessions',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/capture-browser/updates',service:PRIVATE_DATA_DOMAIN",
+      "api:registerUserRoute:scope:'user',method:'GET',url:'/api/ingress/devices/:id/updates',service:'ingress'"
+    ]
+  },
+  "apps/server/src/scope/ingress-lifecycle.ts": {
+    "scope": "user",
+    "module": "M16",
+    "surfaces": [
+      "directory:path"
+    ]
+  },
+  "apps/server/src/scope/action-delivery.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "task:host.execution.register:kind:'actions.delivery'"
+    ]
+  },
+  "apps/server/src/scope/action-discovery.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "task:host.execution.register:kind:'actions.extract'",
+      "task:host.execution.register:kind:'actions.watch'"
+    ]
+  },
+  "apps/server/src/scope/action-routes.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions/:id/reviews/:questionId'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'GET',url:'/api/actions/deliveries'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/'+method",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/claim'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/dismiss'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/:id/receipt'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/retry'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'POST',url:'/api/actions/targets'",
+      "api:registerUserRoute:scope:'user',service:ACTIONS_DOMAIN,method:'PUT',url:'/api/actions/settings'"
+    ]
+  },
+  "apps/server/src/scope/actions-schema.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "table:ac_dependencies",
+      "table:ac_jobs",
+      "table:ac_meta",
+      "table:ac_operations",
+      "table:ac_proposals",
+      "table:ac_restore",
+      "table:ac_sources",
+      "table:ac_state",
+      "table:ac_targets"
+    ]
+  },
+  "apps/server/src/scope/actions.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "extension:runtime.services.registerUser:ACTIONS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/todo-schema.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "table:td_meta",
+      "table:td_restore",
+      "table:td_state",
+      "table:td_todos"
+    ]
+  },
+  "apps/server/src/scope/todos.ts": {
+    "scope": "user",
+    "module": "M12",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'GET',url:'/api/todos'",
+      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'PATCH',url:'/api/todos/:id'",
+      "api:registerUserRoute:scope:'user',service:TODOS_DOMAIN,method:'POST',url:'/api/todos'",
+      "extension:runtime.services.registerUser:TODOS_DOMAIN"
+    ]
+  },
+  "apps/server/src/scope/processing-files.ts": {
+    "scope": "user",
+    "module": "M06",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'DELETE',url:'/api/files/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/assets'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/chunks'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/export'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/forgotten'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/files/:id/reviews'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/allow-again'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/cancel'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/corrections'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/playback'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/retry'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/reviews'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/reviews/:reviewId'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/files/:id/speakers'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/records/:id/attachments/:attachmentId/processing'"
+    ]
+  },
+  "apps/server/src/scope/processing-imports.ts": {
+    "scope": "user",
+    "module": "M06",
+    "surfaces": [
+      "directory:dirname(path)",
+      "task:execution.register:{kind,pool:'processing.imports',concurrency:()=>1,policy:model?EXECUTION_POLICIES.modelCall:EXECUTION_POLICIES.deterministic,...(model?{modelFeature:'import' as const}:{}),parseInput:value=>taskInput.parse(value),authorizeInput:(context,value)=>{const input=taskInput.parse(value);if(input.phase!==phase)throw conflict();const {job}=bound(context,input);if(phase==='prepare'&&model===deterministic(job))throw conflict();},resources:input=>[{scope:'user',key:'import:'+input.jobId}],execute:async run=>{const key=identityHash([run.context.userId,run.task.input.jobId]);active.add(key);try{return await(phase==='prepare'?prepare:commit)(run);}finally{active.delete(key);}},classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure(error instanceof PrivateDataError?'stale':'permanent','import_failed')}"
+    ]
+  },
+  "apps/server/src/scope/processing-reviews.ts": {
+    "scope": "user",
+    "module": "M06",
+    "notes": "Original file review algorithms run through existing M05 file-model leases; retained proposals and exact owner confirmations are private data, with no calendar event writes.",
+    "surfaces": [
+      "task:execution.register:kind:'processing.review'"
+    ]
+  },
+  "apps/server/src/scope/content-storage.ts": {
+    "scope": "user",
+    "module": "M13",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/content-storage'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/storage-statistics'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/content-storage/decrypt'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/content-storage/decrypt/cancel'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/content-storage'",
+      "directory:dirname(dirname(path))",
+      "directory:dirname(path)",
+      "directory:parent",
+      "directory:path",
+      "directory:root",
+      "directory:this.directory",
+      "task:execution.register:{kind,pool:kind,concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic, parseInput:raw=>z.object({operationId:z.string().uuid()}).strict().parse(raw),resources:()=>[{scope:'user',key:kind}], authorizeInput:context=>{runtime.authority.assert(context);if(this.enabled(context.userId))throw new ConfigServiceError('config_conflict');}, execute:run=>this.decrypt(run),classify:()=>new ExecutionFailure('permanent','storage_conversion_failed')}"
+    ]
+  },
+  "apps/server/src/scope/processing-images.ts": {
+    "module": "M06",
+    "scope": "user",
+    "status": "implemented",
+    "notes": "Original ImageProgress presentation of scoped M03/M05/M06/M07 facts. No secondary pipeline or store.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/images/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/images/:id/'+action"
+    ]
+  },
+  "apps/server/src/scope/instance-controls.ts": {
+    "scope": "instance",
+    "module": "M04",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/diagnostics-settings'",
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/execution-settings'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/admin/diagnostics-settings'",
+      "api:registerAuthenticatedRoute:method:'PUT',url:'/api/admin/execution-settings'"
+    ]
+  },
+  "apps/server/src/scope/index-maintenance.ts": {
+    "scope": "mixed",
+    "module": "M05",
+    "surfaces": [
+      "api:registerAuthenticatedRoute:method:'GET',url:'/api/admin/index'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/index/:id/cancel'",
+      "api:registerAuthenticatedRoute:method:'POST',url:'/api/admin/index/rebuild'",
+      "task:execution.register:{kind,pool:kind,concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic,parseInput:raw=>input.parse(raw), authorizeInput:context=>runtime.authority.assertAdministrator(context), resources:()=>[{scope:'shared',key:'lexical-index-maintenance'}], validate:task=>!!task.ownership&&current(task.ownership.userId,task.ownership.authorizationEpoch), execute:async run=>{run.grant.assert();await yieldTurn();run.grant.assert();return {};}, commit:run=>{ // M05 invokes commit synchronously in its lease-fenced SQLite transaction. // Read live owners, sources and heads here; nothing captured before the // asynchronous boundary may reintroduce withdrawn evidence. if(!current(run.context.userId,run.context.authorizationEpoch))throw new ExecutionFailure('stale','grant_revoked'); rebuildPrivateIndex(db); },classify:error=>error instanceof ExecutionFailure?error:new ExecutionFailure('permanent','index_maintenance_failed')}"
+    ]
+  },
+  "apps/server/src/scope/file-export.ts": {
+    "scope": "user",
+    "module": "M03",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:'ingress',method:'GET',url:'/api/files/export'"
+    ]
+  }
+}

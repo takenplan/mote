@@ -6,7 +6,7 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {randomBytes,randomUUID} from 'node:crypto';
 import {z} from 'zod';
-import {buildApp} from '../apps/server/src/app.js';
+import {buildApp} from '../apps/server/test/fixtures/legacy-app.js';
 import type {Config} from '../apps/server/src/config.js';
 import type {SourceItem} from '@mote/shared';
 

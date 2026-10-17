@@ -89,3 +89,10 @@ test('an empty file archive keeps its settled explanation during background oper
  assert.equal(f.d.querySelector('p.muted'),explanation);assert.equal(f.rows().length,0);
  await act(async()=>refresh.resolve({items:[],nextCursor:null}));assert.equal(f.d.querySelector('p.muted'),explanation);
 });
+
+test('source library metadata does not require an unopened connector status panel',async t=>{
+ const f=await fixture(t,'sources'),base=apiWith('sources',()=>page('sources','OWN_REFERENCE')),paths:string[]=[];
+ const api={request:async(path:string,init?:RequestInit)=>{paths.push(path);if(path==='/api/connectors/status')throw new ApiError('connector_not_found',404);return base.request(path,init);}} as Api;
+ await f.render(api);assert.equal(f.rows().length,1);assert.match(f.d.body.textContent!,/OWN_REFERENCE/);
+ assert(!paths.includes('/api/connectors/status'));assert.equal(f.d.querySelector('[role="alert"]'),null);
+});

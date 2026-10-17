@@ -6,7 +6,7 @@ import {z} from 'zod';
 import type {CaptureRecord,QueryResult,TokenUsage} from '@mote/shared';
 import type {ModelSettings} from '@mote/shared/models';
 import {memorySchema,type Memory} from './memory-schema.js';
-import {claimSchema} from './memory.js';
+import {claimSchema} from './memory-contract.js';
 import {memoryProviderRecordSchema,memoryProviderNamespaceSchema,memoryProviderKeySchema,memoryProviderKey,MemoryProviderError,type MemoryProvider,type MemoryProviderNamespace,type MemoryProviderKey,type MemoryProviderRecord,type MemoryProviderWrite,type MemoryProviderRead,type MemoryProviderRemove,type MemoryProviderSearch,type MemoryProviderReceipt,type MemoryProviderHealth,type MemoryProviderHit} from './memory-provider-contract.js';
 import {HindsightService,ManagedHindsightRuntime,HINDSIGHT_VERSION,hindsightDigest,type HindsightRuntime,type HindsightModelCallbacks} from './hindsight-runtime.js';
 
@@ -22,7 +22,7 @@ const entrySchema=z.object({namespace:memoryProviderNamespaceSchema,key:memoryPr
 const projectionSchema=z.object({namespace:memoryProviderNamespaceSchema,bank:z.string(),keys:z.array(memoryProviderKeySchema),state:z.enum(['intent','ready'])}).strict();
 const receiptSchema=z.object({opId:z.string(),namespace:memoryProviderNamespaceSchema,key:memoryProviderKeySchema,payloadDigest:z.string().regex(/^[a-f0-9]{64}$/),externalId:z.string().optional(),state:z.enum(['applied','removed','unknown']),currentRemoved:z.boolean().optional(),historyRetained:z.boolean().optional(),eraseVerified:z.boolean(),recordedAt:z.string()}).strict();
 const journalSchema=z.object({opId:z.string().min(1),kind:z.enum(['put','remove']),inputDigest:z.string().regex(/^[a-f0-9]{64}$/),receipt:receiptSchema.optional()}).strict();
-const preparedSchema=z.object({namespace:memoryProviderNamespaceSchema,bank:z.string(),opId:z.string(),phase:z.enum(['extract','integrate']),keys:z.array(memoryProviderKeySchema).optional(),evidenceIds:z.array(z.string()).optional()}).strict();
+const preparedSchema=z.object({namespace:memoryProviderNamespaceSchema,bank:z.string(),opId:z.string(),phase:z.enum(['extract','integrate']),consolidation:z.object({state:z.enum(['intent','submitted']),operationId:z.string().optional()}).strict().optional(),keys:z.array(memoryProviderKeySchema).optional(),evidenceIds:z.array(z.string()).optional()}).strict();
 const stateSchema=z.object({version:z.literal(1),entries:z.array(entrySchema),operations:z.array(journalSchema).default([]),projections:z.array(projectionSchema),prepared:z.array(preparedSchema),proof:z.object({version:z.literal(HINDSIGHT_VERSION),verifiedAt:z.string(),engine:z.boolean(),physicalErase:z.boolean()}).strict().optional()}).strict();
 type State=z.infer<typeof stateSchema>;
 const same=(a:unknown,b:unknown)=>hindsightDigest(a)===hindsightDigest(b);
@@ -179,8 +179,14 @@ export class HindsightEngine implements MemoryProvider {
       await service.request('POST',service.bankPath(bank)+'/memories',{async:true,operation_id:operationId,items:ranges.map(range=>({content:range.text,document_id:'source-'+hindsightDigest([range.record.id,range.offset,range.length]),timestamp:range.record.capturedAt,metadata:{mote_source_id:range.record.id,mote_offset:String(range.offset),mote_length:String(range.length)},tags:['mote:stage']}))},signal);
       await service.wait(bank,operationId,signal);
       if(input.phase==='integrate'){
-        const completed=(await service.operations(bank)).find(op=>op.task_type==='consolidation'&&op.status==='completed');
-        if(!completed){const result=await service.request<{operation_id:string}>('POST',service.bankPath(bank)+'/consolidate',{},signal);await service.wait(bank,result.operation_id,signal);}
+        const prepared=this.state.prepared.find(item=>item.bank===bank)!,operations=(await service.operations(bank)).filter(op=>op.task_type==='consolidation');
+        const completed=operations.find(op=>op.status==='completed'),pending=operations.find(op=>['pending','running','processing'].includes(op.status));
+        if(!completed){
+          if(prepared.consolidation?.operationId)await service.wait(bank,prepared.consolidation.operationId,signal);
+          else if(pending){prepared.consolidation={state:'submitted',operationId:pending.id};await this.save();await service.wait(bank,pending.id,signal);}
+          else if(prepared.consolidation)throw new MemoryProviderError('unknown_result','Native consolidation issuance requires reconciliation');
+          else{prepared.consolidation={state:'intent'};await this.save();const result=await service.request<{operation_id:string}>('POST',service.bankPath(bank)+'/consolidate',{},signal);prepared.consolidation={state:'submitted',operationId:result.operation_id};await this.save();await service.wait(bank,result.operation_id,signal);}
+        }
       }
       const facts=await service.memories(bank),byId=new Map(facts.map(fact=>[fact.id,fact]));
       const selected=facts.filter(fact=>input.phase==='integrate'?fact.fact_type==='observation':fact.fact_type!=='observation'&&!fact.metadata?.mote_record);
@@ -280,7 +286,7 @@ export class HindsightEngine implements MemoryProvider {
   async close(){if(this.closed)return;this.closed=true;for(const operation of this.running.values())operation.abort('Hindsight provider closed');await this.options.runtime.close();await this.tail;}
 }
 
-export function createHindsightEngine(options:{directory:string;instanceId:string;configurationIdentity?:string;settings:ModelSettings;codex?:{executable?:string;home?:string}}&HindsightModelCallbacks){
+export function createHindsightEngine(options:{directory:string;instanceId:string;configurationIdentity?:string;modelFingerprint?:string;settings:ModelSettings;codex?:{executable?:string;home?:string}}&HindsightModelCallbacks){
   const runtime=new ManagedHindsightRuntime({...options,directory:join(options.directory,'runtime')});
   return new HindsightEngine({directory:join(options.directory,'provider'),runtime,model:options.settings.model});
 }

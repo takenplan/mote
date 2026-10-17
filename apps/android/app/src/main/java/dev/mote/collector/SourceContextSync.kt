@@ -33,7 +33,7 @@ internal object SourceContextSync {
         // Old sources with no declaration never send an implicit clear or require a new API.
         if (!source.contextDirty && source.contextVersion == 0 && source.description.isEmpty()) return source
         if (!source.contextDirty && source.contextTarget == target) return source
-        val path = server.trimEnd('/') + "/api/sources/${source.id}/context"
+        val path = server.trimEnd('/') + "/api/ingress/sources/${source.id}/context"
         var expectedVersion = source.contextVersion
         if (source.contextTarget != target) {
             check(stillSelected()); slice.record(0)

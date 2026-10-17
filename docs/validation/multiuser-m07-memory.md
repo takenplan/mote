@@ -1,0 +1,492 @@
+# M07 Memory validation
+
+The latest feature receipts are in [Final feature receipts](#final-feature-receipts).
+Earlier checkpoints below preserve their original failures, partial coverage and
+then-pending work; they are historical, not substitute final receipts. Final
+prerequisites are PR134 `7572b573b03437ff743652c13181b9fdcf251fda` (including
+PR132/133) and docs-only PR135 `094b69d0c4d623a3b478ae4c05ee249b024ba73b`.
+The unchanged integration base is `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`.
+
+## Reproducible test mapping
+
+All new cases are in `apps/server/test/multiuser-memory.test.ts`. They use the
+actual production builder, M01 accounts, M03 intake/Material publication, M02
+ownership, M04 snapshots, M05 tasks, real Agent runtime and HTTP model transport.
+Only the external model service is a scripted loopback fixture. No real account,
+credential, personal content or external provider operation is used.
+
+| Acceptance / transition | Exact test prefix | Evidence / current limit |
+| --- | --- | --- |
+| A/B same Material ID and entity name; independent review; model context isolation; attribution | `real production Memory extraction/review/publication` | Checks actual model requests and cross-user/admin reads. |
+| Trusted identity and same-user source grants | `trusted Memory inputs` | Forged context and owner selectors denied; fixed source list enforced. Cross-host context case still to add. |
+| Stop while a real model request is held | `stop fences late model results` | Controlled barrier; terminal stale result; B succeeds. |
+| Repeated/concurrent admission | `same operation ID is idempotent` | One job and one extraction/review pair. Changed concurrent input conflict still to add. |
+| Pause/drain | `pause drains admitted extraction` | Admitted work completes without generation change. |
+| Cancellation | `job cancellation during an actual model request` | Cross-user cancellation denied; terminal cancellation and scrubbed output. |
+| Source/original retirement | `retiring source originals` | Barrier after model admission; terminal stale result. |
+| Account disable | `administrator account disable` | Real M01 transition; A cannot read; B completes. |
+| Paging/search/cursor boundaries | `Memory pages and cursor signatures` | User and complete filter binding; same-name records page separately. |
+| Memory deletion against an in-flight job | `deleting a Memory removes owner search` | Removes own candidate; invalidates original job generation. |
+| Missing model/secret isolation | `manual Memory admission requires` | No fallback to another account or feature; safe response. |
+| Revision/command idempotency | `Memory control commands preserve` | Same command ID independent across users; changed command conflicts. |
+| App restart | `restart preserves Memory owner` | Completed output persists and is not replayed; not yet a two-process crash check. |
+| Semantic deletion policy | `a new extraction of the same original` | Calls the shared semantic deletion reviewer and does not regenerate the conclusion. |
+| Domain export/delete | `Memory lifecycle export and deletion` | Own plaintext only, no model secret; held work fenced; B unchanged. |
+| Portable builtin restore | `portable Memory restore validates` | Exact owner/Material parent, stale activation, idempotence, atomic malformed-input refusal. |
+
+Shared review/deletion contracts also run through `memory-review.test.ts` and
+`memory-deletions.test.ts` (the latter currently contributes no standalone Node
+test cases). Existing single-owner fixtures are algorithm regression evidence,
+not multi-user production acceptance.
+
+## Receipts to date
+
+- First production core: 4/4 passed, exit 0,
+  `/tmp/m07-first-network.log`.
+- Expanded core before lifecycle/semantic-deletion additions: 13/13 passed in
+  the shared 25-case run, exit 0, `/tmp/m07-core-freeze-tests.log`.
+- Latest core run: **28/28 passed**, no failures/skips/cancellations, exit 0,
+  `/tmp/m07-core-iteration.log`; 16 new production cases plus 12 shared review
+  regressions. Command:
+  `node --import tsx --test --test-concurrency=1 --test-timeout=60000 apps/server/test/multiuser-memory.test.ts apps/server/test/memory-review.test.ts apps/server/test/memory-deletions.test.ts`.
+- Server typecheck: exit 0, `/tmp/m07-core-typecheck.log` (rerun on the final
+  checkpoint commit before handing off; no runtime pass inferred from it).
+- `node scripts/check-scope-contracts.mjs`: exit 0 after explicit M07 surface
+  inventory and pure-contract import registration. `git diff --check`: exit 0.
+
+The first sandboxed loopback run failed all four cases with `listen EPERM`.
+The same fixture command ran successfully with local listener permission; that
+failed attempt is not a product pass. The first expanded run had one fixture
+using a nonexistent disable URL; it was corrected to the real M01 PATCH route
+and rerun. One read-only exec transport disconnected transiently; immediate
+`pwd` and subsequent commands worked without changing network or service state.
+
+## Required and still unrun
+
+Native Mem0/Hindsight A/B repository, retrieval and model contexts; unsupported
+modes; external failures with no SQL fallback; provider migration/CAS/reader
+snapshots; per-source recipe/version/window selection; integration; partial
+Material readiness; full range/owner-question workflows; external unknown-result
+reconciliation and erasure; genuine M06 upload-to-Memory automation; two-process
+checkpoint recovery; independent module review; final combined suite; fresh
+compiled smoke; final `npm run check:affected -- --base origin/codex/mote-multiuser-integration`.
+
+No CI workflow was enabled. CI is **unrun**, not passed. No PR/main/integration
+merge, deployment, live model check, real-user-data operation or main-worktree
+edit occurred. The final handoff must report full local/remote/head/base SHAs,
+test counts and exit receipts; these partial receipts cannot replace that gate.
+
+## Subsequent implementation freeze (final acceptance pending)
+
+The feature now composes accepted M06 PR #133 head
+470516b7ed4ab7ee8b0fba344883c6b42bb7ce56. Production upload/processing intake,
+policy windows, long-range batches, automatic integration, actual Mem0/Hindsight,
+visual originals, owner correction, provider migration/history and purpose-limited
+lifecycle cleanup are implemented. This section supersedes the initial checkpoint's
+remaining-work list; the initial commands remain historical evidence only.
+
+Independent M08 review of exact c678d24ab672d11f7262ae12b5a1f510f6f685c6 found a
+P1 transitive-source migration disclosure. The fix checks every current/historical
+version with assertSources before target provision/verify/write and across awaits.
+The unchanged probe scenario now reports binding blocked and leaked=false.
+
+Latest targeted checks: host-bound source/cursor/evidence scope, actual image
+pipeline and independent migration regression: 3/3 pass, exit0, Node
+24.21.0 runtime (these three tests do not load the native Mem0 SQLite binding); /tmp/m07-read-contract-first.log/.exit. Server typecheck exit0
+/tmp/m07-read-contract-final-types.log/.exit. Scope inventory/import/SQL checks
+exit0. These do not substitute for final combined or affected checks.
+
+Two actual source-host processes verified retained successful extraction and
+original M04 authority after SIGKILL/restart: 1/1 pass exit0,
+/tmp/m07-process-second.log/.exit. Interrupted independent review retries are
+expected; successful retained extraction is not repeated. A fresh compiled-process
+run remains required after the final build.
+
+Unresolved acceptance gates: final independent delta review; final focused and
+actual composed suites; fresh compiled production smoke; final check:affected;
+final remote head/base verification and Draft PR. CI workflows stay disabled and
+unrun. No live-model, real-account/provider, device or deployment checks were run.
+
+
+## Independent read race and subsequent fixes
+
+M11's independent exact c0aedbbf page probe reproduced a P1: a body fetched
+before a later provider await could still be returned after its deletion. The
+page now revalidates every returned exact row and its original dependencies
+before disclosing the complete result. The durable regression observes
+leaked=false/outcome=blocked. Portable export applies the same complete-catalog
+fence and now includes every exact historical provider body. Restore retains
+those versions as stale builtin data without runtime/model authority.
+
+Default Memory settings also now deep-copy nested policy/recipe defaults.
+The former shared mutable object allowed one caller's threshold mutation to
+change later callers' defaults. A regression verifies independent owner objects.
+
+Node24 full specialized repetition failed 65/68 (exit1): the Mem0 binary in this
+checkout uses ABI147/Node26, while Node24 needs ABI137; two later fixture tests
+also exposed shared default-policy mutation. No dependencies were recompiled or
+installed. System Node26.11.1 :memory: native binding probe passes. After the
+policy repair, complete Memory/review/M05 specialized suite passes69/69 exit0,
+/tmp/m07-policy-isolation-focused.log/.exit,168535ms. This predates the final
+page/history changes and is historical evidence, not final acceptance.
+
+Page race/default isolation/full external history restore/concurrent export
+checks pass4/4 exit0, /tmp/m07-review-page-history-second.log/.exit,11541ms.
+The first page probe correction blocked the leak but its test teardown wrote a
+release marker after fixture directory removal; cleanup now releases barriers
+before closing the fixture. Server typecheck0 at
+/tmp/m07-page-history-types.log/.exit. Final whole combination and required
+affected checks remain pending, as does independent exact final-delta approval.
+
+
+## Durable child admission recovery
+
+Self-audit extended recovery beyond retained completed model outputs. A manual
+job could otherwise remain admitting after a crash between asynchronous M04
+child leases. The job, ordered batch plans and a no-model memory.admit M05
+coordinator now commit together, before model admission. Recovery preserves the
+original root model snapshot. It does not borrow the current model selection.
+Cancellation cannot resurrect the parent after a late lease, and provider binding
+drains these accepted admissions before migration.
+
+Actual manual two-process crash during admission:1/1 exit0,
+/tmp/m07-manual-admission-process.log/.exit,7017ms. Automatic admission recovery
+also passed1/1 in the earlier /tmp/m07-admission-process-first.log/.exit.
+Real M06/ranges/owner correction/read/operation idempotency6/6 exit0,
+/tmp/m07-admission-first.log/.exit. Cancellation/binding-drain2/2 exit0,
+/tmp/m07-admission-binding.log/.exit. Server types0 at
+/tmp/m07-admission-cancel-types.log/.exit; scope/import/SQL0.
+Final independent coordinator delta, actual whole combination, rebuilt emitted
+processes and required affected checks remain pending.
+
+Final whole-scope first combination at1536:298 tests,296pass/2fail,exit1,
+/tmp/m07-1536-combined.log/.exit. Both failures were M06 tests assuming the whole
+instance had exactly two tasks, before real Memory intake was composed. The
+assertions now require the exact three kinds memory.intake/processing.extract/
+processing.pipeline, three authorizations and sequence3; forbidden nested child,
+orphan resource/operation/fairness and zero-model checks remain intact.
+The two actual composed regressions pass2/2 exit0 at
+/tmp/m07-composed-processing-counts.log/.exit. No subscriber was disabled or mocked.
+Fresh1536 Server/Web builds pass0. Rebuilt actual HTTP child processes pass2/2
+exit0, /tmp/m07-1536-compiled-process.log/.exit,36838ms, covering review and manual
+admission SIGKILL. Check:affected dry-run selects full check:local plus Android;
+it is planning evidence only. Required actual affected remains pending.
+
+## Existing-capability closure candidate after6d
+
+This section supersedes the work ledger's previously unknown stale/proposed,
+import and raw-group items; final module gates are still pending. The production
+consumers inspected were `opening-memory.ts` (proposed), `evidence-reader.ts`
+(includeStale/history), `imports.ts` and `import-attribution.ts` (literal frozen
+import prose and new-capture-only binding), and the existing organizer readers
+(fixed grouping, newest2000 / text budget). MVP wire compatibility is deliberately
+not retained; the underlying owner capabilities have safe scoped equivalents
+described in `../design/multiuser-memory.md` and the parity ledger. Query agents
+never receive unreviewed proposals or invalidated cards as valid Memory.
+
+New actual HTTP regressions: proposal inspection while its review is paused;
+builtin/external invalidated history with exact retained originals, no SQL
+fallback on actual provider failure and denial after original deletion; full
+owner M03 upload→real M06→Memory import context with equal A/B declaration IDs,
+duplicate no-replacement, tamper rejection, canonical delete/restore and no
+regrant. `/tmp/m07-audit-import.log/.exit`:4/4 exit0 before the strengthened
+lifecycle/duplicate assertions; strengthened import1/1 exit0 at
+`/tmp/m07-parity-last-matrix.log` (that run's raw-budget fixture failed the
+transport schema and is not counted as a suite pass). Corrected raw coding/UI
+budget production fixture1/1 exit0,1588ms, `/tmp/m07-raw-budget.log/.exit`;
+64 valid observations exercise the actual 4,000,000-character scoped reader
+limit and bounded original/member projection, with no model calls.
+
+Confirmed OCR policy reload P2 is fixed at
+`1d92401d0cf95702c08085d3fb8a59b74a32a2f4`; unchanged recipe refs compare
+id/version while immutable strategy fingerprints stay pinned. Per-capture
+withdrawals remain irreversible and are checked on every grouped original.
+M08 exact literal unchanged daily cases2/2 exit0,10093ms,
+`/tmp/m08-review-m07-1d-daily.log/.exit`; independent report
+`/tmp/mote-m08-review-m07-1d.md` closes this P2.
+
+Feedback complete proposal recovery retains exact durable units before SIGKILL,
+uses no repeated planner, and preserves every completed task ID/attempt count
+and B worker. M11 exact1d independent1/1 exit0,36077ms,
+`/tmp/m11-review-m07-1d-feedback-process.log/.exit`. Owner reply actual HTTP
+processes SIGKILL after durable M05 interpretation and before shared CAS (a
+first-process-only CAS fault barrier), then replay the same request UUID; the
+second process reuses the interpretation, creates one literal statement and
+one fixed-model continuation, and leaves B untouched:1/1 exit0,6564ms,
+`/tmp/m07-owner-reply-process.log/.exit`. The four-case whole process suite
+initially passed3/4: a fixed request-count assertion failed when the unfinished
+child legitimately repaired model output. The revised recovery assertion pins
+all succeeded task IDs/attempts, completed B/planner and exact new A child scope;
+focused feedback1/1 exit0. Whole final process/build/affected gates remain pending.
+
+Final closure subset6/6 exit0,19202ms,
+`/tmp/m07-closure-freeze-targeted.log/.exit`, includes actual owner retry and
+same-transaction publication notifications. Server types0, scope inventory /
+production imports / private SQL0 and diff check0. Stronger import regression
+also checks an imported and unrelated original combined in one Material:
+canonical root prose cannot enter the unrelated block; exact portable
+restoration passes. These receipts remain a subset, not final module acceptance.
+
+### ca69 required affected failure and bounded corrections
+
+The first required affected run on `ca69ed69b04f4cf481a1d099e4b5013f97931d45`
+exited 1: server 2312 passed, two failed, one optional test skipped (2315 total).
+Android was not reached. Preserve `/tmp/m07-ca69-affected.log` and `.exit`;
+389/389 preceding serial combination and emitted 4/4 are separate checkpoints.
+
+- **New implementation defect:** the M06 `source.original` projection decoded
+  Coding tool bodies into searchable same-owner Material. This was introduced by
+  the scoped migration, not demonstrated as an old-flow bug. The fix extracts and
+  reuses the existing complete-part `conversationRecords` algorithm, including
+  declared human/agent-final roles and host-envelope removal. M06 keeps its real
+  pipeline; the Memory organizer reads exact M03 originals under its existing
+  grant and preserves all original dependencies. Raw retained bytes are unchanged.
+  Positive A/B multipart human/final dialogue remains available.
+- **Obsolete fixture assumption:** the rejected cross-source publication test
+  expected the entire Material catalog to stay empty. Real automatic producers
+  now publish legitimate Material. The assertion checks the exact rejected ID,
+  and the raw-body search assertion runs after actual producers settle.
+- **New implementation defect:** extracting shared external body verification
+  put a cancellation fence ahead of the legacy late-acknowledgement journal
+  update. Restore its original transport settlement order; exact-body verification
+  is shared, while publication still checks authority after journal settlement.
+  Both received and lost acknowledgements retain the old binding and recovery.
+
+The failing-test commit is `1d88bddf8a372e20a3c56bd1cc962e6fcae7ae78`:
+its literal archive produced 1 pass / 3 failures, exit 1, using the two Coding
+scenarios and existing received/lost worker ACK scenarios. Evidence:
+`/tmp/m07-coding-red-1d88.log` and `.exit`. The fixture wait was narrowed to the
+M06/Material producers under test; unrelated policy waiting is not completion.
+These results concern same-owner projection and cancellation/recovery semantics;
+they do not establish cross-user leakage. No environment failure is claimed.
+Final combination, compiled processes and required affected must be rerun after
+these corrections and independent review. CI remains disabled and unrun.
+
+The bounded corrected regression command (same two files plus the raw Coding
+budget scenario in `multiuser-memory.test.ts`) passed 5/5, exit 0,
+8208.262625ms: `/tmp/m07-coding-green.log` and `.exit`. Server typecheck,
+scope/import/private-SQL contracts and `git diff --check` also exited 0.
+This is a small correction checkpoint, not full module acceptance.
+
+### Retained v1 Coding visibility: test first, then minimal correction
+
+The actual pre-fix host -> corrected host restart probe initially reported
+`before:1, after:1`, exit 1 (`/tmp/m07-retained-v1-red-actual.log`). Its unchanged
+production scenario now reports `before:1, after:0`, exit 0
+(`/tmp/m07-retained-v1-actual-final.log`). The first `.ts` launch failed because
+its temporary runner was treated as CommonJS; the `.mts` production observation
+is the evidence, not that environment launch error.
+
+Durable failing tests were committed before the retirement runtime change:
+`55fd7b332b999042aaf359bc31084cef94d38830` (0/1, exit 1), extended by
+`7dba36ca3067c903b7fb1f70538336c60a0f5a75` (literal archive 0/2, exit 1;
+`/tmp/m07-v1-literal-red-7dba.log`). They use a generated persisted v1 shape
+independently confirmed against the actual pre-fix host, and test both an old
+current head and a newer filtered head with an obsolete retained target version.
+The latter initially returned the old body with HTTP 200; this is a new migration
+history gap. A preliminary derivation assertion expected 409 but received a safe
+503 refusal; that status mismatch was not a disclosure. The completed guard now
+explicitly rejects obsolete v1 derivation input with 409 before new task admission.
+
+The fix reuses PrivateData's existing `min_visible_sequence` withdrawal and
+transitive Material traversal. It performs owner-bound checks before SQL
+candidates/body reads, validates selected historical versions too, and marks
+supported built-in projections with a host artifact version. No unconditional
+write transaction is added to ordinary valid reads: only detected legacy roots
+enter the existing transaction and are rechecked there. Old decoded artifacts
+cannot feed processing analysis; original bytes/artifacts/version rows remain
+stored. No task or reconstruction authority is created by a read/restart.
+
+Final narrow correction set: 7/7, exit 0, 9892.323208ms,
+`/tmp/m07-v1-final-regressions.log` (Coding fresh/current/history, transitive
+withdrawal, raw retention, B unchanged, no task replay, received/lost worker ACK).
+Existing private-data/lifecycle tests: 23/23, exit 0, 2532.899291ms,
+`/tmp/m07-v1-final-data.log`. Existing organizer/processing/data broader checkpoint
+preceding the final historical guard: 79/79, exit 0, 58998.654583ms,
+`/tmp/m07-retirement-data-processing.log`. Final server typecheck, scope/import/
+private-SQL contracts and diff check exit 0. One restricted-sandbox rerun failed
+only on loopback listen EPERM and passed unchanged with loopback access; preserve
+`/tmp/m07-retirement-final-data.log` and the successful `-data-loopback.log`.
+
+Independent architecture/TDD review, final full combination, fresh builds/emitted
+processes and required affected/Android remain pending. No final acceptance or
+Draft PR is claimed from this narrow checkpoint. CI is disabled and unrun.
+
+## Public-contract A: actual restore and bounded ordinary page reads
+
+After the completed PR135 architecture review, test-only RED commit
+`6d40b997866d19ee1e0b9cde5d6579f3b38cdf3a` extends both retained-v1 cases
+through actual purpose-bound private-data/ingress/processing export, deletion and
+restore. The same previously retained reader is reused after restore; current,
+historical and dependent unfiltered projections stay withdrawn, original bytes
+and B remain intact, and restart grants no task replay. Portable fixtures use
+canonical schema normalization and exact current member refs; earlier malformed
+fixture rejection is not a production failure.
+
+The additional ordinary-page regression measures real PrivateSql calls without
+replacing SQL execution: 80 normal Materials per owner, an actual HTTP 50-item
+page. RED: 52 full-owner legacy scans, 2 restore cases passed and 1 performance
+case failed, exit 1 (`/tmp/m07-public-A-restore-perf-red-valid.log`). This is a
+new migration performance defect, not a pre-existing legacy-flow bug. Exact
+Material reads now scope migration root detection to that ID. Page/search retain
+the full-owner before-candidate/LIMIT check and transitive withdrawal semantics.
+GREEN: 5/5, exit 0, 6766.278291ms, full-owner scans 2, measured page 7.069ms
+(`/tmp/m07-public-A-restore-perf-fixed.log`). This bounds repeated scan count,
+not a claim about production-scale throughput. Server typecheck exits 0.
+Final same-SHA A/B/C, full affected/Android and PR gates remain pending.
+
+The exact-read optimization's first version missed a held-reader direct derived
+Material read before any global refresh. Peer M11 identified this boundary;
+independent RED `90b7a4c9e4ba0de9b41d610eacd464a7fbf52cff` records 1/2 passed,
+exit 1 (`/tmp/m07-public-A-direct-dependent-red.log`). This is a new optimization
+regression, not a legacy-flow bug. The minimal correction follows the target's
+exact revision input ancestors in the existing SQL graph before selecting unsafe
+current roots; existing withdrawal cascades remain authoritative. Same reader
+before first search and after real restore now refuses the known dependent.
+Fresh Coding positives, both retained/history/restore cases and ordinary page
+cost: 5/5, exit 0, 6647.40075ms; full-owner scans remain 2
+(`/tmp/m07-public-A-ancestor-fixed.log`). Scan instrumentation distinguishes an
+owner-wide query from a parameter-bound target query without replacing SQL.
+
+## Public-contract representative A/C fixture closure
+
+A legal 11,000-character declared human Coding message (existing 12,000-character
+message bound unchanged) now runs real M03 archive intake → M06 source extraction
+and segmented Material → 4096-character read pages → M04/M05 Memory extraction
+and independent review for equal A/B source/device/event/revision/batch IDs. The
+full tail reaches the actual model transport; tool/archive bytes remain retained
+and outside search/model inputs, and host envelope/B prose is absent. 1/1, exit 0,
+5636.619083ms (`/tmp/m07-public-A-long-valid.log`). The earlier 13,000-character
+fixture exceeded the existing product bound, and the first paging assumption
+used the wrong response field; these were fixture defects, not product REDs.
+
+C uses two actual HTTP app processes and an installed M09 generated plugin worker.
+Only model/provider external I/O is synthetic. A's real provider `put` has arrived
+at the external HTTP server but cannot commit or ACK. The owner cancels the actual
+job, visibility is revoked while `pendingExternal` remains positive, and the host
+is killed with real SIGKILL before releasing the remote operation. The observed
+worker PID subsequently disappears from the OS. On restart, purpose-limited
+reconciliation reports `result_unknown` rather than replaying the old write or
+claiming erase success while that request can still commit. The external server
+then commits the exact old key after both processes died; a second reconciliation
+observes and removes its actual fixture file and records `erased`. B remains
+byte-for-byte stable; 19 succeeded task IDs/attempts are retained, four original
+model calls do not replay, and A's next legitimate job succeeds with two calls to
+its newly selected model. Exact old opId has only one `put`. All generated adapter
+PIDs disappear after final close. Physical erasure here means the synthetic
+external file and real worker process, not a claim about live vendor retention.
+
+Source C: 1/1, exit 0, 39371.613542ms,
+`/tmp/m07-public-C-process-routed.log`. Two earlier C runs rejected the SDK's real
+messages path/beta query in the new external fixture; these were fixture routing
+errors and no product failure is claimed. The minimal shared `scoped-process`
+helper supplies only actual child launch, deadline/state observation and HTTP
+request/configuration setup. Its two concrete consumers retain domain-specific
+setup and assertions. Existing review/admission/feedback/owner-reply SIGKILL cases
+after extraction: 4/4, exit 0, 81577.311958ms,
+`/tmp/m07-public-process-fixture.log`. Existing PrivateData/lifecycle: 23/23,
+exit 0, 2114.752458ms (`/tmp/m07-public-A-final-data.log`).
+
+These are owning-module source receipts. Independent final A/C review, the same
+unified A/B/C SHA, fresh emitted checks and required affected/Android remain
+separate gates. CI remains disabled and unrun.
+
+The selected-derived-history hotspot is also exercised through real safe parent
+and summary republishing before any global refresh, then through the same actual
+three-domain restore: the exact old summary revision is rejected both times by
+the existing visibility sequence fence. This static concern did not reproduce as
+a production defect; no additional history algorithm was added. Both retained
+variants plus page cost: 3/3, exit 0, 3500.662417ms,
+`/tmp/m07-public-A-history-derived.log`.
+
+
+## Final feature receipts
+
+Production runtime: `84a405f5c52f951f05db975705c12c3bb646dd67`.
+Final code/test commit: `3415cabdf85f6b9798b0e19c94b80c1b09fda140`.
+Only documentation follows this commit. Node 26.11.1; Java 21 and the existing
+local Android SDK. All external model/provider inputs and records are synthetic.
+
+| Gate | Exact result and command / receipt |
+| --- | --- |
+| Complete source scope/multiuser + old review/ACK/PrivateData combination | 424/424, exit 0, no skipped/cancelled, 628564.600916ms at `c5661258cc24628100878b59e96c0cebcb36ee57`; `/tmp/m07-c566-combined.log` / `.exit`. Command below. |
+| Final fixture readiness correction | Only peer test commit `c53c199876bbfee2acfe8c38ecda7403af7f809d` picked as final code/test3415; exact original A/B indexed Material readiness replaces six ticks/first row. Original retained cases 2/2, exit 0, 2975.145584ms; `/tmp/m07-final-readiness.log` / `.exit`. Runtime unchanged. |
+| Same unified A/B/C candidate | `c53c199876bbfee2acfe8c38ecda7403af7f809d`: own literal archive A/C 7/7, exit 0, 54178.698542ms, `/tmp/m07-uniform-c53-AC.log` / `.exit`; M11 13/13 and independent M08 B 5/5 plus legacy tools 3/3, all exit 0. This includes actual Memory/provider/Ask Harness/HTTP SDK rather than substituted domain services. |
+| Independent final delta review | M08 exact c566 A 5/5 + long A 1/1, exit 0 (`/tmp/mote-m08-review-m07-c566.md`); M11 full runtime84a/C code review and actual C 1/1, exit 0 (`/tmp/mote-m11-review-m07.md`). No remaining confirmed P0/P1/P2 in reviewed scopes. Earlier core/review fixes and their independent receipts remain above. |
+| Fresh libraries | `npm run build:libs`, exit 0; `/tmp/m07-final-libs-build.log` / `.exit`. |
+| Fresh server | `npm run build -w @mote/server`, exit 0; `/tmp/m07-final-server-build.log` / `.exit`. |
+| Fresh emitted real HTTP processes | 5/5, exit 0, no skipped/cancelled, 122175.8835ms; `/tmp/m07-final-emitted-process.log` / `.exit`. Includes review, admission, feedback, owner reply, running external write/cancel/SIGKILL/unknown/actual worker retirement and exact external fixture-file erasure. |
+| Required affected | `npm run check:affected -- --base origin/codex/mote-multiuser-integration`, exit 0 on final3415, `/tmp/m07-final-affected.log` / `.exit`; all component typechecks, root/scripts/client/central runner and Android reached. |
+| Scope / working tree | `node scripts/check-scope-contracts.mjs`, exit 0, `/tmp/m07-final-scope.log` / `.exit`; uncommitted `git diff --check` exit 0 and clean code/test tree before final docs. |
+
+The full source combination command was:
+
+```sh
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 \
+  apps/server/test/*scope*.test.ts apps/server/test/multiuser-*.test.ts \
+  apps/server/test/memory-review.test.ts \
+  apps/server/test/memory-publication-retirement.test.ts \
+  apps/server/test/private-data.test.ts apps/server/test/private-data-lifecycle.test.ts
+```
+
+The final same-candidate A/C command was run in a literal c53 archive with its own
+workspace links and copied dependencies (not peer source/DB/dependency writes):
+
+```sh
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 \
+  --test-name-pattern='retained unfiltered Coding|ordinary Material pages|actual M03 Coding|source/Coding archive|representative A keeps|representative C' \
+  apps/server/test/multiuser-ingress.test.ts apps/server/test/multiuser-memory.test.ts \
+  apps/server/test/multiuser-memory-outcome-process.test.ts
+```
+
+Fresh emitted smoke and required affected commands:
+
+```sh
+MOTE_MEMORY_PROCESS_ENTRY="$PWD/apps/server/dist/app.js" \
+node --import tsx --test --test-concurrency=1 --test-timeout=120000 \
+  apps/server/test/multiuser-memory-process.test.ts \
+  apps/server/test/multiuser-memory-outcome-process.test.ts
+
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
+ANDROID_HOME=<redacted-personal-path> \
+ANDROID_SDK_ROOT=<redacted-personal-path> \
+npm run check:affected -- --base origin/codex/mote-multiuser-integration
+```
+
+Final required affected counts (all zero failures):
+
+| Component | Passed | Skipped / execution note |
+| --- | ---: | --- |
+| Desktop | 456 | 0; includes hidden Electron fixture |
+| Server | 2320 | 1 existing optional integration skip; 2321 total |
+| Web | 469 | 0 |
+| Agent | 317 | 1 existing optional integration skip; 318 total |
+| Diagnostics | 5 | 0 |
+| Shared | 190 | 0 |
+| Root release/media/security/reset/network scripts | 81 | 0 |
+| Client scripts | 4 | 0 |
+| Central runner | successful script | exit 0 |
+| Android JUnit | 329 | 70 suites, 0 skipped/failures/errors; BUILD SUCCESSFUL in 42s, 25 actionable tasks all executed |
+
+The earlier ca69 affected exit 1 (two server failures; Android never reached) is
+retained. New scoped Coding projection and legacy late-ACK defects, then retained
+v1 visibility and bounded-read regression, were preserved with RED commits and
+fixed; the final affected run above does not relabel the earlier run. The f072
+independent 6/7 included one pre-assertion fixture readiness TypeError; original
+failure and its bounded exact-publication test-only correction are preserved.
+
+Committed whole-stack whitespace checking separately returns exit 2 for two blank
+EOF lines: the pure extracted `material-organizer-contract.ts` and inherited M04
+`multiuser-model-snapshots.test.ts`. Receipt: `/tmp/m07-final-stack-whitespace.log`
+/ `.exit`. These are formatting notes, not test failures; no source-format edits
+were mixed into the validated freeze. The uncommitted diff check above is distinct.
+
+Checks and Component checks remain disabled and **unrun**, not passed. No workflow
+was enabled or manually triggered. Physical devices, live vendor retention/erase,
+real credentials/user data, production model calls and deployment were not tested
+or authorized. The page-cost fixture bounds repeated scans (80 Materials/owner,
+50 returned) and is not a production-scale load claim. M16 owns cross-domain
+lifecycle orchestration and later clients/UI have their own modules. The same
+candidate A/B/C chain does not replace M08/M11 owning-module final gates.
+Main and integration are unchanged; this feature is delivered as a Draft PR and
+no merge is authorized by these local results.

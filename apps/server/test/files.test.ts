@@ -12,7 +12,7 @@ import {Store,sha256} from '../src/store.js';
 import {SourceStore} from '../src/sources.js';
 import {FileStore} from '../src/files.js';
 import {FileProcessing,type TranscriptionProvider} from '../src/file-processing.js';
-import {buildApp} from '../src/app.js';
+import {buildApp} from './fixtures/legacy-app.js';
 import {configFromFile} from '../src/config.js';
 import {serializeConfigDocument} from '@mote/shared/config-file';
 
