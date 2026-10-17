@@ -47,7 +47,9 @@ for older versions. The current baseline does not add historical task-purpose
 inference, format migration, a startup repair pass or a special retry protocol.
 Current-version restart, data restoration and explicit owner processing retain
 their existing authorization and physical-result protections. The old host is
-only a characterization fixture for the shared domain contract.
+only a characterization fixture for the shared domain contract. Scoped work
+stores the three required current phase receipts directly; aggregate display
+errors are derived from them, without old boolean mirrors or inferred receipts.
 
 Internal Agent `question` retains its nonempty contract but has no arbitrary
 20,000 UTF-16-character cap. External HTTP schemas keep their own input

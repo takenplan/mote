@@ -10,9 +10,10 @@ are not incorporated or validated by this branch.
 
 ## Journeys and actual evidence
 
-Only generated data, loopback model/media servers and generated Codex child
-processes are used. The Harness and account/Ingress/task/archive entry points
-are real; synthetic providers are not evidence of live-model quality.
+Fixture checks use generated data, loopback model/media servers and generated
+Codex child processes. The Harness and account/Ingress/task/archive entry points
+are real; synthetic providers are not evidence of live-model quality. The
+separate real Codex check below also uses only generated content.
 
 | Journey | Executed coverage / result |
 | --- | --- |
@@ -28,6 +29,26 @@ installed-Codex opt-in skip. Agent and Server typechecks pass on the initial
 composed source; the final affected check below supersedes those initial
 typecheck results for the delivered source.
 
+## Real local Codex validation
+
+The installed `codex-cli 0.162.1 app-server`, using the normal local login,
+acknowledged `gpt-6.1-sol` with low reasoning. One real native turn received a
+59,081-character host policy, 11,310 characters across three generated originals
+and their complete coverage contract. Host trace assertions verified exact
+serialization. The actual model returned policy beginning/middle/end markers,
+each original's beginning/middle/end/Unicode/backslash anchors and all target
+coverage; one host validation passed with zero repairs in 15.478 seconds.
+
+Reported thread-cumulative usage was 21,580 input and 557 output tokens (22,137
+total; 25 reasoning tokens reported within that measurement). The underlying
+request count and monetary charge are unknown; a zero request counter is not
+evidence of no model invocation. The isolated runtime was cleaned.
+
+The [sanitized receipt](shared-business-flows-codex-live-2026-10-18.json) records
+the source head at execution and five Agent source hashes, which still match
+the delivered files. This validates the long-input Agent path; it does not prove
+the complete Coding product/independent Memory review journey or general recall.
+
 ## Required affected-component check
 
 ```sh
@@ -40,11 +61,12 @@ execution and source identity are recorded here before PR publication.
 
 ## Preserved unsuccessful attempts
 
-- Three initial affected checks were interrupted while review investigated
+- Initial affected checks were interrupted while review investigated
   earlier-version task compatibility. The owner then explicitly excluded that
   scope for the MVP. The additional origin journal, startup repair, retry hooks
   and upgrade tests were removed; none of their results validates the delivered
-  code. The final affected run covers the reduced current-version implementation.
+  code. A subsequent run was also stopped to remove old boolean/receipt mirrors;
+  the final affected run covers the current-version-only implementation.
 - Initial library build raced the in-progress `AgentInputError` edit and found
   an incompatible status-code override. The override was removed; the complete
   library build and focused typechecks then passed.
@@ -66,8 +88,9 @@ execution and source identity are recorded here before PR publication.
 ## Limits
 
 No production configuration, personal archive, original screenshot, physical
-device, supplier account, real model or deployed release was used. No historical
-failure was retried. Native client UI and runtime behavior were not validated
+device, supplier recording account or deployed release was used. Only the real
+Codex check above used the local model login; no historical failure was retried.
+Native client UI and runtime behavior were not validated
 by the server fixtures. The audit's remaining business differences are not
 closed by passing this correction's tests.
 Older-version task inference, migration and recovery are outside the explicitly

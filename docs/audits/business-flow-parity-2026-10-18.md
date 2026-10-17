@@ -345,7 +345,7 @@ receipts and completed siblings through retry/restart; checks source enablement
 before provider reads; consumes each durable discovery page before requesting
 its successor; deduplicates repeated IDs within a scan; and revises scoped
 evidence when unchanged raw bytes receive changed title, URI or document time
-metadata (`scope/connector-recordings.ts:89–172`). The trusted
+metadata (`scope/connector-recordings.ts:73–156`). The trusted
 `recording-audio-backup` disposition suppresses automatic processing admission
 without blocking an explicit owner processing request
 (`scope/processing.ts:117–124`). Its unprocessed file can be read, played and
@@ -370,7 +370,7 @@ Remaining UNKNOWN / owner decision: legacy `FileStore.transcriptRevision`
 creates one canonical transcript capture with chunks
 (`connectors/recordings.ts:117–124`). Scoped storage still writes a raw export
 and individual segment source-items, which M06 can publish as separate
-Materials (`scope/connector-recordings.ts:99–109`). The parent's generated
+Materials (`scope/connector-recordings.ts:83–93`). The parent's generated
 two-recording journey observed four vendor/segment Materials after the
 unwanted ASR Materials were removed. This changes the downstream evidence and
 Memory input graph; it is not merely account-qualified storage. Candidate A is
@@ -383,7 +383,7 @@ Concrete remaining revision journey, confirmed by static trace: recording R1
 contains two segments; its next provider revision R2 contains only the first.
 The expected current transcript has one segment, with the removed tail retained
 only as history. The scoped adapter updates `:export` and `:segment:0` but never
-withdraws `:segment:1` (`scope/connector-recordings.ts:105–108`). The latter keeps
+withdraws `:segment:1` (`scope/connector-recordings.ts:89–92`). The latter keeps
 its independent current source head. `PrivateData.receiveSourceItems` hides
 predecessor Materials only when that same external ID is revised
 (`scope/private-data.ts:115–118`), so an already processed tail Material remains
@@ -407,6 +407,11 @@ surprise historical replay. Live-provider/ASR accuracy, native UI behavior and
 canonical archive/Memory equivalence remain unverified here. A failed old image
 receipt is not evidence that the recording repair recovered it. F13 remains a
 separate confirmed decode-failure settlement gap.
+
+The parent assigns canonical recording revisions and F13 to a separate
+main/integration workstream. They remain unresolved in this report's `b26e797b`
+plus corrective-PR snapshot; parallel work is not counted as delivered here
+before its commit is verified in the eventual target.
 
 ### F11 — Whole-instance restore adds mandatory reauthorization steps
 
