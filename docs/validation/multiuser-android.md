@@ -9,8 +9,9 @@ explicit feature defaults, Files scalar/graph mapping3bede3e2/ea1b6acd,
 Agentc706d743 and explicit local deletion recoveryda402. Public Models c4,
 Agent245+ddc and declared limited Jointa2 are composed. At ae7927e4 the actual
 full Android JVM/debug build passes358/358 across75 fresh XML,0fail/error/skip,
-82s/44tasks10executed. Fresh Central build and scope checks pass. The genuine
-required affected gate is now running on that fixed SHA; no final exit yet.
+82s/44tasks10executed. Fresh Central build and scope checks pass. That required attempt was controlled-incomplete143 after a native dependency
+ABI mismatch; the original Mem0 four tests pass on the supported matching Node26
+runtime. A new complete required run remains necessary.
 
 Files unconfigured scalar save now correctly selects the existing M04 processing
 CAS; the unchanged complete native case passes1/1. The earlier literal PUT400 is
@@ -1567,3 +1568,27 @@ pass4/4,no skip,7.681s with unchanged assertions/budgets and generated loopback
 (`/tmp/m15-mem0-abi147-isolated.log`). No dependency install, binary rebuild or
 production/test edit was used for this environment repair. Required must still
 be run again; no earlier partial result substitutes for its terminal pass.
+
+### Delivered Desktop PR149 composed without changing Android/server production
+
+Parent-declared final f319513a050218230d624cf93e4154bba5649b15 is merged as
+e02e1ffa; test marker import retained by afe2f8e0. Desktop src/scripts are exact
+f319. Android Kotlin and Server production have zero diff from premerge641e;
+Models6f/c4 and Joint replaceViews are retained. Conflict resolution preserves
+the stronger source-only/ingress-known-device QR case and original PR144
+producer history, adopts canonical formal-note UTF16/B tests while retaining a
+separate raw-before-publication case, and combines atomic PID publication with
+explicit partial-marker readiness/positive-safe-PID observation. No assertion
+is skipped, timeout raised or production endpoint changed by this composition.
+
+On matching installed Node26, all seven affected source files pass42/42/no skip
+in134.734s (`/tmp/m15-desktop-final-composed-merge-regressions.log`): MCP
+canonical/raw windows and real provider awaits, plugin owner/late RPC markers,
+QR and exact Models retirement/copy/features. The complete current Android
+unit/debug build also passes358/358/75XML with0fail/error/skip,91s/44tasks5executed
+(`/tmp/m15-desktop-final-full-android.log`); the test task actually executed with
+the delivered stronger Android Material/source fixture. Bilingual8476/0.
+
+Existing native Models/defaults samecases are separately being checked against
+the matching Node26 generated host; no result is assigned before completion.
+The full required gate must run again on this final Desktop composition.

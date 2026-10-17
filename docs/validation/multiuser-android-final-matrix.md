@@ -10,7 +10,11 @@ Files3bede3e2/ea1b6acd, Agentc706d743 and da402 explicit local deletion-intent
 discard. Public Models c4e42220 (including physical Codex RPC fence), Agent245+ddc
 and limited Jointa2 are composed. At ae7927e4 the current full Android JVM/debug
 build passes358/358 across75 fresh XML,0failure/error/skip,82s/44tasks10executed.
-Fresh Central build and scope checks pass; real affected is running on ae7927e4.
+Fresh Central build and scope checks pass. That affected attempt was controlled
+incomplete143 for Node24/installed-native ABI mismatch; unchanged Mem04/4 passes
+on supported installed Node26. Delivered Desktop PR149f319 is now composed;
+its current Android test/debug build is358/358 actual91s0, and seven merge seam
+source files42/42/no skip0. New full affected remains pending.
 Independent bounded3bede/9852/cc3/6f review reports no new confirmed P0/P1/P2. Independent workspaces/AVDs may
 run in parallel per the parent's superseding resource instruction. M15 writes
 only its own workspace and emulator5562.
@@ -75,3 +79,9 @@ the whole current Android tree2f2a4a6e00b067a78ac7b439eeaaf00a75e012f1.
 Models and Agent are explicit cherry compositions, not asserted ancestry: Models
 configuration differs from pure c4 only by the already-declared Joint replaceViews
 transaction method; model-catalog/probe and the formal DTO are identical.
+
+The subsequent PR149 merge has zero Android Kotlin or Server production delta
+from641e; Desktop src/scripts match delivered f319 exactly. Its shared Android
+test uses the stronger canonical source/Material contract, not an old raw UUID
+fallback. Current APK/JVM proof after that fixture and translation merge is
+`/tmp/m15-desktop-final-full-android.log` and countsJSON (91s,358/358,75XML).
