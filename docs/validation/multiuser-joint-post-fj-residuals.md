@@ -74,3 +74,36 @@ repository root used the wrong tsx JSX configuration and produced three
 `React is not defined` errors; retained separately as `image-neighbors-wrong-cwd`.
 The successful run uses the ordinary Web workspace working directory. This
 fixture-only correction changes no production module or provider behavior.
+
+## Focused successor verification
+
+Complete modified MCP query file22/22 EXIT0,150.678s
+(`/tmp/mote-joint-postfj-mcp-query-neighbors.log/.exit`); the final added
+organizer-settled assertion subsequently passes the same target1/1 above.
+Combined direct coverage is MCP22, image-progress4 and the two mock files51,
+all with zero failures/skips. Server and Web affected TypeScript both EXIT0
+(`/tmp/mote-joint-postfj-affected-types.log/.exit`). Web production build
+result is recorded after terminal below.
+
+All post-FJ changes are confined to these four test files and this evidence
+document. Production source, original privacy/fence checks and old failed
+required-gate receipts are unchanged. Parent explicitly assigns one final-C
+full combined gate and whole recovery to the designated E2E/Recovery owners;
+no second old-platform full gate or recovery is used to hide the original
+EXIT1. In that original gate, later root/CLI and Android remained not reached.
+
+Web production build EXIT0 (`/tmp/mote-joint-postfj-web-build.log/.exit`),
+Vite1.77s; existing bundle-size warning retained. Final test-source candidate
+`4ce4f60111d44855eb7b469f83dbad498ae8087a`; subsequent receipt edits are
+validation documentation only. `git diff --check` passes. All six original
+residuals are closed at the focused fixture level; this does not turn the
+original required EXIT1 into a pass or establish whole-C acceptance.
+
+Consume original FJ521 plus successors in order:256b6cff (FW156 mocks),
+36fa14f9 (MCP genuine retained original),70baf9d6 (image occupancy),4ce4f601
+(settled organizer proof), then the documentation receipt. Draft PR157 remains
+targeted at integration; do not merge or enable CI. The canonical exact-SHA
+machine handoff is `/tmp/mote-joint-fj-input.json`. Final combined root/CLI,
+Android, platform journeys and same-C whole recovery remain with the parent’s
+already designated final-C owners. No private Central data, real model
+inference or live calendar/mail provider was used in these successors.
