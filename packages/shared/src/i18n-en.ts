@@ -8451,5 +8451,6 @@ export const english: Readonly<Record<string, string>> = {
   "设备邀请仅授权此账号的采集与同步，不授予私人资料库或账号管理权限。": "Device invitations authorize collection and sync for this account only, without private library or account management access.",
   "提交结果待确认；重试会使用原操作，不会重新创建任务。": "The submission is not confirmed. Retry uses the original operation without creating another task.",
   "移除本机待确认提交": "Remove local pending submission",
-  "移除本机提交不会取消已经准入的中央任务；可在活动中查看。": "Removing the local submission does not cancel an admitted Central task. Check Activity for its status."
+  "移除本机提交不会取消已经准入的中央任务；可在活动中查看。": "Removing the local submission does not cancel an admitted Central task. Check Activity for its status.",
+  "试听": "Listen to sample"
 };
