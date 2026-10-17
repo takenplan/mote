@@ -1585,3 +1585,28 @@ saved enabled selection preserve history, explicit source withdrawal remains
 false through selection saves, disconnect preserves audio bytes/Files/Material/
 export, B remains unchanged, restart and explicit final read withdrawal are valid.
 Full renderer/export contents remain the recording consumer owner's evidence.
+
+### Non-default installed image recipe closure, narrow evidence
+
+The original M06 rejection `image_recipe_unavailable` was actual RED. The first
+implementation exposed a Material artifact-name schema error; mapping its public
+name to the existing path syntax fixes only that publication boundary. A later
+no-OCR actual RED found Memory's unconditional Material-parent assumption; only
+original-image anchors are now admitted for that case. Explicit recipe replacement
+also reproduced a stale current primary OCR Material; the no-OCR recipe retires
+that current publication while preserving actual accepted raw history.
+
+`/tmp/mote-joint-custom-image-final-narrow.log/.exit` is4/4,0skip,36.124s EXIT0:
+A/B literal same ID OCR+derived and restart/cache; no-OCR interpretation with empty
+region description, exact navigation-only Memory evidence, corrupt-hash refusal
+and data restore/restart; M04 file-model lease plus real Messages read_image of
+generated PNG pixels without OCR; held custom step/source withdrawal with B
+positive. The first journey also exercises real preview/explicit reprocess,
+removed output withdrawal and OCR→interpretation-only replacement. Server noEmit
+and scope checks are0 (`custom-image-types4`, `custom-image-scope3`). The Messages
+and OCR networks are loopback generated transports, not live models. One sandbox
+EPERM before listen and an intermediate syntax typo are retained in their own
+failed receipts; neither is overwritten or counted as runtime acceptance.
+Final union/consumer/compiled/backup acceptance remains pending. Optional disabled
+recipe dependency behavior and all legacy custom packs are not inferred from this
+finite matrix.

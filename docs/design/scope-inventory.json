@@ -1769,6 +1769,8 @@
       "task:execution.register:kind:'processing.analysis'",
       "task:execution.register:kind:'processing.derivatives'",
       "task:execution.register:kind:'processing.health'",
+      "task:execution.register:kind:'processing.image-stage'",
+      "task:execution.register:kind:'processing.image-understanding'",
       "task:execution.register:kind:'processing.pipeline'"
     ]
   },
