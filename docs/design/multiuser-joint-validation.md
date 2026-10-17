@@ -392,3 +392,20 @@ performs no model or provider I/O. Duplicate notifications and restart must dedu
 unknown external results must not replay. The implementation and actual logout,
 A/B, cancellation/withdrawal/deletion, duplicate, restart and unchanged-dependency
 matrix remain pending until their explicit execution evidence is recorded.
+
+## FJ metadata and final-C ownership supersession
+
+KEEP existing M04 complete references, shared SQLite/services/executor and the
+approved fixed-purpose B recheck. CHANGE only new M06 admission metadata for an
+actually declared feature-default file reference: applied plans record it in the
+existing plan, legacy no-plan inputs record an optional fixed reference/hash.
+No secret or generic owner-context constructor is introduced. EXCEPTION:
+previous inputs without this metadata are not retroactively assigned authority.
+Impact/verification:21 named/applied-default/no-plan journeys and branch proof
+pass; the full521 gate's separate six residual cases remain red.
+
+Parent explicitly makes FJ release independent of final C recovery: fixed source,
+actual current gate terminal and unverified boundary are the input. REMOVE the
+earlier circular wait for final client/recovery completion before FJ publication.
+Final C full recovery belongs only to the designated Recovery task after E2E
+composes the final inputs. No transitional whole recovery suite is duplicated.

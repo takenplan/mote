@@ -8,7 +8,8 @@ import {noteCapture} from '@mote/shared';
 import {identityHash} from '../src/scope/originals.js';
 import {navigationRef} from '../src/context-navigation.js';
 import {memoryFixture,memoryText} from './fixtures/mcp-memory.js';
-import {call,value,source} from './fixtures/mcp.js';
+import {call,value,source,item} from './fixtures/mcp.js';
+import {waitForState} from './fixtures/scoped-query-accounts.js';
 
 const note=(id:string,text:string)=>noteCapture({id,deviceId:'same-device',deviceName:'Generated device',platform:'import',capturedAt:'2026-10-16T12:00:00Z',text});
 const okCall=async(client:Parameters<typeof call>[0],name:string,args:Record<string,unknown>={})=>{const result=await call(client,name,args);assert.equal(result.isError,undefined,JSON.stringify(result));return value(result);};
@@ -65,12 +66,26 @@ test('actual SDK Activity/media preserve measured unions and source isolation wi
 });
 
 test('actual SDK read and formal Material windows preserve UTF16 characters and exact ranges',async t=>{
- const f=await memoryFixture(t),id=randomUUID(),text='X😀Y';await f.ok(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId:'unicode',items:[note(id,text)]});
- const formal=await captureMaterial(f,f.a,id),a=await f.connect(await f.mint(f.a.token)),full=await okCall(a.client,'mote_material_read',{ref:formal.ref}),canonical=full.originalRefs[0];
- assert.ok(canonical);assert.notEqual(canonical,'capture:'+id);assert.ok(full.text.startsWith(text+'\n'));assert.equal(full.text.length,formal.textLength);assert.equal(full.textRange.total,formal.textLength);
+ const f=await memoryFixture(t),noteId=randomUUID(),text='X😀Y';
+ await f.ok(f.a.token,'/api/ingress/sources/same-source/captures','POST',{batchId:'unicode',items:[note(noteId,text)]});
+ const formal=await captureMaterial(f,f.a,noteId);const a=await f.connect(await f.mint(f.a.token));
+ const full=await okCall(a.client,'mote_material_read',{ref:formal.ref}),canonical=full.originalRefs[0];
+ assert.ok(canonical);assert.notEqual(canonical,'capture:'+noteId);assert.ok(full.text.startsWith(text+'\n'));assert.equal(full.text.length,formal.textLength);assert.equal(full.textRange.total,formal.textLength);
  const original=await okCall(a.client,'mote_read',{refs:[canonical],offset:2,length:1});assert.equal(original.items[0].text,'😀');assert.deepEqual(original.items[0].textRange,{offset:1,total:4,nextOffset:3});
- const page=await okCall(a.client,'mote_material_read',{ref:formal.ref,offset:2,length:1});assert.equal(page.text,'😀');assert.deepEqual(page.textRange,{offset:1,total:formal.textLength,nextOffset:3});assert.ok(page.spans.length);assert.ok(page.spans.every((span:any)=>span.materialRange.start>=1&&span.materialRange.end<=3));
- assert.equal((await call(a.client,'mote_read',{refs:['capture:'+id]})).isError,true);const b=await f.connect(await f.mint(f.b.token));assert.equal((await call(b.client,'mote_read',{refs:[canonical]})).isError,true);
+ const formalPage=await okCall(a.client,'mote_material_read',{ref:formal.ref,offset:2,length:1});assert.equal(formalPage.text,'😀');assert.deepEqual(formalPage.textRange,{offset:1,total:formal.textLength,nextOffset:3});assert.ok(formalPage.spans.length);assert.ok(formalPage.spans.every((span:any)=>span.materialRange.start>=1&&span.materialRange.end<=3));
+ const foreign=await f.connect(await f.mint(f.b.token));assert.equal((await call(foreign.client,'mote_read',{refs:[canonical]})).isError,true);
+
+ assert.equal((await call(a.client,'mote_read',{refs:['capture:'+noteId]})).isError,true,'settled notes expose their formal locator instead of a retired raw capture');
+ // Ordinary messages acquire a canonical Material even when M06 automatic file
+ // processing is disabled. Settle that path and keep its raw-locator rejection.
+ const message=await f.put(f.a.token,text,'unicode-message');await captureMaterial(f,f.a,'unicode-message');assert.equal((await call(a.client,'mote_read',{refs:['capture:'+message.captures[0].id]})).isError,true);
+ // Use M03's production connector adapter with explicit retained file bytes.
+ // A snapshot item without supplied bytes is still organized asynchronously;
+ // this genuine original stays unprocessed under explicit automatic:false.
+ const context=await f.node.authority.authenticate(f.a.token),bound=f.node.ingress.bindSource(context,['same-source'],()=>{}),received=f.node.ingress.forUser(context).receiveSourceItemsWithOriginals('same-source','unicode-raw',[{...item(text,'unicode-raw'),kind:'file',layer:'original'}],[{bytes:Buffer.from(text),mime:'text/plain',format:'file'}]),id=received.captures[0].id;assert.ok(received.captures[0].original?.ref.startsWith('original:'));assert.equal(bound.readOriginal(received.captures[0].original!.ref).bytes.toString('utf8'),text);
+ await waitForState(async()=>((await f.ok(f.a.token,'/api/tasks?limit=100')).items as any[]).filter(task=>task.kind==='memory.materials'&&f.node.execution!.engine.get(task.id)?.input.captureId===id),tasks=>tasks.length===1&&tasks.every(task=>task.state==='succeeded'),'retained original organizer settled without a premature raw read',8000);assert.equal((await f.ok(f.a.token,'/api/materials')).items.some((m:any)=>m.origin.externalId==='unicode-raw'),false);
+ const raw=await okCall(a.client,'mote_read',{refs:['capture:'+id],offset:2,length:1});assert.equal(raw.items[0].text,'😀');assert.deepEqual(raw.items[0].textRange,{offset:1,total:4,nextOffset:3});
+ const material=bound.publishMaterial({id:'mat_'+identityHash(['same-source','unicode-raw']),kind:'document',schemaVersion:1,title:'Generated Unicode',origin:{sourceId:'same-source',externalId:'unicode-raw'},blocks:[{id:'block',kind:'text',format:'plain',text,memberIds:['original']}],members:[{id:'original',kind:'capture',ref:'capture:'+id}],coverage:{state:'complete'},fidelity:{state:'lossless'},retention:{original:'retained',policy:'keep'}}),page=await okCall(a.client,'mote_material_read',{ref:material.ref,offset:2,length:1});assert.equal(page.text,'😀');assert.deepEqual(page.textRange,{offset:1,total:4,nextOffset:3});assert.ok(page.spans.every((span:any)=>span.materialRange.start>=1&&span.materialRange.end<=3));assert.equal((await call(a.client,'mote_read',{refs:['capture:'+id]})).isError,true);
 });
 
 test('actual SDK context includeMemories false avoids genuine provider reads and preserves source-only results',async t=>{
