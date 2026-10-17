@@ -25,6 +25,12 @@ migration cannot recover statements already deleted by earlier versions. No
 artifact rebuild automatically republishes stale Memory or creates authorized
 historical model work.
 
+Artifact removal also invokes the existing conversation invalidation lifecycle
+before its lineage is removed, in the same SQLite statement. Dependent answers
+remain visible as historical dialogue; their summaries and frozen model snapshots
+are withdrawn. This covers replacement, eviction and recursive parent cascades.
+Exact immutable replay does not invoke that lifecycle.
+
 ## Supersession check
 
 | Status | Responsibility |
@@ -56,6 +62,11 @@ model. It verifies the runtime artifact dependency registration before exercisin
   stale, remove checkpoints and keep it out of ordinary discovery.
 - Restart preserves stale state; deleting the original still erases the card.
 - Startup replaces a legacy destructive trigger in an existing database.
+
+`apps/server/test/evidence-cache-history-integration.test.ts` adds generated
+loopback HTTP/SQLite journeys for the joint conversation lifecycle: equal replay,
+replacement/eviction/parent cascade, restart and referential follow-up, late model
+and summary rejection, and later destructive original deletion.
 
 These fixtures verify host lifecycle enforcement. They do not verify real-model
 semantic accuracy or external provider behavior.

@@ -19,6 +19,9 @@ export class EvidenceArchive {
   constructor(readonly store:Store){
     const db=store.db;
     db.function('mote_observation_key',{deterministic:true},json=>observationKey(JSON.parse(String(json))));
+    // Cache changes retain historical prose, but must still revoke saved
+    // conversation snapshots and summaries before their lineage disappears.
+    db.function('mote_context_history_invalidate',id=>{store.invalidateConversationAnswers([String(id)]);return null;});
     db.exec('PRAGMA recursive_triggers=ON');
     db.exec(`
       CREATE TABLE IF NOT EXISTS context_contents(hash TEXT PRIMARY KEY,json TEXT NOT NULL);
@@ -33,6 +36,9 @@ export class EvidenceArchive {
       CREATE TABLE IF NOT EXISTS artifact_inputs(artifact_id TEXT NOT NULL REFERENCES context_artifacts(id) ON DELETE CASCADE,observation_id TEXT NOT NULL REFERENCES captures(id) ON DELETE CASCADE,fingerprint TEXT NOT NULL,PRIMARY KEY(artifact_id,observation_id));
       CREATE INDEX IF NOT EXISTS artifact_input_observation ON artifact_inputs(observation_id);
       CREATE TABLE IF NOT EXISTS artifact_events(seq INTEGER PRIMARY KEY AUTOINCREMENT,entity TEXT NOT NULL,operation TEXT NOT NULL);
+      CREATE TRIGGER IF NOT EXISTS context_history_invalidation BEFORE DELETE ON context_artifacts BEGIN
+        SELECT mote_context_history_invalidate(old.id);
+      END;
       CREATE TRIGGER IF NOT EXISTS context_observation_insert AFTER INSERT ON captures BEGIN
         INSERT INTO context_observations(id,group_key) VALUES(new.id,mote_observation_key(new.json));
         DELETE FROM context_artifacts WHERE id IN (SELECT artifact_id FROM artifact_inputs WHERE observation_id IN (SELECT id FROM context_observations WHERE group_key=mote_observation_key(new.json)));
