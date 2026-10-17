@@ -154,8 +154,8 @@ export class IngressHost{
     const file=archive.file(fileId),mime=options.mimeType??file.mimeType;if(mime==='application/octet-stream')throw new PrivateDataError('invalid_data');if(file.mimeType!=='application/octet-stream'&&file.mimeType!==mime)throw conflict();
     const externalId='attachment:'+identityHash([parentId,fileId]),revision=identityHash([file.hash,mime]),item=sourceItemSchema.parse({externalId,revision,observedAt:parent.capturedAt,title:file.name,text:'',kind:'file',layer:'original',mimeType:mime,document:{attachmentOf:{captureId:parentId,fileId},contentRole:'other',recordedAt:p.document?.recordedAt,timeBasis:p.document?.recordedAt?'recorded':'unknown'}}),childId=captureId(p.sourceId,item),prior=sql.get('SELECT binding_id FROM ig_attachment_links WHERE user_id=$user AND capture_id=?',childId);
     if(prior){attachmentBinding(sql,childId);return {captureId:childId,parentId,attachmentId:fileId,duplicate:true};}
-    const bytes=originals.readObject(file.hash);if(bytes.length!==file.sizeBytes)throw conflict();const bindingId=randomUUID();
-    intakeSourceItems(p.sourceId,'attachment:'+bindingId,[item],[{bytes,mime,format:'file'}],undefined,undefined,receipt=>{if(receipt.captures[0]?.id!==childId)throw conflict();sql.run('INSERT INTO ig_attachment_links VALUES($user,?,?,?,?)',childId,parentId,fileId,bindingId);});
+    const object=sql.get('SELECT bytes FROM ig_objects WHERE user_id=$user AND hash=?',file.hash);if(!object||Number(object.bytes)!==file.sizeBytes)throw conflict();const bindingId=randomUUID();
+    intakeSourceItems(p.sourceId,'attachment:'+bindingId,[item],undefined,undefined,undefined,receipt=>{if(receipt.captures[0]?.id!==childId)throw conflict();sql.run('INSERT INTO ig_attachment_links VALUES($user,?,?,?,?)',childId,parentId,fileId,bindingId);},{hash:file.hash,mime,bytes:file.sizeBytes});
     attachmentBinding(sql,childId);return {captureId:childId,parentId,attachmentId:fileId,duplicate:false};
    }),
    forgetFile:forgetting.forget,fileForgetReceipt:forgetting.receipt,forgottenFile:forgetting.forgotten,allowFileAgain:forgetting.allowAgain,
@@ -241,23 +241,25 @@ export class IngressHost{
     return originals.gc();
    });},
   };
-  function intakeSourceItems(sourceId:string,id:string,values:unknown[],inputs?:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[],importDeclaration?:unknown,afterWrite?:(receipt:IngressReceipt)=>void){
+  function intakeSourceItems(sourceId:string,id:string,values:unknown[],inputs?:(SuppliedOriginal|undefined)[],formats?:readonly(IngressOriginalFormat|undefined)[],importDeclaration?:unknown,afterWrite?:(receipt:IngressReceipt)=>void,retained?:{hash:string;mime:string;bytes:number}){
    const items=z.array(sourceItemSchema).min(1).max(500).parse(values);
+   if(retained&&(items.length!==1||!sql.get('SELECT hash FROM ig_objects WHERE user_id=$user AND hash=? AND bytes=?',retained.hash,retained.bytes)))throw conflict();
    if(inputs&&(inputs.length!==items.length||inputs.some(v=>v&&(!Buffer.isBuffer(v.bytes)||v.bytes.length>512*1024*1024||!v.mime||v.mime.length>200||v.format!==undefined&&!['source-item','file'].includes(v.format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(v.format)))))throw new PrivateDataError('invalid_data');
    if(formats&&(formats.length!==items.length||formats.some(format=>format!==undefined&&!['capture','source-item','file'].includes(format)&&!/^processor:[a-z][a-z0-9.-]{0,99}$/.test(format))))throw new PrivateDataError('invalid_data');
    for(const item of items)forgetting.allowed(sourceId,item);
-   return batch(sourceId,id,inputs?{items,formats,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime,format:v.format??'file'}:null),...(importDeclaration===undefined?{}:{importDeclaration})}:importDeclaration===undefined?items:{items,importDeclaration},'source-item',()=>{
-    const pin=declaration(sourceId,importDeclaration),binding=source(sourceId),archive=binding.retention==='archive';if(binding.retention==='reference'&&inputs?.some(Boolean))throw conflict();
+   return batch(sourceId,id,inputs?{items,formats,originals:inputs.map(v=>v?{hash:bytesHash(v.bytes),mime:v.mime,format:v.format??'file'}:null),...(importDeclaration===undefined?{}:{importDeclaration})}:retained?{items,retained}:importDeclaration===undefined?items:{items,importDeclaration},'source-item',()=>{
+    const pin=declaration(sourceId,importDeclaration),binding=source(sourceId),archive=binding.retention==='archive';if(binding.retention==='reference'&&(inputs?.some(Boolean)||retained))throw conflict();
     const descriptors=items.map((item,index)=>{
      const capture=captureId(sourceId,item),prior=sql.get('SELECT id,hash,mime,retention FROM ig_originals WHERE user_id=$user AND source_id=? AND capture_id=?',sourceId,capture),input=inputs?.[index];
-     if(prior){if(input&&(prior.hash!==bytesHash(input.bytes)||prior.mime!==input.mime))throw conflict();return originals.original('original:'+prior.id);}
+     if(prior){if(input&&(prior.hash!==bytesHash(input.bytes)||prior.mime!==input.mime)||retained&&(prior.hash!==retained.hash||prior.mime!==retained.mime))throw conflict();return originals.original('original:'+prior.id);}
+     if(retained)return {hash:retained.hash,mime:retained.mime};
      if(!archive&&!input)return;
      const object=originals.put(input?.bytes??Buffer.from(JSON.stringify(item)));return {hash:object.hash,mime:input?.mime??'application/json'};
     });
     const acks=data().receiveSourceItems(sourceId,items,archive?{verify:item=>{if(!descriptors[items.findIndex(value=>value.externalId===item.externalId&&value.revision===item.revision)])throw conflict();}}:undefined).receipts;
     for(const ack of acks)if(!ack.duplicate)imports.bind(ack.id,pin);
     const result=receipt(sourceId,id,acks.map((ack,index)=>{const descriptor=descriptors[index];return {...ack,...(descriptor?{original:originals.attach(sourceId,ack.id,descriptor.hash,descriptor.mime,archive?'archive':'snapshot')}:{})};}));afterWrite?.(result);return result;
-   },result=>Object.fromEntries(result.captures.flatMap((ack,index)=>ack.original&&(formats?.[index]||inputs?.[index])?[[ack.original.ref,formats?.[index]??inputs![index]!.format??'file']]:[])));
+   },result=>Object.fromEntries(result.captures.flatMap((ack,index)=>ack.original&&(formats?.[index]||inputs?.[index]||retained)?[[ack.original.ref,formats?.[index]??inputs?.[index]?.format??'file']]:[])));
   }
   function upload(id:string){assert();if(!/^[a-f0-9-]{36}$/.test(id))throw missing();const row=sql.get('SELECT * FROM ig_uploads WHERE user_id=$user AND id=?',id);if(!row)throw missing();source(String(row.source_id));forgetting.allowed(String(row.source_id),fileRevisionSchema.parse(JSON.parse(String(row.manifest))).item);if(row.authorization_epoch!==context.authorizationEpoch||Number(row.expires)<=Date.now())throw conflict();return row;}
   return Object.freeze(service);
