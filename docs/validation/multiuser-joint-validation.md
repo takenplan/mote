@@ -1253,3 +1253,22 @@ changed processing generation. Same case1/1,6.671s0 is
 `/tmp/mote-joint-policy-settings-change-green1.log/.exit`, Server types0. This
 does not yet close disable/resume, global-policy-null legacy work, derived phases
 or raw-extraction reuse after downstream-only changes.
+
+
+### Independently owned binary parser correction composed
+
+E2E minimal producer69243430→caf05519 is reviewed and selectively composed as
+192703dc/41c5d413; its runtime blob equals the producer main feature b084. Global
+Buffer decoding remains bounded4MiB; selected Imports routes retain MIME and
+decimal-part validation, with existing owner/credential/protocol/CSRF/hash/length
+checks unchanged. Unknown MIME/oversize errors retain the original503 mapping;
+unknown binary routes remain rejected by scope fallback (503 instead of former
+parser400), without staging writes. Own current profile combination targeted
+auth/CSRF+Imports bounds2/2,9.527s0 is
+`/tmp/mote-joint-parser-composed-narrow.log/.exit`. Source review is
+`/tmp/mote-joint-review-binary-parser-caf.md`. Producer41/41 and Recovery104/104/
+new compiled recovery are peer evidence on their exact candidates, not Joint's
+new policy-table restore proof. Own full affected/final clients remain pending.
+The independent cross-user original stop/delete cases also pass2/2,6.552s after
+the fixture-only PID patch (peer e88e1727, `/tmp/mote-crossuser-plugin-marker-green.*`).
+Old failure logs remain preserved; no production plugin fix was inferred.
