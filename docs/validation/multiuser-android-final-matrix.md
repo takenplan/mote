@@ -8,10 +8,10 @@ codex/mote-multiuser-m15-android. No M15 remote DraftPR or final affected exists
 Current native production includes Models9852/cc3 and feature defaults6f4ac791,
 Files3bede3e2/ea1b6acd, Agentc706d743 and da402 explicit local deletion-intent
 discard. Public Models c4e42220 (including physical Codex RPC fence), Agent245+ddc
-and limited Jointa2 are composed. The latest completed full Android JVM/debug
-build is still checkpoint0ff4c9d4:358/358 across75XML,0failure/error/skip,
-61s/44tasks8executed. Subsequent original Models UI changes have actual native
-proof below and await the current full build. Independent workspaces/AVDs may
+and limited Jointa2 are composed. At ae7927e4 the current full Android JVM/debug
+build passes358/358 across75 fresh XML,0failure/error/skip,82s/44tasks10executed.
+Fresh Central build and scope checks pass; real affected is running on ae7927e4.
+Independent bounded3bede/9852/cc3/6f review reports no new confirmed P0/P1/P2. Independent workspaces/AVDs may
 run in parallel per the parent's superseding resource instruction. M15 writes
 only its own workspace and emulator5562.
 
@@ -26,7 +26,7 @@ only its own workspace and emulator5562.
 | Files content/original/correction/names/export | Jointa10 and source519 consumed. Actual generated WAV/chunks/exact text/correction/names/authenticated playback and current generations have native proof. | Preserve exact capture/source/artifact/chunk/hash and unchanged B assertions in final combination. |
 | Files stage retry/cancel/delete | Existing native actual stage retry, stop/retry/delete, unresolved-fact explicit consent, stable encrypted op/generation, committed deletion/lost ACK/missing detail pass. Source-reset165 passes on519. Explicit local intent discard da402 actual RED→GREEN3.068s; lost-ACK neighbor1.508s0; independent bounded reviews no new confirmed finding. | Final representative and genuine affected. Local discard neither cancels Central nor restores bytes/rebases an old op. |
 | Original Files processing settings/graph | Limited Jointa2 six source files15/15/no skip0; configured graph/A old save retirement/B same-ID edit native1/1,2.423s0. Corrected3bede scalar consumer uses existing M04 processing CAS with the same revision; source1/1,2.462s0 and unchanged full native1/1,2.483s0. Unsaved preview remains unconfigured. | Historical strict PUT400 is superseded by the correct client mapping, not a producer defect. Shared advanced execution/profile/recipe/fingerprint/recovery items remain limited by the declared producer freeze; distinguish original native widgets from Web-only controls. |
-| Personal model copy/probe/directory/defaults | Public c4 composed9/9/no skip0, including same physical Codex retirement RED→GREEN+B positive. Original missing-controls native RED→GREEN2.003s; full real generated reader/copy true-false/directory/A→B/B positive native1/1,5.453s0. Empty Chat bind/clear with unavailable Memory ref preserved native1/1,1.165s0. | Current full Android/build and bounded native review remain pending. Shared secrets/endpoints remain opaque under M04; personal ENV interpolation is disallowed. The optional original defaults control uses authoritative feature metadata and no implicit reassignment. |
+| Personal model copy/probe/directory/defaults | Public c4 composed9/9/no skip0, including same physical Codex retirement RED→GREEN+B positive. Original missing-controls native RED→GREEN2.003s; full real generated reader/copy true-false/directory/A→B/B positive native1/1,5.453s0. Empty Chat bind/clear with unavailable Memory ref preserved plus detached A save/B explicit positive native1/1,2.109s0. | Current full Android/build and bounded native review pass; final affected exit remains pending. Shared secrets/endpoints remain opaque under M04; personal ENV interpolation is disallowed. The optional original defaults control uses authoritative feature metadata and no implicit reassignment. |
 | QR/JSON/scan/device reauthorization | Producer485, native d6da and observer659 composed. Actual visible A dialog/URI retirement, normal lostredeem/ACK/queue, same invitation/verifier/name and held A picker→B explicit selection all pass. Actual server-restart and revoked negative cases are separately recorded. | Current final restart/revocation representative; no physical-camera or system-permission claim. |
 | Personal MCP create/revoke | b603 removes invalid serverUrl from M01 creation but retains explicit write-source allowlist. Original native create/cancelled revoke/revoke/B same-label/detached A control1/1,2.013s0; backend0. | Final combination representative; read/helper tests are not substituted for the actual form. |
 | Agent preview/recorded history | Original no-model startup, canonical material/evidence and M04 personal explicit recording restored on c706. Public245+ddc actual3/3; strengthened history/real tool-result/opaque pages/A→B/B new preview native1/1,7.261s0. Native held query→real relogin→UI opt-out→completed/no later payload1/1,7.310s0; currenta2 neighbor1/1,5.920s0. Independent c706 review no new confirmed finding. | Retained history is partial/truncated; no reconstructed prompts or invented tool.completed. Final required remains pending. |
@@ -45,7 +45,7 @@ Original native model copy/probe/directory really exist and remain in scope.
 
 ## Final gates still required
 
-1. Close the original capability and confirmed producer RED rows using exact
+1. Close the original capability and confirmed RED rows using exact
    declared shared freezes and thin native consumers; preserve independent review
    scope separately from executed tests.
 2. Current relevant Android/native queue/SIGKILL/permissions/source/receipt journeys
@@ -61,3 +61,17 @@ and diagnostic setting facades are still not ordinary private APIs. Real devices
 real calendar/provider data, public HTTPS and vendor background checks are not
 claimed. One earlier authored local-Codex connection check remains exact bounded
 connectivity evidence only.
+
+## Current source provenance
+
+Since0ff4c9d4 current Android production changes are limited to CentralAdmin
+Files/Models controls, CentralModels authoritative features and synchronized
+translations; queue, collectors, storage, upload/source/snapshot workers,
+connection/QR, Actions and portable code have zero diff. Their exact current-a2
+native proofs remain applicable to those unchanged components rather than
+mechanically repeating unrelated journeys. Current Models/Files actual native
+cases cover the changed consumers, and the fresh full JVM/debug build covers
+the whole current Android tree2f2a4a6e00b067a78ac7b439eeaaf00a75e012f1.
+Models and Agent are explicit cherry compositions, not asserted ancestry: Models
+configuration differs from pure c4 only by the already-declared Joint replaceViews
+transaction method; model-catalog/probe and the formal DTO are identical.

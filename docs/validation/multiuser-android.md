@@ -4,26 +4,36 @@ Implementation starting parent: `98d76945e091d7234217ebcf532ebeff3350937c` (M11 
 Independent workspace: task-19/mote; feature `codex/mote-multiuser-m15-android`.
 Current M12 stable10748005/runtime dcad6088 is consumed after the parent's explicit handoff restoration, including the earlier4a/5172 lifecycle changes. The earlier pending-handoff statements below are historical. M13/M14 WIP is not accepted dependency evidence.
 
-Current native runtime includes Agentc706d743 and Files settings ea1b6acd,
-with public Agent245+ddc and limited Jointa2cbf3aa. Latest full Android JVM/debug
-APK is c706:358/358 across75XML,0failure/error/skip,144s. Later ea1b has only
-fixture builds and the configured-graph native acceptance, not a new full JVM.
-Current full original scalar/graph case remains RED: a2 rejects the original
-policy-omitting scalar request with400. Do not auto-persist an unsaved preview
-or treat configured-only GREEN as closure. Exact durable test and owner handoff
-uncertainty are recorded below.
+Current native runtime6f4ac791 includes original Models copy/probe/directory and
+explicit feature defaults, Files scalar/graph mapping3bede3e2/ea1b6acd,
+Agentc706d743 and explicit local deletion recoveryda402. Public Models c4,
+Agent245+ddc and declared limited Jointa2 are composed. At ae7927e4 the actual
+full Android JVM/debug build passes358/358 across75 fresh XML,0fail/error/skip,
+82s/44tasks10executed. Fresh Central build and scope checks pass. The genuine
+required affected gate is now running on that fixed SHA; no final exit yet.
 
-Agent actual backend3/3, strengthened native history1/1 and native held-query/
-relogin/opt-out1/1 pass; c706 independent bounded review has no new confirmed
-finding. Limited policy source15/15, Server/scripts types and scope pass. Older
-full Central/types and other original native journeys retain their exact source
-boundaries. Newly declared shared interfaces are consumed as exact commits;
-no subsequent arbitrary producer WIP is accepted evidence.
+Files unconfigured scalar save now correctly selects the existing M04 processing
+CAS; the unchanged complete native case passes1/1. The earlier literal PUT400 is
+historical incorrect consumption, not a producer blocker. Original Models full
+copy/secrets/generated tool/citation probe/directory/heldA→B case passes1/1,
+5.453s. Explicit defaults bind/clear/unavailable-reference/detached A/B positive
+case passes1/1,2.109s. Public Models9/9 includes the identical actual physical
+Codex retirement regression plus B positive. Independent bounded native
+3bede/9852/cc3/6f review reports no new confirmed P0/P1/P2. Exact source/logs and
+fixture/environment distinctions remain below.
+
+Agent actual backend3/3, strengthened native history1/1 and held-query/relogin/
+opt-out1/1 pass; c706 independent bounded review has no new confirmed finding.
+Limited policy source15/15, types and scope pass. Its advanced common execution
+and recovery OPEN items remain producer-owned, not inferred from a saved graph.
+No arbitrary later producer WIP is consumed. Queue/source/SIGKILL/capture code
+is unchanged since the latest exact core native proofs below; current full
+JVM/build evidence includes the later Models UI changes.
 
 This is **not final M15 completion**. The [finite matrix](multiuser-android-final-matrix.md)
 and [remaining original shared-contract map](../design/multiuser-android-open-contracts.md)
-retain the exact model/Agent/policy gaps. Genuine final affected, final dependency
-verification, feature push and Draft PR are pending. No M15 remote PR exists;
+retain exact implemented and remaining common-policy scope. Genuine final affected
+exit, final dependency verification, feature push and Draft PR are pending. No M15 remote PR exists;
 main/integration/CI/deployment are untouched. Parent now permits independent
 workspaces/AVDs in parallel; historical serial resource notes below are superseded.
 
@@ -1534,3 +1544,26 @@ stay zero. Test-only APK build15s/49tasks4executed0. The first attempted build
 used a wrong relative edit path, then lacked sandbox access to the existing
 Gradle lock; neither reached target test. Corrected path and the exact normal
 approved offline build passed. This is not a production RED.
+
+### Required environment prerequisite failure — no pass assigned
+
+Fixed ae792 required attempt used explicit Node24.21.0 and reached all types0
+and Desktop60files501/5010 (135.64s). Server continued after the Mem0 file while
+that owned child stalled. A precise in-memory load of the installed locked
+better-sqlite3 12.10.0 reproduced ERR_DLOPEN_FAILED: binary ABI147 versus Node24
+ABI137. No live embedding opt-in was set. Read-only TCP inspection of only its
+two generated processes showed the fake loopback listener and no outbound SDK
+connection. No test result is invented from that wait.
+
+The verified own root42855/checkout was gracefully TERM-stopped after confirmed
+prerequisite failure; all18 exact descendants received TERM, no KILL was needed.
+Receipt /tmp/m15-required-affected-current-env-stop.json, original log and exit143
+are retained. This is an environment-controlled incomplete gate, not EXIT0 or a
+reported business assertion failure. No foreign process/emulator was targeted.
+
+Already-installed Node26.11.1 supports the project's Node>=24 range and matches
+ABI147. The same in-memory native load passes and the original four Mem0 tests
+pass4/4,no skip,7.681s with unchanged assertions/budgets and generated loopback
+(`/tmp/m15-mem0-abi147-isolated.log`). No dependency install, binary rebuild or
+production/test edit was used for this environment repair. Required must still
+be run again; no earlier partial result substitutes for its terminal pass.
