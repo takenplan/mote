@@ -110,6 +110,35 @@ Both ticket/request maps are restart-local and each is capped at 512 entries.
 The old connection fixture continues to use the same handoff class with its
 legacy adapter, outside production.
 
+### Explicit native central browser login
+
+The original native Central login and its browser approval promise access to all
+Central features. A collector's device-bound credential deliberately cannot open
+those private pages. `POST /api/login/requests` therefore accepts optional
+`purpose: "device" | "central"`, defaulting to `device`. This preserves existing
+device pairing and the exact-device ingress/actions restriction; the private
+HTTP resolver and device credential minting restrictions do not change.
+
+An explicitly requested `central` login uses the existing personal client grant,
+with no device-bound credential metadata, exactly as native username/password
+client login. The immutable request detail includes `purpose: "central"` before
+approval. Browser consent displays full Central access only for that purpose;
+default device requests identify a collection-device connection. The approval
+keeps its original Api and request ID, cannot reuse the previous request's device
+description, and retires old buttons before replacement details resolve. Only a
+current full account session can approve; a device credential cannot upgrade
+itself. PKCE verifier, first-approver account binding, expiry, independent native
+credential, one-use ACK, revocation and no owner-selector rules are unchanged.
+
+This supersedes the assumption that every native browser handoff is a collector
+device grant. KEEP the existing explicit full-client browser login intent and
+consent, and KEEP device isolation. CHANGE only the purpose carried by the native
+Central login and its grant publication. No new user step, default full access,
+alternate provider, QR invitation or device-private API exemption is introduced.
+The separate QR pairing product decision and physical-device acceptance remain
+open. Exact tests and native execution status live in
+[the Android ledger](../validation/multiuser-android.md).
+
 ## Authentication protection
 
 Password verification reserves attempts before asynchronous scrypt, preventing
