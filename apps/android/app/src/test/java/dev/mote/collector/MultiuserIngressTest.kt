@@ -170,12 +170,26 @@ class MultiuserIngressTest {
     @Test fun `native query citations use actual scoped read and cannot fall back to raw owner history`() = fixture { f ->
         val server=f.getString("address");val token=f.getJSONObject("a").getString("token");val id=UUID.randomUUID().toString()
         val receipt=client(server,token).captures(listOf(event(id,"Synthetic native query original")))
-        val api=central(server,token);val response=CentralEvidenceReference.readQuery(api,"capture:$id",0)
+        val api=central(server,token)
+        // The real organizer may publish before the first read. A settled note
+        // must use its declared canonical evidence, never a raw UUID fallback.
+        val deadline=System.currentTimeMillis()+8000;var material:JSONObject?=null
+        while(material==null&&System.currentTimeMillis()<deadline) {
+            val rows=api.get("/api/materials").getJSONArray("items")
+            material=(0 until rows.length()).map(rows::getJSONObject).firstOrNull {it.getJSONObject("origin").getString("externalId")==id}
+            if(material==null)Thread.sleep(20)
+        }
+        assertNotNull("Real capture organizer must publish before exercising settled evidence",material)
+        val expanded=api.get("/api/agent-view/material-read?ref="+java.net.URLEncoder.encode(material!!.getString("ref"),"UTF-8"))
+        val reference=expanded.getJSONArray("originalRefs").getString(0)
+        assertNotEquals("capture:$id",reference)
+        assertEquals(404,assertThrows(CentralFailure::class.java) {CentralEvidenceReference.readQuery(api,"capture:$id",0)}.status)
+        val response=CentralEvidenceReference.readQuery(api,reference,0)
         assertEquals("Synthetic native query original",response.getJSONArray("items").getJSONObject(0).getString("text"))
         assertEquals(200,request(server,token,"PATCH","/api/sources/"+receipt.getString("sourceId"),JSONObject().put("enabled",false)).first)
         assertEquals(200,request(server,token,"GET","/api/captures/$id",null).first)
-        assertEquals(404,assertThrows(CentralFailure::class.java) {CentralEvidenceReference.readQuery(api,"capture:$id",0)}.status)
-        assertEquals(404,assertThrows(CentralFailure::class.java) {CentralEvidenceReference.readQuery(central(server,f.getJSONObject("b").getString("token")),"capture:$id",0)}.status)
+        assertEquals(404,assertThrows(CentralFailure::class.java) {CentralEvidenceReference.readQuery(api,reference,0)}.status)
+        assertEquals(404,assertThrows(CentralFailure::class.java) {CentralEvidenceReference.readQuery(central(server,f.getJSONObject("b").getString("token")),reference,0)}.status)
     }
 
     @Test fun `actual image capture rejects corrupt original reference mime and retention despite a complete owner receipt`() = fixture { f ->
