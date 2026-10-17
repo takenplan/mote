@@ -787,10 +787,10 @@
   },
   "Web": {
     "owner": "01a14920-04fa-73ae-9308-af49d021c008",
-    "actualC2": "BOUNDED_TERMINAL_PARTIAL_NOT_WEB_GROUP_PASS",
+    "actualC2": "RESUMED_PARTIAL_CORE_CONFIRMED_FINAL_EXPANDED_RECEIPT_PENDING",
     "actualC1": "Only A original login/Note/draft reload/two tabs confirmed;规范handoff request200 after initialfixture400",
     "lastEvidenceUtc": "2026-10-17T10:09:58.474Z",
-    "threadReadState": "Direct final bounded receipt supersedes stale thread snapshots; lane has ended without full Web acceptance",
+    "threadReadState": "Direct owner reports supported-tool resumption; old bounded run and its cleanup remain preserved",
     "approvalD588": "No approval ID returned for the known C1 tool failure; no evidence links d588 to that failure or the current extension-UI block",
     "overallJourneyAcceptance": "NOT_CLAIMED",
     "actualC2Source": "/tmp/mote-final-web-task19-c2-8ad990/source",
@@ -801,7 +801,7 @@
       "target": "Owned Chrome tab2046608609 at synthetic C2 origin",
       "reason": "Chrome reports another extension UI open and requires human dismissal before automation continues",
       "outcome": "First navigation uncertain; no later success evidence",
-      "state": "HUMAN_DISMISSAL_NOT_RECEIVED_BOUNDED_LANE_ENDED_HOSTS_CLOSED",
+      "state": "HISTORICAL_BOUNDED_STOP_SUPPORTED_TOOL_NEW_TAB_NOW_SUCCESSFUL",
       "alternateToolOrRetry": false
     },
     "priorToolOutcome": {
@@ -981,7 +981,17 @@
       "files": 36,
       "independentHashMismatches": 0
     },
-    "resumeRequirement": "After human dismissal, start fresh owned hosts in a new turn and inspect current supported session/page before any new action; never replay the uncertain old batch"
+    "resumeRequirement": "After human dismissal, start fresh owned hosts in a new turn and inspect current supported session/page before any new action; never replay the uncertain old batch",
+    "resumption": {
+      "authorization": "User directly asked the Web owner to try again",
+      "tool": "Same supported Chrome tool",
+      "newOwnedTab": "2046608616",
+      "outcome": "New blank tab opened successfully; owner reports old owned tabs automatically cleaned",
+      "source": "8ad99089ead559d6656a269fdca7ccb884953c07",
+      "host": "Restoring own clean exact-C2 host using existing matching build",
+      "productScope": "No additional cases accepted until new actual receipt",
+      "preserved": "Old bounded receipt remains historical; no CDP injection retry or uncertain old batch replay"
+    }
   },
   "priorC1": {
     "source": "f1be61eed018b913bfa8beb2957256676b7e2f6c",
