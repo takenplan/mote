@@ -787,12 +787,33 @@
   },
   "Web": {
     "owner": "01a14920-04fa-73ae-9308-af49d021c008",
-    "actualC2": "NOT_CONFIRMED",
+    "actualC2": "PARTIAL_CORE_CONFIRMED_FINAL_RECEIPT_PENDING",
     "actualC1": "Only A original login/Note/draft reload/two tabs confirmed;规范handoff request200 after initialfixture400",
-    "lastEvidenceUtc": "2026-10-17T09:14:04Z",
+    "lastEvidenceUtc": "2026-10-17T10:09:58.474Z",
     "threadReadState": "Active/inProgress, no attention flag, but returned items end at initialization and are older than confirmed direct messages",
-    "approvalD588": "Parent reports pending user approval; action/owner not proven by available thread state; do not infer, proxy or retry",
-    "overallJourneyAcceptance": "NOT_CLAIMED"
+    "approvalD588": "No approval ID returned for the known C1 tool failure; no evidence links d588 to that failure or the current extension-UI block",
+    "overallJourneyAcceptance": "NOT_CLAIMED",
+    "actualC2Source": "/tmp/mote-final-web-task19-c2-8ad990/source",
+    "actualC2Evidence": "/tmp/mote-final-web-task19-c2-8ad990/evidence",
+    "actualC2Scope": "Fresh libs/server/web build0; Chrome original A login/Note/draft reload/two pages; canonical handoff200; held A GET released after A-to-B switch remains isolated; B-only Note save/sync; normal storage notification retires old handoff page",
+    "currentBlock": {
+      "action": "Next original browser batch, beginning with navigation for A relogin/failed-switch checks",
+      "target": "Owned Chrome C2 tabs2046608609/2046608610",
+      "reason": "Chrome reports another extension UI open and requires human dismissal before automation continues",
+      "outcome": "First navigation uncertain; no later success evidence",
+      "state": "HUMAN_DISMISSAL_REQUESTED_BROWSER_ACTIONS_STOPPED",
+      "alternateToolOrRetry": false
+    },
+    "priorToolOutcome": {
+      "candidate": "C1",
+      "durationSeconds": 3180.99,
+      "action": "CDP Runtime.evaluate attempting one-time lost storage-notification injection",
+      "error": "Tab2046608606 is not part of browser session 01a14920-04fa-73ae-9308-af49d021c008",
+      "mutation": "No successful change evidence",
+      "followingRefresh": "NOT_EXECUTED",
+      "retry": false
+    },
+    "remainingScope": "Final actual-browser receipt, remaining original consumers, and lost-storage-notification injection are not accepted"
   },
   "priorC1": {
     "source": "f1be61eed018b913bfa8beb2957256676b7e2f6c",
