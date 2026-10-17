@@ -97,6 +97,9 @@ export function checkProductionImports(directory=root){
   // projection, and the read-only signed-release checker. Neither opens a
   // private Store or executes updater commands; owner route registration is unused.
   for(const path of ['diagnostics.ts','updates.ts'])allowed.add(sourceRoot+'/'+path);
+  // M13's owner trace sink reuses only the existing event-size constant. This
+  // module is pure configuration validation and opens no log or legacy store.
+  allowed.add(sourceRoot+'/log-retention-config.mjs');
   const entries=[resolve(directory,sourceRoot,'index.ts'),resolve(directory,sourceRoot,'app.ts'),...files(resolve(directory,sourceRoot,'scope'))];
   const pending=entries.slice(),seen=new Set();
   while(pending.length){

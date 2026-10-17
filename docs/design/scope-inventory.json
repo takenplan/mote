@@ -2176,11 +2176,13 @@
     "surfaces": [
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/activity'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/catalog'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/events'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/evidence'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/file-chunks'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/material-read'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/materials'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/memories'",
+      "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/runs'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/segments'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-history'",
       "api:registerUserRoute:scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/source-items'",

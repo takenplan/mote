@@ -8460,5 +8460,9 @@
   "原件清理等待当前调用结束。": "Original cleanup is waiting for the current call to finish.",
   "允许再次采集": "Allow collection again",
   "已允许再次采集": "Collection is allowed again",
-  "默认包含：系统规则、只读工具说明、当前问题、时间与设备范围，以及最多 8 条记忆线索。": "Includes system rules, read-only tool descriptions, the question, time and device scope, and up to 8 Memory leads, matching a new conversation."
+  "默认包含：系统规则、只读工具说明、当前问题、时间与设备范围，以及最多 8 条记忆线索。": "Includes system rules, read-only tool descriptions, the question, time and device scope, and up to 8 Memory leads, matching a new conversation.",
+  "输入追踪设置": "Input trace settings",
+  "仅记录之后发生的输入与工具返回，可能包含私人正文。关闭不重建历史，也不改变已保留内容的到期规则。": "Only future inputs and tool results are recorded. They may contain private text. Turning recording off does not reconstruct history or change retention for existing events.",
+  "记录当前账号的 Agent 输入与读取内容": "Record Agent inputs and reads for this account",
+  "模型传输事件": "Model transport event"
 }

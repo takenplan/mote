@@ -6,7 +6,7 @@ import {z} from 'zod';
 import {MODEL_FEATURES,type ModelFeature,type ModelSettings} from '@mote/shared/models';
 import type {ConfigServiceView,ModelPrice,TokenUsage,UsageReceipt} from '@mote/shared';
 import {ConfigService,ConfigServiceError,type ConfigDocument,type ConfigDomainRegistration} from '../config-service.js';
-import {registerBuiltinDomains} from '../config.js';
+import {registerBuiltinDomains,diagnosticsConfigSchema} from '../config.js';
 import {privateDirectory,privateFile} from '../private-storage.js';
 import {estimateCost,priceSchema,usageTotals} from '../usage-metrics.js';
 import {ScopeError,validScopeId} from './baseline.js';
@@ -172,6 +172,13 @@ export class Configurations {
     };
     const result=create();this.opening.set(context.userId,result);
     try{return await result;}finally{if(this.opening.get(context.userId)===result)this.opening.delete(context.userId);}
+  }
+  /** The original trace opt-in is now personal; the instance still supplies
+   * retention bounds. Observe the opened account entry synchronously without
+   * exposing global diagnostics or a host directory. */
+  async observeAgentTrace(context:UserContext){
+    const entry=await this.entry(context);
+    return ()=>{this.options.authority.assert(context);this.assertGeneration(context.userId,entry.generation);const {traceEnabled}=z.object({traceEnabled:z.boolean()}).strict().parse(entry.service.current('agentTrace')),{maxBytes,maxFiles,maxEntries}=diagnosticsConfigSchema.parse(this.instance.current('diagnostics'));return {traceEnabled,maxBytes,maxFiles,maxEntries};};
   }
   forUser(context:UserContext){
     this.options.authority.assert(context);

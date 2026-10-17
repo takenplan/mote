@@ -19,6 +19,8 @@ export function registerAskReadRoutes(runtime:ScopedRuntime,host:AskHost){
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/bundle',handle:({context,request})=>reader(context).context(query.parse(request.query))});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/context/status',handle:({context})=>reader(context).status()});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/context/read',handle:({context,request})=>{const {refs,offset,length,...scope}=navigationScopeSchema.extend({refs:z.array(z.string().min(1).max(4096)).min(1).max(50),...window}).strict().parse(request.body);return reader(context).read(refs,{offset,length,scope});}});
+ registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/runs',handle:({context})=>host.bind(context,{assertCurrent:()=>runtime.authority.assert(context)}).traceRuns()});
+ registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'GET',url:'/api/agent-view/events',handle:({context,request})=>host.bind(context,{assertCurrent:()=>runtime.authority.assert(context)}).traceEvents(request.query)});
  registerUserRoute(runtime,{scope:'user',service:ASK_DOMAIN,method:'POST',url:'/api/agent-view/startup',handle:async({context,request})=>{
   const input=navigationScopeSchema.pick({after:true,before:true,deviceId:true}).extend({question:z.string().max(4000).default(''),timeZone:z.string().max(100).default('UTC')}).strict().parse(request.body),bound=reader(context),contextTime=new Date().toISOString();
   const leads=await bound.opening({after:input.after,before:input.before,deviceId:input.deviceId});bound.assertCurrent();
