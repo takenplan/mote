@@ -1,3 +1,4 @@
+import type {StatementSync} from 'node:sqlite';
 import {ProviderFailure} from '@mote/shared';
 import {installOperationProjection,linkOperation,type OperationMembership} from './operation-projection.js';
 import {randomUUID,createHash} from 'node:crypto';
@@ -55,6 +56,18 @@ const interrupted=new Error('Execution interrupted');
 
 /** The host owns admission, retry, cancellation, leases and commit fences. */
 export class ExecutionEngine {
+ // Only fixed synchronous host queries use these private compiled statements.
+ // Rows, bindings and authority decisions are read again on every call.
+ private readonly validationStatements=new Map<string,StatementSync>();
+ private validationStatement(sql:string){
+  const prior=this.validationStatements.get(sql);
+  if(prior){try{void prior.sourceSQL;return prior;}catch(error){
+   if((error as NodeJS.ErrnoException).code!=='ERR_INVALID_STATE'||!this.store.db.isOpen)throw error;
+   this.validationStatements.delete(sql);
+  }}
+  const statement=this.store.db.prepare(sql);this.validationStatements.set(sql,statement);return statement;
+ }
+
  private programs=new Map<string,Promise<unknown>>();
  private handlers=new Map<string,ExecutionHandler>();
  private admissions=new Map<string,ExecutionPoolAdmission>();
@@ -127,7 +140,7 @@ export class ExecutionEngine {
    linkOperation(this.store,operationId,id,options);handler.project?.(this.get(id)!);if(own)db.exec('COMMIT');return id;
   }catch(error){if(own)db.exec('ROLLBACK');throw error;}
  }
- get(id:string){const row=this.store.db.prepare('SELECT * FROM execution_steps WHERE id=?').get(id) as Row|undefined;return row?view(row):undefined;}
+ get(id:string){const row=this.validationStatement('SELECT * FROM execution_steps WHERE id=?').get(id) as Row|undefined;return row?view(row):undefined;}
  failure(id:string):ExecutionFailureReceipt|undefined {const row=this.store.db.prepare('SELECT json FROM execution_failures WHERE step_id=?').get(id);return row?JSON.parse(String(row.json)):undefined;}
  failureDiagnostics(){return {writeFailures:this.failureReceiptWriteFailures};}
  private retainFailure(step:ExecutionStep,state:ExecutionState,failure:ExecutionFailure,error?:unknown){
@@ -176,7 +189,7 @@ export class ExecutionEngine {
  }
  /** Stop only this host's work after another writer revoked its durable grant. */
  abortLocal(id:string){this.active.get(id)?.controller.abort();}
- isCurrentGrant(id:string,fence:string){return Boolean(this.store.db.prepare("SELECT 1 FROM execution_steps WHERE id=? AND fence=? AND state='running' AND lease_until>?").get(id,fence,this.now()));}
+ isCurrentGrant(id:string,fence:string){return Boolean(this.validationStatement("SELECT 1 FROM execution_steps WHERE id=? AND fence=? AND state='running' AND lease_until>?").get(id,fence,this.now()));}
  /** A child publication must retain both its parent's lease and input authority. */
  isCurrentInputGrant(id:string,fence:string){const step=this.get(id),handler=step&&this.handlers.get(step.kind);return Boolean(!this.stopping&&!this.active.get(id)?.controller.signal.aborted&&step&&handler&&this.isCurrentGrant(id,fence)&&handler.validate(step)&&(handler.validateGrant?.(step)??true));}
  /** A queued child retains durable input authority while its parent yields a

@@ -1,4 +1,4 @@
-import type {DatabaseSync} from 'node:sqlite';
+import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {randomBytes,createHash} from 'node:crypto';
 import {z} from 'zod';
 import {catalogParent} from '../source-catalog-path.js';
@@ -106,15 +106,24 @@ export function installAsk(db:DatabaseSync){
  CREATE TABLE IF NOT EXISTS ma_restore(user_id TEXT NOT NULL,operation_id TEXT NOT NULL,hash TEXT NOT NULL,PRIMARY KEY(user_id,operation_id));
  `);installConversationHistory(db);if(initializeEvents)db.exec("INSERT INTO ma_auto_events(user_id,kind,entity) SELECT m.user_id,'insights',m.id FROM pd_materials m");db.prepare('INSERT OR IGNORE INTO ma_meta VALUES(1,?)').run(randomBytes(32).toString('hex'));const cursorKey=String(db.prepare('SELECT cursor_key FROM ma_meta WHERE singleton=1').get()!.cursor_key);db.exec('RELEASE ma_schema_install');return cursorKey;}catch(error){db.exec('ROLLBACK TO ma_schema_install;RELEASE ma_schema_install');throw error;}}
 
-/** Startup-only owner enumeration for canonical history receipt migration.
- * This returns owner identifiers, never a user context, grant or private body. */
-export function persistedAskHistoryOwners(db:DatabaseSync){return db.prepare('SELECT DISTINCT t.user_id FROM ma_turns t LEFT JOIN ma_history_turns h ON h.user_id=t.user_id AND h.turn_id=t.id WHERE h.turn_id IS NULL UNION SELECT DISTINCT r.user_id FROM ma_runs r LEFT JOIN ma_history_runs h ON h.user_id=r.user_id AND h.run_id=r.id WHERE h.run_id IS NULL').all();}
+// Private to the host admission predicates below. A reused compiled query
+// still binds its complete owner/run identity and reads current SQLite rows.
+const validationStatements=new WeakMap<DatabaseSync,Map<string,StatementSync>>();
+function askValidationStatement(db:DatabaseSync,sql:string){
+ let cache=validationStatements.get(db);if(!cache){cache=new Map();validationStatements.set(db,cache);}
+ const prior=cache.get(sql);
+ if(prior){try{void prior.sourceSQL;return prior;}catch(error){
+  if((error as NodeJS.ErrnoException).code!=='ERR_INVALID_STATE'||!db.isOpen)throw error;
+  cache.delete(sql);
+ }}
+ const statement=db.prepare(sql);cache.set(sql,statement);return statement;
+}
 
 /** Host-only M05 validation, before a task context exists. Owner comes only from the engine's durable ownership record. */
-export function persistedAskRun(db:DatabaseSync,userId:string,id:string){return db.prepare('SELECT * FROM ma_runs WHERE user_id=? AND id=?').get(userId,id) as AskRow|undefined;}
-export function askUserDeleted(db:DatabaseSync,userId:string){return Boolean(db.prepare('SELECT 1 FROM ma_state WHERE user_id=? AND deleted=1').get(userId));}
+export function persistedAskRun(db:DatabaseSync,userId:string,id:string){return askValidationStatement(db,'SELECT * FROM ma_runs WHERE user_id=? AND id=?').get(userId,id) as AskRow|undefined;}
+export function askUserDeleted(db:DatabaseSync,userId:string){return Boolean(askValidationStatement(db,'SELECT 1 FROM ma_state WHERE user_id=? AND deleted=1').get(userId));}
 
-export function persistedAutomationCurrent(db:DatabaseSync,userId:string,runId:string){const link=db.prepare('SELECT policy_id,generation FROM ma_auto_runs WHERE user_id=? AND run_id=?').get(userId,runId);return !link||Boolean(db.prepare("SELECT 1 FROM ma_automations a WHERE user_id=? AND id=? AND generation=? AND state='active' AND NOT EXISTS(SELECT 1 FROM ma_auto_state s WHERE s.user_id=a.user_id AND s.deleted=1)").get(userId,link.policy_id,link.generation));}
+export function persistedAutomationCurrent(db:DatabaseSync,userId:string,runId:string){const link=askValidationStatement(db,'SELECT policy_id,generation FROM ma_auto_runs WHERE user_id=? AND run_id=?').get(userId,runId);return !link||Boolean(askValidationStatement(db,"SELECT 1 FROM ma_automations a WHERE user_id=? AND id=? AND generation=? AND state='active' AND NOT EXISTS(SELECT 1 FROM ma_auto_state s WHERE s.user_id=a.user_id AND s.deleted=1)").get(userId,link.policy_id,link.generation));}
 
 
 /** Read-only M08 admission predicate. The engine supplies the durable owner and

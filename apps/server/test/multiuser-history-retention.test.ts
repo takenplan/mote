@@ -55,12 +55,11 @@ test('an archive after privacy erasure keeps only erased dialogue receipts and r
  await f.checked(f.a.token,'/api/materials/'+material.id,'DELETE');const archive=await service.exportUser('ask');assert.ok(!JSON.stringify(archive).includes(original.result.answer));await service.deleteUser('ask',randomUUID());const calls=f.requests.length;await service.restoreUser('ask',archive,randomUUID());const page=await f.checked(f.a.token,'/api/conversations/'+original.conversationId);assert.equal(page.turns[0].evidenceDeleted,true);assert.equal(page.turns[0].result,undefined);assert.equal(f.requests.length,calls);
 });
 
-test('upgrading unread scoped dialogue backfills original roots before Memory cache deletion',async t=>{
+test('current scoped dialogue keeps its persisted roots across restart and Memory cache deletion',async t=>{
  const f=await fixture(t);await f.publish(f.a,'A');await f.publish(f.b,'B');const original=await ask(f,f.a),b=await ask(f,f.b),compactContext=await f.node.authority.authenticate(f.a.token);await f.node.ask!.bind(compactContext,{assertCurrent:()=>{}}).compact(original.conversationId);
- // Model the previous M08 schema: real published turns and runs predate the
- // host-only history tables. No forged context, grant or evidence is supplied.
- f.read(db=>{db.exec('PRAGMA foreign_keys=ON');db.prepare('DELETE FROM ma_history_turns WHERE user_id=?').run(f.a.userId);db.prepare('DELETE FROM ma_history_runs WHERE user_id=?').run(f.a.userId);});
- await f.restart();assert.ok(f.read(db=>Number(db.prepare('SELECT count(*) n FROM ma_history_dependencies WHERE user_id=?').get(f.a.userId)!.n))>0,'startup, before any history read, must persist the retained canonical closure');
+ const receipts=()=>f.read(db=>['ma_history_turns','ma_history_runs','ma_history_dependencies'].map(table=>JSON.stringify(db.prepare('SELECT * FROM '+table+' WHERE user_id=? ORDER BY rowid').all(f.a.userId))));
+ const beforeRestart=receipts();assert.ok(f.read(db=>Number(db.prepare('SELECT count(*) n FROM ma_history_dependencies WHERE user_id=?').get(f.a.userId)!.n))>0,'publication must persist the retained canonical closure');
+ await f.restart();assert.deepEqual(receipts(),beforeRestart,'restart must retain current receipts without rebuilding them');
  const before=await f.checked(f.a.token,'/api/conversations/'+original.conversationId);assert.ok(before.summary);const context=await f.node.authority.authenticate(f.a.token);await f.node.services.forUser(context).deleteUser('memory',randomUUID());
  const page=await f.checked(f.a.token,'/api/conversations/'+original.conversationId);assert.equal(page.turns[0].evidenceStale,true);assert.deepEqual(page.turns[0].result,original.result);assert.equal(page.turns[0].evidenceDeleted,undefined);assert.ok(page.revision>before.revision,'cache withdrawal must retire prepared conversation snapshots');assert.equal(f.read(db=>db.prepare('SELECT summary FROM ma_conversations WHERE user_id=? AND id=?').get(f.a.userId,original.conversationId)!.summary),null,'cache withdrawal clears the persisted summary');
  await f.restart();assert.deepEqual((await f.checked(f.a.token,'/api/conversations/'+original.conversationId)).turns[0].result,original.result);assert.deepEqual((await f.checked(f.b.token,'/api/conversations/'+b.conversationId)).turns[0].result,b.result);

@@ -1,5 +1,5 @@
 import {createHash,randomBytes,randomUUID,scrypt,timingSafeEqual} from 'node:crypto';
-import type {DatabaseSync} from 'node:sqlite';
+import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {z} from 'zod';
 import {ScopeError} from './baseline.js';
 import type {IdentityVerifier,VerifiedIdentity,UserContext,UserContextAuthority} from './context.js';
@@ -26,6 +26,18 @@ async function passwordRecord(password:string){passwordSchema.parse(password);co
 /** The account control plane and credential verifier share the epoch-5 SQLite
  * connection. No private archive repository or legacy owner token is consulted. */
 export class Accounts implements IdentityVerifier {
+  // Only fixed synchronous host queries use these private compiled statements.
+  // Rows, bindings and authority decisions are read again on every call.
+  private readonly validationStatements=new Map<string,StatementSync>();
+  private validationStatement(sql:string){
+   const prior=this.validationStatements.get(sql);
+   if(prior){try{void prior.sourceSQL;return prior;}catch(error){
+    if((error as NodeJS.ErrnoException).code!=='ERR_INVALID_STATE'||!this.db.isOpen)throw error;
+    this.validationStatements.delete(sql);
+   }}
+   const statement=this.db.prepare(sql);this.validationStatements.set(sql,statement);return statement;
+  }
+
   private activeHashes=0;
   private closed=false;
   constructor(private db:DatabaseSync,readonly deploymentId:string,private clock=Date.now){
@@ -42,9 +54,9 @@ export class Accounts implements IdentityVerifier {
       CREATE TABLE IF NOT EXISTS auth_attempts(attempt_key TEXT PRIMARY KEY,started_at INTEGER NOT NULL,attempts INTEGER NOT NULL);`);
   }
   private transaction<T>(run:()=>T):T{const nested=this.db.isTransaction,name='account_'+randomUUID().replaceAll('-','');this.db.exec(nested?'SAVEPOINT '+name:'BEGIN IMMEDIATE');try{const result=run();this.db.exec(nested?'RELEASE '+name:'COMMIT');return result;}catch(e){if(nested){this.db.exec('ROLLBACK TO '+name);this.db.exec('RELEASE '+name);}else this.db.exec('ROLLBACK');throw e;}}
-  private account(userId:string){return this.db.prepare('SELECT * FROM auth_accounts WHERE user_id=?').get(userId) as Account|undefined;}
+  private account(userId:string){return this.validationStatement('SELECT * FROM auth_accounts WHERE user_id=?').get(userId) as Account|undefined;}
   private accountNamed(username:string){return this.db.prepare('SELECT * FROM auth_accounts WHERE username=?').get(username) as Account|undefined;}
-  private credential(id:string){return this.db.prepare('SELECT * FROM auth_credentials WHERE id=?').get(id) as Credential|undefined;}
+  private credential(id:string){return this.validationStatement('SELECT * FROM auth_credentials WHERE id=?').get(id) as Credential|undefined;}
   private current(c:Credential|undefined){
     const a=c&&this.account(c.user_id);if(this.closed||!c||!a||a.disabled)return;
     const seen=new Set<string>();let linked:Credential|undefined=c;
@@ -54,8 +66,8 @@ export class Accounts implements IdentityVerifier {
   async verify(token:string){const c=this.findToken(token);if(!c||!['web','client'].includes(c.kind))return;const v=this.current(c);return v?this.identity(v.a,v.c):undefined;}
   isCurrent(identity:Readonly<VerifiedIdentity>){const v=this.current(this.credential(identity.credentialId));return Boolean(v&&identity.deploymentId===this.deploymentId&&identity.userId===v.a.user_id&&identity.authorizationEpoch===v.a.authorization_epoch&&identity.administrator===Boolean(v.a.administrator)&&['web','client'].includes(v.c.kind));}
   /** Trusted durable-task adapters (M05) use the persisted account epoch, not a Web session. */
-  assertAccountEnabled(userId:string,authorizationEpoch:number){const a=this.account(userId);if(this.closed||!a||a.disabled||a.authorization_epoch!==authorizationEpoch)throw new ScopeError('invalid_identity',401);}
-  private findToken(token:string){if(!/^[A-Za-z0-9_-]{43}$/.test(token))return;return this.db.prepare('SELECT * FROM auth_credentials WHERE token_hash=?').get(digest(token)) as Credential|undefined;}
+  assertAccountEnabled(userId:string,authorizationEpoch:number){const a=this.validationStatement('SELECT disabled,authorization_epoch FROM auth_accounts WHERE user_id=?').get(userId);if(this.closed||!a||a.disabled||a.authorization_epoch!==authorizationEpoch)throw new ScopeError('invalid_identity',401);}
+  private findToken(token:string){if(!/^[A-Za-z0-9_-]{43}$/.test(token))return;return this.validationStatement('SELECT * FROM auth_credentials WHERE token_hash=?').get(digest(token)) as Credential|undefined;}
   private assertContext(context:UserContext,authority:UserContextAuthority){authority.assert(context);const c=this.credential(context.credentialId);if(!this.current(c))throw new ScopeError('invalid_identity',401);return c!;}
   self(context:UserContext,authority:UserContextAuthority){this.assertContext(context,authority);return {...summary(this.account(context.userId)!),deploymentId:this.deploymentId,credentialId:context.credentialId};}
   credentialInfo(context:UserContext,authority:UserContextAuthority){const c=this.assertContext(context,authority);let linked:Credential|undefined=c,deviceId:string|undefined;while(linked){const metadata=JSON.parse(linked.metadata);if(metadata.deviceId){if(deviceId&&deviceId!==metadata.deviceId)throw new ScopeError('invalid_identity',403);deviceId=metadata.deviceId;}linked=linked.parent_id?this.credential(linked.parent_id):undefined;}return {kind:c.kind,expiresAt:c.expires_at,...(deviceId?{deviceId}:{})};}

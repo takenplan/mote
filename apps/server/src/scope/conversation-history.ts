@@ -46,9 +46,8 @@ export class ConversationHistory{
  }
  erase(turnId:string){this.sql.run('INSERT INTO ma_history_turns VALUES($user,?,?,0,1) ON CONFLICT(user_id,turn_id) DO UPDATE SET proof=excluded.proof,stale=0,deleted=1',turnId,JSON.stringify({version:1,roots:[],pins:[],materials:[]}));}
  retained(turnId:string):HistoryRoots{const row=this.sql.get('SELECT proof FROM ma_history_turns WHERE user_id=$user AND turn_id=?',turnId);return row?decode<Proof>(row.proof):{version:1,roots:[]};}
- state(row:Record<string,unknown>,inherited:HistoryRoots={version:1,roots:[]}){
-  let saved=this.sql.get('SELECT proof,stale,deleted FROM ma_history_turns WHERE user_id=$user AND turn_id=?',String(row.id));
-  if(!saved){try{const proof=this.proof(decode(row.pins),decode(row.materials),inherited);this.sql.transaction(()=>{if(!this.sql.get('SELECT 1 FROM ma_history_turns WHERE user_id=$user AND turn_id=?',String(row.id)))this.save(String(row.id),proof);});saved=this.sql.get('SELECT proof,stale,deleted FROM ma_history_turns WHERE user_id=$user AND turn_id=?',String(row.id));}catch(error){if(!(error instanceof PrivateDataError))throw error;return {deleted:true as const,stale:false};}}
+ state(row:Record<string,unknown>){
+  const saved=this.sql.get('SELECT proof,stale,deleted FROM ma_history_turns WHERE user_id=$user AND turn_id=?',String(row.id));
   if(!saved||saved.deleted)return {deleted:true as const,stale:false};
   const proof=decode<Proof>(saved.proof);try{this.validate(proof);}catch(error){if(!(error instanceof PrivateDataError))throw error;return {deleted:true as const,stale:false};}
   let stale=Boolean(saved.stale);try{this.reader.validate(proof.pins,proof.materials);}catch(error){if(!(error instanceof PrivateDataError))throw error;stale=true;}
@@ -56,5 +55,5 @@ export class ConversationHistory{
  }
  combine(proofs:readonly HistoryRoots[]):HistoryRoots{const roots=new Map<string,Root>();for(const proof of proofs){this.validate(proof);for(const root of proof.roots){const key=root.kind+':'+root.id,prior=roots.get(key);if(prior&&prior.incarnation!==root.incarnation)throw missing();roots.set(key,prior&&!prior.measurement?prior:root);}}return {version:1,roots:[...roots.values()]};}
  admit(runId:string,proof:HistoryRoots){this.validate(proof);this.sql.run('INSERT INTO ma_history_runs VALUES($user,?,?) ON CONFLICT(user_id,run_id) DO UPDATE SET proof=excluded.proof',runId,JSON.stringify(proof));for(const root of proof.roots)this.sql.run('INSERT OR IGNORE INTO ma_history_run_dependencies VALUES($user,?,?,?)',runId,root.kind,root.id);}
- run(runId:string,context?:string):HistoryRoots{const row=this.sql.get('SELECT proof FROM ma_history_runs WHERE user_id=$user AND run_id=?',runId);if(!row){if(context&&(decode<{turns?:unknown[]}>(context).turns?.length??0)>0)throw missing();return {version:1,roots:[]};}const proof=decode<HistoryRoots>(row.proof);this.validate(proof);return proof;}
+ run(runId:string):HistoryRoots{const row=this.sql.get('SELECT proof FROM ma_history_runs WHERE user_id=$user AND run_id=?',runId);if(!row)throw missing();const proof=decode<HistoryRoots>(row.proof);this.validate(proof);return proof;}
 }

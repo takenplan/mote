@@ -14,8 +14,7 @@
     "test:profiles": "npm run build && node scripts/test-profiles.mjs",
     "test:ui": "npm run build -w @mote/shared && npm run build -w @mote/diagnostics && npm run build -w @mote/agent && npm run build && node scripts/test-ui.mjs",
     "package": "npm run build && electron-builder --dir",
-    "test:central": "npm run build && electron scripts/central-smoke.cjs",
-    "test:ui:legacy-wire1": "npm run build && electron scripts/ui-smoke.cjs && electron scripts/sync-history-smoke.cjs"
+    "test:central": "npm run build && electron scripts/central-smoke.cjs"
   },
   "dependencies": {
     "@mote/diagnostics": "0.1.0",

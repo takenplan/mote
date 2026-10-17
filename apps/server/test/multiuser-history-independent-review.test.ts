@@ -137,26 +137,39 @@ test('personal Ask restore rejects forged hashes, foreign ownership and an omitt
  assert.deepEqual((await f.checked(f.b.token,'/api/conversations/'+b.conversationId)).turns[0].result,b.result);
 });
 
-test('startup backfills unread legacy dialogue before derived Memory cache deletion can remove its anchors',async t=>{
+test('current unread dialogue retains its persisted roots when Memory cache is deleted after restart',async t=>{
  const f=await fixture(t);
  await f.publish(f.a,'A');
  await f.publish(f.b,'B');
  const first=await ask(f,f.a),b=await ask(f,f.b);
  f.read(db=>{
   assert.ok(Number(db.prepare('SELECT count(*) n FROM mm_evidence WHERE user_id=?').get(f.a.userId)!.n)>0);
-  // The prior scoped release persisted turns but had no history root receipts.
-  db.prepare('DELETE FROM ma_history_turns WHERE user_id=?').run(f.a.userId);
-  db.prepare('DELETE FROM ma_history_runs WHERE user_id=?').run(f.a.userId);
+  assert.ok(Number(db.prepare('SELECT count(*) n FROM ma_history_turns WHERE user_id=?').get(f.a.userId)!.n)>0);
+  assert.ok(Number(db.prepare('SELECT count(*) n FROM ma_history_runs WHERE user_id=?').get(f.a.userId)!.n)>0);
  });
  await f.restart();
  const context=await f.node.authority.authenticate(f.a.token);
  await f.node.services.forUser(context).deleteUser('memory',randomUUID());
  assert.equal(f.read(db=>Number(db.prepare('SELECT count(*) n FROM mm_evidence WHERE user_id=?').get(f.a.userId)!.n)),0);
  const page=await f.checked(f.a.token,'/api/conversations/'+first.conversationId);
- assert.equal(page.turns[0].evidenceDeleted,undefined,'retained originals protect unread legacy dialogue after cache withdrawal');
+ assert.equal(page.turns[0].evidenceDeleted,undefined,'persisted original roots protect unread current dialogue after cache withdrawal');
  assert.deepEqual(page.turns[0].result,first.result);
  assert.deepEqual((await f.checked(f.b.token,'/api/conversations/'+b.conversationId)).turns[0].result,b.result);
  await ask(f,f.b);
+});
+
+test('missing history receipts stay unavailable across restart and reads instead of being rebuilt or granting artifact access',async t=>{
+ const f=await fixture(t);await f.publish(f.a,'A');await f.publish(f.b,'B');
+ const first=await ask(f,f.a),b=await ask(f,f.b),artifact=f.read(db=>String(db.prepare('SELECT id FROM ma_artifacts WHERE user_id=? AND run_id=? LIMIT 1').get(f.a.userId,first.id)!.id));
+ f.read(db=>{db.exec('PRAGMA foreign_keys=ON');db.prepare('DELETE FROM ma_history_turns WHERE user_id=?').run(f.a.userId);db.prepare('DELETE FROM ma_history_runs WHERE user_id=?').run(f.a.userId);});
+ const count=()=>f.read(db=>['ma_history_turns','ma_history_runs'].map(table=>Number(db.prepare('SELECT count(*) n FROM '+table+' WHERE user_id=?').get(f.a.userId)!.n)));
+ const calls=f.requests.length;await f.restart();assert.deepEqual(count(),[0,0],'startup must not migrate missing receipts');
+ const page=await f.checked(f.a.token,'/api/conversations/'+first.conversationId);assert.equal(page.turns[0].evidenceDeleted,true);assert.equal(page.turns[0].result,undefined);
+ const run=await f.checked(f.a.token,'/api/query-runs/'+first.id);assert.equal(run.status,'failed');assert.equal(run.error.code,'ask_evidence_changed');assert.equal(run.result,undefined);
+ assert.equal((await f.request(f.a.token,'/api/context/read','POST',{refs:['artifact:'+artifact]})).statusCode,404,'missing run receipts must not grant artifact reads');
+ const context=await f.node.authority.authenticate(f.a.token);assert.equal(f.node.ask!.bind(context,{assertCurrent:()=>{}}).savedConversation(first.id),undefined);
+ assert.deepEqual(count(),[0,0],'reads must not mint replacement history authority');assert.equal(f.requests.length,calls,'unavailable history must not trigger model replay');
+ assert.deepEqual((await f.checked(f.b.token,'/api/conversations/'+b.conversationId)).turns[0].result,b.result);assert.equal((await f.checked(f.b.token,'/api/query-runs/'+b.id)).status,'completed');
 });
 
 test('an independent SQLite writer rolls back privacy cleanup atomically and committed deletion survives restart and equal-ID recreation',async t=>{

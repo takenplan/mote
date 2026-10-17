@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import type {DatabaseSync} from 'node:sqlite';
+import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {z} from 'zod';
 import {ProviderFailure} from '@mote/shared';
 import {ExecutionEngine,ExecutionFailure,type ExecutionStep,type ExecutionGrant,type ExecutionFailureReceipt} from '../execution-engine.js';
@@ -73,6 +73,18 @@ export type UserTaskHandler={kind:string;pool:string;concurrency:()=>number;poli
 
 /** One shared ExecutionEngine and SQLite authority for all user task hosts. */
 export class TaskExecution {
+ // Only fixed synchronous host queries use these private compiled statements.
+ // Rows, bindings and authority decisions are read again on every call.
+ private readonly validationStatements=new Map<string,StatementSync>();
+ private validationStatement(sql:string){
+  const prior=this.validationStatements.get(sql);
+  if(prior){try{void prior.sourceSQL;return prior;}catch(error){
+   if((error as NodeJS.ErrnoException).code!=='ERR_INVALID_STATE'||!this.db.isOpen)throw error;
+   this.validationStatements.delete(sql);
+  }}
+  const statement=this.db.prepare(sql);this.validationStatements.set(sql,statement);return statement;
+ }
+
  readonly engine:ExecutionEngine;
  private readonly handlers=new Map<string,UserTaskHandler>();
  private readonly storage:ExecutionStorage;
@@ -103,8 +115,8 @@ export class TaskExecution {
   try{const value=write();this.db.exec(nested?'RELEASE '+savepoint:'COMMIT');return value;}
   catch(error){if(this.db.isTransaction){if(nested){this.db.exec('ROLLBACK TO '+savepoint);this.db.exec('RELEASE '+savepoint);}else this.db.exec('ROLLBACK');}throw error;}
  }
- private row(taskId:string){return this.db.prepare('SELECT * FROM user_tasks WHERE task_id=?').get(taskId) as TaskRow|undefined;}
- private enabled(userId:string){if(this.db.prepare('SELECT 1 FROM task_lifecycle_state WHERE user_id=? AND deleted=1').get(userId))throw new ScopeError('invalid_identity',401);}
+ private row(taskId:string){return this.validationStatement('SELECT * FROM user_tasks WHERE task_id=?').get(taskId) as TaskRow|undefined;}
+ private enabled(userId:string){if(this.validationStatement('SELECT 1 FROM task_lifecycle_state WHERE user_id=? AND deleted=1').get(userId))throw new ScopeError('invalid_identity',401);}
  private assertTask(step:ExecutionStep){
   const row=this.row(step.id);if(!row||!step.ownership||row.user_id!==step.ownership.userId||row.grant_id!==step.ownership.grantId)throw new ScopeError('invalid_identity',401);
   this.enabled(row.user_id);if(this.grants.assert(row.grant_id,row.user_id,step.ownership.authorizationEpoch).task_id!==step.id)throw new ScopeError('invalid_identity',401);return row;
@@ -285,7 +297,7 @@ export class TaskExecution {
  }
  private assertDeletionSubject(subject:UserDataSubject){
   this.services.assertSubject(subject,EXECUTION_DOMAIN,'delete');if('credentialId' in subject)throw new ScopeError('invalid_identity',403);
-  if(!this.db.prepare('SELECT 1 FROM task_lifecycle_state WHERE user_id=? AND deleted=1').get(subject.userId))throw new TaskError('task_deletion_not_started',409);
+  if(!this.validationStatement('SELECT 1 FROM task_lifecycle_state WHERE user_id=? AND deleted=1').get(subject.userId))throw new TaskError('task_deletion_not_started',409);
  }
  /** Settle one independently observed issuance. Confirmation to retry is never
   * evidence that the previous call did not execute. */

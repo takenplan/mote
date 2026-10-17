@@ -1,7 +1,7 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {constants,existsSync,rmSync,renameSync,openSync,fsyncSync,closeSync,fstatSync,readFileSync} from 'node:fs';
 import {join} from 'node:path';
-import type {DatabaseSync} from 'node:sqlite';
+import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import {z} from 'zod';
 import {MODEL_FEATURES,type ModelFeature,type ModelSettings} from '@mote/shared/models';
 import type {ConfigServiceView,ModelPrice,TokenUsage,UsageReceipt} from '@mote/shared';
@@ -64,6 +64,18 @@ export type UserConfigurationService=ReturnType<Configurations['forUser']>;
  * accepted by this API. Trusted installed modules register ordinary domains on
  * the same service; the private resolver never expands instance environment. */
 export class Configurations {
+  // Only fixed synchronous host queries use these private compiled statements.
+  // Rows, bindings and authority decisions are read again on every call.
+  private readonly validationStatements=new Map<string,StatementSync>();
+  private validationStatement(sql:string){
+   const prior=this.validationStatements.get(sql);
+   if(prior){try{void prior.sourceSQL;return prior;}catch(error){
+    if((error as NodeJS.ErrnoException).code!=='ERR_INVALID_STATE'||!this.options.db.isOpen)throw error;
+    this.validationStatements.delete(sql);
+   }}
+   const statement=this.options.db.prepare(sql);this.validationStatements.set(sql,statement);return statement;
+  }
+
   readonly resources:ModelResources;
   private readonly snapshots:ModelSnapshots;
   private resourcesUnavailable=false;
@@ -102,8 +114,8 @@ export class Configurations {
     this.domains.set(id,factory);
   }
   private state(userId:string):State{
-    this.options.db.prepare('INSERT OR IGNORE INTO user_configuration_state(user_id) VALUES(?)').run(userId);
-    return this.options.db.prepare('SELECT generation,deleted,restore_operation FROM user_configuration_state WHERE user_id=?').get(userId) as State;
+    this.validationStatement('INSERT OR IGNORE INTO user_configuration_state(user_id) VALUES(?)').run(userId);
+    return this.validationStatement('SELECT generation,deleted,restore_operation FROM user_configuration_state WHERE user_id=?').get(userId) as State;
   }
   private assertSubject(context:UserDataSubject,purpose?:'export'|'delete'|'restore'){
     if(this.closed||context.deploymentId!==this.options.authority.deploymentId)throw new ScopeError('invalid_identity',401);
@@ -123,7 +135,7 @@ export class Configurations {
     this.options.db.prepare('INSERT INTO model_resource_revision VALUES(1,?) ON CONFLICT(singleton) DO UPDATE SET revision=excluded.revision').run(this.instance.revision);
   }
   private assertResources(){if(this.resourcesUnavailable)throw new ConfigServiceError('config_unavailable');}
-  private credentialState(userId:string,profileId:string){return this.options.db.prepare('SELECT profile_id,generation,recovery_generation,present,has_credentials,fingerprint,components FROM user_model_credential_generations WHERE user_id=? AND profile_id=?').get(userId,profileId) as CredentialState|undefined;}
+  private credentialState(userId:string,profileId:string){return this.validationStatement('SELECT profile_id,generation,recovery_generation,present,has_credentials,fingerprint,components FROM user_model_credential_generations WHERE user_id=? AND profile_id=?').get(userId,profileId) as CredentialState|undefined;}
   private syncCredentials(userId:string,service:ConfigService,bootstrap:boolean){
     if(this.credentialsUnavailable.has(userId))throw new ConfigServiceError('config_unavailable');
     try{

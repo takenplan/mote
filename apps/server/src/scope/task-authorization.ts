@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import type {DatabaseSync} from 'node:sqlite';
+import type {DatabaseSync,StatementSync} from 'node:sqlite';
 import type {Accounts} from './accounts.js';
 import type {DurableIdentityVerifier,UserContext,VerifiedIdentity} from './context.js';
 import {ScopeError} from './baseline.js';
@@ -7,6 +7,18 @@ import {ScopeError} from './baseline.js';
 /** Only the trusted task host issues and resolves these records. A grant ID is
  * an internal locator, never a login credential or a client-selectable owner. */
 export class TaskAuthorization implements DurableIdentityVerifier {
+ // Only fixed synchronous host queries use these private compiled statements.
+ // Rows, bindings and authority decisions are read again on every call.
+ private readonly validationStatements=new Map<string,StatementSync>();
+ private validationStatement(sql:string){
+  const prior=this.validationStatements.get(sql);
+  if(prior){try{void prior.sourceSQL;return prior;}catch(error){
+   if((error as NodeJS.ErrnoException).code!=='ERR_INVALID_STATE'||!this.db.isOpen)throw error;
+   this.validationStatements.delete(sql);
+  }}
+  const statement=this.db.prepare(sql);this.validationStatements.set(sql,statement);return statement;
+ }
+
  private executionValidator:((taskId:string,fence:string)=>boolean)|undefined;
  private readonly validating=new Set<string>();
  bindExecution(validator:(taskId:string,fence:string)=>boolean){if(this.executionValidator)throw new ScopeError('undeclared_scope',500);this.executionValidator=validator;}
@@ -27,15 +39,15 @@ export class TaskAuthorization implements DurableIdentityVerifier {
   return {grantId,userId:String(row.user_id),authorizationEpoch:Number(row.authorization_epoch)};
  }
  assert(grantId:string,userId?:string,epoch?:number){
-  const row=this.db.prepare('SELECT * FROM task_authorizations WHERE grant_id=? AND revoked=0').get(grantId);
+  const row=this.validationStatement('SELECT * FROM task_authorizations WHERE grant_id=? AND revoked=0').get(grantId);
   if(!row||userId!==undefined&&row.user_id!==userId||epoch!==undefined&&row.authorization_epoch!==epoch)throw new ScopeError('invalid_identity',401);
   this.accounts.assertAccountEnabled(String(row.user_id),Number(row.authorization_epoch));return row;
  }
  async verify(grantId:string):Promise<VerifiedIdentity|undefined>{
-  try{const row=this.assert(grantId),execution=this.db.prepare("SELECT fence FROM execution_steps WHERE id=? AND state='running' AND lease_until>?").get(row.task_id,Date.now());if(!execution?.fence)return undefined;return {deploymentId:this.deploymentId,userId:String(row.user_id),credentialId:grantId+':'+execution.fence,authorizationEpoch:Number(row.authorization_epoch),administrator:false};}catch{return undefined;}
+  try{const row=this.assert(grantId),execution=this.validationStatement("SELECT fence FROM execution_steps WHERE id=? AND state='running' AND lease_until>?").get(row.task_id,Date.now());if(!execution?.fence)return undefined;return {deploymentId:this.deploymentId,userId:String(row.user_id),credentialId:grantId+':'+execution.fence,authorizationEpoch:Number(row.authorization_epoch),administrator:false};}catch{return undefined;}
  }
  isCurrent(identity:Readonly<VerifiedIdentity>){
-  try{if(identity.deploymentId!==this.deploymentId||identity.administrator)return false;const [grantId,fence,...extra]=identity.credentialId.split(':');if(!grantId||!fence||extra.length)return false;const row=this.assert(grantId,identity.userId,identity.authorizationEpoch);if(!this.db.prepare("SELECT 1 FROM execution_steps WHERE id=? AND state='running' AND fence=? AND lease_until>?").get(row.task_id,fence,Date.now())||!this.executionValidator||this.validating.has(identity.credentialId))return false;this.validating.add(identity.credentialId);try{return this.executionValidator(String(row.task_id),fence);}finally{this.validating.delete(identity.credentialId);}}catch{return false;}
+  try{if(identity.deploymentId!==this.deploymentId||identity.administrator)return false;const [grantId,fence,...extra]=identity.credentialId.split(':');if(!grantId||!fence||extra.length)return false;const row=this.assert(grantId,identity.userId,identity.authorizationEpoch);if(!this.validationStatement("SELECT 1 FROM execution_steps WHERE id=? AND state='running' AND fence=? AND lease_until>?").get(row.task_id,fence,Date.now())||!this.executionValidator||this.validating.has(identity.credentialId))return false;this.validating.add(identity.credentialId);try{return this.executionValidator(String(row.task_id),fence);}finally{this.validating.delete(identity.credentialId);}}catch{return false;}
  }
  revoke(taskId:string){this.db.prepare('UPDATE task_authorizations SET revoked=1 WHERE task_id=?').run(taskId);}
 }
