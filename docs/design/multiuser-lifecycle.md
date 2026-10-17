@@ -160,7 +160,7 @@ These choices implement the existing self-hosted private-library direction; they
 are not a new sharing, cloud recovery or workflow product. The owning discussion
 and its adoption are recorded in [Multi-user scope: Decision and provenance](../adr-multiuser-scope.md#decision-and-provenance).
 The original multi-user recommendation is linked there as thread
-`01a140d6-59b6-7251-8306-931da89e156d`; this ledger does not invent separate
+`<internal-task>`; this ledger does not invent separate
 approvals for its individual implementation details. The parent additionally
 confirmed original-deployment/original-account personal import and delegated
 ordinary technical decisions. There is currently no M16 question or approval

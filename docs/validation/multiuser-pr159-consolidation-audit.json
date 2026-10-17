@@ -13,8 +13,8 @@
     "TARGET_KEEP": 1
   },
   "closurePrerequisites": [
-    "Complete actual Web acceptance; no all-eight acceptance yet",
-    "Parent explicitly releases closing only after successful validation",
+    "Keep actual Web acceptance incomplete with explicit unchecked PR TODOs; later user direction permits deferral",
+    "Parent explicitly decides closing after the combined privacy audit; currently paused",
     "Refresh every remote PR head and rerun comparison if any drift before closure",
     "Retain all branches/commits and exclude143/145-148; no mechanical merges"
   ],
@@ -2922,5 +2922,10 @@
     "browserAcceptance": "INCOMPLETE_SEPARATE_TOOL_BLOCK",
     "closeNow": false,
     "note": "All initial source/report holds reconciled. Historical path counts/absent lists below remain explicitly attributed to the initial C2 audit; successor counts are separate. No old gate result is relabelled."
+  },
+  "privacyReview": {
+    "status": "PAUSED_FOR_PARENT_COMBINED_REVIEW",
+    "report": "multiuser-pr159-privacy-review.md",
+    "closedPRs": 0
   }
 }

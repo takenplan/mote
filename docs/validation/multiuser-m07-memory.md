@@ -448,8 +448,8 @@ node --import tsx --test --test-concurrency=1 --test-timeout=120000 \
   apps/server/test/multiuser-memory-outcome-process.test.ts
 
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
-ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
-ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk \
+ANDROID_HOME=<redacted-personal-path> \
+ANDROID_SDK_ROOT=<redacted-personal-path> \
 npm run check:affected -- --base origin/codex/mote-multiuser-integration
 ```
 

@@ -2,7 +2,7 @@
 
 ## Scope and prerequisite identity
 
-Implementation worktree: `/Users/utopiafar/Documents/Codex/2026-10-16/task-7/mote`.
+Implementation worktree: `<module-checkout>`.
 Module branch: `codex/mote-multiuser-m03-ingress`.
 Prerequisite PR #130 and its remote branch were both verified at
 `7f72e9040872dbbb351f3c9a22afa6f069aa59c8` before worktree creation. The local and
@@ -58,7 +58,7 @@ are retained. No assertions or test classes were broadly disabled.
 ## Independent review and resolved findings
 
 Peer review came from the existing M09 execution conversation
-[`01a14182-6199-7164-9b09-792ba8fe4023`](codex://threads/01a14182-6199-7164-9b09-792ba8fe4023),
+`<internal-task>` (internal discussion reference redacted),
 without creating another execution conversation or editing this worktree.
 The peer confirmed review of exact `14858e86` and independently reran all 18
 source/service M03 tests and the compiled listener/restart/download journey:

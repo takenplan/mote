@@ -98,7 +98,7 @@ composition receipt above.
 
 M-AUDIT original search/category/tier/time/as-of/history controls now use owner-filtered stale audit before LIMIT. Actual new source 2/2, original M07 neighbors 7/7, original UI plus refresh neighbors 22/22, Server/Web types and scope pass. The historical row above describes the earlier 15ec checkpoint, not this later state. Selected integration plus filtered audit is independently frozen server-only as `454532ee9ea4a391db9a97c9b4cc00ad97384de6`; see `docs/design/multiuser-memory-manual-http.md`. Range/raw and remaining recipe original-page journeys are still in progress.
 
-Parent assigned R-CONNECT/R-ARCHIVE Web recording consumer and actual scoped UI acceptance to existing task-13 owner `01a14820-803f-701e-b59a-3a87f2e2f02f`. M13 does not edit that block in parallel. Bounded local handoff: `/tmp/mote-m13-recording-owner-handoff.md`. Sending the new direct handoff message was automatically rejected before sending; no workaround or retry was attempted. The new pure Memory handoff message to M15 was likewise rejected before sending; its complete local handoff is `/tmp/mote-m13-memory-public-freeze.md`.
+Parent assigned R-CONNECT/R-ARCHIVE Web recording consumer and actual scoped UI acceptance to existing task-13 owner `<internal-task>`. M13 does not edit that block in parallel. Bounded local handoff: `/tmp/mote-m13-recording-owner-handoff.md`. Sending the new direct handoff message was automatically rejected before sending; no workaround or retry was attempted. The new pure Memory handoff message to M15 was likewise rejected before sending; its complete local handoff is `/tmp/mote-m13-memory-public-freeze.md`.
 
 ## Range/raw follow-up after `884a1d3a` RED
 

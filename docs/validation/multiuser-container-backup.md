@@ -35,7 +35,7 @@ volume for operator inspection; no automatic existing-volume sweep is added.
 ## Actual environment boundary
 
 macOS arm64; Docker CLI `29.8.2`, API `1.56`, context `desktop-linux`, endpoint
-`unix:///Users/utopiafar/.docker/run/docker.sock`.
+`unix://<redacted-personal-path>`.
 
 Initial sandbox access reported socket `permission denied`. Standard-reviewed
 read-only `docker version`, `info`, `image ls`, `ps -a`, and `volume ls` then
@@ -234,8 +234,8 @@ Fixed historical tested candidate: `d1810cd095e8c0075eb1caecdf45395825ec6bbd`.
 ```sh
 export PATH=/opt/homebrew/opt/openjdk@21/bin:/opt/homebrew/bin:$PATH
 export JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home
-export ANDROID_HOME=/Users/utopiafar/Library/Android/sdk
-export ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk
+export ANDROID_HOME=<redacted-personal-path>
+export ANDROID_SDK_ROOT=<redacted-personal-path>
 npm run check:affected -- --base origin/codex/mote-multiuser-integration
 ```
 

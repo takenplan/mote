@@ -116,7 +116,7 @@ The required command passed on the frozen final implementation (exit 0):
 
 ```sh
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
-ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
+ANDROID_HOME=<redacted-personal-path> \
 npm run check:affected -- --base origin/codex/mote-multiuser-integration
 ```
 

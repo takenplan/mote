@@ -731,7 +731,7 @@
     },
     "android-native-reference.json": {
       "C2": "8ad99089ead559d6656a269fdca7ccb884953c07",
-      "receipt": "/Users/utopiafar/Documents/Codex/2026-10-17/task-20/evidence-c2/FINAL-RECEIPT.json",
+      "receipt": "<redacted-personal-path>",
       "sha256": "ace62b61b5753ac3efcfa0c64e505617615bf716ff23166a5c44c380f48062be",
       "nativeMethodsPassed": 21,
       "fail": 0,
@@ -786,7 +786,7 @@
     }
   },
   "Web": {
-    "owner": "01a14920-04fa-73ae-9308-af49d021c008",
+    "owner": "<internal-task>",
     "actualC2": "PARTIAL_BROWSER_TOOL_BLOCK_PERSISTS_AFTER_RESTART",
     "actualC1": "Only A original login/Note/draft reload/two tabs confirmed;规范handoff request200 after initialfixture400",
     "lastEvidenceUtc": "2026-10-17T10:09:58.474Z",
@@ -798,7 +798,7 @@
     "actualC2Scope": "Fresh libs/server/web build0; Chrome original A login/Note/draft reload/two pages; canonical handoff200; held A GET released after A-to-B switch remains isolated; B-only Note save/sync; normal storage notification retires old handoff page",
     "currentBlock": {
       "action": "getByRole(button, name=切换账号, exact=true).click()",
-      "target": "Fresh owned Chrome browser4/tab2046608881 after human-confirmed restart",
+      "target": "Fresh owned Chrome browser4/tab<owned-tab> after human-confirmed restart",
       "reason": "Same extension UI open blocker; owner/name/lock not exposed",
       "outcome": "Switch click uncertain; no subsequent observation/login ran",
       "state": "BLOCK_PERSISTS_AFTER_RESTART_HOST_CLOSED",
@@ -809,7 +809,7 @@
       "candidate": "C1",
       "durationSeconds": 3180.99,
       "action": "CDP Runtime.evaluate attempting one-time lost storage-notification injection",
-      "error": "Tab2046608606 is not part of browser session 01a14920-04fa-73ae-9308-af49d021c008",
+      "error": "Tab<owned-tab> is not part of browser session <internal-task>",
       "mutation": "No successful change evidence",
       "followingRefresh": "NOT_EXECUTED",
       "retry": false
@@ -821,7 +821,7 @@
       "contents": {
         "candidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
         "manifestSha256": "3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a",
-        "actualBrowser": "Chrome extension, dedicated session, tabs 2046608609 and 2046608610",
+        "actualBrowser": "Chrome extension, dedicated session, tabs <owned-tab> and <owned-tab>",
         "buildExit": {
           "libs": 0,
           "server": 0,
@@ -918,7 +918,7 @@
       "contents": {
         "tool": "mcp__cua_repl.js",
         "action": "goto C2 preferences; click switch; A re-login; later wrong B password (batch aborted)",
-        "targetTab": "2046608609",
+        "targetTab": "<owned-tab>",
         "targetOrigin": "http://mote-e2e6-e274f1dd.localhost:62788",
         "result": "Google Chrome is blocking automation because another extension UI is open on this page. Complete or dismiss that extension UI in Google Chrome, then ask me to continue.",
         "execution": "uncertain first goto; no later success evidence; browser paused pending human dismiss",
@@ -941,7 +941,7 @@
       "sha256": "c103d2cafe3f671b2e6029196761f6621bf703319be18864d298104d20cc16a3",
       "contents": {
         "ownedCoreHost": {
-          "session": 76688,
+          "session": "<owned-host-session>",
           "command": "close",
           "childExitCode": 0,
           "signal": null,
@@ -949,7 +949,7 @@
           "bridgeExitNotDirectlyCaptured": "stdout piped through tee; child close0 and no C2 command errors observed"
         },
         "ownedMemoryHost": {
-          "session": 39319,
+          "session": "<owned-host-session>",
           "command": "close",
           "driverExitCode": 0,
           "directoryRemoved": true
@@ -986,7 +986,7 @@
     "resumption": {
       "authorization": "User directly asked the Web owner to try again",
       "tool": "Same supported Chrome tool",
-      "newOwnedTab": "2046608616",
+      "newOwnedTab": "<owned-tab>",
       "outcome": "Fresh supported tab and A login/Note/draft succeeded; next navigation/switch blocked again by extension UI",
       "source": "8ad99089ead559d6656a269fdca7ccb884953c07",
       "host": "Restoring own clean exact-C2 host using existing matching build",
@@ -998,9 +998,9 @@
       "sha256": "2e10047ca108b92c94638ed4886ae4382b35e148cddde16e5609c41c32d37134",
       "contents": {
         "candidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
-        "userAuthorization": "再试试？",
+        "userAuthorization": "A supported retry was authorized; original dialogue omitted.",
         "browser": "Chrome extension",
-        "tab": "2046608616",
+        "tab": "<owned-tab>",
         "origin": "http://mote-e2e6-92f3ed7d.localhost:51482",
         "passed": [
           "fresh supported Chrome tab opens original Preferences",
@@ -1017,7 +1017,7 @@
           "extensionNameOrTitle": "not provided"
         },
         "cleanup": {
-          "ownedHostSession": 92808,
+          "ownedHostSession": "<owned-host-session>",
           "closeCommandExit": 0,
           "noFurtherBrowserAction": true
         },
@@ -1038,7 +1038,7 @@
         "browser": {
           "type": "Chrome extension",
           "id": "4",
-          "tab": "2046608881",
+          "tab": "<owned-tab>",
           "freshAfterHumanRestart": true
         },
         "origin": "http://mote-e2e6-415f9150.localhost:59826",
@@ -1051,7 +1051,7 @@
         ],
         "blocker": {
           "action": "getByRole(button, name=切换账号, exact=true).click()",
-          "targetTab": "2046608881",
+          "targetTab": "<owned-tab>",
           "observedBeforeAction": "original Preferences, logged-in generated-a, switch button185",
           "message": "Google Chrome is blocking automation because another extension UI is open on this page. Complete or dismiss that extension UI in Google Chrome, then ask me to continue.",
           "status": "blocked; click outcome uncertain; no subsequent observation/login ran",
@@ -1063,7 +1063,7 @@
         "remainingCases": "unchanged UNRUN; failure-login/logout/relogin/revoke and Models/File-processing/Memory/Agent/Files/Queues not executed",
         "productRed": [],
         "cleanup": {
-          "hostSession": 93561,
+          "hostSession": "<owned-host-session>",
           "closeCommandExit": 0,
           "port59826": {
             "errno": 61,
@@ -1113,5 +1113,10 @@
     "PRCloseActions": 0,
     "overallWebAcceptance": "INCOMPLETE",
     "oldC2ResultsNotRelabelled": true
+  },
+  "publicationPrivacyNote": {
+    "embeddedSnapshots": "Personal locators, tool-session identifiers and user dialogue are redacted publication views.",
+    "evidenceHashes": "Existing hashes refer to original locally retained execution evidence, not a newly executed or byte-identical redacted snapshot.",
+    "historicalVisibility": "Earlier remote commits remain visible; no history rewrite or credential operation performed."
   }
 }

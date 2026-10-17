@@ -110,7 +110,7 @@ gates and are not replaced by independent code review.
 
 ## Required full affected gate
 
-`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/utopiafar/Library/Android/sdk npm run check:affected -- --base origin/codex/mote-multiuser-integration`
+`JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=<redacted-personal-path> npm run check:affected -- --base origin/codex/mote-multiuser-integration`
 ran against final runtime `07ad9ddb17a0d2cd0004c50958670145b1457446`, exit0;
 `/tmp/m06-07ad-affected.log` and `.exit`. Existing JDK/SDK only; no CI settings changed.
 

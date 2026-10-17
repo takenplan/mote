@@ -13,7 +13,7 @@ authorization, configuration, credentials, data and running work are not.
 The owner explicitly requested same-deployment multi-user support, username and
 password login, an MVP without compatibility adapters, and strong extensibility
 and plugin support. The discussion
-[`01a140d6-59b6-7251-8306-931da89e156d`](codex://threads/01a140d6-59b6-7251-8306-931da89e156d)
+`<internal-task>` (internal discussion reference redacted)
 then recommended the coherent choices below. That discussion contains no
 subsequent user message approving each choice individually. The later M00
 implementation request authorizes adopting that recommendation as the project

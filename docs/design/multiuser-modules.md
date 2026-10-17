@@ -2,7 +2,7 @@
 
 本计划以提交 `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed` 为发现基线，
 固化规划对话
-[`01a140df-f5ba-70b6-a84a-bdea520f9021`](codex://threads/01a140df-f5ba-70b6-a84a-bdea520f9021)
+`<internal-task>` (internal discussion reference redacted)
 的 17 个模块。决策与取代范围见 [多用户 ADR](../adr-multiuser-scope.md)。
 以下矩阵是必须执行的验收要求，不是已通过的验证记录。M00 只交付作用域基础与
 工程合同；M01–M16 均需各自实施、验收和提交。

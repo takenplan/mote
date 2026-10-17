@@ -227,8 +227,8 @@ No arbitrary owner HEAD or later WIP was consumed. Feature delivery uses
 `[skip ci]`, and the first Draft head's CI run query returned an empty list.
 
 A fresh handoff of processing317 to Joint
-`01a1458f-2412-722d-a4ca-9a9cb5ee4023`, and the native citation404 receipt to M15
-`01a143cf-0aef-76c1-b470-6e9cb05c301f`, each returned “An earlier turn submission
+`<internal-task>`, and the native citation404 receipt to M15
+`<internal-task>`, each returned “An earlier turn submission
 is not yet confirmed”. Delivery is uncertain; no resend or successful handoff is
 claimed. Parent-readable commentary and this ledger preserve both failure bounds.
 Actions/catalog and native/query need their existing owners; this recording

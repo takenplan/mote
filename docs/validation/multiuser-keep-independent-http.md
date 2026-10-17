@@ -17,8 +17,8 @@ Only declared differences and their relevant host/context, configuration,
 execution and ingress seams were inspected. The implementation owner's checkout
 was not changed, and undeclared WIP was not selected. Initial scope/prerequisite
 notifications were delivered to implementation thread
-`01a148ca-3475-77df-91ff-593b94f14020` and final E2E thread
-`01a1475f-d672-7415-ac03-5c0f3db9a03d`.
+`<internal-task>` and final E2E thread
+`<internal-task>`.
 
 ## Risk assessment and evidence
 

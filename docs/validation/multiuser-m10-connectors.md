@@ -214,7 +214,7 @@ It used the existing documented environment, without installing or changing it:
 
 ```sh
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
-ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
+ANDROID_HOME=<redacted-personal-path> \
 PATH="/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin:$PATH" \
 npm run check:affected -- --base origin/codex/mote-multiuser-integration
 ```

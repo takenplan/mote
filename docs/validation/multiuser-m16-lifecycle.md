@@ -27,7 +27,7 @@ current-status wording, not their raw evidence or the explicit limits here.
 | `MOTE_ACTIONS_PROCESS_ENTRY=$PWD/apps/server/dist/index.js node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-actions-process.test.ts` at `10748005` | Compiled host + actual native adapter SIGKILL1/1 EXIT0, 12.804s; `/tmp/m16-sixth-actions-emitted.log/.exit`. |
 
 The required environment was `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`,
-`ANDROID_HOME=/Users/utopiafar/Library/Android/sdk` and the same `ANDROID_SDK_ROOT`,
+`ANDROID_HOME=<redacted-personal-path>` and the same `ANDROID_SDK_ROOT`,
 with that JDK's bin prepended to PATH. Server's full suite took 881.655 seconds.
 All heavy phases ended and were explicitly released before other client windows.
 

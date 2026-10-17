@@ -116,4 +116,4 @@ All28 multiuser PRs now have a source/test/design replacement mapping with no
 missing paths. The original audit gaps and historical failing gates remain
 recorded. Separate real Web acceptance is still incomplete; PR143/145–148 stay
 independent. No source-completion result authorizes closing any PR before the
-parent's explicit post-acceptance release.
+parent's explicit release after the combined privacy review. The user has accepted the remaining Web cases as deferred PR TODOs; this does not turn them into passes.

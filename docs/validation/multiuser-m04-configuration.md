@@ -9,7 +9,7 @@ documentation-only commit. The implementation and production contract is
 ## Baseline and scope
 
 The isolated worktree is
-`/Users/utopiafar/Documents/Codex/2026-10-16/task-5/mote`, on
+`<module-checkout>`, on
 `codex/mote-multiuser-m04-config`. It was created from M01
 `443726d2a95ef55db9466d06aa44ea1061ca56e4`, including M00
 `5031b754915d3fbba0dbe0c050b6d103a02966ef`. Their exact remote branch heads were
@@ -112,7 +112,7 @@ Final command on the frozen implementation:
 
 ```sh
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
-ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
+ANDROID_HOME=<redacted-personal-path> \
 npm run check:affected -- --base origin/codex/mote-multiuser-integration
 ```
 

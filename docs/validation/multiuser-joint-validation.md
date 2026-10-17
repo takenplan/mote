@@ -23,7 +23,7 @@ Their single shared SQLite, shared services and one executor remain the design.
 The original domain ADRs retain their business semantics; this preparation does
 not introduce a framework, owner selector, additional runtime or new product limit.
 
-Own clone: `/Users/utopiafar/Documents/Codex/2026-10-17/task/mote`.
+Own clone: `<module-checkout>`.
 Own branch: `codex/mote-multiuser-joint-validation`.
 Actual host: `guangmodeMac-Studio`; the handoff's Bogon label is not machine proof.
 The user's main working directory is not used for writes. Main and integration
@@ -218,7 +218,7 @@ These are independent source-entry receipts, no compiled/server-wide gate claim.
 All Joint processes completed and the heavy slot is explicitly RELEASED.
 
 The parent assigned a released slot to container validation
-`01a145c1-31b7-75e9-b834-56885c972010`, based on M16eec. Its new runtime/scripts
+`<internal-task>`, based on M16eec. Its new runtime/scripts
 remain separate until the final freeze. The original daemon failures are
 historical: Docker became accessible, the standard repository image actually
 built EXIT0 (immutable2e0a192e...), and owner13515436 actual production restore
@@ -581,7 +581,7 @@ proof remain pending. Content audit:
 Files cancellation candidate after host recovery: baseline original endpoint
 returns503 scope_unavailable (actual RED,
 /tmp/mote-joint-file-cancel-entry-red.log and .exit). The pre-disconnect same-case
-GREEN session57818 had an unknown outcome until recovery. On restored Bogon,
+GREEN owned host session had an unknown outcome until recovery. On restored Bogon,
 its saved log/exit proves1/1/EXIT0; scoped process inventory confirms no old test
 is still running. Transport disconnect/ps sandbox denial are environment facts,
 not code failures. The five original uncommitted files were preserved.

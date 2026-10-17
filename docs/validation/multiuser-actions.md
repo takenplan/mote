@@ -26,8 +26,8 @@ M12 明确委托 M16 串行执行共同门禁，本方核对原日志、退出�
 
 ```sh
 JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home \
-ANDROID_HOME=/Users/utopiafar/Library/Android/sdk \
-ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk \
+ANDROID_HOME=<redacted-personal-path> \
+ANDROID_SDK_ROOT=<redacted-personal-path> \
 npm run check:affected -- --base origin/codex/mote-multiuser-integration
 ```
 
@@ -102,7 +102,7 @@ CI Checks/Component checks 按要求禁用、未运行。真实模型、真实�
 
 1. 对齐真实 M07/M08/M11 最终提交，当前活跃对话独立复审最终 runtime，修 confirmed 问题。
 2. 同 SHA 的 M12 专项、实际 scoped/legacy consumer 组合、fresh libs/server build、生产 emitted 双进程恢复。
-3. `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/utopiafar/Library/Android/sdk ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk npm run check:affected -- --base origin/codex/mote-multiuser-integration`。
+3. `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=<redacted-personal-path> ANDROID_SDK_ROOT=<redacted-personal-path> npm run check:affected -- --base origin/codex/mote-multiuser-integration`。
 4. 精确远端 feature head/base/CI 状态，Draft PR 指向独立集成分支；CI Checks/Component checks 禁用，未运行，不启用它们。
 
 所有此前窄检查只覆盖当时树。真实模型、真实日历/外部账号、物理设备、部署和最终跨模块 UI 不计入本模块已验证范围。

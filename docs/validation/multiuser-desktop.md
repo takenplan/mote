@@ -605,7 +605,7 @@ no system Java, permissions, credentials or tracked source and is removed after
 the run. The equivalent
 reproduction environment is
 `JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home`
-and `ANDROID_HOME=/Users/utopiafar/Library/Android/sdk`. The required command's
+and `ANDROID_HOME=<redacted-personal-path>`. The required command's
 Android stage still runs the actual Gradle JVM tests; no checker step is skipped.
 
 The final required command on exacta43979dc18a90517cd641d38787674586a20499d

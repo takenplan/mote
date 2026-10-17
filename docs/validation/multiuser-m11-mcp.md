@@ -42,8 +42,8 @@ npm run build:libs
 npm run build -w @mote/server
 node scripts/check-scope-contracts.mjs
 MOTE_MCP_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" MOTE_ASK_PROCESS_ENTRY="$PWD/apps/server/dist/index.js" MOTE_CONNECTORS_PROCESS_ENTRY="$PWD/apps/server/dist/app.js" node --import tsx --test --test-concurrency=1 --test-timeout=120000 apps/server/test/multiuser-mcp-process.test.ts apps/server/test/multiuser-ask-process.test.ts apps/server/test/multiuser-connectors-process.test.ts
-JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/utopiafar/Library/Android/sdk ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk npm run check:affected -- --base origin/codex/mote-multiuser-integration
-JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=/Users/utopiafar/Library/Android/sdk ANDROID_SDK_ROOT=/Users/utopiafar/Library/Android/sdk apps/android/gradlew -p apps/android --no-daemon --offline --rerun-tasks :app:testDebugUnitTest
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=<redacted-personal-path> ANDROID_SDK_ROOT=<redacted-personal-path> npm run check:affected -- --base origin/codex/mote-multiuser-integration
+JAVA_HOME=/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home ANDROID_HOME=<redacted-personal-path> ANDROID_SDK_ROOT=<redacted-personal-path> apps/android/gradlew -p apps/android --no-daemon --offline --rerun-tasks :app:testDebugUnitTest
 ```
 
 Independent review ranges and closures: M07 protocol/source and Memory adapter plus

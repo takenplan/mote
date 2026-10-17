@@ -62,7 +62,7 @@ node_modules/.bin/electron scripts/test-web-login.cjs
 node --import tsx scripts/android-central-fixture.ts
 node_modules/.bin/electron apps/desktop/scripts/unified-login-smoke.cjs
 JAVA_HOME='/Applications/Android Studio.app/Contents/jbr/Contents/Home' \
-  ANDROID_HOME='/Users/utopiafar/Library/Android/sdk' \
+  ANDROID_HOME='<redacted-personal-path>' \
   apps/android/gradlew -p apps/android -Pmote.testBuildType=development \
   --max-workers=2 testDevelopmentUnitTest assembleDevelopment assembleDevelopmentAndroidTest
 ```
