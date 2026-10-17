@@ -5,7 +5,7 @@ import {scopedFilesFixture} from '../../server/test/fixtures/scoped-files.js';
 
 // Actual M01 pairing and M03 upload. Faults only remove real HTTP replies or
 // corrupt a declared self field; no token/receipt/authority is manufactured.
-const cleanup:Array<()=>unknown>=[],claims:Array<{id:string;challenge:string;deviceId:string;userId:string}>=[],acks:string[]=[],invitations:Array<{userId:string;deviceId?:string}>=[];
+const cleanup:Array<()=>unknown>=[],claims:Array<{id:string;challenge:string;deviceId:string;deviceName:string;userId:string}>=[],acks:string[]=[],invitations:Array<{userId:string;deviceId?:string}>=[];
 const ackStatuses:number[]=[];let verifiedDeviceReads=0,latestCredentialId='';
 const retiredConfigurationRequests:string[]=[];
 let dropRedeem=false,dropAck=false,badSelf='';
@@ -22,7 +22,7 @@ function observe(host:Awaited<ReturnType<typeof buildApp>>){
   if(request.method==='POST'&&request.url==='/api/login/poll'&&reply.statusCode===200){const value=JSON.parse(String(payload));if(value.ready===true)latestCredentialId=value.credentialId;}
   if(request.method==='POST'&&request.url==='/api/connections/invitations'&&reply.statusCode===200){const value=JSON.parse(String(payload)).invitation;invitations.push({userId:value.userId,...value.deviceId?{deviceId:value.deviceId}:{}});}
   if(request.method==='POST'&&request.url==='/api/connections/redeem'&&reply.statusCode===200){
-   const input=request.body as {challenge:string;deviceId:string;expected:{userId:string}},value=JSON.parse(String(payload));claims.push({id:value.id,challenge:input.challenge,deviceId:input.deviceId,userId:input.expected.userId});if(dropRedeem)reply.raw.destroy();
+   const input=request.body as {challenge:string;deviceId:string;deviceName:string;expected:{userId:string}},value=JSON.parse(String(payload));claims.push({id:value.id,challenge:input.challenge,deviceId:input.deviceId,deviceName:input.deviceName,userId:input.expected.userId});if(dropRedeem)reply.raw.destroy();
   }
   if(request.method==='POST'&&request.url==='/api/login/ack'&&reply.statusCode===200){acks.push((request.body as {id:string}).id);if(dropAck)reply.raw.destroy();}
   if(request.method==='GET'&&request.url==='/api/connections/self'&&reply.statusCode===200&&badSelf){

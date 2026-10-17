@@ -682,6 +682,30 @@ class MultiuserWorkerInstrumentedTest {
             UploadWorker.schedule(app,settings.read(),true);waitFor {app.queue().pendingSync().count==0};assertEquals(200,get(app,"a","/api/captures/"+note).first);assertEquals(404,get(app,"b","/api/captures/"+note).first)
         }} finally {instrumentation.removeMonitor(browser)}
     }
+    @Test fun sameInvitationBeginRetainsItsVerifierAndClaimedNameAfterLostRedeemAndSameOwnerLoginChange() {
+        val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
+        val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
+        val issued=CentralClient(endpoint(),token("a")).post("/api/connections/invitations",JSONObject().put("serverUrl",endpoint()).put("label","Generated same invitation retry"))
+        val invitation=ConnectionInvitation.parse(issued.getString("uri"),true,BuildConfig.DEBUG);val client=ConnectionClient(app)
+        control("/generated/drop-redeem")
+        assertThrows(ConnectionFailure::class.java) {client.connect(invitation,"Generated original claim name",true,bindLocal=true)}
+        val first=control("/generated/pairing-state").getJSONArray("claims");assertTrue(first.length()>0);val original=first.getJSONObject(0)
+        assertEquals(endpoint(),client.pendingServer())
+        // A normal same-owner login and an edited device label must not replace
+        // the already durable verifier of the original user-confirmed claim.
+        login(app,"a");val owner=settings.read().account();val directory=app.accountDirectory().absolutePath
+        settings.save(settings.read().copy(deviceName="Generated intervening saved name"))
+        control("/generated/drop-ack")
+        assertThrows(ConnectionFailure::class.java) {client.connect(invitation,"Generated changed retry name",true,bindLocal=true)}
+        assertEquals(owner,settings.read().account());assertEquals(directory,app.accountDirectory().absolutePath)
+        assertEquals("Generated original claim name",settings.read().deviceName);assertEquals(endpoint(),client.pendingServer())
+        control("/generated/release-pairing")
+        client.connect(invitation,"Generated another retry name",true,bindLocal=true)
+        assertNull(client.pendingServer());assertEquals(owner,settings.read().account());assertEquals(directory,app.accountDirectory().absolutePath)
+        val claims=control("/generated/pairing-state").getJSONArray("claims");assertTrue(claims.length()>=2)
+        for(index in 0 until claims.length()) {val row=claims.getJSONObject(index);assertEquals(original.getString("id"),row.getString("id"));assertEquals(original.getString("challenge"),row.getString("challenge"));assertEquals("Generated original claim name",row.getString("deviceName"))}
+        assertEquals("Generated original claim name",settings.read().deviceName)
+    }
     @Test fun actualQrPairingRejectsChangedSelfBeforeLocalWriteAndReauthorizesOnlyItsOriginalDevice() {
         val app=context();waitFor { !QueueStorage.recovering && QueueStorage.recoveryFailure == null };cancel(app)
         val settings=Settings(app);settings.save(settings.read().copy(server="",token="",debugHttp=true,wifiOnly=false,syncMode="manual",metadataEnabled=false))
