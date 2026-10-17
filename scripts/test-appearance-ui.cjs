@@ -46,6 +46,9 @@ async function run(){
   console.log('phase fetch-enabled');
   const loaded=client.window.loadURL(url+'/?themeFixture='+preference+'-'+os+'#/preferences');await until(()=>held,'application module held');
   console.log('phase main-held');
+  // The preload scanner can request the module before the preceding blocking
+  // bootstrap executes. Observe that real bootstrap while the module stays held.
+  await until(async()=>{const value=await client.wc.debugger.sendCommand('Runtime.evaluate',{expression:'Boolean(document.documentElement.dataset.colorScheme)',returnByValue:true});return value.result.value===true;},'synchronous appearance bootstrap before application');
   const first=await client.wc.debugger.sendCommand('Runtime.evaluate',{expression:`JSON.stringify({scheme:document.documentElement.dataset.colorScheme,background:getComputedStyle(document.documentElement).backgroundColor,theme:document.querySelector('meta[name="theme-color"]').content})`,returnByValue:true});
   const value=JSON.parse(first.result.value),expected=preference==='auto'?os:preference;
   assert.equal(value.scheme,expected);assert.equal(value.background,expected==='dark'?'rgb(28, 27, 26)':'rgb(247, 245, 241)');assert.equal(value.theme,expected==='dark'?'#1c1b1a':'#f7f5f1');
