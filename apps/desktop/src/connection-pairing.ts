@@ -10,11 +10,12 @@ import {loginVerifier} from './login-session';
 
 type Device={deviceId:string;deviceName:string;platform:Platform};
 type Grant={ready:true;token:string;credentialId:string;scope:'client';deploymentId:string;userId:string;serverUrl:string;expiresAt:number;purpose:'device';deviceId:string};
-type Pending={version:1;id:string;invitation:DesktopConnectionInvitation;device:Device;verifier:string;sourceBinding:string;requestId?:string;requestExpiresAt?:number;grant?:Grant};
+type Pending={version:1;id:string;invitation:DesktopConnectionInvitation;device:Device;verifier:string;sourceBinding:string;sourceSignedOutBinding:string;requestId?:string;requestExpiresAt?:number;grant?:Grant};
 export type PairingPreview=Pick<DesktopConnectionInvitation,'serverUrl'|'deploymentId'|'userId'|'expiresAt'>;
 const secret=/^[A-Za-z0-9_-]{43}$/;
 const invalid=()=>new ConnectionError('INVALID_RESPONSE','Invalid device pairing response');
 const fingerprint=(config:Config)=>createHash('sha256').update(JSON.stringify([config.serverUrl,accountKey(config),config.deviceId,config.token,Boolean(config.authSignedOut),config.authExpiresAt])).digest('hex');
+const sourceMatches=(config:Config,pending:Pending)=>pending.sourceBinding===fingerprint(config)||Boolean(!config.token&&pending.sourceSignedOutBinding===fingerprint({...config,authSignedOut:true}));
 function grantValue(value:unknown,pending:Pending,now:number):Grant {
  const v=value as Grant,i=pending.invitation;
  if(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).sort().join(',')!=='credentialId,deploymentId,deviceId,expiresAt,purpose,ready,scope,serverUrl,token,userId'||v.ready!==true||v.scope!=='client'||v.purpose!=='device'||v.deploymentId!==i.deploymentId||v.userId!==i.userId||v.serverUrl!==i.serverUrl||v.deviceId!==pending.device.deviceId||typeof v.token!=='string'||v.token.length<32||v.token.length>4096||/[\x00-\x20\x7f]/.test(v.token)||typeof v.credentialId!=='string'||!v.credentialId||v.credentialId.length>128||/[\x00-\x1f\x7f]/.test(v.credentialId)||!Number.isSafeInteger(v.expiresAt)||v.expiresAt<=now)throw invalid();
@@ -42,7 +43,7 @@ export class DesktopPairing {
   let bytes:Buffer;try{bytes=await readFile(this.path);}catch(error){if((error as NodeJS.ErrnoException).code==='ENOENT')return;throw error;}
   if(!this.secrets.available()||bytes.length>32768)throw invalid();
   let p:Pending;try{p=JSON.parse(this.secrets.decrypt(bytes));}catch{throw invalid();}
-  if(!p||p.version!==1||typeof p.id!=='string'||!secret.test(p.verifier)||!/^[a-f0-9]{64}$/.test(p.sourceBinding)||!p.device||!/^[-a-zA-Z0-9_.:]{1,128}$/.test(p.device.deviceId)||typeof p.device.deviceName!=='string'||!p.device.deviceName.trim()||p.device.deviceName.length>128||!['macos','windows','linux','android','other'].includes(p.device.platform))throw invalid();
+  if(!p||p.version!==1||typeof p.id!=='string'||!secret.test(p.verifier)||!/^[a-f0-9]{64}$/.test(p.sourceBinding)||!/^[a-f0-9]{64}$/.test(p.sourceSignedOutBinding)||!p.device||!/^[-a-zA-Z0-9_.:]{1,128}$/.test(p.device.deviceId)||typeof p.device.deviceName!=='string'||!p.device.deviceName.trim()||p.device.deviceName.length>128||!['macos','windows','linux','android','other'].includes(p.device.platform))throw invalid();
   p.invitation=parseDesktopConnectionInvitation(JSON.stringify(p.invitation),p.grant?0:this.now());
   if(p.invitation.deviceId&&p.invitation.deviceId!==p.device.deviceId)throw invalid();
   if(p.requestId!==undefined&&(!secret.test(p.requestId)||!Number.isSafeInteger(p.requestExpiresAt)||p.requestExpiresAt!>Date.parse(p.invitation.expiresAt)))throw invalid();
@@ -57,7 +58,7 @@ export class DesktopPairing {
   try{assertCurrent();await rename(temporary,this.path);if(process.platform!=='win32'){const directory=await open(this.directory,'r');try{await directory.sync();}finally{await directory.close();}}}finally{await rm(temporary,{force:true});}
  });}
  async preview(config:Config):Promise<PairingPreview|undefined>{
-  const pending=await this.read();if(!pending||pending.sourceBinding!==fingerprint(config)&&!installed(config,pending))return;
+  const pending=await this.read();if(!pending||!sourceMatches(config,pending)&&!installed(config,pending))return;
   const {serverUrl,deploymentId,userId,expiresAt}=pending.invitation;return {serverUrl,deploymentId,userId,expiresAt};
  }
  async cancel():Promise<void>{this.epoch++;await this.serial(()=>rm(this.path,{force:true}));}
@@ -68,7 +69,8 @@ export class DesktopPairing {
   // Retry exactly the already durably fixed claim; never rotate its verifier.
   if(existing&&existing.sourceBinding===sourceBinding&&JSON.stringify(existing.invitation)===JSON.stringify(invitation)&&existing.device.deviceId===config.deviceId&&existing.device.deviceName===config.deviceName&&existing.device.platform===platform)return;
   const epoch=++this.epoch,{verifier}=loginVerifier();
-  await this.save({version:1,id:randomUUID(),invitation,device:{deviceId:config.deviceId,deviceName:config.deviceName,platform},verifier,sourceBinding},()=>{assertCurrent();if(epoch!==this.epoch)throw Error('Device pairing changed');});
+  const sourceSignedOutBinding=fingerprint({...config,token:undefined,authSignedOut:true});
+  await this.save({version:1,id:randomUUID(),invitation,device:{deviceId:config.deviceId,deviceName:config.deviceName,platform},verifier,sourceBinding,sourceSignedOutBinding},()=>{assertCurrent();if(epoch!==this.epoch)throw Error('Device pairing changed');});
  }
  async resume(config:Config,assertCurrent:()=>void,publish:(grant:Grant,identity:ConnectionIdentity,device:Readonly<Device>)=>Promise<void>):Promise<void>{
   if(this.busy)throw Error('Device pairing is already in progress');this.busy=true;
@@ -76,7 +78,7 @@ export class DesktopPairing {
   const current=()=>{assertCurrent();if(epoch!==this.epoch)throw Error('Device pairing changed');};
   try{
    let p=await this.read();current();
-   if(!p||p.device.deviceId!==config.deviceId||p.sourceBinding!==fingerprint(config)&&!installed(config,p))throw Error('Device pairing belongs to another connection');
+   if(!p||p.device.deviceId!==config.deviceId||!sourceMatches(config,p)&&!installed(config,p))throw Error('Device pairing belongs to another connection');
    const post=(path:string,body:unknown)=>connectionRequest(p!.invitation.serverUrl,path,{method:'POST',credentials:'omit',headers:{...DESKTOP_PROTOCOL_HEADERS,'Content-Type':'application/json'},body:JSON.stringify(body)},this.fetcher);
    if(!p.requestId){
     const i=p.invitation,result=await post('/api/connections/redeem',{code:i.code,expected:{deploymentId:i.deploymentId,userId:i.userId,serverUrl:i.serverUrl,purpose:i.purpose},...p.device,challenge:createHash('sha256').update(p.verifier).digest('hex')}) as {id:string;expiresAt:number};current();
