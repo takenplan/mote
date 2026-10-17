@@ -50,6 +50,7 @@ model. It verifies the runtime artifact dependency registration before exercisin
 
 - Identical replay preserves a published card, its checkpoints, descendants and
   artifact journal; retrying the completed job does not invoke another model.
+  Valid mixed-case original UUIDs use the same binary input ordering as SQLite.
 - Invalid input fingerprints are rejected before a replay can reuse an artifact.
 - Changed output, source revision and parent cascade retain the old statement as
   stale, remove checkpoints and keep it out of ordinary discovery.

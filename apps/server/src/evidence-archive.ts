@@ -180,7 +180,7 @@ export class EvidenceArchive {
     if(existing&&existingGroup===group){
       const {generatedAt:priorGeneratedAt,text:priorText,...prior}=existing,{generatedAt:nextGeneratedAt,...next}=artifact;
       const priorInputs=db.prepare('SELECT observation_id AS id,fingerprint FROM artifact_inputs WHERE artifact_id=? ORDER BY observation_id').all(id).map(row=>({id:String(row.id),fingerprint:String(row.fingerprint)}));
-      if(priorText===output.text&&isDeepStrictEqual(prior,JSON.parse(JSON.stringify(next)))&&isDeepStrictEqual(priorInputs,[...inputs].sort((a,b)=>a.id.localeCompare(b.id)))){
+      if(priorText===output.text&&isDeepStrictEqual(prior,JSON.parse(JSON.stringify(next)))&&isDeepStrictEqual(priorInputs,[...inputs].sort((a,b)=>a.id<b.id?-1:a.id>b.id?1:0))){
         const {text,...retained}=existing;return retained;
       }
     }

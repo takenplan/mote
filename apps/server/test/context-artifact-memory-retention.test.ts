@@ -76,3 +76,17 @@ test('opening an existing vault replaces the legacy destructive artifact trigger
  await f.restart();f.store.db.prepare('DELETE FROM context_artifacts WHERE id=?').run(f.id);
  assert.equal(f.memories.get(f.memory.id).status,'stale');
 });
+
+test('immutable replay retains descendants for valid mixed-case original UUIDs',async t=>{
+ const directory=await mkdtemp(join(tmpdir(),'mote-artifact-case-')),store=new Store(directory);
+ t.after(async()=>{store.close();await rm(directory,{recursive:true,force:true});});
+ const ids=['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','BBBBBBBB-BBBB-4BBB-8BBB-BBBBBBBBBBBB'];
+ for(const id of ids)await store.ingest({id,deviceId:'generated',deviceName:'Generated',platform:'import',source:'note',capturedAt:'2026-10-01T00:00:00Z',durationMs:0,ocrText:'Generated original '+id});
+ const inputs=ids.map(id=>({id,fingerprint:store.archive.fingerprint(id)!})),id='d'.repeat(64),revision='1'.repeat(64),output={kind:'semantic',text:'Generated interpretation',metadata:{}};
+ const first=store.archive.save(id,'generated-case',revision,output,inputs,'generated','1','generated');
+ const child=store.archive.save('e'.repeat(64),'generated-child',revision,output,[],'generated','1','generated',[],[{id,revision}]);
+ const events=store.db.prepare('SELECT COUNT(*) n FROM artifact_events').get()!.n;
+ assert.deepEqual(store.archive.save(id,'generated-case',revision,output,inputs,'generated','1','generated'),first);
+ assert.ok(store.archive.get(child.id),'an identical original set cannot withdraw descendants');
+ assert.equal(store.db.prepare('SELECT COUNT(*) n FROM artifact_events').get()!.n,events);
+});
