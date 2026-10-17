@@ -19,6 +19,7 @@ import { DiagnosticsRecorder } from '@mote/diagnostics';
 import { githubFeedbackUrl } from '@mote/shared/feedback';
 import { readPowerState, recognizeInvitationQr, runHelper, readInstalledApplications } from './native';
 import { ConnectionOnboarding, ConnectionError, testConnection, assertConnectionChangeSafe, type ConnectionStatus } from './connection';
+import {DesktopPairing} from './connection-pairing';
 import { NoteDraftStore, type NoteDraft } from './note-draft';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -178,6 +179,7 @@ else {
       decrypt: (value: Buffer) => safeStorage.decryptString(value),
     };
     const store = new ConfigStore(dataDirectory, secrets, () => profileDefaults(profile, {}), () => profileDefaults(profile, process.env));
+    const pairing=new DesktopPairing(dataDirectory,secrets);
     settings = await store.load();
     if(connectionToken(settings)&&!accountKey(settings)){
       // New-profile environment credentials are explicit bootstrap input, not
@@ -275,7 +277,7 @@ else {
         if (recoveryRequired && !['mote:get-status', 'mote:storage-restart', 'mote:stop', 'mote:note-draft', 'mote:connection-status', 'mote:update-status', 'mote:sources'].includes(channel)) throw new Error(recoveryRequired);
         const startedAt = Date.now();
         if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'STARTED');
-        try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if(expected!==accountGeneration&&channel!=='mote:ask'&&channel!=='mote:configure'&&channel!=='mote:connection-confirm')throw Error('Desktop account changed; reload the window'); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt }); return result; }
+        try { const label = operationLabels[channel]; const result = await (label ? backgroundJobs.run(channel, label, () => operation(...args)) : operation(...args)); if(expected!==accountGeneration&&channel!=='mote:ask'&&channel!=='mote:configure'&&channel!=='mote:connection-confirm'&&channel!=='mote:connection-resume')throw Error('Desktop account changed; reload the window'); if (stage && channel !== 'mote:note-draft-update') void events.record(stage, 'OK', { elapsedMs: Date.now() - startedAt }); return result; }
         catch (error) { if (stage) void events.record(stage, failureCode(error, stage), { elapsedMs: Date.now() - startedAt }); throw error; }
       });
     };
@@ -327,7 +329,7 @@ else {
       pendingStorageDirectory = undefined;
     };
     const requireAccount=()=>{if(!accountKey(settings)||!connectionToken(settings))throw Error('Sign in before collecting personal data');};
-    const commitConnection = async (requested:Config):Promise<void> => {
+    const commitConnection = async (requested:Config,keepDeviceName=false):Promise<void> => {
       const previous=settings,oldDirectory=accountDirectory;
       const nextDirectory=accounts.directory(requested),switching=nextDirectory!==oldDirectory;
       // Account changes retire running intent. Credential rotation within the
@@ -343,7 +345,8 @@ else {
       try {
         await calendarDelivery;
         await accounts.remember(previous);
-        const updated=switching&&connectionToken(requested)&&accountKey(requested)?await accounts.forLogin(requested):requested;
+        const restored=switching&&connectionToken(requested)&&accountKey(requested)?await accounts.forLogin(requested):requested;
+        const updated=keepDeviceName?{...restored,deviceName:requested.deviceName}:restored;
         if(!switching){
           await queue.binding.commit(updated,queue.stats().depth>0);
           await oldSources.changeConnection(updated);
@@ -388,6 +391,7 @@ else {
     handle('mote:connection-status', () => ({...connectionState, message: statusMessage(connectionState.message)}));
     handle('mote:connection-preview', input => onboarding.preview(input));
     handle('mote:connection-cancel', () => onboarding.clear());
+    handle('mote:connection-pending', () => pairing.preview(settings));
     handle('mote:connection-import', kind => serialize(async () => {
       if (kind !== 'json' && kind !== 'qr') throw new Error(moteText("邀请导入方式无效"));
       onboarding.clear();
@@ -400,17 +404,26 @@ else {
         return { canceled: false, preview: onboarding.preview(input) };
       } catch { throw new Error(moteText("无法读取有效邀请，请检查 JSON/二维码格式、有效期和文件大小；原连接未变动")); }
     }));
-    handle('mote:connection-confirm', async (id, origin, deviceName) => {
-      await serialize(async()=>{
+    const consumePairing=async(confirmation?:{id:unknown;origin:unknown;deviceName:unknown})=>{
+      const requested=settings,generation=accountGeneration,login=++loginGeneration;
+      const assertCurrent=()=>{if(quitting||accountTransition||settings!==requested||generation!==accountGeneration||login!==loginGeneration)throw Error('Desktop account changed; reload the window');};
+      let named=requested;
+      if(confirmation)await serialize(async()=>{
+        assertCurrent();
         if(!encryptedStorageAvailable())throw Error(moteText('系统加密存储不可用，不能交换并保存凭据'));
-        if(typeof deviceName!=='string')throw Error('Invalid device name');
-        const serverUrl=onboarding.confirmNode(id,origin),named=updateConfig(settings,{...settings,deviceName,serverUrl,token:''});
-        await commitConnection({...named,account:undefined,authSignedOut:true,token:undefined});
+        if(typeof confirmation.deviceName!=='string')throw Error('Invalid device name');
+        named=updateConfig(requested,{...requested,deviceName:confirmation.deviceName});
+        await pairing.begin(onboarding.confirm(confirmation.id,confirmation.origin),named,currentPlatform,assertCurrent);
       });
-      // Old owner invitation secrets cannot establish a personal owner. The
-      // confirmed origin now starts the existing account/device approval flow.
-      await browserLogin!();return clientStatus();
-    });
+      await pairing.resume(named,assertCurrent,async(grant,identity,device)=>{
+        await serialize(async()=>{assertCurrent();await commitConnection({...named,deviceName:device.deviceName,serverUrl:grant.serverUrl,token:grant.token,account:identity.account,credentialScope:'client',authSignedOut:false,authSessionOnly:false,authExpiresAt:grant.expiresAt},true);});
+      });
+      loginGeneration++;updateUi(clientStatus());
+      if(requested.token&&requested.token!==settings.token)await loginRequest(requested,'/api/auth/logout',{},requested.token).catch(()=>{});
+      return clientStatus();
+    };
+    handle('mote:connection-confirm', (id,origin,deviceName)=>consumePairing({id,origin,deviceName}));
+    handle('mote:connection-resume', ()=>consumePairing());
     handle('mote:connection-test', async () => {
       if (connectionState.state === 'checking') return connectionState;
       const requested = settings; connectionState = { state: 'checking', message: moteText("正在验证已保存连接与权限…") };
@@ -610,7 +623,7 @@ else {
     browserLogin=async(page,evidenceId,durationMs=2592000000,workId)=>{
       if(![0,86400000,604800000,2592000000].includes(durationMs))throw Error('Invalid lifetime');
       const requested=settings,generation=++loginGeneration,{verifier,challenge}=loginVerifier();
-      const {id}=await loginRequest(requested,'/api/login/requests',{serverUrl:requested.serverUrl,deviceId:requested.deviceId,deviceName:requested.deviceName,platform:currentPlatform,challenge,durationMs});
+      const {id}=await loginRequest(requested,'/api/login/requests',{serverUrl:requested.serverUrl,deviceId:requested.deviceId,deviceName:requested.deviceName,platform:currentPlatform,purpose:'central',challenge,durationMs});
       await openCentralBrowser(requested.serverUrl,page,process.platform,url=>promisify(execFile)('/usr/bin/open',['-a','Google Chrome',url]),url=>shell.openExternal(url),evidenceId,undefined,id,workId);
       const deadline=Date.now()+10*60000;
       while(Date.now()<deadline&&generation===loginGeneration&&settings===requested&&!quitting){

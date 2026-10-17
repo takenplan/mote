@@ -111,6 +111,8 @@ export interface DesktopApi {
   importConnection(kind: 'json' | 'qr'): Promise<{ canceled: boolean; preview?: import('./connection').ConnectionPreview }>;
   cancelConnection(): Promise<void>;
   confirmConnection(id: string, origin: string, deviceName: string): Promise<Status>;
+  pendingConnection(): Promise<import('./connection-pairing').PairingPreview|undefined>;
+  resumeConnection(): Promise<Status>;
   testConnection(): Promise<import('./connection').ConnectionStatus>;
   connectionStatus(): Promise<import('./connection').ConnectionStatus>;
   updateStatus(): Promise<import('./updater').UpdateStatus>;
