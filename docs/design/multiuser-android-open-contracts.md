@@ -51,6 +51,13 @@ processor 参数/recipe、已保存服务检测、未完成 fingerprint reconcil
 其 policy WIP 不是可用合同。原件保存、正文处理、索引及 Memory 就绪仍分别呈现。
 不能将 profileId 当 modelId，也不能在默认任务已准入后才补写用户选定方案。
 
+基线98d的 Files→处理设置并非普通 processing 域表单：它读取
+`GET /api/file-processing`，提交 `{revision:string,settings,policy?}`，只在
+policyConfigured 时带原 policy；根设置页另有 `/api/processing/settings`。
+当前 native `fileSettings` 暂沿 processing 域 CAS，不等价于前者的完整方案图。
+冻结后必须恢复这个原 Files 入口及原 advanced JSON 数组编辑，不将普通说话人
+参数表单的测试当作方案/规则通过，也不因保存标量参数而无意启用候选预览生成的图。
+
 M15 保留原处理设置和 Import 入口；共同 schema/路由及实际执行冻结后，复用
 现有 M04 CAS、M05 task、M03 原件/附件与 M06 发布，不另造后台或返回假成功。
 Web-only acoustic/term-review 控件不是98d原 Android UI，但其现有导出内容和共同
