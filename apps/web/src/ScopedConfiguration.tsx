@@ -1,3 +1,4 @@
+import {MemoryRecipeSelection} from './MemoryRecipeSelection';
 import {ScopedModelsForm} from './ScopedModelsForm';
 import {MemoryLifecycleFields} from './MemorySettings';
 import {useEffect,useState} from 'react';
@@ -28,7 +29,7 @@ function DomainEditor({api,domain,view,administrator=false}:{api:Api;domain:Conf
    <p className="fine-print">{moteText('凭据的 true / false 仅表示配置状态；保持原值会保留同一条目的凭据。填写新值可替换，清空字符串可清除。')}</p>
    {error&&<p className="notice error" role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}
    <button className="button primary" disabled={busy||!dirty}>{moteText('保存并应用')}</button><button type="button" className="button subtle" disabled={busy} onClick={()=>{setBase(view);setText(JSON.stringify(domain.saved,null,2));setError('');}}>{moteText('重新读取并还原草稿')}</button>
-  </form><details><summary>{moteText('当前生效值')}</summary><pre>{JSON.stringify(domain.effective,null,2)}</pre></details>
+  </form>{domain.id==='memory'&&<MemoryRecipeSelection api={api}/>}<details><summary>{moteText('当前生效值')}</summary><pre>{JSON.stringify(domain.effective,null,2)}</pre></details>
  </details>;
 }
 export function ScopedConfiguration(props:{api:Api;administrator?:boolean}){return <ScopedConfigurationContents key={JSON.stringify([props.api.connection,props.administrator])} {...props}/>;}

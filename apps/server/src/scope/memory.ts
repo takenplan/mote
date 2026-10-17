@@ -265,6 +265,14 @@ export class MemoryHost {
   try{const evidence=bindings.flatMap(binding=>data.materialEvidence(parsedId,query.revision,undefined,binding.requires??['material'])),ids=[...new Set(evidence.map(record=>record.id))];return {...base,status:ids.length?'ready' as const:'unavailable' as const,evidenceIds:ids};}
   catch(error){if(error instanceof PrivateDataError&&error.statusCode===409)return {...base,status:'waiting' as const,evidenceIds:[]};throw error;}
  }
+ /** Original source/default chooser; M04 remains the only configuration CAS. */
+ private async recipeSettings(context:UserContext,raw:unknown,change?:unknown){
+  const fields={sourceId:z.string().min(1).max(128).optional(),scope:z.enum(['capture','lark-docs']).optional()},oneScope=(value:{sourceId?:string;scope?:string})=>!value.sourceId||!value.scope,selector=z.object(fields).strict().refine(oneScope,'Choose one recipe scope'),request=change===undefined?undefined:z.object({...fields,revision:z.number().int().nonnegative(),recipes:z.array(memoryStrategyRefSchema).min(1).max(10).nullable()}).strict().refine(oneScope,'Choose one recipe scope').parse(change),query=selector.parse(raw),data=this.data(context),configuration=this.configuration.forUser(context);let view=await configuration.view();
+  const saved=()=>memorySettingsSchema.parse(view.domains.find(domain=>domain.id==='memory')!.saved);let settings=saved();if(query.sourceId)data.privateData.source(query.sourceId);
+  if(request){if(request.sourceId!==query.sourceId||request.scope!==query.scope||request.recipes===null&&!query.sourceId)throw new PrivateDataError('invalid_data');const next=structuredClone(settings);if(query.sourceId){if(request.recipes===null)delete next.sourceRecipes[query.sourceId];else next.sourceRecipes[query.sourceId]=request.recipes;}else if(query.scope==='capture')next.captureRecipes=request.recipes!;else if(query.scope==='lark-docs')next.documentRecipes=request.recipes!;else next.recipes=request.recipes!;view=await configuration.replace('memory',next,request.revision);settings=saved();}
+  const source=query.sourceId?data.privateData.source(query.sourceId):undefined,fallback=source&&isCaptureMemorySource(source.id,source.deviceId)||query.scope==='capture'?settings.captureRecipes:source?.kind==='lark-docs'||query.scope==='lark-docs'?settings.documentRecipes:settings.recipes??[settings.profile==='coding'?settings.codingRecipe:settings.recipe],refs=source?settings.sourceRecipes[source.id]??fallback:fallback;
+  return {revision:view.revision,sourceId:query.sourceId??null,inherited:!!source&&!Object.hasOwn(settings.sourceRecipes,source.id),items:refs.map(recipe=>{let available=true;try{this.strategies.resolve(recipe);}catch{available=false;}return {binding:{recipe},available};})};
+ }
  private captureSelection(context:UserContext,raw:unknown){
   const query=memorySelectionSchema.parse(raw),data=this.data(context),settings=memorySettingsSchema.parse(JSON.parse(data.state().settings)),recipes=query.recipes??settings.recipes??[settings.profile==='coding'?settings.codingRecipe:settings.recipe],bindings=recipes.map(ref=>this.strategies.resolve(ref).binding);
   return data.sql.transaction(()=>({...memoryCaptureSelection(data,query,bindings.map(binding=>binding.requires??['material'])),recipes}));
@@ -326,6 +334,8 @@ export class MemoryHost {
   integrate:(raw:unknown)=>this.manualIntegration(context,raw),
   materialSelection:(id:string,raw:unknown)=>this.materialSelection(context,id,raw),
   captureSelection:(raw:unknown)=>this.captureSelection(context,raw),
+  recipeSettings:(raw:unknown)=>this.recipeSettings(context,raw),
+  saveRecipeSettings:(raw:unknown)=>{const request=z.object({sourceId:z.string().optional(),scope:z.string().optional()}).passthrough().parse(raw);return this.recipeSettings(context,{...(request.sourceId?{sourceId:request.sourceId}:{}),...(request.scope?{scope:request.scope}:{})},raw);},
   job:(id:string)=>this.job(context,id),
   review:(id:string)=>this.auditJob(context,id),
   audit:(raw:unknown)=>this.auditPage(context,raw),

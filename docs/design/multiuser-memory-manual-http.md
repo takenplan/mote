@@ -104,3 +104,36 @@ execution grant. A retired page cannot send a private POST after its selection
 preflight completes. Existing M07 job controls/publication and per-recipe
 independent exact bindings remain authoritative; defaults and automatic settings
 are not changed by a manual run.
+
+
+## Original automatic source combinations
+
+`GET /api/memory/recipe-settings` accepts either no selector (generic default),
+`scope=capture`, `scope=lark-docs`, or exact owned `sourceId`. Selectors are
+mutually exclusive. It returns `{revision, sourceId, inherited,
+items:[{binding:{recipe:{id,version}},available}]}`. The revision is the existing
+whole M04 configuration CAS, not an independent Memory or source revision.
+Configured exact version references stay visible even when unavailable.
+
+`PUT /api/memory/recipe-settings` accepts the same optional selector plus
+`{revision, recipes:[{id,version}]}`. An exact source may use `recipes:null` to
+remove its override and follow the authoritative source-class default. Null is
+invalid for generic/capture/Lark defaults. The existing M04 Memory schema and
+installed strategy resolver validate the complete saved value. A stale revision
+is409; an unowned/missing source is404. It neither accepts an owner field nor
+creates a new settings store.
+
+Only the selected existing field (`recipes`, `captureRecipes`,
+`documentRecipes`, or `sourceRecipes[sourceId]`) changes through M04 replace.
+Capture source inheritance uses the existing shared source/device identity
+contract; Lark document inheritance uses the existing source kind. The saved
+Memory lifecycle flags, integration settings, other source overrides, models
+and the other account remain unchanged. Existing M07 configuration publication
+continues to retire outdated future-intake bindings. Saving does not create
+a model/job, recompute original history, or grant additional execution authority.
+
+The original automatic-combination component is restored in the account Memory
+settings category. It keeps original defaults/capture/Lark/exact-source scopes,
+version choices and source inheritance. Browser saves capture the read revision;
+account/path retirement aborts and discards the old draft and response. The
+legacy bearer paths remain available only to the original legacy composition.

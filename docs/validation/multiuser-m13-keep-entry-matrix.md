@@ -103,3 +103,15 @@ manual controls submit two installed personal recipe versions and a Coding
 recipe, display actual personal/Coding results and retain configuration defaults.
 The remaining automatic-source recipe chooser and final whole gate are separate
 work; no promise of live-model semantic quality is made.
+
+
+## Automatic source/default recipe follow-up
+
+The original MemoryRecipeSelection now appears in account Memory settings and
+reads/writes finite `/api/memory/recipe-settings` through the existing M04 CAS.
+Original capture/Lark/source overrides and inheritance, exact installed versions,
+A/B retirement and no history replay have source2/2 and original/legacy UI2/2
+proof, Servertypes/Webbuild/scope0. Together with f615's installed multi-version
+personal/Coding original-page cases, this closes the specific M-RECIPE control
+and coverage gaps above. It does not change the independent pending/due/failure
+observations or replace final same-candidate whole acceptance.

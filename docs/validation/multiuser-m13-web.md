@@ -843,3 +843,27 @@ same raw UUID without A's body or selected card. A first localhost session becam
 unauthorized after completion while other localhost fixtures could coexist; no
 root cause or cross-user leak is asserted. Fresh 127.0.0.1 original login and
 account-switch verification completed. No hidden Electron or live model used.
+
+
+### Original automatic source/default Memory combinations
+
+Test-only4efaac32 records the actual original scoped settings page without its
+automatic-combination controls (`/tmp/m13-memory-source-recipes-original-red.log`,
+1fail). The existing MemoryRecipeSelection is now reused in that same category,
+with finite scoped GET/PUT mapping and the existing whole M04 CAS. No new
+recipe algorithm, provider, model, scheduler or historical-work admission is
+added. Exact owned source inheritance follows the same capture/Lark/default
+rules as existing M07 intake; only its selected configuration field changes.
+
+Actual source2/2 no skips0 (`/tmp/m13-memory-source-recipes-service.log`) covers
+capture and document defaults, source override/removal, whole-configuration CAS,
+foreign source404, contradictory selectors, invalid refs and zero model/job
+replay. Original page plus unchanged legacy chooser2/2 no skips0
+(`/tmp/m13-memory-source-recipes-four-scopes-ui.log`) covers the original four
+scopes, saved exact version refs, actual M04 writes and detached A Save after B
+mounts. Server noEmit0, Webbuild0 and scope0 are recorded in
+`/tmp/m13-memory-source-recipes-final-server-types.*`,
+`/tmp/m13-memory-source-recipes-final-web-build.*` and
+`/tmp/m13-memory-source-recipes-scope.*`. Earlier failed strict-intersection
+parser attempt remains recorded; the corrected shared selector/body shape passes
+the original assertions. This is finite source/UI proof, not a new whole gate.
