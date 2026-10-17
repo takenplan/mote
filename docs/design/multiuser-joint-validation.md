@@ -309,3 +309,20 @@ imageProfileId work is complete. Existing FileProcessing.completeConfiguration
 compares unfinished runtime fingerprints and requeues changed work; completed
 results remain until explicit preview/reprocess. The eventual adapter must retain
 that distinction and existing unknown-call consent, not blanket-revive work.
+
+
+## Bounded PREP release before final gates
+
+Parent's explicit client-coordination instruction is to publish stable usable
+sub-contracts rather than wait for every module's final candidate. Source8177e8af
+is therefore released as limited consumer PREP with its pending noEmit, independent
+review, full affected/production/client and current native/container schema checks
+visible. No final or compiled-safe claim follows. DELETE/allow bodies are fixed;
+consumer callbacks must bind late receipt/UI effects to the captured original
+generation and complete credential. Profiles/rules/import image-choice execution
+remains a specific OPEN group; pure values do not count as implementation.
+
+M13's already-declared be6 Library original marker is composed without waking its
+paused turn. An actual post-parent-delete raw-detail200 failure is retained;8177
+filters the same exact relation before browser count/paging and passes the original
+case and all six attachment cases. Metadata-only M02 remains data, not a byte grant.

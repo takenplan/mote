@@ -964,3 +964,27 @@ The new processing-policy-contract pure value checks3/3 in0.244s0
 /tmp/mote-joint-processing-policy-value.log/.exit only. It has no registered route,
 M04 domain, M03 intake or M05 processing behavior yet. Keep the actual public
 profile/settings/import-choice group OPEN.
+
+
+### Library entry and explicit limited PREP8177
+
+After composing M13 declaredbe6 source slice, own actual Library record has the
+real fileArchive proof. Parent deletion still returned raw-detail200 (expected404)
+in `/tmp/mote-joint-attachment-capture-browser-red.log/.exit`,1/1 EXIT1,0692552c.
+8177's common relationship predicate is applied before count/LIMIT; actual raw
+positive, retired404/count0, forged declaration404/count0 and the other attachment
+flows pass6/6,0skip/fail,11.647s EXIT0 in
+`/tmp/mote-joint-attachment-capture-browser-green.log/.exit`. Source head lookup
+uses the existing owner/source/external primary key. This is source/presentation
+adaptation, not another file projection or Material processor. Scope checker0 in
+`/tmp/mote-joint-current-public-prep-scope.log/.exit`; policy values after final
+parser/error refinement3/3 in processing-policy-value2 EXIT0.
+
+Explicit consumer PREP source8177 is now released with current noEmit, source
+reviews, full affected/compiled/native/clients and current portable/container
+combination PENDING. Historical203997 types do not cover it. This permits consumers
+to implement the fixed API bodies now, not to mark final acceptance. Parent has
+allocated Desktop QR soleheavy; no Joint build/fullsuite/Gradle/Docker was started.
+There is no pending user approval or policy denial; M15's message routing returned
+earlierturnunconfirmed, not an approval request or confirmed delivery. Exact shared
+handoff `/tmp/mote-joint-files-public-freeze.md` is available for parent relay.
