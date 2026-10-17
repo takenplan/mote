@@ -191,3 +191,20 @@ the original M07 job controls. Credential/Api replacement aborts and retires the
 old callbacks; selecting another card never rewrites an admitted input.
 This closes the selected-card/manual-recipe journey. Broad time-range/raw
 selection and the remaining KEEP ledger are separate unfinished work.
+
+## Account queue overview
+
+The original compact queue overview in Web mode reads `GET /api/tasks/queues`.
+This is a read-only aggregate of the existing M05 owner task rows joined to
+same-owner execution steps: actual running, waiting, blocked and failed counts
+per stored pool, plus the number of tasks with unresolved issued/unknown external
+journal entries. It has scope `account`; it admits/retries no work and carries
+no task input/result, credentials, another user's queue or instance capacity.
+Administrator login has exactly the same personal metadata boundary. Empty own
+state returns an empty pool list, not guessed instance-wide zeros.
+
+The compact summary retains its original location/details layout, but labels
+these measured personal facts explicitly. Global Agent/Harness limit fractions
+belong to instance administration and are not inferred from personal task counts.
+An unresolved external result does not assert physical completion. Bearer
+characterization retains the original execution-settings queue API.

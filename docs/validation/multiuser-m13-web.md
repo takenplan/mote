@@ -743,4 +743,28 @@ page neighbors passed51/51 no skip0
 `/tmp/m13-memory-integration-ui-neighbors.log/.exit`. This command ran the two
 existing files it found; an accidentally supplied nonexistent third filename is
 not additional coverage. Web and Server types/scope/i18n checks are recorded
-separately; no new IAB or whole affected acceptance is inferred here.
+separately. Subsequent permitted IAB proof at953 used the actual original A
+Memory detail and explicit integration, reload of the same completed receipt,
+then actual account switch to B, its own card and a new successful integration.
+`/tmp/m13-memory-integration-iab-proof.json` records six generated provider
+requests across the two extraction and two integration jobs; A/B screenshots
+are `/tmp/m13-memory-integration-iab-a.jpg` and `-b.jpg`. This closes this
+selected-card page journey, without inferring broad range/raw extraction,
+multiple-recipe UI coverage or whole affected acceptance.
+
+### Original queue overview owner migration
+
+IAB953 exposed the genuine old execution-settings503; new source regression59ca
+reached404 task_not_found for /api/tasks/queues (no alias was present). Source
+samecase1/1 no skip0 /tmp/m13-execution-queue-green.log/.exit: held A running and
+queued work, equal business ID in B, B own waiting-only row, admin own empty,
+owner spoof/anonymous denied, no GET admission. Original component9cbad1af
+validRED was scope_unavailable; new owner-only branch plus held A response/B
+empty positive and original bearer/cache/manual neighbors pass in
+/tmp/m13-execution-queue-ui-green.log/.exit,31/31 no skip0. The added actual
+unacknowledged issuance case remains blocked with external uncertainty1 while
+running occupancy is0; source queue and original M05 lifecycle neighbors pass
+13/13 no skip0 in `/tmp/m13-execution-queue-server-neighbors.log/.exit`.
+Server/Web noEmit, scope inventory and synchronized i18n8474 pass separately.
+These are narrow consumer proofs;
+953's540 full Web predates this queue delta and is not relabeled current full.
