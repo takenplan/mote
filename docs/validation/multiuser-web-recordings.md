@@ -199,7 +199,37 @@ exact integration6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed. Command:
 `npm run check:affected -- --base origin/codex/mote-multiuser-integration`, explicit
 Node24.21.0/ABI137 PATH. Fresh actual root/mem0 constructor/read/write/close smoke
 passes in `/tmp/web-recordings-entry-native-smoke.log`; own Electron41.10.7 locked
-official installer exit0 before the gate. Final terminal results: RUNNING, not accepted: `/tmp/web-recordings-entry-affected.log/.exit` on immutable17648069. Desktop501/501 terminal pass; Server has already reported the proposal-pagination failure and continues. Later phases and the full exit must be read at terminal. No healthy run is interrupted or duplicated. A documentation-only delivery commit does not change the tested source or dependencies..
+official installer exit0 before the gate. Final terminal results: exit1 on immutable17648069, `/tmp/web-recordings-entry-affected.log/.exit1`.
+Desktop60 files/501 tests pass; Server2777 tests:2773 pass,2 fail,2 existing skips,
+0 cancelled,1509.21s; Web546/546 pass,0 skips/cancelled,88.28s. Agent317 pass/1
+existing Codex-fixture skip (318 total), diagnostics5/5 and shared192/192 pass.
+I18n8478, shared builds and all workspace/script types pass. Server failures:
+`test/multiuser-actions-catalog.test.ts:23` actual proposal-pagination job wait
+for other-source remains false, and `test/multiuser-processing.test.ts:317`
+summary restart becomes stale/input_changed. Causes are not confirmed. No
+recording test failed or was skipped. check:local returned1, so the root follow-on
+tooling and Gradle step were not reached; the separate native consumer receipt
+above remains failed, not substituted as a final-head pass. The post-test delivery
+changes are documentation only, with no source/test/dependency changes..
 
 No merge, deployment or CI dispatch. The recording-specific5/5 is finite
 acceptance; it does not accept the prerequisite stack or waive other failures.
+
+
+## Delivery and owner handoff
+
+Draft [PR152](https://github.com/utopiafar/mote/pull/152) targets
+`codex/mote-multiuser-integration`; the tested head17648069 and runtime0304fd66
+are unchanged by subsequent documentation commits. Its focused consumer range is
+`4f1caf4e606b86d7f25b3cbb009db280af15f572..codex/mote-web-recordings-ready` (16
+files); the full PR also carries the explicitly frozen prerequisite ancestors.
+No arbitrary owner HEAD or later WIP was consumed. Feature delivery uses
+`[skip ci]`, and the first Draft head's CI run query returned an empty list.
+
+A fresh handoff of processing317 to Joint
+`01a1458f-2412-722d-a4ca-9a9cb5ee4023`, and the native citation404 receipt to M15
+`01a143cf-0aef-76c1-b470-6e9cb05c301f`, each returned “An earlier turn submission
+is not yet confirmed”. Delivery is uncertain; no resend or successful handoff is
+claimed. Parent-readable commentary and this ledger preserve both failure bounds.
+Actions/catalog and native/query need their existing owners; this recording
+consumer does not change those implementations or introduce a read bypass.
