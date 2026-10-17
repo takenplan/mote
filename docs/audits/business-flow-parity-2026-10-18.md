@@ -22,6 +22,12 @@ data access, historical model processing or removal of an existing capability.
   parent's earlier runtime inspection identified deployed Central as
   `central-main-6272a9b5-20261015`; the code baseline above must not be presented
   as its running revision.
+- The owner subsequently clarified: “mvp版本。不需要考虑前向兼容”. The
+  corrective MVP uses the current scoped baseline and does not migrate or repair
+  historical tasks, infer their initiation purpose, or convert old backup
+  records. Earlier code remains a business-contract comparison, not an upgrade
+  compatibility commitment. This scope decision does not remove the current
+  product responsibilities or remaining findings below.
 
 Production reachability is decisive: scoped `src/app.ts:1–2` exports only
 `scope/app.ts`. The latter registers ingress, processing, Memory, Ask,
@@ -352,33 +358,13 @@ author did not independently execute their tests. The companion validation
 record owns generated single-/dual-owner, phase-failure, paging, metadata,
 backup, authority and restore results and the final affected-component gate.
 
-Startup correction now runs before the executor starts. A historical ordinary
-file is relabelled as backup only when the connector mapping, successful media
-checkpoint, authenticated host head, exact capture/item and original body hash
-agree (`scope/processing-origins.ts:50–70`). Missing or mismatched proof leaves
-the format unchanged. New automatic/owner/plugin origins are private host
-records. Automatic derivatives inherit origin separately from the live-parent
-processing contract, so a successful producer does not invalidate its
-derivatives. Known automatic backup trees are retired and fenced at admission
-and I/O; issued/unknown physical facts remain intact. A trusted explicit retry
-can restore its exact policy-retired safe tree; background retry cannot promote
-owner intent. These are source-level review conclusions, with executed results
-in the companion validation record.
-
-Supersession review also found that preventing new admission alone does not stop
-pre-existing automatic backup pipelines or their queued children. The companion
-change adds private host admission-origin records and recovery checks. Historical
-request keys were caller-selectable, however: even an exact
-`intake:<receipt.id>:<originalRef>` match cannot distinguish every old automatic
-admission from an explicit owner request. Missing intent facts stay UNKNOWN.
-The owner is being asked whether those ambiguous existing backup tasks should
-pause until an explicit processing request, or retain their prior execution while
-the new no-automatic-ASR boundary applies prospectively. Neither choice permits
-clearing issued/unknown physical calls or deleting completed results. Final
-implemented policy and validation belong to the companion record.
-At the frozen corrective source, ambiguous old roots retain their prior
-behavior and may still perform ASR. No-automatic-admission coverage for new
-trusted backups must not be described as complete historical suppression.
+Accepted MVP scope: the shared flow and trusted backup disposition apply to the
+current scoped baseline. The owner explicitly excluded forward compatibility;
+historical task-purpose inference, old backup relabelling and queued-work repair
+are outside this correction. There is no pending owner choice to pause or
+migrate those old tasks. Current-baseline backup intake, its ordinary explicit
+processing entry point and existing unknown-result protections remain the
+validation contract. No historical processing or repair is claimed.
 
 Remaining UNKNOWN / owner decision: legacy `FileStore.transcriptRevision`
 creates one canonical transcript capture with chunks
@@ -522,16 +508,6 @@ reports remain evidence only for their exact SHA/scope. F13 records a generated
 failure executed by the parent during the current turn, with independent static
 verification of its type/settlement chain here. This is not a statement
 that all 17 modules are complete or that every unlisted behavior is equivalent.
-Focused in-memory SQLite checks reproduced an explicit same-key derivative
-origin-claim defect and verified its correction: the claimed coordinator and
-its analysis child become owner-origin work while the producer and an
-unrequested sibling remain automatic. These are helper checks, not product
-startup, provider or migration tests. The companion validation record owns the
-actual API regression and final source checks.
-An in-memory `EXPLAIN QUERY PLAN` and prefix check also verified that the final
-startup task-to-format join uses both `(user_id, original_id)` primary-key
-columns and rejects a non-`original:` reference. This is an indexed-query check,
-not a production-size performance benchmark.
 
 The following remain explicitly outside the completed static coverage:
 

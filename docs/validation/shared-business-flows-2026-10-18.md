@@ -22,7 +22,6 @@ are real; synthetic providers are not evidence of live-model quality.
 | Backup intake and explicit ASR | `multiuser-recording-backup-processing.test.ts`: two tests pass. Real DingTalk transport fixture supplies spoken, empty and unsupported exports for A/B. All six backups remain readable/playable with no automatic processing admission, including retry, configuration update and restart. An explicit owner request performs ASR; ordinary audio with caller-forged role metadata still performs configured automatic ASR. |
 | Backup data restoration | The second backup test deletes and restores the processing domain, twice restores the same archive, restarts, verifies actual restored format rows and exact original bytes, and finds no revived processing admission. Foreign-owner reads fail. |
 | Backup export compatibility | A backup without processing products exports only `manifest.json` and exact `original` bytes. The manifest reports unprocessed state, MIME and original identity; it does not fabricate a transcript. Provider disconnect/restart retains original reads and export. Existing Files stream retirement checks cover the shared per-block source/owner fences. |
-| Earlier scoped backup state | `recording-backup-upgrade.test.ts`: two generated real-entry journeys pass. Before `app.ready`, the first constructs earlier file-format/checkpoint/task states. Startup repairs only exact authenticated host-head originals before M05 starts, retires proven automatic roots and children, preserves owner/ordinary B processing and all unknown-call journals, and keeps an owner-selectable legacy intake key UNKNOWN. Internal retry stays fenced; one explicit root retry restores its safe retired child; same-key explicit processing establishes owner intent; unacknowledged unknown retry preserves the journal, and confirmed child retry uses the existing recovery protections. The second uses the actual derivative API with an existing automatic task identity: only the selected coordinator/analysis branch becomes owner-requested, its producer and automatic sibling stay retired, and restart preserves that branch. |
 
 Focused Agent runtime/context group: 75 passes, zero failures, one existing
 installed-Codex opt-in skip. Agent and Server typechecks pass on the initial
@@ -41,20 +40,11 @@ execution and source identity are recorded here before PR publication.
 
 ## Preserved unsuccessful attempts
 
-- The first full affected check was deliberately stopped during Server tests
-  after review found that pre-existing automatic backup tasks also needed
-  retirement. Its Shared/Agent results are focused evidence, not a completed
-  final gate; interruption-generated test failures are not counted as passes.
-  The required final run below uses the corrected source.
-- A second affected check was stopped after final origin review found that an
-  explicit derivative request reusing an earlier automatic task identity could
-  still inherit its producer's automatic origin. The final run follows the
-  branch-local owner-claim correction and its regression, rather than treating
-  that interrupted run as final validation.
-- The first new same-key derivative fixture inherited a local-dialogue audio
-  profile and unexpectedly requested diarization from an ASR-only generated
-  worker. The fixture now explicitly selects `audio.http`, matching its declared
-  purpose; both upgrade journeys then pass. This is not a diarization validation.
+- Three initial affected checks were interrupted while review investigated
+  earlier-version task compatibility. The owner then explicitly excluded that
+  scope for the MVP. The additional origin journal, startup repair, retry hooks
+  and upgrade tests were removed; none of their results validates the delivered
+  code. The final affected run covers the reduced current-version implementation.
 - Initial library build raced the in-progress `AgentInputError` edit and found
   an incompatible status-code override. The override was removed; the complete
   library build and focused typechecks then passed.
@@ -80,11 +70,9 @@ device, supplier account, real model or deployed release was used. No historical
 failure was retried. Native client UI and runtime behavior were not validated
 by the server fixtures. The audit's remaining business differences are not
 closed by passing this correction's tests.
-Earlier tasks lacking independent initiation-purpose facts retain their previous
-behavior pending an owner decision; they may still continue ASR. Originals with
-missing/mismatched authenticated host-head proof are not relabeled. The fixture
-distinguishes those unknown cases from provable automatic admissions and does not
-claim that every historical backup was found or stopped.
+Older-version task inference, migration and recovery are outside the explicitly
+accepted MVP scope. Current-version restart and data restoration remain covered
+by the backup journeys above.
 The scoped recording archive still publishes raw-export and segment Materials,
 where the legacy archive stores one canonical transcript with chunks; audit F10
 retains that consumer/product-shape difference for a subsequent decision. Stage

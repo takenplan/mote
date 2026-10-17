@@ -42,19 +42,12 @@ For a backup without processing products, Files export contains its manifest and
 the retained original bytes, with the same owner/source checks during streaming.
 It does not manufacture a transcript to satisfy the former export prerequisite.
 
-Processing admission origin is a private host record, separate from caller
-metadata and task-cache identity. Automatic successors and configuration rechecks
-inherit their root origin; an authenticated explicit processing/retry action can
-establish owner intent. Background recovery cannot do so. Before M05 starts, the
-host can repair an old backup format only when connector mapping, successful
-media checkpoint, authenticated host head, exact canonical capture/item and
-original hash agree. Proven automatic backup trees are retired without deleting
-completed products or issued/unknown physical-call facts. A deliberate retry can
-restore its safe retired subtree through existing source/model/unknown guards.
-Missing or mismatched host proof is not repaired by guessing. Historical task
-origin was not independently recorded; those ambiguous tasks retain their prior
-behavior pending the owner's choice, so this is not a claim of complete
-historical backup retirement.
+The owner explicitly clarified that this is an MVP with no compatibility work
+for older versions. The current baseline does not add historical task-purpose
+inference, format migration, a startup repair pass or a special retry protocol.
+Current-version restart, data restoration and explicit owner processing retain
+their existing authorization and physical-result protections. The old host is
+only a characterization fixture for the shared domain contract.
 
 Internal Agent `question` retains its nonempty contract but has no arbitrary
 20,000 UTF-16-character cap. External HTTP schemas keep their own input
@@ -78,7 +71,7 @@ authorized ranges or independent-review responsibility.
 | REMOVE | Duplicate Coding coverage instructions; generic retry classification of an invalid local request; automatic ASR caused solely by backup intake; shared error fields as the only record of independent stage failures. |
 | EXCEPTION | Old fixture storage and execution-step representations need not migrate to the scoped schema. Their observable domain contracts still require parity. |
 | EXCEPTION | This rollout does not initiate historical reprocessing or erase past results, fees or unresolved calls. No old-vault migration or deployment is implied. |
-| UNKNOWN | Older scoped task records did not distinguish automatic processing from an explicit owner request. A matching caller-selectable request key alone does not prove intent. The policy for an existing backup task whose origin cannot be reconstructed requires an owner choice; it must not be silently relabeled automatic or explicit. |
+| REMOVE | Extra compatibility work for earlier task records, including purpose inference, startup format repair, a second origin journal and special owner-retry transitions; the owner's MVP clarification supersedes that proposed work. |
 | UNKNOWN | Other scoped business differences remain findings in the audit, not accepted removals or claims of equivalence. Real suppliers/models and physical-device behavior need separate evidence. |
 
 This completes the internal-input cleanup in the

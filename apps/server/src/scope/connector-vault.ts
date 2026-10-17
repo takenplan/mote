@@ -7,13 +7,6 @@ import {ConnectorError} from '../connectors/types.js';
 import type {ConnectorState} from '../connectors/ports.js';
 
 export const connectorHash=(value:unknown)=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
-/** Read one existing authenticated host receipt without creating a namespace or
- * key. Upgrade reconciliation uses this only for exact capture provenance. */
-export function existingConnectorReceipt<T>(db:DatabaseSync,root:string,deploymentId:string,userId:string,instanceId:string,name:string):T|undefined{
- const row=db.prepare('SELECT payload FROM connector_secrets WHERE user_id=? AND instance_id=? AND name=?').get(userId,instanceId,name);if(!row)return;
- let fd:number|undefined;
- try{fd=openSync(join(root,'connectors',connectorHash([deploymentId,userId]),connectorHash(instanceId),'key'),constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);const stat=fstatSync(fd);if(!stat.isFile()||stat.nlink!==1||stat.size!==32||(stat.mode&0o077)!==0||(process.getuid&&stat.uid!==process.getuid()))return;const key=readFileSync(fd),[iv,tag,data]=String(row.payload).split('.').map(value=>Buffer.from(value,'base64')),decipher=createDecipheriv('aes-256-gcm',key,iv);decipher.setAAD(Buffer.from(JSON.stringify([deploymentId,userId,instanceId,name])));decipher.setAuthTag(tag);return JSON.parse(Buffer.concat([decipher.update(data),decipher.final()]).toString()) as T;}catch{return;}finally{if(fd!==undefined)closeSync(fd);}
-}
 /** An instance key and authenticated payload bind every secret to the fixed
  * deployment/account/connection/name. Callers receive no filesystem selector. */
 export class ConnectorVault {
