@@ -27,7 +27,7 @@ export function installConversationHistory(db:DatabaseSync){
  const change=(owner:string,turns:string,deleted:boolean,runs:string)=>{
   const condition=`user_id=${owner} AND id IN (${turns})`;
   return `UPDATE ma_conversations SET summary=NULL,revision=revision+1 WHERE user_id=${owner} AND id IN(SELECT conversation_id FROM ma_turns WHERE ${condition});
-   ${deleted?`UPDATE ma_runs SET result=NULL,context='{}',events='[]',generation=generation+1,status=CASE WHEN status='running' THEN 'failed' ELSE status END WHERE user_id=${owner} AND id IN (${runs});
+   ${deleted?`UPDATE ma_runs SET result=NULL,context='{}',workspace=NULL,events='[]',generation=generation+1,status=CASE WHEN status='running' THEN 'failed' ELSE status END WHERE user_id=${owner} AND id IN (${runs});
     UPDATE user_tasks SET checkpoints='{}',progress='null' WHERE user_id=${owner} AND task_id IN(SELECT task_id FROM ma_fragments WHERE user_id=${owner} AND run_id IN (${runs}) UNION SELECT task_id FROM ma_runs WHERE user_id=${owner} AND id IN (${runs}));
     DELETE FROM ma_artifacts WHERE user_id=${owner} AND run_id IN (${runs});
     DELETE FROM ma_traces WHERE user_id=${owner} AND run_id IN (${runs});

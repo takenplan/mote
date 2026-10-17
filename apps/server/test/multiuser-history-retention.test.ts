@@ -87,3 +87,10 @@ test('repeated real historical followups keep exact evidence proofs bounded with
  const revisions=f.read(db=>db.prepare("SELECT count(DISTINCT json_extract(materials,'$[0].revision')) n FROM ma_turns WHERE user_id=? AND conversation_id=?").get(f.a.userId,conversationId)!);assert.equal(revisions.n,2,'different immutable revisions must retain their own original proof');
  await f.restart();assert.equal((await f.checked(f.a.token,'/api/conversations/'+conversationId)).turnCount,12);await ask(f,f.b);
 });
+
+test('original deletion erases model-authored private research checkpoints as well as the historical answer',async t=>{
+ const f=await fixture(t),material=await f.publish(f.a,'A'),first=await ask(f,f.a),note='GENERATED_PRIVATE_RESEARCH_CHECKPOINT';
+ f.scripts.set('A',(body,_raw,res)=>{const uses=body.messages.flatMap((message:any)=>Array.isArray(message.content)?message.content.filter((part:any)=>part.type==='tool_use'):[]),stage=uses.length+1;if(!uses.length)return writeMessagesResponse(res,{stage,tool:{name:'delegation_workspace',args:{workspaceJson:JSON.stringify({supported:[{statement:note,evidenceIds:[first.result.citations[0].id]}]})}}});writeMessagesResponse(res,{stage,text:JSON.stringify({answer:'Generated checkpoint answer',citationIds:[]})});});
+ const followup=await ask(f,f.a,first.conversationId);assert.ok(f.read(db=>String(db.prepare('SELECT workspace FROM ma_runs WHERE user_id=? AND id=?').get(f.a.userId,followup.id)!.workspace)).includes(note),'the real host-control tool must persist the private checkpoint before erasure');
+ const capture=f.read(db=>String(db.prepare('SELECT capture_id FROM pd_material_captures WHERE user_id=? AND material_id=? LIMIT 1').get(f.a.userId,material.id)!.capture_id));await f.checked(f.a.token,'/api/captures/'+capture,'DELETE');assert.equal(f.read(db=>db.prepare('SELECT workspace FROM ma_runs WHERE user_id=? AND id=?').get(f.a.userId,followup.id)!.workspace),null);await f.restart();assert.ok((await f.checked(f.a.token,'/api/conversations/'+first.conversationId)).turns.every((turn:any)=>turn.evidenceDeleted));
+});
