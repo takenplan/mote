@@ -35,7 +35,7 @@ global.fetch=async(input,init={})=>{
  return response;
 };
 process.on('message',async message=>{
- if(message.type==='hold-diagnostics'){holdDiagnostics=true;return;}
+ if(message.type==='hold-diagnostics'){holdDiagnostics=true;process.send?.({type:'diagnostics-armed'});return;}
  if(message.type==='release-diagnostics'){releaseDiagnostics?.();return;}
  if(message.type==='hold-capture'){holdCapture=true;return;}
  if(message.type==='release-capture'){releaseCapture?.();return;}

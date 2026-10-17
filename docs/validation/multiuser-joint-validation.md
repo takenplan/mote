@@ -1849,3 +1849,36 @@ no additional OCR call. A prior sandbox loopback EPERM is retained separately
 in `image-version-green`; it did not execute the intended journey. This narrow
 closure does not supersede the still-failed combined gate or establish whole
 module acceptance.
+
+### Retired child retry versus logical ACK and physical occupancy
+
+The failed combined gate exposed an obsolete expectation that a generic M05
+retry could revive an extraction child after its coordinator was cancelled or
+retired. Exact-original/parent selection reproduces409 in both scenarios
+(`/tmp/mote-joint-physical-ack-exact-fixture-red.log/.exit`). KEEP the existing
+`task_retry_invalid` fence; no production authorization check was loosened.
+The scenarios now verify rejected generic retry rolls back its confirmation,
+foreign-owner acknowledgement is rejected, and the existing trusted host-only
+logical acknowledgement records exactly one confirmation without settling the
+issued fact. They then execute the original HTTP fresh-operation/retry checks:
+physical occupancy still409, calls remain1, other A/equal-ID B succeed, late
+settlement permits a genuinely new operation, and cancelled work does not revive
+through restart, portable import or native restore. Target pair2/2,8.852s; full
+both-file matrix5/5,18.709s EXIT0 (`physical-ack-contract-green`,
+`physical-ack-contract-neighbors`). This supersedes only the obsolete200 setup,
+not any required occupancy assertion.
+
+### Combined-gate fixture ordering and restored Imports
+
+Web metadata now requires the restored scoped Imports route and resolves its
+owned empty list; the old assertion that Imports must be absent was superseded
+by this feature's original Imports restoration. Library canonical membership
+and A/B assertions are retained. Image complete/recompute waits for its exact
+original's real M05 coordinators to leave waiting/running before submitting the
+next operation; publication or a failed child alone is not physical completion.
+Both actual journeys2/2 EXIT0,8.206s (`gate-fixtures-scoped-green`). Desktop
+retirement now receives an explicit fixture IPC arm acknowledgement and awaits
+the real diagnostics entry event inside the unchanged15s overall test budget.
+Same actual main/preload journey1/1 EXIT0,3.66s (`desktop-retirement-ack-green`),
+35 unrelated cases filtered. Product cancellation/occupancy/session guards are
+unchanged. These narrow results do not relabel the earlier failed full gate.
