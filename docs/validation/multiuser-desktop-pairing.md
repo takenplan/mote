@@ -219,3 +219,68 @@ are unchanged. The entire real plugin/Ingress file then passed **9/9**, exit 0,
 in 17.421 s: `/tmp/mote-desktop-v2-plugin-pid-source-green.log/.exit`, tested blob
 `b03b075120e49df1a17db58010e435549aaecc6f`. No production code, shutdown policy
 or timeout was changed. A new complete affected run is required.
+
+## Canonical evidence and specific completion observations
+
+Complete attempt 7 at `27fc85e2961310dac0b76682b18dc778370b6240` naturally
+exited 1 with identical before/after SHA, from 02:28:29Z to 02:58:59Z on
+2026-10-17. Desktop passed 587/587, Server had 2,634 passes, three failures,
+one skip and zero cancellations, Web passed 515/515, Agent had 317 passes and
+one skip, Diagnostics passed 5/5 and Shared passed 192/192. Evidence:
+`/tmp/mote-desktop-v2-affected-attempt7.*` and `.result.json`. Root scripts and
+Android were short-circuited in that command. The exact root post-workspace
+commands separately passed on unchanged `27fc85e2`: 81/81 root-script tests,
+5/5 CLI tests and Central runner exit 0, with generated temporary data:
+`/tmp/mote-desktop-v2-root-extras-result.json`.
+
+Two Server failures were fixture completion observations. Ordered subtasks
+reached both original disclosures and parent validation when the 20-second
+observation expired. The automatic Insight scenario reached its completion
+observation with both A/B windows running and no task error; its initial real
+61-second interval, frozen snapshot and revocation assertions were not failures.
+An original isolated ordered case passed in 18.107 s. Same-source one-call
+60-second probes retained all business assertions: ordered completion was
+17.191 s (21.907 s whole case), and the complete Insight scenario passed in
+81.983 s. Neither probe reproduced a greater-than-20-second completion wait;
+the recorded complete-run failures supply the actual timeout evidence. Timing
+causality and performance regression remain unestablished.
+
+Only the ordered call and post-interval Insight completion observation now use
+60 seconds. The shared 20-second helper default, production policies, real
+61-second interval, initial zero-model-call check and 120-second Node test
+bound are unchanged. Both corrected repository cases passed **2/2**, exit 0,
+102.149 s overall, with ordered 20.269 s and Insight 80.625 s:
+`/tmp/mote-desktop-v2-ask-observation-source-green.log/.exit`. All original
+child deduplication, exact citations, unit counts, B isolation, frozen model,
+stop/revocation and no-replay assertions remain.
+
+The third Server failure and a separate full Android failure used an obsolete
+raw-UUID-first assumption. Current `AskEvidence.evidence` rejects a raw capture
+once a visible Material references it. The SDK's first raw read returned
+`not_found`. Waiting for the actual organizer and then repeating the old read
+made this stable RED (1.301 s, exit 1); consuming the organizer's declared
+canonical reference passed the same actual SDK entry. The repository scenario
+then passed **1/1**, exit 0:
+`/tmp/mote-desktop-v2-mcp-canonical-source-green.log/.exit`. It preserves exact
+UTF-16 emoji windows, checks nonempty spans, uses the complete Material's actual
+text length including metadata, and rejects both raw fallback and B reads.
+No production evidence visibility was widened.
+
+The separately executed original Android full task had **351/352**, exit 1,
+with that first raw read returning 404. Its XML is retained in
+`/tmp/mote-desktop-v2-android-unit-red-results` and its result in
+`/tmp/mote-desktop-v2-android-unit-red-result.json`. The minimal test update
+follows M15 `c47a0a4cd28458c7363c3bf373162b39bd97faa7` only for that scenario:
+wait for actual Material matching owner/source/external ID, consume its declared
+canonical reference, assert raw 404, then retain source-disable and B 404.
+Full Android rerun passed **352/352 across 74 suites**, zero failures/errors/skips,
+exit 0, in 1m33s. Compilation and the unit task executed; 23 other tasks were
+up-to-date. Evidence: `/tmp/mote-desktop-v2-android-unit-green.log/.exit` and
+`-result.json`. This is local JVM/shared-contract validation, not instrumentation,
+emulator, APK, physical-device or live-provider acceptance.
+
+All three corrected source files remained byte-identical before/after these
+checks: `/tmp/mote-desktop-v2-acceptance-source-{before,after}.json`. Independent
+bounded reviews found no weakened authority or business assertion. These changes
+are tests/docs only; production and the native harness remain from `32f8215c`.
+A fresh complete affected run is still required.
