@@ -549,7 +549,9 @@ class MultiuserWorkerInstrumentedTest {
             var original:JSONObject?=null
             waitFor {val sources=a.get("/api/sources").getJSONArray("items");val source=(0 until sources.length()).map(sources::getJSONObject).singleOrNull {it.optString("kind")=="lark-docs"};if(source==null)false else {val rows=a.get("/api/ingress/sources/"+source.getString("id")+"/originals").getJSONArray("items");if(rows.length()==0)false else {original=rows.getJSONObject(0);true}}}
             assertNotNull(original);assertEquals(beforeB,b.get("/api/source-items").toString())
-            press("资料说明（选填）");ready();scenario.onActivity {activity->
+            press("资料说明（选填）");ready()
+            waitFor {var visible=false;scenario.onActivity {activity->visible=views(activity.window.decorView).filterIsInstance<android.widget.EditText>().any {it.hint.toString()=="可说明格式、时间、作者，以及哪些内容属于你。"}};visible}
+            scenario.onActivity {activity->
                 val texts=views(activity.window.decorView).filterIsInstance<android.widget.TextView>()
                 val editor=texts.filterIsInstance<android.widget.EditText>().singleOrNull {it.hint.toString()=="可说明格式、时间、作者，以及哪些内容属于你。"}
                 assertNotNull("Original source context editor must remain visible; actual generated labels="+texts.map {it.text.toString().take(180)},editor)
