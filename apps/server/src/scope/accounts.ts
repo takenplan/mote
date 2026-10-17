@@ -74,6 +74,13 @@ export class Accounts implements IdentityVerifier {
   assertCsrf(context:UserContext,authority:UserContextAuthority,value:unknown){const c=this.assertContext(context,authority);if(c.kind!=='web'||typeof value!=='string'||!c.csrf_hash||digest(value)!==c.csrf_hash)throw new AuthError('csrf_required',403);}
   /** Local operator bootstrap only, exposed by the stdin CLI, never HTTP. */
   async initialize(username:string,password:string){username=usernameSchema.parse(username);const record=await passwordRecord(password);return this.transaction(()=>{if(this.db.prepare('SELECT 1 FROM auth_accounts LIMIT 1').get())throw new AuthError('already_initialized',409);return this.insertAccount(username,record,true);});}
+  /** Fixed local-development bootstrap only. The operator entry checks the
+   * native loopback profile; ordinary account creation keeps passwordSchema. */
+  async initializeDevelopment(){
+    if(this.db.prepare('SELECT 1 FROM auth_accounts LIMIT 1').get())return false;
+    const salt=randomBytes(16).toString('hex'),record={salt,hash:(await derive('admin',salt)).toString('hex')};
+    return this.transaction(()=>{if(this.db.prepare('SELECT 1 FROM auth_accounts LIMIT 1').get())return false;this.insertAccount('admin',record,true);return true;});
+  }
   private insertAccount(username:string,record:{salt:string;hash:string},administrator:boolean){
     if(this.accountNamed(username))throw new AuthError('username_unavailable',409);
     const userId=randomUUID();this.db.prepare('INSERT INTO auth_accounts(user_id,username,password_salt,password_hash,administrator,created_at) VALUES(?,?,?,?,?,?)').run(userId,username,record.salt,record.hash,Number(administrator),this.clock());return summary(this.account(userId)!);

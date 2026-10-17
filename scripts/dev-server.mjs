@@ -3,13 +3,13 @@
 import { spawn } from 'node:child_process';
 import { startMediaWorkers } from './media-workers.mjs';
 import { createHash, randomUUID } from 'node:crypto';
-import { readFile, readdir, stat, rm } from 'node:fs/promises';
+import { readFile, readdir, stat, lstat, rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { repository, profilePaths, loadProfile, isolatedEnvironment, stopNative, withProfileLock, atomicJson, readJson } from './profile-lib.mjs';
+import { repository, profilePaths, initialize, loadProfile, isolatedEnvironment, stopNative, withProfileLock, atomicJson, readJson } from './profile-lib.mjs';
 
 const help = `Mote foreground debug server (macOS/Linux, Node 24+)
   node scripts/dev-server.mjs [--install] [--startup-timeout MS] [--profile NAME] [--home PATH]
@@ -17,7 +17,9 @@ const help = `Mote foreground debug server (macOS/Linux, Node 24+)
 Stops this profile's managed server, installs changed dependencies, builds the
 current checkout's libraries/server/web and stays attached.
 Ctrl+C stops the server and its children. --install forces npm ci.
-Uses existing native development profiles; prod and port 47832 are excluded.
+Creates a missing native development profile and an empty account database's
+local admin/admin account. Existing profiles and accounts are preserved.
+Prod, non-loopback hosts and port 47832 are excluded.
 Existing tunnel connections keep using the same port. Deployment selection is unchanged.`;
 
 const DEFAULT_STARTUP_TIMEOUT_MS = 120_000;
@@ -124,12 +126,25 @@ export function serverEnvironment(p) {
   return isolatedEnvironment(p);
 }
 
+export async function developmentProfile(options = {}) {
+  const paths = profilePaths(options.profile ?? 'dev', options.home);
+  if (paths.profile === 'prod') throw Error('dev-server requires a native development profile, not prod');
+  try { await lstat(paths.directory); }
+  catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    await initialize(paths, { runtime: 'native' });
+    console.info(`[dev] Created isolated native ${paths.profile} profile.`);
+  }
+  const p = await loadProfile(paths);
+  if (p.port === 47832 || p.meta.runtime !== 'native' || !['127.0.0.1', '::1', 'localhost'].includes(p.env.MOTE_HOST)) throw Error('dev-server requires a loopback native development profile, not prod');
+  return p;
+}
+
 export async function runDevServer(options = {}, root = repository) {
   if (process.platform === 'win32' || Number(process.versions.node.split('.')[0]) < 24) throw Error('Use macOS/Linux with Node.js 24 or newer');
-  const p = await loadProfile(profilePaths(options.profile ?? 'dev', options.home));
-  if (p.profile === 'prod' || p.port === 47832 || p.meta.runtime !== 'native') throw Error('dev-server requires an existing native development profile, not prod');
   const startupTimeoutMs = options.startupTimeoutMs === undefined ? DEFAULT_STARTUP_TIMEOUT_MS : Number(options.startupTimeoutMs);
   if (!Number.isInteger(startupTimeoutMs) || startupTimeoutMs < 1000 || startupTimeoutMs > 600_000) throw Error('--startup-timeout must be an integer between 1000 and 600000 milliseconds');
+  const p = await developmentProfile(options);
   const controller = new AbortController(), { signal } = controller;
   const interrupt = () => { if (!signal.aborted) console.info('\n[dev] Stopping…'); controller.abort(); };
   for (const name of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(name, interrupt);
@@ -144,6 +159,11 @@ export async function runDevServer(options = {}, root = repository) {
       signal.throwIfAborted();
       await assertFreePort(p);
       const version = JSON.parse(await readFile(join(root, 'apps/server/package.json'), 'utf8')).version;
+      const bootstrap = await startCommand(process.execPath, [join(root, 'apps/server/dist/scope/initialize-development.js')], {
+        cwd: root, env: serverEnvironment(p), signal,
+      }).done;
+      signal.throwIfAborted();
+      if (bootstrap.code !== 0) throw Error('Development account initialization failed; no server was started');
       marker = randomUUID();
       workers = startMediaWorkers({ root, env: serverEnvironment(p), signal });
       server = startCommand(process.execPath, [join(root, 'apps/server/dist/index.js'), `--mote-instance=${marker}`], {
@@ -167,7 +187,6 @@ export async function runDevServer(options = {}, root = repository) {
         await sleep(100, undefined, { signal });
       }
       console.info(`[dev] Mote ${version} (${p.profile}) ready at ${p.url}. Web rebuilt. Ctrl+C to stop.`);
-      console.info(`[dev] Owner token configured; use mote token --profile ${p.profile} when explicitly needed.`);
     });
     const result = await server.done;
     signal.throwIfAborted();
