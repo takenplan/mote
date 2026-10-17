@@ -1,0 +1,20 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {randomUUID} from 'node:crypto';
+import {modelFixture} from './fixtures/scoped-actions.js';
+import {waitForState} from './fixtures/scoped-query-accounts.js';
+import {writeMessagesResponse} from '../../../scripts/fixtures/messages-provider.js';
+
+test('actual opted-in Agent inputs retain their owner and actual tool results, never reconstruct missing or retired input',async t=>{
+ const f=await modelFixture(t);for(const owner of ['A','B'])f.scripts.set(owner,(body,raw,res)=>{const uses=body.messages.flatMap((m:any)=>Array.isArray(m.content)?m.content.filter((p:any)=>p.type==='tool_use'):[]),stage=uses.length+1;if(!uses.some((u:any)=>u.name==='material_catalog'))return writeMessagesResponse(res,{stage,tool:{name:'material_catalog',args:{limit:12}}});const ref=raw.match(/material:mat_[a-f0-9]{64}@[a-f0-9]{64}/)?.[0];assert.ok(ref);if(!uses.some((u:any)=>u.name==='material_read'))return writeMessagesResponse(res,{stage,tool:{name:'material_read',args:{ref,length:4000}}});const id=raw.match(/capture:([a-f0-9-]{36})/)?.[1];assert.ok(id);writeMessagesResponse(res,{stage,text:JSON.stringify({answer:'Generated actual '+owner+' answer ['+id+']',citationIds:[id]})});});
+ for(const [user,label]of [[f.a,'A'],[f.b,'B']] as const)await f.ingest(user,label);
+ const view=await f.ok(f.a.token,'/api/configuration'),diagnostics=view.domains.find((d:any)=>d.id==='diagnostics');await f.ok(f.a.token,'/api/configuration/diagnostics','PUT',{revision:view.revision,value:{...diagnostics.effective,traceEnabled:true}});
+ const runs=[];for(const [user,label]of [[f.a,'A'],[f.b,'B']] as const){const id=randomUUID();runs.push(id);await f.ok(user.token,'/api/query-runs','POST',{id,input:{question:'Generated exact '+label+' startup input'}});const run=await waitForState(()=>f.ok(user.token,'/api/query-runs/'+id),value=>value.status!=='running','actual query');assert.equal(run.status,'completed',JSON.stringify(run));}
+ const a=await f.request(f.a.token,'/api/agent-view/events?runId='+runs[0]+'&limit=2');assert.equal(a.statusCode,200,a.body);const page=a.json();assert.equal(page.recording.enabled,true);assert.ok(page.nextCursor);let items=page.items,cursor=page.nextCursor;
+ while(cursor){const next=await f.ok(f.a.token,'/api/agent-view/events?'+new URLSearchParams({runId:runs[0],limit:'2',cursor}));items.push(...next.items);cursor=next.nextCursor;}
+ assert.ok(items.some((e:any)=>e.trace.type==='context.assembled'&&e.trace.payload?.prompt?.includes('Generated exact A startup input')),'only recorded initial input is displayed');assert.ok(items.some((e:any)=>e.trace.type==='tool.completed'&&JSON.stringify(e.trace.payload).includes('GENERATED_A_PRIVATE_APPOINTMENT')),'actual read payload remains distinguishable from access metadata');assert.doesNotMatch(JSON.stringify(items),/GENERATED_B_PRIVATE|Generated exact B|GENERATED_A_KEY/);
+ assert.equal((await f.request(f.b.token,'/api/agent-view/events?'+new URLSearchParams({runId:runs[0],limit:'2',cursor:page.nextCursor}))).statusCode,400,'opaque cursor never crosses owner');assert.equal((await f.request(f.admin.token,'/api/agent-view/events?runId='+runs[0])).statusCode,404,'administrator has no private trace grant');
+ const b=await f.ok(f.b.token,'/api/agent-view/events?runId='+runs[1]);assert.equal(b.recording.enabled,false);assert.ok(b.items.length);assert.ok(b.items.every((e:any)=>e.trace.payload===undefined),'disabled tracing cannot synthesize private input from current configuration');
+ const listing=await f.ok(f.a.token,'/api/agent-view/runs');assert.ok(listing.items.some((run:any)=>run.runId===runs[0]));assert.ok(!listing.items.some((run:any)=>run.runId===runs[1]));
+ await f.ok(f.a.token,'/api/sources/same-source','PATCH',{enabled:false});assert.equal((await f.request(f.a.token,'/api/agent-view/events?runId='+runs[0])).statusCode,404,'retired original cannot disclose a saved prompt');assert.equal((await f.request(f.b.token,'/api/agent-view/events?runId='+runs[1])).statusCode,200);
+});
