@@ -26,18 +26,19 @@ function validLibraryDay(value:string){
     return Number.isFinite(date.getTime())&&date.getFullYear()===Number(value.slice(0,4))&&date.getMonth()+1===Number(value.slice(5,7))&&date.getDate()===Number(value.slice(8,10));
 }
 /** A single object browser: wide screens keep the list, narrow screens return to it. */
-export function LibraryBrowseLayout({ children, reference, api, onClose, onOpen, supporting = false }: {
+export function LibraryBrowseLayout({ children, reference, api, onClose, onOpen, supporting = false, detail }: {
     children: ReactNode;
     reference?: string;
     api: Api;
     onClose: () => void;
     onOpen: (ref: string) => void;
     supporting?: boolean;
+    detail?: ReactNode;
 }) {
     return <div className={'library-browser' + (reference ? ' has-selection' : '') + (supporting ? ' supporting' : '')}>
     <div className="library-master" aria-label={moteText('资料列表')}>{children}</div>
     <section className="library-detail" aria-label={moteText('资料详情')}>
-      {reference ? <><header className="library-detail-heading"><button className="text-button library-back" onClick={onClose}><ArrowLeft size={16}/>{moteText('返回资料列表')}</button><span>{moteText('资料详情')}</span><button className="icon-button library-close" aria-label={moteText('关闭详情')} onClick={onClose}><X size={17}/></button></header><LibraryReference key={reference} api={api} reference={reference} onOpen={onOpen}/></> : <Empty icon={FileText} title={moteText('选择一条资料')}><p>{moteText('在这里查看内容、原始来源和支持证据。')}</p></Empty>}
+      {reference ? <><header className="library-detail-heading"><button className="text-button library-back" onClick={onClose}><ArrowLeft size={16}/>{moteText('返回资料列表')}</button><span>{moteText('资料详情')}</span><button className="icon-button library-close" aria-label={moteText('关闭详情')} onClick={onClose}><X size={17}/></button></header>{detail??<LibraryReference key={reference} api={api} reference={reference} onOpen={onOpen}/>}</> : <Empty icon={FileText} title={moteText('选择一条资料')}><p>{moteText('在这里查看内容、原始来源和支持证据。')}</p></Empty>}
     </section>
   </div>;
 }

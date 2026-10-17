@@ -11,6 +11,6 @@ export type ViewValue={kind:string;schemaVersion:number;representation:string;re
 export type ViewProps={value:ViewValue;api:Api;onOpen:(ref:string)=>void;fallback?:ReactNode;catalog?:import('@mote/shared').LibraryTypeDescriptor};
 export type ViewEntry={id:string;version?:string;requires?:FeatureRequirement[];kind:string;schemaVersion:number;representation:string;render:(props:ViewProps)=>ReactNode};
 export type CollectionProps={api:Api;devices:Device[];range:Range;rangeSelectionKey?:string;activity:Activity;revision:number;onOpen:(ref:string)=>void;onChanged?:()=>void;selectedReference?:string;onBrowseChanged?:()=>void};
-export type CollectionEntry={id:string;featureId:string;label:string;order:number;version?:string;requires?:FeatureRequirement[];group?:'browse'|'records'|'views'|'processing';layout?:'browser'|'standalone';usesTimeRange?:boolean;render:(props:CollectionProps)=>ReactNode};
+export type CollectionEntry={id:string;featureId:string;label:string;order:number;version?:string;requires?:FeatureRequirement[];group?:'browse'|'records'|'views'|'processing';layout?:'browser'|'standalone';usesTimeRange?:boolean;render:(props:CollectionProps)=>ReactNode;renderDetail?:(props:{api:Api;reference:string;onOpen:(ref:string)=>void})=>ReactNode};
 
 export type ActionEntry=ViewEntry & {position:'card'|'detail'};
