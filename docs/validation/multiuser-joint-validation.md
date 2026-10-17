@@ -1199,3 +1199,17 @@ stale409 and sibling unchanged. Current four-file policy/relogin combination
 Server types and scope checker both0 in corresponding `-types`/`-scope` receipts.
 These backend entry checks do not establish client page integration or whole
 policy/final joint acceptance. Public limited consumer candidate remains2528.
+
+
+Plugin fixture timing characterization: a generated-only150ms hold after the
+real marker file open and before its write reproduces the exact stop failure
+with `GENERATED_PID_RAW="" PID=0`,1/1fail11.627s in
+`/tmp/mote-joint-plugin-marker-timing-red.log/.exit`. This PID probes a process
+group, not the worker. Publishing the generated PID via same-directory temporary
+file→rename, asserting a positive safe PID and requiring ESRCH, passes both
+stop/delete under the identical held-write timing2/2,4.630s
+(`/tmp/mote-joint-plugin-marker-timing-green.log/.exit`, actual86038/86052).
+Only the durable generated marker protocol is corrected; no production worker
+code changes. The ignored `.mote/joint-fixture-pid-probe*.test.ts` files preserve
+the deterministic timing instrumentation locally. The independent owner's
+original failed runs still need its own diagnostics/recheck before closure.
