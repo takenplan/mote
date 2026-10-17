@@ -23,9 +23,11 @@ with that original consent. No bearer credential exists merely from generation.
 
 M13 owns Web rendering and retirement of stale page operations. M15 owns Android
 scan/paste/JSON, pending PKCE storage, identity verification and account-generation
-fences. This producer does not change their consumers. M14 currently confirms an
-old invitation's origin and starts its own browser login; Desktop's QR parser and
-that consumer have not been migrated to v2 by this module.
+fences. This producer does not change their consumers. The separate Desktop v2 consumer restores native JSON/URI/QR import, durable
+PKCE recovery and exact fresh-self publication; see its
+[design and supersession](multiuser-desktop-pairing.md) and
+[executed acceptance](../validation/multiuser-desktop-pairing.md). This producer's
+evidence alone does not establish consumer acceptance.
 
 ## Frozen HTTP contract
 
