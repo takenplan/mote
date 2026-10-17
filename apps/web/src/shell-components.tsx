@@ -388,6 +388,8 @@ export function EvidenceDialog({
   const parsedRef=parseEvidenceRef(id),captureRef=parsedRef?.kind==='capture';
   const captureId=captureRef?parsedRef.id:undefined;
   const {data:capture,error:readError}=useResource<Capture>(api,captureRef?`/api/${api.connection?.mode==='web'?'captures':'capture-browser'}/${encodeURIComponent(captureId!)}`:null);
+  // Human raw metadata stays available independently of the owned file reader.
+  const fileAdvertisement=useResource<Pick<Capture,'fileArchive'>>(api,api.connection?.mode==='web'&&captureRef&&capture?.source==='file'&&!capture.fileEvidence&&!capture.fileArchive?`/api/capture-browser/${encodeURIComponent(captureId!)}`:null);
   useOperationUpdates(api);
   const [mutationError,setError]=useState('');
   const error=mutationError||(readError?errorMessage(readError):'');
@@ -420,7 +422,7 @@ export function EvidenceDialog({
       setBusy(false);
     }
   }
-  const presentation = capture ? evidencePresentation(capture) : null;
+  const presentation = capture ? evidencePresentation({...capture,fileArchive:capture.fileArchive??fileAdvertisement.data?.fileArchive}) : null;
   // Decode only the server-declared organizer format; user prose that resembles JSON stays literal.
   const sourceBody=capture?.evidencePresentation==='source-record-json-v1'?decodeSourceText(capture.evidencePresentation,capture.ocrText):undefined;
   const readableText=sourceBody?.kind==='source'?sourceBody.text:capture?.ocrText;
