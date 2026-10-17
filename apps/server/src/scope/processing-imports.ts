@@ -97,7 +97,9 @@ export function processingImports(runtime:ScopedRuntime,db:DatabaseSync,ingress:
     privateFile(manifest,true);const decoded=await formatWork({kind:'plain',inputs,createdAt:job.createdAt,manifest},run.signal);run.grant.assert();bound(run.context,input);partial=decoded.partial;
     const bytes=readFileSync(manifest);if(bytes.length>32*1024*1024||createHash('sha256').update(bytes).digest('hex')!==decoded.hash)throw conflict();records=readRecords(manifest);if(records.length!==decoded.count)throw conflict();warnings=decoded.warnings;
     if(deterministic(job)){decision={confidence:partial?'low':'high',ambiguous:false,reason:partial?'Decoding reported incomplete coverage.':'Deterministic document decoding preserved original text without inferred attribution or dates.'};dispositions=inputs.map(({file})=>({fileId:file.id,status:'parsed',reason:'Deterministic document decoding preserved original text.'}));}
-    else{const mapped=await mapImportPreview(run,job,records,root,()=>{run.grant.assert();bound(run.context,input);});records=mapped.records;summary=mapped.summary;warnings=[...warnings,...mapped.warnings].slice(0,200);decision=mapped.reviewDecision;dispositions=mapped.dispositions;}
+    // The host accounts for containers, metadata and media independently. A
+    // text mapper may describe only the originals its reader actually exposes.
+    else{const mapped=await mapImportPreview(run,{...job,files:inputs.map(input=>input.file)},records,root,()=>{run.grant.assert();bound(run.context,input);});records=mapped.records;summary=mapped.summary;warnings=[...warnings,...mapped.warnings].slice(0,200);decision=mapped.reviewDecision;dispositions=mapped.dispositions;}
    }
    const lookup=(id:string)=>{const path=inputs.find(input=>input.file.id===id)?.path;if(!path)throw conflict();return path;};
    privateFile(manifest,true);writeFileSync(manifest,records.map(record=>JSON.stringify({...record,evidencePaths:record.evidencePaths.map(lookup),attachments:record.attachments.map(lookup)})+'\n').join(''),{mode:0o600});
