@@ -8467,5 +8467,8 @@
   "为此设备重新生成邀请": "Create another invitation for this device",
   "绑定原设备：{0}": "Bound original device: {0}",
   "实例级执行与诊断设置由部署操作者管理；客户端仍可修改本账号的模型和处理设置。": "Instance execution and diagnostics settings are managed by the deployment operator. You can still edit this account’s model and processing settings in the client.",
-  "只清除此设备的待确认请求，不撤销中央已接受的删除，也不恢复文件。": "This only clears the pending request on this device. It does not undo a deletion accepted by the central node or restore the file."
+  "只清除此设备的待确认请求，不撤销中央已接受的删除，也不恢复文件。": "This only clears the pending request on this device. It does not undo a deletion accepted by the central node or restore the file.",
+  "详细记录设置": "Detailed recording settings",
+  "详细记录可能包含问题、上下文、模型输出和工具内容，仅对当前账号生效。关闭后停止新增详细内容，已保留记录不会自动删除。": "Detailed recordings may contain questions, context, model output and tool content. This setting applies only to this account. Turning it off stops new detailed content; retained recordings are not automatically deleted.",
+  "仅显示实际保留的记录；关闭详细记录不会重建缺失内容，截断记录不代表完整读取。": "Only retained recordings are shown. Disabling detailed recording does not reconstruct missing content, and truncated records do not prove a complete read."
 }

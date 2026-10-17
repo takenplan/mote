@@ -237,6 +237,7 @@ internal class CentralAdmin(private val screens: CentralScreens) {
             val domains = view.getJSONArray("domains")
             val value = (0 until domains.length()).map { domains.getJSONObject(it) }.single { it.getString("id") == domainId }.getJSONObject("saved")
             body.removeAllViews(); screens.setBack(back); ui.text(title, NativeFontRole.TITLE_MOBILE)
+            if (domainId == "agentTrace") ui.text(MoteI18n.text("详细记录可能包含问题、上下文、模型输出和工具内容，仅对当前账号生效。关闭后停止新增详细内容，已保留记录不会自动删除。"))
             if (domainId == "models") ui.text(MoteI18n.text("模型预设和默认选择保存在本人配置；复制带凭据、测试连接和模型目录尚待多用户接口。"))
             val collect = form(value, ui.card(), emptySet())
             ui.button(MoteI18n.text("保存设置"), true) {
@@ -618,9 +619,27 @@ internal class CentralAdmin(private val screens: CentralScreens) {
                 } else agentDetail(row, path)
             }
         }
-        ui.button(MoteI18n.text("实际读取记录")) { read("/api/agent-view/events?afterSeq=0") }
+        ui.button(MoteI18n.text("详细记录设置")) { ownedConfiguration(MoteI18n.text("详细记录设置"), "agentTrace", { agent(path) }, { agent(path) }) }
+        ui.button(MoteI18n.text("实际读取记录")) { agentTraceHistory() }
         val question = ui.field(MoteI18n.text("你的问题"), multiline = true)
         ui.button(MoteI18n.text("首次上下文"), true) { action("/api/agent-view/startup", JSONObject().put("question", question.text.toString()).put("timeZone", ZoneId.systemDefault().id)) { values(it, ui.card()) } }
+    }
+    private fun agentTraceHistory(runId: String? = null) {
+        val api = client
+        ui.work(MoteI18n.text("正在读取…"), { api.get("/api/agent-view/runs") }) { runs ->
+            body.removeAllViews(); screens.setBack { agent() }
+            ui.text(MoteI18n.text("实际读取记录"), NativeFontRole.TITLE_MOBILE)
+            ui.text(MoteI18n.text("仅显示实际保留的记录；关闭详细记录不会重建缺失内容，截断记录不代表完整读取。"))
+            values(runs.getJSONObject("recording"), ui.card())
+            if (runId != null) ui.button(MoteI18n.text("全部")) { agentTraceHistory() }
+            val items = runs.getJSONArray("items")
+            for (index in 0 until items.length()) {
+                val run = items.getJSONObject(index); val id = UUID.fromString(run.getString("runId")).toString()
+                ui.button(run.getString("at") + " · " + id) { agentTraceHistory(id) }
+            }
+            val path = "/api/agent-view/events?limit=12" + (runId?.let { "&runId=" + enc(it) } ?: "")
+            library.paged(path, ui.card()) { event, card -> values(event, card) }
+        }
     }
     private fun agentDetail(row: JSONObject, path: String, offset: Int = 0) {
         val kind = row.optString("expand")
