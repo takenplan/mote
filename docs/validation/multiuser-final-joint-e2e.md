@@ -10,10 +10,9 @@ dependency. Its required affected check naturally exited0 (Server2940pass,
 2existing skips), all10 distinct restored recovery scenarios passed, and the
 compiled HTTP replay passed3/3. Its [separate receipt and repeat instructions](multiuser-recovery-source-completion.md)
 retain the new SHA/manifest/image and original C2 results without relabelling.
-All28 multiuser PRs now have source/test/design coverage; actual Web acceptance
-and the parent's explicit release remain prerequisites to any PR closing.
+All28 multiuser PRs have source/test/design coverage and, after the parent's explicit release, are now closed unmerged as superseded by PR159. Actual Web acceptance remains incomplete with the unchecked TODOs below; closure is not full acceptance.
 
-The tested tree is `fcb3bce1524932978ad7133377aaa56136a3dcc1`, based on integration/main `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`, verified again remotely before publication. The later publication commits contain documentation and archival driver source only. They do not replace the tested SHA.
+The tested tree is `fcb3bce1524932978ad7133377aaa56136a3dcc1`, based on integration/main `6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed`, verified again remotely before publication. Later publication commits restore test/document inputs and record the separately executed0cfe successor. The subsequent personal-path cleanup also parameterizes three opt-in validation scripts, verified by eight isolated parameter/syntax checks and scripts strict typechecking; original data/model runtime tests and the full gate were not rerun for that cleanup. None of these edits relabels the original tested C2 SHA.
 
 - [Immutable consumption manifest](multiuser-final-c2-consumption.json): SHA256 `3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a`, covering all 2,823 tested tracked files and build inputs.
 - [Machine receipts and boundaries](multiuser-final-c2-receipts.json): component counts, command/log hashes, artifact identity, independent owner receipts and historical failures.
@@ -111,7 +110,7 @@ No main/integration merge, deployment, CI enabling, real central private data or
 
 ## Deferred Web acceptance TODOs
 
-The user has accepted keeping these items in the Draft PR for later execution. All remain unchecked; passing non-browser gates does not complete them. The current privacy hold independently prevents PR closing until the parent decides otherwise.
+The user has accepted keeping these items in the Draft PR for later execution. All remain unchecked; passing non-browser gates does not complete them. The historical privacy hold was released by the parent after combined review and disclosure of historical limits; all28 superseded PRs were confirmed closed unmerged at `2026-10-17T13:11:22.335443+00:00`. This does not complete these TODOs.
 
 - [ ] Complete A re-login, failed account switch, logout, revocation and disabled-account original-page journeys with B positive controls.
 - [ ] Inject lost storage notification and verify stale visible approval/poll retirement, pagination/streaming and late-response isolation through the supported browser workflow.

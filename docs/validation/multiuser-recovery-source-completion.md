@@ -117,3 +117,7 @@ missing paths. The original audit gaps and historical failing gates remain
 recorded. Separate real Web acceptance is still incomplete; PR143/145–148 stay
 independent. No source-completion result authorizes closing any PR before the
 parent's explicit release after the combined privacy review. The user has accepted the remaining Web cases as deferred PR TODOs; this does not turn them into passes.
+
+## Later consolidation outcome
+
+The source-completion phase above made no closing mutations. After the later current-tree privacy cleanup and combined independent review, the parent explicitly released consolidation with historical privacy limits disclosed and real-Web cases deferred. All28 covered temporary PRs were closed unmerged; the five independent PRs remain open and PR159 remains Open Draft. [The final closure receipt](multiuser-pr159-consolidation-result.json) records the actual readback time, exact heads/bases and28 comment links. This metadata update does not relabel any test execution.

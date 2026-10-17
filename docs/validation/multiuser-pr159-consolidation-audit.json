@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "purpose": "Read-only consolidation audit; no PR closing/commenting/merging or branch deletion",
+  "purpose": "Source/test/design audit and final explicitly authorized unmerged consolidation result",
   "auditedAtClientTime": "2026-10-17T18:41:55.466341+08:00",
   "testedCandidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
   "candidateTree": "fcb3bce1524932978ad7133377aaa56136a3dcc1",
@@ -8,16 +8,10 @@
   "publicationHeadAtAudit": "2bc7e3f19cbde9c825057122850d8a23f386da90",
   "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
   "counts": {
-    "REPLACE_AFTER_ACCEPTANCE": 28,
+    "CLOSED_SUPERSEDED_UNMERGED": 28,
     "UNRELATED_KEEP": 5,
     "TARGET_KEEP": 1
   },
-  "closurePrerequisites": [
-    "Keep actual Web acceptance incomplete with explicit unchecked PR TODOs; later user direction permits deferral",
-    "Parent explicitly decides closing after the combined privacy audit; currently paused",
-    "Refresh every remote PR head and rerun comparison if any drift before closure",
-    "Retain all branches/commits and exclude143/145-148; no mechanical merges"
-  ],
   "method": [
     "Fetched all34 refs/pull/N/head and matched exact GitHub API heads",
     "Compared each PR merge-base diff against actual tested C2 and publication tree; counted exact/evolved/absent Git blobs",
@@ -37,7 +31,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M00 scope foundation",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 89,
@@ -61,7 +55,22 @@
         "evolved": 16
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 126,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:18Z",
+        "draft": true,
+        "head": "5031b754915d3fbba0dbe0c050b6d103a02966ef",
+        "headRef": "codex/mote-multiuser-m00-scope",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/126",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/126#issuecomment-6234232800"
+      }
     },
     {
       "number": 127,
@@ -74,7 +83,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M01 accounts/auth/admin",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 98,
@@ -98,7 +107,22 @@
         "evolved": 25
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 127,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:26Z",
+        "draft": true,
+        "head": "443726d2a95ef55db9466d06aa44ea1061ca56e4",
+        "headRef": "codex/mote-multiuser-m01-auth",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/127",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/127#issuecomment-6234234293"
+      }
     },
     {
       "number": 128,
@@ -111,7 +135,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "M02 private repositories/indexes",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 96,
@@ -164,7 +188,22 @@
         "evolved": 21
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 128,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:37Z",
+        "draft": true,
+        "head": "8ecccb8ecf0093cc655fadd8bbc5e1637220f9fd",
+        "headRef": "codex/mote-multiuser-m02-data",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/128",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/128#issuecomment-6234235699"
+      }
     },
     {
       "number": 129,
@@ -177,7 +216,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "M04 configuration/models/snapshots/usage",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 106,
@@ -233,7 +272,22 @@
         "evolved": 33
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 129,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:46Z",
+        "draft": true,
+        "head": "bc5323e1b5ee337c20dee58d4a8e9c25bc2adbbf",
+        "headRef": "codex/mote-multiuser-m04-config",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/129",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/129#issuecomment-6234237592"
+      }
     },
     {
       "number": 130,
@@ -246,7 +300,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M05 execution/Operations/scheduler",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 122,
@@ -270,7 +324,22 @@
         "evolved": 38
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 130,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:06:58Z",
+        "draft": true,
+        "head": "7f72e9040872dbbb351f3c9a22afa6f069aa59c8",
+        "headRef": "codex/mote-multiuser-m05-execution",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/130",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/130#issuecomment-6234239207"
+      }
     },
     {
       "number": 131,
@@ -283,7 +352,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "M03 originals/Ingress",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 129,
@@ -335,7 +404,22 @@
         "evolved": 46
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 131,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:07Z",
+        "draft": true,
+        "head": "b1f6700a7e68b60318b7b05f631a47d12fd93c24",
+        "headRef": "codex/mote-multiuser-m03-ingress",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/131",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/131#issuecomment-6234240803"
+      }
     },
     {
       "number": 132,
@@ -348,7 +432,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M09 scoped plugins",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 139,
@@ -372,7 +456,22 @@
         "evolved": 51
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 132,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:16Z",
+        "draft": true,
+        "head": "cdc5c34c36fc5743049007ee2c76d705fde3dd7f",
+        "headRef": "codex/mote-multiuser-m09-plugins",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/132",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/132#issuecomment-6234242170"
+      }
     },
     {
       "number": 133,
@@ -385,7 +484,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M06 OCR/ASR/derived files",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 153,
@@ -409,7 +508,22 @@
         "evolved": 56
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 133,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:26Z",
+        "draft": true,
+        "head": "470516b7ed4ab7ee8b0fba344883c6b42bb7ce56",
+        "headRef": "codex/mote-multiuser-m06-processing",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/133",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/133#issuecomment-6234243535"
+      }
     },
     {
       "number": 134,
@@ -422,7 +536,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M10 connectors/provider intake",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 170,
@@ -446,7 +560,22 @@
         "evolved": 59
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 134,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:36Z",
+        "draft": true,
+        "head": "7572b573b03437ff743652c13181b9fdcf251fda",
+        "headRef": "codex/mote-multiuser-m10-connectors",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/134",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/134#issuecomment-6234245329"
+      }
     },
     {
       "number": 135,
@@ -459,7 +588,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "Public isolation/validation contracts",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 170,
@@ -482,7 +611,22 @@
         "evolved": 59
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 135,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:46Z",
+        "draft": true,
+        "head": "094b69d0c4d623a3b478ae4c05ee249b024ba73b",
+        "headRef": "codex/mote-multiuser-public-review",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/135",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/135#issuecomment-6234246837"
+      }
     },
     {
       "number": 136,
@@ -495,7 +639,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M07 Memory",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 220,
@@ -519,7 +663,22 @@
         "evolved": 69
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 136,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:07:58Z",
+        "draft": true,
+        "head": "cd7a306cce0f6cd5fec3c9e91e6dee0761352115",
+        "headRef": "codex/mote-multiuser-m07-memory",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/136",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/136#issuecomment-6234248660"
+      }
     },
     {
       "number": 137,
@@ -532,7 +691,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M08 Ask/chat/Insight",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 245,
@@ -556,7 +715,22 @@
         "evolved": 77
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 137,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:07Z",
+        "draft": true,
+        "head": "58944f00837c89bc1d302ecd7be7a568db4abe44",
+        "headRef": "codex/mote-multiuser-m08-ask",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/137",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/137#issuecomment-6234250353"
+      }
     },
     {
       "number": 138,
@@ -569,7 +743,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M11 MCP inbound/outbound",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 253,
@@ -593,7 +767,22 @@
         "evolved": 74
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 138,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:20Z",
+        "draft": true,
+        "head": "98d76945e091d7234217ebcf532ebeff3350937c",
+        "headRef": "codex/mote-multiuser-m11-mcp",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/138",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/138#issuecomment-6234252331"
+      }
     },
     {
       "number": 139,
@@ -606,7 +795,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M14 Desktop account capture",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 445,
@@ -630,7 +819,22 @@
         "evolved": 119
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 139,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:29Z",
+        "draft": true,
+        "head": "cd46f25a030bdbe593bc138adc375577b4d032ae",
+        "headRef": "codex/mote-multiuser-m14-desktop",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/139",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/139#issuecomment-6234253571"
+      }
     },
     {
       "number": 140,
@@ -643,7 +847,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M12 Actions/todos/calendar",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 434,
@@ -667,7 +871,22 @@
         "evolved": 124
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 140,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:38Z",
+        "draft": true,
+        "head": "a50d1c88647780ebd27d7a247ec4ffbc170ab87f",
+        "headRef": "codex/mote-multiuser-m12-actions",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/140",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/140#issuecomment-6234254991"
+      }
     },
     {
       "number": 141,
@@ -680,7 +899,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M16 lifecycle/portable recovery",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 434,
@@ -704,7 +923,22 @@
         "evolved": 125
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 141,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:08:50Z",
+        "draft": true,
+        "head": "eec967c66304fef78f683e3445900287e75bac21",
+        "headRef": "codex/mote-multiuser-m16-lifecycle",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/141",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/141#issuecomment-6234256494"
+      }
     },
     {
       "number": 142,
@@ -717,7 +951,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "Container/Hindsight epoch-5 validation",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 438,
@@ -741,7 +975,22 @@
         "evolved": 123
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 142,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:00Z",
+        "draft": true,
+        "head": "723cc0b794fc331fc0f9e10512a6b4e45a2de4bb",
+        "headRef": "codex/mote-multiuser-container-validation",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/142",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/142#issuecomment-6234258260"
+      }
     },
     {
       "number": 143,
@@ -1070,7 +1319,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M01 account-bound QR pairing",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 460,
@@ -1093,7 +1342,22 @@
         "evolved": 120
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 144,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:10Z",
+        "draft": true,
+        "head": "48547e8f04a4df76724cb286df32d44f2ecc013b",
+        "headRef": "codex/mote-multiuser-qr-pairing",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/144",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/144#issuecomment-6234259580"
+      }
     },
     {
       "number": 145,
@@ -1290,7 +1554,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "Desktop v2 PKCE durable recovery",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 449,
@@ -1314,7 +1578,22 @@
         "evolved": 106
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 149,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:20Z",
+        "draft": true,
+        "head": "f319513a050218230d624cf93e4154bba5649b15",
+        "headRef": "codex/mote-desktop-v2-pairing",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/149",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/149#issuecomment-6234261289"
+      }
     },
     {
       "number": 150,
@@ -1327,7 +1606,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "Personal applied-policy archive/recovery",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 475,
@@ -1535,7 +1814,7 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent and actual Web acceptance still required before closing.",
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent subsequently released closing after combined review; real Web cases remain explicit unchecked TODOs.",
       "originalC2PathCounts": {
         "exact": 715,
         "evolved": 118,
@@ -1622,7 +1901,22 @@
       "absentPaths": [],
       "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
       "initialClassification": "PARTIAL_HOLD",
-      "initialReason": "Production processing-policy-archive.ts, its core test and design are byte-identical to PR150 head; seven recovery test/fixture/runner paths and two validation reports absent. Archived compiled-HTTP preparation still reads the missing task-7 source test externally. Hold for durable self-contained recovery source closure."
+      "initialReason": "Production processing-policy-archive.ts, its core test and design are byte-identical to PR150 head; seven recovery test/fixture/runner paths and two validation reports absent. Archived compiled-HTTP preparation still reads the missing task-7 source test externally. Hold for durable self-contained recovery source closure.",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 150,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:30Z",
+        "draft": true,
+        "head": "67b992f32016ac5d31f4da265ff0e02cfb2e12bd",
+        "headRef": "codex/mote-policy-personal-archive",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/150",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/150#issuecomment-6234262696"
+      }
     },
     {
       "number": 151,
@@ -1635,7 +1929,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "Named/typed image progress and export",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 510,
@@ -1921,7 +2215,22 @@
         "evolved": 92
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 151,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:42Z",
+        "draft": true,
+        "head": "98b1ea52c4462f1e3f63dee09e3b35645389109a",
+        "headRef": "codex/mote-scoped-image-progress",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/151",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/151#issuecomment-6234264192"
+      }
     },
     {
       "number": 152,
@@ -1934,7 +2243,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "Original recording consumers",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 501,
@@ -1958,7 +2267,22 @@
         "evolved": 108
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 152,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:09:52Z",
+        "draft": true,
+        "head": "144852fe7df75c78f9fc99c6a07eb9c223501095",
+        "headRef": "codex/mote-web-recordings-ready",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/152",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/152#issuecomment-6234266096"
+      }
     },
     {
       "number": 153,
@@ -1971,7 +2295,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "Scoped Ask evidence/admission waiting",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 475,
@@ -2266,7 +2590,7 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent and actual Web acceptance still required before closing.",
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent subsequently released closing after combined review; real Web cases remain explicit unchecked TODOs.",
       "originalC2PathCounts": {
         "exact": 717,
         "evolved": 116,
@@ -2361,7 +2685,22 @@
       "absentPaths": [],
       "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
       "initialClassification": "PARTIAL_HOLD",
-      "initialReason": "Seven module source/test commits all have stable-patch equivalents in C2; ask-schema/read-races exact. Own final ask-actions-wait-closure report is absent. Full PR diff also inherits the PR150 missing recovery paths; do not whole-merge that baseline."
+      "initialReason": "Seven module source/test commits all have stable-patch equivalents in C2; ask-schema/read-races exact. Own final ask-actions-wait-closure report is absent. Full PR diff also inherits the PR150 missing recovery paths; do not whole-merge that baseline.",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 153,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:02Z",
+        "draft": true,
+        "head": "f67f6980cdab6f998f4000733f46220fc2fe76c1",
+        "headRef": "codex/mote-ask-actions-wait-closure-final",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/153",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/153#issuecomment-6234267719"
+      }
     },
     {
       "number": 154,
@@ -2374,7 +2713,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "Ask/processing await authorization tests",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "test": 1,
@@ -2392,7 +2731,7 @@
           "equivalentCandidateCommits": []
         }
       ],
-      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent and actual Web acceptance still required before closing.",
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent subsequently released closing after combined review; real Web cases remain explicit unchecked TODOs.",
       "originalC2PathCounts": {
         "exact": 1,
         "evolved": 1
@@ -2404,7 +2743,22 @@
       "absentPaths": [],
       "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
       "initialClassification": "PARTIAL_HOLD",
-      "initialReason": "The 102-line authorization test is byte-identical. Candidate report has older ending: publication/prerequisite ownership additions are absent and it still says no Draft was opened while RED. Hold for accurate receipt/history reconciliation, not a missing test or runtime fix."
+      "initialReason": "The 102-line authorization test is byte-identical. Candidate report has older ending: publication/prerequisite ownership additions are absent and it still says no Draft was opened while RED. Hold for accurate receipt/history reconciliation, not a missing test or runtime fix.",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 154,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:11Z",
+        "draft": true,
+        "head": "6010cfa97c875f40356a23d5bfdfa428e8dab8d0",
+        "headRef": "codex/mote-authorization-seam-tests",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/154",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/154#issuecomment-6234269239"
+      }
     },
     {
       "number": 155,
@@ -2417,7 +2771,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "M15 Android account lifecycle",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 498,
@@ -2440,7 +2794,22 @@
         "evolved": 77
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 155,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:21Z",
+        "draft": true,
+        "head": "f1452b9876cc817302effb6b33adbc1bb47b7f99",
+        "headRef": "codex/mote-multiuser-m15-android",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/155",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/155#issuecomment-6234270782"
+      }
     },
     {
       "number": 156,
@@ -2453,7 +2822,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "M13 Web/compiled private SQL lifecycle",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 523,
@@ -2526,7 +2895,7 @@
           ]
         }
       ],
-      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent and actual Web acceptance still required before closing.",
+      "reason": "Original missing source/report paths restored in successor0cfe and new recovery cases/required checks executed successfully; historical failures retained. Native fixture only adapts strict current SHA/image provenance and owned progress path. Parent subsequently released closing after combined review; real Web cases remain explicit unchecked TODOs.",
       "originalC2PathCounts": {
         "exact": 888,
         "evolved": 75,
@@ -2549,7 +2918,22 @@
       "absentPaths": [],
       "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
       "initialClassification": "PARTIAL_HOLD",
-      "initialReason": "Current remote head isb2802a8d, newer than manifest FWb598. The extra lifecycle fixa2f299c8 equals already-consumedacbfd/f1be, and its test is exact. C2 private SQL deliberately unions KEEP changeToken. One new lifecycle report is absent and70fc final KEEP-status doc paragraphs are older in C2. No new production/test fix to pick twice."
+      "initialReason": "Current remote head isb2802a8d, newer than manifest FWb598. The extra lifecycle fixa2f299c8 equals already-consumedacbfd/f1be, and its test is exact. C2 private SQL deliberately unions KEEP changeToken. One new lifecycle report is absent and70fc final KEEP-status doc paragraphs are older in C2. No new production/test fix to pick twice.",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 156,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:30Z",
+        "draft": true,
+        "head": "b2802a8dbe0a21ffe2af8d26a2fbdeaa8b2c1a2e",
+        "headRef": "codex/mote-multiuser-m13-web",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/156",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/156#issuecomment-6234272151"
+      }
     },
     {
       "number": 157,
@@ -2562,7 +2946,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": true,
       "scope": "Joint scoped processing/typed graph/ACK contracts",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 490,
@@ -2587,7 +2971,22 @@
         "evolved": 93
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 157,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:43Z",
+        "draft": true,
+        "head": "8084ef359fa058a05fedeaeecc7d4b23f72138a3",
+        "headRef": "codex/mote-multiuser-joint-validation",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/157",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/157#issuecomment-6234273870"
+      }
     },
     {
       "number": 158,
@@ -2600,7 +2999,7 @@
       "mergeBase": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
       "headIsAncestorOfCandidate": false,
       "scope": "KEEP admin limits/lexical maintenance/split exports",
-      "classification": "REPLACE_AFTER_ACCEPTANCE",
+      "classification": "CLOSED_SUPERSEDED_UNMERGED",
       "closeNow": false,
       "changedPathCategoryCounts": {
         "source-or-build": 527,
@@ -2680,7 +3079,22 @@
         "evolved": 77
       },
       "absentPaths": [],
-      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9"
+      "sourceCompletionCandidate": "0cfe78d6afd7143ed3e5be855925928eb23f76a9",
+      "historicalClassification": "REPLACE_AFTER_ACCEPTANCE",
+      "closure": {
+        "number": 158,
+        "state": "closed",
+        "merged": false,
+        "mergedAt": null,
+        "closedAt": "2026-10-17T13:10:53Z",
+        "draft": true,
+        "head": "1d33119b00eb91515ad9e24d356b937bbaa637bc",
+        "headRef": "codex/mote-keep-admin-exports",
+        "base": "6272a9b51ec92cc4c32e2ff1a1eeb4fa38b142ed",
+        "baseRef": "codex/mote-multiuser-integration",
+        "url": "https://github.com/utopiafar/mote/pull/158",
+        "commentUrl": "https://github.com/utopiafar/mote/pull/158#issuecomment-6234275437"
+      }
     },
     {
       "number": 159,
@@ -2921,11 +3335,27 @@
     "missingChangedPathsAcross28PRs": 0,
     "browserAcceptance": "INCOMPLETE_SEPARATE_TOOL_BLOCK",
     "closeNow": false,
-    "note": "All initial source/report holds reconciled. Historical path counts/absent lists below remain explicitly attributed to the initial C2 audit; successor counts are separate. No old gate result is relabelled."
+    "note": "All initial source/report holds reconciled. Historical path counts/absent lists below remain explicitly attributed to the initial C2 audit; successor counts are separate. No old gate result is relabelled.",
+    "closureStatus": "28_CLOSED_UNMERGED_CONFIRMED"
   },
   "privacyReview": {
-    "status": "PAUSED_FOR_PARENT_COMBINED_REVIEW",
+    "status": "COMBINED_REVIEW_RELEASED_WITH_HISTORICAL_LIMITS_DISCLOSED",
     "report": "multiuser-pr159-privacy-review.md",
-    "closedPRs": 0
+    "closedPRs": 28
+  },
+  "historicalClosurePrerequisitesBeforeRelease": [
+    "Keep actual Web acceptance incomplete with explicit unchecked PR TODOs; later user direction permits deferral",
+    "Parent explicitly decides closing after the combined privacy audit; currently paused",
+    "Refresh every remote PR head and rerun comparison if any drift before closure",
+    "Retain all branches/commits and exclude143/145-148; no mechanical merges"
+  ],
+  "closurePrerequisites": [],
+  "closureResult": {
+    "status": "28_CLOSED_UNMERGED_CONFIRMED",
+    "verifiedAtUTC": "2026-10-17T13:11:22.335443+00:00",
+    "receipt": "multiuser-pr159-consolidation-result.json",
+    "commentedAndClosed": 28,
+    "merged": 0,
+    "branchesDeleted": 0
   }
 }

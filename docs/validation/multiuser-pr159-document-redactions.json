@@ -306,7 +306,7 @@
     {
       "path": "docs/validation/multiuser-final-joint-e2e.md",
       "originalSha256": "ca737d5364366795b1cc71ba5b0131030dcece6bee71e7d64632f94ab93aa343",
-      "publicationSha256": "2bd4129d1fa10610f2a38b433525dd2b9f6146615f6e8db0ad3af1f168959185",
+      "publicationSha256": "dec0b04c58b98d79e20cfb014245ac8f9b280dcf3e2ba357aa2d04a4c7bd0f9e",
       "categories": {
         "personalPath": 0,
         "internalTask": 1,
@@ -462,7 +462,7 @@
     {
       "path": "docs/validation/multiuser-pr159-consolidation-audit.md",
       "originalSha256": "aa051106b4fa111b5fff26215d840a4f42e65e5555e0c77ba0eea17dfa213c2d",
-      "publicationSha256": "12c7d0c20fe9173d07f3e662ed9ccbc21916a14b7604935fb6bcaca182e957ed",
+      "publicationSha256": "dc526120f82d8ed37650dea210866305110a053e46a24c89271c15a42107ad5d",
       "categories": {
         "personalPath": 1,
         "internalTask": 0,
