@@ -1,6 +1,6 @@
 /** Zero-provider preparation for the frozen, sealed heldout v2 replay.
  * Stage modes use the separately frozen first-batch adapter. Never prints corpus/question values.
- * MOTE_HELDOUT_OUTPUT=/new/external/path node --import tsx scripts/test-heldout-memory-replay.ts
+ * MOTE_HELDOUT_ROOT=/external/frozen-inputs MOTE_HELDOUT_OUTPUT=/new/external/path node --import tsx scripts/test-heldout-memory-replay.ts
  * Public output is counts/hashes/status only. Vaults and identity manifests are sealed.
  */
 import {execFileSync} from 'node:child_process';
@@ -19,7 +19,8 @@ import {archiveHash,sourceReceiptId} from '../apps/server/src/source-archive.js'
 import {defaultMemoryIntegrationRecipe} from '../apps/server/src/memory-integration-policy.js';
 import {requestMemoryIntegration} from '../apps/server/src/memory-integration.js';
 
-const base='/Users/utopiafar/Documents/Codex/mote-goal-2026-09-27';
+if(!process.env.MOTE_HELDOUT_ROOT)throw new Error('MOTE_HELDOUT_ROOT is required');
+const base=resolve(process.env.MOTE_HELDOUT_ROOT);
 const corpus=join(base,'heldout-corpus-v2'),evaluation=join(base,'heldout-eval-v2-1');
 const freezes={corpus:'367c19ff948908151d4ae1fcd55e8f194bf314de4a02f3824d7c246ff6697e8c',evaluation:'c8fa7c2439da14d540a0877804da8c6fe6e1e5ae7cebe8ff65b3f8f95fc06f24'};
 const recipes=[{id:'mote.personal-memory',version:'2'},{id:'mote.coding-memory',version:'2'}];

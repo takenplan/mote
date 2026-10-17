@@ -23,12 +23,20 @@ Contextual credential review found no confirmed reusable live credential: strict
 
 ## Unresolved public copies and inherited defaults
 
-Tip redaction does not remove earlier public commits, commit messages, cached views or the other temporary PR heads. No force-push, history rewrite, remote branch deletion or credential operation was performed. The three inherited opt-in scripts still contain personal default locators:
+Tip redaction does not remove earlier public commits, commit messages, cached views or the other temporary PR heads. No force-push, history rewrite, remote branch deletion or credential operation was performed. The three inherited opt-in scripts originally contained personal default locators. The authorized minimal follow-up now removes them:
 
-- `scripts/test-composed-image-context.ts` (external generated fixture input; an environment override already exists).
-- `scripts/test-heldout-memory-replay-stage.ts` (external stage-manifest default).
-- `scripts/test-heldout-memory-replay.ts` (held-out input-root default).
+- `scripts/test-composed-image-context.ts`: `MOTE_COMPOSED_IMAGE_FIXTURE` is now required before any fixture path resolution/read; the existing explicit input behavior is retained.
+- `scripts/test-heldout-memory-replay-stage.ts`: the supervisor defaults beneath the explicitly supplied held-out root; `MOTE_HELDOUT_SUPERVISOR` can override it.
+- `scripts/test-heldout-memory-replay.ts`: `MOTE_HELDOUT_ROOT` is now required. The existing `heldout-corpus-v2` and `heldout-eval-v2-1` child layout and frozen hashes are unchanged. Imports of its mechanical-test helpers also require this explicit generated-input root.
 
-Only their source was reviewed; their target directories and contents were not accessed and the scripts were not executed. A separate reviewed code change could require explicit environment/CLI inputs and eliminate personal defaults, with focused checks. It is outside this documentation-only cleanup. Any historical removal or repository-support request requires a separate decision and authorization; this lane will not rewrite history.
+Their original target directories and contents were not accessed. No original script/data/model runtime test was executed. The follow-up ran eight parameter/syntax checks by extracting only the actual guards and path declarations into isolated contexts: missing inputs reject before fixture resolution, explicit paths retain the directory layout, and the supervisor override/default behave as documented. Scripts strict TypeScript checking passed after linking existing read-only matching-build Agent artifacts and server dependencies; the first attempt in the artifact-free publication checkout exited2 for missing local artifacts/types and is retained separately. No dependency lock or product behavior changed, and no full-platform gate was rerun for this authorized cleanup. Any historical removal or repository-support request requires a separate decision and authorization; this lane will not rewrite history.
 
 All 28 temporary PR closes and closing comments remain paused. PR159 stays Draft; PR143 and PR145–148 remain independent. The parent will combine this bounded review with the independent audit and decide further cleanup and closing. The incomplete real-Web work remains an unchecked [PR TODO list](multiuser-final-joint-e2e.md#deferred-web-acceptance-todos).
+
+## Final current-tree and historical classification
+
+A full current tracked-text pass examined 2,839 files, beyond the PR-added document subset. No actual personal home path remained. Five home-shaped literals in `apps/server/test/material-projection.test.ts` are explicitly synthetic fixture-owner paths used to verify model-facing path redaction; they were classified by source context and retained. The 26 historical message findings are all Git-generated local-repository merge-source paths, not copied Central contents or credentials. Their public history remains unchanged.
+
+The actual tracked C2 manifest, C2 aggregate receipt, successor manifest and original execution receipt were individually checked, rather than relying on a separately cleaned copy. Personal-home matches are zero in each. The C2 and successor manifest hashes remain `3295223d9a2cf7e8abf4cea86e2a125328491a024ad3e3c2363e4d4cc07dc08a` and `e67e14ed9f3b86c045e34f4dfe75711f02bed4cfd17f2f314fc3dd80a0063496`; the original successor execution receipt remains `cbb1579bd4244fabeb54e4854d2afffff4f97fd57e9e143a721c19ba1313608e`. The redacted C2 aggregate publication receipt has its own hash in the redaction ledger and must not be confused with original embedded execution evidence.
+
+Within the reviewed scope, the unresolved publication findings are historical low-sensitivity machine locators and internal execution references; no Central private content or reusable live credential was confirmed. After informing the user of those historical limits and combining the independent audit, the parent may consider releasing the already-authorized consolidation. This report does not itself release closing.
