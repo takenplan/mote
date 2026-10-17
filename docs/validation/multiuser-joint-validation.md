@@ -1972,3 +1972,37 @@ export label omitted from the thin selection, then the exact shared/Android
 translation was added and the second check passed. No completed IAB download,
 live-model or physical-device evidence is inferred from these renderer tests.
 Earlier failed whole gates remain failed; current affected gate is next.
+
+### Legacy no-plan feature-default shared file dependency
+
+The explicit remaining no-applied-plan boundary was separately characterized
+through the original M04 models/processing endpoints (no file-policy save).
+Same generated resume journey RED1/1,14.183s
+(`/tmp/mote-joint-observer-no-plan-red.log/.exit`):accepted extraction persisted,
+B private summary succeeded, A's unfinished summary did not observe the shared
+connection update after logout/restart. This is distinct from the applied-plan
+fallback closed in4ae51b3c.
+
+New legacy admissions now record only their declared M04 file-model reference
+and existing complete-connection fingerprint in optional fixed M06 input
+metadata when their configured file-model steps need it. Existing input/lease
+fences require the same current declared reference; the normal shared generation
+check rejects obsolete leases. The existing fixed-purpose B handoff compares
+that metadata when no plan exists, refreshes the owned M04 entry, and submits
+fresh ordinary work for unfinished units. It does not create an applied plan,
+copy endpoints/credentials, reconstruct old contexts/grants, change the global
+scheduler, or backfill unrecorded historical task authority. Missing selections
+still fail. No HTTP/tool capability, table or generic metadata framework is added.
+
+Named/applied-default/no-plan matrices21/21 actual EXIT0,138.832s,0skip
+(`observer-no-plan-green`); Server types0 (`observer-no-plan-types`). Each path
+retains unknown/issued-call refusal, disabled owner, cancelled/source-withdrawn
+intent and completed/unchanged no-op behavior. Successful extraction and B's
+same-ID private result remain unchanged, old grants stay refused and rechecks
+have zero external/model calls. A final branch assertion additionally checks
+that no applied policy binding is invented. Frozen current affected gate and
+fresh compiled/native recovery follow; no earlier aggregate gate is relabelled.
+Final no-plan branch assertion1/1 EXIT0,10.801s
+(`/tmp/mote-joint-observer-no-plan-branch-proof.log/.exit`); applied-plan binding
+count stays zero through the legacy admission. All production differences are
+fixed M06 metadata/selection fences described above.

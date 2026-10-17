@@ -86,6 +86,12 @@ export class ProcessingPolicies {
   sql.run('INSERT INTO mp_file_plans VALUES($user,?,?,?) ON CONFLICT(user_id,id) DO NOTHING',id,ref.slice(9),json);sql.run('INSERT INTO mp_file_policy_bindings VALUES($user,?,?) ON CONFLICT(user_id,original_id) DO UPDATE SET plan_id=excluded.plan_id',ref.slice(9),id);return this.current(context,ref)!;
  }
  effective(base:ProcessingSettings,plan?:FilePolicyPlan){if(!plan)return base;const p=plan.profile,parameters=p.parameters;return processingSettingsSchema.parse({...base,audioProcessor:p.processorId.startsWith('audio.')?p.processorId:base.audioProcessor,diarizationProcessor:p.diarizationProcessor,summarize:p.summarize,speakerCount:parameters.speakerCount??null,speakerMin:parameters.speakerMin??null,speakerMax:parameters.speakerMax??null,semanticTurns:parameters.semanticTurns===true});}
+ /** Fixed M06 metadata for legacy admissions without an applied plan. */
+ fileModelDependency(sql:PrivateSql){
+  const row=sql.get('SELECT json FROM mp_file_policies WHERE user_id=$user');if(!row)return;
+  const saved=effectiveValueSchema.parse(JSON.parse(String(row.json))),reference=saved.defaults?.services.find(service=>service.id==='service.file')?.reference;if(!reference)return;
+  const fingerprint=reference.kind==='shared'?canonicalHash({generation:this.configuration.resources.generation(reference.id)}):saved.connections[connectionKey(reference)];return fingerprint?{reference,fingerprint}:undefined;
+ }
  private async previewPolicy(context:UserContext){
   const saved=this.policy(context);if(saved)return saved;return defaultPolicy((await this.configuration.forUser(context).models()).selections,this.settings(context));
  }
