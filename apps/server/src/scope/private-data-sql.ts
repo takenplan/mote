@@ -7,7 +7,8 @@ export class PrivateDataError extends Error{
 }
 export const missing=()=>new PrivateDataError('not_found',404);
 /** The sole private SQL gateway. Named owner binding is supplied by the host,
- * never by a caller, and every operation revalidates its captured authority.
+ * never by a caller. Ordinary operations revalidate captured authority; an exact
+ * pin disposer is minted while current and only deletes its fixed row.
  * No connection or statement escapes through a user service. */
 export class PrivateSql{
   constructor(private readonly db:DatabaseSync,readonly userId:string,private readonly authorize:()=>void){}
@@ -18,6 +19,12 @@ export class PrivateSql{
   get(sql:string,...args:SQLInputValue[]){return this.statement(sql).get({$user:this.userId},...args);}
   all(sql:string,...args:SQLInputValue[]){return this.statement(sql).all({$user:this.userId},...args);}
   run(sql:string,...args:SQLInputValue[]){const statement=this.statement(sql);statement.setReadBigInts(true);return statement.run({$user:this.userId},...args);}
+  /** Cleanup capability for one fixed pin UUID; retirement must not
+   * turn its release into a read or leave a live pin until expiration. */
+  pinDisposer(id:string):()=>void{
+    const statement=this.statement('DELETE FROM ig_pins WHERE user_id=$user AND id=?'),owner=this.userId,pinId=id;
+    return ()=>{statement.run({$user:owner},pinId);};
+  }
   transaction<T>(run:()=>T):T{
     this.authorize();
     // Host callers may compose atomic source/task writes. Savepoints keep a
