@@ -2489,5 +2489,15 @@
       "directory:this.directory",
       "task:execution.register:{kind,pool:kind,concurrency:()=>1,policy:EXECUTION_POLICIES.deterministic, parseInput:raw=>z.object({operationId:z.string().uuid()}).strict().parse(raw),resources:()=>[{scope:'user',key:kind}], authorizeInput:context=>{runtime.authority.assert(context);if(this.enabled(context.userId))throw new ConfigServiceError('config_conflict');}, execute:run=>this.decrypt(run),classify:()=>new ExecutionFailure('permanent','storage_conversion_failed')}"
     ]
+  },
+  "apps/server/src/scope/processing-images.ts": {
+    "module": "M06",
+    "scope": "user",
+    "status": "implemented",
+    "notes": "Original ImageProgress presentation of scoped M03/M05/M06/M07 facts. No secondary pipeline or store.",
+    "surfaces": [
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'GET',url:'/api/images/:id'",
+      "api:registerUserRoute:scope:'user',service:PROCESSING_DOMAIN,method:'POST',url:'/api/images/:id/'+action"
+    ]
   }
 }
