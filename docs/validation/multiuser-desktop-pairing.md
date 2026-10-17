@@ -185,3 +185,37 @@ regression. No global timeout increase or production retry-policy change was
 made. The residual old-run Web paging failure separately passed its original
 single-file test in 86.07 s without changes; its cause was not inferred from
 that single success.
+
+## Inherited PID-marker publication race
+
+Complete attempt 6 at `fa13a8c6f5797ab30e3d1a44c3aa16a07bfec0cb` naturally
+exited 1, with identical before/after SHA, from 01:56:27Z to 02:24:43Z on
+2026-10-17. Desktop passed 587/587, Server had 2,636 passes, one failure, one
+skip and zero cancellations, Web passed 515/515, Agent had 317 passes and one
+skip, Diagnostics passed 5/5 and Shared passed 192/192. The only failure was
+`multiuser-plugin-ingress.test.ts`: after plugin deletion, the observed PID
+still appeared alive. Evidence is retained as
+`/tmp/mote-desktop-v2-affected-attempt6.*` and `.result.json`. Root extra scripts
+and Android were short-circuited and are not counted as run. Both earlier
+finite-wait repairs passed in this full run: Ask 35.062 s and catalog 43.560 s.
+
+The original isolated plugin-delete test passed 1/1 in 1.199 s; that alone did
+not explain the whole-run failure. A same-source production-entry probe made
+the async marker's existing create-before-write window explicit. The parent
+read zero bytes and parsed PID 0, while the actual worker PID was 14337. After
+deletion the actual worker had exited, but `process.kill(0,0)` continued to
+observe the current process group and the unchanged 10-second assertion failed.
+Probe exit 1: `/tmp/mote-desktop-v2-plugin-pid-race-red.log/.exit`. This confirms
+a fixture defect; the earlier whole-run log did not capture its PID, so its
+historical cause is not claimed as proven.
+
+The durable real-entry regression enables a 200 ms partial PID write only in
+the plugin-delete scenario. With the original parent observation it failed,
+exit 1: `/tmp/mote-desktop-v2-plugin-pid-source-red.log/.exit`. The minimal fix
+waits for a positive safe-integer PID before deletion, under the unchanged
+10-second readiness deadline. The subsequent 10-second process-exit assertion,
+stale task, null result, no events, no A publication and unaffected B assertions
+are unchanged. The entire real plugin/Ingress file then passed **9/9**, exit 0,
+in 17.421 s: `/tmp/mote-desktop-v2-plugin-pid-source-green.log/.exit`, tested blob
+`b03b075120e49df1a17db58010e435549aaecc6f`. No production code, shutdown policy
+or timeout was changed. A new complete affected run is required.
