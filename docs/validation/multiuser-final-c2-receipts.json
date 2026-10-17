@@ -787,7 +787,7 @@
   },
   "Web": {
     "owner": "01a14920-04fa-73ae-9308-af49d021c008",
-    "actualC2": "RETRY_BOUNDED_TERMINAL_PARTIAL_EXTENSION_UI_BLOCKED_AGAIN",
+    "actualC2": "PARTIAL_BROWSER_TOOL_BLOCK_PERSISTS_AFTER_RESTART",
     "actualC1": "Only A original login/Note/draft reload/two tabs confirmed;规范handoff request200 after initialfixture400",
     "lastEvidenceUtc": "2026-10-17T10:09:58.474Z",
     "threadReadState": "Direct retry receipt confirms repeated extension-UI block and host close0; remaining consumers unchanged UNRUN",
@@ -797,12 +797,13 @@
     "actualC2Evidence": "/tmp/mote-final-web-task19-c2-8ad990/evidence",
     "actualC2Scope": "Fresh libs/server/web build0; Chrome original A login/Note/draft reload/two pages; canonical handoff200; held A GET released after A-to-B switch remains isolated; B-only Note save/sync; normal storage notification retires old handoff page",
     "currentBlock": {
-      "action": "Supported Chrome batch: getAXState; save AX+screenshot; goto preferences; click switch; getAXState",
-      "target": "Owned C2 tab2046608616",
-      "reason": "Chrome again requires human dismissal of another extension UI; extension name/title not provided",
-      "outcome": "AX and screenshot saved; subsequent goto/click uncertain; no successful account-switch evidence",
-      "state": "BLOCKED_AGAIN_AFTER_USER_AUTHORIZED_RETRY_HOST_CLOSED",
-      "alternateToolOrRetry": false
+      "action": "getByRole(button, name=切换账号, exact=true).click()",
+      "target": "Fresh owned Chrome browser4/tab2046608881 after human-confirmed restart",
+      "reason": "Same extension UI open blocker; owner/name/lock not exposed",
+      "outcome": "Switch click uncertain; no subsequent observation/login ran",
+      "state": "BLOCK_PERSISTS_AFTER_RESTART_HOST_CLOSED",
+      "noRetry": true,
+      "noAlternativeControl": true
     },
     "priorToolOutcome": {
       "candidate": "C1",
@@ -981,7 +982,7 @@
       "files": 36,
       "independentHashMismatches": 0
     },
-    "resumeRequirement": "After human dismissal, start fresh owned hosts in a new turn and inspect current supported session/page before any new action; never replay the uncertain old batch",
+    "resumeRequirement": "Do not repeat unknown clicks or treat user restart as proof of tool access. Parent/tool support must resolve the persistent supported-tool block before remaining browser cases; only the designated Web owner may control a browser.",
     "resumption": {
       "authorization": "User directly asked the Web owner to try again",
       "tool": "Same supported Chrome tool",
@@ -1026,6 +1027,60 @@
     "retryEvidenceIndex": {
       "path": "/tmp/mote-final-web-task19-c2-8ad990/resume-evidence/sha256.json",
       "sha256": "fe8ba364a5a52ae7455b9b8c933d876175d0fb6c84ab4dacbbfe35cf5f5e0083",
+      "files": 5,
+      "independentHashMismatches": 0
+    },
+    "postRestartReceipt": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/final-evidence/restart-blocker.json",
+      "sha256": "dc33e44c84b5f66e062e3dc5da2b9ed1b6a0117713f972351970d2e1434028d7",
+      "contents": {
+        "candidate": "8ad99089ead559d6656a269fdca7ccb884953c07",
+        "browser": {
+          "type": "Chrome extension",
+          "id": "4",
+          "tab": "2046608881",
+          "freshAfterHumanRestart": true
+        },
+        "origin": "http://mote-e2e6-415f9150.localhost:59826",
+        "passed": [
+          "fresh Chrome connection and own tab",
+          "original Preferences generated-a login confirmed after detached return",
+          "original Note displays A private note",
+          "GENERATED_FINAL_DRAFT_A saved locally and screenshot10 written",
+          "separate navigation to original Preferences observed switch button"
+        ],
+        "blocker": {
+          "action": "getByRole(button, name=切换账号, exact=true).click()",
+          "targetTab": "2046608881",
+          "observedBeforeAction": "original Preferences, logged-in generated-a, switch button185",
+          "message": "Google Chrome is blocking automation because another extension UI is open on this page. Complete or dismiss that extension UI in Google Chrome, then ask me to continue.",
+          "status": "blocked; click outcome uncertain; no subsequent observation/login ran",
+          "owner": "not exposed",
+          "extensionNameOrTitle": "not exposed",
+          "noRetry": true,
+          "noAlternativeControl": true
+        },
+        "remainingCases": "unchanged UNRUN; failure-login/logout/relogin/revoke and Models/File-processing/Memory/Agent/Files/Queues not executed",
+        "productRed": [],
+        "cleanup": {
+          "hostSession": 93561,
+          "closeCommandExit": 0,
+          "port59826": {
+            "errno": 61,
+            "name": "ECONNREFUSED",
+            "closed": true
+          },
+          "hostCloseLog": [
+            "{\"id\":1,\"result\":true}",
+            "{\"event\":\"closed\",\"candidate\":\"8ad99089ead559d6656a269fdca7ccb884953c07\",\"code\":0,\"signal\":null}"
+          ]
+        },
+        "sourceClean": true
+      }
+    },
+    "postRestartEvidenceIndex": {
+      "path": "/tmp/mote-final-web-task19-c2-8ad990/final-evidence/sha256.json",
+      "sha256": "539b02f571fce0041976a20f1af9b813990c223df42097a10c3ea7e434641133",
       "files": 5,
       "independentHashMismatches": 0
     }
