@@ -293,3 +293,41 @@ The actual executable environment returned after the parent reported the desktop
 Current test-only follow-ups64b/ffe/2f892/4b323/f129 are UNCOMPILED/UNRUN: formal overview statistics/devices, private Notes resume before a blocked account resolver, Actions settings revision envelope, and old CalendarActionWorker permission-check/account-admission race. These are candidates, not confirmed new failures. Calendar control509 corrects only its unregistered single-item reader, preserving the already-observed actual uncertain stage. Independent native journeys get two distinct generated B proposals; the earlier three successful UI cases used the original21A/1B producer and are not relabeled as reruns on the later fixture.
 
 The explicitly frozen M12/M16 literal10748005 was merged as04b929d6. Conflict resolution retained the M15-only native tests/ledger and incoming M16 evidence append; no Android source/test byte changed relative to95475. `dcad6088` is an ancestor, and all Android main source is byte-identical to tested9e. New test-only candidates still need a testAPK; the future synthetic backend must start from the new combined server source. No old server process or native acceptance is relabeled as running107.
+
+### Exact unknown-summary child retry: actual RED, minimal host fix,10/10 GREEN
+
+The original bare503 summary/restart case exposed a real missing counterpart to
+M06's OCR/ASR exact-parent preparation. With the actual persisted parent blocked,
+explicit child confirmation returned200 but did not prepare its coordinator; the
+child subsequently became stale/input_changed. The same precise parent-blocked
+handshake and original checkpoint/model/count assertions fail against committed
+c7b35614 source: `/tmp/m15-summary-exact-parent-retry-valid-red.log/.exit`,
+1case/EXIT1,10.30s. Its finally receipt verifies the proposed source bytes were
+restored exactly; no other test or build used that temporary baseline.
+
+The minimal processing.analysis prepareRetry hook validates the same owner,
+processing.derivatives parent kind/state, exact mode/checkpoint/complete child
+input and current original/extraction/settings. Existing M05 retry prepares only
+that blocked original coordinator inside the same acknowledgement transaction.
+Cancelled/stale parents, changed source authority and mismatched child inputs
+stay fenced; no new task, model snapshot or grant is created. Explicit replay
+confirmation does not settle the previous unknown external fact.
+
+Final exact10 cases pass10/10,no skip/cancel,80.91s EXIT0 in
+`/tmp/m15-summary-exact-parent-retry-final-ten.log/.exit`: original summary
+checkpoint/pinned M04 usage/restart and fresh explicit per-file reprocess; capacity
+retry and ASR checkpoint neighbors; cancellation and source-privacy withdrawal
+reject child acknowledgement with409, preserve issuance/confirmation counts and
+forbid publication/foreign retry; the four exact processing fixture migrations;
+and original Files cancellation with A-other/B positives and fresh recovery.
+The negative fixture's earlier runs stopped before actual Fastify readiness or
+expected401 where owned source privacy returns409; those failed setup/expectation
+logs remain, and none is called product RED. The real restart now begins through
+its original authenticated task GET. Production backoff/corpora/budgets remain.
+Independent read-only review `/tmp/mote-m13-review-m15-summary-parent-retry.md`
+finds no new confirmed P0/P1/P2 in the exact helper/M05 transaction; it is not
+reviewer execution or final required acceptance.
+
+Separately, the two original Web Actions files pass2/2,no skip,101.86s unchanged
+(`/tmp/m15-web-actions-original-two.log/.exit`). The old full-run proposal timeout
+failures remain. No Web observation or approval assertion was changed.
