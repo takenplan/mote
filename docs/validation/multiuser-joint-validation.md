@@ -7,6 +7,11 @@ dependencies, not proof that all17 modules work together. M13/M15 remain
 checkpoints with known capability gaps. No whole-project completion, final
 candidate or final joint PR is claimed.
 
+Current finite FJ input is frozen at521ec1f3; its latest required gate naturally
+terminated EXIT1 (Server1 and Web5 failures). See the [FJ terminal delivery](multiuser-joint-fj-delivery.md).
+It is available for final C composition with explicit residuals, not accepted
+whole-project validation. Final C recovery is independently owned by Recovery.
+
 ## Authority, composition and evidence rules
 
 The governing sources are [AGENTS](../../AGENTS.md), the
